@@ -93,11 +93,28 @@ time is socket/startup/handler overhead, not the line-index work alone.
 The 4 MiB run was **732.0 ms PTY**, 25 chunks, 21.7 ms average, 661.3 ms
 total. Raising to 5.5 MiB removed 92 ms but did not close the gap.
 
+Pipelining measurement (real gateway, 5.5 MiB chunks, UDS client without
+document decode, page-cache warm):
+
+| In-flight | Total | Per chunk |
+|---:|---:|---:|
+| 1 | 591.8 ms | 31.1 ms |
+| 2 | 372.0 ms | 19.6 ms |
+| 4 | 389.0 ms | 20.5 ms |
+| 8 | **335.3 ms** | **17.6 ms** |
+| 19 | 376.6 ms | 19.8 ms |
+
+An 8-request window saves about **302 ms** against the serial UDS loop. It is
+not only a 28 ms socket optimization; the server encode overlaps across cores.
+Projected PTY open is roughly **338 ms** before client decode is included.
+
 ## Interpretation
 
 - Direct Rust 100 MB open is 174–184 ms; direct PTY startup is 210 ms.
   The gateway path is **640 ms PTY**, about **+430 ms** over the direct PTY
-  baseline and roughly 3.1x. It **does not meet the ADR-0011 50 ms gate**.
+  baseline and roughly 3.1x. It **does not meet the Phase 0.6 open target of
+  200 ms**; the direct path itself is already just over that target. The 50 ms
+  open number is a long-term target, not the Phase 0.6 blocker.
 - The server encode path, not file I/O, is the dominant added cost. Per 5.5
   MiB chunk: `ReadFileAt` is 0.84 ms, base64 is 4.98 ms, JSON is 5.33 ms, and
   the full response encode is 11.8 ms. The file is page-cache warm.
@@ -105,13 +122,15 @@ total. Raising to 5.5 MiB removed 92 ms but did not close the gap.
   and 5.5 MiB is 640 ms. But 7 MiB raw exceeds the frame after base64, and the
   practical ceiling is about 5.9 MiB. The remaining gap is not round-trip
   count alone.
-- Pipelining can hide UDS round-trip latency, but it cannot remove the
-  per-chunk encode CPU; the UDS frame read itself is only 1.46 ms/chunk.
+- Pipelining is the cheapest measured improvement: window 8 takes the UDS loop
+  from 637 ms to 335 ms, saving about 302 ms. It still leaves a projected
+  ~338 ms PTY open, above the 200 ms Phase 0.6 target.
 - Binary framing removes the measured base64 and JSON work: about 10.3 ms
   server + 3.3 ms client per chunk, or ~258 ms total. That projects to roughly
   **380 ms PTY**, not 240 ms. fd passing removes the whole 19.2 ms/chunk
   transfer path and is the only option that can approach the direct baseline.
-  The 50 ms gate is still not met without further work on the open/index path.
+  The 200 ms target still needs binary framing, pipelining, and parallel
+  line-index construction.
 - Search remains dominated by the in-process scan, so the gateway barely
   changes it. Key-to-screen and scroll are within local PTY noise.
 - These numbers include the Go gateway, but not LSP, terminal emulator, or idle

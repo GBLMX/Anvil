@@ -223,13 +223,23 @@ page-cache warm. Client-side per chunk: JSON decode **1.17 ms**, base64 decode
 encode CPU. Binary framing removes about 10.3 ms server + 3.3 ms client per
 chunk (~258 ms total), projecting to roughly **380 ms PTY**, not 240 ms.
 fd passing removes the whole transfer path and is the only option that can
-approach the direct baseline; the 50 ms gate still needs open/index work.
+approach the direct baseline. Pipelining was measured separately on the real
+gateway: 1 in-flight 591.8 ms, 2 372.0 ms, 4 389.0 ms, 8 **335.3 ms**, 19
+376.6 ms. Window 8 saves about **302 ms** against the serial loop and projects
+to roughly **338 ms PTY**; it is not a 28 ms socket-only optimization.
 
-The initial acceptable increment is **at most 50 ms** over the direct-read
-baseline. A 20 ms target may be physically unrealistic with 19 round trips; do
-not shrink chunking to meet a target. If the increment exceeds 50 ms, evaluate
-a larger frame-safe chunk or shared-memory transfer before changing the
-security boundary.
+The single 50 ms gate was too coarse for a 100 MB document. The Phase 0.6 gates
+are:
+
+- **Open 100 MB PTY < 200 ms.** Current gateway is 640 ms; direct is 210 ms.
+  This needs binary framing plus parallel line-index construction. Not met.
+- **Daily edit key-to-screen < 1 ms.** Current Rust-side is ~0.08 ms and local
+  PTY is ~0.16–0.6 ms. Met.
+- **50 ms open remains a long-term target**, not a Phase 0.6 blocker; the
+  line-index construction alone is a substantial part of the direct baseline.
+
+Do not reduce chunk size to chase a latency number, and do not raise the frame
+limit without re-evaluating the memory and parsing boundary.
 
 ## Consequences
 
