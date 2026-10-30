@@ -435,10 +435,11 @@ impl Model {
         };
         let line = position.line;
         let height = usize::from(height.max(1));
-        if line < self.scroll {
-            self.scroll = line;
-        } else if line >= self.scroll + height {
-            self.scroll = line + 1 - height;
+        let margin = 3.min(height.saturating_sub(1) / 2);
+        if line < self.scroll.saturating_add(margin) {
+            self.scroll = line.saturating_sub(margin);
+        } else if line + margin >= self.scroll.saturating_add(height) {
+            self.scroll = line + margin + 1 - height;
         }
         let column = position.display_column;
         let width = usize::from(width.max(1));
@@ -899,7 +900,11 @@ impl Model {
         let digits = usize::from(self.gutter_width().saturating_sub(1));
         let mut lines = Vec::with_capacity(end.saturating_sub(self.scroll));
         for line_number in self.scroll..end {
-            let number = format!("{:>digits$} ", line_number + 1);
+            let display = match current {
+                Some(current) if current != line_number => current.abs_diff(line_number),
+                _ => line_number + 1,
+            };
+            let number = format!("{display:>digits$} ");
             let mut style = Style::default().fg(Color::DarkGray);
             if Some(line_number) == current {
                 style = style.bg(Color::Indexed(236));
@@ -918,6 +923,7 @@ impl Model {
         let total = index.len_lines();
         let end = (self.scroll + usize::from(height)).min(total);
         let current = self.current_line();
+        let needle = self.search_query.as_str();
         let mut lines = Vec::with_capacity(end.saturating_sub(self.scroll));
         for line_number in self.scroll..end {
             let Some(start) = index.line_to_offset(line_number) else {
@@ -926,20 +932,39 @@ impl Model {
             let Some(line) = index.offset_to_line(start) else {
                 break;
             };
-            let spans = text
-                .chunks(start..line.end)
-                .map(Span::raw)
-                .collect::<Vec<_>>();
-            let line = Line::from(if spans.is_empty() {
-                vec![Span::raw("")]
-            } else {
-                spans
-            });
-            lines.push(if Some(line_number) == current {
-                line.style(Style::default().bg(Color::Indexed(236)))
-            } else {
-                line
-            });
+            let mut spans = Vec::new();
+            let mut base = start;
+            for chunk in text.chunks(start..line.end) {
+                if needle.is_empty() {
+                    spans.push(Span::raw(chunk));
+                } else {
+                    let mut from = 0;
+                    for (at, _) in chunk.match_indices(needle) {
+                        if at > from {
+                            spans.push(Span::raw(&chunk[from..at]));
+                        }
+                        let style = if base + at == self.cursor {
+                            Style::default().bg(Color::Yellow).fg(Color::Black)
+                        } else {
+                            Style::default().bg(Color::Indexed(88)).fg(Color::White)
+                        };
+                        spans.push(Span::styled(&chunk[at..at + needle.len()], style));
+                        from = at + needle.len();
+                    }
+                    if from < chunk.len() {
+                        spans.push(Span::raw(&chunk[from..]));
+                    }
+                }
+                base += chunk.len();
+            }
+            if spans.is_empty() {
+                spans.push(Span::raw(""));
+            }
+            let mut rendered = Line::from(spans);
+            if Some(line_number) == current {
+                rendered = rendered.style(Style::default().bg(Color::Indexed(236)));
+            }
+            lines.push(rendered);
         }
         if lines.is_empty() {
             lines.push(Line::raw(""));
@@ -996,6 +1021,11 @@ pub fn view(model: &Model, frame: &mut Frame) {
             .as_ref()
             .map(|path| path.display().to_string())
             .unwrap_or_else(|| "[no file]".to_owned());
+        let name = if model.modified {
+            format!("[+] {name}")
+        } else {
+            name
+        };
         if model.buffers.is_empty() {
             name
         } else {
