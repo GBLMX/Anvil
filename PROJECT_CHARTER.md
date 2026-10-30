@@ -144,12 +144,12 @@ These are release blockers, not aspirations.
 
 ## 8. Public API
 
-The v1 contract is four modules and nine methods. Exact signatures are frozen by
+The v1 contract is four modules and ten methods. Exact signatures are frozen by
 ADR-0003; names below are the baseline.
 
 | Module | Methods | Purpose |
 |---|---|---|
-| `editor` | `get_view`, `apply_edit`, `register_command` | Read viewport/selection/interaction mode, apply an authorized transaction, register a user-invoked command |
+| `editor` | `get_view`, `set_mode`, `apply_edit`, `register_command` | Read viewport/selection/interaction mode, switch the session mode, apply an authorized transaction, register a user-invoked command |
 | `ui` | `notify`, `status` | Transient user feedback only |
 | `event` | `subscribe` | Subscribe to an allowlisted event set |
 | `sys` | `read_file`, `fetch`, `exec` | Capability-gated system access |
@@ -162,7 +162,7 @@ propagate to DNS, HTTP, file reads, and child processes.
 
 ```toml
 [plugins.permissions]
-editor = ["read", "write", "commands"]
+editor = ["read", "write", "commands", "mode"]
 network = ["GET:https://api.github.com"]
 fs = ["read:src/**"]
 exec = ["rg", "fd"]
@@ -171,6 +171,8 @@ exec = ["rg", "fd"]
 - Permissions are scoped to a workspace.
 - `network` entries must include method and exact host; host wildcards are not
   supported in v1.
+- `mode` permits changing the session interaction mode; it does not grant
+  buffer or command authority.
 - `fs` entries are interpreted under the workspace root; absolute paths and
   traversal are rejected before `openat2`.
 - `exec` entries name executables; each executable also has an argument policy.

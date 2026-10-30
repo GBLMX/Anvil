@@ -113,7 +113,7 @@ Injection risk and quoting ambiguity.
 ### Structured pipeline AST (rejected for v1)
 
 It recreates a shell inside the gateway. The attack surface is not justified by
-nine API methods.
+ten API methods.
 
 ### Executable allowlist only (rejected)
 

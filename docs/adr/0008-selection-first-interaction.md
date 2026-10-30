@@ -41,11 +41,11 @@ mode-specific path.
 5. **Interaction mode is session state, not process-global state.** The editor
    snapshot carries an `interaction_mode` value. Phase 0 has one value,
    `select`.
-6. **The plugin API must be mode-aware from the start.** `editor.get_view`
-   returns the current `interaction_mode` alongside viewport and selection.
-   Switching modes is reserved for the API revision that introduces a second
-   native mode; it must be an explicit session command, not a plugin-defined
-   mode. Unknown mode values are rejected.
+6. **The plugin API exposes a queryable and switchable session mode.**
+   `editor.get_view` returns `interaction_mode`; `editor.set_mode` changes it
+   under the `editor.mode` permission. Phase 0 accepts only `select`, and
+   unknown mode values are rejected. The mode is explicit session state, not a
+   plugin-defined mode or process-global switch.
 7. **Multiple modal kernels and multi-cursor are later features.** They are not a
    Phase 0 architecture burden. The selection primitive must not preclude them.
 
@@ -62,8 +62,8 @@ Positive:
 Negative:
 
 - The first keymap will feel less Vim-native until an adapter exists.
-- Mode-specific plugin behavior needs an API version bump when a second native
-  mode lands.
+- Adding a second native mode is an additive API version bump, not a new
+  transport method.
 - Keymap latency depends on the plugin transport; core editing must not.
 
 ## Alternatives considered
@@ -91,5 +91,6 @@ undo grouping. Those invariants belong to the Rust core.
   grapheme and display-cell boundaries, and undo grouping.
 - No Phase 0 test path may require an operator-pending state.
 - View serialization includes `interaction_mode`; an unknown value is rejected.
+- `editor.set_mode` rejects unknown modes and calls without `editor.mode`.
 - Keymap plugin tests exercise binding only; they do not redefine motion
   semantics.

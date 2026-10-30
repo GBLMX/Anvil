@@ -119,7 +119,7 @@ with `session_required`. A second `session.hello` on the same connection is
 invalid.
 
 `session.hello`, `anvil.cancel`, and `event.deliver` are control methods, not part
-of the nine public API methods.
+of the ten public API methods.
 
 ### 4. Errors
 

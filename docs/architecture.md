@@ -142,6 +142,7 @@ plugin. Neither is sufficient alone.
 
 ```text
 plugin --editor.get_view-------> editor
+plugin --editor.set_mode-------> editor (permission checked)
 plugin --editor.apply_edit-----> editor (permission checked)
 plugin --editor.register_cmd---> editor
 plugin --ui.notify/status------> editor
@@ -169,8 +170,8 @@ filesystem/network I/O on behalf of a plugin.
 - A future Vim adapter may add an operator-pending layer above the native
   actions. It must not replace the action engine.
 - `interaction_mode` is session state, not process-global state. The plugin API
-  returns it in `editor.get_view`; switching is reserved for the API revision
-  that introduces a second native mode.
+  returns it in `editor.get_view` and changes it with `editor.set_mode`. Phase 0
+  accepts only `select`; unknown modes are rejected.
 - Rendering covers only visible lines; syntax highlighting is incremental and
   viewport-scoped.
 - Byte, char, grapheme, and display-cell coordinates are explicit in the API.
