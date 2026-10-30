@@ -15,6 +15,10 @@ All notable changes to Anvil are recorded here. The format follows
 - Literal `:s/old/new/[g]` and `:%s/old/new/g` substitution with dynamic
   offset updates after length-changing replacements.
 
+- Tree-sitter syntax highlighting for Rust and JSON with a revision-keyed
+  highlight cache, zero-copy span slicing, and keyword/string/comment/number
+  rendering. Files over 2 MiB remain unhighlighted.
+
 - TUI relative line-number gutter, current-line background highlight,
   scrolloff margin, dirty `[+]` title marker, colored mode badge in the status
   line, block/bar cursor shape switching, and current/other search-match

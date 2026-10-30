@@ -12,6 +12,9 @@ default = []
 e2e-bench = []
 
 [dependencies]
+tree-sitter = "0.25"
+tree-sitter-json = "0.24"
+tree-sitter-rust = "0.24"
 anvil-api = { path = "../anvil-api", version = "0.1.0" }
 anvil-core = { path = "../anvil-core", version = "0.1.0" }
 anvil-editor = { path = "../anvil-editor", version = "0.1.0" }

@@ -3,6 +3,7 @@
 //! gateway; there is no direct document fallback in the runtime path.
 
 use std::{
+    cell::RefCell,
     fs,
     io::{self, Stdout},
     path::{Path, PathBuf},
@@ -29,7 +30,9 @@ use ratatui::{
 };
 
 mod gateway;
+mod syntax;
 use gateway::GatewaySession;
+use syntax::{Highlight, SyntaxCache, SyntaxClass};
 
 const MAX_OPEN_BYTES: usize = 256 * 1024 * 1024;
 
@@ -105,6 +108,8 @@ pub struct Model {
     workspace: PathBuf,
     /// Reject file operations instead of falling back when the gateway is absent.
     require_gateway: bool,
+    /// Tree-sitter highlights cached by editor revision and path.
+    syntax: RefCell<SyntaxCache>,
 }
 
 impl Model {
@@ -129,6 +134,7 @@ impl Model {
             gateway: None,
             workspace: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
             require_gateway: false,
+            syntax: RefCell::new(SyntaxCache::default()),
         }
     }
 
@@ -1077,9 +1083,18 @@ impl Model {
             };
             let mut spans = Vec::new();
             let mut base = start;
+            let mut syntax_guard = if needle.is_empty() {
+                Some(self.syntax.borrow_mut())
+            } else {
+                None
+            };
+            let highlights = match syntax_guard.as_mut() {
+                Some(cache) => cache.ensure(text, self.editor.revision(), self.path.as_deref()),
+                None => &[],
+            };
             for chunk in text.chunks(start..line.end) {
                 if needle.is_empty() {
-                    spans.push(Span::raw(chunk));
+                    push_syntax_spans(&mut spans, chunk, base, highlights);
                 } else {
                     let mut from = 0;
                     for (at, _) in chunk.match_indices(needle) {
@@ -1114,6 +1129,57 @@ impl Model {
         }
         lines
     }
+}
+
+fn push_syntax_spans<'a>(
+    spans: &mut Vec<Span<'a>>,
+    chunk: &'a str,
+    base: usize,
+    highlights: &[Highlight],
+) {
+    let chunk_end = base + chunk.len();
+    let first = highlights.partition_point(|highlight| highlight.end <= base);
+    let mut cursor = base;
+    for highlight in &highlights[first..] {
+        if highlight.start >= chunk_end {
+            break;
+        }
+        let start = highlight.start.max(base).max(cursor);
+        let end = highlight.end.min(chunk_end);
+        if end <= start {
+            continue;
+        }
+        if start > cursor {
+            spans.push(Span::raw(&chunk[cursor - base..start - base]));
+        }
+        if end > start {
+            spans.push(Span::styled(
+                &chunk[start - base..end - base],
+                syntax_style(highlight.class),
+            ));
+        }
+        cursor = end.max(cursor);
+    }
+    if cursor < chunk_end {
+        spans.push(Span::raw(&chunk[cursor - base..]));
+    }
+    if chunk.is_empty() {
+        spans.push(Span::raw(""));
+    }
+}
+
+fn syntax_style(class: SyntaxClass) -> Style {
+    let color = match class {
+        SyntaxClass::Keyword => Color::Magenta,
+        SyntaxClass::String => Color::Green,
+        SyntaxClass::Comment => Color::DarkGray,
+        SyntaxClass::Number => Color::Yellow,
+        SyntaxClass::Function => Color::Blue,
+        SyntaxClass::Type => Color::Cyan,
+        SyntaxClass::Property => Color::LightCyan,
+        SyntaxClass::Constant => Color::Yellow,
+    };
+    Style::default().fg(color)
 }
 
 fn find_matches(text: &TextDocument, needle: &str) -> Vec<usize> {
@@ -1596,6 +1662,25 @@ mod tests {
         model.cursor = model.editor.text().len_bytes();
         model.ensure_cursor_visible(1, 3);
         assert_eq!(model.hscroll, 8);
+    }
+
+    #[test]
+    fn syntax_keyword_is_rendered() {
+        let mut model = Model::new(
+            EditorState::from_text("fn main() {}"),
+            Some(PathBuf::from("sample.rs")),
+        );
+        let backend = TestBackend::new(80, 8);
+        let mut terminal = Terminal::new(backend).expect("terminal");
+        terminal.draw(|frame| view(&model, frame)).expect("draw");
+        let colored = terminal
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .any(|cell| cell.fg == Color::Magenta);
+        assert!(colored, "keyword span was not colored");
+        model.dirty = false;
     }
 
     #[test]
