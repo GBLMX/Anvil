@@ -21,8 +21,9 @@ All notable changes to Anvil are recorded here. The format follows
   handling, truncation detection, I/O error preservation, Unix socket
   connections with `0600` socket permissions, `SO_PEERCRED` lookup, and
   validated `Request`/`Response`/`Meta`/`ErrorObject` envelopes.
-- `anvil-api`: the `InteractionMode`, `SetModeRequest`, and `SetModeResponse`
-  types for the `editor.set_mode` contract.
+- `anvil-api`: interaction and view contracts: `InteractionMode`,
+  `EditorView`, `Viewport`, `Selection`, `TextPosition`, `SetModeRequest`, and
+  `SetModeResponse`.
 - `go/internal/fsroot`: `openat2`-confined workspace reader with traversal,
   symlink-escape, regular-file, and size-limit tests.
 
