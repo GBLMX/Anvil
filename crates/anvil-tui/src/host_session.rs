@@ -39,12 +39,10 @@ impl HostSession {
 
     pub fn start_oom(workspace: &Path) -> Result<Self, String> {
         let host = host_binary()?;
-        Self::start_with_host(
-            workspace,
-            &host,
-            Some(300),
-            Some(PathBuf::from("/sys/fs/cgroup")),
-        )
+        let root = std::env::var_os("ANVIL_CGROUP_ROOT")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from("/sys/fs/cgroup"));
+        Self::start_with_host(workspace, &host, Some(300), Some(root))
     }
 
     pub(crate) fn start_with_host(
@@ -337,16 +335,16 @@ mod tests {
             eprintln!("skipping OOM test: plugin host binary not built");
             return;
         };
-        if !Path::new("/sys/fs/cgroup").is_dir() {
+        let root = std::env::var_os("ANVIL_CGROUP_ROOT")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from("/sys/fs/cgroup"));
+        if !root.is_dir() {
             eprintln!("skipping OOM test: cgroup2 unavailable");
             return;
         }
-        let Ok(mut session) = HostSession::start_with_host(
-            Path::new("."),
-            &host,
-            Some(300),
-            Some(PathBuf::from("/sys/fs/cgroup")),
-        ) else {
+        let Ok(mut session) =
+            HostSession::start_with_host(Path::new("."), &host, Some(300), Some(root))
+        else {
             eprintln!("skipping OOM test: no delegated cgroup2 root");
             return;
         };
