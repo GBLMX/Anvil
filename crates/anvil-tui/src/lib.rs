@@ -55,6 +55,8 @@ pub struct Model {
     pub dirty: bool,
     /// Short status line.
     pub status: String,
+    /// Pending normal-mode operator (`d` or `y`).
+    pending: Option<char>,
 }
 
 impl Model {
@@ -70,6 +72,7 @@ impl Model {
             modified: false,
             dirty: true,
             status: String::new(),
+            pending: None,
         }
     }
 
@@ -176,6 +179,87 @@ impl Model {
         self.dirty = true;
     }
 
+    fn sync_cursor_from_selection(&mut self) {
+        self.cursor = self
+            .editor
+            .selection_bytes()
+            .first()
+            .map(|(_, head)| *head)
+            .unwrap_or(0)
+            .min(self.editor.text().len_bytes());
+    }
+
+    fn undo(&mut self) {
+        if self.editor.undo() {
+            self.sync_cursor_from_selection();
+            self.modified = true;
+        } else {
+            self.status = "Already at oldest change".to_owned();
+        }
+        self.dirty = true;
+    }
+
+    fn redo(&mut self) {
+        if self.editor.redo() {
+            self.sync_cursor_from_selection();
+            self.modified = true;
+        } else {
+            self.status = "Already at newest change".to_owned();
+        }
+        self.dirty = true;
+    }
+
+    fn delete_line(&mut self) {
+        let Some(range) = self.editor.line_range_at(self.cursor) else {
+            self.status = "E: no line".to_owned();
+            self.dirty = true;
+            return;
+        };
+        self.editor.set_selection_bytes(range.start, range.end);
+        self.cursor = range.start;
+        self.editor.delete(range);
+        self.sync_cursor_from_selection();
+        self.modified = true;
+        self.dirty = true;
+    }
+
+    fn yank_line(&mut self) {
+        let Some(range) = self.editor.line_range_at(self.cursor) else {
+            self.status = "E: no line".to_owned();
+            self.dirty = true;
+            return;
+        };
+        let cursor = self.cursor;
+        self.editor.set_selection_bytes(range.start, range.end);
+        if self.editor.yank(range) {
+            self.status = "1 line yanked".to_owned();
+        } else {
+            self.status = "E: yank failed".to_owned();
+        }
+        let _ = self.editor.set_selection_bytes(cursor, cursor);
+        self.cursor = cursor;
+        self.dirty = true;
+    }
+
+    fn put_register(&mut self) {
+        if self.editor.put(self.cursor).is_some() {
+            self.sync_cursor_from_selection();
+            self.modified = true;
+        } else {
+            self.status = "E: register empty".to_owned();
+        }
+        self.dirty = true;
+    }
+
+    fn request_quit(&mut self) {
+        if self.modified {
+            self.status = "No write since last change (:q! to override)".to_owned();
+            self.dirty = true;
+        } else {
+            self.quit = true;
+        }
+    }
+
     fn backspace(&mut self) {
         if self.cursor == 0 {
             return;
@@ -205,32 +289,37 @@ impl Model {
         self.dirty = true;
     }
 
-    fn save(&mut self) {
+    fn save(&mut self) -> bool {
         let Some(path) = self.path.as_ref() else {
             self.status = "E32: no file name".to_owned();
             self.dirty = true;
-            return;
+            return false;
         };
         let text = self.editor.text().slice(0..self.editor.text().len_bytes());
         match fs::write(path, text) {
             Ok(()) => {
                 self.modified = false;
                 self.status = format!("\"{}\" written", path.display());
+                self.dirty = true;
+                true
             }
             Err(error) => {
                 self.status = format!("E: {error}");
+                self.dirty = true;
+                false
             }
         }
-        self.dirty = true;
     }
 
     fn execute_command(&mut self, command: &str) {
         match command {
-            "w" => self.save(),
-            "q" => self.quit = true,
-            "wq" => {
+            "w" => {
                 self.save();
-                if !self.modified {
+            }
+            "q" => self.request_quit(),
+            "q!" => self.quit = true,
+            "wq" => {
+                if self.save() {
                     self.quit = true;
                 }
             }
@@ -294,13 +383,18 @@ pub fn view(model: &Model, frame: &mut Frame) {
                 .editor
                 .index()
                 .position(model.editor.text(), model.cursor);
-            match position {
+            let location = match position {
                 Some(position) => format!(
                     " Ln {}, Col {} ",
                     position.line + 1,
                     position.grapheme_column + 1
                 ),
                 None => " Ln 1, Col 1 ".to_owned(),
+            };
+            if model.status.is_empty() {
+                location
+            } else {
+                format!("{} ·{location}", model.status)
             }
         }
     };
@@ -353,6 +447,7 @@ fn handle_event(model: &mut Model, event: Event) {
     match event {
         Event::Key(key) if key.kind == KeyEventKind::Press => handle_key(model, key),
         Event::Paste(text) => {
+            model.pending = None;
             if let InputMode::Insert = model.input_mode {
                 model.insert_text(&text);
             } else if let InputMode::CommandLine { buffer } = &mut model.input_mode {
@@ -369,6 +464,16 @@ fn handle_key(model: &mut Model, key: KeyEvent) {
     let control = key
         .modifiers
         .contains(crossterm::event::KeyModifiers::CONTROL);
+
+    if let Some(pending) = model.pending.take() {
+        model.dirty = true;
+        match (pending, key.code) {
+            ('d', KeyCode::Char('d')) => model.delete_line(),
+            ('y', KeyCode::Char('y')) => model.yank_line(),
+            _ => {}
+        }
+        return;
+    }
     match &mut model.input_mode {
         InputMode::CommandLine { buffer } => match key.code {
             KeyCode::Esc => {
@@ -408,7 +513,7 @@ fn handle_key(model: &mut Model, key: KeyEvent) {
             _ => {}
         },
         InputMode::Normal => match key.code {
-            KeyCode::Char('q') => model.quit = true,
+            KeyCode::Char('q') => model.request_quit(),
             KeyCode::Char('i') => {
                 model.input_mode = InputMode::Insert;
                 model.dirty = true;
@@ -419,6 +524,12 @@ fn handle_key(model: &mut Model, key: KeyEvent) {
                 };
                 model.dirty = true;
             }
+            KeyCode::Char('d') if !control => model.pending = Some('d'),
+            KeyCode::Char('y') if !control => model.pending = Some('y'),
+            KeyCode::Char('x') if !control => model.delete_forward(),
+            KeyCode::Char('p') if !control => model.put_register(),
+            KeyCode::Char('u') if !control => model.undo(),
+            KeyCode::Char('r') if control => model.redo(),
             KeyCode::Char('h') | KeyCode::Left => model.move_char(-1),
             KeyCode::Char('l') | KeyCode::Right => model.move_char(1),
             KeyCode::Char('j') | KeyCode::Down => model.move_line(1),
@@ -470,6 +581,10 @@ mod tests {
 
     fn key(code: KeyCode) -> Event {
         Event::Key(KeyEvent::new(code, KeyModifiers::NONE))
+    }
+
+    fn ctrl(code: KeyCode) -> Event {
+        Event::Key(KeyEvent::new(code, KeyModifiers::CONTROL))
     }
 
     #[test]
@@ -533,7 +648,7 @@ mod tests {
         model.dirty = false;
         handle_event(&mut model, Event::FocusGained);
         assert!(!model.dirty);
-        handle_event(&mut model, key(KeyCode::Char('x')));
+        handle_event(&mut model, key(KeyCode::Char('z')));
         assert!(!model.dirty);
         handle_event(&mut model, key(KeyCode::Char('j')));
         assert!(model.dirty);
@@ -558,5 +673,90 @@ mod tests {
         handle_event(&mut model, key(KeyCode::Char('i')));
         handle_event(&mut model, Event::Paste("b".to_owned()));
         assert_eq!(model.editor.text().slice(0..2), "ba");
+    }
+
+    #[test]
+    fn quit_guard_requires_force_or_write() {
+        let mut model = Model::new(EditorState::from_text("a"), None);
+        handle_event(&mut model, key(KeyCode::Char('i')));
+        handle_event(&mut model, key(KeyCode::Char('b')));
+        handle_event(&mut model, key(KeyCode::Esc));
+
+        handle_event(&mut model, key(KeyCode::Char('q')));
+        assert!(!model.quit);
+        assert!(model.status.contains("No write since last change"));
+
+        handle_event(&mut model, key(KeyCode::Char(':')));
+        handle_event(&mut model, key(KeyCode::Char('q')));
+        handle_event(&mut model, key(KeyCode::Char('!')));
+        handle_event(&mut model, key(KeyCode::Enter));
+        assert!(model.quit);
+    }
+
+    #[test]
+    fn undo_and_redo_are_reachable_from_normal_mode() {
+        let mut model = Model::new(EditorState::from_text("a"), None);
+        handle_event(&mut model, key(KeyCode::Char('i')));
+        handle_event(&mut model, key(KeyCode::Char('X')));
+        handle_event(&mut model, key(KeyCode::Esc));
+        assert_eq!(model.editor.text().slice(0..2), "Xa");
+
+        handle_event(&mut model, key(KeyCode::Char('u')));
+        assert_eq!(model.editor.text().slice(0..1), "a");
+        assert_eq!(model.cursor, 0);
+
+        handle_event(&mut model, ctrl(KeyCode::Char('r')));
+        assert_eq!(model.editor.text().slice(0..2), "Xa");
+        assert_eq!(model.cursor, 1);
+    }
+
+    #[test]
+    fn dd_deletes_current_line_and_keeps_line_start() {
+        let mut model = Model::new(EditorState::from_text("a\nb\nc"), None);
+        model.move_line(1);
+        handle_event(&mut model, key(KeyCode::Char('d')));
+        handle_event(&mut model, key(KeyCode::Char('d')));
+        assert_eq!(model.editor.text().slice(0..3), "a\nc");
+        assert_eq!(model.cursor, 2);
+        assert!(model.modified);
+    }
+
+    #[test]
+    fn yy_and_p_use_the_unnamed_register() {
+        let mut model = Model::new(EditorState::from_text("a\nb"), None);
+        model.move_line(1);
+        handle_event(&mut model, key(KeyCode::Char('y')));
+        handle_event(&mut model, key(KeyCode::Char('y')));
+        assert_eq!(model.editor.yank_text(), "b");
+        assert_eq!(model.cursor, 2);
+
+        model.move_end();
+        handle_event(&mut model, key(KeyCode::Char('p')));
+        assert_eq!(model.editor.text().slice(0..4), "a\nbb");
+        assert_eq!(model.cursor, 4);
+    }
+
+    #[test]
+    fn x_deletes_forward() {
+        let mut model = Model::new(EditorState::from_text("ab"), None);
+        handle_event(&mut model, key(KeyCode::Char('x')));
+        assert_eq!(model.editor.text().slice(0..1), "b");
+        assert_eq!(model.cursor, 0);
+        assert!(model.modified);
+    }
+
+    #[test]
+    fn wq_without_a_path_does_not_quit() {
+        let mut model = Model::new(EditorState::from_text("a"), None);
+        for code in [
+            KeyCode::Char(':'),
+            KeyCode::Char('w'),
+            KeyCode::Char('q'),
+            KeyCode::Enter,
+        ] {
+            handle_event(&mut model, key(code));
+        }
+        assert!(!model.quit);
+        assert!(model.status.contains("no file name"));
     }
 }

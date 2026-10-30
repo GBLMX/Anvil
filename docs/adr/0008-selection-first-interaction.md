@@ -53,9 +53,8 @@ mode-specific path.
    `dd` selects the current line, including its trailing line break when one
    exists, then deletes that selection; the caret remains at the original
    line-start offset rather than advancing as in Vim. `yy` selects the current
-   line under the same rule and yanks it. Yanking requires a core
-   register/clipboard primitive that does not exist yet; selection plus delete
-   is not sufficient for `yy`.
+   line under the same rule and yanks it. The minimal unnamed register is
+   implemented; named registers and system clipboard are later additions.
 
 ## Consequences
 

@@ -39,6 +39,7 @@ pub struct EditorState {
     interaction_mode: InteractionMode,
     undo: Vec<EditRecord>,
     redo: Vec<EditRecord>,
+    yank: String,
 }
 
 /// Immutable view of the editor at one revision.
@@ -65,6 +66,7 @@ impl EditorState {
             interaction_mode: InteractionMode::Select,
             undo: Vec::new(),
             redo: Vec::new(),
+            yank: String::new(),
         }
     }
 
@@ -139,6 +141,49 @@ impl EditorState {
     /// Current selection byte offsets.
     pub fn selection_bytes(&self) -> Vec<(usize, usize)> {
         self.selections.clone()
+    }
+
+    /// Byte range of the line containing `offset`, including its trailing
+    /// `\n` when the document has one.
+    pub fn line_range_at(&self, offset: usize) -> Option<Range<usize>> {
+        let line = self.index.offset_to_line(offset)?;
+        let end = if line.end < self.text.len_bytes() {
+            line.end + 1
+        } else {
+            line.end
+        };
+        Some(line.start..end)
+    }
+
+    /// Copies a byte range into the unnamed register.
+    pub fn yank(&mut self, range: Range<usize>) -> bool {
+        if range.start > range.end
+            || range.end > self.text.len_bytes()
+            || !self.text.is_char_boundary(range.start)
+            || !self.text.is_char_boundary(range.end)
+        {
+            return false;
+        }
+        self.yank = self.text.slice(range);
+        true
+    }
+
+    /// Current unnamed register contents.
+    pub fn yank_text(&self) -> &str {
+        &self.yank
+    }
+
+    /// Inserts the unnamed register at `at`, returning the inserted range.
+    pub fn put(&mut self, at: usize) -> Option<Range<usize>> {
+        if self.yank.is_empty() || at > self.text.len_bytes() || !self.text.is_char_boundary(at) {
+            return None;
+        }
+        let text = std::mem::take(&mut self.yank);
+        let end = at + text.len();
+        self.set_selection_bytes(at, at);
+        self.insert(at, &text);
+        self.yank = text;
+        Some(at..end)
     }
 
     /// Number of undo records retained.
@@ -437,5 +482,26 @@ mod tests {
         let snapshot = state.snapshot();
         assert!(Arc::ptr_eq(&state.text, &snapshot.text));
         assert!(Arc::ptr_eq(&state.index, &snapshot.index));
+    }
+
+    #[test]
+    fn line_range_includes_trailing_newline() {
+        let state = EditorState::from_text("a\nb\nc");
+        assert_eq!(state.line_range_at(0), Some(0..2));
+        assert_eq!(state.line_range_at(2), Some(2..4));
+        assert_eq!(state.line_range_at(4), Some(4..5));
+    }
+
+    #[test]
+    fn unnamed_register_round_trips_and_is_undoable() {
+        let mut state = EditorState::from_text("a\nb");
+        assert!(state.yank(0..2));
+        assert_eq!(state.yank_text(), "a\n");
+        assert_eq!(state.put(3), Some(3..5));
+        assert_eq!(state.text().slice(0..5), "a\nba\n");
+        assert_eq!(state.selection_bytes(), vec![(5, 5)]);
+        assert!(state.undo());
+        assert_eq!(state.text().slice(0..3), "a\nb");
+        assert_eq!(state.yank_text(), "a\n");
     }
 }

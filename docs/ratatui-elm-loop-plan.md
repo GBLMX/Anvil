@@ -1,6 +1,6 @@
 # Ratatui TUI Elm Loop Plan
 
-Status: TUI-0 and basic TUI-1 implemented (insert, save, cursor/viewport); Elm Msg/Cmd runtime remains planned.
+Status: TUI-0 and basic TUI-1 implemented (insert, save, quit guard, undo/redo, `x`/`dd`/`yy`/`p`, cursor/viewport); Elm Msg/Cmd runtime remains planned.
 
 ## 1. Goal
 
@@ -216,11 +216,11 @@ Initial layout:
 - A selection is visible only when anchor != head or an operator is active.
 - Input events are replayed deterministically in tests.
 - Paste is treated as an edit command, never as a sequence of key events.
-- Future Vim aliases compose native selection actions: `dd` selects the current
-  line (including its trailing line break, when present) and deletes it without
+- Vim aliases compose native selection actions: `dd` selects the current line
+  (including its trailing line break, when present) and deletes it without
   moving the caret to the next line; `yy` selects the same range and yanks it.
-  The yank/register path does not exist yet, so `yy` also needs a new core
-  primitive rather than only a keymap binding.
+  The unnamed register is implemented; named registers and system clipboard are
+  later slices.
 
 ## 10. Gateway startup
 
