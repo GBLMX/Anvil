@@ -14,7 +14,7 @@ All notable changes to Anvil are recorded here. The format follows
 - Architecture decision records for plugin isolation, the per-session Go
   gateway, lightweight IDL, text-model selection, exec policy, upstream
   dependencies, the JSON-RPC/token contract, and the selection-first
-  interaction model.
+  interaction model, including the text-model snapshot decision gate.
 - Repository governance files: security policy, contribution guide, code of
   conduct, editor configuration, license files, and CI skeleton.
 - `anvil-ipc`: length-prefixed JSON-RPC framing with an 8 MiB limit, clean-EOF

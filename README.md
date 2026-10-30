@@ -20,6 +20,7 @@ JSON-RPC envelope, Unix socket transport, and `SO_PEERCRED`, plus the
 - [Upstream dependencies](docs/adr/0006-upstream-dependencies.md)
 - [JSON-RPC and token contract](docs/adr/0007-jsonrpc-envelope-and-capability-token.md)
 - [Selection-first interaction](docs/adr/0008-selection-first-interaction.md)
+- [Text-model snapshot gate](docs/adr/0009-text-model-snapshot-gate.md)
 - [Architecture decision records](docs/adr/)
 - [Security policy](SECURITY.md)
 - [Contributing](CONTRIBUTING.md)

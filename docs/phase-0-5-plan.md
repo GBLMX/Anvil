@@ -237,9 +237,9 @@ Only changes required by the core slice:
 - PR-only same-runner A/B gate: 10 MB p99 against `origin/main`, 10% ceiling; skip workloads whose baseline p99 is below 10 µs to avoid timer noise.
 - 100 MB remains a manual reference run, not a PR gate.
 
-### M3: Decision gate
+### M3: Decision gate (proposed: Rope candidate; owner/reviewer sign-off pending)
 
-- ADR-0009 accepted and signed off by owner + reviewer;
+- [ADR-0009](adr/0009-text-model-snapshot-gate.md) accepted and signed off by owner + reviewer;
 - one production backend selected;
 - other backends benchmark-only.
 
