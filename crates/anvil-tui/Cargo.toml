@@ -12,10 +12,10 @@ default = []
 e2e-bench = []
 
 [dependencies]
-anvil-api = { path = "../anvil-api", version = "0.0.0" }
-anvil-core = { path = "../anvil-core", version = "0.0.0" }
-anvil-editor = { path = "../anvil-editor", version = "0.0.0" }
-anvil-ipc = { path = "../anvil-ipc", version = "0.0.0" }
+anvil-api = { path = "../anvil-api", version = "0.1.0" }
+anvil-core = { path = "../anvil-core", version = "0.1.0" }
+anvil-editor = { path = "../anvil-editor", version = "0.1.0" }
+anvil-ipc = { path = "../anvil-ipc", version = "0.1.0" }
 sha2 = "0.10"
 crossterm = "0.29"
 ratatui = "0.30"

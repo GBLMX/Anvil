@@ -6,6 +6,14 @@ All notable changes to Anvil are recorded here. The format follows
 
 ## [Unreleased]
 
+### Planned
+
+- 0.1.1 / Phase 0.7: plugin-host isolation, Tree-sitter syntax highlighting,
+  LSP client, and optional `:reconnect` poison recovery. See
+  [docs/phase-0-7-plan.md](docs/phase-0-7-plan.md).
+
+## [0.1.0] - 2026-10-31
+
 ### Added
 
 - Phase 0.6 exec sandbox foundation: `anvil-exec-runner`, Landlock

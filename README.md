@@ -3,7 +3,7 @@
 Anvil is a Linux-first terminal editor built around a small, capability-scoped
 plugin contract.
 
-Status: **pre-alpha; Phase 0.6 in progress**. A minimal ratatui editor exists with
+Status: **0.1.0; Phase 0.6 in progress**. A minimal ratatui editor exists with
 insert mode (`i`/`a`/`A`/`o`/`O`), `:w`/`:wq`/`:w file`/`:q!`, an
 unsaved-change guard, undo/redo, `x`/`dd`/`yy`/`p` with an unnamed register,
 `/` search with `n`/`N`, an embedded read-only `:help` page, multi-buffer
@@ -23,6 +23,7 @@ atomic writer in `go/internal/fsroot`.
 ## Documents
 
 - [Project charter](PROJECT_CHARTER.md)
+- [0.1.1 / Phase 0.7 plan](docs/phase-0-7-plan.md)
 - [Threat model](docs/threat-model.md)
 - [Architecture](docs/architecture.md)
 - [Deployment model](docs/deployment.md)
