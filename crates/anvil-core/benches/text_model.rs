@@ -1,4 +1,4 @@
-use std::hint::black_box;
+use std::{hint::black_box, sync::Arc};
 
 use anvil_core::{GapBuffer, PieceTable, RopeBuffer, TextBuffer};
 use criterion::{BatchSize, Criterion, Throughput, criterion_group, criterion_main};
@@ -95,8 +95,24 @@ fn run_backend<B: TextBuffer + Clone>(
         bencher.iter(|| black_box(buffer.slice(0..end)));
     });
 
-    group.bench_function("snapshot", |bencher| {
-        bencher.iter(|| black_box(buffer.clone()));
+    let shared = Arc::new(B::from_text(text));
+    group.bench_function("arc_snapshot", |bencher| {
+        bencher.iter(|| black_box(Arc::clone(&shared)));
+    });
+
+    group.bench_function("first_edit_after_snapshot", |bencher| {
+        bencher.iter_batched(
+            || {
+                let shared = Arc::new(B::from_text(text));
+                let snapshot = Arc::clone(&shared);
+                (shared, snapshot)
+            },
+            |(mut shared, _snapshot)| {
+                let _ = Arc::make_mut(&mut shared);
+                black_box(shared.len_bytes())
+            },
+            BatchSize::LargeInput,
+        );
     });
 
     group.bench_function("random_edits", |bencher| {

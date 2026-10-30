@@ -89,17 +89,20 @@ TEXT_P99_MB=100 cargo run --release -p anvil-core --bin text-p99
 
 The 100 MB run uses 30 samples; the 1 MB and 10 MB runs use 100 samples.
 
-### Snapshot proxy (100 MB, `clone`)
+### Snapshot contract (100 MB, `Arc<Document>`)
 
-| Backend | Snapshot p99 |
-|---|---:|
-| Rope | 44 ns |
-| Gap | 34.010 ms |
-| Piece | 13.870 ms |
+| Backend | Arc snapshot p99 | First edit after snapshot p99 |
+|---|---:|---:|
+| Rope | 41 ns | 527 ns |
+| Gap | 45 ns | 72.874 ms |
+| Piece | 43 ns | 15.776 ms |
 
-This measures `Clone` as a snapshot proxy. Rope shares its backing storage;
-Gap and Piece copy document data. Only Rope satisfies the structural
-"no full-document copy per snapshot" hard gate without a redesign.
+Snapshot creation is O(1) for every backend through `Arc`. The first edit after
+a snapshot is the copy-on-write/versioning cost: it clones the document before
+mutation. Rope's clone is O(1); Gap and Piece copy their stored data.
+
+The earlier full-`Clone` measurement was a proxy and is not used for the
+snapshot hard gate.
 
 The PR gate reruns the 10 MB probe against `origin/main` in a second worktree
 on the same runner and fails if any workload's p99 regresses by more than 10%;

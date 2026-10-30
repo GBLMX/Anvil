@@ -1,4 +1,4 @@
-use std::{hint::black_box, time::Instant};
+use std::{hint::black_box, sync::Arc, time::Instant};
 
 use anvil_core::{GapBuffer, PieceTable, RopeBuffer, TextBuffer};
 
@@ -118,13 +118,24 @@ fn measure<B: TextBuffer + Clone>(
     }
     report(name, megabytes, "viewport", times);
 
+    let shared = Arc::new(B::from_text(text));
     let mut times = Vec::with_capacity(samples_per_workload);
     for _ in 0..samples_per_workload {
         let start = Instant::now();
-        black_box(buffer.clone());
+        black_box(Arc::clone(&shared));
         times.push(start.elapsed().as_nanos());
     }
-    report(name, megabytes, "snapshot", times);
+    report(name, megabytes, "arc_snapshot", times);
+
+    let mut times = Vec::with_capacity(samples_per_workload);
+    for _ in 0..samples_per_workload {
+        let mut shared = Arc::new(B::from_text(text));
+        let _snapshot = Arc::clone(&shared);
+        let start = Instant::now();
+        let _ = Arc::make_mut(&mut shared);
+        times.push(start.elapsed().as_nanos());
+    }
+    report(name, megabytes, "first_edit_after_snapshot", times);
 
     let mut times = Vec::with_capacity(samples_per_workload);
     for _ in 0..samples_per_workload {
