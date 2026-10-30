@@ -232,6 +232,7 @@ Only changes required by the core slice:
 - workload and RSS coverage;
 - deterministic edit traces;
 - benchmark report;
+- baseline report: [text-model.md](benchmarks/text-model.md)
 - baseline saved for PR regression checks.
 
 ### M3: Decision gate

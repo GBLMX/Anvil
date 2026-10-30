@@ -15,6 +15,7 @@ JSON-RPC envelope, Unix socket transport, and `SO_PEERCRED`, plus the
 - [Threat model](docs/threat-model.md)
 - [Architecture](docs/architecture.md)
 - [Performance baseline](docs/performance.md)
+- [Text model benchmark](docs/benchmarks/text-model.md)
 - [Phase 0.5 plan](docs/phase-0-5-plan.md)
 - [Upstream dependencies](docs/adr/0006-upstream-dependencies.md)
 - [JSON-RPC and token contract](docs/adr/0007-jsonrpc-envelope-and-capability-token.md)
