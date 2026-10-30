@@ -172,9 +172,12 @@ Response:
 
 ### 8. Performance gate
 
-The direct `std::fs` 100 MB open baseline is 185.9 ms (Rust side) and 193.7 ms
-(PTY first output). After the chunked gateway path exists, rerun the same
-fixture at 4 MiB chunks and report:
+The post-index-fix direct `std::fs` 100 MB open baseline is **174.1 ms**
+(Rust side) and **209.6 ms** (PTY first output). Use this baseline after
+`71ea604`; the older 185.9 ms / 193.7 ms numbers were measured before the
+line-index copy fix and must not be used to attribute gateway overhead. After
+the chunked gateway path exists, rerun the same fixture at 4 MiB chunks and
+report:
 
 - Rust-side open + first frame.
 - PTY first output.
