@@ -1,0 +1,76 @@
+{
+	"idleTimeoutMs": 900000,
+	"servers": {
+		"rust-analyzer": {
+			"command": "rustup",
+			"args": ["run", "1.88.0", "rust-analyzer"],
+			"settings": {
+				"rust-analyzer": {
+					"checkOnSave": true,
+					"check": {
+						"command": "clippy",
+						"extraArgs": ["--all-targets"]
+					},
+					"cargo": {
+						"allFeatures": false
+					},
+					"procMacro": {
+						"enable": true
+					},
+					"diagnostics": {
+						"enable": true,
+						"experimental": {
+							"enable": true
+						}
+					}
+				}
+			},
+			"workspaceReadyTimings": {
+				"timeoutMs": 30000,
+				"settleMs": 1500
+			}
+		},
+		"gopls": {
+			"settings": {
+				"gopls": {
+					"staticcheck": false,
+					"gofumpt": false,
+					"analyses": {
+						"unusedparams": true,
+						"shadow": true
+					}
+				}
+			}
+		},
+		"marksman": {
+			"disabled": true
+		},
+		"yamlls": {
+			"rootMarkers": [".git", ".github"]
+		},
+		"vscode-json-language-server": {
+			"rootMarkers": [".git", ".omp"]
+		},
+		"taplo": {
+			"command": "taplo",
+			"args": ["lsp", "stdio"],
+			"fileTypes": [".toml"],
+			"rootMarkers": ["Cargo.toml", "deny.toml", "rust-toolchain.toml"]
+		},
+		"vscode-html-language-server": {
+			"disabled": true
+		},
+		"vscode-css-language-server": {
+			"disabled": true
+		},
+		"bashls": {
+			"disabled": true
+		},
+		"lua-language-server": {
+			"disabled": true
+		},
+		"texlab": {
+			"disabled": true
+		}
+	}
+}

@@ -1,0 +1,4 @@
+lsp:
+  requestTimeout: 30
+  diagnosticsOnWrite: true
+  formatOnWrite: false
