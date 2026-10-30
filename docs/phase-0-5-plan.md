@@ -1,6 +1,6 @@
 # Phase 0.5 Plan: Core Evidence and Editing Primitives
 
-Status: approved for execution; 6-week timebox. M1-M4 are complete.
+Status: complete; 6-week timebox. M1-M5 are complete.
 
 ## 1. Entry state
 
@@ -251,13 +251,15 @@ Only changes required by the core slice:
 - snapshot contract;
 - core tests and API view integration.
 
-### M5: Phase 0.5 exit (next)
+### M5: Phase 0.5 exit (done)
 
 - all gates above pass;
 - no `todo!()`, `unimplemented!()`, empty command bodies, or placeholder
   modules;
 - worktree clean;
-- CI green.
+- CI green;
+- benchmark data in [editor.md](benchmarks/editor.md) and
+  [line-index-stress.md](benchmarks/line-index-stress.md).
 
 ## 9. Risks
 
