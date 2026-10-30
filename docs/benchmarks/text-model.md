@@ -89,6 +89,18 @@ TEXT_P99_MB=100 cargo run --release -p anvil-core --bin text-p99
 
 The 100 MB run uses 30 samples; the 1 MB and 10 MB runs use 100 samples.
 
+### Snapshot proxy (100 MB, `clone`)
+
+| Backend | Snapshot p99 |
+|---|---:|
+| Rope | 44 ns |
+| Gap | 34.010 ms |
+| Piece | 13.870 ms |
+
+This measures `Clone` as a snapshot proxy. Rope shares its backing storage;
+Gap and Piece copy document data. Only Rope satisfies the structural
+"no full-document copy per snapshot" hard gate without a redesign.
+
 The PR gate reruns the 10 MB probe against `origin/main` in a second worktree
 on the same runner and fails if any workload's p99 regresses by more than 10%;
 workloads with a baseline p99 below 10 µs are skipped as timer noise.

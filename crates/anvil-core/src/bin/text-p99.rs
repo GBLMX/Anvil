@@ -85,7 +85,7 @@ fn report(name: &str, megabytes: usize, workload: &str, mut samples: Vec<u128>) 
     );
 }
 
-fn measure<B: TextBuffer>(
+fn measure<B: TextBuffer + Clone>(
     name: &str,
     megabytes: usize,
     samples_per_workload: usize,
@@ -117,6 +117,14 @@ fn measure<B: TextBuffer>(
         times.push(start.elapsed().as_nanos());
     }
     report(name, megabytes, "viewport", times);
+
+    let mut times = Vec::with_capacity(samples_per_workload);
+    for _ in 0..samples_per_workload {
+        let start = Instant::now();
+        black_box(buffer.clone());
+        times.push(start.elapsed().as_nanos());
+    }
+    report(name, megabytes, "snapshot", times);
 
     let mut times = Vec::with_capacity(samples_per_workload);
     for _ in 0..samples_per_workload {

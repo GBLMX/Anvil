@@ -70,7 +70,7 @@ fn apply_trace<B: TextBuffer>(buffer: &mut B, trace: &EditTrace) {
     }
 }
 
-fn run_backend<B: TextBuffer>(
+fn run_backend<B: TextBuffer + Clone>(
     criterion: &mut Criterion,
     name: &str,
     megabytes: usize,
@@ -93,6 +93,10 @@ fn run_backend<B: TextBuffer>(
     group.bench_function("viewport", |bencher| {
         let end = (VIEWPORT_LINES * LINE_WIDTH).min(buffer.len_bytes());
         bencher.iter(|| black_box(buffer.slice(0..end)));
+    });
+
+    group.bench_function("snapshot", |bencher| {
+        bencher.iter(|| black_box(buffer.clone()));
     });
 
     group.bench_function("random_edits", |bencher| {
