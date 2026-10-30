@@ -49,9 +49,12 @@ All notable changes to Anvil are recorded here. The format follows
   canonicalization before permission checks, and no `std::fs` fallback.
 
 - `anvil-ipc::GatewayClient`: synchronous handshake, chunked read/write,
-  response-id checks, policy-error detection, and complete-file helpers. The
-  TUI is still on direct `std::fs`; this is not an end-to-end sandbox
-  integration yet.
+  response-id checks, policy-error detection, and complete-file helpers.
+
+- TUI gateway integration: `--workspace`, per-session `anvil-gateway` spawn,
+  token handshake, gateway-backed open/save/`:e`/`:w`, 256 MiB open limit, and
+  fail-closed behavior when the gateway cannot start. No `std::fs` document
+  fallback remains in the runtime path.
 
 - Phase 0.5 complete: PieceTable production selection, cursor/line-index
   primitives, editor snapshots, selection-aware undo, and the locked-core

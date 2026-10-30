@@ -1,20 +1,20 @@
 # ADR-0011: Workspace-Scoped Chunked File I/O
 
-- Status: Proposed; Go `sys.read_file`/`sys.write_file` and `anvil-ipc::GatewayClient` implemented; TUI gateway wiring and TUI `--workspace` are not implemented yet
+- Status: Proposed; Go `sys.read_file`/`sys.write_file`, `anvil-ipc::GatewayClient`, TUI gateway wiring, and TUI `--workspace` are implemented
 - Date: 2026-10-31
 - Related: [ADR-0002](0002-go-daemon.md), [ADR-0007](0007-jsonrpc-envelope-and-capability-token.md)
 
 ## Context
 
-The TUI currently opens and saves with `std::fs` directly. That bypasses the
-per-session gateway and the `fsroot` `openat2` boundary. The gateway and
-`anvil-ipc::GatewayClient` implement chunked `sys.read_file`/`sys.write_file`,
-but the TUI is not wired to them, and `MAX_FRAME_LEN` is 8 MiB, so a 100 MB
-file cannot be read in one frame.
+The TUI uses the per-session gateway for open/save and refuses file operations
+when the gateway cannot start. The gateway and `anvil-ipc::GatewayClient`
+implement chunked `sys.read_file`/`sys.write_file`; `MAX_FRAME_LEN` is 8 MiB,
+so a 100 MB file is transferred in 4 MiB chunks.
 
-The editor also has no workspace root. `fsroot` accepts only paths relative to
-an already opened directory with `RESOLVE_BENEATH`; it does not accept absolute
-paths. Multi-buffer `:e` currently accepts arbitrary paths.
+The TUI workspace root defaults to the startup directory and can be set with
+`--workspace`. `fsroot` accepts only paths relative to the opened directory with
+`RESOLVE_BENEATH`; absolute paths and outside paths are rejected for every
+buffer.
 
 ## Decision
 

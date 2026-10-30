@@ -12,11 +12,13 @@ scrolling, and dirty-only redraws; the Elm command runtime is not complete yet.
 Phase 0 code currently consists of the `anvil-api` interaction and view
 contracts, the `anvil-core` text buffer and selected PieceTable backend, the
 `anvil-editor` snapshot layer, the `anvil-ipc` frame codec, JSON-RPC envelope,
-Unix socket transport, and `SO_PEERCRED`; Phase 0.6 adds the Go gateway
+Unix socket transport, `SO_PEERCRED`, and a synchronous gateway client; the TUI
+starts `anvil-gateway` (sibling binary or `ANVIL_GATEWAY`) and uses
+`--workspace <dir>` for all open/save operations. Phase 0.6 adds the Go gateway
 skeleton, exec runner, Landlock confinement with per-tool execute and a positive
 seccomp allowlist, supervised process groups, `rg`/`fd` argv policy, an
-SSRF-constrained fetch client, plus the `openat2`-confined workspace reader in
-`go/internal/fsroot`.
+SSRF-constrained fetch client, plus the `openat2`-confined workspace reader and
+atomic writer in `go/internal/fsroot`.
 
 ## Documents
 

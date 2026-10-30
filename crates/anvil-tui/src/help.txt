@@ -1,5 +1,9 @@
 Anvil help
 
+Launch
+  anvil --workspace <dir> [file]
+  File paths are workspace-relative. Missing gateway: file I/O is refused.
+
 Normal mode
   h j k l / arrows    move
   Home / End          line start / end

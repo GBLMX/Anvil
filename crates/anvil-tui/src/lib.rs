@@ -1,6 +1,6 @@
 //! Minimal ratatui frontend. TUI-1 adds insert mode, cursor-independent
-//! viewport tracking, and `:w` saving. Prefix commands and gateway effects
-//! remain later slices.
+//! viewport tracking, and `:w` saving. File I/O runs through the workspace
+//! gateway; there is no direct document fallback in the runtime path.
 
 use std::{
     fs,
@@ -11,6 +11,7 @@ use std::{
 use anvil_api::EditorView;
 use anvil_core::{TextBuffer, TextDocument};
 use anvil_editor::EditorState;
+use anvil_ipc::GatewayClient;
 use crossterm::{
     event::{self, Event, KeyCode, KeyEvent, KeyEventKind},
     execute,
@@ -23,6 +24,11 @@ use ratatui::{
     text::{Line, Span},
     widgets::{Block, Paragraph},
 };
+
+mod gateway;
+use gateway::GatewaySession;
+
+const MAX_OPEN_BYTES: usize = 256 * 1024 * 1024;
 
 const HELP_TEXT: &str = include_str!("help.txt");
 
@@ -82,6 +88,12 @@ pub struct Model {
     buffers: Vec<Buffer>,
     /// Active buffer index.
     active: usize,
+    /// Gateway client used for file I/O when present.
+    gateway: Option<GatewayClient>,
+    /// Workspace root used to resolve all file paths.
+    workspace: PathBuf,
+    /// Reject file operations instead of falling back when the gateway is absent.
+    require_gateway: bool,
 }
 
 impl Model {
@@ -103,7 +115,44 @@ impl Model {
             help_back: None,
             buffers: Vec::new(),
             active: 0,
+            gateway: None,
+            workspace: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
+            require_gateway: false,
         }
+    }
+
+    /// Builds a model that uses `gateway` for all file I/O.
+    pub fn with_gateway(gateway: GatewayClient, workspace: PathBuf) -> Self {
+        let mut model = Self::new(EditorState::from_text(""), None);
+        model.gateway = Some(gateway);
+        model.workspace = workspace;
+        model.require_gateway = true;
+        model
+    }
+
+    /// Replaces the active buffer with a UTF-8 file from the workspace.
+    pub fn open_path(&mut self, path: impl AsRef<Path>) -> Result<(), String> {
+        let absolute = self.absolute_path(path.as_ref())?;
+        let text = self.read_file(&absolute)?;
+        self.editor = EditorState::from_text(&text);
+        self.path = Some(absolute);
+        self.cursor = 0;
+        self.scroll = 0;
+        self.hscroll = 0;
+        self.modified = false;
+        self.dirty = true;
+        Ok(())
+    }
+
+    /// Builds a gateway-backed model by reading a UTF-8 file.
+    pub fn open_with_gateway(
+        path: impl AsRef<Path>,
+        gateway: GatewayClient,
+        workspace: PathBuf,
+    ) -> Result<Self, String> {
+        let mut model = Self::with_gateway(gateway, workspace);
+        model.open_path(path)?;
+        Ok(model)
     }
 
     /// Builds a model by reading a UTF-8 file.
@@ -114,6 +163,56 @@ impl Model {
         let path = path.as_ref().to_path_buf();
         let text = fs::read_to_string(&path)?;
         Ok(Self::new(EditorState::from_text(&text), Some(path)))
+    }
+
+    fn absolute_path(&self, path: &Path) -> Result<PathBuf, String> {
+        if path.is_absolute() {
+            Ok(path.to_path_buf())
+        } else {
+            Ok(self.workspace.join(path))
+        }
+    }
+
+    fn relative_path(&self, path: &Path) -> Result<String, String> {
+        let relative = path
+            .strip_prefix(&self.workspace)
+            .map_err(|_| format!("path is outside workspace {}", self.workspace.display()))?;
+        let relative = relative
+            .to_str()
+            .filter(|relative| !relative.is_empty() && *relative != ".")
+            .ok_or_else(|| "invalid file path".to_owned())?;
+        Ok(relative.to_owned())
+    }
+
+    fn read_file(&mut self, path: &Path) -> Result<String, String> {
+        if !self.require_gateway {
+            let data = fs::read(path).map_err(|error| error.to_string())?;
+            return String::from_utf8(data)
+                .map_err(|_| format!("{}: invalid UTF-8", path.display()));
+        }
+        let relative = self.relative_path(path)?;
+        let gateway = self
+            .gateway
+            .as_mut()
+            .ok_or_else(|| "gateway unavailable".to_owned())?;
+        let data = gateway
+            .read_all(&relative, MAX_OPEN_BYTES)
+            .map_err(|error| error.to_string())?;
+        String::from_utf8(data).map_err(|_| format!("{relative}: invalid UTF-8"))
+    }
+
+    fn write_file(&mut self, path: &Path, text: &str) -> Result<(), String> {
+        if !self.require_gateway {
+            return fs::write(path, text).map_err(|error| error.to_string());
+        }
+        let relative = self.relative_path(path)?;
+        let gateway = self
+            .gateway
+            .as_mut()
+            .ok_or_else(|| "gateway unavailable".to_owned())?;
+        gateway
+            .write_all(&relative, text.as_bytes())
+            .map_err(|error| error.to_string())
     }
 
     /// Dispatches one terminal event through the normal input path.
@@ -168,7 +267,14 @@ impl Model {
         if self.help_back.is_some() {
             let _ = self.close_help();
         }
-        let path = PathBuf::from(path);
+        let path = match self.absolute_path(Path::new(path)) {
+            Ok(path) => path,
+            Err(error) => {
+                self.status = format!("E: {error}");
+                self.dirty = true;
+                return;
+            }
+        };
         if self.path.as_ref() == Some(&path) {
             self.status = format!("Already editing {}", path.display());
             self.dirty = true;
@@ -190,7 +296,7 @@ impl Model {
             self.dirty = true;
             return;
         }
-        let text = match fs::read_to_string(&path) {
+        let text = match self.read_file(&path) {
             Ok(text) => text,
             Err(error) => {
                 self.status = format!("E: {error}");
@@ -664,9 +770,17 @@ impl Model {
         if self.reject_read_only() {
             return false;
         }
+        let path = match self.absolute_path(&path) {
+            Ok(path) => path,
+            Err(error) => {
+                self.status = format!("E: {error}");
+                self.dirty = true;
+                return false;
+            }
+        };
         let text = self.editor.text().slice(0..self.editor.text().len_bytes());
         let display = path.display().to_string();
-        match fs::write(&path, text) {
+        match self.write_file(&path, &text) {
             Ok(()) => {
                 self.path = Some(path);
                 self.modified = false;
@@ -884,11 +998,33 @@ pub fn view(model: &Model, frame: &mut Frame) {
     }
 }
 
-/// Runs the minimal terminal loop.
+/// Runs the minimal terminal loop in the current directory workspace.
 pub fn run(path: Option<PathBuf>) -> io::Result<()> {
-    let mut model = match path {
-        Some(path) => Model::open(path)?,
-        None => Model::new(EditorState::from_text(""), None),
+    run_with_workspace(path, std::env::current_dir()?)
+}
+
+/// Runs the minimal terminal loop with an explicit workspace.
+pub fn run_with_workspace(path: Option<PathBuf>, workspace: PathBuf) -> io::Result<()> {
+    let workspace = workspace.canonicalize()?;
+    let (mut model, _session) = match GatewaySession::start(&workspace) {
+        Ok((session, client)) => {
+            let mut model = Model::with_gateway(client, workspace.clone());
+            if let Some(path) = path
+                && let Err(error) = model.open_path(path)
+            {
+                model.status = format!("E: {error}");
+                model.dirty = true;
+            }
+            (model, Some(session))
+        }
+        Err(error) => {
+            let mut model = Model::new(EditorState::from_text(""), None);
+            model.workspace = workspace;
+            model.require_gateway = true;
+            model.status = format!("E: gateway unavailable: {error}");
+            model.dirty = true;
+            (model, None)
+        }
     };
     let mut terminal = TerminalSession::start()?;
     loop {
@@ -1500,5 +1636,42 @@ mod tests {
         type_text(&mut model, "q!");
         handle_event(&mut model, key(KeyCode::Enter));
         assert!(model.quit);
+    }
+
+    #[test]
+    fn gateway_required_refuses_file_operations_without_client() {
+        let directory = tempfile::tempdir().expect("tempdir");
+        let path = directory.path().join("file.txt");
+        let mut model = Model::new(EditorState::from_text("data"), None);
+        model.require_gateway = true;
+        model.workspace = directory.path().to_path_buf();
+        model.path = Some(path);
+        assert!(!model.save());
+        assert!(model.status.contains("gateway unavailable"));
+
+        handle_event(&mut model, key(KeyCode::Char(':')));
+        type_text(&mut model, "e other.txt");
+        handle_event(&mut model, key(KeyCode::Enter));
+        assert!(model.status.contains("gateway unavailable"));
+    }
+
+    #[test]
+    fn gateway_refuses_paths_outside_workspace() {
+        let directory = tempfile::tempdir().expect("tempdir");
+        let outside = tempfile::tempdir().expect("outside");
+        let mut model = Model::new(EditorState::from_text(""), None);
+        model.require_gateway = true;
+        model.workspace = directory.path().to_path_buf();
+        handle_event(&mut model, key(KeyCode::Char(':')));
+        type_text(
+            &mut model,
+            &format!("e {}", outside.path().join("x").display()),
+        );
+        handle_event(&mut model, key(KeyCode::Enter));
+        assert!(
+            model.status.contains("outside workspace"),
+            "{}",
+            model.status
+        );
     }
 }
