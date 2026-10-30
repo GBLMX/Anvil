@@ -1,6 +1,6 @@
 # ADR-0010: Core Owns Coordinates; the Editor Layer Owns Snapshots
 
-- Status: Proposed for owner sign-off
+- Status: Accepted (owner; Phase 0.5 owner-only self-approval)
 - Date: 2026-10-30
 - Related: [ADR-0004](0004-text-model.md), [ADR-0008](0008-selection-first-interaction.md), [ADR-0009](0009-text-model-snapshot-gate.md)
 
@@ -258,8 +258,7 @@ enable a nightly run only after its measured runtime is acceptable.
 
 ## Sign-off
 
-- Owner: pending
-- Reviewer: pending
+- Owner: accepted 2026-10-30
+- Reviewer: not required during Phase 0.5 owner-only self-approval
 
-M4 may implement cursor primitives against this ADR once the owner accepts it.
-Until then, `set_selection` and other cursor-related API additions stay blocked.
+M4 may now implement cursor primitives and the snapshot path against this ADR.

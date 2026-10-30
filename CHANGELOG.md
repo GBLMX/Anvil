@@ -15,7 +15,7 @@ All notable changes to Anvil are recorded here. The format follows
   gateway, lightweight IDL, text-model selection, exec policy, upstream
   dependencies, the JSON-RPC/token contract, and the selection-first
   interaction model, including the text-model snapshot decision gate and a
-  proposed cursor/snapshot ownership ADR.
+  accepted cursor/snapshot ownership ADR.
 - Repository governance files: security policy, contribution guide, code of
   conduct, editor configuration, license files, and CI skeleton.
 - `anvil-ipc`: length-prefixed JSON-RPC framing with an 8 MiB limit, clean-EOF
