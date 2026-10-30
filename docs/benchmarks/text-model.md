@@ -54,9 +54,12 @@ is shown below. These are not p99 measurements yet.
 
 | Backend | 1 MB | 10 MB | 100 MB |
 |---|---:|---:|---:|
-| Rope | 144.61 µs | 711.36 µs | 8.9701 ms |
-| Gap | 2.3547 ms | 39.606 ms | 567.19 ms |
-| Piece | 84.100 µs | 94.547 µs | 341.50 µs |
+| Rope | 144.61 µs | 711.36 µs | 6.7014 ms |
+| Gap | 2.3547 ms | 39.606 ms | 566.27 ms |
+| Piece | 84.100 µs | 94.547 µs | 260.60 µs |
+
+The criterion table is a separate harness; the p99 table below is the
+regression reference.
 
 ## 100 MB RSS probe
 
@@ -66,11 +69,14 @@ Each backend ran in its own process:
 cargo run --release -p anvil-core --bin text-rss -- <rope|gap|piece> 100
 ```
 
-| Backend | VmRSS | VmHWM |
-|---|---:|---:|
-| Rope | 223,092 KB | 223,156 KB |
-| Gap | 207,528 KB | 207,580 KB |
-| Piece | 207,520 KB | 207,580 KB |
+| Backend | State | VmRSS | VmHWM |
+|---|---|---:|---:|
+| Rope | open | 223,300 KB | 223,364 KB |
+| Rope | edited | 223,512 KB | 223,516 KB |
+| Gap | open | 207,548 KB | 207,616 KB |
+| Gap | edited | 310,012 KB | 310,012 KB |
+| Piece | open | 207,420 KB | 207,488 KB |
+| Piece | edited | 207,516 KB | 207,516 KB |
 
 The RSS probe includes the 100 MB input string and the constructed buffer; it
 does not isolate shared runtime overhead.
@@ -83,9 +89,9 @@ TEXT_P99_MB=100 cargo run --release -p anvil-core --bin text-p99
 
 | Backend | Open p99 | `len_lines` p99 | Viewport p99 | Random edits p99 |
 |---|---:|---:|---:|---:|
-| Rope | 126.058 ms | 48 ns | 8.721 µs | 696.619 µs |
-| Gap | 33.341 ms | 51 ns | 1.669 µs | 959.948 ms |
-| Piece | 27.616 ms | 58 ns | 2.335 µs | 219.029 µs |
+| Rope | 78.392 ms | 31 ns | 5.084 µs | 405.469 µs |
+| Gap | 23.387 ms | 26 ns | 0.969 µs | 693.389 ms |
+| Piece | 20.529 ms | 25 ns | 2.310 µs | 141.271 µs |
 
 The 100 MB run uses 30 samples; the 1 MB and 10 MB runs use 100 samples.
 
