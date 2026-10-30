@@ -37,7 +37,8 @@ Applied before plugin VM initialization:
   Landlock claim.
 - seccomp: checks `seccomp_data.arch` against the native ABI; `socket`/
   `socketpair` allow only `AF_UNIX`; other domains return `EPERM`, so TCP/UDP
-  cannot be created. Non-native syscall ABIs are rejected. UDS stream operations remain allowed.
+  cannot be created. Non-native ABIs and x32 (`nr & 0x4000_0000`) are
+  rejected. UDS stream operations remain allowed.
   Broader namespace/mount/ptrace filtering is pending.
 - Landlock handles `EXECUTE`; no path is granted execute after startup.
 - RLIMIT/cgroup pids, memory, fds, and output caps.

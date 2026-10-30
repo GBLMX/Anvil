@@ -20,6 +20,8 @@ Normal mode
   n / N               next / previous match
   :w                  save
   :w file             save as
+  :s/old/new/[g]      replace first / all on current line
+  :%s/old/new/g       replace all in the file
   :wq                 save and quit
   :e file             open or switch file
   :bn / :bp           next / previous buffer

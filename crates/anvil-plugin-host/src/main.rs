@@ -311,6 +311,7 @@ mod linux {
     const BPF_ABS: u16 = 0x20;
     const BPF_JMP: u16 = 0x05;
     const BPF_JEQ: u16 = 0x10;
+    const BPF_JSET: u16 = 0x40;
     const BPF_K: u16 = 0x00;
     const BPF_RET: u16 = 0x06;
     const SECCOMP_RET_ERRNO: u32 = 0x0005_0000;
@@ -350,6 +351,18 @@ mod linux {
                 jt: 0,
                 jf: 0,
                 k: NR,
+            },
+            SockFilter {
+                code: BPF_JMP | BPF_JSET | BPF_K,
+                jt: 0,
+                jf: 1,
+                k: 0x4000_0000,
+            },
+            SockFilter {
+                code: BPF_RET | BPF_K,
+                jt: 0,
+                jf: 0,
+                k: SECCOMP_RET_ERRNO | libc::EPERM as u32,
             },
             SockFilter {
                 code: BPF_JMP | BPF_JEQ | BPF_K,

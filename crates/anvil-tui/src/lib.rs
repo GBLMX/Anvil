@@ -896,7 +896,71 @@ impl Model {
         self.save_to(PathBuf::from(path))
     }
 
+    fn substitute(&mut self, whole: bool, spec: &str) {
+        if self.reject_read_only() {
+            return;
+        }
+        let mut parts = spec.splitn(3, '/');
+        let (Some(old), Some(new)) = (parts.next(), parts.next()) else {
+            self.status = "E: usage: :s/old/new/[g]".to_owned();
+            self.dirty = true;
+            return;
+        };
+        let flags = parts.next().unwrap_or_default();
+        if old.is_empty() {
+            self.status = "E: empty search pattern".to_owned();
+            self.dirty = true;
+            return;
+        }
+        if !flags.is_empty() && flags != "g" {
+            self.status = format!("E: unknown substitute flags: {flags}");
+            self.dirty = true;
+            return;
+        }
+        let range = if whole {
+            0..self.editor.text().len_bytes()
+        } else {
+            let Some(line) = self.editor.index().offset_to_line(self.cursor) else {
+                self.status = "E: no line".to_owned();
+                self.dirty = true;
+                return;
+            };
+            line.start..line.end
+        };
+        let mut matches = find_matches_in(self.editor.text(), old, range);
+        if !flags.contains('g') {
+            matches.truncate(1);
+        }
+        if matches.is_empty() {
+            self.status = "E: pattern not found".to_owned();
+            self.dirty = true;
+            return;
+        }
+        let first = matches[0];
+        for start in matches.into_iter().rev() {
+            let end = start + old.len();
+            self.editor.set_selection_bytes(start, end);
+            self.editor.delete(start..end);
+            if !new.is_empty() {
+                self.editor.insert(start, new);
+            }
+        }
+        self.cursor = first.min(self.editor.text().len_bytes());
+        self.editor.set_selection_bytes(self.cursor, self.cursor);
+        self.modified = true;
+        self.dirty = true;
+        self.status = "substitution applied".to_owned();
+    }
+
     fn execute_command(&mut self, command: &str) {
+        if let Some(rest) = command.strip_prefix("%s/") {
+            self.substitute(true, rest);
+            return;
+        }
+        if let Some(rest) = command.strip_prefix("s/") {
+            self.substitute(false, rest);
+            return;
+        }
         let mut parts = command.splitn(2, char::is_whitespace);
         let name = parts.next().unwrap_or_default();
         let argument = parts.next().unwrap_or_default().trim();
@@ -1043,14 +1107,18 @@ impl Model {
 }
 
 fn find_matches(text: &TextDocument, needle: &str) -> Vec<usize> {
+    find_matches_in(text, needle, 0..text.len_bytes())
+}
+
+fn find_matches_in(text: &TextDocument, needle: &str, range: std::ops::Range<usize>) -> Vec<usize> {
     let needle = needle.as_bytes();
-    if needle.is_empty() || needle.len() > text.len_bytes() {
+    if needle.is_empty() || needle.len() > range.end.saturating_sub(range.start) {
         return Vec::new();
     }
     let mut matches = Vec::new();
     let mut carry = Vec::new();
-    let mut processed: usize = 0;
-    for chunk in text.chunks(0..text.len_bytes()) {
+    let mut processed = range.start;
+    for chunk in text.chunks(range) {
         if chunk.is_empty() {
             continue;
         }
@@ -1617,6 +1685,25 @@ mod tests {
         assert_eq!(model.cursor, 6);
         handle_event(&mut model, key(KeyCode::Char('e')));
         assert_eq!(model.cursor, 9);
+    }
+
+    #[test]
+    fn substitute_is_literal_and_line_scoped() {
+        let mut model = Model::new(EditorState::from_text("foo foo\nfoo"), None);
+        model.execute_command("s/foo/bar/");
+        assert_eq!(model.editor.text().slice(0..11), "bar foo\nfoo");
+        assert!(model.modified);
+
+        let mut model = Model::new(EditorState::from_text("foo foo\nfoo"), None);
+        model.execute_command("%s/foo/bar/g");
+        assert_eq!(model.editor.text().slice(0..11), "bar bar\nbar");
+    }
+
+    #[test]
+    fn substitute_updates_offsets_after_length_change() {
+        let mut model = Model::new(EditorState::from_text("a a"), None);
+        model.execute_command("%s/a/aa/g");
+        assert_eq!(model.editor.text().slice(0..5), "aa aa");
     }
 
     #[test]
