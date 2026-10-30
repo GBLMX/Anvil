@@ -72,6 +72,11 @@ jobs:
       - name: Test
         if: steps.detect.outputs.present == 'true'
         run: cargo test --workspace --all-targets
+      - name: Check generated API bindings
+        if: steps.detect.outputs.present == 'true'
+        run: |
+          cargo run -p anvil-api --example export_bindings
+          git diff --exit-code -- crates/anvil-api/bindings
       - name: Check dependency licenses and advisories
         if: steps.detect.outputs.present == 'true'
         uses: EmbarkStudios/cargo-deny-action@v2
