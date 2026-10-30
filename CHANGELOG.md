@@ -45,9 +45,10 @@ All notable changes to Anvil are recorded here. The format follows
   `sys.ping -> pong`, and `sys.exec -> Unsupported` until the sandboxed
   executor is wired.
 
-- TUI debug `HostSession`: `:plugin-start` / `:plugin-exec` / `:plugin-stop`,
-  background UDS thread with mpsc events, 2-second RPC timeout, OOM status
-  mapping, and host/cgroup cleanup on drop. No VM or plugin API yet.
+- TUI debug `HostSession`: `:plugin-start` / `:plugin-exec` / `:plugin-stop` /
+  `:plugin-oom`, background UDS thread with mpsc events, 2-second RPC timeout,
+  OOM status mapping, host SIGKILL event-loop test, and host/cgroup cleanup on
+  drop. No VM or plugin API yet.
 
 ### Planned
 

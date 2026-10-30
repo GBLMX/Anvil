@@ -977,6 +977,29 @@ impl Model {
     }
 
     #[cfg(target_os = "linux")]
+    fn start_oom_host(&mut self) {
+        if self.host.is_some() {
+            self.status = "plugin host already running".to_owned();
+            self.dirty = true;
+            return;
+        }
+        match HostSession::start_oom(&self.workspace) {
+            Ok(host) => {
+                self.host = Some(host);
+                self.status = "plugin host OOM probe starting".to_owned();
+            }
+            Err(error) => self.status = format!("E: {error}"),
+        }
+        self.dirty = true;
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    fn start_oom_host(&mut self) {
+        self.status = "E: plugin host is Linux-only".to_owned();
+        self.dirty = true;
+    }
+
+    #[cfg(target_os = "linux")]
     fn start_host(&mut self) {
         if self.host.is_some() {
             self.status = "plugin host already running".to_owned();
@@ -1086,6 +1109,7 @@ impl Model {
             ("q!", "") => self.force_quit(),
             ("help", "") => self.show_help(),
             ("plugin-start", "") => self.start_host(),
+            ("plugin-oom", "") => self.start_oom_host(),
             ("plugin-exec", "") => self.exec_host(),
             ("plugin-stop", "") => self.stop_host(),
             ("wq", "") => {

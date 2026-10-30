@@ -20,6 +20,7 @@ mod linux {
         let mut check_read = None;
         let mut hold = false;
         let mut check_fds = false;
+        let mut allocate_mb = 0u32;
         let mut check_network = false;
         let mut check_exec = false;
         let mut check_write = false;
@@ -46,6 +47,14 @@ mod linux {
                 }
                 "--hold" => hold = true,
                 "--check-fds" => check_fds = true,
+                "--allocate-mb" => {
+                    let value = args
+                        .next()
+                        .ok_or_else(|| io::Error::other("missing --allocate-mb value"))?;
+                    allocate_mb = value
+                        .parse()
+                        .map_err(|_| io::Error::other("invalid --allocate-mb"))?;
+                }
                 "--check-network" => check_network = true,
                 "--check-exec" => check_exec = true,
                 "--check-write" => check_write = true,
@@ -78,6 +87,13 @@ mod linux {
         }
         apply_landlock()?;
         apply_seccomp()?;
+
+        if allocate_mb > 0 {
+            std::thread::sleep(std::time::Duration::from_millis(100));
+            let bytes = (allocate_mb as usize).saturating_mul(1024 * 1024);
+            let memory = vec![1u8; bytes];
+            std::hint::black_box(&memory);
+        }
 
         if let Some(path) = check_read {
             match std::fs::File::open(&path) {

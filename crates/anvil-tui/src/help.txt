@@ -28,6 +28,7 @@ Normal mode
   :q                  quit, or close help
   :q!                 force quit, or close help
   :plugin-start       start the debug plugin host
+  :plugin-oom         start host with a 300 MB allocation probe
   :plugin-exec        exercise sys.exec (returns unsupported)
   :plugin-stop        stop the plugin host
   :help               this page
