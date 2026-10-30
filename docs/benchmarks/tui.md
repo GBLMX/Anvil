@@ -29,26 +29,26 @@ cargo bench -p anvil-tui --bench e2e_edit --features e2e-bench
 
 | Layer | Scenario | p50 | p95 | p99 | n |
 |---|---|---:|---:|---:|---:|
-| Rust | key to screen, 1 MB | 73.3 µs | 78.4 µs | 78.4 µs | 20 |
-| Rust | open 100 MB, first frame | 185.9 ms | 185.9 ms | 185.9 ms | 1 |
-| Rust | scroll 100 MB, one `j` | 74.8 µs | 101.0 µs | 101.0 µs | 20 |
-| Rust | first `/` search, 100 MB | 219.9 ms | 219.9 ms | 219.9 ms | 1 |
-| Rust | subsequent `/` search, 100 MB | 202.5 ms | 226.2 ms | 226.2 ms | 10 |
-| PTY | open 100 MB, first frame | 193.7 ms | 193.7 ms | 193.7 ms | 1 |
-| PTY | key to first output, 1 MB | 128.3 µs | 762.8 µs | 762.8 µs | 20 |
-| PTY | scroll 100 MB, one `j` | 224.5 µs | 509.8 µs | 509.8 µs | 20 |
-| PTY | first `/` search, 100 MB | 222.3 ms | 222.3 ms | 222.3 ms | 1 |
-| PTY | subsequent `/` search, 100 MB | 220.2 ms | 227.4 ms | 227.4 ms | 10 |
+| Rust | key to screen, 1 MB | 76.5 µs | 79.6 µs | 79.6 µs | 20 |
+| Rust | open 100 MB, first frame | 174.1 ms | 174.1 ms | 174.1 ms | 1 |
+| Rust | scroll 100 MB, one `j` | 74.4 µs | 104.0 µs | 104.0 µs | 20 |
+| Rust | first `/` search, 100 MB | 210.7 ms | 210.7 ms | 210.7 ms | 1 |
+| Rust | subsequent `/` search, 100 MB | 213.7 ms | 229.8 ms | 229.8 ms | 10 |
+| PTY | open 100 MB, first frame | 209.6 ms | 209.6 ms | 209.6 ms | 1 |
+| PTY | key to first output, 1 MB | 223.3 µs | 508.9 µs | 508.9 µs | 20 |
+| PTY | scroll 100 MB, one `j` | 104.4 µs | 367.1 µs | 367.1 µs | 20 |
+| PTY | first `/` search, 100 MB | 219.0 ms | 219.0 ms | 219.0 ms | 1 |
+| PTY | subsequent `/` search, 100 MB | 221.3 ms | 239.1 ms | 239.1 ms | 10 |
 
 ## Interpretation
 
 - The 100 MB open is dominated by building the line index and first frame:
-  186 ms Rust-side, 194 ms including PTY startup.
-- Scrolling is cheap: about 75 µs Rust-side and 225 µs to first PTY output.
+  174 ms Rust-side, 210 ms including PTY startup.
+- Scrolling is cheap: about 74 µs Rust-side and 104 µs to first PTY output.
 - Search is linear in document size: about 200 ms for 100 MB. PTY overhead is
   negligible when the search scan dominates.
 - PTY overhead is **not** a fixed 2–8 ms on this machine: key-to-first-output
-  adds roughly 55 µs at p50 and 685 µs at p95 over the Rust-side number.
+  adds roughly 147 µs at p50 and 429 µs at p95 over the Rust-side number.
   A real terminal emulator will add its own parsing and painting cost on top.
 - These numbers exclude the Go gateway, LSP, terminal emulator, and idle CPU.
 
@@ -59,12 +59,18 @@ Measured with `/proc/<pid>/status` after the first 100 MB frame:
 | Metric | Value |
 |---|---:|
 | VmRSS after first frame | 198 MB |
-| VmHWM (peak) | 493 MB |
+| VmHWM (peak) | 300 MB |
 
 The peak includes the source `String`, the `PieceTable` copy, and the line
 index. The steady RSS is lower after the source string is dropped, but the
 text and index remain resident. This was measured before gateway integration,
 so it does not include UDS buffers or base64 decode buffers.
+
+A `line_starts` preallocation experiment alone did not change VmHWM. The win
+came from building `LineIndex` directly from the source `&str` instead of
+calling `TextBuffer::slice` through `EditorState::new`: that removes one
+temporary 100 MB copy. The peak includes the source `String`, the
+`PieceTable` copy, and the absolute/relative line-start arrays.
 
 The chunked gateway protocol bounds the server-side transient to one chunk
 (4 MiB raw, about 5.3 MiB base64 plus JSON overhead). The editor still
@@ -74,7 +80,7 @@ stream into a temporary file rather than accumulate the whole document.
 
 ## Boundaries
 
-- No Go gateway, LSP, or syntax highlighting is in this loop. The 73 µs
+- No Go gateway, LSP, or syntax highlighting is in this loop. The 76.5 µs
   key-to-screen number is the core edit/render path before Tree-sitter or
   span styling is added.
 - Tree-sitter highlighting will add highlight computation and styled span

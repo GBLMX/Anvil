@@ -40,6 +40,10 @@ All notable changes to Anvil are recorded here. The format follows
 - Phase 0.6 TUI edit-loop benchmark: layered Rust-side and PTY latency for
   key-to-screen, 100 MB open, 100 MB scroll, and 100 MB search.
 
+- TUI 100 MB open memory: build `LineIndex` directly from the source `&str`
+  instead of a full `TextBuffer::slice` copy; peak VmHWM drops from 493 MB to
+  300 MB, steady RSS remains 198 MB.
+
 - Proposed workspace-scoped chunked `sys.read_file`/`sys.write_file` protocol:
   fail-closed gateway I/O, base64 4 MiB chunks, atomic rename, and no
   `std::fs` fallback.

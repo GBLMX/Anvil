@@ -57,6 +57,16 @@ impl EditorState {
     /// Creates state with one caret at byte zero.
     pub fn new(text: TextDocument) -> Self {
         let index = LineIndex::from_buffer(&text);
+        Self::with_index(text, index)
+    }
+
+    /// Creates state from initial text.
+    pub fn from_text(text: &str) -> Self {
+        let index = LineIndex::from_text(text);
+        Self::with_index(TextDocument::from_text(text), index)
+    }
+
+    fn with_index(text: TextDocument, index: LineIndex) -> Self {
         Self {
             text: Arc::new(text),
             index: Arc::new(index),
@@ -68,11 +78,6 @@ impl EditorState {
             redo: Vec::new(),
             yank: String::new(),
         }
-    }
-
-    /// Creates state from initial text.
-    pub fn from_text(text: &str) -> Self {
-        Self::new(TextDocument::from_text(text))
     }
 
     /// Current text buffer.
