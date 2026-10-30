@@ -9,6 +9,8 @@ repository.workspace = true
 
 [dependencies]
 ropey = "1"
+unicode-segmentation = "1"
+unicode-width = "0.2"
 [dev-dependencies]
 criterion = "0.5"
 proptest = "1"

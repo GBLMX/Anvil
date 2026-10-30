@@ -162,8 +162,9 @@ filesystem/network I/O on behalf of a plugin.
   in shared `Arc<str>` chunks, so retained snapshots never copy the document.
 - Rope and Gap Buffer remain benchmark-only; a second production backend is not
   a parallel maintenance path.
-- The snapshot contains `Arc<Document>` plus viewport/selection/revision and
-  the session `interaction_mode`. It must not clone 100 MB of text per frame.
+- The snapshot contains shared `Arc<TextDocument>` and `Arc<LineIndex>` plus
+  viewport/selection/revision and the session `interaction_mode`. It must not
+  clone 100 MB of text per frame.
 - Phase 0 has exactly one native interaction model: selection-first. A caret is
   an empty selection; there is no operator-pending state in the core.
 - Motions and actions are native core semantics. Keymaps are Lua/TS plugins and

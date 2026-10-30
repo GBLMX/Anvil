@@ -6,7 +6,9 @@
 use std::{ops::Range, sync::Arc};
 
 mod command;
+mod line_index;
 pub use command::{CommandError, EditCommand, History, Revision};
+pub use line_index::{LineIndex, LinePosition, Position};
 
 /// A text buffer with byte-addressed edits and slicing.
 ///

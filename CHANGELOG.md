@@ -31,9 +31,12 @@ All notable changes to Anvil are recorded here. The format follows
   `TextDocument` backend; Rope and Gap Buffer remain benchmark-only. UTF-8
   boundary checks, cached line counts, proptest model comparisons,
   `EditCommand`/`History` undo-redo with revisions and typing groups, COW
-  PieceTable text chunks, a criterion decision harness, a p99/snapshot timing
+  PieceTable text chunks, chunked `LineIndex`, cursor/grapheme/display
+  conversion, a criterion decision harness, a p99/snapshot timing
   probe, a Linux `text-rss` probe, and a PR-only 10 MB same-runner p99
   regression gate.
+- `anvil-editor`: shared `EditorSnapshot`, `EditorState`, selection mapping,
+  and `EditorView` projection.
 - `go/internal/fsroot`: `openat2`-confined workspace reader with traversal,
   symlink-escape, regular-file, and size-limit tests.
 

@@ -1,0 +1,12 @@
+[package]
+name = "anvil-editor"
+description = "Editor state, snapshots, and API view projection for Anvil"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+anvil-api = { path = "../anvil-api" }
+anvil-core = { path = "../anvil-core" }
