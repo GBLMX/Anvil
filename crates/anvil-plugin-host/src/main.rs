@@ -22,6 +22,7 @@ mod linux {
         let mut check_fds = false;
         let mut check_network = false;
         let mut check_exec = false;
+        let mut check_write = false;
         let mut args = std::env::args().skip(1);
         while let Some(arg) = args.next() {
             match arg.as_str() {
@@ -45,6 +46,7 @@ mod linux {
                 "--check-fds" => check_fds = true,
                 "--check-network" => check_network = true,
                 "--check-exec" => check_exec = true,
+                "--check-write" => check_write = true,
                 other => return Err(io::Error::other(format!("unknown argument: {other}"))),
             }
         }
@@ -79,6 +81,14 @@ mod linux {
                     let _ = writeln!(io::stderr(), "read failed unexpectedly: {error}");
                     return Ok(12);
                 }
+            }
+        }
+
+        if check_write {
+            match std::fs::File::create("/tmp/anvil-plugin-host-write-denied") {
+                Err(error) if error.kind() == io::ErrorKind::PermissionDenied => return Ok(20),
+                Ok(_) => return Ok(21),
+                Err(_) => return Ok(22),
             }
         }
 

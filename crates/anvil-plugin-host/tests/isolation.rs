@@ -35,6 +35,13 @@ fn host_denies_network() {
 }
 
 #[test]
+fn landlock_denies_write() {
+    let mut host =
+        spawn(host_bin(), &["--check-write".to_owned()], Token([6; 32])).expect("spawn host");
+    assert_eq!(host.wait().expect("wait").code(), Some(20));
+}
+
+#[test]
 fn landlock_denies_exec() {
     let mut host =
         spawn(host_bin(), &["--check-exec".to_owned()], Token([5; 32])).expect("spawn host");
