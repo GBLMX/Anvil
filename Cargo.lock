@@ -90,6 +90,7 @@ dependencies = [
  "crossterm",
  "nix 0.31.3",
  "ratatui",
+ "serde",
  "serde_json",
  "sha2",
  "tempfile",

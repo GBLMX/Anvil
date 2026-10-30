@@ -58,6 +58,7 @@ Acceptance:
 
 Required outcome:
 
+- LSP wire codec and diagnostics parsing are implemented in `anvil-tui`.
 - Per-workspace language-server lifecycle; no server is started until a
   matching buffer is opened.
 - Diagnostics, hover, definition, and completion are opt-in and cancellable.

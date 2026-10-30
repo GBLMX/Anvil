@@ -31,6 +31,7 @@ use ratatui::{
 
 mod gateway;
 mod host_session;
+pub mod lsp;
 mod syntax;
 use gateway::GatewaySession;
 #[cfg(target_os = "linux")]
