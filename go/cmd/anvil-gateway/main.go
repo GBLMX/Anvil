@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/GBLMX/Anvil/go/internal/fetch"
 	"github.com/GBLMX/Anvil/go/internal/gateway"
 )
 
@@ -25,6 +26,10 @@ func main() {
 	allowExec := flag.Bool("allow-exec", false, "grant sys.exec")
 	execTimeout := flag.Duration("exec-timeout", 5*time.Second, "default sys.exec timeout")
 	maxOutput := flag.Int("max-output", 1<<20, "combined exec output limit")
+	allowFetch := flag.Bool("allow-fetch", false, "grant sys.fetch")
+	fetchAllow := flag.String("fetch-allow", "", "comma-separated exact fetch hosts")
+	fetchMax := flag.Int64("fetch-max", fetch.DefaultMaxBody, "maximum fetch body bytes")
+	fetchTimeout := flag.Duration("fetch-timeout", 10*time.Second, "fetch timeout")
 	flag.Parse()
 
 	if *socket == "" || *workspace == "" || *tokenHash == "" {
@@ -57,6 +62,26 @@ func main() {
 	if *allowExec && !contains(granted, "sys.exec") {
 		granted = append(granted, "sys.exec")
 	}
+	var fetcher *fetch.Client
+	if *allowFetch {
+		hosts := splitPermissions(*fetchAllow)
+		if len(hosts) == 0 {
+			fmt.Fprintln(os.Stderr, "anvil-gateway: -allow-fetch requires -fetch-allow")
+			os.Exit(2)
+		}
+		fetcher, err = fetch.New(fetch.Config{
+			AllowedHosts: hosts,
+			MaxBody:      *fetchMax,
+			Timeout:      *fetchTimeout,
+		})
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "anvil-gateway: fetch: %v\n", err)
+			os.Exit(2)
+		}
+		if !contains(granted, "sys.fetch") {
+			granted = append(granted, "sys.fetch")
+		}
+	}
 	server, err := gateway.Listen(gateway.Config{
 		SocketPath:  *socket,
 		Workspace:   workspacePath,
@@ -66,6 +91,7 @@ func main() {
 		ExecRunner:  runnerPath,
 		ExecTimeout: *execTimeout,
 		MaxOutput:   *maxOutput,
+		Fetcher:     fetcher,
 	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "anvil-gateway: %v\n", err)

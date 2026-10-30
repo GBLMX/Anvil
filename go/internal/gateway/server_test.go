@@ -6,11 +6,16 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"net"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/GBLMX/Anvil/go/internal/fetch"
 )
 
 const testToken = "0123456789abcdef0123456789abcdef"
@@ -197,6 +202,65 @@ func TestConnectionCloseCancelsExec(t *testing.T) {
 	time.Sleep(1500 * time.Millisecond)
 	if _, err := os.Stat(marker); err == nil {
 		t.Fatal("exec process survived connection close")
+	}
+}
+
+func TestSysFetch(t *testing.T) {
+	httpServer := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		_, _ = writer.Write([]byte("fetched"))
+	}))
+	defer httpServer.Close()
+	parsed, err := url.Parse(httpServer.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fetcher, err := fetch.New(fetch.Config{
+		AllowedHosts:  []string{"127.0.0.1"},
+		MaxBody:       1024,
+		AllowHTTP:     true,
+		AllowLoopback: true,
+		AllowAnyPort:  true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	socket := filepath.Join(t.TempDir(), "gateway.sock")
+	hash := sha256.Sum256([]byte(testToken))
+	server, err := Listen(Config{
+		SocketPath:  socket,
+		Workspace:   t.TempDir(),
+		PluginID:    "test-plugin",
+		TokenSHA256: hash,
+		Permissions: []string{"sys.fetch"},
+		Fetcher:     fetcher,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_ = server.Serve(ctx)
+	}()
+	t.Cleanup(func() {
+		cancel()
+		_ = server.Close()
+		<-done
+	})
+	conn := dialGateway(t, socket)
+	if response := sendRequest(t, conn, "hello-1", "session.hello", helloRequestParams(testToken)); response.Error != nil {
+		t.Fatalf("handshake error: %+v", response.Error)
+	}
+	response := sendRequest(t, conn, "fetch-1", "sys.fetch", map[string]interface{}{
+		"url": httpServer.URL + "/",
+	})
+	if response.Error != nil {
+		t.Fatalf("fetch error: %+v", response.Error)
+	}
+	result, ok := response.Result.(map[string]interface{})
+	if !ok || result["body"] != "fetched" || result["status"] != float64(200) {
+		t.Fatalf("result = %#v on port %s", response.Result, parsed.Port())
 	}
 }
 

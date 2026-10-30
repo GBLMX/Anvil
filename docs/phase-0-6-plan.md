@@ -53,7 +53,19 @@ Open:
 
 ## 2. Fetch/SSRF
 
-Not started.
+Implemented:
+
+- `go/internal/fetch`: exact host allowlist, DNS pinning, A/AAAA validation,
+  private/loopback/link-local/CGNAT/documentation/transition-range rejection,
+  HTTPS-only production policy, disabled redirects, timeout, and body cap;
+- `sys.fetch` routing in the gateway with `sys.fetch` permission checks;
+- `httptest` coverage for pinning/host preservation, mixed DNS answers,
+  blocked addresses, host denial, redirect denial, and body truncation.
+
+Open:
+
+- add deployment documentation for the allowlist; the gateway currently requires
+  explicit `-fetch-allow` hosts and has no wildcard support.
 
 ## 3. Go gateway
 

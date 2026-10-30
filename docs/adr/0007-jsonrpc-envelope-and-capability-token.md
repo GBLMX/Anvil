@@ -1,6 +1,6 @@
 # ADR-0007: JSON-RPC Envelope and Capability Token Semantics
 
-- Status: Proposed; handshake and sys.exec routing implemented, control registration pending
+- Status: Proposed; handshake, sys.exec, and sys.fetch routing implemented, control registration pending
 - Date: 2026-10-30
 - Note: requested as ADR-0006, but ADR-0006 is the upstream dependency
   baseline. This is the next free number.

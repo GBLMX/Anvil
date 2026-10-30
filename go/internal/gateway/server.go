@@ -20,6 +20,7 @@ import (
 
 	"github.com/GBLMX/Anvil/go/internal/execpolicy"
 	"github.com/GBLMX/Anvil/go/internal/execrunner"
+	"github.com/GBLMX/Anvil/go/internal/fetch"
 	"golang.org/x/sys/unix"
 )
 
@@ -42,6 +43,7 @@ type Config struct {
 	ExecRunner  string
 	ExecTimeout time.Duration
 	MaxOutput   int
+	Fetcher     *fetch.Client
 }
 
 // Server accepts framed JSON-RPC connections on a Unix socket.
@@ -153,6 +155,18 @@ type execParams struct {
 	TimeoutMS uint64   `json:"timeout_ms"`
 }
 
+type fetchParams struct {
+	URL      string `json:"url"`
+	MaxBytes int64  `json:"max_bytes"`
+}
+
+type fetchResult struct {
+	Status      int    `json:"status"`
+	ContentType string `json:"content_type"`
+	Body        string `json:"body"`
+	Truncated   bool   `json:"truncated"`
+}
+
 type execResult struct {
 	Stdout          string `json:"stdout"`
 	Stderr          string `json:"stderr"`
@@ -227,6 +241,8 @@ func (s *Server) dispatch(ctx context.Context, req request, state *connectionSta
 		return s.hello(req, state)
 	case "sys.exec":
 		return s.exec(ctx, req, state)
+	case "sys.fetch":
+		return s.fetch(ctx, req, state)
 	default:
 		return nil, &rpcError{Code: -32601, Message: "method not found"}
 	}
@@ -270,22 +286,32 @@ func (s *Server) hello(req request, state *connectionState) (interface{}, *rpcEr
 	}, nil
 }
 
+func (s *Server) fetch(parent context.Context, req request, state *connectionState) (interface{}, *rpcError) {
+	if rpcErr := s.permissionError(state, "sys.fetch"); rpcErr != nil {
+		return nil, rpcErr
+	}
+	if s.cfg.Fetcher == nil {
+		return nil, &rpcError{Code: -32008, Message: "fetch unavailable"}
+	}
+	var params fetchParams
+	if err := decodeParams(req.Params, &params); err != nil || params.URL == "" {
+		return nil, &rpcError{Code: -32602, Message: "invalid params"}
+	}
+	response, err := s.cfg.Fetcher.Fetch(parent, params.URL, params.MaxBytes)
+	if err != nil {
+		return nil, &rpcError{Code: -32002, Message: "fetch policy denied"}
+	}
+	return fetchResult{
+		Status:      response.Status,
+		ContentType: response.ContentType,
+		Body:        string(response.Body),
+		Truncated:   response.Truncated,
+	}, nil
+}
+
 func (s *Server) exec(parent context.Context, req request, state *connectionState) (interface{}, *rpcError) {
-	state.mu.Lock()
-	if !state.handshaken {
-		state.mu.Unlock()
-		return nil, &rpcError{Code: -32003, Message: "session required"}
-	}
-	allowed := false
-	for _, permission := range state.permissions {
-		if permission == "sys.exec" {
-			allowed = true
-			break
-		}
-	}
-	state.mu.Unlock()
-	if !allowed {
-		return nil, &rpcError{Code: -32002, Message: "policy denied"}
+	if rpcErr := s.permissionError(state, "sys.exec"); rpcErr != nil {
+		return nil, rpcErr
 	}
 	if s.cfg.ExecRunner == "" {
 		return nil, &rpcError{Code: -32008, Message: "exec runner unavailable"}
@@ -326,6 +352,20 @@ func (s *Server) exec(parent context.Context, req request, state *connectionStat
 		TimedOut:        result.TimedOut,
 		OutputTruncated: result.OutputTruncated,
 	}, nil
+}
+
+func (s *Server) permissionError(state *connectionState, wanted string) *rpcError {
+	state.mu.Lock()
+	defer state.mu.Unlock()
+	if !state.handshaken {
+		return &rpcError{Code: -32003, Message: "session required"}
+	}
+	for _, permission := range state.permissions {
+		if permission == wanted {
+			return nil
+		}
+	}
+	return &rpcError{Code: -32002, Message: "policy denied"}
 }
 
 func decodeParams(raw json.RawMessage, target interface{}) error {
