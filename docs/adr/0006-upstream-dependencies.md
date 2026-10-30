@@ -87,7 +87,8 @@ prerequisites, not system runtime libraries.
 1. Dependencies are pinned in `Cargo.lock` / `go.sum`; ranges in manifests are
    upper-bounded by the versions above.
 2. `cargo-deny` allowlist: MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC,
-   Unicode-DFS-2016, NCSA. `NCSA` is required by the selected
+   Unicode-DFS-2016, Unicode-3.0, NCSA. `Unicode-3.0` is required by
+   `unicode-ident` (through serde derive); `NCSA` is required by the selected
    `libfuzzer-sys` dev dependency (`(MIT OR Apache-2.0) AND NCSA`). Anything
    else requires an ADR.
 3. `deny.toml` is the executable form of this allowlist; CI runs
