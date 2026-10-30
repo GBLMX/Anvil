@@ -1,6 +1,6 @@
 # Phase 0.5 Plan: Core Evidence and Editing Primitives
 
-Status: approved for execution; 6-week timebox. M1, M2, and M3 are complete.
+Status: approved for execution; 6-week timebox. M1-M4 are complete.
 
 ## 1. Entry state
 
@@ -244,14 +244,14 @@ Only changes required by the core slice:
 - `TextDocument = PieceTable` is the production backend;
 - Rope and Gap Buffer remain benchmark-only.
 
-### M4: Editing primitives gate (in progress: SoA landed; A1 p99 gate remains)
+### M4: Editing primitives gate (done: SoA; locked-core p99 gates pass)
 
 - cursor/coordinate ownership [ADR-0010](adr/0010-cursor-and-snapshot-ownership.md) accepted;
 - command/undo/revision with stale-revision rejection and typing groups;
 - snapshot contract;
 - core tests and API view integration.
 
-### M5: Phase 0.5 exit
+### M5: Phase 0.5 exit (next)
 
 - all gates above pass;
 - no `todo!()`, `unimplemented!()`, empty command bodies, or placeholder

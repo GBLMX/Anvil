@@ -47,6 +47,23 @@ fn measure_edits(
     report(case, samples);
 }
 
+fn measure_edits_fresh(
+    case: &str,
+    count: usize,
+    text: &str,
+    mut action: impl FnMut(&mut EditorState),
+) {
+    let mut samples = Vec::with_capacity(count);
+    for _ in 0..count {
+        let mut state = EditorState::from_text(text);
+        let start = Instant::now();
+        action(&mut state);
+        samples.push(start.elapsed().as_nanos());
+        black_box(state.revision());
+    }
+    report(case, samples);
+}
+
 fn measure_views(case: &str, count: usize, snapshot: &anvil_editor::EditorSnapshot) {
     let mut samples = Vec::with_capacity(count);
     for _ in 0..count {
@@ -89,14 +106,12 @@ fn main() {
             state.insert(midpoint, &split_paste);
         },
     );
-    measure_edits(
-        "A3_merge_delete",
-        edit_samples,
-        EditorState::from_text(&text),
-        |state| {
-            state.delete(midpoint..midpoint + 80_000);
-        },
-    );
+    measure_edits_fresh("A3_merge_delete", edit_samples, &text, |state| {
+        let len = state.text().len_bytes();
+        let start = (len / 2).min(len.saturating_sub(1));
+        let end = (start + 80_000).min(len);
+        state.delete(start..end);
+    });
     measure_edits(
         "A4_paste_10k_lines",
         edit_samples,

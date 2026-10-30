@@ -28,9 +28,10 @@ offset-p99-ns,2218
 cargo test --release -p anvil-editor --test line_index_stress -- --ignored --nocapture
 ```
 
-The release run completed in 57.6 s. The sampled 100k run completed with **1,281 chunks**; the full line-start
-round-trip check ran at every 10,000 edits, and the per-1,000 line-count check
-reported no drift.
+The release run completed in 51.6 s. The sampled 100k run completed with **1,281 chunks**. Deviation: the full
+line-start round-trip check runs at every 10,000 edits for the 100k test; the
+per-1,000 check covers `len_lines`, chunk count, and chunk bounds. This is
+documented rather than claiming a full 1k cadence for 100k.
 
 ## Interpretation
 

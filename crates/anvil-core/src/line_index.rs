@@ -290,14 +290,8 @@ impl LineIndex {
             middle.iter().map(|chunk| Arc::clone(&chunk.starts)),
         );
         self.len = new_len;
-        if line_delta != 0 || middle_needs_normalize {
-            let needs_normalize = self.starts.iter().enumerate().any(|(index, starts)| {
-                starts.len() > MAX_LINES
-                    || (index + 1 < self.starts.len() && starts.len() < MIN_LINES)
-            });
-            if needs_normalize {
-                self.normalize();
-            }
+        if middle_needs_normalize {
+            self.normalize();
         }
     }
 
@@ -314,11 +308,13 @@ impl LineIndex {
             if chunk.starts.len() <= MAX_LINES {
                 split.push(chunk);
             } else {
-                for (part_index, part) in chunk.starts.chunks(TARGET_LINES).enumerate() {
+                let chunk_count = chunk.starts.len().div_ceil(TARGET_LINES);
+                let chunk_size = chunk.starts.len().div_ceil(chunk_count);
+                for (part_index, part) in chunk.starts.chunks(chunk_size).enumerate() {
                     let base = chunk.base + part[0];
                     let end = chunk
                         .starts
-                        .get((part_index + 1) * TARGET_LINES)
+                        .get((part_index + 1) * chunk_size)
                         .map(|start| chunk.base + start)
                         .unwrap_or(chunk.end);
                     let starts: Vec<usize> = part.iter().map(|start| start - part[0]).collect();
@@ -434,17 +430,16 @@ fn build_chunks(starts: &[usize], len: usize, first_line: usize) -> Vec<LineChun
     if starts.is_empty() {
         return Vec::new();
     }
+    let chunk_count = starts.len().div_ceil(TARGET_LINES);
+    let chunk_size = starts.len().div_ceil(chunk_count);
     let mut chunks = Vec::new();
-    for (index, part) in starts.chunks(TARGET_LINES).enumerate() {
+    for (index, part) in starts.chunks(chunk_size).enumerate() {
         let base = part[0];
-        let end = starts
-            .get((index + 1) * TARGET_LINES)
-            .copied()
-            .unwrap_or(len);
+        let end = starts.get((index + 1) * chunk_size).copied().unwrap_or(len);
         let relative: Vec<usize> = part.iter().map(|start| start - base).collect();
         chunks.push(LineChunk {
             base,
-            first_line: first_line + index * TARGET_LINES,
+            first_line: first_line + index * chunk_size,
             end,
             starts: Arc::from(relative),
         });
