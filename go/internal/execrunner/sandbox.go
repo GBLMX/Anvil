@@ -191,18 +191,42 @@ func elfInterpreter(path string) (string, error) {
 func limitTaskCount(headroom uint64) error {
 	if path := os.Getenv("ANVIL_CGROUP_PATH"); path != "" {
 		if err := applyCgroupTaskLimit(path, headroom); err == nil {
+			if err := relaxNproc(); err != nil {
+				return err
+			}
 			return nil
 		}
 	}
 	return limitNproc(headroom)
 }
 
+// applyCgroupTaskLimit runs before Landlock/seccomp and before the final execve.
+// The runner does not fork after moving itself into the cgroup, so the tool
+// inherits the limit.
 func applyCgroupTaskLimit(dir string, maxTasks uint64) error {
 	if err := os.WriteFile(filepath.Join(dir, "pids.max"), []byte(strconv.FormatUint(maxTasks, 10)), 0o644); err != nil {
 		return fmt.Errorf("write cgroup pids.max: %w", err)
 	}
 	if err := os.WriteFile(filepath.Join(dir, "cgroup.procs"), []byte(strconv.Itoa(os.Getpid())), 0o644); err != nil {
 		return fmt.Errorf("write cgroup.procs: %w", err)
+	}
+	return nil
+}
+
+// relaxNproc removes the soft RLIMIT_NPROC clamp when a per-sandbox cgroup is
+// active. The cgroup is then the effective limit; a lower hard RLIMIT still
+// makes the effective limit min(pids.max, RLIMIT_NPROC).
+func relaxNproc() error {
+	var current unix.Rlimit
+	if err := unix.Getrlimit(unix.RLIMIT_NPROC, &current); err != nil {
+		return fmt.Errorf("getrlimit RLIMIT_NPROC: %w", err)
+	}
+	if current.Cur == current.Max {
+		return nil
+	}
+	current.Cur = current.Max
+	if err := unix.Setrlimit(unix.RLIMIT_NPROC, &current); err != nil {
+		return fmt.Errorf("setrlimit RLIMIT_NPROC: %w", err)
 	}
 	return nil
 }

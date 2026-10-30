@@ -30,6 +30,9 @@ Implemented:
   combined output cap, `Pdeathsig`, and `WaitDelay`;
 - per-sandbox cgroup v2 `pids.max` when `ANVIL_CGROUP_PATH` is supplied,
   otherwise `RLIMIT_NPROC` reserves 64 tasks above the user's current count;
+- cgroup move happens before Landlock/seccomp and before the final execve;
+  when cgroup is active the runner raises the soft `RLIMIT_NPROC` to the hard
+  limit, leaving `min(pids.max, RLIMIT_NPROC hard)` as the effective bound;
 - extra descriptors are marked close-on-exec before applying the sandbox;
 - tests for outside-file/symlink and workspace-write denial, concurrent
   symlink-swap races, non-allowlisted exec (including via `ld.so`),
@@ -39,8 +42,9 @@ Implemented:
 
 Open:
 
-- gateway must resolve the tool fd/policy, create/clean up
-  `ANVIL_CGROUP_PATH`, and pass a bounded request;
+- gateway must resolve the tool fd/policy, create `ANVIL_CGROUP_PATH` before
+  launch, remove it after wait, and sweep stale empty cgroups older than one
+  hour at startup;
 - CI needs an explicit Landlock capability probe and skip path.
 
 ## 2. Fetch/SSRF

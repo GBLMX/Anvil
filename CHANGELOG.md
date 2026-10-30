@@ -13,8 +13,9 @@ All notable changes to Anvil are recorded here. The format follows
   grants, a positive seccomp allowlist with `clone`/`clone3` and
   executable-mapping filtering, OS-thread locking and identity checks for
   per-thread confinement, `rg`/`fd` argv policy parsers, optional cgroup v2
-  `pids.max` with `RLIMIT_NPROC` fallback, and a supervised process-group runner
-  for timeout and output caps.
+  `pids.max` with pre-exec membership and soft-RLIMIT relaxation plus
+  `RLIMIT_NPROC` fallback, and a supervised process-group runner for timeout
+  and output caps.
 
 - Phase 0.5 complete: PieceTable production selection, cursor/line-index
   primitives, editor snapshots, selection-aware undo, and the locked-core
