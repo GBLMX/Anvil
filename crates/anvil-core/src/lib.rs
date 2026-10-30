@@ -5,6 +5,9 @@
 
 use std::{ops::Range, string::String};
 
+mod command;
+pub use command::{CommandError, EditCommand, History, Revision};
+
 /// A text buffer with byte-addressed edits and slicing.
 ///
 /// Callers must pass UTF-8 code-point boundaries. Invalid offsets panic at the
@@ -18,6 +21,9 @@ pub trait TextBuffer: Sized {
 
     /// Number of logical lines. Empty text has zero lines.
     fn len_lines(&self) -> usize;
+
+    /// Whether `at` is a valid UTF-8 boundary within the buffer.
+    fn is_char_boundary(&self, at: usize) -> bool;
 
     /// Inserts `text` at byte offset `at`.
     ///
@@ -74,6 +80,15 @@ impl TextBuffer for RopeBuffer {
 
     fn len_lines(&self) -> usize {
         self.line_count
+    }
+
+    fn is_char_boundary(&self, at: usize) -> bool {
+        at <= self.len_bytes()
+            && (at == self.len_bytes()
+                || self
+                    .rope
+                    .get_byte(at)
+                    .is_some_and(|byte| (byte & 0xC0) != 0x80))
     }
 
     fn insert(&mut self, at: usize, text: &str) {
@@ -207,6 +222,11 @@ impl TextBuffer for GapBuffer {
 
     fn len_lines(&self) -> usize {
         self.line_count
+    }
+
+    fn is_char_boundary(&self, at: usize) -> bool {
+        at <= self.len()
+            && (at == self.len() || self.byte_at(at).is_some_and(|byte| (byte & 0xC0) != 0x80))
     }
 
     fn insert(&mut self, at: usize, text: &str) {
@@ -390,6 +410,12 @@ impl TextBuffer for PieceTable {
 
     fn len_lines(&self) -> usize {
         self.line_count
+    }
+
+    fn is_char_boundary(&self, at: usize) -> bool {
+        at <= self.len_bytes()
+            && (at == self.len_bytes()
+                || self.byte_at(at).is_some_and(|byte| (byte & 0xC0) != 0x80))
     }
 
     fn insert(&mut self, at: usize, text: &str) {

@@ -27,9 +27,10 @@ All notable changes to Anvil are recorded here. The format follows
 - `anvil-api/bindings`: generated TypeScript declarations, JSON Schema, LuaLS
   annotations, and the API version constant.
 - `anvil-core`: `TextBuffer` plus Rope, Gap Buffer, and piece-table candidates,
-  UTF-8 boundary checks, cached line counts, proptest model comparisons, a
-  criterion decision harness, a p99 timing probe, a Linux `text-rss` probe, and
-  a PR-only 10 MB same-runner p99 regression gate.
+  UTF-8 boundary checks, cached line counts, proptest model comparisons,
+  `EditCommand`/`History` undo-redo with revisions, a criterion decision
+  harness, a p99 timing probe, a Linux `text-rss` probe, and a PR-only 10 MB
+  same-runner p99 regression gate.
 - `go/internal/fsroot`: `openat2`-confined workspace reader with traversal,
   symlink-escape, regular-file, and size-limit tests.
 
