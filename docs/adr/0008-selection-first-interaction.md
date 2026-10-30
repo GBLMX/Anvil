@@ -30,8 +30,8 @@ mode-specific path.
 1. **Phase 0 ships exactly one native interaction model: selection-first.** The
    core has no normal/insert/visual mode split and no operator-pending stack.
 2. **Motions and actions are native core semantics.** Selection extension,
-   deletion, change, yank, put, undo grouping, and multi-selection invariants are
-   implemented in Rust. Plugins do not define what `word`, `delete`, or `change`
+   deletion, change, yank, put, undo grouping, and multi-selection invariants
+   belong in Rust. Plugins do not define what `word`, `delete`, or `change`
    means.
 3. **Key mappings are plugins.** Lua/TS keymap plugins bind input events to core
    commands. The core does not embed Vim, Helix, or Emacs key tables.
@@ -53,7 +53,9 @@ mode-specific path.
    `dd` selects the current line, including its trailing line break when one
    exists, then deletes that selection; the caret remains at the original
    line-start offset rather than advancing as in Vim. `yy` selects the current
-   line under the same rule and yanks it.
+   line under the same rule and yanks it. Yanking requires a core
+   register/clipboard primitive that does not exist yet; selection plus delete
+   is not sufficient for `yy`.
 
 ## Consequences
 

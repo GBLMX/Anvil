@@ -219,6 +219,8 @@ Initial layout:
 - Future Vim aliases compose native selection actions: `dd` selects the current
   line (including its trailing line break, when present) and deletes it without
   moving the caret to the next line; `yy` selects the same range and yanks it.
+  The yank/register path does not exist yet, so `yy` also needs a new core
+  primitive rather than only a keymap binding.
 
 ## 10. Gateway startup
 
