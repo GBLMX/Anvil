@@ -129,10 +129,12 @@ fn measure<B: TextBuffer + Clone>(
 
     let mut times = Vec::with_capacity(samples_per_workload);
     for _ in 0..samples_per_workload {
-        let mut shared = Arc::new(B::from_text(text));
+        let mut buffer = B::from_text(text);
+        apply_trace(&mut buffer, trace);
+        let mut shared = Arc::new(buffer);
         let _snapshot = Arc::clone(&shared);
         let start = Instant::now();
-        let _ = Arc::make_mut(&mut shared);
+        Arc::make_mut(&mut shared).insert(0, "x");
         times.push(start.elapsed().as_nanos());
     }
     report(name, megabytes, "first_edit_after_snapshot", times);

@@ -33,15 +33,17 @@ backend. The corrected measurements separately measure:
 
 ## Measurements
 
-100 MB, p99, 30 samples:
+100 MB, p99, 30 samples. The snapshot workload applies the 256-edit trace
+before taking the retained snapshot:
 
 | Backend | Open | Random edits | Arc snapshot | First edit after snapshot |
 |---|---:|---:|---:|---:|
-| Rope | 83.680 ms | 403.709 µs | 45 ns | 724 ns |
-| Gap | 27.915 ms | 705.919 ms | 45 ns | 30.956 ms |
-| Piece | 19.585 ms | 146.138 µs | 105 ns | 1.769 µs |
+| Rope | 78.392 ms | 405.469 µs | 43 ns | 4.280 µs |
+| Gap | 23.387 ms | 693.389 ms | 48 ns | 68.707 ms |
+| Piece | 20.529 ms | 141.271 µs | 49 ns | 5.288 µs |
 
-100 MB RSS: Rope 223,092 KB; Gap/Piece 207,520 KB.
+100 MB RSS after the 256-edit trace: Rope 223,512 KB; Gap 310,012 KB; Piece
+207,516 KB.
 
 ## Decision
 
@@ -53,11 +55,11 @@ The deciding gate is not raw edit throughput. It is:
 > A retained snapshot must not force a full-document copy on the next edit.
 
 `Arc` snapshot creation is O(1) for all three, but the first edit after a
-snapshot:
+snapshot on an already-edited document:
 
-- Rope: 724 ns (clone shares storage);
-- Piece: 1.769 µs (clones the piece index, shares text chunks);
-- Gap: 30.956 ms (copies the backing storage).
+- Rope: 4.280 µs (clone shares storage);
+- Piece: 5.288 µs (clones the piece index, shares text chunks);
+- Gap: 68.707 ms (copies the backing storage).
 
 PieceTable now passes the COW gate and also wins random-edit throughput, open
 latency, and memory. Rope remains a viable fallback; GapBuffer is rejected on
@@ -80,7 +82,7 @@ Negative:
 
 ## Sensitivity
 
-The measured COW gate is categorical: 1.8 µs versus 0.7–31 ms. Weight changes
+The measured COW gate is categorical: 5.3 µs versus 4.3–68.7 ms. Weight changes
 inside the 40/25/20/15 envelope do not change the gate result. A weighted edit
 score alone would favor PieceTable, which is why the hard gate is recorded
 separately rather than hidden in the weights.

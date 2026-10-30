@@ -93,14 +93,18 @@ The 100 MB run uses 30 samples; the 1 MB and 10 MB runs use 100 samples.
 
 | Backend | Arc snapshot p99 | First edit after snapshot p99 |
 |---|---:|---:|
-| Rope | 45 ns | 724 ns |
-| Gap | 45 ns | 30.956 ms |
-| Piece | 105 ns | 1.769 µs |
+| Rope | 43 ns | 4.280 µs |
+| Gap | 48 ns | 68.707 ms |
+| Piece | 49 ns | 5.288 µs |
 
-Snapshot creation is O(1) for every backend through `Arc`. The first edit after
-a snapshot is the copy-on-write/versioning cost. PieceTable now stores its
-original and inserted text as `Arc` chunks, so its first post-snapshot edit no
-longer copies the document. Rope also remains O(1); Gap copies its storage.
+Snapshot creation is O(1) for every backend through `Arc`. The snapshot probe
+applies the 256-edit trace before taking the snapshot, so the first-edit cost
+includes the real edited piece index. PieceTable stores its original and
+inserted text as `Arc` chunks, so its first post-snapshot edit no longer copies
+the document. Rope also remains O(1); Gap copies its storage.
+
+100 MB RSS after the same 256-edit trace: Rope 223,512 KB; Gap 310,012 KB;
+Piece 207,516 KB.
 
 The earlier full-`Clone` measurement was a proxy and is not used for the
 snapshot hard gate.

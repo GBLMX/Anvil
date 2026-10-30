@@ -103,12 +103,14 @@ fn run_backend<B: TextBuffer + Clone>(
     group.bench_function("first_edit_after_snapshot", |bencher| {
         bencher.iter_batched(
             || {
-                let shared = Arc::new(B::from_text(text));
+                let mut buffer = B::from_text(text);
+                apply_trace(&mut buffer, trace);
+                let shared = Arc::new(buffer);
                 let snapshot = Arc::clone(&shared);
                 (shared, snapshot)
             },
             |(mut shared, _snapshot)| {
-                let _ = Arc::make_mut(&mut shared);
+                Arc::make_mut(&mut shared).insert(0, "x");
                 black_box(shared.len_bytes())
             },
             BatchSize::LargeInput,

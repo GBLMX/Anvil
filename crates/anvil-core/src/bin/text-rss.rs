@@ -12,6 +12,24 @@ fn synthetic_text(megabytes: usize) -> String {
     text
 }
 
+const TRACE_EDITS: usize = 256;
+
+fn apply_trace<B: TextBuffer>(buffer: &mut B) {
+    for index in 0..TRACE_EDITS {
+        let length = buffer.len_bytes();
+        if length == 0 {
+            return;
+        }
+        let at = index.wrapping_mul(7_919) % length;
+        match index % 4 {
+            0 => buffer.insert(at, "x"),
+            1 => buffer.insert(at, "abc\n"),
+            2 => buffer.delete(at..(at + 1).min(length)),
+            _ => buffer.delete(at..(at + 64).min(length)),
+        }
+    }
+}
+
 fn status_value(name: &str) -> Option<u64> {
     let status = std::fs::read_to_string("/proc/self/status").ok()?;
     status.lines().find_map(|line| {
@@ -27,10 +45,16 @@ fn status_value(name: &str) -> Option<u64> {
 }
 
 fn measure<B: TextBuffer>(name: &str, megabytes: usize, text: &str) {
-    let buffer = B::from_text(text);
+    let mut buffer = B::from_text(text);
     let _ = black_box(buffer.len_lines());
     println!(
-        "{name},{megabytes},{},{}",
+        "{name},{megabytes},open,{},{}",
+        status_value("VmRSS").unwrap_or(0),
+        status_value("VmHWM").unwrap_or(0)
+    );
+    apply_trace(&mut buffer);
+    println!(
+        "{name},{megabytes},edited,{},{}",
         status_value("VmRSS").unwrap_or(0),
         status_value("VmHWM").unwrap_or(0)
     );
@@ -46,7 +70,7 @@ fn main() {
         .unwrap_or(1);
     let text = synthetic_text(megabytes);
 
-    println!("backend,mb,rss_kb,hwm_kb");
+    println!("backend,mb,state,rss_kb,hwm_kb");
     match backend.as_str() {
         "rope" => measure::<RopeBuffer>("rope", megabytes, &text),
         "gap" => measure::<GapBuffer>("gap", megabytes, &text),
