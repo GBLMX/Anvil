@@ -85,23 +85,14 @@ fn run_backend<B: TextBuffer>(
         bencher.iter(|| black_box(B::from_text(black_box(text))));
     });
 
+    let buffer = B::from_text(text);
     group.bench_function("len_lines", |bencher| {
-        bencher.iter_batched(
-            || B::from_text(text),
-            |buffer| black_box(buffer.len_lines()),
-            BatchSize::LargeInput,
-        );
+        bencher.iter(|| black_box(buffer.len_lines()));
     });
 
     group.bench_function("viewport", |bencher| {
-        bencher.iter_batched(
-            || B::from_text(text),
-            |buffer| {
-                let end = (VIEWPORT_LINES * LINE_WIDTH).min(buffer.len_bytes());
-                black_box(buffer.slice(0..end))
-            },
-            BatchSize::LargeInput,
-        );
+        let end = (VIEWPORT_LINES * LINE_WIDTH).min(buffer.len_bytes());
+        bencher.iter(|| black_box(buffer.slice(0..end)));
     });
 
     group.bench_function("random_edits", |bencher| {
