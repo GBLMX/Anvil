@@ -48,7 +48,8 @@ Open:
 - gateway needs write access to `/sys/fs/cgroup/anvil-exec/` via systemd
   `Delegate=pids` or a pre-created/chowned root; it must not run as root just
   for cgroup management;
-- CI needs an explicit Landlock capability probe and skip path.
+- CI needs an explicit Landlock capability probe and skip path;
+- gateway control-socket registration and inherited-fd token delivery remain.
 
 ## 2. Fetch/SSRF
 
@@ -56,7 +57,25 @@ Not started.
 
 ## 3. Go gateway
 
-Not started.
+Implemented:
+
+- `go/cmd/anvil-gateway` and `go/internal/gateway`: per-session Unix socket
+  with mode `0600`, 4-byte length-prefixed JSON-RPC, `SO_PEERCRED` UID check,
+  `session.hello` token-hash authentication, and `sys.exec` routing through
+  `anvil-exec-runner`;
+- the bootstrap token hash is supplied with `-token-sha256`; the raw token is
+  only sent by the client in `session.hello`;
+- `crates/anvil-ipc/examples/gateway_handshake.rs` performs a real Rust-to-Go
+  handshake;
+- Go tests cover handshake rejection and the `sys.exec` runner route.
+
+Open:
+
+- replace the bootstrap `-token-sha256` flag with editor control-socket
+  registration and inherited-fd token delivery;
+- add fetch/SSRF and gateway audit logging;
+- wire per-session cgroup creation/cleanup into `Run`;
+- add real-runner gateway integration coverage to CI.
 
 ## 4. Plugin host
 

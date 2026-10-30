@@ -7,10 +7,10 @@ Status: **pre-alpha; Phase 0.6 in progress**. There is no runnable editor yet.
 Phase 0 code currently consists of the `anvil-api` interaction and view
 contracts, the `anvil-core` text buffer and selected PieceTable backend, the
 `anvil-editor` snapshot layer, the `anvil-ipc` frame codec, JSON-RPC envelope,
-Unix socket transport, and `SO_PEERCRED`; Phase 0.6 adds the Go exec runner,
-Landlock confinement with per-tool execute and a positive seccomp allowlist,
-supervised process groups, and `rg`/`fd` argv policy, plus the `openat2`-confined
-workspace reader in `go/internal/fsroot`.
+Unix socket transport, and `SO_PEERCRED`; Phase 0.6 adds the Go gateway
+skeleton, exec runner, Landlock confinement with per-tool execute and a positive
+seccomp allowlist, supervised process groups, and `rg`/`fd` argv policy, plus the
+`openat2`-confined workspace reader in `go/internal/fsroot`.
 
 ## Documents
 
