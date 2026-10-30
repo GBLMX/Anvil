@@ -1,6 +1,6 @@
 # Phase 0.5 Plan: Core Evidence and Editing Primitives
 
-Status: approved for execution; 6-week timebox. M1 is complete.
+Status: approved for execution; 6-week timebox. M1 and M2 are complete.
 
 ## 1. Entry state
 
@@ -227,7 +227,7 @@ Only changes required by the core slice:
 - line-count semantics;
 - cached line counts; no per-call full-document allocation.
 
-### M2: Benchmark gate (in progress: 10 MB PR A/B gate landed)
+### M2: Benchmark gate (done: 10 MB PR A/B gate; 100 MB manual reference)
 
 - criterion harness;
 - workload and RSS coverage;
@@ -235,7 +235,7 @@ Only changes required by the core slice:
 - benchmark report;
 - baseline report: [text-model.md](benchmarks/text-model.md)
 - PR-only same-runner A/B gate: 10 MB p99 against `origin/main`, 10% ceiling; skip workloads whose baseline p99 is below 10 µs to avoid timer noise.
-- baseline saved for PR regression checks.
+- 100 MB remains a manual reference run, not a PR gate.
 
 ### M3: Decision gate
 
