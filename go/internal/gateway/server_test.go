@@ -522,3 +522,47 @@ func TestReadPermissionUsesCanonicalPath(t *testing.T) {
 		t.Fatalf("read error = %+v", response.Error)
 	}
 }
+
+func TestSysReadFileBinary(t *testing.T) {
+	workspace := t.TempDir()
+	data := []byte("binary-frame-data")
+	if err := os.WriteFile(filepath.Join(workspace, "file.txt"), data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	socket := startGatewayAt(t, workspace, []string{"fs.read:**"})
+	conn := dialGateway(t, socket)
+	if response := sendRequest(t, conn, "hello-1", "session.hello", helloRequestParams(testToken)); response.Error != nil {
+		t.Fatalf("handshake error: %+v", response.Error)
+	}
+	body, err := json.Marshal(map[string]interface{}{
+		"jsonrpc": "2.0",
+		"id":      "read-binary",
+		"method":  "sys.read_file",
+		"params": map[string]interface{}{
+			"path":   "file.txt",
+			"offset": 0,
+			"binary": true,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := writeFrame(conn, body); err != nil {
+		t.Fatal(err)
+	}
+	frame, err := readFrame(conn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(frame) == 0 || frame[0] == '{' {
+		t.Fatalf("expected binary frame, got %q", frame)
+	}
+	flags := frame[0]
+	got := frame[1:]
+	if string(got) != string(data) {
+		t.Fatalf("data = %q, want %q", got, data)
+	}
+	if flags&1 == 0 {
+		t.Fatal("binary frame did not set eof")
+	}
+}

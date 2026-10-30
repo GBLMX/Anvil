@@ -37,7 +37,7 @@ go build -o target/release/anvil-gateway ./go/cmd/anvil-gateway
 | Layer | Scenario | p50 | p95 | p99 | n |
 |---|---|---:|---:|---:|---:|
 | Rust | key to screen, 1 MB | 76.5 µs | 79.6 µs | 79.6 µs | 20 |
-| Rust | open 100 MB, first frame | 96.1 ms | 96.1 ms | 96.1 ms | 1 |
+| Rust | open 100 MB, first frame | 89.0 ms | 89.0 ms | 89.0 ms | 1 |
 | Rust | scroll 100 MB, one `j` | 74.4 µs | 104.0 µs | 104.0 µs | 20 |
 | Rust | first `/` search, 100 MB | 210.7 ms | 210.7 ms | 210.7 ms | 1 |
 | Rust | subsequent `/` search, 100 MB | 213.7 ms | 229.8 ms | 229.8 ms | 10 |
@@ -52,20 +52,24 @@ kept as the historical direct baseline.
 
 ## Gateway path (2026-10-31)
 
-Same 100 MB fixture, release TUI, sibling release `anvil-gateway`, 5.5 MiB
-chunks (19 chunks / 104,857,596 bytes):
+Same 100 MB fixture, release TUI, sibling release `anvil-gateway`, binary
+frames with 7 MiB chunks (15 chunks / 104,857,596 bytes):
 
 | Layer | Scenario | p50 | p95 | p99 | n |
 |---|---|---:|---:|---:|---:|
-| Rust | open 100 MB, first frame | 96.1 ms | 96.1 ms | 96.1 ms | 1 |
-| PTY + gateway | open 100 MB, first frame | 563.1 ms | 563.1 ms | 563.1 ms | 1 |
-| PTY + gateway | key to first output, 1 MB | 550.5 µs | 690.8 µs | 690.8 µs | 20 |
-| PTY + gateway | scroll 100 MB, one `j` | 342.6 µs | 487.4 µs | 487.4 µs | 20 |
-| PTY + gateway | first `/` search, 100 MB | 262.1 ms | 262.1 ms | 262.1 ms | 1 |
-| PTY + gateway | subsequent `/` search, 100 MB | 229.9 ms | 261.6 ms | 261.6 ms | 10 |
-| Gateway | per 5.5 MiB read chunk | 27.7 ms avg | 48.6 ms max | 5.3 ms min | 19 |
+| Rust | open 100 MB, first frame | 89.0 ms | 89.0 ms | 89.0 ms | 1 |
+| PTY + gateway | open 100 MB, first frame | 208.9 ms | 208.9 ms | 208.9 ms | 1 |
+| PTY + gateway | key to first output, 1 MB | 565.0 µs | 815.2 µs | 815.2 µs | 20 |
+| PTY + gateway | scroll 100 MB, one `j` | 287.8 µs | 600.4 µs | 600.4 µs | 20 |
+| PTY + gateway | first `/` search, 100 MB | 201.5 ms | 201.5 ms | 201.5 ms | 1 |
+| PTY + gateway | subsequent `/` search, 100 MB | 237.0 ms | 265.9 ms | 265.9 ms | 10 |
+| Gateway | per 7 MiB binary chunk | 12.6 ms avg | — | — | 15 |
 
-Gateway ready (spawn + handshake): 3.13 ms. Total UDS read loop: 637.4 ms.
+Gateway ready (spawn + handshake): 3.1 ms. Serial binary UDS loop: 188.9 ms.
+For comparison, the previous JSON/base64 5.5 MiB path was 563.1 ms PTY with
+19 chunks.
+
+### Previous JSON path (superseded for reads)
 
 Server-side stage benchmark (page-cache warm, per chunk):
 
@@ -96,22 +100,23 @@ time is socket/startup/handler overhead, not the line-index work alone.
 The 4 MiB run was **732.0 ms PTY**, 25 chunks, 21.7 ms average, 661.3 ms
 total. Raising to 5.5 MiB removed 92 ms but did not close the gap.
 
-Pipelining measurement (real gateway, 5.5 MiB chunks, UDS client without
-document decode, page-cache warm):
+Pipelining measurement (real gateway, binary frames, 7 MiB chunks, UDS client
+without document decode, page-cache warm):
 
 | In-flight | Total | Per chunk |
 |---:|---:|---:|
-| 1 | 591.8 ms | 31.1 ms |
-| 2 | 372.0 ms | 19.6 ms |
-| 4 | 389.0 ms | 20.5 ms |
-| 8 | **335.3 ms** | **17.6 ms** |
-| 19 | 376.6 ms | 19.8 ms |
+| 1 | 188.9 ms | 12.6 ms |
+| 2 | 135.1 ms | 9.0 ms |
+| 4 | 126.8 ms | 8.5 ms |
+| 8 | **124.8 ms** | **8.3 ms** |
+| 15 | 138.3 ms | 9.2 ms |
 
-An 8-request window saves **256 ms** against window 1 in the same run. It is
-not only a 28 ms socket optimization; the server encode overlaps across cores.
-Projected PTY open is roughly **307 ms** before client decode is included.
+An 8-request window saves **64 ms** against window 1. Projected PTY open is
+roughly **145 ms**, which would meet the 200 ms Phase 0.6 open target when
+pipelining is implemented. It still does not approach 50 ms.
 
-Worker-count check for CPU competition (same fixture, direct Rust / gateway PTY):
+Worker-count check on the previous JSON path (same fixture, direct Rust /
+gateway PTY):
 
 | Workers | Rust open | Gateway PTY |
 |---:|---:|---:|
@@ -131,27 +136,20 @@ it. The 3,000,000-line parallel/serial equivalence test covers the merge path.
 
 ## Interpretation
 
-- Direct Rust 100 MB open is **96.1 ms** after parallel line scanning;
-  the pre-parallel direct PTY baseline was 210 ms. The gateway path is **563 ms
-  PTY**, about **+353 ms** over that older direct PTY number. It **does not
-  meet the Phase 0.6 open target of 200 ms**. The 50 ms open number is a
-  long-term target, not the Phase 0.6 blocker.
-- The server encode path, not file I/O, is the dominant added cost. Per 5.5
-  MiB chunk: `ReadFileAt` is 0.84 ms, base64 is 4.98 ms, JSON is 5.33 ms, and
-  the full response encode is 11.8 ms. The file is page-cache warm.
-- The 5.5 MiB chunk is real and fits the 8 MiB frame; the 4 MiB run was 732 ms
-  and 5.5 MiB is 563 ms. But 7 MiB raw exceeds the frame after base64, and the
-  practical ceiling is about 5.9 MiB. The remaining gap is not round-trip
-  count alone.
-- Pipelining is the cheapest measured improvement: window 8 takes the UDS loop
-  from 591.8 ms to 335.3 ms in the same run, saving 256 ms. It still leaves a
-  projected ~307 ms PTY open, above the 200 ms Phase 0.6 target.
-- Binary framing removes the measured base64 and JSON work: about 10.3 ms
-  server + 3.3 ms client per chunk, or ~258 ms total. That projects to roughly
-  **305 ms PTY**, not 240 ms. fd passing removes the whole 19.2 ms/chunk
-  transfer path and is the only option that can approach the direct baseline.
-  The 200 ms target still needs binary framing and pipelining; parallel
-  line-index construction is implemented.
+- Direct Rust 100 MB open is **89.0 ms** after parallel line scanning;
+  the pre-parallel direct PTY baseline was 210 ms. The binary gateway path is
+  **208.9 ms PTY**, just above the Phase 0.6 open target of 200 ms.
+  Serial binary UDS is 188.9 ms for 15 chunks.
+- The previous JSON/base64 path was 563.1 ms PTY and 19 chunks. It has been
+  replaced for reads; its server encode cost (11.8 ms/chunk) and client decode
+  cost (5.88 ms/chunk) no longer apply to open.
+- Binary pipelining is still useful: window 8 takes the UDS loop from 188.9 ms
+  to 124.8 ms, saving 64 ms. Projected PTY open is roughly **145 ms**, which
+  meets the 200 ms target once pipelining is wired into the TUI.
+- The 50 ms open target still needs fd passing or another zero-copy path; the
+  current binary frame path is not close.
+- Parallel line scanning remains necessary; it cut direct Rust open from
+  174 ms to 89–96 ms across runs.
 - Search remains dominated by the in-process scan, so the gateway barely
   changes it. Key-to-screen and scroll are within local PTY noise.
 - These numbers include the Go gateway, but not LSP, terminal emulator, or idle
@@ -163,13 +161,13 @@ Measured with `/proc/<pid>/status` after the first 100 MB frame:
 
 | Process | VmRSS | VmHWM |
 |---|---:|---:|
-| TUI | 198 MB | 301 MB |
-| `anvil-gateway` child | 58 MB | 63 MB |
+| TUI | 198 MB | 300 MB |
+| `anvil-gateway` child | 27 MB | 34 MB |
 
 The TUI footprint is unchanged from the direct path: the peak includes the
-source `String`, the `PieceTable` copy, and the line index. The gateway adds
-about 58 MB steady and 63 MB peak for 5.5 MiB chunk, base64, and JSON buffers.
-The combined steady footprint is about 256 MB.
+source `String`, the `PieceTable` copy, and the line index. The binary gateway
+adds about 27 MB steady and 34 MB peak for one raw chunk plus framing. The
+combined steady footprint is about 225 MB.
 
 The two-pass parallel line scan keeps memory flat: it allocates the final
 line-start array once and writes disjoint per-worker slices, instead of keeping
@@ -182,7 +180,7 @@ temporary 100 MB copy. The peak includes the source `String`, the
 `PieceTable` copy, and the absolute/relative line-start arrays.
 
 The chunked gateway protocol bounds the server-side transient to one chunk
-(5.5 MiB raw, about 7.3 MiB base64 plus JSON overhead). The editor still
+(7 MiB raw binary for reads; JSON/base64 writes are 5.5 MiB). The editor still
 assembles the complete text and line index, so its steady-state footprint is
 unchanged; memory is not reduced by chunking. `sys.write_file` streams into a
 temporary file rather than accumulating the whole document.

@@ -30,9 +30,12 @@ import (
 const (
 	// MaxFrameLen is the largest accepted JSON-RPC frame.
 	MaxFrameLen = 8 << 20
-	// maxReadChunk is the maximum file bytes returned by sys.read_file.
+	// maxReadChunk is the maximum JSON/base64 file chunk.
 	// 5.5 MiB encodes to about 7.33 MiB of base64, leaving frame overhead room.
 	maxReadChunk = 5*1024*1024 + 512*1024
+	// maxBinaryReadChunk is the maximum raw chunk; one flag byte plus 7 MiB
+	// still fits the 8 MiB frame.
+	maxBinaryReadChunk = 7 << 20
 	// maxWriteChunk is the maximum file bytes accepted by one sys.write_file.
 	maxWriteChunk = maxReadChunk
 	// Protocol is the v1 JSON-RPC protocol name.
@@ -214,6 +217,11 @@ type readParams struct {
 	Path     string `json:"path"`
 	Offset   int64  `json:"offset"`
 	MaxBytes int64  `json:"max_bytes"`
+	Binary   bool   `json:"binary"`
+}
+
+type binaryResult struct {
+	payload []byte
 }
 
 type readResult struct {
@@ -302,6 +310,10 @@ func (s *Server) handle(serverCtx context.Context, conn net.Conn) {
 			defer writeMu.Unlock()
 			if rpcErr != nil {
 				_ = writeError(conn, req.ID, rpcErr.Code, rpcErr.Message)
+				return
+			}
+			if binary, ok := result.(binaryResult); ok {
+				_ = writeFrame(conn, binary.payload)
 				return
 			}
 			_ = writeResult(conn, req.ID, result)
@@ -401,11 +413,15 @@ func (s *Server) readFile(req request, state *connectionState) (interface{}, *rp
 	if err != nil {
 		return nil, &rpcError{Code: -32002, Message: "policy denied"}
 	}
+	limit := int64(maxReadChunk)
+	if params.Binary {
+		limit = maxBinaryReadChunk
+	}
 	max := params.MaxBytes
 	if max == 0 {
-		max = maxReadChunk
+		max = limit
 	}
-	if max < 0 || max > maxReadChunk {
+	if max < 0 || max > limit {
 		return nil, &rpcError{Code: -32602, Message: "invalid params"}
 	}
 	if rpcErr := s.pathPermissionError(state, "fs.read", path); rpcErr != nil {
@@ -425,6 +441,14 @@ func (s *Server) readFile(req request, state *connectionState) (interface{}, *rp
 		return nil, &rpcError{Code: code, Message: "read unavailable"}
 	}
 	next := params.Offset + int64(len(data))
+	if params.Binary {
+		payload := make([]byte, 1+len(data))
+		if eof {
+			payload[0] = 1
+		}
+		copy(payload[1:], data)
+		return binaryResult{payload: payload}, nil
+	}
 	return readResult{
 		Data:       base64.StdEncoding.EncodeToString(data),
 		NextOffset: next,

@@ -196,7 +196,7 @@ impl Model {
             .as_mut()
             .ok_or_else(|| "gateway unavailable".to_owned())?;
         let data = gateway
-            .read_all(&relative, MAX_OPEN_BYTES)
+            .read_all_binary(&relative, MAX_OPEN_BYTES)
             .map_err(|error| error.to_string())?;
         String::from_utf8(data).map_err(|_| format!("{relative}: invalid UTF-8"))
     }

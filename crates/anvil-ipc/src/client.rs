@@ -13,6 +13,9 @@ use crate::{Connection, EnvelopeError, FrameError, JSONRPC_VERSION, Request, Res
 /// Bytes requested per read or accepted per write.
 pub const FILE_CHUNK: usize = 5 * 1024 * 1024 + 512 * 1024;
 
+/// Raw binary read chunk; one flag byte plus this fits the 8 MiB frame.
+pub const BINARY_READ_CHUNK: usize = 7 * 1024 * 1024;
+
 /// A gateway client failure.
 #[derive(Debug)]
 pub enum ClientError {
@@ -212,11 +215,82 @@ impl GatewayClient {
         Ok(())
     }
 
+    /// Read one raw binary chunk. The frame is `[eof byte][bytes]`.
+    pub fn read_file_binary(
+        &mut self,
+        path: &str,
+        offset: u64,
+        max_bytes: usize,
+    ) -> Result<ReadChunk, ClientError> {
+        if max_bytes == 0 || max_bytes > BINARY_READ_CHUNK {
+            return Err(ClientError::Protocol("read chunk size"));
+        }
+        let id = self.send_request(
+            "sys.read_file",
+            serde_json::json!({
+                "path": path,
+                "offset": offset,
+                "max_bytes": max_bytes,
+                "binary": true,
+            }),
+        )?;
+        let frame = self
+            .connection
+            .recv()?
+            .ok_or(ClientError::Protocol("gateway closed"))?;
+        if frame.first() == Some(&b'{') {
+            let _ = parse_response(&frame, &id)?;
+            return Err(ClientError::Protocol("binary frame expected"));
+        }
+        let Some((&flags, data)) = frame.split_first() else {
+            return Err(ClientError::Protocol("empty binary frame"));
+        };
+        let next_offset = offset + data.len() as u64;
+        Ok(ReadChunk {
+            data: data.to_vec(),
+            next_offset,
+            eof: flags & 1 != 0,
+        })
+    }
+
+    /// Read a complete file using raw binary frames.
+    pub fn read_all_binary(&mut self, path: &str, limit: usize) -> Result<Vec<u8>, ClientError> {
+        let mut data = Vec::new();
+        let mut offset = 0;
+        loop {
+            let chunk = self.read_file_binary(path, offset, BINARY_READ_CHUNK)?;
+            if data.len().saturating_add(chunk.data.len()) > limit {
+                return Err(ClientError::Limit);
+            }
+            data.extend_from_slice(&chunk.data);
+            if chunk.eof {
+                return Ok(data);
+            }
+            if chunk.next_offset <= offset {
+                return Err(ClientError::Protocol("read made no progress"));
+            }
+            offset = chunk.next_offset;
+        }
+    }
+
     fn request(
         &mut self,
         method: &str,
         params: serde_json::Value,
     ) -> Result<serde_json::Value, ClientError> {
+        let id = self.send_request(method, params)?;
+        let frame = self
+            .connection
+            .recv()?
+            .ok_or(ClientError::Protocol("gateway closed"))?;
+        parse_response(&frame, &id)
+    }
+
+    fn send_request(
+        &mut self,
+        method: &str,
+        params: serde_json::Value,
+    ) -> Result<String, ClientError> {
         let id = format!("anvil-{}", self.next_id);
         self.next_id = self.next_id.saturating_add(1);
         let request = Request {
@@ -228,23 +302,23 @@ impl GatewayClient {
         };
         request.validate()?;
         self.connection.send(&serde_json::to_vec(&request)?)?;
-        let frame = self
-            .connection
-            .recv()?
-            .ok_or(ClientError::Protocol("gateway closed"))?;
-        let response: Response = serde_json::from_slice(&frame)?;
-        response.validate()?;
-        if response.id.as_deref() != Some(id.as_str()) {
-            return Err(ClientError::Protocol("response id"));
-        }
-        if let Some(error) = response.error {
-            return Err(ClientError::Rpc {
-                code: error.code,
-                message: error.message,
-            });
-        }
-        Ok(response.result.unwrap_or(serde_json::Value::Null))
+        Ok(id)
     }
+}
+
+fn parse_response(frame: &[u8], id: &str) -> Result<serde_json::Value, ClientError> {
+    let response: Response = serde_json::from_slice(frame)?;
+    response.validate()?;
+    if response.id.as_deref() != Some(id) {
+        return Err(ClientError::Protocol("response id"));
+    }
+    if let Some(error) = response.error {
+        return Err(ClientError::Rpc {
+            code: error.code,
+            message: error.message,
+        });
+    }
+    Ok(response.result.unwrap_or(serde_json::Value::Null))
 }
 
 /// True when the error is the gateway's policy-denied code.
@@ -342,6 +416,35 @@ mod tests {
         let chunk = client.read_file("file.txt", 0, 4).expect("read");
         assert_eq!(chunk.data, b"abc");
         assert_eq!(chunk.next_offset, 3);
+        assert!(chunk.eof);
+        server.join().expect("server");
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn reads_a_binary_frame() {
+        let path = socket_path("binary");
+        let listener = Listener::bind(&path).expect("bind");
+        let server = thread::spawn(move || {
+            let mut connection = listener.accept().expect("accept");
+            let hello = receive(&mut connection);
+            respond(
+                &mut connection,
+                hello.id.as_deref().expect("id"),
+                json!({"session_id": "test"}),
+            );
+            let read = receive(&mut connection);
+            assert_eq!(read.method, "sys.read_file");
+            assert_eq!(read.params["binary"], true);
+            connection.send(&[1, b'h', b'i']).expect("binary");
+        });
+
+        let mut client = GatewayClient::connect(&path, &[7; 32]).expect("connect");
+        let chunk = client
+            .read_file_binary("file.txt", 0, 16)
+            .expect("binary read");
+        assert_eq!(chunk.data, b"hi");
+        assert_eq!(chunk.next_offset, 2);
         assert!(chunk.eof);
         server.join().expect("server");
         let _ = fs::remove_file(path);
