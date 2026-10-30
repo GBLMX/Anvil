@@ -26,8 +26,23 @@ the eventual editor the wrong kind of client.
 
 1. **`anvil-core` owns coordinate and cursor primitives.** It exposes
    `offset_to_line`, `line_to_offset`, and byte/grapheme/display conversion for a
-   document. The line index is maintained incrementally on insert/delete; it is
-   not rebuilt per frame.
+   document.
+
+   `LineIndex` is a chunked persistent index, not a flat `Vec<usize>`:
+   - each chunk covers at most 1024 lines and stores its absolute base offset,
+     first line number, byte end, and an `Arc<[usize]>` of relative line starts;
+   - a snapshot shares the chunk vector and all line-start slices;
+   - an edit clones the small chunk vector, copies only the affected chunk's
+     line starts, and shifts later chunk bases/line numbers;
+   - no edit copies every line start or the document text.
+
+   Complexity:
+   - snapshot: `O(1)`;
+   - first edit after snapshot: `O(chunks + 1024)`, not `O(lines)`;
+   - `offset_to_line`: `O(log chunks + log 1024)`;
+   - `line_to_offset`: `O(log chunks)`.
+
+   Chunks split/merge at the 1024-line target to prevent unbounded growth.
 
 2. **`anvil-core` gains `unicode-segmentation` and `unicode-width`.** These are
    text semantics, not UI dependencies. `anvil-core` must not depend on
@@ -113,6 +128,12 @@ would allow the TUI and plugin API to disagree. Rejected.
 Makes `EditorView` O(document size) and violates the no-full-document-copy
 snapshot contract. Rejected.
 
+### Flat line-start `Vec` with `Arc::make_mut` (rejected)
+
+Copies every line start on the first edit after a snapshot. That converts an
+O(chunks) metadata copy into O(lines) and defeats the same retained-snapshot
+rule the text buffer follows. Rejected.
+
 ## Verification expectations
 
 - Core tests cover empty buffers, multi-byte characters, combining marks, wide
@@ -120,6 +141,11 @@ snapshot contract. Rejected.
 - `offset_to_line` and `line_to_offset` round-trip across every line boundary.
 - Selection mapping tests cover both directions, empty selections, insertion at
   a boundary, deletion containing an endpoint, and undo/redo restoration.
+- `LineIndex` tests prove an edit does not clone every line start: unaffected
+  chunk `Arc<[usize]>` pointers remain shared, the retained snapshot's offsets
+  are unchanged, and the edited index has the new line boundaries.
+- The snapshot first-edit benchmark includes `LineIndex` work and reports the
+  chunk path cost; it must stay far below a full line-array copy.
 - Snapshot tests prove `Arc` sharing and immutability; no document text copy is
   permitted.
 - `anvil-editor` tests construct `EditorView` from a snapshot without duplicating
