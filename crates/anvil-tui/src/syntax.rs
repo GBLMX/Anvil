@@ -2,7 +2,7 @@ use anvil_core::{TextBuffer, TextDocument};
 use std::path::{Path, PathBuf};
 use tree_sitter::{Language, Parser, Query, QueryCursor, StreamingIterator};
 
-const MAX_HIGHLIGHT_BYTES: usize = 2 * 1024 * 1024;
+const MAX_HIGHLIGHT_BYTES: usize = 256 * 1024;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SyntaxClass {
