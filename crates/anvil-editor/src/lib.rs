@@ -155,6 +155,16 @@ impl EditorState {
         Some(line.start..end)
     }
 
+    /// Next grapheme-cluster boundary after `offset`.
+    pub fn next_grapheme_boundary(&self, offset: usize) -> Option<usize> {
+        self.index.next_grapheme_boundary(&*self.text, offset)
+    }
+
+    /// Previous grapheme-cluster boundary before `offset`.
+    pub fn previous_grapheme_boundary(&self, offset: usize) -> Option<usize> {
+        self.index.previous_grapheme_boundary(&*self.text, offset)
+    }
+
     /// Copies a byte range into the unnamed register.
     pub fn yank(&mut self, range: Range<usize>) -> bool {
         if range.start > range.end
@@ -503,5 +513,18 @@ mod tests {
         assert!(state.undo());
         assert_eq!(state.text().slice(0..3), "a\nb");
         assert_eq!(state.yank_text(), "a\n");
+    }
+
+    #[test]
+    fn grapheme_boundaries_keep_zwj_clusters_whole() {
+        let state = EditorState::from_text("a👨‍👩‍👧‍👦b");
+        assert_eq!(state.next_grapheme_boundary(0), Some(1));
+        let after_emoji = state.next_grapheme_boundary(1).expect("emoji boundary");
+        assert_eq!(state.text().slice(1..after_emoji), "👨‍👩‍👧‍👦");
+        assert_eq!(state.previous_grapheme_boundary(after_emoji), Some(1));
+        assert_eq!(
+            state.next_grapheme_boundary(after_emoji),
+            Some(after_emoji + 1)
+        );
     }
 }

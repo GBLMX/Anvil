@@ -152,6 +152,53 @@ impl LineIndex {
             .map(|start| self.bases[chunk_index] + start)
     }
 
+    /// Returns the next grapheme-cluster boundary after `offset`.
+    pub fn next_grapheme_boundary<B: TextBuffer>(
+        &self,
+        buffer: &B,
+        offset: usize,
+    ) -> Option<usize> {
+        if offset > buffer.len_bytes() || !buffer.is_char_boundary(offset) || self.starts.is_empty()
+        {
+            return None;
+        }
+        let line = self.offset_to_line(offset)?;
+        if offset < line.end {
+            let text = buffer.slice(offset..line.end);
+            let grapheme = text.graphemes(true).next()?;
+            Some(offset + grapheme.len())
+        } else if line.end < buffer.len_bytes() {
+            Some(line.end + 1)
+        } else {
+            Some(offset)
+        }
+    }
+
+    /// Returns the previous grapheme-cluster boundary before `offset`.
+    pub fn previous_grapheme_boundary<B: TextBuffer>(
+        &self,
+        buffer: &B,
+        offset: usize,
+    ) -> Option<usize> {
+        if offset > buffer.len_bytes() || !buffer.is_char_boundary(offset) || self.starts.is_empty()
+        {
+            return None;
+        }
+        let line = self.offset_to_line(offset)?;
+        if offset > line.start {
+            let text = buffer.slice(line.start..offset);
+            let start = text
+                .grapheme_indices(true)
+                .next_back()
+                .map_or(line.start, |(index, _)| line.start + index);
+            Some(start)
+        } else if offset > 0 {
+            Some(offset - 1)
+        } else {
+            Some(0)
+        }
+    }
+
     /// Returns the cursor coordinates for a byte offset.
     pub fn position<B: TextBuffer>(&self, buffer: &B, offset: usize) -> Option<Position> {
         if offset > buffer.len_bytes() || !buffer.is_char_boundary(offset) || self.starts.is_empty()

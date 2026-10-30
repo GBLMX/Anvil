@@ -115,27 +115,17 @@ impl Model {
         self.dirty = true;
     }
 
-    /// Moves the cursor one character boundary.
+    /// Moves the cursor one grapheme-cluster boundary.
     pub fn move_char(&mut self, delta: isize) {
-        let mut offset = self.cursor;
-        if delta < 0 {
-            if offset == 0 {
-                return;
-            }
-            offset -= 1;
-            while offset > 0 && !self.editor.text().is_char_boundary(offset) {
-                offset -= 1;
-            }
-        } else if offset < self.editor.text().len_bytes() {
-            offset += 1;
-            while offset < self.editor.text().len_bytes()
-                && !self.editor.text().is_char_boundary(offset)
-            {
-                offset += 1;
-            }
+        let next = if delta < 0 {
+            self.editor.previous_grapheme_boundary(self.cursor)
+        } else {
+            self.editor.next_grapheme_boundary(self.cursor)
+        };
+        if let Some(offset) = next {
+            self.cursor = offset;
+            self.dirty = true;
         }
-        self.cursor = offset;
-        self.dirty = true;
     }
 
     /// Moves to the start of the cursor line.
@@ -246,6 +236,7 @@ impl Model {
         self.dirty = true;
     }
 
+    /// Inserts the unnamed register at the cursor.
     fn put_register(&mut self) {
         if self.editor.put(self.cursor).is_some() {
             self.sync_cursor_from_selection();
@@ -366,12 +357,11 @@ impl Model {
     }
 
     fn backspace(&mut self) {
-        if self.cursor == 0 {
+        let Some(start) = self.editor.previous_grapheme_boundary(self.cursor) else {
             return;
-        }
-        let mut start = self.cursor - 1;
-        while start > 0 && !self.editor.text().is_char_boundary(start) {
-            start -= 1;
+        };
+        if start == self.cursor {
+            return;
         }
         self.editor.set_selection_bytes(start, self.cursor);
         self.editor.delete(start..self.cursor);
@@ -381,12 +371,11 @@ impl Model {
     }
 
     fn delete_forward(&mut self) {
-        if self.cursor >= self.editor.text().len_bytes() {
+        let Some(end) = self.editor.next_grapheme_boundary(self.cursor) else {
             return;
-        }
-        let mut end = self.cursor + 1;
-        while end < self.editor.text().len_bytes() && !self.editor.text().is_char_boundary(end) {
-            end += 1;
+        };
+        if end == self.cursor {
+            return;
         }
         self.editor.set_selection_bytes(self.cursor, end);
         self.editor.delete(self.cursor..end);
@@ -1021,5 +1010,22 @@ mod tests {
         handle_event(&mut end, key(KeyCode::Char('A')));
         type_text(&mut end, "b");
         assert_eq!(end.editor.text().slice(0..2), "ab");
+    }
+
+    #[test]
+    fn grapheme_motion_and_deletion_keep_emoji_whole() {
+        let mut model = Model::new(EditorState::from_text("a👨‍👩‍👧‍👦b"), None);
+        model.cursor = 1;
+        model.move_char(1);
+        assert_eq!(model.cursor, "a👨‍👩‍👧‍👦".len());
+        model.move_char(-1);
+        assert_eq!(model.cursor, 1);
+        model.delete_forward();
+        assert_eq!(model.editor.text().slice(0..2), "ab");
+
+        let mut backspace = Model::new(EditorState::from_text("a👨‍👩‍👧‍👦b"), None);
+        backspace.cursor = "a👨‍👩‍👧‍👦".len();
+        backspace.backspace();
+        assert_eq!(backspace.editor.text().slice(0..2), "ab");
     }
 }
