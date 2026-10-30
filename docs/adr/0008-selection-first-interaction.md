@@ -48,6 +48,12 @@ mode-specific path.
    plugin-defined mode or process-global switch.
 7. **Multiple modal kernels and multi-cursor are later features.** They are not a
    Phase 0 architecture burden. The selection primitive must not preclude them.
+8. **Vim `dd`/`yy` lower to selection-first composition.** A keymap may expose
+   them, but the core has no separate line-delete or line-yank primitive.
+   `dd` selects the current line, including its trailing line break when one
+   exists, then deletes that selection; the caret remains at the original
+   line-start offset rather than advancing as in Vim. `yy` selects the current
+   line under the same rule and yanks it.
 
 ## Consequences
 

@@ -216,6 +216,9 @@ Initial layout:
 - A selection is visible only when anchor != head or an operator is active.
 - Input events are replayed deterministically in tests.
 - Paste is treated as an edit command, never as a sequence of key events.
+- Future Vim aliases compose native selection actions: `dd` selects the current
+  line (including its trailing line break, when present) and deletes it without
+  moving the caret to the next line; `yy` selects the same range and yanks it.
 
 ## 10. Gateway startup
 
