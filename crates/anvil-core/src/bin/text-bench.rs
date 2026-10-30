@@ -21,7 +21,9 @@ fn run<B: TextBuffer>(name: &str, megabytes: usize, text: &str) {
     let mut buffer = B::from_text(text);
     let open = open_start.elapsed();
 
+    let lines_start = Instant::now();
     let lines = buffer.len_lines();
+    let lines_time = lines_start.elapsed();
     let viewport_range = 0..(VIEWPORT_LINES * LINE_WIDTH).min(buffer.len_bytes());
     let viewport_start = Instant::now();
     let viewport = buffer.slice(viewport_range);
@@ -40,8 +42,9 @@ fn run<B: TextBuffer>(name: &str, megabytes: usize, text: &str) {
     black_box(viewport);
     black_box(buffer.len_bytes());
     println!(
-        "{name},{megabytes},{},{},{},{lines}",
+        "{name},{megabytes},{},{},{},{},{lines}",
         open.as_micros(),
+        lines_time.as_micros(),
         viewport_time.as_micros(),
         edits.as_micros()
     );
@@ -58,7 +61,7 @@ fn main() {
         sizes
     };
 
-    println!("backend,mb,open_us,viewport_us,edits_us,lines");
+    println!("backend,mb,open_us,lines_us,viewport_us,edits_us,lines");
     for megabytes in sizes {
         let text = synthetic_text(megabytes);
         run::<RopeBuffer>("rope", megabytes, &text);

@@ -181,12 +181,12 @@ Only changes required by the core slice:
 - smoke benchmark;
 - CI and generated bindings.
 
-### M1: Correctness gate
+### M1: Correctness gate (done)
 
 - boundary assertions;
 - property tests;
 - line-count semantics;
-- hidden O(n) paths removed or documented as failures.
+- cached line counts; no per-call full-document allocation.
 
 ### M2: Benchmark gate
 

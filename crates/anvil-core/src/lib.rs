@@ -7,8 +7,8 @@ use std::{ops::Range, string::String};
 
 /// A text buffer with byte-addressed edits and slicing.
 ///
-/// Callers must pass UTF-8 code-point boundaries. The buffer validates slices
-/// but does not repair invalid boundaries.
+/// Callers must pass UTF-8 code-point boundaries. Invalid offsets panic at the
+/// operation that receives them; the buffer never repairs a broken boundary.
 pub trait TextBuffer: Sized {
     /// Builds a buffer from initial text.
     fn from_text(text: &str) -> Self;
@@ -20,12 +20,18 @@ pub trait TextBuffer: Sized {
     fn len_lines(&self) -> usize;
 
     /// Inserts `text` at byte offset `at`.
+    ///
+    /// Panics if `at` is out of bounds or not a UTF-8 boundary.
     fn insert(&mut self, at: usize, text: &str);
 
     /// Deletes the half-open byte range.
+    ///
+    /// Panics if either endpoint is out of bounds or not a UTF-8 boundary.
     fn delete(&mut self, range: Range<usize>);
 
     /// Returns the text in the half-open byte range.
+    ///
+    /// Panics if either endpoint is out of bounds or not a UTF-8 boundary.
     fn slice(&self, range: Range<usize>) -> String;
 }
 
@@ -41,6 +47,16 @@ fn line_count(bytes: &[u8]) -> usize {
 #[derive(Debug, Clone)]
 pub struct RopeBuffer {
     rope: ropey::Rope,
+}
+
+impl RopeBuffer {
+    fn assert_boundary(&self, at: usize) {
+        assert!(at <= self.len_bytes(), "offset {at} is out of bounds");
+        if at < self.len_bytes() {
+            let byte = self.rope.get_byte(at).expect("offset checked");
+            assert!((byte & 0xC0) != 0x80, "offset {at} is not a UTF-8 boundary");
+        }
+    }
 }
 
 impl TextBuffer for RopeBuffer {
@@ -63,11 +79,15 @@ impl TextBuffer for RopeBuffer {
     }
 
     fn insert(&mut self, at: usize, text: &str) {
+        self.assert_boundary(at);
         let index = self.rope.byte_to_char(at);
         self.rope.insert(index, text);
     }
 
     fn delete(&mut self, range: Range<usize>) {
+        assert!(range.start <= range.end && range.end <= self.len_bytes());
+        self.assert_boundary(range.start);
+        self.assert_boundary(range.end);
         let start = self.rope.byte_to_char(range.start);
         let end = self.rope.byte_to_char(range.end);
         self.rope.remove(start..end);
@@ -75,6 +95,8 @@ impl TextBuffer for RopeBuffer {
 
     fn slice(&self, range: Range<usize>) -> String {
         assert!(range.start <= range.end && range.end <= self.len_bytes());
+        self.assert_boundary(range.start);
+        self.assert_boundary(range.end);
         let start = self.rope.byte_to_char(range.start);
         let end = self.rope.byte_to_char(range.end);
         self.rope.slice(start..end).to_string()
@@ -87,6 +109,7 @@ pub struct GapBuffer {
     storage: Vec<u8>,
     gap_start: usize,
     gap_end: usize,
+    line_count: usize,
 }
 
 impl GapBuffer {
@@ -125,6 +148,23 @@ impl GapBuffer {
         self.storage = storage;
         self.gap_end = new_gap_end;
     }
+
+    fn byte_at(&self, at: usize) -> Option<u8> {
+        if at < self.gap_start {
+            Some(self.storage[at])
+        } else if at < self.len() {
+            Some(self.storage[self.gap_end + at - self.gap_start])
+        } else {
+            None
+        }
+    }
+
+    fn assert_boundary(&self, at: usize) {
+        assert!(at <= self.len(), "offset {at} is out of bounds");
+        if let Some(byte) = self.byte_at(at) {
+            assert!((byte & 0xC0) != 0x80, "offset {at} is not a UTF-8 boundary");
+        }
+    }
 }
 
 impl TextBuffer for GapBuffer {
@@ -136,6 +176,7 @@ impl TextBuffer for GapBuffer {
             storage,
             gap_start: text.len(),
             gap_end: capacity,
+            line_count: line_count(text.as_bytes()),
         }
     }
 
@@ -144,13 +185,20 @@ impl TextBuffer for GapBuffer {
     }
 
     fn len_lines(&self) -> usize {
-        let mut bytes = Vec::with_capacity(self.len());
-        bytes.extend_from_slice(&self.storage[..self.gap_start]);
-        bytes.extend_from_slice(&self.storage[self.gap_end..]);
-        line_count(&bytes)
+        self.line_count
     }
 
     fn insert(&mut self, at: usize, text: &str) {
+        self.assert_boundary(at);
+        if text.is_empty() {
+            return;
+        }
+        let inserted_lines = text.bytes().filter(|byte| *byte == b'\n').count();
+        if self.len() == 0 {
+            self.line_count = inserted_lines + 1;
+        } else {
+            self.line_count += inserted_lines;
+        }
         self.move_gap(at);
         self.ensure_gap(text.len());
         self.storage[self.gap_start..self.gap_start + text.len()].copy_from_slice(text.as_bytes());
@@ -159,18 +207,29 @@ impl TextBuffer for GapBuffer {
 
     fn delete(&mut self, range: Range<usize>) {
         assert!(range.start <= range.end && range.end <= self.len());
+        self.assert_boundary(range.start);
+        self.assert_boundary(range.end);
         if range.start == range.end {
             return;
         }
         self.move_gap(range.start);
         let removed = range.end - range.start;
-        let tail_start = self.gap_end + removed;
-        self.storage.copy_within(tail_start.., self.gap_end);
+        let removed_lines = self.storage[self.gap_end..self.gap_end + removed]
+            .iter()
+            .filter(|byte| **byte == b'\n')
+            .count();
         self.gap_end += removed;
+        if self.len() == 0 {
+            self.line_count = 0;
+        } else {
+            self.line_count -= removed_lines;
+        }
     }
 
     fn slice(&self, range: Range<usize>) -> String {
         assert!(range.start <= range.end && range.end <= self.len());
+        self.assert_boundary(range.start);
+        self.assert_boundary(range.end);
         let mut bytes = Vec::with_capacity(range.end - range.start);
         if range.start < self.gap_start {
             let end = range.end.min(self.gap_start);
@@ -192,6 +251,7 @@ pub struct PieceTable {
     original: String,
     added: String,
     pieces: Vec<Piece>,
+    line_count: usize,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -241,16 +301,46 @@ impl PieceTable {
         self.pieces.len()
     }
 
-    fn count_newlines(&self) -> usize {
-        self.pieces
-            .iter()
-            .map(|piece| {
-                self.text(piece.source)[piece.start..piece.start + piece.len]
-                    .bytes()
-                    .filter(|byte| *byte == b'\n')
-                    .count()
-            })
-            .sum()
+    fn byte_at(&self, at: usize) -> Option<u8> {
+        let mut position = 0;
+        for piece in &self.pieces {
+            if at < position + piece.len {
+                let offset = at - position;
+                return Some(self.text(piece.source).as_bytes()[piece.start + offset]);
+            }
+            position += piece.len;
+        }
+        None
+    }
+
+    fn assert_boundary(&self, at: usize) {
+        assert!(at <= self.len_bytes(), "offset {at} is out of bounds");
+        if let Some(byte) = self.byte_at(at) {
+            assert!((byte & 0xC0) != 0x80, "offset {at} is not a UTF-8 boundary");
+        }
+    }
+
+    fn count_newlines_in(&self, range: Range<usize>) -> usize {
+        let mut position = 0;
+        let mut count = 0;
+        for piece in &self.pieces {
+            let piece_end = position + piece.len;
+            if piece_end <= range.start {
+                position = piece_end;
+                continue;
+            }
+            if position >= range.end {
+                break;
+            }
+            let local_start = range.start.max(position) - position;
+            let local_end = range.end.min(piece_end) - position;
+            count += self.text(piece.source)[piece.start + local_start..piece.start + local_end]
+                .bytes()
+                .filter(|byte| *byte == b'\n')
+                .count();
+            position = piece_end;
+        }
+        count
     }
 }
 
@@ -269,6 +359,7 @@ impl TextBuffer for PieceTable {
             original: text.to_owned(),
             added: String::new(),
             pieces,
+            line_count: line_count(text.as_bytes()),
         }
     }
 
@@ -277,14 +368,20 @@ impl TextBuffer for PieceTable {
     }
 
     fn len_lines(&self) -> usize {
-        if self.len_bytes() == 0 {
-            0
-        } else {
-            self.count_newlines() + 1
-        }
+        self.line_count
     }
 
     fn insert(&mut self, at: usize, text: &str) {
+        self.assert_boundary(at);
+        if text.is_empty() {
+            return;
+        }
+        let inserted_lines = text.bytes().filter(|byte| *byte == b'\n').count();
+        if self.len_bytes() == 0 {
+            self.line_count = inserted_lines + 1;
+        } else {
+            self.line_count += inserted_lines;
+        }
         let index = self.split_at(at);
         let start = self.added.len();
         self.added.push_str(text);
@@ -300,16 +397,26 @@ impl TextBuffer for PieceTable {
 
     fn delete(&mut self, range: Range<usize>) {
         assert!(range.start <= range.end && range.end <= self.len_bytes());
+        self.assert_boundary(range.start);
+        self.assert_boundary(range.end);
         if range.start == range.end {
             return;
         }
+        let removed_lines = self.count_newlines_in(range.clone());
         let start = self.split_at(range.start);
         let end = self.split_at(range.end);
         self.pieces.drain(start..end);
+        if self.len_bytes() == 0 {
+            self.line_count = 0;
+        } else {
+            self.line_count -= removed_lines;
+        }
     }
 
     fn slice(&self, range: Range<usize>) -> String {
         assert!(range.start <= range.end && range.end <= self.len_bytes());
+        self.assert_boundary(range.start);
+        self.assert_boundary(range.end);
         let mut result = String::with_capacity(range.end - range.start);
         let mut position = 0;
         for piece in &self.pieces {
@@ -334,6 +441,7 @@ impl TextBuffer for PieceTable {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use proptest::prelude::*;
 
     fn exercise<B: TextBuffer>() {
         let mut buffer = B::from_text("alpha\nβeta");
@@ -370,5 +478,140 @@ mod tests {
         assert_eq!(RopeBuffer::from_text("").len_lines(), 0);
         assert_eq!(GapBuffer::from_text("").len_lines(), 0);
         assert_eq!(PieceTable::from_text("").len_lines(), 0);
+    }
+
+    #[derive(Debug, Clone)]
+    enum Op {
+        Insert { at: usize, text: String },
+        Delete { start: usize, end: usize },
+    }
+
+    fn text_strategy() -> impl Strategy<Value = String> {
+        prop::collection::vec(
+            prop::sample::select(vec!['a', 'b', '\n', 'é', 'β', '🦀']),
+            0..8,
+        )
+        .prop_map(|chars| chars.into_iter().collect())
+    }
+
+    fn op_strategy() -> impl Strategy<Value = Op> {
+        prop_oneof![
+            (0usize..64, text_strategy()).prop_map(|(at, text)| Op::Insert { at, text }),
+            (0usize..64, 0usize..64).prop_map(|(a, b)| Op::Delete {
+                start: a.min(b),
+                end: a.max(b),
+            }),
+        ]
+    }
+
+    fn normalize_boundary(text: &str, at: usize) -> usize {
+        let mut at = at.min(text.len());
+        while at > 0 && !text.is_char_boundary(at) {
+            at -= 1;
+        }
+        at
+    }
+
+    fn model_lines(text: &str) -> usize {
+        if text.is_empty() {
+            0
+        } else {
+            text.bytes().filter(|byte| *byte == b'\n').count() + 1
+        }
+    }
+
+    fn check_ops<B: TextBuffer>(ops: &[Op]) {
+        let mut buffer = B::from_text("seed\n");
+        let mut model = String::from("seed\n");
+        for op in ops {
+            match op {
+                Op::Insert { at, text } => {
+                    let at = normalize_boundary(&model, *at);
+                    model.insert_str(at, text);
+                    buffer.insert(at, text);
+                }
+                Op::Delete { start, end } => {
+                    let start = normalize_boundary(&model, *start);
+                    let end = normalize_boundary(&model, *end).max(start);
+                    model.replace_range(start..end, "");
+                    buffer.delete(start..end);
+                }
+            }
+            assert_eq!(buffer.len_bytes(), model.len());
+            assert_eq!(buffer.len_lines(), model_lines(&model));
+            assert_eq!(buffer.slice(0..buffer.len_bytes()), model);
+        }
+    }
+
+    proptest! {
+        #[test]
+        fn rope_matches_string_model(ops in prop::collection::vec(op_strategy(), 0..40)) {
+            check_ops::<RopeBuffer>(&ops);
+        }
+
+        #[test]
+        fn gap_matches_string_model(ops in prop::collection::vec(op_strategy(), 0..40)) {
+            check_ops::<GapBuffer>(&ops);
+        }
+
+        #[test]
+        fn piece_matches_string_model(ops in prop::collection::vec(op_strategy(), 0..40)) {
+            check_ops::<PieceTable>(&ops);
+        }
+    }
+
+    #[test]
+    fn line_counts_follow_edits() {
+        fn check<B: TextBuffer>() {
+            let mut buffer = B::from_text("a");
+            assert_eq!(buffer.len_lines(), 1);
+            buffer.insert(1, "\n");
+            assert_eq!(buffer.len_lines(), 2);
+            buffer.insert(2, "b");
+            assert_eq!(buffer.len_lines(), 2);
+            buffer.delete(1..2);
+            assert_eq!(buffer.len_lines(), 1);
+            buffer.delete(0..buffer.len_bytes());
+            assert_eq!(buffer.len_lines(), 0);
+        }
+        check::<RopeBuffer>();
+        check::<GapBuffer>();
+        check::<PieceTable>();
+    }
+
+    #[test]
+    #[should_panic]
+    fn rope_rejects_mid_codepoint_insert() {
+        RopeBuffer::from_text("é").insert(1, "x");
+    }
+
+    #[test]
+    #[should_panic(expected = "not a UTF-8 boundary")]
+    fn gap_rejects_mid_codepoint_insert() {
+        GapBuffer::from_text("é").insert(1, "x");
+    }
+
+    #[test]
+    #[should_panic(expected = "not a UTF-8 boundary")]
+    fn piece_rejects_mid_codepoint_insert() {
+        PieceTable::from_text("é").insert(1, "x");
+    }
+
+    #[test]
+    #[should_panic]
+    fn rope_rejects_mid_codepoint_delete() {
+        RopeBuffer::from_text("é").delete(0..1);
+    }
+
+    #[test]
+    #[should_panic(expected = "not a UTF-8 boundary")]
+    fn gap_rejects_mid_codepoint_delete() {
+        GapBuffer::from_text("é").delete(0..1);
+    }
+
+    #[test]
+    #[should_panic(expected = "not a UTF-8 boundary")]
+    fn piece_rejects_mid_codepoint_delete() {
+        PieceTable::from_text("é").delete(0..1);
     }
 }
