@@ -227,13 +227,14 @@ Only changes required by the core slice:
 - line-count semantics;
 - cached line counts; no per-call full-document allocation.
 
-### M2: Benchmark gate (in progress: criterion + RSS harness landed)
+### M2: Benchmark gate (in progress: 10 MB PR A/B gate landed)
 
 - criterion harness;
 - workload and RSS coverage;
 - deterministic edit traces;
 - benchmark report;
 - baseline report: [text-model.md](benchmarks/text-model.md)
+- PR-only same-runner A/B gate: 10 MB p99 against `origin/main`, 10% ceiling; skip workloads whose baseline p99 is below 10 µs to avoid timer noise.
 - baseline saved for PR regression checks.
 
 ### M3: Decision gate

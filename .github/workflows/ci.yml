@@ -47,6 +47,63 @@ jobs:
           npm install --global typescript@5.9.3
           tsc --noEmit --skipLibCheck crates/anvil-api/bindings/*.ts
 
+  bench-regression:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Install pinned Rust toolchain
+        run: rustup show
+      - name: Measure PR p99
+        run: |
+          TEXT_P99_MB=10 TEXT_P99_SAMPLES=100 \
+            cargo run --release -p anvil-core --bin text-p99 > /tmp/pr-p99.csv
+      - name: Measure main p99
+        run: |
+          git worktree add --detach /tmp/bench-base origin/main
+          cd /tmp/bench-base
+          CARGO_TARGET_DIR=/tmp/bench-target \
+            TEXT_P99_MB=10 TEXT_P99_SAMPLES=100 \
+            cargo run --release -p anvil-core --bin text-p99 > /tmp/base-p99.csv
+      - name: Compare p99 against main
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import sys
+
+          def read(path):
+              rows = {}
+              for line in Path(path).read_text().splitlines():
+                  if not line or line.startswith("backend,"):
+                      continue
+                  backend, mb, workload, _p50, _p95, p99, _samples = line.split(",")
+                  rows[(backend, mb, workload)] = float(p99)
+              return rows
+
+          base = read("/tmp/base-p99.csv")
+          current = read("/tmp/pr-p99.csv")
+          failures = []
+          for key, before in base.items():
+              after = current.get(key)
+              if after is None:
+                  failures.append(f"{key}: missing from PR run")
+                  continue
+              if before < 10_000:
+                  print(f"{key}: skipped (p99 < 10us)")
+                  continue
+              ratio = after / before if before else float("inf")
+              print(f"{key}: {ratio:.3f}x")
+              if ratio > 1.10:
+                  failures.append(f"{key}: p99 regressed {ratio:.3f}x")
+          if failures:
+              print("\n".join(failures))
+              sys.exit(1)
+          print("p99 regression gate: ok")
+          PY
+
   rust:
     runs-on: ubuntu-latest
     steps:

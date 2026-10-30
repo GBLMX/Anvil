@@ -89,6 +89,11 @@ TEXT_P99_MB=100 cargo run --release -p anvil-core --bin text-p99
 
 The 100 MB run uses 30 samples; the 1 MB and 10 MB runs use 100 samples.
 
+The PR gate reruns the 10 MB probe against `origin/main` in a second worktree
+on the same runner and fails if any workload's p99 regresses by more than 10%;
+workloads with a baseline p99 below 10 µs are skipped as timer noise.
+The 100 MB run remains a manual reference measurement.
+
 ## Interpretation limits
 
 - The p99 probe is a separate timing loop, not Criterion's confidence
