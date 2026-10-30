@@ -246,8 +246,8 @@ Binary pipelining was measured on the real gateway: 1 in-flight 188.9 ms, 2
 135.1 ms, 4 126.8 ms, 8 **124.8 ms**, 15 138.3 ms. The TUI wires a 4-request
 window and measures **171.1 ms PTY end-to-end**, meeting the 200 ms target.
 Window 8 is slightly faster (168.4 ms median) but raises gateway VmHWM to ~199 MB;
-window 4 is the selected tradeoff. The 50 ms target still needs fd passing or
-another zero-copy path.
+window 4 is the selected tradeoff. The 50 ms target needs delayed/partial
+indexing plus fd passing or another zero-copy path.
 
 The worker-count check on the previous JSON path (16/8/4) showed gateway PTY
 563.1/560.7/597.3 ms, so CPU contention does not explain a 30–50 ms gap; 16
@@ -260,8 +260,9 @@ are:
   **171.1 ms**; direct Rust open is **95.3 ms**. Serial binary is 215.8 ms.
 - **Daily edit key-to-screen < 1 ms.** Current Rust-side is ~0.08 ms and local
   PTY is ~0.16–0.6 ms. Met.
-- **50 ms open remains a long-term target**, not a Phase 0.6 blocker; the
-  line-index construction is now parallel but still part of the direct baseline.
+- **50 ms open remains a long-term target**, not a Phase 0.6 blocker. An
+  instrumented run attributes ~62 ms to line-index construction alone, so 50 ms
+  requires delayed/partial indexing, not only fd passing.
 
 Do not reduce chunk size to chase a latency number, and do not raise the frame
 limit without re-evaluating the memory and parsing boundary.

@@ -49,7 +49,10 @@ All notable changes to Anvil are recorded here. The format follows
   **89–96 ms** and the JSON gateway path from 640 ms to 563 ms without
   increasing the 198/300 MB TUI RSS/peak.
 
-- Binary `sys.read_file` frames: `"binary": true` returns `[eof flag][raw
+- Open phase instrumentation (`ANVIL_OPEN_TIMING`) and a decomposition showing
+  ~80 ms stat/pipeline read, ~62 ms line index, and ~0.4 ms first frame.
++
++- Binary `sys.read_file` frames: `"binary": true` returns `[eof flag][raw
   bytes]`, 7 MiB chunks, no base64/JSON on the read path. 100 MB gateway PTY
   open drops from 563 ms serial to **171.1 ms** with a 4-request window; gateway
   RSS is 66/91 MB. TUI still sends writes through JSON/base64.

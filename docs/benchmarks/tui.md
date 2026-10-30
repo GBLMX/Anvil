@@ -136,6 +136,22 @@ a UTF-8 continuation byte, and a newline at a range boundary belongs to exactly
 one range (`[start, end)`), so the two-pass count cannot double-count or miss
 it. The 3,000,000-line parallel/serial equivalence test covers the merge path.
 
+## Open phase breakdown (instrumented)
+
+One instrumented 100 MB run (`ANVIL_OPEN_TIMING=1`) after the 5-run median:
+
+| Phase | Time |
+|---|---:|
+| gateway start + model setup, before read | ~21 ms |
+| `sys.stat` + 4-way binary read | **79.8 ms** |
+| `EditorState::from_text` (line index) | **61.6 ms** |
+| terminal + first frame | 0.4 ms |
+| total to first frame | **163.3 ms** |
+
+The 171.1 ms median includes run-to-run variance. The line index alone is
+61.6 ms, so the 50 ms target is unreachable for 100 MB with a full index even
+if transfer becomes free. 200 ms is the Phase 0.6 target; 50 ms remains a
+long-term target requiring delayed/partial indexing, not just fd passing.
 ## Interpretation
 
 - Direct Rust 100 MB open is **95.3 ms** after parallel line scanning.
@@ -148,8 +164,8 @@ it. The 3,000,000-line parallel/serial equivalence test covers the merge path.
   from 188.9 ms to 126.8 ms at window 4; measured TUI end-to-end is 171.1 ms.
   Window 8 is slightly faster (124.8 ms UDS / 168.4 ms TUI) but gateway VmHWM
   rises to ~199 MB, so window 4 is the selected tradeoff.
-- The 50 ms open target still needs fd passing or another zero-copy path; the
-  current binary frame path is not close.
+- The 50 ms open target needs both delayed/partial indexing and a zero-copy
+  transfer path; the current binary frame path is not close.
 - Parallel line scanning remains necessary; it cut direct Rust open from
   174 ms to 89–96 ms across runs.
 - Search remains dominated by the in-process scan, so the gateway barely

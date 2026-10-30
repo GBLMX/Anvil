@@ -6,6 +6,7 @@ use std::{
     fs,
     io::{self, Stdout},
     path::{Path, PathBuf},
+    time::Instant,
 };
 
 use anvil_api::EditorView;
@@ -132,9 +133,15 @@ impl Model {
 
     /// Replaces the active buffer with a UTF-8 file from the workspace.
     pub fn open_path(&mut self, path: impl AsRef<Path>) -> Result<(), String> {
+        let timing = std::env::var_os("ANVIL_OPEN_TIMING").is_some();
+        let start = Instant::now();
         let absolute = self.absolute_path(path.as_ref())?;
         let text = self.read_file(&absolute)?;
+        let read_done = start.elapsed();
         self.editor = EditorState::from_text(&text);
+        if timing {
+            eprintln!("open_path read={read_done:?} index={:?}", start.elapsed());
+        }
         self.path = Some(absolute);
         self.cursor = 0;
         self.scroll = 0;
@@ -1013,6 +1020,8 @@ pub fn run(path: Option<PathBuf>) -> io::Result<()> {
 
 /// Runs the minimal terminal loop with an explicit workspace.
 pub fn run_with_workspace(path: Option<PathBuf>, workspace: PathBuf) -> io::Result<()> {
+    let timing = std::env::var_os("ANVIL_OPEN_TIMING").is_some();
+    let start = Instant::now();
     let workspace = workspace.canonicalize()?;
     let (mut model, _session) = match GatewaySession::start(&workspace) {
         Ok((session, client)) => {
@@ -1034,13 +1043,27 @@ pub fn run_with_workspace(path: Option<PathBuf>, workspace: PathBuf) -> io::Resu
             (model, None)
         }
     };
+    let model_ready = start.elapsed();
     let mut terminal = TerminalSession::start()?;
+    let terminal_ready = start.elapsed();
+    let mut first_draw = true;
     loop {
         let size = terminal.terminal.size()?;
         model.ensure_cursor_visible(size.height.saturating_sub(2), size.width.saturating_sub(2));
         if model.dirty {
             terminal.terminal.draw(|frame| view(&model, frame))?;
             model.dirty = false;
+            if first_draw {
+                first_draw = false;
+                if timing {
+                    eprintln!(
+                        "open_timing model={:?} terminal={:?} first_frame={:?}",
+                        model_ready,
+                        terminal_ready,
+                        start.elapsed()
+                    );
+                }
+            }
         }
         handle_event(&mut model, event::read()?);
         if model.quit {
