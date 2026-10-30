@@ -52,6 +52,26 @@ cargo bench -p anvil-tui --bench e2e_edit --features e2e-bench
   A real terminal emulator will add its own parsing and painting cost on top.
 - These numbers exclude the Go gateway, LSP, terminal emulator, and idle CPU.
 
+## Memory (direct std::fs, not gateway)
+
+Measured with `/proc/<pid>/status` after the first 100 MB frame:
+
+| Metric | Value |
+|---|---:|
+| VmRSS after first frame | 198 MB |
+| VmHWM (peak) | 493 MB |
+
+The peak includes the source `String`, the `PieceTable` copy, and the line
+index. The steady RSS is lower after the source string is dropped, but the
+text and index remain resident. This was measured before gateway integration,
+so it does not include UDS buffers or base64 decode buffers.
+
+The chunked gateway protocol bounds the server-side transient to one chunk
+(4 MiB raw, about 5.3 MiB base64 plus JSON overhead). The editor still
+assembles the complete text and line index, so its steady-state footprint is
+unchanged; memory is not reduced by chunking. `sys.write_file` is specified to
+stream into a temporary file rather than accumulate the whole document.
+
 ## Boundaries
 
 - No Go gateway, LSP, or syntax highlighting is in this loop. The 73 µs
