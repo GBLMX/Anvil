@@ -242,12 +242,13 @@ type statResult struct {
 }
 
 type writeParams struct {
-	Path   string `json:"path"`
-	Offset int64  `json:"offset"`
-	Data   string `json:"data"`
-	EOF    *bool  `json:"eof"`
-	Binary bool   `json:"binary"`
-	Seq    uint64 `json:"seq"`
+	Path    string `json:"path"`
+	Offset  int64  `json:"offset"`
+	Data    string `json:"data"`
+	EOF     *bool  `json:"eof"`
+	Binary  bool   `json:"binary"`
+	Seq     uint64 `json:"seq"`
+	DataLen int    `json:"data_len"`
 }
 
 type binaryWriteResult struct {
@@ -534,7 +535,7 @@ func (s *Server) writeFileBinary(req request, state *connectionState, data []byt
 	if err := decodeParams(req.Params, &params); err != nil {
 		return nil, &rpcError{Code: -32602, Message: "invalid params"}
 	}
-	if params.Offset < 0 || params.EOF == nil || !params.Binary || len(data) > maxBinaryWriteChunk {
+	if params.Offset < 0 || params.EOF == nil || !params.Binary || len(data) > maxBinaryWriteChunk || len(data) != params.DataLen {
 		return nil, &rpcError{Code: -32602, Message: "invalid params"}
 	}
 	if len(data) == 0 && !*params.EOF {

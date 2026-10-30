@@ -175,8 +175,8 @@ long-term target requiring delayed/partial indexing, not just fd passing.
 
 ## Write path (100 MB)
 
-Binary write control + data frames, serial chunks; workspace on ext4, page cache
-warm. Timer from Enter on `:w` to the `written` status:
+Binary write control + data frames, serial chunks; workspace on ext4 NVMe,
+page cache warm. Timer from Enter on `:w` to the `written` status:
 
 | Filesystem | Save to written |
 |---|---:|
@@ -184,7 +184,8 @@ warm. Timer from Enter on `:w` to the `written` status:
 | ext4 workspace | **22.2 ms** |
 
 The 200 ms save acceptance is met with serial binary writes; 4-way write
-pipelining is not needed for this fixture. `fsync` is included at `eof`.
+pipelining is not needed for this fixture. `fsync` is included at `eof`
+(`file.Sync` before `renameat`); slower disks will be slower.
 
 ## Memory (gateway path, 100 MB)
 

@@ -340,6 +340,7 @@ impl GatewayClient {
                     "eof": eof,
                     "binary": true,
                     "seq": seq,
+                    "data_len": chunk.len(),
                 }),
             )?;
             self.connection.send(chunk)?;

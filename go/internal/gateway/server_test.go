@@ -590,11 +590,12 @@ func TestSysWriteFileBinary(t *testing.T) {
 		"id":      "write-binary",
 		"method":  "sys.write_file",
 		"params": map[string]interface{}{
-			"path":   "file.txt",
-			"offset": 0,
-			"eof":    true,
-			"binary": true,
-			"seq":    3,
+			"path":     "file.txt",
+			"offset":   0,
+			"eof":      true,
+			"binary":   true,
+			"seq":      3,
+			"data_len": len("binary-write"),
 		},
 	})
 	if err != nil {

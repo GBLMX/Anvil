@@ -197,8 +197,11 @@ Response:
 #### Binary writes
 
 `sys.write_file` accepts `"binary": true` as a JSON control frame, immediately
-followed by one raw data frame. The control carries `path`, `offset`, `seq`,
-and `eof`; the data frame is the chunk. The response is a 17-byte payload:
+followed by exactly one raw data frame. The pair is atomic: the gateway reads
+the next frame as data and `data_len` must match; interleaving another request
+between them is a protocol error. The control carries `path`, `offset`, `seq`,
+`eof`, and `data_len`; the data frame is the chunk. The client serializes the
+pair. The response is a 17-byte payload:
 
 ```text
 [flags][seq u64][next_offset u64]
@@ -206,9 +209,11 @@ and `eof`; the data frame is the chunk. The response is a 17-byte payload:
 
 Bit 0 of `flags` indicates the committed EOF chunk. Writes use the same
 per-path temp file/commit state as JSON writes, check contiguous offsets, and
-are serial in the TUI. A 100 MB save to an ext4 workspace measures 22.2 ms
-from `:w` Enter to the `written` status, including `fsync`; 4-way write
-pipelining is not needed for that fixture.
+are serial in the TUI. A 100 MB save to an ext4 workspace on this NVMe machine
+measures 22.2 ms from `:w` Enter to the `written` status. The measured interval
+includes `WriteTarget.Commit` (`file.Sync`, close, `renameat`) and therefore
+`fsync`; slower disks can be slower. Four-way write pipelining is not needed
+for this fixture.
 
 - `fs.write` permission is separate from `fs.read`.
 
