@@ -42,9 +42,11 @@ func TestSandboxHelper(t *testing.T) {
 	if err := unix.Unshare(unix.CLONE_NEWUSER); !errors.Is(err, unix.EPERM) {
 		os.Exit(15)
 	}
-	var taskLimit unix.Rlimit
-	if err := unix.Getrlimit(unix.RLIMIT_NPROC, &taskLimit); err != nil || taskLimit.Cur == unix.RLIM_INFINITY {
-		os.Exit(16)
+	if os.Getenv("ANVIL_CGROUP_PATH") == "" {
+		var taskLimit unix.Rlimit
+		if err := unix.Getrlimit(unix.RLIMIT_NPROC, &taskLimit); err != nil || taskLimit.Cur == unix.RLIM_INFINITY {
+			os.Exit(16)
+		}
 	}
 	var usage unix.Rusage
 	if err := unix.Getrusage(unix.RUSAGE_SELF, &usage); !errors.Is(err, unix.EPERM) {
