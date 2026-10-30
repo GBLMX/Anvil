@@ -45,7 +45,7 @@ All notable changes to Anvil are recorded here. The format follows
   300 MB, steady RSS remains 198 MB.
 
 - Workspace-scoped chunked `sys.read_file`/`sys.write_file`: fail-closed
-  gateway I/O, base64 4 MiB chunks, atomic rename, streaming writes, path
+  gateway I/O, base64 5.5 MiB chunks, atomic rename, streaming writes, path
   canonicalization before permission checks, and no `std::fs` fallback.
 
 - `anvil-ipc::GatewayClient`: synchronous handshake, chunked read/write,

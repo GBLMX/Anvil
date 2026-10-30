@@ -215,8 +215,9 @@ read loop, and **640.1 ms PTY first output**. That is **+430 ms** over the
 direct PTY baseline; the gate **fails**. The 4 MiB run was 732.0 ms, so 5.5
 MiB is a real but insufficient improvement. A 7 MiB raw chunk cannot fit after
 base64; the practical ceiling is about 5.9 MiB. Server-side stage benchmarks
-show per chunk: read **0.84 ms**, base64 encode **4.98 ms**, JSON encode
-**5.33 ms**, full response encode **11.8 ms**; the file is page-cache warm.
+show per chunk: read **0.84 ms (~6.5 GB/s)**, base64 encode **4.98 ms**,
+JSON encode **5.33 ms**, full response encode **11.8 ms**; the file is
+page-cache warm.
 Pipelining can overlap round trips, but it does not remove the encode CPU.
 Binary framing or fd passing is required before claiming the 50 ms gate.
 

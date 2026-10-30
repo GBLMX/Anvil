@@ -73,6 +73,9 @@ Server-side stage benchmark (page-cache warm, per chunk):
 | JSON encode | 5.33 |
 | full response encode | 11.8 |
 
+`ReadFileAt` moves 5.5 MiB in 0.84 ms, about **6.5 GB/s** (the Go benchmark
+reports 6,847 MB/s); file I/O is not the bottleneck.
+
 The 4 MiB run was **732.0 ms PTY**, 25 chunks, 21.7 ms average, 661.3 ms
 total. Raising to 5.5 MiB removed 92 ms but did not close the gap.
 
