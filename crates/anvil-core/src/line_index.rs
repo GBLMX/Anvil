@@ -104,8 +104,9 @@ impl LineIndex {
             .get(local + 1)
             .map(|start| chunk.base + start)
             .unwrap_or(chunk.end);
-        let end = if next_start > start && next_start <= self.len {
-            next_start
+        let has_next_line = local + 1 < chunk.starts.len() || chunk_index + 1 < self.chunks.len();
+        let end = if has_next_line && next_start <= self.len {
+            next_start - 1
         } else {
             self.len
         };
@@ -159,7 +160,7 @@ impl LineIndex {
     ) -> Option<usize> {
         let start = self.line_to_offset(line)?;
         let line = self.offset_to_line(start)?;
-        let content_end = self.content_end(buffer, line);
+        let content_end = line.end;
         let text = buffer.slice(start..content_end);
         for (index, (byte, _)) in text.grapheme_indices(true).enumerate() {
             if index == column {
@@ -180,7 +181,7 @@ impl LineIndex {
     ) -> Option<usize> {
         let start = self.line_to_offset(line)?;
         let line = self.offset_to_line(start)?;
-        let content_end = self.content_end(buffer, line);
+        let content_end = line.end;
         let text = buffer.slice(start..content_end);
         let mut width = 0;
         for (byte, character) in text.char_indices() {
@@ -251,16 +252,6 @@ impl LineIndex {
         self.chunks.extend(suffix);
         self.len = new_len;
         self.normalize();
-    }
-
-    fn content_end<B: TextBuffer>(&self, buffer: &B, line: LinePosition) -> usize {
-        if line.end > line.start {
-            let tail = buffer.slice(line.end - 1..line.end);
-            if tail == "\n" {
-                return line.end - 1;
-            }
-        }
-        line.end
     }
 
     fn chunk_for_line(&self, line: usize) -> usize {
@@ -463,6 +454,15 @@ mod tests {
         assert_eq!(index.line_to_offset(1), Some(2));
         assert_eq!(index.offset_to_line(1).unwrap().line, 0);
         assert_eq!(index.offset_to_line(2).unwrap().line, 1);
+        assert_eq!(index.offset_to_line(0).unwrap().end, 1);
+        assert_eq!(index.offset_to_line(2).unwrap().end, 2);
+        let crlf = LineIndex::from_text("a\r\n");
+        assert_eq!(crlf.offset_to_line(0).unwrap().end, 2);
+        let no_newline = LineIndex::from_text("a");
+        assert_eq!(no_newline.offset_to_line(0).unwrap().end, 1);
+        let blank = LineIndex::from_text("\n");
+        assert_eq!(blank.offset_to_line(0).unwrap().end, 0);
+        assert_eq!(blank.offset_to_line(1).unwrap().end, 1);
     }
 
     #[test]

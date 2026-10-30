@@ -14,6 +14,20 @@ pub const DEFAULT_VIEWPORT: Viewport = Viewport {
     height: 24,
 };
 
+/// One reversible text edit.
+#[derive(Debug, Clone)]
+enum EditAction {
+    Insert { at: usize, text: String },
+    Delete { start: usize, text: String },
+}
+
+#[derive(Debug, Clone)]
+struct EditRecord {
+    before: Vec<(usize, usize)>,
+    after: Vec<(usize, usize)>,
+    action: EditAction,
+}
+
 /// Mutable editor state.
 #[derive(Debug)]
 pub struct EditorState {
@@ -23,6 +37,8 @@ pub struct EditorState {
     viewport: Viewport,
     selections: Vec<(usize, usize)>,
     interaction_mode: InteractionMode,
+    undo: Vec<EditRecord>,
+    redo: Vec<EditRecord>,
 }
 
 /// Immutable view of the editor at one revision.
@@ -47,6 +63,8 @@ impl EditorState {
             viewport: DEFAULT_VIEWPORT,
             selections: vec![(0, 0)],
             interaction_mode: InteractionMode::Select,
+            undo: Vec::new(),
+            redo: Vec::new(),
         }
     }
 
@@ -113,12 +131,16 @@ impl EditorState {
         if text.is_empty() {
             return;
         }
-        let range = at..at;
-        let buffer = Arc::make_mut(&mut self.text);
-        buffer.insert(at, text);
-        Arc::make_mut(&mut self.index).apply_edit(buffer, range);
+        let before = self.selections.clone();
+        self.apply_insert(at, text);
         self.map_selections(at, at, text.len());
-        self.revision += 1;
+        self.push_record(
+            EditAction::Insert {
+                at,
+                text: text.to_owned(),
+            },
+            before,
+        );
     }
 
     /// Deletes a byte range and updates the line index and selections.
@@ -126,11 +148,47 @@ impl EditorState {
         if range.start == range.end {
             return;
         }
-        let buffer = Arc::make_mut(&mut self.text);
-        buffer.delete(range.clone());
-        Arc::make_mut(&mut self.index).apply_edit(buffer, range.clone());
+        let text = self.text.slice(range.clone());
+        let before = self.selections.clone();
+        self.apply_delete(range.clone());
         self.map_selections(range.start, range.end, 0);
+        self.push_record(
+            EditAction::Delete {
+                start: range.start,
+                text,
+            },
+            before,
+        );
+    }
+
+    /// Reverts the most recent text edit and restores its selection.
+    pub fn undo(&mut self) -> bool {
+        let Some(record) = self.undo.pop() else {
+            return false;
+        };
+        match &record.action {
+            EditAction::Insert { at, text } => self.apply_delete(*at..*at + text.len()),
+            EditAction::Delete { start, text } => self.apply_insert(*start, text),
+        }
+        self.selections = record.before.clone();
+        self.redo.push(record);
         self.revision += 1;
+        true
+    }
+
+    /// Reapplies the most recently undone edit and restores its selection.
+    pub fn redo(&mut self) -> bool {
+        let Some(record) = self.redo.pop() else {
+            return false;
+        };
+        match &record.action {
+            EditAction::Insert { at, text } => self.apply_insert(*at, text),
+            EditAction::Delete { start, text } => self.apply_delete(*start..*start + text.len()),
+        }
+        self.selections = record.after.clone();
+        self.undo.push(record);
+        self.revision += 1;
+        true
     }
 
     /// Builds an immutable snapshot. Text and line-index Arcs are shared.
@@ -167,6 +225,28 @@ impl EditorState {
             grapheme_column: position.grapheme_column as u32,
             display_column: position.display_column as u32,
         }
+    }
+
+    fn apply_insert(&mut self, at: usize, text: &str) {
+        let buffer = Arc::make_mut(&mut self.text);
+        buffer.insert(at, text);
+        Arc::make_mut(&mut self.index).apply_edit(buffer, at..at);
+    }
+
+    fn apply_delete(&mut self, range: Range<usize>) {
+        let buffer = Arc::make_mut(&mut self.text);
+        buffer.delete(range.clone());
+        Arc::make_mut(&mut self.index).apply_edit(buffer, range);
+    }
+
+    fn push_record(&mut self, action: EditAction, before: Vec<(usize, usize)>) {
+        self.undo.push(EditRecord {
+            before,
+            after: self.selections.clone(),
+            action,
+        });
+        self.redo.clear();
+        self.revision += 1;
     }
 
     fn map_selections(&mut self, start: usize, end: usize, inserted_len: usize) {
@@ -262,6 +342,32 @@ mod tests {
         state.delete(0..3);
         assert_eq!(state.selection_bytes(), vec![(0, 2)]);
         assert_eq!(state.snapshot().view().selections[0].head.byte_offset, 2);
+    }
+
+    #[test]
+    fn undo_redo_restore_selection() {
+        let mut state = EditorState::from_text("abc");
+        assert!(state.set_selection_bytes(1, 1));
+        state.insert(0, "x\n");
+        assert_eq!(state.revision(), 1);
+        assert!(state.undo());
+        assert_eq!(state.text().slice(0..3), "abc");
+        assert_eq!(state.selection_bytes(), vec![(1, 1)]);
+        assert_eq!(state.revision(), 2);
+        assert!(state.redo());
+        assert_eq!(state.text().slice(0..5), "x\nabc");
+        assert_eq!(state.selection_bytes(), vec![(3, 3)]);
+        assert_eq!(state.revision(), 3);
+    }
+
+    #[test]
+    fn delete_undo_restores_removed_text() {
+        let mut state = EditorState::from_text("abcdef");
+        assert!(state.set_selection_bytes(1, 4));
+        state.delete(2..5);
+        assert!(state.undo());
+        assert_eq!(state.text().slice(0..6), "abcdef");
+        assert_eq!(state.selection_bytes(), vec![(1, 4)]);
     }
 
     #[test]
