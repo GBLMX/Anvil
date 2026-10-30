@@ -15,6 +15,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
 	"unsafe"
 
 	"golang.org/x/sys/unix"
@@ -203,6 +204,32 @@ func limitTaskCount(headroom uint64) error {
 // applyCgroupTaskLimit runs before Landlock/seccomp and before the final execve.
 // The runner does not fork after moving itself into the cgroup, so the tool
 // inherits the limit.
+// CleanupStaleCgroups removes empty cgroups under root older than olderThan.
+// The gateway calls this at startup to recover directories left by crashes or
+// failed cleanup. Non-cgroup entries and non-empty cgroups are left alone.
+func CleanupStaleCgroups(root string, olderThan time.Duration) error {
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return fmt.Errorf("read cgroup root: %w", err)
+	}
+	for _, entry := range entries {
+		path := filepath.Join(root, entry.Name())
+		info, err := entry.Info()
+		if err != nil || !info.IsDir() || time.Since(info.ModTime()) < olderThan {
+			continue
+		}
+		procs, err := os.ReadFile(filepath.Join(path, "cgroup.procs"))
+		if err != nil || strings.TrimSpace(string(procs)) != "" {
+			continue
+		}
+		if err := os.Remove(path); err == nil {
+			continue
+		}
+		_ = os.RemoveAll(path)
+	}
+	return nil
+}
+
 func applyCgroupTaskLimit(dir string, maxTasks uint64) error {
 	if err := os.WriteFile(filepath.Join(dir, "pids.max"), []byte(strconv.FormatUint(maxTasks, 10)), 0o644); err != nil {
 		return fmt.Errorf("write cgroup pids.max: %w", err)

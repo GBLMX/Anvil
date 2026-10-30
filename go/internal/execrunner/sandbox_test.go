@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"testing"
+	"time"
 
 	"golang.org/x/sys/unix"
 )
@@ -217,6 +218,52 @@ func TestCgroupTaskLimitWrites(t *testing.T) {
 	}
 	if string(procs) != strconv.Itoa(os.Getpid()) {
 		t.Fatalf("cgroup.procs = %q", procs)
+	}
+}
+
+func TestCleanupStaleCgroups(t *testing.T) {
+	root := t.TempDir()
+	old := filepath.Join(root, "old")
+	fresh := filepath.Join(root, "fresh")
+	active := filepath.Join(root, "active")
+	nonCgroup := filepath.Join(root, "not-a-cgroup")
+	for _, dir := range []string{old, fresh, active, nonCgroup} {
+		if err := os.Mkdir(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, dir := range []string{old, fresh, active} {
+		if err := os.WriteFile(filepath.Join(dir, "pids.max"), []byte("64"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(old, "cgroup.procs"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(fresh, "cgroup.procs"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(active, "cgroup.procs"), []byte("123"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	oldTime := time.Now().Add(-2 * time.Hour)
+	for _, dir := range []string{old, active, nonCgroup} {
+		if err := os.Chtimes(dir, oldTime, oldTime); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := CleanupStaleCgroups(root, time.Hour); err != nil {
+		t.Fatal(err)
+	}
+	for _, dir := range []string{old} {
+		if _, err := os.Stat(dir); !os.IsNotExist(err) {
+			t.Fatalf("stale cgroup %s was not removed", dir)
+		}
+	}
+	for _, dir := range []string{fresh, active, nonCgroup} {
+		if _, err := os.Stat(dir); err != nil {
+			t.Fatalf("preserved path %s missing: %v", dir, err)
+		}
 	}
 }
 

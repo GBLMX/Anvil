@@ -61,9 +61,9 @@ safe:
     effective bound is then `min(pids.max, RLIMIT_NPROC hard)`. The runner writes
     `cgroup.procs` before its final execve and does not fork afterward, so the
     tool inherits the cgroup. The gateway creates the cgroup before launch,
-    removes it after wait, and sweeps stale empty cgroups older than one hour at
-    startup. Otherwise `RLIMIT_NPROC` reserves 64 tasks above the current user
-    task count as a coarse fallback.
+    removes it after wait, and calls `CleanupStaleCgroups` to remove empty
+    cgroups older than one hour at startup. Otherwise `RLIMIT_NPROC` reserves
+    64 tasks above the current user task count as a coarse fallback.
 12. `sys.exec` is unavailable when the runner, policy, or sandbox setup is
     incomplete. Deny by default.
 

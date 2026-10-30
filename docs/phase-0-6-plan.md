@@ -37,14 +37,14 @@ Implemented:
 - tests for outside-file/symlink and workspace-write denial, concurrent
   symlink-swap races, non-allowlisted exec (including via `ld.so`),
   socket/permission denial, allowlist escape, clone3 fallback, tool startup,
-  cgroup file writes, RLIMIT_NPROC verification, timeout descendant kill,
-  output cap, fd cleanup, and exit-code capture.
+  cgroup file writes and stale-directory cleanup, RLIMIT_NPROC verification,
+  timeout descendant kill, output cap, fd cleanup, and exit-code capture.
 
 Open:
 
 - gateway must resolve the tool fd/policy, create `ANVIL_CGROUP_PATH` before
-  launch, remove it after wait, and sweep stale empty cgroups older than one
-  hour at startup;
+  launch, remove it after wait, and call `CleanupStaleCgroups` for stale empty
+  directories at startup;
 - CI needs an explicit Landlock capability probe and skip path.
 
 ## 2. Fetch/SSRF
