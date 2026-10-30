@@ -51,7 +51,7 @@ All notable changes to Anvil are recorded here. The format follows
 
 - Binary `sys.read_file` frames: `"binary": true` returns `[eof flag][raw
   bytes]`, 7 MiB chunks, no base64/JSON on the read path. 100 MB gateway PTY
-  open drops from 563 ms to **208.9 ms**; gateway RSS is 27/34 MB. TUI still
+  open drops from 563 ms to **215.8 ms**; gateway RSS is 27/34 MB. TUI still
   sends writes through JSON/base64.
 
 - Workspace-scoped chunked `sys.read_file`/`sys.write_file`: fail-closed

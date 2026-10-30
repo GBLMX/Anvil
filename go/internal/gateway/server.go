@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -218,6 +219,7 @@ type readParams struct {
 	Offset   int64  `json:"offset"`
 	MaxBytes int64  `json:"max_bytes"`
 	Binary   bool   `json:"binary"`
+	Seq      uint64 `json:"seq"`
 }
 
 type binaryResult struct {
@@ -442,11 +444,13 @@ func (s *Server) readFile(req request, state *connectionState) (interface{}, *rp
 	}
 	next := params.Offset + int64(len(data))
 	if params.Binary {
-		payload := make([]byte, 1+len(data))
+		payload := make([]byte, 17+len(data))
 		if eof {
 			payload[0] = 1
 		}
-		copy(payload[1:], data)
+		binary.BigEndian.PutUint64(payload[1:9], params.Seq)
+		binary.BigEndian.PutUint64(payload[9:17], uint64(params.Offset))
+		copy(payload[17:], data)
 		return binaryResult{payload: payload}, nil
 	}
 	return readResult{

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
 	"net"
 	"net/http"
@@ -542,6 +543,7 @@ func TestSysReadFileBinary(t *testing.T) {
 			"path":   "file.txt",
 			"offset": 0,
 			"binary": true,
+			"seq":    7,
 		},
 	})
 	if err != nil {
@@ -557,8 +559,17 @@ func TestSysReadFileBinary(t *testing.T) {
 	if len(frame) == 0 || frame[0] == '{' {
 		t.Fatalf("expected binary frame, got %q", frame)
 	}
+	if len(frame) < 17 {
+		t.Fatalf("binary frame too short: %d", len(frame))
+	}
 	flags := frame[0]
-	got := frame[1:]
+	if seq := binary.BigEndian.Uint64(frame[1:9]); seq != 7 {
+		t.Fatalf("seq = %d", seq)
+	}
+	if offset := binary.BigEndian.Uint64(frame[9:17]); offset != 0 {
+		t.Fatalf("offset = %d", offset)
+	}
+	got := frame[17:]
 	if string(got) != string(data) {
 		t.Fatalf("data = %q, want %q", got, data)
 	}

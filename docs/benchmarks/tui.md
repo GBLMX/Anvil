@@ -37,7 +37,7 @@ go build -o target/release/anvil-gateway ./go/cmd/anvil-gateway
 | Layer | Scenario | p50 | p95 | p99 | n |
 |---|---|---:|---:|---:|---:|
 | Rust | key to screen, 1 MB | 76.5 µs | 79.6 µs | 79.6 µs | 20 |
-| Rust | open 100 MB, first frame | 89.0 ms | 89.0 ms | 89.0 ms | 1 |
+| Rust | open 100 MB, first frame | 85.4 ms | 85.4 ms | 85.4 ms | 1 |
 | Rust | scroll 100 MB, one `j` | 74.4 µs | 104.0 µs | 104.0 µs | 20 |
 | Rust | first `/` search, 100 MB | 210.7 ms | 210.7 ms | 210.7 ms | 1 |
 | Rust | subsequent `/` search, 100 MB | 213.7 ms | 229.8 ms | 229.8 ms | 10 |
@@ -57,8 +57,8 @@ frames with 7 MiB chunks (15 chunks / 104,857,596 bytes):
 
 | Layer | Scenario | p50 | p95 | p99 | n |
 |---|---|---:|---:|---:|---:|
-| Rust | open 100 MB, first frame | 89.0 ms | 89.0 ms | 89.0 ms | 1 |
-| PTY + gateway | open 100 MB, first frame | 208.9 ms | 208.9 ms | 208.9 ms | 1 |
+| Rust | open 100 MB, first frame | 85.4 ms | 85.4 ms | 85.4 ms | 1 |
+| PTY + gateway | open 100 MB, first frame | 215.8 ms | 215.8 ms | 215.8 ms | 1 |
 | PTY + gateway | key to first output, 1 MB | 565.0 µs | 815.2 µs | 815.2 µs | 20 |
 | PTY + gateway | scroll 100 MB, one `j` | 287.8 µs | 600.4 µs | 600.4 µs | 20 |
 | PTY + gateway | first `/` search, 100 MB | 201.5 ms | 201.5 ms | 201.5 ms | 1 |
@@ -113,7 +113,7 @@ without document decode, page-cache warm):
 
 An 8-request window saves **64 ms** against window 1. This table is the pure
 UDS read loop: it excludes UI decode, line-index construction, and rendering.
-The ~145 ms PTY figure is a projection from the serial 208.9 ms measurement,
+The ~152 ms PTY figure is a projection from the serial 215.8 ms measurement,
 not a measured TUI result. The TUI still uses serial binary reads; pipelining
 is not wired in.
 
@@ -138,17 +138,16 @@ it. The 3,000,000-line parallel/serial equivalence test covers the merge path.
 
 ## Interpretation
 
-- Direct Rust 100 MB open is **89.0 ms** after parallel line scanning;
+- Direct Rust 100 MB open is **85.4 ms** after parallel line scanning;
   the pre-parallel direct PTY baseline was 210 ms. The binary gateway path is
-  **208.9 ms PTY**, just above the Phase 0.6 open target of 200 ms.
+  **215.8 ms PTY**, just above the Phase 0.6 open target of 200 ms.
   Serial binary UDS is 188.9 ms for 15 chunks.
 - The previous JSON/base64 path was 563.1 ms PTY and 19 chunks. It has been
   replaced for reads; its server encode cost (11.8 ms/chunk) and client decode
   cost (5.88 ms/chunk) no longer apply to open.
 - Binary pipelining is still useful: window 8 takes the UDS loop from 188.9 ms
-  to 124.8 ms, saving 64 ms. Projected PTY open is roughly **145 ms**, but the
-  current binary header has no id/offset, so pipelining cannot be wired safely
-  without extending it.
+  to 124.8 ms, saving 64 ms. Projected PTY open is roughly **152 ms**, but the
+  binary header now carries `seq`/`offset`, but TUI pipelining is not wired yet.
 - The 50 ms open target still needs fd passing or another zero-copy path; the
   current binary frame path is not close.
 - Parallel line scanning remains necessary; it cut direct Rust open from

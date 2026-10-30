@@ -81,6 +81,7 @@ pub struct ReadChunk {
     pub data: Vec<u8>,
     pub next_offset: u64,
     pub eof: bool,
+    pub seq: u64,
 }
 
 /// A connected, handshaken gateway client.
@@ -148,6 +149,7 @@ impl GatewayClient {
             data,
             next_offset,
             eof,
+            seq: 0,
         })
     }
 
@@ -215,12 +217,24 @@ impl GatewayClient {
         Ok(())
     }
 
-    /// Read one raw binary chunk. The frame is `[eof byte][bytes]`.
+    /// Read one raw binary chunk with sequence zero.
     pub fn read_file_binary(
         &mut self,
         path: &str,
         offset: u64,
         max_bytes: usize,
+    ) -> Result<ReadChunk, ClientError> {
+        self.read_file_binary_seq(path, offset, max_bytes, 0)
+    }
+
+    /// Read one raw binary chunk. The frame is
+    /// `[flags][seq u64][offset u64][raw bytes]`.
+    pub fn read_file_binary_seq(
+        &mut self,
+        path: &str,
+        offset: u64,
+        max_bytes: usize,
+        seq: u64,
     ) -> Result<ReadChunk, ClientError> {
         if max_bytes == 0 || max_bytes > BINARY_READ_CHUNK {
             return Err(ClientError::Protocol("read chunk size"));
@@ -232,6 +246,7 @@ impl GatewayClient {
                 "offset": offset,
                 "max_bytes": max_bytes,
                 "binary": true,
+                "seq": seq,
             }),
         )?;
         let frame = self
@@ -242,14 +257,21 @@ impl GatewayClient {
             let _ = parse_response(&frame, &id)?;
             return Err(ClientError::Protocol("binary frame expected"));
         }
-        let Some((&flags, data)) = frame.split_first() else {
-            return Err(ClientError::Protocol("empty binary frame"));
-        };
-        let next_offset = offset + data.len() as u64;
+        if frame.len() < 17 {
+            return Err(ClientError::Protocol("short binary header"));
+        }
+        let flags = frame[0];
+        let frame_seq = u64::from_be_bytes(frame[1..9].try_into().expect("seq"));
+        let frame_offset = u64::from_be_bytes(frame[9..17].try_into().expect("offset"));
+        if frame_seq != seq || frame_offset != offset {
+            return Err(ClientError::Protocol("binary header mismatch"));
+        }
+        let data = &frame[17..];
         Ok(ReadChunk {
             data: data.to_vec(),
-            next_offset,
+            next_offset: offset + data.len() as u64,
             eof: flags & 1 != 0,
+            seq,
         })
     }
 
@@ -436,7 +458,11 @@ mod tests {
             let read = receive(&mut connection);
             assert_eq!(read.method, "sys.read_file");
             assert_eq!(read.params["binary"], true);
-            connection.send(&[1, b'h', b'i']).expect("binary");
+            let mut payload = vec![1];
+            payload.extend_from_slice(&0_u64.to_be_bytes());
+            payload.extend_from_slice(&0_u64.to_be_bytes());
+            payload.extend_from_slice(b"hi");
+            connection.send(&payload).expect("binary");
         });
 
         let mut client = GatewayClient::connect(&path, &[7; 32]).expect("connect");

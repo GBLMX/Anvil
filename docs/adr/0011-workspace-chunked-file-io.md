@@ -110,15 +110,14 @@ Response:
 payload, not JSON:
 
 ```text
-[1 byte flags][raw bytes]
+[1 byte flags][8 byte seq][8 byte offset][raw bytes]
 ```
 
 - Bit 0 of `flags` is `eof`; remaining bits are reserved and must be zero.
-- The request id is not repeated in the binary payload. The binary path is
-  sequential; errors are still returned as JSON-RPC error frames. Pipelining
-  requires adding an id or offset to the binary header before it can safely
-  reorder responses.
-- The maximum raw chunk is 7 MiB. One flag byte plus 7 MiB fits the 8 MiB frame.
+- The request carries an optional `seq`; the binary response echoes it with the
+  chunk offset, so pipelined responses can be reordered and validated. Errors
+  are still returned as JSON-RPC error frames.
+- The maximum raw chunk is 7 MiB. A 17-byte header plus 7 MiB fits the 8 MiB frame.
 - `next_offset` is `offset + len(raw bytes)`.
 - The client checks whether the first payload byte is `{` before treating a
   frame as binary, so JSON errors remain distinguishable.
@@ -217,7 +216,7 @@ Response:
 
 ### 8. Performance gate
 
-The direct `std::fs` 100 MB open baseline is **89.0 ms** (Rust side) after
+The direct `std::fs` 100 MB open baseline is **85.4 ms** (Rust side) after
 two-pass parallel line scanning and **209.6 ms** (PTY first output, measured
 before parallel indexing). Use this baseline after
 `71ea604`; the older 185.9 ms / 193.7 ms numbers were measured before the
@@ -231,17 +230,17 @@ binary 7 MiB chunks and report:
 - Total chunk count and total bytes.
 
 Measured 2026-10-31 on the same 100 MB fixture with binary reads: 15 chunks of
-7 MiB, 104,857,596 bytes, 188.9 ms serial UDS loop, and **208.9 ms PTY first
+7 MiB, 104,857,596 bytes, 188.9 ms serial UDS loop, and **215.8 ms PTY first
 output**. That is just above the 200 ms target. Parallel indexing cut direct
 Rust open from 174 ms to 89 ms and the JSON path from 640 ms to 563 ms; binary
-frames then brought the gateway to 208.9 ms. The previous JSON path cost
+frames then brought the gateway to 215.8 ms. The previous JSON path cost
 11.8 ms/chunk server encode and 5.88 ms/chunk client decode; those costs do not
 apply to the binary read path.
 
 Binary pipelining was measured on the real gateway: 1 in-flight 188.9 ms, 2
 135.1 ms, 4 126.8 ms, 8 **124.8 ms**, 15 138.3 ms. Window 8 saves **64 ms**
-against window 1; this is a pure UDS measurement. The ~145 ms PTY figure is a
-projection from serial 208.9 ms and does not include TUI decode, line-index, or
+against window 1; this is a pure UDS measurement. The ~152 ms PTY figure is a
+projection from serial 215.8 ms and does not include TUI decode, line-index, or
 rendering. Pipelining is not wired into the TUI, so the 200 ms gate is not
 closed. It still does not approach 50 ms; fd passing remains the option for
 that long-term target.
@@ -253,10 +252,10 @@ remains the default.
 The single 50 ms gate was too coarse for a 100 MB document. The Phase 0.6 gates
 are:
 
-- **Open 100 MB PTY < 200 ms.** Current serial binary gateway is **208.9 ms**;
+- **Open 100 MB PTY < 200 ms.** Current serial binary gateway is **215.8 ms**;
   direct Rust open is **89 ms**. Binary framing and parallel indexing are
-  implemented; pipelining is projected to reach **145 ms**, requires a binary
-  header id/offset, and is not wired into the TUI yet. The serial path does not meet the target.
+  implemented; the binary header now carries `seq` and `offset`, but pipelining is
+  not wired into the TUI yet. Projected: **152 ms**. The serial path does not meet the target.
 - **Daily edit key-to-screen < 1 ms.** Current Rust-side is ~0.08 ms and local
   PTY is ~0.16–0.6 ms. Met.
 - **50 ms open remains a long-term target**, not a Phase 0.6 blocker; the
