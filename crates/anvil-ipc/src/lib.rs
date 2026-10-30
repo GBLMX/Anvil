@@ -15,6 +15,9 @@ use std::{
     time::Duration,
 };
 
+mod envelope;
+pub use envelope::*;
+
 /// Maximum accepted frame body.
 pub const MAX_FRAME_LEN: u32 = 8 * 1024 * 1024;
 
