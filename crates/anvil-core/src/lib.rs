@@ -47,6 +47,7 @@ fn line_count(bytes: &[u8]) -> usize {
 #[derive(Debug, Clone)]
 pub struct RopeBuffer {
     rope: ropey::Rope,
+    line_count: usize,
 }
 
 impl RopeBuffer {
@@ -62,6 +63,7 @@ impl RopeBuffer {
 impl TextBuffer for RopeBuffer {
     fn from_text(text: &str) -> Self {
         Self {
+            line_count: line_count(text.as_bytes()),
             rope: ropey::Rope::from_str(text),
         }
     }
@@ -71,15 +73,20 @@ impl TextBuffer for RopeBuffer {
     }
 
     fn len_lines(&self) -> usize {
-        if self.rope.len_bytes() == 0 {
-            0
-        } else {
-            self.rope.len_lines()
-        }
+        self.line_count
     }
 
     fn insert(&mut self, at: usize, text: &str) {
         self.assert_boundary(at);
+        if text.is_empty() {
+            return;
+        }
+        let inserted_lines = text.bytes().filter(|byte| *byte == b'\n').count();
+        if self.len_bytes() == 0 {
+            self.line_count = inserted_lines + 1;
+        } else {
+            self.line_count += inserted_lines;
+        }
         let index = self.rope.byte_to_char(at);
         self.rope.insert(index, text);
     }
@@ -88,9 +95,23 @@ impl TextBuffer for RopeBuffer {
         assert!(range.start <= range.end && range.end <= self.len_bytes());
         self.assert_boundary(range.start);
         self.assert_boundary(range.end);
+        if range.start == range.end {
+            return;
+        }
         let start = self.rope.byte_to_char(range.start);
         let end = self.rope.byte_to_char(range.end);
+        let removed_lines = self
+            .rope
+            .slice(start..end)
+            .chars()
+            .filter(|c| *c == '\n')
+            .count();
         self.rope.remove(start..end);
+        if self.len_bytes() == 0 {
+            self.line_count = 0;
+        } else {
+            self.line_count -= removed_lines;
+        }
     }
 
     fn slice(&self, range: Range<usize>) -> String {

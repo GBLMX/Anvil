@@ -93,6 +93,18 @@ all three candidates agree on line-count cases
 - Warm up before sampling; report p50/p95/p99 and max, not one `Instant`.
 - Run at least 30 samples per case.
 
+### Commands
+
+```text
+TEXT_BENCH_MB=1 cargo bench --bench text_model
+cargo bench --bench text_model -- --save-baseline main
+cargo run --release -p anvil-core --bin text-rss -- rope 100
+cargo run --release -p anvil-core --bin text-rss -- gap 100
+cargo run --release -p anvil-core --bin text-rss -- piece 100
+```
+
+RSS must run one backend per process; it reports `VmRSS` and `VmHWM`.
+
 ### Workloads
 
 For 1 MB, 10 MB, and 100 MB:
@@ -214,7 +226,7 @@ Only changes required by the core slice:
 - line-count semantics;
 - cached line counts; no per-call full-document allocation.
 
-### M2: Benchmark gate
+### M2: Benchmark gate (in progress: criterion + RSS harness landed)
 
 - criterion harness;
 - workload and RSS coverage;

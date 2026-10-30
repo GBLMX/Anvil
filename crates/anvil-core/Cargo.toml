@@ -9,6 +9,10 @@ repository.workspace = true
 
 [dependencies]
 ropey = "1"
-
 [dev-dependencies]
+criterion = "0.5"
 proptest = "1"
+
+[[bench]]
+name = "text_model"
+harness = false
