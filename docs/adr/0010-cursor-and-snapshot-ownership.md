@@ -29,8 +29,9 @@ the eventual editor the wrong kind of client.
    document.
 
    `LineIndex` is a chunked persistent index, not a flat `Vec<usize>`:
-   - each chunk covers at most 1024 lines and stores its absolute base offset,
-     first line number, byte end, and an `Arc<[usize]>` of relative line starts;
+   - each chunk targets 1024 lines and may hold up to 2048 lines; it stores its
+     absolute base offset, first line number, byte end, and an `Arc<[usize]>` of
+     relative line starts;
    - a snapshot shares the chunk vector and all line-start slices;
    - an edit clones the small chunk vector, copies only the affected chunk's
      line starts, and shifts later chunk bases/line numbers;
@@ -38,11 +39,17 @@ the eventual editor the wrong kind of client.
 
    Complexity:
    - snapshot: `O(1)`;
-   - first edit after snapshot: `O(chunks + 1024)`, not `O(lines)`;
+   - first edit after snapshot: `O(chunks + 2048)`, not `O(lines)`;
    - `offset_to_line`: `O(log chunks + log 1024)`;
-   - `line_to_offset`: `O(log chunks)`.
+   - `line_to_offset`: `O(log chunks)`; after the chunk is found,
+     `starts[line - first_line]` is an O(1) array index. A binary search inside
+     the chunk is not used.
 
-   Chunks split/merge at the 1024-line target to prevent unbounded growth.
+   `first_line` is mandatory. If an implementation omits it and must search the
+   chunk's line starts, the bound becomes `O(log chunks + log 1024)`; that
+   variant is not this design.
+
+   Chunk normalization is defined below and keeps chunks bounded.
 
 2. **`anvil-core` gains `unicode-segmentation` and `unicode-width`.** These are
    text semantics, not UI dependencies. `anvil-core` must not depend on
@@ -88,6 +95,72 @@ the eventual editor the wrong kind of client.
    immutable text/index references and owned vectors. No mutable editor handle
    is exposed through the snapshot, and no snapshot path clones the document
    text.
+
+## LineIndex maintenance
+
+Constants:
+
+- `TARGET_LINES = 1024`
+- `MAX_LINES = 2048`
+- `MIN_LINES = 256`
+
+Normalization runs synchronously at the end of every successful edit. There is
+no dirty-chunk or lazy-rebuild path:
+
+- a chunk above `MAX_LINES` splits at `TARGET_LINES`;
+- a chunk below `MIN_LINES` merges with its smaller neighbor when their sum is
+  at most `MAX_LINES`;
+- if that sum exceeds `MAX_LINES`, the pair is rebalanced into two chunks at the
+  midpoint;
+- only the final chunk may remain below `MIN_LINES`; every other chunk is within
+  `[MIN_LINES, MAX_LINES]`.
+
+Split/merge rebuilds only the affected chunk headers and `Arc<[usize]>` arrays.
+It does not scan the document or rebuild the whole index.
+
+`LineIndex` is independent of PieceTable piece boundaries. An edit is applied by
+byte range and a `TextBuffer` reference:
+
+- the affected chunk range is found from the old index;
+- the line starts of every intersecting chunk are rebuilt from buffer slices;
+- later chunk bases and first-line numbers are shifted by the byte/line delta;
+- piece boundaries are irrelevant: one piece spanning multiple chunks rebuilds
+  all touched chunks, and multiple pieces inside one chunk rebuild one chunk.
+
+An edit that enters or leaves a line rebuilds the boundary chunk as well as the
+directly intersecting chunks. This keeps `offset_to_line` valid immediately
+after the edit; it does not defer work to the query path.
+
+With the occupancy invariant, the chunk count is bounded by
+`lines / MIN_LINES + 1` (plus the final partial chunk). A 100 MB synthetic file
+therefore stays in the low thousands of chunks even after long edit sessions.
+
+## Line semantics
+
+`LineIndex` must agree with `TextBuffer::len_lines` exactly:
+
+- empty text has zero lines and no line starts;
+- `\n` is the only line delimiter;
+- `\r\n` is one delimiter, and `\r` is ordinary line content with zero display
+  width;
+- a file without a trailing `\n` still counts its final content line;
+- a file ending in `\n` has a final empty line starting at `len`;
+- offsets at `\n` belong to the preceding line; offsets immediately after it
+  belong to the next line.
+
+| Text | `len_lines` | Line starts |
+|---|---:|---|
+| `""` | 0 | `[]` |
+| `"a"` | 1 | `[0]` |
+| `"a\n"` | 2 | `[0, 2]` |
+| `"a\r\n"` | 2 | `[0, 3]` |
+| `"a\r\nb"` | 2 | `[0, 3]` |
+| `"\n"` | 2 | `[0, 1]` |
+
+For empty text, `offset_to_line(0)` returns `None` and `line_to_offset` rejects
+line 0. The editor represents an empty-document caret separately; it must not
+invent a line that `TextBuffer::len_lines` does not count.
+
 
 ## Consequences
 
@@ -144,6 +217,16 @@ rule the text buffer follows. Rejected.
 - `LineIndex` tests prove an edit does not clone every line start: unaffected
   chunk `Arc<[usize]>` pointers remain shared, the retained snapshot's offsets
   are unchanged, and the edited index has the new line boundaries.
+- Line-index semantics tests assert the exact table above for empty, trailing-LF,
+  CRLF, and trailing-content cases, and compare every result with
+  `TextBuffer::len_lines`.
+- Normalization tests cover split above 2048, merge below 256, rebalance when a
+  merge would exceed 2048, and the final-chunk exception.
+- Piece-boundary tests cover an edit crossing pieces inside one chunk and an
+  edit crossing multiple chunks inside one piece.
+- A 100k-edit randomized stress run on the 100 MB reference checks that chunk
+  count stays within 2× the initial count, every non-final chunk remains within
+  `[256, 2048]`, and `offset_to_line` p99 does not regress by more than 10%.
 - The snapshot first-edit benchmark includes `LineIndex` work and reports the
   chunk path cost; it must stay far below a full line-array copy.
 - Snapshot tests prove `Arc` sharing and immutability; no document text copy is
