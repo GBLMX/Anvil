@@ -51,3 +51,18 @@ cargo bench -p anvil-tui --bench e2e_edit --features e2e-bench
   adds roughly 55 µs at p50 and 685 µs at p95 over the Rust-side number.
   A real terminal emulator will add its own parsing and painting cost on top.
 - These numbers exclude the Go gateway, LSP, terminal emulator, and idle CPU.
+
+## Boundaries
+
+- No Go gateway, LSP, or syntax highlighting is in this loop. The 73 µs
+  key-to-screen number is the core edit/render path before Tree-sitter or
+  span styling is added.
+- Tree-sitter highlighting will add highlight computation and styled span
+  generation on the draw path. The core edit path should remain in the same
+  microsecond range, but the full key-to-paint number will grow.
+- The PTY layer stops at the first output byte and does not include a real
+  terminal emulator's parsing or painting. A real terminal will add roughly
+  2–5 ms on top of the local PTY measurement.
+- Search is Enter-triggered linear scanning, not live incremental highlighting.
+  Live search highlighting needs an incremental index and is a separate
+  engineering effort.
