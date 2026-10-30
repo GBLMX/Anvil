@@ -298,6 +298,13 @@ func TestCleanupStaleCgroupsSelectsOnlyEmptyOldCgroups(t *testing.T) {
 	}
 }
 
+func infoMode(info os.FileInfo) string {
+	if info == nil {
+		return "missing"
+	}
+	return info.Mode().String()
+}
+
 func TestSymlinkRaceHelper(t *testing.T) {
 	if os.Getenv("ANVIL_SYMLINK_RACE_HELPER") != "1" {
 		return
@@ -308,13 +315,24 @@ func TestSymlinkRaceHelper(t *testing.T) {
 		os.Exit(2)
 	}
 	fmt.Fprintln(os.Stdout, "ready")
+	race := filepath.Join(workspace, "race")
 	for i := 0; i < 5000; i++ {
-		data, err := os.ReadFile(filepath.Join(workspace, "race"))
+		data, err := os.ReadFile(race)
 		if err != nil {
 			if errors.Is(err, unix.EACCES) {
 				continue
 			}
-			fmt.Fprintf(os.Stderr, "unexpected read error: %v\n", err)
+			info, statErr := os.Lstat(race)
+			target, targetErr := os.Readlink(race)
+			fmt.Fprintf(
+				os.Stderr,
+				"unexpected read error: %v; lstat=%s (%v), target=%q (%v)\n",
+				err,
+				infoMode(info),
+				statErr,
+				target,
+				targetErr,
+			)
 			os.Exit(3)
 		}
 		if string(data) != "SAFE" {
@@ -333,7 +351,12 @@ func TestSymlinkSwapCannotEscape(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(workspace, "safe"), []byte("SAFE"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Symlink("safe", filepath.Join(workspace, "race")); err != nil {
+	race := filepath.Join(workspace, "race")
+	other := filepath.Join(workspace, "race.other")
+	if err := os.Symlink("safe", race); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("/etc/passwd", other); err != nil {
 		t.Fatal(err)
 	}
 	cmd := exec.Command(os.Args[0], "-test.run=TestSymlinkRaceHelper")
@@ -356,22 +379,35 @@ func TestSymlinkSwapCannotEscape(t *testing.T) {
 		_ = cmd.Wait()
 		t.Fatalf("sandbox helper not ready: %q, %v, stderr=%s", line, err, stderr.String())
 	}
-	tmp := filepath.Join(workspace, "race.tmp")
+	// Exchange two prepared symlinks atomically so the reader never observes
+	// an intermediate create/remove window.
 	for i := 0; i < 5000; i++ {
-		target := "safe"
-		if i%2 == 1 {
-			target = "/etc/passwd"
-		}
-		_ = os.Remove(tmp)
-		if err := os.Symlink(target, tmp); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.Rename(tmp, filepath.Join(workspace, "race")); err != nil {
-			t.Fatal(err)
+		if err := unix.Renameat2(unix.AT_FDCWD, other, unix.AT_FDCWD, race, unix.RENAME_EXCHANGE); err != nil {
+			info, statErr := os.Lstat(race)
+			target, targetErr := os.Readlink(race)
+			t.Fatalf(
+				"atomic symlink exchange failed at %d: %v; race mode=%v (%v), target=%q (%v)",
+				i,
+				err,
+				infoMode(info),
+				statErr,
+				target,
+				targetErr,
+			)
 		}
 	}
 	if err := cmd.Wait(); err != nil {
-		t.Fatalf("symlink race helper failed: %v\n%s", err, stderr.String())
+		info, statErr := os.Lstat(race)
+		target, targetErr := os.Readlink(race)
+		t.Fatalf(
+			"symlink race helper failed: %v; race mode=%v (%v), target=%q (%v)\n%s",
+			err,
+			infoMode(info),
+			statErr,
+			target,
+			targetErr,
+			stderr.String(),
+		)
 	}
 }
 
