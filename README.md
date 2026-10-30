@@ -3,22 +3,26 @@
 Anvil is a Linux-first terminal editor built around a small, capability-scoped
 plugin contract.
 
-Status: **0.1.0; Phase 0.6 in progress**. A minimal ratatui editor exists with
-insert mode (`i`/`a`/`A`/`o`/`O`), `:w`/`:wq`/`:w file`/`:q!`, an
-unsaved-change guard, undo/redo, `x`/`dd`/`yy`/`p` with an unnamed register,
-`/` search with `n`/`N`, an embedded read-only `:help` page, multi-buffer
-switching with `:e`/`:bn`/`:bp`, cursor/viewport separation with horizontal
-scrolling, and dirty-only redraws; the Elm command runtime is not complete yet.
-Phase 0 code currently consists of the `anvil-api` interaction and view
-contracts, the `anvil-core` text buffer and selected PieceTable backend, the
-`anvil-editor` snapshot layer, the `anvil-ipc` frame codec, JSON-RPC envelope,
-Unix socket transport, `SO_PEERCRED`, and a synchronous gateway client; the TUI
-starts `anvil-gateway` (sibling binary or `ANVIL_GATEWAY`) and uses
-`--workspace <dir>` for all open/save operations. Phase 0.6 adds the Go gateway
-skeleton, exec runner, Landlock confinement with per-tool execute and a positive
-seccomp allowlist, supervised process groups, `rg`/`fd` argv policy, an
-SSRF-constrained fetch client, plus the `openat2`-confined workspace reader and
-atomic writer in `go/internal/fsroot`.
+Status: **0.1.1; Phase 0.7 in progress**. The ratatui editor now includes insert
+mode (`i`/`a`/`A`/`o`/`O`), `:w`/`:wq`/`:w file`/`:q!`, an unsaved-change
+guard, undo/redo, `x`/`dd`/`yy`/`p`, `w`/`b`/`e` word motions with
+`dw`/`db`/`de`/`yw`/`yb`/`ye`, literal `:s`/`:%s` substitution, `/` search
+with `n`/`N`, multi-buffer switching, horizontal scrolling, and dirty-only
+redraws. Rust and JSON files use Tree-sitter highlighting on a debounced
+background thread, capped at 256 KiB so large files keep plain-text latency.
+
+The plugin-host path has an empty sandboxed host with token-FD delivery,
+`close_range`, `no_new_privs`, Landlock read/no-exec rules, native-ABI seccomp
+with AF_UNIX-only sockets, cgroup v2 limits with OOM classification, framed
+`sys.ping`/`sys.exec` dispatch, and a TUI debug `HostSession`
+(`:plugin-start`/`:plugin-exec`/`:plugin-stop`/`:plugin-oom`). This is not yet
+a VM or public plugin API.
+
+Phase 0 still consists of the `anvil-api` contracts, `anvil-core` PieceTable,
+`anvil-editor` snapshots, `anvil-ipc` framing/JSON-RPC/Unix transport, and the
+Go gateway with `openat2`, Landlock/seccomp exec sandboxing, SSRF-constrained
+fetch, and a synchronous Rust gateway client. The TUI discovers the gateway
+beside the binary or via `ANVIL_GATEWAY`.
 
 ## Documents
 
@@ -71,6 +75,14 @@ atomic writer in `go/internal/fsroot`.
 - The text model is `PieceTable`, exposed as `anvil-core::TextDocument`; Rope and
   Gap Buffer remain benchmark-only. See
   [ADR-0009](docs/adr/0009-text-model-snapshot-gate.md).
+
+- Syntax highlighting is derived state, not stored in `PieceTable`. Parsing runs
+  on a background worker after a 50 ms debounce; stale spans remain visible
+  until the replacement arrives. Files over 256 KiB are intentionally plain
+  text.
+- The empty plugin host is a real process/sandbox boundary, but not yet a plugin
+  runtime. cgroup limits require a delegated cgroup2 root; without one the host
+  fails closed rather than pretending limits are active.
 - Phase 0 has one native interaction model: selection-first. Motions and
   actions live in the Rust core; keymaps ship as Lua/TS plugins.
 - Full untrusted-plugin support targets Linux 5.13+ (Landlock). Linux 5.6-5.12

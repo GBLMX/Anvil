@@ -1,6 +1,7 @@
 # 0.1.1 / Phase 0.7 Plan
 
-Status: planned. 0.1.0 is the current release baseline.
+Status: in progress. `v0.1.1` is tagged; plugin-host is an empty sandboxed
+process (no VM), and syntax highlighting is asynchronous but not incremental.
 
 ## Priorities
 
@@ -30,22 +31,25 @@ Acceptance:
 - Plugin death does not take down the TUI or gateway.
 - Security tests cover FD inheritance, token reuse, and workspace escape.
 
-Blocking open item from 0.6: gateway control-socket registration and
-inherited-FD token delivery.
+Remaining gate: VM/runtime, gateway control-socket token registration, and
+end-to-end `sys.*` dispatch beyond the current `sys.ping`/mock `sys.exec`.
 
 ## 2. Tree-sitter syntax highlighting
 
 Required outcome:
 
-- Incremental parse per buffer; no full-document reparse on each keystroke.
+- Full parse on a debounced background worker; incremental `Tree::edit` is
+  deferred to a later phase.
 - Highlights are derived state, not stored in `PieceTable`.
 - Plain text and unsupported languages remain usable without a parser.
 - Scroll and search stay within the 0.1.0 latency envelope.
 
 Acceptance:
 
-- 100 MB plain text open remains < 200 ms; no parser is loaded for plain text.
-- A 1 MB Rust file key-to-screen stays < 1 ms Rust-side.
+- 100 MB plain text open remains < 200 ms; no parser is loaded for plain
+  text.
+- A 250 KiB Rust file key-to-screen stays < 1 ms Rust-side; files over
+  256 KiB intentionally skip highlighting.
 - Editing before/after syntax spans does not corrupt the text or index.
 - Parser errors never panic the TUI.
 

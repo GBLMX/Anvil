@@ -1,6 +1,8 @@
 # Anvil Performance Baseline
 
 Status: Phase 0 measurement plan. Numbers are gates, not shipped claims.
+0.1.1 syntax measurements are recorded below; the full gate suite is not yet
+run on the reference machine.
 
 ## 1. Reference machine
 
@@ -116,8 +118,26 @@ band.
 | Child leak after 1000 reloads | 0 | Process table assertion |
 | RSS growth after 1000 reloads | <= 5% | Same plugin, same workload |
 
+
 If a target is exceeded, the result is a design finding, not a reason to change
 the measurement.
+
+## 3.1 0.1.1 syntax measurements
+
+Measured with the installed release binary over PTY (120x40), gateway
+included, on the workstation used for 0.1.1 development. Insert latency is
+key-to-output median in insert mode after warmup.
+
+| Rust file | First frame | Insert median | Insert max |
+|---:|---:|---:|---:|
+| 64 KiB | 23 ms | 0.18 ms | 0.88 ms |
+| 250 KiB | 25 ms | 0.07 ms | 0.56 ms |
+| 1 MiB | 29 ms | 0.45 ms | 0.83 ms |
+
+Before the worker-thread change, 250 KiB insert latency was 50.9 ms because
+every revision reparsed on the UI thread. Parsing now runs on a debounced
+background worker with stale spans retained; files over 256 KiB intentionally
+skip highlighting.
 
 ## 4. Methodology
 
