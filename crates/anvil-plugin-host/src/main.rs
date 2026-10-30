@@ -24,6 +24,7 @@ mod linux {
         let mut check_exec = false;
         let mut check_write = false;
         let mut check_uds = false;
+        let mut socket = None;
         let mut args = std::env::args().skip(1);
         while let Some(arg) = args.next() {
             match arg.as_str() {
@@ -49,6 +50,12 @@ mod linux {
                 "--check-exec" => check_exec = true,
                 "--check-write" => check_write = true,
                 "--check-uds" => check_uds = true,
+                "--socket" => {
+                    socket = Some(
+                        args.next()
+                            .ok_or_else(|| io::Error::other("missing --socket value"))?,
+                    );
+                }
                 other => return Err(io::Error::other(format!("unknown argument: {other}"))),
             }
         }
@@ -123,6 +130,10 @@ mod linux {
         }
 
         send_hello()?;
+        if let Some(path) = socket {
+            watch_editor(&path)?;
+            return Ok(0);
+        }
         if hold {
             std::thread::sleep(std::time::Duration::from_secs(60));
         }
@@ -307,8 +318,33 @@ mod linux {
 
     fn apply_seccomp() -> io::Result<()> {
         const NR: u32 = 0;
+        const ARCH: u32 = 4;
         const ARG0: u32 = 16;
+        #[cfg(target_arch = "x86_64")]
+        const NATIVE_ARCH: u32 = 0xC000_003E;
+        #[cfg(target_arch = "aarch64")]
+        const NATIVE_ARCH: u32 = 0xC000_00B7;
+        #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+        const NATIVE_ARCH: u32 = 0;
         let filter = [
+            SockFilter {
+                code: BPF_LD | BPF_W | BPF_ABS,
+                jt: 0,
+                jf: 0,
+                k: ARCH,
+            },
+            SockFilter {
+                code: BPF_JMP | BPF_JEQ | BPF_K,
+                jt: 1,
+                jf: 0,
+                k: NATIVE_ARCH,
+            },
+            SockFilter {
+                code: BPF_RET | BPF_K,
+                jt: 0,
+                jf: 0,
+                k: SECCOMP_RET_ERRNO | libc::EPERM as u32,
+            },
             SockFilter {
                 code: BPF_LD | BPF_W | BPF_ABS,
                 jt: 0,
@@ -380,6 +416,39 @@ mod linux {
             return Err(io::Error::last_os_error());
         }
         Ok(())
+    }
+
+    fn watch_editor(path: &str) -> io::Result<()> {
+        use std::io::Read;
+        use std::os::unix::net::UnixStream;
+        let mut stream = UnixStream::connect(path)?;
+        stream.set_nonblocking(true)?;
+        let fd = std::os::fd::AsRawFd::as_raw_fd(&stream);
+        let mut poll = libc::pollfd {
+            fd,
+            events: libc::POLLIN,
+            revents: 0,
+        };
+        loop {
+            let ready = unsafe { libc::poll(&mut poll, 1, 100) };
+            if ready < 0 {
+                let error = io::Error::last_os_error();
+                if error.kind() == io::ErrorKind::Interrupted {
+                    continue;
+                }
+                return Err(error);
+            }
+            if ready == 0 {
+                continue;
+            }
+            let mut byte = [0u8; 1];
+            match stream.read(&mut byte) {
+                Ok(0) => return Ok(()),
+                Ok(_) => {}
+                Err(error) if error.kind() == io::ErrorKind::WouldBlock => {}
+                Err(error) => return Err(error),
+            }
+        }
     }
 
     fn send_hello() -> io::Result<()> {

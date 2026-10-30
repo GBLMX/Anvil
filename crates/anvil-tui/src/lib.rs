@@ -384,7 +384,7 @@ impl Model {
         let target = match motion {
             WordMotion::NextStart => next_word_start(self.editor.text(), self.cursor),
             WordMotion::PreviousStart => previous_word_start(self.editor.text(), self.cursor),
-            WordMotion::End => self.word_end_exclusive().saturating_sub(1),
+            WordMotion::End => end_word(self.editor.text(), self.cursor),
         };
         if target != self.cursor {
             self.cursor = target;
@@ -1617,6 +1617,14 @@ mod tests {
         assert_eq!(model.cursor, 6);
         handle_event(&mut model, key(KeyCode::Char('e')));
         assert_eq!(model.cursor, 9);
+    }
+
+    #[test]
+    fn word_end_keeps_multibyte_boundary() {
+        let mut model = Model::new(EditorState::from_text("café"), None);
+        handle_event(&mut model, key(KeyCode::Char('e')));
+        assert_eq!(model.cursor, 3);
+        assert!(model.editor.text().is_char_boundary(model.cursor));
     }
 
     #[test]

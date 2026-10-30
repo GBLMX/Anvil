@@ -52,6 +52,14 @@ mod linux {
             Ok(body)
         }
 
+        pub fn try_wait(&mut self) -> io::Result<Option<ExitStatus>> {
+            let status = self.child.try_wait()?;
+            if status.is_some() {
+                self.pgid = 0;
+            }
+            Ok(status)
+        }
+
         pub fn wait(&mut self) -> io::Result<ExitStatus> {
             let status = self.child.wait()?;
             self.pgid = 0;

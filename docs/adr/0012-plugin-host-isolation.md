@@ -1,7 +1,7 @@
 # ADR-0012: Plugin-Host Isolation
 
-- Status: Proposed; empty-host + FS/exec/network denial implemented; VM, cgroup,
-  and editor UDS not started
+- Status: Proposed; empty-host + FS/exec/network denial + host-side UDS EOF exit
+  implemented; VM and cgroup not started
 - Date: 2026-10-31
 - Related: [ADR-0001](0001-plugin-isolation.md), [ADR-0002](0002-go-daemon.md),
   [ADR-0007](0007-jsonrpc-envelope-and-capability-token.md),

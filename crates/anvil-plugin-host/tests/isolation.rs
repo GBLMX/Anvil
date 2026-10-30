@@ -2,6 +2,7 @@
 
 use anvil_plugin_host::{Token, spawn};
 use std::io::{BufRead, BufReader};
+use std::os::unix::net::UnixListener;
 use std::path::Path;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
@@ -39,6 +40,32 @@ fn host_denies_network() {
     let mut host =
         spawn(host_bin(), &["--check-network".to_owned()], Token([4; 32])).expect("spawn host");
     assert_eq!(host.wait().expect("wait").code(), Some(14));
+}
+
+#[test]
+fn editor_uds_eof_exits_host() {
+    let path = std::env::temp_dir().join(format!("anvil-uds-{}.sock", std::process::id()));
+    let _ = std::fs::remove_file(&path);
+    let listener = UnixListener::bind(&path).expect("bind uds");
+    let mut host = spawn(
+        host_bin(),
+        &["--socket".to_owned(), path.display().to_string()],
+        Token([8; 32]),
+    )
+    .expect("spawn host");
+    let _ = host.read_hello().expect("hello");
+    let editor = listener.accept().expect("accept").0;
+    editor
+        .shutdown(std::net::Shutdown::Write)
+        .expect("shutdown");
+    let deadline = Instant::now() + Duration::from_millis(500);
+    while host.try_wait().expect("try wait").is_none() {
+        if Instant::now() >= deadline {
+            panic!("host did not exit after editor EOF");
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    let _ = std::fs::remove_file(&path);
 }
 
 #[test]
