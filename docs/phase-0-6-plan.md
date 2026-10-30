@@ -113,7 +113,8 @@ Open:
 - add fetch/SSRF and gateway audit logging;
 - provide deployment-specific delegated cgroup root provisioning/systemd
   unit;
-- add real-runner gateway integration coverage to CI.
+- add real-runner gateway integration coverage to CI;
+- benchmark complete sandboxed exec and TLS fetch with transport reuse.
 
 ## 4. Plugin host
 

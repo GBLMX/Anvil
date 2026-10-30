@@ -36,4 +36,16 @@ through the current per-request transport design.
   this host.
 - Fetch latency is dominated by transport setup and the local HTTP request path;
   keep-alive reuse is not part of the current policy client.
-- Process spawn is roughly 0.34 ms before sandbox setup and tool runtime.
+- Process spawn is roughly 0.39 ms before sandbox setup and tool runtime.
+
+## Known gaps
+
+- `BenchmarkFetchHTTP` uses a local plain-HTTP server, not a real TLS
+  handshake. It also creates a new `http.Transport` per request, so it does not
+  represent connection reuse. Real `sys.fetch` latency will include TLS setup
+  until the client reuses a transport with `MaxIdleConnsPerHost`.
+- `BenchmarkRunTrue` measures only the supervisor spawn/wait path. It excludes
+  Landlock, seccomp, cgroup setup, sandboxed tool startup, and tool runtime, so
+  it must not be read as end-to-end `sys.exec` latency.
+- A later benchmark should measure the complete runner path and a TLS fetch with
+  connection reuse; these are follow-ups, not Phase 0.6 gates.
