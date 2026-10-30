@@ -1,11 +1,11 @@
 # Text Model Benchmark: Phase 0.5 Baseline
 
-Status: measurement report, not a final backend decision.
+Status: measurement report supporting ADR-0009; selected backend is PieceTable.
 
 ## Environment
 
 ```text
-commit:      4db2553
+commit:      0a3235a
 rustc:       1.88.0 (6b00bc388 2025-06-23)
 kernel:      7.3.0-4-cachyos
 cpu:         12th Gen Intel(R) Core(TM) i7-12700H
@@ -126,6 +126,6 @@ The 100 MB run remains a manual reference measurement.
   interval. Its 100 MB sample count is 30; use a larger run for a final claim.
 - The random trace is deterministic but synthetic; it does not model a real
   user's edit distribution.
-- Undo/redo and snapshot costs are deferred until M4 creates the command/actor
-  layers.
-- This data does not select a production backend.
+- Undo/redo costs remain deferred until M4 completes the command/actor layers.
+- This data supports the PieceTable selection recorded in
+  [ADR-0009](../adr/0009-text-model-snapshot-gate.md).

@@ -30,7 +30,7 @@ The dependency set should avoid:
 | Area | Choice | Version policy | Why |
 |---|---|---|---|
 | TUI | `ratatui` + `crossterm` | `0.30` / `0.29` | Rust 1.88 compatible; direct terminal control; no actor/runtime |
-| Text | `ropey` | `1.6` | Default candidate for 100 MB random edits; added only after ADR-0004 gate |
+| Text | `ropey` | `1.6` | Benchmark fallback for 100 MB; production backend is PieceTable (ADR-0009) |
 | Lua | `mlua` with `luau` | `0.12` | Luau sandbox removes dangerous stdlib; vendored runtime |
 | JS | `rquickjs` | `0.14` | QuickJS-NG bindings; no V8/Deno |
 | Sandbox | `landlock`, `seccompiler`, `rustix` | `0.4`, `0.5`, `1` | Unprivileged Landlock/seccomp without libseccomp |

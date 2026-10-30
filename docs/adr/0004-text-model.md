@@ -1,4 +1,4 @@
-# ADR-0004: Text Model Is Selected by Benchmark, Rope Is the Default Candidate
+# ADR-0004: Text Model Is Selected by Benchmark
 
 - Status: Superseded by ADR-0009 for backend selection; benchmark method remains
 - Date: 2026-10-30

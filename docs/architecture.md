@@ -194,7 +194,7 @@ v1. Ferriso remains a useful MIT-licensed reference:
 - `ferriso-editor` defaults to a 64 MiB open limit; Anvil must set its own limit
   and retest at 100 MB if its code is reused.
 
-Revisit this decision only if the direct `ratatui` + Rope stack fails a Phase 0
+Revisit this decision only if the direct `ratatui` + PieceTable stack fails a
 gate.
 
 ## 6. Build and packaging
