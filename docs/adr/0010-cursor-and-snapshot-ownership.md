@@ -61,7 +61,8 @@ the eventual editor the wrong kind of client.
    - offsets before `start` stay unchanged;
    - offsets inside the replaced range clamp to `start`;
    - offsets at or after `end` shift by the byte delta;
-   - an insertion is the empty-range case at `start`.
+   - for an insertion (`start == end`), offsets at or after `start` shift by the
+     inserted length, including a caret exactly at the insertion point.
 
    Anchor and head map independently, preserving direction. Empty selections
    stay empty. The editor layer records selection state per command so undo and
