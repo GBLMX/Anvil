@@ -221,7 +221,7 @@ func TestCgroupTaskLimitWrites(t *testing.T) {
 	}
 }
 
-func TestCleanupStaleCgroupsIsConservative(t *testing.T) {
+func TestCleanupStaleCgroupsDefaultRemoverDoesNotRecurse(t *testing.T) {
 	root := t.TempDir()
 	stale := filepath.Join(root, "stale")
 	fresh := filepath.Join(root, "fresh")
@@ -257,7 +257,7 @@ func TestCleanupStaleCgroupsIsConservative(t *testing.T) {
 	}
 	for _, dir := range []string{stale, fresh, active, nonCgroup} {
 		if _, err := os.Stat(dir); err != nil {
-			t.Fatalf("conservative cleanup removed %s: %v", dir, err)
+			t.Fatalf("default remover recursed into %s: %v", dir, err)
 		}
 	}
 }

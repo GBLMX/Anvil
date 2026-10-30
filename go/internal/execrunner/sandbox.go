@@ -207,8 +207,15 @@ func limitTaskCount(headroom uint64) error {
 // CleanupStaleCgroups removes empty cgroups under root older than olderThan.
 // The gateway calls this at startup to recover directories left by crashes or
 // failed cleanup. Non-cgroup entries and non-empty cgroups are left alone.
+// defaultCgroupRemover must stay rmdir-only. os.RemoveAll on cgroupfs can
+// recursively destroy child cgroups; a non-empty directory is intentionally
+// left for the next safe cleanup attempt.
+var defaultCgroupRemover = func(path string) error {
+	return os.Remove(path)
+}
+
 func CleanupStaleCgroups(root string, olderThan time.Duration) error {
-	return cleanupStaleCgroups(root, olderThan, os.Remove)
+	return cleanupStaleCgroups(root, olderThan, defaultCgroupRemover)
 }
 
 func cleanupStaleCgroups(root string, olderThan time.Duration, remove func(string) error) error {

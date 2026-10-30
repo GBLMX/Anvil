@@ -1,6 +1,6 @@
 # ADR-0005: No Shell, No Pipeline, Per-Tool Argument Policy
 
-- Status: Proposed; exec runner, positive seccomp allowlist, per-tool execute, argv policy, process supervisor, symlink-race test, and kernel tests implemented; gateway integration pending
+- Status: Accepted; exec runner, positive seccomp allowlist, per-tool execute, argv policy, process supervisor, symlink-race test, and kernel tests implemented. Gateway integration remains an implementation follow-up.
 - Date: 2026-10-30
 
 ## Context
@@ -66,6 +66,20 @@ safe:
     64 tasks above the current user task count as a coarse fallback.
 12. `sys.exec` is unavailable when the runner, policy, or sandbox setup is
     incomplete. Deny by default.
+
+## Deployment requirements
+
+- The gateway needs write access to `/sys/fs/cgroup/anvil-exec/` (or the
+  configured cgroup root). Provide this through systemd `Delegate=pids` or a
+  pre-created directory chowned to the gateway user. Do not run the gateway as
+  root merely to manage cgroups.
+- The gateway owns cgroup creation, membership setup, cleanup, and startup
+  sweeping. The runner only writes `pids.max` and `cgroup.procs` before exec;
+  it never creates or removes cgroups.
+- `CleanupStaleCgroups` uses rmdir only. It never recursively removes a
+  cgroupfs directory, and it skips non-cgroup or non-empty directories.
+- If cgroup v2 is unavailable, the runner falls back to `RLIMIT_NPROC`, which
+  is per-UID rather than per-sandbox and may cause cross-process interference.
 
 ## Tool argument policy
 

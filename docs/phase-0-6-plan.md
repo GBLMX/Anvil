@@ -45,6 +45,9 @@ Open:
 - gateway must resolve the tool fd/policy, create `ANVIL_CGROUP_PATH` before
   launch, remove it after wait, and call `CleanupStaleCgroups` for stale empty
   directories at startup;
+- gateway needs write access to `/sys/fs/cgroup/anvil-exec/` via systemd
+  `Delegate=pids` or a pre-created/chowned root; it must not run as root just
+  for cgroup management;
 - CI needs an explicit Landlock capability probe and skip path.
 
 ## 2. Fetch/SSRF
