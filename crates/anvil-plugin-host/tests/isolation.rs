@@ -28,6 +28,13 @@ fn host_closes_all_but_stdio() {
 }
 
 #[test]
+fn host_allows_unix_sockets() {
+    let mut host =
+        spawn(host_bin(), &["--check-uds".to_owned()], Token([7; 32])).expect("spawn host");
+    assert_eq!(host.wait().expect("wait").code(), Some(23));
+}
+
+#[test]
 fn host_denies_network() {
     let mut host =
         spawn(host_bin(), &["--check-network".to_owned()], Token([4; 32])).expect("spawn host");

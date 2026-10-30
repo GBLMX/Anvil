@@ -23,6 +23,7 @@ mod linux {
         let mut check_network = false;
         let mut check_exec = false;
         let mut check_write = false;
+        let mut check_uds = false;
         let mut args = std::env::args().skip(1);
         while let Some(arg) = args.next() {
             match arg.as_str() {
@@ -47,6 +48,7 @@ mod linux {
                 "--check-network" => check_network = true,
                 "--check-exec" => check_exec = true,
                 "--check-write" => check_write = true,
+                "--check-uds" => check_uds = true,
                 other => return Err(io::Error::other(format!("unknown argument: {other}"))),
             }
         }
@@ -101,6 +103,14 @@ mod linux {
                 Err(error) if error.kind() == io::ErrorKind::PermissionDenied => return Ok(18),
                 Ok(_) => return Ok(17),
                 Err(_) => return Ok(19),
+            }
+        }
+
+        if check_uds {
+            match std::os::unix::net::UnixStream::pair() {
+                Ok(_) => return Ok(23),
+                Err(error) if error.raw_os_error() == Some(libc::EPERM) => return Ok(24),
+                Err(_) => return Ok(25),
             }
         }
 
@@ -297,47 +307,69 @@ mod linux {
 
     fn apply_seccomp() -> io::Result<()> {
         const NR: u32 = 0;
-        let denied = [
-            libc::SYS_socket,
-            libc::SYS_socketpair,
-            libc::SYS_connect,
-            libc::SYS_bind,
-            libc::SYS_listen,
-            libc::SYS_accept,
-            libc::SYS_accept4,
-            libc::SYS_sendto,
-            libc::SYS_recvfrom,
-            libc::SYS_sendmsg,
-            libc::SYS_recvmsg,
-            libc::SYS_shutdown,
-        ];
-        let mut filter = Vec::with_capacity(denied.len() * 2 + 2);
-        filter.push(SockFilter {
-            code: BPF_LD | BPF_W | BPF_ABS,
-            jt: 0,
-            jf: 0,
-            k: NR,
-        });
-        for syscall in denied {
-            filter.push(SockFilter {
+        const ARG0: u32 = 16;
+        let filter = [
+            SockFilter {
+                code: BPF_LD | BPF_W | BPF_ABS,
+                jt: 0,
+                jf: 0,
+                k: NR,
+            },
+            SockFilter {
                 code: BPF_JMP | BPF_JEQ | BPF_K,
                 jt: 0,
-                jf: 1,
-                k: syscall as u32,
-            });
-            filter.push(SockFilter {
+                jf: 3,
+                k: libc::SYS_socket as u32,
+            },
+            SockFilter {
+                code: BPF_LD | BPF_W | BPF_ABS,
+                jt: 0,
+                jf: 0,
+                k: ARG0,
+            },
+            SockFilter {
+                code: BPF_JMP | BPF_JEQ | BPF_K,
+                jt: 1,
+                jf: 0,
+                k: libc::AF_UNIX as u32,
+            },
+            SockFilter {
                 code: BPF_RET | BPF_K,
                 jt: 0,
                 jf: 0,
                 k: SECCOMP_RET_ERRNO | libc::EPERM as u32,
-            });
-        }
-        filter.push(SockFilter {
-            code: BPF_RET | BPF_K,
-            jt: 0,
-            jf: 0,
-            k: SECCOMP_RET_ALLOW,
-        });
+            },
+            SockFilter {
+                code: BPF_JMP | BPF_JEQ | BPF_K,
+                jt: 0,
+                jf: 3,
+                k: libc::SYS_socketpair as u32,
+            },
+            SockFilter {
+                code: BPF_LD | BPF_W | BPF_ABS,
+                jt: 0,
+                jf: 0,
+                k: ARG0,
+            },
+            SockFilter {
+                code: BPF_JMP | BPF_JEQ | BPF_K,
+                jt: 1,
+                jf: 0,
+                k: libc::AF_UNIX as u32,
+            },
+            SockFilter {
+                code: BPF_RET | BPF_K,
+                jt: 0,
+                jf: 0,
+                k: SECCOMP_RET_ERRNO | libc::EPERM as u32,
+            },
+            SockFilter {
+                code: BPF_RET | BPF_K,
+                jt: 0,
+                jf: 0,
+                k: SECCOMP_RET_ALLOW,
+            },
+        ];
         let program = SockFprog {
             len: filter.len() as u16,
             filter: filter.as_ptr(),

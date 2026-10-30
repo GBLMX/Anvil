@@ -13,7 +13,7 @@ Status: planned. 0.1.0 is the current release baseline.
 ## 1. Plugin-host isolation
 
 Contract: [ADR-0012](adr/0012-plugin-host-isolation.md).
-Empty-host slice implemented: token FD, fd closure, Landlock FS read + no-exec rules, seccomp network denial, `session.hello`, and isolation tests. VM, cgroup, and editor UDS pending.
+Empty-host slice implemented: token FD, fd closure, Landlock FS read + no-exec rules, seccomp AF_UNIX-only sockets (TCP/UDP denied), `session.hello`, and isolation tests. VM, cgroup, and editor UDS pending.
 
 Required outcome:
 

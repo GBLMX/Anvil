@@ -35,9 +35,9 @@ Applied before plugin VM initialization:
   granted paths. Landlock network rules are used only on kernels that support
   them (>= 6.7); on 5.13-6.6 network denial is a seccomp responsibility, not a
   Landlock claim.
-- seccomp: network syscalls (`socket`, `connect`, `bind`, `listen`, `accept*`,
-  `send*`, `recv*`, `shutdown`) return `EPERM`; broader namespace/mount/ptrace
-  filtering is pending.
+- seccomp: `socket`/`socketpair` allow only `AF_UNIX`; other domains return
+  `EPERM`, so TCP/UDP cannot be created. UDS stream operations remain allowed.
+  Broader namespace/mount/ptrace filtering is pending.
 - Landlock handles `EXECUTE`; no path is granted execute after startup.
 - RLIMIT/cgroup pids, memory, fds, and output caps.
 - The host starts with a minimal environment; no inherited editor/gateway FDs.
