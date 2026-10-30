@@ -132,8 +132,8 @@ Projected PTY open is roughly **344 ms** before client decode is included.
   server + 3.3 ms client per chunk, or ~258 ms total. That projects to roughly
   **342 ms PTY**, not 240 ms. fd passing removes the whole 19.2 ms/chunk
   transfer path and is the only option that can approach the direct baseline.
-  The 200 ms target still needs binary framing, pipelining, and parallel
-  line-index construction.
+  The 200 ms target still needs binary framing and pipelining; parallel
+  line-index construction is implemented.
 - Search remains dominated by the in-process scan, so the gateway barely
   changes it. Key-to-screen and scroll are within local PTY noise.
 - These numbers include the Go gateway, but not LSP, terminal emulator, or idle
