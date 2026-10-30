@@ -111,20 +111,21 @@ All notable changes to Anvil are recorded here. The format follows
   regression gate.
 - `anvil-editor`: shared `EditorSnapshot`, `EditorState`, selection mapping,
   and `EditorView` projection.
-- `go/internal/fsroot`: `openat2`-confined workspace reader with traversal,
-  symlink-escape, regular-file, and size-limit tests.
+- `go/internal/fsroot`: `openat2`-confined workspace reader, atomic writer,
+  size query, and traversal/symlink/regular-file/limit tests.
 
 ### Security
 
 - `anvil-exec-runner` applies Landlock/seccomp, the symlink-swap race test
-  passes, and non-allowlisted exec (including through `ld.so`) is denied.
-  `sys.exec` remains disabled until the Go gateway uses this runner.
+  passes, and non-allowlisted exec (including through `ld.so`) is denied;
+  the gateway routes `sys.exec` through this runner.
 - Untrusted plugins run outside the editor process; the Go gateway is a policy
   gateway, not the plugin sandbox.
 
 ### Known limitations
 
-- No runnable editor yet.
-- No stable plugin API or release.
+- 0.1.0 is pre-alpha; the TUI is runnable but the plugin API is not stable.
+- Untrusted plugin-host isolation remains the Phase 0.6/0.7 open security item.
 - Landlock-backed untrusted plugins require Linux 5.13+.
-- Smithy and Rope/piece-table decisions remain Phase 0 gates.
+- 100 MB open/save meet 200 ms on this NVMe Linux host; 50 ms open remains a
+  long-term target.
