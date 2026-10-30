@@ -21,6 +21,7 @@ func main() {
 	socket := flag.String("socket", "", "gateway Unix socket path")
 	workspace := flag.String("workspace", "", "workspace root")
 	allowRead := flag.Bool("allow-read", false, "grant sys.read_file")
+	allowWrite := flag.Bool("allow-write", false, "grant sys.write_file")
 	pluginID := flag.String("plugin-id", "plugin", "registered plugin id")
 	tokenHash := flag.String("token-sha256", "", "hex SHA-256 of the 32-byte plugin token")
 	permissions := flag.String("permissions", "", "comma-separated granted permissions")
@@ -64,6 +65,9 @@ func main() {
 	granted := splitPermissions(*permissions)
 	if *allowRead && !contains(granted, "fs.read:**") {
 		granted = append(granted, "fs.read:**")
+	}
+	if *allowWrite && !contains(granted, "fs.write:**") {
+		granted = append(granted, "fs.write:**")
 	}
 	if *allowExec && !contains(granted, "sys.exec") {
 		granted = append(granted, "sys.exec")

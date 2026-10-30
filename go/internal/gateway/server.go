@@ -14,6 +14,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
@@ -31,6 +32,8 @@ const (
 	MaxFrameLen = 8 << 20
 	// maxReadChunk is the maximum file bytes returned by sys.read_file.
 	maxReadChunk = 4 << 20
+	// maxWriteChunk is the maximum file bytes accepted by one sys.write_file.
+	maxWriteChunk = 4 << 20
 	// Protocol is the v1 JSON-RPC protocol name.
 	Protocol = "anvil-jsonrpc-1"
 	// APIVersion is the public API version.
@@ -218,11 +221,38 @@ type readResult struct {
 	EOF        bool   `json:"eof"`
 }
 
+type writeParams struct {
+	Path   string `json:"path"`
+	Offset int64  `json:"offset"`
+	Data   string `json:"data"`
+	EOF    *bool  `json:"eof"`
+}
+
+type writeFileResult struct {
+	NextOffset int64 `json:"next_offset"`
+}
+
+type pendingWrite struct {
+	target *fsroot.WriteTarget
+	offset int64
+}
+
 type connectionState struct {
 	mu          sync.Mutex
 	handshaken  bool
 	sessionID   string
 	permissions []string
+	writesMu    sync.Mutex
+	writes      map[string]*pendingWrite
+}
+
+func (state *connectionState) abortWrites() {
+	state.writesMu.Lock()
+	defer state.writesMu.Unlock()
+	for path, pending := range state.writes {
+		pending.target.Abort()
+		delete(state.writes, path)
+	}
 }
 
 func (s *Server) handle(serverCtx context.Context, conn net.Conn) {
@@ -235,7 +265,9 @@ func (s *Server) handle(serverCtx context.Context, conn net.Conn) {
 	defer cancel()
 	state := &connectionState{
 		permissions: append([]string{}, s.cfg.Permissions...),
+		writes:      map[string]*pendingWrite{},
 	}
+	defer state.abortWrites()
 	var writeMu sync.Mutex
 	var requests sync.WaitGroup
 	for {
@@ -282,6 +314,8 @@ func (s *Server) dispatch(ctx context.Context, req request, state *connectionSta
 	switch req.Method {
 	case "sys.read_file":
 		return s.readFile(req, state)
+	case "sys.write_file":
+		return s.writeFile(req, state)
 	case "session.hello":
 		return s.hello(req, state)
 	case "sys.exec":
@@ -359,8 +393,12 @@ func (s *Server) readFile(req request, state *connectionState) (interface{}, *rp
 	if err := decodeParams(req.Params, &params); err != nil {
 		return nil, &rpcError{Code: -32602, Message: "invalid params"}
 	}
-	if params.Path == "" || params.Offset < 0 {
+	if params.Offset < 0 {
 		return nil, &rpcError{Code: -32602, Message: "invalid params"}
+	}
+	path, err := workspacePath(params.Path)
+	if err != nil {
+		return nil, &rpcError{Code: -32002, Message: "policy denied"}
 	}
 	max := params.MaxBytes
 	if max == 0 {
@@ -369,13 +407,13 @@ func (s *Server) readFile(req request, state *connectionState) (interface{}, *rp
 	if max < 0 || max > maxReadChunk {
 		return nil, &rpcError{Code: -32602, Message: "invalid params"}
 	}
-	if rpcErr := s.pathPermissionError(state, "fs.read", params.Path); rpcErr != nil {
+	if rpcErr := s.pathPermissionError(state, "fs.read", path); rpcErr != nil {
 		return nil, rpcErr
 	}
 	if s.root == nil {
 		return nil, &rpcError{Code: -32008, Message: "file service unavailable"}
 	}
-	data, eof, err := s.root.ReadFileAt(params.Path, params.Offset, max)
+	data, eof, err := s.root.ReadFileAt(path, params.Offset, max)
 	if err != nil {
 		code := -32002
 		if errors.Is(err, fsroot.ErrOffsetOutOfRange) {
@@ -391,6 +429,82 @@ func (s *Server) readFile(req request, state *connectionState) (interface{}, *rp
 		NextOffset: next,
 		EOF:        eof,
 	}, nil
+}
+
+func (s *Server) writeFile(req request, state *connectionState) (interface{}, *rpcError) {
+	var params writeParams
+	if err := decodeParams(req.Params, &params); err != nil {
+		return nil, &rpcError{Code: -32602, Message: "invalid params"}
+	}
+	if params.Offset < 0 || params.EOF == nil {
+		return nil, &rpcError{Code: -32602, Message: "invalid params"}
+	}
+	path, err := workspacePath(params.Path)
+	if err != nil {
+		return nil, &rpcError{Code: -32002, Message: "policy denied"}
+	}
+	data, err := base64.StdEncoding.DecodeString(params.Data)
+	if err != nil || len(data) > maxWriteChunk {
+		return nil, &rpcError{Code: -32602, Message: "invalid params"}
+	}
+	if len(data) == 0 && !*params.EOF {
+		return nil, &rpcError{Code: -32602, Message: "invalid params"}
+	}
+	if rpcErr := s.pathPermissionError(state, "fs.write", path); rpcErr != nil {
+		return nil, rpcErr
+	}
+	if s.root == nil {
+		return nil, &rpcError{Code: -32008, Message: "file service unavailable"}
+	}
+
+	state.writesMu.Lock()
+	defer state.writesMu.Unlock()
+	pending := state.writes[path]
+	if pending == nil {
+		if params.Offset != 0 {
+			return nil, &rpcError{Code: -32009, Message: "write offset conflict"}
+		}
+		target, err := s.root.CreateWrite(path)
+		if err != nil {
+			code := -32008
+			if errors.Is(err, fsroot.ErrInvalidPath) {
+				code = -32002
+			} else if errors.Is(err, os.ErrNotExist) {
+				code = -32007
+			}
+			return nil, &rpcError{Code: code, Message: "write unavailable"}
+		}
+		pending = &pendingWrite{target: target}
+		state.writes[path] = pending
+	}
+	if params.Offset != pending.offset {
+		return nil, &rpcError{Code: -32009, Message: "write offset conflict"}
+	}
+	if _, err := pending.target.Write(data); err != nil {
+		pending.target.Abort()
+		delete(state.writes, path)
+		return nil, &rpcError{Code: -32008, Message: "write unavailable"}
+	}
+	pending.offset += int64(len(data))
+	if *params.EOF {
+		if err := pending.target.Commit(); err != nil {
+			delete(state.writes, path)
+			return nil, &rpcError{Code: -32008, Message: "write unavailable"}
+		}
+		delete(state.writes, path)
+	}
+	return writeFileResult{NextOffset: pending.offset}, nil
+}
+
+func workspacePath(path string) (string, error) {
+	if path == "" || strings.ContainsRune(path, 0) || filepath.IsAbs(path) {
+		return "", fsroot.ErrInvalidPath
+	}
+	clean := filepath.Clean(path)
+	if clean == "." || clean == ".." || strings.HasPrefix(clean, "../") {
+		return "", fsroot.ErrInvalidPath
+	}
+	return clean, nil
 }
 
 func (s *Server) exec(parent context.Context, req request, state *connectionState) (interface{}, *rpcError) {

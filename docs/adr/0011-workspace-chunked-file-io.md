@@ -1,16 +1,16 @@
 # ADR-0011: Workspace-Scoped Chunked File I/O
 
-- Status: Proposed; chunked Go `sys.read_file` implemented; TUI client, `sys.write_file`, and TUI `--workspace` are not implemented yet
+- Status: Proposed; Go `sys.read_file`/`sys.write_file` and `anvil-ipc::GatewayClient` implemented; TUI gateway wiring and TUI `--workspace` are not implemented yet
 - Date: 2026-10-31
 - Related: [ADR-0002](0002-go-daemon.md), [ADR-0007](0007-jsonrpc-envelope-and-capability-token.md)
 
 ## Context
 
 The TUI currently opens and saves with `std::fs` directly. That bypasses the
-per-session gateway and the `fsroot` `openat2` boundary. Moving file I/O behind
-the gateway requires more than routing: the gateway has no `sys.read_file` or
-`sys.write_file` handler, the editor has no gateway client, and
-`MAX_FRAME_LEN` is 8 MiB, so a 100 MB file cannot be read in one frame.
+per-session gateway and the `fsroot` `openat2` boundary. The gateway and
+`anvil-ipc::GatewayClient` implement chunked `sys.read_file`/`sys.write_file`,
+but the TUI is not wired to them, and `MAX_FRAME_LEN` is 8 MiB, so a 100 MB
+file cannot be read in one frame.
 
 The editor also has no workspace root. `fsroot` accepts only paths relative to
 an already opened directory with `RESOLVE_BENEATH`; it does not accept absolute
@@ -114,8 +114,22 @@ Request:
   "params": {
     "path": "src/main.rs",
     "offset": 0,
-    "data": "<base64>"
+    "data": "<base64>",
+    "eof": false
+  }
 }
+```
+
+The final chunk uses `"eof": true`; its offset must equal the accumulated
+length, and its `data` may be empty when the last non-final chunk already
+contained the end of the file:
+
+```json
+{
+  "path": "src/main.rs",
+  "offset": 4194304,
+  "data": "<base64>",
+  "eof": true
 }
 ```
 

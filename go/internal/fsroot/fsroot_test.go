@@ -109,3 +109,108 @@ func TestReadFileAtChunks(t *testing.T) {
 		t.Fatal("offset beyond EOF was accepted")
 	}
 }
+
+func TestWriteFileAtomicReplacement(t *testing.T) {
+	root, dir := testRoot(t)
+	target := filepath.Join(dir, "file.txt")
+	if err := os.WriteFile(target, []byte("old"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	write, err := root.CreateWrite("file.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := write.Write([]byte("new ")); err != nil {
+		write.Abort()
+		t.Fatal(err)
+	}
+	if _, err := write.Write([]byte("content")); err != nil {
+		write.Abort()
+		t.Fatal(err)
+	}
+	if err := write.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "new content" {
+		t.Fatalf("got %q", got)
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), writeTempPrefix) {
+			t.Fatalf("temporary file left behind: %s", entry.Name())
+		}
+	}
+}
+
+func TestWriteAbortLeavesDestination(t *testing.T) {
+	root, dir := testRoot(t)
+	target := filepath.Join(dir, "file.txt")
+	if err := os.WriteFile(target, []byte("old"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	write, err := root.CreateWrite("file.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := write.Write([]byte("discarded")); err != nil {
+		t.Fatal(err)
+	}
+	write.Abort()
+	got, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "old" {
+		t.Fatalf("abort changed destination to %q", got)
+	}
+}
+
+func TestWriteRejectsSymlinkedParent(t *testing.T) {
+	root, dir := testRoot(t)
+	outside := t.TempDir()
+	if err := os.Symlink(outside, filepath.Join(dir, "link")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := root.CreateWrite("link/file.txt"); err == nil {
+		t.Fatal("write through symlink outside the workspace was accepted")
+	}
+}
+
+func TestWriteRejectsMissingParent(t *testing.T) {
+	root, _ := testRoot(t)
+	if _, err := root.CreateWrite("missing/file.txt"); err == nil {
+		t.Fatal("write with missing parent was accepted")
+	}
+}
+
+func TestWriteFileInSubdirectory(t *testing.T) {
+	root, dir := testRoot(t)
+	if err := os.Mkdir(filepath.Join(dir, "sub"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	write, err := root.CreateWrite("sub/file.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := write.Write([]byte("nested")); err != nil {
+		write.Abort()
+		t.Fatal(err)
+	}
+	if err := write.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(filepath.Join(dir, "sub", "file.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "nested" {
+		t.Fatalf("file = %q", got)
+	}
+}

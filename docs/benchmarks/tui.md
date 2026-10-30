@@ -75,8 +75,8 @@ temporary 100 MB copy. The peak includes the source `String`, the
 The chunked gateway protocol bounds the server-side transient to one chunk
 (4 MiB raw, about 5.3 MiB base64 plus JSON overhead). The editor still
 assembles the complete text and line index, so its steady-state footprint is
-unchanged; memory is not reduced by chunking. `sys.write_file` is specified to
-stream into a temporary file rather than accumulate the whole document.
+unchanged; memory is not reduced by chunking. `sys.write_file` streams into a
+temporary file rather than accumulating the whole document.
 
 ## Boundaries
 

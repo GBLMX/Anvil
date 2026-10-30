@@ -17,6 +17,8 @@ use std::{
 
 mod envelope;
 pub use envelope::*;
+mod client;
+pub use client::*;
 
 /// Maximum accepted frame body.
 pub const MAX_FRAME_LEN: u32 = 8 * 1024 * 1024;

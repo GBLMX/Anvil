@@ -410,3 +410,115 @@ func TestConnectionCloseCancelsExec(t *testing.T) {
 		t.Fatal("exec process survived connection close")
 	}
 }
+
+func TestSysWriteFileChunks(t *testing.T) {
+	workspace := t.TempDir()
+	socket := startGatewayAt(t, workspace, []string{"fs.write:**"})
+	conn := dialGateway(t, socket)
+	if response := sendRequest(t, conn, "hello-1", "session.hello", helloRequestParams(testToken)); response.Error != nil {
+		t.Fatalf("handshake error: %+v", response.Error)
+	}
+	first := sendRequest(t, conn, "write-1", "sys.write_file", map[string]interface{}{
+		"path":   "file.txt",
+		"offset": 0,
+		"data":   base64.StdEncoding.EncodeToString([]byte("hello ")),
+		"eof":    false,
+	})
+	if first.Error != nil {
+		t.Fatalf("first write error: %+v", first.Error)
+	}
+	result, ok := first.Result.(map[string]interface{})
+	if !ok || result["next_offset"] != float64(6) {
+		t.Fatalf("first result = %#v", first.Result)
+	}
+	second := sendRequest(t, conn, "write-2", "sys.write_file", map[string]interface{}{
+		"path":   "file.txt",
+		"offset": 6,
+		"data":   base64.StdEncoding.EncodeToString([]byte("world")),
+		"eof":    true,
+	})
+	if second.Error != nil {
+		t.Fatalf("second write error: %+v", second.Error)
+	}
+	got, err := os.ReadFile(filepath.Join(workspace, "file.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "hello world" {
+		t.Fatalf("file = %q", got)
+	}
+	entries, err := os.ReadDir(workspace)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), ".anvil-write-") {
+			t.Fatalf("temporary file left behind: %s", entry.Name())
+		}
+	}
+}
+
+func TestSysWriteFileRequiresPermission(t *testing.T) {
+	socket := startGatewayAt(t, t.TempDir(), []string{"fs.read:**"})
+	conn := dialGateway(t, socket)
+	if response := sendRequest(t, conn, "hello-1", "session.hello", helloRequestParams(testToken)); response.Error != nil {
+		t.Fatalf("handshake error: %+v", response.Error)
+	}
+	response := sendRequest(t, conn, "write-1", "sys.write_file", map[string]interface{}{
+		"path":   "file.txt",
+		"offset": 0,
+		"data":   base64.StdEncoding.EncodeToString([]byte("data")),
+		"eof":    true,
+	})
+	if response.Error == nil || response.Error.Code != -32002 {
+		t.Fatalf("write error = %+v", response.Error)
+	}
+}
+
+func TestSysWriteFileOffsetConflict(t *testing.T) {
+	workspace := t.TempDir()
+	socket := startGatewayAt(t, workspace, []string{"fs.write:**"})
+	conn := dialGateway(t, socket)
+	if response := sendRequest(t, conn, "hello-1", "session.hello", helloRequestParams(testToken)); response.Error != nil {
+		t.Fatalf("handshake error: %+v", response.Error)
+	}
+	first := sendRequest(t, conn, "write-1", "sys.write_file", map[string]interface{}{
+		"path":   "file.txt",
+		"offset": 0,
+		"data":   base64.StdEncoding.EncodeToString([]byte("abc")),
+		"eof":    false,
+	})
+	if first.Error != nil {
+		t.Fatalf("first write error: %+v", first.Error)
+	}
+	second := sendRequest(t, conn, "write-2", "sys.write_file", map[string]interface{}{
+		"path":   "file.txt",
+		"offset": 1,
+		"data":   base64.StdEncoding.EncodeToString([]byte("x")),
+		"eof":    true,
+	})
+	if second.Error == nil || second.Error.Code != -32009 {
+		t.Fatalf("conflict error = %+v", second.Error)
+	}
+	if _, err := os.Stat(filepath.Join(workspace, "file.txt")); !os.IsNotExist(err) {
+		t.Fatalf("conflicting write modified destination: %v", err)
+	}
+}
+
+func TestReadPermissionUsesCanonicalPath(t *testing.T) {
+	workspace := t.TempDir()
+	if err := os.WriteFile(filepath.Join(workspace, "secret"), []byte("secret"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	socket := startGatewayAt(t, workspace, []string{"fs.read:src/**"})
+	conn := dialGateway(t, socket)
+	if response := sendRequest(t, conn, "hello-1", "session.hello", helloRequestParams(testToken)); response.Error != nil {
+		t.Fatalf("handshake error: %+v", response.Error)
+	}
+	response := sendRequest(t, conn, "read-1", "sys.read_file", map[string]interface{}{
+		"path": "src/../secret",
+	})
+	if response.Error == nil || response.Error.Code != -32002 {
+		t.Fatalf("read error = %+v", response.Error)
+	}
+}
