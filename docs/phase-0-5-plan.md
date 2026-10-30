@@ -244,7 +244,7 @@ Only changes required by the core slice:
 - `TextDocument = PieceTable` is the production backend;
 - Rope and Gap Buffer remain benchmark-only.
 
-### M4: Editing primitives gate (in progress: correctness/snapshot/undo landed; A1/A3 benchmark gates fail)
+### M4: Editing primitives gate (in progress: SoA landed; A1 p99 gate remains)
 
 - cursor/coordinate ownership [ADR-0010](adr/0010-cursor-and-snapshot-ownership.md) accepted;
 - command/undo/revision with stale-revision rejection and typing groups;

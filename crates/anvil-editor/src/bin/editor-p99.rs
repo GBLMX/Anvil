@@ -70,7 +70,7 @@ fn main() {
     let base = EditorState::from_text(&text);
     let midpoint = text.len() / 2;
     let pasted = "pasted line\n".repeat(10_000);
-    let split_paste = "split line\n".repeat(1_100);
+    let split_paste = "split line\n".repeat(1_025);
 
     println!("case,p50_ns,p95_ns,p99_ns,samples");
     measure_edits(

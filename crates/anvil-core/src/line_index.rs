@@ -1,8 +1,7 @@
 //! Chunked line index and cursor coordinate conversion.
 //!
-//! The index stores line starts in persistent chunks. A snapshot can share the
-//! chunk vector and every line-start slice; an edit copies only the chunk
-//! metadata and the chunks it actually rebuilds.
+//! Line metadata is stored in parallel arrays so an edit shifts contiguous
+//! cache lines instead of walking a large array of chunk structs.
 
 use std::{ops::Range, sync::Arc};
 
@@ -52,17 +51,17 @@ pub struct Position {
 #[derive(Debug, Clone)]
 pub struct LineIndex {
     len: usize,
-    chunks: Vec<LineChunk>,
+    bases: Vec<usize>,
+    first_lines: Vec<usize>,
+    ends: Vec<usize>,
+    starts: Vec<Arc<[usize]>>,
 }
 
 impl LineIndex {
     /// Builds an index from initial text.
     pub fn from_text(text: &str) -> Self {
         let starts = line_starts(text);
-        Self {
-            len: text.len(),
-            chunks: build_chunks(&starts, text.len(), 0),
-        }
+        Self::from_chunks(text.len(), build_chunks(&starts, text.len(), 0))
     }
 
     /// Builds an index from the current buffer.
@@ -77,20 +76,20 @@ impl LineIndex {
 
     /// Number of persistent chunks currently held.
     pub fn chunk_count(&self) -> usize {
-        self.chunks.len()
+        self.starts.len()
     }
 
     /// Number of line starts in each chunk.
     pub fn chunk_sizes(&self) -> Vec<usize> {
-        self.chunks.iter().map(|chunk| chunk.starts.len()).collect()
+        self.starts.iter().map(|starts| starts.len()).collect()
     }
 
     /// Asserts the chunk occupancy invariant used by the design.
     pub fn assert_chunk_bounds(&self) {
-        for (index, chunk) in self.chunks.iter().enumerate() {
-            let size = chunk.starts.len();
+        for (index, starts) in self.starts.iter().enumerate() {
+            let size = starts.len();
             assert!(size <= MAX_LINES, "chunk {index} has {size} lines");
-            if index + 1 < self.chunks.len() {
+            if index + 1 < self.starts.len() {
                 assert!(size >= MIN_LINES, "chunk {index} has only {size} lines");
             }
         }
@@ -98,41 +97,41 @@ impl LineIndex {
 
     /// Number of logical lines. Empty text has zero lines.
     pub fn len_lines(&self) -> usize {
-        self.chunks
+        self.first_lines
             .last()
-            .map_or(0, |chunk| chunk.first_line + chunk.starts.len())
+            .zip(self.starts.last())
+            .map_or(0, |(first_line, starts)| first_line + starts.len())
     }
 
     /// Maps a byte offset to a line and line bounds.
     ///
     /// Returns `None` for an out-of-range offset or any offset in empty text.
     pub fn offset_to_line(&self, offset: usize) -> Option<LinePosition> {
-        if offset > self.len || self.chunks.is_empty() {
+        if offset > self.len || self.starts.is_empty() {
             return None;
         }
         let chunk_index = self
-            .chunks
-            .partition_point(|chunk| chunk.base <= offset)
+            .bases
+            .partition_point(|base| *base <= offset)
             .saturating_sub(1);
-        let chunk = &self.chunks[chunk_index];
-        let local = chunk
-            .starts
-            .partition_point(|start| chunk.base + start <= offset)
+        let base = self.bases[chunk_index];
+        let starts = &self.starts[chunk_index];
+        let local = starts
+            .partition_point(|start| base + start <= offset)
             .saturating_sub(1);
-        let start = chunk.base + chunk.starts[local];
-        let next_start = chunk
-            .starts
+        let start = base + starts[local];
+        let next_start = starts
             .get(local + 1)
-            .map(|start| chunk.base + start)
-            .unwrap_or(chunk.end);
-        let has_next_line = local + 1 < chunk.starts.len() || chunk_index + 1 < self.chunks.len();
+            .map(|start| base + start)
+            .unwrap_or(self.ends[chunk_index]);
+        let has_next_line = local + 1 < starts.len() || chunk_index + 1 < self.starts.len();
         let end = if has_next_line && next_start <= self.len {
             next_start - 1
         } else {
             self.len
         };
         Some(LinePosition {
-            line: chunk.first_line + local,
+            line: self.first_lines[chunk_index] + local,
             start,
             end,
         })
@@ -140,21 +139,22 @@ impl LineIndex {
 
     /// Maps a zero-based line to its byte offset.
     pub fn line_to_offset(&self, line: usize) -> Option<usize> {
-        if self.chunks.is_empty() || line >= self.len_lines() {
+        if self.starts.is_empty() || line >= self.len_lines() {
             return None;
         }
         let chunk_index = self
-            .chunks
-            .partition_point(|chunk| chunk.first_line <= line)
+            .first_lines
+            .partition_point(|first_line| *first_line <= line)
             .saturating_sub(1);
-        let chunk = &self.chunks[chunk_index];
-        let local = line - chunk.first_line;
-        chunk.starts.get(local).map(|start| chunk.base + start)
+        let local = line - self.first_lines[chunk_index];
+        self.starts[chunk_index]
+            .get(local)
+            .map(|start| self.bases[chunk_index] + start)
     }
 
     /// Returns the cursor coordinates for a byte offset.
     pub fn position<B: TextBuffer>(&self, buffer: &B, offset: usize) -> Option<Position> {
-        if offset > buffer.len_bytes() || !buffer.is_char_boundary(offset) || self.chunks.is_empty()
+        if offset > buffer.len_bytes() || !buffer.is_char_boundary(offset) || self.starts.is_empty()
         {
             return None;
         }
@@ -171,8 +171,6 @@ impl LineIndex {
     }
 
     /// Returns the byte offset at a grapheme column.
-    ///
-    /// Columns beyond the line content clamp to the line content end.
     pub fn offset_at_grapheme<B: TextBuffer>(
         &self,
         buffer: &B,
@@ -181,19 +179,16 @@ impl LineIndex {
     ) -> Option<usize> {
         let start = self.line_to_offset(line)?;
         let line = self.offset_to_line(start)?;
-        let content_end = line.end;
-        let text = buffer.slice(start..content_end);
+        let text = buffer.slice(start..line.end);
         for (index, (byte, _)) in text.grapheme_indices(true).enumerate() {
             if index == column {
                 return Some(start + byte);
             }
         }
-        Some(content_end)
+        Some(line.end)
     }
 
     /// Returns the byte offset at a terminal display column.
-    ///
-    /// A column inside a wide character clamps to that character's start.
     pub fn offset_at_display_column<B: TextBuffer>(
         &self,
         buffer: &B,
@@ -202,8 +197,7 @@ impl LineIndex {
     ) -> Option<usize> {
         let start = self.line_to_offset(line)?;
         let line = self.offset_to_line(start)?;
-        let content_end = line.end;
-        let text = buffer.slice(start..content_end);
+        let text = buffer.slice(start..line.end);
         let mut width = 0;
         for (byte, character) in text.char_indices() {
             if width >= column {
@@ -211,7 +205,7 @@ impl LineIndex {
             }
             width += display_char_width(character, width);
         }
-        Some(content_end)
+        Some(line.end)
     }
 
     /// Applies an edit after `buffer` has already been mutated.
@@ -220,7 +214,7 @@ impl LineIndex {
     pub fn apply_edit<B: TextBuffer>(&mut self, buffer: &B, range: Range<usize>) {
         let new_len = buffer.len_bytes();
         assert!(range.start <= range.end && range.end <= self.len);
-        if new_len == 0 || self.chunks.is_empty() {
+        if new_len == 0 || self.starts.is_empty() {
             *self = Self::from_buffer(buffer);
             return;
         }
@@ -232,8 +226,8 @@ impl LineIndex {
             && new_len > self.len
             && !buffer.slice(self.len..new_len).contains('\n')
         {
-            if let Some(last) = self.chunks.last_mut() {
-                last.end = new_len;
+            if let Some(end) = self.ends.last_mut() {
+                *end = new_len;
                 self.len = new_len;
                 return;
             }
@@ -251,24 +245,23 @@ impl LineIndex {
             });
         let first_chunk = self.chunk_for_line(start_line);
         let last_chunk = self.chunk_for_line(end_line);
-        let region_start = self.chunks[first_chunk].base;
-        let old_region_end = self.chunks[last_chunk].end;
+        let region_start = self.bases[first_chunk];
+        let old_region_end = self.ends[last_chunk];
         let new_region_end = add_delta(old_region_end, delta).min(new_len);
-        let old_region_lines = self.chunks[last_chunk].first_line
-            + self.chunks[last_chunk].starts.len()
-            - self.chunks[first_chunk].first_line;
+        let old_region_lines = self.first_lines[last_chunk] + self.starts[last_chunk].len()
+            - self.first_lines[first_chunk];
         let slice = buffer.slice(region_start..new_region_end);
         let mut local_starts = line_starts(&slice);
-        if last_chunk + 1 < self.chunks.len() && local_starts.last() == Some(&slice.len()) {
+        if last_chunk + 1 < self.starts.len() && local_starts.last() == Some(&slice.len()) {
             local_starts.pop();
         }
         let new_region_lines = local_starts.len();
         let line_delta = new_region_lines as isize - old_region_lines as isize;
 
-        for chunk in &mut self.chunks[last_chunk + 1..] {
-            chunk.base = add_delta(chunk.base, delta);
-            chunk.end = add_delta(chunk.end, delta);
-            chunk.first_line = add_delta(chunk.first_line, line_delta);
+        for index in last_chunk + 1..self.starts.len() {
+            self.bases[index] = add_delta(self.bases[index], delta);
+            self.ends[index] = add_delta(self.ends[index], delta);
+            self.first_lines[index] = add_delta(self.first_lines[index], line_delta);
         }
 
         let absolute_starts: Vec<usize> = local_starts
@@ -278,15 +271,29 @@ impl LineIndex {
         let middle = build_chunks(
             &absolute_starts,
             new_region_end,
-            self.chunks[first_chunk].first_line,
+            self.first_lines[first_chunk],
         );
         let middle_needs_normalize = middle.iter().any(|chunk| chunk.starts.len() < MIN_LINES);
-        self.chunks.splice(first_chunk..=last_chunk, middle);
+        let range_end = last_chunk + 1;
+        self.bases.splice(
+            first_chunk..range_end,
+            middle.iter().map(|chunk| chunk.base),
+        );
+        self.first_lines.splice(
+            first_chunk..range_end,
+            middle.iter().map(|chunk| chunk.first_line),
+        );
+        self.ends
+            .splice(first_chunk..range_end, middle.iter().map(|chunk| chunk.end));
+        self.starts.splice(
+            first_chunk..range_end,
+            middle.iter().map(|chunk| Arc::clone(&chunk.starts)),
+        );
         self.len = new_len;
         if line_delta != 0 || middle_needs_normalize {
-            let needs_normalize = self.chunks.iter().enumerate().any(|(index, chunk)| {
-                chunk.starts.len() > MAX_LINES
-                    || (index + 1 < self.chunks.len() && chunk.starts.len() < MIN_LINES)
+            let needs_normalize = self.starts.iter().enumerate().any(|(index, starts)| {
+                starts.len() > MAX_LINES
+                    || (index + 1 < self.starts.len() && starts.len() < MIN_LINES)
             });
             if needs_normalize {
                 self.normalize();
@@ -295,14 +302,15 @@ impl LineIndex {
     }
 
     fn chunk_for_line(&self, line: usize) -> usize {
-        self.chunks
-            .partition_point(|chunk| chunk.first_line <= line)
+        self.first_lines
+            .partition_point(|first_line| *first_line <= line)
             .saturating_sub(1)
     }
 
     fn normalize(&mut self) {
+        let mut chunks = self.to_chunks();
         let mut split = Vec::new();
-        for chunk in std::mem::take(&mut self.chunks) {
+        for chunk in chunks.drain(..) {
             if chunk.starts.len() <= MAX_LINES {
                 split.push(chunk);
             } else {
@@ -326,73 +334,90 @@ impl LineIndex {
                 }
             }
         }
-        self.chunks = split;
-        self.recompute_first_lines();
-
+        recompute_first_lines(&mut split);
         let mut index = 0;
-        while index < self.chunks.len() {
-            if self.chunks[index].starts.len() >= MIN_LINES {
+        while index < split.len() {
+            if split[index].starts.len() >= MIN_LINES {
                 index += 1;
                 continue;
             }
-            if self.chunks.len() == 1 {
+            if split.len() == 1 {
                 break;
             }
             let (left, right) = if index == 0 {
                 (0, 1)
-            } else if index + 1 == self.chunks.len() {
+            } else if index + 1 == split.len()
+                || split[index - 1].starts.len() <= split[index + 1].starts.len()
+            {
                 (index - 1, index)
             } else {
-                let left_len = self.chunks[index - 1].starts.len();
-                let right_len = self.chunks[index + 1].starts.len();
-                if left_len <= right_len {
-                    (index - 1, index)
-                } else {
-                    (index, index + 1)
-                }
+                (index, index + 1)
             };
-            let total = self.chunks[left].starts.len() + self.chunks[right].starts.len();
-            let mut starts = absolute_starts(&self.chunks[left]);
-            starts.extend(absolute_starts(&self.chunks[right]));
+            let total = split[left].starts.len() + split[right].starts.len();
+            let mut starts = absolute_starts(&split[left]);
+            starts.extend(absolute_starts(&split[right]));
             let split_at = if total <= MAX_LINES { total } else { total / 2 };
-            let left_base = self.chunks[left].base;
-            let right_end = self.chunks[right].end;
-            let left_first_line = self.chunks[left].first_line;
-            self.chunks[left].starts = Arc::from(
+            let left_base = split[left].base;
+            let right_end = split[right].end;
+            let left_first_line = split[left].first_line;
+            split[left].starts = Arc::from(
                 starts[..split_at]
                     .iter()
                     .map(|start| start - left_base)
                     .collect::<Vec<_>>(),
             );
-            self.chunks[left].end = if split_at == total {
+            split[left].end = if split_at == total {
                 right_end
             } else {
                 starts[split_at]
             };
             if split_at == total {
-                self.chunks.remove(right);
+                split.remove(right);
             } else {
-                self.chunks[right].base = starts[split_at];
-                self.chunks[right].first_line = left_first_line + split_at;
-                self.chunks[right].starts = Arc::from(
+                split[right].base = starts[split_at];
+                split[right].first_line = left_first_line + split_at;
+                split[right].starts = Arc::from(
                     starts[split_at..]
                         .iter()
                         .map(|start| start - starts[split_at])
                         .collect::<Vec<_>>(),
                 );
-                self.chunks[right].end = right_end;
+                split[right].end = right_end;
             }
+            recompute_first_lines(&mut split);
             index = left;
         }
-        self.recompute_first_lines();
+        self.adopt_chunks(split);
     }
 
-    fn recompute_first_lines(&mut self) {
-        let mut first_line = 0;
-        for chunk in &mut self.chunks {
-            chunk.first_line = first_line;
-            first_line += chunk.starts.len();
-        }
+    fn from_chunks(len: usize, chunks: Vec<LineChunk>) -> Self {
+        let mut index = Self {
+            len,
+            bases: Vec::with_capacity(chunks.len()),
+            first_lines: Vec::with_capacity(chunks.len()),
+            ends: Vec::with_capacity(chunks.len()),
+            starts: Vec::with_capacity(chunks.len()),
+        };
+        index.adopt_chunks(chunks);
+        index
+    }
+
+    fn adopt_chunks(&mut self, chunks: Vec<LineChunk>) {
+        self.bases = chunks.iter().map(|chunk| chunk.base).collect();
+        self.first_lines = chunks.iter().map(|chunk| chunk.first_line).collect();
+        self.ends = chunks.iter().map(|chunk| chunk.end).collect();
+        self.starts = chunks.into_iter().map(|chunk| chunk.starts).collect();
+    }
+
+    fn to_chunks(&self) -> Vec<LineChunk> {
+        (0..self.starts.len())
+            .map(|index| LineChunk {
+                base: self.bases[index],
+                first_line: self.first_lines[index],
+                end: self.ends[index],
+                starts: Arc::clone(&self.starts[index]),
+            })
+            .collect()
     }
 }
 
@@ -439,6 +464,14 @@ fn add_delta(value: usize, delta: isize) -> usize {
     (value as isize + delta).max(0) as usize
 }
 
+fn recompute_first_lines(chunks: &mut [LineChunk]) {
+    let mut first_line = 0;
+    for chunk in chunks {
+        chunk.first_line = first_line;
+        first_line += chunk.starts.len();
+    }
+}
+
 fn display_char_width(character: char, column: usize) -> usize {
     if character == '\t' {
         TAB_WIDTH - column % TAB_WIDTH
@@ -456,7 +489,6 @@ fn display_width(text: &str) -> usize {
     }
     column
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -556,7 +588,7 @@ mod tests {
         buffer.delete(2_000..end);
         index.apply_edit(&buffer, 2_000..end);
         assert_index_matches(&buffer, &index);
-        assert!(index.chunks.len() <= index.len_lines() / MIN_LINES + 1);
+        assert!(index.chunk_count() <= index.len_lines() / MIN_LINES + 1);
     }
 
     #[test]
@@ -578,16 +610,13 @@ mod tests {
         let mut buffer = PieceTable::from_text(&text);
         let index = LineIndex::from_buffer(&buffer);
         let clone = index.clone();
-        assert!(Arc::ptr_eq(
-            &index.chunks[0].starts,
-            &clone.chunks[0].starts
-        ));
+        assert!(Arc::ptr_eq(&index.starts[0], &clone.starts[0]));
         buffer.insert(0, "x\n");
         let mut edited = index;
         edited.apply_edit(&buffer, 0..0);
         assert!(Arc::ptr_eq(
-            &edited.chunks.last().unwrap().starts,
-            &clone.chunks.last().unwrap().starts
+            edited.starts.last().unwrap(),
+            clone.starts.last().unwrap()
         ));
     }
 }

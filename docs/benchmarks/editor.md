@@ -22,14 +22,16 @@ cargo test --release -p anvil-editor --test line_index_stress -- --ignored --noc
 
 | Case | p50 | p95 | p99 | Target | Result |
 |---|---:|---:|---:|---:|---|
-| A1 middle insert | 33.532 µs | 43.489 µs | 64.214 µs | < 50 µs | FAIL |
-| A2 split insert | 49.090 µs | 59.362 µs | 78.620 µs | < 100 µs | PASS |
-| A3 merge delete | 46.534 µs | 67.328 µs | 213.018 µs | < 100 µs | FAIL |
-| A4 paste 10k lines | 139.692 µs | 240.575 µs | 343.861 µs | < 2 ms | PASS |
-| A5 append | 0.374 µs | 0.837 µs | 2.607 µs | < 10 µs | PASS |
+| A1 middle insert | 31.889 µs | 35.789 µs | 60.364 µs | < 50 µs | FAIL |
+| A2 split insert | 60.997 µs | 70.893 µs | 98.391 µs | < 100 µs | PASS |
+| A3 merge delete | 55.944 µs | 64.469 µs | 83.688 µs | < 100 µs | PASS |
+| A4 paste 10k lines | 133.667 µs | 217.123 µs | 299.924 µs | < 2 ms | PASS |
+| A5 append | 0.394 µs | 0.652 µs | 2.301 µs | < 10 µs | PASS |
 
-A1 and A3 remain above their targets. A5 now passes: append without a newline
-uses the last-chunk fast path.
+A5 now passes: append without a newline uses the last-chunk fast path. A2 and
+A3 also pass after the SoA metadata layout; A1 remains 10.364 µs over target.
+The index now shifts contiguous metadata arrays (`bases`, `first_lines`,
+`ends`) and `starts` instead of AoS chunk structs.
 
 ### A5 breakdown
 
@@ -37,14 +39,26 @@ Criterion, 100 MB, shared snapshot setup:
 
 | Component | Time |
 |---|---:|
-| `A5_piece_append` | 63.8 ns |
-| `A5_line_index_append` | 5.147 µs |
-| `A5_append` (retained snapshot) | 11.407 µs |
+| `A5_piece_append` | 61.6 ns |
+| `A5_line_index_append` | 5.140 µs |
+| `A5_append` (retained snapshot) | 11.556 µs |
 
-The p99 ordinary-edit run is 0.374 µs p50 / 2.607 µs p99 because the state's
+The p99 ordinary-edit run is 0.334 µs p50 / 2.245 µs p99 because the state's
 line index is not shared with a retained snapshot. The shared-snapshot case
-still pays the `LineChunk` vector COW copy; this is not the ordinary append
-path.
+still pays the metadata-array COW copy; this is not the ordinary append path.
+
+### A3 breakdown
+
+Criterion, 100 MB, shared snapshot setup:
+
+| Component | Time |
+|---|---:|
+| `A3_piece_delete` | 6.122 µs |
+| `A3_line_index_delete` | 47.577 µs |
+| `A3_merge_delete` total | 61.019 µs |
+
+Line-index work dominates but is within the p99 gate once the SoA metadata
+arrays replace AoS chunk writes. No cascade threshold change is needed.
 
 ## B: Correctness
 
@@ -61,16 +75,16 @@ B1/B2/B3/B4 are `cargo test` cases, not Criterion performance cases.
 
 | Case | p50 | p95 | p99 | Target | Result |
 |---|---:|---:|---:|---:|---|
-| C1 single caret | 25 ns | 27 ns | 27 ns | < 10 µs | PASS |
-| C2 100 selections | 70 ns | 75 ns | 78 ns | < 50 µs | PASS |
-| C3 1 MB single line | 25 ns | 26 ns | 26 ns | < 100 µs | PASS |
+| C1 single caret | 25 ns | 29 ns | 29 ns | < 10 µs | PASS |
+| C2 100 selections | 75 ns | 79 ns | 81 ns | < 50 µs | PASS |
+| C3 1 MB single line | 24 ns | 25 ns | 26 ns | < 100 µs | PASS |
 
 `EditorView` clones only revision/viewport/selection metadata and shared
 `Arc` references; it does not touch document text.
 
 ## M4 status
 
-M4 is **not accepted** under the stated performance gate: A1 and A3 fail
-their p99 targets; A5 now passes. The implementation and correctness tests are complete, but
-the flat chunk-header update model needs a follow-up optimization (or an
-explicitly renegotiated acceptance threshold) before claiming M4.
+M4 is **not accepted** under the stated performance gate: A1 still fails its
+p99 target; A2, A3, A5, and C1-C3 pass. The implementation and correctness
+tests are complete, but the contiguous metadata shift still misses A1. No
+threshold is being relaxed without a separate decision.

@@ -80,6 +80,32 @@ fn editor_benches(criterion: &mut Criterion) {
         );
     });
     let base_buffer = PieceTable::from_text(&text);
+    let base_index = LineIndex::from_buffer(&base_buffer);
+    group.bench_function("A3_piece_delete", |bencher| {
+        bencher.iter_batched(
+            || base_buffer.clone(),
+            |mut buffer| {
+                buffer.delete(midpoint..midpoint + 80_000);
+                black_box(buffer.len_bytes())
+            },
+            BatchSize::LargeInput,
+        );
+    });
+    group.bench_function("A3_line_index_delete", |bencher| {
+        bencher.iter_batched(
+            || {
+                let mut buffer = base_buffer.clone();
+                let index = base_index.clone();
+                buffer.delete(midpoint..midpoint + 80_000);
+                (buffer, index)
+            },
+            |(buffer, mut index)| {
+                index.apply_edit(&buffer, midpoint..midpoint + 80_000);
+                black_box(index.chunk_count())
+            },
+            BatchSize::LargeInput,
+        );
+    });
     group.bench_function("A5_piece_append", |bencher| {
         bencher.iter_batched(
             || base_buffer.clone(),
@@ -91,7 +117,6 @@ fn editor_benches(criterion: &mut Criterion) {
             BatchSize::LargeInput,
         );
     });
-    let base_index = LineIndex::from_buffer(&base_buffer);
     group.bench_function("A5_line_index_append", |bencher| {
         bencher.iter_batched(
             || {
