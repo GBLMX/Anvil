@@ -76,6 +76,20 @@ Server-side stage benchmark (page-cache warm, per chunk):
 `ReadFileAt` moves 5.5 MiB in 0.84 ms, about **6.5 GB/s** (the Go benchmark
 reports 6,847 MB/s); file I/O is not the bottleneck.
 
+Client-side decode benchmark (Rust, per 5.5 MiB response):
+
+| Stage | ms |
+|---|---:|
+| JSON decode | 1.17 |
+| base64 decode | 2.09 |
+| append to `String` | 0.31 |
+| full client decode | 5.88 |
+| UDS frame read | 1.46 |
+
+Client decode is about **5.9 ms/chunk**, not 10 ms; 19 chunks are about
+**112 ms**. The server encode is about **224 ms**. The remaining observed
+time is socket/startup/handler overhead, not the line-index work alone.
+
 The 4 MiB run was **732.0 ms PTY**, 25 chunks, 21.7 ms average, 661.3 ms
 total. Raising to 5.5 MiB removed 92 ms but did not close the gap.
 
@@ -91,9 +105,13 @@ total. Raising to 5.5 MiB removed 92 ms but did not close the gap.
   and 5.5 MiB is 640 ms. But 7 MiB raw exceeds the frame after base64, and the
   practical ceiling is about 5.9 MiB. The remaining gap is not round-trip
   count alone.
-- Pipelining can hide round-trip latency, but it cannot remove the per-chunk
-  encode CPU. A binary frame or fd passing is required before claiming the
-  50 ms gate.
+- Pipelining can hide UDS round-trip latency, but it cannot remove the
+  per-chunk encode CPU; the UDS frame read itself is only 1.46 ms/chunk.
+- Binary framing removes the measured base64 and JSON work: about 10.3 ms
+  server + 3.3 ms client per chunk, or ~258 ms total. That projects to roughly
+  **380 ms PTY**, not 240 ms. fd passing removes the whole 19.2 ms/chunk
+  transfer path and is the only option that can approach the direct baseline.
+  The 50 ms gate is still not met without further work on the open/index path.
 - Search remains dominated by the in-process scan, so the gateway barely
   changes it. Key-to-screen and scroll are within local PTY noise.
 - These numbers include the Go gateway, but not LSP, terminal emulator, or idle

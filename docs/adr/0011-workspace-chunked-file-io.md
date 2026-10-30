@@ -217,9 +217,13 @@ MiB is a real but insufficient improvement. A 7 MiB raw chunk cannot fit after
 base64; the practical ceiling is about 5.9 MiB. Server-side stage benchmarks
 show per chunk: read **0.84 ms (~6.5 GB/s)**, base64 encode **4.98 ms**,
 JSON encode **5.33 ms**, full response encode **11.8 ms**; the file is
-page-cache warm.
-Pipelining can overlap round trips, but it does not remove the encode CPU.
-Binary framing or fd passing is required before claiming the 50 ms gate.
+page-cache warm. Client-side per chunk: JSON decode **1.17 ms**, base64 decode
+**2.09 ms**, append **0.31 ms**, full decode **5.88 ms**, UDS frame read
+**1.46 ms**. Pipelining can overlap round trips, but it cannot remove the
+encode CPU. Binary framing removes about 10.3 ms server + 3.3 ms client per
+chunk (~258 ms total), projecting to roughly **380 ms PTY**, not 240 ms.
+fd passing removes the whole transfer path and is the only option that can
+approach the direct baseline; the 50 ms gate still needs open/index work.
 
 The initial acceptable increment is **at most 50 ms** over the direct-read
 baseline. A 20 ms target may be physically unrealistic with 19 round trips; do
