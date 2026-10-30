@@ -34,6 +34,8 @@ pub struct Model {
     pub scroll: usize,
     /// Set by `q`.
     pub quit: bool,
+    /// Whether the next loop iteration should render.
+    pub dirty: bool,
 }
 
 impl Model {
@@ -44,6 +46,7 @@ impl Model {
             path,
             scroll: 0,
             quit: false,
+            dirty: true,
         }
     }
 
@@ -60,11 +63,13 @@ impl Model {
     pub fn scroll_down(&mut self) {
         let last = self.editor.index().len_lines().saturating_sub(1);
         self.scroll = (self.scroll + 1).min(last);
+        self.dirty = true;
     }
 
     /// Scrolls up one line.
     pub fn scroll_up(&mut self) {
         self.scroll = self.scroll.saturating_sub(1);
+        self.dirty = true;
     }
 
     fn visible_lines(&self, height: u16) -> Vec<Line<'_>> {
@@ -125,22 +130,27 @@ pub fn run(path: Option<PathBuf>) -> io::Result<()> {
     };
     let mut terminal = TerminalSession::start()?;
     loop {
-        terminal.terminal.draw(|frame| view(&model, frame))?;
-        if event::poll(std::time::Duration::from_millis(50))? {
-            match event::read()? {
-                Event::Key(key) if key.kind == KeyEventKind::Press => match key.code {
-                    KeyCode::Char('q') => model.quit = true,
-                    KeyCode::Char('j') | KeyCode::Down => model.scroll_down(),
-                    KeyCode::Char('k') | KeyCode::Up => model.scroll_up(),
-                    _ => {}
-                },
-                Event::Resize(_, _) => {}
-                _ => {}
-            }
+        if model.dirty {
+            terminal.terminal.draw(|frame| view(&model, frame))?;
+            model.dirty = false;
         }
+        handle_event(&mut model, event::read()?);
         if model.quit {
             return Ok(());
         }
+    }
+}
+
+fn handle_event(model: &mut Model, event: Event) {
+    match event {
+        Event::Key(key) if key.kind == KeyEventKind::Press => match key.code {
+            KeyCode::Char('q') => model.quit = true,
+            KeyCode::Char('j') | KeyCode::Down => model.scroll_down(),
+            KeyCode::Char('k') | KeyCode::Up => model.scroll_up(),
+            _ => {}
+        },
+        Event::Resize(_, _) => model.dirty = true,
+        _ => {}
     }
 }
 
@@ -201,12 +211,38 @@ mod tests {
     #[test]
     fn scrolls_and_clamps() {
         let mut model = Model::new(EditorState::from_text("a\nb\nc"), None);
+        model.dirty = false;
         model.scroll_down();
+        assert!(model.dirty);
         assert_eq!(model.scroll, 1);
         model.scroll_down();
         model.scroll_down();
         assert_eq!(model.scroll, 2);
         model.scroll_up();
         assert_eq!(model.scroll, 1);
+    }
+
+    #[test]
+    fn idle_events_do_not_request_a_redraw() {
+        let mut model = Model::new(EditorState::from_text("a"), None);
+        model.dirty = false;
+        handle_event(&mut model, Event::FocusGained);
+        assert!(!model.dirty);
+        handle_event(
+            &mut model,
+            Event::Key(crossterm::event::KeyEvent::new(
+                KeyCode::Char('x'),
+                crossterm::event::KeyModifiers::NONE,
+            )),
+        );
+        assert!(!model.dirty);
+        handle_event(
+            &mut model,
+            Event::Key(crossterm::event::KeyEvent::new(
+                KeyCode::Char('j'),
+                crossterm::event::KeyModifiers::NONE,
+            )),
+        );
+        assert!(model.dirty);
     }
 }
