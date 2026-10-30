@@ -43,7 +43,7 @@ in `go/internal/fsroot`.
 - Lua plugins use `mlua` with Luau; TS uses `rquickjs` (QuickJS-NG), not V8.
 - The Go gateway is a per-session policy gateway, not the plugin sandbox.
 - `sys.exec` remains disabled until the Go gateway routes tool calls through
-  `anvil-exec-runner`; the runner's Landlock/seccomp path and ambient-authority
+  `anvil-exec-runner`; the runner's Landlock/seccomp path and kernel sandbox
   tests are implemented, but gateway integration is still pending.
 - The public API starts small and is defined from Rust types plus generated JSON
   Schema and TypeScript/Lua stubs. Smithy is deferred until the API justifies

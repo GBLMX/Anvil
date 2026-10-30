@@ -16,7 +16,8 @@ const DefaultMaxOutput = 1 << 20
 
 var errOutputLimit = errors.New("output limit exceeded")
 
-// ProcessConfig describes one supervised tool process.
+// ProcessConfig describes one supervised tool process. A nil Env means an
+// empty environment; callers must pass every variable the tool needs.
 type ProcessConfig struct {
 	Path      string
 	Args      []string
@@ -44,13 +45,20 @@ func Run(ctx context.Context, cfg ProcessConfig) (ProcessResult, error) {
 	if cfg.Path == "" {
 		return ProcessResult{}, errors.New("process path is required")
 	}
+	if cfg.Path[0] != '/' {
+		return ProcessResult{}, errors.New("process path must be absolute")
+	}
 	maxOutput := cfg.MaxOutput
 	if maxOutput <= 0 {
 		maxOutput = DefaultMaxOutput
 	}
 
 	cmd := exec.Command(cfg.Path, cfg.Args...)
-	cmd.Env = cfg.Env
+	if cfg.Env == nil {
+		cmd.Env = []string{}
+	} else {
+		cmd.Env = cfg.Env
+	}
 	cmd.Dir = cfg.Dir
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true, Pdeathsig: syscall.SIGKILL}
 	cmd.WaitDelay = 2 * time.Second

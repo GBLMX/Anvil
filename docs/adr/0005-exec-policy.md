@@ -85,6 +85,9 @@ Anvil API instead of raw `exec`.
   and `no_new_privs` before `execveat`.
 - `Run` uses `Setpgid`, `Pdeathsig`, explicit group SIGKILL, `WaitDelay`, and a
   bounded shared stdout/stderr budget; truncation and timeout are explicit.
+- `Run` requires an absolute executable path and defaults to an empty
+  environment, so `PATH`, `LD_PRELOAD`, `RIPGREP_CONFIG_PATH`, and locale
+  variables cannot be inherited accidentally.
 
 ## Why `openat2` is not enough
 
