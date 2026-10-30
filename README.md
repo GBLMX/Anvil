@@ -24,6 +24,7 @@ atomic writer in `go/internal/fsroot`.
 
 - [Project charter](PROJECT_CHARTER.md)
 - [0.1.1 / Phase 0.7 plan](docs/phase-0-7-plan.md)
+- [Plugin-host isolation ADR](docs/adr/0012-plugin-host-isolation.md)
 - [Threat model](docs/threat-model.md)
 - [Architecture](docs/architecture.md)
 - [Deployment model](docs/deployment.md)

@@ -12,6 +12,9 @@ Status: planned. 0.1.0 is the current release baseline.
 
 ## 1. Plugin-host isolation
 
+Contract: [ADR-0012](adr/0012-plugin-host-isolation.md).
+Implementation has not started.
+
 Required outcome:
 
 - Plugin processes run under the same workspace/openat2 boundary as gateway

@@ -13,6 +13,12 @@ All notable changes to Anvil are recorded here. The format follows
   line, block/bar cursor shape switching, and current/other search-match
   highlighting.
 
+### Added
+
+- ADR-0012 plugin-host isolation contract: one sandboxed host per plugin,
+  FD-delivered one-shot tokens, no inherited editor/gateway FDs, process-group
+  lifecycle, and accepted escape/orphan tests. Implementation not started.
+
 ### Planned
 
 - 0.1.1 / Phase 0.7: plugin-host isolation, Tree-sitter syntax highlighting,
