@@ -261,3 +261,4 @@ are accepted under the same dual-license terms.
 - [0007: JSON-RPC envelope and capability token](docs/adr/0007-jsonrpc-envelope-and-capability-token.md)
 - [0008: Selection-first interaction](docs/adr/0008-selection-first-interaction.md)
 - [0009: Text-model snapshot gate](docs/adr/0009-text-model-snapshot-gate.md)
+- [0010: Cursor and snapshot ownership](docs/adr/0010-cursor-and-snapshot-ownership.md)

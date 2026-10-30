@@ -21,6 +21,7 @@ codec, JSON-RPC envelope, Unix socket transport, and `SO_PEERCRED`, plus the
 - [JSON-RPC and token contract](docs/adr/0007-jsonrpc-envelope-and-capability-token.md)
 - [Selection-first interaction](docs/adr/0008-selection-first-interaction.md)
 - [Text-model snapshot gate](docs/adr/0009-text-model-snapshot-gate.md)
+- [Cursor and snapshot ownership](docs/adr/0010-cursor-and-snapshot-ownership.md)
 - [Architecture decision records](docs/adr/)
 - [Security policy](SECURITY.md)
 - [Contributing](CONTRIBUTING.md)
