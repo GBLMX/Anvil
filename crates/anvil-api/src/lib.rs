@@ -11,6 +11,74 @@ use ts_rs::TS;
 /// The public plugin API version carried by generated stubs.
 pub const API_VERSION: &str = "0.1.0";
 
+/// Stable JSON-RPC method names.
+pub mod method {
+    pub const EDITOR_GET_VIEW: &str = "editor.get_view";
+    pub const EDITOR_SET_MODE: &str = "editor.set_mode";
+    pub const EDITOR_APPLY_EDIT: &str = "editor.apply_edit";
+    pub const EDITOR_REGISTER_COMMAND: &str = "editor.register_command";
+    pub const UI_NOTIFY: &str = "ui.notify";
+    pub const UI_STATUS: &str = "ui.status";
+    pub const EVENT_SUBSCRIBE: &str = "event.subscribe";
+    pub const SYS_READ_FILE: &str = "sys.read_file";
+    pub const SYS_FETCH: &str = "sys.fetch";
+    pub const SYS_EXEC: &str = "sys.exec";
+}
+
+/// Stable plugin-facing error kinds.
+///
+/// The numeric code mapping follows ADR-0007. `InvalidMode` and `Unsupported`
+/// are method-level kinds that reuse the closest transport code.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+#[non_exhaustive]
+pub enum ApiError {
+    InvalidMode,
+    Unsupported,
+    ParseError,
+    InvalidRequest,
+    MethodNotFound,
+    InvalidParams,
+    Unauthorized,
+    PolicyDenied,
+    SessionRequired,
+    Cancelled,
+    Timeout,
+    LimitExceeded,
+    NotFound,
+    Unavailable,
+    Conflict,
+    InternalError,
+}
+
+impl ApiError {
+    /// Stable numeric code from ADR-0007.
+    pub const fn code(self) -> i32 {
+        match self {
+            Self::ParseError => -32700,
+            Self::InvalidRequest => -32600,
+            Self::MethodNotFound => -32601,
+            Self::InvalidMode | Self::InvalidParams => -32602,
+            Self::InternalError => -32603,
+            Self::Unauthorized => -32001,
+            Self::PolicyDenied => -32002,
+            Self::SessionRequired => -32003,
+            Self::Cancelled => -32004,
+            Self::Timeout => -32005,
+            Self::LimitExceeded => -32006,
+            Self::NotFound => -32007,
+            Self::Unavailable | Self::Unsupported => -32008,
+            Self::Conflict => -32009,
+        }
+    }
+
+    /// Whether the caller may retry without changing the request.
+    pub const fn retryable(self) -> bool {
+        matches!(self, Self::Timeout | Self::Unavailable)
+    }
+}
+
 /// The interaction model active for the current editor session.
 ///
 /// Phase 0 has one native model, `select`. A caret is an empty selection.
@@ -24,21 +92,14 @@ pub enum InteractionMode {
     Select,
 }
 
-impl InteractionMode {
-    /// Returns the wire representation used by the plugin API.
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Select => "select",
-        }
-    }
-}
-
 /// A position in the document.
 ///
 /// All indices are zero-based. `byte_offset` is a UTF-8 byte offset;
 /// `grapheme_column` counts extended grapheme clusters; `display_column`
 /// counts terminal cells and accounts for wide characters. The editor owns the
 /// conversions and guarantees the fields describe the same cursor position.
+/// Plugins receive positions from `editor.get_view`; construction stays
+/// editor-owned until a future `set_selection` contract validates it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[ts(export)]
 pub struct TextPosition {
@@ -200,5 +261,22 @@ mod tests {
             head: position,
         };
         assert_eq!(selection.anchor, selection.head);
+    }
+
+    #[test]
+    fn method_names_are_stable() {
+        assert_eq!(method::EDITOR_GET_VIEW, "editor.get_view");
+        assert_eq!(method::EDITOR_SET_MODE, "editor.set_mode");
+        assert_eq!(method::SYS_EXEC, "sys.exec");
+    }
+
+    #[test]
+    fn api_errors_map_to_stable_codes() {
+        assert_eq!(ApiError::InvalidMode.code(), -32602);
+        assert_eq!(ApiError::Unsupported.code(), -32008);
+        assert_eq!(ApiError::Timeout.code(), -32005);
+        assert_eq!(ApiError::Conflict.code(), -32009);
+        assert!(ApiError::Timeout.retryable());
+        assert!(!ApiError::InvalidMode.retryable());
     }
 }

@@ -35,6 +35,18 @@ jobs:
           print('Markdown links: ok')
           PY
 
+  bindings:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Type-check generated TypeScript
+        run: |
+          npm install --global typescript@5.9.3
+          tsc --noEmit --skipLibCheck crates/anvil-api/bindings/*.ts
+
   rust:
     runs-on: ubuntu-latest
     steps:

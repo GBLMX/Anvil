@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Stable plugin-facing error kinds.\n\nThe numeric code mapping follows ADR-0007. `InvalidMode` and `Unsupported`\nare method-level kinds that reuse the closest transport code.",
+  "enum": [
+    "invalid_mode",
+    "unsupported",
+    "parse_error",
+    "invalid_request",
+    "method_not_found",
+    "invalid_params",
+    "unauthorized",
+    "policy_denied",
+    "session_required",
+    "cancelled",
+    "timeout",
+    "limit_exceeded",
+    "not_found",
+    "unavailable",
+    "conflict",
+    "internal_error"
+  ],
+  "title": "ApiError",
+  "type": "string"
+}

@@ -21,11 +21,11 @@ All notable changes to Anvil are recorded here. The format follows
   handling, truncation detection, I/O error preservation, Unix socket
   connections with `0600` socket permissions, `SO_PEERCRED` lookup, and
   validated `Request`/`Response`/`Meta`/`ErrorObject` envelopes.
-- `anvil-api`: interaction and view contracts: `InteractionMode`,
-  `EditorView`, `Viewport`, `Selection`, `TextPosition`, `SetModeRequest`, and
-  `SetModeResponse`.
-- `anvil-api/bindings`: generated TypeScript declarations and JSON Schema for
-  the interaction and view contracts.
+- `anvil-api`: interaction, view, and error contracts: `InteractionMode`,
+  `EditorView`, `Viewport`, `Selection`, `TextPosition`, `SetModeRequest`,
+  `SetModeResponse`, `ApiError`, and stable method-name constants.
+- `anvil-api/bindings`: generated TypeScript declarations, JSON Schema, LuaLS
+  annotations, and the API version constant.
 - `anvil-core`: `TextBuffer` plus Rope, Gap Buffer, and piece-table candidates,
   with a repeatable `text-bench` CLI.
 - `go/internal/fsroot`: `openat2`-confined workspace reader with traversal,
