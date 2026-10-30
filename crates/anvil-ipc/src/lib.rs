@@ -4,7 +4,16 @@
 //! UTF-8 JSON-RPC. The codec is independent of the socket type so it can be
 //! tested with an in-memory reader and reused by the editor and plugin host.
 
-use std::io::{self, Read, Write};
+use std::{
+    fs,
+    io::{self, Read, Write},
+    os::unix::{
+        fs::PermissionsExt,
+        net::{UnixListener, UnixStream},
+    },
+    path::{Path, PathBuf},
+    time::Duration,
+};
 
 /// Maximum accepted frame body.
 pub const MAX_FRAME_LEN: u32 = 8 * 1024 * 1024;
@@ -93,10 +102,76 @@ fn io_error(error: io::Error) -> FrameError {
     FrameError::Io(error.kind())
 }
 
+/// A Unix socket listener for framed connections.
+#[derive(Debug)]
+pub struct Listener {
+    inner: UnixListener,
+    path: PathBuf,
+}
+
+impl Listener {
+    /// Bind a Unix socket and set its mode to `0600`.
+    ///
+    /// The caller owns the parent directory and the socket path. Binding an
+    /// existing path is not silently repaired; a failed permission change
+    /// removes the socket this call just created.
+    pub fn bind(path: impl AsRef<Path>) -> io::Result<Self> {
+        let path = path.as_ref().to_path_buf();
+        let inner = UnixListener::bind(&path)?;
+        if let Err(error) = fs::set_permissions(&path, fs::Permissions::from_mode(0o600)) {
+            drop(inner);
+            let _ = fs::remove_file(&path);
+            return Err(error);
+        }
+        Ok(Self { inner, path })
+    }
+
+    /// Accept one framed connection.
+    pub fn accept(&self) -> io::Result<Connection> {
+        let (stream, _) = self.inner.accept()?;
+        Ok(Connection { stream })
+    }
+
+    /// Path the listener is bound to.
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+}
+
+/// A framed connection over a Unix stream.
+#[derive(Debug)]
+pub struct Connection {
+    stream: UnixStream,
+}
+
+impl Connection {
+    /// Connect to a Unix socket.
+    pub fn connect(path: impl AsRef<Path>) -> io::Result<Self> {
+        Ok(Self {
+            stream: UnixStream::connect(path)?,
+        })
+    }
+
+    /// Send one frame.
+    pub fn send(&mut self, body: &[u8]) -> Result<(), FrameError> {
+        write_frame(&mut self.stream, body)
+    }
+
+    /// Receive one frame, or `None` on a clean peer EOF.
+    pub fn recv(&mut self) -> Result<Option<Vec<u8>>, FrameError> {
+        read_frame(&mut self.stream)
+    }
+
+    /// Set the read timeout for subsequent `recv` calls.
+    pub fn set_read_timeout(&self, timeout: Option<Duration>) -> io::Result<()> {
+        self.stream.set_read_timeout(timeout)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Cursor;
+    use std::{fs, io::Cursor, os::unix::fs::PermissionsExt, path::PathBuf};
 
     #[test]
     fn round_trips_a_frame() {
@@ -157,5 +232,45 @@ mod tests {
             read_frame(&mut Failing),
             Err(FrameError::Io(io::ErrorKind::ConnectionReset))
         );
+    }
+
+    fn socket_path() -> PathBuf {
+        use std::sync::atomic::{AtomicU64, Ordering};
+
+        static NEXT: AtomicU64 = AtomicU64::new(0);
+        std::env::temp_dir().join(format!(
+            "anvil-ipc-{}-{}.sock",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        ))
+    }
+
+    struct SocketCleanup(PathBuf);
+
+    impl Drop for SocketCleanup {
+        fn drop(&mut self) {
+            let _ = fs::remove_file(&self.0);
+        }
+    }
+
+    #[test]
+    fn unix_socket_round_trip_and_clean_eof() {
+        let path = socket_path();
+        let _cleanup = SocketCleanup(path.clone());
+        let listener = Listener::bind(&path).expect("bind");
+        assert_eq!(
+            fs::metadata(&path).expect("metadata").permissions().mode() & 0o777,
+            0o600
+        );
+
+        let mut client = Connection::connect(&path).expect("connect");
+        let mut server = listener.accept().expect("accept");
+        client.send(b"hello").expect("send");
+        assert_eq!(server.recv().expect("recv"), Some(b"hello".to_vec()));
+        server.send(b"world").expect("send");
+        assert_eq!(client.recv().expect("recv"), Some(b"world".to_vec()));
+
+        drop(client);
+        assert_eq!(server.recv().expect("eof"), None);
     }
 }

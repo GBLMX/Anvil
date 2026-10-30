@@ -17,7 +17,8 @@ All notable changes to Anvil are recorded here. The format follows
 - Repository governance files: security policy, contribution guide, code of
   conduct, editor configuration, license files, and CI skeleton.
 - `anvil-ipc`: length-prefixed JSON-RPC framing with an 8 MiB limit, clean-EOF
-  handling, truncation detection, and I/O error preservation.
+  handling, truncation detection, I/O error preservation, and Unix socket
+  connections with `0600` socket permissions.
 - `go/internal/fsroot`: `openat2`-confined workspace reader with traversal,
   symlink-escape, regular-file, and size-limit tests.
 
