@@ -43,6 +43,9 @@ impl HostSession {
         ));
         let _ = std::fs::remove_file(&socket);
         let listener = Listener::bind(&socket).map_err(|error| error.to_string())?;
+        listener
+            .set_nonblocking(true)
+            .map_err(|error| error.to_string())?;
         let cgroup = match std::env::var_os("ANVIL_CGROUP_ROOT") {
             Some(root) => {
                 let name = format!("anvil-plugin-{}", std::process::id());
@@ -70,9 +73,20 @@ impl HostSession {
         let alive = Arc::new(AtomicBool::new(true));
         let thread_alive = Arc::clone(&alive);
         std::thread::spawn(move || {
-            let Ok(mut connection) = listener.accept() else {
-                let _ = event_tx.send(HostEvent::Error("host did not connect".to_owned()));
-                return;
+            let mut connection = loop {
+                if !thread_alive.load(Ordering::Relaxed) {
+                    return;
+                }
+                match listener.accept() {
+                    Ok(connection) => break connection,
+                    Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
+                        std::thread::sleep(Duration::from_millis(10));
+                    }
+                    Err(error) => {
+                        let _ = event_tx.send(HostEvent::Error(format!("host accept: {error}")));
+                        return;
+                    }
+                }
             };
             let _ = event_tx.send(HostEvent::Ready);
             let _ = connection.set_read_timeout(Some(Duration::from_secs(2)));

@@ -131,6 +131,11 @@ impl Listener {
         Ok(Self { inner, path })
     }
 
+    /// Set nonblocking mode for subsequent `accept` calls.
+    pub fn set_nonblocking(&self, nonblocking: bool) -> io::Result<()> {
+        self.inner.set_nonblocking(nonblocking)
+    }
+
     /// Accept one framed connection.
     pub fn accept(&self) -> io::Result<Connection> {
         let (stream, _) = self.inner.accept()?;
