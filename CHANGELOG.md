@@ -26,8 +26,9 @@ All notable changes to Anvil are recorded here. The format follows
   `SetModeResponse`, `ApiError`, and stable method-name constants.
 - `anvil-api/bindings`: generated TypeScript declarations, JSON Schema, LuaLS
   annotations, and the API version constant.
-- `anvil-core`: `TextBuffer` plus Rope, Gap Buffer, and piece-table candidates,
-  UTF-8 boundary checks, cached line counts, proptest model comparisons,
+- `anvil-core`: `TextBuffer` with `PieceTable` selected as the production
+  `TextDocument` backend; Rope and Gap Buffer remain benchmark-only. UTF-8
+  boundary checks, cached line counts, proptest model comparisons,
   `EditCommand`/`History` undo-redo with revisions and typing groups, COW
   PieceTable text chunks, a criterion decision harness, a p99/snapshot timing
   probe, a Linux `text-rss` probe, and a PR-only 10 MB same-runner p99

@@ -1,7 +1,7 @@
 //! Text buffer primitives for Anvil.
 //!
-//! The Phase 0 benchmark compares three candidates behind [`TextBuffer`]. Only
-//! the winner becomes the production backend; the others are benchmark-only.
+//! [`PieceTable`] is the production backend selected by ADR-0009. Rope and Gap
+//! Buffer remain benchmark comparisons behind [`TextBuffer`].
 
 use std::{ops::Range, sync::Arc};
 
@@ -490,6 +490,9 @@ impl TextBuffer for PieceTable {
     }
 }
 
+/// Production text buffer selected by ADR-0009.
+pub type TextDocument = PieceTable;
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -610,6 +613,13 @@ mod tests {
         fn piece_matches_string_model(ops in prop::collection::vec(op_strategy(), 0..40)) {
             check_ops::<PieceTable>(&ops);
         }
+    }
+
+    #[test]
+    fn text_document_uses_piece_table() {
+        let mut text = TextDocument::from_text("a");
+        text.insert(1, "b");
+        assert_eq!(text.slice(0..2), "ab");
     }
 
     #[test]

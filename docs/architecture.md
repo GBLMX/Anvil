@@ -158,8 +158,10 @@ filesystem/network I/O on behalf of a plugin.
 ## 4. Editor and text model
 
 - Public `TextBuffer` trait separates the editor from the concrete storage.
-- Phase 0 benchmark chooses Rope/piece table or Gap Buffer. Only one backend
-  ships in v1; a second backend is not a parallel maintenance path.
+- `TextDocument` aliases `PieceTable` as the production backend. Its text lives
+  in shared `Arc<str>` chunks, so retained snapshots never copy the document.
+- Rope and Gap Buffer remain benchmark-only; a second production backend is not
+  a parallel maintenance path.
 - The snapshot contains `Arc<Document>` plus viewport/selection/revision and
   the session `interaction_mode`. It must not clone 100 MB of text per frame.
 - Phase 0 has exactly one native interaction model: selection-first. A caret is

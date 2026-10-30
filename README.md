@@ -5,8 +5,8 @@ plugin contract.
 
 Status: **pre-alpha, Phase 0**. There is no runnable editor yet. Phase 0 code
 currently consists of the `anvil-api` interaction and view contracts, the
-`anvil-core` text-buffer candidates and benchmark, the `anvil-ipc` frame codec,
-JSON-RPC envelope, Unix socket transport, and `SO_PEERCRED`, plus the
+`anvil-core` text buffer and selected PieceTable backend, the `anvil-ipc` frame
+codec, JSON-RPC envelope, Unix socket transport, and `SO_PEERCRED`, plus the
 `openat2`-confined workspace reader in `go/internal/fsroot`.
 
 ## Documents
@@ -40,8 +40,9 @@ JSON-RPC envelope, Unix socket transport, and `SO_PEERCRED`, plus the
 - The public API starts small and is defined from Rust types plus generated JSON
   Schema and TypeScript/Lua stubs. Smithy is deferred until the API justifies
   its code-generation cost.
-- The text model is selected by a Phase 0 benchmark. A rope or piece table is the
-  default candidate; Gap Buffer ships only if it meets the random-edit targets.
+- The text model is `PieceTable`, exposed as `anvil-core::TextDocument`; Rope and
+  Gap Buffer remain benchmark-only. See
+  [ADR-0009](docs/adr/0009-text-model-snapshot-gate.md).
 - Phase 0 has one native interaction model: selection-first. Motions and
   actions live in the Rust core; keymaps ship as Lua/TS plugins.
 - Full untrusted-plugin support targets Linux 5.13+ (Landlock). Linux 5.6-5.12

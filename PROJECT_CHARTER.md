@@ -211,7 +211,8 @@ reproducible harness:
 4. **SSRF suite**: private IPv4/IPv6, CGNAT, metadata, DNS rebinding simulation,
    redirect, compressed-body bomb, and wrong SNI.
 5. **Text benchmark**: Gap Buffer versus Rope/piece table on 1/10/100 MB,
-   including random edits, undo, long lines, and memory.
+   including random edits, undo, long lines, and memory; PieceTable selected
+   as the production backend in ADR-0009.
 6. **IDL decision**: lightweight generated stubs accepted, or a Smithy spike
    proves its cost within one week.
 7. **Performance harness**: reproducible first-frame, open, edit, scroll, and

@@ -1,6 +1,6 @@
 # Phase 0.5 Plan: Core Evidence and Editing Primitives
 
-Status: approved for execution; 6-week timebox. M1 and M2 are complete.
+Status: approved for execution; 6-week timebox. M1, M2, and M3 are complete.
 
 ## 1. Entry state
 
@@ -237,11 +237,12 @@ Only changes required by the core slice:
 - PR-only same-runner A/B gate: 10 MB p99 against `origin/main`, 10% ceiling; skip workloads whose baseline p99 is below 10 µs to avoid timer noise.
 - 100 MB remains a manual reference run, not a PR gate.
 
-### M3: Decision gate (proposed: PieceTable candidate; owner/reviewer sign-off pending)
+### M3: Decision gate (done: PieceTable selected; owner-only accepted)
 
-- [ADR-0009](adr/0009-text-model-snapshot-gate.md) accepted and signed off by owner + reviewer;
-- one production backend selected;
-- other backends benchmark-only.
+- [ADR-0009](adr/0009-text-model-snapshot-gate.md) accepted under the Phase 0.5
+  owner-only self-approval rule;
+- `TextDocument = PieceTable` is the production backend;
+- Rope and Gap Buffer remain benchmark-only.
 
 ### M4: Editing primitives gate (in progress: command/undo/typing groups landed)
 

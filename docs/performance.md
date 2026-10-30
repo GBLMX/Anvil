@@ -155,10 +155,9 @@ The Phase 0 benchmark must answer, for each candidate:
 - behavior with one 100 MB line;
 - snapshot cost when the document is shared via `Arc`.
 
-Default candidate: a Rope or piece table.
-
-Gap Buffer ships only if it meets the random-edit targets on the reference
-machine and does not require copying the document per snapshot.
+Selected backend: PieceTable, exposed as `anvil-core::TextDocument`; see
+[ADR-0009](adr/0009-text-model-snapshot-gate.md). Rope remains a benchmark
+fallback; Gap Buffer is rejected.
 
 The initial candidate harness lives in `anvil-core`:
 

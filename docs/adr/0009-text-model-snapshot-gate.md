@@ -1,6 +1,6 @@
-# ADR-0009: Text Model Snapshot Gate and Production Candidate
+# ADR-0009: Text Model Snapshot Gate and Production Backend
 
-- Status: Proposed for owner + reviewer sign-off
+- Status: Accepted (owner; Phase 0.5 owner-only self-approval)
 - Date: 2026-10-30
 - Inputs: [text-model benchmark](../benchmarks/text-model.md), ADR-0004
 
@@ -47,8 +47,11 @@ before taking the retained snapshot:
 
 ## Decision
 
-**PieceTable is the production candidate.** Its COW `Arc<str>` sources make the
-first post-snapshot edit bounded; GapBuffer remains benchmark-only.
+**PieceTable is the production backend**, exposed as [`TextDocument`] in
+`anvil-core`. Rope remains a benchmark fallback; GapBuffer is rejected.
+
+`anvil-core::TextDocument` aliases `PieceTable`; the application boundary uses
+that name rather than a benchmark candidate.
 
 The deciding gate is not raw edit throughput. It is:
 
@@ -78,7 +81,7 @@ Negative:
 
 - PieceTable retains piece and chunk indexes; compaction remains future work.
 - The COW first-write cost is bounded by piece count, not document size.
-- This decision is a Phase 0.5 candidate selection, not a release API freeze.
+- This is a Phase 0.5 backend decision, not a release API freeze.
 
 ## Sensitivity
 
@@ -89,8 +92,8 @@ separately rather than hidden in the weights.
 
 ## Sign-off
 
-- Owner: pending
-- Reviewer: pending
+- Owner: accepted 2026-10-30
+- Reviewer: not required during Phase 0.5 owner-only self-approval
 
-Until both signatures are recorded, M3 is not complete and no production code
-switch is made.
+M3 is complete. Production code uses `TextDocument = PieceTable`; Rope and
+GapBuffer remain benchmark-only.
