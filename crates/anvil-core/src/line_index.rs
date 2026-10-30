@@ -502,14 +502,21 @@ fn line_starts(text: &str) -> Vec<usize> {
         return Vec::new();
     }
     let bytes = text.as_bytes();
+    let configured = std::env::var("ANVIL_LINE_SCAN_WORKERS")
+        .ok()
+        .and_then(|value| value.parse::<usize>().ok())
+        .filter(|workers| *workers > 0)
+        .unwrap_or(16);
     let workers = thread::available_parallelism()
         .map_or(1, std::num::NonZeroUsize::get)
-        .min(16)
+        .min(configured)
         .min(bytes.len() / (1 << 20))
         .max(1);
     if workers == 1 || bytes.len() < PARALLEL_LINE_SCAN {
         return serial_line_starts(bytes);
     }
+    // Ranges are half-open. A newline is ASCII and cannot be a UTF-8
+    // continuation byte, so a newline at a boundary belongs to exactly one range.
     let chunk = bytes.len().div_ceil(workers);
     let mut ranges = Vec::with_capacity(workers);
     for index in 0..workers {

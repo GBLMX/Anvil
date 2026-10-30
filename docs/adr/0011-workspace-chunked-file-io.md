@@ -197,7 +197,7 @@ Response:
 
 ### 8. Performance gate
 
-The direct `std::fs` 100 MB open baseline is **109.8 ms** (Rust side) after
+The direct `std::fs` 100 MB open baseline is **96.1 ms** (Rust side) after
 two-pass parallel line scanning and **209.6 ms** (PTY first output, measured
 before parallel indexing). Use this baseline after
 `71ea604`; the older 185.9 ms / 193.7 ms numbers were measured before the
@@ -212,10 +212,10 @@ report:
 
 Measured 2026-10-31 on the same 100 MB fixture: gateway-ready 3.38 ms,
 19 chunks, 104,857,596 bytes, 27.7 ms average per chunk, 637.4 ms total UDS
-read loop, and **600.4 ms PTY first output** after parallel indexing. That is
-**+390 ms** over the older direct PTY baseline; the gate **fails**. The 4 MiB run was 732.0 ms, so 5.5
+read loop, and **563.1 ms PTY first output** after parallel indexing. That is
+**+353 ms** over the older direct PTY baseline; the gate **fails**. The 4 MiB run was 732.0 ms, so 5.5
 MiB is a real but insufficient improvement; parallel indexing cut Rust open from
-174 ms to 110 ms and gateway PTY from 640 ms to 600 ms. A 7 MiB raw chunk cannot fit after
+174 ms to 96 ms and gateway PTY from 640 ms to 563 ms. A 7 MiB raw chunk cannot fit after
 base64; the practical ceiling is about 5.9 MiB. Server-side stage benchmarks
 show per chunk: read **0.84 ms (~6.5 GB/s)**, base64 encode **4.98 ms**,
 JSON encode **5.33 ms**, full response encode **11.8 ms**; the file is
@@ -223,18 +223,20 @@ page-cache warm. Client-side per chunk: JSON decode **1.17 ms**, base64 decode
 **2.09 ms**, append **0.31 ms**, full decode **5.88 ms**, UDS frame read
 **1.46 ms**. Pipelining can overlap round trips, but it cannot remove the
 encode CPU. Binary framing removes about 10.3 ms server + 3.3 ms client per
-chunk (~258 ms total), projecting to roughly **342 ms PTY**, not 240 ms.
+chunk (~258 ms total), projecting to roughly **305 ms PTY**, not 240 ms.
 fd passing removes the whole transfer path and is the only option that can
 approach the direct baseline. Pipelining was measured separately on the real
 gateway: 1 in-flight 591.8 ms, 2 372.0 ms, 4 389.0 ms, 8 **335.3 ms**, 19
 376.6 ms. Within the same run, window 8 saves **256 ms** against window 1 and
-projects to roughly **344 ms PTY**; it is not a 28 ms socket-only optimization.
+projects to roughly **307 ms PTY**; it is not a 28 ms socket-only optimization.
+The worker-count check (16/8/4) showed gateway PTY 563.1/560.7/597.3 ms, so
+CPU contention does not explain a 30–50 ms gap; 16 remains the default.
 
 The single 50 ms gate was too coarse for a 100 MB document. The Phase 0.6 gates
 are:
 
-- **Open 100 MB PTY < 200 ms.** Current gateway is 600 ms; direct Rust open is
-  110 ms. Parallel line-index construction is implemented; binary framing and
+- **Open 100 MB PTY < 200 ms.** Current gateway is 563 ms; direct Rust open is
+  96 ms. Parallel line-index construction is implemented; binary framing and
   pipelining are still needed. Not met.
 - **Daily edit key-to-screen < 1 ms.** Current Rust-side is ~0.08 ms and local
   PTY is ~0.16–0.6 ms. Met.

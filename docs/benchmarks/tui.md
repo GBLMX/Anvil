@@ -37,7 +37,7 @@ go build -o target/release/anvil-gateway ./go/cmd/anvil-gateway
 | Layer | Scenario | p50 | p95 | p99 | n |
 |---|---|---:|---:|---:|---:|
 | Rust | key to screen, 1 MB | 76.5 µs | 79.6 µs | 79.6 µs | 20 |
-| Rust | open 100 MB, first frame | 109.8 ms | 109.8 ms | 109.8 ms | 1 |
+| Rust | open 100 MB, first frame | 96.1 ms | 96.1 ms | 96.1 ms | 1 |
 | Rust | scroll 100 MB, one `j` | 74.4 µs | 104.0 µs | 104.0 µs | 20 |
 | Rust | first `/` search, 100 MB | 210.7 ms | 210.7 ms | 210.7 ms | 1 |
 | Rust | subsequent `/` search, 100 MB | 213.7 ms | 229.8 ms | 229.8 ms | 10 |
@@ -57,12 +57,12 @@ chunks (19 chunks / 104,857,596 bytes):
 
 | Layer | Scenario | p50 | p95 | p99 | n |
 |---|---|---:|---:|---:|---:|
-| Rust | open 100 MB, first frame | 109.8 ms | 109.8 ms | 109.8 ms | 1 |
-| PTY + gateway | open 100 MB, first frame | 600.4 ms | 600.4 ms | 600.4 ms | 1 |
-| PTY + gateway | key to first output, 1 MB | 160.8 µs | 561.7 µs | 561.7 µs | 20 |
-| PTY + gateway | scroll 100 MB, one `j` | 523.4 µs | 731.4 µs | 731.4 µs | 20 |
-| PTY + gateway | first `/` search, 100 MB | 230.7 ms | 230.7 ms | 230.7 ms | 1 |
-| PTY + gateway | subsequent `/` search, 100 MB | 220.7 ms | 256.3 ms | 256.3 ms | 10 |
+| Rust | open 100 MB, first frame | 96.1 ms | 96.1 ms | 96.1 ms | 1 |
+| PTY + gateway | open 100 MB, first frame | 563.1 ms | 563.1 ms | 563.1 ms | 1 |
+| PTY + gateway | key to first output, 1 MB | 550.5 µs | 690.8 µs | 690.8 µs | 20 |
+| PTY + gateway | scroll 100 MB, one `j` | 342.6 µs | 487.4 µs | 487.4 µs | 20 |
+| PTY + gateway | first `/` search, 100 MB | 262.1 ms | 262.1 ms | 262.1 ms | 1 |
+| PTY + gateway | subsequent `/` search, 100 MB | 229.9 ms | 261.6 ms | 261.6 ms | 10 |
 | Gateway | per 5.5 MiB read chunk | 27.7 ms avg | 48.6 ms max | 5.3 ms min | 19 |
 
 Gateway ready (spawn + handshake): 3.13 ms. Total UDS read loop: 637.4 ms.
@@ -109,28 +109,46 @@ document decode, page-cache warm):
 
 An 8-request window saves **256 ms** against window 1 in the same run. It is
 not only a 28 ms socket optimization; the server encode overlaps across cores.
-Projected PTY open is roughly **344 ms** before client decode is included.
+Projected PTY open is roughly **307 ms** before client decode is included.
+
+Worker-count check for CPU competition (same fixture, direct Rust / gateway PTY):
+
+| Workers | Rust open | Gateway PTY |
+|---:|---:|---:|
+| 16 | **96.1 ms** | 563.1 ms |
+| 8 | 103.0 ms | **560.7 ms** |
+| 4 | 110.4 ms | 597.3 ms |
+
+Eight workers do not produce a 30–50 ms gateway win; the 16-worker gateway
+result is within ~2.4 ms of eight. The earlier 74 ms/40 ms discrepancy was
+run-to-run variance, not a large contention effect. Keep the 16-worker default
+with `ANVIL_LINE_SCAN_WORKERS` as an override.
+
+Worker ranges are half-open and split on bytes. A `\n` byte cannot occur inside
+a UTF-8 continuation byte, and a newline at a range boundary belongs to exactly
+one range (`[start, end)`), so the two-pass count cannot double-count or miss
+it. The 3,000,000-line parallel/serial equivalence test covers the merge path.
 
 ## Interpretation
 
-- Direct Rust 100 MB open is **109.8 ms** after parallel line scanning;
-  the pre-parallel direct PTY baseline was 210 ms. The gateway path is **600 ms
-  PTY**, about **+390 ms** over that older direct PTY number. It **does not
+- Direct Rust 100 MB open is **96.1 ms** after parallel line scanning;
+  the pre-parallel direct PTY baseline was 210 ms. The gateway path is **563 ms
+  PTY**, about **+353 ms** over that older direct PTY number. It **does not
   meet the Phase 0.6 open target of 200 ms**. The 50 ms open number is a
   long-term target, not the Phase 0.6 blocker.
 - The server encode path, not file I/O, is the dominant added cost. Per 5.5
   MiB chunk: `ReadFileAt` is 0.84 ms, base64 is 4.98 ms, JSON is 5.33 ms, and
   the full response encode is 11.8 ms. The file is page-cache warm.
 - The 5.5 MiB chunk is real and fits the 8 MiB frame; the 4 MiB run was 732 ms
-  and 5.5 MiB is 600 ms. But 7 MiB raw exceeds the frame after base64, and the
+  and 5.5 MiB is 563 ms. But 7 MiB raw exceeds the frame after base64, and the
   practical ceiling is about 5.9 MiB. The remaining gap is not round-trip
   count alone.
 - Pipelining is the cheapest measured improvement: window 8 takes the UDS loop
   from 591.8 ms to 335.3 ms in the same run, saving 256 ms. It still leaves a
-  projected ~344 ms PTY open, above the 200 ms Phase 0.6 target.
+  projected ~307 ms PTY open, above the 200 ms Phase 0.6 target.
 - Binary framing removes the measured base64 and JSON work: about 10.3 ms
   server + 3.3 ms client per chunk, or ~258 ms total. That projects to roughly
-  **342 ms PTY**, not 240 ms. fd passing removes the whole 19.2 ms/chunk
+  **305 ms PTY**, not 240 ms. fd passing removes the whole 19.2 ms/chunk
   transfer path and is the only option that can approach the direct baseline.
   The 200 ms target still needs binary framing and pipelining; parallel
   line-index construction is implemented.

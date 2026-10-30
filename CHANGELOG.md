@@ -46,7 +46,7 @@ All notable changes to Anvil are recorded here. The format follows
 
 - Two-pass parallel line scanning for large text: disjoint worker ranges count
   and fill the final line-start array, cutting 100 MB Rust open from 174 ms to
-  110 ms and gateway PTY open from 640 ms to 600 ms without increasing the
+  96 ms and gateway PTY open from 640 ms to 563 ms without increasing the
   198/301 MB TUI RSS/peak.
 
 - Workspace-scoped chunked `sys.read_file`/`sys.write_file`: fail-closed
