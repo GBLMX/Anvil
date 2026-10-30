@@ -42,7 +42,8 @@ Applied before plugin VM initialization:
   rejected. UDS stream operations remain allowed.
   Broader namespace/mount/ptrace filtering is pending.
 - Landlock handles `EXECUTE`; no path is granted execute after startup.
-- RLIMIT/cgroup pids, memory, fds, and output caps.
+- RLIMIT/cgroup pids, memory, fds, and output caps. cgroup setup verifies the
+  cgroup2 superblock and opens existing control files without creating them.
 - The host starts with a minimal environment; no inherited editor/gateway FDs.
 
 ### 3. Token delivery

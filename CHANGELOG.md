@@ -35,8 +35,9 @@ All notable changes to Anvil are recorded here. The format follows
   `SIGKILL` reaping.
 
 - Plugin-host cgroup v2 helper: `pids.max=64`, `memory.max=256MiB`,
-  post-spawn PID attach, and `HostExit::OomKilled` classification for SIGKILL
-  when a memory limit was active. No VM, framed UDS dispatch, or plugin API
+  post-spawn PID attach, cgroup2 `statfs` validation with existing-file writes
+  only, and `HostExit::OomKilled` classification for SIGKILL when a memory
+  limit was active. No VM, framed UDS dispatch, or plugin API
   yet.
 
 ### Planned
