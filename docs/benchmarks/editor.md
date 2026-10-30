@@ -44,7 +44,7 @@ Criterion, 100 MB, shared snapshot setup:
 | `A5_line_index_append` | 5.140 µs |
 | `A5_append` (retained snapshot) | 11.556 µs |
 
-The p99 ordinary-edit run is 0.334 µs p50 / 2.245 µs p99 because the state's
+The p99 ordinary-edit run is 1.322 µs p50 / 2.415 µs p99 because the state's
 line index is not shared with a retained snapshot. The shared-snapshot case
 still pays the metadata-array COW copy; this is not the ordinary append path.
 
