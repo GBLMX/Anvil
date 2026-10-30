@@ -1,6 +1,6 @@
 # ADR-0011: Workspace-Scoped Chunked File I/O
 
-- Status: Proposed; protocol only, no TUI or gateway implementation yet
+- Status: Proposed; chunked Go `sys.read_file` implemented; TUI client, `sys.write_file`, and TUI `--workspace` are not implemented yet
 - Date: 2026-10-31
 - Related: [ADR-0002](0002-go-daemon.md), [ADR-0007](0007-jsonrpc-envelope-and-capability-token.md)
 
@@ -48,14 +48,14 @@ based on the first file opened.
 
 ### 3. Transport envelope
 
-Requests use ADR-0007's 4-byte big-endian length-prefixed JSON-RPC framing.
-`MAX_FRAME_LEN` remains 8 MiB. File data is UTF-8 text because the editor
-currently accepts only UTF-8 documents; invalid UTF-8 is rejected rather than
-lossily replaced.
+`MAX_FRAME_LEN` remains 8 MiB. File data is base64-encoded bytes. Base64 keeps
+arbitrary binary chunks inside the JSON frame and bounds worst-case escaping;
+the editor assembles all chunks and rejects invalid UTF-8 before constructing a
+document.
 
-All offsets are absolute byte offsets from the start of the file. They must be
-UTF-8 boundaries. `next_offset` is always the offset immediately after the data
-in the response.
+All offsets are absolute byte offsets from the start of the file. Chunks may
+split a UTF-8 sequence. `next_offset` is always the offset immediately after the
+decoded data in the response.
 
 ### 4. `sys.read_file`
 
@@ -81,7 +81,7 @@ Response:
   "jsonrpc": "2.0",
   "id": "read-1",
   "result": {
-    "data": "...",
+    "data": "<base64>",
     "next_offset": 4194304,
     "eof": false
   }
@@ -89,10 +89,9 @@ Response:
 ```
 
 - One request returns at most one chunk. The client loops until `eof` is true.
-- `max_bytes` is optional; default and maximum are 4 MiB. The server may return
-  less than requested.
-- The server must not split a UTF-8 code point. If the byte limit lands inside a
-  code point, it backs the chunk end up to the preceding UTF-8 boundary.
+- `max_bytes` is optional; default and maximum are 4 MiB of raw file bytes. The
+  server may return less than requested.
+- `data` is standard base64 of the returned raw bytes.
 - `eof` is explicit. A short chunk is not an end signal; a file whose size is an
   exact multiple of the chunk size still requires a final request with
   `"eof": true`.
@@ -100,7 +99,8 @@ Response:
   `RESOLVE_BENEATH`. The gateway does not hold a long-lived file descriptor
   across chunks.
 - An empty file returns `data: ""`, `next_offset: 0`, `eof: true`.
-- Invalid UTF-8, a non-regular file, a path escape, or an offset not on a UTF-8
+- A non-regular file, a path escape, an offset beyond EOF, or invalid base64 is
+  rejected.
   boundary is rejected.
 
 ### 5. `sys.write_file`
@@ -115,9 +115,8 @@ Request:
   "params": {
     "path": "src/main.rs",
     "offset": 0,
-    "data": "...",
-    "eof": false
-  }
+    "data": "<base64>"
+}
 }
 ```
 
@@ -133,8 +132,9 @@ Response:
 }
 ```
 
-- One request carries one chunk. `offset` must equal the accumulated length for
-  that path; otherwise the request fails with `conflict`.
+- `data` is standard base64 of the raw chunk bytes.
+- `offset` must equal the accumulated length for that path; otherwise the
+  request fails with `conflict`.
 - The gateway creates a temporary file in the destination directory, writes
   chunks as they arrive, flushes and `fsync`s at `eof`, then `rename`s it over
   the destination. This preserves the existing atomic-replacement caveat: owner,
@@ -163,7 +163,7 @@ Response:
 
 | Code | Meaning |
 |---|---|
-| `-32602` | invalid params, invalid UTF-8, offset not a boundary |
+| `-32602` | invalid params, invalid base64, offset beyond EOF |
 | `-32002` | path policy denied |
 | `-32003` | session required |
 | `-32007` | file not found or not a regular file |

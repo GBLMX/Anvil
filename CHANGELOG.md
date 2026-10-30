@@ -41,8 +41,12 @@ All notable changes to Anvil are recorded here. The format follows
   key-to-screen, 100 MB open, 100 MB scroll, and 100 MB search.
 
 - Proposed workspace-scoped chunked `sys.read_file`/`sys.write_file` protocol:
-  fail-closed gateway I/O, UTF-8-safe 4 MiB chunks, atomic rename, and no
+  fail-closed gateway I/O, base64 4 MiB chunks, atomic rename, and no
   `std::fs` fallback.
+
+- Gateway `sys.read_file`: workspace-relative base64 chunks, explicit `eof`,
+  path-scoped `fs.read` permissions, and an `-allow-read` grant. The TUI is
+  still on direct `std::fs`; this is not an end-to-end sandbox integration yet.
 
 - Phase 0.5 complete: PieceTable production selection, cursor/line-index
   primitives, editor snapshots, selection-aware undo, and the locked-core

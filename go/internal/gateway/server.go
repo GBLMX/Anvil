@@ -14,6 +14,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -21,12 +22,15 @@ import (
 	"github.com/GBLMX/Anvil/go/internal/execpolicy"
 	"github.com/GBLMX/Anvil/go/internal/execrunner"
 	"github.com/GBLMX/Anvil/go/internal/fetch"
+	"github.com/GBLMX/Anvil/go/internal/fsroot"
 	"golang.org/x/sys/unix"
 )
 
 const (
 	// MaxFrameLen is the largest accepted JSON-RPC frame.
 	MaxFrameLen = 8 << 20
+	// maxReadChunk is the maximum file bytes returned by sys.read_file.
+	maxReadChunk = 4 << 20
 	// Protocol is the v1 JSON-RPC protocol name.
 	Protocol = "anvil-jsonrpc-1"
 	// APIVersion is the public API version.
@@ -51,6 +55,7 @@ type Config struct {
 type Server struct {
 	cfg       Config
 	listener  net.Listener
+	root      *fsroot.Root
 	tokenMu   sync.Mutex
 	tokenUsed bool
 	cgroup    string
@@ -73,12 +78,18 @@ func Listen(cfg Config) (*Server, error) {
 	if cfg.Permissions == nil {
 		cfg.Permissions = []string{}
 	}
+	root, err := fsroot.Open(cfg.Workspace)
+	if err != nil {
+		return nil, fmt.Errorf("open workspace: %w", err)
+	}
 	listener, err := net.Listen("unix", cfg.SocketPath)
 	if err != nil {
+		_ = root.Close()
 		return nil, fmt.Errorf("listen gateway socket: %w", err)
 	}
 	if err := os.Chmod(cfg.SocketPath, 0o600); err != nil {
 		_ = listener.Close()
+		_ = root.Close()
 		_ = os.Remove(cfg.SocketPath)
 		return nil, fmt.Errorf("chmod gateway socket: %w", err)
 	}
@@ -88,12 +99,13 @@ func Listen(cfg Config) (*Server, error) {
 		path, err := os.MkdirTemp(cfg.CgroupRoot, "anvil-exec-")
 		if err != nil {
 			_ = listener.Close()
+			_ = root.Close()
 			_ = os.Remove(cfg.SocketPath)
 			return nil, fmt.Errorf("create session cgroup: %w", err)
 		}
 		cgroupPath = path
 	}
-	return &Server{cfg: cfg, listener: listener, cgroup: cgroupPath}, nil
+	return &Server{cfg: cfg, listener: listener, root: root, cgroup: cgroupPath}, nil
 }
 
 // Addr returns the bound Unix socket path.
@@ -101,10 +113,12 @@ func (s *Server) Addr() string {
 	return s.cfg.SocketPath
 }
 
-// Close closes the listener.
 func (s *Server) Close() error {
 	err := s.listener.Close()
 	_ = os.Remove(s.cfg.SocketPath)
+	if s.root != nil {
+		_ = s.root.Close()
+	}
 	if s.cgroup != "" {
 		_ = os.Remove(s.cgroup)
 	}
@@ -192,6 +206,18 @@ type execResult struct {
 	OutputTruncated bool   `json:"output_truncated"`
 }
 
+type readParams struct {
+	Path     string `json:"path"`
+	Offset   int64  `json:"offset"`
+	MaxBytes int64  `json:"max_bytes"`
+}
+
+type readResult struct {
+	Data       string `json:"data"`
+	NextOffset int64  `json:"next_offset"`
+	EOF        bool   `json:"eof"`
+}
+
 type connectionState struct {
 	mu          sync.Mutex
 	handshaken  bool
@@ -254,6 +280,8 @@ func (s *Server) handle(serverCtx context.Context, conn net.Conn) {
 
 func (s *Server) dispatch(ctx context.Context, req request, state *connectionState) (interface{}, *rpcError) {
 	switch req.Method {
+	case "sys.read_file":
+		return s.readFile(req, state)
 	case "session.hello":
 		return s.hello(req, state)
 	case "sys.exec":
@@ -326,6 +354,45 @@ func (s *Server) fetch(parent context.Context, req request, state *connectionSta
 	}, nil
 }
 
+func (s *Server) readFile(req request, state *connectionState) (interface{}, *rpcError) {
+	var params readParams
+	if err := decodeParams(req.Params, &params); err != nil {
+		return nil, &rpcError{Code: -32602, Message: "invalid params"}
+	}
+	if params.Path == "" || params.Offset < 0 {
+		return nil, &rpcError{Code: -32602, Message: "invalid params"}
+	}
+	max := params.MaxBytes
+	if max == 0 {
+		max = maxReadChunk
+	}
+	if max < 0 || max > maxReadChunk {
+		return nil, &rpcError{Code: -32602, Message: "invalid params"}
+	}
+	if rpcErr := s.pathPermissionError(state, "fs.read", params.Path); rpcErr != nil {
+		return nil, rpcErr
+	}
+	if s.root == nil {
+		return nil, &rpcError{Code: -32008, Message: "file service unavailable"}
+	}
+	data, eof, err := s.root.ReadFileAt(params.Path, params.Offset, max)
+	if err != nil {
+		code := -32002
+		if errors.Is(err, fsroot.ErrOffsetOutOfRange) {
+			code = -32602
+		} else if errors.Is(err, os.ErrNotExist) {
+			code = -32007
+		}
+		return nil, &rpcError{Code: code, Message: "read unavailable"}
+	}
+	next := params.Offset + int64(len(data))
+	return readResult{
+		Data:       base64.StdEncoding.EncodeToString(data),
+		NextOffset: next,
+		EOF:        eof,
+	}, nil
+}
+
 func (s *Server) exec(parent context.Context, req request, state *connectionState) (interface{}, *rpcError) {
 	if rpcErr := s.permissionError(state, "sys.exec"); rpcErr != nil {
 		return nil, rpcErr
@@ -387,6 +454,50 @@ func (s *Server) permissionError(state *connectionState, wanted string) *rpcErro
 		}
 	}
 	return &rpcError{Code: -32002, Message: "policy denied"}
+}
+
+func (s *Server) pathPermissionError(state *connectionState, base, path string) *rpcError {
+	state.mu.Lock()
+	defer state.mu.Unlock()
+	if !state.handshaken {
+		return &rpcError{Code: -32003, Message: "session required"}
+	}
+	for _, permission := range state.permissions {
+		if permission == base {
+			return nil
+		}
+		pattern, ok := strings.CutPrefix(permission, base+":")
+		if ok && matchPath(pattern, path) {
+			return nil
+		}
+	}
+	return &rpcError{Code: -32002, Message: "policy denied"}
+}
+
+func matchPath(pattern, path string) bool {
+	if pattern == "*" || pattern == "**" {
+		return true
+	}
+	var expression strings.Builder
+	expression.WriteByte('^')
+	for index := 0; index < len(pattern); index++ {
+		switch pattern[index] {
+		case '*':
+			if index+1 < len(pattern) && pattern[index+1] == '*' {
+				expression.WriteString(".*")
+				index++
+			} else {
+				expression.WriteString("[^/]*")
+			}
+		case '?':
+			expression.WriteString("[^/]")
+		default:
+			expression.WriteString(regexp.QuoteMeta(string(pattern[index])))
+		}
+	}
+	expression.WriteByte('$')
+	compiled, err := regexp.Compile(expression.String())
+	return err == nil && compiled.MatchString(path)
 }
 
 func decodeParams(raw json.RawMessage, target interface{}) error {

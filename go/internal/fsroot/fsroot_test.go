@@ -78,3 +78,34 @@ func TestReadLimitAndRegularFiles(t *testing.T) {
 		t.Fatalf("directory read error = %v", err)
 	}
 }
+
+func TestReadFileAtChunks(t *testing.T) {
+	root, dir := testRoot(t)
+	if err := os.WriteFile(filepath.Join(dir, "file.txt"), []byte("0123456789"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	first, eof, err := root.ReadFileAt("file.txt", 0, 4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(first) != "0123" || eof {
+		t.Fatalf("first chunk = %q, eof=%v", first, eof)
+	}
+	last, eof, err := root.ReadFileAt("file.txt", 8, 4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(last) != "89" || !eof {
+		t.Fatalf("last chunk = %q, eof=%v", last, eof)
+	}
+	empty, eof, err := root.ReadFileAt("file.txt", 10, 4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(empty) != 0 || !eof {
+		t.Fatalf("end chunk = %q, eof=%v", empty, eof)
+	}
+	if _, _, err := root.ReadFileAt("file.txt", 11, 4); err == nil {
+		t.Fatal("offset beyond EOF was accepted")
+	}
+}
