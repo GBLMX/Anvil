@@ -56,12 +56,14 @@ impl SyntaxCache {
 }
 
 struct ParseRequest {
+    epoch: u64,
     revision: u64,
     path: PathBuf,
     source: String,
 }
 
 struct ParseResult {
+    epoch: u64,
     revision: u64,
     path: PathBuf,
     highlights: Vec<Highlight>,
@@ -82,6 +84,7 @@ impl SyntaxWorker {
                     continue;
                 };
                 let _ = result_tx.send(ParseResult {
+                    epoch: request.epoch,
                     revision: request.revision,
                     path: request.path,
                     highlights,
@@ -105,6 +108,7 @@ pub struct SyntaxState {
     worker: SyntaxWorker,
     last_activity: Instant,
     in_flight: bool,
+    epoch: u64,
 }
 
 impl Default for SyntaxState {
@@ -114,6 +118,7 @@ impl Default for SyntaxState {
             worker: SyntaxWorker::start(),
             last_activity: Instant::now(),
             in_flight: false,
+            epoch: 0,
         }
     }
 }
@@ -123,18 +128,32 @@ impl SyntaxState {
         self.last_activity = Instant::now();
     }
 
+    pub fn invalidate(&mut self) {
+        self.epoch = self.epoch.wrapping_add(1);
+        self.cache.clear(0, None);
+        self.in_flight = false;
+    }
+
     /// Returns true when the cache changed and the caller should redraw.
     pub fn poll(&mut self, text: &TextDocument, revision: u64, path: Option<&Path>) -> bool {
         let mut changed = false;
         while let Some(result) = self.worker.try_result() {
             self.in_flight = false;
-            if result.revision == revision && path == Some(result.path.as_path()) {
+            if result.epoch == self.epoch
+                && result.revision == revision
+                && path == Some(result.path.as_path())
+            {
                 self.cache
                     .apply(result.revision, result.path, result.highlights);
                 changed = true;
             }
         }
-        if self.cache.matches(revision, path) {
+        let path_changed = self.cache.path.as_deref() != path;
+        if path_changed {
+            self.cache.clear(u64::MAX, path);
+            changed = true;
+        }
+        if !path_changed && self.cache.matches(revision, path) {
             return changed;
         }
         if self.in_flight || self.last_activity.elapsed() < DEBOUNCE {
@@ -150,6 +169,7 @@ impl SyntaxState {
         }
         let source = text.slice(0..text.len_bytes());
         self.worker.request(ParseRequest {
+            epoch: self.epoch,
             revision,
             path: path.to_path_buf(),
             source,
@@ -288,7 +308,7 @@ mod tests {
         let document = text("fn main() {}");
         state.note_activity();
         let changed = state.poll(&document, 1, Some(Path::new("x.rs")));
-        assert!(!changed);
+        assert!(changed);
         assert!(state.highlights().is_empty());
     }
 }

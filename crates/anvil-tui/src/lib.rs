@@ -166,6 +166,7 @@ impl Model {
         if timing {
             eprintln!("open_path read={read_done:?} index={:?}", start.elapsed());
         }
+        self.syntax.borrow_mut().invalidate();
         self.path = Some(absolute);
         self.cursor = 0;
         self.scroll = 0;
@@ -291,6 +292,7 @@ impl Model {
         self.hscroll = buffer.hscroll;
         self.modified = buffer.modified;
         self.search_query = buffer.search_query;
+        self.syntax.borrow_mut().invalidate();
         self.active = index;
         self.input_mode = InputMode::Normal;
         self.pending = None;
@@ -578,6 +580,7 @@ impl Model {
         self.hscroll = saved.hscroll;
         self.modified = saved.modified;
         self.search_query = saved.search_query;
+        self.syntax.borrow_mut().invalidate();
         self.input_mode = InputMode::Normal;
         self.pending = None;
         self.status = "Returned from help".to_owned();
@@ -1814,6 +1817,10 @@ mod tests {
             }
             std::thread::sleep(std::time::Duration::from_millis(10));
         }
+        assert!(
+            !model.syntax.borrow().highlights().is_empty(),
+            "no syntax highlights produced"
+        );
         let backend = TestBackend::new(80, 8);
         let mut terminal = Terminal::new(backend).expect("terminal");
         terminal.draw(|frame| view(&model, frame)).expect("draw");
