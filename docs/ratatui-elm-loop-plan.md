@@ -1,6 +1,6 @@
 # Ratatui TUI Elm Loop Plan
 
-Status: TUI-0 implemented (read-only viewport); TUI-1+ planned.
+Status: TUI-0 and basic TUI-1 implemented (insert, save, cursor/viewport); Elm Msg/Cmd runtime remains planned.
 
 ## 1. Goal
 

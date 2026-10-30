@@ -17,3 +17,6 @@ ratatui = "0.30"
 [[bin]]
 name = "anvil"
 path = "src/main.rs"
+
+[dev-dependencies]
+tempfile = "3"

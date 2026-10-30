@@ -29,8 +29,9 @@ All notable changes to Anvil are recorded here. The format follows
   blocked-address validation, disabled redirects, bounded bodies, allowlisted
   request headers with name-only sensitive auditing, and host-bound TLS SNI.
 
-- Phase 0.6 TUI-0: minimal `anvil-tui` read-only viewport with `ratatui` and
-  `crossterm`, terminal restore, j/k scrolling, q quit, and borrowed text chunks.
+- Phase 0.6 TUI-0/TUI-1: minimal `anvil-tui` editor with insert mode, `:w`
+  saving, cursor/viewport separation, dirty-only redraws, terminal restore, and
+  borrowed text chunks.
 
 - Phase 0.5 complete: PieceTable production selection, cursor/line-index
   primitives, editor snapshots, selection-aware undo, and the locked-core
