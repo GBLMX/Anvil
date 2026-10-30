@@ -3,7 +3,7 @@
 //! The Phase 0 benchmark compares three candidates behind [`TextBuffer`]. Only
 //! the winner becomes the production backend; the others are benchmark-only.
 
-use std::{ops::Range, string::String};
+use std::{ops::Range, sync::Arc};
 
 mod command;
 pub use command::{CommandError, EditCommand, History, Revision};
@@ -287,10 +287,14 @@ impl TextBuffer for GapBuffer {
 }
 
 /// Piece-table candidate from the Phase 0 text-model benchmark.
+///
+/// Text lives in shared `Arc<str>` chunks. Cloning the table, including the
+/// `Arc::make_mut` clone after a retained snapshot, copies only the piece and
+/// chunk indexes, never the document text.
 #[derive(Debug, Clone)]
 pub struct PieceTable {
-    original: String,
-    added: String,
+    original: Arc<str>,
+    added: Vec<Arc<str>>,
     pieces: Vec<Piece>,
     line_count: usize,
 }
@@ -298,7 +302,7 @@ pub struct PieceTable {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Source {
     Original,
-    Added,
+    Added(usize),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -312,7 +316,7 @@ impl PieceTable {
     fn text(&self, source: Source) -> &str {
         match source {
             Source::Original => &self.original,
-            Source::Added => &self.added,
+            Source::Added(index) => &self.added[index],
         }
     }
 
@@ -397,8 +401,8 @@ impl TextBuffer for PieceTable {
             }]
         };
         Self {
-            original: text.to_owned(),
-            added: String::new(),
+            original: Arc::from(text),
+            added: Vec::new(),
             pieces,
             line_count: line_count(text.as_bytes()),
         }
@@ -430,13 +434,14 @@ impl TextBuffer for PieceTable {
             self.line_count += inserted_lines;
         }
         let index = self.split_at(at);
-        let start = self.added.len();
-        self.added.push_str(text);
+        let chunk = Arc::<str>::from(text);
+        let source = Source::Added(self.added.len());
+        self.added.push(chunk);
         self.pieces.insert(
             index,
             Piece {
-                source: Source::Added,
-                start,
+                source,
+                start: 0,
                 len: text.len(),
             },
         );
@@ -624,6 +629,20 @@ mod tests {
         check::<RopeBuffer>();
         check::<GapBuffer>();
         check::<PieceTable>();
+    }
+
+    #[test]
+    fn piece_snapshot_shares_text_chunks() {
+        let mut buffer = PieceTable::from_text("alpha");
+        let original = buffer.original.clone();
+        buffer.insert(5, " beta");
+        let added = buffer.added[0].clone();
+        let snapshot = buffer.clone();
+        assert!(Arc::ptr_eq(&original, &snapshot.original));
+        assert!(Arc::ptr_eq(&added, &snapshot.added[0]));
+        buffer.insert(0, "x");
+        assert!(Arc::ptr_eq(&original, &buffer.original));
+        assert!(Arc::ptr_eq(&added, &buffer.added[0]));
     }
 
     #[test]
