@@ -138,6 +138,14 @@ impl Listener {
     }
 }
 
+/// Linux peer credentials from `SO_PEERCRED`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PeerCredentials {
+    pub pid: i32,
+    pub uid: u32,
+    pub gid: u32,
+}
+
 /// A framed connection over a Unix stream.
 #[derive(Debug)]
 pub struct Connection {
@@ -149,6 +157,16 @@ impl Connection {
     pub fn connect(path: impl AsRef<Path>) -> io::Result<Self> {
         Ok(Self {
             stream: UnixStream::connect(path)?,
+        })
+    }
+
+    /// Read the Linux peer credentials for this connection.
+    pub fn peer_credentials(&self) -> io::Result<PeerCredentials> {
+        let credentials = rustix::net::sockopt::socket_peercred(&self.stream)?;
+        Ok(PeerCredentials {
+            pid: credentials.pid.as_raw_pid(),
+            uid: credentials.uid.as_raw(),
+            gid: credentials.gid.as_raw(),
         })
     }
 
@@ -265,6 +283,10 @@ mod tests {
 
         let mut client = Connection::connect(&path).expect("connect");
         let mut server = listener.accept().expect("accept");
+        assert_eq!(
+            server.peer_credentials().expect("peer credentials").pid,
+            std::process::id() as i32
+        );
         client.send(b"hello").expect("send");
         assert_eq!(server.recv().expect("recv"), Some(b"hello".to_vec()));
         server.send(b"world").expect("send");
