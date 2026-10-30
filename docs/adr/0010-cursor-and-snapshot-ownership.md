@@ -119,6 +119,11 @@ no dirty-chunk or lazy-rebuild path:
 Split/merge rebuilds only the affected chunk headers and `Arc<[usize]>` arrays.
 It does not scan the document or rebuild the whole index.
 
+A single edit can trigger several splits or merges, and a large paste may touch
+many chunks. The cost is linear in the number of chunks actually split, merged,
+or rebuilt, each bounded by `MAX_LINES`; it is not `O(document lines)` unless
+the edit itself spans the whole document.
+
 `LineIndex` is independent of PieceTable piece boundaries. An edit is applied by
 byte range and a `TextBuffer` reference:
 
@@ -229,6 +234,7 @@ rule the text buffer follows. Rejected.
   count stays within `ceil(lines / 512) + 1` and within 2× the initial count
   plus one, every non-final chunk remains within `[512, 2048]`, and
   `offset_to_line` p99 does not regress by more than 10%.
+
 - The snapshot first-edit benchmark includes `LineIndex` work and reports the
   chunk path cost; it must stay far below a full line-array copy.
 - Snapshot tests prove `Arc` sharing and immutability; no document text copy is
@@ -236,6 +242,10 @@ rule the text buffer follows. Rejected.
 - `anvil-editor` tests construct `EditorView` from a snapshot without duplicating
   coordinate logic.
 - No test path requires TUI, Tokio, or a plugin runtime in `anvil-core`.
+
+The 100k/100 MB stress run is a manual or scheduled benchmark, not a PR CI
+gate. PR CI keeps the existing 10 MB p99 gate plus small normalization tests;
+enable a nightly run only after its measured runtime is acceptable.
 
 ## Sign-off
 
