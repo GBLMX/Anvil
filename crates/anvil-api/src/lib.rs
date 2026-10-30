@@ -4,7 +4,9 @@
 //! ADR-0003 and ADR-0008. It deliberately does not depend on the editor, TUI,
 //! or platform crates.
 
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use ts_rs::TS;
 
 /// The public plugin API version carried by generated stubs.
 pub const API_VERSION: &str = "0.1.0";
@@ -12,7 +14,8 @@ pub const API_VERSION: &str = "0.1.0";
 /// The interaction model active for the current editor session.
 ///
 /// Phase 0 has one native model, `select`. A caret is an empty selection.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[ts(export)]
 #[serde(rename_all = "snake_case")]
 #[non_exhaustive]
 pub enum InteractionMode {
@@ -36,9 +39,12 @@ impl InteractionMode {
 /// `grapheme_column` counts extended grapheme clusters; `display_column`
 /// counts terminal cells and accounts for wide characters. The editor owns the
 /// conversions and guarantees the fields describe the same cursor position.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[ts(export)]
 pub struct TextPosition {
     /// UTF-8 byte offset from the start of the document.
+    #[ts(type = "number")]
+    #[schemars(range(max = 9007199254740991i64))]
     pub byte_offset: u64,
     /// Zero-based line number.
     pub line: u32,
@@ -49,7 +55,8 @@ pub struct TextPosition {
 }
 
 /// The visible region of the document.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[ts(export)]
 pub struct Viewport {
     /// First visible line.
     pub first_line: u32,
@@ -64,7 +71,8 @@ pub struct Viewport {
 }
 
 /// One selection. A caret is an empty selection where `anchor == head`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[ts(export)]
 pub struct Selection {
     /// Fixed end of the selection.
     pub anchor: TextPosition,
@@ -75,9 +83,12 @@ pub struct Selection {
 /// Result of `editor.get_view`.
 ///
 /// Phase 0 has at least one selection and one native mode (`select`).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[ts(export)]
 pub struct EditorView {
     /// Monotonic document revision at snapshot time.
+    #[ts(type = "number")]
+    #[schemars(range(max = 9007199254740991i64))]
     pub revision: u64,
     /// Session interaction mode.
     pub interaction_mode: InteractionMode,
@@ -88,14 +99,16 @@ pub struct EditorView {
 }
 
 /// Payload for `editor.set_mode`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[ts(export)]
 pub struct SetModeRequest {
     /// The mode to activate for the current session.
     pub mode: InteractionMode,
 }
 
 /// Result of `editor.set_mode`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[ts(export)]
 pub struct SetModeResponse {
     /// The mode active after the request.
     pub mode: InteractionMode,
@@ -164,6 +177,19 @@ mod tests {
         let encoded = serde_json::to_string(&view).unwrap();
         let decoded: EditorView = serde_json::from_str(&encoded).unwrap();
         assert_eq!(decoded, view);
+    }
+
+    #[test]
+    fn schema_exposes_mode_and_safe_integer_bounds() {
+        let schema = serde_json::to_value(schemars::schema_for!(EditorView)).unwrap();
+        assert_eq!(
+            schema["properties"]["interaction_mode"]["$ref"],
+            "#/$defs/InteractionMode"
+        );
+        assert_eq!(
+            schema["properties"]["revision"]["maximum"].as_u64(),
+            Some(9_007_199_254_740_991)
+        );
     }
 
     #[test]

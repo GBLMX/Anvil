@@ -24,6 +24,8 @@ All notable changes to Anvil are recorded here. The format follows
 - `anvil-api`: interaction and view contracts: `InteractionMode`,
   `EditorView`, `Viewport`, `Selection`, `TextPosition`, `SetModeRequest`, and
   `SetModeResponse`.
+- `anvil-api/bindings`: generated TypeScript declarations and JSON Schema for
+  the interaction and view contracts.
 - `go/internal/fsroot`: `openat2`-confined workspace reader with traversal,
   symlink-escape, regular-file, and size-limit tests.
 

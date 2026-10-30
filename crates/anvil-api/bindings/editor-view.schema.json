@@ -1,0 +1,146 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "EditorView",
+  "description": "Result of `editor.get_view`.\n\nPhase 0 has at least one selection and one native mode (`select`).",
+  "type": "object",
+  "properties": {
+    "interaction_mode": {
+      "description": "Session interaction mode.",
+      "$ref": "#/$defs/InteractionMode"
+    },
+    "revision": {
+      "description": "Monotonic document revision at snapshot time.",
+      "type": "integer",
+      "format": "uint64",
+      "maximum": 9007199254740991,
+      "minimum": 0
+    },
+    "selections": {
+      "description": "Current selections; Phase 0 normally contains one caret/selection.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Selection"
+      }
+    },
+    "viewport": {
+      "description": "Visible document region.",
+      "$ref": "#/$defs/Viewport"
+    }
+  },
+  "required": [
+    "revision",
+    "interaction_mode",
+    "viewport",
+    "selections"
+  ],
+  "$defs": {
+    "InteractionMode": {
+      "description": "The interaction model active for the current editor session.\n\nPhase 0 has one native model, `select`. A caret is an empty selection.",
+      "oneOf": [
+        {
+          "description": "Selection-first editing. Insertion and navigation both act on a selection.",
+          "type": "string",
+          "const": "select"
+        }
+      ]
+    },
+    "Selection": {
+      "description": "One selection. A caret is an empty selection where `anchor == head`.",
+      "type": "object",
+      "properties": {
+        "anchor": {
+          "description": "Fixed end of the selection.",
+          "$ref": "#/$defs/TextPosition"
+        },
+        "head": {
+          "description": "Moving end of the selection.",
+          "$ref": "#/$defs/TextPosition"
+        }
+      },
+      "required": [
+        "anchor",
+        "head"
+      ]
+    },
+    "TextPosition": {
+      "description": "A position in the document.\n\nAll indices are zero-based. `byte_offset` is a UTF-8 byte offset;\n`grapheme_column` counts extended grapheme clusters; `display_column`\ncounts terminal cells and accounts for wide characters. The editor owns the\nconversions and guarantees the fields describe the same cursor position.",
+      "type": "object",
+      "properties": {
+        "byte_offset": {
+          "description": "UTF-8 byte offset from the start of the document.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "display_column": {
+          "description": "Zero-based terminal display-cell column.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "grapheme_column": {
+          "description": "Zero-based grapheme-cluster column.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "line": {
+          "description": "Zero-based line number.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "byte_offset",
+        "line",
+        "grapheme_column",
+        "display_column"
+      ]
+    },
+    "Viewport": {
+      "description": "The visible region of the document.",
+      "type": "object",
+      "properties": {
+        "first_column": {
+          "description": "First visible display column for horizontal scrolling.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "first_line": {
+          "description": "First visible line.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "height": {
+          "description": "Visible height in terminal rows.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "line_count": {
+          "description": "Number of visible lines.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "width": {
+          "description": "Visible width in terminal cells.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "first_line",
+        "first_column",
+        "line_count",
+        "width",
+        "height"
+      ]
+    }
+  }
+}
