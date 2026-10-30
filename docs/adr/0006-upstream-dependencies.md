@@ -34,6 +34,7 @@ The dependency set should avoid:
 | Lua | `mlua` with `luau` | `0.12` | Luau sandbox removes dangerous stdlib; vendored runtime |
 | JS | `rquickjs` | `0.14` | QuickJS-NG bindings; no V8/Deno |
 | Sandbox | `landlock`, `seccompiler`, `rustix` | `0.4`, `0.5`, `1` | Unprivileged Landlock/seccomp without libseccomp |
+| Sandbox (Go) | `golang.org/x/sys/unix` | `0.30` | Landlock/seccomp syscalls in the exec runner |
 | IPC | `serde`, `serde_json` | `1` | Length-prefixed JSON-RPC; no `jsonrpsee` |
 | Config/manifest | `serde`, `toml_edit` | `1`, `0.25` | Comment-preserving TOML; shared format |
 | CLI | `clap` | `4` | `anvil doctor` and build commands |

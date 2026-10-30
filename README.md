@@ -3,11 +3,13 @@
 Anvil is a Linux-first terminal editor built around a small, capability-scoped
 plugin contract.
 
-Status: **pre-alpha; Phase 0.5 complete**. There is no runnable editor yet. Phase 0 code
-currently consists of the `anvil-api` interaction and view contracts, the
-`anvil-core` text buffer and selected PieceTable backend, the `anvil-editor`
-snapshot layer, the `anvil-ipc` frame codec, JSON-RPC envelope, Unix socket transport, and `SO_PEERCRED`, plus the
-`openat2`-confined workspace reader in `go/internal/fsroot`.
+Status: **pre-alpha; Phase 0.6 in progress**. There is no runnable editor yet.
+Phase 0 code currently consists of the `anvil-api` interaction and view
+contracts, the `anvil-core` text buffer and selected PieceTable backend, the
+`anvil-editor` snapshot layer, the `anvil-ipc` frame codec, JSON-RPC envelope,
+Unix socket transport, and `SO_PEERCRED`; Phase 0.6 adds the Go exec runner,
+Landlock/seccomp sandbox, and `rg`/`fd` argv policy, plus the `openat2`-confined
+workspace reader in `go/internal/fsroot`.
 
 ## Documents
 
@@ -19,6 +21,7 @@ snapshot layer, the `anvil-ipc` frame codec, JSON-RPC envelope, Unix socket tran
 - [Editor benchmarks](docs/benchmarks/editor.md)
 - [Line index stress](docs/benchmarks/line-index-stress.md)
 - [Phase 0.5 plan](docs/phase-0-5-plan.md)
+- [Phase 0.6 plan](docs/phase-0-6-plan.md)
 - [Upstream dependencies](docs/adr/0006-upstream-dependencies.md)
 - [JSON-RPC and token contract](docs/adr/0007-jsonrpc-envelope-and-capability-token.md)
 - [Selection-first interaction](docs/adr/0008-selection-first-interaction.md)

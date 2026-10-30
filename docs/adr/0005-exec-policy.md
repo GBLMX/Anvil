@@ -1,6 +1,6 @@
 # ADR-0005: No Shell, No Pipeline, Per-Tool Argument Policy
 
-- Status: Proposed; blocked until the sandboxed exec runner and symlink-race test exist
+- Status: Proposed; exec runner and argv policy implemented, gateway/symlink-race pending
 - Date: 2026-10-30
 
 ## Context

@@ -8,6 +8,10 @@ All notable changes to Anvil are recorded here. The format follows
 
 ### Added
 
+- Phase 0.6 exec sandbox foundation: `anvil-exec-runner`, Landlock
+  read-only workspace/runtime rules, seccomp syscall denial, and `rg`/`fd`
+  argv policy parsers.
+
 - Phase 0.5 complete: PieceTable production selection, cursor/line-index
   primitives, editor snapshots, selection-aware undo, and the locked-core
   A/C benchmark and 100k stress gate.
