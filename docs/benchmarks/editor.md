@@ -9,7 +9,7 @@
 ## Commands
 
 ```text
-cargo run --release -p anvil-editor --bin editor-p99
+TEXT_EDITOR_EDIT_SAMPLES=1000 taskset -c 0-3 cargo run --release -p anvil-editor --bin editor-p99
 cargo test -p anvil-editor --test editor_correctness
 cargo test -p anvil-editor --test line_index_stress -- --nocapture
 cargo test --release -p anvil-editor --test line_index_stress -- --ignored --nocapture
