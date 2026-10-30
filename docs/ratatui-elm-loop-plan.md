@@ -42,7 +42,14 @@ not add Tokio, an actor framework, or a second event loop.
 - TUI mouse support beyond a disabled-by-default stub.
 - Network fetch/exec policy; those remain gateway responsibilities.
 
-## 3. Elm types
+## 3. Dependencies
+
+- `ratatui` `0.30` and `crossterm` `0.29`, matching ADR-0006.
+- `anvil-core` and `anvil-editor` for text, selection, snapshots, and commands.
+- Standard-library threads, channels, and `Duration` for the runtime.
+- No Tokio, no actor runtime, no async executor.
+
+## 4. Elm types
 
 Proposed module layout:
 
@@ -129,7 +136,7 @@ Subscription
 No periodic tick is enabled when the UI is idle. Redraw happens when `Model`
 changes, not on a fixed frame loop.
 
-## 4. Update rules
+## 5. Update rules
 
 - `update` must never call `terminal.draw`, read files, spawn processes, or block.
 - All state transitions happen inside `update`.
@@ -154,7 +161,7 @@ while let Some(message) = mailbox.recv() {
 }
 ```
 
-## 5. Runtime and threads
+## 6. Runtime and threads
 
 - A dedicated terminal reader thread owns `crossterm::event::read`.
 - A command runtime thread owns command dispatch and result collection.
@@ -167,7 +174,7 @@ while let Some(message) = mailbox.recv() {
 The main loop only processes messages and renders. A slow file save or gateway
 call never stalls input.
 
-## 6. Terminal lifecycle
+## 7. Terminal lifecycle
 
 - `TerminalGuard` enters raw mode, alternate screen, and keyboard enhancement
   where available.
@@ -178,7 +185,7 @@ call never stalls input.
 - The first frame is rendered before any gateway request.
 - Resize invalidates layout and schedules one redraw.
 
-## 7. View
+## 8. View
 
 Initial layout:
 
@@ -200,7 +207,7 @@ Initial layout:
 - Color and style policies are centralized; views do not hardcode terminal
   colors.
 
-## 8. Input and selection-first
+## 9. Input and selection-first
 
 - Key events become core `EditorCommand`/motion requests.
 - The editor owns text, selection, viewport, and revision.
@@ -210,7 +217,7 @@ Initial layout:
 - Input events are replayed deterministically in tests.
 - Paste is treated as an edit command, never as a sequence of key events.
 
-## 9. Gateway startup
+## 10. Gateway startup
 
 - `Model.gateway = NotStarted` initially.
 - The first `sys.*` action or plugin handshake enqueues `Cmd::StartGateway`.
@@ -220,7 +227,7 @@ Initial layout:
 - If the gateway is unavailable, `sys.*` actions are disabled but editing,
   selection, and rendering continue.
 
-## 10. Errors and cancellation
+## 11. Errors and cancellation
 
 - Terminal errors return an error after restoring the terminal.
 - Command errors become `Msg::Command` with a typed error and status text.
@@ -229,7 +236,7 @@ Initial layout:
 - No panic may leave raw mode, alternate screen, or a hidden cursor behind.
 - No stale command result may overwrite newer editor state.
 
-## 11. Testing
+## 12. Testing
 
 Pure tests:
 
@@ -263,7 +270,7 @@ Manual smoke:
 - startup with gateway unavailable;
 - first-frame timing.
 
-## 12. Performance gates
+## 13. Performance gates
 
 Reference machine, release build:
 
@@ -277,7 +284,7 @@ Reference machine, release build:
 Record p50/p99 and allocator numbers; do not claim end-to-end latency from a
 single frame.
 
-## 13. Delivery sequence
+## 14. Delivery sequence
 
 ### TUI-0: crate and terminal skeleton
 
@@ -326,7 +333,7 @@ single frame.
 - Plugin state and event subscription.
 - Reload status; no TUI block on host restart.
 
-## 14. Acceptance criteria
+## 15. Acceptance criteria
 
 - TUI renders before gateway startup and remains usable with no gateway.
 - `update` is pure and has no I/O or terminal calls.
@@ -340,7 +347,7 @@ single frame.
 - Performance smoke meets the reference first-frame and p99 gates, or the
   report states the measured failure.
 
-## 15. Open questions
+## 16. Open questions
 
 - Whether `anvil-editor` exposes a session type suitable for `Model`, or
   `anvil-tui` owns a thin session wrapper.
