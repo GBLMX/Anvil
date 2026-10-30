@@ -40,6 +40,10 @@ All notable changes to Anvil are recorded here. The format follows
 - Phase 0.6 TUI edit-loop benchmark: layered Rust-side and PTY latency for
   key-to-screen, 100 MB open, 100 MB scroll, and 100 MB search.
 
+- Proposed workspace-scoped chunked `sys.read_file`/`sys.write_file` protocol:
+  fail-closed gateway I/O, UTF-8-safe 4 MiB chunks, atomic rename, and no
+  `std::fs` fallback.
+
 - Phase 0.5 complete: PieceTable production selection, cursor/line-index
   primitives, editor snapshots, selection-aware undo, and the locked-core
   A/C benchmark and 100k stress gate.
