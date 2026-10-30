@@ -115,7 +115,9 @@ payload, not JSON:
 
 - Bit 0 of `flags` is `eof`; remaining bits are reserved and must be zero.
 - The request id is not repeated in the binary payload. The binary path is
-  sequential; errors are still returned as JSON-RPC error frames.
+  sequential; errors are still returned as JSON-RPC error frames. Pipelining
+  requires adding an id or offset to the binary header before it can safely
+  reorder responses.
 - The maximum raw chunk is 7 MiB. One flag byte plus 7 MiB fits the 8 MiB frame.
 - `next_offset` is `offset + len(raw bytes)`.
 - The client checks whether the first payload byte is `{` before treating a
@@ -238,9 +240,11 @@ apply to the binary read path.
 
 Binary pipelining was measured on the real gateway: 1 in-flight 188.9 ms, 2
 135.1 ms, 4 126.8 ms, 8 **124.8 ms**, 15 138.3 ms. Window 8 saves **64 ms**
-against window 1 and projects to roughly **145 ms PTY**, which would meet the
-200 ms target once pipelining is wired into the TUI. It still does not approach
-50 ms. fd passing remains the option for that long-term target.
+against window 1; this is a pure UDS measurement. The ~145 ms PTY figure is a
+projection from serial 208.9 ms and does not include TUI decode, line-index, or
+rendering. Pipelining is not wired into the TUI, so the 200 ms gate is not
+closed. It still does not approach 50 ms; fd passing remains the option for
+that long-term target.
 
 The worker-count check on the previous JSON path (16/8/4) showed gateway PTY
 563.1/560.7/597.3 ms, so CPU contention does not explain a 30–50 ms gap; 16
@@ -251,8 +255,8 @@ are:
 
 - **Open 100 MB PTY < 200 ms.** Current serial binary gateway is **208.9 ms**;
   direct Rust open is **89 ms**. Binary framing and parallel indexing are
-  implemented; pipelining is projected to reach **145 ms** but is not wired into
-  the TUI yet. The serial path does not meet the target.
+  implemented; pipelining is projected to reach **145 ms**, requires a binary
+  header id/offset, and is not wired into the TUI yet. The serial path does not meet the target.
 - **Daily edit key-to-screen < 1 ms.** Current Rust-side is ~0.08 ms and local
   PTY is ~0.16–0.6 ms. Met.
 - **50 ms open remains a long-term target**, not a Phase 0.6 blocker; the

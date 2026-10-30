@@ -111,9 +111,11 @@ without document decode, page-cache warm):
 | 8 | **124.8 ms** | **8.3 ms** |
 | 15 | 138.3 ms | 9.2 ms |
 
-An 8-request window saves **64 ms** against window 1. Projected PTY open is
-roughly **145 ms**, which would meet the 200 ms Phase 0.6 open target when
-pipelining is implemented. It still does not approach 50 ms.
+An 8-request window saves **64 ms** against window 1. This table is the pure
+UDS read loop: it excludes UI decode, line-index construction, and rendering.
+The ~145 ms PTY figure is a projection from the serial 208.9 ms measurement,
+not a measured TUI result. The TUI still uses serial binary reads; pipelining
+is not wired in.
 
 Worker-count check on the previous JSON path (same fixture, direct Rust /
 gateway PTY):
@@ -144,8 +146,9 @@ it. The 3,000,000-line parallel/serial equivalence test covers the merge path.
   replaced for reads; its server encode cost (11.8 ms/chunk) and client decode
   cost (5.88 ms/chunk) no longer apply to open.
 - Binary pipelining is still useful: window 8 takes the UDS loop from 188.9 ms
-  to 124.8 ms, saving 64 ms. Projected PTY open is roughly **145 ms**, which
-  meets the 200 ms target once pipelining is wired into the TUI.
+  to 124.8 ms, saving 64 ms. Projected PTY open is roughly **145 ms**, but the
+  current binary header has no id/offset, so pipelining cannot be wired safely
+  without extending it.
 - The 50 ms open target still needs fd passing or another zero-copy path; the
   current binary frame path is not close.
 - Parallel line scanning remains necessary; it cut direct Rust open from
