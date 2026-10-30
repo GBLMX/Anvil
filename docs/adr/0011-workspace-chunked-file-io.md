@@ -101,7 +101,6 @@ Response:
 - An empty file returns `data: ""`, `next_offset: 0`, `eof: true`.
 - A non-regular file, a path escape, an offset beyond EOF, or invalid base64 is
   rejected.
-  boundary is rejected.
 
 ### 5. `sys.write_file`
 
@@ -135,12 +134,22 @@ Response:
 - `data` is standard base64 of the raw chunk bytes.
 - `offset` must equal the accumulated length for that path; otherwise the
   request fails with `conflict`.
-- The gateway creates a temporary file in the destination directory, writes
-  chunks as they arrive, flushes and `fsync`s at `eof`, then `rename`s it over
-  the destination. This preserves the existing atomic-replacement caveat: owner,
-  ACLs, xattrs, and hard links are not preserved.
+- The gateway streams chunks into a temporary file in the destination
+  directory. It does **not** accumulate the whole document in memory: a 100 MB
+  write would otherwise add a 100 MB gateway allocation on top of the chunk
+  buffers.
+- There is no per-chunk `fsync`. The gateway flushes and `fsync`s once at
+  `eof`, then `rename`s the temporary file over the destination. This preserves
+  the existing atomic-replacement caveat: owner, ACLs, xattrs, and hard links
+  are not preserved.
+- The destination parent is opened with `openat2` and `RESOLVE_BENEATH`; the
+  temporary file and final rename both use that directory fd. The final name is
+  a single path component. Rename target validation is not skipped: a target
+  parent that escapes the workspace is rejected before the temporary file is
+  created. Rename replaces the target entry itself and never follows a target
+  symlink.
 - The temporary file is removed on error, cancellation, timeout, or connection
-  close. Stale writes are removed by the gateway when the session ends.
+  close. Stale writes are removed when the connection ends.
 - Only one active write per path is allowed. A second writer fails with
   `conflict` until the first commits or aborts.
 - A write session must end with `eof: true`; abandoning it does not modify the
