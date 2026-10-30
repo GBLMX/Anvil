@@ -169,7 +169,7 @@ Measured with `/proc/<pid>/status` after the first 100 MB frame:
 The TUI footprint is unchanged from the direct path: the peak includes the
 source `String`, the `PieceTable` copy, and the line index. The gateway adds
 about 58 MB steady and 63 MB peak for 5.5 MiB chunk, base64, and JSON buffers.
-The combined steady footprint is about 255 MB.
+The combined steady footprint is about 256 MB.
 
 The two-pass parallel line scan keeps memory flat: it allocates the final
 line-start array once and writes disjoint per-worker slices, instead of keeping
