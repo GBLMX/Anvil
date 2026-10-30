@@ -52,8 +52,8 @@
 			"rootMarkers": [".git", ".omp"]
 		},
 		"taplo": {
-			"command": "taplo",
-			"args": ["lsp", "stdio"],
+			"command": "env",
+			"args": ["taplo", "lsp", "stdio"],
 			"fileTypes": [".toml"],
 			"rootMarkers": ["Cargo.toml", "deny.toml", "rust-toolchain.toml"]
 		},
