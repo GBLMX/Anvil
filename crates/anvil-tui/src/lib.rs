@@ -73,12 +73,13 @@ impl Model {
         }
     }
 
-    /// Builds a model by reading a file, using lossy conversion for invalid
-    /// UTF-8 so the first editor slice always has something to show.
+    /// Builds a model by reading a UTF-8 file.
+    ///
+    /// Invalid UTF-8 is rejected instead of being lossily replaced, because
+    /// saving a lossy view would silently corrupt the original bytes.
     pub fn open(path: impl AsRef<Path>) -> io::Result<Self> {
         let path = path.as_ref().to_path_buf();
-        let bytes = fs::read(&path)?;
-        let text = String::from_utf8_lossy(&bytes);
+        let text = fs::read_to_string(&path)?;
         Ok(Self::new(EditorState::from_text(&text), Some(path)))
     }
 
@@ -351,7 +352,14 @@ pub fn run(path: Option<PathBuf>) -> io::Result<()> {
 fn handle_event(model: &mut Model, event: Event) {
     match event {
         Event::Key(key) if key.kind == KeyEventKind::Press => handle_key(model, key),
-        Event::Paste(text) => model.insert_text(&text),
+        Event::Paste(text) => {
+            if let InputMode::Insert = model.input_mode {
+                model.insert_text(&text);
+            } else if let InputMode::CommandLine { buffer } = &mut model.input_mode {
+                buffer.push_str(&text);
+                model.dirty = true;
+            }
+        }
         Event::Resize(_, _) => model.dirty = true,
         _ => {}
     }
@@ -529,5 +537,26 @@ mod tests {
         assert!(!model.dirty);
         handle_event(&mut model, key(KeyCode::Char('j')));
         assert!(model.dirty);
+    }
+
+    #[test]
+    fn invalid_utf8_is_rejected() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("binary.bin");
+        fs::write(&path, [0xff, 0xfe]).expect("write");
+        assert!(Model::open(path).is_err());
+    }
+
+    #[test]
+    fn paste_only_inserts_in_edit_modes() {
+        let mut model = Model::new(EditorState::from_text("a"), None);
+        model.dirty = false;
+        handle_event(&mut model, Event::Paste("x".to_owned()));
+        assert_eq!(model.editor.text().slice(0..1), "a");
+        assert!(!model.dirty);
+
+        handle_event(&mut model, key(KeyCode::Char('i')));
+        handle_event(&mut model, Event::Paste("b".to_owned()));
+        assert_eq!(model.editor.text().slice(0..2), "ba");
     }
 }
