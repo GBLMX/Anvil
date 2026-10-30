@@ -16,6 +16,8 @@ snapshot layer, the `anvil-ipc` frame codec, JSON-RPC envelope, Unix socket tran
 - [Architecture](docs/architecture.md)
 - [Performance baseline](docs/performance.md)
 - [Text model benchmark](docs/benchmarks/text-model.md)
+- [Editor benchmarks](docs/benchmarks/editor.md)
+- [Line index stress](docs/benchmarks/line-index-stress.md)
 - [Phase 0.5 plan](docs/phase-0-5-plan.md)
 - [Upstream dependencies](docs/adr/0006-upstream-dependencies.md)
 - [JSON-RPC and token contract](docs/adr/0007-jsonrpc-envelope-and-capability-token.md)

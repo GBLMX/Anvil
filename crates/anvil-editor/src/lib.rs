@@ -29,7 +29,7 @@ struct EditRecord {
 }
 
 /// Mutable editor state.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct EditorState {
     text: Arc<TextDocument>,
     index: Arc<LineIndex>,
@@ -121,9 +121,45 @@ impl EditorState {
         true
     }
 
+    /// Replaces all selections using byte offsets.
+    pub fn set_selections_bytes(&mut self, selections: Vec<(usize, usize)>) -> bool {
+        let valid = selections.iter().all(|(anchor, head)| {
+            *anchor <= self.text.len_bytes()
+                && *head <= self.text.len_bytes()
+                && self.text.is_char_boundary(*anchor)
+                && self.text.is_char_boundary(*head)
+        });
+        if !valid {
+            return false;
+        }
+        self.selections = selections;
+        true
+    }
+
     /// Current selection byte offsets.
     pub fn selection_bytes(&self) -> Vec<(usize, usize)> {
         self.selections.clone()
+    }
+
+    /// Number of undo records retained.
+    pub fn undo_depth(&self) -> usize {
+        self.undo.len()
+    }
+
+    /// Approximate heap bytes retained by undo records.
+    pub fn undo_bytes(&self) -> usize {
+        self.undo
+            .iter()
+            .map(|record| {
+                record.before.len() * std::mem::size_of::<(usize, usize)>()
+                    + record.after.len() * std::mem::size_of::<(usize, usize)>()
+                    + match &record.action {
+                        EditAction::Insert { text, .. } | EditAction::Delete { text, .. } => {
+                            text.len()
+                        }
+                    }
+            })
+            .sum()
     }
 
     /// Inserts text and updates the line index and selections.
@@ -240,6 +276,22 @@ impl EditorState {
     }
 
     fn push_record(&mut self, action: EditAction, before: Vec<(usize, usize)>) {
+        if let Some(last) = self.undo.last_mut()
+            && let (
+                EditAction::Insert {
+                    at: previous_at,
+                    text: previous_text,
+                },
+                EditAction::Insert { at, text },
+            ) = (&mut last.action, &action)
+            && *previous_at + previous_text.len() == *at
+        {
+            previous_text.push_str(text);
+            last.after = self.selections.clone();
+            self.redo.clear();
+            self.revision += 1;
+            return;
+        }
         self.undo.push(EditRecord {
             before,
             after: self.selections.clone(),

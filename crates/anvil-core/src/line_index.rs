@@ -75,6 +75,27 @@ impl LineIndex {
         self.len
     }
 
+    /// Number of persistent chunks currently held.
+    pub fn chunk_count(&self) -> usize {
+        self.chunks.len()
+    }
+
+    /// Number of line starts in each chunk.
+    pub fn chunk_sizes(&self) -> Vec<usize> {
+        self.chunks.iter().map(|chunk| chunk.starts.len()).collect()
+    }
+
+    /// Asserts the chunk occupancy invariant used by the design.
+    pub fn assert_chunk_bounds(&self) {
+        for (index, chunk) in self.chunks.iter().enumerate() {
+            let size = chunk.starts.len();
+            assert!(size <= MAX_LINES, "chunk {index} has {size} lines");
+            if index + 1 < self.chunks.len() {
+                assert!(size >= MIN_LINES, "chunk {index} has only {size} lines");
+            }
+        }
+    }
+
     /// Number of logical lines. Empty text has zero lines.
     pub fn len_lines(&self) -> usize {
         self.chunks
@@ -229,9 +250,7 @@ impl LineIndex {
         let new_region_lines = local_starts.len();
         let line_delta = new_region_lines as isize - old_region_lines as isize;
 
-        let prefix = self.chunks[..first_chunk].to_vec();
-        let mut suffix = self.chunks[last_chunk + 1..].to_vec();
-        for chunk in &mut suffix {
+        for chunk in &mut self.chunks[last_chunk + 1..] {
             chunk.base = add_delta(chunk.base, delta);
             chunk.end = add_delta(chunk.end, delta);
             chunk.first_line = add_delta(chunk.first_line, line_delta);
@@ -246,12 +265,18 @@ impl LineIndex {
             new_region_end,
             self.chunks[first_chunk].first_line,
         );
-
-        self.chunks = prefix;
-        self.chunks.extend(middle);
-        self.chunks.extend(suffix);
+        let middle_needs_normalize = middle.iter().any(|chunk| chunk.starts.len() < MIN_LINES);
+        self.chunks.splice(first_chunk..=last_chunk, middle);
         self.len = new_len;
-        self.normalize();
+        if line_delta != 0 || middle_needs_normalize {
+            let needs_normalize = self.chunks.iter().enumerate().any(|(index, chunk)| {
+                chunk.starts.len() > MAX_LINES
+                    || (index + 1 < self.chunks.len() && chunk.starts.len() < MIN_LINES)
+            });
+            if needs_normalize {
+                self.normalize();
+            }
+        }
     }
 
     fn chunk_for_line(&self, line: usize) -> usize {
@@ -463,6 +488,21 @@ mod tests {
         let blank = LineIndex::from_text("\n");
         assert_eq!(blank.offset_to_line(0).unwrap().end, 0);
         assert_eq!(blank.offset_to_line(1).unwrap().end, 1);
+    }
+
+    #[test]
+    fn chunk_bounds_hold_after_edits() {
+        let mut text = String::new();
+        for _ in 0..4000 {
+            text.push_str("line\n");
+        }
+        let mut buffer = PieceTable::from_text(&text);
+        let mut index = LineIndex::from_buffer(&buffer);
+        buffer.insert(0, &"inserted\n".repeat(3000));
+        index.apply_edit(&buffer, 0..0);
+        index.assert_chunk_bounds();
+        assert!(index.chunk_count() > 1);
+        assert!(index.chunk_sizes().iter().all(|size| *size <= MAX_LINES));
     }
 
     #[test]

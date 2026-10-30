@@ -18,3 +18,7 @@ proptest = "1"
 [[bench]]
 name = "text_model"
 harness = false
+
+[[bench]]
+name = "line_index"
+harness = false
