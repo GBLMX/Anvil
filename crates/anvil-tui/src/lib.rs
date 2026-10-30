@@ -927,10 +927,20 @@ impl Model {
             };
             line.start..line.end
         };
-        let mut matches = find_matches_in(self.editor.text(), old, range);
-        if !flags.contains('g') {
-            matches.truncate(1);
-        }
+        let matches = find_matches_in(self.editor.text(), old, range);
+        let matches = if flags.contains('g') {
+            let mut non_overlapping = Vec::new();
+            let mut end = 0;
+            for start in matches {
+                if start >= end {
+                    non_overlapping.push(start);
+                    end = start + old.len();
+                }
+            }
+            non_overlapping
+        } else {
+            matches.into_iter().take(1).collect()
+        };
         if matches.is_empty() {
             self.status = "E: pattern not found".to_owned();
             self.dirty = true;
@@ -1697,6 +1707,13 @@ mod tests {
         let mut model = Model::new(EditorState::from_text("foo foo\nfoo"), None);
         model.execute_command("%s/foo/bar/g");
         assert_eq!(model.editor.text().slice(0..11), "bar bar\nbar");
+    }
+
+    #[test]
+    fn substitute_uses_non_overlapping_matches() {
+        let mut model = Model::new(EditorState::from_text("aaa"), None);
+        model.execute_command("%s/aa/X/g");
+        assert_eq!(model.editor.text().slice(0..2), "Xa");
     }
 
     #[test]
