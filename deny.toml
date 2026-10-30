@@ -1,0 +1,23 @@
+# Executable form of ADR-0006's dependency policy.
+#
+# NCSA is allowed because the selected libfuzzer-sys dev dependency is
+# `(MIT OR Apache-2.0) AND NCSA`.
+
+[licenses]
+allow = [
+  "MIT",
+  "Apache-2.0",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "ISC",
+  "Unicode-DFS-2016",
+  "NCSA",
+]
+confidence-threshold = 0.9
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+
+[advisories]
+yanked = "deny"

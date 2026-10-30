@@ -87,13 +87,17 @@ prerequisites, not system runtime libraries.
 1. Dependencies are pinned in `Cargo.lock` / `go.sum`; ranges in manifests are
    upper-bounded by the versions above.
 2. `cargo-deny` allowlist: MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC,
-   Unicode-DFS-2016. Anything else requires an ADR.
-3. Native crates must vendor their C source (`mlua` Luau, `rquickjs`
+   Unicode-DFS-2016, NCSA. `NCSA` is required by the selected
+   `libfuzzer-sys` dev dependency (`(MIT OR Apache-2.0) AND NCSA`). Anything
+   else requires an ADR.
+3. `deny.toml` is the executable form of this allowlist; CI runs
+   `cargo deny check` when `Cargo.toml` exists.
+4. Native crates must vendor their C source (`mlua` Luau, `rquickjs`
    QuickJS-NG); do not link a system Lua/QuickJS.
-4. No new native dependency without a security and license review.
-5. Every dependency that parses untrusted input needs a fuzz target or a
+5. No new native dependency without a security and license review.
+6. Every dependency that parses untrusted input needs a fuzz target or a
    documented reason why not.
-6. A direct dependency upgrade is a normal change; a version family jump
+7. A direct dependency upgrade is a normal change; a version family jump
    (0.x -> 0.y, semver-incompatible) needs a changelog entry and a test run.
 
 ## Consequences
