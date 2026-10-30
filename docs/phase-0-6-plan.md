@@ -28,20 +28,20 @@ Implemented:
   and config-loading flags;
 - process-group supervision with timeout, cancellation, descendant kill,
   combined output cap, `Pdeathsig`, and `WaitDelay`;
-- `RLIMIT_NPROC` reserves 64 tasks above the user's current task count;
+- per-sandbox cgroup v2 `pids.max` when `ANVIL_CGROUP_PATH` is supplied,
+  otherwise `RLIMIT_NPROC` reserves 64 tasks above the user's current count;
 - extra descriptors are marked close-on-exec before applying the sandbox;
 - tests for outside-file/symlink and workspace-write denial, concurrent
   symlink-swap races, non-allowlisted exec (including via `ld.so`),
   socket/permission denial, allowlist escape, clone3 fallback, tool startup,
-  RLIMIT_NPROC verification, timeout descendant kill, output cap, fd cleanup,
-  and exit-code capture.
+  cgroup file writes, RLIMIT_NPROC verification, timeout descendant kill,
+  output cap, fd cleanup, and exit-code capture.
 
 Open:
 
-- gateway must resolve the tool fd/policy and pass a bounded request;
-- CI needs an explicit Landlock capability probe and skip path;
-- an exact per-call cgroup `pids.max` remains a follow-up; `RLIMIT_NPROC` is
-  user-wide and supplies bounded headroom rather than an exact per-call count.
+- gateway must resolve the tool fd/policy, create/clean up
+  `ANVIL_CGROUP_PATH`, and pass a bounded request;
+- CI needs an explicit Landlock capability probe and skip path.
 
 ## 2. Fetch/SSRF
 

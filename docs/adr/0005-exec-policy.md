@@ -55,9 +55,11 @@ safe:
     deny an escape even if a symlink is swapped after argument validation.
 11. Limits: max runtime, max stdout+stderr bytes, max process count, max file
     descriptors. `Run` kills the whole process group; the runner marks all
-    descriptors above stderr close-on-exec before exec. `RLIMIT_NPROC` reserves
-    64 tasks above the current user task count; an exact per-call cgroup
-    `pids.max` remains a follow-up.
+    descriptors above stderr close-on-exec before exec. When the gateway
+    supplies `ANVIL_CGROUP_PATH`, the runner sets `pids.max=64` and moves itself
+    into that cgroup. Otherwise `RLIMIT_NPROC` reserves 64 tasks above the
+    current user task count as a coarse fallback; the gateway owns cgroup
+    creation and cleanup.
 12. `sys.exec` is unavailable when the runner, policy, or sandbox setup is
     incomplete. Deny by default.
 

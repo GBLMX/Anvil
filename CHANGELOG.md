@@ -11,9 +11,10 @@ All notable changes to Anvil are recorded here. The format follows
 - Phase 0.6 exec sandbox foundation: `anvil-exec-runner`, Landlock
   read-only workspace/runtime rules with per-tool and ELF-interpreter execute
   grants, a positive seccomp allowlist with `clone`/`clone3` and
-  executable-mapping filtering, OS-thread locking for per-thread confinement,
-  `rg`/`fd` argv policy parsers, `RLIMIT_NPROC` task headroom, and a supervised
-  process-group runner for timeout and output caps.
+  executable-mapping filtering, OS-thread locking and identity checks for
+  per-thread confinement, `rg`/`fd` argv policy parsers, optional cgroup v2
+  `pids.max` with `RLIMIT_NPROC` fallback, and a supervised process-group runner
+  for timeout and output caps.
 
 - Phase 0.5 complete: PieceTable production selection, cursor/line-index
   primitives, editor snapshots, selection-aware undo, and the locked-core

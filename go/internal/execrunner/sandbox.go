@@ -75,6 +75,7 @@ func Apply(workspace string, runtimePaths []string) error {
 // Runtime directories stay read-only, so another binary cannot be exec'd.
 // It locks the calling OS thread; the caller must exec on the same goroutine.
 func ApplyTool(workspace, tool string, runtimePaths []string) error {
+	threadID := unix.Gettid()
 	runtime.LockOSThread()
 	abi, err := LandlockABI()
 	if err != nil {
@@ -148,6 +149,9 @@ func ApplyTool(workspace, tool string, runtimePaths []string) error {
 	if err := applySeccomp(); err != nil {
 		return fmt.Errorf("seccomp: %w", err)
 	}
+	if unix.Gettid() != threadID {
+		return errors.New("sandbox thread migrated during setup")
+	}
 	return nil
 }
 
@@ -185,6 +189,25 @@ func elfInterpreter(path string) (string, error) {
 // An absolute value small enough for a one-shot tool can be below the user's
 // existing process count and would break the Go runtime and the tool.
 func limitTaskCount(headroom uint64) error {
+	if path := os.Getenv("ANVIL_CGROUP_PATH"); path != "" {
+		if err := applyCgroupTaskLimit(path, headroom); err == nil {
+			return nil
+		}
+	}
+	return limitNproc(headroom)
+}
+
+func applyCgroupTaskLimit(dir string, maxTasks uint64) error {
+	if err := os.WriteFile(filepath.Join(dir, "pids.max"), []byte(strconv.FormatUint(maxTasks, 10)), 0o644); err != nil {
+		return fmt.Errorf("write cgroup pids.max: %w", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "cgroup.procs"), []byte(strconv.Itoa(os.Getpid())), 0o644); err != nil {
+		return fmt.Errorf("write cgroup.procs: %w", err)
+	}
+	return nil
+}
+
+func limitNproc(headroom uint64) error {
 	tasks, err := countUserTasks()
 	if err != nil {
 		return err
