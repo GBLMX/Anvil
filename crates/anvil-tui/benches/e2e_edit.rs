@@ -33,7 +33,7 @@ fn main() {
     fs::write(&large_path, make_text(100, SEARCH_MARKERS)).expect("write large fixture");
 
     rust_side(&small_path, &large_path);
-    pty_side(&small_path, &large_path);
+    pty_side(temp.path(), &small_path, &large_path);
 }
 
 fn rust_side(small_path: &Path, large_path: &Path) {
@@ -91,7 +91,7 @@ fn rust_side(small_path: &Path, large_path: &Path) {
     report("rust", "search_100MB", &search_times);
 }
 
-fn pty_side(small_path: &Path, large_path: &Path) {
+fn pty_side(workspace: &Path, small_path: &Path, large_path: &Path) {
     let bin = anvil_bin();
     let marker = large_path
         .file_name()
@@ -101,7 +101,7 @@ fn pty_side(small_path: &Path, large_path: &Path) {
     let mut startup_times = Vec::new();
     {
         let start = Instant::now();
-        let mut session = PtySession::spawn(&bin, large_path).expect("spawn 100MB");
+        let mut session = PtySession::spawn(&bin, workspace, large_path).expect("spawn 100MB");
         session
             .wait_for(&marker, Duration::from_secs(30))
             .expect("100MB first frame");
@@ -111,7 +111,7 @@ fn pty_side(small_path: &Path, large_path: &Path) {
 
     let mut key_times = Vec::new();
     {
-        let mut session = PtySession::spawn(&bin, small_path).expect("spawn small");
+        let mut session = PtySession::spawn(&bin, workspace, small_path).expect("spawn small");
         session
             .wait_for(
                 small_path
@@ -137,7 +137,7 @@ fn pty_side(small_path: &Path, large_path: &Path) {
 
     let mut scroll_times = Vec::new();
     {
-        let mut session = PtySession::spawn(&bin, large_path).expect("spawn 100MB");
+        let mut session = PtySession::spawn(&bin, workspace, large_path).expect("spawn 100MB");
         session
             .wait_for(&marker, Duration::from_secs(30))
             .expect("100MB first frame");
@@ -159,7 +159,7 @@ fn pty_side(small_path: &Path, large_path: &Path) {
     let mut search_first = None;
     let mut search_times = Vec::new();
     {
-        let mut session = PtySession::spawn(&bin, large_path).expect("spawn 100MB");
+        let mut session = PtySession::spawn(&bin, workspace, large_path).expect("spawn 100MB");
         session
             .wait_for(&marker, Duration::from_secs(30))
             .expect("100MB first frame");
@@ -257,7 +257,7 @@ struct PtySession {
 }
 
 impl PtySession {
-    fn spawn(bin: &Path, file: &Path) -> io::Result<Self> {
+    fn spawn(bin: &Path, workspace: &Path, file: &Path) -> io::Result<Self> {
         let winsize = Winsize {
             ws_row: ROWS,
             ws_col: COLS,
@@ -270,9 +270,12 @@ impl PtySession {
             ForkptyResult::Child => {
                 let bin = CString::new(bin.as_os_str().as_encoded_bytes())
                     .expect("binary path contains NUL");
+                let workspace = CString::new(workspace.as_os_str().as_encoded_bytes())
+                    .expect("workspace path contains NUL");
                 let file = CString::new(file.as_os_str().as_encoded_bytes())
                     .expect("file path contains NUL");
-                let args = [bin.clone(), file];
+                let workspace_flag = CString::new("--workspace").expect("literal");
+                let args = [bin.clone(), workspace_flag, workspace, file];
                 let _ = execvp(&bin, &args);
                 std::process::exit(127);
             }

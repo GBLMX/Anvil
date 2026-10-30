@@ -13,19 +13,26 @@ Rust-side numbers are `Model::dispatch` + `ensure_cursor_visible` +
 `Terminal<TestBackend>::draw`. They exclude terminal output, kernel PTY
 buffers, and terminal parsing. The benchmark uses the release profile.
 
-PTY numbers use `forkpty`, launch `target/release/anvil`, and stop at the
-first output byte after the input. They include process scheduling, PTY
-transport, and `anvil`'s update + draw, but not a real terminal emulator's
-parsing or painting. PTY search measurements drain the typed query before
-starting the timer, so they measure Enter-to-first-output, not query echo.
-The first search is reported separately from the following ten searches.
+PTY numbers use `forkpty`, launch `target/release/anvil` with `--workspace`,
+and stop at the first output byte after the input. The TUI starts its sibling
+`target/release/anvil-gateway`; the numbers therefore include gateway startup,
+chunked UDS transfer, and `anvil`'s update + draw, but not a real terminal
+emulator's parsing or painting. PTY search measurements drain the typed query
+before starting the timer, so they measure Enter-to-first-output, not query
+echo. The first search is reported separately from the following ten searches.
 
 Run:
 
 cargo bench -p anvil-tui --bench e2e_edit --features e2e-bench
 ```
 
-## Results
+Build the gateway sibling before the PTY run:
+
+```text
+go build -o target/release/anvil-gateway ./go/cmd/anvil-gateway
+```
+
+## Results (direct `std::fs`, pre-gateway)
 
 | Layer | Scenario | p50 | p95 | p99 | n |
 |---|---|---:|---:|---:|---:|
@@ -40,31 +47,52 @@ cargo bench -p anvil-tui --bench e2e_edit --features e2e-bench
 | PTY | first `/` search, 100 MB | 219.0 ms | 219.0 ms | 219.0 ms | 1 |
 | PTY | subsequent `/` search, 100 MB | 221.3 ms | 239.1 ms | 239.1 ms | 10 |
 
+## Gateway path (2026-10-31)
+
+Same 100 MB fixture, release TUI, sibling release `anvil-gateway`, 4 MiB
+chunks (25 chunks / 104,857,596 bytes):
+
+| Layer | Scenario | p50 | p95 | p99 | n |
+|---|---|---:|---:|---:|---:|
+| Rust | open 100 MB, first frame | 176.6 ms | 176.6 ms | 176.6 ms | 1 |
+| PTY + gateway | open 100 MB, first frame | 732.0 ms | 732.0 ms | 732.0 ms | 1 |
+| PTY + gateway | key to first output, 1 MB | 590.2 µs | 1034.6 µs | 1034.6 µs | 20 |
+| PTY + gateway | scroll 100 MB, one `j` | 266.2 µs | 450.4 µs | 450.4 µs | 20 |
+| PTY + gateway | first `/` search, 100 MB | 231.0 ms | 231.0 ms | 231.0 ms | 1 |
+| PTY + gateway | subsequent `/` search, 100 MB | 226.9 ms | 256.3 ms | 256.3 ms | 10 |
+| Gateway | per 4 MiB read chunk | 21.7 ms avg | 30.5 ms max | 16.4 ms min | 25 |
+
+Gateway ready (spawn + handshake): 3.38 ms. Total UDS read loop: 661.3 ms.
+
 ## Interpretation
 
-- The 100 MB open is dominated by building the line index and first frame:
-  174 ms Rust-side, 210 ms including PTY startup.
-- Scrolling is cheap: about 74 µs Rust-side and 104 µs to first PTY output.
-- Search is linear in document size: about 200 ms for 100 MB. PTY overhead is
-  negligible when the search scan dominates.
-- PTY overhead is **not** a fixed 2–8 ms on this machine: key-to-first-output
-  adds roughly 147 µs at p50 and 429 µs at p95 over the Rust-side number.
-  A real terminal emulator will add its own parsing and painting cost on top.
-- These numbers exclude the Go gateway, LSP, terminal emulator, and idle CPU.
+- Direct Rust 100 MB open is 174–177 ms; direct PTY startup is 210 ms.
+  The gateway path is **732 ms PTY**, about **+522 ms** over the direct PTY
+  baseline and roughly 3.5x. It **does not meet the ADR-0011 50 ms gate**.
+- The transfer loop, not document construction, is the dominant added cost:
+  25 chunks at 21.7 ms average. Four MiB is the largest safe payload for the
+  8 MiB JSON frame after base64 expansion.
+- Chunk size is not a sufficient fix. A 5.5 MiB chunk would only remove about
+  five round trips; 7 MiB raw exceeds the 8 MiB frame after base64. Pipelining
+  or shared-memory/fd transfer is required before claiming the 50 ms gate.
+- Search remains dominated by the in-process scan, so the gateway barely
+  changes it. Key-to-screen and scroll are within local PTY noise.
+- These numbers include the Go gateway, but not LSP, terminal emulator, or idle
+  CPU.
 
-## Memory (direct std::fs, not gateway)
+## Memory (gateway path, 100 MB)
 
 Measured with `/proc/<pid>/status` after the first 100 MB frame:
 
-| Metric | Value |
-|---|---:|
-| VmRSS after first frame | 198 MB |
-| VmHWM (peak) | 300 MB |
+| Process | VmRSS | VmHWM |
+|---|---:|---:|
+| TUI | 198 MB | 300 MB |
+| `anvil-gateway` child | 38 MB | 48 MB |
 
-The peak includes the source `String`, the `PieceTable` copy, and the line
-index. The steady RSS is lower after the source string is dropped, but the
-text and index remain resident. This was measured before gateway integration,
-so it does not include UDS buffers or base64 decode buffers.
+The TUI footprint is unchanged from the direct path: the peak includes the
+source `String`, the `PieceTable` copy, and the line index. The gateway adds
+about 38 MB steady and 48 MB peak for chunk, base64, and JSON buffers. The
+combined steady footprint is about 236 MB.
 
 A `line_starts` preallocation experiment alone did not change VmHWM. The win
 came from building `LineIndex` directly from the source `&str` instead of
@@ -80,9 +108,10 @@ temporary file rather than accumulating the whole document.
 
 ## Boundaries
 
-- No Go gateway, LSP, or syntax highlighting is in this loop. The 76.5 µs
-  key-to-screen number is the core edit/render path before Tree-sitter or
-  span styling is added.
+- The Go gateway is included in PTY + gateway and per-chunk rows, but not in
+  Rust-side direct rows. LSP and syntax highlighting are not in this loop. The
+  76.5 µs key-to-screen number is the core edit/render path before Tree-sitter
+  or span styling is added.
 - Tree-sitter highlighting will add highlight computation and styled span
   generation on the draw path. The core edit path should remain in the same
   microsecond range, but the full key-to-paint number will grow.

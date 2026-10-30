@@ -207,11 +207,20 @@ report:
 - Per-chunk UDS round-trip latency.
 - Total chunk count and total bytes.
 
+Measured 2026-10-31 on the same 100 MB fixture: gateway-ready 3.38 ms,
+25 chunks, 104,857,596 bytes, 21.7 ms average per chunk, 661.3 ms total UDS
+read loop, and **732.0 ms PTY first output**. That is **+522 ms** over the
+direct PTY baseline; the gate **fails**. Four MiB is the practical maximum for
+an 8 MiB JSON frame after base64 expansion; 7 MiB raw cannot fit. A 5.5 MiB
+chunk removes only five round trips. The next performance work is pipelining
+or shared-memory/fd transfer, not silently raising the frame limit or dropping
+the gate.
+
 The initial acceptable increment is **at most 50 ms** over the direct-read
 baseline. A 20 ms target may be physically unrealistic with 25 round trips; do
 not shrink chunking to meet a target. If the increment exceeds 50 ms, evaluate
-a larger frame-safe chunk (up to 7 MiB) or shared-memory transfer before
-changing the security boundary.
+a larger frame-safe chunk or shared-memory transfer before changing the
+security boundary.
 
 ## Consequences
 
