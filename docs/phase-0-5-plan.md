@@ -1,6 +1,6 @@
 # Phase 0.5 Plan: Core Evidence and Editing Primitives
 
-Status: proposed subphase before the remaining Phase 0 security work.
+Status: approved for execution; 6-week timebox. M1 is complete.
 
 ## 1. Entry state
 
@@ -16,8 +16,18 @@ Phase 0 is not complete. The current baseline is:
 - CI: Rust, Go, docs, TypeScript binding checks, and generated-artifact
   freshness.
 
-The text-model benchmark currently proves that the trait boundary works. It
-does not prove which backend should enter production.
+The current `text-bench` is a smoke test: it proves the trait boundary works but
+is not decision-grade. It does not prove which backend should enter production.
+
+### Phase 0 map
+
+1. **0.1 Documents and contracts**: complete.
+2. **0.5 Core evidence and editing primitives**: this plan.
+3. **0.6 Security work**: exec/fetch/plugin-host isolation, SSRF, and gateway.
+4. **0.7 TUI minimum editor**: first-frame measurement and the cold-start gate.
+
+The subphases are sequential for exit criteria, but API-contract alignment may
+run in parallel when it does not change core semantics.
 
 ## 2. Goal
 
@@ -92,11 +102,13 @@ For 1 MB, 10 MB, and 100 MB:
 - large deletes spanning multiple lines;
 - `len_lines` and line lookup;
 - viewport extraction without full-document copies;
-- undo/redo after the command layer exists;
-- snapshot/`Arc` behavior after the actor layer exists;
 - one-line 100 MB;
 - Unicode and CRLF/BOM cases;
 - peak RSS, using a Linux `/proc/self/status` probe or `getrusage`.
+
+Undo/redo and snapshot benchmarks run after M4 creates the command/actor layers.
+They supplement M3; they do not block it. Snapshot correctness before M4 is a
+structural check only (no full-document copy), not a performance claim.
 
 ### Decision framework
 
@@ -105,17 +117,24 @@ results.
 
 Required content:
 
-- hard gates (correctness, no O(n) per-frame line count, 100 MB open and
-  viewport budgets, no full-document copy per snapshot);
+- hard gates: correctness, `len_lines` and line lookup O(1) or O(log n) on the
+  selected backend, 100 MB open/viewport budgets, and no full-document copy per
+  snapshot;
 - weighted criteria:
   - random-edit p99: 40%
   - line lookup and viewport: 25%
   - memory/RSS: 20%
   - snapshot/undo: 15%;
-- tie-break: Rope or piece table wins over Gap unless Gap strictly wins every
-  hard gate and the weighted score;
-- rules for declaring a benchmark invalid (insufficient samples, machine
-  anomaly, edit trace not representative).
+- weight provenance: the split is a v1 engineering prior based on interactive
+  editing frequency, not measured user telemetry. ADR-0009 records that
+  assumption and includes a ±10% sensitivity check; if the winner changes, add
+  workloads rather than accept the prior;
+- tie-break: Rope or piece table wins only when the weighted score is within 5%;
+  Gap wins when it exceeds the score by more than 5% and passes every hard gate;
+- invalid-run rule: repeat any case whose p99 coefficient of variation exceeds
+  20%; three consecutive invalid runs mark the machine unsuitable;
+- sign-off: one owner signature and one reviewer signature (owner-only
+  self-approval during Phase 0.5, with a second reviewer from Phase 1 onward).
 
 The percentages are decision inputs, not performance claims. They must be
 fixed before looking at results.
@@ -128,6 +147,8 @@ fixed before looking at results.
 - The decision ADR is accepted before production code is switched.
 - Only the selected backend is enabled by default; other backends are
   feature-gated or benchmark-only.
+- The decision baseline is saved and a `bench-regression` CI job compares
+  against it; p99 regression above 10% fails the job.
 
 ## 6. Workstream C: Core editing primitives
 
@@ -139,6 +160,9 @@ fixed before looking at results.
   `unicode-segmentation` and `unicode-width` if core owns it.
 - Define `offset_to_line` and `line_to_offset` ownership; do not leave line
   indexing implicit.
+- ADR-0010 must answer: whether `EditorView` is built by core or TUI; whether
+  `unicode-*` lives in core or a separate crate if core builds it; and whether
+  TUI snapshots carry byte offsets only or the full three-column position.
 
 ### Commands, undo, and revision
 
@@ -170,8 +194,10 @@ Only changes required by the core slice:
   methods in this phase.
 - Keep `ApiError` mapping aligned with ADR-0007.
 - Regenerate TS/Schema/Lua artifacts and pass the freshness gate.
-- Do not add `set_selection` until the cursor/position ownership decision is
-  accepted.
+- Method constants, error alignment, and regeneration may run in parallel with
+  M1–M3 as long as they do not change core semantics.
+- `set_selection` and cursor-related API additions wait until M4 accepts
+  ADR-0010.
 
 ## 8. Milestones
 
@@ -193,11 +219,12 @@ Only changes required by the core slice:
 - criterion harness;
 - workload and RSS coverage;
 - deterministic edit traces;
-- benchmark report.
+- benchmark report;
+- baseline saved for PR regression checks.
 
 ### M3: Decision gate
 
-- ADR-0009 accepted;
+- ADR-0009 accepted and signed off by owner + reviewer;
 - one production backend selected;
 - other backends benchmark-only.
 
@@ -211,7 +238,8 @@ Only changes required by the core slice:
 ### M5: Phase 0.5 exit
 
 - all gates above pass;
-- no TODO/placeholder modules;
+- no `todo!()`, `unimplemented!()`, empty command bodies, or placeholder
+  modules;
 - worktree clean;
 - CI green.
 
@@ -226,6 +254,9 @@ Only changes required by the core slice:
 | Cursor/revision ownership remains ambiguous | Resolve with ADR-0010 before implementation |
 | Decision criteria are invented after results | Freeze ADR-0009 first |
 | Benchmark machine noise | Warmup, 30+ samples, record environment, allow invalid-run rule |
+| Scope grows into all ten API methods | Keep contract changes to the two existing methods |
+| Proptest fixes invalidate the benchmark | Run M2 only after M1 is stable |
+| Six-week timebox expires | Drop ADR research: default cursor ownership to core and snapshot to structural validation |
 
 ## 10. Out of scope for this plan
 
