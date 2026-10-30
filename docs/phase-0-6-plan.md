@@ -89,7 +89,8 @@ Security boundaries:
 Open:
 
 - replace the bootstrap `-token-sha256` flag with editor control-socket
-  registration and inherited-fd token delivery;
+  registration and inherited-fd token delivery; client must pin the gateway
+  pid/start-time so a stale-socket replacement cannot impersonate it;
 - add fetch/SSRF and gateway audit logging;
 - wire per-session cgroup creation/cleanup into `Run`;
 - add real-runner gateway integration coverage to CI.

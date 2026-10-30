@@ -232,6 +232,21 @@ return a transport error to the local caller.
 - Oversized notifications close the connection rather than allocating without
   bound.
 
+### 8. Residual Phase 0.6 risks
+
+- A crashed gateway can leave a stale socket. A same-UID process could unlink it
+  and bind a fake server; client-side `SO_PEERCRED` alone accepts the same UID.
+  Control-socket registration must pin the gateway pid/start-time, and the
+  client must verify it before trusting a reconnect.
+- `-token-sha256` is a verifier, but it is still exposed in `ps` and
+  `/proc/<pid>/cmdline`. The 32-byte token remains secret; the bootstrap flag
+  is temporary and must be replaced by inherited-fd delivery.
+- Connection close cancels an in-flight `sys.exec` through `Run`: the runner
+  process group receives SIGKILL and `Run` waits for the leader. If the process
+  already exited, only the unsent response is lost; no child is left behind.
+  A gateway crash is still handled by `Pdeathsig`/process-group cleanup and must
+  be covered by the session owner.
+
 ## Consequences
 
 Positive:
