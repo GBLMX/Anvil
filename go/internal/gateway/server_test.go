@@ -577,3 +577,53 @@ func TestSysReadFileBinary(t *testing.T) {
 		t.Fatal("binary frame did not set eof")
 	}
 }
+
+func TestSysWriteFileBinary(t *testing.T) {
+	workspace := t.TempDir()
+	socket := startGatewayAt(t, workspace, []string{"fs.write:**"})
+	conn := dialGateway(t, socket)
+	if response := sendRequest(t, conn, "hello-1", "session.hello", helloRequestParams(testToken)); response.Error != nil {
+		t.Fatalf("handshake error: %+v", response.Error)
+	}
+	body, err := json.Marshal(map[string]interface{}{
+		"jsonrpc": "2.0",
+		"id":      "write-binary",
+		"method":  "sys.write_file",
+		"params": map[string]interface{}{
+			"path":   "file.txt",
+			"offset": 0,
+			"eof":    true,
+			"binary": true,
+			"seq":    3,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := writeFrame(conn, body); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeFrame(conn, []byte("binary-write")); err != nil {
+		t.Fatal(err)
+	}
+	frame, err := readFrame(conn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(frame) != 17 {
+		t.Fatalf("binary response length = %d", len(frame))
+	}
+	if binary.BigEndian.Uint64(frame[1:9]) != 3 {
+		t.Fatalf("seq = %d", binary.BigEndian.Uint64(frame[1:9]))
+	}
+	if binary.BigEndian.Uint64(frame[9:17]) != uint64(len("binary-write")) {
+		t.Fatalf("next = %d", binary.BigEndian.Uint64(frame[9:17]))
+	}
+	got, err := os.ReadFile(filepath.Join(workspace, "file.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "binary-write" {
+		t.Fatalf("file = %q", got)
+	}
+}

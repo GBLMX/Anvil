@@ -38,7 +38,8 @@ const (
 	// still fits the 8 MiB frame.
 	maxBinaryReadChunk = 7 << 20
 	// maxWriteChunk is the maximum file bytes accepted by one sys.write_file.
-	maxWriteChunk = maxReadChunk
+	maxWriteChunk       = maxReadChunk
+	maxBinaryWriteChunk = 7 << 20
 	// Protocol is the v1 JSON-RPC protocol name.
 	Protocol = "anvil-jsonrpc-1"
 	// APIVersion is the public API version.
@@ -245,6 +246,12 @@ type writeParams struct {
 	Offset int64  `json:"offset"`
 	Data   string `json:"data"`
 	EOF    *bool  `json:"eof"`
+	Binary bool   `json:"binary"`
+	Seq    uint64 `json:"seq"`
+}
+
+type binaryWriteResult struct {
+	payload []byte
 }
 
 type writeFileResult struct {
@@ -311,6 +318,32 @@ func (s *Server) handle(serverCtx context.Context, conn net.Conn) {
 			_ = writeError(conn, req.ID, -32600, "invalid request")
 			writeMu.Unlock()
 			continue
+		}
+		if req.Method == "sys.write_file" {
+			var params writeParams
+			if json.Unmarshal(req.Params, &params) == nil && params.Binary {
+				data, err := readFrame(conn)
+				if err != nil {
+					cancel()
+					break
+				}
+				requests.Add(1)
+				go func(req request, data []byte) {
+					defer requests.Done()
+					result, rpcErr := s.writeFileBinary(req, state, data)
+					writeMu.Lock()
+					defer writeMu.Unlock()
+					if rpcErr != nil {
+						_ = writeError(conn, req.ID, rpcErr.Code, rpcErr.Message)
+						return
+					}
+					if binary, ok := result.(binaryWriteResult); ok {
+						_ = writeFrame(conn, binary.payload)
+						return
+					}
+				}(req, data)
+				continue
+			}
 		}
 		requests.Add(1)
 		go func(req request) {
@@ -494,6 +527,72 @@ func (s *Server) readFile(req request, state *connectionState) (interface{}, *rp
 		NextOffset: next,
 		EOF:        eof,
 	}, nil
+}
+
+func (s *Server) writeFileBinary(req request, state *connectionState, data []byte) (interface{}, *rpcError) {
+	var params writeParams
+	if err := decodeParams(req.Params, &params); err != nil {
+		return nil, &rpcError{Code: -32602, Message: "invalid params"}
+	}
+	if params.Offset < 0 || params.EOF == nil || !params.Binary || len(data) > maxBinaryWriteChunk {
+		return nil, &rpcError{Code: -32602, Message: "invalid params"}
+	}
+	if len(data) == 0 && !*params.EOF {
+		return nil, &rpcError{Code: -32602, Message: "invalid params"}
+	}
+	path, err := workspacePath(params.Path)
+	if err != nil {
+		return nil, &rpcError{Code: -32002, Message: "policy denied"}
+	}
+	if rpcErr := s.pathPermissionError(state, "fs.write", path); rpcErr != nil {
+		return nil, rpcErr
+	}
+	if s.root == nil {
+		return nil, &rpcError{Code: -32008, Message: "file service unavailable"}
+	}
+	state.writesMu.Lock()
+	defer state.writesMu.Unlock()
+	pending := state.writes[path]
+	if pending == nil {
+		if params.Offset != 0 {
+			return nil, &rpcError{Code: -32009, Message: "write offset conflict"}
+		}
+		target, err := s.root.CreateWrite(path)
+		if err != nil {
+			code := -32008
+			if errors.Is(err, fsroot.ErrInvalidPath) {
+				code = -32002
+			} else if errors.Is(err, os.ErrNotExist) {
+				code = -32007
+			}
+			return nil, &rpcError{Code: code, Message: "write unavailable"}
+		}
+		pending = &pendingWrite{target: target}
+		state.writes[path] = pending
+	}
+	if params.Offset != pending.offset {
+		return nil, &rpcError{Code: -32009, Message: "write offset conflict"}
+	}
+	if _, err := pending.target.Write(data); err != nil {
+		pending.target.Abort()
+		delete(state.writes, path)
+		return nil, &rpcError{Code: -32008, Message: "write unavailable"}
+	}
+	pending.offset += int64(len(data))
+	if *params.EOF {
+		if err := pending.target.Commit(); err != nil {
+			delete(state.writes, path)
+			return nil, &rpcError{Code: -32008, Message: "write unavailable"}
+		}
+		delete(state.writes, path)
+	}
+	payload := make([]byte, 17)
+	if *params.EOF {
+		payload[0] = 1
+	}
+	binary.BigEndian.PutUint64(payload[1:9], params.Seq)
+	binary.BigEndian.PutUint64(payload[9:17], uint64(pending.offset))
+	return binaryWriteResult{payload: payload}, nil
 }
 
 func (s *Server) writeFile(req request, state *connectionState) (interface{}, *rpcError) {

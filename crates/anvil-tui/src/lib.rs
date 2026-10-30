@@ -226,7 +226,7 @@ impl Model {
             .as_mut()
             .ok_or_else(|| "gateway unavailable".to_owned())?;
         gateway
-            .write_all(&relative, text.as_bytes())
+            .write_all_binary(&relative, text.as_bytes())
             .map_err(|error| error.to_string())
     }
 

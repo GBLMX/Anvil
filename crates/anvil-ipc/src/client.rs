@@ -322,6 +322,47 @@ impl GatewayClient {
         Ok(data)
     }
 
+    /// Write a complete file using binary data frames.
+    pub fn write_all_binary(&mut self, path: &str, data: &[u8]) -> Result<(), ClientError> {
+        if data.is_empty() {
+            return self.write_all(path, data);
+        }
+        let chunk_count = data.len().div_ceil(BINARY_READ_CHUNK);
+        for (index, chunk) in data.chunks(BINARY_READ_CHUNK).enumerate() {
+            let offset = (index * BINARY_READ_CHUNK) as u64;
+            let seq = index as u64;
+            let eof = index + 1 == chunk_count;
+            let id = self.send_request(
+                "sys.write_file",
+                serde_json::json!({
+                    "path": path,
+                    "offset": offset,
+                    "eof": eof,
+                    "binary": true,
+                    "seq": seq,
+                }),
+            )?;
+            self.connection.send(chunk)?;
+            let frame = self
+                .connection
+                .recv()?
+                .ok_or(ClientError::Protocol("gateway closed"))?;
+            if frame.first() == Some(&b'{') {
+                parse_response(&frame, &id)?;
+                return Err(ClientError::Protocol("binary write response expected"));
+            }
+            if frame.len() != 17 {
+                return Err(ClientError::Protocol("short binary write response"));
+            }
+            let frame_seq = u64::from_be_bytes(frame[1..9].try_into().expect("seq"));
+            let next_offset = u64::from_be_bytes(frame[9..17].try_into().expect("offset"));
+            if frame_seq != seq || next_offset != offset + chunk.len() as u64 {
+                return Err(ClientError::Protocol("binary write mismatch"));
+            }
+        }
+        Ok(())
+    }
+
     /// Read one raw binary chunk with sequence zero.
     pub fn read_file_binary(
         &mut self,

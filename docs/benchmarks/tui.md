@@ -173,6 +173,19 @@ long-term target requiring delayed/partial indexing, not just fd passing.
 - These numbers include the Go gateway, but not LSP, terminal emulator, or idle
   CPU.
 
+## Write path (100 MB)
+
+Binary write control + data frames, serial chunks; workspace on ext4, page cache
+warm. Timer from Enter on `:w` to the `written` status:
+
+| Filesystem | Save to written |
+|---|---:|
+| `/tmp` tmpfs | 5.8 ms |
+| ext4 workspace | **22.2 ms** |
+
+The 200 ms save acceptance is met with serial binary writes; 4-way write
+pipelining is not needed for this fixture. `fsync` is included at `eof`.
+
 ## Memory (gateway path, 100 MB)
 
 Measured with `/proc/<pid>/status` after the first 100 MB frame:
