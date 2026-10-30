@@ -26,7 +26,8 @@ use ratatui::{
 
 const HELP_TEXT: &str = include_str!("help.txt");
 
-struct SavedBuffer {
+#[derive(Clone)]
+struct Buffer {
     editor: EditorState,
     path: Option<PathBuf>,
     cursor: usize,
@@ -76,7 +77,11 @@ pub struct Model {
     /// Last substring search.
     search_query: String,
     /// Buffer replaced by the read-only help page.
-    help_back: Option<SavedBuffer>,
+    help_back: Option<Buffer>,
+    /// All open buffers, including the active one after the first switch.
+    buffers: Vec<Buffer>,
+    /// Active buffer index.
+    active: usize,
 }
 
 impl Model {
@@ -96,6 +101,8 @@ impl Model {
             pending: None,
             search_query: String::new(),
             help_back: None,
+            buffers: Vec::new(),
+            active: 0,
         }
     }
 
@@ -107,6 +114,131 @@ impl Model {
         let path = path.as_ref().to_path_buf();
         let text = fs::read_to_string(&path)?;
         Ok(Self::new(EditorState::from_text(&text), Some(path)))
+    }
+
+    fn snapshot(&self) -> Buffer {
+        Buffer {
+            editor: self.editor.clone(),
+            path: self.path.clone(),
+            cursor: self.cursor,
+            scroll: self.scroll,
+            hscroll: self.hscroll,
+            modified: self.modified,
+            search_query: self.search_query.clone(),
+        }
+    }
+
+    fn sync_active(&mut self) {
+        let snapshot = self.snapshot();
+        if let Some(buffer) = self.buffers.get_mut(self.active) {
+            *buffer = snapshot;
+        }
+    }
+
+    fn load_buffer(&mut self, index: usize) {
+        let Some(buffer) = self.buffers.get(index).cloned() else {
+            return;
+        };
+        self.editor = buffer.editor;
+        self.path = buffer.path;
+        self.cursor = buffer.cursor;
+        self.scroll = buffer.scroll;
+        self.hscroll = buffer.hscroll;
+        self.modified = buffer.modified;
+        self.search_query = buffer.search_query;
+        self.active = index;
+        self.input_mode = InputMode::Normal;
+        self.pending = None;
+        self.dirty = true;
+    }
+
+    fn open_file(&mut self, path: &str) {
+        if path.is_empty() {
+            self.status = "E: file name required".to_owned();
+            self.dirty = true;
+            return;
+        }
+        if self.help_back.is_some() {
+            let _ = self.close_help();
+        }
+        let path = PathBuf::from(path);
+        if self.path.as_ref() == Some(&path) {
+            self.status = format!("Already editing {}", path.display());
+            self.dirty = true;
+            return;
+        }
+        if let Some(index) = self
+            .buffers
+            .iter()
+            .position(|buffer| buffer.path.as_ref() == Some(&path))
+        {
+            self.sync_active();
+            self.load_buffer(index);
+            self.status = format!(
+                "buffer {}/{}: {}",
+                index + 1,
+                self.buffers.len(),
+                path.display()
+            );
+            self.dirty = true;
+            return;
+        }
+        let text = match fs::read_to_string(&path) {
+            Ok(text) => text,
+            Err(error) => {
+                self.status = format!("E: {error}");
+                self.dirty = true;
+                return;
+            }
+        };
+        self.sync_active();
+        if self.buffers.is_empty() {
+            self.buffers.push(self.snapshot());
+        }
+        self.buffers.push(Buffer {
+            editor: EditorState::from_text(&text),
+            path: Some(path.clone()),
+            cursor: 0,
+            scroll: 0,
+            hscroll: 0,
+            modified: false,
+            search_query: String::new(),
+        });
+        let index = self.buffers.len() - 1;
+        self.load_buffer(index);
+        self.status = format!(
+            "buffer {}/{}: {}",
+            index + 1,
+            self.buffers.len(),
+            path.display()
+        );
+        self.dirty = true;
+    }
+
+    fn switch_buffer(&mut self, delta: isize) {
+        if self.help_back.is_some() {
+            let _ = self.close_help();
+        }
+        if self.buffers.is_empty() {
+            self.status = "E: only one buffer".to_owned();
+            self.dirty = true;
+            return;
+        }
+        self.sync_active();
+        let len = self.buffers.len();
+        let target = (self.active as isize + delta).rem_euclid(len as isize) as usize;
+        if target == self.active {
+            self.status = "E: only one buffer".to_owned();
+            self.dirty = true;
+            return;
+        }
+        self.load_buffer(target);
+        let name = self
+            .path
+            .as_ref()
+            .map(|path| path.display().to_string())
+            .unwrap_or_else(|| "[no file]".to_owned());
+        self.status = format!("buffer {}/{}: {name}", target + 1, len);
     }
 
     /// Moves the cursor one line while keeping the viewport independent.
@@ -204,7 +336,7 @@ impl Model {
             return;
         }
         let editor = std::mem::replace(&mut self.editor, EditorState::from_text(HELP_TEXT));
-        let saved = SavedBuffer {
+        let saved = Buffer {
             editor,
             path: self.path.take(),
             cursor: self.cursor,
@@ -356,11 +488,19 @@ impl Model {
         self.dirty = true;
     }
 
+    fn any_modified(&self) -> bool {
+        self.modified
+            || self
+                .buffers
+                .iter()
+                .enumerate()
+                .any(|(index, buffer)| index != self.active && buffer.modified)
+    }
     fn request_quit(&mut self) {
         if self.close_help() {
             return;
         }
-        if self.modified {
+        if self.any_modified() {
             self.status = "No write since last change (:q! to override)".to_owned();
             self.dirty = true;
         } else {
@@ -562,17 +702,30 @@ impl Model {
             ("w", path) => {
                 self.save_as(path);
             }
+            ("e", path) => self.open_file(path),
+            ("bn", "") => self.switch_buffer(1),
+            ("bp", "") => self.switch_buffer(-1),
             ("q", "") => self.request_quit(),
             ("q!", "") => self.force_quit(),
             ("help", "") => self.show_help(),
             ("wq", "") => {
                 if self.save() {
-                    self.quit = true;
+                    if self.any_modified() {
+                        self.status = "E: other buffers have unsaved changes".to_owned();
+                        self.dirty = true;
+                    } else {
+                        self.quit = true;
+                    }
                 }
             }
             ("wq", path) => {
                 if self.save_as(path) {
-                    self.quit = true;
+                    if self.any_modified() {
+                        self.status = "E: other buffers have unsaved changes".to_owned();
+                        self.dirty = true;
+                    } else {
+                        self.quit = true;
+                    }
                 }
             }
             _ => {
@@ -655,11 +808,16 @@ pub fn view(model: &Model, frame: &mut Frame) {
     let title = if model.help_back.is_some() {
         "[help]".to_owned()
     } else {
-        model
+        let name = model
             .path
             .as_ref()
             .map(|path| path.display().to_string())
-            .unwrap_or_else(|| "[no file]".to_owned())
+            .unwrap_or_else(|| "[no file]".to_owned());
+        if model.buffers.is_empty() {
+            name
+        } else {
+            format!("[{}/{}] {name}", model.active + 1, model.buffers.len())
+        }
     };
     let debug_revision = std::env::var_os("ANVIL_DEBUG_REV").is_some();
     let title = if debug_revision {
@@ -1258,5 +1416,82 @@ mod tests {
         assert!(model.help_back.is_some());
         assert!(model.status.contains("read-only"));
         assert_eq!(model.editor.text().slice(0..HELP_TEXT.len()), HELP_TEXT);
+    }
+
+    #[test]
+    fn multi_buffer_switch_preserves_per_buffer_state() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let first = dir.path().join("first.txt");
+        let second = dir.path().join("second.txt");
+        fs::write(&first, "first").expect("write first");
+        fs::write(&second, "second").expect("write second");
+
+        let mut model = Model::open(&first).expect("open first");
+        model.cursor = 2;
+        handle_event(&mut model, key(KeyCode::Char(':')));
+        type_text(&mut model, &format!("e {}", second.display()));
+        handle_event(&mut model, key(KeyCode::Enter));
+        assert_eq!(model.path.as_ref(), Some(&second));
+        assert_eq!(model.editor.text().slice(0..6), "second");
+
+        model.cursor = 1;
+        handle_event(&mut model, key(KeyCode::Char(':')));
+        type_text(&mut model, "bn");
+        handle_event(&mut model, key(KeyCode::Enter));
+        assert_eq!(model.path.as_ref(), Some(&first));
+        assert_eq!(model.cursor, 2);
+
+        handle_event(&mut model, key(KeyCode::Char(':')));
+        type_text(&mut model, "bn");
+        handle_event(&mut model, key(KeyCode::Enter));
+        assert_eq!(model.path.as_ref(), Some(&second));
+        assert_eq!(model.cursor, 1);
+
+        handle_event(&mut model, key(KeyCode::Char(':')));
+        type_text(&mut model, &format!("e {}", first.display()));
+        handle_event(&mut model, key(KeyCode::Enter));
+        assert_eq!(model.path.as_ref(), Some(&first));
+        assert_eq!(model.buffers.len(), 2);
+    }
+
+    #[test]
+    fn buffer_commands_require_a_second_buffer() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("only.txt");
+        fs::write(&path, "only").expect("write");
+        let mut model = Model::open(&path).expect("open");
+
+        handle_event(&mut model, key(KeyCode::Char(':')));
+        type_text(&mut model, "bn");
+        handle_event(&mut model, key(KeyCode::Enter));
+        assert_eq!(model.path.as_ref(), Some(&path));
+        assert_eq!(model.status, "E: only one buffer");
+    }
+
+    #[test]
+    fn quit_guard_checks_inactive_buffers() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let first = dir.path().join("first.txt");
+        let second = dir.path().join("second.txt");
+        fs::write(&first, "first").expect("write first");
+        fs::write(&second, "second").expect("write second");
+
+        let mut model = Model::open(&first).expect("open");
+        handle_event(&mut model, key(KeyCode::Char('i')));
+        type_text(&mut model, "X");
+        handle_event(&mut model, key(KeyCode::Esc));
+        handle_event(&mut model, key(KeyCode::Char(':')));
+        type_text(&mut model, &format!("e {}", second.display()));
+        handle_event(&mut model, key(KeyCode::Enter));
+        assert_eq!(model.path.as_ref(), Some(&second));
+
+        handle_event(&mut model, key(KeyCode::Char('q')));
+        assert!(!model.quit);
+        assert!(model.status.contains("No write since last change"));
+
+        handle_event(&mut model, key(KeyCode::Char(':')));
+        type_text(&mut model, "q!");
+        handle_event(&mut model, key(KeyCode::Enter));
+        assert!(model.quit);
     }
 }
