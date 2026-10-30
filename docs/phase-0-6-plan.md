@@ -113,7 +113,17 @@ Open:
 
 ## 4. Plugin host
 
-Not started.
+Not started. Split into independently verifiable slices:
+
+- **0.7a runtime**: add Luau (`mlua`) or QuickJS (`rquickjs`), load a script,
+  execute a function, and return a value; no gateway dependency.
+- **0.7b control registration**: editor-to-gateway control socket, gateway
+  pid/start-time pinning, and inherited-fd token delivery replacing the
+  bootstrap hash argument.
+- **0.7c plugin-host process**: read the token fd, connect to the gateway,
+  `session.hello`, and receive permissions.
+- **0.7d hot reload supervisor**: SIGTERM the old host, start a new host, and
+  repeat the handshake. Verify no process, fd, or socket leak.
 
 ## Exit gates
 
