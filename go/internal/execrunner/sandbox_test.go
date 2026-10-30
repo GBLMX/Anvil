@@ -221,23 +221,23 @@ func TestCgroupTaskLimitWrites(t *testing.T) {
 	}
 }
 
-func TestCleanupStaleCgroups(t *testing.T) {
+func TestCleanupStaleCgroupsIsConservative(t *testing.T) {
 	root := t.TempDir()
-	old := filepath.Join(root, "old")
+	stale := filepath.Join(root, "stale")
 	fresh := filepath.Join(root, "fresh")
 	active := filepath.Join(root, "active")
 	nonCgroup := filepath.Join(root, "not-a-cgroup")
-	for _, dir := range []string{old, fresh, active, nonCgroup} {
+	for _, dir := range []string{stale, fresh, active, nonCgroup} {
 		if err := os.Mkdir(dir, 0o755); err != nil {
 			t.Fatal(err)
 		}
 	}
-	for _, dir := range []string{old, fresh, active} {
+	for _, dir := range []string{stale, fresh, active} {
 		if err := os.WriteFile(filepath.Join(dir, "pids.max"), []byte("64"), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if err := os.WriteFile(filepath.Join(old, "cgroup.procs"), nil, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(stale, "cgroup.procs"), nil, 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(fresh, "cgroup.procs"), nil, 0o644); err != nil {
@@ -247,7 +247,7 @@ func TestCleanupStaleCgroups(t *testing.T) {
 		t.Fatal(err)
 	}
 	oldTime := time.Now().Add(-2 * time.Hour)
-	for _, dir := range []string{old, active, nonCgroup} {
+	for _, dir := range []string{stale, active, nonCgroup} {
 		if err := os.Chtimes(dir, oldTime, oldTime); err != nil {
 			t.Fatal(err)
 		}
@@ -255,15 +255,46 @@ func TestCleanupStaleCgroups(t *testing.T) {
 	if err := CleanupStaleCgroups(root, time.Hour); err != nil {
 		t.Fatal(err)
 	}
-	for _, dir := range []string{old} {
-		if _, err := os.Stat(dir); !os.IsNotExist(err) {
-			t.Fatalf("stale cgroup %s was not removed", dir)
+	for _, dir := range []string{stale, fresh, active, nonCgroup} {
+		if _, err := os.Stat(dir); err != nil {
+			t.Fatalf("conservative cleanup removed %s: %v", dir, err)
 		}
 	}
-	for _, dir := range []string{fresh, active, nonCgroup} {
-		if _, err := os.Stat(dir); err != nil {
-			t.Fatalf("preserved path %s missing: %v", dir, err)
+}
+
+func TestCleanupStaleCgroupsSelectsOnlyEmptyOldCgroups(t *testing.T) {
+	root := t.TempDir()
+	stale := filepath.Join(root, "stale")
+	fresh := filepath.Join(root, "fresh")
+	active := filepath.Join(root, "active")
+	for _, dir := range []string{stale, fresh, active} {
+		if err := os.Mkdir(dir, 0o755); err != nil {
+			t.Fatal(err)
 		}
+		if err := os.WriteFile(filepath.Join(dir, "cgroup.procs"), nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(active, "cgroup.procs"), []byte("123"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	oldTime := time.Now().Add(-2 * time.Hour)
+	if err := os.Chtimes(stale, oldTime, oldTime); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(active, oldTime, oldTime); err != nil {
+		t.Fatal(err)
+	}
+	var removed []string
+	remove := func(path string) error {
+		removed = append(removed, filepath.Base(path))
+		return nil
+	}
+	if err := cleanupStaleCgroups(root, time.Hour, remove); err != nil {
+		t.Fatal(err)
+	}
+	if len(removed) != 1 || removed[0] != "stale" {
+		t.Fatalf("removed = %v", removed)
 	}
 }
 

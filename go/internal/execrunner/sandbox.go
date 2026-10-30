@@ -208,6 +208,10 @@ func limitTaskCount(headroom uint64) error {
 // The gateway calls this at startup to recover directories left by crashes or
 // failed cleanup. Non-cgroup entries and non-empty cgroups are left alone.
 func CleanupStaleCgroups(root string, olderThan time.Duration) error {
+	return cleanupStaleCgroups(root, olderThan, os.Remove)
+}
+
+func cleanupStaleCgroups(root string, olderThan time.Duration, remove func(string) error) error {
 	entries, err := os.ReadDir(root)
 	if err != nil {
 		return fmt.Errorf("read cgroup root: %w", err)
@@ -222,10 +226,7 @@ func CleanupStaleCgroups(root string, olderThan time.Duration) error {
 		if err != nil || strings.TrimSpace(string(procs)) != "" {
 			continue
 		}
-		if err := os.Remove(path); err == nil {
-			continue
-		}
-		_ = os.RemoveAll(path)
+		_ = remove(path)
 	}
 	return nil
 }
