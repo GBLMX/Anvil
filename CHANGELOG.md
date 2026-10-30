@@ -32,7 +32,12 @@ All notable changes to Anvil are recorded here. The format follows
   `no_new_privs`, Landlock filesystem read rules, `session.hello`, and tests for
   `/etc/passwd` denial, exec/write denial, fd closure, native-ABI seccomp with
   AF_UNIX-only sockets (TCP/UDP `EPERM`), editor UDS EOF exit, and editor
-  `SIGKILL` reaping. No VM, cgroup, or plugin API yet.
+  `SIGKILL` reaping.
+
+- Plugin-host cgroup v2 helper: `pids.max=64`, `memory.max=256MiB`,
+  post-spawn PID attach, and `HostExit::OomKilled` classification for SIGKILL
+  when a memory limit was active. No VM, framed UDS dispatch, or plugin API
+  yet.
 
 ### Planned
 

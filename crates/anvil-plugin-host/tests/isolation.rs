@@ -69,6 +69,45 @@ fn editor_uds_eof_exits_host() {
 }
 
 #[test]
+fn host_can_join_delegated_cgroup() {
+    let name = format!("anvil-plugin-test-{}", std::process::id());
+    let Ok(mut cgroup) = anvil_plugin_host::Cgroup::create("/sys/fs/cgroup", &name, 64, 256 << 20)
+    else {
+        return;
+    };
+    let mut host = spawn(host_bin(), &["--hold".to_owned()], Token([11; 32])).expect("spawn host");
+    host.attach_cgroup(&cgroup).expect("attach");
+    unsafe {
+        libc::kill(host.id() as i32, libc::SIGKILL);
+    }
+    let _ = host.wait();
+    cgroup.remove().expect("remove cgroup");
+}
+
+#[test]
+fn sigkill_is_oom_only_with_memory_limit() {
+    let mut limited =
+        spawn(host_bin(), &["--hold".to_owned()], Token([9; 32])).expect("spawn limited");
+    unsafe {
+        libc::kill(limited.id() as i32, libc::SIGKILL);
+    }
+    assert_eq!(
+        limited.wait_classified(true).expect("wait"),
+        anvil_plugin_host::HostExit::OomKilled
+    );
+
+    let mut unlimited =
+        spawn(host_bin(), &["--hold".to_owned()], Token([10; 32])).expect("spawn unlimited");
+    unsafe {
+        libc::kill(unlimited.id() as i32, libc::SIGKILL);
+    }
+    assert_eq!(
+        unlimited.wait_classified(false).expect("wait"),
+        anvil_plugin_host::HostExit::Signaled(libc::SIGKILL)
+    );
+}
+
+#[test]
 fn landlock_denies_write() {
     let mut host =
         spawn(host_bin(), &["--check-write".to_owned()], Token([6; 32])).expect("spawn host");

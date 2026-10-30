@@ -12,6 +12,41 @@ pub struct Token(pub [u8; 32]);
 
 const TOKEN_FD: libc::c_int = 3;
 
+/// How a plugin host process ended.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HostExit {
+    Exited(i32),
+    Signaled(i32),
+    OomKilled,
+}
+
+/// Classifies SIGKILL as OOM only when a memory limit was actually active.
+pub fn classify_exit(status: std::process::ExitStatus, memory_limited: bool) -> HostExit {
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::ExitStatusExt;
+        if let Some(code) = status.code() {
+            return HostExit::Exited(code);
+        }
+        if let Some(signal) = status.signal() {
+            if signal == 9 && memory_limited {
+                return HostExit::OomKilled;
+            }
+            return HostExit::Signaled(signal);
+        }
+    }
+    HostExit::Exited(status.code().unwrap_or(-1))
+}
+
+#[cfg(target_os = "linux")]
+mod cgroup;
+#[cfg(target_os = "linux")]
+pub use cgroup::Cgroup;
+
+/// Non-Linux placeholder so workspace targets still compile.
+#[cfg(not(target_os = "linux"))]
+pub struct Cgroup;
+
 #[cfg(target_os = "linux")]
 mod linux {
     use super::{Path, TOKEN_FD, Token};
@@ -64,6 +99,15 @@ mod linux {
             let status = self.child.wait()?;
             self.pgid = 0;
             Ok(status)
+        }
+
+        pub fn wait_classified(&mut self, memory_limited: bool) -> io::Result<super::HostExit> {
+            let status = self.wait()?;
+            Ok(super::classify_exit(status, memory_limited))
+        }
+
+        pub fn attach_cgroup(&self, cgroup: &crate::Cgroup) -> io::Result<()> {
+            cgroup.attach(self.id())
         }
 
         pub fn terminate(&mut self) {
