@@ -1,6 +1,6 @@
 # ADR-0005: No Shell, No Pipeline, Per-Tool Argument Policy
 
-- Status: Proposed; exec runner, positive seccomp allowlist, argv policy, process supervisor, and kernel tests implemented; gateway integration pending
+- Status: Proposed; exec runner, positive seccomp allowlist, per-tool execute, argv policy, process supervisor, symlink-race test, and kernel tests implemented; gateway integration pending
 - Date: 2026-10-30
 
 ## Context
@@ -40,19 +40,24 @@ safe:
    `no_new_privs` before executing the tool. The runner sees a read-only
    workspace and read-only system runtime paths; writes, network, ptrace,
    namespace creation, privilege changes, and anonymous executable mappings
-   are denied.
+   are denied. Runtime directories do not grant execute; only the selected tool
+   and its ELF interpreter are executable.
 9. Seccomp is a positive allowlist, not a denylist. Every syscall not explicitly
    allowed returns `EPERM`. `clone` is allowed only with `CLONE_THREAD` and no
    namespace flag; `clone3` returns `ENOSYS` so glibc falls back to the
    inspectable `clone`; file-backed executable mappings remain available for
    ld.so, while anonymous `PROT_EXEC` mmap and `mprotect(PROT_EXEC)` are
    denied.
+   Landlock and seccomp state is per-thread, so the runner locks the applying
+   OS thread and execs on that same goroutine.
 10. `openat2` validation in the gateway is defense in depth, not a substitute for
     child confinement: `rg`/`fd` reopen path strings themselves. Landlock must
     deny an escape even if a symlink is swapped after argument validation.
 11. Limits: max runtime, max stdout+stderr bytes, max process count, max file
     descriptors. `Run` kills the whole process group; the runner marks all
-    descriptors above stderr close-on-exec before exec.
+    descriptors above stderr close-on-exec before exec. `RLIMIT_NPROC` reserves
+    64 tasks above the current user task count; an exact per-call cgroup
+    `pids.max` remains a follow-up.
 12. `sys.exec` is unavailable when the runner, policy, or sandbox setup is
     incomplete. Deny by default.
 
@@ -150,4 +155,6 @@ preferable to an unsafe generic exec.
 - unknown flag rejected.
 - working directory outside workspace rejected.
 - symlinked executable rejected or resolved to an approved fd.
-- a live symlink-swap race and a per-tool execute rule remain follow-ups.
+- a concurrent symlink-swap race cannot read outside the workspace.
+- non-allowlisted binaries, including via `ld.so`, cannot be exec'd.
+- the tool and its ELF interpreter start under per-tool execute rules.

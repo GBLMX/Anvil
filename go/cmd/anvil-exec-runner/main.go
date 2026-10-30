@@ -20,7 +20,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "anvil-exec-runner: %v\n", err)
 		os.Exit(2)
 	}
-	if err := execrunner.Apply(*workspace, execrunner.RuntimePaths()); err != nil {
+	if err := execrunner.ApplyTool(*workspace, *tool, execrunner.RuntimePaths()); err != nil {
 		fmt.Fprintf(os.Stderr, "anvil-exec-runner: %v\n", err)
 		os.Exit(2)
 	}

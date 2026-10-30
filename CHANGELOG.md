@@ -9,9 +9,11 @@ All notable changes to Anvil are recorded here. The format follows
 ### Added
 
 - Phase 0.6 exec sandbox foundation: `anvil-exec-runner`, Landlock
-  read-only workspace/runtime rules, a positive seccomp allowlist with
-  `clone`/`clone3` and executable-mapping filtering, `rg`/`fd` argv policy
-  parsers, and a supervised process-group runner for timeout and output caps.
+  read-only workspace/runtime rules with per-tool and ELF-interpreter execute
+  grants, a positive seccomp allowlist with `clone`/`clone3` and
+  executable-mapping filtering, OS-thread locking for per-thread confinement,
+  `rg`/`fd` argv policy parsers, `RLIMIT_NPROC` task headroom, and a supervised
+  process-group runner for timeout and output caps.
 
 - Phase 0.5 complete: PieceTable production selection, cursor/line-index
   primitives, editor snapshots, selection-aware undo, and the locked-core
@@ -51,8 +53,9 @@ All notable changes to Anvil are recorded here. The format follows
 
 ### Security
 
-- `sys.exec` is not considered safe until `anvil-exec-runner` applies
-  Landlock/seccomp and a workspace symlink-race test passes.
+- `anvil-exec-runner` applies Landlock/seccomp, the symlink-swap race test
+  passes, and non-allowlisted exec (including through `ld.so`) is denied.
+  `sys.exec` remains disabled until the Go gateway uses this runner.
 - Untrusted plugins run outside the editor process; the Go gateway is a policy
   gateway, not the plugin sandbox.
 

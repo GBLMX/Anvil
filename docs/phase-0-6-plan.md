@@ -14,29 +14,34 @@ Status: in progress. Phase 0.5 is complete.
 Implemented:
 
 - `go/cmd/anvil-exec-runner`: fixed absolute tool path, no shell, no PATH lookup;
-- `go/internal/execrunner`: Landlock read-only workspace/runtime rules,
+- `go/internal/execrunner`: Landlock read-only workspace and runtime rules,
   `no_new_privs`, and a positive seccomp allowlist;
 - seccomp rejects namespace/privilege/network/mount/ptrace syscalls outside the
   allowlist, returns `ENOSYS` for `clone3` so glibc falls back to `clone`, and
   filters `clone` namespace flags, anonymous `PROT_EXEC` mmap, and
   `mprotect(PROT_EXEC)`;
+- Landlock grants execute only to the selected tool and its ELF interpreter;
+  runtime directories remain read-only;
+- the runner locks its OS thread before applying per-thread Landlock/seccomp
+  state and execs on that same goroutine;
 - `go/internal/execpolicy`: `rg`/`fd` argv parsers rejecting command-launching
   and config-loading flags;
-- process-group supervision with timeout, descendant kill, combined output cap,
-  `Pdeathsig`, and `WaitDelay`;
+- process-group supervision with timeout, cancellation, descendant kill,
+  combined output cap, `Pdeathsig`, and `WaitDelay`;
+- `RLIMIT_NPROC` reserves 64 tasks above the user's current task count;
 - extra descriptors are marked close-on-exec before applying the sandbox;
-- tests for outside-file/symlink and workspace-write denial, socket/permission
-  denial, allowlist escape, clone3 fallback, tool startup, timeout descendant
-  kill, output cap, fd cleanup, and exit-code capture.
+- tests for outside-file/symlink and workspace-write denial, concurrent
+  symlink-swap races, non-allowlisted exec (including via `ld.so`),
+  socket/permission denial, allowlist escape, clone3 fallback, tool startup,
+  RLIMIT_NPROC verification, timeout descendant kill, output cap, fd cleanup,
+  and exit-code capture.
 
 Open:
 
 - gateway must resolve the tool fd/policy and pass a bounded request;
 - CI needs an explicit Landlock capability probe and skip path;
-- a live symlink-swap race test and process-count limit remain;
-- runtime execute permissions still cover the shared runtime roots; a
-  per-tool execute rule needs a follow-up because a Landlock file rule alone did
-  not permit `execve` on this kernel.
+- an exact per-call cgroup `pids.max` remains a follow-up; `RLIMIT_NPROC` is
+  user-wide and supplies bounded headroom rather than an exact per-call count.
 
 ## 2. Fetch/SSRF
 

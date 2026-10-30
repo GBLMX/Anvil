@@ -1,7 +1,10 @@
 package execrunner
 
 import (
+	"bufio"
+	"bytes"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -37,6 +40,10 @@ func TestSandboxHelper(t *testing.T) {
 	}
 	if err := unix.Unshare(unix.CLONE_NEWUSER); !errors.Is(err, unix.EPERM) {
 		os.Exit(15)
+	}
+	var taskLimit unix.Rlimit
+	if err := unix.Getrlimit(unix.RLIMIT_NPROC, &taskLimit); err != nil || taskLimit.Cur == unix.RLIM_INFINITY {
+		os.Exit(16)
 	}
 	var usage unix.Rusage
 	if err := unix.Getrusage(unix.RUSAGE_SELF, &usage); !errors.Is(err, unix.EPERM) {
@@ -95,7 +102,7 @@ func TestSandboxToolHelper(t *testing.T) {
 	}
 	workspace := os.Getenv("ANVIL_SANDBOX_WORKSPACE")
 	tool := os.Getenv("ANVIL_SANDBOX_TOOL")
-	if err := Apply(workspace, RuntimePaths()); err != nil {
+	if err := ApplyTool(workspace, tool, RuntimePaths()); err != nil {
 		os.Stderr.WriteString(err.Error() + "\n")
 		os.Exit(2)
 	}
@@ -127,6 +134,38 @@ func TestSandboxedToolsStart(t *testing.T) {
 	}
 }
 
+func TestSandboxForbiddenExecHelper(t *testing.T) {
+	if os.Getenv("ANVIL_SANDBOX_FORBIDDEN_EXEC") != "1" {
+		return
+	}
+	workspace := os.Getenv("ANVIL_SANDBOX_WORKSPACE")
+	if err := ApplyTool(workspace, "/usr/bin/rg", RuntimePaths()); err != nil {
+		os.Exit(2)
+	}
+	if err := Exec("/bin/sh", []string{"/bin/sh", "-c", "exit 0"}, []string{"PATH=/usr/bin:/bin"}); !errors.Is(err, unix.EACCES) {
+		os.Exit(3)
+	}
+	os.Exit(0)
+}
+
+func TestSandboxDeniesNonAllowlistedExec(t *testing.T) {
+	if _, err := LandlockABI(); err != nil {
+		t.Skipf("Landlock unavailable: %v", err)
+	}
+	if _, err := os.Stat("/usr/bin/rg"); err != nil {
+		t.Skip("/usr/bin/rg unavailable")
+	}
+	cmd := exec.Command(os.Args[0], "-test.run=TestSandboxForbiddenExecHelper")
+	cmd.Env = append(os.Environ(),
+		"ANVIL_SANDBOX_FORBIDDEN_EXEC=1",
+		"ANVIL_SANDBOX_WORKSPACE="+t.TempDir(),
+	)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("forbidden exec test failed: %v\n%s", err, out)
+	}
+}
+
 func TestCloseExtraFDsHelper(t *testing.T) {
 	if os.Getenv("ANVIL_FD_HELPER") != "1" {
 		return
@@ -154,6 +193,121 @@ func TestCloseExtraFDs(t *testing.T) {
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("fd helper failed: %v\n%s", err, out)
+	}
+}
+
+func TestSymlinkRaceHelper(t *testing.T) {
+	if os.Getenv("ANVIL_SYMLINK_RACE_HELPER") != "1" {
+		return
+	}
+	workspace := os.Getenv("ANVIL_SANDBOX_WORKSPACE")
+	if err := Apply(workspace, RuntimePaths()); err != nil {
+		os.Stderr.WriteString(err.Error() + "\n")
+		os.Exit(2)
+	}
+	fmt.Fprintln(os.Stdout, "ready")
+	for i := 0; i < 5000; i++ {
+		data, err := os.ReadFile(filepath.Join(workspace, "race"))
+		if err != nil {
+			if errors.Is(err, unix.EACCES) {
+				continue
+			}
+			fmt.Fprintf(os.Stderr, "unexpected read error: %v\n", err)
+			os.Exit(3)
+		}
+		if string(data) != "SAFE" {
+			fmt.Fprintf(os.Stderr, "escaped symlink content: %q\n", data)
+			os.Exit(4)
+		}
+	}
+	os.Exit(0)
+}
+
+func TestSymlinkSwapCannotEscape(t *testing.T) {
+	if _, err := LandlockABI(); err != nil {
+		t.Skipf("Landlock unavailable: %v", err)
+	}
+	workspace := t.TempDir()
+	if err := os.WriteFile(filepath.Join(workspace, "safe"), []byte("SAFE"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("safe", filepath.Join(workspace, "race")); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command(os.Args[0], "-test.run=TestSymlinkRaceHelper")
+	cmd.Env = append(os.Environ(),
+		"ANVIL_SYMLINK_RACE_HELPER=1",
+		"ANVIL_SANDBOX_WORKSPACE="+workspace,
+	)
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	line, err := bufio.NewReader(stdout).ReadString('\n')
+	if err != nil || line != "ready\n" {
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
+		t.Fatalf("sandbox helper not ready: %q, %v, stderr=%s", line, err, stderr.String())
+	}
+	tmp := filepath.Join(workspace, "race.tmp")
+	for i := 0; i < 5000; i++ {
+		target := "safe"
+		if i%2 == 1 {
+			target = "/etc/passwd"
+		}
+		_ = os.Remove(tmp)
+		if err := os.Symlink(target, tmp); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Rename(tmp, filepath.Join(workspace, "race")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := cmd.Wait(); err != nil {
+		t.Fatalf("symlink race helper failed: %v\n%s", err, stderr.String())
+	}
+}
+
+func TestSandboxLoaderHelper(t *testing.T) {
+	if os.Getenv("ANVIL_SANDBOX_LOADER_HELPER") != "1" {
+		return
+	}
+	workspace := os.Getenv("ANVIL_SANDBOX_WORKSPACE")
+	if err := ApplyTool(workspace, "/usr/bin/rg", RuntimePaths()); err != nil {
+		os.Exit(2)
+	}
+	if err := Exec("/lib64/ld-linux-x86-64.so.2", []string{"ld.so", "/bin/true"}, []string{"PATH=/usr/bin:/bin"}); err != nil {
+		os.Exit(3)
+	}
+	os.Exit(4)
+}
+
+func TestSandboxDeniesLoaderExec(t *testing.T) {
+	if _, err := LandlockABI(); err != nil {
+		t.Skipf("Landlock unavailable: %v", err)
+	}
+	for _, path := range []string{"/usr/bin/rg", "/lib64/ld-linux-x86-64.so.2", "/bin/true"} {
+		if _, err := os.Stat(path); err != nil {
+			t.Skipf("%s unavailable", path)
+		}
+	}
+	cmd := exec.Command(os.Args[0], "-test.run=TestSandboxLoaderHelper")
+	cmd.Env = append(os.Environ(),
+		"ANVIL_SANDBOX_LOADER_HELPER=1",
+		"ANVIL_SANDBOX_WORKSPACE="+t.TempDir(),
+	)
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("ld.so executed a non-allowlisted binary: %s", out)
+	}
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) && exitErr.ExitCode() == 0 {
+		t.Fatalf("ld.so escaped the execute policy: %s", out)
 	}
 }
 

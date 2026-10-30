@@ -6,10 +6,15 @@
 package execrunner
 
 import (
+	"debug/elf"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strconv"
+	"strings"
 	"unsafe"
 
 	"golang.org/x/sys/unix"
@@ -56,13 +61,21 @@ func LandlockABI() (int, error) {
 	return int(version), nil
 }
 
-// Apply confines the current process to read-only access beneath workspace
-// plus read-only, executable runtime paths. Runtime execute access lets the
-// dynamic loader and the allowlisted tool start.
+// Apply confines the current process to read-only workspace and runtime paths.
+// It permits no file execution; call ApplyTool when executing an allowlisted
+// tool.
 //
 // This function is irreversible. It must run in the exec-runner child, never in
 // the gateway or editor process.
 func Apply(workspace string, runtimePaths []string) error {
+	return ApplyTool(workspace, "", runtimePaths)
+}
+
+// ApplyTool also grants execute access to the tool and its ELF interpreter.
+// Runtime directories stay read-only, so another binary cannot be exec'd.
+// It locks the calling OS thread; the caller must exec on the same goroutine.
+func ApplyTool(workspace, tool string, runtimePaths []string) error {
+	runtime.LockOSThread()
 	abi, err := LandlockABI()
 	if err != nil {
 		return err
@@ -93,13 +106,38 @@ func Apply(workspace string, runtimePaths []string) error {
 	}
 	defer unix.Close(ruleset)
 	for path := range seen {
-		var access uint64 = allReadExec
+		access := uint64(readAccess)
 		if path == workspaceAbs {
 			access = readAccess
 		}
 		if err := addPathRule(ruleset, path, access); err != nil {
 			return err
 		}
+	}
+	if tool != "" {
+		absolute, err := filepathAbs(tool)
+		if err != nil {
+			return err
+		}
+		absolute, err = filepath.EvalSymlinks(absolute)
+		if err != nil {
+			return fmt.Errorf("resolve tool %q: %w", tool, err)
+		}
+		if err := addPathRule(ruleset, absolute, readAccess|execAccess); err != nil {
+			return err
+		}
+		interpreter, err := elfInterpreter(absolute)
+		if err != nil {
+			return err
+		}
+		if interpreter != "" {
+			if err := addPathRule(ruleset, interpreter, readAccess|execAccess); err != nil {
+				return err
+			}
+		}
+	}
+	if err := limitTaskCount(64); err != nil {
+		return err
 	}
 	if err := unix.Prctl(unix.PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0); err != nil {
 		return fmt.Errorf("no_new_privs: %w", err)
@@ -124,6 +162,91 @@ func filepathAbs(path string) (string, error) {
 	return absolute, nil
 }
 
+func elfInterpreter(path string) (string, error) {
+	file, err := elf.Open(path)
+	if err != nil {
+		return "", nil
+	}
+	defer file.Close()
+	for _, program := range file.Progs {
+		if program.Type != elf.PT_INTERP {
+			continue
+		}
+		data, err := io.ReadAll(program.Open())
+		if err != nil {
+			return "", fmt.Errorf("read ELF interpreter for %s: %w", path, err)
+		}
+		return strings.TrimRight(string(data), "\x00"), nil
+	}
+	return "", nil
+}
+
+// limitTaskCount reserves headroom above the user's current task count.
+// An absolute value small enough for a one-shot tool can be below the user's
+// existing process count and would break the Go runtime and the tool.
+func limitTaskCount(headroom uint64) error {
+	tasks, err := countUserTasks()
+	if err != nil {
+		return err
+	}
+	limit := tasks + headroom
+	var current unix.Rlimit
+	if err := unix.Getrlimit(unix.RLIMIT_NPROC, &current); err != nil {
+		return fmt.Errorf("getrlimit RLIMIT_NPROC: %w", err)
+	}
+	if current.Max != unix.RLIM_INFINITY && current.Max < limit {
+		limit = current.Max
+	}
+	if current.Cur < limit {
+		limit = current.Cur
+	}
+	if limit == 0 {
+		limit = 1
+	}
+	next := unix.Rlimit{Cur: limit, Max: limit}
+	if err := unix.Setrlimit(unix.RLIMIT_NPROC, &next); err != nil {
+		return fmt.Errorf("setrlimit RLIMIT_NPROC: %w", err)
+	}
+	return nil
+}
+
+func countUserTasks() (uint64, error) {
+	uid := os.Getuid()
+	entries, err := os.ReadDir("/proc")
+	if err != nil {
+		return 0, fmt.Errorf("read /proc: %w", err)
+	}
+	var total uint64
+	for _, entry := range entries {
+		if _, err := strconv.Atoi(entry.Name()); err != nil {
+			continue
+		}
+		status, err := os.ReadFile(filepath.Join("/proc", entry.Name(), "status"))
+		if err != nil {
+			continue
+		}
+		var processUID, threads uint64
+		for _, line := range strings.Split(string(status), "\n") {
+			switch {
+			case strings.HasPrefix(line, "Uid:"):
+				fields := strings.Fields(line)
+				if len(fields) > 1 {
+					processUID, _ = strconv.ParseUint(fields[1], 10, 64)
+				}
+			case strings.HasPrefix(line, "Threads:"):
+				fields := strings.Fields(line)
+				if len(fields) > 1 {
+					threads, _ = strconv.ParseUint(fields[1], 10, 64)
+				}
+			}
+		}
+		if processUID == uint64(uid) {
+			total += threads
+		}
+	}
+	return total, nil
+}
+
 func handledAccess(abi int) uint64 {
 	handled := uint64(readAccess | execAccess | writeAccess)
 	if abi >= 2 {
@@ -146,6 +269,7 @@ func createRuleset(access uint64) (int, error) {
 	if errno != 0 {
 		return -1, fmt.Errorf("landlock_create_ruleset: %w", errno)
 	}
+	unix.CloseOnExec(int(fd))
 	return int(fd), nil
 }
 
@@ -155,7 +279,7 @@ func addPathRule(ruleset int, path string, access uint64) error {
 		return fmt.Errorf("stat landlock path %q: %w", path, err)
 	}
 	if !info.IsDir() {
-		access = unix.LANDLOCK_ACCESS_FS_READ_FILE
+		access &^= unix.LANDLOCK_ACCESS_FS_READ_DIR
 	}
 	fd, err := unix.Open(path, unix.O_PATH|unix.O_CLOEXEC, 0)
 	if err != nil {
@@ -194,11 +318,11 @@ func restrictSelf(ruleset int) error {
 	return nil
 }
 
-// RuntimePaths returns the minimal read-only, executable runtime roots needed
-// to start allowlisted tools. Missing paths are ignored.
+// RuntimePaths returns the minimal read-only runtime roots needed to start an
+// allowlisted tool. Missing paths are ignored.
 func RuntimePaths() []string {
 	candidates := []string{
-		"/usr", "/lib", "/lib64", "/bin", "/sbin", "/etc/ld.so.cache",
+		"/usr/lib", "/usr/lib64", "/lib", "/lib64", "/etc/ld.so.cache",
 		"/proc/self/maps", "/proc/self/fd",
 	}
 	var paths []string
