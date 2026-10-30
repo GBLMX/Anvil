@@ -93,6 +93,9 @@ mod linux {
             let bytes = (allocate_mb as usize).saturating_mul(1024 * 1024);
             let memory = vec![1u8; bytes];
             std::hint::black_box(&memory);
+            // The cgroup memory.max path must remain the only caller of this
+            // probe. Keep the pages resident until the kernel kills us.
+            std::thread::sleep(std::time::Duration::from_secs(60));
         }
 
         if let Some(path) = check_read {
