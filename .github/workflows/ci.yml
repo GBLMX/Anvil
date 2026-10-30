@@ -173,4 +173,4 @@ jobs:
         run: cd "$(dirname "${{ steps.detect.outputs.file }}")" && go test ./...
       - name: Stress symlink race
         if: steps.detect.outputs.present == 'true'
-        run: cd "$(dirname "${{ steps.detect.outputs.file }}")" && go test -run '^TestSymlinkSwapCannotEscape$' -count=100 ./internal/execrunner
+        run: cd "$(dirname "${{ steps.detect.outputs.file }}")" && go test -run '^TestSymlinkSwapCannotEscape$' -count=100 ./go/internal/execrunner
