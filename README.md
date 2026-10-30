@@ -20,6 +20,7 @@ SSRF-constrained fetch client, plus the `openat2`-confined workspace reader in
 - [Architecture](docs/architecture.md)
 - [Deployment model](docs/deployment.md)
 - [Performance baseline](docs/performance.md)
+- [Go gateway benchmarks](docs/benchmarks/go-gateway.md)
 - [Text model benchmark](docs/benchmarks/text-model.md)
 - [Editor benchmarks](docs/benchmarks/editor.md)
 - [Line index stress](docs/benchmarks/line-index-stress.md)
