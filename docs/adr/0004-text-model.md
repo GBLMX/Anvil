@@ -34,6 +34,20 @@ piece table is also viable; the choice is not "Gap Buffer or nothing".
 7. Ferriso's gap buffer and line index are reference implementations, not an
    automatic dependency.
 
+## Current harness
+
+`crates/anvil-core` defines the `TextBuffer` trait and three candidates:
+`RopeBuffer`, `GapBuffer`, and `PieceTable`. The initial CLI benchmark runs:
+
+```text
+cargo run --release -p anvil-core --bin text-bench -- 1 10 100
+```
+
+It measures construction, first viewport extraction, and repeated edits at
+1/50/99% offsets. It is not yet the final decision harness: p99 sampling,
+undo/redo, snapshots, memory accounting, and the one-line 100 MB case remain
+open gates.
+
 ## Required measurements
 
 For 1 MB, 10 MB, and 100 MB:

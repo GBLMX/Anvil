@@ -5,9 +5,9 @@ plugin contract.
 
 Status: **pre-alpha, Phase 0**. There is no runnable editor yet. Phase 0 code
 currently consists of the `anvil-api` interaction and view contracts, the
-`anvil-ipc` frame codec, JSON-RPC envelope, Unix socket transport, and
-`SO_PEERCRED`, plus the `openat2`-confined workspace reader in
-`go/internal/fsroot`.
+`anvil-core` text-buffer candidates and benchmark, the `anvil-ipc` frame codec,
+JSON-RPC envelope, Unix socket transport, and `SO_PEERCRED`, plus the
+`openat2`-confined workspace reader in `go/internal/fsroot`.
 
 ## Documents
 

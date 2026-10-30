@@ -160,6 +160,14 @@ Default candidate: a Rope or piece table.
 Gap Buffer ships only if it meets the random-edit targets on the reference
 machine and does not require copying the document per snapshot.
 
+The initial candidate harness lives in `anvil-core`:
+
+```text
+cargo run --release -p anvil-core --bin text-bench -- 1 10 100
+```
+
+It is a smoke/measurement starting point, not the final p99 decision run.
+
 ## 7. Reporting template
 
 ```text

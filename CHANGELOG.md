@@ -26,6 +26,8 @@ All notable changes to Anvil are recorded here. The format follows
   `SetModeResponse`.
 - `anvil-api/bindings`: generated TypeScript declarations and JSON Schema for
   the interaction and view contracts.
+- `anvil-core`: `TextBuffer` plus Rope, Gap Buffer, and piece-table candidates,
+  with a repeatable `text-bench` CLI.
 - `go/internal/fsroot`: `openat2`-confined workspace reader with traversal,
   symlink-escape, regular-file, and size-limit tests.
 
