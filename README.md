@@ -8,8 +8,9 @@ Phase 0 code currently consists of the `anvil-api` interaction and view
 contracts, the `anvil-core` text buffer and selected PieceTable backend, the
 `anvil-editor` snapshot layer, the `anvil-ipc` frame codec, JSON-RPC envelope,
 Unix socket transport, and `SO_PEERCRED`; Phase 0.6 adds the Go exec runner,
-Landlock/seccomp sandbox, and `rg`/`fd` argv policy, plus the `openat2`-confined
-workspace reader in `go/internal/fsroot`.
+Landlock confinement with a positive seccomp allowlist, supervised process
+groups, and `rg`/`fd` argv policy, plus the `openat2`-confined workspace reader
+in `go/internal/fsroot`.
 
 ## Documents
 
@@ -41,8 +42,9 @@ workspace reader in `go/internal/fsroot`.
   Ferriso runtime dependency. Ferriso is reference material.
 - Lua plugins use `mlua` with Luau; TS uses `rquickjs` (QuickJS-NG), not V8.
 - The Go gateway is a per-session policy gateway, not the plugin sandbox.
-- `sys.exec` is disabled until `anvil-exec-runner` applies Landlock/seccomp to
-  the tool child. The gateway never execs a tool from its own unsandboxed space.
+- `sys.exec` remains disabled until the Go gateway routes tool calls through
+  `anvil-exec-runner`; the runner's Landlock/seccomp path and ambient-authority
+  tests are implemented, but gateway integration is still pending.
 - The public API starts small and is defined from Rust types plus generated JSON
   Schema and TypeScript/Lua stubs. Smithy is deferred until the API justifies
   its code-generation cost.

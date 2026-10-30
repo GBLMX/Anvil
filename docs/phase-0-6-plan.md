@@ -15,18 +15,28 @@ Implemented:
 
 - `go/cmd/anvil-exec-runner`: fixed absolute tool path, no shell, no PATH lookup;
 - `go/internal/execrunner`: Landlock read-only workspace/runtime rules,
-  `no_new_privs`, seccomp denial of network/ptrace/mount/privilege syscalls;
+  `no_new_privs`, and a positive seccomp allowlist;
+- seccomp rejects namespace/privilege/network/mount/ptrace syscalls outside the
+  allowlist, returns `ENOSYS` for `clone3` so glibc falls back to `clone`, and
+  filters `clone` namespace flags, anonymous `PROT_EXEC` mmap, and
+  `mprotect(PROT_EXEC)`;
 - `go/internal/execpolicy`: `rg`/`fd` argv parsers rejecting command-launching
   and config-loading flags;
-- tests for outside-file denial and socket denial.
+- process-group supervision with timeout, descendant kill, combined output cap,
+  `Pdeathsig`, and `WaitDelay`;
+- extra descriptors are marked close-on-exec before applying the sandbox;
+- tests for outside-file/symlink and workspace-write denial, socket/permission
+  denial, allowlist escape, clone3 fallback, tool startup, timeout descendant
+  kill, output cap, fd cleanup, and exit-code capture.
 
 Open:
 
-- seccomp is currently a denied-syscall filter, not the desired positive
-  allowlist;
 - gateway must resolve the tool fd/policy and pass a bounded request;
 - CI needs an explicit Landlock capability probe and skip path;
-- symlink-race, timeout/descendant, output-cap, and process-count tests remain.
+- a live symlink-swap race test and process-count limit remain;
+- runtime execute permissions still cover the shared runtime roots; a
+  per-tool execute rule needs a follow-up because a Landlock file rule alone did
+  not permit `execve` on this kernel.
 
 ## 2. Fetch/SSRF
 

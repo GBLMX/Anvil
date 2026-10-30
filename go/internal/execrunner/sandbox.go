@@ -19,6 +19,12 @@ const (
 	readAccess  = unix.LANDLOCK_ACCESS_FS_READ_FILE | unix.LANDLOCK_ACCESS_FS_READ_DIR
 	execAccess  = unix.LANDLOCK_ACCESS_FS_EXECUTE
 	allReadExec = readAccess | execAccess
+	writeAccess = unix.LANDLOCK_ACCESS_FS_WRITE_FILE |
+		unix.LANDLOCK_ACCESS_FS_REMOVE_DIR | unix.LANDLOCK_ACCESS_FS_REMOVE_FILE |
+		unix.LANDLOCK_ACCESS_FS_MAKE_CHAR | unix.LANDLOCK_ACCESS_FS_MAKE_DIR |
+		unix.LANDLOCK_ACCESS_FS_MAKE_REG | unix.LANDLOCK_ACCESS_FS_MAKE_SOCK |
+		unix.LANDLOCK_ACCESS_FS_MAKE_FIFO | unix.LANDLOCK_ACCESS_FS_MAKE_BLOCK |
+		unix.LANDLOCK_ACCESS_FS_MAKE_SYM
 )
 
 // SandboxError reports a missing or unusable kernel feature.
@@ -51,12 +57,18 @@ func LandlockABI() (int, error) {
 }
 
 // Apply confines the current process to read-only access beneath workspace
-// plus read-only runtime paths.
+// plus read-only, executable runtime paths. Runtime execute access lets the
+// dynamic loader and the allowlisted tool start.
 //
 // This function is irreversible. It must run in the exec-runner child, never in
 // the gateway or editor process.
 func Apply(workspace string, runtimePaths []string) error {
-	if _, err := LandlockABI(); err != nil {
+	abi, err := LandlockABI()
+	if err != nil {
+		return err
+	}
+	workspaceAbs, err := filepathAbs(workspace)
+	if err != nil {
 		return err
 	}
 	paths := append([]string{workspace}, runtimePaths...)
@@ -75,13 +87,17 @@ func Apply(workspace string, runtimePaths []string) error {
 		seen[absolute] = struct{}{}
 	}
 
-	ruleset, err := createRuleset(allReadExec)
+	ruleset, err := createRuleset(handledAccess(abi))
 	if err != nil {
 		return err
 	}
 	defer unix.Close(ruleset)
 	for path := range seen {
-		if err := addPathRule(ruleset, path, allReadExec); err != nil {
+		var access uint64 = allReadExec
+		if path == workspaceAbs {
+			access = readAccess
+		}
+		if err := addPathRule(ruleset, path, access); err != nil {
 			return err
 		}
 	}
@@ -106,6 +122,17 @@ func filepathAbs(path string) (string, error) {
 		return "", fmt.Errorf("stat sandbox path %q: %w", path, err)
 	}
 	return absolute, nil
+}
+
+func handledAccess(abi int) uint64 {
+	handled := uint64(readAccess | execAccess | writeAccess)
+	if abi >= 2 {
+		handled |= unix.LANDLOCK_ACCESS_FS_REFER
+	}
+	if abi >= 3 {
+		handled |= unix.LANDLOCK_ACCESS_FS_TRUNCATE
+	}
+	return handled
 }
 
 func createRuleset(access uint64) (int, error) {
@@ -167,11 +194,12 @@ func restrictSelf(ruleset int) error {
 	return nil
 }
 
-// RuntimePaths returns the minimal read-only runtime roots needed to execute
-// allowlisted tools. Missing paths are ignored.
+// RuntimePaths returns the minimal read-only, executable runtime roots needed
+// to start allowlisted tools. Missing paths are ignored.
 func RuntimePaths() []string {
 	candidates := []string{
 		"/usr", "/lib", "/lib64", "/bin", "/sbin", "/etc/ld.so.cache",
+		"/proc/self/maps", "/proc/self/fd",
 	}
 	var paths []string
 	for _, path := range candidates {

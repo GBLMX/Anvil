@@ -16,6 +16,10 @@ func main() {
 		fmt.Fprintln(os.Stderr, "anvil-exec-runner: -workspace and -tool are required")
 		os.Exit(2)
 	}
+	if err := execrunner.CloseExtraFDs(); err != nil {
+		fmt.Fprintf(os.Stderr, "anvil-exec-runner: %v\n", err)
+		os.Exit(2)
+	}
 	if err := execrunner.Apply(*workspace, execrunner.RuntimePaths()); err != nil {
 		fmt.Fprintf(os.Stderr, "anvil-exec-runner: %v\n", err)
 		os.Exit(2)

@@ -9,8 +9,9 @@ All notable changes to Anvil are recorded here. The format follows
 ### Added
 
 - Phase 0.6 exec sandbox foundation: `anvil-exec-runner`, Landlock
-  read-only workspace/runtime rules, seccomp syscall denial, and `rg`/`fd`
-  argv policy parsers.
+  read-only workspace/runtime rules, a positive seccomp allowlist with
+  `clone`/`clone3` and executable-mapping filtering, `rg`/`fd` argv policy
+  parsers, and a supervised process-group runner for timeout and output caps.
 
 - Phase 0.5 complete: PieceTable production selection, cursor/line-index
   primitives, editor snapshots, selection-aware undo, and the locked-core

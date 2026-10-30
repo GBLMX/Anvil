@@ -1,6 +1,6 @@
 # ADR-0005: No Shell, No Pipeline, Per-Tool Argument Policy
 
-- Status: Proposed; exec runner and argv policy implemented, gateway/symlink-race pending
+- Status: Proposed; exec runner, positive seccomp allowlist, argv policy, process supervisor, and kernel tests implemented; gateway integration pending
 - Date: 2026-10-30
 
 ## Context
@@ -38,14 +38,22 @@ safe:
 8. The child is never spawned directly by the unsandboxed gateway. The gateway
    invokes a small `anvil-exec-runner`, which applies Landlock, seccomp, and
    `no_new_privs` before executing the tool. The runner sees a read-only
-   workspace and read-only system runtime paths; writes, network, ptrace, and
-   privilege changes are denied.
-9. `openat2` validation in the gateway is defense in depth, not a substitute for
-   child confinement: `rg`/`fd` reopen path strings themselves. Landlock must
-   deny an escape even if a symlink is swapped after argument validation.
-10. Limits: max runtime, max stdout+stderr bytes, max process count, max file
-    descriptors.
-11. `sys.exec` is unavailable when the runner, policy, or sandbox setup is
+   workspace and read-only system runtime paths; writes, network, ptrace,
+   namespace creation, privilege changes, and anonymous executable mappings
+   are denied.
+9. Seccomp is a positive allowlist, not a denylist. Every syscall not explicitly
+   allowed returns `EPERM`. `clone` is allowed only with `CLONE_THREAD` and no
+   namespace flag; `clone3` returns `ENOSYS` so glibc falls back to the
+   inspectable `clone`; file-backed executable mappings remain available for
+   ld.so, while anonymous `PROT_EXEC` mmap and `mprotect(PROT_EXEC)` are
+   denied.
+10. `openat2` validation in the gateway is defense in depth, not a substitute for
+    child confinement: `rg`/`fd` reopen path strings themselves. Landlock must
+    deny an escape even if a symlink is swapped after argument validation.
+11. Limits: max runtime, max stdout+stderr bytes, max process count, max file
+    descriptors. `Run` kills the whole process group; the runner marks all
+    descriptors above stderr close-on-exec before exec.
+12. `sys.exec` is unavailable when the runner, policy, or sandbox setup is
     incomplete. Deny by default.
 
 ## Tool argument policy
@@ -75,7 +83,8 @@ Anvil API instead of raw `exec`.
 - Gateway is a subreaper/owns the child lifecycle for its session.
 - The gateway invokes `anvil-exec-runner`; the runner applies Landlock/seccomp
   and `no_new_privs` before `execveat`.
-- Output is streamed into bounded buffers; truncation is explicit.
+- `Run` uses `Setpgid`, `Pdeathsig`, explicit group SIGKILL, `WaitDelay`, and a
+  bounded shared stdout/stderr budget; truncation and timeout are explicit.
 
 ## Why `openat2` is not enough
 
@@ -129,10 +138,13 @@ preferable to an unsafe generic exec.
 - `rg --pre /bin/sh` rejected.
 - `fd --exec id` rejected.
 - `RIPGREP_CONFIG_PATH`, `LD_PRELOAD`, `PATH` injection rejected.
-- workspace symlink to an outside directory, then race the symlink target during
-  `rg`/`fd`; the runner must deny the outside read.
-- timeout kills descendants.
-- output cap enforced.
+- workspace symlink to an outside file and workspace writes are denied by
+  Landlock.
+- a syscall outside the allowlist returns `EPERM`; `clone3` returns `ENOSYS`;
+  anonymous `PROT_EXEC` mappings and `mprotect(PROT_EXEC)` are denied.
+- `rg` and `fd` start successfully under the allowlist.
+- timeout kills descendants; output cap is enforced.
 - unknown flag rejected.
 - working directory outside workspace rejected.
 - symlinked executable rejected or resolved to an approved fd.
+- a live symlink-swap race and a per-tool execute rule remain follow-ups.
