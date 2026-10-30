@@ -18,8 +18,10 @@ All notable changes to Anvil are recorded here. The format follows
   offset updates after length-changing replacements.
 
 - Tree-sitter syntax highlighting for Rust and JSON with a revision-keyed
-  highlight cache, zero-copy span slicing, and keyword/string/comment/number
-  rendering. Files over 256 KiB remain unhighlighted to keep key latency bounded.
+  cache, zero-copy span slicing, keyword/string/comment/number rendering, a
+  background parser thread, 50 ms debounce, and stale-span retention while a
+  new parse is in flight. Files over 256 KiB remain unhighlighted to keep key
+  latency bounded.
 
 - TUI relative line-number gutter, current-line background highlight,
   scrolloff margin, dirty `[+]` title marker, colored mode badge in the status

@@ -35,7 +35,7 @@ mod syntax;
 use gateway::GatewaySession;
 #[cfg(target_os = "linux")]
 use host_session::{HostEvent, HostSession};
-use syntax::{Highlight, SyntaxCache, SyntaxClass};
+use syntax::{Highlight, SyntaxClass, SyntaxState};
 
 const MAX_OPEN_BYTES: usize = 256 * 1024 * 1024;
 
@@ -112,7 +112,7 @@ pub struct Model {
     /// Reject file operations instead of falling back when the gateway is absent.
     require_gateway: bool,
     /// Tree-sitter highlights cached by editor revision and path.
-    syntax: RefCell<SyntaxCache>,
+    syntax: RefCell<SyntaxState>,
     /// Debug plugin host session, when started.
     #[cfg(target_os = "linux")]
     host: Option<HostSession>,
@@ -140,7 +140,7 @@ impl Model {
             gateway: None,
             workspace: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
             require_gateway: false,
-            syntax: RefCell::new(SyntaxCache::default()),
+            syntax: RefCell::new(SyntaxState::default()),
             #[cfg(target_os = "linux")]
             host: None,
         }
@@ -1083,6 +1083,19 @@ impl Model {
     #[cfg(not(target_os = "linux"))]
     pub fn poll_host(&mut self) {}
 
+    pub fn poll_syntax(&mut self) {
+        let text = self.editor.text();
+        let revision = self.editor.revision();
+        let path = self.path.clone();
+        if self
+            .syntax
+            .borrow_mut()
+            .poll(text, revision, path.as_deref())
+        {
+            self.dirty = true;
+        }
+    }
+
     fn execute_command(&mut self, command: &str) {
         if let Some(rest) = command.strip_prefix("%s/") {
             self.substitute(true, rest);
@@ -1202,15 +1215,15 @@ impl Model {
             };
             let mut spans = Vec::new();
             let mut base = start;
-            let mut syntax_guard = if needle.is_empty() {
-                Some(self.syntax.borrow_mut())
+            let syntax_guard = if needle.is_empty() {
+                Some(self.syntax.borrow())
             } else {
                 None
             };
-            let highlights = match syntax_guard.as_mut() {
-                Some(cache) => cache.ensure(text, self.editor.revision(), self.path.as_deref()),
-                None => &[],
-            };
+            let highlights = syntax_guard
+                .as_deref()
+                .map(SyntaxState::highlights)
+                .unwrap_or(&[]);
             for chunk in text.chunks(start..line.end) {
                 if needle.is_empty() {
                     push_syntax_spans(&mut spans, chunk, base, highlights);
@@ -1497,6 +1510,7 @@ pub fn run_with_workspace(path: Option<PathBuf>, workspace: PathBuf) -> io::Resu
             }
         }
         model.poll_host();
+        model.poll_syntax();
         if event::poll(std::time::Duration::from_millis(50))? {
             handle_event(&mut model, event::read()?);
         }
@@ -1507,6 +1521,7 @@ pub fn run_with_workspace(path: Option<PathBuf>, workspace: PathBuf) -> io::Resu
 }
 
 fn handle_event(model: &mut Model, event: Event) {
+    model.syntax.borrow_mut().note_activity();
     match event {
         Event::Key(key) if key.kind == KeyEventKind::Press => handle_key(model, key),
         Event::Paste(text) => {
@@ -1792,6 +1807,13 @@ mod tests {
             EditorState::from_text("fn main() {}"),
             Some(PathBuf::from("sample.rs")),
         );
+        for _ in 0..200 {
+            model.poll_syntax();
+            if !model.syntax.borrow().highlights().is_empty() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
         let backend = TestBackend::new(80, 8);
         let mut terminal = Terminal::new(backend).expect("terminal");
         terminal.draw(|frame| view(&model, frame)).expect("draw");
