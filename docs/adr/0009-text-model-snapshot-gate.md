@@ -17,6 +17,20 @@ backend. The corrected measurements separately measure:
 1. `Arc::clone` snapshot creation;
 2. the first edit after a retained snapshot, which forces copy-on-write.
 
+## COW design
+
+- Snapshots are `Arc<Document>`; creation is reference-counted, not textual.
+- Mutation goes through `Arc::make_mut`, which clones `PieceTable` metadata.
+- `PieceTable` stores `original: Arc<str>` and inserted text as
+  `Vec<Arc<str>>` chunks.
+- Each `Piece` references `Source::Original` or `Source::Added(index)` plus a
+  byte range.
+- Insert creates a new immutable chunk; no buffer shared with a snapshot is
+  mutated in place.
+- Delete and split rewrite only the piece index; text chunks stay shared.
+- Complexity: snapshot O(1); first edit O(piece count) plus inserted bytes;
+  the base document is never copied.
+
 ## Measurements
 
 100 MB, p99, 30 samples:
