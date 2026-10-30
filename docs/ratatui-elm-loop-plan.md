@@ -1,6 +1,6 @@
 # Ratatui TUI Elm Loop Plan
 
-Status: TUI-0 and basic TUI-1 implemented (insert, save, quit guard, undo/redo, `x`/`dd`/`yy`/`p`, cursor/viewport); Elm Msg/Cmd runtime remains planned.
+Status: TUI-0 and basic TUI-1 implemented (insert variants, save/save-as, quit guard, undo/redo, `x`/`dd`/`yy`/`p`, `/` search with `n`/`N`, cursor/viewport); Elm Msg/Cmd runtime remains planned.
 
 ## 1. Goal
 

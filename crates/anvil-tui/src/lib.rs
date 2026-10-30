@@ -9,7 +9,7 @@ use std::{
 };
 
 use anvil_api::EditorView;
-use anvil_core::TextBuffer;
+use anvil_core::{TextBuffer, TextDocument};
 use anvil_editor::EditorState;
 use crossterm::{
     event::{self, Event, KeyCode, KeyEvent, KeyEventKind},
@@ -33,6 +33,8 @@ pub enum InputMode {
     Insert,
     /// Ex-style command line.
     CommandLine { buffer: String },
+    /// Incremental substring search.
+    Search { query: String },
 }
 
 /// TUI state.
@@ -57,6 +59,8 @@ pub struct Model {
     pub status: String,
     /// Pending normal-mode operator (`d` or `y`).
     pending: Option<char>,
+    /// Last substring search.
+    search_query: String,
 }
 
 impl Model {
@@ -73,6 +77,7 @@ impl Model {
             dirty: true,
             status: String::new(),
             pending: None,
+            search_query: String::new(),
         }
     }
 
@@ -260,6 +265,106 @@ impl Model {
         }
     }
 
+    fn jump_to(&mut self, offset: usize) {
+        self.cursor = offset;
+        self.editor.set_selection_bytes(offset, offset);
+        self.dirty = true;
+    }
+
+    fn execute_search(&mut self, query: String) {
+        if query.is_empty() {
+            if self.search_query.is_empty() {
+                self.status = "E: no previous search".to_owned();
+                self.dirty = true;
+            } else {
+                self.search_next(true);
+            }
+            return;
+        }
+        self.search_query = query;
+        let matches = find_matches(self.editor.text(), &self.search_query);
+        if matches.is_empty() {
+            self.status = format!("E: pattern not found: {}", self.search_query);
+            self.dirty = true;
+            return;
+        }
+        let target = matches
+            .iter()
+            .copied()
+            .find(|&offset| offset >= self.cursor)
+            .unwrap_or(matches[0]);
+        self.jump_to(target);
+        self.status = format!("/{}", self.search_query);
+    }
+
+    fn search_next(&mut self, forward: bool) {
+        if self.search_query.is_empty() {
+            self.status = "E: no previous search".to_owned();
+            self.dirty = true;
+            return;
+        }
+        let matches = find_matches(self.editor.text(), &self.search_query);
+        if matches.is_empty() {
+            self.status = format!("E: pattern not found: {}", self.search_query);
+            self.dirty = true;
+            return;
+        }
+        let target = if forward {
+            matches
+                .iter()
+                .copied()
+                .find(|&offset| offset > self.cursor)
+                .unwrap_or(matches[0])
+        } else {
+            matches
+                .iter()
+                .rev()
+                .copied()
+                .find(|&offset| offset < self.cursor)
+                .unwrap_or(matches[matches.len() - 1])
+        };
+        self.jump_to(target);
+        self.status = format!("/{}", self.search_query);
+    }
+
+    fn append(&mut self) {
+        if let Some(line) = self.editor.index().offset_to_line(self.cursor)
+            && self.cursor < line.end
+        {
+            self.move_char(1);
+        }
+        self.input_mode = InputMode::Insert;
+        self.dirty = true;
+    }
+
+    fn append_line_end(&mut self) {
+        if let Some(line) = self.editor.index().offset_to_line(self.cursor) {
+            self.cursor = line.end;
+        }
+        self.input_mode = InputMode::Insert;
+        self.dirty = true;
+    }
+
+    fn open_below(&mut self) {
+        if let Some(line) = self.editor.index().offset_to_line(self.cursor) {
+            self.cursor = line.end;
+        }
+        self.insert_text("\n");
+        self.input_mode = InputMode::Insert;
+    }
+
+    fn open_above(&mut self) {
+        let start = self
+            .editor
+            .index()
+            .offset_to_line(self.cursor)
+            .map_or(0, |line| line.start);
+        self.cursor = start;
+        self.insert_text("\n");
+        self.cursor = start;
+        self.input_mode = InputMode::Insert;
+    }
+
     fn backspace(&mut self) {
         if self.cursor == 0 {
             return;
@@ -289,17 +394,14 @@ impl Model {
         self.dirty = true;
     }
 
-    fn save(&mut self) -> bool {
-        let Some(path) = self.path.as_ref() else {
-            self.status = "E32: no file name".to_owned();
-            self.dirty = true;
-            return false;
-        };
+    fn save_to(&mut self, path: PathBuf) -> bool {
         let text = self.editor.text().slice(0..self.editor.text().len_bytes());
-        match fs::write(path, text) {
+        let display = path.display().to_string();
+        match fs::write(&path, text) {
             Ok(()) => {
+                self.path = Some(path);
                 self.modified = false;
-                self.status = format!("\"{}\" written", path.display());
+                self.status = format!("\"{display}\" written");
                 self.dirty = true;
                 true
             }
@@ -311,15 +413,39 @@ impl Model {
         }
     }
 
+    fn save(&mut self) -> bool {
+        let Some(path) = self.path.clone() else {
+            self.status = "E32: no file name".to_owned();
+            self.dirty = true;
+            return false;
+        };
+        self.save_to(path)
+    }
+
+    fn save_as(&mut self, path: &str) -> bool {
+        self.save_to(PathBuf::from(path))
+    }
+
     fn execute_command(&mut self, command: &str) {
-        match command {
-            "w" => {
+        let mut parts = command.splitn(2, char::is_whitespace);
+        let name = parts.next().unwrap_or_default();
+        let argument = parts.next().unwrap_or_default().trim();
+        match (name, argument) {
+            ("w", "") => {
                 self.save();
             }
-            "q" => self.request_quit(),
-            "q!" => self.quit = true,
-            "wq" => {
+            ("w", path) => {
+                self.save_as(path);
+            }
+            ("q", "") => self.request_quit(),
+            ("q!", "") => self.quit = true,
+            ("wq", "") => {
                 if self.save() {
+                    self.quit = true;
+                }
+            }
+            ("wq", path) => {
+                if self.save_as(path) {
                     self.quit = true;
                 }
             }
@@ -360,6 +486,42 @@ impl Model {
     }
 }
 
+fn find_matches(text: &TextDocument, needle: &str) -> Vec<usize> {
+    let needle = needle.as_bytes();
+    if needle.is_empty() || needle.len() > text.len_bytes() {
+        return Vec::new();
+    }
+    let mut matches = Vec::new();
+    let mut carry = Vec::new();
+    let mut processed: usize = 0;
+    for chunk in text.chunks(0..text.len_bytes()) {
+        if chunk.is_empty() {
+            continue;
+        }
+        let mut window = Vec::with_capacity(carry.len() + chunk.len());
+        window.extend_from_slice(&carry);
+        window.extend_from_slice(chunk.as_bytes());
+        let window_start = processed.saturating_sub(carry.len());
+        let mut from = 0;
+        while from + needle.len() <= window.len() {
+            let Some(local) = window[from..]
+                .windows(needle.len())
+                .position(|candidate| candidate == needle)
+            else {
+                break;
+            };
+            let at = from + local;
+            matches.push(window_start + at);
+            from = at + 1;
+        }
+        let keep = needle.len().saturating_sub(1).min(window.len());
+        carry.clear();
+        carry.extend_from_slice(&window[window.len() - keep..]);
+        processed += chunk.len();
+    }
+    matches
+}
+
 /// Renders the current viewport and cursor.
 pub fn view(model: &Model, frame: &mut Frame) {
     let area = frame.area();
@@ -377,6 +539,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
     };
     let status = match &model.input_mode {
         InputMode::CommandLine { buffer } => format!(":{buffer}"),
+        InputMode::Search { query } => format!("/{query}"),
         InputMode::Insert => "-- INSERT --".to_owned(),
         InputMode::Normal => {
             let position = model
@@ -453,6 +616,9 @@ fn handle_event(model: &mut Model, event: Event) {
             } else if let InputMode::CommandLine { buffer } = &mut model.input_mode {
                 buffer.push_str(&text);
                 model.dirty = true;
+            } else if let InputMode::Search { query } = &mut model.input_mode {
+                query.push_str(&text);
+                model.dirty = true;
             }
         }
         Event::Resize(_, _) => model.dirty = true,
@@ -495,6 +661,26 @@ fn handle_key(model: &mut Model, key: KeyEvent) {
             }
             _ => {}
         },
+        InputMode::Search { query } => match key.code {
+            KeyCode::Esc => {
+                model.input_mode = InputMode::Normal;
+                model.dirty = true;
+            }
+            KeyCode::Enter => {
+                let query = std::mem::take(query);
+                model.input_mode = InputMode::Normal;
+                model.execute_search(query);
+            }
+            KeyCode::Backspace => {
+                query.pop();
+                model.dirty = true;
+            }
+            KeyCode::Char(character) if !control => {
+                query.push(character);
+                model.dirty = true;
+            }
+            _ => {}
+        },
         InputMode::Insert => match key.code {
             KeyCode::Esc => {
                 model.input_mode = InputMode::Normal;
@@ -524,6 +710,18 @@ fn handle_key(model: &mut Model, key: KeyEvent) {
                 };
                 model.dirty = true;
             }
+            KeyCode::Char('/') => {
+                model.input_mode = InputMode::Search {
+                    query: String::new(),
+                };
+                model.dirty = true;
+            }
+            KeyCode::Char('a') if !control => model.append(),
+            KeyCode::Char('A') if !control => model.append_line_end(),
+            KeyCode::Char('o') if !control => model.open_below(),
+            KeyCode::Char('O') if !control => model.open_above(),
+            KeyCode::Char('n') if !control => model.search_next(true),
+            KeyCode::Char('N') if !control => model.search_next(false),
             KeyCode::Char('d') if !control => model.pending = Some('d'),
             KeyCode::Char('y') if !control => model.pending = Some('y'),
             KeyCode::Char('x') if !control => model.delete_forward(),
@@ -585,6 +783,12 @@ mod tests {
 
     fn ctrl(code: KeyCode) -> Event {
         Event::Key(KeyEvent::new(code, KeyModifiers::CONTROL))
+    }
+
+    fn type_text(model: &mut Model, text: &str) {
+        for character in text.chars() {
+            handle_event(model, key(KeyCode::Char(character)));
+        }
     }
 
     #[test]
@@ -758,5 +962,64 @@ mod tests {
         }
         assert!(!model.quit);
         assert!(model.status.contains("no file name"));
+    }
+
+    #[test]
+    fn search_cycles_and_crosses_chunk_boundaries() {
+        let mut model = Model::new(EditorState::from_text("foo bar foo"), None);
+        handle_event(&mut model, key(KeyCode::Char('/')));
+        type_text(&mut model, "foo");
+        handle_event(&mut model, key(KeyCode::Enter));
+        assert_eq!(model.cursor, 0);
+
+        handle_event(&mut model, key(KeyCode::Char('n')));
+        assert_eq!(model.cursor, 8);
+        handle_event(&mut model, key(KeyCode::Char('N')));
+        assert_eq!(model.cursor, 0);
+
+        let mut chunked = Model::new(EditorState::from_text("hello "), None);
+        chunked.cursor = 6;
+        chunked.insert_text("world");
+        handle_event(&mut chunked, key(KeyCode::Char('/')));
+        type_text(&mut chunked, "o w");
+        handle_event(&mut chunked, key(KeyCode::Enter));
+        assert_eq!(chunked.cursor, 4);
+    }
+
+    #[test]
+    fn w_path_saves_as_and_updates_the_current_path() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("saved.txt");
+        let mut model = Model::new(EditorState::from_text("data"), None);
+        handle_event(&mut model, key(KeyCode::Char(':')));
+        type_text(&mut model, &format!("w {}", path.display()));
+        handle_event(&mut model, key(KeyCode::Enter));
+
+        assert_eq!(fs::read_to_string(&path).expect("read"), "data");
+        assert_eq!(model.path.as_ref(), Some(&path));
+        assert!(!model.modified);
+    }
+
+    #[test]
+    fn insert_variants_append_and_open_lines() {
+        let mut append = Model::new(EditorState::from_text("ac"), None);
+        handle_event(&mut append, key(KeyCode::Char('a')));
+        type_text(&mut append, "b");
+        assert_eq!(append.editor.text().slice(0..3), "abc");
+
+        let mut below = Model::new(EditorState::from_text("a"), None);
+        handle_event(&mut below, key(KeyCode::Char('o')));
+        type_text(&mut below, "b");
+        assert_eq!(below.editor.text().slice(0..3), "a\nb");
+
+        let mut above = Model::new(EditorState::from_text("a"), None);
+        handle_event(&mut above, key(KeyCode::Char('O')));
+        type_text(&mut above, "b");
+        assert_eq!(above.editor.text().slice(0..3), "b\na");
+
+        let mut end = Model::new(EditorState::from_text("a"), None);
+        handle_event(&mut end, key(KeyCode::Char('A')));
+        type_text(&mut end, "b");
+        assert_eq!(end.editor.text().slice(0..2), "ab");
     }
 }
