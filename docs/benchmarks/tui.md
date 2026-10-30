@@ -37,7 +37,7 @@ go build -o target/release/anvil-gateway ./go/cmd/anvil-gateway
 | Layer | Scenario | p50 | p95 | p99 | n |
 |---|---|---:|---:|---:|---:|
 | Rust | key to screen, 1 MB | 76.5 µs | 79.6 µs | 79.6 µs | 20 |
-| Rust | open 100 MB, first frame | 174.1 ms | 174.1 ms | 174.1 ms | 1 |
+| Rust | open 100 MB, first frame | 109.8 ms | 109.8 ms | 109.8 ms | 1 |
 | Rust | scroll 100 MB, one `j` | 74.4 µs | 104.0 µs | 104.0 µs | 20 |
 | Rust | first `/` search, 100 MB | 210.7 ms | 210.7 ms | 210.7 ms | 1 |
 | Rust | subsequent `/` search, 100 MB | 213.7 ms | 229.8 ms | 229.8 ms | 10 |
@@ -47,6 +47,9 @@ go build -o target/release/anvil-gateway ./go/cmd/anvil-gateway
 | PTY | first `/` search, 100 MB | 219.0 ms | 219.0 ms | 219.0 ms | 1 |
 | PTY | subsequent `/` search, 100 MB | 221.3 ms | 239.1 ms | 239.1 ms | 10 |
 
+The Rust open row is post-parallel-index; the PTY row is pre-parallel and is
+kept as the historical direct baseline.
+
 ## Gateway path (2026-10-31)
 
 Same 100 MB fixture, release TUI, sibling release `anvil-gateway`, 5.5 MiB
@@ -54,8 +57,8 @@ chunks (19 chunks / 104,857,596 bytes):
 
 | Layer | Scenario | p50 | p95 | p99 | n |
 |---|---|---:|---:|---:|---:|
-| Rust | open 100 MB, first frame | 184.4 ms | 184.4 ms | 184.4 ms | 1 |
-| PTY + gateway | open 100 MB, first frame | 640.1 ms | 640.1 ms | 640.1 ms | 1 |
+| Rust | open 100 MB, first frame | 109.8 ms | 109.8 ms | 109.8 ms | 1 |
+| PTY + gateway | open 100 MB, first frame | 600.4 ms | 600.4 ms | 600.4 ms | 1 |
 | PTY + gateway | key to first output, 1 MB | 160.8 µs | 561.7 µs | 561.7 µs | 20 |
 | PTY + gateway | scroll 100 MB, one `j` | 523.4 µs | 731.4 µs | 731.4 µs | 20 |
 | PTY + gateway | first `/` search, 100 MB | 230.7 ms | 230.7 ms | 230.7 ms | 1 |
@@ -106,28 +109,28 @@ document decode, page-cache warm):
 
 An 8-request window saves **256 ms** against window 1 in the same run. It is
 not only a 28 ms socket optimization; the server encode overlaps across cores.
-Projected PTY open is roughly **384 ms** before client decode is included.
+Projected PTY open is roughly **344 ms** before client decode is included.
 
 ## Interpretation
 
-- Direct Rust 100 MB open is 174–184 ms; direct PTY startup is 210 ms.
-  The gateway path is **640 ms PTY**, about **+430 ms** over the direct PTY
-  baseline and roughly 3.1x. It **does not meet the Phase 0.6 open target of
-  200 ms**; the direct path itself is already just over that target. The 50 ms
-  open number is a long-term target, not the Phase 0.6 blocker.
+- Direct Rust 100 MB open is **109.8 ms** after parallel line scanning;
+  the pre-parallel direct PTY baseline was 210 ms. The gateway path is **600 ms
+  PTY**, about **+390 ms** over that older direct PTY number. It **does not
+  meet the Phase 0.6 open target of 200 ms**. The 50 ms open number is a
+  long-term target, not the Phase 0.6 blocker.
 - The server encode path, not file I/O, is the dominant added cost. Per 5.5
   MiB chunk: `ReadFileAt` is 0.84 ms, base64 is 4.98 ms, JSON is 5.33 ms, and
   the full response encode is 11.8 ms. The file is page-cache warm.
 - The 5.5 MiB chunk is real and fits the 8 MiB frame; the 4 MiB run was 732 ms
-  and 5.5 MiB is 640 ms. But 7 MiB raw exceeds the frame after base64, and the
+  and 5.5 MiB is 600 ms. But 7 MiB raw exceeds the frame after base64, and the
   practical ceiling is about 5.9 MiB. The remaining gap is not round-trip
   count alone.
 - Pipelining is the cheapest measured improvement: window 8 takes the UDS loop
   from 591.8 ms to 335.3 ms in the same run, saving 256 ms. It still leaves a
-  projected ~384 ms PTY open, above the 200 ms Phase 0.6 target.
+  projected ~344 ms PTY open, above the 200 ms Phase 0.6 target.
 - Binary framing removes the measured base64 and JSON work: about 10.3 ms
   server + 3.3 ms client per chunk, or ~258 ms total. That projects to roughly
-  **380 ms PTY**, not 240 ms. fd passing removes the whole 19.2 ms/chunk
+  **342 ms PTY**, not 240 ms. fd passing removes the whole 19.2 ms/chunk
   transfer path and is the only option that can approach the direct baseline.
   The 200 ms target still needs binary framing, pipelining, and parallel
   line-index construction.
@@ -143,12 +146,16 @@ Measured with `/proc/<pid>/status` after the first 100 MB frame:
 | Process | VmRSS | VmHWM |
 |---|---:|---:|
 | TUI | 198 MB | 301 MB |
-| `anvil-gateway` child | 56 MB | 63 MB |
+| `anvil-gateway` child | 58 MB | 63 MB |
 
 The TUI footprint is unchanged from the direct path: the peak includes the
 source `String`, the `PieceTable` copy, and the line index. The gateway adds
-about 56 MB steady and 63 MB peak for 5.5 MiB chunk, base64, and JSON buffers.
+about 58 MB steady and 63 MB peak for 5.5 MiB chunk, base64, and JSON buffers.
 The combined steady footprint is about 255 MB.
+
+The two-pass parallel line scan keeps memory flat: it allocates the final
+line-start array once and writes disjoint per-worker slices, instead of keeping
+per-worker arrays and a second merged array.
 
 A `line_starts` preallocation experiment alone did not change VmHWM. The win
 came from building `LineIndex` directly from the source `&str` instead of

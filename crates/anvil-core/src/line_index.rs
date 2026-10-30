@@ -3,7 +3,7 @@
 //! Line metadata is stored in parallel arrays so an edit shifts contiguous
 //! cache lines instead of walking a large array of chunk structs.
 
-use std::{ops::Range, sync::Arc};
+use std::{ops::Range, sync::Arc, thread};
 
 use unicode_segmentation::{GraphemeCursor, GraphemeIncomplete, UnicodeSegmentation};
 use unicode_width::UnicodeWidthChar;
@@ -15,6 +15,7 @@ const MAX_LINES: usize = 2048;
 const MIN_LINES: usize = 512;
 const TAB_WIDTH: usize = 4;
 const GRAPHEME_WINDOW: usize = 64;
+const PARALLEL_LINE_SCAN: usize = 4 << 20;
 
 fn floor_char_boundary<B: TextBuffer>(buffer: &B, mut offset: usize) -> usize {
     while offset > 0 && !buffer.is_char_boundary(offset) {
@@ -500,8 +501,75 @@ fn line_starts(text: &str) -> Vec<usize> {
     if text.is_empty() {
         return Vec::new();
     }
+    let bytes = text.as_bytes();
+    let workers = thread::available_parallelism()
+        .map_or(1, std::num::NonZeroUsize::get)
+        .min(16)
+        .min(bytes.len() / (1 << 20))
+        .max(1);
+    if workers == 1 || bytes.len() < PARALLEL_LINE_SCAN {
+        return serial_line_starts(bytes);
+    }
+    let chunk = bytes.len().div_ceil(workers);
+    let mut ranges = Vec::with_capacity(workers);
+    for index in 0..workers {
+        let start = index * chunk;
+        let end = (start + chunk).min(bytes.len());
+        if start < end {
+            ranges.push((start, end));
+        }
+    }
+    let counts = thread::scope(|scope| {
+        let mut handles = Vec::with_capacity(ranges.len());
+        for (start, end) in &ranges {
+            let start = *start;
+            let end = *end;
+            handles.push(scope.spawn(move || {
+                bytes[start..end]
+                    .iter()
+                    .filter(|byte| **byte == b'\n')
+                    .count()
+            }));
+        }
+        handles
+            .into_iter()
+            .map(|handle| handle.join().expect("line scan worker"))
+            .collect::<Vec<_>>()
+    });
+    let total = 1 + counts.iter().sum::<usize>();
+    let mut starts = vec![0; total];
+    let mut rest = &mut starts[1..];
+    thread::scope(|scope| {
+        let mut handles = Vec::with_capacity(ranges.len());
+        for ((start, end), count) in ranges.into_iter().zip(counts) {
+            let (slot, next) = rest.split_at_mut(count);
+            rest = next;
+            handles.push(scope.spawn(move || {
+                let mut index = 0;
+                for (offset, byte) in bytes[start..end].iter().enumerate() {
+                    if *byte == b'\n' {
+                        slot[index] = start + offset + 1;
+                        index += 1;
+                    }
+                }
+            }));
+        }
+        for handle in handles {
+            handle.join().expect("line scan worker");
+        }
+    });
+    starts
+}
+
+fn serial_line_starts(bytes: &[u8]) -> Vec<usize> {
     let mut starts = vec![0];
-    starts.extend(text.match_indices('\n').map(|(index, _)| index + 1));
+    starts.extend(
+        bytes
+            .iter()
+            .enumerate()
+            .filter(|(_, byte)| **byte == b'\n')
+            .map(|(index, _)| index + 1),
+    );
     starts
 }
 
@@ -609,6 +677,15 @@ mod tests {
         let blank = LineIndex::from_text("\n");
         assert_eq!(blank.offset_to_line(0).unwrap().end, 0);
         assert_eq!(blank.offset_to_line(1).unwrap().end, 1);
+    }
+
+    #[test]
+    fn parallel_line_scan_matches_serial() {
+        let text = "a\n".repeat(3_000_000);
+        assert_eq!(line_starts(&text), serial_line_starts(text.as_bytes()));
+        let index = LineIndex::from_text(&text);
+        assert_eq!(index.len_lines(), 3_000_001);
+        assert_eq!(index.line_to_offset(3_000_000), Some(6_000_000));
     }
 
     #[test]

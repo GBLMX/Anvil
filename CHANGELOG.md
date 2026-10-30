@@ -44,6 +44,11 @@ All notable changes to Anvil are recorded here. The format follows
   instead of a full `TextBuffer::slice` copy; peak VmHWM drops from 493 MB to
   300 MB, steady RSS remains 198 MB.
 
+- Two-pass parallel line scanning for large text: disjoint worker ranges count
+  and fill the final line-start array, cutting 100 MB Rust open from 174 ms to
+  110 ms and gateway PTY open from 640 ms to 600 ms without increasing the
+  198/301 MB TUI RSS/peak.
+
 - Workspace-scoped chunked `sys.read_file`/`sys.write_file`: fail-closed
   gateway I/O, base64 5.5 MiB chunks, atomic rename, streaming writes, path
   canonicalization before permission checks, and no `std::fs` fallback.
