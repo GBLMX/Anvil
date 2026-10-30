@@ -47,6 +47,8 @@ pub struct Model {
     pub cursor: usize,
     /// First visible line, independent of the cursor.
     pub scroll: usize,
+    /// First visible display column.
+    pub hscroll: usize,
     /// Input state.
     pub input_mode: InputMode,
     /// Set by `q` / `:q`.
@@ -71,6 +73,7 @@ impl Model {
             path,
             cursor: 0,
             scroll: 0,
+            hscroll: 0,
             input_mode: InputMode::Normal,
             quit: false,
             modified: false,
@@ -145,7 +148,7 @@ impl Model {
     }
 
     /// Keeps the cursor inside the viewport.
-    pub fn ensure_cursor_visible(&mut self, height: u16) {
+    pub fn ensure_cursor_visible(&mut self, height: u16, width: u16) {
         let Some(position) = self
             .editor
             .index()
@@ -159,6 +162,13 @@ impl Model {
             self.scroll = line;
         } else if line >= self.scroll + height {
             self.scroll = line + 1 - height;
+        }
+        let column = position.display_column;
+        let width = usize::from(width.max(1));
+        if column < self.hscroll {
+            self.hscroll = column;
+        } else if column >= self.hscroll.saturating_add(width) {
+            self.hscroll = column + 1 - width;
         }
     }
 
@@ -560,13 +570,17 @@ pub fn view(model: &Model, frame: &mut Frame) {
         width: area.width.saturating_sub(2),
         height: area.height.saturating_sub(2),
     };
-    frame.render_widget(Paragraph::new(model.visible_lines(inner.height)), inner);
+    frame.render_widget(
+        Paragraph::new(model.visible_lines(inner.height))
+            .scroll((0, u16::try_from(model.hscroll).unwrap_or(u16::MAX))),
+        inner,
+    );
     if let Some(position) = model
         .editor
         .index()
         .position(model.editor.text(), model.cursor)
     {
-        let x = inner.x + position.display_column as u16;
+        let x = inner.x + position.display_column.saturating_sub(model.hscroll) as u16;
         let y = inner.y + position.line.saturating_sub(model.scroll) as u16;
         if x < inner.right() && y < inner.bottom() {
             frame.set_cursor_position((x, y));
@@ -583,7 +597,7 @@ pub fn run(path: Option<PathBuf>) -> io::Result<()> {
     let mut terminal = TerminalSession::start()?;
     loop {
         let size = terminal.terminal.size()?;
-        model.ensure_cursor_visible(size.height.saturating_sub(2));
+        model.ensure_cursor_visible(size.height.saturating_sub(2), size.width.saturating_sub(2));
         if model.dirty {
             terminal.terminal.draw(|frame| view(&model, frame))?;
             model.dirty = false;
@@ -828,11 +842,48 @@ mod tests {
     fn cursor_and_viewport_are_independent() {
         let mut model = Model::new(EditorState::from_text("a\nb\nc\nd"), None);
         model.move_line(3);
-        model.ensure_cursor_visible(2);
+        model.ensure_cursor_visible(2, 80);
         assert_eq!(model.scroll, 2);
         model.move_line(-1);
-        model.ensure_cursor_visible(2);
+        model.ensure_cursor_visible(2, 80);
         assert_eq!(model.scroll, 2);
+    }
+
+    #[test]
+    fn horizontal_scroll_follows_the_cursor() {
+        let mut model = Model::new(EditorState::from_text("0123456789"), None);
+        model.cursor = 8;
+        model.ensure_cursor_visible(1, 4);
+        assert_eq!(model.hscroll, 5);
+        model.cursor = 0;
+        model.ensure_cursor_visible(1, 4);
+        assert_eq!(model.hscroll, 0);
+    }
+
+    #[test]
+    fn horizontal_scroll_uses_display_cells() {
+        let mut model = Model::new(EditorState::from_text("中中中中中"), None);
+        model.cursor = model.editor.text().len_bytes();
+        model.ensure_cursor_visible(1, 3);
+        assert_eq!(model.hscroll, 8);
+    }
+
+    #[test]
+    fn status_column_uses_grapheme_index() {
+        let mut model = Model::new(EditorState::from_text("a👨‍👩‍👧‍👦b"), None);
+        model.cursor = "a👨‍👩‍👧‍👦".len();
+        let backend = TestBackend::new(80, 8);
+        let mut terminal = Terminal::new(backend).expect("terminal");
+        terminal.draw(|frame| view(&model, frame)).expect("draw");
+        let rendered = terminal
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .map(|cell| cell.symbol())
+            .collect::<String>();
+        assert!(rendered.contains("Col 3"));
+        assert!(!rendered.contains("Col 26"));
     }
 
     #[test]

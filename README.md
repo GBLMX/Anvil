@@ -6,8 +6,8 @@ plugin contract.
 Status: **pre-alpha; Phase 0.6 in progress**. A minimal ratatui editor exists with
 insert mode (`i`/`a`/`A`/`o`/`O`), `:w`/`:wq`/`:w file`/`:q!`, an
 unsaved-change guard, undo/redo, `x`/`dd`/`yy`/`p` with an unnamed register,
-`/` search with `n`/`N`, cursor/viewport separation, and dirty-only redraws; the
-Elm command runtime is not complete yet.
+`/` search with `n`/`N`, cursor/viewport separation with horizontal scrolling,
+and dirty-only redraws; the Elm command runtime is not complete yet.
 Phase 0 code currently consists of the `anvil-api` interaction and view
 contracts, the `anvil-core` text buffer and selected PieceTable backend, the
 `anvil-editor` snapshot layer, the `anvil-ipc` frame codec, JSON-RPC envelope,

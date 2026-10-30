@@ -5,7 +5,7 @@
 
 use std::{ops::Range, sync::Arc};
 
-use unicode_segmentation::UnicodeSegmentation;
+use unicode_segmentation::{GraphemeCursor, GraphemeIncomplete, UnicodeSegmentation};
 use unicode_width::UnicodeWidthChar;
 
 use crate::TextBuffer;
@@ -14,6 +14,21 @@ const TARGET_LINES: usize = 1024;
 const MAX_LINES: usize = 2048;
 const MIN_LINES: usize = 512;
 const TAB_WIDTH: usize = 4;
+const GRAPHEME_WINDOW: usize = 64;
+
+fn floor_char_boundary<B: TextBuffer>(buffer: &B, mut offset: usize) -> usize {
+    while offset > 0 && !buffer.is_char_boundary(offset) {
+        offset -= 1;
+    }
+    offset
+}
+
+fn ceil_char_boundary<B: TextBuffer>(buffer: &B, mut offset: usize) -> usize {
+    while offset < buffer.len_bytes() && !buffer.is_char_boundary(offset) {
+        offset += 1;
+    }
+    offset
+}
 
 #[derive(Debug, Clone)]
 struct LineChunk {
@@ -162,15 +177,23 @@ impl LineIndex {
         {
             return None;
         }
-        let line = self.offset_to_line(offset)?;
-        if offset < line.end {
-            let text = buffer.slice(offset..line.end);
-            let grapheme = text.graphemes(true).next()?;
-            Some(offset + grapheme.len())
-        } else if line.end < buffer.len_bytes() {
-            Some(line.end + 1)
-        } else {
-            Some(offset)
+        let len = buffer.len_bytes();
+        if offset == len {
+            return Some(len);
+        }
+        let mut end = floor_char_boundary(buffer, (offset + GRAPHEME_WINDOW).min(len));
+        loop {
+            let chunk = buffer.slice(offset..end);
+            let mut cursor = GraphemeCursor::new(offset, len, true);
+            match cursor.next_boundary(&chunk, offset) {
+                Ok(Some(boundary)) => return Some(boundary),
+                Ok(None) => return Some(len),
+                Err(GraphemeIncomplete::NextChunk) if end < len => {
+                    end = floor_char_boundary(buffer, (end + GRAPHEME_WINDOW).min(len));
+                }
+                Err(GraphemeIncomplete::NextChunk) => return Some(len),
+                Err(_) => return None,
+            }
         }
     }
 
@@ -184,18 +207,27 @@ impl LineIndex {
         {
             return None;
         }
-        let line = self.offset_to_line(offset)?;
-        if offset > line.start {
-            let text = buffer.slice(line.start..offset);
-            let start = text
-                .grapheme_indices(true)
-                .next_back()
-                .map_or(line.start, |(index, _)| line.start + index);
-            Some(start)
-        } else if offset > 0 {
-            Some(offset - 1)
-        } else {
-            Some(0)
+        if offset == 0 {
+            return Some(0);
+        }
+        let len = buffer.len_bytes();
+        let mut start = ceil_char_boundary(buffer, offset.saturating_sub(GRAPHEME_WINDOW));
+        loop {
+            let chunk = buffer.slice(start..offset);
+            let mut cursor = GraphemeCursor::new(offset, len, true);
+            match cursor.prev_boundary(&chunk, start) {
+                Ok(Some(boundary)) => return Some(boundary),
+                Ok(None) => return Some(0),
+                Err(GraphemeIncomplete::PrevChunk | GraphemeIncomplete::PreContext(_))
+                    if start > 0 =>
+                {
+                    start = ceil_char_boundary(buffer, start.saturating_sub(GRAPHEME_WINDOW));
+                }
+                Err(GraphemeIncomplete::PrevChunk | GraphemeIncomplete::PreContext(_)) => {
+                    return Some(0);
+                }
+                Err(_) => return None,
+            }
         }
     }
 

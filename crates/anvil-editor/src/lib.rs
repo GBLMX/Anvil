@@ -527,4 +527,13 @@ mod tests {
             Some(after_emoji + 1)
         );
     }
+
+    #[test]
+    fn grapheme_boundaries_expand_beyond_the_window() {
+        let text = format!("e{}b", "\u{301}".repeat(80));
+        let state = EditorState::from_text(&text);
+        let after_cluster = state.next_grapheme_boundary(0).expect("cluster boundary");
+        assert_eq!(after_cluster, text.len() - 1);
+        assert_eq!(state.previous_grapheme_boundary(after_cluster), Some(0));
+    }
 }

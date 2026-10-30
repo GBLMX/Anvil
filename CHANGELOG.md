@@ -33,8 +33,8 @@ All notable changes to Anvil are recorded here. The format follows
   (`i`/`a`/`A`/`o`/`O`), `:w`/`:wq`/`:w file`/`:q!`, an unsaved-change quit
   guard, undo/redo, `x`/`dd`/`yy`/`p` with an unnamed register, substring
   `/` search with `n`/`N`, grapheme-aware cursor movement and deletion,
-  cursor/viewport separation, dirty-only redraws, terminal restore, and
-  borrowed text chunks.
+  horizontal scrolling, cursor/viewport separation, dirty-only redraws,
+  terminal restore, and borrowed text chunks.
 
 - Phase 0.5 complete: PieceTable production selection, cursor/line-index
   primitives, editor snapshots, selection-aware undo, and the locked-core
