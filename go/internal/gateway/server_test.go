@@ -205,6 +205,39 @@ func TestConnectionCloseCancelsExec(t *testing.T) {
 	}
 }
 
+func TestSessionCgroupLifecycle(t *testing.T) {
+	root := t.TempDir()
+	socket := filepath.Join(t.TempDir(), "gateway.sock")
+	hash := sha256.Sum256([]byte(testToken))
+	server, err := Listen(Config{
+		SocketPath:  socket,
+		Workspace:   t.TempDir(),
+		PluginID:    "test-plugin",
+		TokenSHA256: hash,
+		CgroupRoot:  root,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("cgroup entries = %d", len(entries))
+	}
+	if err := server.Close(); err != nil {
+		t.Fatal(err)
+	}
+	entries, err = os.ReadDir(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("cgroup cleanup left %d entries", len(entries))
+	}
+}
+
 func TestSysFetch(t *testing.T) {
 	httpServer := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
 		_, _ = writer.Write([]byte("fetched"))

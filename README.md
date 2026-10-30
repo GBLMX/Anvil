@@ -18,6 +18,7 @@ SSRF-constrained fetch client, plus the `openat2`-confined workspace reader in
 - [Project charter](PROJECT_CHARTER.md)
 - [Threat model](docs/threat-model.md)
 - [Architecture](docs/architecture.md)
+- [Deployment model](docs/deployment.md)
 - [Performance baseline](docs/performance.md)
 - [Text model benchmark](docs/benchmarks/text-model.md)
 - [Editor benchmarks](docs/benchmarks/editor.md)

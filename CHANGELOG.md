@@ -17,6 +17,9 @@ All notable changes to Anvil are recorded here. The format follows
   cleanup, and `RLIMIT_NPROC` fallback, plus a supervised process-group runner
   for timeout and output caps.
 
+- Phase 0.6 gateway per-session cgroup provisioning and cleanup, plus a
+  deployment model document for systemd delegation and root-owned roots.
+
 - Phase 0.6 Go gateway skeleton: Unix-socket framed JSON-RPC,
   one-shot `session.hello` token-hash authentication, `SO_PEERCRED` UID checks,
   connection-cancel propagation, and `sys.exec` routing through

@@ -44,6 +44,7 @@ type Config struct {
 	ExecTimeout time.Duration
 	MaxOutput   int
 	Fetcher     *fetch.Client
+	CgroupRoot  string
 }
 
 // Server accepts framed JSON-RPC connections on a Unix socket.
@@ -52,6 +53,7 @@ type Server struct {
 	listener  net.Listener
 	tokenMu   sync.Mutex
 	tokenUsed bool
+	cgroup    string
 }
 
 // Listen binds the gateway socket with mode 0600.
@@ -80,7 +82,18 @@ func Listen(cfg Config) (*Server, error) {
 		_ = os.Remove(cfg.SocketPath)
 		return nil, fmt.Errorf("chmod gateway socket: %w", err)
 	}
-	return &Server{cfg: cfg, listener: listener}, nil
+	var cgroupPath string
+	if cfg.CgroupRoot != "" {
+		_ = execrunner.CleanupStaleCgroups(cfg.CgroupRoot, time.Hour)
+		path, err := os.MkdirTemp(cfg.CgroupRoot, "anvil-exec-")
+		if err != nil {
+			_ = listener.Close()
+			_ = os.Remove(cfg.SocketPath)
+			return nil, fmt.Errorf("create session cgroup: %w", err)
+		}
+		cgroupPath = path
+	}
+	return &Server{cfg: cfg, listener: listener, cgroup: cgroupPath}, nil
 }
 
 // Addr returns the bound Unix socket path.
@@ -92,6 +105,9 @@ func (s *Server) Addr() string {
 func (s *Server) Close() error {
 	err := s.listener.Close()
 	_ = os.Remove(s.cfg.SocketPath)
+	if s.cgroup != "" {
+		_ = os.Remove(s.cgroup)
+	}
 	return err
 }
 
@@ -335,10 +351,14 @@ func (s *Server) exec(parent context.Context, req request, state *connectionStat
 	defer cancel()
 	args := []string{"-workspace", s.cfg.Workspace, "-tool", params.Tool, "--"}
 	args = append(args, params.Args...)
+	env := []string{}
+	if s.cgroup != "" {
+		env = append(env, "ANVIL_CGROUP_PATH="+s.cgroup)
+	}
 	result, err := execrunner.Run(ctx, execrunner.ProcessConfig{
 		Path:      s.cfg.ExecRunner,
 		Args:      args,
-		Env:       []string{},
+		Env:       env,
 		Dir:       s.cfg.Workspace,
 		Timeout:   timeout,
 		MaxOutput: s.cfg.MaxOutput,

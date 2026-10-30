@@ -26,6 +26,9 @@ Implemented:
   state and execs on that same goroutine;
 - `go/internal/execpolicy`: `rg`/`fd` argv parsers rejecting command-launching
   and config-loading flags;
+- gateway `-cgroup-root` creates a per-session child, cleans it on close, and
+  passes `ANVIL_CGROUP_PATH` to `sys.exec`; the runner writes `pids.max` and
+  joins it before exec;
 - process-group supervision with timeout, cancellation, descendant kill,
   combined output cap, `Pdeathsig`, and `WaitDelay`;
 - per-sandbox cgroup v2 `pids.max` when `ANVIL_CGROUP_PATH` is supplied,
@@ -108,7 +111,8 @@ Open:
   registration and inherited-fd token delivery; client must pin the gateway
   pid/start-time so a stale-socket replacement cannot impersonate it;
 - add fetch/SSRF and gateway audit logging;
-- wire per-session cgroup creation/cleanup into `Run`;
+- provide deployment-specific delegated cgroup root provisioning/systemd
+  unit;
 - add real-runner gateway integration coverage to CI.
 
 ## 4. Plugin host

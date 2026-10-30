@@ -27,6 +27,7 @@ func main() {
 	allowExec := flag.Bool("allow-exec", false, "grant sys.exec")
 	execTimeout := flag.Duration("exec-timeout", 5*time.Second, "default sys.exec timeout")
 	maxOutput := flag.Int("max-output", 1<<20, "combined exec output limit")
+	cgroupRoot := flag.String("cgroup-root", "", "delegated cgroup v2 root for per-session exec limits")
 	allowFetch := flag.Bool("allow-fetch", false, "grant sys.fetch")
 	fetchAllow := flag.String("fetch-allow", "", "comma-separated exact fetch hosts")
 	fetchMax := flag.Int64("fetch-max", fetch.DefaultMaxBody, "maximum fetch body bytes")
@@ -96,6 +97,7 @@ func main() {
 		ExecTimeout: *execTimeout,
 		MaxOutput:   *maxOutput,
 		Fetcher:     fetcher,
+		CgroupRoot:  *cgroupRoot,
 	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "anvil-gateway: %v\n", err)
