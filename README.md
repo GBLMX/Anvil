@@ -19,6 +19,7 @@ SSRF-constrained fetch client, plus the `openat2`-confined workspace reader in
 - [Threat model](docs/threat-model.md)
 - [Architecture](docs/architecture.md)
 - [Deployment model](docs/deployment.md)
+- [Ratatui TUI Elm loop plan](docs/ratatui-elm-loop-plan.md)
 - [Performance baseline](docs/performance.md)
 - [Go gateway benchmarks](docs/benchmarks/go-gateway.md)
 - [Text model benchmark](docs/benchmarks/text-model.md)
