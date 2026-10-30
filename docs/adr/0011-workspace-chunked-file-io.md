@@ -216,7 +216,7 @@ Response:
 
 ### 8. Performance gate
 
-The direct `std::fs` 100 MB open baseline is **85.4 ms** (Rust side) after
+The direct `std::fs` 100 MB open baseline is **95.3 ms** (Rust side) after
 two-pass parallel line scanning and **209.6 ms** (PTY first output, measured
 before parallel indexing). Use this baseline after
 `71ea604`; the older 185.9 ms / 193.7 ms numbers were measured before the
@@ -230,20 +230,20 @@ binary 7 MiB chunks and report:
 - Total chunk count and total bytes.
 
 Measured 2026-10-31 on the same 100 MB fixture with binary reads: 15 chunks of
-7 MiB, 104,857,596 bytes, 188.9 ms serial UDS loop, and **215.8 ms PTY first
-output**. That is just above the 200 ms target. Parallel indexing cut direct
+7 MiB, 104,857,596 bytes, 188.9 ms serial UDS loop, and **215.8 ms serial PTY
+first output**. That was just above the 200 ms target; the 4-way pipelined TUI
+now measures **181.7 ms**, meeting the target. Parallel indexing cut direct
 Rust open from 174 ms to 89 ms and the JSON path from 640 ms to 563 ms; binary
-frames then brought the gateway to 215.8 ms. The previous JSON path cost
+frames then brought serial to 215.8 ms and 4-way pipelining to 181.7 ms. The previous JSON path cost
 11.8 ms/chunk server encode and 5.88 ms/chunk client decode; those costs do not
 apply to the binary read path.
 
 Binary pipelining was measured on the real gateway: 1 in-flight 188.9 ms, 2
-135.1 ms, 4 126.8 ms, 8 **124.8 ms**, 15 138.3 ms. Window 8 saves **64 ms**
-against window 1; this is a pure UDS measurement. The ~152 ms PTY figure is a
-projection from serial 215.8 ms and does not include TUI decode, line-index, or
-rendering. Pipelining is not wired into the TUI, so the 200 ms gate is not
-closed. It still does not approach 50 ms; fd passing remains the option for
-that long-term target.
+135.1 ms, 4 126.8 ms, 8 **124.8 ms**, 15 138.3 ms. The TUI wires a 4-request
+window and measures **181.7 ms PTY end-to-end**, meeting the 200 ms target.
+Window 8 is slightly faster (173.3 ms) but raises gateway VmHWM to ~199 MB;
+window 4 is the selected tradeoff. The 50 ms target still needs fd passing or
+another zero-copy path.
 
 The worker-count check on the previous JSON path (16/8/4) showed gateway PTY
 563.1/560.7/597.3 ms, so CPU contention does not explain a 30–50 ms gap; 16
@@ -252,10 +252,8 @@ remains the default.
 The single 50 ms gate was too coarse for a 100 MB document. The Phase 0.6 gates
 are:
 
-- **Open 100 MB PTY < 200 ms.** Current serial binary gateway is **215.8 ms**;
-  direct Rust open is **89 ms**. Binary framing and parallel indexing are
-  implemented; the binary header now carries `seq` and `offset`, but pipelining is
-  not wired into the TUI yet. Projected: **152 ms**. The serial path does not meet the target.
+- **Open 100 MB PTY < 200 ms.** Met: 4-way pipelined binary gateway is
+  **181.7 ms**; direct Rust open is **95.3 ms**. Serial binary is 215.8 ms.
 - **Daily edit key-to-screen < 1 ms.** Current Rust-side is ~0.08 ms and local
   PTY is ~0.16–0.6 ms. Met.
 - **50 ms open remains a long-term target**, not a Phase 0.6 blocker; the

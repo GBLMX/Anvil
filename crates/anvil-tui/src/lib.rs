@@ -195,8 +195,11 @@ impl Model {
             .gateway
             .as_mut()
             .ok_or_else(|| "gateway unavailable".to_owned())?;
+        let size = gateway
+            .file_size(&relative)
+            .map_err(|error| error.to_string())?;
         let data = gateway
-            .read_all_binary(&relative, MAX_OPEN_BYTES)
+            .read_all_binary_pipelined(&relative, size, MAX_OPEN_BYTES, 4)
             .map_err(|error| error.to_string())?;
         String::from_utf8(data).map_err(|_| format!("{relative}: invalid UTF-8"))
     }

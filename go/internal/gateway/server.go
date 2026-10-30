@@ -232,6 +232,14 @@ type readResult struct {
 	EOF        bool   `json:"eof"`
 }
 
+type statParams struct {
+	Path string `json:"path"`
+}
+
+type statResult struct {
+	Size int64 `json:"size"`
+}
+
 type writeParams struct {
 	Path   string `json:"path"`
 	Offset int64  `json:"offset"`
@@ -329,6 +337,8 @@ func (s *Server) dispatch(ctx context.Context, req request, state *connectionSta
 	switch req.Method {
 	case "sys.read_file":
 		return s.readFile(req, state)
+	case "sys.stat":
+		return s.statFile(req, state)
 	case "sys.write_file":
 		return s.writeFile(req, state)
 	case "session.hello":
@@ -401,6 +411,32 @@ func (s *Server) fetch(parent context.Context, req request, state *connectionSta
 		Body:        string(response.Body),
 		Truncated:   response.Truncated,
 	}, nil
+}
+
+func (s *Server) statFile(req request, state *connectionState) (interface{}, *rpcError) {
+	var params statParams
+	if err := decodeParams(req.Params, &params); err != nil {
+		return nil, &rpcError{Code: -32602, Message: "invalid params"}
+	}
+	path, err := workspacePath(params.Path)
+	if err != nil {
+		return nil, &rpcError{Code: -32002, Message: "policy denied"}
+	}
+	if rpcErr := s.pathPermissionError(state, "fs.read", path); rpcErr != nil {
+		return nil, rpcErr
+	}
+	if s.root == nil {
+		return nil, &rpcError{Code: -32008, Message: "file service unavailable"}
+	}
+	size, err := s.root.Size(path)
+	if err != nil {
+		code := -32002
+		if errors.Is(err, os.ErrNotExist) {
+			code = -32007
+		}
+		return nil, &rpcError{Code: code, Message: "stat unavailable"}
+	}
+	return statResult{Size: size}, nil
 }
 
 func (s *Server) readFile(req request, state *connectionState) (interface{}, *rpcError) {

@@ -217,6 +217,93 @@ impl GatewayClient {
         Ok(())
     }
 
+    /// Return the workspace-relative regular file size through the gateway.
+    pub fn file_size(&mut self, path: &str) -> Result<u64, ClientError> {
+        let result = self.request("sys.stat", serde_json::json!({ "path": path }))?;
+        result
+            .get("size")
+            .and_then(serde_json::Value::as_u64)
+            .ok_or(ClientError::Protocol("stat size"))
+    }
+
+    /// Read a complete file with a bounded pipeline of binary requests.
+    pub fn read_all_binary_pipelined(
+        &mut self,
+        path: &str,
+        size: u64,
+        limit: usize,
+        window: usize,
+    ) -> Result<Vec<u8>, ClientError> {
+        if size > limit as u64 {
+            return Err(ClientError::Limit);
+        }
+        if size == 0 {
+            return Ok(Vec::new());
+        }
+        let total = size.div_ceil(BINARY_READ_CHUNK as u64) as usize;
+        let window = window.clamp(1, 8);
+        let mut chunks: Vec<Option<ReadChunk>> = (0..total).map(|_| None).collect();
+        let mut pending: Vec<(String, u64, u64)> = Vec::with_capacity(window);
+        let mut next = 0_usize;
+        while next < total || !pending.is_empty() {
+            while pending.len() < window && next < total {
+                let offset = next as u64 * BINARY_READ_CHUNK as u64;
+                let seq = next as u64;
+                let id = self.send_binary_request(path, offset, BINARY_READ_CHUNK, seq)?;
+                pending.push((id, offset, seq));
+                next += 1;
+            }
+            let frame = self
+                .connection
+                .recv()?
+                .ok_or(ClientError::Protocol("gateway closed"))?;
+            if frame.first() == Some(&b'{') {
+                let response: Response = serde_json::from_slice(&frame)?;
+                response.validate()?;
+                let id = response
+                    .id
+                    .as_deref()
+                    .ok_or(ClientError::Protocol("response id"))?;
+                let index = pending
+                    .iter()
+                    .position(|(pending_id, _, _)| pending_id == id)
+                    .ok_or(ClientError::Protocol("unexpected response id"))?;
+                pending.remove(index);
+                if let Some(error) = response.error {
+                    return Err(ClientError::Rpc {
+                        code: error.code,
+                        message: error.message,
+                    });
+                }
+                return Err(ClientError::Protocol("binary frame expected"));
+            }
+            let (offset, seq, chunk) = parse_binary_frame(&frame)?;
+            let index = pending
+                .iter()
+                .position(|(_, pending_offset, pending_seq)| {
+                    *pending_offset == offset && *pending_seq == seq
+                })
+                .ok_or(ClientError::Protocol("unexpected binary header"))?;
+            pending.remove(index);
+            if chunk.next_offset != offset + chunk.data.len() as u64 {
+                return Err(ClientError::Protocol("binary offset"));
+            }
+            let slot = chunks
+                .get_mut(seq as usize)
+                .ok_or(ClientError::Protocol("binary sequence"))?;
+            *slot = Some(chunk);
+        }
+        let mut data = Vec::with_capacity(size as usize);
+        for chunk in chunks {
+            let chunk = chunk.ok_or(ClientError::Protocol("missing binary chunk"))?;
+            data.extend_from_slice(&chunk.data);
+        }
+        if data.len() as u64 != size {
+            return Err(ClientError::Protocol("binary size mismatch"));
+        }
+        Ok(data)
+    }
+
     /// Read one raw binary chunk with sequence zero.
     pub fn read_file_binary(
         &mut self,
@@ -239,16 +326,7 @@ impl GatewayClient {
         if max_bytes == 0 || max_bytes > BINARY_READ_CHUNK {
             return Err(ClientError::Protocol("read chunk size"));
         }
-        let id = self.send_request(
-            "sys.read_file",
-            serde_json::json!({
-                "path": path,
-                "offset": offset,
-                "max_bytes": max_bytes,
-                "binary": true,
-                "seq": seq,
-            }),
-        )?;
+        let id = self.send_binary_request(path, offset, max_bytes, seq)?;
         let frame = self
             .connection
             .recv()?
@@ -257,22 +335,11 @@ impl GatewayClient {
             let _ = parse_response(&frame, &id)?;
             return Err(ClientError::Protocol("binary frame expected"));
         }
-        if frame.len() < 17 {
-            return Err(ClientError::Protocol("short binary header"));
-        }
-        let flags = frame[0];
-        let frame_seq = u64::from_be_bytes(frame[1..9].try_into().expect("seq"));
-        let frame_offset = u64::from_be_bytes(frame[9..17].try_into().expect("offset"));
+        let (frame_offset, frame_seq, chunk) = parse_binary_frame(&frame)?;
         if frame_seq != seq || frame_offset != offset {
             return Err(ClientError::Protocol("binary header mismatch"));
         }
-        let data = &frame[17..];
-        Ok(ReadChunk {
-            data: data.to_vec(),
-            next_offset: offset + data.len() as u64,
-            eof: flags & 1 != 0,
-            seq,
-        })
+        Ok(chunk)
     }
 
     /// Read a complete file using raw binary frames.
@@ -308,6 +375,25 @@ impl GatewayClient {
         parse_response(&frame, &id)
     }
 
+    fn send_binary_request(
+        &mut self,
+        path: &str,
+        offset: u64,
+        max_bytes: usize,
+        seq: u64,
+    ) -> Result<String, ClientError> {
+        self.send_request(
+            "sys.read_file",
+            serde_json::json!({
+                "path": path,
+                "offset": offset,
+                "max_bytes": max_bytes,
+                "binary": true,
+                "seq": seq,
+            }),
+        )
+    }
+
     fn send_request(
         &mut self,
         method: &str,
@@ -326,6 +412,26 @@ impl GatewayClient {
         self.connection.send(&serde_json::to_vec(&request)?)?;
         Ok(id)
     }
+}
+
+fn parse_binary_frame(frame: &[u8]) -> Result<(u64, u64, ReadChunk), ClientError> {
+    if frame.len() < 17 {
+        return Err(ClientError::Protocol("short binary header"));
+    }
+    let flags = frame[0];
+    let seq = u64::from_be_bytes(frame[1..9].try_into().expect("seq"));
+    let offset = u64::from_be_bytes(frame[9..17].try_into().expect("offset"));
+    let data = &frame[17..];
+    Ok((
+        offset,
+        seq,
+        ReadChunk {
+            data: data.to_vec(),
+            next_offset: offset + data.len() as u64,
+            eof: flags & 1 != 0,
+            seq,
+        },
+    ))
 }
 
 fn parse_response(frame: &[u8], id: &str) -> Result<serde_json::Value, ClientError> {

@@ -350,3 +350,29 @@ func openBeneath(dirfd int, path string) (int, error) {
 	}
 	return -1, unix.EAGAIN
 }
+
+// Size returns the size of a regular file beneath the root.
+func (r *Root) Size(path string) (int64, error) {
+	relative, err := cleanRelative(path)
+	if err != nil {
+		return 0, err
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	if r.fd < 0 {
+		return 0, errors.New("workspace is closed")
+	}
+	fd, err := openBeneath(r.fd, relative)
+	if err != nil {
+		return 0, fmt.Errorf("open %q beneath workspace: %w", relative, err)
+	}
+	defer unix.Close(fd)
+	var stat unix.Stat_t
+	if err := unix.Fstat(fd, &stat); err != nil {
+		return 0, fmt.Errorf("stat %q: %w", relative, err)
+	}
+	if stat.Mode&unix.S_IFMT != unix.S_IFREG {
+		return 0, fmt.Errorf("%q is not a regular file", relative)
+	}
+	return stat.Size, nil
+}
