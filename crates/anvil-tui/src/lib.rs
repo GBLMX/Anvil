@@ -14,6 +14,7 @@ use anvil_core::{TextBuffer, TextDocument};
 use anvil_editor::EditorState;
 use anvil_ipc::GatewayClient;
 use crossterm::{
+    cursor::SetCursorStyle,
     event::{self, Event, KeyCode, KeyEvent, KeyEventKind},
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
@@ -22,6 +23,7 @@ use ratatui::{
     Frame, Terminal,
     backend::CrosstermBackend,
     layout::Rect,
+    style::{Color, Style},
     text::{Line, Span},
     widgets::{Block, Paragraph},
 };
@@ -871,11 +873,51 @@ impl Model {
         }
     }
 
+    fn gutter_width(&self) -> u16 {
+        let digits = self
+            .editor
+            .index()
+            .len_lines()
+            .max(1)
+            .to_string()
+            .len()
+            .max(3);
+        (digits + 1) as u16
+    }
+
+    fn current_line(&self) -> Option<usize> {
+        self.editor
+            .index()
+            .position(self.editor.text(), self.cursor)
+            .map(|position| position.line)
+    }
+
+    fn visible_gutter(&self, height: u16) -> Vec<Line<'static>> {
+        let index = self.editor.index();
+        let end = (self.scroll + usize::from(height)).min(index.len_lines());
+        let current = self.current_line();
+        let digits = usize::from(self.gutter_width().saturating_sub(1));
+        let mut lines = Vec::with_capacity(end.saturating_sub(self.scroll));
+        for line_number in self.scroll..end {
+            let number = format!("{:>digits$} ", line_number + 1);
+            let mut style = Style::default().fg(Color::DarkGray);
+            if Some(line_number) == current {
+                style = style.bg(Color::Indexed(236));
+            }
+            lines.push(Line::from(Span::styled(number, style)));
+        }
+        if lines.is_empty() {
+            lines.push(Line::raw(""));
+        }
+        lines
+    }
+
     fn visible_lines(&self, height: u16) -> Vec<Line<'_>> {
         let index = self.editor.index();
         let text = self.editor.text();
         let total = index.len_lines();
         let end = (self.scroll + usize::from(height)).min(total);
+        let current = self.current_line();
         let mut lines = Vec::with_capacity(end.saturating_sub(self.scroll));
         for line_number in self.scroll..end {
             let Some(start) = index.line_to_offset(line_number) else {
@@ -888,11 +930,16 @@ impl Model {
                 .chunks(start..line.end)
                 .map(Span::raw)
                 .collect::<Vec<_>>();
-            lines.push(Line::from(if spans.is_empty() {
+            let line = Line::from(if spans.is_empty() {
                 vec![Span::raw("")]
             } else {
                 spans
-            }));
+            });
+            lines.push(if Some(line_number) == current {
+                line.style(Style::default().bg(Color::Indexed(236)))
+            } else {
+                line
+            });
         }
         if lines.is_empty() {
             lines.push(Line::raw(""));
@@ -961,10 +1008,10 @@ pub fn view(model: &Model, frame: &mut Frame) {
     } else {
         title
     };
-    let status = match &model.input_mode {
-        InputMode::CommandLine { buffer } => format!(":{buffer}"),
-        InputMode::Search { query } => format!("/{query}"),
-        InputMode::Insert => "-- INSERT --".to_owned(),
+    let (mode_text, mode_color, status) = match &model.input_mode {
+        InputMode::CommandLine { buffer } => (" CMD ", Color::Yellow, format!(":{buffer}")),
+        InputMode::Search { query } => (" SRC ", Color::Yellow, format!("/{query}")),
+        InputMode::Insert => (" INS ", Color::Green, String::new()),
         InputMode::Normal => {
             let position = model
                 .editor
@@ -978,16 +1025,18 @@ pub fn view(model: &Model, frame: &mut Frame) {
                 ),
                 None => " Ln 1, Col 1 ".to_owned(),
             };
-            if model.status.is_empty() {
+            let status = if model.status.is_empty() {
                 location
             } else {
                 format!("{} ·{location}", model.status)
-            }
+            };
+            (" NOR ", Color::Blue, status)
         }
     };
+    let mode = Span::styled(mode_text, Style::default().fg(Color::Black).bg(mode_color));
     let block = Block::bordered()
         .title(title)
-        .title_bottom(Line::raw(status));
+        .title_bottom(Line::from(vec![mode, Span::raw(status)]));
     frame.render_widget(block, area);
     let inner = Rect {
         x: area.x + 1,
@@ -995,17 +1044,31 @@ pub fn view(model: &Model, frame: &mut Frame) {
         width: area.width.saturating_sub(2),
         height: area.height.saturating_sub(2),
     };
+    let gutter_width = model.gutter_width().min(inner.width);
+    let gutter_area = Rect {
+        width: gutter_width,
+        ..inner
+    };
+    let text_area = Rect {
+        x: inner.x + gutter_width,
+        width: inner.width.saturating_sub(gutter_width),
+        ..inner
+    };
+    frame.render_widget(
+        Paragraph::new(model.visible_gutter(inner.height)),
+        gutter_area,
+    );
     frame.render_widget(
         Paragraph::new(model.visible_lines(inner.height))
             .scroll((0, u16::try_from(model.hscroll).unwrap_or(u16::MAX))),
-        inner,
+        text_area,
     );
     if let Some(position) = model
         .editor
         .index()
         .position(model.editor.text(), model.cursor)
     {
-        let x = inner.x + position.display_column.saturating_sub(model.hscroll) as u16;
+        let x = text_area.x + position.display_column.saturating_sub(model.hscroll) as u16;
         let y = inner.y + position.line.saturating_sub(model.scroll) as u16;
         if x < inner.right() && y < inner.bottom() {
             frame.set_cursor_position((x, y));
@@ -1047,7 +1110,13 @@ pub fn run_with_workspace(path: Option<PathBuf>, workspace: PathBuf) -> io::Resu
     let mut terminal = TerminalSession::start()?;
     let terminal_ready = start.elapsed();
     let mut first_draw = true;
+    let mut insert_cursor: Option<bool> = None;
     loop {
+        let wants_bar = matches!(model.input_mode, InputMode::Insert);
+        if insert_cursor != Some(wants_bar) {
+            terminal.set_cursor_shape(wants_bar)?;
+            insert_cursor = Some(wants_bar);
+        }
         let size = terminal.terminal.size()?;
         model.ensure_cursor_visible(size.height.saturating_sub(2), size.width.saturating_sub(2));
         if model.dirty {
@@ -1226,10 +1295,25 @@ impl TerminalSession {
     }
 }
 
+impl TerminalSession {
+    fn set_cursor_shape(&mut self, insert: bool) -> io::Result<()> {
+        let style = if insert {
+            SetCursorStyle::SteadyBar
+        } else {
+            SetCursorStyle::SteadyBlock
+        };
+        crossterm::execute!(self.terminal.backend_mut(), style)
+    }
+}
+
 impl Drop for TerminalSession {
     fn drop(&mut self) {
         let _ = disable_raw_mode();
-        let _ = execute!(self.terminal.backend_mut(), LeaveAlternateScreen);
+        let _ = execute!(
+            self.terminal.backend_mut(),
+            SetCursorStyle::DefaultUserShape,
+            LeaveAlternateScreen
+        );
         let _ = self.terminal.show_cursor();
     }
 }

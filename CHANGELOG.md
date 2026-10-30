@@ -6,6 +6,12 @@ All notable changes to Anvil are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- TUI line-number gutter, current-line background highlight, colored mode badge
+  in the status line, and block/bar cursor shape switching between Normal and
+  Insert modes.
+
 ### Planned
 
 - 0.1.1 / Phase 0.7: plugin-host isolation, Tree-sitter syntax highlighting,
