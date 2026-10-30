@@ -2,13 +2,20 @@ package fetch
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/tls"
+	"crypto/x509"
 	"errors"
+	"math/big"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 )
 
 type fakeResolver struct {
@@ -122,6 +129,58 @@ func TestFetchRejectsHostNotOnAllowlist(t *testing.T) {
 	_, err := client.Fetch(context.Background(), "http://other.test/", 0, nil)
 	if !errors.Is(err, ErrHostNotAllowed) {
 		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestFetchTLSValidatesOriginalHost(t *testing.T) {
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	template := &x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		NotBefore:    time.Now().Add(-time.Hour),
+		NotAfter:     time.Now().Add(time.Hour),
+		DNSNames:     []string{"example.test"},
+		KeyUsage:     x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+	}
+	der, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	certificate, err := x509.ParseCertificate(der)
+	if err != nil {
+		t.Fatal(err)
+	}
+	roots := x509.NewCertPool()
+	roots.AddCert(certificate)
+	server := httptest.NewUnstartedServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		_, _ = writer.Write([]byte("tls"))
+	}))
+	server.TLS = &tls.Config{Certificates: []tls.Certificate{{Certificate: [][]byte{der}, PrivateKey: key}}}
+	server.StartTLS()
+	defer server.Close()
+	parsed, err := url.Parse(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client, err := New(Config{
+		AllowedHosts:  []string{"example.test"},
+		AllowLoopback: true,
+		AllowAnyPort:  true,
+		TLSConfig:     &tls.Config{RootCAs: roots},
+		Resolver:      fakeResolver{addresses: []net.IPAddr{{IP: net.ParseIP("127.0.0.1")}}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	response, err := client.Fetch(context.Background(), "https://example.test:"+parsed.Port()+"/", 0, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(response.Body) != "tls" {
+		t.Fatalf("body = %q", response.Body)
 	}
 }
 
