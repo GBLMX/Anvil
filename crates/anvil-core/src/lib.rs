@@ -389,6 +389,27 @@ impl PieceTable {
         }
         count
     }
+    /// Returns borrowed text chunks intersecting `range` without copying the
+    /// document text. This is the renderer-facing fast path.
+    pub fn chunks(&self, range: Range<usize>) -> impl Iterator<Item = &str> + '_ {
+        assert!(range.start <= range.end && range.end <= self.len_bytes());
+        self.assert_boundary(range.start);
+        self.assert_boundary(range.end);
+        let start = range.start;
+        let end = range.end;
+        let mut position = 0;
+        self.pieces.iter().filter_map(move |piece| {
+            let piece_start = position;
+            let piece_end = position + piece.len;
+            position = piece_end;
+            if piece_end <= start || piece_start >= end {
+                return None;
+            }
+            let local_start = start.max(piece_start) - piece_start;
+            let local_end = end.min(piece_end) - piece_start;
+            Some(&self.text(piece.source)[piece.start + local_start..piece.start + local_end])
+        })
+    }
 }
 
 impl TextBuffer for PieceTable {
@@ -615,6 +636,14 @@ mod tests {
         fn piece_matches_string_model(ops in prop::collection::vec(op_strategy(), 0..40)) {
             check_ops::<PieceTable>(&ops);
         }
+    }
+
+    #[test]
+    fn piece_chunks_borrow_across_piece_boundaries() {
+        let mut buffer = PieceTable::from_text("abcd");
+        buffer.insert(2, "XY");
+        let chunks: Vec<&str> = buffer.chunks(0..buffer.len_bytes()).collect();
+        assert_eq!(chunks, vec!["ab", "XY", "cd"]);
     }
 
     #[test]

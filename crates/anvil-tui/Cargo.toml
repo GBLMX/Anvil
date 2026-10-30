@@ -1,0 +1,19 @@
+[package]
+name = "anvil-tui"
+description = "Minimal ratatui frontend for Anvil"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+anvil-api = { path = "../anvil-api", version = "0.0.0" }
+anvil-core = { path = "../anvil-core", version = "0.0.0" }
+anvil-editor = { path = "../anvil-editor", version = "0.0.0" }
+crossterm = "0.29"
+ratatui = "0.30"
+
+[[bin]]
+name = "anvil"
+path = "src/main.rs"

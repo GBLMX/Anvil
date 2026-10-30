@@ -114,6 +114,7 @@ Open:
 - provide deployment-specific delegated cgroup root provisioning/systemd
   unit;
 - add real-runner gateway integration coverage to CI;
+- continue `anvil-tui` TUI-1+ (Elm command runtime, editing, prefix commands);
 - benchmark complete sandboxed exec and TLS fetch with transport reuse.
 
 ## 4. Plugin host

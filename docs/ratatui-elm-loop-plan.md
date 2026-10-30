@@ -1,6 +1,6 @@
 # Ratatui TUI Elm Loop Plan
 
-Status: planned; no runnable editor crate yet.
+Status: TUI-0 implemented (read-only viewport); TUI-1+ planned.
 
 ## 1. Goal
 
