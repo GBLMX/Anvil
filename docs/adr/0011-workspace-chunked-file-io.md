@@ -120,7 +120,8 @@ payload, not JSON:
 - The maximum raw chunk is 7 MiB. A 17-byte header plus 7 MiB fits the 8 MiB frame.
 - `next_offset` is `offset + len(raw bytes)`.
 - The client checks whether the first payload byte is `{` before treating a
-  frame as binary, so JSON errors remain distinguishable.
+  frame as binary, so JSON errors remain distinguishable. Any pipeline error
+  poisons the client; in-flight responses are not reused on the next request.
 
 
 ### 5. `sys.write_file`
@@ -232,16 +233,16 @@ binary 7 MiB chunks and report:
 Measured 2026-10-31 on the same 100 MB fixture with binary reads: 15 chunks of
 7 MiB, 104,857,596 bytes, 188.9 ms serial UDS loop, and **215.8 ms serial PTY
 first output**. That was just above the 200 ms target; the 4-way pipelined TUI
-now measures **181.7 ms**, meeting the target. Parallel indexing cut direct
+now measures **171.1 ms**, meeting the target. Parallel indexing cut direct
 Rust open from 174 ms to 89 ms and the JSON path from 640 ms to 563 ms; binary
-frames then brought serial to 215.8 ms and 4-way pipelining to 181.7 ms. The previous JSON path cost
+frames then brought serial to 215.8 ms and 4-way pipelining to 171.1 ms. The previous JSON path cost
 11.8 ms/chunk server encode and 5.88 ms/chunk client decode; those costs do not
 apply to the binary read path.
 
 Binary pipelining was measured on the real gateway: 1 in-flight 188.9 ms, 2
 135.1 ms, 4 126.8 ms, 8 **124.8 ms**, 15 138.3 ms. The TUI wires a 4-request
-window and measures **181.7 ms PTY end-to-end**, meeting the 200 ms target.
-Window 8 is slightly faster (173.3 ms) but raises gateway VmHWM to ~199 MB;
+window and measures **171.1 ms PTY end-to-end**, meeting the 200 ms target.
+Window 8 is slightly faster (168.4 ms median) but raises gateway VmHWM to ~199 MB;
 window 4 is the selected tradeoff. The 50 ms target still needs fd passing or
 another zero-copy path.
 
@@ -253,7 +254,7 @@ The single 50 ms gate was too coarse for a 100 MB document. The Phase 0.6 gates
 are:
 
 - **Open 100 MB PTY < 200 ms.** Met: 4-way pipelined binary gateway is
-  **181.7 ms**; direct Rust open is **95.3 ms**. Serial binary is 215.8 ms.
+  **171.1 ms**; direct Rust open is **95.3 ms**. Serial binary is 215.8 ms.
 - **Daily edit key-to-screen < 1 ms.** Current Rust-side is ~0.08 ms and local
   PTY is ~0.16–0.6 ms. Met.
 - **50 ms open remains a long-term target**, not a Phase 0.6 blocker; the

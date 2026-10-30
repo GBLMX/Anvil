@@ -89,6 +89,7 @@ pub struct ReadChunk {
 pub struct GatewayClient {
     connection: Connection,
     next_id: u64,
+    poisoned: bool,
 }
 
 impl GatewayClient {
@@ -97,6 +98,7 @@ impl GatewayClient {
         let mut client = Self {
             connection: Connection::connect(socket)?,
             next_id: 1,
+            poisoned: false,
         };
         client.request(
             "session.hello",
@@ -240,6 +242,19 @@ impl GatewayClient {
         if size == 0 {
             return Ok(Vec::new());
         }
+        let result = self.read_all_binary_pipelined_inner(path, size, window);
+        if result.is_err() {
+            self.poisoned = true;
+        }
+        result
+    }
+
+    fn read_all_binary_pipelined_inner(
+        &mut self,
+        path: &str,
+        size: u64,
+        window: usize,
+    ) -> Result<Vec<u8>, ClientError> {
         let total = size.div_ceil(BINARY_READ_CHUNK as u64) as usize;
         let window = window.clamp(1, 8);
         let mut chunks: Vec<Option<ReadChunk>> = (0..total).map(|_| None).collect();
@@ -399,6 +414,9 @@ impl GatewayClient {
         method: &str,
         params: serde_json::Value,
     ) -> Result<String, ClientError> {
+        if self.poisoned {
+            return Err(ClientError::Protocol("client poisoned"));
+        }
         let id = format!("anvil-{}", self.next_id);
         self.next_id = self.next_id.saturating_add(1);
         let request = Request {
@@ -578,6 +596,44 @@ mod tests {
         assert_eq!(chunk.data, b"hi");
         assert_eq!(chunk.next_offset, 2);
         assert!(chunk.eof);
+        server.join().expect("server");
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn pipeline_error_poisons_the_client() {
+        let path = socket_path("pipeline-error");
+        let listener = Listener::bind(&path).expect("bind");
+        let server = thread::spawn(move || {
+            let mut connection = listener.accept().expect("accept");
+            let hello = receive(&mut connection);
+            respond(
+                &mut connection,
+                hello.id.as_deref().expect("id"),
+                json!({"session_id": "test"}),
+            );
+            let first = receive(&mut connection);
+            let _second = receive(&mut connection);
+            respond_error(
+                &mut connection,
+                first.id.as_deref().expect("id"),
+                codes::POLICY_DENIED,
+            );
+            let mut payload = vec![1];
+            payload.extend_from_slice(&1_u64.to_be_bytes());
+            payload.extend_from_slice(&(BINARY_READ_CHUNK as u64).to_be_bytes());
+            payload.push(b'x');
+            connection.send(&payload).expect("second binary");
+        });
+
+        let mut client = GatewayClient::connect(&path, &[7; 32]).expect("connect");
+        let size = BINARY_READ_CHUNK as u64 + 1;
+        let error = client
+            .read_all_binary_pipelined("file.txt", size, usize::MAX, 2)
+            .expect_err("pipeline error");
+        assert!(is_policy_denied(&error));
+        let poisoned = client.file_size("file.txt").expect_err("poisoned");
+        assert!(poisoned.to_string().contains("client poisoned"));
         server.join().expect("server");
         let _ = fs::remove_file(path);
     }

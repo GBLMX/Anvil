@@ -58,7 +58,7 @@ frames with 7 MiB chunks (15 chunks / 104,857,596 bytes):
 | Layer | Scenario | p50 | p95 | p99 | n |
 |---|---|---:|---:|---:|---:|
 | Rust | open 100 MB, first frame | 95.3 ms | 95.3 ms | 95.3 ms | 1 |
-| PTY + gateway | open 100 MB, first frame | 181.7 ms | 181.7 ms | 181.7 ms | 1 |
+| PTY + gateway | open 100 MB, first frame | 171.1 ms | 171.1 ms | 171.1 ms | 1 |
 | PTY + gateway | key to first output, 1 MB | 160.6 µs | 277.1 µs | 277.1 µs | 20 |
 | PTY + gateway | scroll 100 MB, one `j` | 255.2 µs | 542.6 µs | 542.6 µs | 20 |
 | PTY + gateway | first `/` search, 100 MB | 221.2 ms | 221.2 ms | 221.2 ms | 1 |
@@ -113,8 +113,8 @@ without document decode, page-cache warm):
 
 An 8-request window saves **64 ms** against window 1 in the pure UDS loop.
 The TUI uses a **4-request** window; its measured end-to-end PTY open is
-**181.7 ms** (including decode, index, rendering, and gateway startup), which
-meets the 200 ms Phase 0.6 target. Window 8 reaches 173.3 ms but raises gateway
+**171.1 ms** (including decode, index, rendering, and gateway startup), which
+meets the 200 ms Phase 0.6 target. Window 8 reaches 168.4 ms but raises gateway
 memory sharply; window 4 is the better tradeoff.
 
 Worker-count check on the previous JSON path (same fixture, direct Rust /
@@ -139,14 +139,14 @@ it. The 3,000,000-line parallel/serial equivalence test covers the merge path.
 ## Interpretation
 
 - Direct Rust 100 MB open is **95.3 ms** after parallel line scanning.
-  The 4-way binary gateway path is **181.7 ms PTY**, meeting the 200 ms Phase
+  The 4-way binary gateway path is **171.1 ms PTY**, meeting the 200 ms Phase
   0.6 open target. Serial binary UDS was 188.9 ms for 15 chunks.
 - The previous JSON/base64 path was 563.1 ms PTY and 19 chunks. It has been
   replaced for reads; its server encode cost (11.8 ms/chunk) and client decode
   cost (5.88 ms/chunk) no longer apply to open.
 - Binary pipelining is wired into the TUI at window 4. The pure UDS loop drops
-  from 188.9 ms to 126.8 ms at window 4; measured TUI end-to-end is 181.7 ms.
-  Window 8 is slightly faster (124.8 ms UDS / 173.3 ms TUI) but gateway VmHWM
+  from 188.9 ms to 126.8 ms at window 4; measured TUI end-to-end is 171.1 ms.
+  Window 8 is slightly faster (124.8 ms UDS / 168.4 ms TUI) but gateway VmHWM
   rises to ~199 MB, so window 4 is the selected tradeoff.
 - The 50 ms open target still needs fd passing or another zero-copy path; the
   current binary frame path is not close.
@@ -169,7 +169,7 @@ Measured with `/proc/<pid>/status` after the first 100 MB frame:
 The TUI footprint is unchanged from the direct path: the peak includes the
 source `String`, the `PieceTable` copy, and the line index. The binary gateway
 adds about 66 MB steady and 91 MB peak for four in-flight raw chunks plus
-framing. The combined steady footprint is about 265 MB.
+framing. The combined steady footprint is about 264 MB.
 
 The two-pass parallel line scan keeps memory flat: it allocates the final
 line-start array once and writes disjoint per-worker slices, instead of keeping

@@ -198,8 +198,13 @@ impl Model {
         let size = gateway
             .file_size(&relative)
             .map_err(|error| error.to_string())?;
+        let window = std::env::var("ANVIL_TUI_READ_WINDOW")
+            .ok()
+            .and_then(|value| value.parse::<usize>().ok())
+            .filter(|window| *window > 0)
+            .unwrap_or(4);
         let data = gateway
-            .read_all_binary_pipelined(&relative, size, MAX_OPEN_BYTES, 4)
+            .read_all_binary_pipelined(&relative, size, MAX_OPEN_BYTES, window)
             .map_err(|error| error.to_string())?;
         String::from_utf8(data).map_err(|_| format!("{relative}: invalid UTF-8"))
     }
