@@ -70,6 +70,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "anvil-plugin-host"
+version = "0.1.0"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "anvil-tui"
 version = "0.1.0"
 dependencies = [

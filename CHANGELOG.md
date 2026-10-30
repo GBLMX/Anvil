@@ -13,11 +13,14 @@ All notable changes to Anvil are recorded here. The format follows
   line, block/bar cursor shape switching, and current/other search-match
   highlighting.
 
-### Added
-
 - ADR-0012 plugin-host isolation contract: one sandboxed host per plugin,
   FD-delivered one-shot tokens, no inherited editor/gateway FDs, process-group
-  lifecycle, and accepted escape/orphan tests. Implementation not started.
+  lifecycle, and accepted escape/orphan tests.
+
+- Empty plugin host: token-FD read, `close_range` to stdio only,
+  `no_new_privs`, Landlock filesystem read rules, `session.hello`, and tests for
+  `/etc/passwd` denial, fd closure, and editor `SIGKILL` reaping. No VM,
+  network seccomp, or plugin API yet.
 
 ### Planned
 

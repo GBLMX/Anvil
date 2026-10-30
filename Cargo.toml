@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/anvil-api", "crates/anvil-core", "crates/anvil-editor", "crates/anvil-ipc", "crates/anvil-tui"]
+members = ["crates/anvil-api", "crates/anvil-core", "crates/anvil-editor", "crates/anvil-ipc", "crates/anvil-plugin-host", "crates/anvil-tui"]
 resolver = "3"
 
 [workspace.package]

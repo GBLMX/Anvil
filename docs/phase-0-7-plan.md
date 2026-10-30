@@ -13,7 +13,7 @@ Status: planned. 0.1.0 is the current release baseline.
 ## 1. Plugin-host isolation
 
 Contract: [ADR-0012](adr/0012-plugin-host-isolation.md).
-Implementation has not started.
+Empty-host slice implemented: token FD, fd closure, Landlock FS read rules, `session.hello`, and isolation tests. VM/seccomp/network enforcement pending.
 
 Required outcome:
 

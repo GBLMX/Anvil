@@ -1,6 +1,6 @@
 # ADR-0012: Plugin-Host Isolation
 
-- Status: Proposed; implementation not started
+- Status: Proposed; empty-host slice implemented; VM/seccomp not started
 - Date: 2026-10-31
 - Related: [ADR-0001](0001-plugin-isolation.md), [ADR-0002](0002-go-daemon.md),
   [ADR-0007](0007-jsonrpc-envelope-and-capability-token.md),
@@ -31,7 +31,9 @@ Applied before plugin VM initialization:
 
 - `no_new_privs`.
 - Landlock: read-only runtime files needed by the VM; workspace access only for
-  granted paths; no network; no execute except the host/runtime interpreter.
+  granted paths. Landlock network rules are used only on kernels that support
+  them (>= 6.7); on 5.13-6.6 network denial is a seccomp responsibility, not a
+  Landlock claim.
 - seccomp allowlist: no `clone` namespaces, mount, ptrace, network, keyring,
   `bpf`, `perf_event_open`, or arbitrary `execve`.
 - RLIMIT/cgroup pids, memory, fds, and output caps.
