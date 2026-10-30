@@ -53,12 +53,17 @@ mod linux {
         }
 
         pub fn wait(&mut self) -> io::Result<ExitStatus> {
-            self.child.wait()
+            let status = self.child.wait()?;
+            self.pgid = 0;
+            Ok(status)
         }
 
         pub fn terminate(&mut self) {
-            unsafe {
-                libc::kill(-self.pgid, libc::SIGKILL);
+            if self.pgid > 0 {
+                unsafe {
+                    libc::kill(-self.pgid, libc::SIGKILL);
+                }
+                self.pgid = 0;
             }
             let _ = self.child.wait();
         }
@@ -76,7 +81,7 @@ mod linux {
     /// before `exec`, so gateway/editor sockets cannot leak into a plugin.
     pub fn spawn(host: &Path, args: &[String], token: Token) -> io::Result<HostProcess> {
         let mut pipe = [0; 2];
-        if unsafe { libc::pipe2(pipe.as_mut_ptr(), 0) } != 0 {
+        if unsafe { libc::pipe2(pipe.as_mut_ptr(), libc::O_CLOEXEC) } != 0 {
             return Err(io::Error::last_os_error());
         }
         let (read_fd, write_fd) = (pipe[0], pipe[1]);
@@ -100,6 +105,9 @@ mod linux {
                     return Err(io::Error::last_os_error());
                 }
                 if read_fd != TOKEN_FD && libc::dup2(read_fd, TOKEN_FD) < 0 {
+                    return Err(io::Error::last_os_error());
+                }
+                if libc::fcntl(TOKEN_FD, libc::F_SETFD, 0) < 0 {
                     return Err(io::Error::last_os_error());
                 }
                 let closed =

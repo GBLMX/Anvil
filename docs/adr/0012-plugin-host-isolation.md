@@ -1,6 +1,7 @@
 # ADR-0012: Plugin-Host Isolation
 
-- Status: Proposed; empty-host slice implemented; VM/seccomp not started
+- Status: Proposed; empty-host + FS/exec/network denial implemented; VM, cgroup,
+  and editor UDS not started
 - Date: 2026-10-31
 - Related: [ADR-0001](0001-plugin-isolation.md), [ADR-0002](0002-go-daemon.md),
   [ADR-0007](0007-jsonrpc-envelope-and-capability-token.md),
@@ -34,8 +35,10 @@ Applied before plugin VM initialization:
   granted paths. Landlock network rules are used only on kernels that support
   them (>= 6.7); on 5.13-6.6 network denial is a seccomp responsibility, not a
   Landlock claim.
-- seccomp allowlist: no `clone` namespaces, mount, ptrace, network, keyring,
-  `bpf`, `perf_event_open`, or arbitrary `execve`.
+- seccomp: network syscalls (`socket`, `connect`, `bind`, `listen`, `accept*`,
+  `send*`, `recv*`, `shutdown`) return `EPERM`; broader namespace/mount/ptrace
+  filtering is pending.
+- Landlock handles `EXECUTE`; no path is granted execute after startup.
 - RLIMIT/cgroup pids, memory, fds, and output caps.
 - The host starts with a minimal environment; no inherited editor/gateway FDs.
 

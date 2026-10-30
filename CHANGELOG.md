@@ -19,8 +19,8 @@ All notable changes to Anvil are recorded here. The format follows
 
 - Empty plugin host: token-FD read, `close_range` to stdio only,
   `no_new_privs`, Landlock filesystem read rules, `session.hello`, and tests for
-  `/etc/passwd` denial, fd closure, and editor `SIGKILL` reaping. No VM,
-  network seccomp, or plugin API yet.
+  `/etc/passwd` denial, exec denial, fd closure, network `EPERM`, and editor
+  `SIGKILL` reaping. No VM, cgroup, editor UDS, or plugin API yet.
 
 ### Planned
 

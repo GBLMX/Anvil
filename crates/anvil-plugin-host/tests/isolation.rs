@@ -28,6 +28,20 @@ fn host_closes_all_but_stdio() {
 }
 
 #[test]
+fn host_denies_network() {
+    let mut host =
+        spawn(host_bin(), &["--check-network".to_owned()], Token([4; 32])).expect("spawn host");
+    assert_eq!(host.wait().expect("wait").code(), Some(14));
+}
+
+#[test]
+fn landlock_denies_exec() {
+    let mut host =
+        spawn(host_bin(), &["--check-exec".to_owned()], Token([5; 32])).expect("spawn host");
+    assert_eq!(host.wait().expect("wait").code(), Some(18));
+}
+
+#[test]
 fn landlock_denies_etc_passwd() {
     let mut host = spawn(
         host_bin(),
