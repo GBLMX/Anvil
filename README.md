@@ -14,12 +14,18 @@ be proven before implementation expands.
 - [Architecture](docs/architecture.md)
 - [Performance baseline](docs/performance.md)
 - [Architecture decision records](docs/adr/)
+- [Security policy](SECURITY.md)
+- [Contributing](CONTRIBUTING.md)
+- [Code of conduct](CODE_OF_CONDUCT.md)
+- [Changelog](CHANGELOG.md)
 
 ## Current decisions
 
 - Plugins are untrusted by default and run in a separate plugin-host process,
   never in the editor process.
 - The Go gateway is a per-session policy gateway, not the plugin sandbox.
+- `sys.exec` is disabled until `anvil-exec-runner` applies Landlock/seccomp to
+  the tool child. The gateway never execs a tool from its own unsandboxed space.
 - The public API starts small and is defined from Rust types plus generated JSON
   Schema and TypeScript/Lua stubs. Smithy is deferred until the API justifies
   its code-generation cost.
@@ -31,4 +37,4 @@ be proven before implementation expands.
 ## License
 
 Licensed under either of Apache-2.0 or MIT, at your option.
-See [LICENSE](LICENSE) and [LICENSE-MIT](LICENSE-MIT).
+See [LICENSE-APACHE](LICENSE-APACHE) and [LICENSE-MIT](LICENSE-MIT).

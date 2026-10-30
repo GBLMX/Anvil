@@ -124,9 +124,11 @@ These are release blockers, not aspirations.
    `GET`/`HEAD` by default, redirects disabled, every resolved A/AAAA address
    checked, and the connection pinned to the checked address while preserving
    Host and TLS SNI.
-4. **No shell execution.** `sys.exec` accepts argv arrays only. No shell string,
-   no shell interpretation, no inherited environment. Tool-specific argument
-   policy is mandatory.
+4. **No shell execution and no unsandboxed exec.** `sys.exec` accepts argv
+   arrays only. No shell string or inherited environment is allowed. The
+   gateway invokes a sandboxed `anvil-exec-runner` that applies Landlock,
+   seccomp, and `no_new_privs` before the tool starts; a process group alone is
+   not a filesystem boundary.
 5. **No orphan processes.** `sys.exec` children run in their own process group;
    timeout/cancel/reload kills the whole tree and reaps it.
 6. **No manifest self-escalation.** `Anvil.toml` permissions are requests. The
@@ -182,6 +184,8 @@ Phase 0 gates:
 - malicious plugin cannot read outside the workspace;
 - `openat2` symlink-race tests pass;
 - `sys.exec` rejects `rg --pre` and `fd --exec`;
+- `sys.exec` spawns through `anvil-exec-runner`, and a workspace symlink raced
+  against `rg`/`fd` cannot read outside the workspace;
 - 100 MB file opens within target;
 - random edits at 1%, 50%, and 99% offsets have measured p99;
 - first-frame cold start is measured with the gateway excluded and included;
@@ -196,8 +200,10 @@ reproducible harness:
    and a malicious Lua test that cannot read outside its workspace.
 2. **Path security suite**: traversal, absolute paths, symlink escape, magic
    links, workspace-root symlink, and `EAGAIN` retry.
-3. **Exec policy PoC**: dangerous tool flags and inherited environment rejected;
-   timeout kills descendants.
+3. **Exec sandbox PoC**: dangerous tool flags and inherited environment
+   rejected; `anvil-exec-runner` applies Landlock/seccomp/no_new_privs; a
+   workspace symlink raced during `rg`/`fd` cannot read outside; timeout kills
+   descendants.
 4. **SSRF suite**: private IPv4/IPv6, CGNAT, metadata, DNS rebinding simulation,
    redirect, compressed-body bomb, and wrong SNI.
 5. **Text benchmark**: Gap Buffer versus Rope/piece table on 1/10/100 MB,
@@ -214,7 +220,7 @@ If a gate fails, stop and change the design. Do not mark it "Phase 1".
 | Phase | Outcome | Gate |
 |---|---|---|
 | 0 | Security and performance spikes | All Phase 0 exit criteria |
-| 1 | Gateway and plugin-host vertical slice | `read_file` + `exec` mediated end to end |
+| 1 | Gateway and plugin-host vertical slice | `read_file` + sandboxed `exec` mediated end to end |
 | 2 | Lua API, hot reload, cancellation | No escape, no zombies, no RSS growth |
 | 3 | QuickJS, generated stubs, build | TS plugin passes the same security suite |
 | Later | Optional static assembly, more platform support | Separate ADR |
@@ -235,7 +241,8 @@ Dates are planning estimates, not release commitments.
 ## 14. License
 
 Anvil is dual-licensed under Apache-2.0 or MIT, at the user's option. The
-repository ships [LICENSE](LICENSE) and [LICENSE-MIT](LICENSE-MIT). Contributions
+repository ships [LICENSE-APACHE](LICENSE-APACHE) and
+[LICENSE-MIT](LICENSE-MIT). Contributions
 are accepted under the same dual-license terms.
 
 ## 15. ADR index

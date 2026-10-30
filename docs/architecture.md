@@ -25,6 +25,10 @@ Status: Phase 0 baseline.
                 files / network / child processes
 ```
 
+`sys.exec` adds one hop: the gateway invokes `anvil-exec-runner`, which applies
+Landlock/seccomp and then executes the tool. The gateway never execs a tool
+directly from its unsandboxed address space.
+
 A second plugin is a second host process. One host may serve multiple plugins
 only when they are in the same explicitly declared trust group.
 
@@ -56,6 +60,15 @@ only when they are in the same explicitly declared trust group.
 - Does not trust a plugin host merely because it is on a local socket.
 - Fails closed on policy error, malformed frames, missing grants, or cancelled
   requests.
+
+**Exec runner**
+
+- Minimal trusted launcher used only by `sys.exec`.
+- Receives a workspace dirfd, tool path fd, argv, and limits from the gateway.
+- Applies read-only Landlock rules for the workspace and system runtime paths,
+  seccomp (no network, ptrace, or privilege changes), and `no_new_privs`.
+- Executes with `execveat`; the gateway does not pass path strings as authority.
+- If the runner is unavailable or sandbox setup fails, `sys.exec` is disabled.
 
 The gateway is **not** the plugin sandbox. It is the policy enforcement point for
 requests that reach it. The kernel sandbox around the plugin host is the
@@ -131,7 +144,7 @@ plugin --ui.notify/status------> editor
 plugin --event.subscribe-------> editor
 plugin --sys.read_file---------> gateway
 plugin --sys.fetch-------------> gateway
-plugin --sys.exec--------------> gateway
+plugin --sys.exec--------------> gateway -> exec-runner -> tool
 ```
 
 The gateway never proxies editor state. The editor never performs ambient
@@ -170,10 +183,12 @@ Proposed workspace:
 crates/
   anvil-core/          text model, commands, snapshots
   anvil-tui/           terminal frontend
-  anvil-protocol/      JSON-RPC types, framing, schemas
-  anvil-plugin-host/   Lua/QuickJS host + sandbox
+  anvil-ipc/           UDS transport, JSON-RPC framing
+  anvil-api/           public Rust types, schema, generated stubs
   anvil-test/          security and performance harnesses
-daemon/                Go gateway module
+  anvil-exec-runner/   sandboxed launcher for rg/fd
+plugin-host/           Lua/QuickJS host + sandbox
+go/                    Go module: cmd/anvil-gateway, internal/{policy,mediation,audit}
 docs/
 ```
 
@@ -193,6 +208,7 @@ docs/
 | Malformed frame | Connection closed; plugin disabled |
 | Cancelled request | I/O and process tree killed; no success response |
 | Stale token | Request rejected; plugin host restarted |
+| Exec runner missing | `sys.exec` disabled; no unsandboxed fallback |
 
 ## 8. Deliberate exclusions
 

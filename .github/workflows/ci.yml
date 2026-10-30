@@ -1,0 +1,94 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check relative Markdown links
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          import sys
+
+          root = Path('.')
+          missing = []
+          for path in sorted(root.rglob('*.md')):
+              for match in re.finditer(r'\[[^\]]*\]\(([^)]+)\)', path.read_text()):
+                  target = match.group(1).split('#', 1)[0]
+                  if not target or '://' in target or target.startswith('mailto:'):
+                      continue
+                  if not (path.parent / target).resolve().exists():
+                      missing.append(f'{path}: {target}')
+          if missing:
+              print('\n'.join(missing))
+              sys.exit(1)
+          print('Markdown links: ok')
+          PY
+
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Detect Rust workspace
+        id: detect
+        run: |
+          if [ -f Cargo.toml ]; then
+            echo 'present=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'present=false' >> "$GITHUB_OUTPUT"
+            echo 'No Cargo.toml yet; Rust checks will activate when the workspace lands.'
+          fi
+      - name: Install pinned Rust toolchain
+        if: steps.detect.outputs.present == 'true'
+        run: rustup show
+      - name: Check formatting
+        if: steps.detect.outputs.present == 'true'
+        run: cargo fmt --all -- --check
+      - name: Lint
+        if: steps.detect.outputs.present == 'true'
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: Test
+        if: steps.detect.outputs.present == 'true'
+        run: cargo test --workspace --all-targets
+
+  go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Detect Go module
+        id: detect
+        run: |
+          if [ -f go/go.mod ]; then
+            echo 'present=true' >> "$GITHUB_OUTPUT"
+            echo 'file=go/go.mod' >> "$GITHUB_OUTPUT"
+          elif [ -f go.mod ]; then
+            echo 'present=true' >> "$GITHUB_OUTPUT"
+            echo 'file=go.mod' >> "$GITHUB_OUTPUT"
+          else
+            echo 'present=false' >> "$GITHUB_OUTPUT"
+            echo 'No Go module yet; Go checks will activate when the gateway lands.'
+          fi
+      - uses: actions/setup-go@v5
+        if: steps.detect.outputs.present == 'true'
+        with:
+          go-version-file: ${{ steps.detect.outputs.file }}
+          cache: true
+      - name: Check formatting
+        if: steps.detect.outputs.present == 'true'
+        run: cd "$(dirname "${{ steps.detect.outputs.file }}")" && test -z "$(gofmt -l .)"
+      - name: Vet
+        if: steps.detect.outputs.present == 'true'
+        run: cd "$(dirname "${{ steps.detect.outputs.file }}")" && go vet ./...
+      - name: Test
+        if: steps.detect.outputs.present == 'true'
+        run: cd "$(dirname "${{ steps.detect.outputs.file }}")" && go test ./...

@@ -124,6 +124,14 @@ Reference: [OWASP SSRF Prevention Cheat Sheet](https://cheatsheetseries.owasp.or
 - `env_clear()` plus a fixed minimal environment.
 - Fixed executable path opened as a file descriptor; no `PATH` lookup.
 - Child in its own process group; timeout/cancel kills the whole tree.
+- The gateway must not spawn `rg`/`fd` directly. It invokes
+  `anvil-exec-runner`, which applies Landlock (workspace + system runtime
+  read-only), seccomp (no network/ptrace/privilege changes), and
+  `no_new_privs` before `execveat`.
+- Landlock must deny a symlink swapped after gateway validation; `openat2` is
+  only defense in depth because the child reopens paths itself.
+- A symlink-race test must prove that a workspace link pointing outside cannot
+  be read by `rg` or `fd`.
 - Output and process count limits.
 
 ### T4. Plugin escape
@@ -212,7 +220,7 @@ reuses an old approval.
 |---|---|
 | Paths | `..`, absolute, symlink escape, magic link, root symlink, `EAGAIN` race, hard link |
 | Network | private IPv4/IPv6, metadata IP, CGNAT, DNS rebinding, redirect, gzip bomb, wrong SNI, proxy env |
-| Exec | shell string, `--pre`, `--exec`, env injection, PATH swap, timeout, descendant kill |
+| Exec | shell string, `--pre`, `--exec`, env injection, PATH swap, symlink race, runner sandbox failure, timeout, descendant kill |
 | Plugin host | removed stdlib functions, native module load, memory limit, CPU interrupt |
 | IPC | wrong token, replayed token, wrong workspace, concurrent cancel |
 | Reload | 1000 reloads, fd/RSS/child checks |

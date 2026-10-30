@@ -45,6 +45,8 @@ The gateway owns:
 - HTTPS fetch, redirect policy, body limits;
 - executable allowlist and argument policy;
 - child process groups, timeouts, and reaping;
+- spawning `anvil-exec-runner`, which applies Landlock/seccomp and then execs
+  the allowlisted tool; the gateway never execs a tool directly.
 - request deadlines and cancellation;
 - capability grant lookup.
 
@@ -55,6 +57,7 @@ The gateway does not:
 - expose an editor API;
 - grant permissions on its own;
 - survive as a shared daemon across workspaces.
+- execute a tool child directly from its own unsandboxed address space.
 
 ## Lifecycle
 
@@ -126,6 +129,7 @@ sandbox boundary. Keep plugin execution in the dedicated host process.
 - Malformed frame: close and disable plugin.
 - Cancelled request: kill its children; never return success.
 - Gateway unavailable: plugin disabled; editor remains usable.
+- Exec runner unavailable: `sys.exec` disabled; no direct fallback.
 
 ## References
 

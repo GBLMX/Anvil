@@ -77,7 +77,8 @@ Targets are evaluated per file size and with syntax highlighting on/off:
 - UDS round trip: empty JSON-RPC method;
 - `sys.read_file`: 4 KiB and 5 MiB;
 - `sys.fetch`: local TLS test server, no public network;
-- `sys.exec`: spawn to exit, separate from policy.
+- `sys.exec`: gateway -> exec-runner -> tool, spawn to exit; report runner
+  sandbox setup separately from tool runtime.
 
 Do not mix policy latency with network or process startup.
 

@@ -1,6 +1,6 @@
 # ADR-0005: No Shell, No Pipeline, Per-Tool Argument Policy
 
-- Status: Accepted
+- Status: Proposed; blocked until the sandboxed exec runner and symlink-race test exist
 - Date: 2026-10-30
 
 ## Context
@@ -35,10 +35,18 @@ safe:
    - any unknown flag.
 7. The child runs in a new process group. Timeout, cancellation, and reload kill
    the group, wait for it, and reap descendants.
-8. Limits: max runtime, max stdout+stderr bytes, max process count, max file
-   descriptors.
-9. `sys.exec` is unavailable when the sandbox/policy is incomplete. Deny by
-   default.
+8. The child is never spawned directly by the unsandboxed gateway. The gateway
+   invokes a small `anvil-exec-runner`, which applies Landlock, seccomp, and
+   `no_new_privs` before executing the tool. The runner sees a read-only
+   workspace and read-only system runtime paths; writes, network, ptrace, and
+   privilege changes are denied.
+9. `openat2` validation in the gateway is defense in depth, not a substitute for
+   child confinement: `rg`/`fd` reopen path strings themselves. Landlock must
+   deny an escape even if a symlink is swapped after argument validation.
+10. Limits: max runtime, max stdout+stderr bytes, max process count, max file
+    descriptors.
+11. `sys.exec` is unavailable when the runner, policy, or sandbox setup is
+    incomplete. Deny by default.
 
 ## Tool argument policy
 
@@ -65,7 +73,21 @@ Anvil API instead of raw `exec`.
 - `Wait` after kill; no zombie.
 - `Pdeathsig` where available.
 - Gateway is a subreaper/owns the child lifecycle for its session.
+- The gateway invokes `anvil-exec-runner`; the runner applies Landlock/seccomp
+  and `no_new_privs` before `execveat`.
 - Output is streamed into bounded buffers; truncation is explicit.
+
+## Why `openat2` is not enough
+
+`openat2` protects the gateway's own opens. It does not constrain a child
+process that receives a path string and reopens it. A workspace symlink can be
+swapped after validation or can point outside the workspace. The exec child must
+therefore inherit a kernel sandbox that denies access outside its allowed
+workspace/system roots, regardless of the path it chooses.
+
+If this cannot be implemented, remove `sys.exec` from v1. Do not ship a
+process-group-only exec policy and call it a security boundary.
+
 
 ## Consequences
 
@@ -107,6 +129,8 @@ preferable to an unsafe generic exec.
 - `rg --pre /bin/sh` rejected.
 - `fd --exec id` rejected.
 - `RIPGREP_CONFIG_PATH`, `LD_PRELOAD`, `PATH` injection rejected.
+- workspace symlink to an outside directory, then race the symlink target during
+  `rg`/`fd`; the runner must deny the outside read.
 - timeout kills descendants.
 - output cap enforced.
 - unknown flag rejected.
