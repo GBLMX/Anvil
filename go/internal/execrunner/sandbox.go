@@ -75,8 +75,8 @@ func Apply(workspace string, runtimePaths []string) error {
 // Runtime directories stay read-only, so another binary cannot be exec'd.
 // It locks the calling OS thread; the caller must exec on the same goroutine.
 func ApplyTool(workspace, tool string, runtimePaths []string) error {
-	threadID := unix.Gettid()
 	runtime.LockOSThread()
+	threadID := unix.Gettid()
 	abi, err := LandlockABI()
 	if err != nil {
 		return err
@@ -185,8 +185,8 @@ func elfInterpreter(path string) (string, error) {
 	return "", nil
 }
 
-// limitTaskCount reserves headroom above the user's current task count.
-// An absolute value small enough for a one-shot tool can be below the user's
+// limitTaskCount prefers the gateway's per-sandbox cgroup and falls back to a
+// user-wide RLIMIT_NPROC headroom. An absolute RLIMIT can be below the user's
 // existing process count and would break the Go runtime and the tool.
 func limitTaskCount(headroom uint64) error {
 	if path := os.Getenv("ANVIL_CGROUP_PATH"); path != "" {

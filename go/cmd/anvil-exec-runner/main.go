@@ -6,7 +6,6 @@ import (
 	"os"
 
 	"github.com/GBLMX/Anvil/go/internal/execrunner"
-	"golang.org/x/sys/unix"
 )
 
 func main() {
@@ -21,13 +20,8 @@ func main() {
 		fmt.Fprintf(os.Stderr, "anvil-exec-runner: %v\n", err)
 		os.Exit(2)
 	}
-	threadID := unix.Gettid()
 	if err := execrunner.ApplyTool(*workspace, *tool, execrunner.RuntimePaths()); err != nil {
 		fmt.Fprintf(os.Stderr, "anvil-exec-runner: %v\n", err)
-		os.Exit(2)
-	}
-	if unix.Gettid() != threadID {
-		fmt.Fprintln(os.Stderr, "anvil-exec-runner: sandboxed goroutine migrated")
 		os.Exit(2)
 	}
 	args := append([]string{*tool}, flag.Args()...)

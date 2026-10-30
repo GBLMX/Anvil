@@ -105,13 +105,9 @@ func TestSandboxToolHelper(t *testing.T) {
 	}
 	workspace := os.Getenv("ANVIL_SANDBOX_WORKSPACE")
 	tool := os.Getenv("ANVIL_SANDBOX_TOOL")
-	threadID := unix.Gettid()
 	if err := ApplyTool(workspace, tool, RuntimePaths()); err != nil {
 		os.Stderr.WriteString(err.Error() + "\n")
 		os.Exit(2)
-	}
-	if unix.Gettid() != threadID {
-		os.Exit(3)
 	}
 	if err := Exec(tool, []string{tool, "--version"}, []string{"PATH=/usr/bin:/bin", "LANG=C.UTF-8"}); err != nil {
 		os.Stderr.WriteString(err.Error() + "\n")
