@@ -252,3 +252,4 @@ are accepted under the same dual-license terms.
 - [0003: IDL strategy](docs/adr/0003-idl.md)
 - [0004: Text model](docs/adr/0004-text-model.md)
 - [0005: Exec policy](docs/adr/0005-exec-policy.md)
+- [0006: Upstream dependencies](docs/adr/0006-upstream-dependencies.md)

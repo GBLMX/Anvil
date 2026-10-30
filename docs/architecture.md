@@ -162,18 +162,23 @@ filesystem/network I/O on behalf of a plugin.
 - Byte, char, grapheme, and display-cell coordinates are explicit in the API.
   The editor owns conversions; plugins must not reimplement Unicode width rules.
 
-## 5. Ferriso reuse
+## 5. Ferriso: reference, not a v1 runtime dependency
 
-Reuse is allowed at the adapter layer, not as a hidden global architecture:
+Anvil does not depend on `ferriso-core`, `ferriso-tui`, or `ferriso-editor` in
+v1. Ferriso remains a useful MIT-licensed reference:
 
-- `ferriso-core` snapshot/actor semantics: useful for editor state publication.
-- `ferriso-tui`: useful ratatui layout and terminal adaptation.
-- `ferriso-editor`: reference implementation of gap buffer, line index,
+- `ferriso-editor` shows a gap buffer, segmented line index,
   grapheme/visual coordinates, undo, and atomic save.
-- Ferriso types must not appear in the public plugin API.
-- Ferriso is pinned to a commit; Anvil owns its text and security behavior.
-- `ferriso-editor` currently defaults to a 64 MiB open limit; Anvil must set its
-  own limit and retest at 100 MB.
+- `ferriso-tui` shows a ratatui/crossterm terminal lifecycle.
+- Copy or adapt only small, attributable pieces; do not expose Ferriso types in
+  the public API.
+- Ferriso 0.3.x and its Tokio actor assumptions are not a stable base for a
+  100 MB editor with a separate Go gateway.
+- `ferriso-editor` defaults to a 64 MiB open limit; Anvil must set its own limit
+  and retest at 100 MB if its code is reused.
+
+Revisit this decision only if the direct `ratatui` + Rope stack fails a Phase 0
+gate.
 
 ## 6. Build and packaging
 

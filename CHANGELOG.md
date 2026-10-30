@@ -12,7 +12,8 @@ All notable changes to Anvil are recorded here. The format follows
 - Threat model covering path traversal, SSRF, plugin escape, IPC spoofing,
   resource exhaustion, cancellation, and manifest escalation.
 - Architecture decision records for plugin isolation, the per-session Go
-  gateway, lightweight IDL, text-model selection, and exec policy.
+  gateway, lightweight IDL, text-model selection, exec policy, and upstream
+  dependency baseline.
 - Repository governance files: security policy, contribution guide, code of
   conduct, editor configuration, license files, and CI skeleton.
 

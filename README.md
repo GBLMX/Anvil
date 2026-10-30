@@ -13,6 +13,7 @@ be proven before implementation expands.
 - [Threat model](docs/threat-model.md)
 - [Architecture](docs/architecture.md)
 - [Performance baseline](docs/performance.md)
+- [Upstream dependencies](docs/adr/0006-upstream-dependencies.md)
 - [Architecture decision records](docs/adr/)
 - [Security policy](SECURITY.md)
 - [Contributing](CONTRIBUTING.md)
@@ -23,6 +24,9 @@ be proven before implementation expands.
 
 - Plugins are untrusted by default and run in a separate plugin-host process,
   never in the editor process.
+- The Rust v1 stack uses `ratatui` + `crossterm` directly, with no Tokio or
+  Ferriso runtime dependency. Ferriso is reference material.
+- Lua plugins use `mlua` with Luau; TS uses `rquickjs` (QuickJS-NG), not V8.
 - The Go gateway is a per-session policy gateway, not the plugin sandbox.
 - `sys.exec` is disabled until `anvil-exec-runner` applies Landlock/seccomp to
   the tool child. The gateway never execs a tool from its own unsandboxed space.
