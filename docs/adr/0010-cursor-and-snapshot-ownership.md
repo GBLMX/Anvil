@@ -40,6 +40,8 @@ the eventual editor the wrong kind of client.
    Complexity:
    - snapshot: `O(1)`;
    - first edit after snapshot: `O(chunks + 2 * MAX_LINES)`, not `O(lines)`;
+   - normal edit: `O(chunks + rebuilt chunk lines + split/merge operations)`,
+     because later chunk bases and first-line numbers shift;
    - `offset_to_line`: `O(log chunks + log 1024)`;
    - `line_to_offset`: `O(log chunks)`; after the chunk is found,
      `starts[line - first_line]` is an O(1) array index. A binary search inside
@@ -116,13 +118,18 @@ no dirty-chunk or lazy-rebuild path:
 - only the final chunk may remain below `MIN_LINES`; every other chunk is within
   `[MIN_LINES, MAX_LINES]`.
 
-Split/merge rebuilds only the affected chunk headers and `Arc<[usize]>` arrays.
-It does not scan the document or rebuild the whole index.
+Split/merge rebuilds only the affected chunk line arrays. Independently of
+split/merge, every edit shifts the absolute `base` and `first_line` fields of
+all later chunk headers, which is `O(chunks)`. This is a per-edit cost, not only
+a snapshot-first-edit cost.
 
 A single edit can trigger several splits or merges, and a large paste may touch
-many chunks. The cost is linear in the number of chunks actually split, merged,
-or rebuilt, each bounded by `MAX_LINES`; it is not `O(document lines)` unless
-the edit itself spans the whole document.
+many chunks. The total edit cost is:
+
+`O(chunks + lines in rebuilt chunks + split/merge operations)`
+
+Each rebuilt chunk is bounded by `MAX_LINES`; the work is not `O(document
+lines)` unless the edit itself spans the whole document.
 
 `LineIndex` is independent of PieceTable piece boundaries. An edit is applied by
 byte range and a `TextBuffer` reference:
@@ -237,6 +244,8 @@ rule the text buffer follows. Rejected.
 
 - The snapshot first-edit benchmark includes `LineIndex` work and reports the
   chunk path cost; it must stay far below a full line-array copy.
+- A normal-edit benchmark reports latency including later chunk-header shifts,
+  separately from the snapshot-first-edit case.
 - Snapshot tests prove `Arc` sharing and immutability; no document text copy is
   permitted.
 - `anvil-editor` tests construct `EditorView` from a snapshot without duplicating
