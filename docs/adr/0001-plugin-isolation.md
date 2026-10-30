@@ -74,10 +74,10 @@ Strong memory isolation and a mature embedding model, as demonstrated by Zed's
 Wasm extensions. Deferred because Lua/TS compatibility and host API design need a
 separate ADR. The process boundary does not prevent adding a Wasm host later.
 
-### Luau instead of Lua 5.4 (candidate)
+### Luau instead of Lua 5.4 (selected by ADR-0006)
 
 Luau removes dangerous standard libraries and is designed for untrusted code.
-It is a candidate for plugins that do not require Lua 5.4 compatibility. It
+ADR-0006 selects it for the v1 Lua host through `mlua`'s `luau` feature. It
 still runs in the isolated host process; it does not replace the process
 boundary.
 

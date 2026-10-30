@@ -39,7 +39,7 @@ The dependency set should avoid:
 | CLI | `clap` | `4` | `anvil doctor` and build commands |
 | Errors | `thiserror`, `anyhow` | `2`, `1` | Typed core errors; anyhow only at binaries |
 | Logs | `tracing`, `tracing-subscriber` | `0.1`, `0.3` | Structured fields without a logging framework |
-| IDL | `schemars`, `ts-rs` | `1`, `11` | Schema/TS from Rust types; LuaLS template |
+| IDL | `schemars`, `ts-rs` | `1`, `11` | Schema/TS from Rust types; Luau/LuaLS template |
 | Unicode | `unicode-segmentation`, `unicode-width` | `1`, `0.2` | Grapheme and cell-width correctness |
 | Dev | `tempfile`, `proptest`, `criterion`, `libfuzzer-sys` | `3`, `1`, `0.5`, `0.4` | Fixtures, properties, benchmarks, fuzz targets |
 
@@ -72,6 +72,15 @@ The dependency set should avoid:
 - **No V8/Deno, no system Lua, no system QuickJS.**
 - **No second crossterm backend.** Ratatui's crossterm feature is the only
   terminal path; avoid semver-duplicated `crossterm` crates.
+
+The Go module lives at the repository root (`go.mod`, module
+`github.com/GBLMX/Anvil`) with gateway packages under `go/`. A `go.work` is
+only added if a second Go module appears.
+
+`mlua`/Luau and `rquickjs`/QuickJS-NG are vendored C/C++ builds. CI and
+contributors need a C/C++ compiler; `rquickjs` may additionally need
+`bindgen`/libclang depending on its selected features. These are build
+prerequisites, not system runtime libraries.
 
 ## Rules
 
