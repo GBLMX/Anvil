@@ -243,10 +243,10 @@ Only changes required by the core slice:
 - one production backend selected;
 - other backends benchmark-only.
 
-### M4: Editing primitives gate (in progress: command/undo/revision landed)
+### M4: Editing primitives gate (in progress: command/undo/typing groups landed)
 
 - cursor/coordinate ownership ADR;
-- command/undo/revision with stale-revision rejection;
+- command/undo/revision with stale-revision rejection and typing groups;
 - snapshot contract;
 - core tests and API view integration.
 

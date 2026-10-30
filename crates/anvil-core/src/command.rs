@@ -57,6 +57,7 @@ impl Error for CommandError {}
 struct HistoryEntry {
     forward: EditCommand,
     inverse: EditCommand,
+    typing: bool,
 }
 
 /// Undo/redo stack with a monotonically increasing revision.
@@ -86,7 +87,48 @@ impl History {
         self.undo.push(HistoryEntry {
             forward: command,
             inverse,
+            typing: false,
         });
+        self.redo.clear();
+        self.revision += 1;
+        Ok(self.revision)
+    }
+
+    /// Applies a typing insert and merges contiguous typing into one undo step.
+    pub fn apply_typing<B: TextBuffer>(
+        &mut self,
+        buffer: &mut B,
+        expected: Revision,
+        at: usize,
+        text: &str,
+    ) -> Result<Revision, CommandError> {
+        self.check_revision(expected)?;
+        let command = EditCommand::Insert {
+            at,
+            text: text.to_owned(),
+        };
+        let inverse = command.inverse(buffer)?;
+        command.apply(buffer);
+
+        if let Some(entry) = self.undo.last_mut()
+            && entry.typing
+            && let EditCommand::Insert {
+                at: previous_at,
+                text: previous_text,
+            } = &mut entry.forward
+            && *previous_at + previous_text.len() == at
+        {
+            previous_text.push_str(text);
+            entry.inverse = EditCommand::Delete {
+                range: *previous_at..*previous_at + previous_text.len(),
+            };
+        } else {
+            self.undo.push(HistoryEntry {
+                forward: command,
+                inverse,
+                typing: true,
+            });
+        }
         self.redo.clear();
         self.revision += 1;
         Ok(self.revision)
@@ -289,5 +331,40 @@ mod tests {
             Err(CommandError::NothingToRedo)
         );
         assert_eq!(buffer.slice(0..buffer.len_bytes()), "ac");
+    }
+
+    fn typing_group<B: TextBuffer>() {
+        let mut buffer = B::from_text("");
+        let mut history = History::default();
+        history.apply_typing(&mut buffer, 0, 0, "a").unwrap();
+        history.apply_typing(&mut buffer, 1, 1, "b").unwrap();
+        history.apply_typing(&mut buffer, 2, 2, "c").unwrap();
+        assert_eq!(buffer.slice(0..buffer.len_bytes()), "abc");
+
+        let revision = history.undo(&mut buffer, 3).unwrap();
+        assert_eq!(revision, 4);
+        assert_eq!(buffer.slice(0..buffer.len_bytes()), "");
+
+        let revision = history.redo(&mut buffer, 4).unwrap();
+        assert_eq!(revision, 5);
+        assert_eq!(buffer.slice(0..buffer.len_bytes()), "abc");
+    }
+
+    #[test]
+    fn contiguous_typing_is_one_undo_group() {
+        typing_group::<RopeBuffer>();
+        typing_group::<GapBuffer>();
+        typing_group::<PieceTable>();
+    }
+
+    #[test]
+    fn non_contiguous_typing_starts_a_new_group() {
+        let mut buffer = PieceTable::from_text("");
+        let mut history = History::default();
+        history.apply_typing(&mut buffer, 0, 0, "a").unwrap();
+        history.apply_typing(&mut buffer, 1, 0, "b").unwrap();
+        assert_eq!(buffer.slice(0..buffer.len_bytes()), "ba");
+        history.undo(&mut buffer, 2).unwrap();
+        assert_eq!(buffer.slice(0..buffer.len_bytes()), "a");
     }
 }
