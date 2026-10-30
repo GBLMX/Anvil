@@ -1030,6 +1030,7 @@ impl Model {
         let Some(host) = &mut self.host else {
             return;
         };
+        let mut stop = false;
         for event in host.poll() {
             match event {
                 HostEvent::Ready => self.status = "plugin host connected".to_owned(),
@@ -1037,13 +1038,22 @@ impl Model {
                 HostEvent::ExecUnsupported => {
                     self.status = "plugin sys.exec not implemented yet".to_owned();
                 }
-                HostEvent::Error(error) => self.status = format!("E: plugin host: {error}"),
+                HostEvent::Error(error) => {
+                    self.status = format!("E: plugin host: {error}");
+                    stop = true;
+                }
                 HostEvent::Exited(anvil_plugin_host::HostExit::OomKilled) => {
                     self.status = "⚠ Plugin Killed: Out of Memory".to_owned();
                 }
-                HostEvent::Exited(_) => self.status = "plugin host exited".to_owned(),
+                HostEvent::Exited(_) => {
+                    self.status = "plugin host exited".to_owned();
+                    stop = true;
+                }
             }
             self.dirty = true;
+        }
+        if stop {
+            self.host = None;
         }
     }
 
