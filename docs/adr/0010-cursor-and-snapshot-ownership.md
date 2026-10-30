@@ -39,7 +39,7 @@ the eventual editor the wrong kind of client.
 
    Complexity:
    - snapshot: `O(1)`;
-   - first edit after snapshot: `O(chunks + 2048)`, not `O(lines)`;
+   - first edit after snapshot: `O(chunks + 2 * MAX_LINES)`, not `O(lines)`;
    - `offset_to_line`: `O(log chunks + log 1024)`;
    - `line_to_offset`: `O(log chunks)`; after the chunk is found,
      `starts[line - first_line]` is an O(1) array index. A binary search inside
@@ -102,12 +102,13 @@ Constants:
 
 - `TARGET_LINES = 1024`
 - `MAX_LINES = 2048`
-- `MIN_LINES = 256`
+- `MIN_LINES = 512`
 
 Normalization runs synchronously at the end of every successful edit. There is
 no dirty-chunk or lazy-rebuild path:
 
-- a chunk above `MAX_LINES` splits at `TARGET_LINES`;
+- a chunk above `MAX_LINES` splits at `TARGET_LINES`, repeating until it is at
+  or below `MAX_LINES`;
 - a chunk below `MIN_LINES` merges with its smaller neighbor when their sum is
   at most `MAX_LINES`;
 - if that sum exceeds `MAX_LINES`, the pair is rebalanced into two chunks at the
@@ -132,8 +133,8 @@ directly intersecting chunks. This keeps `offset_to_line` valid immediately
 after the edit; it does not defer work to the query path.
 
 With the occupancy invariant, the chunk count is bounded by
-`lines / MIN_LINES + 1` (plus the final partial chunk). A 100 MB synthetic file
-therefore stays in the low thousands of chunks even after long edit sessions.
+`ceil(lines / MIN_LINES) + 1`. A 100 MB synthetic file therefore stays within
+the low thousands of chunks even after long edit sessions.
 
 ## Line semantics
 
@@ -220,13 +221,14 @@ rule the text buffer follows. Rejected.
 - Line-index semantics tests assert the exact table above for empty, trailing-LF,
   CRLF, and trailing-content cases, and compare every result with
   `TextBuffer::len_lines`.
-- Normalization tests cover split above 2048, merge below 256, rebalance when a
+- Normalization tests cover split above 2048, merge below 512, rebalance when a
   merge would exceed 2048, and the final-chunk exception.
 - Piece-boundary tests cover an edit crossing pieces inside one chunk and an
   edit crossing multiple chunks inside one piece.
 - A 100k-edit randomized stress run on the 100 MB reference checks that chunk
-  count stays within 2× the initial count, every non-final chunk remains within
-  `[256, 2048]`, and `offset_to_line` p99 does not regress by more than 10%.
+  count stays within `ceil(lines / 512) + 1` and within 2× the initial count
+  plus one, every non-final chunk remains within `[512, 2048]`, and
+  `offset_to_line` p99 does not regress by more than 10%.
 - The snapshot first-edit benchmark includes `LineIndex` work and reports the
   chunk path cost; it must stay far below a full line-array copy.
 - Snapshot tests prove `Arc` sharing and immutability; no document text copy is
