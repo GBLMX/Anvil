@@ -2,7 +2,7 @@
 
 use anvil_ipc::write_frame;
 use anvil_plugin_host::{Token, spawn};
-use std::io::{BufRead, BufReader};
+use std::io::{BufRead, BufReader, Write};
 use std::os::unix::net::UnixListener;
 use std::path::Path;
 use std::process::{Command, Stdio};
@@ -80,6 +80,37 @@ fn host_answers_sys_ping_and_rejects_sys_exec() {
     let response: serde_json::Value = serde_json::from_slice(&response).expect("json");
     assert_eq!(response["error"]["code"], -32008);
 
+    editor
+        .shutdown(std::net::Shutdown::Write)
+        .expect("shutdown");
+    assert_eq!(host.wait().expect("wait").code(), Some(0));
+    let _ = std::fs::remove_file(&path);
+}
+
+#[test]
+fn host_buffers_split_frames_across_reads() {
+    let path = std::env::temp_dir().join(format!("anvil-split-{}.sock", std::process::id()));
+    let _ = std::fs::remove_file(&path);
+    let listener = UnixListener::bind(&path).expect("bind uds");
+    let mut host = spawn(
+        host_bin(),
+        &["--socket".to_owned(), path.display().to_string()],
+        Token([13; 32]),
+    )
+    .expect("spawn host");
+    let _ = host.read_hello().expect("hello");
+    let mut editor = listener.accept().expect("accept").0;
+    let body = br#"{"jsonrpc":"2.0","id":3,"method":"sys.ping"}"#;
+    let mut frame = (body.len() as u32).to_be_bytes().to_vec();
+    frame.extend_from_slice(body);
+    editor.write_all(&frame[..2]).expect("partial header");
+    std::thread::sleep(Duration::from_millis(150));
+    editor.write_all(&frame[2..]).expect("remainder");
+    let response = anvil_ipc::read_frame(&mut editor)
+        .expect("read")
+        .expect("response");
+    let response: serde_json::Value = serde_json::from_slice(&response).expect("json");
+    assert_eq!(response["result"], "pong");
     editor
         .shutdown(std::net::Shutdown::Write)
         .expect("shutdown");

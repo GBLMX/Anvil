@@ -433,14 +433,10 @@ mod linux {
 
     fn watch_editor(path: &str) -> io::Result<()> {
         let mut connection = anvil_ipc::Connection::connect(path)?;
-        connection.set_read_timeout(Some(std::time::Duration::from_millis(100)))?;
         loop {
             match connection.recv() {
                 Ok(None) => return Ok(()),
                 Ok(Some(frame)) => handle_rpc(&mut connection, &frame)?,
-                Err(anvil_ipc::FrameError::Io(
-                    io::ErrorKind::WouldBlock | io::ErrorKind::TimedOut,
-                )) => {}
                 Err(error) => {
                     return Err(io::Error::other(format!("editor frame: {error}")));
                 }
