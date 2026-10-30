@@ -101,6 +101,7 @@ cargo bench --bench text_model -- --save-baseline main
 cargo run --release -p anvil-core --bin text-rss -- rope 100
 cargo run --release -p anvil-core --bin text-rss -- gap 100
 cargo run --release -p anvil-core --bin text-rss -- piece 100
+TEXT_P99_MB=100 cargo run --release -p anvil-core --bin text-p99
 ```
 
 RSS must run one backend per process; it reports `VmRSS` and `VmHWM`.

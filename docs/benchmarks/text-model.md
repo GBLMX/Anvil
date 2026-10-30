@@ -75,10 +75,24 @@ cargo run --release -p anvil-core --bin text-rss -- <rope|gap|piece> 100
 The RSS probe includes the 100 MB input string and the constructed buffer; it
 does not isolate shared runtime overhead.
 
+## 100 MB p99 probe
+
+```bash
+TEXT_P99_MB=100 cargo run --release -p anvil-core --bin text-p99
+```
+
+| Backend | Open p99 | `len_lines` p99 | Viewport p99 | Random edits p99 |
+|---|---:|---:|---:|---:|
+| Rope | 126.058 ms | 48 ns | 8.721 µs | 696.619 µs |
+| Gap | 33.341 ms | 51 ns | 1.669 µs | 959.948 ms |
+| Piece | 27.616 ms | 58 ns | 2.335 µs | 219.029 µs |
+
+The 100 MB run uses 30 samples; the 1 MB and 10 MB runs use 100 samples.
+
 ## Interpretation limits
 
-- Criterion's confidence interval is not a p99 measurement. A p99 harness or
-  raw-sample analysis is still required before the M3 decision.
+- The p99 probe is a separate timing loop, not Criterion's confidence
+  interval. Its 100 MB sample count is 30; use a larger run for a final claim.
 - The random trace is deterministic but synthetic; it does not model a real
   user's edit distribution.
 - Undo/redo and snapshot costs are deferred until M4 creates the command/actor
