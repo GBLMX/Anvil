@@ -432,36 +432,51 @@ mod linux {
     }
 
     fn watch_editor(path: &str) -> io::Result<()> {
-        use std::io::Read;
-        use std::os::unix::net::UnixStream;
-        let mut stream = UnixStream::connect(path)?;
-        stream.set_nonblocking(true)?;
-        let fd = std::os::fd::AsRawFd::as_raw_fd(&stream);
-        let mut poll = libc::pollfd {
-            fd,
-            events: libc::POLLIN,
-            revents: 0,
-        };
+        let mut connection = anvil_ipc::Connection::connect(path)?;
+        connection.set_read_timeout(Some(std::time::Duration::from_millis(100)))?;
         loop {
-            let ready = unsafe { libc::poll(&mut poll, 1, 100) };
-            if ready < 0 {
-                let error = io::Error::last_os_error();
-                if error.kind() == io::ErrorKind::Interrupted {
-                    continue;
+            match connection.recv() {
+                Ok(None) => return Ok(()),
+                Ok(Some(frame)) => handle_rpc(&mut connection, &frame)?,
+                Err(anvil_ipc::FrameError::Io(
+                    io::ErrorKind::WouldBlock | io::ErrorKind::TimedOut,
+                )) => {}
+                Err(error) => {
+                    return Err(io::Error::other(format!("editor frame: {error}")));
                 }
-                return Err(error);
-            }
-            if ready == 0 {
-                continue;
-            }
-            let mut byte = [0u8; 1];
-            match stream.read(&mut byte) {
-                Ok(0) => return Ok(()),
-                Ok(_) => {}
-                Err(error) if error.kind() == io::ErrorKind::WouldBlock => {}
-                Err(error) => return Err(error),
             }
         }
+    }
+
+    fn handle_rpc(connection: &mut anvil_ipc::Connection, frame: &[u8]) -> io::Result<()> {
+        let Ok(request) = serde_json::from_slice::<serde_json::Value>(frame) else {
+            return Ok(());
+        };
+        let id = request
+            .get("id")
+            .cloned()
+            .unwrap_or(serde_json::Value::Null);
+        let response = match request.get("method").and_then(|value| value.as_str()) {
+            Some("sys.ping") => serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": id,
+                "result": "pong"
+            }),
+            Some("sys.exec") => serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": id,
+                "error": {
+                    "code": -32008,
+                    "message": "sys.exec is not implemented yet"
+                }
+            }),
+            _ => return Ok(()),
+        };
+        let body = serde_json::to_vec(&response)
+            .map_err(|error| io::Error::other(format!("encode rpc response: {error}")))?;
+        connection
+            .send(&body)
+            .map_err(|error| io::Error::other(format!("send rpc response: {error}")))
     }
 
     fn send_hello() -> io::Result<()> {

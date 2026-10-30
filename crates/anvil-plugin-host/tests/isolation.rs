@@ -1,5 +1,6 @@
 #![cfg(target_os = "linux")]
 
+use anvil_ipc::write_frame;
 use anvil_plugin_host::{Token, spawn};
 use std::io::{BufRead, BufReader};
 use std::os::unix::net::UnixListener;
@@ -40,6 +41,50 @@ fn host_denies_network() {
     let mut host =
         spawn(host_bin(), &["--check-network".to_owned()], Token([4; 32])).expect("spawn host");
     assert_eq!(host.wait().expect("wait").code(), Some(14));
+}
+
+#[test]
+fn host_answers_sys_ping_and_rejects_sys_exec() {
+    let path = std::env::temp_dir().join(format!("anvil-rpc-{}.sock", std::process::id()));
+    let _ = std::fs::remove_file(&path);
+    let listener = UnixListener::bind(&path).expect("bind uds");
+    let mut host = spawn(
+        host_bin(),
+        &["--socket".to_owned(), path.display().to_string()],
+        Token([12; 32]),
+    )
+    .expect("spawn host");
+    let _ = host.read_hello().expect("hello");
+    let mut editor = listener.accept().expect("accept").0;
+
+    write_frame(
+        &mut editor,
+        br#"{"jsonrpc":"2.0","id":1,"method":"sys.ping"}"#,
+    )
+    .expect("ping");
+    let response = anvil_ipc::read_frame(&mut editor)
+        .expect("read")
+        .expect("response");
+    let response: serde_json::Value = serde_json::from_slice(&response).expect("json");
+    assert_eq!(response["id"], 1);
+    assert_eq!(response["result"], "pong");
+
+    write_frame(
+        &mut editor,
+        br#"{"jsonrpc":"2.0","id":2,"method":"sys.exec"}"#,
+    )
+    .expect("exec");
+    let response = anvil_ipc::read_frame(&mut editor)
+        .expect("read")
+        .expect("response");
+    let response: serde_json::Value = serde_json::from_slice(&response).expect("json");
+    assert_eq!(response["error"]["code"], -32008);
+
+    editor
+        .shutdown(std::net::Shutdown::Write)
+        .expect("shutdown");
+    assert_eq!(host.wait().expect("wait").code(), Some(0));
+    let _ = std::fs::remove_file(&path);
 }
 
 #[test]

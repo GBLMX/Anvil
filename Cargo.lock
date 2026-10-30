@@ -73,7 +73,9 @@ dependencies = [
 name = "anvil-plugin-host"
 version = "0.1.0"
 dependencies = [
+ "anvil-ipc",
  "libc",
+ "serde_json",
 ]
 
 [[package]]
