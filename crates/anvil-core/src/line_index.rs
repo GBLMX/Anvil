@@ -228,7 +228,8 @@ impl LineIndex {
             return;
         }
 
-        let delta = new_len as isize - self.len as isize;
+        let old_len = self.len;
+        let delta = new_len as isize - old_len as isize;
         let start_line = self
             .offset_to_line(range.start)
             .map_or(0, |line| line.line.saturating_sub(1));
@@ -246,7 +247,10 @@ impl LineIndex {
             + self.chunks[last_chunk].starts.len()
             - self.chunks[first_chunk].first_line;
         let slice = buffer.slice(region_start..new_region_end);
-        let local_starts = line_starts(&slice);
+        let mut local_starts = line_starts(&slice);
+        if last_chunk + 1 < self.chunks.len() && local_starts.last() == Some(&slice.len()) {
+            local_starts.pop();
+        }
         let new_region_lines = local_starts.len();
         let line_delta = new_region_lines as isize - old_region_lines as isize;
 

@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-use anvil_core::TextBuffer;
+use anvil_core::{LineIndex, PieceTable, TextBuffer};
 use anvil_editor::EditorState;
 
 fn generate_file(megabytes: usize) -> String {
@@ -13,6 +13,17 @@ fn generate_file(megabytes: usize) -> String {
     text
 }
 
+fn assert_index_matches(text: &PieceTable, index: &LineIndex) {
+    assert_eq!(index.len_bytes(), text.len_bytes());
+    assert_eq!(index.len_lines(), text.len_lines());
+    for line in 0..index.len_lines() {
+        let offset = index.line_to_offset(line).unwrap();
+        let mapped = index.offset_to_line(offset).unwrap();
+        assert_eq!(mapped.line, line, "line {line} at offset {offset}");
+        assert_eq!(mapped.start, offset, "line {line} start");
+    }
+}
+
 fn next(seed: &mut u64) -> u64 {
     *seed = seed
         .wrapping_mul(6_364_136_223_846_793_005)
@@ -23,11 +34,17 @@ fn next(seed: &mut u64) -> u64 {
 fn stress(edits: usize) {
     let mut state = EditorState::from_text(&generate_file(100));
     let initial_chunks = state.index().chunk_count();
+    assert_eq!(
+        state.index().len_lines(),
+        state.text().len_lines(),
+        "initial line count"
+    );
     let mut seed = 42_u64;
     for index in 0..edits {
         let len = state.text().len_bytes();
         let at = (next(&mut seed) as usize) % len;
-        match next(&mut seed) % 10 {
+        let op = next(&mut seed) % 10;
+        match op {
             0..=6 => state.insert(at, "x"),
             7..=8 => {
                 let end = (at + 1).min(len);
@@ -37,11 +54,25 @@ fn stress(edits: usize) {
             }
             _ => state.insert(at, "x\n"),
         }
+        assert_eq!(
+            state.index().len_lines(),
+            state.text().len_lines(),
+            "line-count drift at edit {index}, at {at}, op {op}, len {len}"
+        );
         if index % 1_000 == 0 {
             let chunks = state.index().chunk_count();
             println!("chunk-curve,{index},{chunks}");
+            assert_eq!(
+                state.index().len_lines(),
+                state.text().len_lines(),
+                "line-count drift at edit {index}"
+            );
             assert!(chunks <= initial_chunks * 2 + 1);
             state.index().assert_chunk_bounds();
+            let full_check_every = if edits > 10_000 { 10_000 } else { 1_000 };
+            if index % full_check_every == 0 {
+                assert_index_matches(state.text(), state.index());
+            }
         }
     }
     let mut samples = Vec::new();
