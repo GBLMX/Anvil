@@ -123,6 +123,10 @@ No resource is cleaned up only by a language-level `Drop`.
 - Every request has an id and deadline.
 - Cancellation uses the same id; a cancelled id never returns success later.
 
+Envelope fields, `session.hello`, capability-token semantics, error codes, and
+event notifications are defined by
+[ADR-0007](adr/0007-jsonrpc-envelope-and-capability-token.md).
+
 ### Endpoints
 
 | Endpoint | Client | Server | Purpose |

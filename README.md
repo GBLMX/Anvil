@@ -15,6 +15,7 @@ and `SO_PEERCRED`, and the `openat2`-confined workspace reader in
 - [Architecture](docs/architecture.md)
 - [Performance baseline](docs/performance.md)
 - [Upstream dependencies](docs/adr/0006-upstream-dependencies.md)
+- [JSON-RPC and token contract](docs/adr/0007-jsonrpc-envelope-and-capability-token.md)
 - [Architecture decision records](docs/adr/)
 - [Security policy](SECURITY.md)
 - [Contributing](CONTRIBUTING.md)

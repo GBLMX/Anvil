@@ -253,3 +253,4 @@ are accepted under the same dual-license terms.
 - [0004: Text model](docs/adr/0004-text-model.md)
 - [0005: Exec policy](docs/adr/0005-exec-policy.md)
 - [0006: Upstream dependencies](docs/adr/0006-upstream-dependencies.md)
+- [0007: JSON-RPC envelope and capability token](docs/adr/0007-jsonrpc-envelope-and-capability-token.md)
