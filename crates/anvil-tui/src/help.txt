@@ -27,6 +27,9 @@ Normal mode
   :bn / :bp           next / previous buffer
   :q                  quit, or close help
   :q!                 force quit, or close help
+  :plugin-start       start the debug plugin host
+  :plugin-exec        exercise sys.exec (returns unsupported)
+  :plugin-stop        stop the plugin host
   :help               this page
 
 Insert mode

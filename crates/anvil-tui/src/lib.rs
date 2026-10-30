@@ -30,8 +30,11 @@ use ratatui::{
 };
 
 mod gateway;
+mod host_session;
 mod syntax;
 use gateway::GatewaySession;
+#[cfg(target_os = "linux")]
+use host_session::{HostEvent, HostSession};
 use syntax::{Highlight, SyntaxCache, SyntaxClass};
 
 const MAX_OPEN_BYTES: usize = 256 * 1024 * 1024;
@@ -110,6 +113,9 @@ pub struct Model {
     require_gateway: bool,
     /// Tree-sitter highlights cached by editor revision and path.
     syntax: RefCell<SyntaxCache>,
+    /// Debug plugin host session, when started.
+    #[cfg(target_os = "linux")]
+    host: Option<HostSession>,
 }
 
 impl Model {
@@ -135,6 +141,8 @@ impl Model {
             workspace: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
             require_gateway: false,
             syntax: RefCell::new(SyntaxCache::default()),
+            #[cfg(target_os = "linux")]
+            host: None,
         }
     }
 
@@ -968,6 +976,80 @@ impl Model {
         self.status = "substitution applied".to_owned();
     }
 
+    #[cfg(target_os = "linux")]
+    fn start_host(&mut self) {
+        if self.host.is_some() {
+            self.status = "plugin host already running".to_owned();
+            self.dirty = true;
+            return;
+        }
+        match HostSession::start(&self.workspace) {
+            Ok(host) => {
+                self.host = Some(host);
+                self.status = "plugin host starting".to_owned();
+            }
+            Err(error) => self.status = format!("E: {error}"),
+        }
+        self.dirty = true;
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    fn start_host(&mut self) {
+        self.status = "E: plugin host is Linux-only".to_owned();
+        self.dirty = true;
+    }
+
+    #[cfg(target_os = "linux")]
+    fn exec_host(&mut self) {
+        let Some(host) = &self.host else {
+            self.status = "E: plugin host not running".to_owned();
+            self.dirty = true;
+            return;
+        };
+        if !host.exec() {
+            self.status = "E: plugin host channel closed".to_owned();
+        }
+        self.dirty = true;
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    fn exec_host(&mut self) {}
+
+    #[cfg(target_os = "linux")]
+    fn stop_host(&mut self) {
+        self.host = None;
+        self.status = "plugin host stopped".to_owned();
+        self.dirty = true;
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    fn stop_host(&mut self) {}
+
+    #[cfg(target_os = "linux")]
+    pub fn poll_host(&mut self) {
+        let Some(host) = &mut self.host else {
+            return;
+        };
+        for event in host.poll() {
+            match event {
+                HostEvent::Ready => self.status = "plugin host connected".to_owned(),
+                HostEvent::Pong => self.status = "plugin host ready".to_owned(),
+                HostEvent::ExecUnsupported => {
+                    self.status = "plugin sys.exec not implemented yet".to_owned();
+                }
+                HostEvent::Error(error) => self.status = format!("E: plugin host: {error}"),
+                HostEvent::Exited(anvil_plugin_host::HostExit::OomKilled) => {
+                    self.status = "⚠ Plugin Killed: Out of Memory".to_owned();
+                }
+                HostEvent::Exited(_) => self.status = "plugin host exited".to_owned(),
+            }
+            self.dirty = true;
+        }
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    pub fn poll_host(&mut self) {}
+
     fn execute_command(&mut self, command: &str) {
         if let Some(rest) = command.strip_prefix("%s/") {
             self.substitute(true, rest);
@@ -993,6 +1075,9 @@ impl Model {
             ("q", "") => self.request_quit(),
             ("q!", "") => self.force_quit(),
             ("help", "") => self.show_help(),
+            ("plugin-start", "") => self.start_host(),
+            ("plugin-exec", "") => self.exec_host(),
+            ("plugin-stop", "") => self.stop_host(),
             ("wq", "") => {
                 if self.save() {
                     if self.any_modified() {
@@ -1377,7 +1462,10 @@ pub fn run_with_workspace(path: Option<PathBuf>, workspace: PathBuf) -> io::Resu
                 }
             }
         }
-        handle_event(&mut model, event::read()?);
+        model.poll_host();
+        if event::poll(std::time::Duration::from_millis(50))? {
+            handle_event(&mut model, event::read()?);
+        }
         if model.quit {
             return Ok(());
         }

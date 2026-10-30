@@ -37,8 +37,15 @@ All notable changes to Anvil are recorded here. The format follows
 - Plugin-host cgroup v2 helper: `pids.max=64`, `memory.max=256MiB`,
   post-spawn PID attach, cgroup2 `statfs` validation with existing-file writes
   only, and `HostExit::OomKilled` classification for SIGKILL when a memory
-  limit was active. No VM, framed UDS dispatch, or plugin API
-  yet.
+  limit was active.
+
+- Plugin-host framed UDS dispatch: `anvil-ipc` length-prefixed frames,
+  `sys.ping -> pong`, and `sys.exec -> Unsupported` until the sandboxed
+  executor is wired.
+
+- TUI debug `HostSession`: `:plugin-start` / `:plugin-exec` / `:plugin-stop`,
+  background UDS thread with mpsc events, 2-second RPC timeout, OOM status
+  mapping, and host/cgroup cleanup on drop. No VM or plugin API yet.
 
 ### Planned
 
