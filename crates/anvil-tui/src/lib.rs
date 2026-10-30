@@ -107,6 +107,8 @@ pub struct Model {
     active: usize,
     /// Gateway client used for file I/O when present.
     gateway: Option<GatewayClient>,
+    /// Owning child/socket for the current gateway client.
+    gateway_session: Option<GatewaySession>,
     /// Workspace root used to resolve all file paths.
     workspace: PathBuf,
     /// Reject file operations instead of falling back when the gateway is absent.
@@ -138,6 +140,7 @@ impl Model {
             buffers: Vec::new(),
             active: 0,
             gateway: None,
+            gateway_session: None,
             workspace: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
             require_gateway: false,
             syntax: RefCell::new(SyntaxState::default()),
@@ -1099,6 +1102,27 @@ impl Model {
         }
     }
 
+    fn reconnect_gateway(&mut self) {
+        if !self.require_gateway {
+            self.status = "E: gateway is not required in this session".to_owned();
+            self.dirty = true;
+            return;
+        }
+        self.gateway = None;
+        self.gateway_session = None;
+        match GatewaySession::start(&self.workspace) {
+            Ok((session, client)) => {
+                self.gateway_session = Some(session);
+                self.gateway = Some(client);
+                self.status = "gateway reconnected".to_owned();
+            }
+            Err(error) => {
+                self.status = format!("E: reconnect failed: {error}");
+            }
+        }
+        self.dirty = true;
+    }
+
     fn execute_command(&mut self, command: &str) {
         if let Some(rest) = command.strip_prefix("%s/") {
             self.substitute(true, rest);
@@ -1124,6 +1148,7 @@ impl Model {
             ("q", "") => self.request_quit(),
             ("q!", "") => self.force_quit(),
             ("help", "") => self.show_help(),
+            ("reconnect", "") => self.reconnect_gateway(),
             ("plugin-start", "") => self.start_host(),
             ("plugin-oom", "") => self.start_oom_host(),
             ("plugin-exec", "") => self.exec_host(),
@@ -1464,7 +1489,7 @@ pub fn run_with_workspace(path: Option<PathBuf>, workspace: PathBuf) -> io::Resu
     let timing = std::env::var_os("ANVIL_OPEN_TIMING").is_some();
     let start = Instant::now();
     let workspace = workspace.canonicalize()?;
-    let (mut model, _session) = match GatewaySession::start(&workspace) {
+    let (mut model, session) = match GatewaySession::start(&workspace) {
         Ok((session, client)) => {
             let mut model = Model::with_gateway(client, workspace.clone());
             if let Some(path) = path
@@ -1484,6 +1509,7 @@ pub fn run_with_workspace(path: Option<PathBuf>, workspace: PathBuf) -> io::Resu
             (model, None)
         }
     };
+    model.gateway_session = session;
     let model_ready = start.elapsed();
     let mut terminal = TerminalSession::start()?;
     let terminal_ready = start.elapsed();

@@ -1,7 +1,8 @@
 # 0.1.1 / Phase 0.7 Plan
 
-Status: in progress. `v0.1.1` is tagged; plugin-host is an empty sandboxed
-process (no VM), and syntax highlighting is asynchronous but not incremental.
+Status: in progress. `v0.1.1` is tagged; `:reconnect` is implemented for 0.1.2;
+plugin-host is an empty sandboxed process (no VM), and syntax highlighting is
+asynchronous but not incremental.
 
 ## Priorities
 
@@ -75,8 +76,8 @@ Acceptance:
 0.1.0 poisons the client on pipeline desynchronization and requires a TUI
 restart. 0.1.1 may add:
 
-- `:reconnect` stops the old gateway child, starts a new session, re-handshakes,
-  and clears poison only after a successful handshake.
+- `:reconnect` is implemented: it stops the old gateway child, starts a new
+  session, re-handshakes, and clears poison only after a successful handshake.
 - Buffers remain in memory; no unsaved text is discarded.
 - Failure keeps the client poisoned and reports the reason.
 - This is recovery UX, not a relaxation of the security boundary.

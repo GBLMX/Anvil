@@ -27,6 +27,7 @@ Normal mode
   :bn / :bp           next / previous buffer
   :q                  quit, or close help
   :q!                 force quit, or close help
+  :reconnect          restart the gateway and re-handshake
   :plugin-start       start the debug plugin host
   :plugin-oom         start host with a 300 MB allocation probe
   :plugin-exec        exercise sys.exec (returns unsupported)

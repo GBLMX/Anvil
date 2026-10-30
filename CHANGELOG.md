@@ -6,6 +6,11 @@ All notable changes to Anvil are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `:reconnect` restarts the gateway child and performs a fresh handshake,
+  replacing a poisoned client without discarding buffers or unsaved text.
+
 ## [0.1.1] - 2026-10-31
 
 ### Added
