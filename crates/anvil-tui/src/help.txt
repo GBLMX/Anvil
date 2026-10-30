@@ -6,11 +6,14 @@ Launch
 
 Normal mode
   h j k l / arrows    move
+  w / b / e           next / previous word, word end
   Home / End          line start / end
   i a A o O           insert before / after / line end / below / above
   x                   delete character
   dd                  delete line
+  dw / db / de        delete word forward / back / end
   yy                  yank line
+  yw / yb / ye        yank word forward / back / end
   p                   put unnamed register
   u / Ctrl+r          undo / redo
   /pattern            search

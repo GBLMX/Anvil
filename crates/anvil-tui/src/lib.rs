@@ -10,7 +10,7 @@ use std::{
 };
 
 use anvil_api::EditorView;
-use anvil_core::{TextBuffer, TextDocument};
+use anvil_core::{TextBuffer, TextDocument, end_word, next_word_start, previous_word_start};
 use anvil_editor::EditorState;
 use anvil_ipc::GatewayClient;
 use crossterm::{
@@ -57,6 +57,14 @@ pub enum InputMode {
     CommandLine { buffer: String },
     /// Incremental substring search.
     Search { query: String },
+}
+
+/// Vi word motion kind.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WordMotion {
+    NextStart,
+    PreviousStart,
+    End,
 }
 
 /// TUI state.
@@ -369,6 +377,64 @@ impl Model {
             .map(|path| path.display().to_string())
             .unwrap_or_else(|| "[no file]".to_owned());
         self.status = format!("buffer {}/{}: {name}", target + 1, len);
+    }
+
+    /// Moves the cursor by a vi word motion.
+    pub fn move_word(&mut self, motion: WordMotion) {
+        let target = match motion {
+            WordMotion::NextStart => next_word_start(self.editor.text(), self.cursor),
+            WordMotion::PreviousStart => previous_word_start(self.editor.text(), self.cursor),
+            WordMotion::End => self.word_end_exclusive().saturating_sub(1),
+        };
+        if target != self.cursor {
+            self.cursor = target;
+            self.dirty = true;
+        }
+    }
+
+    fn word_range(&self, motion: WordMotion) -> Option<std::ops::Range<usize>> {
+        let text = self.editor.text();
+        let (start, end) = match motion {
+            WordMotion::NextStart => (self.cursor, next_word_start(text, self.cursor)),
+            WordMotion::PreviousStart => (previous_word_start(text, self.cursor), self.cursor),
+            WordMotion::End => (self.cursor, self.word_end_exclusive()),
+        };
+        (start < end).then_some(start..end)
+    }
+
+    fn word_end_exclusive(&self) -> usize {
+        let text = self.editor.text();
+        let end = end_word(text, self.cursor);
+        self.editor
+            .next_grapheme_boundary(end)
+            .filter(|next| *next > end)
+            .unwrap_or(end)
+            .min(text.len_bytes())
+    }
+
+    fn delete_word(&mut self, motion: WordMotion) {
+        if self.reject_read_only() {
+            return;
+        }
+        let Some(range) = self.word_range(motion) else {
+            return;
+        };
+        self.editor.set_selection_bytes(range.start, range.end);
+        self.editor.delete(range.clone());
+        self.cursor = range.start;
+        self.modified = true;
+        self.dirty = true;
+    }
+
+    fn yank_word(&mut self, motion: WordMotion) {
+        let Some(range) = self.word_range(motion) else {
+            return;
+        };
+        let cursor = self.cursor;
+        self.editor.set_selection_bytes(range.start, range.end);
+        let _ = self.editor.yank(range);
+        let _ = self.editor.set_selection_bytes(cursor, cursor);
+        self.dirty = true;
     }
 
     /// Moves the cursor one line while keeping the viewport independent.
@@ -1204,6 +1270,12 @@ fn handle_key(model: &mut Model, key: KeyEvent) {
         match (pending, key.code) {
             ('d', KeyCode::Char('d')) => model.delete_line(),
             ('y', KeyCode::Char('y')) => model.yank_line(),
+            ('d', KeyCode::Char('w')) => model.delete_word(WordMotion::NextStart),
+            ('d', KeyCode::Char('e')) => model.delete_word(WordMotion::End),
+            ('d', KeyCode::Char('b')) => model.delete_word(WordMotion::PreviousStart),
+            ('y', KeyCode::Char('w')) => model.yank_word(WordMotion::NextStart),
+            ('y', KeyCode::Char('e')) => model.yank_word(WordMotion::End),
+            ('y', KeyCode::Char('b')) => model.yank_word(WordMotion::PreviousStart),
             _ => {}
         }
         return;
@@ -1293,6 +1365,9 @@ fn handle_key(model: &mut Model, key: KeyEvent) {
             KeyCode::Char('p') if !control => model.put_register(),
             KeyCode::Char('u') if !control => model.undo(),
             KeyCode::Char('r') if control => model.redo(),
+            KeyCode::Char('w') if !control => model.move_word(WordMotion::NextStart),
+            KeyCode::Char('b') if !control => model.move_word(WordMotion::PreviousStart),
+            KeyCode::Char('e') if !control => model.move_word(WordMotion::End),
             KeyCode::Char('h') | KeyCode::Left => model.move_char(-1),
             KeyCode::Char('l') | KeyCode::Right => model.move_char(1),
             KeyCode::Char('j') | KeyCode::Down => model.move_line(1),
@@ -1529,6 +1604,30 @@ mod tests {
         handle_event(&mut model, ctrl(KeyCode::Char('r')));
         assert_eq!(model.editor.text().slice(0..2), "Xa");
         assert_eq!(model.cursor, 1);
+    }
+
+    #[test]
+    fn word_motions_follow_vi_boundaries() {
+        let mut model = Model::new(EditorState::from_text("alpha beta.gamma"), None);
+        handle_event(&mut model, key(KeyCode::Char('w')));
+        assert_eq!(model.cursor, 6);
+        handle_event(&mut model, key(KeyCode::Char('w')));
+        assert_eq!(model.cursor, 10);
+        handle_event(&mut model, key(KeyCode::Char('b')));
+        assert_eq!(model.cursor, 6);
+        handle_event(&mut model, key(KeyCode::Char('e')));
+        assert_eq!(model.cursor, 9);
+    }
+
+    #[test]
+    fn dw_deletes_to_next_word_start_and_undoes() {
+        let mut model = Model::new(EditorState::from_text("alpha beta"), None);
+        handle_event(&mut model, key(KeyCode::Char('d')));
+        handle_event(&mut model, key(KeyCode::Char('w')));
+        assert_eq!(model.editor.text().slice(0..4), "beta");
+        assert_eq!(model.cursor, 0);
+        handle_event(&mut model, key(KeyCode::Char('u')));
+        assert_eq!(model.editor.text().slice(0..10), "alpha beta");
     }
 
     #[test]

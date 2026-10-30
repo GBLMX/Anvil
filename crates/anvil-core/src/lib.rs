@@ -9,6 +9,8 @@ mod command;
 mod line_index;
 pub use command::{CommandError, EditCommand, History, Revision};
 pub use line_index::{LineIndex, LinePosition, Position};
+mod word;
+pub use word::{end_word, next_word_start, previous_word_start};
 
 /// A text buffer with byte-addressed edits and slicing.
 ///

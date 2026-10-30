@@ -8,6 +8,9 @@ All notable changes to Anvil are recorded here. The format follows
 
 ### Added
 
+- Vi word motions `w`/`b`/`e` and operators `dw`/`db`/`de`/`yw`/`yb`/`ye`
+  with byte-borrowing word classification in `anvil-core`.
+
 - TUI relative line-number gutter, current-line background highlight,
   scrolloff margin, dirty `[+]` title marker, colored mode badge in the status
   line, block/bar cursor shape switching, and current/other search-match
