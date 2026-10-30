@@ -31,9 +31,10 @@ const (
 	// MaxFrameLen is the largest accepted JSON-RPC frame.
 	MaxFrameLen = 8 << 20
 	// maxReadChunk is the maximum file bytes returned by sys.read_file.
-	maxReadChunk = 4 << 20
+	// 5.5 MiB encodes to about 7.33 MiB of base64, leaving frame overhead room.
+	maxReadChunk = 5*1024*1024 + 512*1024
 	// maxWriteChunk is the maximum file bytes accepted by one sys.write_file.
-	maxWriteChunk = 4 << 20
+	maxWriteChunk = maxReadChunk
 	// Protocol is the v1 JSON-RPC protocol name.
 	Protocol = "anvil-jsonrpc-1"
 	// APIVersion is the public API version.

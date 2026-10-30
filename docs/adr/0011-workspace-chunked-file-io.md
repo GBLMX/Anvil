@@ -9,7 +9,7 @@
 The TUI uses the per-session gateway for open/save and refuses file operations
 when the gateway cannot start. The gateway and `anvil-ipc::GatewayClient`
 implement chunked `sys.read_file`/`sys.write_file`; `MAX_FRAME_LEN` is 8 MiB,
-so a 100 MB file is transferred in 4 MiB chunks.
+so a 100 MB file is transferred in 5.5 MiB chunks.
 
 The TUI workspace root defaults to the startup directory and can be set with
 `--workspace`. `fsroot` accepts only paths relative to the opened directory with
@@ -69,7 +69,7 @@ Request:
   "params": {
     "path": "src/main.rs",
     "offset": 0,
-    "max_bytes": 4194304
+    "max_bytes": 5767168
   }
 }
 ```
@@ -82,15 +82,17 @@ Response:
   "id": "read-1",
   "result": {
     "data": "<base64>",
-    "next_offset": 4194304,
+    "next_offset": 5767168,
     "eof": false
   }
 }
 ```
 
 - One request returns at most one chunk. The client loops until `eof` is true.
-- `max_bytes` is optional; default and maximum are 4 MiB of raw file bytes. The
-  server may return less than requested.
+- `max_bytes` is optional; default and maximum are 5.5 MiB of raw file bytes.
+  5.5 MiB encodes to about 7.3 MiB of base64 and fits the 8 MiB frame with
+  JSON overhead; the theoretical ceiling is about 5.9 MiB. The server may
+  return less than requested.
 - `data` is standard base64 of the returned raw bytes.
 - `eof` is explicit. A short chunk is not an end signal; a file whose size is an
   exact multiple of the chunk size still requires a final request with
@@ -127,7 +129,7 @@ contained the end of the file:
 ```json
 {
   "path": "src/main.rs",
-  "offset": 4194304,
+  "offset": 5767168,
   "data": "<base64>",
   "eof": true
 }
@@ -140,7 +142,7 @@ Response:
   "jsonrpc": "2.0",
   "id": "write-1",
   "result": {
-    "next_offset": 4194304
+    "next_offset": 5767168
   }
 }
 ```
@@ -199,7 +201,7 @@ The post-index-fix direct `std::fs` 100 MB open baseline is **174.1 ms**
 (Rust side) and **209.6 ms** (PTY first output). Use this baseline after
 `71ea604`; the older 185.9 ms / 193.7 ms numbers were measured before the
 line-index copy fix and must not be used to attribute gateway overhead. After
-the chunked gateway path exists, rerun the same fixture at 4 MiB chunks and
+the chunked gateway path exists, rerun the same fixture at 5.5 MiB chunks and
 report:
 
 - Rust-side open + first frame.
@@ -208,16 +210,18 @@ report:
 - Total chunk count and total bytes.
 
 Measured 2026-10-31 on the same 100 MB fixture: gateway-ready 3.38 ms,
-25 chunks, 104,857,596 bytes, 21.7 ms average per chunk, 661.3 ms total UDS
-read loop, and **732.0 ms PTY first output**. That is **+522 ms** over the
-direct PTY baseline; the gate **fails**. Four MiB is the practical maximum for
-an 8 MiB JSON frame after base64 expansion; 7 MiB raw cannot fit. A 5.5 MiB
-chunk removes only five round trips. The next performance work is pipelining
-or shared-memory/fd transfer, not silently raising the frame limit or dropping
-the gate.
+19 chunks, 104,857,596 bytes, 27.7 ms average per chunk, 637.4 ms total UDS
+read loop, and **640.1 ms PTY first output**. That is **+430 ms** over the
+direct PTY baseline; the gate **fails**. The 4 MiB run was 732.0 ms, so 5.5
+MiB is a real but insufficient improvement. A 7 MiB raw chunk cannot fit after
+base64; the practical ceiling is about 5.9 MiB. Server-side stage benchmarks
+show per chunk: read **0.84 ms**, base64 encode **4.98 ms**, JSON encode
+**5.33 ms**, full response encode **11.8 ms**; the file is page-cache warm.
+Pipelining can overlap round trips, but it does not remove the encode CPU.
+Binary framing or fd passing is required before claiming the 50 ms gate.
 
 The initial acceptable increment is **at most 50 ms** over the direct-read
-baseline. A 20 ms target may be physically unrealistic with 25 round trips; do
+baseline. A 20 ms target may be physically unrealistic with 19 round trips; do
 not shrink chunking to meet a target. If the increment exceeds 50 ms, evaluate
 a larger frame-safe chunk or shared-memory transfer before changing the
 security boundary.

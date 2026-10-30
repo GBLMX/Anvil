@@ -11,7 +11,7 @@ use base64::{Engine as _, engine::general_purpose};
 use crate::{Connection, EnvelopeError, FrameError, JSONRPC_VERSION, Request, Response, codes};
 
 /// Bytes requested per read or accepted per write.
-pub const FILE_CHUNK: usize = 4 * 1024 * 1024;
+pub const FILE_CHUNK: usize = 5 * 1024 * 1024 + 512 * 1024;
 
 /// A gateway client failure.
 #[derive(Debug)]
@@ -198,7 +198,7 @@ impl GatewayClient {
         Ok(next_offset)
     }
 
-    /// Write a complete file in 4 MiB chunks.
+    /// Write a complete file in 5.5 MiB chunks.
     pub fn write_all(&mut self, path: &str, data: &[u8]) -> Result<(), ClientError> {
         if data.is_empty() {
             self.write_file(path, 0, &[], true)?;

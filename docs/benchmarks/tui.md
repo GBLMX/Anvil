@@ -49,32 +49,48 @@ go build -o target/release/anvil-gateway ./go/cmd/anvil-gateway
 
 ## Gateway path (2026-10-31)
 
-Same 100 MB fixture, release TUI, sibling release `anvil-gateway`, 4 MiB
-chunks (25 chunks / 104,857,596 bytes):
+Same 100 MB fixture, release TUI, sibling release `anvil-gateway`, 5.5 MiB
+chunks (19 chunks / 104,857,596 bytes):
 
 | Layer | Scenario | p50 | p95 | p99 | n |
 |---|---|---:|---:|---:|---:|
-| Rust | open 100 MB, first frame | 176.6 ms | 176.6 ms | 176.6 ms | 1 |
-| PTY + gateway | open 100 MB, first frame | 732.0 ms | 732.0 ms | 732.0 ms | 1 |
-| PTY + gateway | key to first output, 1 MB | 590.2 µs | 1034.6 µs | 1034.6 µs | 20 |
-| PTY + gateway | scroll 100 MB, one `j` | 266.2 µs | 450.4 µs | 450.4 µs | 20 |
-| PTY + gateway | first `/` search, 100 MB | 231.0 ms | 231.0 ms | 231.0 ms | 1 |
-| PTY + gateway | subsequent `/` search, 100 MB | 226.9 ms | 256.3 ms | 256.3 ms | 10 |
-| Gateway | per 4 MiB read chunk | 21.7 ms avg | 30.5 ms max | 16.4 ms min | 25 |
+| Rust | open 100 MB, first frame | 184.4 ms | 184.4 ms | 184.4 ms | 1 |
+| PTY + gateway | open 100 MB, first frame | 640.1 ms | 640.1 ms | 640.1 ms | 1 |
+| PTY + gateway | key to first output, 1 MB | 160.8 µs | 561.7 µs | 561.7 µs | 20 |
+| PTY + gateway | scroll 100 MB, one `j` | 523.4 µs | 731.4 µs | 731.4 µs | 20 |
+| PTY + gateway | first `/` search, 100 MB | 230.7 ms | 230.7 ms | 230.7 ms | 1 |
+| PTY + gateway | subsequent `/` search, 100 MB | 220.7 ms | 256.3 ms | 256.3 ms | 10 |
+| Gateway | per 5.5 MiB read chunk | 27.7 ms avg | 48.6 ms max | 5.3 ms min | 19 |
 
-Gateway ready (spawn + handshake): 3.38 ms. Total UDS read loop: 661.3 ms.
+Gateway ready (spawn + handshake): 3.13 ms. Total UDS read loop: 637.4 ms.
+
+Server-side stage benchmark (page-cache warm, per chunk):
+
+| Stage | ms |
+|---|---:|
+| `ReadFileAt` | 0.84 |
+| base64 encode | 4.98 |
+| JSON encode | 5.33 |
+| full response encode | 11.8 |
+
+The 4 MiB run was **732.0 ms PTY**, 25 chunks, 21.7 ms average, 661.3 ms
+total. Raising to 5.5 MiB removed 92 ms but did not close the gap.
 
 ## Interpretation
 
-- Direct Rust 100 MB open is 174–177 ms; direct PTY startup is 210 ms.
-  The gateway path is **732 ms PTY**, about **+522 ms** over the direct PTY
-  baseline and roughly 3.5x. It **does not meet the ADR-0011 50 ms gate**.
-- The transfer loop, not document construction, is the dominant added cost:
-  25 chunks at 21.7 ms average. Four MiB is the largest safe payload for the
-  8 MiB JSON frame after base64 expansion.
-- Chunk size is not a sufficient fix. A 5.5 MiB chunk would only remove about
-  five round trips; 7 MiB raw exceeds the 8 MiB frame after base64. Pipelining
-  or shared-memory/fd transfer is required before claiming the 50 ms gate.
+- Direct Rust 100 MB open is 174–184 ms; direct PTY startup is 210 ms.
+  The gateway path is **640 ms PTY**, about **+430 ms** over the direct PTY
+  baseline and roughly 3.1x. It **does not meet the ADR-0011 50 ms gate**.
+- The server encode path, not file I/O, is the dominant added cost. Per 5.5
+  MiB chunk: `ReadFileAt` is 0.84 ms, base64 is 4.98 ms, JSON is 5.33 ms, and
+  the full response encode is 11.8 ms. The file is page-cache warm.
+- The 5.5 MiB chunk is real and fits the 8 MiB frame; the 4 MiB run was 732 ms
+  and 5.5 MiB is 640 ms. But 7 MiB raw exceeds the frame after base64, and the
+  practical ceiling is about 5.9 MiB. The remaining gap is not round-trip
+  count alone.
+- Pipelining can hide round-trip latency, but it cannot remove the per-chunk
+  encode CPU. A binary frame or fd passing is required before claiming the
+  50 ms gate.
 - Search remains dominated by the in-process scan, so the gateway barely
   changes it. Key-to-screen and scroll are within local PTY noise.
 - These numbers include the Go gateway, but not LSP, terminal emulator, or idle
@@ -86,13 +102,13 @@ Measured with `/proc/<pid>/status` after the first 100 MB frame:
 
 | Process | VmRSS | VmHWM |
 |---|---:|---:|
-| TUI | 198 MB | 300 MB |
-| `anvil-gateway` child | 38 MB | 48 MB |
+| TUI | 198 MB | 301 MB |
+| `anvil-gateway` child | 56 MB | 63 MB |
 
 The TUI footprint is unchanged from the direct path: the peak includes the
 source `String`, the `PieceTable` copy, and the line index. The gateway adds
-about 38 MB steady and 48 MB peak for chunk, base64, and JSON buffers. The
-combined steady footprint is about 236 MB.
+about 56 MB steady and 63 MB peak for 5.5 MiB chunk, base64, and JSON buffers.
+The combined steady footprint is about 255 MB.
 
 A `line_starts` preallocation experiment alone did not change VmHWM. The win
 came from building `LineIndex` directly from the source `&str` instead of
@@ -101,7 +117,7 @@ temporary 100 MB copy. The peak includes the source `String`, the
 `PieceTable` copy, and the absolute/relative line-start arrays.
 
 The chunked gateway protocol bounds the server-side transient to one chunk
-(4 MiB raw, about 5.3 MiB base64 plus JSON overhead). The editor still
+(5.5 MiB raw, about 7.3 MiB base64 plus JSON overhead). The editor still
 assembles the complete text and line index, so its steady-state footprint is
 unchanged; memory is not reduced by chunking. `sys.write_file` streams into a
 temporary file rather than accumulating the whole document.
