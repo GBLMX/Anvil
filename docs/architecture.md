@@ -79,7 +79,9 @@ isolation boundary.
 ### Session start
 
 1. Editor creates `$XDG_RUNTIME_DIR/anvil/<session-id>/` with mode `0700`.
-2. Editor starts the gateway; both open control UDS with `0600`.
+   The TUI may start rendering before the gateway is ready.
+2. Editor starts the gateway asynchronously (or on first `sys.*`/plugin need);
+   both open control UDS with `0600`.
 3. Gateway creates its `sys` listener and reports readiness.
 4. Editor starts a plugin host for each enabled plugin, with a fresh token.
 

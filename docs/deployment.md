@@ -85,3 +85,19 @@ enabled.
 `-allow-exec` and `-allow-fetch` are per-gateway grants. Because the gateway is
 per-session, this is equivalent to a per-session grant in the current model.
 Per-session permission negotiation remains a follow-up.
+
+## TUI startup ordering
+
+The TUI must not block on gateway startup. The required ordering is:
+
+1. The editor process creates the runtime directory and starts rendering.
+2. The gateway is started asynchronously, either immediately in the background
+   or on the first operation that needs `sys.*` / a plugin handshake.
+3. A plugin host that needs the gateway waits for that gateway's readiness
+   notification; the TUI does not wait.
+4. If gateway startup fails, the TUI remains usable and `sys.*` is disabled
+   until the gateway is restarted.
+
+The cold-start cost belongs to the first plugin/sys operation, not to the editor
+launch path. A future runnable editor must keep the gateway health state
+separate from the editor render loop.

@@ -62,9 +62,9 @@ The gateway does not:
 ## Lifecycle
 
 ```text
-editor starts
+editor/TUI starts and renders
   -> create runtime directory (0700)
-  -> start gateway
+  -> start gateway asynchronously, or on first sys.*/plugin need
   -> create control socket (0600)
   -> register plugin grants
   -> plugin host connects to gateway
@@ -73,8 +73,10 @@ editor starts
   -> gateway kills children and exits
 ```
 
-If the gateway crashes, plugin `sys.*` calls fail closed. The editor remains
-usable and may restart the gateway. If the editor crashes, the gateway must not
+Gateway startup never blocks initial TUI rendering. The cold-start cost is paid
+by the first operation that needs `sys.*` or a plugin handshake. If the gateway
+crashes, plugin `sys.*` calls fail closed. The editor remains usable and may
+restart the gateway. If the editor crashes, the gateway must not
 continue serving orphaned plugin hosts.
 
 ## Why Go
