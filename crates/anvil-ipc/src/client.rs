@@ -31,6 +31,8 @@ pub enum ClientError {
     Rpc { code: i32, message: String },
     /// The gateway returned an unexpected response shape.
     Protocol(&'static str),
+    /// A pipeline failed; the connection may contain unread frames.
+    Poisoned,
     /// A requested file exceeded the caller's limit.
     Limit,
 }
@@ -44,6 +46,7 @@ impl std::fmt::Display for ClientError {
             Self::Envelope(error) => write!(formatter, "gateway envelope failed: {error}"),
             Self::Rpc { code, message } => write!(formatter, "gateway error {code}: {message}"),
             Self::Protocol(message) => write!(formatter, "gateway protocol error: {message}"),
+            Self::Poisoned => write!(formatter, "gateway protocol error: restart gateway and TUI"),
             Self::Limit => write!(formatter, "file exceeds the requested limit"),
         }
     }
@@ -415,7 +418,7 @@ impl GatewayClient {
         params: serde_json::Value,
     ) -> Result<String, ClientError> {
         if self.poisoned {
-            return Err(ClientError::Protocol("client poisoned"));
+            return Err(ClientError::Poisoned);
         }
         let id = format!("anvil-{}", self.next_id);
         self.next_id = self.next_id.saturating_add(1);
@@ -633,7 +636,7 @@ mod tests {
             .expect_err("pipeline error");
         assert!(is_policy_denied(&error));
         let poisoned = client.file_size("file.txt").expect_err("poisoned");
-        assert!(poisoned.to_string().contains("client poisoned"));
+        assert!(poisoned.to_string().contains("restart gateway"));
         server.join().expect("server");
         let _ = fs::remove_file(path);
     }

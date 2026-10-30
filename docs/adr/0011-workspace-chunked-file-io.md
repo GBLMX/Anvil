@@ -122,6 +122,9 @@ payload, not JSON:
 - The client checks whether the first payload byte is `{` before treating a
   frame as binary, so JSON errors remain distinguishable. Any pipeline error
   poisons the client; in-flight responses are not reused on the next request.
+  The TUI displays `gateway protocol error: restart gateway and TUI`. Poisoned
+  clients are terminal; there is no in-place un-poison. Restart the gateway
+  process and the TUI together.
 
 
 ### 5. `sys.write_file`
