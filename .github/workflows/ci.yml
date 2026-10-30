@@ -12,7 +12,7 @@ jobs:
   docs:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Check relative Markdown links
         run: |
           python3 - <<'PY'
@@ -38,7 +38,7 @@ jobs:
   rust:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Detect Rust workspace
         id: detect
         run: |
@@ -69,7 +69,7 @@ jobs:
   go:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Detect Go module
         id: detect
         run: |
@@ -83,7 +83,7 @@ jobs:
             echo 'present=false' >> "$GITHUB_OUTPUT"
             echo 'No Go module yet; Go checks will activate when the gateway lands.'
           fi
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         if: steps.detect.outputs.present == 'true'
         with:
           go-version-file: ${{ steps.detect.outputs.file }}
