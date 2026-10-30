@@ -1,0 +1,27 @@
+Anvil help
+
+Normal mode
+  h j k l / arrows    move
+  Home / End          line start / end
+  i a A o O           insert before / after / line end / below / above
+  x                   delete character
+  dd                  delete line
+  yy                  yank line
+  p                   put unnamed register
+  u / Ctrl+r          undo / redo
+  /pattern            search
+  n / N               next / previous match
+  :w                  save
+  :w file             save as
+  :wq                 save and quit
+  :q                  quit, or close help
+  :q!                 force quit, or close help
+  :help               this page
+
+Insert mode
+  Esc                 return to normal mode
+  Enter               newline
+  Backspace / Delete  delete grapheme
+  arrows / Home / End move
+
+Help is read-only. :q returns to the previous buffer.

@@ -24,6 +24,18 @@ use ratatui::{
     widgets::{Block, Paragraph},
 };
 
+const HELP_TEXT: &str = include_str!("help.txt");
+
+struct SavedBuffer {
+    editor: EditorState,
+    path: Option<PathBuf>,
+    cursor: usize,
+    scroll: usize,
+    hscroll: usize,
+    modified: bool,
+    search_query: String,
+}
+
 /// The small state machine needed by TUI-1.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum InputMode {
@@ -63,6 +75,8 @@ pub struct Model {
     pending: Option<char>,
     /// Last substring search.
     search_query: String,
+    /// Buffer replaced by the read-only help page.
+    help_back: Option<SavedBuffer>,
 }
 
 impl Model {
@@ -81,6 +95,7 @@ impl Model {
             status: String::new(),
             pending: None,
             search_query: String::new(),
+            help_back: None,
         }
     }
 
@@ -172,9 +187,81 @@ impl Model {
         }
     }
 
+    fn reject_read_only(&mut self) -> bool {
+        if self.help_back.is_some() {
+            self.status = "E: help is read-only".to_owned();
+            self.dirty = true;
+            true
+        } else {
+            false
+        }
+    }
+
+    fn show_help(&mut self) {
+        if self.help_back.is_some() {
+            self.status = "Already viewing help".to_owned();
+            self.dirty = true;
+            return;
+        }
+        let editor = std::mem::replace(&mut self.editor, EditorState::from_text(HELP_TEXT));
+        let saved = SavedBuffer {
+            editor,
+            path: self.path.take(),
+            cursor: self.cursor,
+            scroll: self.scroll,
+            hscroll: self.hscroll,
+            modified: self.modified,
+            search_query: std::mem::take(&mut self.search_query),
+        };
+        self.help_back = Some(saved);
+        self.cursor = 0;
+        self.scroll = 0;
+        self.hscroll = 0;
+        self.modified = false;
+        self.input_mode = InputMode::Normal;
+        self.pending = None;
+        self.status = "Help: :q returns".to_owned();
+        self.dirty = true;
+    }
+
+    fn close_help(&mut self) -> bool {
+        let Some(saved) = self.help_back.take() else {
+            return false;
+        };
+        self.editor = saved.editor;
+        self.path = saved.path;
+        self.cursor = saved.cursor;
+        self.scroll = saved.scroll;
+        self.hscroll = saved.hscroll;
+        self.modified = saved.modified;
+        self.search_query = saved.search_query;
+        self.input_mode = InputMode::Normal;
+        self.pending = None;
+        self.status = "Returned from help".to_owned();
+        self.dirty = true;
+        true
+    }
+
+    fn force_quit(&mut self) {
+        if !self.close_help() {
+            self.quit = true;
+        }
+    }
+
+    fn insert_here(&mut self) {
+        if self.reject_read_only() {
+            return;
+        }
+        self.input_mode = InputMode::Insert;
+        self.dirty = true;
+    }
+
     /// Inserts text at the cursor.
     pub fn insert_text(&mut self, text: &str) {
         if text.is_empty() {
+            return;
+        }
+        if self.reject_read_only() {
             return;
         }
         self.editor.set_selection_bytes(self.cursor, self.cursor);
@@ -195,6 +282,9 @@ impl Model {
     }
 
     fn undo(&mut self) {
+        if self.reject_read_only() {
+            return;
+        }
         if self.editor.undo() {
             self.sync_cursor_from_selection();
             self.modified = true;
@@ -205,6 +295,9 @@ impl Model {
     }
 
     fn redo(&mut self) {
+        if self.reject_read_only() {
+            return;
+        }
         if self.editor.redo() {
             self.sync_cursor_from_selection();
             self.modified = true;
@@ -215,6 +308,9 @@ impl Model {
     }
 
     fn delete_line(&mut self) {
+        if self.reject_read_only() {
+            return;
+        }
         let Some(range) = self.editor.line_range_at(self.cursor) else {
             self.status = "E: no line".to_owned();
             self.dirty = true;
@@ -248,6 +344,9 @@ impl Model {
 
     /// Inserts the unnamed register at the cursor.
     fn put_register(&mut self) {
+        if self.reject_read_only() {
+            return;
+        }
         if self.editor.put(self.cursor).is_some() {
             self.sync_cursor_from_selection();
             self.modified = true;
@@ -258,6 +357,9 @@ impl Model {
     }
 
     fn request_quit(&mut self) {
+        if self.close_help() {
+            return;
+        }
         if self.modified {
             self.status = "No write since last change (:q! to override)".to_owned();
             self.dirty = true;
@@ -329,6 +431,9 @@ impl Model {
     }
 
     fn append(&mut self) {
+        if self.reject_read_only() {
+            return;
+        }
         if let Some(line) = self.editor.index().offset_to_line(self.cursor)
             && self.cursor < line.end
         {
@@ -339,6 +444,9 @@ impl Model {
     }
 
     fn append_line_end(&mut self) {
+        if self.reject_read_only() {
+            return;
+        }
         if let Some(line) = self.editor.index().offset_to_line(self.cursor) {
             self.cursor = line.end;
         }
@@ -347,6 +455,9 @@ impl Model {
     }
 
     fn open_below(&mut self) {
+        if self.reject_read_only() {
+            return;
+        }
         if let Some(line) = self.editor.index().offset_to_line(self.cursor) {
             self.cursor = line.end;
         }
@@ -355,6 +466,9 @@ impl Model {
     }
 
     fn open_above(&mut self) {
+        if self.reject_read_only() {
+            return;
+        }
         let start = self
             .editor
             .index()
@@ -367,6 +481,9 @@ impl Model {
     }
 
     fn backspace(&mut self) {
+        if self.reject_read_only() {
+            return;
+        }
         let Some(start) = self.editor.previous_grapheme_boundary(self.cursor) else {
             return;
         };
@@ -381,6 +498,9 @@ impl Model {
     }
 
     fn delete_forward(&mut self) {
+        if self.reject_read_only() {
+            return;
+        }
         let Some(end) = self.editor.next_grapheme_boundary(self.cursor) else {
             return;
         };
@@ -394,6 +514,9 @@ impl Model {
     }
 
     fn save_to(&mut self, path: PathBuf) -> bool {
+        if self.reject_read_only() {
+            return false;
+        }
         let text = self.editor.text().slice(0..self.editor.text().len_bytes());
         let display = path.display().to_string();
         match fs::write(&path, text) {
@@ -413,6 +536,9 @@ impl Model {
     }
 
     fn save(&mut self) -> bool {
+        if self.reject_read_only() {
+            return false;
+        }
         let Some(path) = self.path.clone() else {
             self.status = "E32: no file name".to_owned();
             self.dirty = true;
@@ -437,7 +563,8 @@ impl Model {
                 self.save_as(path);
             }
             ("q", "") => self.request_quit(),
-            ("q!", "") => self.quit = true,
+            ("q!", "") => self.force_quit(),
+            ("help", "") => self.show_help(),
             ("wq", "") => {
                 if self.save() {
                     self.quit = true;
@@ -525,11 +652,15 @@ fn find_matches(text: &TextDocument, needle: &str) -> Vec<usize> {
 pub fn view(model: &Model, frame: &mut Frame) {
     let area = frame.area();
     let editor_view: EditorView = model.editor.snapshot().view();
-    let title = model
-        .path
-        .as_ref()
-        .map(|path| path.display().to_string())
-        .unwrap_or_else(|| "[no file]".to_owned());
+    let title = if model.help_back.is_some() {
+        "[help]".to_owned()
+    } else {
+        model
+            .path
+            .as_ref()
+            .map(|path| path.display().to_string())
+            .unwrap_or_else(|| "[no file]".to_owned())
+    };
     let debug_revision = std::env::var_os("ANVIL_DEBUG_REV").is_some();
     let title = if debug_revision {
         format!("{title} · rev {}", editor_view.revision)
@@ -703,10 +834,7 @@ fn handle_key(model: &mut Model, key: KeyEvent) {
         },
         InputMode::Normal => match key.code {
             KeyCode::Char('q') => model.request_quit(),
-            KeyCode::Char('i') => {
-                model.input_mode = InputMode::Insert;
-                model.dirty = true;
-            }
+            KeyCode::Char('i') => model.insert_here(),
             KeyCode::Char(':') => {
                 model.input_mode = InputMode::CommandLine {
                     buffer: String::new(),
@@ -1078,5 +1206,57 @@ mod tests {
         backspace.cursor = "a👨‍👩‍👧‍👦".len();
         backspace.backspace();
         assert_eq!(backspace.editor.text().slice(0..2), "ab");
+    }
+
+    #[test]
+    fn help_is_read_only_and_returns_to_the_previous_buffer() {
+        let original_path = PathBuf::from("file.txt");
+        let mut model = Model::new(
+            EditorState::from_text("original"),
+            Some(original_path.clone()),
+        );
+        model.cursor = 3;
+        model.scroll = 1;
+        model.hscroll = 2;
+        model.modified = true;
+
+        handle_event(&mut model, key(KeyCode::Char(':')));
+        type_text(&mut model, "help");
+        handle_event(&mut model, key(KeyCode::Enter));
+        assert!(model.help_back.is_some());
+        assert_eq!(model.editor.text().slice(0..HELP_TEXT.len()), HELP_TEXT);
+        assert_eq!(model.input_mode, InputMode::Normal);
+
+        handle_event(&mut model, key(KeyCode::Char('i')));
+        type_text(&mut model, "Z");
+        assert_eq!(model.input_mode, InputMode::Normal);
+        assert!(model.status.contains("read-only"));
+        assert_eq!(model.editor.text().slice(0..HELP_TEXT.len()), HELP_TEXT);
+
+        handle_event(&mut model, key(KeyCode::Char(':')));
+        type_text(&mut model, "q");
+        handle_event(&mut model, key(KeyCode::Enter));
+        assert!(model.help_back.is_none());
+        assert_eq!(model.editor.text().slice(0..8), "original");
+        assert_eq!(model.path, Some(original_path));
+        assert_eq!(model.cursor, 3);
+        assert_eq!(model.scroll, 1);
+        assert_eq!(model.hscroll, 2);
+        assert!(model.modified);
+    }
+
+    #[test]
+    fn help_refuses_writes() {
+        let mut model = Model::new(EditorState::from_text("data"), None);
+        handle_event(&mut model, key(KeyCode::Char(':')));
+        type_text(&mut model, "help");
+        handle_event(&mut model, key(KeyCode::Enter));
+
+        handle_event(&mut model, key(KeyCode::Char(':')));
+        type_text(&mut model, "w");
+        handle_event(&mut model, key(KeyCode::Enter));
+        assert!(model.help_back.is_some());
+        assert!(model.status.contains("read-only"));
+        assert_eq!(model.editor.text().slice(0..HELP_TEXT.len()), HELP_TEXT);
     }
 }
