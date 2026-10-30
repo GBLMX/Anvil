@@ -3,9 +3,9 @@
 Anvil is a Linux-first terminal editor built around a small, capability-scoped
 plugin contract.
 
-Status: **pre-alpha, Phase 0**. There is no runnable editor yet. This repository
-currently contains the project charter and the architecture decisions that must
-be proven before implementation expands.
+Status: **pre-alpha, Phase 0**. There is no runnable editor yet. Phase 0 code
+currently consists of the `anvil-ipc` frame codec and the Unix
+`openat2`-confined workspace reader in `go/internal/fsroot`.
 
 ## Documents
 
