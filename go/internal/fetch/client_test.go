@@ -50,7 +50,7 @@ func TestFetchPinsResolvedAddressAndPreservesHost(t *testing.T) {
 	}
 	resolved := []net.IPAddr{{IP: net.ParseIP("127.0.0.1")}}
 	client := testClient(t, fakeResolver{addresses: resolved})
-	response, err := client.Fetch(context.Background(), "http://example.test:"+parsed.Port()+"/", 0)
+	response, err := client.Fetch(context.Background(), "http://example.test:"+parsed.Port()+"/", 0, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,7 +67,7 @@ func TestFetchRejectsBlockedAddress(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = client.Fetch(context.Background(), "https://example.test/", 0)
+	_, err = client.Fetch(context.Background(), "https://example.test/", 0, nil)
 	if !errors.Is(err, ErrBlockedAddress) {
 		t.Fatalf("error = %v", err)
 	}
@@ -78,7 +78,7 @@ func TestFetchRejectsMixedAnswers(t *testing.T) {
 		{IP: net.ParseIP("93.184.216.34")},
 		{IP: net.ParseIP("10.0.0.1")},
 	}})
-	_, err := client.Fetch(context.Background(), "http://example.test/", 0)
+	_, err := client.Fetch(context.Background(), "http://example.test/", 0, nil)
 	if !errors.Is(err, ErrBlockedAddress) {
 		t.Fatalf("error = %v", err)
 	}
@@ -91,7 +91,7 @@ func TestFetchBodyCap(t *testing.T) {
 	defer server.Close()
 	parsed, _ := url.Parse(server.URL)
 	client := testClient(t, fakeResolver{addresses: []net.IPAddr{{IP: net.ParseIP("127.0.0.1")}}})
-	response, err := client.Fetch(context.Background(), "http://example.test:"+parsed.Port()+"/", 4)
+	response, err := client.Fetch(context.Background(), "http://example.test:"+parsed.Port()+"/", 4, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,7 +111,7 @@ func TestFetchRejectsRedirect(t *testing.T) {
 	defer server.Close()
 	parsed, _ := url.Parse(server.URL)
 	client := testClient(t, fakeResolver{addresses: []net.IPAddr{{IP: net.ParseIP("127.0.0.1")}}})
-	_, err := client.Fetch(context.Background(), "http://example.test:"+parsed.Port()+"/redirect", 0)
+	_, err := client.Fetch(context.Background(), "http://example.test:"+parsed.Port()+"/redirect", 0, nil)
 	if !errors.Is(err, ErrRedirect) {
 		t.Fatalf("error = %v", err)
 	}
@@ -119,9 +119,48 @@ func TestFetchRejectsRedirect(t *testing.T) {
 
 func TestFetchRejectsHostNotOnAllowlist(t *testing.T) {
 	client := testClient(t, fakeResolver{addresses: []net.IPAddr{{IP: net.ParseIP("93.184.216.34")}}})
-	_, err := client.Fetch(context.Background(), "http://other.test/", 0)
+	_, err := client.Fetch(context.Background(), "http://other.test/", 0, nil)
 	if !errors.Is(err, ErrHostNotAllowed) {
 		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestFetchHeadersWhitelistAndAudit(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.Header.Get("Accept") != "application/json" {
+			t.Errorf("Accept = %q", request.Header.Get("Accept"))
+		}
+		if request.Header.Get("Authorization") != "Bearer secret" {
+			t.Errorf("Authorization = %q", request.Header.Get("Authorization"))
+		}
+		_, _ = writer.Write([]byte("ok"))
+	}))
+	defer server.Close()
+	parsed, _ := url.Parse(server.URL)
+	var audited []string
+	client, err := New(Config{
+		AllowedHosts:  []string{"example.test"},
+		AllowHTTP:     true,
+		AllowLoopback: true,
+		AllowAnyPort:  true,
+		Resolver:      fakeResolver{addresses: []net.IPAddr{{IP: net.ParseIP("127.0.0.1")}}},
+		Audit:         func(name string) { audited = append(audited, name) },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = client.Fetch(context.Background(), "http://example.test:"+parsed.Port()+"/", 0, map[string]string{
+		"Accept":        "application/json",
+		"Authorization": "Bearer secret",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(audited) != 1 || audited[0] != "Authorization" {
+		t.Fatalf("audited = %v", audited)
+	}
+	if _, err := client.Fetch(context.Background(), "http://example.test:"+parsed.Port()+"/", 0, map[string]string{"Cookie": "x"}); err == nil {
+		t.Fatal("Cookie header was accepted")
 	}
 }
 

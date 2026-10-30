@@ -156,8 +156,9 @@ type execParams struct {
 }
 
 type fetchParams struct {
-	URL      string `json:"url"`
-	MaxBytes int64  `json:"max_bytes"`
+	URL      string            `json:"url"`
+	MaxBytes int64             `json:"max_bytes"`
+	Headers  map[string]string `json:"headers"`
 }
 
 type fetchResult struct {
@@ -297,7 +298,7 @@ func (s *Server) fetch(parent context.Context, req request, state *connectionSta
 	if err := decodeParams(req.Params, &params); err != nil || params.URL == "" {
 		return nil, &rpcError{Code: -32602, Message: "invalid params"}
 	}
-	response, err := s.cfg.Fetcher.Fetch(parent, params.URL, params.MaxBytes)
+	response, err := s.cfg.Fetcher.Fetch(parent, params.URL, params.MaxBytes, params.Headers)
 	if err != nil {
 		return nil, &rpcError{Code: -32002, Message: "fetch policy denied"}
 	}

@@ -41,6 +41,7 @@ type Config struct {
 	AllowAnyPort  bool // tests only; production permits 443 (HTTP tests 80)
 	TLSConfig     *tls.Config
 	Resolver      Resolver
+	Audit         func(headerName string)
 }
 
 // Response is a bounded fetch result.
@@ -84,7 +85,7 @@ func New(cfg Config) (*Client, error) {
 
 // Fetch performs one GET with DNS pinning, IP validation, redirect rejection,
 // and a bounded response body.
-func (c *Client) Fetch(ctx context.Context, rawURL string, maxBody int64) (Response, error) {
+func (c *Client) Fetch(ctx context.Context, rawURL string, maxBody int64, headers map[string]string) (Response, error) {
 	if maxBody <= 0 || maxBody > c.cfg.MaxBody {
 		maxBody = c.cfg.MaxBody
 	}
@@ -114,6 +115,10 @@ func (c *Client) Fetch(ctx context.Context, rawURL string, maxBody int64) (Respo
 	if err != nil || len(addresses) == 0 {
 		return Response{}, fmt.Errorf("resolve fetch host: %w", err)
 	}
+	headerSet, err := c.headers(headers)
+	if err != nil {
+		return Response{}, err
+	}
 	var pinned net.IP
 	for _, address := range addresses {
 		if !c.addressAllowed(address.IP) {
@@ -124,11 +129,17 @@ func (c *Client) Fetch(ctx context.Context, rawURL string, maxBody int64) (Respo
 		}
 	}
 	dialAddress := net.JoinHostPort(pinned.String(), port)
+	tlsConfig := &tls.Config{ServerName: host, InsecureSkipVerify: false}
+	if c.cfg.TLSConfig != nil {
+		tlsConfig = c.cfg.TLSConfig.Clone()
+		tlsConfig.ServerName = host
+		tlsConfig.InsecureSkipVerify = false
+	}
 	transport := &http.Transport{
 		Proxy:                 nil,
 		DisableKeepAlives:     true,
 		ResponseHeaderTimeout: c.cfg.Timeout,
-		TLSClientConfig:       c.cfg.TLSConfig,
+		TLSClientConfig:       tlsConfig,
 		DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
 			var dialer net.Dialer
 			return dialer.DialContext(ctx, "tcp", dialAddress)
@@ -145,6 +156,7 @@ func (c *Client) Fetch(ctx context.Context, rawURL string, maxBody int64) (Respo
 	if err != nil {
 		return Response{}, err
 	}
+	request.Header = headerSet
 	response, err := client.Do(request)
 	if err != nil {
 		return Response{}, err
@@ -164,6 +176,33 @@ func (c *Client) Fetch(ctx context.Context, rawURL string, maxBody int64) (Respo
 		Body:        body,
 		Truncated:   truncated,
 	}, nil
+}
+
+func (c *Client) headers(input map[string]string) (http.Header, error) {
+	allowed := map[string]bool{
+		"Accept":        true,
+		"Authorization": true,
+		"Content-Type":  true,
+		"User-Agent":    true,
+	}
+	if len(input) > 8 {
+		return nil, errors.New("too many fetch headers")
+	}
+	headers := make(http.Header, len(input))
+	for name, value := range input {
+		canonical := http.CanonicalHeaderKey(name)
+		if !allowed[canonical] {
+			return nil, fmt.Errorf("fetch header %q is not allowed", name)
+		}
+		if value == "" || len(value) > 4096 || strings.ContainsAny(value, "\r\n") {
+			return nil, fmt.Errorf("fetch header %q has an invalid value", name)
+		}
+		if canonical == "Authorization" && c.cfg.Audit != nil {
+			c.cfg.Audit(canonical)
+		}
+		headers.Set(canonical, value)
+	}
+	return headers, nil
 }
 
 func (c *Client) addressAllowed(ip net.IP) bool {

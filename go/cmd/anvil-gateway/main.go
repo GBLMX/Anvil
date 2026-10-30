@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"flag"
 	"fmt"
+	"log"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -73,6 +74,9 @@ func main() {
 			AllowedHosts: hosts,
 			MaxBody:      *fetchMax,
 			Timeout:      *fetchTimeout,
+			Audit: func(name string) {
+				log.Printf("sys.fetch sensitive header name=%s", name)
+			},
 		})
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "anvil-gateway: fetch: %v\n", err)

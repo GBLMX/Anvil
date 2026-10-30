@@ -59,8 +59,12 @@ Implemented:
   private/loopback/link-local/CGNAT/documentation/transition-range rejection,
   HTTPS-only production policy, disabled redirects, timeout, and body cap;
 - `sys.fetch` routing in the gateway with `sys.fetch` permission checks;
+- allowlisted request headers (`Accept`, `Authorization`, `Content-Type`,
+  `User-Agent`), with sensitive header names audited without values;
+- TLS `ServerName` set from the original host with `InsecureSkipVerify`
+  explicitly false, while the TCP dial uses the pinned IP;
 - `httptest` coverage for pinning/host preservation, mixed DNS answers,
-  blocked addresses, host denial, redirect denial, and body truncation.
+  blocked addresses, host denial, redirect denial, headers, and body truncation.
 
 Open:
 

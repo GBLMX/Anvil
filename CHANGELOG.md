@@ -23,7 +23,8 @@ All notable changes to Anvil are recorded here. The format follows
   `anvil-exec-runner`; Rust handshake example included.
 
 - Phase 0.6 SSRF-constrained `sys.fetch`: exact host allowlist, DNS pinning,
-  blocked-address validation, disabled redirects, and bounded bodies.
+  blocked-address validation, disabled redirects, bounded bodies, allowlisted
+  request headers with name-only sensitive auditing, and host-bound TLS SNI.
 
 - Phase 0.5 complete: PieceTable production selection, cursor/line-index
   primitives, editor snapshots, selection-aware undo, and the locked-core
