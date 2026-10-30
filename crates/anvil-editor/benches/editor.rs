@@ -1,7 +1,7 @@
 use std::hint::black_box;
 
 use anvil_api::Viewport;
-use anvil_core::TextBuffer;
+use anvil_core::{LineIndex, PieceTable, TextBuffer};
 use anvil_editor::EditorState;
 use criterion::{BatchSize, Criterion, criterion_group, criterion_main};
 
@@ -75,6 +75,35 @@ fn editor_benches(criterion: &mut Criterion) {
                 let end = state.text().len_bytes();
                 state.insert(end, "x");
                 black_box(state.revision())
+            },
+            BatchSize::LargeInput,
+        );
+    });
+    let base_buffer = PieceTable::from_text(&text);
+    group.bench_function("A5_piece_append", |bencher| {
+        bencher.iter_batched(
+            || base_buffer.clone(),
+            |mut buffer| {
+                let end = buffer.len_bytes();
+                buffer.insert(end, "x");
+                black_box(buffer.len_bytes())
+            },
+            BatchSize::LargeInput,
+        );
+    });
+    let base_index = LineIndex::from_buffer(&base_buffer);
+    group.bench_function("A5_line_index_append", |bencher| {
+        bencher.iter_batched(
+            || {
+                let mut buffer = base_buffer.clone();
+                let index = base_index.clone();
+                let end = buffer.len_bytes();
+                buffer.insert(end, "x");
+                (buffer, index, end)
+            },
+            |(buffer, mut index, end)| {
+                index.apply_edit(&buffer, end..end);
+                black_box(index.len_lines())
             },
             BatchSize::LargeInput,
         );

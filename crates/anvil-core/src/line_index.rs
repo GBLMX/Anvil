@@ -227,6 +227,17 @@ impl LineIndex {
         if range.start == range.end && new_len == self.len {
             return;
         }
+        if range.start == range.end
+            && range.start == self.len
+            && new_len > self.len
+            && !buffer.slice(self.len..new_len).contains('\n')
+        {
+            if let Some(last) = self.chunks.last_mut() {
+                last.end = new_len;
+                self.len = new_len;
+                return;
+            }
+        }
 
         let old_len = self.len;
         let delta = new_len as isize - old_len as isize;
