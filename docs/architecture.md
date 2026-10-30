@@ -159,8 +159,18 @@ filesystem/network I/O on behalf of a plugin.
 - Public `TextBuffer` trait separates the editor from the concrete storage.
 - Phase 0 benchmark chooses Rope/piece table or Gap Buffer. Only one backend
   ships in v1; a second backend is not a parallel maintenance path.
-- The snapshot contains `Arc<Document>` plus viewport/selection/revision.
-  It must not clone 100 MB of text per frame.
+- The snapshot contains `Arc<Document>` plus viewport/selection/revision and
+  the session `interaction_mode`. It must not clone 100 MB of text per frame.
+- Phase 0 has exactly one native interaction model: selection-first. A caret is
+  an empty selection; there is no operator-pending state in the core.
+- Motions and actions are native core semantics. Keymaps are Lua/TS plugins and
+  only bind input to core commands; they do not define word boundaries or undo
+  grouping.
+- A future Vim adapter may add an operator-pending layer above the native
+  actions. It must not replace the action engine.
+- `interaction_mode` is session state, not process-global state. The plugin API
+  returns it in `editor.get_view`; switching is reserved for the API revision
+  that introduces a second native mode.
 - Rendering covers only visible lines; syntax highlighting is incremental and
   viewport-scoped.
 - Byte, char, grapheme, and display-cell coordinates are explicit in the API.
@@ -226,6 +236,8 @@ docs/
 - No shell/pipeline execution in v1.
 - No native Lua C modules in v1.
 - No claim of cross-platform sandbox parity.
+- No operator-pending state in the Phase 0 core.
+- No plugin-defined motion or action semantics in v1.
 
 ## 9. Open questions
 

@@ -16,6 +16,7 @@ reader in `go/internal/fsroot`.
 - [Performance baseline](docs/performance.md)
 - [Upstream dependencies](docs/adr/0006-upstream-dependencies.md)
 - [JSON-RPC and token contract](docs/adr/0007-jsonrpc-envelope-and-capability-token.md)
+- [Selection-first interaction](docs/adr/0008-selection-first-interaction.md)
 - [Architecture decision records](docs/adr/)
 - [Security policy](SECURITY.md)
 - [Contributing](CONTRIBUTING.md)
@@ -37,6 +38,8 @@ reader in `go/internal/fsroot`.
   its code-generation cost.
 - The text model is selected by a Phase 0 benchmark. A rope or piece table is the
   default candidate; Gap Buffer ships only if it meets the random-edit targets.
+- Phase 0 has one native interaction model: selection-first. Motions and
+  actions live in the Rust core; keymaps ship as Lua/TS plugins.
 - Full untrusted-plugin support targets Linux 5.13+ (Landlock). Linux 5.6-5.12
   may run the editor with trusted plugins only.
 

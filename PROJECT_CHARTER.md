@@ -39,6 +39,8 @@ not a prerequisite for editing.
    and versioned independently from the editor binary.
 6. **Linux first, honestly.** Full untrusted-plugin support requires kernel
    5.13+ for Landlock. Kernel 5.6-5.12 may run trusted plugins only.
+7. **One native interaction model per phase.** Phase 0 is selection-first.
+   Keymaps are plugins; motion and action semantics belong to the core.
 
 ## 4. Trust model
 
@@ -147,7 +149,7 @@ ADR-0003; names below are the baseline.
 
 | Module | Methods | Purpose |
 |---|---|---|
-| `editor` | `get_view`, `apply_edit`, `register_command` | Read viewport/selection, apply an authorized transaction, register a user-invoked command |
+| `editor` | `get_view`, `apply_edit`, `register_command` | Read viewport/selection/interaction mode, apply an authorized transaction, register a user-invoked command |
 | `ui` | `notify`, `status` | Transient user feedback only |
 | `event` | `subscribe` | Subscribe to an allowlisted event set |
 | `sys` | `read_file`, `fetch`, `exec` | Capability-gated system access |
@@ -254,3 +256,4 @@ are accepted under the same dual-license terms.
 - [0005: Exec policy](docs/adr/0005-exec-policy.md)
 - [0006: Upstream dependencies](docs/adr/0006-upstream-dependencies.md)
 - [0007: JSON-RPC envelope and capability token](docs/adr/0007-jsonrpc-envelope-and-capability-token.md)
+- [0008: Selection-first interaction](docs/adr/0008-selection-first-interaction.md)
