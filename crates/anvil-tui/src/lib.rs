@@ -923,7 +923,10 @@ impl Model {
         let total = index.len_lines();
         let end = (self.scroll + usize::from(height)).min(total);
         let current = self.current_line();
-        let needle = self.search_query.as_str();
+        let needle = match &self.input_mode {
+            InputMode::Search { query } => query.as_str(),
+            _ => self.search_query.as_str(),
+        };
         let mut lines = Vec::with_capacity(end.saturating_sub(self.scroll));
         for line_number in self.scroll..end {
             let Some(start) = index.line_to_offset(line_number) else {
