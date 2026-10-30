@@ -30,6 +30,7 @@ SSRF-constrained fetch client, plus the `openat2`-confined workspace reader in
 - [Text model benchmark](docs/benchmarks/text-model.md)
 - [Editor benchmarks](docs/benchmarks/editor.md)
 - [Line index stress](docs/benchmarks/line-index-stress.md)
+- [TUI edit-loop latency](docs/benchmarks/tui.md)
 - [Phase 0.5 plan](docs/phase-0-5-plan.md)
 - [Phase 0.6 plan](docs/phase-0-6-plan.md)
 - [Upstream dependencies](docs/adr/0006-upstream-dependencies.md)

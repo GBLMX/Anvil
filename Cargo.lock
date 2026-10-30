@@ -76,6 +76,7 @@ dependencies = [
  "anvil-core",
  "anvil-editor",
  "crossterm",
+ "nix 0.31.3",
  "ratatui",
  "tempfile",
 ]

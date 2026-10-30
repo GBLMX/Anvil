@@ -7,6 +7,10 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 
+[features]
+default = []
+e2e-bench = []
+
 [dependencies]
 anvil-api = { path = "../anvil-api", version = "0.0.0" }
 anvil-core = { path = "../anvil-core", version = "0.0.0" }
@@ -19,4 +23,10 @@ name = "anvil"
 path = "src/main.rs"
 
 [dev-dependencies]
+nix = { version = "0.31", features = ["poll", "process", "signal", "term"] }
 tempfile = "3"
+
+[[bench]]
+name = "e2e_edit"
+harness = false
+required-features = ["e2e-bench"]

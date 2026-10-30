@@ -37,6 +37,9 @@ All notable changes to Anvil are recorded here. The format follows
   horizontal scrolling, cursor/viewport separation, dirty-only redraws,
   terminal restore, and borrowed text chunks.
 
+- Phase 0.6 TUI edit-loop benchmark: layered Rust-side and PTY latency for
+  key-to-screen, 100 MB open, 100 MB scroll, and 100 MB search.
+
 - Phase 0.5 complete: PieceTable production selection, cursor/line-index
   primitives, editor snapshots, selection-aware undo, and the locked-core
   A/C benchmark and 100k stress gate.

@@ -116,6 +116,13 @@ impl Model {
         Ok(Self::new(EditorState::from_text(&text), Some(path)))
     }
 
+    /// Dispatches one terminal event through the normal input path.
+    ///
+    /// Used by tests and benchmarks; terminal loops read events themselves.
+    pub fn dispatch(&mut self, event: Event) {
+        handle_event(self, event);
+    }
+
     fn snapshot(&self) -> Buffer {
         Buffer {
             editor: self.editor.clone(),
