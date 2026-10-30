@@ -58,7 +58,8 @@ Acceptance:
 
 Required outcome:
 
-- LSP wire codec and diagnostics parsing are implemented in `anvil-tui`.
+- Rust LSP wire codec/diagnostics and Go `internal/lsp` framing/manager are
+  implemented; gateway dispatch and TUI diagnostics are pending.
 - Per-workspace language-server lifecycle; no server is started until a
   matching buffer is opened.
 - Diagnostics, hover, definition, and completion are opt-in and cancellable.

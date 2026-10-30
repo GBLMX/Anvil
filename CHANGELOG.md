@@ -11,9 +11,11 @@ All notable changes to Anvil are recorded here. The format follows
 - `:reconnect` restarts the gateway child and performs a fresh handshake,
   replacing a poisoned client without discarding buffers or unsaved text.
 
-- LSP wire foundation: `Content-Length` framed JSON-RPC transport, request/
-  notification helpers, and `textDocument/publishDiagnostics` parsing. No
-  language-server process, diagnostics UI, or gateway supervision yet.
+- LSP wire foundation: Rust `Content-Length` framed JSON-RPC transport,
+  request/notification helpers, `textDocument/publishDiagnostics` parsing, and
+  a Go `internal/lsp` framed manager with persistent stdin/stdout pipes and
+  crash/lifecycle primitives. No gateway dispatch, diagnostics UI, or TUI
+  language-server session yet.
 
 ## [0.1.1] - 2026-10-31
 
