@@ -104,9 +104,9 @@ document decode, page-cache warm):
 | 8 | **335.3 ms** | **17.6 ms** |
 | 19 | 376.6 ms | 19.8 ms |
 
-An 8-request window saves about **302 ms** against the serial UDS loop. It is
+An 8-request window saves **256 ms** against window 1 in the same run. It is
 not only a 28 ms socket optimization; the server encode overlaps across cores.
-Projected PTY open is roughly **338 ms** before client decode is included.
+Projected PTY open is roughly **384 ms** before client decode is included.
 
 ## Interpretation
 
@@ -123,8 +123,8 @@ Projected PTY open is roughly **338 ms** before client decode is included.
   practical ceiling is about 5.9 MiB. The remaining gap is not round-trip
   count alone.
 - Pipelining is the cheapest measured improvement: window 8 takes the UDS loop
-  from 637 ms to 335 ms, saving about 302 ms. It still leaves a projected
-  ~338 ms PTY open, above the 200 ms Phase 0.6 target.
+  from 591.8 ms to 335.3 ms in the same run, saving 256 ms. It still leaves a
+  projected ~384 ms PTY open, above the 200 ms Phase 0.6 target.
 - Binary framing removes the measured base64 and JSON work: about 10.3 ms
   server + 3.3 ms client per chunk, or ~258 ms total. That projects to roughly
   **380 ms PTY**, not 240 ms. fd passing removes the whole 19.2 ms/chunk

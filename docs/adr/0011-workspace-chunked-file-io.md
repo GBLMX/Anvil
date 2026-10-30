@@ -225,8 +225,8 @@ chunk (~258 ms total), projecting to roughly **380 ms PTY**, not 240 ms.
 fd passing removes the whole transfer path and is the only option that can
 approach the direct baseline. Pipelining was measured separately on the real
 gateway: 1 in-flight 591.8 ms, 2 372.0 ms, 4 389.0 ms, 8 **335.3 ms**, 19
-376.6 ms. Window 8 saves about **302 ms** against the serial loop and projects
-to roughly **338 ms PTY**; it is not a 28 ms socket-only optimization.
+376.6 ms. Within the same run, window 8 saves **256 ms** against window 1 and
+projects to roughly **384 ms PTY**; it is not a 28 ms socket-only optimization.
 
 The single 50 ms gate was too coarse for a 100 MB document. The Phase 0.6 gates
 are:
