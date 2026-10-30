@@ -153,6 +153,53 @@ func TestSysExecRoutesThroughRunner(t *testing.T) {
 	}
 }
 
+func TestTokenIsOneShot(t *testing.T) {
+	socket := startGateway(t, []string{"sys.exec"}, "")
+	first := dialGateway(t, socket)
+	if response := sendRequest(t, first, "hello-1", "session.hello", helloRequestParams(testToken)); response.Error != nil {
+		t.Fatalf("first handshake: %+v", response.Error)
+	}
+	second := dialGateway(t, socket)
+	response := sendRequest(t, second, "hello-2", "session.hello", helloRequestParams(testToken))
+	if response.Error == nil || response.Error.Code != -32001 {
+		t.Fatalf("second handshake error = %+v", response.Error)
+	}
+}
+
+func TestConnectionCloseCancelsExec(t *testing.T) {
+	marker := filepath.Join(t.TempDir(), "alive")
+	runner := filepath.Join(t.TempDir(), "runner")
+	script := "#!/bin/sh\nsleep 1\n: > " + marker + "\n"
+	if err := os.WriteFile(runner, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	socket := startGateway(t, []string{"sys.exec"}, runner)
+	conn := dialGateway(t, socket)
+	if response := sendRequest(t, conn, "hello-1", "session.hello", helloRequestParams(testToken)); response.Error != nil {
+		t.Fatalf("handshake error: %+v", response.Error)
+	}
+	body, err := json.Marshal(map[string]interface{}{
+		"jsonrpc": "2.0",
+		"id":      "exec-1",
+		"method":  "sys.exec",
+		"params": map[string]interface{}{
+			"tool": "/usr/bin/rg",
+			"args": []string{"-n", "foo", "README.md"},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := writeFrame(conn, body); err != nil {
+		t.Fatal(err)
+	}
+	_ = conn.Close()
+	time.Sleep(1500 * time.Millisecond)
+	if _, err := os.Stat(marker); err == nil {
+		t.Fatal("exec process survived connection close")
+	}
+}
+
 func TestSysExecRequiresHandshake(t *testing.T) {
 	socket := startGateway(t, []string{"sys.exec"}, "")
 	conn := dialGateway(t, socket)

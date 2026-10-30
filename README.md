@@ -41,10 +41,15 @@ seccomp allowlist, supervised process groups, and `rg`/`fd` argv policy, plus th
 - The Rust v1 stack uses `ratatui` + `crossterm` directly, with no Tokio or
   Ferriso runtime dependency. Ferriso is reference material.
 - Lua plugins use `mlua` with Luau; TS uses `rquickjs` (QuickJS-NG), not V8.
-- The Go gateway is a per-session policy gateway, not the plugin sandbox.
-- `sys.exec` remains disabled until the Go gateway routes tool calls through
-  `anvil-exec-runner`; the runner's Landlock/seccomp path and kernel sandbox
-  tests are implemented, but gateway integration is still pending.
+- The Go gateway is a per-session policy gateway, not the plugin sandbox. One
+  gateway process owns one session socket; closing the server removes the
+  socket.
+- `sys.exec` routes through `anvil-exec-runner`. The Phase 0.6 gateway uses a
+  one-shot 32-byte bootstrap token: the gateway holds only its SHA-256 verifier,
+  the raw token appears only in `session.hello`, and a second handshake is
+  rejected. `SO_PEERCRED` UID plus the token are both required. `-allow-exec`
+  is currently per gateway instance; per-session permission negotiation remains
+  open.
 - The public API starts small and is defined from Rust types plus generated JSON
   Schema and TypeScript/Lua stubs. Smithy is deferred until the API justifies
   its code-generation cost.

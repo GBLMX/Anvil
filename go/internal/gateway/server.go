@@ -46,8 +46,10 @@ type Config struct {
 
 // Server accepts framed JSON-RPC connections on a Unix socket.
 type Server struct {
-	cfg      Config
-	listener net.Listener
+	cfg       Config
+	listener  net.Listener
+	tokenMu   sync.Mutex
+	tokenUsed bool
 }
 
 // Listen binds the gateway socket with mode 0600.
@@ -114,7 +116,7 @@ func (s *Server) Serve(ctx context.Context) error {
 			}
 			return err
 		}
-		go s.handle(conn)
+		go s.handle(ctx, conn)
 	}
 }
 
@@ -166,51 +168,65 @@ type connectionState struct {
 	permissions []string
 }
 
-func (s *Server) handle(conn net.Conn) {
+func (s *Server) handle(serverCtx context.Context, conn net.Conn) {
 	defer conn.Close()
 	uid, err := peerUID(conn)
 	if err != nil || uid != uint32(os.Getuid()) {
 		return
 	}
+	ctx, cancel := context.WithCancel(serverCtx)
+	defer cancel()
 	state := &connectionState{
 		permissions: append([]string{}, s.cfg.Permissions...),
 	}
+	var writeMu sync.Mutex
+	var requests sync.WaitGroup
 	for {
 		body, err := readFrame(conn)
 		if err != nil {
-			return
+			cancel()
+			break
 		}
 		var req request
 		if err := json.Unmarshal(body, &req); err != nil {
+			writeMu.Lock()
 			_ = writeError(conn, nil, -32700, "parse error")
-			return
+			writeMu.Unlock()
+			cancel()
+			break
 		}
 		if req.ID == nil {
 			continue
 		}
 		if req.JSONRPC != "2.0" || req.Method == "" {
+			writeMu.Lock()
 			_ = writeError(conn, req.ID, -32600, "invalid request")
+			writeMu.Unlock()
 			continue
 		}
-		result, rpcErr := s.dispatch(req, state)
-		if rpcErr != nil {
-			if err := writeError(conn, req.ID, rpcErr.Code, rpcErr.Message); err != nil {
+		requests.Add(1)
+		go func(req request) {
+			defer requests.Done()
+			result, rpcErr := s.dispatch(ctx, req, state)
+			writeMu.Lock()
+			defer writeMu.Unlock()
+			if rpcErr != nil {
+				_ = writeError(conn, req.ID, rpcErr.Code, rpcErr.Message)
 				return
 			}
-			continue
-		}
-		if err := writeResult(conn, req.ID, result); err != nil {
-			return
-		}
+			_ = writeResult(conn, req.ID, result)
+		}(req)
 	}
+	cancel()
+	requests.Wait()
 }
 
-func (s *Server) dispatch(req request, state *connectionState) (interface{}, *rpcError) {
+func (s *Server) dispatch(ctx context.Context, req request, state *connectionState) (interface{}, *rpcError) {
 	switch req.Method {
 	case "session.hello":
 		return s.hello(req, state)
 	case "sys.exec":
-		return s.exec(req, state)
+		return s.exec(ctx, req, state)
 	default:
 		return nil, &rpcError{Code: -32601, Message: "method not found"}
 	}
@@ -237,6 +253,13 @@ func (s *Server) hello(req request, state *connectionState) (interface{}, *rpcEr
 	if subtle.ConstantTimeCompare(hash[:], s.cfg.TokenSHA256[:]) != 1 {
 		return nil, &rpcError{Code: -32001, Message: "unauthorized"}
 	}
+	s.tokenMu.Lock()
+	if s.tokenUsed {
+		s.tokenMu.Unlock()
+		return nil, &rpcError{Code: -32001, Message: "unauthorized"}
+	}
+	s.tokenUsed = true
+	s.tokenMu.Unlock()
 	state.handshaken = true
 	state.sessionID = randomID()
 	return map[string]interface{}{
@@ -247,7 +270,7 @@ func (s *Server) hello(req request, state *connectionState) (interface{}, *rpcEr
 	}, nil
 }
 
-func (s *Server) exec(req request, state *connectionState) (interface{}, *rpcError) {
+func (s *Server) exec(parent context.Context, req request, state *connectionState) (interface{}, *rpcError) {
 	state.mu.Lock()
 	if !state.handshaken {
 		state.mu.Unlock()
@@ -281,7 +304,7 @@ func (s *Server) exec(req request, state *connectionState) (interface{}, *rpcErr
 			timeout = requested
 		}
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithTimeout(parent, timeout)
 	defer cancel()
 	args := []string{"-workspace", s.cfg.Workspace, "-tool", params.Tool, "--"}
 	args = append(args, params.Args...)

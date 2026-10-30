@@ -69,6 +69,23 @@ Implemented:
   handshake;
 - Go tests cover handshake rejection and the `sys.exec` runner route.
 
+Security boundaries:
+
+- `-token-sha256` is a verifier, not a token. The gateway hashes the 32-byte
+  token from `session.hello` and compares it; it does not accept the hash as a
+  credential. The token is consumed by the first successful handshake, so a
+  second connection is rejected. v1 has no HMAC/nonce challenge; this is safe
+  only because the token is 32 random bytes, is sent only over the session UDS,
+  and is one-shot.
+- `SO_PEERCRED` supplies the same-UID check; the one-shot token supplies plugin
+  identity. Both are required.
+- `-allow-exec` is per gateway instance, and the Phase 0.6 deployment uses one
+  gateway per plugin session. Per-session permission negotiation is a follow-up.
+- A gateway is a per-session process, not a daemon. `Close` removes the socket;
+  a crashed gateway leaves a stale socket and no authority.
+- Closing the client connection cancels in-flight `sys.exec` work and kills the
+  runner process group. A handshake is single-use per connection.
+
 Open:
 
 - replace the bootstrap `-token-sha256` flag with editor control-socket

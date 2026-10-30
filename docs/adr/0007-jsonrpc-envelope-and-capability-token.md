@@ -81,6 +81,20 @@ assumed.
 - Signed/stateless tokens are deferred. They require key distribution and
   rotation, which v1 does not need.
 
+Phase 0.6 bootstrap note:
+
+- The gateway's `-token-sha256` argument is a verifier, not an accepted token.
+  A client must still present a 32-byte token; the gateway computes
+  `SHA-256(token)` and compares it in constant time.
+- The bootstrap token is consumed by the first successful handshake. A second
+  `session.hello` on another connection is rejected, so the hash exposed in the
+  process command line is useful only before that first handshake and does not
+  reveal the token.
+- v1 uses the direct hash-of-token check, not HMAC or a nonce challenge. It
+  relies on 32 random token bytes, the session-private Unix socket, and one-shot
+  consumption. Control-socket registration and inherited-fd delivery replace
+  the bootstrap flag before untrusted plugin deployment.
+
 ### 3. Handshake
 
 Before any API method, each plugin connection sends:

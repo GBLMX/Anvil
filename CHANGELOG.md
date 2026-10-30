@@ -18,8 +18,9 @@ All notable changes to Anvil are recorded here. The format follows
   for timeout and output caps.
 
 - Phase 0.6 Go gateway skeleton: Unix-socket framed JSON-RPC,
-  `session.hello` token-hash authentication, `SO_PEERCRED` UID checks, and
-  `sys.exec` routing through `anvil-exec-runner`; Rust handshake example included.
+  one-shot `session.hello` token-hash authentication, `SO_PEERCRED` UID checks,
+  connection-cancel propagation, and `sys.exec` routing through
+  `anvil-exec-runner`; Rust handshake example included.
 
 - Phase 0.5 complete: PieceTable production selection, cursor/line-index
   primitives, editor snapshots, selection-aware undo, and the locked-core
