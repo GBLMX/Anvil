@@ -49,6 +49,20 @@ Go gateway with `openat2`, Landlock/seccomp exec sandboxing, SSRF-constrained
 fetch, and a synchronous Rust gateway client. The TUI discovers the gateway
 beside the binary or via `ANVIL_GATEWAY`.
 
+## Usage
+
+```text
+anvil [OPTIONS] [FILE]
+
+  -w, --workspace <DIR>  Workspace directory (default: current directory)
+  -h, --help             Show help and exit
+  -V, --version          Show the version and exit
+  --                     Treat the next argument as FILE
+```
+
+`FILE` must be inside the selected workspace. Use `--` before a file name that
+starts with a dash.
+
 ## Documents
 
 - [Project charter](PROJECT_CHARTER.md)

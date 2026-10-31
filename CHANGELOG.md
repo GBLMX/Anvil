@@ -14,6 +14,8 @@ All notable changes to Anvil are recorded here. The format follows
 
 ### Added
 
+- CLI `-h`/`--help`, `-V`/`--version`, and `--workspace=<DIR>` parsing, with
+  parser tests and documented usage.
 - Opt-in PGO and BOLT workflow: `scripts/pgo-bolt.sh` builds instrumented and
   profile-use binaries, records a PTY workload, and supports post-link BOLT
   profiles via `perf2bolt`; no default release or CI behavior changes.
