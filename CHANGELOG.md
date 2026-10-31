@@ -6,6 +6,14 @@ All notable changes to Anvil are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.2.10] - 2026-10-31
+
+### Changed
+
+- Fuzzy file results show workspace-relative paths, clip long paths from the
+  left with an ellipsis, and highlight case-insensitive query matches with
+  bold/underline styling.
+
 ## [0.2.9] - 2026-10-31
 
 ### Added

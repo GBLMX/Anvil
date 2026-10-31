@@ -148,6 +148,71 @@ fn syntax_style(class: SyntaxClass) -> Style {
     Style::default().fg(color)
 }
 
+fn clip_path(path: &str, max_width: usize) -> String {
+    let width = path.width();
+    if width <= max_width {
+        return path.to_owned();
+    }
+    if max_width == 0 {
+        return String::new();
+    }
+    let mut suffix = String::new();
+    let mut used = 0;
+    for character in path.chars().rev() {
+        let character_width = character.width().unwrap_or(0);
+        if used + character_width + 1 > max_width {
+            break;
+        }
+        suffix.insert(0, character);
+        used += character_width;
+    }
+    format!("…{suffix}")
+}
+
+fn fuzzy_match_ranges(path: &str, query: &str) -> Vec<(usize, usize)> {
+    if query.is_empty() || !path.is_ascii() || !query.is_ascii() {
+        return Vec::new();
+    }
+    let path_lower = path.to_ascii_lowercase();
+    let query_lower = query.to_ascii_lowercase();
+    let mut ranges = Vec::new();
+    let mut offset = 0;
+    while let Some(found) = path_lower[offset..].find(&query_lower) {
+        let start = offset + found;
+        let end = start + query_lower.len();
+        ranges.push((start, end));
+        offset = end;
+    }
+    ranges
+}
+
+fn fuzzy_path_line(path: &str, query: &str, max_width: usize, selected: bool) -> Line<'static> {
+    let clipped = clip_path(path, max_width);
+    let base = if selected {
+        Style::default().fg(Color::Black).bg(Color::Yellow)
+    } else {
+        Style::default()
+    };
+    let ranges = fuzzy_match_ranges(&clipped, query);
+    if ranges.is_empty() {
+        return Line::styled(clipped, base);
+    }
+    let match_style = base.add_modifier(Modifier::BOLD | Modifier::UNDERLINED);
+    let mut spans = Vec::new();
+    let mut cursor = 0;
+    for (start, end) in ranges {
+        if start > cursor {
+            spans.push(Span::styled(clipped[cursor..start].to_owned(), base));
+        }
+        spans.push(Span::styled(clipped[start..end].to_owned(), match_style));
+        cursor = end;
+    }
+    if cursor < clipped.len() {
+        spans.push(Span::styled(clipped[cursor..].to_owned(), base));
+    }
+    Line::from(spans)
+}
+
 pub fn view(model: &Model, frame: &mut Frame) {
     let area = frame.area();
     let editor_view: EditorView = model.editor.snapshot().view();
@@ -305,12 +370,12 @@ pub fn view(model: &Model, frame: &mut Frame) {
             .enumerate()
         {
             let name = &fuzzy.entries[*index];
-            let style = if row == fuzzy.selected {
-                Style::default().fg(Color::Black).bg(Color::Yellow)
-            } else {
-                Style::default()
-            };
-            lines.push(Line::styled(name.as_str(), style));
+            lines.push(fuzzy_path_line(
+                name,
+                &fuzzy.query,
+                width.saturating_sub(2) as usize,
+                row == fuzzy.selected,
+            ));
         }
         lines.push(Line::raw(format!("> {}", fuzzy.query)));
         frame.render_widget(
@@ -376,5 +441,22 @@ pub fn view(model: &Model, frame: &mut Frame) {
             Paragraph::new(hover.as_str()).block(Block::bordered().title("Hover")),
             popup,
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{clip_path, fuzzy_match_ranges};
+
+    #[test]
+    fn clips_paths_from_the_left() {
+        assert_eq!(clip_path("crates/anvil-tui/src/lib.rs", 12), "…/src/lib.rs");
+        assert_eq!(clip_path("short.rs", 20), "short.rs");
+    }
+
+    #[test]
+    fn finds_case_insensitive_match_ranges() {
+        assert_eq!(fuzzy_match_ranges("src/main.rs", "MAIN"), vec![(4, 8)]);
+        assert!(fuzzy_match_ranges("src/main.rs", "zzz").is_empty());
     }
 }

@@ -8,8 +8,8 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-anvil-api = { path = "../anvil-api", version = "0.2.9" }
-anvil-core = { path = "../anvil-core", version = "0.2.9" }
+anvil-api = { path = "../anvil-api", version = "0.2.10" }
+anvil-core = { path = "../anvil-core", version = "0.2.10" }
 
 [dev-dependencies]
 criterion = "0.5"
