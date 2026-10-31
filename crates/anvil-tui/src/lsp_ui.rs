@@ -222,7 +222,18 @@ impl Model {
             .position(self.editor.text(), self.cursor)
             .map(|position| position.line)
             .unwrap_or(0);
-        let mut positions: Vec<(usize, usize)> = diagnostics
+        let primary: Vec<&crate::lsp::Diagnostic> = if diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.severity.is_some())
+        {
+            diagnostics
+                .iter()
+                .filter(|diagnostic| diagnostic.severity.is_some())
+                .collect()
+        } else {
+            diagnostics.iter().collect()
+        };
+        let mut positions: Vec<(usize, usize)> = primary
             .iter()
             .map(|diagnostic| {
                 (
@@ -247,7 +258,7 @@ impl Model {
         let Some(&(line, character)) = selected else {
             return;
         };
-        let Some(diagnostic) = diagnostics.iter().find(|diagnostic| {
+        let Some(diagnostic) = primary.iter().find(|diagnostic| {
             diagnostic.range.start.line as usize == line
                 && diagnostic.range.start.character as usize == character
         }) else {

@@ -2438,6 +2438,21 @@ mod tests {
                     message: "second".to_owned(),
                     source: Some("test".to_owned()),
                 },
+                lsp::Diagnostic {
+                    range: lsp::Range {
+                        start: lsp::Position {
+                            line: 0,
+                            character: 2,
+                        },
+                        end: lsp::Position {
+                            line: 0,
+                            character: 3,
+                        },
+                    },
+                    severity: None,
+                    message: "related".to_owned(),
+                    source: Some("test".to_owned()),
+                },
             ],
         );
         model.jump_diagnostic(true);

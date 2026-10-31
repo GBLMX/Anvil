@@ -1,6 +1,6 @@
 # Anvil Project Charter
 
-Status: **0.2.12 / Phase 0.7 in progress. Pre-alpha.**
+Status: **0.2.13 / Phase 0.7 in progress. Pre-alpha.**
 Supersedes: the V1.0 whitepaper draft where it conflicts with the decisions below.
 Changes to this document require an ADR.
 

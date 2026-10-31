@@ -6,6 +6,14 @@ All notable changes to Anvil are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.2.13] - 2026-10-31
+
+### Fixed
+
+- Diagnostic navigation prefers severity-bearing primary diagnostics over
+  related/secondary entries, so `]d` / `[d` and the popup show the actionable
+  error instead of a related-location note.
+
 ## [0.2.12] - 2026-10-31
 
 ### Added
