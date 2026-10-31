@@ -79,6 +79,12 @@ impl LspWorker {
                 let _ = sender.send(LspEvent::Error(error));
                 return;
             }
+            let did_save = serde_json::json!({
+                "jsonrpc": "2.0",
+                "method": "textDocument/didSave",
+                "params": {"textDocument": {"uri": uri}}
+            });
+            let _ = send(&mut client, &did_save);
             loop {
                 let message = match client.recv_notification() {
                     Ok(Some(message)) => message,
@@ -108,6 +114,14 @@ impl LspWorker {
                         let Some(data) = message.params.get("data") else {
                             continue;
                         };
+                        match answer_server_request(&mut client, data) {
+                            Ok(true) => continue,
+                            Ok(false) => {}
+                            Err(error) => {
+                                let _ = sender.send(LspEvent::Error(error));
+                                return;
+                            }
+                        }
                         if let Some((path, diagnostics)) = publish_diagnostics(data) {
                             let _ = sender.send(LspEvent::Diagnostics(path, diagnostics));
                         }
@@ -122,6 +136,25 @@ impl LspWorker {
     pub fn poll(&self) -> Vec<LspEvent> {
         self.events.try_iter().collect()
     }
+}
+
+fn answer_server_request(
+    client: &mut GatewayClient,
+    message: &serde_json::Value,
+) -> Result<bool, String> {
+    let Some(id) = message.get("id") else {
+        return Ok(false);
+    };
+    if message.get("method").is_none() {
+        return Ok(false);
+    }
+    let response = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "result": null
+    });
+    send(client, &response)?;
+    Ok(true)
 }
 
 fn send(client: &mut GatewayClient, message: &serde_json::Value) -> Result<(), String> {
@@ -146,6 +179,9 @@ fn wait_initialize(client: &mut GatewayClient) -> Result<(), String> {
         let Some(data) = message.params.get("data") else {
             continue;
         };
+        if answer_server_request(client, data)? {
+            continue;
+        }
         if data.get("id") == Some(&serde_json::json!(1)) {
             return Ok(());
         }
@@ -191,7 +227,7 @@ mod tests {
             let mut connection = listener.accept().expect("accept");
             let hello = receive(&mut connection);
             respond(&mut connection, hello.id.as_deref().expect("id"));
-            for index in 0..4 {
+            for index in 0..5 {
                 let request = receive(&mut connection);
                 respond(&mut connection, request.id.as_deref().expect("id"));
                 if index == 1 {
@@ -208,7 +244,7 @@ mod tests {
                         .send(&serde_json::to_vec(&ready).expect("initialize response"))
                         .expect("send initialize response");
                 }
-                if index == 3 {
+                if index == 4 {
                     let notification = json!({
                         "jsonrpc": "2.0",
                         "method": "lsp.message",
