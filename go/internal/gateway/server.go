@@ -730,7 +730,24 @@ func (s *Server) exec(parent context.Context, req request, state *connectionStat
 	}
 	ctx, cancel := context.WithTimeout(parent, timeout)
 	defer cancel()
-	args := []string{"-workspace", s.cfg.Workspace, "-tool", params.Tool, "--"}
+	home, _ := os.UserHomeDir()
+	var runtimePaths []string
+	var extraEnv []string
+	if home != "" {
+		runtimePaths = append(runtimePaths, filepath.Join(home, ".rustup"), filepath.Join(home, ".cargo"))
+		extraEnv = append(extraEnv,
+			"HOME="+home,
+			"RUSTUP_HOME="+filepath.Join(home, ".rustup"),
+			"CARGO_HOME="+filepath.Join(home, ".cargo"),
+		)
+	}
+	args := []string{
+		"-workspace", s.cfg.Workspace,
+		"-tool", params.Tool,
+		"-runtime-paths", strings.Join(runtimePaths, ","),
+		"-env", strings.Join(extraEnv, ","),
+		"--",
+	}
 	args = append(args, params.Args...)
 	env := []string{}
 	if s.cgroup != "" {
@@ -779,7 +796,24 @@ func (s *Server) lspStart(ctx context.Context, req request, state *connectionSta
 	if err := execpolicy.Validate(params.Tool, params.Args); err != nil {
 		return nil, &rpcError{Code: -32002, Message: "policy denied"}
 	}
-	args := []string{"-workspace", s.cfg.Workspace, "-tool", params.Tool, "--"}
+	home, _ := os.UserHomeDir()
+	var runtimePaths []string
+	var extraEnv []string
+	if home != "" {
+		runtimePaths = append(runtimePaths, filepath.Join(home, ".rustup"), filepath.Join(home, ".cargo"))
+		extraEnv = append(extraEnv,
+			"HOME="+home,
+			"RUSTUP_HOME="+filepath.Join(home, ".rustup"),
+			"CARGO_HOME="+filepath.Join(home, ".cargo"),
+		)
+	}
+	args := []string{
+		"-workspace", s.cfg.Workspace,
+		"-tool", params.Tool,
+		"-runtime-paths", strings.Join(runtimePaths, ","),
+		"-env", strings.Join(extraEnv, ","),
+		"--",
+	}
 	args = append(args, params.Args...)
 	env := []string{}
 	if s.cgroup != "" {

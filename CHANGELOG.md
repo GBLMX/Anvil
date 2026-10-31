@@ -25,10 +25,11 @@ All notable changes to Anvil are recorded here. The format follows
   notifications, and `lsp.crashed` on reader failure. `GatewayClient` exposes
   matching LSP helpers plus blocking notification receive.
 
-- TUI LSP worker on a second authenticated gateway connection; initialize,
-  initialized, didOpen, publishDiagnostics parsing, diagnostics map, and
-  red underlined diagnostic lines. End-to-end rust-analyzer diagnostics remain
-  unverified in the sandbox.
+- TUI LSP worker on a second authenticated gateway connection; initialize
+  response ordering, initialized, didOpen, publishDiagnostics parsing,
+  diagnostics map, and red underlined diagnostic lines. The exec runner can
+  grant read-only rustup/cargo runtime paths and LSP env for rust-analyzer.
+  End-to-end rust-analyzer diagnostics remain unverified in the sandbox.
 
 ## [0.1.1] - 2026-10-31
 
