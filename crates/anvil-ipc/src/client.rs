@@ -4,6 +4,7 @@
 //! implements the chunked file protocol from ADR-0011; it does not fall back to
 //! direct filesystem access.
 
+use std::collections::VecDeque;
 use std::path::Path;
 
 use base64::{Engine as _, engine::general_purpose};
@@ -93,6 +94,7 @@ pub struct GatewayClient {
     connection: Connection,
     next_id: u64,
     poisoned: bool,
+    notifications: VecDeque<Request>,
 }
 
 impl GatewayClient {
@@ -102,6 +104,7 @@ impl GatewayClient {
             connection: Connection::connect(socket)?,
             next_id: 1,
             poisoned: false,
+            notifications: VecDeque::new(),
         };
         client.request(
             "session.hello",
@@ -112,6 +115,12 @@ impl GatewayClient {
             }),
         )?;
         Ok(client)
+    }
+
+    /// Drain server-initiated notifications received while waiting for
+    /// responses.
+    pub fn take_notifications(&mut self) -> Vec<Request> {
+        self.notifications.drain(..).collect()
     }
 
     /// Read at most `max_bytes` from `path` at `offset`.
@@ -271,10 +280,17 @@ impl GatewayClient {
                 pending.push((id, offset, seq));
                 next += 1;
             }
-            let frame = self
-                .connection
-                .recv()?
-                .ok_or(ClientError::Protocol("gateway closed"))?;
+            let frame = loop {
+                let frame = self
+                    .connection
+                    .recv()?
+                    .ok_or(ClientError::Protocol("gateway closed"))?;
+                if let Some(notification) = parse_notification(&frame) {
+                    self.notifications.push_back(notification);
+                    continue;
+                }
+                break frame;
+            };
             if frame.first() == Some(&b'{') {
                 let response: Response = serde_json::from_slice(&frame)?;
                 response.validate()?;
@@ -344,10 +360,17 @@ impl GatewayClient {
                 }),
             )?;
             self.connection.send(chunk)?;
-            let frame = self
-                .connection
-                .recv()?
-                .ok_or(ClientError::Protocol("gateway closed"))?;
+            let frame = loop {
+                let frame = self
+                    .connection
+                    .recv()?
+                    .ok_or(ClientError::Protocol("gateway closed"))?;
+                if let Some(notification) = parse_notification(&frame) {
+                    self.notifications.push_back(notification);
+                    continue;
+                }
+                break frame;
+            };
             if frame.first() == Some(&b'{') {
                 parse_response(&frame, &id)?;
                 return Err(ClientError::Protocol("binary write response expected"));
@@ -387,10 +410,17 @@ impl GatewayClient {
             return Err(ClientError::Protocol("read chunk size"));
         }
         let id = self.send_binary_request(path, offset, max_bytes, seq)?;
-        let frame = self
-            .connection
-            .recv()?
-            .ok_or(ClientError::Protocol("gateway closed"))?;
+        let frame = loop {
+            let frame = self
+                .connection
+                .recv()?
+                .ok_or(ClientError::Protocol("gateway closed"))?;
+            if let Some(notification) = parse_notification(&frame) {
+                self.notifications.push_back(notification);
+                continue;
+            }
+            break frame;
+        };
         if frame.first() == Some(&b'{') {
             let _ = parse_response(&frame, &id)?;
             return Err(ClientError::Protocol("binary frame expected"));
@@ -428,11 +458,17 @@ impl GatewayClient {
         params: serde_json::Value,
     ) -> Result<serde_json::Value, ClientError> {
         let id = self.send_request(method, params)?;
-        let frame = self
-            .connection
-            .recv()?
-            .ok_or(ClientError::Protocol("gateway closed"))?;
-        parse_response(&frame, &id)
+        loop {
+            let frame = self
+                .connection
+                .recv()?
+                .ok_or(ClientError::Protocol("gateway closed"))?;
+            if let Some(notification) = parse_notification(&frame) {
+                self.notifications.push_back(notification);
+                continue;
+            }
+            return parse_response(&frame, &id);
+        }
     }
 
     fn send_binary_request(
@@ -495,6 +531,18 @@ fn parse_binary_frame(frame: &[u8]) -> Result<(u64, u64, ReadChunk), ClientError
             seq,
         },
     ))
+}
+
+fn parse_notification(frame: &[u8]) -> Option<Request> {
+    if frame.first() != Some(&b'{') {
+        return None;
+    }
+    let request: Request = serde_json::from_slice(frame).ok()?;
+    if request.is_notification() && request.validate().is_ok() {
+        Some(request)
+    } else {
+        None
+    }
 }
 
 fn parse_response(frame: &[u8], id: &str) -> Result<serde_json::Value, ClientError> {
@@ -608,6 +656,43 @@ mod tests {
         assert_eq!(chunk.data, b"abc");
         assert_eq!(chunk.next_offset, 3);
         assert!(chunk.eof);
+        server.join().expect("server");
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn queues_server_notifications_before_response() {
+        let path = socket_path("notification");
+        let listener = Listener::bind(&path).expect("bind");
+        let server = thread::spawn(move || {
+            let mut connection = listener.accept().expect("accept");
+            let hello = receive(&mut connection);
+            respond(
+                &mut connection,
+                hello.id.as_deref().expect("id"),
+                json!({"session_id": "test"}),
+            );
+            let read = receive(&mut connection);
+            let notification = json!({
+                "jsonrpc": "2.0",
+                "method": "lsp.diagnostics",
+                "params": {"uri": "file:///a.rs"}
+            });
+            connection
+                .send(&serde_json::to_vec(&notification).expect("notification"))
+                .expect("send");
+            respond(
+                &mut connection,
+                read.id.as_deref().expect("id"),
+                json!({"data": "", "next_offset": 0, "eof": true}),
+            );
+        });
+
+        let mut client = GatewayClient::connect(&path, &[7; 32]).expect("connect");
+        client.read_file("file.txt", 0, 4).expect("read");
+        let notifications = client.take_notifications();
+        assert_eq!(notifications.len(), 1);
+        assert_eq!(notifications[0].method, "lsp.diagnostics");
         server.join().expect("server");
         let _ = fs::remove_file(path);
     }

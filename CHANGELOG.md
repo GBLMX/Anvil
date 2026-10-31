@@ -14,8 +14,12 @@ All notable changes to Anvil are recorded here. The format follows
 - LSP wire foundation: Rust `Content-Length` framed JSON-RPC transport,
   request/notification helpers, `textDocument/publishDiagnostics` parsing, and
   a Go `internal/lsp` framed manager with persistent stdin/stdout pipes and
-  crash/lifecycle primitives. No gateway dispatch, diagnostics UI, or TUI
-  language-server session yet.
+  crash/lifecycle primitives.
+
+- `GatewayClient` now queues interleaved server-initiated JSON-RPC
+  notifications while waiting for a response; binary read/write paths skip
+  notifications instead of desynchronizing. No gateway LSP dispatch, diagnostics
+  UI, or TUI language-server session yet.
 
 ## [0.1.1] - 2026-10-31
 
