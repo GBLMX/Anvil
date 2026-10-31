@@ -6,6 +6,17 @@ All notable changes to Anvil are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.2.7] - 2026-10-31
+
+### Changed
+
+- Split the TUI monolith into `keys`, `render`, `lsp_ui`, and `file_tree_ui`
+  modules. `lib.rs` dropped from 4355 to 2863 lines without behavior changes.
+- LSP settings, completion/hover/definition requests, and file-tree/fuzzy
+  behavior now live at their domain boundaries.
+- Synchronized the Phase 0.7 plan with the implemented Rust/Go/Python LSP and
+  module layout.
+
 ## [0.2.6] - 2026-10-31
 
 ### Changed

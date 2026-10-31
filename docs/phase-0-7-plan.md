@@ -1,8 +1,10 @@
 # 0.1.1 / Phase 0.7 Plan
 
-Status: in progress. `v0.2.0` adds Tab indentation, the workspace tree, fuzzy file finding, and trusted LSP diagnostics;
-plugin-host is an empty sandboxed process (no VM), and syntax highlighting is
-asynchronous but not incremental.
+Status: in progress. `v0.2.6` has trusted LSP diagnostics, completion, hover, and
+definition for Rust/Go/Python, an async tree/fuzzy worker, and a split TUI
+(`keys`, `render`, `lsp_ui`, `file_tree_ui`). Plugin-host remains an empty
+sandboxed process (no VM); syntax highlighting is asynchronous but not
+incremental.
 
 ## Priorities
 
@@ -60,8 +62,9 @@ Required outcome:
 
 - Rust LSP wire codec/diagnostics, Go `internal/lsp` manager, gateway
   `lsp.start/send/stop` routes, and client notification queuing are implemented.
-  TUI worker, diagnostics rendering, and end-to-end rust-analyzer validation
-  remain pending.
+  TUI worker, diagnostics, completion, hover, and definition are implemented and
+  validated against rust-analyzer, gopls, and pyright. Code Actions, Rename,
+  Formatting, and Document Symbols remain for the next tier.
 - Per-workspace language-server lifecycle; no server is started until a
   matching buffer is opened.
 - Diagnostics, hover, definition, and completion are opt-in and cancellable.
