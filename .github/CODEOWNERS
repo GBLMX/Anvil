@@ -1,0 +1,19 @@
+# Review routing. The maintainer list lives in MAINTAINERS.md.
+
+* @GBLMX
+
+/.github/ @GBLMX
+/GOVERNANCE.md @GBLMX
+/MAINTAINERS.md @GBLMX
+/RELEASE.md @GBLMX
+/SECURITY.md @GBLMX
+/SUPPORT.md @GBLMX
+
+/crates/anvil-api/ @GBLMX
+/crates/anvil-core/ @GBLMX
+/crates/anvil-editor/ @GBLMX
+/crates/anvil-ipc/ @GBLMX
+/crates/anvil-plugin-host/ @GBLMX
+/crates/anvil-tui/ @GBLMX
+/go/ @GBLMX
+/docs/adr/ @GBLMX

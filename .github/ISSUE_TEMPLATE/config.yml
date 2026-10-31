@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/GBLMX/Anvil/security/advisories/new
+    about: Do not open a public issue for vulnerabilities; use private reporting.
+  - name: Read the contribution guide
+    url: https://github.com/GBLMX/Anvil/blob/main/CONTRIBUTING.md
+    about: Required checks, architecture reading, and DCO sign-off.
+  - name: Read the architecture and ADRs
+    url: https://github.com/GBLMX/Anvil/tree/main/docs
+    about: Check the documented boundary before proposing a structural change.

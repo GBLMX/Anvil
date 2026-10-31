@@ -239,6 +239,9 @@ Dates are planning estimates, not release commitments.
 ## 13. Governance
 
 - Architecture decisions are recorded in `docs/adr/`.
+- Roles, decision making, and maintainer changes are defined in
+  [GOVERNANCE.md](GOVERNANCE.md); review ownership is in
+  [.github/CODEOWNERS](.github/CODEOWNERS).
 - Plugin API versions independently from the editor binary.
 - Breaking plugin API changes require at least six months or two minor versions
   of notice, whichever is longer.

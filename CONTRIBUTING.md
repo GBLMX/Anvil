@@ -55,7 +55,7 @@ Do not introduce a new native dependency without an ADR.
 
 ## Required checks
 
-Once code exists, a pull request must pass:
+A pull request must pass:
 
 ```bash
 cargo fmt --all -- --check
@@ -77,7 +77,7 @@ govulncheck ./...
 ```
 
 Security and performance changes also need the relevant fixtures under
-`crates/anvil-test/`.
+`crates/*/benches` or the crate's integration tests.
 
 ## Pull requests
 
@@ -100,6 +100,14 @@ feat(gateway): add openat2 workspace resolver
 fix(plugin-host): reject native module loading
 test(exec): cover symlink race in rg
 ```
+
+## Project process
+
+- [Governance](GOVERNANCE.md)
+- [Maintainers and review ownership](MAINTAINERS.md)
+- [Release process](RELEASE.md)
+- [Support policy](SUPPORT.md)
+- [Roadmap](ROADMAP.md)
 
 ## Security reports
 
