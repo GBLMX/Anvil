@@ -2,7 +2,8 @@
 
 Status: in progress inside the [Polish & Specification release train](polish-and-specification.md).
 `v0.3.0` has trusted LSP diagnostics, completion, hover, definition, rename,
-Code Actions, formatting, and document symbols for Rust/Go/Python, an async
+Code Actions, formatting, and document symbols for Rust, Go, Python,
+TypeScript/JavaScript, C/C++, Java, Lua, JSON, YAML, and shell files, an async
 tree/fuzzy worker, and a split TUI (`keys`, `render`, `lsp_ui`,
 `file_tree_ui`). Plugin-host remains an empty sandboxed process (no VM); syntax
 highlighting is asynchronous but not incremental.

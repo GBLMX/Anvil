@@ -12,6 +12,52 @@ All notable changes to Anvil are recorded here. The format follows
   documentation, and contract closure only; no new capability families. See
   [the release policy](docs/polish-and-specification.md).
 
+### Added
+
+- Opt-in PGO and BOLT workflow: `scripts/pgo-bolt.sh` builds instrumented and
+  profile-use binaries, records a PTY workload, and supports post-link BOLT
+  profiles via `perf2bolt`; no default release or CI behavior changes.
+- Vertical two-pane splits with `Ctrl-w v`, `Ctrl-w h/l` focus switching, and
+  `Ctrl-w q` close; each pane keeps its own cursor, scroll, and buffer.
+- Multi-selection core: atomic multi-range transactions, `s` word-occurrence
+  selection, `Alt-s` line-cursor splitting, `C`/`Alt-C` cursor extension, and
+  secondary-caret rendering.
+- Space which-key overlay and indentation guides with current-block
+  highlighting.
+- Signature Help requests after `(`/`,` with a reusable popup, cancellation,
+  and stale response checks.
+- Workspace Symbols (`Space S`) with client-side filtering and cross-file
+  navigation.
+- Built-in LSP settings for TypeScript/JavaScript, C/C++, Java, Lua,
+  JSON/JSONC, YAML, and shell files, with per-language root markers, arguments,
+  and environment overrides.
+- LSP initialize errors are surfaced in the status bar instead of being treated
+  as a generic crash; `jdtls` shows an indexing-workspace startup hint.
+
+### Fixed
+
+- Upgraded the Go module and CI toolchain to Go 1.26.10 and `golang.org/x/sys`
+  to v0.44.0, resolving the 45 standard-library vulnerabilities reported by
+  `govulncheck` against Go 1.22.3 and the remaining module advisory; CI now
+  runs a pinned `govulncheck` v1.9.0 vulnerability scan.
+- Rename, Code Action, and Formatting responses are ignored when the active
+  path or editor revision changed after the request, preventing stale edits
+  from being applied to a different or newer buffer.
+- Document-symbol traversal is bounded to 64 levels and 4096 items so malformed
+  or adversarial symbol trees cannot exhaust the editor stack or memory.
+- Gateway file reads, directory listings, and stats now open with
+  `O_NONBLOCK`, so a workspace FIFO cannot block the gateway or editor.
+- File permissions now require both the requested path and its resolved
+  symlink target to match the granted subtree, preventing a link inside an
+  allowed path from exposing a workspace file outside that grant.
+- The `e2e_edit` performance harness now compiles again through a
+  feature-gated scroll helper, so 100 MB end-to-end measurements can run.
+- Added pinned `golangci-lint` v2.15.0 to CI with the standard linters and
+  intentional deferred-close exclusions; fixed the remaining errcheck and
+  staticcheck findings.
+- Bounded the seccomp program instruction count before converting it to
+  `uint16`, with a regression test for oversized programs.
+
 ## [0.3.0] - 2026-10-31
 
 ### Added

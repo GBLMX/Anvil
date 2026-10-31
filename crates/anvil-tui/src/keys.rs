@@ -122,6 +122,16 @@ fn handle_key(model: &mut Model, key: KeyEvent) {
             return;
         }
         let count = model.take_count();
+        if pending == 'w' {
+            match key.code {
+                KeyCode::Char('v') => model.split_vertical(),
+                KeyCode::Char('h') => model.focus_split(false),
+                KeyCode::Char('l') => model.focus_split(true),
+                KeyCode::Char('q') => model.close_split(),
+                _ => {}
+            }
+            return;
+        }
         if pending == ' ' {
             match key.code {
                 KeyCode::Char('e') => model.open_tree(),
@@ -129,6 +139,7 @@ fn handle_key(model: &mut Model, key: KeyEvent) {
                 KeyCode::Char('r') => model.start_rename(),
                 KeyCode::Char('a') => model.request_code_actions(),
                 KeyCode::Char('s') => model.request_document_symbols(),
+                KeyCode::Char('S') => model.request_workspace_symbols(),
                 KeyCode::Char('F') => model.request_formatting(),
                 _ => {}
             }
@@ -176,6 +187,48 @@ fn handle_key(model: &mut Model, key: KeyEvent) {
             _ => {}
         }
         return;
+    }
+
+    if model.workspace_symbols.is_some() {
+        let consumed = match key.code {
+            KeyCode::Esc => {
+                model.cancel_workspace_symbols();
+                true
+            }
+            KeyCode::Up => {
+                model.move_workspace_symbol(-1);
+                true
+            }
+            KeyCode::Down => {
+                model.move_workspace_symbol(1);
+                true
+            }
+            KeyCode::Enter => {
+                model.apply_workspace_symbol();
+                true
+            }
+            KeyCode::Backspace => {
+                if let Some(symbols) = model.workspace_symbols.as_mut() {
+                    symbols.query.pop();
+                }
+                model.filter_workspace_symbols();
+                true
+            }
+            KeyCode::Char(character) if !control => {
+                if let Some(symbols) = model.workspace_symbols.as_mut() {
+                    symbols.query.push(character);
+                }
+                model.filter_workspace_symbols();
+                true
+            }
+            _ => {
+                model.cancel_workspace_symbols();
+                false
+            }
+        };
+        if consumed {
+            return;
+        }
     }
 
     if model.document_symbols.is_some() {
@@ -376,6 +429,7 @@ fn handle_key(model: &mut Model, key: KeyEvent) {
         InputMode::Insert => match key.code {
             KeyCode::Esc => {
                 model.cancel_completion();
+                model.cancel_signature_help();
                 model.input_mode = InputMode::Normal;
                 model.dirty = true;
             }
@@ -424,6 +478,14 @@ fn handle_key(model: &mut Model, key: KeyEvent) {
                 model.macro_wait = Some('@');
                 model.dirty = true;
             }
+            KeyCode::Char('s') if key.modifiers.contains(crossterm::event::KeyModifiers::ALT) => {
+                model.split_selection_lines();
+            }
+            KeyCode::Char('s') if !control => model.select_word_occurrences(),
+            KeyCode::Char('C') if key.modifiers.contains(crossterm::event::KeyModifiers::ALT) => {
+                model.extend_line_cursor(true);
+            }
+            KeyCode::Char('C') if !control => model.extend_line_cursor(false),
             KeyCode::Char('i') => model.insert_here(),
             KeyCode::Char(':') => {
                 model.input_mode = InputMode::CommandLine {
@@ -463,6 +525,10 @@ fn handle_key(model: &mut Model, key: KeyEvent) {
                 model.push_count(character);
             }
             KeyCode::Char('0') if !control && model.count == 0 => model.move_home(),
+            KeyCode::Char('w') if control => {
+                model.pending = Some('w');
+                model.dirty = true;
+            }
             KeyCode::Char('w') if !control => model.move_words(WordMotion::NextStart),
             KeyCode::Char('b') if !control => model.move_words(WordMotion::PreviousStart),
             KeyCode::Char('e') if !control => model.move_words(WordMotion::End),

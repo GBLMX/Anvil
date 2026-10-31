@@ -2,7 +2,8 @@
 
 use super::{
     CodeActionItem, CodeActionState, CompletionItem, CompletionState, InputMode, LspRequestKind,
-    Model, SymbolItem, SymbolState, WorkspaceEdit,
+    Model, SignatureHelpState, SignatureItem, SymbolItem, SymbolState, WorkspaceEdit,
+    WorkspaceSymbolItem, WorkspaceSymbolState,
 };
 use crate::{lsp, lsp_worker};
 use anvil_core::TextBuffer;
@@ -51,6 +52,121 @@ pub(crate) fn lsp_settings(path: &Path) -> Option<LspSettings> {
             ],
             "python language server",
             "ANVIL_LSP_PYTHON",
+        ),
+        "ts" | "mts" | "cts" => (
+            vec!["typescript-language-server", "vtsls"],
+            vec!["--stdio".to_owned()],
+            "typescript",
+            vec!["tsconfig.json", "jsconfig.json", "package.json"],
+            "typescript language server",
+            "ANVIL_LSP_TYPESCRIPT",
+        ),
+        "tsx" => (
+            vec!["typescript-language-server", "vtsls"],
+            vec!["--stdio".to_owned()],
+            "typescriptreact",
+            vec!["tsconfig.json", "jsconfig.json", "package.json"],
+            "typescript language server",
+            "ANVIL_LSP_TYPESCRIPT",
+        ),
+        "js" | "mjs" | "cjs" => (
+            vec!["typescript-language-server", "vtsls"],
+            vec!["--stdio".to_owned()],
+            "javascript",
+            vec!["tsconfig.json", "jsconfig.json", "package.json"],
+            "typescript language server",
+            "ANVIL_LSP_TYPESCRIPT",
+        ),
+        "jsx" => (
+            vec!["typescript-language-server", "vtsls"],
+            vec!["--stdio".to_owned()],
+            "javascriptreact",
+            vec!["tsconfig.json", "jsconfig.json", "package.json"],
+            "typescript language server",
+            "ANVIL_LSP_TYPESCRIPT",
+        ),
+        "c" | "h" => (
+            vec!["clangd"],
+            Vec::new(),
+            "c",
+            vec![
+                "compile_commands.json",
+                "compile_flags.txt",
+                ".clangd",
+                "CMakeLists.txt",
+                "Makefile",
+            ],
+            "clangd",
+            "ANVIL_LSP_CLANGD",
+        ),
+        "cc" | "cpp" | "cxx" | "hpp" | "hh" | "hxx" => (
+            vec!["clangd"],
+            Vec::new(),
+            "cpp",
+            vec![
+                "compile_commands.json",
+                "compile_flags.txt",
+                ".clangd",
+                "CMakeLists.txt",
+                "Makefile",
+            ],
+            "clangd",
+            "ANVIL_LSP_CLANGD",
+        ),
+        "java" => (
+            vec!["jdtls"],
+            Vec::new(),
+            "java",
+            vec![
+                "pom.xml",
+                "build.gradle",
+                "build.gradle.kts",
+                "settings.gradle",
+                "settings.gradle.kts",
+                "gradlew",
+            ],
+            "jdtls",
+            "ANVIL_LSP_JAVA",
+        ),
+        "lua" => (
+            vec!["lua-language-server"],
+            Vec::new(),
+            "lua",
+            vec![".luarc.json", ".luarc.jsonc", ".stylua.toml", "selene.toml"],
+            "lua-language-server",
+            "ANVIL_LSP_LUA",
+        ),
+        "json" => (
+            vec!["vscode-json-language-server", "json-languageserver"],
+            vec!["--stdio".to_owned()],
+            "json",
+            vec!["package.json", "tsconfig.json", "jsconfig.json"],
+            "json language server",
+            "ANVIL_LSP_JSON",
+        ),
+        "jsonc" => (
+            vec!["vscode-json-language-server", "json-languageserver"],
+            vec!["--stdio".to_owned()],
+            "jsonc",
+            vec!["package.json", "tsconfig.json", "jsconfig.json"],
+            "json language server",
+            "ANVIL_LSP_JSON",
+        ),
+        "yaml" | "yml" => (
+            vec!["yaml-language-server"],
+            vec!["--stdio".to_owned()],
+            "yaml",
+            vec![".yamllint", ".yamllint.yaml", ".yamllint.yml", "Chart.yaml"],
+            "yaml-language-server",
+            "ANVIL_LSP_YAML",
+        ),
+        "sh" | "bash" | "zsh" => (
+            vec!["bash-language-server"],
+            vec!["start".to_owned()],
+            "shellscript",
+            vec![".shellcheckrc", ".bashrc", ".zshrc"],
+            "bash-language-server",
+            "ANVIL_LSP_SHELL",
         ),
         _ => return None,
     };
@@ -139,6 +255,9 @@ fn hover_text(value: &serde_json::Value) -> String {
     }
 }
 
+const MAX_SYMBOL_DEPTH: usize = 64;
+const MAX_SYMBOLS: usize = 4096;
+
 fn symbols_from_lsp(items: &[serde_json::Value]) -> Vec<SymbolItem> {
     let mut symbols = Vec::new();
     collect_symbols(items, 0, &mut symbols);
@@ -146,7 +265,13 @@ fn symbols_from_lsp(items: &[serde_json::Value]) -> Vec<SymbolItem> {
 }
 
 fn collect_symbols(items: &[serde_json::Value], depth: usize, symbols: &mut Vec<SymbolItem>) {
+    if depth > MAX_SYMBOL_DEPTH || symbols.len() >= MAX_SYMBOLS {
+        return;
+    }
     for item in items {
+        if symbols.len() >= MAX_SYMBOLS {
+            break;
+        }
         let Some(name) = item.get("name").and_then(serde_json::Value::as_str) else {
             continue;
         };
@@ -209,7 +334,7 @@ impl Model {
         Some((position.line as u64, character as u64))
     }
 
-    fn send_lsp_request(
+    pub(crate) fn send_lsp_request(
         &mut self,
         kind: LspRequestKind,
         method: &str,
@@ -237,6 +362,17 @@ impl Model {
             return false;
         }
         self.pending_lsp.insert(id, kind);
+        if matches!(
+            kind,
+            LspRequestKind::Rename
+                | LspRequestKind::CodeAction
+                | LspRequestKind::Formatting
+                | LspRequestKind::SignatureHelp
+        ) {
+            self.pending_edit_revision
+                .insert(id, self.editor.revision());
+            self.pending_edit_path.insert(id, path);
+        }
         true
     }
 
@@ -329,6 +465,61 @@ impl Model {
         }
     }
 
+    pub(crate) fn clear_lsp_requests(&mut self) {
+        self.pending_lsp.clear();
+        self.pending_edit_revision.clear();
+        self.pending_edit_path.clear();
+        self.signature_help = None;
+        self.workspace_symbols = None;
+        self.inlay_hints.clear();
+        self.inlay_pending = None;
+        self.inlay_checked = None;
+        self.dirty = true;
+    }
+
+    pub(crate) fn cancel_signature_help(&mut self) {
+        self.pending_lsp
+            .retain(|_, kind| *kind != LspRequestKind::SignatureHelp);
+        self.signature_help = None;
+        self.prune_edit_requests();
+        self.dirty = true;
+    }
+
+    pub(crate) fn request_signature_help(&mut self, trigger: char) {
+        self.cancel_completion();
+        self.cancel_code_actions();
+        self.cancel_document_symbols();
+        self.cancel_signature_help();
+        self.hover = None;
+        self.diagnostic_popup = None;
+        let Some(uri) = self.path.as_ref().map(|path| lsp_worker::file_uri(path)) else {
+            return;
+        };
+        let Some((line, character)) = self.lsp_position() else {
+            return;
+        };
+        let params = serde_json::json!({
+            "textDocument": {"uri": uri},
+            "position": {"line": line, "character": character},
+            "context": {"triggerKind": 2, "triggerCharacter": trigger.to_string()}
+        });
+        if self.send_lsp_request(
+            LspRequestKind::SignatureHelp,
+            "textDocument/signatureHelp",
+            params,
+        ) {
+            self.status = "signature".to_owned();
+        }
+        self.dirty = true;
+    }
+
+    fn prune_edit_requests(&mut self) {
+        let pending: Vec<u64> = self.pending_lsp.keys().copied().collect();
+        self.pending_edit_revision
+            .retain(|id, _| pending.contains(id));
+        self.pending_edit_path.retain(|id, _| pending.contains(id));
+    }
+
     pub(crate) fn cancel_completion(&mut self) {
         self.pending_lsp
             .retain(|_, kind| *kind != LspRequestKind::Completion);
@@ -343,6 +534,7 @@ impl Model {
                 LspRequestKind::CodeAction | LspRequestKind::DocumentSymbol
             )
         });
+        self.prune_edit_requests();
         self.code_actions = None;
         self.document_symbols = None;
         self.dirty = true;
@@ -517,6 +709,149 @@ impl Model {
         self.dirty = true;
     }
 
+    pub(crate) fn cancel_workspace_symbols(&mut self) {
+        self.pending_lsp
+            .retain(|_, kind| *kind != LspRequestKind::WorkspaceSymbol);
+        self.workspace_symbols = None;
+        self.prune_edit_requests();
+        self.dirty = true;
+    }
+
+    pub(crate) fn request_workspace_symbols(&mut self) {
+        self.cancel_completion();
+        self.cancel_code_actions();
+        self.cancel_document_symbols();
+        self.cancel_workspace_symbols();
+        self.hover = None;
+        self.diagnostic_popup = None;
+        let Some(path) = self.path.as_ref() else {
+            return;
+        };
+        let params = serde_json::json!({"query": ""});
+        let _ = path;
+        if self.send_lsp_request(LspRequestKind::WorkspaceSymbol, "workspace/symbol", params) {
+            self.status = "workspace symbols".to_owned();
+        }
+        self.dirty = true;
+    }
+
+    pub(crate) fn move_workspace_symbol(&mut self, delta: isize) {
+        if let Some(symbols) = self.workspace_symbols.as_mut() {
+            symbols.selected = symbols
+                .selected
+                .saturating_add_signed(delta)
+                .min(symbols.filtered.len().saturating_sub(1));
+            self.dirty = true;
+        }
+    }
+
+    pub(crate) fn filter_workspace_symbols(&mut self) {
+        if let Some(symbols) = self.workspace_symbols.as_mut() {
+            let query = symbols.query.to_lowercase();
+            symbols.filtered = symbols
+                .items
+                .iter()
+                .enumerate()
+                .filter(|(_, item)| {
+                    item.name.to_lowercase().contains(&query)
+                        || item.detail.to_lowercase().contains(&query)
+                        || item.path.to_string_lossy().to_lowercase().contains(&query)
+                })
+                .map(|(index, _)| index)
+                .collect();
+            symbols.selected = symbols
+                .selected
+                .min(symbols.filtered.len().saturating_sub(1));
+            self.dirty = true;
+        }
+    }
+
+    pub(crate) fn apply_workspace_symbol(&mut self) {
+        let Some(symbols) = self.workspace_symbols.take() else {
+            return;
+        };
+        let Some(symbol) = symbols
+            .filtered
+            .get(symbols.selected)
+            .and_then(|index| symbols.items.get(*index))
+            .cloned()
+        else {
+            return;
+        };
+        if self.path.as_ref() != Some(&symbol.path)
+            && let Err(error) = self.open_path(&symbol.path)
+        {
+            self.status = format!("E: {error}");
+            self.dirty = true;
+            return;
+        }
+        self.cursor = self.offset_at_utf16(symbol.line, symbol.character);
+        self.status = format!("symbol {}", symbol.name);
+        self.dirty = true;
+    }
+
+    fn apply_workspace_symbols_response(&mut self, result: &serde_json::Value) {
+        let Some(items) = result.as_array() else {
+            self.status = "lsp: no workspace symbols".to_owned();
+            self.workspace_symbols = None;
+            return;
+        };
+        let mut parsed = Vec::new();
+        for item in items {
+            let Some(name) = item.get("name").and_then(serde_json::Value::as_str) else {
+                continue;
+            };
+            let Some(location) = item.get("location") else {
+                continue;
+            };
+            let Some(uri) = location.get("uri").and_then(serde_json::Value::as_str) else {
+                continue;
+            };
+            let Some(path) = lsp::uri_to_path(uri) else {
+                continue;
+            };
+            let range = location.get("range").or_else(|| item.get("range"));
+            let Some(start) = range
+                .and_then(|range| range.get("start"))
+                .and_then(serde_json::Value::as_object)
+            else {
+                continue;
+            };
+            let line = start
+                .get("line")
+                .and_then(serde_json::Value::as_u64)
+                .unwrap_or(0) as usize;
+            let character = start
+                .get("character")
+                .and_then(serde_json::Value::as_u64)
+                .unwrap_or(0) as usize;
+            let detail = item
+                .get("containerName")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or_default()
+                .to_owned();
+            parsed.push(WorkspaceSymbolItem {
+                name: name.to_owned(),
+                detail,
+                path,
+                line,
+                character,
+            });
+        }
+        if parsed.is_empty() {
+            self.status = "lsp: no workspace symbols".to_owned();
+            self.workspace_symbols = None;
+        } else {
+            self.workspace_symbols = Some(WorkspaceSymbolState {
+                filtered: (0..parsed.len()).collect(),
+                items: parsed,
+                query: String::new(),
+                selected: 0,
+            });
+            self.status = "workspace symbols".to_owned();
+        }
+    }
+
     pub(crate) fn request_document_symbols(&mut self) {
         self.cancel_completion();
         self.cancel_code_actions();
@@ -563,11 +898,15 @@ impl Model {
         self.cancel_completion();
         self.cancel_code_actions();
         self.cancel_document_symbols();
+        self.pending_lsp
+            .retain(|_, kind| *kind != LspRequestKind::Formatting);
+        self.prune_edit_requests();
         self.hover = None;
         self.diagnostic_popup = None;
-        let Some(uri) = self.path.as_ref().map(|path| lsp_worker::file_uri(path)) else {
+        let Some(path) = self.path.clone() else {
             return;
         };
+        let uri = lsp_worker::file_uri(&path);
         let params = serde_json::json!({
             "textDocument": {"uri": uri},
             "options": {"tabSize": 4, "insertSpaces": true}
@@ -673,14 +1012,59 @@ impl Model {
         }
     }
 
-    fn apply_formatting_response(&mut self, result: &serde_json::Value) {
+    fn apply_signature_help_response(&mut self, result: &serde_json::Value) {
+        let Some(signatures) = result
+            .get("signatures")
+            .and_then(serde_json::Value::as_array)
+        else {
+            self.status = "lsp: no signature".to_owned();
+            self.signature_help = None;
+            return;
+        };
+        let signatures: Vec<SignatureItem> = signatures
+            .iter()
+            .filter_map(|signature| {
+                let label = signature
+                    .get("label")
+                    .and_then(serde_json::Value::as_str)?
+                    .to_owned();
+                let documentation = signature
+                    .get("documentation")
+                    .map(hover_text)
+                    .unwrap_or_default();
+                Some(SignatureItem {
+                    label,
+                    documentation,
+                })
+            })
+            .collect();
+        if signatures.is_empty() {
+            self.status = "lsp: no signature".to_owned();
+            self.signature_help = None;
+            return;
+        }
+        let active_signature = result
+            .get("activeSignature")
+            .and_then(serde_json::Value::as_u64)
+            .unwrap_or(0) as usize;
+        let active_parameter = result
+            .get("activeParameter")
+            .and_then(serde_json::Value::as_u64)
+            .unwrap_or(0) as usize;
+        self.signature_help = Some(SignatureHelpState {
+            active_signature: active_signature.min(signatures.len() - 1),
+            active_parameter,
+            signatures,
+        });
+        self.status = "signature".to_owned();
+    }
+
+    fn apply_formatting_response(&mut self, result: &serde_json::Value, path: &Path) {
         if result.is_null() || result.as_array().is_some_and(Vec::is_empty) {
             self.status = "lsp: no formatting changes".to_owned();
             return;
         }
-        let Some(uri) = self.path.as_ref().map(|path| lsp_worker::file_uri(path)) else {
-            return;
-        };
+        let uri = lsp_worker::file_uri(path);
         let changes = serde_json::json!({"changes": {uri: result.clone()}});
         match WorkspaceEdit::from_lsp(&changes).and_then(|edit| edit.apply(self)) {
             Ok(()) => self.status = "formatted".to_owned(),
@@ -697,8 +1081,36 @@ impl Model {
         let Some(kind) = self.pending_lsp.remove(&id) else {
             return;
         };
+        let edit_revision = self.pending_edit_revision.remove(&id);
+        let edit_path = self.pending_edit_path.remove(&id);
         if let Some(error) = error {
             self.status = format!("E: lsp: {error}");
+            self.dirty = true;
+            return;
+        }
+        if matches!(
+            kind,
+            LspRequestKind::Rename
+                | LspRequestKind::CodeAction
+                | LspRequestKind::Formatting
+                | LspRequestKind::SignatureHelp
+        ) && edit_revision.is_some_and(|revision| revision != self.editor.revision())
+        {
+            self.status = "lsp: stale edit response ignored".to_owned();
+            self.dirty = true;
+            return;
+        }
+        if matches!(
+            kind,
+            LspRequestKind::Rename
+                | LspRequestKind::CodeAction
+                | LspRequestKind::Formatting
+                | LspRequestKind::SignatureHelp
+        ) && edit_path
+            .as_ref()
+            .is_some_and(|path| self.path.as_ref() != Some(path))
+        {
+            self.status = "lsp: edit response for inactive buffer".to_owned();
             self.dirty = true;
             return;
         }
@@ -717,7 +1129,18 @@ impl Model {
                 }
             }
             LspRequestKind::CodeAction => self.apply_code_action_response(&result),
-            LspRequestKind::Formatting => self.apply_formatting_response(&result),
+            LspRequestKind::SignatureHelp => self.apply_signature_help_response(&result),
+            LspRequestKind::WorkspaceSymbol => {
+                self.apply_workspace_symbols_response(&result);
+            }
+            LspRequestKind::InlayHint => self.apply_inlay_hints_response(id, &result),
+            LspRequestKind::Formatting => {
+                let Some(path) = edit_path.or_else(|| self.path.clone()) else {
+                    self.status = "lsp: no formatting path".to_owned();
+                    return;
+                };
+                self.apply_formatting_response(&result, &path);
+            }
             LspRequestKind::DocumentSymbol => self.apply_document_symbols_response(&result),
         }
         self.dirty = true;

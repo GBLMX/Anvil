@@ -167,13 +167,16 @@ filesystem/network I/O on behalf of a plugin.
 - The snapshot contains shared `Arc<TextDocument>` and `Arc<LineIndex>` plus
   viewport/selection/revision and the session `interaction_mode`. It must not
   clone 100 MB of text per frame.
-- Phase 0 has exactly one native interaction model: selection-first. A caret is
-  an empty selection; there is no operator-pending state in the core.
-- Motions and actions are native core semantics. Keymaps are Lua/TS plugins and
-  only bind input to core commands; they do not define word boundaries or undo
-  grouping.
-- A future Vim adapter may add an operator-pending layer above the native
-  actions. It must not replace the action engine.
+- Phase 0's core has exactly one native interaction model: selection-first. A
+  caret is an empty selection; there is no operator-pending state in the core.
+- Motions and actions are native core semantics. The target keymap layer is
+  Lua/TS plugins that only bind input to core commands; they do not define word
+  boundaries or undo grouping.
+- The current TUI has an interim Vim-like keymap in Rust. Its input states and
+  pending-key fields are a UI adapter over core actions, not a second native
+  editing model.
+- A future plugin/Vim adapter may add an operator-pending layer above the
+  native actions. It must not replace the action engine.
 - `interaction_mode` is session state, not process-global state. The plugin API
   returns it in `editor.get_view` and changes it with `editor.set_mode`. Phase 0
   accepts only `select`; unknown modes are rejected.
@@ -202,23 +205,30 @@ gate.
 
 ## 6. Build and packaging
 
-Proposed workspace:
+The kernel/distribution boundary is defined in
+[ADR-0013](adr/0013-kernel-distribution-boundary.md); no kernel API is frozen
+yet.
 
 ```text
 crates/
-  anvil-core/          text model, commands, snapshots
-  anvil-tui/           terminal frontend
-  anvil-ipc/           UDS transport, JSON-RPC framing
   anvil-api/           public Rust types, schema, generated stubs
-  anvil-test/          security and performance harnesses
-  anvil-exec-runner/   sandboxed launcher for rg/fd
-plugin-host/           Lua/QuickJS host + sandbox
-go/                    Go module: cmd/anvil-gateway, internal/{policy,mediation,audit}
+  anvil-core/          text model, commands, snapshots
+  anvil-editor/        selection-first editor state and snapshots
+  anvil-ipc/           UDS transport, JSON-RPC framing
+  anvil-plugin-host/   Lua/QuickJS host and sandbox
+  anvil-tui/           terminal frontend
+go/
+  cmd/anvil-gateway/   gateway entry point
+  cmd/anvil-exec-runner/
+  internal/            gateway, LSP, fetch, policy, fsroot, execrunner
+go.mod                 Go module at the repository root
 docs/
 ```
 
-- Rust toolchain and Go toolchain are pinned.
-- `cargo-deny` and Go license checks are CI gates.
+- Rust is pinned by `rust-toolchain.toml`; Go requires 1.26.10 or newer, and
+  CI installs the exact version from the root `go.mod`.
+- `cargo-deny` is a CI gate. Go vulnerability scanning is a CI gate; a Go
+  license gate is not implemented yet.
 - The gateway and editor are packaged together but versioned independently.
 - No gateway is installed as a global service; it is per session.
 
@@ -242,7 +252,8 @@ docs/
 - No shell/pipeline execution in v1.
 - No native Lua C modules in v1.
 - No claim of cross-platform sandbox parity.
-- No operator-pending state in the Phase 0 core.
+- No operator-pending state in the Phase 0 core. The interim TUI keymap's
+  pending-key handling is adapter state, not a core editing mode.
 - No plugin-defined motion or action semantics in v1.
 
 ## 9. Open questions

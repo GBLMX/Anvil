@@ -24,7 +24,7 @@ impl Model {
 
     pub(crate) fn load_buffer(&mut self, index: usize) {
         self.cancel_completion();
-        self.pending_lsp.clear();
+        self.clear_lsp_requests();
         self.hover = None;
         self.diagnostic_popup = None;
         self.code_actions = None;
@@ -145,6 +145,7 @@ impl Model {
 
     pub(crate) fn any_modified(&self) -> bool {
         self.modified
+            || self.split.as_ref().is_some_and(|pane| pane.buffer.modified)
             || self
                 .buffers
                 .iter()

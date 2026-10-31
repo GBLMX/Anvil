@@ -111,24 +111,172 @@ fn fuzzy_filters_workspace_files() {
 }
 
 #[test]
-fn lsp_settings_cover_rust_go_and_python() {
+fn lsp_settings_cover_builtin_languages() {
+    for (path, language) in [
+        ("main.rs", "rust"),
+        ("main.go", "go"),
+        ("main.py", "python"),
+        ("main.ts", "typescript"),
+        ("main.tsx", "typescriptreact"),
+        ("main.js", "javascript"),
+        ("main.jsx", "javascriptreact"),
+        ("main.c", "c"),
+        ("main.cpp", "cpp"),
+        ("main.h", "c"),
+        ("main.java", "java"),
+        ("main.lua", "lua"),
+        ("main.json", "json"),
+        ("main.jsonc", "jsonc"),
+        ("main.yaml", "yaml"),
+        ("main.yml", "yaml"),
+        ("main.sh", "shellscript"),
+    ] {
+        assert_eq!(
+            lsp_settings(Path::new(path))
+                .unwrap_or_else(|| panic!("missing settings for {path}"))
+                .language_id,
+            language,
+            "{path}"
+        );
+    }
     assert_eq!(
-        lsp_settings(Path::new("main.rs"))
-            .expect("rust")
-            .language_id,
-        "rust"
+        lsp_settings(Path::new("main.ts")).expect("typescript").args,
+        vec!["--stdio"]
     );
     assert_eq!(
-        lsp_settings(Path::new("main.go")).expect("go").language_id,
-        "go"
-    );
-    assert_eq!(
-        lsp_settings(Path::new("main.py"))
-            .expect("python")
-            .language_id,
-        "python"
+        lsp_settings(Path::new("main.sh")).expect("shell").args,
+        vec!["start"]
     );
     assert!(lsp_settings(Path::new("README.md")).is_none());
+}
+
+#[test]
+fn renders_two_split_panes() {
+    let mut model = Model::new(EditorState::from_text("alpha\nbeta\ngamma"), None);
+    model.split_vertical();
+    let backend = TestBackend::new(60, 10);
+    let mut terminal = Terminal::new(backend).expect("terminal");
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+    let buffer = terminal.backend().buffer();
+    let rendered = buffer
+        .content()
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect::<String>();
+    assert!(rendered.matches("alpha").count() >= 2, "{rendered}");
+}
+
+#[test]
+fn split_panes_hold_different_buffers() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let left = dir.path().join("left.txt");
+    let right = dir.path().join("right.txt");
+    std::fs::write(&left, "left text").expect("write left");
+    std::fs::write(&right, "right text").expect("write right");
+    let mut model = Model::new(EditorState::from_text("scratch"), None);
+    model.open_path(&left).expect("open left");
+    model.split_vertical();
+    model.focus_split(true);
+    model.open_path(&right).expect("open right");
+    assert_eq!(
+        model
+            .editor
+            .text()
+            .slice(0..model.editor.text().len_bytes()),
+        "right text"
+    );
+    model.focus_split(false);
+    assert_eq!(
+        model
+            .editor
+            .text()
+            .slice(0..model.editor.text().len_bytes()),
+        "left text"
+    );
+    model.focus_split(true);
+    assert_eq!(
+        model
+            .editor
+            .text()
+            .slice(0..model.editor.text().len_bytes()),
+        "right text"
+    );
+}
+
+#[test]
+fn closing_focused_split_restores_left_pane() {
+    let mut model = Model::new(EditorState::from_text("left\nright"), None);
+    model.split_vertical();
+    model.focus_split(true);
+    model.cursor = 5;
+    model.close_split();
+    assert!(model.split.is_none());
+    assert!(!model.split_active);
+    assert_eq!(model.cursor, 0);
+    assert_eq!(model.editor.text().slice(0..4), "left");
+}
+
+#[test]
+fn ctrl_w_v_opens_split_and_ctrl_w_h_l_switches_focus() {
+    let mut model = Model::new(EditorState::from_text("alpha\nbeta\ngamma"), None);
+    handle_event(&mut model, ctrl(KeyCode::Char('w')));
+    handle_event(&mut model, key(KeyCode::Char('v')));
+    assert!(model.split.is_some());
+    handle_event(&mut model, ctrl(KeyCode::Char('w')));
+    handle_event(&mut model, key(KeyCode::Char('l')));
+    assert!(model.split_active);
+    handle_event(&mut model, ctrl(KeyCode::Char('w')));
+    handle_event(&mut model, key(KeyCode::Char('h')));
+    assert!(!model.split_active);
+}
+
+#[test]
+fn split_panes_keep_independent_cursors() {
+    let mut model = Model::new(EditorState::from_text("one\ntwo\nthree"), None);
+    model.cursor = 1;
+    model.split_vertical();
+    assert!(model.split.is_some());
+    assert!(!model.split_active);
+    model.focus_split(true);
+    assert!(model.split_active);
+    assert_eq!(model.cursor, 1);
+    model.cursor = 5;
+    model.scroll = 2;
+    model.hscroll = 3;
+    model.focus_split(false);
+    assert!(!model.split_active);
+    assert_eq!(model.cursor, 1);
+    assert_eq!(model.scroll, 0);
+    assert_eq!(model.hscroll, 0);
+    model.focus_split(true);
+    assert_eq!(model.cursor, 5);
+    assert_eq!(model.scroll, 2);
+    assert_eq!(model.hscroll, 3);
+}
+
+#[test]
+fn select_word_occurrences_replaces_all_as_one_undo() {
+    let original = "foo\n".repeat(100);
+    let mut model = Model::new(
+        EditorState::from_text(&original),
+        Some(PathBuf::from("multi.txt")),
+    );
+    model.select_word_occurrences();
+    assert_eq!(model.editor.selection_bytes().len(), 100);
+    model.insert_text("bar");
+    assert_eq!(model.editor.text().slice(0..400), "bar\n".repeat(100));
+    assert_eq!(model.editor.undo_depth(), 1);
+    model.undo();
+    assert_eq!(model.editor.text().slice(0..400), original);
+    assert_eq!(model.editor.selection_bytes().len(), 100);
+}
+
+#[test]
+fn split_selection_lines_creates_one_caret_per_line() {
+    let mut model = Model::new(EditorState::from_text("one\ntwo\nthree"), None);
+    assert!(model.editor.set_selection_bytes(0, 7));
+    model.split_selection_lines();
+    assert_eq!(model.editor.selection_bytes().len(), 2);
 }
 
 #[test]
@@ -520,6 +668,37 @@ fn document_symbols_populate_and_jump_to_selection() {
 }
 
 #[test]
+fn document_symbol_depth_is_bounded() {
+    let mut value = serde_json::json!({
+        "name": "leaf",
+        "kind": 12,
+        "selectionRange": {
+            "start": {"line": 0, "character": 0},
+            "end": {"line": 0, "character": 1}
+        }
+    });
+    for _ in 0..100 {
+        value = serde_json::json!({
+            "name": "node",
+            "kind": 12,
+            "selectionRange": {
+                "start": {"line": 0, "character": 0},
+                "end": {"line": 0, "character": 1}
+            },
+            "children": [value]
+        });
+    }
+    let mut model = Model::new(
+        EditorState::from_text("text"),
+        Some(PathBuf::from("deep.rs")),
+    );
+    model.pending_lsp.insert(14, LspRequestKind::DocumentSymbol);
+    model.handle_lsp_response(14, serde_json::json!([value]), None);
+    let symbols = model.document_symbols.as_ref().expect("symbols");
+    assert!(symbols.items.len() <= 65);
+}
+
+#[test]
 fn formatting_response_applies_edits_without_writing() {
     let dir = tempfile::tempdir().expect("tempdir");
     let file = dir.path().join("format.rs");
@@ -541,6 +720,174 @@ fn formatting_response_applies_edits_without_writing() {
     assert_eq!(fs::read_to_string(&file).expect("disk"), "fn main(){}");
     assert!(model.save_all());
     assert_eq!(fs::read_to_string(&file).expect("saved"), "//fn main(){}");
+}
+
+#[test]
+fn formatting_response_for_inactive_path_is_ignored() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let first = dir.path().join("first.rs");
+    let second = dir.path().join("second.rs");
+    fs::write(&first, "fn first(){}").expect("first");
+    let mut model = Model::open(&first).expect("open");
+    let first_path = model.path.clone().expect("first path");
+    model.pending_edit_path.insert(13, first_path);
+    model.pending_lsp.insert(13, LspRequestKind::Formatting);
+    model
+        .save_as(second.to_str().expect("second path"))
+        .then_some(())
+        .expect("save as");
+    model.handle_lsp_response(
+        13,
+        serde_json::json!([{
+            "range": {
+                "start": {"line": 0, "character": 0},
+                "end": {"line": 0, "character": 0}
+            },
+            "newText": "//"
+        }]),
+        None,
+    );
+    assert_eq!(model.editor.text().slice(0..9), "fn first(");
+    assert!(model.status.contains("inactive"));
+}
+
+#[test]
+fn workspace_symbols_response_filters_and_jumps() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let file = dir.path().join("symbols.rs");
+    fs::write(&file, "fn alpha() {}\n").expect("file");
+    let mut model = Model::open(&file).expect("open");
+    let uri = lsp_worker::file_uri(&file);
+    model
+        .pending_lsp
+        .insert(18, LspRequestKind::WorkspaceSymbol);
+    model.handle_lsp_response(
+        18,
+        serde_json::json!([
+            {
+                "name": "alpha",
+                "containerName": "symbols",
+                "location": {
+                    "uri": uri,
+                    "range": {
+                        "start": {"line": 0, "character": 3},
+                        "end": {"line": 0, "character": 8}
+                    }
+                }
+            },
+            {
+                "name": "beta",
+                "containerName": "other",
+                "location": {
+                    "uri": uri,
+                    "range": {
+                        "start": {"line": 0, "character": 0},
+                        "end": {"line": 0, "character": 2}
+                    }
+                }
+            }
+        ]),
+        None,
+    );
+    let symbols = model.workspace_symbols.as_ref().expect("symbols");
+    assert_eq!(symbols.items.len(), 2);
+    model.filter_workspace_symbols();
+    assert_eq!(
+        model
+            .workspace_symbols
+            .as_ref()
+            .expect("symbols")
+            .filtered
+            .len(),
+        2
+    );
+    model.apply_workspace_symbol();
+    assert_eq!(model.cursor, 3);
+    assert!(model.status.contains("alpha"));
+}
+
+#[test]
+fn signature_help_response_populates_active_signature() {
+    let mut model = Model::new(
+        EditorState::from_text("fn main() {}"),
+        Some(PathBuf::from("sig.rs")),
+    );
+    model.pending_lsp.insert(17, LspRequestKind::SignatureHelp);
+    model.handle_lsp_response(
+        17,
+        serde_json::json!({
+            "signatures": [
+                {"label": "fn foo(a: i32, b: &str)", "documentation": "Example"}
+            ],
+            "activeSignature": 0,
+            "activeParameter": 1
+        }),
+        None,
+    );
+    let signature = model.signature_help.as_ref().expect("signature");
+    assert_eq!(signature.active_parameter, 1);
+    assert_eq!(signature.signatures.len(), 1);
+    assert_eq!(signature.signatures[0].label, "fn foo(a: i32, b: &str)");
+}
+
+#[test]
+fn stale_formatting_response_is_ignored() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let file = dir.path().join("stale.rs");
+    fs::write(&file, "fn main(){}").expect("file");
+    let mut model = Model::open(&file).expect("open");
+    model.pending_lsp.insert(15, LspRequestKind::Formatting);
+    model
+        .pending_edit_revision
+        .insert(15, model.editor.revision());
+    model.editor.insert(0, "x");
+    model.handle_lsp_response(
+        15,
+        serde_json::json!([{
+            "range": {
+                "start": {"line": 0, "character": 0},
+                "end": {"line": 0, "character": 0}
+            },
+            "newText": "//"
+        }]),
+        None,
+    );
+    assert_eq!(model.editor.text().slice(0..3), "xfn");
+    assert!(model.status.contains("stale"));
+}
+
+#[test]
+fn rename_response_for_inactive_path_is_ignored() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let first = dir.path().join("first.rs");
+    let second = dir.path().join("second.rs");
+    fs::write(&first, "fn first(){}").expect("first");
+    let mut model = Model::open(&first).expect("open");
+    let first_path = model.path.clone().expect("first path");
+    let uri = lsp_worker::file_uri(&first_path);
+    model.pending_edit_path.insert(16, first_path);
+    model
+        .pending_edit_revision
+        .insert(16, model.editor.revision());
+    model.pending_lsp.insert(16, LspRequestKind::Rename);
+    assert!(model.save_as(second.to_str().expect("second path")));
+    model.handle_lsp_response(
+        16,
+        serde_json::json!({
+            "changes": {
+                uri: [{
+                    "range": {
+                        "start": {"line": 0, "character": 0},
+                        "end": {"line": 0, "character": 2}
+                    },
+                    "newText": "xx"
+                }]
+            }
+        }),
+        None,
+    );
+    assert_eq!(model.editor.text().slice(0..9), "fn first(");
+    assert!(model.status.contains("inactive"));
 }
 
 #[test]

@@ -392,7 +392,7 @@ func cleanRelative(path string) (string, error) {
 
 func openBeneath(dirfd int, path string) (int, error) {
 	how := &unix.OpenHow{
-		Flags:   uint64(unix.O_RDONLY | unix.O_CLOEXEC),
+		Flags:   uint64(unix.O_RDONLY | unix.O_CLOEXEC | unix.O_NONBLOCK),
 		Resolve: uint64(unix.RESOLVE_BENEATH | unix.RESOLVE_NO_MAGICLINKS),
 	}
 	for range 4 {

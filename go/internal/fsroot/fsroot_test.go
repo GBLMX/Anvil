@@ -5,6 +5,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	"golang.org/x/sys/unix"
 )
 
 func testRoot(t *testing.T) (*Root, string) {
@@ -60,6 +63,29 @@ func TestRejectsSymlinkOutsideRoot(t *testing.T) {
 	}
 	if _, err := root.ReadFile("link", 0); err == nil {
 		t.Fatal("symlink outside the workspace was read")
+	}
+}
+
+func TestReadOperationsDoNotBlockOnFIFO(t *testing.T) {
+	root, dir := testRoot(t)
+	if err := unix.Mkfifo(filepath.Join(dir, "fifo"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for name, operation := range map[string]func() error{
+		"read_file": func() error { _, err := root.ReadFile("fifo", 0); return err },
+		"read_dir":  func() error { _, err := root.ReadDir("fifo"); return err },
+		"stat":      func() error { _, err := root.Size("fifo"); return err },
+	} {
+		done := make(chan error, 1)
+		go func() { done <- operation() }()
+		select {
+		case err := <-done:
+			if err == nil {
+				t.Fatalf("%s accepted a FIFO", name)
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatalf("%s blocked on a FIFO", name)
+		}
 	}
 }
 

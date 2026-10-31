@@ -12,10 +12,17 @@ Normal mode
   "a{yy,p}            named yank/put register; "_" is blackhole
   Home / End          line start / end
   q{reg} / @{reg}     record macro / replay macro; @@ repeats
+  s                   select all occurrences of the word under the cursor
+  Alt-s               split the selection into one cursor per line
+  C / Alt-C           add a cursor below / above on the same column
+  Ctrl-w v            open a vertical split
+  Ctrl-w h / l        focus the left / right pane
+  Ctrl-w q            close the split
   Space e             file tree (h/l/Enter expand or open, H toggles hidden)
   Space r             rename symbol
   Space a             code actions / quick fixes
   Space s             document symbols
+  Space S             workspace symbols
   Space F             format the current document
   Space f             fuzzy file finder; type to filter, Enter opens
   gd                  go to definition
@@ -43,7 +50,7 @@ Normal mode
   :q!                 force quit, or close help
   :tree               toggle the workspace file tree
   :reconnect          restart the gateway and re-handshake
-  :lsp-start          start rust-analyzer/gopls/pyright for the current file
+  :lsp-start          start the detected language server for the current file
   :lsp-stop           stop the language server
   :format              format the current document
   :symbols             document symbols

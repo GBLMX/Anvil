@@ -9,7 +9,7 @@ use std::{
     fs,
     io::{self, Stdout},
     path::{Path, PathBuf},
-    time::Instant,
+    time::{Duration, Instant},
 };
 
 use anvil_core::{TextBuffer, TextDocument, end_word, next_word_start, previous_word_start};
@@ -36,9 +36,12 @@ mod file_io;
 mod file_tree_ui;
 mod file_worker;
 mod gateway;
+mod git_gutter;
 mod host_session;
+mod inlay_hints;
 pub mod lsp;
 mod lsp_ui;
+mod splits;
 use lsp_ui::lsp_settings;
 mod keys;
 mod lsp_worker;
@@ -72,6 +75,10 @@ struct Buffer {
     hscroll: usize,
     modified: bool,
     search_query: String,
+}
+
+struct Pane {
+    buffer: Buffer,
 }
 
 /// The small state machine needed by TUI-1.
@@ -132,6 +139,9 @@ enum LspRequestKind {
     CodeAction,
     Formatting,
     DocumentSymbol,
+    SignatureHelp,
+    WorkspaceSymbol,
+    InlayHint,
 }
 
 #[derive(Debug, Clone)]
@@ -160,6 +170,43 @@ struct SymbolItem {
 struct SymbolState {
     items: Vec<SymbolItem>,
     selected: usize,
+}
+
+#[derive(Debug, Clone)]
+struct SignatureItem {
+    label: String,
+    documentation: String,
+}
+
+#[derive(Debug, Clone)]
+struct SignatureHelpState {
+    signatures: Vec<SignatureItem>,
+    active_signature: usize,
+    active_parameter: usize,
+}
+
+#[derive(Debug, Clone)]
+struct WorkspaceSymbolItem {
+    name: String,
+    detail: String,
+    path: PathBuf,
+    line: usize,
+    character: usize,
+}
+
+#[derive(Debug, Clone)]
+struct WorkspaceSymbolState {
+    items: Vec<WorkspaceSymbolItem>,
+    filtered: Vec<usize>,
+    query: String,
+    selected: usize,
+}
+
+#[derive(Debug, Clone)]
+struct InlayHint {
+    line: usize,
+    character: usize,
+    label: String,
 }
 
 #[derive(Debug, Clone)]
@@ -225,14 +272,33 @@ pub struct Model {
     active: usize,
     /// Background directory and file enumerator.
     file_worker: Option<FileWorker>,
+    /// Git gutter marks keyed by zero-based line.
+    git_marks: HashMap<usize, char>,
+    /// Requested git diff path and revision.
+    git_pending: Option<(PathBuf, u64)>,
+    /// Last requested git diff path and revision.
+    git_checked: Option<(PathBuf, u64)>,
+    /// Debounce deadline for the next git diff request.
+    git_due: Option<Instant>,
     /// LSP requests waiting for responses.
     pending_lsp: HashMap<u64, LspRequestKind>,
+    pending_edit_revision: HashMap<u64, u64>,
+    pending_edit_path: HashMap<u64, PathBuf>,
     next_lsp_request: u64,
     completion: Option<CompletionState>,
     hover: Option<String>,
     diagnostic_popup: Option<String>,
     code_actions: Option<CodeActionState>,
     document_symbols: Option<SymbolState>,
+    signature_help: Option<SignatureHelpState>,
+    workspace_symbols: Option<WorkspaceSymbolState>,
+    inlay_hints: Vec<InlayHint>,
+    inlay_pending: Option<(u64, PathBuf, u64, usize, usize)>,
+    inlay_checked: Option<(PathBuf, u64, usize, usize)>,
+    /// Secondary pane when a vertical split is open.
+    split: Option<Pane>,
+    /// Whether the active pane is the right-hand split.
+    split_active: bool,
     /// Flattened workspace tree, when open.
     tree: Vec<TreeEntry>,
     tree_selected: Option<usize>,
@@ -296,13 +362,26 @@ impl Model {
             buffers: Vec::new(),
             active: 0,
             file_worker: None,
+            git_marks: HashMap::new(),
+            git_pending: None,
+            git_checked: None,
+            git_due: None,
             pending_lsp: HashMap::new(),
+            pending_edit_revision: HashMap::new(),
+            pending_edit_path: HashMap::new(),
             next_lsp_request: 2,
             completion: None,
             hover: None,
             diagnostic_popup: None,
             code_actions: None,
             document_symbols: None,
+            signature_help: None,
+            workspace_symbols: None,
+            inlay_hints: Vec::new(),
+            inlay_pending: None,
+            inlay_checked: None,
+            split: None,
+            split_active: false,
             tree: Vec::new(),
             tree_selected: None,
             tree_visible: false,
@@ -618,13 +697,17 @@ impl Model {
             Ok(worker) => {
                 self.lsp_worker = Some(worker);
                 self.lsp_config = Some(desired);
-                self.pending_lsp.clear();
+                self.clear_lsp_requests();
                 self.completion = None;
                 self.hover = None;
                 self.diagnostic_popup = None;
                 self.code_actions = None;
                 self.document_symbols = None;
-                self.status = format!("{} starting", settings.label);
+                self.status = if settings.label == "jdtls" {
+                    "jdtls starting (indexing workspace)".to_owned()
+                } else {
+                    format!("{} starting", settings.label)
+                };
             }
             Err(error) => self.status = format!("E: lsp start: {error}"),
         }
@@ -635,7 +718,7 @@ impl Model {
         self.lsp_worker = None;
         self.lsp_config = None;
         self.lsp_retries = 0;
-        self.pending_lsp.clear();
+        self.clear_lsp_requests();
         self.completion = None;
         self.hover = None;
         self.diagnostic_popup = None;
@@ -663,7 +746,7 @@ impl Model {
                 LspEvent::Crashed(error) => {
                     self.lsp_worker = None;
                     self.lsp_config = None;
-                    self.pending_lsp.clear();
+                    self.clear_lsp_requests();
                     self.completion = None;
                     self.hover = None;
                     self.diagnostic_popup = None;
@@ -685,6 +768,17 @@ impl Model {
                 }
                 LspEvent::Response { id, result, error } => {
                     self.handle_lsp_response(id, result, error);
+                }
+                LspEvent::StartupError(error) => {
+                    self.lsp_worker = None;
+                    self.lsp_config = None;
+                    self.clear_lsp_requests();
+                    self.completion = None;
+                    self.hover = None;
+                    self.diagnostic_popup = None;
+                    self.code_actions = None;
+                    self.document_symbols = None;
+                    self.status = format!("E: lsp startup failed: {error}");
                 }
                 LspEvent::Error(error) => self.status = format!("E: lsp: {error}"),
                 LspEvent::Log(line) => self.status = format!("lsp: {line}"),
@@ -760,7 +854,7 @@ impl Model {
         self.lsp_worker = None;
         self.lsp_client = None;
         self.lsp_config = None;
-        self.pending_lsp.clear();
+        self.clear_lsp_requests();
         self.completion = None;
         self.hover = None;
         self.diagnostic_popup = None;
@@ -791,7 +885,7 @@ impl Model {
             .to_string()
             .len()
             .max(3);
-        (digits + 1) as u16
+        (digits + 2) as u16
     }
 
     fn current_line(&self) -> Option<usize> {
@@ -812,12 +906,22 @@ impl Model {
                 Some(current) if current != line_number => current.abs_diff(line_number),
                 _ => line_number + 1,
             };
+            let marker = self.git_marker(line_number).unwrap_or(' ');
             let number = format!("{display:>digits$} ");
             let mut style = Style::default().fg(Color::DarkGray);
             if Some(line_number) == current {
                 style = style.bg(Color::Indexed(236));
             }
-            lines.push(Line::from(Span::styled(number, style)));
+            let marker_style = match marker {
+                '+' => Style::default().fg(Color::Green),
+                '-' => Style::default().fg(Color::Red),
+                '~' => Style::default().fg(Color::Yellow),
+                _ => Style::default(),
+            };
+            lines.push(Line::from(vec![
+                Span::styled(marker.to_string(), marker_style),
+                Span::styled(number, style),
+            ]));
         }
         if lines.is_empty() {
             lines.push(Line::raw(""));
@@ -881,6 +985,7 @@ impl Model {
             if spans.is_empty() {
                 spans.push(Span::raw(""));
             }
+            self.insert_inlay_hints(line_number, start, line.end, &mut spans);
             expand_tabs(&mut spans);
             let ranges = self.diagnostic_ranges(line_number, start, line.end);
             apply_diagnostic_underlines(&mut spans, &ranges);
@@ -969,6 +1074,8 @@ pub fn run_with_workspace(path: Option<PathBuf>, workspace: PathBuf) -> io::Resu
         model.poll_syntax();
         model.poll_lsp();
         model.poll_file_worker();
+        model.poll_inlay_hints(size.height.saturating_sub(2));
+        model.poll_git();
         if event::poll(std::time::Duration::from_millis(50))? {
             handle_event(&mut model, event::read()?);
         }

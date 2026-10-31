@@ -31,22 +31,26 @@ There is no separate CLA.
 
 ## Development setup
 
-The repository is still a skeleton. The intended layout is:
+The current layout is:
 
 ```text
 Cargo.toml                  Rust workspace
-crates/anvil-core/          text model, commands, snapshots
-crates/anvil-tui/           terminal frontend
-crates/anvil-ipc/           UDS transport, JSON-RPC framing
+go.mod                      Go module at the repository root
 crates/anvil-api/           public Rust types, schema, generated stubs
-crates/anvil-test/          security and performance harnesses
-crates/anvil-exec-runner/   sandboxed rg/fd launcher
-plugin-host/                Lua/QuickJS host and sandbox
-go/                         Go module: gateway
-docs/                       charter, threat model, ADRs, performance
+crates/anvil-core/         text model, commands, snapshots
+crates/anvil-editor/       selection-first editor state and snapshots
+crates/anvil-ipc/          UDS transport, JSON-RPC framing
+crates/anvil-plugin-host/  Lua/QuickJS host and sandbox
+crates/anvil-tui/          terminal frontend
+go/cmd/anvil-gateway/      gateway entry point
+go/cmd/anvil-exec-runner/  sandboxed rg/fd launcher
+go/internal/               gateway, LSP, fetch, policy, fsroot, execrunner
+docs/                      charter, threat model, ADRs, performance
 ```
 
-Toolchains are pinned by `rust-toolchain.toml` and `go/go.mod` once they exist.
+Rust is pinned by `rust-toolchain.toml`. Go **1.26.10 or newer** is required;
+CI installs the exact version from the root `go.mod` (currently 1.26.10), while
+local newer toolchains are allowed.
 Do not introduce a new native dependency without an ADR.
 
 ## Required checks
@@ -66,6 +70,10 @@ For Go:
 gofmt -w .
 go vet ./...
 go test ./...
+go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
+golangci-lint run ./...
+go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
+govulncheck ./...
 ```
 
 Security and performance changes also need the relevant fixtures under
