@@ -55,6 +55,9 @@ All notable changes to Anvil are recorded here. The format follows
   ends stay on UTF-8 boundaries. Numeric prefixes are supported for motions,
   `d`/`y` word operators, `dd`, `yy`, `x`, and line movement.
 
+- `ciw`, `ci"`, and `ci'` inner text-object changes; named yank/put registers
+  via `"a` with `"_` blackhole support.
+
 - Literal `:s/old/new/[g]` and `:%s/old/new/g` substitution with dynamic
   offset updates after length-changing replacements.
 

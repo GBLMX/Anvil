@@ -104,6 +104,14 @@ pub struct Model {
     pending: Option<char>,
     /// Numeric count prefix, zero means no count.
     count: usize,
+    /// Waiting for a register name after `"`.
+    register_wait: bool,
+    /// Register selected by `"x`.
+    register: Option<char>,
+    /// Named yank registers.
+    registers: HashMap<char, String>,
+    /// `c` / `y` operator waiting for an inner text object (`i`).
+    object_pending: bool,
     /// Last substring search.
     search_query: String,
     /// Buffer replaced by the read-only help page.
@@ -149,6 +157,10 @@ impl Model {
             status: String::new(),
             pending: None,
             count: 0,
+            register_wait: false,
+            register: None,
+            registers: HashMap::new(),
+            object_pending: false,
             search_query: String::new(),
             help_back: None,
             buffers: Vec::new(),
@@ -447,6 +459,100 @@ impl Model {
         self.move_words(motion);
     }
 
+    fn change_word(&mut self, motion: WordMotion) {
+        if self.reject_read_only() {
+            return;
+        }
+        let Some(range) = self.word_range(motion) else {
+            return;
+        };
+        self.editor.set_selection_bytes(range.start, range.end);
+        self.editor.delete(range.clone());
+        self.cursor = range.start;
+        self.modified = true;
+        self.input_mode = InputMode::Insert;
+        self.dirty = true;
+    }
+
+    fn change_inner_word(&mut self) {
+        if self.reject_read_only() {
+            return;
+        }
+        let Some(range) = self.inner_word_range() else {
+            self.status = "E: no word".to_owned();
+            self.dirty = true;
+            return;
+        };
+        self.editor.set_selection_bytes(range.start, range.end);
+        self.editor.delete(range.clone());
+        self.cursor = range.start;
+        self.modified = true;
+        self.input_mode = InputMode::Insert;
+        self.dirty = true;
+    }
+
+    fn change_inner_quote(&mut self, quote: char) {
+        if self.reject_read_only() {
+            return;
+        }
+        let Some(range) = self.inner_quote_range(quote) else {
+            self.status = "E: no quote pair".to_owned();
+            self.dirty = true;
+            return;
+        };
+        self.editor.set_selection_bytes(range.start, range.end);
+        self.editor.delete(range.clone());
+        self.cursor = range.start;
+        self.modified = true;
+        self.input_mode = InputMode::Insert;
+        self.dirty = true;
+    }
+
+    fn inner_word_range(&self) -> Option<std::ops::Range<usize>> {
+        let line = self.editor.line_range_at(self.cursor)?;
+        let text = self.editor.text().slice(line.start..line.end);
+        let local = self.cursor.saturating_sub(line.start).min(text.len());
+        let class_of = |character: char| {
+            if character.is_whitespace() {
+                0
+            } else if character.is_alphanumeric() || character == '_' {
+                1
+            } else {
+                2
+            }
+        };
+        let current = text[..local]
+            .chars()
+            .next_back()
+            .or_else(|| text[local..].chars().next())
+            .map(class_of)?;
+        let mut start = local;
+        for (index, character) in text[..local].char_indices().rev() {
+            if class_of(character) != current {
+                break;
+            }
+            start = index;
+        }
+        let mut end = local;
+        for (index, character) in text[local..].char_indices() {
+            if class_of(character) != current {
+                break;
+            }
+            end = local + index + character.len_utf8();
+        }
+        (start < end).then_some(line.start + start..line.start + end)
+    }
+
+    fn inner_quote_range(&self, quote: char) -> Option<std::ops::Range<usize>> {
+        let line = self.editor.line_range_at(self.cursor)?;
+        let text = self.editor.text().slice(line.start..line.end);
+        let local = self.cursor.saturating_sub(line.start).min(text.len());
+        let left = text[..local].rfind(quote)?;
+        let right = text[local..].find(quote)? + local;
+        (left + quote.len_utf8() <= right)
+            .then_some(line.start + left + quote.len_utf8()..line.start + right)
+    }
+
     fn word_range(&self, motion: WordMotion) -> Option<std::ops::Range<usize>> {
         let text = self.editor.text();
         let (start, end) = match motion {
@@ -499,7 +605,9 @@ impl Model {
         };
         let cursor = self.cursor;
         self.editor.set_selection_bytes(range.start, range.end);
-        let _ = self.editor.yank(range);
+        if self.editor.yank(range) {
+            self.record_register();
+        }
         let _ = self.editor.set_selection_bytes(cursor, cursor);
         self.dirty = true;
     }
@@ -763,14 +871,40 @@ impl Model {
             return;
         };
         if self.editor.yank(start..last.end.max(start)) {
+            self.record_register();
             self.status = format!("{count} lines yanked");
         }
         self.dirty = true;
     }
 
+    fn record_register(&mut self) {
+        if let Some(register) = self.register.take()
+            && register != '_'
+        {
+            self.registers
+                .insert(register, self.editor.yank_text().to_owned());
+        }
+    }
+
     /// Inserts the unnamed register at the cursor.
     fn put_register(&mut self) {
         if self.reject_read_only() {
+            return;
+        }
+        if let Some(register) = self.register.take() {
+            if register == '_' {
+                return;
+            }
+            let Some(text) = self.registers.get(&register).cloned() else {
+                self.status = "E: register empty".to_owned();
+                self.dirty = true;
+                return;
+            };
+            self.editor.set_selection_bytes(self.cursor, self.cursor);
+            self.editor.insert(self.cursor, &text);
+            self.cursor += text.len();
+            self.modified = true;
+            self.dirty = true;
             return;
         }
         if self.editor.put(self.cursor).is_some() {
@@ -1756,8 +1890,33 @@ fn handle_key(model: &mut Model, key: KeyEvent) {
         .modifiers
         .contains(crossterm::event::KeyModifiers::CONTROL);
 
+    if model.register_wait {
+        if let KeyCode::Char(character) = key.code {
+            model.register = Some(character);
+            model.register_wait = false;
+            model.dirty = true;
+        }
+        return;
+    }
     if let Some(pending) = model.pending.take() {
         model.dirty = true;
+        if model.object_pending {
+            model.object_pending = false;
+            if pending == 'c' {
+                match key.code {
+                    KeyCode::Char('w') => model.change_inner_word(),
+                    KeyCode::Char('"') => model.change_inner_quote('"'),
+                    KeyCode::Char('\'') => model.change_inner_quote('\''),
+                    _ => {}
+                }
+            }
+            return;
+        }
+        if pending == 'c' && key.code == KeyCode::Char('i') {
+            model.pending = Some('c');
+            model.object_pending = true;
+            return;
+        }
         if let KeyCode::Char(character) = key.code
             && character.is_ascii_digit()
         {
@@ -1767,6 +1926,9 @@ fn handle_key(model: &mut Model, key: KeyEvent) {
         }
         let count = model.take_count();
         match (pending, key.code) {
+            ('c', KeyCode::Char('w')) => model.change_word(WordMotion::NextStart),
+            ('c', KeyCode::Char('e')) => model.change_word(WordMotion::End),
+            ('c', KeyCode::Char('b')) => model.change_word(WordMotion::PreviousStart),
             ('d', KeyCode::Char('d')) => model.delete_lines(count),
             ('y', KeyCode::Char('y')) => model.yank_lines(count),
             ('d', KeyCode::Char('w')) => model.delete_words(WordMotion::NextStart, count),
@@ -1860,6 +2022,11 @@ fn handle_key(model: &mut Model, key: KeyEvent) {
             KeyCode::Char('N') if !control => model.search_next(false),
             KeyCode::Char('d') if !control => model.pending = Some('d'),
             KeyCode::Char('y') if !control => model.pending = Some('y'),
+            KeyCode::Char('c') if !control => model.pending = Some('c'),
+            KeyCode::Char('"') if !control => {
+                model.register_wait = true;
+                model.dirty = true;
+            }
             KeyCode::Char('x') if !control => {
                 let count = model.take_count();
                 for _ in 0..count {
@@ -2178,6 +2345,48 @@ mod tests {
         handle_event(&mut model, ctrl(KeyCode::Char('r')));
         assert_eq!(model.editor.text().slice(0..2), "Xa");
         assert_eq!(model.cursor, 1);
+    }
+
+    #[test]
+    fn named_register_yank_and_put() {
+        let mut model = Model::new(EditorState::from_text("alpha\nbeta"), None);
+        for key_code in [
+            KeyCode::Char('"'),
+            KeyCode::Char('a'),
+            KeyCode::Char('y'),
+            KeyCode::Char('y'),
+        ] {
+            handle_event(&mut model, key(key_code));
+        }
+        assert_eq!(
+            model.registers.get(&'a').map(String::as_str),
+            Some("alpha\n")
+        );
+        model.cursor = 0;
+        for key_code in [KeyCode::Char('"'), KeyCode::Char('a'), KeyCode::Char('p')] {
+            handle_event(&mut model, key(key_code));
+        }
+        assert_eq!(model.editor.text().slice(0..12), "alpha\nalpha\n");
+    }
+
+    #[test]
+    fn change_inner_word_and_quote() {
+        let mut model = Model::new(EditorState::from_text("alpha beta"), None);
+        for key_code in [KeyCode::Char('c'), KeyCode::Char('i'), KeyCode::Char('w')] {
+            handle_event(&mut model, key(key_code));
+        }
+        handle_event(&mut model, key(KeyCode::Char('X')));
+        handle_event(&mut model, key(KeyCode::Esc));
+        assert_eq!(model.editor.text().slice(0..6), "X beta");
+
+        let mut model = Model::new(EditorState::from_text("say \"hello\" now"), None);
+        model.cursor = 6;
+        for key_code in [KeyCode::Char('c'), KeyCode::Char('i'), KeyCode::Char('"')] {
+            handle_event(&mut model, key(key_code));
+        }
+        handle_event(&mut model, key(KeyCode::Char('X')));
+        handle_event(&mut model, key(KeyCode::Esc));
+        assert_eq!(model.editor.text().slice(0..11), "say \"X\" now");
     }
 
     #[test]
