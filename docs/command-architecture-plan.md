@@ -199,6 +199,10 @@ not write files. `fs.write` is only for an explicit save command.
 Migrate `editor.undo`, `editor.redo`, `search.next`, `view.split`, and
 `buffer.next`.
 
+Entry gate: the ADR-0008 keymap-layer decision is amended or superseded and
+accepted. Do not start Phase A while the accepted ADR still names Lua/TS as the
+target keymap layer.
+
 Acceptance:
 
 - Same editing behavior and undo boundaries.
@@ -258,6 +262,24 @@ Defer `build.run`/make until a build sandbox and explicit build policy exist.
 A generic `proc.spawn` capability is not acceptable.
 
 ## 7. Contract requirements
+
+### Decision prerequisite: ADR-0008 keymap layer
+
+[ADR-0008](adr/0008-selection-first-interaction.md) decision 3 currently
+states that the target key mapping layer is Lua/TS plugins. That conflicts with
+this plan.
+
+Before Phase A starts, amend ADR-0008 or add a superseding ADR that changes
+**only the keymap-layer decision**:
+
+- Lua/TS remains the declaration/config layer.
+- Rust owns the hot-path trie, mode resolution, and CommandId mapping.
+- Lua callbacks are not invoked per key event.
+
+The rest of ADR-0008 remains authoritative, including the selection-first core,
+native motion/action semantics, and the requirement that keymaps cannot
+redefine editing semantics. The old keymap-layer sentence must be explicitly
+marked superseded; do not silently contradict an accepted ADR.
 
 Before implementing, freeze:
 
