@@ -85,7 +85,17 @@ impl LspWorker {
                     "capabilities": {
                         "textDocument": {
                             "publishDiagnostics": {"relatedInformation": true},
-                            "synchronization": {"didSave": true}
+                            "synchronization": {"didSave": true},
+                            "codeAction": {
+                                "codeActionLiteralSupport": {
+                                    "codeActionKind": {
+                                        "valueSet": ["", "quickfix", "refactor", "source"]
+                                    }
+                                },
+                                "isPreferredSupport": true,
+                                "disabledSupport": true,
+                                "dataSupport": true
+                            }
                         },
                         "workspace": {"workspaceFolders": true},
                         "window": {"workDoneProgress": true}

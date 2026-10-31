@@ -1,6 +1,6 @@
 # Anvil Architecture
 
-Status: `v0.2.9`; Phase 0.7 in progress. See [visual current/future maps](architecture-visual.md).
+Status: `v0.3.0`; Phase 0.7 in progress. See [visual current/future maps](architecture-visual.md).
 
 ## 1. Process model
 

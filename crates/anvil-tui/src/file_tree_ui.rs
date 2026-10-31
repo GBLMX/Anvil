@@ -314,6 +314,8 @@ impl Model {
         self.pending_lsp.clear();
         self.hover = None;
         self.diagnostic_popup = None;
+        self.code_actions = None;
+        self.document_symbols = None;
         let workspace = self.workspace.clone();
         if self.ensure_file_worker() {
             if let Some(worker) = self.file_worker.as_ref() {

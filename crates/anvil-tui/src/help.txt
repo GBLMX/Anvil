@@ -13,6 +13,10 @@ Normal mode
   Home / End          line start / end
   q{reg} / @{reg}     record macro / replay macro; @@ repeats
   Space e             file tree (h/l/Enter expand or open, H toggles hidden)
+  Space r             rename symbol
+  Space a             code actions / quick fixes
+  Space s             document symbols
+  Space F             format the current document
   Space f             fuzzy file finder; type to filter, Enter opens
   gd                  go to definition
   ]d / [d             next / previous diagnostic
@@ -29,6 +33,7 @@ Normal mode
   n / N               next / previous match
   :w                  save
   :w file             save as
+  :wa                 save all modified buffers
   :s/old/new/[g]      replace first / all on current line
   :%s/old/new/g       replace all in the file
   :wq                 save and quit
@@ -40,6 +45,8 @@ Normal mode
   :reconnect          restart the gateway and re-handshake
   :lsp-start          start rust-analyzer/gopls/pyright for the current file
   :lsp-stop           stop the language server
+  :format              format the current document
+  :symbols             document symbols
   :plugin-start       start the debug plugin host
   :plugin-oom         start host with a 300 MB allocation probe
   :plugin-exec        exercise sys.exec (returns unsupported)

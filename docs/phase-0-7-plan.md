@@ -1,18 +1,22 @@
-# 0.1.1 / Phase 0.7 Plan
+# 0.3.0 → 0.4.0 / Phase 0.7 Plan (Polish & Specification)
 
-Status: in progress. `v0.2.9` has trusted LSP diagnostics, completion, hover, and
-definition for Rust/Go/Python, an async tree/fuzzy worker, and a split TUI
-(`keys`, `render`, `lsp_ui`, `file_tree_ui`). Plugin-host remains an empty
-sandboxed process (no VM); syntax highlighting is asynchronous but not
-incremental.
+Status: in progress inside the [Polish & Specification release train](polish-and-specification.md).
+`v0.3.0` has trusted LSP diagnostics, completion, hover, definition, rename,
+Code Actions, formatting, and document symbols for Rust/Go/Python, an async
+tree/fuzzy worker, and a split TUI (`keys`, `render`, `lsp_ui`,
+`file_tree_ui`). Plugin-host remains an empty sandboxed process (no VM); syntax
+highlighting is asynchronous but not incremental.
 
 ## Priorities
 
 1. **Plugin-host isolation** — the remaining Phase 0.6 security boundary and a
    prerequisite for a plugin ecosystem.
-2. **Tree-sitter syntax highlighting** — the largest daily-experience gap.
-3. **LSP client** — the step from a text editor to a development environment.
-4. **`:reconnect` poison recovery** — quality-of-life, not a security boundary.
+2. **LSP contract closure** — decide or implement command-style Code Actions,
+   close formatting options, and keep the advertised surface test-backed.
+3. **Specification and documentation hardening** — keys, commands, schemas,
+   error codes, trust boundaries, and known limitations.
+4. **Reliability and performance evidence** — crash/reconnect paths,
+   regression measurements, and release gates.
 
 ## 1. Plugin-host isolation
 
@@ -64,7 +68,9 @@ Required outcome:
   `lsp.start/send/stop` routes, and client notification queuing are implemented.
   TUI worker, diagnostics, completion, hover, and definition are implemented and
   validated against rust-analyzer, gopls, and pyright. Code Actions, Rename,
-  Formatting, and Document Symbols remain for the next tier.
+  Formatting, and Document Symbols are implemented over a shared
+  `WorkspaceEdit` engine, including background buffers and explicit `:wa`
+  saves.
 - Per-workspace language-server lifecycle; no server is started until a
   matching buffer is opened.
 - Diagnostics, hover, definition, and completion are opt-in and cancellable.

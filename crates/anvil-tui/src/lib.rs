@@ -43,7 +43,7 @@ use lsp_ui::lsp_settings;
 mod keys;
 mod lsp_worker;
 mod render;
-#[allow(dead_code)]
+use workspace_edit::WorkspaceEdit;
 mod workspace_edit;
 pub(crate) use keys::handle_event;
 pub use render::view;
@@ -81,6 +81,8 @@ pub enum InputMode {
     Normal,
     /// Text insertion at the cursor.
     Insert,
+    /// Rename symbol input.
+    Rename { name: String },
     /// Ex-style command line.
     CommandLine { buffer: String },
     /// Incremental substring search.
@@ -126,6 +128,38 @@ enum LspRequestKind {
     Completion,
     Definition,
     Hover,
+    Rename,
+    CodeAction,
+    Formatting,
+    DocumentSymbol,
+}
+
+#[derive(Debug, Clone)]
+struct CodeActionItem {
+    title: String,
+    edit: Option<WorkspaceEdit>,
+    disabled: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+struct CodeActionState {
+    items: Vec<CodeActionItem>,
+    selected: usize,
+}
+
+#[derive(Debug, Clone)]
+struct SymbolItem {
+    name: String,
+    detail: Option<String>,
+    line: usize,
+    character: usize,
+    depth: usize,
+}
+
+#[derive(Debug, Clone)]
+struct SymbolState {
+    items: Vec<SymbolItem>,
+    selected: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -197,6 +231,8 @@ pub struct Model {
     completion: Option<CompletionState>,
     hover: Option<String>,
     diagnostic_popup: Option<String>,
+    code_actions: Option<CodeActionState>,
+    document_symbols: Option<SymbolState>,
     /// Flattened workspace tree, when open.
     tree: Vec<TreeEntry>,
     tree_selected: Option<usize>,
@@ -265,6 +301,8 @@ impl Model {
             completion: None,
             hover: None,
             diagnostic_popup: None,
+            code_actions: None,
+            document_symbols: None,
             tree: Vec::new(),
             tree_selected: None,
             tree_visible: false,
@@ -584,6 +622,8 @@ impl Model {
                 self.completion = None;
                 self.hover = None;
                 self.diagnostic_popup = None;
+                self.code_actions = None;
+                self.document_symbols = None;
                 self.status = format!("{} starting", settings.label);
             }
             Err(error) => self.status = format!("E: lsp start: {error}"),
@@ -599,6 +639,8 @@ impl Model {
         self.completion = None;
         self.hover = None;
         self.diagnostic_popup = None;
+        self.code_actions = None;
+        self.document_symbols = None;
         self.status = "lsp stopped".to_owned();
         self.dirty = true;
     }
@@ -625,6 +667,8 @@ impl Model {
                     self.completion = None;
                     self.hover = None;
                     self.diagnostic_popup = None;
+                    self.code_actions = None;
+                    self.document_symbols = None;
                     if self.lsp_retries < 3 {
                         self.lsp_retries += 1;
                         if self.lsp_client.is_none() {
@@ -720,6 +764,8 @@ impl Model {
         self.completion = None;
         self.hover = None;
         self.diagnostic_popup = None;
+        self.code_actions = None;
+        self.document_symbols = None;
         self.gateway = None;
         self.gateway_session = None;
         match GatewaySession::start(&self.workspace) {

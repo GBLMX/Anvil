@@ -179,6 +179,53 @@ impl Model {
         self.save_to(path)
     }
 
+    pub(crate) fn save_all(&mut self) -> bool {
+        if self.reject_read_only() {
+            return false;
+        }
+        self.sync_active();
+        let active_path = self.path.clone();
+        let mut failed = false;
+        if self.modified && !self.save() {
+            failed = true;
+        }
+        let mut writes = Vec::new();
+        for (index, buffer) in self.buffers.iter().enumerate() {
+            if !buffer.modified || buffer.path == active_path {
+                continue;
+            }
+            let Some(path) = &buffer.path else {
+                self.status = "E: modified buffer has no file name".to_owned();
+                failed = true;
+                continue;
+            };
+            let text = buffer
+                .editor
+                .text()
+                .slice(0..buffer.editor.text().len_bytes());
+            writes.push((index, path.clone(), text));
+        }
+        for (index, path, text) in writes {
+            match self.write_file(&path, &text) {
+                Ok(()) => {
+                    if let Some(buffer) = self.buffers.get_mut(index) {
+                        buffer.modified = false;
+                    }
+                }
+                Err(error) => {
+                    self.status = format!("E: {}: {error}", path.display());
+                    failed = true;
+                }
+            }
+        }
+        self.sync_active();
+        if !failed {
+            self.status = "all files written".to_owned();
+        }
+        self.dirty = true;
+        !failed
+    }
+
     pub(crate) fn save_as(&mut self, path: &str) -> bool {
         self.save_to(PathBuf::from(path))
     }

@@ -1,6 +1,6 @@
 # Anvil Architecture Maps
 
-Status: current as of `v0.2.9`. Solid paths are implemented. Dashed paths are
+Status: current as of `v0.3.0`. Solid paths are implemented. Dashed paths are
 planned or debug-only.
 
 ## Current architecture
@@ -14,7 +14,7 @@ flowchart TB
         RENDER["render.rs<br/>editor · gutter · popups"]
         SYNTAX["syntax.rs worker<br/>Tree-sitter"]
         TREEUI["file_tree_ui.rs<br/>tree · fuzzy state"]
-        LSPUI["lsp_ui.rs<br/>requests · completion · hover · definition"]
+        LSPUI["lsp_ui.rs<br/>requests · completion · hover · definition<br/>code actions · rename · formatting · symbols"]
         HOST["host_session<br/>debug plugin launcher"]
         IPC["anvil-ipc<br/>GatewayClient"]
 
@@ -100,12 +100,8 @@ flowchart TB
         MODEL2["model.rs<br/>buffers · state · lifecycle"]
         FILEIO["file_io.rs<br/>async open/save"]
         CMD["commands.rs<br/>Ex · search · substitute"]
-        LSPUI2["lsp_ui.rs<br/>completion · hover · definition"]
+        LSPUI2["lsp_ui.rs<br/>async request orchestration"]
         WEDIT["workspace_edit.rs<br/>TextEdit / WorkspaceEdit"]
-        ACTIONS["Code Actions / Quick Fix"]
-        RENAME["Rename"]
-        FORMAT["Formatting"]
-        SYMBOLS["Document Symbols"]
         TREE2["file_tree_ui.rs"]
 
         KEYS2 --> MODEL2
@@ -114,10 +110,6 @@ flowchart TB
         MODEL2 --> CMD
         MODEL2 --> LSPUI2
         MODEL2 --> WEDIT
-        WEDIT --> ACTIONS
-        WEDIT --> RENAME
-        WEDIT --> FORMAT
-        LSPUI2 --> SYMBOLS
         MODEL2 --> TREE2
     end
 
@@ -186,10 +178,9 @@ flowchart TB
 
 ## Planned sequence
 
-1. **WorkspaceEdit engine** — shared UTF-16 edit application for Code Actions,
-   Rename, and Formatting.
-2. **LSP second tier** — Code Actions, Rename, Formatting, Document Symbols.
-3. **Async open/save** — remove remaining synchronous file I/O from the UI path.
-4. **Model extraction** — `model.rs`, `file_io.rs`, `commands.rs`; current
+1. **LSP second-tier polish** — command-style code actions and workspace-edit
+   resource operations.
+2. **Async open/save** — remove remaining synchronous file I/O from the UI path.
+3. **Model extraction** — `model.rs`, `file_io.rs`, `commands.rs`; current
    `lib.rs` still owns the Model core.
-5. **Plugin runtime** — Lua/QuickJS host, control-socket grants, VM isolation.
+4. **Plugin runtime** — Lua/QuickJS host, control-socket grants, VM isolation.

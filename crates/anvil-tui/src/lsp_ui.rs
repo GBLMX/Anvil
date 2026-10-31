@@ -1,6 +1,9 @@
 //! LSP request state, completion, definition, and hover UI behavior.
 
-use super::{CompletionItem, CompletionState, LspRequestKind, Model};
+use super::{
+    CodeActionItem, CodeActionState, CompletionItem, CompletionState, InputMode, LspRequestKind,
+    Model, SymbolItem, SymbolState, WorkspaceEdit,
+};
 use crate::{lsp, lsp_worker};
 use anvil_core::TextBuffer;
 use std::path::Path;
@@ -136,6 +139,43 @@ fn hover_text(value: &serde_json::Value) -> String {
     }
 }
 
+fn symbols_from_lsp(items: &[serde_json::Value]) -> Vec<SymbolItem> {
+    let mut symbols = Vec::new();
+    collect_symbols(items, 0, &mut symbols);
+    symbols
+}
+
+fn collect_symbols(items: &[serde_json::Value], depth: usize, symbols: &mut Vec<SymbolItem>) {
+    for item in items {
+        let Some(name) = item.get("name").and_then(serde_json::Value::as_str) else {
+            continue;
+        };
+        let range = item
+            .get("selectionRange")
+            .or_else(|| item.get("range"))
+            .or_else(|| {
+                item.get("location")
+                    .and_then(|location| location.get("range"))
+            })
+            .and_then(|range| serde_json::from_value::<lsp::Range>(range.clone()).ok());
+        if let Some(range) = range {
+            symbols.push(SymbolItem {
+                name: name.to_owned(),
+                detail: item
+                    .get("detail")
+                    .and_then(serde_json::Value::as_str)
+                    .map(ToOwned::to_owned),
+                line: range.start.line as usize,
+                character: range.start.character as usize,
+                depth,
+            });
+        }
+        if let Some(children) = item.get("children").and_then(serde_json::Value::as_array) {
+            collect_symbols(children, depth + 1, symbols);
+        }
+    }
+}
+
 impl Model {
     pub(crate) fn offset_at_utf16(&self, line: usize, character: usize) -> usize {
         let Some(start) = self.editor.index().line_to_offset(line) else {
@@ -202,6 +242,7 @@ impl Model {
 
     pub(crate) fn jump_diagnostic(&mut self, forward: bool) {
         self.cancel_completion();
+        self.cancel_code_actions();
         self.hover = None;
         let Some(path) = self.path.clone() else {
             self.status = "E: no file".to_owned();
@@ -295,6 +336,18 @@ impl Model {
         self.dirty = true;
     }
 
+    pub(crate) fn cancel_code_actions(&mut self) {
+        self.pending_lsp.retain(|_, kind| {
+            !matches!(
+                kind,
+                LspRequestKind::CodeAction | LspRequestKind::DocumentSymbol
+            )
+        });
+        self.code_actions = None;
+        self.document_symbols = None;
+        self.dirty = true;
+    }
+
     pub(crate) fn auto_completion(&mut self) {
         if self.lsp_worker.is_some() {
             self.request_completion();
@@ -305,6 +358,7 @@ impl Model {
         self.cancel_completion();
         self.hover = None;
         self.diagnostic_popup = None;
+        self.cancel_code_actions();
         let Some(uri) = self.path.as_ref().map(|path| lsp_worker::file_uri(path)) else {
             return;
         };
@@ -329,6 +383,7 @@ impl Model {
     pub(crate) fn request_definition(&mut self) {
         self.cancel_completion();
         self.diagnostic_popup = None;
+        self.cancel_code_actions();
         let Some(uri) = self.path.as_ref().map(|path| lsp_worker::file_uri(path)) else {
             return;
         };
@@ -352,6 +407,7 @@ impl Model {
     pub(crate) fn request_hover(&mut self) {
         self.cancel_completion();
         self.diagnostic_popup = None;
+        self.cancel_code_actions();
         let Some(uri) = self.path.as_ref().map(|path| lsp_worker::file_uri(path)) else {
             return;
         };
@@ -366,6 +422,270 @@ impl Model {
             self.status = "hover".to_owned();
         }
         self.dirty = true;
+    }
+
+    pub(crate) fn start_rename(&mut self) {
+        self.cancel_completion();
+        self.cancel_code_actions();
+        self.hover = None;
+        self.diagnostic_popup = None;
+        self.input_mode = InputMode::Rename {
+            name: String::new(),
+        };
+        self.status = "rename symbol".to_owned();
+        self.dirty = true;
+    }
+
+    pub(crate) fn request_rename(&mut self, new_name: &str) {
+        if new_name.trim().is_empty() {
+            self.status = "E: empty rename".to_owned();
+            self.dirty = true;
+            return;
+        }
+        let Some(uri) = self.path.as_ref().map(|path| lsp_worker::file_uri(path)) else {
+            return;
+        };
+        let Some((line, character)) = self.lsp_position() else {
+            return;
+        };
+        let params = serde_json::json!({
+            "textDocument": {"uri": uri},
+            "position": {"line": line, "character": character},
+            "newName": new_name
+        });
+        if self.send_lsp_request(LspRequestKind::Rename, "textDocument/rename", params) {
+            self.status = "renaming".to_owned();
+        }
+        self.dirty = true;
+    }
+
+    pub(crate) fn request_code_actions(&mut self) {
+        self.cancel_completion();
+        self.cancel_code_actions();
+        self.hover = None;
+        self.diagnostic_popup = None;
+        let Some(path) = self.path.clone() else {
+            return;
+        };
+        let uri = lsp_worker::file_uri(&path);
+        let Some((line, _character)) = self.lsp_position() else {
+            return;
+        };
+        let line_start = self
+            .editor
+            .index()
+            .line_to_offset(line as usize)
+            .unwrap_or(0);
+        let line_end = self
+            .editor
+            .index()
+            .offset_to_line(line_start)
+            .map(|position| position.end)
+            .unwrap_or(line_start);
+        let line_text = self.editor.text().slice(line_start..line_end);
+        let line_units = line_text.chars().map(char::len_utf16).sum::<usize>();
+        let diagnostics = self
+            .diagnostics
+            .get(&path)
+            .cloned()
+            .unwrap_or_default()
+            .into_iter()
+            .filter_map(|diagnostic| serde_json::to_value(diagnostic).ok())
+            .collect::<Vec<_>>();
+        let params = serde_json::json!({
+            "textDocument": {"uri": uri},
+            "range": {
+                "start": {"line": line, "character": 0},
+                "end": {"line": line, "character": line_units}
+            },
+            "context": {"diagnostics": diagnostics, "triggerKind": 1}
+        });
+        if self.send_lsp_request(
+            LspRequestKind::CodeAction,
+            "textDocument/codeAction",
+            params,
+        ) {
+            self.status = "code actions".to_owned();
+        }
+        self.dirty = true;
+    }
+
+    pub(crate) fn cancel_document_symbols(&mut self) {
+        self.pending_lsp
+            .retain(|_, kind| *kind != LspRequestKind::DocumentSymbol);
+        self.document_symbols = None;
+        self.dirty = true;
+    }
+
+    pub(crate) fn request_document_symbols(&mut self) {
+        self.cancel_completion();
+        self.cancel_code_actions();
+        self.cancel_document_symbols();
+        self.hover = None;
+        self.diagnostic_popup = None;
+        let Some(uri) = self.path.as_ref().map(|path| lsp_worker::file_uri(path)) else {
+            return;
+        };
+        let params = serde_json::json!({"textDocument": {"uri": uri}});
+        if self.send_lsp_request(
+            LspRequestKind::DocumentSymbol,
+            "textDocument/documentSymbol",
+            params,
+        ) {
+            self.status = "document symbols".to_owned();
+        }
+        self.dirty = true;
+    }
+
+    pub(crate) fn move_document_symbol(&mut self, delta: isize) {
+        if let Some(symbols) = self.document_symbols.as_mut() {
+            symbols.selected = symbols
+                .selected
+                .saturating_add_signed(delta)
+                .min(symbols.items.len().saturating_sub(1));
+            self.dirty = true;
+        }
+    }
+
+    pub(crate) fn apply_document_symbol(&mut self) {
+        let Some(symbols) = self.document_symbols.take() else {
+            return;
+        };
+        let Some(symbol) = symbols.items.get(symbols.selected).cloned() else {
+            return;
+        };
+        self.cursor = self.offset_at_utf16(symbol.line, symbol.character);
+        self.status = format!("symbol {}", symbol.name);
+        self.dirty = true;
+    }
+
+    pub(crate) fn request_formatting(&mut self) {
+        self.cancel_completion();
+        self.cancel_code_actions();
+        self.cancel_document_symbols();
+        self.hover = None;
+        self.diagnostic_popup = None;
+        let Some(uri) = self.path.as_ref().map(|path| lsp_worker::file_uri(path)) else {
+            return;
+        };
+        let params = serde_json::json!({
+            "textDocument": {"uri": uri},
+            "options": {"tabSize": 4, "insertSpaces": true}
+        });
+        if self.send_lsp_request(
+            LspRequestKind::Formatting,
+            "textDocument/formatting",
+            params,
+        ) {
+            self.status = "formatting".to_owned();
+        }
+        self.dirty = true;
+    }
+
+    pub(crate) fn move_code_action(&mut self, delta: isize) {
+        if let Some(actions) = self.code_actions.as_mut() {
+            actions.selected = actions
+                .selected
+                .saturating_add_signed(delta)
+                .min(actions.items.len().saturating_sub(1));
+            self.dirty = true;
+        }
+    }
+
+    pub(crate) fn apply_code_action(&mut self) {
+        let Some(actions) = self.code_actions.take() else {
+            return;
+        };
+        let Some(item) = actions.items.get(actions.selected) else {
+            return;
+        };
+        if let Some(reason) = &item.disabled {
+            self.status = format!("E: {reason}");
+        } else if let Some(edit) = &item.edit {
+            match edit.apply(self) {
+                Ok(()) => self.status = format!("applied {}", item.title),
+                Err(error) => self.status = format!("E: {error}"),
+            }
+        } else {
+            self.status = "E: command code actions are not supported".to_owned();
+        }
+        self.dirty = true;
+    }
+
+    fn apply_code_action_response(&mut self, result: &serde_json::Value) {
+        if result.is_null() {
+            self.status = "lsp: no code actions".to_owned();
+            self.code_actions = None;
+            return;
+        }
+        let Some(items) = result.as_array() else {
+            self.status = "E: lsp: invalid code action response".to_owned();
+            return;
+        };
+        let items: Vec<CodeActionItem> = items
+            .iter()
+            .filter_map(|item| {
+                let title = item.get("title")?.as_str()?.to_owned();
+                let mut disabled = item
+                    .get("disabled")
+                    .and_then(|disabled| disabled.get("reason"))
+                    .and_then(serde_json::Value::as_str)
+                    .map(ToOwned::to_owned);
+                let edit = match item.get("edit") {
+                    Some(edit) => match WorkspaceEdit::from_lsp(edit) {
+                        Ok(edit) => Some(edit),
+                        Err(error) => {
+                            disabled = Some(format!("invalid edit: {error}"));
+                            None
+                        }
+                    },
+                    None => None,
+                };
+                Some(CodeActionItem {
+                    title,
+                    edit,
+                    disabled,
+                })
+            })
+            .collect();
+        if items.is_empty() {
+            self.status = "lsp: no code actions".to_owned();
+            self.code_actions = None;
+        } else {
+            self.code_actions = Some(CodeActionState { items, selected: 0 });
+            self.status = "code actions".to_owned();
+        }
+    }
+
+    fn apply_document_symbols_response(&mut self, result: &serde_json::Value) {
+        let Some(items) = result.as_array() else {
+            self.status = "lsp: no document symbols".to_owned();
+            self.document_symbols = None;
+            return;
+        };
+        let items = symbols_from_lsp(items);
+        if items.is_empty() {
+            self.status = "lsp: no document symbols".to_owned();
+            self.document_symbols = None;
+        } else {
+            self.document_symbols = Some(SymbolState { items, selected: 0 });
+            self.status = "document symbols".to_owned();
+        }
+    }
+
+    fn apply_formatting_response(&mut self, result: &serde_json::Value) {
+        if result.is_null() || result.as_array().is_some_and(Vec::is_empty) {
+            self.status = "lsp: no formatting changes".to_owned();
+            return;
+        }
+        let Some(uri) = self.path.as_ref().map(|path| lsp_worker::file_uri(path)) else {
+            return;
+        };
+        let changes = serde_json::json!({"changes": {uri: result.clone()}});
+        match WorkspaceEdit::from_lsp(&changes).and_then(|edit| edit.apply(self)) {
+            Ok(()) => self.status = "formatted".to_owned(),
+            Err(error) => self.status = format!("E: format: {error}"),
+        }
     }
 
     pub(crate) fn handle_lsp_response(
@@ -386,6 +706,19 @@ impl Model {
             LspRequestKind::Completion => self.apply_completion_response(id, &result),
             LspRequestKind::Definition => self.apply_definition_response(&result),
             LspRequestKind::Hover => self.apply_hover_response(&result),
+            LspRequestKind::Rename => {
+                if result.is_null() {
+                    self.status = "lsp: no rename".to_owned();
+                } else {
+                    match WorkspaceEdit::from_lsp(&result).and_then(|edit| edit.apply(self)) {
+                        Ok(()) => self.status = "renamed".to_owned(),
+                        Err(error) => self.status = format!("E: rename: {error}"),
+                    }
+                }
+            }
+            LspRequestKind::CodeAction => self.apply_code_action_response(&result),
+            LspRequestKind::Formatting => self.apply_formatting_response(&result),
+            LspRequestKind::DocumentSymbol => self.apply_document_symbols_response(&result),
         }
         self.dirty = true;
     }

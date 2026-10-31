@@ -242,6 +242,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
         title
     };
     let (mode_text, mode_color, status) = match &model.input_mode {
+        InputMode::Rename { name } => (" REN ", Color::Magenta, format!("rename> {name}")),
         InputMode::CommandLine { buffer } => (" CMD ", Color::Yellow, format!(":{buffer}")),
         InputMode::Search { query } => (" SRC ", Color::Yellow, format!("/{query}")),
         InputMode::Insert => (" INS ", Color::Green, String::new()),
@@ -409,6 +410,81 @@ pub fn view(model: &Model, frame: &mut Frame) {
             popup,
         );
     }
+    if let Some(actions) = &model.code_actions {
+        let width = (area.width * 3 / 5)
+            .max(36)
+            .min(area.width.saturating_sub(2));
+        let height = (actions.items.len() as u16 + 2)
+            .min(14)
+            .min(area.height.saturating_sub(2));
+        let popup = Rect {
+            x: area.x + (area.width.saturating_sub(width)) / 2,
+            y: area.y + (area.height.saturating_sub(height)) / 2,
+            width,
+            height,
+        };
+        frame.render_widget(Clear, popup);
+        let mut lines = Vec::new();
+        for (row, item) in actions
+            .items
+            .iter()
+            .take(height.saturating_sub(2) as usize)
+            .enumerate()
+        {
+            let text = if let Some(reason) = &item.disabled {
+                format!("{}  [{}]", item.title, reason)
+            } else {
+                item.title.clone()
+            };
+            let style = if row == actions.selected {
+                Style::default().fg(Color::Black).bg(Color::Yellow)
+            } else {
+                Style::default()
+            };
+            lines.push(Line::styled(text, style));
+        }
+        frame.render_widget(
+            Paragraph::new(lines).block(Block::bordered().title("Code Actions")),
+            popup,
+        );
+    }
+    if let Some(symbols) = &model.document_symbols {
+        let width = (area.width * 3 / 5)
+            .max(36)
+            .min(area.width.saturating_sub(2));
+        let height = (symbols.items.len() as u16 + 2)
+            .min(16)
+            .min(area.height.saturating_sub(2));
+        let popup = Rect {
+            x: area.x + (area.width.saturating_sub(width)) / 2,
+            y: area.y + (area.height.saturating_sub(height)) / 2,
+            width,
+            height,
+        };
+        frame.render_widget(Clear, popup);
+        let visible = height.saturating_sub(2) as usize;
+        let start = symbols.selected.saturating_sub(visible.saturating_sub(1));
+        let mut lines = Vec::new();
+        for (row, item) in symbols.items.iter().skip(start).take(visible).enumerate() {
+            let indent = "  ".repeat(item.depth.min(8));
+            let text = if let Some(detail) = &item.detail {
+                format!("{indent}{}  {detail}", item.name)
+            } else {
+                format!("{indent}{}", item.name)
+            };
+            let style = if start + row == symbols.selected {
+                Style::default().fg(Color::Black).bg(Color::Yellow)
+            } else {
+                Style::default()
+            };
+            lines.push(Line::styled(text, style));
+        }
+        frame.render_widget(
+            Paragraph::new(lines).block(Block::bordered().title("Document Symbols")),
+            popup,
+        );
+    }
+
     if let Some(completion) = &model.completion {
         let width = (area.width * 2 / 5)
             .max(36)

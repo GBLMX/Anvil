@@ -144,6 +144,9 @@ impl Model {
             ("w", path) => {
                 self.save_as(path);
             }
+            ("wa", "") => {
+                self.save_all();
+            }
             ("e", path) => self.open_file(path),
             ("bn", "") => self.switch_buffer(1),
             ("bp", "") => self.switch_buffer(-1),
@@ -154,6 +157,8 @@ impl Model {
             ("lsp-start", "") => self.start_lsp(),
             ("tree", "") => self.open_tree(),
             ("lsp-stop", "") => self.stop_lsp(),
+            ("format", "") => self.request_formatting(),
+            ("symbols", "") => self.request_document_symbols(),
             ("plugin-start", "") => self.start_host(),
             ("plugin-oom", "") => self.start_oom_host(),
             ("plugin-exec", "") => self.exec_host(),

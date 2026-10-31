@@ -56,12 +56,17 @@ pub struct Range {
     pub end: Position,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 pub struct Diagnostic {
     pub range: Range,
     pub severity: Option<u32>,
     pub message: String,
     pub source: Option<String>,
+    /// LSP fields Anvil does not interpret but must forward to Code Action
+    /// requests, such as `code`, `codeDescription`, `relatedInformation`,
+    /// `tags`, and `data`.
+    #[serde(flatten, default)]
+    pub extra: serde_json::Map<String, Value>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -226,7 +231,13 @@ mod tests {
                     },
                     "severity": 1,
                     "message": "mismatched types",
-                    "source": "rust-analyzer"
+                    "source": "rust-analyzer",
+                    "code": "E0308",
+                    "relatedInformation": [{
+                        "location": {"uri": "file:///tmp/b.rs", "range": {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 1}}},
+                        "message": "expected here"
+                    }],
+                    "data": {"fix": true}
                 }]
             }
         });
@@ -234,6 +245,12 @@ mod tests {
         assert_eq!(path, PathBuf::from("/tmp/a.rs"));
         assert_eq!(diagnostics.len(), 1);
         assert_eq!(diagnostics[0].range.start.line, 1);
+        assert_eq!(diagnostics[0].extra["code"], "E0308");
+        assert_eq!(
+            diagnostics[0].extra["relatedInformation"][0]["message"],
+            "expected here"
+        );
+        assert_eq!(diagnostics[0].extra["data"]["fix"], true);
     }
 
     #[test]

@@ -352,6 +352,198 @@ fn cancelling_completion_drops_pending_response() {
 }
 
 #[test]
+fn rename_response_applies_workspace_edit() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let file = dir.path().join("rename.rs");
+    fs::write(&file, "foo").expect("file");
+    let mut model = Model::open(&file).expect("open");
+    let uri = lsp_worker::file_uri(&file);
+    model.pending_lsp.insert(7, LspRequestKind::Rename);
+    model.handle_lsp_response(
+        7,
+        serde_json::json!({
+            "changes": {
+                uri: [{
+                    "range": {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 3}},
+                    "newText": "bar"
+                }]
+            }
+        }),
+        None,
+    );
+    assert_eq!(model.editor.text().slice(0..3), "bar");
+    assert!(model.modified);
+}
+
+#[test]
+fn code_action_response_applies_workspace_edit() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let file = dir.path().join("action.rs");
+    fs::write(&file, "bad").expect("file");
+    let mut model = Model::open(&file).expect("open");
+    let uri = lsp_worker::file_uri(&file);
+    model.pending_lsp.insert(8, LspRequestKind::CodeAction);
+    model.handle_lsp_response(
+        8,
+        serde_json::json!([{
+            "title": "Fix it",
+            "edit": {
+                "changes": {
+                    uri: [{
+                        "range": {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 3}},
+                        "newText": "good"
+                    }]
+                }
+            }
+        }]),
+        None,
+    );
+    assert!(model.code_actions.is_some());
+    model.apply_code_action();
+    assert_eq!(model.editor.text().slice(0..4), "good");
+    assert!(model.code_actions.is_none());
+}
+
+#[test]
+fn cancelling_code_action_drops_pending_response() {
+    let mut model = Model::new(EditorState::from_text("text"), Some(PathBuf::from("a.rs")));
+    model.pending_lsp.insert(10, LspRequestKind::CodeAction);
+    model.cancel_code_actions();
+    assert!(!model.pending_lsp.contains_key(&10));
+    model.handle_lsp_response(10, serde_json::json!([{"title": "late"}]), None);
+    assert!(model.code_actions.is_none());
+}
+
+#[test]
+fn gopls_code_action_response_applies_organize_imports() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let file = dir.path().join("main.go");
+    fs::write(&file, "package main\n\nimport \"fmt\"\n\nfunc main() {}\n").expect("file");
+    let mut model = Model::open(&file).expect("open");
+    let uri = lsp_worker::file_uri(&file);
+    model.pending_lsp.insert(9, LspRequestKind::CodeAction);
+    model.handle_lsp_response(
+        9,
+        serde_json::json!([
+            {
+                "title": "Organize Imports",
+                "kind": "source.organizeImports",
+                "edit": {
+                    "documentChanges": [{
+                        "textDocument": {"version": 2, "uri": uri},
+                        "edits": [{
+                            "range": {"start": {"line": 1, "character": 0}, "end": {"line": 3, "character": 0}},
+                            "newText": ""
+                        }]
+                    }]
+                }
+            },
+            {
+                "title": "Browse documentation",
+                "kind": "source.doc",
+                "command": {"title": "Browse documentation", "command": "gopls.doc"}
+            }
+        ]),
+        None,
+    );
+    let actions = model.code_actions.as_ref().expect("actions");
+    assert_eq!(actions.items.len(), 2);
+    assert!(actions.items[0].edit.is_some());
+    model.apply_code_action();
+    assert!(
+        !model
+            .editor
+            .text()
+            .slice(0..model.editor.text().len_bytes())
+            .contains("fmt")
+    );
+    assert!(model.modified);
+}
+
+#[test]
+fn document_symbols_populate_and_jump_to_selection() {
+    let file = PathBuf::from("symbols.rs");
+    let mut model = Model::new(
+        EditorState::from_text("fn alpha() {\n    fn inner() {}\n}\nfn beta() {}\n"),
+        Some(file),
+    );
+    model.pending_lsp.insert(11, LspRequestKind::DocumentSymbol);
+    model.handle_lsp_response(
+        11,
+        serde_json::json!([
+            {
+                "name": "alpha",
+                "kind": 12,
+                "detail": "fn()",
+                "range": {
+                    "start": {"line": 0, "character": 0},
+                    "end": {"line": 2, "character": 1}
+                },
+                "selectionRange": {
+                    "start": {"line": 0, "character": 3},
+                    "end": {"line": 0, "character": 8}
+                },
+                "children": [{
+                    "name": "inner",
+                    "kind": 12,
+                    "range": {
+                        "start": {"line": 1, "character": 4},
+                        "end": {"line": 1, "character": 17}
+                    },
+                    "selectionRange": {
+                        "start": {"line": 1, "character": 7},
+                        "end": {"line": 1, "character": 12}
+                    }
+                }]
+            },
+            {
+                "name": "beta",
+                "kind": 12,
+                "location": {
+                    "uri": "file:///workspace/symbols.rs",
+                    "range": {
+                        "start": {"line": 3, "character": 3},
+                        "end": {"line": 3, "character": 7}
+                    }
+                }
+            }
+        ]),
+        None,
+    );
+    let symbols = model.document_symbols.as_ref().expect("symbols");
+    assert_eq!(symbols.items.len(), 3);
+    assert_eq!(symbols.items[1].depth, 1);
+    assert_eq!(symbols.items[2].line, 3);
+    model.apply_document_symbol();
+    assert_eq!(model.cursor, 3);
+    assert!(model.status.contains("alpha"));
+}
+
+#[test]
+fn formatting_response_applies_edits_without_writing() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let file = dir.path().join("format.rs");
+    fs::write(&file, "fn main(){}").expect("file");
+    let mut model = Model::open(&file).expect("open");
+    model.pending_lsp.insert(12, LspRequestKind::Formatting);
+    model.handle_lsp_response(
+        12,
+        serde_json::json!([{
+            "range": {
+                "start": {"line": 0, "character": 0},
+                "end": {"line": 0, "character": 0}
+            },
+            "newText": "//"
+        }]),
+        None,
+    );
+    assert_eq!(model.editor.text().slice(0..2), "//");
+    assert_eq!(fs::read_to_string(&file).expect("disk"), "fn main(){}");
+    assert!(model.save_all());
+    assert_eq!(fs::read_to_string(&file).expect("saved"), "//fn main(){}");
+}
+
+#[test]
 fn diagnostic_jump_cycles_between_lines() {
     let mut model = Model::new(
         EditorState::from_text("one\ntwo\nthree"),
@@ -374,6 +566,7 @@ fn diagnostic_jump_cycles_between_lines() {
                 severity: Some(1),
                 message: "first".to_owned(),
                 source: Some("test".to_owned()),
+                extra: serde_json::Map::new(),
             },
             lsp::Diagnostic {
                 range: lsp::Range {
@@ -389,6 +582,7 @@ fn diagnostic_jump_cycles_between_lines() {
                 severity: Some(2),
                 message: "second".to_owned(),
                 source: Some("test".to_owned()),
+                extra: serde_json::Map::new(),
             },
             lsp::Diagnostic {
                 range: lsp::Range {
@@ -404,6 +598,7 @@ fn diagnostic_jump_cycles_between_lines() {
                 severity: None,
                 message: "related".to_owned(),
                 source: Some("test".to_owned()),
+                extra: serde_json::Map::new(),
             },
         ],
     );
@@ -449,6 +644,7 @@ fn diagnostics_underline_matching_line() {
             severity: Some(1),
             message: "error".to_owned(),
             source: Some("test".to_owned()),
+            extra: serde_json::Map::new(),
         }],
     );
     let backend = TestBackend::new(80, 8);
@@ -804,6 +1000,7 @@ fn open_resolves_symlink_to_canonical_path() {
             severity: Some(1),
             message: "error".to_owned(),
             source: Some("test".to_owned()),
+            extra: serde_json::Map::new(),
         }],
     );
     assert_eq!(model.diagnostic_lines(), vec![1]);

@@ -1,6 +1,8 @@
 # Anvil Project Charter
 
-Status: **0.2.19 / Phase 0.7 in progress. Pre-alpha.**
+Status: **0.3.0 / Phase 0.7 in progress. Pre-alpha.**
+Release train: **0.3.0 → 0.4.0: Polish & Specification**. `0.3.x` is patch-only
+hardening; `0.4.0` is the release tag that closes the train after its gates.
 Supersedes: the V1.0 whitepaper draft where it conflicts with the decisions below.
 Changes to this document require an ADR.
 

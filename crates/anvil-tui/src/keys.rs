@@ -17,6 +17,9 @@ pub(crate) fn handle_event(model: &mut Model, event: Event) {
             } else if let InputMode::Search { query } = &mut model.input_mode {
                 query.push_str(&text);
                 model.dirty = true;
+            } else if let InputMode::Rename { name } = &mut model.input_mode {
+                name.push_str(&text);
+                model.dirty = true;
             }
         }
         Event::Resize(_, _) => model.dirty = true,
@@ -123,6 +126,10 @@ fn handle_key(model: &mut Model, key: KeyEvent) {
             match key.code {
                 KeyCode::Char('e') => model.open_tree(),
                 KeyCode::Char('f') => model.start_fuzzy(),
+                KeyCode::Char('r') => model.start_rename(),
+                KeyCode::Char('a') => model.request_code_actions(),
+                KeyCode::Char('s') => model.request_document_symbols(),
+                KeyCode::Char('F') => model.request_formatting(),
                 _ => {}
             }
             return;
@@ -169,6 +176,62 @@ fn handle_key(model: &mut Model, key: KeyEvent) {
             _ => {}
         }
         return;
+    }
+
+    if model.document_symbols.is_some() {
+        let consumed = match key.code {
+            KeyCode::Esc => {
+                model.cancel_document_symbols();
+                true
+            }
+            KeyCode::Up | KeyCode::Char('k') => {
+                model.move_document_symbol(-1);
+                true
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                model.move_document_symbol(1);
+                true
+            }
+            KeyCode::Enter => {
+                model.apply_document_symbol();
+                true
+            }
+            _ => {
+                model.cancel_document_symbols();
+                false
+            }
+        };
+        if consumed {
+            return;
+        }
+    }
+
+    if model.code_actions.is_some() {
+        let consumed = match key.code {
+            KeyCode::Esc => {
+                model.cancel_code_actions();
+                true
+            }
+            KeyCode::Up => {
+                model.move_code_action(-1);
+                true
+            }
+            KeyCode::Down => {
+                model.move_code_action(1);
+                true
+            }
+            KeyCode::Enter => {
+                model.apply_code_action();
+                true
+            }
+            _ => {
+                model.cancel_code_actions();
+                false
+            }
+        };
+        if consumed {
+            return;
+        }
     }
 
     if model.completion.is_some() {
@@ -249,6 +312,27 @@ fn handle_key(model: &mut Model, key: KeyEvent) {
     }
 
     match &mut model.input_mode {
+        InputMode::Rename { name } => match key.code {
+            KeyCode::Esc => {
+                model.input_mode = InputMode::Normal;
+                model.status = "rename cancelled".to_owned();
+                model.dirty = true;
+            }
+            KeyCode::Enter => {
+                let new_name = std::mem::take(name);
+                model.input_mode = InputMode::Normal;
+                model.request_rename(&new_name);
+            }
+            KeyCode::Backspace => {
+                name.pop();
+                model.dirty = true;
+            }
+            KeyCode::Char(character) if !control => {
+                name.push(character);
+                model.dirty = true;
+            }
+            _ => {}
+        },
         InputMode::CommandLine { buffer } => match key.code {
             KeyCode::Esc => {
                 model.input_mode = InputMode::Normal;

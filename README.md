@@ -3,8 +3,10 @@
 Anvil is a Linux-first terminal editor built around a small, capability-scoped
 plugin contract.
 
-Status: **0.2.19; Phase 0.7 in progress**. The ratatui editor now includes insert
-mode (`i`/`a`/`A`/`o`/`O`), `:w`/`:wq`/`:w file`/`:q!`, an unsaved-change
+Status: **0.3.0; Phase 0.7 in progress**.
+Release train: **0.3.0 → 0.4.0: Polish & Specification**. The ratatui editor now
+includes insert
+mode (`i`/`a`/`A`/`o`/`O`), `:w`/`:wa`/`:wq`/`:w file`/`:q!`, an unsaved-change
 guard, undo/redo, `x`/`dd`/`yy`/`p`, `w`/`b`/`e` word motions with
 `dw`/`db`/`de`/`yw`/`yb`/`ye`, literal `:s`/`:%s` substitution, `/` search
 with `n`/`N`, multi-buffer switching, horizontal scrolling, and dirty-only
@@ -12,8 +14,12 @@ redraws, insert-mode Tab indentation, a workspace file tree, and a fuzzy file
 finder. Rust and JSON files use Tree-sitter highlighting on a debounced
 background thread, capped at 256 KiB so large files keep plain-text latency.
 Trusted language servers (rust-analyzer, gopls, pyright/pylsp) run without the
-plugin sandbox; diagnostics, completion (`Ctrl+Space`), definition (`gd`), and
-hover (`K`) use canonicalized LSP UTF-16 positions.
+plugin sandbox; diagnostics, completion (`Ctrl+Space`), definition (`gd`),
+hover (`K`), rename (`Space r`), code actions/quick fixes (`Space a`),
+formatting (`Space F`), and document symbols (`Space s`) use canonicalized LSP
+UTF-16 positions. Rename, code-action, and formatting edits go through a shared
+`WorkspaceEdit` engine; unopened files become background buffers, and `:wa`
+saves every modified buffer without silently writing files during an edit.
 
 The plugin-host path has an empty sandboxed host with token-FD delivery,
 `close_range`, `no_new_privs`, Landlock read/no-exec rules, native-ABI seccomp
@@ -31,7 +37,8 @@ beside the binary or via `ANVIL_GATEWAY`.
 ## Documents
 
 - [Project charter](PROJECT_CHARTER.md)
-- [0.1.1 / Phase 0.7 plan](docs/phase-0-7-plan.md)
+- [0.3.0 → 0.4.0: Polish & Specification](docs/polish-and-specification.md)
+- [0.3.0 → 0.4.0 / Phase 0.7 plan](docs/phase-0-7-plan.md)
 - [Plugin-host isolation ADR](docs/adr/0012-plugin-host-isolation.md)
 - [Threat model](docs/threat-model.md)
 - [Architecture](docs/architecture.md)

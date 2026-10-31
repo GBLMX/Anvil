@@ -6,6 +6,36 @@ All notable changes to Anvil are recorded here. The format follows
 
 ## [Unreleased]
 
+### Release focus
+
+- `0.3.0` → `0.4.0` is the Polish & Specification train: fixes, tests,
+  documentation, and contract closure only; no new capability families. See
+  [the release policy](docs/polish-and-specification.md).
+
+## [0.3.0] - 2026-10-31
+
+### Added
+
+- LSP Code Actions/Quick Fixes (`Space a`) with a selectable popup and a
+  shared `WorkspaceEdit` application path. Code Action requests forward the
+  complete diagnostic payload (`code`, `codeDescription`, `relatedInformation`,
+  `tags`, and `data`), and the client advertises Code Action literal support.
+- LSP Rename (`Space r`) with an inline rename prompt; edits apply to every
+  file returned by the language server.
+- LSP Formatting (`Space F`, `:format`) applies `TextEdit[]` through the shared
+  `WorkspaceEdit` path without writing to disk.
+- Document Symbols (`Space s`, `:symbols`) with hierarchical
+  `DocumentSymbol`/`SymbolInformation` parsing, selection, and cursor jump.
+- `:wa` saves every modified buffer. `WorkspaceEdit` changes to unopened files
+  create background buffers and never write files during an edit.
+
+### Changed
+
+- LSP Code Actions/Rename now share UTF-16 workspace-edit application,
+  unopened-file loading, overlap rejection, and active-buffer snapshot updates.
+- Stale Code Action responses are cancelled when the popup closes or another
+  overlay/request replaces it.
+
 ## [0.2.19] - 2026-10-31
 
 ### Fixed

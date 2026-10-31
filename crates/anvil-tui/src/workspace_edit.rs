@@ -238,6 +238,37 @@ mod tests {
     }
 
     #[test]
+    fn save_all_writes_ghost_buffers() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let first = dir.path().join("first.rs");
+        let second = dir.path().join("second.rs");
+        std::fs::write(&first, "first").expect("first");
+        std::fs::write(&second, "second").expect("second");
+        let mut model = Model::open(&first).expect("open");
+        model.open_path(&second).expect("second");
+        model.switch_buffer(-1);
+        let workspace_edit = WorkspaceEdit::from_lsp(&serde_json::json!({
+            "changes": {
+                uri(&second): [{
+                    "range": {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 0}},
+                    "newText": "G"
+                }]
+            }
+        }))
+        .expect("parse");
+        workspace_edit.apply(&mut model).expect("apply");
+        assert_eq!(
+            std::fs::read_to_string(&second).expect("before save"),
+            "second"
+        );
+        assert!(model.save_all());
+        assert_eq!(
+            std::fs::read_to_string(&second).expect("after save"),
+            "Gsecond"
+        );
+    }
+
+    #[test]
     fn rejects_overlapping_changes_without_modifying_text() {
         let dir = tempfile::tempdir().expect("tempdir");
         let file = dir.path().join("file.rs");
