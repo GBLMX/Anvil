@@ -24,7 +24,7 @@ use crossterm::{
 use ratatui::{
     Terminal,
     backend::CrosstermBackend,
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
 };
 
@@ -46,6 +46,7 @@ use lsp_ui::lsp_settings;
 mod keys;
 mod lsp_worker;
 mod render;
+mod theme;
 use workspace_edit::WorkspaceEdit;
 mod workspace_edit;
 pub(crate) use keys::handle_event;
@@ -886,16 +887,18 @@ impl Model {
         self.dirty = true;
     }
 
-    fn gutter_width(&self) -> u16 {
-        let digits = self
-            .editor
+    fn gutter_digits(&self) -> usize {
+        self.editor
             .index()
             .len_lines()
             .max(1)
             .to_string()
             .len()
-            .max(3);
-        (digits + 2) as u16
+            .max(3)
+    }
+
+    fn gutter_width(&self) -> u16 {
+        (self.gutter_digits() + 2) as u16
     }
 
     fn current_line(&self) -> Option<usize> {
@@ -909,7 +912,7 @@ impl Model {
         let index = self.editor.index();
         let end = (self.scroll + usize::from(height)).min(index.len_lines());
         let current = self.current_line();
-        let digits = usize::from(self.gutter_width().saturating_sub(1));
+        let digits = self.gutter_digits();
         let mut lines = Vec::with_capacity(end.saturating_sub(self.scroll));
         for line_number in self.scroll..end {
             let display = match current {
@@ -918,14 +921,14 @@ impl Model {
             };
             let marker = self.git_marker(line_number).unwrap_or(' ');
             let number = format!("{display:>digits$} ");
-            let mut style = Style::default().fg(Color::DarkGray);
+            let mut style = Style::default().fg(theme::MUTED);
             if Some(line_number) == current {
-                style = style.bg(Color::Indexed(236));
+                style = theme::current_line();
             }
             let marker_style = match marker {
-                '+' => Style::default().fg(Color::Green),
-                '-' => Style::default().fg(Color::Red),
-                '~' => Style::default().fg(Color::Yellow),
+                '+' => Style::default().fg(theme::SUCCESS),
+                '-' => Style::default().fg(theme::ERROR),
+                '~' => Style::default().fg(theme::WARNING),
                 _ => Style::default(),
             };
             lines.push(Line::from(vec![
@@ -979,9 +982,9 @@ impl Model {
                             spans.push(Span::raw(&chunk[from..at]));
                         }
                         let style = if base + at == self.cursor {
-                            Style::default().bg(Color::Yellow).fg(Color::Black)
+                            theme::mode_badge(theme::WARNING)
                         } else {
-                            Style::default().bg(Color::Indexed(88)).fg(Color::White)
+                            theme::selected()
                         };
                         spans.push(Span::styled(&chunk[at..at + needle.len()], style));
                         from = at + needle.len();
@@ -1001,12 +1004,12 @@ impl Model {
             apply_diagnostic_underlines(&mut spans, &ranges);
             let mut rendered = Line::from(spans);
             if Some(line_number) == current {
-                rendered = rendered.style(Style::default().bg(Color::Indexed(236)));
+                rendered = rendered.style(theme::current_line());
             }
             if diagnostic_lines.contains(&line_number) && ranges.is_empty() {
                 rendered = rendered.style(
                     Style::default()
-                        .fg(Color::Red)
+                        .fg(theme::ERROR)
                         .add_modifier(Modifier::UNDERLINED),
                 );
             }

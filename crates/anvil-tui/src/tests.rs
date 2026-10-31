@@ -75,6 +75,23 @@ fn renders_visible_lines() {
     assert!(rendered.contains("alpha"));
     assert!(rendered.contains("beta"));
     assert!(rendered.contains("gamma"));
+    assert!(rendered.contains("1 alpha"), "{rendered}");
+}
+
+#[test]
+fn indent_guides_do_not_overwrite_code() {
+    let model = Model::new(EditorState::from_text("    let value = 42;"), None);
+    let backend = TestBackend::new(40, 6);
+    let mut terminal = Terminal::new(backend).expect("terminal");
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+    let rendered = terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect::<String>();
+    assert!(rendered.contains("let value = 42;"), "{rendered}");
 }
 
 #[test]
@@ -442,7 +459,7 @@ fn syntax_keyword_is_rendered() {
         .buffer()
         .content()
         .iter()
-        .any(|cell| cell.fg == Color::Magenta);
+        .any(|cell| cell.fg == theme::SYNTAX_KEYWORD);
     assert!(colored, "keyword span was not colored");
     model.dirty = false;
 }
@@ -1046,7 +1063,7 @@ fn diagnostics_underline_matching_line() {
         .buffer()
         .content()
         .iter()
-        .any(|cell| cell.fg == Color::Red);
+        .any(|cell| cell.fg == theme::ERROR);
     assert!(red, "diagnostic line was not rendered red");
 }
 

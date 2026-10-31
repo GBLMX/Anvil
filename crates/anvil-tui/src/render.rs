@@ -2,15 +2,25 @@
 
 use super::*;
 use crate::syntax::{Highlight, SyntaxClass};
+use crate::theme;
 use anvil_api::EditorView;
 use ratatui::{
     Frame,
     layout::{Alignment, Rect},
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Clear, Paragraph},
+    widgets::{Block, BorderType, Clear, Paragraph},
 };
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
+
+fn panel_block(title: impl Into<Line<'static>>) -> Block<'static> {
+    Block::bordered()
+        .border_type(BorderType::Rounded)
+        .border_style(theme::border(false))
+        .style(theme::panel())
+        .title_style(theme::title())
+        .title(title)
+}
 
 pub(crate) fn utf16_to_byte(text: &str, units: usize) -> usize {
     let mut seen = 0;
@@ -56,7 +66,9 @@ pub(crate) fn apply_diagnostic_underlines(spans: &mut Vec<Span<'_>>, ranges: &[(
                 .iter()
                 .any(|(start, end)| column < *end && column + width.max(1) > *start);
             let style = if underlined {
-                span.style.fg(Color::Red).add_modifier(Modifier::UNDERLINED)
+                span.style
+                    .fg(theme::ERROR)
+                    .add_modifier(Modifier::UNDERLINED)
             } else {
                 span.style
             };
@@ -136,14 +148,14 @@ pub(crate) fn push_syntax_spans<'a>(
 
 fn syntax_style(class: SyntaxClass) -> Style {
     let color = match class {
-        SyntaxClass::Keyword => Color::Magenta,
-        SyntaxClass::String => Color::Green,
-        SyntaxClass::Comment => Color::DarkGray,
-        SyntaxClass::Number => Color::Yellow,
-        SyntaxClass::Function => Color::Blue,
-        SyntaxClass::Type => Color::Cyan,
-        SyntaxClass::Property => Color::LightCyan,
-        SyntaxClass::Constant => Color::Yellow,
+        SyntaxClass::Keyword => theme::SYNTAX_KEYWORD,
+        SyntaxClass::String => theme::SYNTAX_STRING,
+        SyntaxClass::Comment => theme::SYNTAX_COMMENT,
+        SyntaxClass::Number => theme::SYNTAX_NUMBER,
+        SyntaxClass::Function => theme::SYNTAX_FUNCTION,
+        SyntaxClass::Type => theme::SYNTAX_TYPE,
+        SyntaxClass::Property => theme::SYNTAX_PROPERTY,
+        SyntaxClass::Constant => theme::SYNTAX_CONSTANT,
     };
     Style::default().fg(color)
 }
@@ -189,9 +201,9 @@ fn fuzzy_match_ranges(path: &str, query: &str) -> Vec<(usize, usize)> {
 fn fuzzy_path_line(path: &str, query: &str, max_width: usize, selected: bool) -> Line<'static> {
     let clipped = clip_path(path, max_width);
     let base = if selected {
-        Style::default().fg(Color::Black).bg(Color::Yellow)
+        theme::selected()
     } else {
-        Style::default()
+        theme::panel()
     };
     let ranges = fuzzy_match_ranges(&clipped, query);
     if ranges.is_empty() {
@@ -242,10 +254,10 @@ pub fn view(model: &Model, frame: &mut Frame) {
         title
     };
     let (mode_text, mode_color, status) = match &model.input_mode {
-        InputMode::Rename { name } => (" REN ", Color::Magenta, format!("rename> {name}")),
-        InputMode::CommandLine { buffer } => (" CMD ", Color::Yellow, format!(":{buffer}")),
-        InputMode::Search { query } => (" SRC ", Color::Yellow, format!("/{query}")),
-        InputMode::Insert => (" INS ", Color::Green, String::new()),
+        InputMode::Rename { name } => (" REN ", theme::MAGENTA, format!("rename> {name}")),
+        InputMode::CommandLine { buffer } => (" CMD ", theme::WARNING, format!(":{buffer}")),
+        InputMode::Search { query } => (" SRC ", theme::WARNING, format!("/{query}")),
+        InputMode::Insert => (" INS ", theme::SUCCESS, String::new()),
         InputMode::Normal => {
             let position = model
                 .editor
@@ -264,13 +276,16 @@ pub fn view(model: &Model, frame: &mut Frame) {
             } else {
                 format!("{} ·{location}", model.status)
             };
-            (" NOR ", Color::Blue, status)
+            (" NOR ", theme::ACCENT, status)
         }
     };
-    let mode = Span::styled(mode_text, Style::default().fg(Color::Black).bg(mode_color));
-    let block = Block::bordered()
-        .title(title)
-        .title_bottom(Line::from(vec![mode, Span::raw(status)]));
+    let mode = Span::styled(mode_text, theme::mode_badge(mode_color));
+    let block = panel_block(title)
+        .title_style(theme::title())
+        .title_bottom(Line::from(vec![
+            mode,
+            Span::styled(status, theme::status()),
+        ]));
     frame.render_widget(block, area);
     let inner = Rect {
         x: area.x + 1,
@@ -303,27 +318,32 @@ pub fn view(model: &Model, frame: &mut Frame) {
             };
             let text = format!("{}{}{}", "  ".repeat(entry.depth), marker, name);
             let style = if model.tree_selected == Some(index) {
-                Style::default().fg(Color::Black).bg(Color::Yellow)
+                theme::selected()
             } else if entry.is_dir {
-                Style::default().fg(Color::Cyan)
+                Style::default().fg(theme::ACCENT).bg(theme::SURFACE)
             } else {
-                Style::default()
+                theme::panel()
             };
             lines.push(Line::styled(text, style));
         }
         if lines.is_empty() {
-            lines.push(Line::raw("empty"));
+            lines.push(Line::styled("empty", theme::panel().fg(theme::MUTED)));
         }
         let tree_title = if model.show_hidden {
             "Files · hidden"
         } else {
             "Files"
         };
-        let mut tree_block = Block::bordered().title(tree_title);
+        let mut tree_block = panel_block(tree_title);
         if model.tree_focus {
-            tree_block = tree_block.border_style(Style::default().fg(Color::Yellow));
+            tree_block = tree_block.border_style(theme::border(true));
         }
-        frame.render_widget(Paragraph::new(lines).block(tree_block), tree_area);
+        frame.render_widget(
+            Paragraph::new(lines)
+                .style(theme::panel())
+                .block(tree_block),
+            tree_area,
+        );
         content = Rect {
             x: inner.x + sidebar_width,
             width: inner.width.saturating_sub(sidebar_width),
@@ -341,11 +361,12 @@ pub fn view(model: &Model, frame: &mut Frame) {
         ..content
     };
     frame.render_widget(
-        Paragraph::new(model.visible_gutter(inner.height)),
+        Paragraph::new(model.visible_gutter(inner.height)).style(theme::text()),
         gutter_area,
     );
     frame.render_widget(
         Paragraph::new(model.visible_lines(inner.height))
+            .style(theme::text())
             .scroll((0, u16::try_from(model.hscroll).unwrap_or(u16::MAX))),
         text_area,
     );
@@ -368,13 +389,13 @@ pub fn view(model: &Model, frame: &mut Frame) {
             }
         }
         let style = if model.current_line() == Some(line_number) {
-            Style::default().fg(Color::Indexed(244))
+            Style::default().fg(theme::MUTED)
         } else {
-            Style::default().fg(Color::DarkGray)
+            Style::default().fg(theme::DIM)
         };
         for level in 1..=columns / 4 {
             let column = level * 4;
-            if column < model.hscroll {
+            if column >= columns || column < model.hscroll {
                 continue;
             }
             let x = text_area.x + (column - model.hscroll) as u16;
@@ -415,13 +436,15 @@ pub fn view(model: &Model, frame: &mut Frame) {
             .iter()
             .map(|(key, description)| {
                 Line::from(vec![
-                    Span::styled(format!(" {key:<2}"), Style::default().fg(Color::Yellow)),
+                    Span::styled(format!(" {key:<2}"), Style::default().fg(theme::ACCENT)),
                     Span::raw(format!(" {description}")),
                 ])
             })
             .collect::<Vec<_>>();
         frame.render_widget(
-            Paragraph::new(lines).block(Block::bordered().title("Space")),
+            Paragraph::new(lines)
+                .style(theme::panel())
+                .block(panel_block("Space")),
             popup,
         );
     }
@@ -446,8 +469,11 @@ pub fn view(model: &Model, frame: &mut Frame) {
         let y = inner.y + (line - model.scroll) as u16;
         if x < text_area.right() && y < text_area.bottom() {
             frame.render_widget(
-                Paragraph::new("│")
-                    .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::DIM)),
+                Paragraph::new("│").style(
+                    Style::default()
+                        .fg(theme::ACCENT)
+                        .add_modifier(Modifier::DIM),
+                ),
                 Rect {
                     x,
                     y,
@@ -500,13 +526,18 @@ pub fn view(model: &Model, frame: &mut Frame) {
                 row == fuzzy.selected,
             ));
         }
-        lines.push(Line::raw(format!("> {}", fuzzy.query)));
+        lines.push(Line::styled(
+            format!("> {}", fuzzy.query),
+            Style::default().fg(theme::ACCENT).bg(theme::SURFACE),
+        ));
         frame.render_widget(
-            Paragraph::new(lines).block(Block::bordered().title(if model.show_hidden {
-                "Files · hidden"
-            } else {
-                "Files"
-            })),
+            Paragraph::new(lines)
+                .style(theme::panel())
+                .block(panel_block(if model.show_hidden {
+                    "Files · hidden"
+                } else {
+                    "Files"
+                })),
             popup,
         );
     }
@@ -523,7 +554,9 @@ pub fn view(model: &Model, frame: &mut Frame) {
         };
         frame.render_widget(Clear, popup);
         frame.render_widget(
-            Paragraph::new(diagnostic.as_str()).block(Block::bordered().title("Diagnostic")),
+            Paragraph::new(diagnostic.as_str())
+                .style(theme::panel())
+                .block(panel_block("Diagnostic")),
             popup,
         );
     }
@@ -554,14 +587,18 @@ pub fn view(model: &Model, frame: &mut Frame) {
                 item.title.clone()
             };
             let style = if row == actions.selected {
-                Style::default().fg(Color::Black).bg(Color::Yellow)
+                theme::selected()
+            } else if item.disabled.is_some() {
+                theme::panel().fg(theme::MUTED)
             } else {
-                Style::default()
+                theme::panel()
             };
             lines.push(Line::styled(text, style));
         }
         frame.render_widget(
-            Paragraph::new(lines).block(Block::bordered().title("Code Actions")),
+            Paragraph::new(lines)
+                .style(theme::panel())
+                .block(panel_block("Code Actions")),
             popup,
         );
     }
@@ -590,14 +627,16 @@ pub fn view(model: &Model, frame: &mut Frame) {
                 format!("{indent}{}", item.name)
             };
             let style = if start + row == symbols.selected {
-                Style::default().fg(Color::Black).bg(Color::Yellow)
+                theme::selected()
             } else {
-                Style::default()
+                theme::panel()
             };
             lines.push(Line::styled(text, style));
         }
         frame.render_widget(
-            Paragraph::new(lines).block(Block::bordered().title("Document Symbols")),
+            Paragraph::new(lines)
+                .style(theme::panel())
+                .block(panel_block("Document Symbols")),
             popup,
         );
     }
@@ -617,17 +656,19 @@ pub fn view(model: &Model, frame: &mut Frame) {
         frame.render_widget(Clear, popup);
         let mut lines = vec![Line::styled(
             item.label.clone(),
-            Style::default().fg(Color::Cyan),
+            Style::default().fg(theme::ACCENT).bg(theme::SURFACE),
         )];
         if !item.documentation.is_empty() {
             lines.push(Line::raw(item.documentation.clone()));
         }
         lines.push(Line::styled(
             format!("parameter {}", signature.active_parameter + 1),
-            Style::default().fg(Color::DarkGray),
+            Style::default().fg(theme::MUTED).bg(theme::SURFACE),
         ));
         frame.render_widget(
-            Paragraph::new(lines).block(Block::bordered().title("Signature")),
+            Paragraph::new(lines)
+                .style(theme::panel())
+                .block(panel_block("Signature")),
             popup,
         );
     }
@@ -649,7 +690,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
         let start = symbols.selected.saturating_sub(visible.saturating_sub(1));
         let mut lines = vec![Line::styled(
             format!("> {}", symbols.query),
-            Style::default().fg(Color::Cyan),
+            Style::default().fg(theme::ACCENT).bg(theme::SURFACE),
         )];
         for (row, index) in symbols
             .filtered
@@ -665,20 +706,22 @@ pub fn view(model: &Model, frame: &mut Frame) {
                 format!("{} · {}", item.detail, item.path.display())
             };
             let style = if start + row == symbols.selected {
-                Style::default().fg(Color::Black).bg(Color::Yellow)
+                theme::selected()
             } else {
-                Style::default()
+                theme::panel()
             };
             lines.push(Line::styled(format!("{}  {detail}", item.name), style));
         }
         if lines.len() == 1 {
             lines.push(Line::styled(
                 "no symbols",
-                Style::default().fg(Color::DarkGray),
+                Style::default().fg(theme::MUTED).bg(theme::SURFACE),
             ));
         }
         frame.render_widget(
-            Paragraph::new(lines).block(Block::bordered().title("Workspace Symbols")),
+            Paragraph::new(lines)
+                .style(theme::panel())
+                .block(panel_block("Workspace Symbols")),
             popup,
         );
     }
@@ -710,15 +753,16 @@ pub fn view(model: &Model, frame: &mut Frame) {
                 format!("{}  {}", item.label, item.detail)
             };
             let style = if row == completion.selected {
-                Style::default().fg(Color::Black).bg(Color::Yellow)
+                theme::selected()
             } else {
-                Style::default()
+                theme::panel()
             };
             lines.push(Line::styled(text, style));
         }
         frame.render_widget(
             Paragraph::new(lines)
-                .block(Block::bordered().title(format!("Completion #{}", completion.id))),
+                .style(theme::panel())
+                .block(panel_block(format!("Completion #{}", completion.id))),
             popup,
         );
     }
@@ -737,7 +781,9 @@ pub fn view(model: &Model, frame: &mut Frame) {
         };
         frame.render_widget(Clear, popup);
         frame.render_widget(
-            Paragraph::new(hover.as_str()).block(Block::bordered().title("Hover")),
+            Paragraph::new(hover.as_str())
+                .style(theme::panel())
+                .block(panel_block("Hover")),
             popup,
         );
     }
@@ -757,57 +803,63 @@ fn render_welcome(frame: &mut Frame, area: Rect, model: &Model) {
         Line::from(vec![Span::styled(
             "ANVIL",
             Style::default()
-                .fg(Color::Yellow)
+                .fg(theme::ACCENT)
+                .bg(theme::SURFACE)
                 .add_modifier(Modifier::BOLD),
         )]),
-        Line::raw("selection-first terminal editor"),
+        Line::styled(
+            "selection-first terminal editor",
+            Style::default().fg(theme::MUTED).bg(theme::SURFACE),
+        ),
         Line::raw(""),
         Line::from(vec![
-            Span::styled("i", Style::default().fg(Color::Cyan)),
+            Span::styled("i", Style::default().fg(theme::ACCENT)),
             Span::raw("      insert"),
         ]),
         Line::from(vec![
-            Span::styled("Space f", Style::default().fg(Color::Cyan)),
+            Span::styled("Space f", Style::default().fg(theme::ACCENT)),
             Span::raw(" find file"),
         ]),
         Line::from(vec![
-            Span::styled("Space e", Style::default().fg(Color::Cyan)),
+            Span::styled("Space e", Style::default().fg(theme::ACCENT)),
             Span::raw(" file tree"),
         ]),
         Line::from(vec![
-            Span::styled("?", Style::default().fg(Color::Cyan)),
+            Span::styled("?", Style::default().fg(theme::ACCENT)),
             Span::raw("      help"),
         ]),
         Line::from(vec![
-            Span::styled(":q", Style::default().fg(Color::Cyan)),
+            Span::styled(":q", Style::default().fg(theme::ACCENT)),
             Span::raw("      quit"),
         ]),
         Line::raw(""),
-        Line::raw(format!("workspace  {}", model.workspace.display())),
-        Line::raw(format!("version    {}", env!("CARGO_PKG_VERSION"))),
+        Line::styled(
+            format!("workspace  {}", model.workspace.display()),
+            Style::default().fg(theme::MUTED).bg(theme::SURFACE),
+        ),
+        Line::styled(
+            format!("version    {}", env!("CARGO_PKG_VERSION")),
+            Style::default().fg(theme::MUTED).bg(theme::SURFACE),
+        ),
     ];
     lines.truncate(usize::from(height.saturating_sub(2)));
     frame.render_widget(
         Paragraph::new(lines)
+            .style(theme::panel())
             .alignment(Alignment::Center)
-            .block(Block::bordered().title(" start ")),
+            .block(panel_block(" start ")),
         panel,
     );
 }
 
 fn render_split_pane(frame: &mut Frame, area: Rect, buffer: &Buffer, is_active: bool) {
-    let block = Block::bordered()
-        .title(
-            buffer
-                .path
-                .as_ref()
-                .map_or("[no file]".to_owned(), |path| path.display().to_string()),
-        )
-        .border_style(if is_active {
-            Style::default().fg(Color::Yellow)
-        } else {
-            Style::default().fg(Color::DarkGray)
-        });
+    let block = panel_block(
+        buffer
+            .path
+            .as_ref()
+            .map_or("[no file]".to_owned(), |path| path.display().to_string()),
+    )
+    .border_style(theme::border(is_active));
     let inner = Rect {
         x: area.x + 1,
         y: area.y + 1,
@@ -827,17 +879,21 @@ fn render_split_pane(frame: &mut Frame, area: Rect, buffer: &Buffer, is_active: 
             break;
         };
         let text = buffer.editor.text().slice(start..line.end);
-        lines.push(Line::raw(format!(
-            "{:>digits$} {text}",
-            line_number + 1,
-            digits = digits
-        )));
+        lines.push(Line::from(vec![
+            Span::styled(
+                format!("{:>digits$} ", line_number + 1, digits = digits),
+                Style::default().fg(theme::MUTED),
+            ),
+            Span::raw(text),
+        ]));
     }
     if lines.is_empty() {
         lines.push(Line::raw(""));
     }
     frame.render_widget(
-        Paragraph::new(lines).scroll((0, u16::try_from(buffer.hscroll).unwrap_or(u16::MAX))),
+        Paragraph::new(lines)
+            .style(theme::text())
+            .scroll((0, u16::try_from(buffer.hscroll).unwrap_or(u16::MAX))),
         inner,
     );
 }

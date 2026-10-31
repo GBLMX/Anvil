@@ -19,6 +19,10 @@ All notable changes to Anvil are recorded here. The format follows
   a Criterion benchmark compares it with the legacy transaction path.
 - Start dashboard for empty launches: workspace/version context and shortcuts
   for insert, fuzzy file finding, the file tree, help, and quit.
+- Dark truecolor TUI theme with rounded panels, accent focus borders, mode
+  badges, panel surfaces, and WCAG-AA text/syntax contrast.
+- Fixed line-number gutter clipping and indentation guides overwriting the
+  first code character.
 - CLI `-h`/`--help`, `-V`/`--version`, and `--workspace=<DIR>` parsing, with
   parser tests and documented usage.
 - Opt-in PGO and BOLT workflow: `scripts/pgo-bolt.sh` builds instrumented and
