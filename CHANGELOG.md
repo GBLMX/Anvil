@@ -6,6 +6,15 @@ All notable changes to Anvil are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.2.8] - 2026-10-31
+
+### Fixed
+
+- Navigation through definition, file tree, and fuzzy finder no longer replaces
+  an edited active buffer without snapshotting it. `open_path` now preserves
+  modified buffers, reuses already-open buffers, and routes navigation through
+  the multi-buffer model.
+
 ## [0.2.7] - 2026-10-31
 
 ### Changed

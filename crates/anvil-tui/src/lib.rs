@@ -282,23 +282,56 @@ impl Model {
         model
     }
 
-    /// Replaces the active buffer with a UTF-8 file from the workspace.
+    /// Opens a workspace file, preserving an edited active buffer as a snapshot.
     pub fn open_path(&mut self, path: impl AsRef<Path>) -> Result<(), String> {
         let timing = std::env::var_os("ANVIL_OPEN_TIMING").is_some();
         let start = Instant::now();
         let absolute = self.absolute_path(path.as_ref())?;
+        if self.path.as_ref() == Some(&absolute) {
+            return Ok(());
+        }
+        if let Some(index) = self
+            .buffers
+            .iter()
+            .position(|buffer| buffer.path.as_ref() == Some(&absolute))
+        {
+            if self.path.is_some() {
+                self.sync_active();
+            }
+            self.load_buffer(index);
+            return Ok(());
+        }
         let text = self.read_file(&absolute)?;
         let read_done = start.elapsed();
-        self.editor = EditorState::from_text(&text);
+        if self.path.is_some() {
+            self.sync_active();
+            if self.buffers.is_empty() {
+                self.buffers.push(self.snapshot());
+                self.active = 0;
+            }
+            self.buffers.push(Buffer {
+                editor: EditorState::from_text(&text),
+                path: Some(absolute),
+                cursor: 0,
+                scroll: 0,
+                hscroll: 0,
+                modified: false,
+                search_query: String::new(),
+            });
+            let index = self.buffers.len() - 1;
+            self.load_buffer(index);
+        } else {
+            self.editor = EditorState::from_text(&text);
+            self.path = Some(absolute);
+            self.cursor = 0;
+            self.scroll = 0;
+            self.hscroll = 0;
+            self.modified = false;
+            self.syntax.borrow_mut().invalidate();
+        }
         if timing {
             eprintln!("open_path read={read_done:?} index={:?}", start.elapsed());
         }
-        self.syntax.borrow_mut().invalidate();
-        self.path = Some(absolute);
-        self.cursor = 0;
-        self.scroll = 0;
-        self.hscroll = 0;
-        self.modified = false;
         self.dirty = true;
         Ok(())
     }
@@ -2235,6 +2268,30 @@ mod tests {
         assert_eq!(utf16_to_byte(text, 1), 1);
         assert_eq!(utf16_to_byte(text, 3), 5);
         assert_eq!(utf16_to_byte(text, 4), 6);
+    }
+
+    #[test]
+    fn navigation_preserves_modified_buffer() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let first = dir.path().join("first.txt");
+        let second = dir.path().join("second.txt");
+        fs::write(&first, "first").expect("first");
+        fs::write(&second, "second").expect("second");
+        let mut model = Model::open(&first).expect("open");
+        model.insert_text("X");
+        assert!(model.modified);
+        model.open_path(&second).expect("second open");
+        assert_eq!(
+            model.path.as_deref(),
+            Some(second.canonicalize().expect("canonical").as_path())
+        );
+        assert_eq!(model.editor.text().slice(0..6), "second");
+        assert_eq!(model.buffers.len(), 2);
+        assert!(model.buffers[0].modified);
+        assert_eq!(model.buffers[0].editor.text().slice(0..6), "Xfirst");
+        model.switch_buffer(-1);
+        assert_eq!(model.editor.text().slice(0..6), "Xfirst");
+        assert!(model.modified);
     }
 
     #[test]
