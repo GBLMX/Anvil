@@ -24,6 +24,8 @@ func AllowedTool(path string) (string, error) {
 		return "rg", nil
 	case "/usr/bin/fd", "/bin/fd", "/usr/bin/fdfind":
 		return "fd", nil
+	case "/usr/bin/git", "/bin/git":
+		return "git", nil
 	default:
 		if filepath.Base(clean) == "rust-analyzer" {
 			return "rust-analyzer", nil
@@ -43,6 +45,8 @@ func Validate(tool string, args []string) error {
 		return validateRg(args)
 	case "fd":
 		return validateFd(args)
+	case "git":
+		return validateGit(args)
 	case "rust-analyzer":
 		if len(args) == 0 || (len(args) == 1 && args[0] == "--stdio") {
 			return nil
@@ -122,6 +126,20 @@ func validateFd(args []string) error {
 			}
 			return fmt.Errorf("%w: unknown flag %s", ErrInvalidArgs, arg)
 		}
+	}
+	return nil
+}
+
+func validateGit(args []string) error {
+	if len(args) != 9 || args[0] != "--no-pager" || args[1] != "diff" ||
+		args[2] != "--no-ext-diff" || args[3] != "--no-textconv" ||
+		args[4] != "--no-color" || args[5] != "--unified=0" || args[6] != "HEAD" || args[7] != "--" {
+		return fmt.Errorf("%w: unsupported git command", ErrInvalidArgs)
+	}
+	path := filepath.Clean(args[8])
+	if path == "" || path == "." || path == ".." || filepath.IsAbs(path) ||
+		strings.HasPrefix(path, ".."+string(filepath.Separator)) {
+		return fmt.Errorf("%w: invalid git path", ErrInvalidArgs)
 	}
 	return nil
 }

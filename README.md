@@ -1,25 +1,40 @@
 # Anvil
 
-Anvil is a Linux-first terminal editor built around a small, capability-scoped
-plugin contract.
+Anvil is a Linux-first terminal editor. The project targets a reusable Rust
+kernel, a per-session Go policy gateway, and a capability-scoped plugin host.
+The official standard edition is one composition; third-party distributions
+can compose the kernel with their own UI and trusted Rust code. Runtime plugins
+remain untrusted and sandboxed.
 
 Status: **0.3.0; Phase 0.7 in progress**.
-Release train: **0.3.0 → 0.4.0: Polish & Specification**. The ratatui editor now
+Release train: **0.3.0 → 0.4.0: Polish & Specification**.
+Development uses Rust from `rust-toolchain.toml` and Go **1.26.10 or newer**;
+CI installs the exact Go version from the root `go.mod`. The ratatui editor now
 includes insert
-mode (`i`/`a`/`A`/`o`/`O`), `:w`/`:wa`/`:wq`/`:w file`/`:q!`, an unsaved-change
-guard, undo/redo, `x`/`dd`/`yy`/`p`, `w`/`b`/`e` word motions with
+mode (`i`/`a`/`A`/`o`/`O`), multi-cursor selection (`s`/`Alt-s`/`C`),
+`:w`/`:wa`/`:wq`/`:w file`/`:q!`, an unsaved-change guard, undo/redo,
+`x`/`dd`/`yy`/`p`, `w`/`b`/`e` word motions with
 `dw`/`db`/`de`/`yw`/`yb`/`ye`, literal `:s`/`:%s` substitution, `/` search
-with `n`/`N`, multi-buffer switching, horizontal scrolling, and dirty-only
-redraws, insert-mode Tab indentation, a workspace file tree, and a fuzzy file
+with `n`/`N`, multi-buffer switching, vertical splits with independent pane cursors,
+horizontal scrolling, and dirty-only redraws, insert-mode Tab indentation, a workspace file tree, and a fuzzy file
 finder. Rust and JSON files use Tree-sitter highlighting on a debounced
 background thread, capped at 256 KiB so large files keep plain-text latency.
-Trusted language servers (rust-analyzer, gopls, pyright/pylsp) run without the
-plugin sandbox; diagnostics, completion (`Ctrl+Space`), definition (`gd`),
+Trusted language servers (rust-analyzer, gopls, pyright/pylsp,
+typescript-language-server/vtsls, clangd, jdtls, lua-language-server,
+vscode-json-language-server, yaml-language-server, bash-language-server) run
+without the plugin sandbox; diagnostics, completion (`Ctrl+Space`), definition (`gd`),
 hover (`K`), rename (`Space r`), code actions/quick fixes (`Space a`),
-formatting (`Space F`), and document symbols (`Space s`) use canonicalized LSP
-UTF-16 positions. Rename, code-action, and formatting edits go through a shared
+formatting (`Space F`), document symbols (`Space s`), signature help, and
+workspace symbols (`Space S`) use canonicalized LSP UTF-16 positions. Rename, code-action, and formatting edits go through a shared
 `WorkspaceEdit` engine; unopened files become background buffers, and `:wa`
 saves every modified buffer without silently writing files during an edit.
+Language servers are not bundled; install them on `PATH`.
+
+- TypeScript support requires a project-local compiler: run
+  `npm install -D typescript` (or `pnpm add -D typescript`) in the project.
+- C/C++ support works best with a compilation database: `bear -- make`, or
+  configure CMake with `-DCMAKE_EXPORT_COMPILE_COMMANDS=ON`. Without it, clangd
+  may report unresolved includes.
 
 The plugin-host path has an empty sandboxed host with token-FD delivery,
 `close_range`, `no_new_privs`, Landlock read/no-exec rules, native-ABI seccomp
@@ -55,11 +70,17 @@ beside the binary or via `ANVIL_GATEWAY`.
 - [Phase 0.6 plan](docs/phase-0-6-plan.md)
 - [Upstream dependencies](docs/adr/0006-upstream-dependencies.md)
 - [JSON-RPC and token contract](docs/adr/0007-jsonrpc-envelope-and-capability-token.md)
+- [Kernel/distribution boundary](docs/adr/0013-kernel-distribution-boundary.md)
 - [Selection-first interaction](docs/adr/0008-selection-first-interaction.md)
 - [Text-model snapshot gate](docs/adr/0009-text-model-snapshot-gate.md)
 - [Cursor and snapshot ownership](docs/adr/0010-cursor-and-snapshot-ownership.md)
 - [Workspace file I/O protocol](docs/adr/0011-workspace-chunked-file-io.md)
 - [Architecture decision records](docs/adr/)
+- [Governance](GOVERNANCE.md)
+- [Maintainers](MAINTAINERS.md)
+- [Release process](RELEASE.md)
+- [Support](SUPPORT.md)
+- [Roadmap](ROADMAP.md)
 - [Security policy](SECURITY.md)
 - [Contributing](CONTRIBUTING.md)
 - [Code of conduct](CODE_OF_CONDUCT.md)
@@ -95,8 +116,9 @@ beside the binary or via `ANVIL_GATEWAY`.
 - The empty plugin host is a real process/sandbox boundary, but not yet a plugin
   runtime. cgroup limits require a delegated cgroup2 root; without one the host
   fails closed rather than pretending limits are active.
-- Phase 0 has one native interaction model: selection-first. Motions and
-  actions live in the Rust core; keymaps ship as Lua/TS plugins.
+- The native editor/API interaction model is selection-first. The current TUI
+  exposes that core through a Vim-like keymap implemented in Rust; Lua/TS
+  keymap plugins and user remapping are not implemented yet.
 - Full untrusted-plugin support targets Linux 5.13+ (Landlock). Linux 5.6-5.12
   may run the editor with trusted plugins only.
 

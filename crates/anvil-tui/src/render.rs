@@ -345,6 +345,82 @@ pub fn view(model: &Model, frame: &mut Frame) {
             .scroll((0, u16::try_from(model.hscroll).unwrap_or(u16::MAX))),
         text_area,
     );
+    let visible_end =
+        (model.scroll + usize::from(inner.height)).min(model.editor.index().len_lines());
+    for line_number in model.scroll..visible_end {
+        let Some(start) = model.editor.index().line_to_offset(line_number) else {
+            continue;
+        };
+        let Some(line) = model.editor.index().offset_to_line(start) else {
+            continue;
+        };
+        let slice = model.editor.text().slice(start..line.end);
+        let mut columns = 0;
+        for character in slice.chars() {
+            match character {
+                ' ' => columns += 1,
+                '\t' => columns += 4 - columns % 4,
+                _ => break,
+            }
+        }
+        let style = if model.current_line() == Some(line_number) {
+            Style::default().fg(Color::Indexed(244))
+        } else {
+            Style::default().fg(Color::DarkGray)
+        };
+        for level in 1..=columns / 4 {
+            let column = level * 4;
+            if column < model.hscroll {
+                continue;
+            }
+            let x = text_area.x + (column - model.hscroll) as u16;
+            let y = inner.y + (line_number - model.scroll) as u16;
+            if x < text_area.right() && y < text_area.bottom() {
+                frame.render_widget(
+                    Paragraph::new("│").style(style),
+                    Rect {
+                        x,
+                        y,
+                        width: 1,
+                        height: 1,
+                    },
+                );
+            }
+        }
+    }
+    if model.pending == Some(' ') {
+        let entries = [
+            ("e", "file tree"),
+            ("f", "fuzzy files"),
+            ("r", "rename"),
+            ("a", "code actions"),
+            ("s", "symbols"),
+            ("S", "workspace symbols"),
+            ("F", "format"),
+        ];
+        let width = 30.min(area.width.saturating_sub(4));
+        let height = (entries.len() as u16 + 2).min(area.height.saturating_sub(2));
+        let popup = Rect {
+            x: area.x + area.width.saturating_sub(width + 2),
+            y: area.y + area.height.saturating_sub(height + 2),
+            width,
+            height,
+        };
+        frame.render_widget(Clear, popup);
+        let lines = entries
+            .iter()
+            .map(|(key, description)| {
+                Line::from(vec![
+                    Span::styled(format!(" {key:<2}"), Style::default().fg(Color::Yellow)),
+                    Span::raw(format!(" {description}")),
+                ])
+            })
+            .collect::<Vec<_>>();
+        frame.render_widget(
+            Paragraph::new(lines).block(Block::bordered().title("Space")),
+            popup,
+        );
+    }
     if let Some(position) = model
         .editor
         .index()
@@ -355,6 +431,43 @@ pub fn view(model: &Model, frame: &mut Frame) {
         if x < inner.right() && y < inner.bottom() {
             frame.set_cursor_position((x, y));
         }
+    }
+    for selection in editor_view.selections.iter().skip(1) {
+        let line = selection.head.line as usize;
+        let column = selection.head.display_column as usize;
+        if line < model.scroll || column < model.hscroll {
+            continue;
+        }
+        let x = text_area.x + (column - model.hscroll) as u16;
+        let y = inner.y + (line - model.scroll) as u16;
+        if x < text_area.right() && y < text_area.bottom() {
+            frame.render_widget(
+                Paragraph::new("│")
+                    .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::DIM)),
+                Rect {
+                    x,
+                    y,
+                    width: 1,
+                    height: 1,
+                },
+            );
+        }
+    }
+    if let Some(split) = &model.split {
+        let half = inner.width / 2;
+        let split_area = if model.split_active {
+            Rect {
+                width: half,
+                ..inner
+            }
+        } else {
+            Rect {
+                x: inner.x + half,
+                width: inner.width.saturating_sub(half),
+                ..inner
+            }
+        };
+        render_split_pane(frame, split_area, &split.buffer, model.split_active);
     }
     if let Some(fuzzy) = &model.fuzzy {
         let width = (area.width * 3 / 5)
@@ -485,6 +598,86 @@ pub fn view(model: &Model, frame: &mut Frame) {
         );
     }
 
+    if let Some(signature) = &model.signature_help {
+        let item = &signature.signatures[signature.active_signature];
+        let width = (area.width * 3 / 5)
+            .max(40)
+            .min(area.width.saturating_sub(2));
+        let height = 7.min(area.height.saturating_sub(2));
+        let popup = Rect {
+            x: area.x + (area.width.saturating_sub(width)) / 2,
+            y: area.y + area.height.saturating_sub(height + 2),
+            width,
+            height,
+        };
+        frame.render_widget(Clear, popup);
+        let mut lines = vec![Line::styled(
+            item.label.clone(),
+            Style::default().fg(Color::Cyan),
+        )];
+        if !item.documentation.is_empty() {
+            lines.push(Line::raw(item.documentation.clone()));
+        }
+        lines.push(Line::styled(
+            format!("parameter {}", signature.active_parameter + 1),
+            Style::default().fg(Color::DarkGray),
+        ));
+        frame.render_widget(
+            Paragraph::new(lines).block(Block::bordered().title("Signature")),
+            popup,
+        );
+    }
+    if let Some(symbols) = &model.workspace_symbols {
+        let width = (area.width * 3 / 5)
+            .max(40)
+            .min(area.width.saturating_sub(2));
+        let height = (symbols.filtered.len() as u16 + 3)
+            .min(16)
+            .min(area.height.saturating_sub(2));
+        let popup = Rect {
+            x: area.x + (area.width.saturating_sub(width)) / 2,
+            y: area.y + (area.height.saturating_sub(height)) / 2,
+            width,
+            height,
+        };
+        frame.render_widget(Clear, popup);
+        let visible = height.saturating_sub(3) as usize;
+        let start = symbols.selected.saturating_sub(visible.saturating_sub(1));
+        let mut lines = vec![Line::styled(
+            format!("> {}", symbols.query),
+            Style::default().fg(Color::Cyan),
+        )];
+        for (row, index) in symbols
+            .filtered
+            .iter()
+            .skip(start)
+            .take(visible)
+            .enumerate()
+        {
+            let item = &symbols.items[*index];
+            let detail = if item.detail.is_empty() {
+                item.path.display().to_string()
+            } else {
+                format!("{} · {}", item.detail, item.path.display())
+            };
+            let style = if start + row == symbols.selected {
+                Style::default().fg(Color::Black).bg(Color::Yellow)
+            } else {
+                Style::default()
+            };
+            lines.push(Line::styled(format!("{}  {detail}", item.name), style));
+        }
+        if lines.len() == 1 {
+            lines.push(Line::styled(
+                "no symbols",
+                Style::default().fg(Color::DarkGray),
+            ));
+        }
+        frame.render_widget(
+            Paragraph::new(lines).block(Block::bordered().title("Workspace Symbols")),
+            popup,
+        );
+    }
     if let Some(completion) = &model.completion {
         let width = (area.width * 2 / 5)
             .max(36)
@@ -544,6 +737,53 @@ pub fn view(model: &Model, frame: &mut Frame) {
             popup,
         );
     }
+}
+
+fn render_split_pane(frame: &mut Frame, area: Rect, buffer: &Buffer, is_active: bool) {
+    let block = Block::bordered()
+        .title(
+            buffer
+                .path
+                .as_ref()
+                .map_or("[no file]".to_owned(), |path| path.display().to_string()),
+        )
+        .border_style(if is_active {
+            Style::default().fg(Color::Yellow)
+        } else {
+            Style::default().fg(Color::DarkGray)
+        });
+    let inner = Rect {
+        x: area.x + 1,
+        y: area.y + 1,
+        width: area.width.saturating_sub(2),
+        height: area.height.saturating_sub(2),
+    };
+    frame.render_widget(block, area);
+    let total = buffer.editor.index().len_lines();
+    let digits = total.max(1).to_string().len().max(3);
+    let end = (buffer.scroll + usize::from(inner.height)).min(total);
+    let mut lines = Vec::new();
+    for line_number in buffer.scroll..end {
+        let Some(start) = buffer.editor.index().line_to_offset(line_number) else {
+            break;
+        };
+        let Some(line) = buffer.editor.index().offset_to_line(start) else {
+            break;
+        };
+        let text = buffer.editor.text().slice(start..line.end);
+        lines.push(Line::raw(format!(
+            "{:>digits$} {text}",
+            line_number + 1,
+            digits = digits
+        )));
+    }
+    if lines.is_empty() {
+        lines.push(Line::raw(""));
+    }
+    frame.render_widget(
+        Paragraph::new(lines).scroll((0, u16::try_from(buffer.hscroll).unwrap_or(u16::MAX))),
+        inner,
+    );
 }
 
 #[cfg(test)]

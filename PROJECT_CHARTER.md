@@ -41,8 +41,10 @@ not a prerequisite for editing.
    and versioned independently from the editor binary.
 6. **Linux first, honestly.** Full untrusted-plugin support requires kernel
    5.13+ for Landlock. Kernel 5.6-5.12 may run trusted plugins only.
-7. **One native interaction model per phase.** Phase 0 is selection-first.
-   Keymaps are plugins; motion and action semantics belong to the core.
+7. **One native interaction model per phase.** Phase 0's core is
+   selection-first. The target keymap layer is Lua/TS plugins; the current TUI
+   Rust keymap is an interim adapter. Motion and action semantics belong to the
+   core.
 
 ## 4. Trust model
 
@@ -237,12 +239,15 @@ Dates are planning estimates, not release commitments.
 ## 13. Governance
 
 - Architecture decisions are recorded in `docs/adr/`.
+- Roles, decision making, and maintainer changes are defined in
+  [GOVERNANCE.md](GOVERNANCE.md); review ownership is in
+  [.github/CODEOWNERS](.github/CODEOWNERS).
 - Plugin API versions independently from the editor binary.
 - Breaking plugin API changes require at least six months or two minor versions
   of notice, whichever is longer.
 - Security fixes may bypass the notice period.
-- Dependency licenses are checked by `cargo-deny`/`go-licenses`; new native
-  dependencies need an ADR.
+- Rust dependency licenses are checked by `cargo-deny`. Go license checks are
+  required but are not yet a CI gate; new native dependencies need an ADR.
 - Every security invariant has a test; a failing security test blocks release.
 
 ## 14. License
@@ -264,3 +269,6 @@ are accepted under the same dual-license terms.
 - [0008: Selection-first interaction](docs/adr/0008-selection-first-interaction.md)
 - [0009: Text-model snapshot gate](docs/adr/0009-text-model-snapshot-gate.md)
 - [0010: Cursor and snapshot ownership](docs/adr/0010-cursor-and-snapshot-ownership.md)
+- [0011: Workspace-scoped chunked file I/O](docs/adr/0011-workspace-chunked-file-io.md)
+- [0012: Plugin-host isolation](docs/adr/0012-plugin-host-isolation.md)
+- [0013: Rust kernel and distribution boundary](docs/adr/0013-kernel-distribution-boundary.md)

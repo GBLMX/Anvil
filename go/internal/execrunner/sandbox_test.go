@@ -21,7 +21,7 @@ func TestSandboxHelper(t *testing.T) {
 	}
 	workspace := os.Getenv("ANVIL_SANDBOX_WORKSPACE")
 	if err := Apply(workspace, RuntimePaths()); err != nil {
-		os.Stderr.WriteString(err.Error() + "\n")
+		_, _ = os.Stderr.WriteString(err.Error() + "\n")
 		os.Exit(2)
 	}
 	if _, err := os.ReadFile(filepath.Join(workspace, "ok")); err != nil {
@@ -107,11 +107,11 @@ func TestSandboxToolHelper(t *testing.T) {
 	workspace := os.Getenv("ANVIL_SANDBOX_WORKSPACE")
 	tool := os.Getenv("ANVIL_SANDBOX_TOOL")
 	if err := ApplyTool(workspace, tool, RuntimePaths()); err != nil {
-		os.Stderr.WriteString(err.Error() + "\n")
+		_, _ = os.Stderr.WriteString(err.Error() + "\n")
 		os.Exit(2)
 	}
 	if err := Exec(tool, []string{tool, "--version"}, []string{"PATH=/usr/bin:/bin", "LANG=C.UTF-8"}); err != nil {
-		os.Stderr.WriteString(err.Error() + "\n")
+		_, _ = os.Stderr.WriteString(err.Error() + "\n")
 		os.Exit(3)
 	}
 }
@@ -311,10 +311,10 @@ func TestSymlinkRaceHelper(t *testing.T) {
 	}
 	workspace := os.Getenv("ANVIL_SANDBOX_WORKSPACE")
 	if err := Apply(workspace, RuntimePaths()); err != nil {
-		os.Stderr.WriteString(err.Error() + "\n")
+		_, _ = os.Stderr.WriteString(err.Error() + "\n")
 		os.Exit(2)
 	}
-	fmt.Fprintln(os.Stdout, "ready")
+	_, _ = fmt.Fprintln(os.Stdout, "ready")
 	race := filepath.Join(workspace, "race")
 	for i := 0; i < 5000; i++ {
 		data, err := os.ReadFile(race)

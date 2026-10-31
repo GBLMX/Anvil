@@ -274,11 +274,123 @@ impl Model {
         }
     }
 
+    #[cfg(feature = "e2e-bench")]
+    #[doc(hidden)]
+    pub fn ensure_cursor_visible_for_bench(&mut self, height: u16, width: u16) {
+        self.ensure_cursor_visible(height, width);
+    }
+
     pub(crate) fn insert_here(&mut self) {
         if self.reject_read_only() {
             return;
         }
         self.input_mode = InputMode::Insert;
+        self.dirty = true;
+    }
+
+    pub(crate) fn select_word_occurrences(&mut self) {
+        let text = self.editor.text().slice(0..self.editor.text().len_bytes());
+        let cursor = self.cursor.min(text.len());
+        let Some((start, end)) = word_bounds(&text, cursor) else {
+            self.status = "E: no word under cursor".to_owned();
+            self.dirty = true;
+            return;
+        };
+        let word = &text[start..end];
+        let mut selections = Vec::new();
+        for (offset, _) in text.match_indices(word) {
+            let match_end = offset + word.len();
+            let left_ok = offset == 0
+                || !text[..offset]
+                    .chars()
+                    .next_back()
+                    .is_some_and(is_word_character);
+            let right_ok = match_end == text.len()
+                || !text[match_end..]
+                    .chars()
+                    .next()
+                    .is_some_and(is_word_character);
+            if left_ok && right_ok {
+                selections.push((offset, match_end));
+            }
+        }
+        if selections.is_empty() || !self.editor.set_selections_bytes(selections) {
+            return;
+        }
+        self.cursor = self
+            .editor
+            .selection_bytes()
+            .first()
+            .map(|(start, _)| *start)
+            .unwrap_or(cursor);
+        self.input_mode = InputMode::Insert;
+        self.status = format!("{} selections", self.editor.selection_bytes().len());
+        self.dirty = true;
+    }
+
+    pub(crate) fn split_selection_lines(&mut self) {
+        let selections = self.editor.selection_bytes();
+        let mut carets = Vec::new();
+        for (anchor, head) in selections {
+            let start = anchor.min(head);
+            let end = anchor.max(head);
+            let Some(first_line) = self.editor.index().offset_to_line(start) else {
+                continue;
+            };
+            let Some(last_line) = self.editor.index().offset_to_line(end) else {
+                continue;
+            };
+            for line in first_line.line..=last_line.line {
+                if let Some(offset) = self.editor.index().line_to_offset(line) {
+                    carets.push((offset, offset));
+                }
+            }
+        }
+        carets.sort_unstable();
+        carets.dedup();
+        if carets.len() < 2 || !self.editor.set_selections_bytes(carets) {
+            self.status = "E: no lines to split".to_owned();
+            self.dirty = true;
+            return;
+        }
+        self.cursor = self
+            .editor
+            .selection_bytes()
+            .first()
+            .map(|(start, _)| *start)
+            .unwrap_or(self.cursor);
+        self.status = format!("{} cursors", self.editor.selection_bytes().len());
+        self.dirty = true;
+    }
+
+    pub(crate) fn extend_line_cursor(&mut self, up: bool) {
+        let Some(line) = self.editor.index().offset_to_line(self.cursor) else {
+            return;
+        };
+        let target_line = if up {
+            line.line.checked_sub(1)
+        } else {
+            Some(line.line + 1)
+        };
+        let Some(target_line) =
+            target_line.and_then(|line| self.editor.index().line_to_offset(line))
+        else {
+            return;
+        };
+        let Some(target) = self.editor.index().offset_to_line(target_line) else {
+            return;
+        };
+        let column = self.cursor.saturating_sub(line.start);
+        let target_offset = target.start + column.min(target.end.saturating_sub(target.start));
+        let mut selections = self.editor.selection_bytes();
+        selections.push((target_offset, target_offset));
+        selections.sort_unstable();
+        selections.dedup();
+        if !self.editor.set_selections_bytes(selections) {
+            return;
+        }
+        self.cursor = target_offset;
+        self.status = format!("{} cursors", self.editor.selection_bytes().len());
         self.dirty = true;
     }
 
@@ -289,11 +401,32 @@ impl Model {
         if self.reject_read_only() {
             return;
         }
+        let selections = self.editor.selection_bytes();
+        if selections.len() > 1 || selections.iter().any(|(anchor, head)| anchor != head) {
+            if self.editor.insert_at_selections(text) {
+                self.sync_cursor_from_selection();
+                self.modified = true;
+            }
+            self.maybe_request_signature_help(text);
+            self.dirty = true;
+            return;
+        }
         self.editor.set_selection_bytes(self.cursor, self.cursor);
         self.editor.insert(self.cursor, text);
         self.cursor += text.len();
         self.modified = true;
+        self.maybe_request_signature_help(text);
         self.dirty = true;
+    }
+
+    fn maybe_request_signature_help(&mut self, text: &str) {
+        if let Some(trigger) = text
+            .chars()
+            .last()
+            .filter(|character| matches!(character, '(' | ','))
+        {
+            self.request_signature_help(trigger);
+        }
     }
 
     pub(crate) fn sync_cursor_from_selection(&mut self) {
@@ -513,6 +646,10 @@ impl Model {
         if self.reject_read_only() {
             return;
         }
+        self.cancel_signature_help();
+        if self.delete_selections(false) {
+            return;
+        }
         let Some(start) = self.editor.previous_grapheme_boundary(self.cursor) else {
             return;
         };
@@ -530,6 +667,10 @@ impl Model {
         if self.reject_read_only() {
             return;
         }
+        self.cancel_signature_help();
+        if self.delete_selections(true) {
+            return;
+        }
         let Some(end) = self.editor.next_grapheme_boundary(self.cursor) else {
             return;
         };
@@ -541,4 +682,74 @@ impl Model {
         self.modified = true;
         self.dirty = true;
     }
+
+    fn delete_selections(&mut self, forward: bool) -> bool {
+        let selections = self.editor.selection_bytes();
+        if selections.len() == 1 && selections[0].0 == selections[0].1 {
+            return false;
+        }
+        let mut edits = Vec::new();
+        for (anchor, head) in selections {
+            let start = anchor.min(head);
+            let end = anchor.max(head);
+            if start == end {
+                let target = if forward {
+                    self.editor.next_grapheme_boundary(start)
+                } else {
+                    self.editor.previous_grapheme_boundary(start)
+                };
+                let Some(target) = target else {
+                    continue;
+                };
+                if target == start {
+                    continue;
+                }
+                edits.push((start.min(target)..start.max(target), String::new()));
+            } else {
+                edits.push((start..end, String::new()));
+            }
+        }
+        if edits.is_empty() || !self.editor.apply_transaction(edits) {
+            return false;
+        }
+        self.sync_cursor_from_selection();
+        self.modified = true;
+        self.dirty = true;
+        true
+    }
+}
+
+fn is_word_character(character: char) -> bool {
+    character.is_alphanumeric() || character == '_'
+}
+
+fn word_bounds(text: &str, cursor: usize) -> Option<(usize, usize)> {
+    let mut start = cursor.min(text.len());
+    let mut end = start;
+    if (start == text.len() || !text[start..].chars().next().is_some_and(is_word_character))
+        && let Some(previous) = text[..start].chars().next_back()
+        && is_word_character(previous)
+    {
+        start -= previous.len_utf8();
+        end = start + previous.len_utf8();
+    }
+    while start > 0 {
+        let Some(previous) = text[..start].chars().next_back() else {
+            break;
+        };
+        if !is_word_character(previous) {
+            break;
+        }
+        start -= previous.len_utf8();
+    }
+    while end < text.len() {
+        let Some(next) = text[end..].chars().next() else {
+            break;
+        };
+        if !is_word_character(next) {
+            break;
+        }
+        end += next.len_utf8();
+    }
+    (start < end).then_some((start, end))
 }

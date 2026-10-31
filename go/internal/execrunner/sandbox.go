@@ -168,6 +168,10 @@ func applyTool(workspace, tool string, runtimePaths, execPaths []string, writeWo
 			}
 		}
 	}
+	// Read-only tools such as git open /dev/null for discarded diff input.
+	if err := addPathRule(ruleset, "/dev/null", readAccess|unix.LANDLOCK_ACCESS_FS_WRITE_FILE); err != nil {
+		return err
+	}
 	if err := limitTaskCount(64); err != nil {
 		return err
 	}

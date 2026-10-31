@@ -1,0 +1,48 @@
+name: Feature or architecture proposal
+description: Propose a scoped capability, API, or UX change
+title: "proposal: "
+labels: ["proposal", "needs-triage"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What user or project problem is not solved today?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+      description: Smallest useful slice; name affected crates or process boundaries.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: boundary
+    attributes:
+      label: Does this change a boundary?
+      options:
+        - No boundary change
+        - Rust kernel API
+        - IPC or gateway protocol
+        - Plugin or capability model
+        - Security or sandbox invariant
+        - Release or compatibility policy
+    validations:
+      required: true
+
+  - type: textarea
+    id: adr
+    attributes:
+      label: ADR needed?
+      description: Explain whether an ADR is required and what alternatives exist.
+    validations:
+      required: true
+
+  - type: textarea
+    id: verification
+    attributes:
+      label: Verification
+      description: How should this be tested or measured?

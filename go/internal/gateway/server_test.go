@@ -524,6 +524,30 @@ func TestReadPermissionUsesCanonicalPath(t *testing.T) {
 	}
 }
 
+func TestReadPermissionRejectsSymlinkEscalation(t *testing.T) {
+	workspace := t.TempDir()
+	if err := os.Mkdir(filepath.Join(workspace, "src"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(workspace, "secret"), []byte("secret"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("../secret", filepath.Join(workspace, "src", "link")); err != nil {
+		t.Fatal(err)
+	}
+	socket := startGatewayAt(t, workspace, []string{"fs.read:src/**"})
+	conn := dialGateway(t, socket)
+	if response := sendRequest(t, conn, "hello-symlink", "session.hello", helloRequestParams(testToken)); response.Error != nil {
+		t.Fatalf("handshake error: %+v", response.Error)
+	}
+	response := sendRequest(t, conn, "read-symlink", "sys.read_file", map[string]interface{}{
+		"path": "src/link",
+	})
+	if response.Error == nil {
+		t.Fatal("symlink outside the read grant was readable")
+	}
+}
+
 func TestSysReadFileBinary(t *testing.T) {
 	workspace := t.TempDir()
 	data := []byte("binary-frame-data")

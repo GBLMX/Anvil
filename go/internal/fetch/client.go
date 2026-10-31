@@ -93,7 +93,7 @@ func (c *Client) Fetch(ctx context.Context, rawURL string, maxBody int64, header
 	if err != nil || parsed.Hostname() == "" || parsed.User != nil {
 		return Response{}, errors.New("invalid fetch URL")
 	}
-	if parsed.Scheme != "https" && !(c.cfg.AllowHTTP && parsed.Scheme == "http") {
+	if parsed.Scheme != "https" && (parsed.Scheme != "http" || !c.cfg.AllowHTTP) {
 		return Response{}, errors.New("fetch scheme is not allowed")
 	}
 	host := strings.ToLower(parsed.Hostname())

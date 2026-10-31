@@ -139,6 +139,38 @@ every revision reparsed on the UI thread. Parsing now runs on a debounced
 background worker with stale spans retained; files over 256 KiB intentionally
 skip highlighting.
 
+## 3.2 0.3.0 local spot checks (not gates)
+
+These numbers were collected on an i7-12700H development workstation, not the
+Ryzen 7 5800X reference machine. They are spot checks, not release-gate
+evidence. Several scenarios intentionally have fewer than the required 30
+samples and are marked as single-run or observed-max values.
+
+| Scenario | n | Observation | Interpretation |
+|---|---:|---:|---|
+| Rust 100 MB first frame | 1 | 90.8 ms | single run |
+| PTY 100 MB first frame | 1 | 205 ms | single run |
+| Rust 100 MB scroll | 20 | p99 120.7 us | spot check only |
+| PTY 100 MB scroll | 20 | p99 720 us | spot check only |
+| Rust key-to-screen | 20 | p99 88.5 us | spot check only |
+| PTY key-to-screen | 20 | p99 680 us | spot check only |
+| 100 MB first search | 1 | 217 ms Rust / 232 ms PTY | single run |
+| 100 MB subsequent search | 10 | p99 222 ms Rust / 269 ms PTY | spot check only |
+| PieceTable 100 MB open | 3 | 19.2 ms | observed maximum |
+| PieceTable 100 MB viewport | 3 | 2.1 us | observed maximum |
+| PieceTable 100 MB random edits | 3 | 115 us | observed maximum |
+
+`BenchmarkReadResponseEncoding` measured **12.25 ms mean** for a large
+JSON/base64 read response on this workstation. It is a Go benchmark mean, not
+a UDS round-trip p99, and it has not been rerun on the reference machine with
+the required sample count. Treat it as an unverified performance risk, not a
+P1 gate failure.
+
+The TUI's normal file path uses binary frames; `BenchmarkReadFileChunk`
+measured 0.81 ms on the same machine. Large `sys.read_file` consumers should
+prefer binary frames. The JSON/base64 large-read path remains available for
+compatibility but is not the recommended transport for multi-megabyte reads.
+
 ## 4. Methodology
 
 - Use release builds with `lto = true`, `codegen-units = 1`.
@@ -151,6 +183,13 @@ skip highlighting.
 - Use synthetic files with fixed seeds; store generation scripts in the repo.
 - For scroll, generate input at a fixed rate and measure frame timestamps, not
   loop iterations.
+
+### PGO and BOLT
+
+Opt-in profile-guided optimization is documented in
+[pgo-bolt.md](pgo-bolt.md). PGO uses a PTY workload in
+`scripts/pgo-workload.py`; BOLT additionally requires `perf`, `perf2bolt`, and
+`llvm-bolt`. Neither path changes the default release build or CI.
 
 ## 5. CI policy
 

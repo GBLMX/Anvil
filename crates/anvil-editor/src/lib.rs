@@ -19,6 +19,7 @@ pub const DEFAULT_VIEWPORT: Viewport = Viewport {
 enum EditAction {
     Insert { at: usize, text: String },
     Delete { start: usize, text: String },
+    Transaction(Vec<EditAction>),
 }
 
 #[derive(Debug, Clone)]
@@ -217,6 +218,14 @@ impl EditorState {
                         EditAction::Insert { text, .. } | EditAction::Delete { text, .. } => {
                             text.len()
                         }
+                        EditAction::Transaction(actions) => actions
+                            .iter()
+                            .map(|action| match action {
+                                EditAction::Insert { text, .. }
+                                | EditAction::Delete { text, .. } => text.len(),
+                                EditAction::Transaction(_) => 0,
+                            })
+                            .sum(),
                     }
             })
             .sum()
@@ -257,6 +266,78 @@ impl EditorState {
         );
     }
 
+    /// Applies non-overlapping edits as one undoable transaction.
+    ///
+    /// Ranges are applied from the end of the document toward the start so
+    /// later edits never shift earlier byte offsets.
+    pub fn apply_transaction(&mut self, mut edits: Vec<(Range<usize>, String)>) -> bool {
+        edits.retain(|(range, text)| range.start != range.end || !text.is_empty());
+        if edits.is_empty() {
+            return false;
+        }
+        for (range, _) in &edits {
+            if range.start > range.end
+                || range.end > self.text.len_bytes()
+                || !self.text.is_char_boundary(range.start)
+                || !self.text.is_char_boundary(range.end)
+            {
+                return false;
+            }
+        }
+        edits.sort_by(|left, right| {
+            right
+                .0
+                .start
+                .cmp(&left.0.start)
+                .then_with(|| right.0.end.cmp(&left.0.end))
+        });
+        for pair in edits.windows(2) {
+            if pair[1].0.end > pair[0].0.start {
+                return false;
+            }
+        }
+        let before = self.selections.clone();
+        let mut actions = Vec::new();
+        for (range, text) in edits {
+            if range.start != range.end {
+                let deleted = self.text.slice(range.clone());
+                self.apply_delete(range.clone());
+                self.map_selections(range.start, range.end, 0);
+                actions.push(EditAction::Delete {
+                    start: range.start,
+                    text: deleted,
+                });
+            }
+            if !text.is_empty() {
+                self.apply_insert(range.start, &text);
+                self.map_selections(range.start, range.start, text.len());
+                actions.push(EditAction::Insert {
+                    at: range.start,
+                    text,
+                });
+            }
+        }
+        self.push_record(EditAction::Transaction(actions), before);
+        true
+    }
+
+    /// Replaces or inserts at every current selection as one transaction.
+    pub fn insert_at_selections(&mut self, text: &str) -> bool {
+        if text.is_empty() || self.selections.is_empty() {
+            return false;
+        }
+        let edits = self
+            .selections
+            .iter()
+            .map(|(anchor, head)| {
+                let start = (*anchor).min(*head);
+                let end = (*anchor).max(*head);
+                (start..end, text.to_owned())
+            })
+            .collect();
+        self.apply_transaction(edits)
+    }
+
     /// Reverts the most recent text edit and restores its selection.
     pub fn undo(&mut self) -> bool {
         let Some(record) = self.undo.pop() else {
@@ -265,6 +346,17 @@ impl EditorState {
         match &record.action {
             EditAction::Insert { at, text } => self.apply_delete(*at..*at + text.len()),
             EditAction::Delete { start, text } => self.apply_insert(*start, text),
+            EditAction::Transaction(actions) => {
+                for action in actions.iter().rev() {
+                    match action {
+                        EditAction::Insert { at, text } => {
+                            self.apply_delete(*at..*at + text.len());
+                        }
+                        EditAction::Delete { start, text } => self.apply_insert(*start, text),
+                        EditAction::Transaction(_) => {}
+                    }
+                }
+            }
         }
         self.selections = record.before.clone();
         self.redo.push(record);
@@ -280,6 +372,17 @@ impl EditorState {
         match &record.action {
             EditAction::Insert { at, text } => self.apply_insert(*at, text),
             EditAction::Delete { start, text } => self.apply_delete(*start..*start + text.len()),
+            EditAction::Transaction(actions) => {
+                for action in actions {
+                    match action {
+                        EditAction::Insert { at, text } => self.apply_insert(*at, text),
+                        EditAction::Delete { start, text } => {
+                            self.apply_delete(*start..*start + text.len());
+                        }
+                        EditAction::Transaction(_) => {}
+                    }
+                }
+            }
         }
         self.selections = record.after.clone();
         self.undo.push(record);
@@ -454,6 +557,29 @@ mod tests {
         state.delete(0..3);
         assert_eq!(state.selection_bytes(), vec![(0, 2)]);
         assert_eq!(state.snapshot().view().selections[0].head.byte_offset, 2);
+    }
+
+    #[test]
+    fn transaction_replaces_all_selections_atomically() {
+        let mut state = EditorState::from_text("foo foo foo");
+        assert!(state.set_selections_bytes(vec![(0, 3), (4, 7), (8, 11)]));
+        assert!(state.insert_at_selections("bar"));
+        assert_eq!(state.text().slice(0..11), "bar bar bar");
+        assert_eq!(state.undo_depth(), 1);
+        assert_eq!(state.selection_bytes(), vec![(3, 3), (7, 7), (11, 11)]);
+        assert!(state.undo());
+        assert_eq!(state.text().slice(0..11), "foo foo foo");
+        assert_eq!(state.selection_bytes(), vec![(0, 3), (4, 7), (8, 11)]);
+        assert!(state.redo());
+        assert_eq!(state.text().slice(0..11), "bar bar bar");
+    }
+
+    #[test]
+    fn transaction_rejects_overlapping_ranges() {
+        let mut state = EditorState::from_text("abcdef");
+        assert!(!state.apply_transaction(vec![(0..4, "x".to_owned()), (3..6, "y".to_owned())]));
+        assert_eq!(state.text().slice(0..6), "abcdef");
+        assert_eq!(state.undo_depth(), 0);
     }
 
     #[test]

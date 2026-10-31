@@ -18,6 +18,7 @@ pub enum LspEvent {
         error: Option<String>,
     },
     Crashed(String),
+    StartupError(String),
     Error(String),
     Log(String),
 }
@@ -86,6 +87,9 @@ impl LspWorker {
                         "textDocument": {
                             "publishDiagnostics": {"relatedInformation": true},
                             "synchronization": {"didSave": true},
+                            "inlayHint": {
+                                "dynamicRegistration": false
+                            },
                             "codeAction": {
                                 "codeActionLiteralSupport": {
                                     "codeActionKind": {
@@ -107,7 +111,7 @@ impl LspWorker {
                 return;
             }
             if let Err(error) = wait_initialize(&mut client) {
-                let _ = sender.send(LspEvent::Crashed(error));
+                let _ = sender.send(LspEvent::StartupError(error));
                 return;
             }
             let initialized = serde_json::json!({
@@ -404,6 +408,13 @@ fn wait_initialize(client: &mut GatewayClient) -> Result<(), String> {
             continue;
         }
         if data.get("id") == Some(&serde_json::json!(INITIALIZE_ID)) {
+            if let Some(error) = data
+                .get("error")
+                .and_then(|error| error.get("message"))
+                .and_then(serde_json::Value::as_str)
+            {
+                return Err(format!("initialize failed: {error}"));
+            }
             return Ok(());
         }
     }

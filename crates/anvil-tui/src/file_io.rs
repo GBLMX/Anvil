@@ -153,6 +153,8 @@ impl Model {
             Ok(()) => {
                 self.path = Some(path.clone());
                 self.modified = false;
+                self.git_checked = None;
+                self.git_due = Some(Instant::now());
                 self.sync_lsp_active();
                 self.notify_lsp_save(&path, &text);
                 self.status = format!("\"{display}\" written");

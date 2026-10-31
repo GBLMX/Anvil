@@ -13,7 +13,7 @@ impl Model {
             || matches!(name, ".github" | ".cargo")
     }
 
-    fn ensure_file_worker(&mut self) -> bool {
+    pub(crate) fn ensure_file_worker(&mut self) -> bool {
         if self.file_worker.is_some() {
             return true;
         }
@@ -81,6 +81,11 @@ impl Model {
                     self.status = "files ready".to_owned();
                 }
                 FileEvent::Files(Err(error)) => self.status = format!("E: files: {error}"),
+                FileEvent::GitDiff {
+                    path,
+                    revision,
+                    result,
+                } => self.handle_git_diff(path, revision, result),
             }
             self.dirty = true;
         }
@@ -311,7 +316,7 @@ impl Model {
 
     pub(crate) fn start_fuzzy(&mut self) {
         self.cancel_completion();
-        self.pending_lsp.clear();
+        self.clear_lsp_requests();
         self.hover = None;
         self.diagnostic_popup = None;
         self.code_actions = None;

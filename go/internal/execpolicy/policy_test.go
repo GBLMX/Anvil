@@ -36,6 +36,22 @@ func TestRejectsExecAndConfigFlags(t *testing.T) {
 	}
 }
 
+func TestValidatesGitDiff(t *testing.T) {
+	args := []string{"--no-pager", "diff", "--no-ext-diff", "--no-textconv", "--no-color", "--unified=0", "HEAD", "--", "src/main.go"}
+	if err := Validate("/usr/bin/git", args); err != nil {
+		t.Fatalf("git: %v", err)
+	}
+	for _, bad := range [][]string{
+		{"diff"},
+		{"--no-pager", "show", "HEAD"},
+		{"--no-pager", "diff", "HEAD", "--", "../secret"},
+	} {
+		if err := Validate("/usr/bin/git", bad); !errors.Is(err, ErrInvalidArgs) {
+			t.Fatalf("git %v: got %v", bad, err)
+		}
+	}
+}
+
 func TestRejectsUnknownTool(t *testing.T) {
 	if err := Validate("/bin/sh", nil); !errors.Is(err, ErrUnknownTool) {
 		t.Fatalf("got %v", err)

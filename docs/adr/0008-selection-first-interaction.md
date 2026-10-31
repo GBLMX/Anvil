@@ -1,6 +1,6 @@
 # ADR-0008: Selection-First Native Interaction Model
 
-- Status: Accepted for Phase 0
+- Status: Accepted for Phase 0; amended 2026-11-01 for the interim TUI adapter
 - Date: 2026-10-30
 - Related: [ADR-0003](0003-idl.md), [ADR-0004](0004-text-model.md)
 
@@ -27,14 +27,18 @@ mode-specific path.
 
 ## Decision
 
-1. **Phase 0 ships exactly one native interaction model: selection-first.** The
-   core has no normal/insert/visual mode split and no operator-pending stack.
+1. **Phase 0's core has exactly one native interaction model: selection-first.**
+   The core has no normal/insert/visual mode split and no operator-pending
+   stack. UI adapters may temporarily hold pending keys while mapping input;
+   they must invoke core actions rather than implement a second editing model.
 2. **Motions and actions are native core semantics.** Selection extension,
    deletion, change, yank, put, undo grouping, and multi-selection invariants
    belong in Rust. Plugins do not define what `word`, `delete`, or `change`
    means.
-3. **Key mappings are plugins.** Lua/TS keymap plugins bind input events to core
-   commands. The core does not embed Vim, Helix, or Emacs key tables.
+3. **The target key mapping layer is plugins.** Lua/TS keymap plugins bind input
+   events to core commands. The core does not embed Vim, Helix, or Emacs key
+   tables. Until plugin keymaps exist, the TUI's Rust keymap is an interim
+   adapter.
 4. **A future Vim adapter composes the native primitives.** It may add an
    operator-pending layer that temporarily stores a motion and then invokes the
    native action, but it does not replace the core action engine.
@@ -56,6 +60,19 @@ mode-specific path.
    line under the same rule and yanks it. The minimal unnamed register is
    implemented; named registers and system clipboard are later additions.
 
+## Implementation status (2026-11-01)
+
+- `anvil-api` and `anvil-editor` implement the selection-first core:
+  `InteractionMode::Select`, explicit `Selection { anchor, head }` values, and
+  selection-aware insertion/deletion/undo.
+- The current `anvil-tui` keymap is an interim Vim-like adapter in `keys.rs`.
+  Its Normal/Insert/Search input states and `pending`/`object_pending` fields
+  are UI key-sequence state; they compose core actions and are not a second
+  native editing kernel.
+- Lua/TS keymap plugins, user remapping, and a configurable default keymap are
+  not implemented. The interim adapter can be replaced without changing the
+  core action API.
+
 ## Consequences
 
 Positive:
@@ -68,7 +85,8 @@ Positive:
 
 Negative:
 
-- The first keymap will feel less Vim-native until an adapter exists.
+- The interim built-in Vim adapter is a compatibility layer; replacing it with
+  plugin keymaps may change default bindings.
 - Adding a second native mode is an additive API version bump, not a new
   transport method.
 - Keymap latency depends on the plugin transport; core editing must not.
@@ -96,7 +114,8 @@ undo grouping. Those invariants belong to the Rust core.
 
 - Core motion/action tests cover empty and non-empty selections, direction,
   grapheme and display-cell boundaries, and undo grouping.
-- No Phase 0 test path may require an operator-pending state.
+- No Phase 0 core test path may require an operator-pending state. The interim
+  TUI adapter may test its own pending-key sequence handling.
 - View serialization includes `interaction_mode`; an unknown value is rejected.
 - `editor.set_mode` rejects unknown modes and calls without `editor.mode`.
 - Keymap plugin tests exercise binding only; they do not redefine motion

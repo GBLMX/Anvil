@@ -795,6 +795,10 @@ func (s *Server) exec(parent context.Context, req request, state *connectionStat
 			"TMPDIR="+tmp,
 			"PATH="+filepath.Join(home, ".cargo", "bin")+":/usr/bin:/bin",
 			"RUSTC_WRAPPER=",
+			"GIT_CONFIG_GLOBAL=/dev/null",
+			"GIT_CONFIG_SYSTEM=/dev/null",
+			"GIT_DIR="+filepath.Join(s.cfg.Workspace, ".git"),
+			"GIT_WORK_TREE="+s.cfg.Workspace,
 		)
 	}
 	args := []string{
@@ -914,6 +918,8 @@ func (s *Server) lspStart(ctx context.Context, req request, state *connectionSta
 			"TMPDIR="+tmp,
 			"PATH="+filepath.Join(home, ".cargo", "bin")+":/usr/bin:/bin",
 			"RUSTC_WRAPPER=",
+			"GIT_CONFIG_GLOBAL=/dev/null",
+			"GIT_CONFIG_SYSTEM=/dev/null",
 		)
 	}
 	args := []string{
@@ -1041,16 +1047,47 @@ func (s *Server) pathPermissionError(state *connectionState, base, path string) 
 	if !state.handshaken {
 		return &rpcError{Code: -32003, Message: "session required"}
 	}
+	canonical, err := s.canonicalPermissionPath(path)
+	if err != nil {
+		return &rpcError{Code: -32002, Message: "policy denied"}
+	}
 	for _, permission := range state.permissions {
 		if permission == base {
 			return nil
 		}
 		pattern, ok := strings.CutPrefix(permission, base+":")
-		if ok && matchPath(pattern, path) {
+		// Require both the requested path and the resolved symlink target to
+		// match. Otherwise a link inside a granted subtree could expose a file
+		// outside that subtree.
+		if ok && matchPath(pattern, path) && matchPath(pattern, canonical) {
 			return nil
 		}
 	}
 	return &rpcError{Code: -32002, Message: "policy denied"}
+}
+
+func (s *Server) canonicalPermissionPath(path string) (string, error) {
+	workspace, err := filepath.EvalSymlinks(s.cfg.Workspace)
+	if err != nil {
+		return "", err
+	}
+	full := filepath.Join(workspace, filepath.FromSlash(path))
+	resolved, err := filepath.EvalSymlinks(full)
+	if err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			return "", err
+		}
+		parent, parentErr := filepath.EvalSymlinks(filepath.Dir(full))
+		if parentErr != nil {
+			return "", parentErr
+		}
+		resolved = filepath.Join(parent, filepath.Base(full))
+	}
+	relative, err := filepath.Rel(workspace, resolved)
+	if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(os.PathSeparator)) {
+		return "", fsroot.ErrInvalidPath
+	}
+	return filepath.ToSlash(relative), nil
 }
 
 func matchPath(pattern, path string) bool {

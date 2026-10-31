@@ -2,6 +2,7 @@ package execrunner
 
 import (
 	"fmt"
+	"math"
 	"unsafe"
 
 	"golang.org/x/sys/unix"
@@ -262,13 +263,24 @@ func seccompProgram(allowProcess bool) ([]unix.SockFilter, error) {
 	return b.finish()
 }
 
+func seccompProgramLen(instructions []unix.SockFilter) (uint16, error) {
+	if len(instructions) > math.MaxUint16 {
+		return 0, fmt.Errorf("seccomp program too large: %d instructions", len(instructions))
+	}
+	return uint16(len(instructions)), nil // #nosec G115 -- bounded above.
+}
+
 func applySeccomp(allowProcess bool) error {
 	instructions, err := seccompProgram(allowProcess)
 	if err != nil {
 		return err
 	}
+	length, err := seccompProgramLen(instructions)
+	if err != nil {
+		return err
+	}
 	program := unix.SockFprog{
-		Len:    uint16(len(instructions)),
+		Len:    length,
 		Filter: &instructions[0],
 	}
 	if err := unix.Prctl(
