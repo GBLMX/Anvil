@@ -105,6 +105,12 @@ fn handle_key(model: &mut Model, key: KeyEvent) {
             }
             return;
         }
+        if pending == ']' || pending == '[' {
+            if key.code == KeyCode::Char('d') {
+                model.jump_diagnostic(pending == ']');
+            }
+            return;
+        }
         if let KeyCode::Char(character) = key.code
             && character.is_ascii_digit()
         {
@@ -218,6 +224,14 @@ fn handle_key(model: &mut Model, key: KeyEvent) {
         }
     }
 
+    if model.diagnostic_popup.is_some() {
+        model.diagnostic_popup = None;
+        model.dirty = true;
+        if key.code == KeyCode::Esc {
+            return;
+        }
+    }
+
     if model.tree_focus {
         match key.code {
             KeyCode::Esc => {
@@ -302,6 +316,14 @@ fn handle_key(model: &mut Model, key: KeyEvent) {
             }
             KeyCode::Char('g') if !control => {
                 model.pending = Some('g');
+                model.dirty = true;
+            }
+            KeyCode::Char(']') if !control => {
+                model.pending = Some(']');
+                model.dirty = true;
+            }
+            KeyCode::Char('[') if !control => {
+                model.pending = Some('[');
                 model.dirty = true;
             }
             KeyCode::Char('K') if !control => model.request_hover(),

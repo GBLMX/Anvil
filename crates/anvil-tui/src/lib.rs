@@ -190,6 +190,7 @@ pub struct Model {
     next_lsp_request: u64,
     completion: Option<CompletionState>,
     hover: Option<String>,
+    diagnostic_popup: Option<String>,
     /// Flattened workspace tree, when open.
     tree: Vec<TreeEntry>,
     tree_selected: Option<usize>,
@@ -257,6 +258,7 @@ impl Model {
             next_lsp_request: 2,
             completion: None,
             hover: None,
+            diagnostic_popup: None,
             tree: Vec::new(),
             tree_selected: None,
             tree_visible: false,
@@ -1574,6 +1576,7 @@ impl Model {
                 self.pending_lsp.clear();
                 self.completion = None;
                 self.hover = None;
+                self.diagnostic_popup = None;
                 self.status = format!("{} starting", settings.label);
             }
             Err(error) => self.status = format!("E: lsp start: {error}"),
@@ -1588,6 +1591,7 @@ impl Model {
         self.pending_lsp.clear();
         self.completion = None;
         self.hover = None;
+        self.diagnostic_popup = None;
         self.status = "lsp stopped".to_owned();
         self.dirty = true;
     }
@@ -1613,6 +1617,7 @@ impl Model {
                     self.pending_lsp.clear();
                     self.completion = None;
                     self.hover = None;
+                    self.diagnostic_popup = None;
                     if self.lsp_retries < 3 {
                         self.lsp_retries += 1;
                         if self.lsp_client.is_none() {
@@ -1707,6 +1712,7 @@ impl Model {
         self.pending_lsp.clear();
         self.completion = None;
         self.hover = None;
+        self.diagnostic_popup = None;
         self.gateway = None;
         self.gateway_session = None;
         match GatewaySession::start(&self.workspace) {
@@ -2391,6 +2397,67 @@ mod tests {
             Some(path.canonicalize().expect("canonical").as_path())
         );
         assert_eq!(model.cursor, model.offset_at_utf16(1, 3));
+    }
+
+    #[test]
+    fn diagnostic_jump_cycles_between_lines() {
+        let mut model = Model::new(
+            EditorState::from_text("one\ntwo\nthree"),
+            Some(PathBuf::from("diag.rs")),
+        );
+        model.diagnostics.insert(
+            PathBuf::from("diag.rs"),
+            vec![
+                lsp::Diagnostic {
+                    range: lsp::Range {
+                        start: lsp::Position {
+                            line: 0,
+                            character: 0,
+                        },
+                        end: lsp::Position {
+                            line: 0,
+                            character: 1,
+                        },
+                    },
+                    severity: Some(1),
+                    message: "first".to_owned(),
+                    source: Some("test".to_owned()),
+                },
+                lsp::Diagnostic {
+                    range: lsp::Range {
+                        start: lsp::Position {
+                            line: 2,
+                            character: 0,
+                        },
+                        end: lsp::Position {
+                            line: 2,
+                            character: 1,
+                        },
+                    },
+                    severity: Some(2),
+                    message: "second".to_owned(),
+                    source: Some("test".to_owned()),
+                },
+            ],
+        );
+        model.jump_diagnostic(true);
+        assert_eq!(model.cursor, model.offset_at_utf16(2, 0));
+        assert!(
+            model
+                .diagnostic_popup
+                .as_deref()
+                .is_some_and(|text| text.contains("second"))
+        );
+        model.jump_diagnostic(false);
+        assert_eq!(model.cursor, 0);
+        assert!(
+            model
+                .diagnostic_popup
+                .as_deref()
+                .is_some_and(|text| text.contains("first"))
+        );
+        model.jump_diagnostic(false);
+        assert_eq!(model.cursor, model.offset_at_utf16(2, 0));
     }
 
     #[test]

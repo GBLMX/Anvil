@@ -200,6 +200,75 @@ impl Model {
         true
     }
 
+    pub(crate) fn jump_diagnostic(&mut self, forward: bool) {
+        let Some(path) = self.path.clone() else {
+            self.status = "E: no file".to_owned();
+            self.dirty = true;
+            return;
+        };
+        let Some(diagnostics) = self.diagnostics.get(&path) else {
+            self.status = "no diagnostics".to_owned();
+            self.dirty = true;
+            return;
+        };
+        if diagnostics.is_empty() {
+            self.status = "no diagnostics".to_owned();
+            self.dirty = true;
+            return;
+        }
+        let current = self
+            .editor
+            .index()
+            .position(self.editor.text(), self.cursor)
+            .map(|position| position.line)
+            .unwrap_or(0);
+        let mut positions: Vec<(usize, usize)> = diagnostics
+            .iter()
+            .map(|diagnostic| {
+                (
+                    diagnostic.range.start.line as usize,
+                    diagnostic.range.start.character as usize,
+                )
+            })
+            .collect();
+        positions.sort();
+        let selected = if forward {
+            positions
+                .iter()
+                .find(|(line, _)| *line > current)
+                .or_else(|| positions.first())
+        } else {
+            positions
+                .iter()
+                .rev()
+                .find(|(line, _)| *line < current)
+                .or_else(|| positions.last())
+        };
+        let Some(&(line, character)) = selected else {
+            return;
+        };
+        let Some(diagnostic) = diagnostics.iter().find(|diagnostic| {
+            diagnostic.range.start.line as usize == line
+                && diagnostic.range.start.character as usize == character
+        }) else {
+            return;
+        };
+        let label = match diagnostic.severity {
+            Some(1) => "E",
+            Some(2) => "W",
+            Some(3) => "I",
+            _ => "D",
+        };
+        self.diagnostic_popup = Some(format!("{label}: {}", diagnostic.message));
+        self.cursor = self.offset_at_utf16(line, character);
+        let index = positions
+            .iter()
+            .position(|item| *item == (line, character))
+            .unwrap_or(0);
+        self.status = format!("diagnostic {}/{}", index + 1, positions.len());
+        self.dirty = true;
+    }
+
     pub(crate) fn notify_lsp_save(&mut self, path: &std::path::Path, text: &str) {
         if let Some(worker) = self.lsp_worker.as_ref() {
             let _ = worker.save(path, text.to_owned());

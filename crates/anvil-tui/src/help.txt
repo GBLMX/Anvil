@@ -15,6 +15,7 @@ Normal mode
   Space e             file tree (h/l/Enter expand or open, H toggles hidden)
   Space f             fuzzy file finder; type to filter, Enter opens
   gd                  go to definition
+  ]d / [d             next / previous diagnostic
   K                   hover documentation
   i a A o O           insert before / after / line end / below / above
   x                   delete character

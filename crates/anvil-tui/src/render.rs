@@ -392,6 +392,23 @@ pub fn view(model: &Model, frame: &mut Frame) {
             popup,
         );
     }
+    if let Some(diagnostic) = &model.diagnostic_popup {
+        let width = (area.width * 3 / 4)
+            .max(30)
+            .min(area.width.saturating_sub(2));
+        let height = 6_u16.min(area.height.saturating_sub(2));
+        let popup = Rect {
+            x: area.x + (area.width.saturating_sub(width)) / 2,
+            y: area.y + (area.height.saturating_sub(height)) / 2,
+            width,
+            height,
+        };
+        frame.render_widget(Clear, popup);
+        frame.render_widget(
+            Paragraph::new(diagnostic.as_str()).block(Block::bordered().title("Diagnostic")),
+            popup,
+        );
+    }
     if let Some(completion) = &model.completion {
         let width = (area.width * 2 / 5)
             .max(36)

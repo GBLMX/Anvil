@@ -6,6 +6,14 @@ All notable changes to Anvil are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.2.12] - 2026-10-31
+
+### Added
+
+- `]d` / `[d` diagnostic navigation with wraparound, a Diagnostic popup, and
+  severity labels. Selecting a diagnostic moves the cursor to its UTF-16 start
+  position.
+
 ## [0.2.11] - 2026-10-31
 
 ### Added
