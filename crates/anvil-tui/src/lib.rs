@@ -43,6 +43,8 @@ use lsp_ui::lsp_settings;
 mod keys;
 mod lsp_worker;
 mod render;
+#[allow(dead_code)]
+mod workspace_edit;
 pub(crate) use keys::handle_event;
 pub use render::view;
 use render::{

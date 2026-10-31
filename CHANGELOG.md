@@ -6,6 +6,15 @@ All notable changes to Anvil are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.2.18] - 2026-10-31
+
+### Added
+
+- `WorkspaceEdit` engine for LSP `changes` and `documentChanges`: URI decoding,
+  UTF-16 range conversion, cross-file application, unopened-file loading,
+  descending edits, overlap rejection, and atomic validation before buffers
+  change. Code Actions/Rename UI wiring remains the next step.
+
 ## [0.2.17] - 2026-10-31
 
 ### Changed
