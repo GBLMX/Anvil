@@ -49,26 +49,28 @@ const (
 
 // Config is the minimum per-session gateway configuration.
 type Config struct {
-	SocketPath  string
-	Workspace   string
-	PluginID    string
-	TokenSHA256 [32]byte
-	Permissions []string
-	ExecRunner  string
-	ExecTimeout time.Duration
-	MaxOutput   int
-	Fetcher     *fetch.Client
-	CgroupRoot  string
+	SocketPath     string
+	Workspace      string
+	PluginID       string
+	TokenSHA256    [32]byte
+	LSPTokenSHA256 [32]byte
+	Permissions    []string
+	ExecRunner     string
+	ExecTimeout    time.Duration
+	MaxOutput      int
+	Fetcher        *fetch.Client
+	CgroupRoot     string
 }
 
 // Server accepts framed JSON-RPC connections on a Unix socket.
 type Server struct {
-	cfg       Config
-	listener  net.Listener
-	root      *fsroot.Root
-	tokenMu   sync.Mutex
-	tokenUsed bool
-	cgroup    string
+	cfg          Config
+	listener     net.Listener
+	root         *fsroot.Root
+	tokenMu      sync.Mutex
+	tokenUsed    bool
+	lspTokenUsed bool
+	cgroup       string
 }
 
 // Listen binds the gateway socket with mode 0600.
@@ -429,15 +431,23 @@ func (s *Server) hello(req request, state *connectionState) (interface{}, *rpcEr
 		return nil, &rpcError{Code: -32001, Message: "unauthorized"}
 	}
 	hash := sha256.Sum256(rawToken)
-	if subtle.ConstantTimeCompare(hash[:], s.cfg.TokenSHA256[:]) != 1 {
-		return nil, &rpcError{Code: -32001, Message: "unauthorized"}
-	}
 	s.tokenMu.Lock()
-	if s.tokenUsed {
+	if subtle.ConstantTimeCompare(hash[:], s.cfg.TokenSHA256[:]) == 1 {
+		if s.tokenUsed {
+			s.tokenMu.Unlock()
+			return nil, &rpcError{Code: -32001, Message: "unauthorized"}
+		}
+		s.tokenUsed = true
+	} else if s.cfg.LSPTokenSHA256 != [32]byte{} && subtle.ConstantTimeCompare(hash[:], s.cfg.LSPTokenSHA256[:]) == 1 {
+		if s.lspTokenUsed {
+			s.tokenMu.Unlock()
+			return nil, &rpcError{Code: -32001, Message: "unauthorized"}
+		}
+		s.lspTokenUsed = true
+	} else {
 		s.tokenMu.Unlock()
 		return nil, &rpcError{Code: -32001, Message: "unauthorized"}
 	}
-	s.tokenUsed = true
 	s.tokenMu.Unlock()
 	state.handshaken = true
 	state.sessionID = randomID()

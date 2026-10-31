@@ -4,6 +4,7 @@
 
 use std::{
     cell::RefCell,
+    collections::HashMap,
     fs,
     io::{self, Stdout},
     path::{Path, PathBuf},
@@ -24,6 +25,7 @@ use ratatui::{
     Frame, Terminal,
     backend::CrosstermBackend,
     layout::Rect,
+    style::Modifier,
     style::{Color, Style},
     text::{Line, Span},
     widgets::{Block, Paragraph},
@@ -32,10 +34,12 @@ use ratatui::{
 mod gateway;
 mod host_session;
 pub mod lsp;
+mod lsp_worker;
 mod syntax;
 use gateway::GatewaySession;
 #[cfg(target_os = "linux")]
 use host_session::{HostEvent, HostSession};
+use lsp_worker::{LspEvent, LspWorker};
 use syntax::{Highlight, SyntaxClass, SyntaxState};
 
 const MAX_OPEN_BYTES: usize = 256 * 1024 * 1024;
@@ -110,6 +114,12 @@ pub struct Model {
     gateway: Option<GatewayClient>,
     /// Owning child/socket for the current gateway client.
     gateway_session: Option<GatewaySession>,
+    /// Second authenticated gateway connection owned by the LSP worker.
+    lsp_client: Option<GatewayClient>,
+    /// Active language-server worker.
+    lsp_worker: Option<LspWorker>,
+    /// Diagnostics keyed by workspace path.
+    diagnostics: HashMap<PathBuf, Vec<lsp::Diagnostic>>,
     /// Workspace root used to resolve all file paths.
     workspace: PathBuf,
     /// Reject file operations instead of falling back when the gateway is absent.
@@ -142,6 +152,9 @@ impl Model {
             active: 0,
             gateway: None,
             gateway_session: None,
+            lsp_client: None,
+            lsp_worker: None,
+            diagnostics: HashMap::new(),
             workspace: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
             require_gateway: false,
             syntax: RefCell::new(SyntaxState::default()),
@@ -1103,6 +1116,81 @@ impl Model {
         }
     }
 
+    fn start_lsp(&mut self) {
+        if self.lsp_worker.is_some() {
+            self.status = "lsp already running".to_owned();
+            self.dirty = true;
+            return;
+        }
+        let Some(client) = self.lsp_client.take() else {
+            self.status = "E: lsp gateway connection unavailable".to_owned();
+            self.dirty = true;
+            return;
+        };
+        let Some(path) = self.path.clone() else {
+            self.status = "E: lsp requires an open file".to_owned();
+            self.dirty = true;
+            return;
+        };
+        let text = self.editor.text().slice(0..self.editor.text().len_bytes());
+        match LspWorker::start(
+            client,
+            &lsp_tool(),
+            Vec::new(),
+            self.workspace.clone(),
+            path,
+            text,
+        ) {
+            Ok(worker) => {
+                self.lsp_worker = Some(worker);
+                self.status = "lsp starting".to_owned();
+            }
+            Err(error) => self.status = format!("E: lsp start: {error}"),
+        }
+        self.dirty = true;
+    }
+
+    fn stop_lsp(&mut self) {
+        self.lsp_worker = None;
+        self.status = "lsp stopped".to_owned();
+        self.dirty = true;
+    }
+
+    fn poll_lsp(&mut self) {
+        let Some(worker) = &self.lsp_worker else {
+            return;
+        };
+        for event in worker.poll() {
+            match event {
+                LspEvent::Diagnostics(path, diagnostics) => {
+                    self.diagnostics.insert(path, diagnostics);
+                    self.status = format!(
+                        "lsp diagnostics: {}",
+                        self.diagnostics.values().map(Vec::len).sum::<usize>()
+                    );
+                }
+                LspEvent::Crashed(error) => self.status = format!("E: lsp crashed: {error}"),
+                LspEvent::Error(error) => self.status = format!("E: lsp: {error}"),
+            }
+            self.dirty = true;
+        }
+    }
+
+    fn diagnostic_lines(&self) -> Vec<usize> {
+        let Some(path) = &self.path else {
+            return Vec::new();
+        };
+        self.diagnostics
+            .get(path)
+            .map(|diagnostics| {
+                diagnostics
+                    .iter()
+                    .map(|diagnostic| diagnostic.range.start.line as usize)
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
     fn reconnect_gateway(&mut self) {
         if !self.require_gateway {
             self.status = "E: gateway is not required in this session".to_owned();
@@ -1112,9 +1200,10 @@ impl Model {
         self.gateway = None;
         self.gateway_session = None;
         match GatewaySession::start(&self.workspace) {
-            Ok((session, client)) => {
+            Ok((session, client, lsp_client)) => {
                 self.gateway_session = Some(session);
                 self.gateway = Some(client);
+                self.lsp_client = Some(lsp_client);
                 self.status = "gateway reconnected".to_owned();
             }
             Err(error) => {
@@ -1150,6 +1239,8 @@ impl Model {
             ("q!", "") => self.force_quit(),
             ("help", "") => self.show_help(),
             ("reconnect", "") => self.reconnect_gateway(),
+            ("lsp-start", "") => self.start_lsp(),
+            ("lsp-stop", "") => self.stop_lsp(),
             ("plugin-start", "") => self.start_host(),
             ("plugin-oom", "") => self.start_oom_host(),
             ("plugin-exec", "") => self.exec_host(),
@@ -1234,6 +1325,7 @@ impl Model {
             InputMode::Search { query } => query.as_str(),
             _ => self.search_query.as_str(),
         };
+        let diagnostic_lines = self.diagnostic_lines();
         let mut lines = Vec::with_capacity(end.saturating_sub(self.scroll));
         for line_number in self.scroll..end {
             let Some(start) = index.line_to_offset(line_number) else {
@@ -1282,6 +1374,13 @@ impl Model {
             let mut rendered = Line::from(spans);
             if Some(line_number) == current {
                 rendered = rendered.style(Style::default().bg(Color::Indexed(236)));
+            }
+            if diagnostic_lines.contains(&line_number) {
+                rendered = rendered.style(
+                    Style::default()
+                        .fg(Color::Red)
+                        .add_modifier(Modifier::UNDERLINED),
+                );
             }
             lines.push(rendered);
         }
@@ -1341,6 +1440,21 @@ fn syntax_style(class: SyntaxClass) -> Style {
         SyntaxClass::Constant => Color::Yellow,
     };
     Style::default().fg(color)
+}
+
+fn lsp_tool() -> String {
+    if let Some(path) = std::env::var_os("ANVIL_LSP") {
+        return path.to_string_lossy().into_owned();
+    }
+    if let Some(path) = std::env::var_os("PATH") {
+        for directory in std::env::split_paths(&path) {
+            let candidate = directory.join("rust-analyzer");
+            if candidate.is_file() {
+                return candidate.to_string_lossy().into_owned();
+            }
+        }
+    }
+    "rust-analyzer".to_owned()
 }
 
 fn find_matches(text: &TextDocument, needle: &str) -> Vec<usize> {
@@ -1491,8 +1605,9 @@ pub fn run_with_workspace(path: Option<PathBuf>, workspace: PathBuf) -> io::Resu
     let start = Instant::now();
     let workspace = workspace.canonicalize()?;
     let (mut model, session) = match GatewaySession::start(&workspace) {
-        Ok((session, client)) => {
+        Ok((session, client, lsp_client)) => {
             let mut model = Model::with_gateway(client, workspace.clone());
+            model.lsp_client = Some(lsp_client);
             if let Some(path) = path
                 && let Err(error) = model.open_path(path)
             {
@@ -1541,6 +1656,7 @@ pub fn run_with_workspace(path: Option<PathBuf>, workspace: PathBuf) -> io::Resu
         }
         model.poll_host();
         model.poll_syntax();
+        model.poll_lsp();
         if event::poll(std::time::Duration::from_millis(50))? {
             handle_event(&mut model, event::read()?);
         }
@@ -1859,6 +1975,42 @@ mod tests {
             .any(|cell| cell.fg == Color::Magenta);
         assert!(colored, "keyword span was not colored");
         model.dirty = false;
+    }
+
+    #[test]
+    fn diagnostics_underline_matching_line() {
+        let mut model = Model::new(
+            EditorState::from_text("first\nsecond"),
+            Some(PathBuf::from("diag.rs")),
+        );
+        model.diagnostics.insert(
+            PathBuf::from("diag.rs"),
+            vec![lsp::Diagnostic {
+                range: lsp::Range {
+                    start: lsp::Position {
+                        line: 1,
+                        character: 0,
+                    },
+                    end: lsp::Position {
+                        line: 1,
+                        character: 3,
+                    },
+                },
+                severity: Some(1),
+                message: "error".to_owned(),
+                source: Some("test".to_owned()),
+            }],
+        );
+        let backend = TestBackend::new(80, 8);
+        let mut terminal = Terminal::new(backend).expect("terminal");
+        terminal.draw(|frame| view(&model, frame)).expect("draw");
+        let red = terminal
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .any(|cell| cell.fg == Color::Red);
+        assert!(red, "diagnostic line was not rendered red");
     }
 
     #[test]

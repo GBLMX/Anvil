@@ -24,6 +24,7 @@ func main() {
 	allowWrite := flag.Bool("allow-write", false, "grant sys.write_file")
 	pluginID := flag.String("plugin-id", "plugin", "registered plugin id")
 	tokenHash := flag.String("token-sha256", "", "hex SHA-256 of the 32-byte plugin token")
+	lspTokenHash := flag.String("lsp-token-sha256", "", "hex SHA-256 of the LSP worker token")
 	permissions := flag.String("permissions", "", "comma-separated granted permissions")
 	execRunner := flag.String("exec-runner", "", "absolute anvil-exec-runner path")
 	allowExec := flag.Bool("allow-exec", false, "grant sys.exec")
@@ -44,6 +45,15 @@ func main() {
 	if err != nil || len(hash) != 32 {
 		fmt.Fprintln(os.Stderr, "anvil-gateway: -token-sha256 must be 64 hex characters")
 		os.Exit(2)
+	}
+	var lspHash [32]byte
+	if *lspTokenHash != "" {
+		decoded, err := hex.DecodeString(*lspTokenHash)
+		if err != nil || len(decoded) != 32 {
+			fmt.Fprintln(os.Stderr, "anvil-gateway: -lsp-token-sha256 must be 64 hex characters")
+			os.Exit(2)
+		}
+		copy(lspHash[:], decoded)
 	}
 	workspacePath, err := filepath.Abs(*workspace)
 	if err != nil {
@@ -96,16 +106,17 @@ func main() {
 		}
 	}
 	server, err := gateway.Listen(gateway.Config{
-		SocketPath:  *socket,
-		Workspace:   workspacePath,
-		PluginID:    *pluginID,
-		TokenSHA256: [32]byte(hash),
-		Permissions: granted,
-		ExecRunner:  runnerPath,
-		ExecTimeout: *execTimeout,
-		MaxOutput:   *maxOutput,
-		Fetcher:     fetcher,
-		CgroupRoot:  *cgroupRoot,
+		SocketPath:     *socket,
+		Workspace:      workspacePath,
+		PluginID:       *pluginID,
+		TokenSHA256:    [32]byte(hash),
+		LSPTokenSHA256: lspHash,
+		Permissions:    granted,
+		ExecRunner:     runnerPath,
+		ExecTimeout:    *execTimeout,
+		MaxOutput:      *maxOutput,
+		Fetcher:        fetcher,
+		CgroupRoot:     *cgroupRoot,
 	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "anvil-gateway: %v\n", err)

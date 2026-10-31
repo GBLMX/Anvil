@@ -159,7 +159,12 @@ pub fn publish_diagnostics(message: &Value) -> Option<(PathBuf, Vec<Diagnostic>)
     }
     let params = message.get("params")?.clone();
     let parsed: PublishDiagnostics = serde_json::from_value(params).ok()?;
-    Some((PathBuf::from(parsed.uri), parsed.diagnostics))
+    let path = parsed
+        .uri
+        .strip_prefix("file://")
+        .unwrap_or(&parsed.uri)
+        .to_owned();
+    Some((PathBuf::from(path), parsed.diagnostics))
 }
 
 #[cfg(test)]
@@ -201,7 +206,7 @@ mod tests {
             }
         });
         let (path, diagnostics) = publish_diagnostics(&message).expect("diagnostics");
-        assert_eq!(path, PathBuf::from("file:///tmp/a.rs"));
+        assert_eq!(path, PathBuf::from("/tmp/a.rs"));
         assert_eq!(diagnostics.len(), 1);
         assert_eq!(diagnostics[0].range.start.line, 1);
     }

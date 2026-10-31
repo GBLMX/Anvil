@@ -25,6 +25,9 @@ func AllowedTool(path string) (string, error) {
 	case "/usr/bin/fd", "/bin/fd", "/usr/bin/fdfind":
 		return "fd", nil
 	default:
+		if filepath.Base(clean) == "rust-analyzer" {
+			return "rust-analyzer", nil
+		}
 		return "", fmt.Errorf("%w: %s", ErrUnknownTool, path)
 	}
 }
@@ -40,6 +43,11 @@ func Validate(tool string, args []string) error {
 		return validateRg(args)
 	case "fd":
 		return validateFd(args)
+	case "rust-analyzer":
+		if len(args) == 0 || (len(args) == 1 && args[0] == "--stdio") {
+			return nil
+		}
+		return ErrInvalidArgs
 	default:
 		return ErrUnknownTool
 	}

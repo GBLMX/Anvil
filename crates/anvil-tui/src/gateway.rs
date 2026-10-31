@@ -21,7 +21,7 @@ pub struct GatewaySession {
 
 impl GatewaySession {
     /// Start `anvil-gateway` for `workspace` and return a handshaken client.
-    pub fn start(workspace: &Path) -> Result<(Self, GatewayClient), String> {
+    pub fn start(workspace: &Path) -> Result<(Self, GatewayClient, GatewayClient), String> {
         let workspace = workspace
             .canonicalize()
             .map_err(|error| format!("workspace {}: {error}", workspace.display()))?;
@@ -33,11 +33,14 @@ impl GatewaySession {
         }
         let binary = gateway_binary();
         let token = random_token()?;
+        let lsp_token = random_token()?;
         let hash = hex(&Sha256::digest(token));
+        let lsp_hash = hex(&Sha256::digest(lsp_token));
         let socket = socket_path()?;
         let socket_arg = socket.to_string_lossy().into_owned();
         let workspace_arg = workspace.to_string_lossy().into_owned();
-        let child = Command::new(&binary)
+        let mut command = Command::new(&binary);
+        command
             .arg("-socket")
             .arg(&socket_arg)
             .arg("-workspace")
@@ -45,17 +48,32 @@ impl GatewaySession {
             .arg("-plugin-id")
             .arg("anvil-tui")
             .arg("-token-sha256")
-            .arg(hash)
+            .arg(&hash)
+            .arg("-lsp-token-sha256")
+            .arg(&lsp_hash)
             .arg("-allow-read")
             .arg("-allow-write")
             .stdin(Stdio::null())
             .stdout(Stdio::null())
-            .stderr(Stdio::null())
+            .stderr(Stdio::null());
+        if let Some(runner) = gateway_binary()
+            .parent()
+            .map(|parent| parent.join("anvil-exec-runner"))
+            .filter(|path| path.is_file())
+        {
+            command.arg("-allow-exec").arg("-exec-runner").arg(runner);
+        }
+        let child = command
             .spawn()
             .map_err(|error| format!("start {}: {error}", binary.display()))?;
         let mut session = Self { child, socket };
-        match session.connect(&token) {
-            Ok(client) => Ok((session, client)),
+        let result = (|| {
+            let client = session.connect(&token)?;
+            let lsp_client = session.connect(&lsp_token)?;
+            Ok((client, lsp_client))
+        })();
+        match result {
+            Ok((client, lsp_client)) => Ok((session, client, lsp_client)),
             Err(error) => {
                 session.stop();
                 Err(error)
