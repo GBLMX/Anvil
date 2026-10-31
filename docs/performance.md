@@ -171,6 +171,23 @@ measured 0.81 ms on the same machine. Large `sys.read_file` consumers should
 prefer binary frames. The JSON/base64 large-read path remains available for
 compatibility but is not the recommended transport for multi-megabyte reads.
 
+### Multi-cursor transaction spot check
+
+`editor/multicursor/1MB` measures inserting one character at every caret in a
+1 MB file. `insert_carets` is the batch path used by `insert_at_selections`;
+`legacy_carets` is the previous one-edit-at-a-time transaction path.
+
+| Carets | Batch | Legacy | Ratio |
+|---:|---:|---:|---:|
+| 10 | 515 µs | 506 µs | 1.02x |
+| 100 | 584 µs | 5.25 ms | 9.0x |
+| 1000 | 1.48 ms | 57.8 ms | 39x |
+
+These are local Criterion spot checks, not release gates. The batch path applies
+text edits without per-edit selection/index work, rebuilds `LineIndex` once, and
+maps caret offsets in a sorted batch. Selections with non-empty ranges and
+multi-edit replacements still use the legacy transaction path.
+
 ## 4. Methodology
 
 - Use release builds with `lto = true`, `codegen-units = 1`.

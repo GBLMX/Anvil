@@ -135,6 +135,52 @@ fn editor_benches(criterion: &mut Criterion) {
     });
     group.finish();
 
+    let mut group = criterion.benchmark_group("editor/multicursor/1MB");
+    group.sample_size(20);
+    let one_mb = generate_file(1, 80);
+    for carets in [10usize, 100, 1000] {
+        let positions: Vec<(usize, usize)> =
+            (0..carets).map(|index| (index * 80, index * 80)).collect();
+        let base = EditorState::from_text(&one_mb);
+        group.bench_with_input(
+            criterion::BenchmarkId::new("insert_carets", carets),
+            &positions,
+            |bencher, positions| {
+                bencher.iter_batched(
+                    || {
+                        let mut state = base.clone();
+                        assert!(state.set_selections_bytes(positions.clone()));
+                        state
+                    },
+                    |mut state| {
+                        black_box(state.insert_at_selections("x"));
+                        black_box(state.selection_bytes().len())
+                    },
+                    BatchSize::LargeInput,
+                );
+            },
+        );
+        let edits: Vec<(std::ops::Range<usize>, String)> = positions
+            .iter()
+            .map(|(at, _)| (*at..*at, "x".to_owned()))
+            .collect();
+        group.bench_with_input(
+            criterion::BenchmarkId::new("legacy_carets", carets),
+            &edits,
+            |bencher, edits| {
+                bencher.iter_batched(
+                    || base.clone(),
+                    |mut state| {
+                        black_box(state.apply_transaction(edits.clone()));
+                        black_box(state.selection_bytes().len())
+                    },
+                    BatchSize::LargeInput,
+                );
+            },
+        );
+    }
+    group.finish();
+
     let mut group = criterion.benchmark_group("editor/view/100MB");
     group.sample_size(100);
     let snapshot = base.snapshot();

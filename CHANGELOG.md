@@ -14,6 +14,9 @@ All notable changes to Anvil are recorded here. The format follows
 
 ### Added
 
+- Multi-cursor caret insertion now applies text edits without per-edit index
+  updates, rebuilds `LineIndex` once, and maps selections in a sorted batch;
+  a Criterion benchmark compares it with the legacy transaction path.
 - Start dashboard for empty launches: workspace/version context and shortcuts
   for insert, fuzzy file finding, the file tree, help, and quit.
 - CLI `-h`/`--help`, `-V`/`--version`, and `--workspace=<DIR>` parsing, with

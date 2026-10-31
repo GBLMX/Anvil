@@ -322,9 +322,17 @@ impl EditorState {
     }
 
     /// Replaces or inserts at every current selection as one transaction.
+    ///
+    /// Caret-only selections use a batch path: all inserts are applied without
+    /// per-edit selection/index work, then the line index and selection offsets
+    /// are rebuilt once. This avoids O(k²) selection mapping for multi-cursor
+    /// typing.
     pub fn insert_at_selections(&mut self, text: &str) -> bool {
         if text.is_empty() || self.selections.is_empty() {
             return false;
+        }
+        if self.selections.iter().all(|(anchor, head)| anchor == head) {
+            return self.insert_carets_batch(text);
         }
         let edits = self
             .selections
@@ -336,6 +344,51 @@ impl EditorState {
             })
             .collect();
         self.apply_transaction(edits)
+    }
+
+    fn insert_carets_batch(&mut self, text: &str) -> bool {
+        let before = self.selections.clone();
+        if before.len() <= 16 {
+            let edits = before
+                .iter()
+                .map(|(caret, _)| (*caret..*caret, text.to_owned()))
+                .collect();
+            return self.apply_transaction(edits);
+        }
+        let mut edits: Vec<(usize, String)> = before
+            .iter()
+            .map(|(caret, _)| (*caret, text.to_owned()))
+            .collect();
+        edits.sort_by(|left, right| right.0.cmp(&left.0));
+
+        for (at, text) in &edits {
+            self.apply_insert_text(*at, text);
+        }
+        self.index = Arc::new(LineIndex::from_buffer(&*self.text));
+
+        let mut positions: Vec<(usize, usize)> =
+            edits.iter().map(|(at, text)| (*at, text.len())).collect();
+        positions.sort_by_key(|(at, _)| *at);
+        let mut prefix = Vec::with_capacity(positions.len() + 1);
+        prefix.push(0);
+        for (_, len) in &positions {
+            prefix.push(prefix.last().copied().unwrap_or(0) + len);
+        }
+        let map_offset = |offset: usize| {
+            let index = positions.partition_point(|(at, _)| *at <= offset);
+            offset + prefix[index]
+        };
+        self.selections = before
+            .iter()
+            .map(|(anchor, head)| (map_offset(*anchor), map_offset(*head)))
+            .collect();
+
+        let actions = edits
+            .into_iter()
+            .map(|(at, text)| EditAction::Insert { at, text })
+            .collect();
+        self.push_record(EditAction::Transaction(actions), before);
+        true
     }
 
     /// Reverts the most recent text edit and restores its selection.
@@ -427,9 +480,13 @@ impl EditorState {
     }
 
     fn apply_insert(&mut self, at: usize, text: &str) {
+        self.apply_insert_text(at, text);
+        Arc::make_mut(&mut self.index).apply_edit(&*self.text, at..at);
+    }
+
+    fn apply_insert_text(&mut self, at: usize, text: &str) {
         let buffer = Arc::make_mut(&mut self.text);
         buffer.insert(at, text);
-        Arc::make_mut(&mut self.index).apply_edit(buffer, at..at);
     }
 
     fn apply_delete(&mut self, range: Range<usize>) {
@@ -572,6 +629,18 @@ mod tests {
         assert_eq!(state.selection_bytes(), vec![(0, 3), (4, 7), (8, 11)]);
         assert!(state.redo());
         assert_eq!(state.text().slice(0..11), "bar bar bar");
+    }
+
+    #[test]
+    fn caret_batch_insert_matches_text_selection_and_undo() {
+        let mut state = EditorState::from_text("abc");
+        assert!(state.set_selections_bytes(vec![(1, 1), (3, 3)]));
+        assert!(state.insert_at_selections("X"));
+        assert_eq!(state.text().slice(0..5), "aXbcX");
+        assert_eq!(state.selection_bytes(), vec![(2, 2), (5, 5)]);
+        assert!(state.undo());
+        assert_eq!(state.text().slice(0..3), "abc");
+        assert_eq!(state.selection_bytes(), vec![(1, 1), (3, 3)]);
     }
 
     #[test]
