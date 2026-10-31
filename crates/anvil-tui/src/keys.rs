@@ -291,6 +291,7 @@ fn handle_key(model: &mut Model, key: KeyEvent) {
         },
         InputMode::Insert => match key.code {
             KeyCode::Esc => {
+                model.cancel_completion();
                 model.input_mode = InputMode::Normal;
                 model.dirty = true;
             }

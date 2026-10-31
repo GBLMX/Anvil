@@ -289,9 +289,9 @@ impl Model {
     }
 
     pub(crate) fn cancel_completion(&mut self) {
-        if let Some(completion) = self.completion.take() {
-            self.pending_lsp.remove(&completion.id);
-        }
+        self.pending_lsp
+            .retain(|_, kind| *kind != LspRequestKind::Completion);
+        self.completion = None;
         self.dirty = true;
     }
 

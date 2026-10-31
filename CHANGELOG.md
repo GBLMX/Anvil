@@ -6,6 +6,14 @@ All notable changes to Anvil are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.2.15] - 2026-10-31
+
+### Fixed
+
+- Completion cancellation now removes every pending completion request, even
+  when no popup is visible. Insert-mode Esc and buffer switches therefore
+  cannot let a late response reopen a popup after the request was cancelled.
+
 ## [0.2.14] - 2026-10-31
 
 ### Changed

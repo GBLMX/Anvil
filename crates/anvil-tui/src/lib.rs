@@ -2424,6 +2424,11 @@ mod tests {
         assert!(!model.pending_lsp.contains_key(&9));
         model.handle_lsp_response(9, serde_json::json!({"items": []}), None);
         assert!(model.completion.is_none());
+        model.pending_lsp.insert(10, LspRequestKind::Completion);
+        model.cancel_completion();
+        assert!(!model.pending_lsp.contains_key(&10));
+        model.handle_lsp_response(10, serde_json::json!({"items": []}), None);
+        assert!(model.completion.is_none());
     }
 
     #[test]
