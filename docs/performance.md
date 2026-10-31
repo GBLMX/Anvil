@@ -174,14 +174,15 @@ compatibility but is not the recommended transport for multi-megabyte reads.
 ### Multi-cursor transaction spot check
 
 `editor/multicursor/1MB` measures inserting one character at every caret in a
-1 MB file. `insert_carets` is the batch path used by `insert_at_selections`;
-`legacy_carets` is the previous one-edit-at-a-time transaction path.
+1 MB file. `insert_carets` is the public multi-caret path; it uses the
+one-edit-at-a-time transaction for 16 or fewer carets and the batch path above
+that threshold. `legacy_carets` always measures the transaction path.
 
-| Carets | Batch | Legacy | Ratio |
-|---:|---:|---:|---:|
-| 10 | 515 µs | 506 µs | 1.02x |
-| 100 | 584 µs | 5.25 ms | 9.0x |
-| 1000 | 1.48 ms | 57.8 ms | 39x |
+| Carets | `insert_carets` path | `insert_carets` | Legacy | Ratio |
+|---:|---|---:|---:|---:|
+| 10 | fallback | 515 µs | 506 µs | 1.02x |
+| 100 | batch | 584 µs | 5.25 ms | 9.0x |
+| 1000 | batch | 1.48 ms | 57.8 ms | 39x |
 
 These are local Criterion spot checks, not release gates. The batch path applies
 text edits without per-edit selection/index work, rebuilds `LineIndex` once, and

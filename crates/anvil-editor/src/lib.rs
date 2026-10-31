@@ -644,6 +644,61 @@ mod tests {
     }
 
     #[test]
+    fn caret_batch_insert_matches_transaction_with_duplicates_and_multibyte() {
+        const TEXT: &str = "αβγδ\nεζηθ\nικλμ\nνξοπ";
+        const INSERT: &str = "Ω";
+        let mut boundaries: Vec<usize> = TEXT.char_indices().map(|(at, _)| at).collect();
+        boundaries.push(TEXT.len());
+        let selections: Vec<(usize, usize)> = [
+            18, 0, 9, 5, 12, 1, 0, 3, 10, 5, 6, 16, 2, 8, 9, 14, 11, 7, 19, 15,
+        ]
+        .into_iter()
+        .map(|index| {
+            let at = boundaries[index];
+            (at, at)
+        })
+        .collect();
+        let edits: Vec<_> = selections
+            .iter()
+            .map(|(at, _)| (*at..*at, INSERT.to_owned()))
+            .collect();
+
+        let mut legacy = EditorState::from_text(TEXT);
+        assert!(legacy.set_selections_bytes(selections.clone()));
+        assert!(legacy.apply_transaction(edits));
+
+        let mut batched = EditorState::from_text(TEXT);
+        assert!(batched.set_selections_bytes(selections.clone()));
+        assert!(batched.insert_at_selections(INSERT));
+
+        let expected_len = TEXT.len() + selections.len() * INSERT.len();
+        assert_eq!(
+            batched.text().slice(0..expected_len),
+            legacy.text().slice(0..expected_len)
+        );
+        assert_eq!(batched.selection_bytes(), legacy.selection_bytes());
+        assert_eq!(batched.revision(), legacy.revision());
+        let expected_text = batched.text().slice(0..expected_len);
+        let expected_selections = batched.selection_bytes();
+
+        assert!(batched.undo());
+        assert!(legacy.undo());
+        assert_eq!(
+            batched.text().slice(0..TEXT.len()),
+            legacy.text().slice(0..TEXT.len())
+        );
+        assert_eq!(batched.selection_bytes(), selections);
+        assert_eq!(legacy.selection_bytes(), selections);
+
+        assert!(batched.redo());
+        assert!(legacy.redo());
+        assert_eq!(batched.text().slice(0..expected_len), expected_text);
+        assert_eq!(batched.selection_bytes(), expected_selections);
+        assert_eq!(legacy.text().slice(0..expected_len), expected_text);
+        assert_eq!(legacy.selection_bytes(), expected_selections);
+    }
+
+    #[test]
     fn transaction_rejects_overlapping_ranges() {
         let mut state = EditorState::from_text("abcdef");
         assert!(!state.apply_transaction(vec![(0..4, "x".to_owned()), (3..6, "y".to_owned())]));
