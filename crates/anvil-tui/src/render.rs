@@ -309,7 +309,12 @@ pub fn view(model: &Model, frame: &mut Frame) {
         if lines.is_empty() {
             lines.push(Line::raw("empty"));
         }
-        let mut tree_block = Block::bordered().title("Files");
+        let tree_title = if model.show_hidden {
+            "Files · hidden"
+        } else {
+            "Files"
+        };
+        let mut tree_block = Block::bordered().title(tree_title);
         if model.tree_focus {
             tree_block = tree_block.border_style(Style::default().fg(Color::Yellow));
         }
@@ -379,7 +384,11 @@ pub fn view(model: &Model, frame: &mut Frame) {
         }
         lines.push(Line::raw(format!("> {}", fuzzy.query)));
         frame.render_widget(
-            Paragraph::new(lines).block(Block::bordered().title("Files")),
+            Paragraph::new(lines).block(Block::bordered().title(if model.show_hidden {
+                "Files · hidden"
+            } else {
+                "Files"
+            })),
             popup,
         );
     }

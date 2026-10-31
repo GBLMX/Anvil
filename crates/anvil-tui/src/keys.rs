@@ -229,6 +229,7 @@ fn handle_key(model: &mut Model, key: KeyEvent) {
             KeyCode::Char('k') | KeyCode::Up => model.tree_move(-1),
             KeyCode::Char('h') | KeyCode::Left => model.tree_collapse(),
             KeyCode::Char('l') | KeyCode::Right | KeyCode::Enter => model.tree_toggle(),
+            KeyCode::Char('H') => model.toggle_hidden(),
             _ => {}
         }
         return;

@@ -6,6 +6,14 @@ All notable changes to Anvil are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.2.11] - 2026-10-31
+
+### Added
+
+- File tree `H` toggles hidden directories; `.github` and `.cargo` remain
+  visible by default. Fuzzy file discovery passes the hidden state to
+  `rg --files` and excludes `.git`, `target`, `.cache`, `.cargo`, and `.rustup`.
+
 ## [0.2.10] - 2026-10-31
 
 ### Changed

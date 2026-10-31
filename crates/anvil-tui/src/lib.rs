@@ -195,6 +195,7 @@ pub struct Model {
     tree_selected: Option<usize>,
     tree_visible: bool,
     tree_focus: bool,
+    show_hidden: bool,
     fuzzy: Option<FuzzyState>,
     /// Gateway client used for file I/O when present.
     gateway: Option<GatewayClient>,
@@ -260,6 +261,7 @@ impl Model {
             tree_selected: None,
             tree_visible: false,
             tree_focus: false,
+            show_hidden: false,
             fuzzy: None,
             gateway: None,
             gateway_session: None,
@@ -2099,6 +2101,36 @@ mod tests {
         assert!(rendered.contains("alpha"));
         assert!(rendered.contains("beta"));
         assert!(rendered.contains("gamma"));
+    }
+
+    #[test]
+    fn tree_visibility_toggles_hidden_directories() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        fs::create_dir(dir.path().join("src")).expect("src");
+        fs::create_dir(dir.path().join(".github")).expect("github");
+        fs::create_dir(dir.path().join(".hidden")).expect("hidden");
+        let mut model = Model::new(EditorState::from_text(""), None);
+        model.workspace = dir.path().to_path_buf();
+        model.open_tree();
+        assert!(
+            model
+                .tree
+                .iter()
+                .any(|entry| entry.path.ends_with(".github"))
+        );
+        assert!(
+            !model
+                .tree
+                .iter()
+                .any(|entry| entry.path.ends_with(".hidden"))
+        );
+        model.toggle_hidden();
+        assert!(
+            model
+                .tree
+                .iter()
+                .any(|entry| entry.path.ends_with(".hidden"))
+        );
     }
 
     #[test]

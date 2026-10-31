@@ -12,7 +12,7 @@ Normal mode
   "a{yy,p}            named yank/put register; "_" is blackhole
   Home / End          line start / end
   q{reg} / @{reg}     record macro / replay macro; @@ repeats
-  Space e             file tree (h/l/Enter expand or open, Esc closes)
+  Space e             file tree (h/l/Enter expand or open, H toggles hidden)
   Space f             fuzzy file finder; type to filter, Enter opens
   gd                  go to definition
   K                   hover documentation

@@ -6,6 +6,13 @@ use anvil_ipc::DirEntry;
 use std::{fs, path::Path};
 
 impl Model {
+    fn tree_entry_visible(&self, name: &str, is_dir: bool) -> bool {
+        !is_dir
+            || self.show_hidden
+            || !name.starts_with('.')
+            || matches!(name, ".github" | ".cargo")
+    }
+
     fn ensure_file_worker(&mut self) -> bool {
         if self.file_worker.is_some() {
             return true;
@@ -29,6 +36,10 @@ impl Model {
         for event in events {
             match event {
                 FileEvent::Listed(path, Ok(entries)) => {
+                    let entries: Vec<DirEntry> = entries
+                        .into_iter()
+                        .filter(|entry| self.tree_entry_visible(&entry.name, entry.is_dir))
+                        .collect();
                     if path == self.workspace {
                         self.tree = entries
                             .into_iter()
@@ -129,6 +140,7 @@ impl Model {
                     Ok(entries) => {
                         self.tree = entries
                             .into_iter()
+                            .filter(|entry| self.tree_entry_visible(&entry.name, entry.is_dir))
                             .map(|entry| TreeEntry {
                                 path: workspace.join(entry.name),
                                 depth: 0,
@@ -201,6 +213,7 @@ impl Model {
                     self.tree[index].expanded = true;
                     let children: Vec<TreeEntry> = children
                         .into_iter()
+                        .filter(|child| self.tree_entry_visible(&child.name, child.is_dir))
                         .map(|child| TreeEntry {
                             path: entry.path.join(child.name),
                             depth: entry.depth + 1,
@@ -244,6 +257,9 @@ impl Model {
         }
         let entries = self.tree_entries(directory)?;
         for entry in entries {
+            if !self.tree_entry_visible(&entry.name, entry.is_dir) {
+                continue;
+            }
             let relative = if prefix.is_empty() {
                 entry.name.clone()
             } else {
@@ -261,11 +277,45 @@ impl Model {
         Ok(())
     }
 
+    pub(crate) fn toggle_hidden(&mut self) {
+        self.show_hidden = !self.show_hidden;
+        if self.tree_visible {
+            self.tree.clear();
+            self.tree_selected = None;
+            let workspace = self.workspace.clone();
+            if self.ensure_file_worker() {
+                if let Some(worker) = self.file_worker.as_ref() {
+                    let _ = worker.request(FileRequest::List(workspace));
+                }
+            } else if let Ok(entries) = self.tree_entries(&workspace) {
+                self.tree = entries
+                    .into_iter()
+                    .filter(|entry| self.tree_entry_visible(&entry.name, entry.is_dir))
+                    .map(|entry| TreeEntry {
+                        path: workspace.join(entry.name),
+                        depth: 0,
+                        is_dir: entry.is_dir,
+                        expanded: false,
+                    })
+                    .collect();
+            }
+            self.tree_selected = (!self.tree.is_empty()).then_some(0);
+        }
+        self.status = if self.show_hidden {
+            "hidden files shown".to_owned()
+        } else {
+            "hidden files hidden".to_owned()
+        };
+        self.dirty = true;
+    }
+
     pub(crate) fn start_fuzzy(&mut self) {
         let workspace = self.workspace.clone();
         if self.ensure_file_worker() {
             if let Some(worker) = self.file_worker.as_ref() {
-                let _ = worker.request(FileRequest::Files);
+                let _ = worker.request(FileRequest::Files {
+                    hidden: self.show_hidden,
+                });
             }
             self.fuzzy = Some(FuzzyState {
                 query: String::new(),

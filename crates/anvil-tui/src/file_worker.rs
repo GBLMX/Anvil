@@ -15,7 +15,7 @@ pub enum FileRequest {
     /// List one directory.
     List(PathBuf),
     /// Enumerate workspace files with `rg --files`, or a bounded fallback.
-    Files,
+    Files { hidden: bool },
 }
 
 /// A background file-tree result.
@@ -57,7 +57,9 @@ impl FileWorker {
                                 .map_err(|error| error.to_string()),
                         )
                     }
-                    FileRequest::Files => FileEvent::Files(files(&mut client, &workspace)),
+                    FileRequest::Files { hidden } => {
+                        FileEvent::Files(files(&mut client, &workspace, hidden))
+                    }
                 };
                 if event_sender.send(event).is_err() {
                     break;
@@ -83,16 +85,20 @@ impl FileWorker {
     }
 }
 
-fn files(client: &mut GatewayClient, workspace: &Path) -> Result<Vec<String>, String> {
+fn files(
+    client: &mut GatewayClient,
+    workspace: &Path,
+    hidden: bool,
+) -> Result<Vec<String>, String> {
     if let Some(tool) = rg_tool() {
-        let args = [
-            "--files".to_owned(),
-            "--hidden".to_owned(),
-            "--glob".to_owned(),
-            "!.git/**".to_owned(),
-            "--glob".to_owned(),
-            "!target/**".to_owned(),
-        ];
+        let mut args = vec!["--files".to_owned()];
+        if hidden {
+            args.push("--hidden".to_owned());
+        }
+        for excluded in [".git", "target", ".cache", ".cargo", ".rustup"] {
+            args.push("--glob".to_owned());
+            args.push(format!("!{excluded}/**"));
+        }
         if let Ok(result) = client.exec(&tool, &args, 3000)
             && result.exit_code == 0
             && !result.timed_out
@@ -102,7 +108,11 @@ fn files(client: &mut GatewayClient, workspace: &Path) -> Result<Vec<String>, St
                 .lines()
                 .filter(|line| !line.is_empty())
                 .map(ToOwned::to_owned)
-                .filter(|line| !line.starts_with(".git/") && !line.starts_with("target/"))
+                .filter(|line| {
+                    ![".git/", "target/", ".cache/", ".cargo/", ".rustup/"]
+                        .iter()
+                        .any(|prefix| line.starts_with(prefix))
+                })
                 .collect();
             files.sort();
             files.dedup();
@@ -112,7 +122,7 @@ fn files(client: &mut GatewayClient, workspace: &Path) -> Result<Vec<String>, St
         }
     }
     let mut files = Vec::new();
-    collect_fallback(client, workspace, workspace, "", &mut files)?;
+    collect_fallback(client, workspace, workspace, "", hidden, &mut files)?;
     files.sort();
     files.dedup();
     Ok(files)
@@ -133,6 +143,7 @@ fn collect_fallback(
     root: &Path,
     directory: &Path,
     prefix: &str,
+    hidden: bool,
     out: &mut Vec<String>,
 ) -> Result<(), String> {
     if out.len() >= FILE_LIMIT {
@@ -152,13 +163,26 @@ fn collect_fallback(
         .read_dir(&relative)
         .map_err(|error| error.to_string())?;
     for entry in entries {
+        if [".git", "target", ".cache", ".cargo", ".rustup"].contains(&entry.name.as_str()) {
+            continue;
+        }
+        if !hidden && entry.name.starts_with('.') {
+            continue;
+        }
         let child = if prefix.is_empty() {
             entry.name.clone()
         } else {
             format!("{prefix}/{}", entry.name)
         };
         if entry.is_dir {
-            collect_fallback(client, root, &directory.join(&entry.name), &child, out)?;
+            collect_fallback(
+                client,
+                root,
+                &directory.join(&entry.name),
+                &child,
+                hidden,
+                out,
+            )?;
         } else {
             out.push(child);
         }
