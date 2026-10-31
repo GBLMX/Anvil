@@ -33,15 +33,17 @@ fn handle_key(model: &mut Model, key: KeyEvent) {
         .contains(crossterm::event::KeyModifiers::CONTROL);
 
     if model.welcome {
-        model.welcome = false;
-        model.dirty = true;
         if key.code == KeyCode::Esc {
+            model.welcome = false;
+            model.dirty = true;
             return;
         }
         if key.code == KeyCode::Char('?') {
             model.show_help();
             return;
         }
+        model.welcome = false;
+        model.dirty = true;
     }
     if let Some(waiting) = model.macro_wait.take() {
         match waiting {

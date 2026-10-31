@@ -40,6 +40,7 @@ impl Model {
         self.modified = buffer.modified;
         self.search_query = buffer.search_query;
         self.welcome = false;
+        self.welcome_back = false;
         self.syntax.borrow_mut().invalidate();
         self.active = index;
         self.input_mode = InputMode::Normal;

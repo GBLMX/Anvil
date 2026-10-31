@@ -55,6 +55,7 @@ impl Model {
             eprintln!("open_path read={read_done:?} index={:?}", start.elapsed());
         }
         self.welcome = false;
+        self.welcome_back = false;
         self.sync_lsp_active();
         self.dirty = true;
         Ok(())

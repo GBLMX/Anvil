@@ -266,6 +266,8 @@ pub struct Model {
     search_query: String,
     /// Full-editor start dashboard, shown until the first interaction or file open.
     welcome: bool,
+    /// Dashboard state to restore after closing the help page.
+    welcome_back: bool,
     /// Buffer replaced by the read-only help page.
     help_back: Option<Buffer>,
     /// All open buffers, including the active one after the first switch.
@@ -341,6 +343,7 @@ impl Model {
             editor,
             path,
             welcome,
+            welcome_back: false,
             cursor: 0,
             scroll: 0,
             hscroll: 0,
@@ -477,6 +480,7 @@ impl Model {
         self.scroll = 0;
         self.hscroll = 0;
         self.modified = false;
+        self.welcome_back = self.welcome;
         self.welcome = false;
         self.input_mode = InputMode::Normal;
         self.pending = None;
@@ -497,6 +501,7 @@ impl Model {
         self.search_query = saved.search_query;
         self.syntax.borrow_mut().invalidate();
         self.input_mode = InputMode::Normal;
+        self.welcome = std::mem::take(&mut self.welcome_back);
         self.pending = None;
         self.status = "Returned from help".to_owned();
         self.dirty = true;
