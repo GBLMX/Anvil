@@ -775,8 +775,8 @@ fn render_welcome(frame: &mut Frame, area: Rect, model: &Model) {
             Span::raw(" file tree"),
         ]),
         Line::from(vec![
-            Span::styled(":help", Style::default().fg(Color::Cyan)),
-            Span::raw("   documentation"),
+            Span::styled("?", Style::default().fg(Color::Cyan)),
+            Span::raw("      help"),
         ]),
         Line::from(vec![
             Span::styled(":q", Style::default().fg(Color::Cyan)),
