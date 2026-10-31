@@ -65,7 +65,8 @@ Required outcome:
 - Per-workspace language-server lifecycle; no server is started until a
   matching buffer is opened.
 - Diagnostics, hover, definition, and completion are opt-in and cancellable.
-- LSP traffic cannot bypass the gateway permission model.
+- Trusted local language servers use the gateway's `-no-sandbox-lsp` process
+  path; plugin-host remains the sandboxed boundary for third-party plugins.
 - Server crash/restart does not lose buffer text or undo history.
 
 Acceptance:

@@ -57,6 +57,7 @@ type Config struct {
 	LSPTokenSHA256 [32]byte
 	Permissions    []string
 	ExecRunner     string
+	NoSandboxLSP   bool
 	ExecTimeout    time.Duration
 	MaxOutput      int
 	Fetcher        *fetch.Client
@@ -801,15 +802,46 @@ type lspSendParams struct {
 }
 
 func (s *Server) lspStart(ctx context.Context, req request, state *connectionState) (interface{}, *rpcError) {
-	if rpcErr := s.permissionError(state, "sys.exec"); rpcErr != nil {
-		return nil, rpcErr
+	if !s.cfg.NoSandboxLSP {
+		if rpcErr := s.permissionError(state, "sys.exec"); rpcErr != nil {
+			return nil, rpcErr
+		}
 	}
-	if s.cfg.ExecRunner == "" {
+	if !s.cfg.NoSandboxLSP && s.cfg.ExecRunner == "" {
 		return nil, &rpcError{Code: -32008, Message: "exec runner unavailable"}
 	}
 	var params lspStartParams
 	if err := decodeParams(req.Params, &params); err != nil || params.Tool == "" {
 		return nil, &rpcError{Code: -32602, Message: "invalid params"}
+	}
+	if s.cfg.NoSandboxLSP {
+		home, _ := os.UserHomeDir()
+		env := []string{
+			"HOME=" + home,
+			"RUSTUP_HOME=" + filepath.Join(home, ".rustup"),
+			"CARGO_HOME=" + filepath.Join(home, ".cargo"),
+			"PATH=" + filepath.Join(home, ".cargo", "bin") + ":/usr/bin:/bin",
+			"RUSTC_WRAPPER=",
+		}
+		manager, err := lsp.Start(ctx, lsp.Config{
+			Command: params.Tool,
+			Args:    params.Args,
+			Dir:     s.cfg.Workspace,
+			Env:     env,
+		})
+		if err != nil {
+			return nil, &rpcError{Code: -32008, Message: "lsp start unavailable"}
+		}
+		state.lspMu.Lock()
+		old := state.lsp
+		state.lsp = manager
+		state.lspMu.Unlock()
+		if old != nil {
+			_ = old.Close()
+		}
+		go s.forwardLSP(ctx, state, manager)
+		go s.forwardLSPStderr(ctx, state, manager)
+		return map[string]bool{"started": true}, nil
 	}
 	if err := execpolicy.Validate(params.Tool, params.Args); err != nil {
 		return nil, &rpcError{Code: -32002, Message: "policy denied"}

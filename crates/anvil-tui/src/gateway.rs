@@ -57,6 +57,7 @@ impl GatewaySession {
             .arg(&lsp_hash)
             .arg("-allow-read")
             .arg("-allow-write")
+            .arg("-no-sandbox-lsp")
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(gateway_stderr);

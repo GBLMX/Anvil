@@ -28,6 +28,7 @@ func main() {
 	permissions := flag.String("permissions", "", "comma-separated granted permissions")
 	execRunner := flag.String("exec-runner", "", "absolute anvil-exec-runner path")
 	allowExec := flag.Bool("allow-exec", false, "grant sys.exec")
+	noSandboxLSP := flag.Bool("no-sandbox-lsp", false, "run LSP tools without Landlock/seccomp")
 	execTimeout := flag.Duration("exec-timeout", 5*time.Second, "default sys.exec timeout")
 	maxOutput := flag.Int("max-output", 1<<20, "combined exec output limit")
 	cgroupRoot := flag.String("cgroup-root", "", "delegated cgroup v2 root for per-session exec limits")
@@ -113,6 +114,7 @@ func main() {
 		LSPTokenSHA256: lspHash,
 		Permissions:    granted,
 		ExecRunner:     runnerPath,
+		NoSandboxLSP:   *noSandboxLSP,
 		ExecTimeout:    *execTimeout,
 		MaxOutput:      *maxOutput,
 		Fetcher:        fetcher,

@@ -7,6 +7,7 @@ import (
 	"io"
 	"os/exec"
 	"sync"
+	"syscall"
 )
 
 // Config describes one language-server process. It must already name a
@@ -35,6 +36,7 @@ func Start(ctx context.Context, cfg Config) (*Manager, error) {
 	cmd := exec.CommandContext(ctx, cfg.Command, cfg.Args...)
 	cmd.Dir = cfg.Dir
 	cmd.Env = cfg.Env
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true, Pdeathsig: syscall.SIGKILL}
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return nil, err
@@ -86,6 +88,9 @@ func (m *Manager) Close() error {
 	var err error
 	m.once.Do(func() {
 		_ = m.stdin.Close()
+		if m.cmd.Process != nil {
+			_ = syscall.Kill(-m.cmd.Process.Pid, syscall.SIGKILL)
+		}
 		err = m.cmd.Wait()
 	})
 	return err
