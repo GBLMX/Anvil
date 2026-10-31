@@ -25,6 +25,7 @@ import (
 	"github.com/GBLMX/Anvil/go/internal/execrunner"
 	"github.com/GBLMX/Anvil/go/internal/fetch"
 	"github.com/GBLMX/Anvil/go/internal/fsroot"
+	"github.com/GBLMX/Anvil/go/internal/lsp"
 	"golang.org/x/sys/unix"
 )
 
@@ -271,6 +272,20 @@ type connectionState struct {
 	permissions []string
 	writesMu    sync.Mutex
 	writes      map[string]*pendingWrite
+	conn        net.Conn
+	writeMu     *sync.Mutex
+	lspMu       sync.Mutex
+	lsp         *lsp.Manager
+}
+
+func (state *connectionState) stopLSP() {
+	state.lspMu.Lock()
+	manager := state.lsp
+	state.lsp = nil
+	state.lspMu.Unlock()
+	if manager != nil {
+		_ = manager.Close()
+	}
 }
 
 func (state *connectionState) abortWrites() {
@@ -290,12 +305,15 @@ func (s *Server) handle(serverCtx context.Context, conn net.Conn) {
 	}
 	ctx, cancel := context.WithCancel(serverCtx)
 	defer cancel()
+	var writeMu sync.Mutex
 	state := &connectionState{
 		permissions: append([]string{}, s.cfg.Permissions...),
 		writes:      map[string]*pendingWrite{},
+		conn:        conn,
+		writeMu:     &writeMu,
 	}
 	defer state.abortWrites()
-	var writeMu sync.Mutex
+	defer state.stopLSP()
 	var requests sync.WaitGroup
 	for {
 		body, err := readFrame(conn)
@@ -381,6 +399,13 @@ func (s *Server) dispatch(ctx context.Context, req request, state *connectionSta
 		return s.exec(ctx, req, state)
 	case "sys.fetch":
 		return s.fetch(ctx, req, state)
+	case "lsp.start":
+		return s.lspStart(ctx, req, state)
+	case "lsp.send":
+		return s.lspSend(req, state)
+	case "lsp.stop":
+		state.stopLSP()
+		return map[string]bool{"stopped": true}, nil
 	default:
 		return nil, &rpcError{Code: -32601, Message: "method not found"}
 	}
@@ -719,6 +744,102 @@ func (s *Server) exec(parent context.Context, req request, state *connectionStat
 		TimedOut:        result.TimedOut,
 		OutputTruncated: result.OutputTruncated,
 	}, nil
+}
+
+type lspStartParams struct {
+	Tool string   `json:"tool"`
+	Args []string `json:"args"`
+}
+
+type lspSendParams struct {
+	Data json.RawMessage `json:"data"`
+}
+
+func (s *Server) lspStart(ctx context.Context, req request, state *connectionState) (interface{}, *rpcError) {
+	if rpcErr := s.permissionError(state, "sys.exec"); rpcErr != nil {
+		return nil, rpcErr
+	}
+	if s.cfg.ExecRunner == "" {
+		return nil, &rpcError{Code: -32008, Message: "exec runner unavailable"}
+	}
+	var params lspStartParams
+	if err := decodeParams(req.Params, &params); err != nil || params.Tool == "" {
+		return nil, &rpcError{Code: -32602, Message: "invalid params"}
+	}
+	if err := execpolicy.Validate(params.Tool, params.Args); err != nil {
+		return nil, &rpcError{Code: -32002, Message: "policy denied"}
+	}
+	args := []string{"-workspace", s.cfg.Workspace, "-tool", params.Tool, "--"}
+	args = append(args, params.Args...)
+	env := []string{}
+	if s.cgroup != "" {
+		env = append(env, "ANVIL_CGROUP_PATH="+s.cgroup)
+	}
+	manager, err := lsp.Start(ctx, lsp.Config{
+		Command: s.cfg.ExecRunner,
+		Args:    args,
+		Dir:     s.cfg.Workspace,
+		Env:     env,
+	})
+	if err != nil {
+		return nil, &rpcError{Code: -32008, Message: "lsp start unavailable"}
+	}
+	state.lspMu.Lock()
+	old := state.lsp
+	state.lsp = manager
+	state.lspMu.Unlock()
+	if old != nil {
+		_ = old.Close()
+	}
+	go s.forwardLSP(ctx, state, manager)
+	return map[string]bool{"started": true}, nil
+}
+
+func (s *Server) lspSend(req request, state *connectionState) (interface{}, *rpcError) {
+	state.lspMu.Lock()
+	manager := state.lsp
+	state.lspMu.Unlock()
+	if manager == nil {
+		return nil, &rpcError{Code: -32008, Message: "lsp not running"}
+	}
+	var params lspSendParams
+	if err := decodeParams(req.Params, &params); err != nil || len(params.Data) == 0 {
+		return nil, &rpcError{Code: -32602, Message: "invalid params"}
+	}
+	if err := manager.Send(params.Data); err != nil {
+		return nil, &rpcError{Code: -32008, Message: "lsp send failed"}
+	}
+	return map[string]bool{"sent": true}, nil
+}
+
+func (s *Server) forwardLSP(ctx context.Context, state *connectionState, manager *lsp.Manager) {
+	for {
+		body, err := manager.Recv()
+		if err != nil {
+			if ctx.Err() == nil {
+				s.notifyLSP(state, "lsp.crashed", map[string]string{"message": err.Error()})
+			}
+			return
+		}
+		s.notifyLSP(state, "lsp.message", map[string]json.RawMessage{"data": body})
+	}
+}
+
+func (s *Server) notifyLSP(state *connectionState, method string, params interface{}) {
+	if state.conn == nil || state.writeMu == nil {
+		return
+	}
+	payload, err := json.Marshal(map[string]interface{}{
+		"jsonrpc": "2.0",
+		"method":  method,
+		"params":  params,
+	})
+	if err != nil {
+		return
+	}
+	state.writeMu.Lock()
+	defer state.writeMu.Unlock()
+	_ = writeFrame(state.conn, payload)
 }
 
 func (s *Server) permissionError(state *connectionState, wanted string) *rpcError {

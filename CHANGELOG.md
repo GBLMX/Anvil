@@ -18,8 +18,12 @@ All notable changes to Anvil are recorded here. The format follows
 
 - `GatewayClient` now queues interleaved server-initiated JSON-RPC
   notifications while waiting for a response; binary read/write paths skip
-  notifications instead of desynchronizing. No gateway LSP dispatch, diagnostics
-  UI, or TUI language-server session yet.
+  notifications instead of desynchronizing.
+
+- Gateway `lsp.start` / `lsp.send` / `lsp.stop` routes with persistent
+  `internal/lsp` process pipes, sandboxed exec-runner launch, `lsp.message`
+  notifications, and `lsp.crashed` on reader failure. TUI diagnostics UI and
+  worker are still pending.
 
 ## [0.1.1] - 2026-10-31
 

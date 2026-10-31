@@ -58,9 +58,10 @@ Acceptance:
 
 Required outcome:
 
-- Rust LSP wire codec/diagnostics and Go `internal/lsp` framing/manager are
-  implemented; `GatewayClient` can queue server notifications. Gateway LSP
-  dispatch and TUI diagnostics remain pending.
+- Rust LSP wire codec/diagnostics, Go `internal/lsp` manager, gateway
+  `lsp.start/send/stop` routes, and client notification queuing are implemented.
+  TUI worker, diagnostics rendering, and end-to-end rust-analyzer validation
+  remain pending.
 - Per-workspace language-server lifecycle; no server is started until a
   matching buffer is opened.
 - Diagnostics, hover, definition, and completion are opt-in and cancellable.
