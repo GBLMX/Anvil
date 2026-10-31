@@ -8,6 +8,7 @@ pub enum LspEvent {
     Diagnostics(PathBuf, Vec<Diagnostic>),
     Crashed(String),
     Error(String),
+    Log(String),
 }
 
 pub struct LspWorker {
@@ -87,6 +88,14 @@ impl LspWorker {
                     "lsp.crashed" => {
                         let _ = sender.send(LspEvent::Crashed(message.params.to_string()));
                         return;
+                    }
+                    "lsp.stderr" => {
+                        let line = message
+                            .params
+                            .get("message")
+                            .and_then(|value| value.as_str())
+                            .unwrap_or_default();
+                        let _ = sender.send(LspEvent::Log(line.to_owned()));
                     }
                     "lsp.message" => {
                         let Some(data) = message.params.get("data") else {

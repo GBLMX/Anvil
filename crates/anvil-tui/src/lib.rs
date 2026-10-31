@@ -1171,6 +1171,7 @@ impl Model {
                 }
                 LspEvent::Crashed(error) => self.status = format!("E: lsp crashed: {error}"),
                 LspEvent::Error(error) => self.status = format!("E: lsp: {error}"),
+                LspEvent::Log(line) => self.status = format!("lsp: {line}"),
             }
             self.dirty = true;
         }

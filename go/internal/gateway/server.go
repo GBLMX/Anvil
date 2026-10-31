@@ -739,12 +739,15 @@ func (s *Server) exec(parent context.Context, req request, state *connectionStat
 			"HOME="+home,
 			"RUSTUP_HOME="+filepath.Join(home, ".rustup"),
 			"CARGO_HOME="+filepath.Join(home, ".cargo"),
+			"PATH="+filepath.Join(home, ".cargo", "bin")+":/usr/bin:/bin",
 		)
 	}
 	args := []string{
 		"-workspace", s.cfg.Workspace,
 		"-tool", params.Tool,
 		"-runtime-paths", strings.Join(runtimePaths, ","),
+		"-exec-paths", strings.Join(runtimePaths, ","),
+		"-workspace-write",
 		"-env", strings.Join(extraEnv, ","),
 		"--",
 	}
@@ -805,12 +808,15 @@ func (s *Server) lspStart(ctx context.Context, req request, state *connectionSta
 			"HOME="+home,
 			"RUSTUP_HOME="+filepath.Join(home, ".rustup"),
 			"CARGO_HOME="+filepath.Join(home, ".cargo"),
+			"PATH="+filepath.Join(home, ".cargo", "bin")+":/usr/bin:/bin",
 		)
 	}
 	args := []string{
 		"-workspace", s.cfg.Workspace,
 		"-tool", params.Tool,
 		"-runtime-paths", strings.Join(runtimePaths, ","),
+		"-exec-paths", strings.Join(runtimePaths, ","),
+		"-workspace-write",
 		"-env", strings.Join(extraEnv, ","),
 		"--",
 	}
@@ -836,6 +842,7 @@ func (s *Server) lspStart(ctx context.Context, req request, state *connectionSta
 		_ = old.Close()
 	}
 	go s.forwardLSP(ctx, state, manager)
+	go s.forwardLSPStderr(ctx, state, manager)
 	return map[string]bool{"started": true}, nil
 }
 
@@ -866,6 +873,19 @@ func (s *Server) forwardLSP(ctx context.Context, state *connectionState, manager
 			return
 		}
 		s.notifyLSP(state, "lsp.message", map[string]json.RawMessage{"data": body})
+	}
+}
+
+func (s *Server) forwardLSPStderr(ctx context.Context, state *connectionState, manager *lsp.Manager) {
+	for {
+		line, err := manager.RecvStderr()
+		if err != nil {
+			return
+		}
+		if ctx.Err() != nil {
+			return
+		}
+		s.notifyLSP(state, "lsp.stderr", map[string]string{"message": line})
 	}
 }
 

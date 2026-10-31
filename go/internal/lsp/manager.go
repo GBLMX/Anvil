@@ -23,6 +23,7 @@ type Manager struct {
 	cmd    *exec.Cmd
 	stdin  io.WriteCloser
 	stdout *bufio.Reader
+	stderr *bufio.Reader
 	once   sync.Once
 }
 
@@ -43,11 +44,21 @@ func Start(ctx context.Context, cfg Config) (*Manager, error) {
 		_ = stdin.Close()
 		return nil, err
 	}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		_ = stdin.Close()
+		return nil, err
+	}
 	if err := cmd.Start(); err != nil {
 		_ = stdin.Close()
 		return nil, err
 	}
-	return &Manager{cmd: cmd, stdin: stdin, stdout: bufio.NewReader(stdout)}, nil
+	return &Manager{
+		cmd:    cmd,
+		stdin:  stdin,
+		stdout: bufio.NewReader(stdout),
+		stderr: bufio.NewReader(stderr),
+	}, nil
 }
 
 // Send writes one framed LSP JSON message.
@@ -58,6 +69,11 @@ func (m *Manager) Send(body []byte) error {
 // Recv reads one framed LSP JSON message.
 func (m *Manager) Recv() ([]byte, error) {
 	return ReadFrame(m.stdout)
+}
+
+// RecvStderr reads one line from the server's stderr.
+func (m *Manager) RecvStderr() (string, error) {
+	return m.stderr.ReadString('\n')
 }
 
 // Wait waits for the server process to exit.

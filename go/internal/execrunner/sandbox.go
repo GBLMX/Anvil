@@ -72,10 +72,26 @@ func Apply(workspace string, runtimePaths []string) error {
 	return ApplyTool(workspace, "", runtimePaths)
 }
 
+// ApplyToolWithExecute grants execute access to additional runtime binaries
+// (for example a toolchain bin directory) while keeping them read-only.
+func ApplyToolWithExecute(workspace, tool string, runtimePaths, execPaths []string) error {
+	return applyTool(workspace, tool, runtimePaths, execPaths, false)
+}
+
+// ApplyToolForLSP grants read/write workspace access and explicit executable
+// runtime paths for a supervised language server.
+func ApplyToolForLSP(workspace, tool string, runtimePaths, execPaths []string) error {
+	return applyTool(workspace, tool, runtimePaths, execPaths, true)
+}
+
 // ApplyTool also grants execute access to the tool and its ELF interpreter.
 // Runtime directories stay read-only, so another binary cannot be exec'd.
 // It locks the calling OS thread; the caller must exec on the same goroutine.
 func ApplyTool(workspace, tool string, runtimePaths []string) error {
+	return applyTool(workspace, tool, runtimePaths, nil, false)
+}
+
+func applyTool(workspace, tool string, runtimePaths, execPaths []string, writeWorkspace bool) error {
 	runtime.LockOSThread()
 	threadID := unix.Gettid()
 	abi, err := LandlockABI()
@@ -109,10 +125,24 @@ func ApplyTool(workspace, tool string, runtimePaths []string) error {
 	defer unix.Close(ruleset)
 	for path := range seen {
 		access := uint64(readAccess)
-		if path == workspaceAbs {
+		if path == workspaceAbs && writeWorkspace {
+			access = readAccess | writeAccess
+		} else if path == workspaceAbs {
 			access = readAccess
 		}
 		if err := addPathRule(ruleset, path, access); err != nil {
+			return err
+		}
+	}
+	for _, path := range execPaths {
+		if path == "" {
+			continue
+		}
+		absolute, err := filepathAbs(path)
+		if err != nil {
+			return err
+		}
+		if err := addPathRule(ruleset, absolute, readAccess|execAccess); err != nil {
 			return err
 		}
 	}
