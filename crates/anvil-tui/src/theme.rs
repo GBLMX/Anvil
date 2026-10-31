@@ -97,7 +97,12 @@ mod tests {
         for color in [
             TEXT,
             MUTED,
+            DIM,
             ACCENT,
+            SUCCESS,
+            WARNING,
+            ERROR,
+            MAGENTA,
             SYNTAX_KEYWORD,
             SYNTAX_STRING,
             SYNTAX_COMMENT,
