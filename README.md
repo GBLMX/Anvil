@@ -67,6 +67,7 @@ key dismisses it.
 ## Documents
 
 - [Project charter](PROJECT_CHARTER.md)
+- [Known issues](docs/known-issues.md)
 - [0.3.0 → 0.4.0: Polish & Specification](docs/polish-and-specification.md)
 - [0.3.0 → 0.4.0 / Phase 0.7 plan](docs/phase-0-7-plan.md)
 - [Plugin-host isolation ADR](docs/adr/0012-plugin-host-isolation.md)
