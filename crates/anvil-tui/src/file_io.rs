@@ -172,7 +172,7 @@ impl Model {
             return false;
         }
         let Some(path) = self.path.clone() else {
-            self.status = "E32: no file name".to_owned();
+            self.status = "E: no file name".to_owned();
             self.dirty = true;
             return false;
         };

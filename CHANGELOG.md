@@ -6,6 +6,19 @@ All notable changes to Anvil are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.2.17] - 2026-10-31
+
+### Changed
+
+- Extracted editing/motions/registers into `editing.rs` and unit/integration
+  tests into `tests.rs`. `lib.rs` is now 981 lines, down from 4355 before the
+  modularization pass.
+
+### Fixed
+
+- Corrected the no-file save status from `E32: no file name` to
+  `E: no file name` and tightened the regression assertion.
+
 ## [0.2.16] - 2026-10-31
 
 ### Changed

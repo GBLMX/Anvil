@@ -1,0 +1,1032 @@
+use super::*;
+use crossterm::event::{KeyCode, KeyModifiers};
+use ratatui::{Terminal, backend::TestBackend};
+
+fn key(code: KeyCode) -> Event {
+    Event::Key(KeyEvent::new(code, KeyModifiers::NONE))
+}
+
+fn ctrl(code: KeyCode) -> Event {
+    Event::Key(KeyEvent::new(code, KeyModifiers::CONTROL))
+}
+
+fn type_text(model: &mut Model, text: &str) {
+    for character in text.chars() {
+        handle_event(model, key(KeyCode::Char(character)));
+    }
+}
+
+#[test]
+fn renders_visible_lines() {
+    let model = Model::new(EditorState::from_text("alpha\nbeta\ngamma"), None);
+    let backend = TestBackend::new(40, 8);
+    let mut terminal = Terminal::new(backend).expect("terminal");
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+    let buffer = terminal.backend().buffer();
+    let rendered = buffer
+        .content()
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect::<String>();
+    assert!(rendered.contains("alpha"));
+    assert!(rendered.contains("beta"));
+    assert!(rendered.contains("gamma"));
+}
+
+#[test]
+fn tree_visibility_toggles_hidden_directories() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    fs::create_dir(dir.path().join("src")).expect("src");
+    fs::create_dir(dir.path().join(".github")).expect("github");
+    fs::create_dir(dir.path().join(".hidden")).expect("hidden");
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.workspace = dir.path().to_path_buf();
+    model.open_tree();
+    assert!(
+        model
+            .tree
+            .iter()
+            .any(|entry| entry.path.ends_with(".github"))
+    );
+    assert!(
+        !model
+            .tree
+            .iter()
+            .any(|entry| entry.path.ends_with(".hidden"))
+    );
+    model.toggle_hidden();
+    assert!(
+        model
+            .tree
+            .iter()
+            .any(|entry| entry.path.ends_with(".hidden"))
+    );
+}
+
+#[test]
+fn tree_expands_directories() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    fs::create_dir(dir.path().join("src")).expect("dir");
+    fs::write(dir.path().join("src/main.rs"), "fn main() {}").expect("file");
+    fs::write(dir.path().join("Cargo.toml"), "").expect("manifest");
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.workspace = dir.path().to_path_buf();
+    model.open_tree();
+    assert!(model.tree_visible);
+    let index = model
+        .tree
+        .iter()
+        .position(|entry| entry.path.ends_with("src"))
+        .expect("src");
+    model.tree_selected = Some(index);
+    model.tree_toggle();
+    assert!(
+        model
+            .tree
+            .iter()
+            .any(|entry| entry.path.ends_with("src/main.rs"))
+    );
+    model.tree_toggle();
+    assert!(
+        !model
+            .tree
+            .iter()
+            .any(|entry| entry.path.ends_with("src/main.rs"))
+    );
+}
+
+#[test]
+fn fuzzy_filters_workspace_files() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    fs::create_dir(dir.path().join("src")).expect("dir");
+    fs::write(dir.path().join("src/main.rs"), "fn main() {}").expect("file");
+    fs::write(dir.path().join("src/lib.rs"), "").expect("file");
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.workspace = dir.path().to_path_buf();
+    model.start_fuzzy();
+    let fuzzy = model.fuzzy.as_mut().expect("fuzzy");
+    fuzzy.query = "main".to_owned();
+    model.fuzzy_refresh();
+    assert_eq!(model.fuzzy.as_ref().expect("fuzzy").filtered.len(), 1);
+}
+
+#[test]
+fn lsp_settings_cover_rust_go_and_python() {
+    assert_eq!(
+        lsp_settings(Path::new("main.rs"))
+            .expect("rust")
+            .language_id,
+        "rust"
+    );
+    assert_eq!(
+        lsp_settings(Path::new("main.go")).expect("go").language_id,
+        "go"
+    );
+    assert_eq!(
+        lsp_settings(Path::new("main.py"))
+            .expect("python")
+            .language_id,
+        "python"
+    );
+    assert!(lsp_settings(Path::new("README.md")).is_none());
+}
+
+#[test]
+fn normal_tab_does_not_insert_text() {
+    let mut model = Model::new(EditorState::from_text("a"), None);
+    handle_event(&mut model, key(KeyCode::Tab));
+    handle_event(&mut model, key(KeyCode::BackTab));
+    assert_eq!(model.editor.text().slice(0..1), "a");
+    assert!(!model.modified);
+}
+
+#[test]
+fn insert_tab_adds_four_spaces() {
+    let mut model = Model::new(EditorState::from_text("a"), None);
+    handle_event(&mut model, key(KeyCode::Char('a')));
+    handle_event(&mut model, key(KeyCode::Tab));
+    assert_eq!(model.editor.text().slice(0..5), "a    ");
+}
+
+#[test]
+fn rendered_tabs_use_display_columns() {
+    let model = Model::new(
+        EditorState::from_text("a\tb"),
+        Some(PathBuf::from("tabs.rs")),
+    );
+    let backend = TestBackend::new(20, 5);
+    let mut terminal = Terminal::new(backend).expect("terminal");
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+    let content: String = terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect();
+    assert!(content.contains("a   b"), "{content:?}");
+    assert!(!content.contains('\t'));
+}
+
+#[test]
+fn insert_mode_modifies_piece_table() {
+    let mut model = Model::new(EditorState::from_text("ac"), None);
+    handle_event(&mut model, key(KeyCode::Char('i')));
+    handle_event(&mut model, key(KeyCode::Char('b')));
+    handle_event(&mut model, key(KeyCode::Esc));
+    assert_eq!(model.editor.text().slice(0..3), "bac");
+    assert!(model.modified);
+    assert_eq!(model.input_mode, InputMode::Normal);
+}
+
+#[test]
+fn command_line_saves() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("file.txt");
+    fs::write(&path, "old").expect("write");
+    let mut model = Model::open(&path).expect("open");
+    handle_event(&mut model, key(KeyCode::Char('i')));
+    handle_event(&mut model, key(KeyCode::Char('n')));
+    handle_event(&mut model, key(KeyCode::Esc));
+    handle_event(&mut model, key(KeyCode::Char(':')));
+    handle_event(&mut model, key(KeyCode::Char('w')));
+    handle_event(&mut model, key(KeyCode::Enter));
+    assert!(!model.modified);
+    assert_eq!(fs::read_to_string(path).expect("read"), "nold");
+}
+
+#[test]
+fn cursor_and_viewport_are_independent() {
+    let mut model = Model::new(EditorState::from_text("a\nb\nc\nd"), None);
+    model.move_line(3);
+    model.ensure_cursor_visible(2, 80);
+    assert_eq!(model.scroll, 2);
+    model.move_line(-1);
+    model.ensure_cursor_visible(2, 80);
+    assert_eq!(model.scroll, 2);
+}
+
+#[test]
+fn horizontal_scroll_follows_the_cursor() {
+    let mut model = Model::new(EditorState::from_text("0123456789"), None);
+    model.cursor = 8;
+    model.ensure_cursor_visible(1, 4);
+    assert_eq!(model.hscroll, 5);
+    model.cursor = 0;
+    model.ensure_cursor_visible(1, 4);
+    assert_eq!(model.hscroll, 0);
+}
+
+#[test]
+fn horizontal_scroll_uses_display_cells() {
+    let mut model = Model::new(EditorState::from_text("中中中中中"), None);
+    model.cursor = model.editor.text().len_bytes();
+    model.ensure_cursor_visible(1, 3);
+    assert_eq!(model.hscroll, 8);
+}
+
+#[test]
+fn syntax_keyword_is_rendered() {
+    let mut model = Model::new(
+        EditorState::from_text("fn main() {}"),
+        Some(PathBuf::from("sample.rs")),
+    );
+    for _ in 0..200 {
+        model.poll_syntax();
+        if !model.syntax.borrow().highlights().is_empty() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    assert!(
+        !model.syntax.borrow().highlights().is_empty(),
+        "no syntax highlights produced"
+    );
+    let backend = TestBackend::new(80, 8);
+    let mut terminal = Terminal::new(backend).expect("terminal");
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+    let colored = terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .any(|cell| cell.fg == Color::Magenta);
+    assert!(colored, "keyword span was not colored");
+    model.dirty = false;
+}
+
+#[test]
+fn snippets_drop_placeholders() {
+    assert_eq!(
+        lsp_ui::expand_snippet("fn ${1:name}(${2:args}) $0"),
+        "fn name(args) "
+    );
+}
+
+#[test]
+fn utf16_offset_maps_through_emoji() {
+    let model = Model::new(EditorState::from_text("a😀b"), None);
+    assert_eq!(model.offset_at_utf16(0, 1), 1);
+    assert_eq!(model.offset_at_utf16(0, 3), 5);
+}
+
+#[test]
+fn utf16_columns_map_through_emoji() {
+    let text = "a😀b";
+    assert_eq!(utf16_to_byte(text, 1), 1);
+    assert_eq!(utf16_to_byte(text, 3), 5);
+    assert_eq!(utf16_to_byte(text, 4), 6);
+}
+
+#[test]
+fn navigation_preserves_modified_buffer() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let first = dir.path().join("first.txt");
+    let second = dir.path().join("second.txt");
+    fs::write(&first, "first").expect("first");
+    fs::write(&second, "second").expect("second");
+    let mut model = Model::open(&first).expect("open");
+    model.insert_text("X");
+    assert!(model.modified);
+    model.open_path(&second).expect("second open");
+    assert_eq!(
+        model.path.as_deref(),
+        Some(second.canonicalize().expect("canonical").as_path())
+    );
+    assert_eq!(model.editor.text().slice(0..6), "second");
+    assert_eq!(model.buffers.len(), 2);
+    assert!(model.buffers[0].modified);
+    assert_eq!(model.buffers[0].editor.text().slice(0..6), "Xfirst");
+    model.switch_buffer(-1);
+    assert_eq!(model.editor.text().slice(0..6), "Xfirst");
+    assert!(model.modified);
+}
+
+#[test]
+fn definition_response_moves_cursor() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("main.rs");
+    fs::write(&path, "fn foo() {}\nfn main() { foo(); }\n").expect("write");
+    let mut model = Model::open(&path).expect("open");
+    let uri = lsp_worker::file_uri(&path);
+    model.apply_definition_response(&serde_json::json!([{
+        "targetUri": uri,
+        "targetSelectionRange": {
+            "start": {"line": 1, "character": 3},
+            "end": {"line": 1, "character": 7}
+        }
+    }]));
+    assert_eq!(
+        model.path.as_deref(),
+        Some(path.canonicalize().expect("canonical").as_path())
+    );
+    assert_eq!(model.cursor, model.offset_at_utf16(1, 3));
+}
+
+#[test]
+fn cancelling_completion_drops_pending_response() {
+    let mut model = Model::new(EditorState::from_text("x"), None);
+    model.completion = Some(CompletionState {
+        id: 9,
+        items: vec![CompletionItem {
+            label: "item".to_owned(),
+            insert: "item".to_owned(),
+            detail: String::new(),
+            replace: None,
+        }],
+        filtered: vec![0],
+        query: String::new(),
+        selected: 0,
+    });
+    model.pending_lsp.insert(9, LspRequestKind::Completion);
+    model.cancel_completion();
+    assert!(model.completion.is_none());
+    assert!(!model.pending_lsp.contains_key(&9));
+    model.handle_lsp_response(9, serde_json::json!({"items": []}), None);
+    assert!(model.completion.is_none());
+    model.pending_lsp.insert(10, LspRequestKind::Completion);
+    model.cancel_completion();
+    assert!(!model.pending_lsp.contains_key(&10));
+    model.handle_lsp_response(10, serde_json::json!({"items": []}), None);
+    assert!(model.completion.is_none());
+}
+
+#[test]
+fn diagnostic_jump_cycles_between_lines() {
+    let mut model = Model::new(
+        EditorState::from_text("one\ntwo\nthree"),
+        Some(PathBuf::from("diag.rs")),
+    );
+    model.diagnostics.insert(
+        PathBuf::from("diag.rs"),
+        vec![
+            lsp::Diagnostic {
+                range: lsp::Range {
+                    start: lsp::Position {
+                        line: 0,
+                        character: 0,
+                    },
+                    end: lsp::Position {
+                        line: 0,
+                        character: 1,
+                    },
+                },
+                severity: Some(1),
+                message: "first".to_owned(),
+                source: Some("test".to_owned()),
+            },
+            lsp::Diagnostic {
+                range: lsp::Range {
+                    start: lsp::Position {
+                        line: 2,
+                        character: 0,
+                    },
+                    end: lsp::Position {
+                        line: 2,
+                        character: 1,
+                    },
+                },
+                severity: Some(2),
+                message: "second".to_owned(),
+                source: Some("test".to_owned()),
+            },
+            lsp::Diagnostic {
+                range: lsp::Range {
+                    start: lsp::Position {
+                        line: 0,
+                        character: 2,
+                    },
+                    end: lsp::Position {
+                        line: 0,
+                        character: 3,
+                    },
+                },
+                severity: None,
+                message: "related".to_owned(),
+                source: Some("test".to_owned()),
+            },
+        ],
+    );
+    model.jump_diagnostic(true);
+    assert_eq!(model.cursor, model.offset_at_utf16(2, 0));
+    assert!(
+        model
+            .diagnostic_popup
+            .as_deref()
+            .is_some_and(|text| text.contains("second"))
+    );
+    model.jump_diagnostic(false);
+    assert_eq!(model.cursor, 0);
+    assert!(
+        model
+            .diagnostic_popup
+            .as_deref()
+            .is_some_and(|text| text.contains("first"))
+    );
+    model.jump_diagnostic(false);
+    assert_eq!(model.cursor, model.offset_at_utf16(2, 0));
+}
+
+#[test]
+fn diagnostics_underline_matching_line() {
+    let mut model = Model::new(
+        EditorState::from_text("first\nsecond"),
+        Some(PathBuf::from("diag.rs")),
+    );
+    model.diagnostics.insert(
+        PathBuf::from("diag.rs"),
+        vec![lsp::Diagnostic {
+            range: lsp::Range {
+                start: lsp::Position {
+                    line: 1,
+                    character: 0,
+                },
+                end: lsp::Position {
+                    line: 1,
+                    character: 3,
+                },
+            },
+            severity: Some(1),
+            message: "error".to_owned(),
+            source: Some("test".to_owned()),
+        }],
+    );
+    let backend = TestBackend::new(80, 8);
+    let mut terminal = Terminal::new(backend).expect("terminal");
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+    let red = terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .any(|cell| cell.fg == Color::Red);
+    assert!(red, "diagnostic line was not rendered red");
+}
+
+#[test]
+fn status_column_uses_grapheme_index() {
+    let mut model = Model::new(EditorState::from_text("a👨‍👩‍👧‍👦b"), None);
+    model.cursor = "a👨‍👩‍👧‍👦".len();
+    let backend = TestBackend::new(80, 8);
+    let mut terminal = Terminal::new(backend).expect("terminal");
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+    let rendered = terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect::<String>();
+    assert!(rendered.contains("Col 3"));
+    assert!(!rendered.contains("Col 26"));
+}
+
+#[test]
+fn idle_events_do_not_request_a_redraw() {
+    let mut model = Model::new(EditorState::from_text("a\nb"), None);
+    model.dirty = false;
+    handle_event(&mut model, Event::FocusGained);
+    assert!(!model.dirty);
+    handle_event(&mut model, key(KeyCode::Char('z')));
+    assert!(!model.dirty);
+    handle_event(&mut model, key(KeyCode::Char('j')));
+    assert!(model.dirty);
+}
+
+#[test]
+fn invalid_utf8_is_rejected() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("binary.bin");
+    fs::write(&path, [0xff, 0xfe]).expect("write");
+    assert!(Model::open(path).is_err());
+}
+
+#[test]
+fn paste_only_inserts_in_edit_modes() {
+    let mut model = Model::new(EditorState::from_text("a"), None);
+    model.dirty = false;
+    handle_event(&mut model, Event::Paste("x".to_owned()));
+    assert_eq!(model.editor.text().slice(0..1), "a");
+    assert!(!model.dirty);
+
+    handle_event(&mut model, key(KeyCode::Char('i')));
+    handle_event(&mut model, Event::Paste("b".to_owned()));
+    assert_eq!(model.editor.text().slice(0..2), "ba");
+}
+
+#[test]
+fn quit_guard_requires_force_or_write() {
+    let mut model = Model::new(EditorState::from_text("a"), None);
+    handle_event(&mut model, key(KeyCode::Char('i')));
+    handle_event(&mut model, key(KeyCode::Char('b')));
+    handle_event(&mut model, key(KeyCode::Esc));
+
+    for code in [KeyCode::Char(':'), KeyCode::Char('q'), KeyCode::Enter] {
+        handle_event(&mut model, key(code));
+    }
+    assert!(!model.quit);
+    assert!(model.status.contains("No write since last change"));
+
+    handle_event(&mut model, key(KeyCode::Char(':')));
+    handle_event(&mut model, key(KeyCode::Char('q')));
+    handle_event(&mut model, key(KeyCode::Char('!')));
+    handle_event(&mut model, key(KeyCode::Enter));
+    assert!(model.quit);
+}
+
+#[test]
+fn undo_and_redo_are_reachable_from_normal_mode() {
+    let mut model = Model::new(EditorState::from_text("a"), None);
+    handle_event(&mut model, key(KeyCode::Char('i')));
+    handle_event(&mut model, key(KeyCode::Char('X')));
+    handle_event(&mut model, key(KeyCode::Esc));
+    assert_eq!(model.editor.text().slice(0..2), "Xa");
+
+    handle_event(&mut model, key(KeyCode::Char('u')));
+    assert_eq!(model.editor.text().slice(0..1), "a");
+    assert_eq!(model.cursor, 0);
+
+    handle_event(&mut model, ctrl(KeyCode::Char('r')));
+    assert_eq!(model.editor.text().slice(0..2), "Xa");
+    assert_eq!(model.cursor, 1);
+}
+
+#[test]
+fn delete_into_named_register() {
+    let mut model = Model::new(EditorState::from_text("alpha beta"), None);
+    for key_code in [
+        KeyCode::Char('"'),
+        KeyCode::Char('a'),
+        KeyCode::Char('d'),
+        KeyCode::Char('w'),
+    ] {
+        handle_event(&mut model, key(key_code));
+    }
+    assert_eq!(
+        model.registers.get(&'a').map(String::as_str),
+        Some("alpha ")
+    );
+    for key_code in [KeyCode::Char('"'), KeyCode::Char('a'), KeyCode::Char('p')] {
+        handle_event(&mut model, key(key_code));
+    }
+    assert_eq!(model.editor.text().slice(0..10), "alpha beta");
+}
+
+#[test]
+fn named_register_yank_and_put() {
+    let mut model = Model::new(EditorState::from_text("alpha\nbeta"), None);
+    for key_code in [
+        KeyCode::Char('"'),
+        KeyCode::Char('a'),
+        KeyCode::Char('y'),
+        KeyCode::Char('y'),
+    ] {
+        handle_event(&mut model, key(key_code));
+    }
+    assert_eq!(
+        model.registers.get(&'a').map(String::as_str),
+        Some("alpha\n")
+    );
+    model.cursor = 0;
+    for key_code in [KeyCode::Char('"'), KeyCode::Char('a'), KeyCode::Char('p')] {
+        handle_event(&mut model, key(key_code));
+    }
+    assert_eq!(model.editor.text().slice(0..12), "alpha\nalpha\n");
+}
+
+#[test]
+fn macro_records_and_replays() {
+    let mut model = Model::new(EditorState::from_text(""), None);
+    for code in [
+        KeyCode::Char('q'),
+        KeyCode::Char('a'),
+        KeyCode::Char('i'),
+        KeyCode::Char('X'),
+        KeyCode::Esc,
+        KeyCode::Char('q'),
+    ] {
+        handle_event(&mut model, key(code));
+    }
+    assert_eq!(model.macros.get(&'a').map(Vec::len), Some(3));
+    for code in [KeyCode::Char('@'), KeyCode::Char('a')] {
+        handle_event(&mut model, key(code));
+    }
+    assert_eq!(model.editor.text().slice(0..2), "XX");
+}
+
+#[test]
+fn change_inner_word_and_quote() {
+    let mut model = Model::new(EditorState::from_text("alpha beta"), None);
+    for key_code in [KeyCode::Char('c'), KeyCode::Char('i'), KeyCode::Char('w')] {
+        handle_event(&mut model, key(key_code));
+    }
+    handle_event(&mut model, key(KeyCode::Char('X')));
+    handle_event(&mut model, key(KeyCode::Esc));
+    assert_eq!(model.editor.text().slice(0..6), "X beta");
+
+    let mut model = Model::new(EditorState::from_text("say \"hello\" now"), None);
+    model.cursor = 6;
+    for key_code in [KeyCode::Char('c'), KeyCode::Char('i'), KeyCode::Char('"')] {
+        handle_event(&mut model, key(key_code));
+    }
+    handle_event(&mut model, key(KeyCode::Char('X')));
+    handle_event(&mut model, key(KeyCode::Esc));
+    assert_eq!(model.editor.text().slice(0..11), "say \"X\" now");
+}
+
+#[test]
+fn counts_repeat_motions_and_operators() {
+    let mut model = Model::new(EditorState::from_text("a b c d"), None);
+    handle_event(&mut model, key(KeyCode::Char('3')));
+    handle_event(&mut model, key(KeyCode::Char('w')));
+    assert_eq!(model.cursor, 6);
+
+    let mut model = Model::new(EditorState::from_text("a b c d"), None);
+    handle_event(&mut model, key(KeyCode::Char('d')));
+    handle_event(&mut model, key(KeyCode::Char('2')));
+    handle_event(&mut model, key(KeyCode::Char('w')));
+    assert_eq!(model.editor.text().slice(0..3), "c d");
+}
+
+#[test]
+fn word_motions_follow_vi_boundaries() {
+    let mut model = Model::new(EditorState::from_text("alpha beta.gamma"), None);
+    handle_event(&mut model, key(KeyCode::Char('w')));
+    assert_eq!(model.cursor, 6);
+    handle_event(&mut model, key(KeyCode::Char('w')));
+    assert_eq!(model.cursor, 10);
+    handle_event(&mut model, key(KeyCode::Char('b')));
+    assert_eq!(model.cursor, 6);
+    handle_event(&mut model, key(KeyCode::Char('e')));
+    assert_eq!(model.cursor, 9);
+}
+
+#[test]
+fn substitute_is_literal_and_line_scoped() {
+    let mut model = Model::new(EditorState::from_text("foo foo\nfoo"), None);
+    model.execute_command("s/foo/bar/");
+    assert_eq!(model.editor.text().slice(0..11), "bar foo\nfoo");
+    assert!(model.modified);
+
+    let mut model = Model::new(EditorState::from_text("foo foo\nfoo"), None);
+    model.execute_command("%s/foo/bar/g");
+    assert_eq!(model.editor.text().slice(0..11), "bar bar\nbar");
+}
+
+#[test]
+fn substitute_uses_non_overlapping_matches() {
+    let mut model = Model::new(EditorState::from_text("aaa"), None);
+    model.execute_command("%s/aa/X/g");
+    assert_eq!(model.editor.text().slice(0..2), "Xa");
+}
+
+#[test]
+fn substitute_updates_offsets_after_length_change() {
+    let mut model = Model::new(EditorState::from_text("a a"), None);
+    model.execute_command("%s/a/aa/g");
+    assert_eq!(model.editor.text().slice(0..5), "aa aa");
+}
+
+#[test]
+fn word_end_keeps_multibyte_boundary() {
+    let mut model = Model::new(EditorState::from_text("café"), None);
+    handle_event(&mut model, key(KeyCode::Char('e')));
+    assert_eq!(model.cursor, 3);
+    assert!(model.editor.text().is_char_boundary(model.cursor));
+}
+
+#[test]
+fn dw_deletes_to_next_word_start_and_undoes() {
+    let mut model = Model::new(EditorState::from_text("alpha beta"), None);
+    handle_event(&mut model, key(KeyCode::Char('d')));
+    handle_event(&mut model, key(KeyCode::Char('w')));
+    assert_eq!(model.editor.text().slice(0..4), "beta");
+    assert_eq!(model.cursor, 0);
+    handle_event(&mut model, key(KeyCode::Char('u')));
+    assert_eq!(model.editor.text().slice(0..10), "alpha beta");
+}
+
+#[test]
+fn dd_deletes_current_line_and_keeps_line_start() {
+    let mut model = Model::new(EditorState::from_text("a\nb\nc"), None);
+    model.move_line(1);
+    handle_event(&mut model, key(KeyCode::Char('d')));
+    handle_event(&mut model, key(KeyCode::Char('d')));
+    assert_eq!(model.editor.text().slice(0..3), "a\nc");
+    assert_eq!(model.cursor, 2);
+    assert!(model.modified);
+}
+
+#[test]
+fn yy_and_p_use_the_unnamed_register() {
+    let mut model = Model::new(EditorState::from_text("a\nb"), None);
+    model.move_line(1);
+    handle_event(&mut model, key(KeyCode::Char('y')));
+    handle_event(&mut model, key(KeyCode::Char('y')));
+    assert_eq!(model.editor.yank_text(), "b");
+    assert_eq!(model.cursor, 2);
+
+    model.move_end();
+    handle_event(&mut model, key(KeyCode::Char('p')));
+    assert_eq!(model.editor.text().slice(0..4), "a\nbb");
+    assert_eq!(model.cursor, 4);
+}
+
+#[test]
+fn x_deletes_forward() {
+    let mut model = Model::new(EditorState::from_text("ab"), None);
+    handle_event(&mut model, key(KeyCode::Char('x')));
+    assert_eq!(model.editor.text().slice(0..1), "b");
+    assert_eq!(model.cursor, 0);
+    assert!(model.modified);
+}
+
+#[test]
+fn wq_without_a_path_does_not_quit() {
+    let mut model = Model::new(EditorState::from_text("a"), None);
+    for code in [
+        KeyCode::Char(':'),
+        KeyCode::Char('w'),
+        KeyCode::Char('q'),
+        KeyCode::Enter,
+    ] {
+        handle_event(&mut model, key(code));
+    }
+    assert!(!model.quit);
+    assert_eq!(model.status, "E: no file name");
+}
+
+#[test]
+fn search_cycles_and_crosses_chunk_boundaries() {
+    let mut model = Model::new(EditorState::from_text("foo bar foo"), None);
+    handle_event(&mut model, key(KeyCode::Char('/')));
+    type_text(&mut model, "foo");
+    handle_event(&mut model, key(KeyCode::Enter));
+    assert_eq!(model.cursor, 0);
+
+    handle_event(&mut model, key(KeyCode::Char('n')));
+    assert_eq!(model.cursor, 8);
+    handle_event(&mut model, key(KeyCode::Char('N')));
+    assert_eq!(model.cursor, 0);
+
+    let mut chunked = Model::new(EditorState::from_text("hello "), None);
+    chunked.cursor = 6;
+    chunked.insert_text("world");
+    handle_event(&mut chunked, key(KeyCode::Char('/')));
+    type_text(&mut chunked, "o w");
+    handle_event(&mut chunked, key(KeyCode::Enter));
+    assert_eq!(chunked.cursor, 4);
+}
+
+#[test]
+#[cfg(unix)]
+fn open_resolves_symlink_to_canonical_path() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let target = dir.path().join("target.txt");
+    let link = dir.path().join("link.txt");
+    fs::write(&target, "first\nsecond").expect("write");
+    std::os::unix::fs::symlink(&target, &link).expect("symlink");
+    let mut model = Model::open(&link).expect("open");
+    assert_eq!(model.path.as_deref(), Some(target.as_path()));
+    model.diagnostics.insert(
+        model.path.clone().expect("path"),
+        vec![lsp::Diagnostic {
+            range: lsp::Range {
+                start: lsp::Position {
+                    line: 1,
+                    character: 0,
+                },
+                end: lsp::Position {
+                    line: 1,
+                    character: 3,
+                },
+            },
+            severity: Some(1),
+            message: "error".to_owned(),
+            source: Some("test".to_owned()),
+        }],
+    );
+    assert_eq!(model.diagnostic_lines(), vec![1]);
+}
+
+#[test]
+fn w_path_saves_as_and_updates_the_current_path() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("saved.txt");
+    let mut model = Model::new(EditorState::from_text("data"), None);
+    handle_event(&mut model, key(KeyCode::Char(':')));
+    type_text(&mut model, &format!("w {}", path.display()));
+    handle_event(&mut model, key(KeyCode::Enter));
+
+    assert_eq!(fs::read_to_string(&path).expect("read"), "data");
+    assert_eq!(model.path.as_ref(), Some(&path));
+    assert!(!model.modified);
+}
+
+#[test]
+fn insert_variants_append_and_open_lines() {
+    let mut append = Model::new(EditorState::from_text("ac"), None);
+    handle_event(&mut append, key(KeyCode::Char('a')));
+    type_text(&mut append, "b");
+    assert_eq!(append.editor.text().slice(0..3), "abc");
+
+    let mut below = Model::new(EditorState::from_text("a"), None);
+    handle_event(&mut below, key(KeyCode::Char('o')));
+    type_text(&mut below, "b");
+    assert_eq!(below.editor.text().slice(0..3), "a\nb");
+
+    let mut above = Model::new(EditorState::from_text("a"), None);
+    handle_event(&mut above, key(KeyCode::Char('O')));
+    type_text(&mut above, "b");
+    assert_eq!(above.editor.text().slice(0..3), "b\na");
+
+    let mut end = Model::new(EditorState::from_text("a"), None);
+    handle_event(&mut end, key(KeyCode::Char('A')));
+    type_text(&mut end, "b");
+    assert_eq!(end.editor.text().slice(0..2), "ab");
+}
+
+#[test]
+fn grapheme_motion_and_deletion_keep_emoji_whole() {
+    let mut model = Model::new(EditorState::from_text("a👨‍👩‍👧‍👦b"), None);
+    model.cursor = 1;
+    model.move_char(1);
+    assert_eq!(model.cursor, "a👨‍👩‍👧‍👦".len());
+    model.move_char(-1);
+    assert_eq!(model.cursor, 1);
+    model.delete_forward();
+    assert_eq!(model.editor.text().slice(0..2), "ab");
+
+    let mut backspace = Model::new(EditorState::from_text("a👨‍👩‍👧‍👦b"), None);
+    backspace.cursor = "a👨‍👩‍👧‍👦".len();
+    backspace.backspace();
+    assert_eq!(backspace.editor.text().slice(0..2), "ab");
+}
+
+#[test]
+fn help_is_read_only_and_returns_to_the_previous_buffer() {
+    let original_path = PathBuf::from("file.txt");
+    let mut model = Model::new(
+        EditorState::from_text("original"),
+        Some(original_path.clone()),
+    );
+    model.cursor = 3;
+    model.scroll = 1;
+    model.hscroll = 2;
+    model.modified = true;
+
+    handle_event(&mut model, key(KeyCode::Char(':')));
+    type_text(&mut model, "help");
+    handle_event(&mut model, key(KeyCode::Enter));
+    assert!(model.help_back.is_some());
+    assert_eq!(model.editor.text().slice(0..HELP_TEXT.len()), HELP_TEXT);
+    assert_eq!(model.input_mode, InputMode::Normal);
+
+    handle_event(&mut model, key(KeyCode::Char('i')));
+    type_text(&mut model, "Z");
+    assert_eq!(model.input_mode, InputMode::Normal);
+    assert!(model.status.contains("read-only"));
+    assert_eq!(model.editor.text().slice(0..HELP_TEXT.len()), HELP_TEXT);
+
+    handle_event(&mut model, key(KeyCode::Char(':')));
+    type_text(&mut model, "q");
+    handle_event(&mut model, key(KeyCode::Enter));
+    assert!(model.help_back.is_none());
+    assert_eq!(model.editor.text().slice(0..8), "original");
+    assert_eq!(model.path, Some(original_path));
+    assert_eq!(model.cursor, 3);
+    assert_eq!(model.scroll, 1);
+    assert_eq!(model.hscroll, 2);
+    assert!(model.modified);
+}
+
+#[test]
+fn help_refuses_writes() {
+    let mut model = Model::new(EditorState::from_text("data"), None);
+    handle_event(&mut model, key(KeyCode::Char(':')));
+    type_text(&mut model, "help");
+    handle_event(&mut model, key(KeyCode::Enter));
+
+    handle_event(&mut model, key(KeyCode::Char(':')));
+    type_text(&mut model, "w");
+    handle_event(&mut model, key(KeyCode::Enter));
+    assert!(model.help_back.is_some());
+    assert!(model.status.contains("read-only"));
+    assert_eq!(model.editor.text().slice(0..HELP_TEXT.len()), HELP_TEXT);
+}
+
+#[test]
+fn multi_buffer_switch_preserves_per_buffer_state() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let first = dir.path().join("first.txt");
+    let second = dir.path().join("second.txt");
+    fs::write(&first, "first").expect("write first");
+    fs::write(&second, "second").expect("write second");
+
+    let mut model = Model::open(&first).expect("open first");
+    model.cursor = 2;
+    handle_event(&mut model, key(KeyCode::Char(':')));
+    type_text(&mut model, &format!("e {}", second.display()));
+    handle_event(&mut model, key(KeyCode::Enter));
+    assert_eq!(model.path.as_ref(), Some(&second));
+    assert_eq!(model.editor.text().slice(0..6), "second");
+
+    model.cursor = 1;
+    handle_event(&mut model, key(KeyCode::Char(':')));
+    type_text(&mut model, "bn");
+    handle_event(&mut model, key(KeyCode::Enter));
+    assert_eq!(model.path.as_ref(), Some(&first));
+    assert_eq!(model.cursor, 2);
+
+    handle_event(&mut model, key(KeyCode::Char(':')));
+    type_text(&mut model, "bn");
+    handle_event(&mut model, key(KeyCode::Enter));
+    assert_eq!(model.path.as_ref(), Some(&second));
+    assert_eq!(model.cursor, 1);
+
+    handle_event(&mut model, key(KeyCode::Char(':')));
+    type_text(&mut model, &format!("e {}", first.display()));
+    handle_event(&mut model, key(KeyCode::Enter));
+    assert_eq!(model.path.as_ref(), Some(&first));
+    assert_eq!(model.buffers.len(), 2);
+}
+
+#[test]
+fn buffer_commands_require_a_second_buffer() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("only.txt");
+    fs::write(&path, "only").expect("write");
+    let mut model = Model::open(&path).expect("open");
+
+    handle_event(&mut model, key(KeyCode::Char(':')));
+    type_text(&mut model, "bn");
+    handle_event(&mut model, key(KeyCode::Enter));
+    assert_eq!(model.path.as_ref(), Some(&path));
+    assert_eq!(model.status, "E: only one buffer");
+}
+
+#[test]
+fn quit_guard_checks_inactive_buffers() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let first = dir.path().join("first.txt");
+    let second = dir.path().join("second.txt");
+    fs::write(&first, "first").expect("write first");
+    fs::write(&second, "second").expect("write second");
+
+    let mut model = Model::open(&first).expect("open");
+    handle_event(&mut model, key(KeyCode::Char('i')));
+    type_text(&mut model, "X");
+    handle_event(&mut model, key(KeyCode::Esc));
+    handle_event(&mut model, key(KeyCode::Char(':')));
+    type_text(&mut model, &format!("e {}", second.display()));
+    handle_event(&mut model, key(KeyCode::Enter));
+    assert_eq!(model.path.as_ref(), Some(&second));
+
+    for code in [KeyCode::Char(':'), KeyCode::Char('q'), KeyCode::Enter] {
+        handle_event(&mut model, key(code));
+    }
+    assert!(!model.quit);
+    assert!(model.status.contains("No write since last change"));
+
+    handle_event(&mut model, key(KeyCode::Char(':')));
+    type_text(&mut model, "q!");
+    handle_event(&mut model, key(KeyCode::Enter));
+    assert!(model.quit);
+}
+
+#[test]
+fn gateway_required_refuses_file_operations_without_client() {
+    let directory = tempfile::tempdir().expect("tempdir");
+    let path = directory.path().join("file.txt");
+    let mut model = Model::new(EditorState::from_text("data"), None);
+    model.require_gateway = true;
+    model.workspace = directory.path().to_path_buf();
+    model.path = Some(path);
+    assert!(!model.save());
+    assert!(model.status.contains("gateway unavailable"));
+
+    handle_event(&mut model, key(KeyCode::Char(':')));
+    type_text(&mut model, "e other.txt");
+    handle_event(&mut model, key(KeyCode::Enter));
+    assert!(model.status.contains("gateway unavailable"));
+}
+
+#[test]
+fn gateway_refuses_paths_outside_workspace() {
+    let directory = tempfile::tempdir().expect("tempdir");
+    let outside = tempfile::tempdir().expect("outside");
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.require_gateway = true;
+    model.workspace = directory.path().to_path_buf();
+    handle_event(&mut model, key(KeyCode::Char(':')));
+    type_text(
+        &mut model,
+        &format!("e {}", outside.path().join("x").display()),
+    );
+    handle_event(&mut model, key(KeyCode::Enter));
+    assert!(
+        model.status.contains("outside workspace"),
+        "{}",
+        model.status
+    );
+}
