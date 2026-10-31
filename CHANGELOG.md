@@ -6,6 +6,15 @@ All notable changes to Anvil are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.2.14] - 2026-10-31
+
+### Changed
+
+- Completion now auto-triggers after `.` and `:` in Insert mode, cancels
+  pending completion requests on close/buffer switch/fuzzy open, and ignores
+  stale responses. Completion, hover, diagnostics, and fuzzy overlays are
+  mutually exclusive.
+
 ## [0.2.13] - 2026-10-31
 
 ### Fixed

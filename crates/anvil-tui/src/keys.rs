@@ -174,8 +174,7 @@ fn handle_key(model: &mut Model, key: KeyEvent) {
     if model.completion.is_some() {
         let consumed = match key.code {
             KeyCode::Esc => {
-                model.completion = None;
-                model.dirty = true;
+                model.cancel_completion();
                 true
             }
             KeyCode::Up => {
@@ -207,7 +206,7 @@ fn handle_key(model: &mut Model, key: KeyEvent) {
                 true
             }
             _ => {
-                model.completion = None;
+                model.cancel_completion();
                 false
             }
         };
@@ -306,7 +305,12 @@ fn handle_key(model: &mut Model, key: KeyEvent) {
             KeyCode::Home => model.move_home(),
             KeyCode::End => model.move_end(),
             KeyCode::Char(' ') if control => model.request_completion(),
-            KeyCode::Char(character) if !control => model.insert_text(&character.to_string()),
+            KeyCode::Char(character) if !control => {
+                model.insert_text(&character.to_string());
+                if matches!(character, '.' | ':') {
+                    model.auto_completion();
+                }
+            }
             _ => {}
         },
         InputMode::Normal => match key.code {

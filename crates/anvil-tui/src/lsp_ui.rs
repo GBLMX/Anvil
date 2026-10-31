@@ -201,6 +201,8 @@ impl Model {
     }
 
     pub(crate) fn jump_diagnostic(&mut self, forward: bool) {
+        self.cancel_completion();
+        self.hover = None;
         let Some(path) = self.path.clone() else {
             self.status = "E: no file".to_owned();
             self.dirty = true;
@@ -286,7 +288,23 @@ impl Model {
         }
     }
 
+    pub(crate) fn cancel_completion(&mut self) {
+        if let Some(completion) = self.completion.take() {
+            self.pending_lsp.remove(&completion.id);
+        }
+        self.dirty = true;
+    }
+
+    pub(crate) fn auto_completion(&mut self) {
+        if self.lsp_worker.is_some() {
+            self.request_completion();
+        }
+    }
+
     pub(crate) fn request_completion(&mut self) {
+        self.cancel_completion();
+        self.hover = None;
+        self.diagnostic_popup = None;
         let Some(uri) = self.path.as_ref().map(|path| lsp_worker::file_uri(path)) else {
             return;
         };
@@ -309,6 +327,8 @@ impl Model {
     }
 
     pub(crate) fn request_definition(&mut self) {
+        self.cancel_completion();
+        self.diagnostic_popup = None;
         let Some(uri) = self.path.as_ref().map(|path| lsp_worker::file_uri(path)) else {
             return;
         };
@@ -330,6 +350,8 @@ impl Model {
     }
 
     pub(crate) fn request_hover(&mut self) {
+        self.cancel_completion();
+        self.diagnostic_popup = None;
         let Some(uri) = self.path.as_ref().map(|path| lsp_worker::file_uri(path)) else {
             return;
         };

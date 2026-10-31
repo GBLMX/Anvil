@@ -310,6 +310,10 @@ impl Model {
     }
 
     pub(crate) fn start_fuzzy(&mut self) {
+        self.cancel_completion();
+        self.pending_lsp.clear();
+        self.hover = None;
+        self.diagnostic_popup = None;
         let workspace = self.workspace.clone();
         if self.ensure_file_worker() {
             if let Some(worker) = self.file_worker.as_ref() {

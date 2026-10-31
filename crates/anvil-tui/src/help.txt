@@ -49,6 +49,7 @@ Normal mode
 Insert mode
   Esc                 return to normal mode
   Ctrl+Space          LSP completion popup
+  . / :               auto-trigger completion in insert mode
   Enter               newline
   Tab                 insert four spaces
   Backspace / Delete  delete grapheme

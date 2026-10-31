@@ -452,6 +452,10 @@ impl Model {
     }
 
     fn load_buffer(&mut self, index: usize) {
+        self.cancel_completion();
+        self.pending_lsp.clear();
+        self.hover = None;
+        self.diagnostic_popup = None;
         let Some(buffer) = self.buffers.get(index).cloned() else {
             return;
         };
@@ -2397,6 +2401,29 @@ mod tests {
             Some(path.canonicalize().expect("canonical").as_path())
         );
         assert_eq!(model.cursor, model.offset_at_utf16(1, 3));
+    }
+
+    #[test]
+    fn cancelling_completion_drops_pending_response() {
+        let mut model = Model::new(EditorState::from_text("x"), None);
+        model.completion = Some(CompletionState {
+            id: 9,
+            items: vec![CompletionItem {
+                label: "item".to_owned(),
+                insert: "item".to_owned(),
+                detail: String::new(),
+                replace: None,
+            }],
+            filtered: vec![0],
+            query: String::new(),
+            selected: 0,
+        });
+        model.pending_lsp.insert(9, LspRequestKind::Completion);
+        model.cancel_completion();
+        assert!(model.completion.is_none());
+        assert!(!model.pending_lsp.contains_key(&9));
+        model.handle_lsp_response(9, serde_json::json!({"items": []}), None);
+        assert!(model.completion.is_none());
     }
 
     #[test]
