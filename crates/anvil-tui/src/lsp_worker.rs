@@ -90,16 +90,6 @@ impl LspWorker {
                 let message = match client.recv_notification() {
                     Ok(Some(message)) => message,
                     Ok(None) => {
-                        if let Ok(log) = std::env::var("ANVIL_LSP_LOG") {
-                            use std::io::Write;
-                            if let Ok(mut file) = std::fs::OpenOptions::new()
-                                .create(true)
-                                .append(true)
-                                .open(log)
-                            {
-                                let _ = writeln!(file, "worker gateway closed");
-                            }
-                        }
                         let _ = sender.send(LspEvent::Crashed("gateway closed".to_owned()));
                         return;
                     }
@@ -110,16 +100,6 @@ impl LspWorker {
                 };
                 match message.method.as_str() {
                     "lsp.crashed" => {
-                        if let Ok(log) = std::env::var("ANVIL_LSP_LOG") {
-                            use std::io::Write;
-                            if let Ok(mut file) = std::fs::OpenOptions::new()
-                                .create(true)
-                                .append(true)
-                                .open(log)
-                            {
-                                let _ = writeln!(file, "worker crashed: {}", message.params);
-                            }
-                        }
                         let _ = sender.send(LspEvent::Crashed(message.params.to_string()));
                         return;
                     }
@@ -144,21 +124,6 @@ impl LspWorker {
                             }
                         }
                         if let Some((path, diagnostics)) = publish_diagnostics(data) {
-                            if let Ok(log) = std::env::var("ANVIL_LSP_LOG") {
-                                use std::io::Write;
-                                if let Ok(mut file) = std::fs::OpenOptions::new()
-                                    .create(true)
-                                    .append(true)
-                                    .open(log)
-                                {
-                                    let _ = writeln!(
-                                        file,
-                                        "publish {} diagnostics={}",
-                                        path.display(),
-                                        diagnostics.len()
-                                    );
-                                }
-                            }
                             let _ = sender.send(LspEvent::Diagnostics(path, diagnostics));
                         }
                     }

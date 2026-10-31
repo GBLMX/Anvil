@@ -1792,16 +1792,6 @@ impl Model {
             return;
         }
         let Some(client) = self.lsp_client.take() else {
-            if let Ok(log) = std::env::var("ANVIL_LSP_LOG") {
-                use std::io::Write;
-                if let Ok(mut file) = std::fs::OpenOptions::new()
-                    .create(true)
-                    .append(true)
-                    .open(log)
-                {
-                    let _ = writeln!(file, "start_lsp: no client");
-                }
-            }
             self.status = "E: lsp gateway connection unavailable".to_owned();
             self.dirty = true;
             return;
@@ -1824,19 +1814,7 @@ impl Model {
                 self.lsp_worker = Some(worker);
                 self.status = "lsp starting".to_owned();
             }
-            Err(error) => {
-                if let Ok(log) = std::env::var("ANVIL_LSP_LOG") {
-                    use std::io::Write;
-                    if let Ok(mut file) = std::fs::OpenOptions::new()
-                        .create(true)
-                        .append(true)
-                        .open(log)
-                    {
-                        let _ = writeln!(file, "start_lsp failed: {error}");
-                    }
-                }
-                self.status = format!("E: lsp start: {error}")
-            }
+            Err(error) => self.status = format!("E: lsp start: {error}"),
         }
         self.dirty = true;
     }
@@ -1864,50 +1842,14 @@ impl Model {
                     );
                 }
                 LspEvent::Crashed(error) => {
-                    if let Ok(log) = std::env::var("ANVIL_LSP_LOG") {
-                        use std::io::Write;
-                        if let Ok(mut file) = std::fs::OpenOptions::new()
-                            .create(true)
-                            .append(true)
-                            .open(log)
-                        {
-                            let _ = writeln!(file, "model crashed: {error}");
-                        }
-                    }
                     self.lsp_worker = None;
                     if self.lsp_retries < 3 {
                         self.lsp_retries += 1;
                         if self.lsp_client.is_none() {
-                            match self.gateway_session.as_mut() {
-                                Some(session) => match session.connect_lsp() {
-                                    Ok(client) => self.lsp_client = Some(client),
-                                    Err(error) => {
-                                        if let Ok(log) = std::env::var("ANVIL_LSP_LOG") {
-                                            use std::io::Write;
-                                            if let Ok(mut file) = std::fs::OpenOptions::new()
-                                                .create(true)
-                                                .append(true)
-                                                .open(log)
-                                            {
-                                                let _ =
-                                                    writeln!(file, "connect_lsp failed: {error}");
-                                            }
-                                        }
-                                    }
-                                },
-                                None => {
-                                    if let Ok(log) = std::env::var("ANVIL_LSP_LOG") {
-                                        use std::io::Write;
-                                        if let Ok(mut file) = std::fs::OpenOptions::new()
-                                            .create(true)
-                                            .append(true)
-                                            .open(log)
-                                        {
-                                            let _ = writeln!(file, "connect_lsp: no session");
-                                        }
-                                    }
-                                }
-                            }
+                            self.lsp_client = self
+                                .gateway_session
+                                .as_mut()
+                                .and_then(|session| session.connect_lsp().ok());
                         }
                         self.status = format!("lsp crashed, restarting ({}/3)", self.lsp_retries);
                         self.start_lsp();
@@ -1985,6 +1927,9 @@ impl Model {
             self.dirty = true;
             return;
         }
+        self.file_worker = None;
+        self.lsp_worker = None;
+        self.lsp_client = None;
         self.gateway = None;
         self.gateway_session = None;
         match GatewaySession::start(&self.workspace) {

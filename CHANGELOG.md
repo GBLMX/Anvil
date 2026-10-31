@@ -8,6 +8,11 @@ All notable changes to Anvil are recorded here. The format follows
 
 ## [0.2.1] - 2026-10-31
 
+### Fixed
+
+- `:reconnect` drops the old file-tree worker and LSP worker before replacing
+  the gateway session, so later tree/fuzzy operations use the new socket.
+
 ### Added
 
 - File tree and fuzzy-file enumeration now run in a dedicated `FileWorker`
