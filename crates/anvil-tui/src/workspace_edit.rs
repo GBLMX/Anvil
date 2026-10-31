@@ -112,6 +112,15 @@ impl WorkspaceEdit {
                 model.cursor = model.cursor.min(model.editor.text().len_bytes());
                 model.modified = true;
                 model.syntax.borrow_mut().invalidate();
+                if let Some(buffer) = model
+                    .buffers
+                    .iter_mut()
+                    .find(|buffer| buffer.path.as_ref() == Some(&path))
+                {
+                    buffer.editor = model.editor.clone();
+                    buffer.cursor = model.cursor;
+                    buffer.modified = true;
+                }
             } else if let Some(buffer) = model
                 .buffers
                 .iter_mut()
@@ -198,6 +207,34 @@ mod tests {
         assert_eq!(second_buffer.editor.text().slice(0..4), "two!");
         assert!(second_buffer.modified);
         model.path = Some(second.clone());
+    }
+
+    #[test]
+    fn active_buffer_snapshot_tracks_workspace_edit() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let first = dir.path().join("first.rs");
+        let second = dir.path().join("second.rs");
+        std::fs::write(&first, "first").expect("first");
+        std::fs::write(&second, "second").expect("second");
+        let mut model = Model::open(&first).expect("open first");
+        model.open_path(&second).expect("open second");
+        model.switch_buffer(-1);
+        let workspace_edit = WorkspaceEdit::from_lsp(&serde_json::json!({
+            "changes": {
+                uri(&first): [{
+                    "range": {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 0}},
+                    "newText": "X"
+                }]
+            }
+        }))
+        .expect("parse");
+        workspace_edit.apply(&mut model).expect("apply");
+        assert_eq!(model.editor.text().slice(0..6), "Xfirst");
+        assert_eq!(
+            model.buffers[model.active].editor.text().slice(0..6),
+            "Xfirst"
+        );
+        assert!(model.buffers[model.active].modified);
     }
 
     #[test]

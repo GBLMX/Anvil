@@ -6,6 +6,15 @@ All notable changes to Anvil are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.2.19] - 2026-10-31
+
+### Fixed
+
+- WorkspaceEdit now updates the matching active-buffer snapshot as well as
+  `model.editor`; switching away/back no longer resurrects stale text after an
+  edit. Added regression coverage for editing the active buffer after opening
+  another file.
+
 ## [0.2.18] - 2026-10-31
 
 ### Added
