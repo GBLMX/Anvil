@@ -1,7 +1,8 @@
 use crate::lsp::{Diagnostic, publish_diagnostics};
 use anvil_ipc::GatewayClient;
 use serde_json::Value;
-use std::path::PathBuf;
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::time::Duration;
 
@@ -23,7 +24,14 @@ pub enum LspEvent {
 
 /// Commands sent from the UI to the language-server thread.
 pub enum LspCommand {
-    Sync(String),
+    Sync {
+        path: PathBuf,
+        text: String,
+    },
+    Save {
+        path: PathBuf,
+        text: String,
+    },
     Request {
         id: u64,
         method: String,
@@ -120,37 +128,40 @@ impl LspWorker {
                 "params": {"textDocument": {"uri": uri}}
             });
             let _ = send(&mut client, &did_save);
-            let mut version = 1_u64;
+            let mut documents = HashMap::new();
+            documents.insert(path.clone(), 1_u64);
             loop {
                 while let Ok(command) = commands.try_recv() {
-                    match command {
-                        LspCommand::Sync(text) => {
-                            version += 1;
-                            let did_change = serde_json::json!({
-                                "jsonrpc": "2.0",
-                                "method": "textDocument/didChange",
-                                "params": {
-                                    "textDocument": {"uri": uri, "version": version},
-                                    "contentChanges": [{"text": text}]
-                                }
-                            });
-                            if let Err(error) = send(&mut client, &did_change) {
-                                let _ = sender.send(LspEvent::Crashed(error));
-                                return;
-                            }
+                    let result = match command {
+                        LspCommand::Sync { path, text } => {
+                            sync_document(&mut client, &mut documents, &language_id, &path, &text)
                         }
-                        LspCommand::Request { id, method, params } => {
-                            let request = serde_json::json!({
+                        LspCommand::Save { path, text } => {
+                            sync_document(&mut client, &mut documents, &language_id, &path, &text)
+                                .and_then(|()| {
+                                    send(
+                                        &mut client,
+                                        &serde_json::json!({
+                                            "jsonrpc": "2.0",
+                                            "method": "textDocument/didSave",
+                                            "params": {"textDocument": {"uri": file_uri(&path)}}
+                                        }),
+                                    )
+                                })
+                        }
+                        LspCommand::Request { id, method, params } => send(
+                            &mut client,
+                            &serde_json::json!({
                                 "jsonrpc": "2.0",
                                 "id": id,
                                 "method": method,
                                 "params": params
-                            });
-                            if let Err(error) = send(&mut client, &request) {
-                                let _ = sender.send(LspEvent::Crashed(error));
-                                return;
-                            }
-                        }
+                            }),
+                        ),
+                    };
+                    if let Err(error) = result {
+                        let _ = sender.send(LspEvent::Crashed(error));
+                        return;
                     }
                 }
                 match client.wait_readable(POLL_INTERVAL) {
@@ -223,9 +234,21 @@ impl LspWorker {
         })
     }
 
-    pub fn sync(&self, text: String) -> Result<(), String> {
+    pub fn sync(&self, path: &Path, text: String) -> Result<(), String> {
         self.commands
-            .send(LspCommand::Sync(text))
+            .send(LspCommand::Sync {
+                path: path.to_path_buf(),
+                text,
+            })
+            .map_err(|_| "lsp worker stopped".to_owned())
+    }
+
+    pub fn save(&self, path: &Path, text: String) -> Result<(), String> {
+        self.commands
+            .send(LspCommand::Save {
+                path: path.to_path_buf(),
+                text,
+            })
             .map_err(|_| "lsp worker stopped".to_owned())
     }
 
@@ -261,6 +284,47 @@ fn answer_server_request(
     });
     send(client, &response)?;
     Ok(true)
+}
+
+fn sync_document(
+    client: &mut GatewayClient,
+    documents: &mut HashMap<PathBuf, u64>,
+    language_id: &str,
+    path: &Path,
+    text: &str,
+) -> Result<(), String> {
+    let uri = file_uri(path);
+    if let Some(version) = documents.get_mut(path) {
+        *version += 1;
+        send(
+            client,
+            &serde_json::json!({
+                "jsonrpc": "2.0",
+                "method": "textDocument/didChange",
+                "params": {
+                    "textDocument": {"uri": uri, "version": *version},
+                    "contentChanges": [{"text": text}]
+                }
+            }),
+        )
+    } else {
+        documents.insert(path.to_path_buf(), 1);
+        send(
+            client,
+            &serde_json::json!({
+                "jsonrpc": "2.0",
+                "method": "textDocument/didOpen",
+                "params": {
+                    "textDocument": {
+                        "uri": uri,
+                        "languageId": language_id,
+                        "version": 1,
+                        "text": text
+                    }
+                }
+            }),
+        )
+    }
 }
 
 fn project_root(

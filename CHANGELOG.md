@@ -6,6 +6,15 @@ All notable changes to Anvil are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.2.9] - 2026-10-31
+
+### Added
+
+- Multi-document LSP sessions: buffer navigation sends `didOpen`/`didChange`
+  for the active document, and `:w` sends `didChange` + `didSave`.
+- Automatic language-server switching when the active buffer changes language
+  (Rust -> Go -> Python), with stale worker state cleared.
+
 ## [0.2.8] - 2026-10-31
 
 ### Fixed

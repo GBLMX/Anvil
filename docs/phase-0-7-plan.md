@@ -1,6 +1,6 @@
 # 0.1.1 / Phase 0.7 Plan
 
-Status: in progress. `v0.2.6` has trusted LSP diagnostics, completion, hover, and
+Status: in progress. `v0.2.9` has trusted LSP diagnostics, completion, hover, and
 definition for Rust/Go/Python, an async tree/fuzzy worker, and a split TUI
 (`keys`, `render`, `lsp_ui`, `file_tree_ui`). Plugin-host remains an empty
 sandboxed process (no VM); syntax highlighting is asynchronous but not

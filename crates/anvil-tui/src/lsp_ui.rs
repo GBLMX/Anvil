@@ -175,6 +175,11 @@ impl Model {
         method: &str,
         params: serde_json::Value,
     ) -> bool {
+        let Some(path) = self.path.clone() else {
+            self.status = "E: lsp requires an open file".to_owned();
+            self.dirty = true;
+            return false;
+        };
         let Some(worker) = self.lsp_worker.as_ref() else {
             self.status = "E: lsp is not running".to_owned();
             self.dirty = true;
@@ -184,7 +189,7 @@ impl Model {
         self.next_lsp_request += 1;
         let text = self.editor.text().slice(0..self.editor.text().len_bytes());
         if let Err(error) = worker
-            .sync(text)
+            .sync(&path, text)
             .and_then(|()| worker.request(id, method, params))
         {
             self.status = format!("E: lsp request: {error}");
@@ -193,6 +198,12 @@ impl Model {
         }
         self.pending_lsp.insert(id, kind);
         true
+    }
+
+    pub(crate) fn notify_lsp_save(&mut self, path: &std::path::Path, text: &str) {
+        if let Some(worker) = self.lsp_worker.as_ref() {
+            let _ = worker.save(path, text.to_owned());
+        }
     }
 
     pub(crate) fn request_completion(&mut self) {

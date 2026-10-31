@@ -204,6 +204,8 @@ pub struct Model {
     lsp_client: Option<GatewayClient>,
     /// Active language-server worker.
     lsp_worker: Option<LspWorker>,
+    /// Tool and language id currently owned by `lsp_worker`.
+    lsp_config: Option<(String, String)>,
     /// Number of automatic LSP restarts for this buffer.
     lsp_retries: u8,
     /// Diagnostics keyed by workspace path.
@@ -263,6 +265,7 @@ impl Model {
             gateway_session: None,
             lsp_client: None,
             lsp_worker: None,
+            lsp_config: None,
             lsp_retries: 0,
             diagnostics: HashMap::new(),
             workspace: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
@@ -332,6 +335,7 @@ impl Model {
         if timing {
             eprintln!("open_path read={read_done:?} index={:?}", start.elapsed());
         }
+        self.sync_lsp_active();
         self.dirty = true;
         Ok(())
     }
@@ -458,6 +462,7 @@ impl Model {
         self.active = index;
         self.input_mode = InputMode::Normal;
         self.pending = None;
+        self.sync_lsp_active();
         self.dirty = true;
     }
 
@@ -1275,8 +1280,10 @@ impl Model {
         let display = path.display().to_string();
         match self.write_file(&path, &text) {
             Ok(()) => {
-                self.path = Some(path);
+                self.path = Some(path.clone());
                 self.modified = false;
+                self.sync_lsp_active();
+                self.notify_lsp_save(&path, &text);
                 self.status = format!("\"{display}\" written");
                 self.dirty = true;
                 true
@@ -1491,12 +1498,31 @@ impl Model {
         }
     }
 
-    fn start_lsp(&mut self) {
-        if self.lsp_worker.is_some() {
-            self.status = "lsp already running".to_owned();
-            self.dirty = true;
+    pub(crate) fn sync_lsp_active(&mut self) {
+        let Some(path) = self.path.clone() else {
             return;
+        };
+        let Some(settings) = lsp_settings(&path) else {
+            if self.lsp_worker.is_some() {
+                self.stop_lsp();
+            }
+            return;
+        };
+        let desired = (settings.tool.clone(), settings.language_id.clone());
+        if self.lsp_worker.is_some() {
+            if self.lsp_config.as_ref() != Some(&desired) {
+                self.stop_lsp();
+                self.start_lsp();
+                return;
+            }
+            let text = self.editor.text().slice(0..self.editor.text().len_bytes());
+            if let Some(worker) = self.lsp_worker.as_ref() {
+                let _ = worker.sync(&path, text);
+            }
         }
+    }
+
+    fn start_lsp(&mut self) {
         let Some(path) = self.path.clone() else {
             self.status = "E: lsp requires an open file".to_owned();
             self.dirty = true;
@@ -1507,7 +1533,23 @@ impl Model {
             self.dirty = true;
             return;
         };
-        let Some(client) = self.lsp_client.take() else {
+        let desired = (settings.tool.clone(), settings.language_id.clone());
+        if self.lsp_worker.is_some() {
+            if self.lsp_config.as_ref() == Some(&desired) {
+                self.sync_lsp_active();
+                self.status = "lsp already running".to_owned();
+            } else {
+                self.stop_lsp();
+                self.start_lsp();
+            }
+            self.dirty = true;
+            return;
+        }
+        let Some(client) = self.lsp_client.take().or_else(|| {
+            self.gateway_session
+                .as_mut()
+                .and_then(|session| session.connect_lsp().ok())
+        }) else {
             self.status = "E: lsp gateway connection unavailable".to_owned();
             self.dirty = true;
             return;
@@ -1526,6 +1568,7 @@ impl Model {
         match LspWorker::start(client, config, self.workspace.clone(), path, text) {
             Ok(worker) => {
                 self.lsp_worker = Some(worker);
+                self.lsp_config = Some(desired);
                 self.pending_lsp.clear();
                 self.completion = None;
                 self.hover = None;
@@ -1538,6 +1581,7 @@ impl Model {
 
     fn stop_lsp(&mut self) {
         self.lsp_worker = None;
+        self.lsp_config = None;
         self.lsp_retries = 0;
         self.pending_lsp.clear();
         self.completion = None;
@@ -1563,6 +1607,7 @@ impl Model {
                 }
                 LspEvent::Crashed(error) => {
                     self.lsp_worker = None;
+                    self.lsp_config = None;
                     self.pending_lsp.clear();
                     self.completion = None;
                     self.hover = None;
@@ -1656,6 +1701,7 @@ impl Model {
         self.file_worker = None;
         self.lsp_worker = None;
         self.lsp_client = None;
+        self.lsp_config = None;
         self.pending_lsp.clear();
         self.completion = None;
         self.hover = None;
