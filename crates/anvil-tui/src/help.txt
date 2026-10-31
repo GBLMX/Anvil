@@ -7,6 +7,7 @@ Launch
 Normal mode
   h j k l / arrows    move
   w / b / e           next / previous word, word end
+  {count}w/b/e        count word motions; 3x, 2dd, 2yy
   Home / End          line start / end
   i a A o O           insert before / after / line end / below / above
   x                   delete character

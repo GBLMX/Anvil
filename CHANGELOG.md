@@ -44,7 +44,8 @@ All notable changes to Anvil are recorded here. The format follows
 
 - Vi word motions `w`/`b`/`e` and operators `dw`/`db`/`de`/`yw`/`yb`/`ye`
   with byte-borrowing word classification in `anvil-core`; multibyte word
-  ends stay on UTF-8 boundaries.
+  ends stay on UTF-8 boundaries. Numeric prefixes are supported for motions,
+  `d`/`y` word operators, `dd`, `yy`, `x`, and line movement.
 
 - Literal `:s/old/new/[g]` and `:%s/old/new/g` substitution with dynamic
   offset updates after length-changing replacements.

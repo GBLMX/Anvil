@@ -102,6 +102,8 @@ pub struct Model {
     pub status: String,
     /// Pending normal-mode operator (`d` or `y`).
     pending: Option<char>,
+    /// Numeric count prefix, zero means no count.
+    count: usize,
     /// Last substring search.
     search_query: String,
     /// Buffer replaced by the read-only help page.
@@ -146,6 +148,7 @@ impl Model {
             dirty: true,
             status: String::new(),
             pending: None,
+            count: 0,
             search_query: String::new(),
             help_back: None,
             buffers: Vec::new(),
@@ -412,17 +415,36 @@ impl Model {
         self.status = format!("buffer {}/{}: {name}", target + 1, len);
     }
 
-    /// Moves the cursor by a vi word motion.
-    pub fn move_word(&mut self, motion: WordMotion) {
-        let target = match motion {
-            WordMotion::NextStart => next_word_start(self.editor.text(), self.cursor),
-            WordMotion::PreviousStart => previous_word_start(self.editor.text(), self.cursor),
-            WordMotion::End => end_word(self.editor.text(), self.cursor),
-        };
-        if target != self.cursor {
+    fn push_count(&mut self, character: char) {
+        self.count = self.count.saturating_mul(10) + usize::from(character as u8 - b'0');
+        self.dirty = true;
+    }
+
+    fn take_count(&mut self) -> usize {
+        let count = self.count.max(1);
+        self.count = 0;
+        count
+    }
+
+    /// Moves the cursor by repeated vi word motions.
+    pub fn move_words(&mut self, motion: WordMotion) {
+        let count = self.take_count();
+        for _ in 0..count {
+            let target = match motion {
+                WordMotion::NextStart => next_word_start(self.editor.text(), self.cursor),
+                WordMotion::PreviousStart => previous_word_start(self.editor.text(), self.cursor),
+                WordMotion::End => end_word(self.editor.text(), self.cursor),
+            };
+            if target == self.cursor {
+                break;
+            }
             self.cursor = target;
             self.dirty = true;
         }
+    }
+
+    pub fn move_word(&mut self, motion: WordMotion) {
+        self.move_words(motion);
     }
 
     fn word_range(&self, motion: WordMotion) -> Option<std::ops::Range<usize>> {
@@ -443,6 +465,18 @@ impl Model {
             .filter(|next| *next > end)
             .unwrap_or(end)
             .min(text.len_bytes())
+    }
+
+    fn delete_words(&mut self, motion: WordMotion, count: usize) {
+        for _ in 0..count {
+            self.delete_word(motion);
+        }
+    }
+
+    fn yank_words(&mut self, motion: WordMotion, count: usize) {
+        for _ in 0..count {
+            self.yank_word(motion);
+        }
     }
 
     fn delete_word(&mut self, motion: WordMotion) {
@@ -470,6 +504,13 @@ impl Model {
         self.dirty = true;
     }
 
+    fn move_lines(&mut self, delta: isize) {
+        let count = self.take_count();
+        for _ in 0..count {
+            self.move_line(delta);
+        }
+    }
+
     /// Moves the cursor one line while keeping the viewport independent.
     pub fn move_line(&mut self, delta: isize) {
         let Some(position) = self
@@ -492,6 +533,13 @@ impl Model {
         };
         self.cursor = offset;
         self.dirty = true;
+    }
+
+    fn move_chars(&mut self, delta: isize) {
+        let count = self.take_count();
+        for _ in 0..count {
+            self.move_char(delta);
+        }
     }
 
     /// Moves the cursor one grapheme-cluster boundary.
@@ -670,6 +718,12 @@ impl Model {
         self.dirty = true;
     }
 
+    fn delete_lines(&mut self, count: usize) {
+        for _ in 0..count {
+            self.delete_line();
+        }
+    }
+
     fn delete_line(&mut self) {
         if self.reject_read_only() {
             return;
@@ -687,21 +741,30 @@ impl Model {
         self.dirty = true;
     }
 
-    fn yank_line(&mut self) {
-        let Some(range) = self.editor.line_range_at(self.cursor) else {
-            self.status = "E: no line".to_owned();
-            self.dirty = true;
+    fn yank_lines(&mut self, count: usize) {
+        let Some(position) = self
+            .editor
+            .index()
+            .position(self.editor.text(), self.cursor)
+        else {
             return;
         };
-        let cursor = self.cursor;
-        self.editor.set_selection_bytes(range.start, range.end);
-        if self.editor.yank(range) {
-            self.status = "1 line yanked".to_owned();
-        } else {
-            self.status = "E: yank failed".to_owned();
+        let Some(start) = self.editor.index().line_to_offset(position.line) else {
+            return;
+        };
+        let Some(last_start) = self
+            .editor
+            .index()
+            .line_to_offset(position.line.saturating_add(count.saturating_sub(1)))
+        else {
+            return;
+        };
+        let Some(last) = self.editor.line_range_at(last_start) else {
+            return;
+        };
+        if self.editor.yank(start..last.end.max(start)) {
+            self.status = format!("{count} lines yanked");
         }
-        let _ = self.editor.set_selection_bytes(cursor, cursor);
-        self.cursor = cursor;
         self.dirty = true;
     }
 
@@ -1695,15 +1758,23 @@ fn handle_key(model: &mut Model, key: KeyEvent) {
 
     if let Some(pending) = model.pending.take() {
         model.dirty = true;
+        if let KeyCode::Char(character) = key.code
+            && character.is_ascii_digit()
+        {
+            model.count = model.count.saturating_mul(10) + usize::from(character as u8 - b'0');
+            model.pending = Some(pending);
+            return;
+        }
+        let count = model.take_count();
         match (pending, key.code) {
-            ('d', KeyCode::Char('d')) => model.delete_line(),
-            ('y', KeyCode::Char('y')) => model.yank_line(),
-            ('d', KeyCode::Char('w')) => model.delete_word(WordMotion::NextStart),
-            ('d', KeyCode::Char('e')) => model.delete_word(WordMotion::End),
-            ('d', KeyCode::Char('b')) => model.delete_word(WordMotion::PreviousStart),
-            ('y', KeyCode::Char('w')) => model.yank_word(WordMotion::NextStart),
-            ('y', KeyCode::Char('e')) => model.yank_word(WordMotion::End),
-            ('y', KeyCode::Char('b')) => model.yank_word(WordMotion::PreviousStart),
+            ('d', KeyCode::Char('d')) => model.delete_lines(count),
+            ('y', KeyCode::Char('y')) => model.yank_lines(count),
+            ('d', KeyCode::Char('w')) => model.delete_words(WordMotion::NextStart, count),
+            ('d', KeyCode::Char('e')) => model.delete_words(WordMotion::End, count),
+            ('d', KeyCode::Char('b')) => model.delete_words(WordMotion::PreviousStart, count),
+            ('y', KeyCode::Char('w')) => model.yank_words(WordMotion::NextStart, count),
+            ('y', KeyCode::Char('e')) => model.yank_words(WordMotion::End, count),
+            ('y', KeyCode::Char('b')) => model.yank_words(WordMotion::PreviousStart, count),
             _ => {}
         }
         return;
@@ -1789,17 +1860,26 @@ fn handle_key(model: &mut Model, key: KeyEvent) {
             KeyCode::Char('N') if !control => model.search_next(false),
             KeyCode::Char('d') if !control => model.pending = Some('d'),
             KeyCode::Char('y') if !control => model.pending = Some('y'),
-            KeyCode::Char('x') if !control => model.delete_forward(),
+            KeyCode::Char('x') if !control => {
+                let count = model.take_count();
+                for _ in 0..count {
+                    model.delete_forward();
+                }
+            }
             KeyCode::Char('p') if !control => model.put_register(),
             KeyCode::Char('u') if !control => model.undo(),
             KeyCode::Char('r') if control => model.redo(),
-            KeyCode::Char('w') if !control => model.move_word(WordMotion::NextStart),
-            KeyCode::Char('b') if !control => model.move_word(WordMotion::PreviousStart),
-            KeyCode::Char('e') if !control => model.move_word(WordMotion::End),
-            KeyCode::Char('h') | KeyCode::Left => model.move_char(-1),
-            KeyCode::Char('l') | KeyCode::Right => model.move_char(1),
-            KeyCode::Char('j') | KeyCode::Down => model.move_line(1),
-            KeyCode::Char('k') | KeyCode::Up => model.move_line(-1),
+            KeyCode::Char(character) if !control && character.is_ascii_digit() => {
+                model.push_count(character);
+            }
+            KeyCode::Char('0') if !control && model.count == 0 => model.move_home(),
+            KeyCode::Char('w') if !control => model.move_words(WordMotion::NextStart),
+            KeyCode::Char('b') if !control => model.move_words(WordMotion::PreviousStart),
+            KeyCode::Char('e') if !control => model.move_words(WordMotion::End),
+            KeyCode::Char('h') | KeyCode::Left => model.move_chars(-1),
+            KeyCode::Char('l') | KeyCode::Right => model.move_chars(1),
+            KeyCode::Char('j') | KeyCode::Down => model.move_lines(1),
+            KeyCode::Char('k') | KeyCode::Up => model.move_lines(-1),
             KeyCode::Home => model.move_home(),
             KeyCode::End => model.move_end(),
             _ => {}
@@ -2098,6 +2178,20 @@ mod tests {
         handle_event(&mut model, ctrl(KeyCode::Char('r')));
         assert_eq!(model.editor.text().slice(0..2), "Xa");
         assert_eq!(model.cursor, 1);
+    }
+
+    #[test]
+    fn counts_repeat_motions_and_operators() {
+        let mut model = Model::new(EditorState::from_text("a b c d"), None);
+        handle_event(&mut model, key(KeyCode::Char('3')));
+        handle_event(&mut model, key(KeyCode::Char('w')));
+        assert_eq!(model.cursor, 6);
+
+        let mut model = Model::new(EditorState::from_text("a b c d"), None);
+        handle_event(&mut model, key(KeyCode::Char('d')));
+        handle_event(&mut model, key(KeyCode::Char('2')));
+        handle_event(&mut model, key(KeyCode::Char('w')));
+        assert_eq!(model.editor.text().slice(0..3), "c d");
     }
 
     #[test]
