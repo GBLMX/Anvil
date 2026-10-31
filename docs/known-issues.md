@@ -85,3 +85,121 @@ by the current change.
   - Malformed input never panics or shifts text; the editor remains usable.
   - Markdown tests cover fenced code, nested lists, frontmatter, and a broken
     fence.
+
+## Urgent foundational gaps
+
+These are missing capabilities, not regressions. They block normal IDE-like
+workspace management and should be addressed before adding more UI features.
+
+### BUG-004: File tree cannot create files or directories
+
+- Area: TUI `Space e` file tree; gateway filesystem API
+- Priority: Urgent
+- Status: Open; not fixed
+- Current behavior:
+  - `Space e` supports movement, expand/collapse, open, and hidden-file toggle
+    only.
+  - The gateway has `sys.write_file` but no directory creation API.
+  - `:w path` can create a file only when its parent directory already exists.
+  - There is no way to create a folder from Anvil.
+- Required interaction:
+  - `a` creates a file and `A` creates a directory in the selected directory,
+    or in the selected file's parent.
+  - Inline prompt; `Enter` creates, `Esc` cancels.
+  - A created file opens; a created directory expands and selects.
+  - Reject empty names, absolute paths, `..`, `/`, control characters, and
+    existing targets without overwrite.
+- Required plumbing:
+  - Add a workspace-confined `sys.create_dir` gateway method using the root
+    dirfd and `mkdirat`; require `fs.write`.
+  - Use `sys.write_file` for the empty new file.
+  - Refresh the tree through `FileWorker` and keep the new entry visible.
+- Acceptance:
+  - File and directory creation work in the tree without direct `std::fs`
+    access.
+  - Outside-workspace and symlink escapes are denied.
+  - Existing entries are never silently overwritten.
+
+### BUG-005: File tree cannot rename, delete, or move entries
+
+- Area: TUI file tree; gateway filesystem API
+- Priority: Urgent
+- Status: Open; not fixed
+- Current behavior: no tree keys or gateway methods exist for rename, unlink,
+  move, or copy.
+- Required interaction:
+  - Rename current entry; delete current entry with explicit confirmation.
+  - Never delete a modified open buffer without a clear guard.
+  - Update open buffer paths and close affected split panes safely.
+  - Keep operations workspace-confined and preserve revision/conflict checks.
+- Required plumbing:
+  - Add confined gateway methods for rename and unlink; do not shell out.
+  - Add a confirmation state so destructive operations cannot run from a stray
+    key press.
+- Acceptance:
+  - Rename/delete work for files and directories, including open buffers.
+  - `..`, symlink, and outside-workspace attempts are denied.
+  - Failed operations leave the tree and buffers unchanged.
+
+### BUG-006: No new-buffer or close-buffer lifecycle
+
+- Area: TUI buffer management
+- Priority: High
+- Status: Open; not fixed
+- Current behavior:
+  - Buffers are created only by opening a file.
+  - Commands provide `:bn`/`:bp` but no new empty buffer, close buffer, or
+    delete buffer.
+  - `:q` quits the editor; `Ctrl-w q` closes only a split pane.
+- Required behavior:
+  - Create an empty buffer without a path.
+  - Close the current buffer, or a named/indexed buffer, with an unsaved-change
+    guard.
+  - Remove the buffer from split-pane references and keep one valid active
+    buffer.
+- Acceptance:
+  - `new`, close, and switch work with modified and unmodified buffers.
+  - Closing a modified buffer requires explicit confirmation or force.
+  - No stale split pane points at a removed buffer.
+
+### BUG-007: LSP does not auto-start for supported files
+
+- Area: LSP lifecycle
+- Priority: High (policy/UX gap)
+- Status: Open; not fixed
+- Current behavior:
+  - Opening a supported file calls `sync_lsp_active`, but that function only
+    syncs an already-running worker.
+  - A language server starts only through `:lsp-start` (or crash restart).
+  - Users opening a Rust/Go/TypeScript file see no diagnostics until they run
+    the command manually.
+- Required decision:
+  - Choose explicit-start versus auto-start as the default policy.
+  - If auto-start is enabled, start once per supported file/language and avoid
+    duplicate servers; `:lsp-stop` remains explicit.
+  - If explicit-start is intentional, document it prominently.
+- Acceptance:
+  - The lifecycle is deterministic and does not spawn duplicate servers on
+    buffer switches.
+  - A crashed server follows the existing bounded restart policy.
+  - The status/help text matches the selected policy.
+
+### BUG-008: External file changes are not watched
+
+- Area: Workspace/file lifecycle
+- Priority: High
+- Status: Open; not fixed
+- Current behavior:
+  - `FileWorker` only lists directories/files on explicit requests.
+  - No filesystem watcher refreshes the tree or open buffers after an external
+    edit, create, rename, or delete.
+  - A buffer can display stale contents while the disk has changed.
+- Required behavior:
+  - Detect external changes and mark or reload affected buffers safely.
+  - Refresh the tree without dropping the selected entry or expanded state.
+  - Never overwrite dirty in-memory edits silently.
+- Acceptance:
+  - External create/delete/rename updates the tree.
+  - External change to a clean open buffer is surfaced or reloaded.
+  - External change to a dirty buffer prompts or marks a conflict; it never
+    discards local edits.
