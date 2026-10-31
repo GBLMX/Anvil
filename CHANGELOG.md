@@ -6,6 +6,15 @@ All notable changes to Anvil are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.2.16] - 2026-10-31
+
+### Changed
+
+- Further split `anvil-tui/src/lib.rs`: file I/O lives in `file_io.rs`, buffer
+  lifecycle/navigation in `buffer.rs`, and search/substitution/Ex dispatch in
+  `commands.rs`. `lib.rs` is now 2552 lines, down from 3113 at the start of
+  this extraction pass.
+
 ## [0.2.15] - 2026-10-31
 
 ### Fixed

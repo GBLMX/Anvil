@@ -28,7 +28,10 @@ use ratatui::{
     text::{Line, Span},
 };
 
+mod buffer;
 mod clipboard;
+mod commands;
+mod file_io;
 mod file_tree_ui;
 mod file_worker;
 mod gateway;
@@ -290,284 +293,16 @@ impl Model {
     }
 
     /// Opens a workspace file, preserving an edited active buffer as a snapshot.
-    pub fn open_path(&mut self, path: impl AsRef<Path>) -> Result<(), String> {
-        let timing = std::env::var_os("ANVIL_OPEN_TIMING").is_some();
-        let start = Instant::now();
-        let absolute = self.absolute_path(path.as_ref())?;
-        if self.path.as_ref() == Some(&absolute) {
-            return Ok(());
-        }
-        if let Some(index) = self
-            .buffers
-            .iter()
-            .position(|buffer| buffer.path.as_ref() == Some(&absolute))
-        {
-            if self.path.is_some() {
-                self.sync_active();
-            }
-            self.load_buffer(index);
-            return Ok(());
-        }
-        let text = self.read_file(&absolute)?;
-        let read_done = start.elapsed();
-        if self.path.is_some() {
-            self.sync_active();
-            if self.buffers.is_empty() {
-                self.buffers.push(self.snapshot());
-                self.active = 0;
-            }
-            self.buffers.push(Buffer {
-                editor: EditorState::from_text(&text),
-                path: Some(absolute),
-                cursor: 0,
-                scroll: 0,
-                hscroll: 0,
-                modified: false,
-                search_query: String::new(),
-            });
-            let index = self.buffers.len() - 1;
-            self.load_buffer(index);
-        } else {
-            self.editor = EditorState::from_text(&text);
-            self.path = Some(absolute);
-            self.cursor = 0;
-            self.scroll = 0;
-            self.hscroll = 0;
-            self.modified = false;
-            self.syntax.borrow_mut().invalidate();
-        }
-        if timing {
-            eprintln!("open_path read={read_done:?} index={:?}", start.elapsed());
-        }
-        self.sync_lsp_active();
-        self.dirty = true;
-        Ok(())
-    }
-
     /// Builds a gateway-backed model by reading a UTF-8 file.
-    pub fn open_with_gateway(
-        path: impl AsRef<Path>,
-        gateway: GatewayClient,
-        workspace: PathBuf,
-    ) -> Result<Self, String> {
-        let mut model = Self::with_gateway(gateway, workspace);
-        model.open_path(path)?;
-        Ok(model)
-    }
-
     /// Builds a model by reading a UTF-8 file.
     ///
     /// Invalid UTF-8 is rejected instead of being lossily replaced, because
     /// saving a lossy view would silently corrupt the original bytes.
-    pub fn open(path: impl AsRef<Path>) -> io::Result<Self> {
-        let path = path.as_ref().to_path_buf();
-        let text = fs::read_to_string(&path)?;
-        let path = path.canonicalize().unwrap_or(path);
-        Ok(Self::new(EditorState::from_text(&text), Some(path)))
-    }
-
-    fn absolute_path(&self, path: &Path) -> Result<PathBuf, String> {
-        let joined = if path.is_absolute() {
-            path.to_path_buf()
-        } else {
-            self.workspace.join(path)
-        };
-        Ok(joined.canonicalize().unwrap_or(joined))
-    }
-
-    fn relative_path(&self, path: &Path) -> Result<String, String> {
-        let relative = path
-            .strip_prefix(&self.workspace)
-            .map_err(|_| format!("path is outside workspace {}", self.workspace.display()))?;
-        let relative = relative
-            .to_str()
-            .filter(|relative| !relative.is_empty() && *relative != ".")
-            .ok_or_else(|| "invalid file path".to_owned())?;
-        Ok(relative.to_owned())
-    }
-
-    fn read_file(&mut self, path: &Path) -> Result<String, String> {
-        if !self.require_gateway {
-            let data = fs::read(path).map_err(|error| error.to_string())?;
-            return String::from_utf8(data)
-                .map_err(|_| format!("{}: invalid UTF-8", path.display()));
-        }
-        let relative = self.relative_path(path)?;
-        let gateway = self
-            .gateway
-            .as_mut()
-            .ok_or_else(|| "gateway unavailable".to_owned())?;
-        let size = gateway
-            .file_size(&relative)
-            .map_err(|error| error.to_string())?;
-        let window = std::env::var("ANVIL_TUI_READ_WINDOW")
-            .ok()
-            .and_then(|value| value.parse::<usize>().ok())
-            .filter(|window| *window > 0)
-            .unwrap_or(4);
-        let data = gateway
-            .read_all_binary_pipelined(&relative, size, MAX_OPEN_BYTES, window)
-            .map_err(|error| error.to_string())?;
-        String::from_utf8(data).map_err(|_| format!("{relative}: invalid UTF-8"))
-    }
-
-    fn write_file(&mut self, path: &Path, text: &str) -> Result<(), String> {
-        if !self.require_gateway {
-            return fs::write(path, text).map_err(|error| error.to_string());
-        }
-        let relative = self.relative_path(path)?;
-        let gateway = self
-            .gateway
-            .as_mut()
-            .ok_or_else(|| "gateway unavailable".to_owned())?;
-        gateway
-            .write_all_binary(&relative, text.as_bytes())
-            .map_err(|error| error.to_string())
-    }
-
     /// Dispatches one terminal event through the normal input path.
     ///
     /// Used by tests and benchmarks; terminal loops read events themselves.
     pub fn dispatch(&mut self, event: Event) {
         handle_event(self, event);
-    }
-
-    fn snapshot(&self) -> Buffer {
-        Buffer {
-            editor: self.editor.clone(),
-            path: self.path.clone(),
-            cursor: self.cursor,
-            scroll: self.scroll,
-            hscroll: self.hscroll,
-            modified: self.modified,
-            search_query: self.search_query.clone(),
-        }
-    }
-
-    fn sync_active(&mut self) {
-        let snapshot = self.snapshot();
-        if let Some(buffer) = self.buffers.get_mut(self.active) {
-            *buffer = snapshot;
-        }
-    }
-
-    fn load_buffer(&mut self, index: usize) {
-        self.cancel_completion();
-        self.pending_lsp.clear();
-        self.hover = None;
-        self.diagnostic_popup = None;
-        let Some(buffer) = self.buffers.get(index).cloned() else {
-            return;
-        };
-        self.editor = buffer.editor;
-        self.path = buffer.path;
-        self.cursor = buffer.cursor;
-        self.scroll = buffer.scroll;
-        self.hscroll = buffer.hscroll;
-        self.modified = buffer.modified;
-        self.search_query = buffer.search_query;
-        self.syntax.borrow_mut().invalidate();
-        self.active = index;
-        self.input_mode = InputMode::Normal;
-        self.pending = None;
-        self.sync_lsp_active();
-        self.dirty = true;
-    }
-
-    fn open_file(&mut self, path: &str) {
-        if path.is_empty() {
-            self.status = "E: file name required".to_owned();
-            self.dirty = true;
-            return;
-        }
-        if self.help_back.is_some() {
-            let _ = self.close_help();
-        }
-        let path = match self.absolute_path(Path::new(path)) {
-            Ok(path) => path,
-            Err(error) => {
-                self.status = format!("E: {error}");
-                self.dirty = true;
-                return;
-            }
-        };
-        if self.path.as_ref() == Some(&path) {
-            self.status = format!("Already editing {}", path.display());
-            self.dirty = true;
-            return;
-        }
-        if let Some(index) = self
-            .buffers
-            .iter()
-            .position(|buffer| buffer.path.as_ref() == Some(&path))
-        {
-            self.sync_active();
-            self.load_buffer(index);
-            self.status = format!(
-                "buffer {}/{}: {}",
-                index + 1,
-                self.buffers.len(),
-                path.display()
-            );
-            self.dirty = true;
-            return;
-        }
-        let text = match self.read_file(&path) {
-            Ok(text) => text,
-            Err(error) => {
-                self.status = format!("E: {error}");
-                self.dirty = true;
-                return;
-            }
-        };
-        self.sync_active();
-        if self.buffers.is_empty() {
-            self.buffers.push(self.snapshot());
-        }
-        self.buffers.push(Buffer {
-            editor: EditorState::from_text(&text),
-            path: Some(path.clone()),
-            cursor: 0,
-            scroll: 0,
-            hscroll: 0,
-            modified: false,
-            search_query: String::new(),
-        });
-        let index = self.buffers.len() - 1;
-        self.load_buffer(index);
-        self.status = format!(
-            "buffer {}/{}: {}",
-            index + 1,
-            self.buffers.len(),
-            path.display()
-        );
-        self.dirty = true;
-    }
-
-    fn switch_buffer(&mut self, delta: isize) {
-        if self.help_back.is_some() {
-            let _ = self.close_help();
-        }
-        if self.buffers.is_empty() {
-            self.status = "E: only one buffer".to_owned();
-            self.dirty = true;
-            return;
-        }
-        self.sync_active();
-        let len = self.buffers.len();
-        let target = (self.active as isize + delta).rem_euclid(len as isize) as usize;
-        if target == self.active {
-            self.status = "E: only one buffer".to_owned();
-            self.dirty = true;
-            return;
-        }
-        self.load_buffer(target);
-        let name = self
-            .path
-            .as_ref()
-            .map(|path| path.display().to_string())
-            .unwrap_or_else(|| "[no file]".to_owned());
-        self.status = format!("buffer {}/{}: {name}", target + 1, len);
     }
 
     fn push_count(&mut self, character: char) {
@@ -914,12 +649,6 @@ impl Model {
         true
     }
 
-    fn force_quit(&mut self) {
-        if !self.close_help() {
-            self.quit = true;
-        }
-    }
-
     fn insert_here(&mut self) {
         if self.reject_read_only() {
             return;
@@ -1107,86 +836,10 @@ impl Model {
         self.dirty = true;
     }
 
-    fn any_modified(&self) -> bool {
-        self.modified
-            || self
-                .buffers
-                .iter()
-                .enumerate()
-                .any(|(index, buffer)| index != self.active && buffer.modified)
-    }
-    fn request_quit(&mut self) {
-        if self.close_help() {
-            return;
-        }
-        if self.any_modified() {
-            self.status = "No write since last change (:q! to override)".to_owned();
-            self.dirty = true;
-        } else {
-            self.quit = true;
-        }
-    }
-
     fn jump_to(&mut self, offset: usize) {
         self.cursor = offset;
         self.editor.set_selection_bytes(offset, offset);
         self.dirty = true;
-    }
-
-    fn execute_search(&mut self, query: String) {
-        if query.is_empty() {
-            if self.search_query.is_empty() {
-                self.status = "E: no previous search".to_owned();
-                self.dirty = true;
-            } else {
-                self.search_next(true);
-            }
-            return;
-        }
-        self.search_query = query;
-        let matches = find_matches(self.editor.text(), &self.search_query);
-        if matches.is_empty() {
-            self.status = format!("E: pattern not found: {}", self.search_query);
-            self.dirty = true;
-            return;
-        }
-        let target = matches
-            .iter()
-            .copied()
-            .find(|&offset| offset >= self.cursor)
-            .unwrap_or(matches[0]);
-        self.jump_to(target);
-        self.status = format!("/{}", self.search_query);
-    }
-
-    fn search_next(&mut self, forward: bool) {
-        if self.search_query.is_empty() {
-            self.status = "E: no previous search".to_owned();
-            self.dirty = true;
-            return;
-        }
-        let matches = find_matches(self.editor.text(), &self.search_query);
-        if matches.is_empty() {
-            self.status = format!("E: pattern not found: {}", self.search_query);
-            self.dirty = true;
-            return;
-        }
-        let target = if forward {
-            matches
-                .iter()
-                .copied()
-                .find(|&offset| offset > self.cursor)
-                .unwrap_or(matches[0])
-        } else {
-            matches
-                .iter()
-                .rev()
-                .copied()
-                .find(|&offset| offset < self.cursor)
-                .unwrap_or(matches[matches.len() - 1])
-        };
-        self.jump_to(target);
-        self.status = format!("/{}", self.search_query);
     }
 
     fn append(&mut self) {
@@ -1270,120 +923,6 @@ impl Model {
         self.editor.delete(self.cursor..end);
         self.modified = true;
         self.dirty = true;
-    }
-
-    fn save_to(&mut self, path: PathBuf) -> bool {
-        if self.reject_read_only() {
-            return false;
-        }
-        let path = match self.absolute_path(&path) {
-            Ok(path) => path,
-            Err(error) => {
-                self.status = format!("E: {error}");
-                self.dirty = true;
-                return false;
-            }
-        };
-        let text = self.editor.text().slice(0..self.editor.text().len_bytes());
-        let display = path.display().to_string();
-        match self.write_file(&path, &text) {
-            Ok(()) => {
-                self.path = Some(path.clone());
-                self.modified = false;
-                self.sync_lsp_active();
-                self.notify_lsp_save(&path, &text);
-                self.status = format!("\"{display}\" written");
-                self.dirty = true;
-                true
-            }
-            Err(error) => {
-                self.status = format!("E: {error}");
-                self.dirty = true;
-                false
-            }
-        }
-    }
-
-    fn save(&mut self) -> bool {
-        if self.reject_read_only() {
-            return false;
-        }
-        let Some(path) = self.path.clone() else {
-            self.status = "E32: no file name".to_owned();
-            self.dirty = true;
-            return false;
-        };
-        self.save_to(path)
-    }
-
-    fn save_as(&mut self, path: &str) -> bool {
-        self.save_to(PathBuf::from(path))
-    }
-
-    fn substitute(&mut self, whole: bool, spec: &str) {
-        if self.reject_read_only() {
-            return;
-        }
-        let mut parts = spec.splitn(3, '/');
-        let (Some(old), Some(new)) = (parts.next(), parts.next()) else {
-            self.status = "E: usage: :s/old/new/[g]".to_owned();
-            self.dirty = true;
-            return;
-        };
-        let flags = parts.next().unwrap_or_default();
-        if old.is_empty() {
-            self.status = "E: empty search pattern".to_owned();
-            self.dirty = true;
-            return;
-        }
-        if !flags.is_empty() && flags != "g" {
-            self.status = format!("E: unknown substitute flags: {flags}");
-            self.dirty = true;
-            return;
-        }
-        let range = if whole {
-            0..self.editor.text().len_bytes()
-        } else {
-            let Some(line) = self.editor.index().offset_to_line(self.cursor) else {
-                self.status = "E: no line".to_owned();
-                self.dirty = true;
-                return;
-            };
-            line.start..line.end
-        };
-        let matches = find_matches_in(self.editor.text(), old, range);
-        let matches = if flags.contains('g') {
-            let mut non_overlapping = Vec::new();
-            let mut end = 0;
-            for start in matches {
-                if start >= end {
-                    non_overlapping.push(start);
-                    end = start + old.len();
-                }
-            }
-            non_overlapping
-        } else {
-            matches.into_iter().take(1).collect()
-        };
-        if matches.is_empty() {
-            self.status = "E: pattern not found".to_owned();
-            self.dirty = true;
-            return;
-        }
-        let first = matches[0];
-        for start in matches.into_iter().rev() {
-            let end = start + old.len();
-            self.editor.set_selection_bytes(start, end);
-            self.editor.delete(start..end);
-            if !new.is_empty() {
-                self.editor.insert(start, new);
-            }
-        }
-        self.cursor = first.min(self.editor.text().len_bytes());
-        self.editor.set_selection_bytes(self.cursor, self.cursor);
-        self.modified = true;
-        self.dirty = true;
-        self.status = "substitution applied".to_owned();
     }
 
     #[cfg(target_os = "linux")]
@@ -1733,66 +1272,6 @@ impl Model {
         self.dirty = true;
     }
 
-    fn execute_command(&mut self, command: &str) {
-        if let Some(rest) = command.strip_prefix("%s/") {
-            self.substitute(true, rest);
-            return;
-        }
-        if let Some(rest) = command.strip_prefix("s/") {
-            self.substitute(false, rest);
-            return;
-        }
-        let mut parts = command.splitn(2, char::is_whitespace);
-        let name = parts.next().unwrap_or_default();
-        let argument = parts.next().unwrap_or_default().trim();
-        match (name, argument) {
-            ("w", "") => {
-                self.save();
-            }
-            ("w", path) => {
-                self.save_as(path);
-            }
-            ("e", path) => self.open_file(path),
-            ("bn", "") => self.switch_buffer(1),
-            ("bp", "") => self.switch_buffer(-1),
-            ("q", "") => self.request_quit(),
-            ("q!", "") => self.force_quit(),
-            ("help", "") => self.show_help(),
-            ("reconnect", "") => self.reconnect_gateway(),
-            ("lsp-start", "") => self.start_lsp(),
-            ("tree", "") => self.open_tree(),
-            ("lsp-stop", "") => self.stop_lsp(),
-            ("plugin-start", "") => self.start_host(),
-            ("plugin-oom", "") => self.start_oom_host(),
-            ("plugin-exec", "") => self.exec_host(),
-            ("plugin-stop", "") => self.stop_host(),
-            ("wq", "") => {
-                if self.save() {
-                    if self.any_modified() {
-                        self.status = "E: other buffers have unsaved changes".to_owned();
-                        self.dirty = true;
-                    } else {
-                        self.quit = true;
-                    }
-                }
-            }
-            ("wq", path) => {
-                if self.save_as(path) {
-                    if self.any_modified() {
-                        self.status = "E: other buffers have unsaved changes".to_owned();
-                        self.dirty = true;
-                    } else {
-                        self.quit = true;
-                    }
-                }
-            }
-            _ => {
-                self.status = format!("E: unknown command: {command}");
-                self.dirty = true;
-            }
-        }
-    }
-
     fn gutter_width(&self) -> u16 {
         let digits = self
             .editor
@@ -1913,46 +1392,6 @@ impl Model {
         }
         lines
     }
-}
-
-fn find_matches(text: &TextDocument, needle: &str) -> Vec<usize> {
-    find_matches_in(text, needle, 0..text.len_bytes())
-}
-
-fn find_matches_in(text: &TextDocument, needle: &str, range: std::ops::Range<usize>) -> Vec<usize> {
-    let needle = needle.as_bytes();
-    if needle.is_empty() || needle.len() > range.end.saturating_sub(range.start) {
-        return Vec::new();
-    }
-    let mut matches = Vec::new();
-    let mut carry = Vec::new();
-    let mut processed = range.start;
-    for chunk in text.chunks(range) {
-        if chunk.is_empty() {
-            continue;
-        }
-        let mut window = Vec::with_capacity(carry.len() + chunk.len());
-        window.extend_from_slice(&carry);
-        window.extend_from_slice(chunk.as_bytes());
-        let window_start = processed.saturating_sub(carry.len());
-        let mut from = 0;
-        while from + needle.len() <= window.len() {
-            let Some(local) = window[from..]
-                .windows(needle.len())
-                .position(|candidate| candidate == needle)
-            else {
-                break;
-            };
-            let at = from + local;
-            matches.push(window_start + at);
-            from = at + 1;
-        }
-        let keep = needle.len().saturating_sub(1).min(window.len());
-        carry.clear();
-        carry.extend_from_slice(&window[window.len() - keep..]);
-        processed += chunk.len();
-    }
-    matches
 }
 
 /// Renders the current viewport and cursor.
