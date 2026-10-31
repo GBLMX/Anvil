@@ -14,6 +14,8 @@ Normal mode
   q{reg} / @{reg}     record macro / replay macro; @@ repeats
   Space e             file tree (h/l/Enter expand or open, Esc closes)
   Space f             fuzzy file finder; type to filter, Enter opens
+  gd                  go to definition
+  K                   hover documentation
   i a A o O           insert before / after / line end / below / above
   x                   delete character
   dd                  delete line
@@ -45,6 +47,7 @@ Normal mode
 
 Insert mode
   Esc                 return to normal mode
+  Ctrl+Space          LSP completion popup
   Enter               newline
   Tab                 insert four spaces
   Backspace / Delete  delete grapheme

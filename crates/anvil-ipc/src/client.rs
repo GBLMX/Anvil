@@ -53,6 +53,17 @@ impl std::fmt::Display for ClientError {
     }
 }
 
+impl ClientError {
+    /// Return the underlying I/O error kind, when this is an I/O failure.
+    pub fn kind(&self) -> Option<std::io::ErrorKind> {
+        match self {
+            Self::Io(kind) => Some(*kind),
+            Self::Frame(FrameError::Io(kind)) => Some(*kind),
+            _ => None,
+        }
+    }
+}
+
 impl std::error::Error for ClientError {}
 
 impl From<FrameError> for ClientError {
@@ -156,6 +167,15 @@ impl GatewayClient {
     /// Stop the supervised LSP process.
     pub fn lsp_stop(&mut self) -> Result<(), ClientError> {
         self.request("lsp.stop", serde_json::json!({}))?;
+        Ok(())
+    }
+
+    /// Set the underlying socket read timeout.
+    pub fn set_read_timeout(
+        &mut self,
+        timeout: Option<std::time::Duration>,
+    ) -> Result<(), ClientError> {
+        self.connection.set_read_timeout(timeout)?;
         Ok(())
     }
 

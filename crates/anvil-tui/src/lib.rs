@@ -93,6 +93,30 @@ struct FuzzyState {
 }
 
 #[derive(Debug, Clone)]
+struct CompletionItem {
+    label: String,
+    insert: String,
+    detail: String,
+    replace: Option<(usize, usize, usize, usize)>,
+}
+
+#[derive(Debug, Clone)]
+struct CompletionState {
+    id: u64,
+    items: Vec<CompletionItem>,
+    filtered: Vec<usize>,
+    query: String,
+    selected: usize,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LspRequestKind {
+    Completion,
+    Definition,
+    Hover,
+}
+
+#[derive(Debug, Clone)]
 struct TreeEntry {
     path: PathBuf,
     depth: usize,
@@ -155,6 +179,11 @@ pub struct Model {
     active: usize,
     /// Background directory and file enumerator.
     file_worker: Option<FileWorker>,
+    /// LSP requests waiting for responses.
+    pending_lsp: HashMap<u64, LspRequestKind>,
+    next_lsp_request: u64,
+    completion: Option<CompletionState>,
+    hover: Option<String>,
     /// Flattened workspace tree, when open.
     tree: Vec<TreeEntry>,
     tree_selected: Option<usize>,
@@ -215,6 +244,10 @@ impl Model {
             buffers: Vec::new(),
             active: 0,
             file_worker: None,
+            pending_lsp: HashMap::new(),
+            next_lsp_request: 2,
+            completion: None,
+            hover: None,
             tree: Vec::new(),
             tree_selected: None,
             tree_visible: false,
@@ -1798,6 +1831,313 @@ impl Model {
         self.dirty = true;
     }
 
+    fn offset_at_utf16(&self, line: usize, character: usize) -> usize {
+        let Some(start) = self.editor.index().line_to_offset(line) else {
+            return self.editor.text().len_bytes();
+        };
+        let end = self
+            .editor
+            .index()
+            .offset_to_line(start)
+            .map(|position| position.end)
+            .unwrap_or(start);
+        let text = self.editor.text().slice(start..end);
+        let mut units = 0;
+        for (offset, codepoint) in text.char_indices() {
+            if units >= character {
+                return start + offset;
+            }
+            units += codepoint.len_utf16();
+        }
+        end
+    }
+
+    fn lsp_position(&self) -> Option<(u64, u64)> {
+        let position = self
+            .editor
+            .index()
+            .position(self.editor.text(), self.cursor)?;
+        let line_start = self.editor.index().line_to_offset(position.line)?;
+        let prefix = self.editor.text().slice(line_start..self.cursor);
+        let character = prefix.chars().map(char::len_utf16).sum::<usize>();
+        Some((position.line as u64, character as u64))
+    }
+
+    fn send_lsp_request(
+        &mut self,
+        kind: LspRequestKind,
+        method: &str,
+        params: serde_json::Value,
+    ) -> bool {
+        let Some(worker) = self.lsp_worker.as_ref() else {
+            self.status = "E: lsp is not running".to_owned();
+            self.dirty = true;
+            return false;
+        };
+        let id = self.next_lsp_request;
+        self.next_lsp_request += 1;
+        let text = self.editor.text().slice(0..self.editor.text().len_bytes());
+        if let Err(error) = worker
+            .sync(text)
+            .and_then(|()| worker.request(id, method, params))
+        {
+            self.status = format!("E: lsp request: {error}");
+            self.dirty = true;
+            return false;
+        }
+        self.pending_lsp.insert(id, kind);
+        true
+    }
+
+    fn request_completion(&mut self) {
+        let Some(uri) = self.path.as_ref().map(|path| lsp_worker::file_uri(path)) else {
+            return;
+        };
+        let Some((line, character)) = self.lsp_position() else {
+            return;
+        };
+        let params = serde_json::json!({
+            "textDocument": {"uri": uri},
+            "position": {"line": line, "character": character},
+            "context": {"triggerKind": 1}
+        });
+        if self.send_lsp_request(
+            LspRequestKind::Completion,
+            "textDocument/completion",
+            params,
+        ) {
+            self.status = "completion".to_owned();
+        }
+        self.dirty = true;
+    }
+
+    fn request_definition(&mut self) {
+        let Some(uri) = self.path.as_ref().map(|path| lsp_worker::file_uri(path)) else {
+            return;
+        };
+        let Some((line, character)) = self.lsp_position() else {
+            return;
+        };
+        let params = serde_json::json!({
+            "textDocument": {"uri": uri},
+            "position": {"line": line, "character": character}
+        });
+        if self.send_lsp_request(
+            LspRequestKind::Definition,
+            "textDocument/definition",
+            params,
+        ) {
+            self.status = "definition".to_owned();
+        }
+        self.dirty = true;
+    }
+
+    fn request_hover(&mut self) {
+        let Some(uri) = self.path.as_ref().map(|path| lsp_worker::file_uri(path)) else {
+            return;
+        };
+        let Some((line, character)) = self.lsp_position() else {
+            return;
+        };
+        let params = serde_json::json!({
+            "textDocument": {"uri": uri},
+            "position": {"line": line, "character": character}
+        });
+        if self.send_lsp_request(LspRequestKind::Hover, "textDocument/hover", params) {
+            self.status = "hover".to_owned();
+        }
+        self.dirty = true;
+    }
+
+    fn handle_lsp_response(&mut self, id: u64, result: serde_json::Value, error: Option<String>) {
+        let Some(kind) = self.pending_lsp.remove(&id) else {
+            return;
+        };
+        if let Some(error) = error {
+            self.status = format!("E: lsp: {error}");
+            self.dirty = true;
+            return;
+        }
+        match kind {
+            LspRequestKind::Completion => self.apply_completion_response(id, &result),
+            LspRequestKind::Definition => self.apply_definition_response(&result),
+            LspRequestKind::Hover => self.apply_hover_response(&result),
+        }
+        self.dirty = true;
+    }
+
+    fn apply_completion_response(&mut self, id: u64, result: &serde_json::Value) {
+        let items = result
+            .get("items")
+            .and_then(serde_json::Value::as_array)
+            .or_else(|| result.as_array());
+        let Some(items) = items else {
+            self.status = "E: lsp: invalid completion response".to_owned();
+            return;
+        };
+        let items: Vec<CompletionItem> = items
+            .iter()
+            .filter_map(|item| {
+                let label = item.get("label")?.as_str()?.to_owned();
+                let insert = item
+                    .get("textEdit")
+                    .and_then(|edit| edit.get("newText"))
+                    .and_then(serde_json::Value::as_str)
+                    .or_else(|| item.get("insertText").and_then(serde_json::Value::as_str))
+                    .unwrap_or(&label)
+                    .to_owned();
+                let detail = item
+                    .get("detail")
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or_default()
+                    .to_owned();
+                let replace = item
+                    .get("textEdit")
+                    .and_then(|edit| edit.get("range"))
+                    .and_then(|range| {
+                        let start = range.get("start")?;
+                        let end = range.get("end")?;
+                        Some((
+                            start.get("line")?.as_u64()? as usize,
+                            start.get("character")?.as_u64()? as usize,
+                            end.get("line")?.as_u64()? as usize,
+                            end.get("character")?.as_u64()? as usize,
+                        ))
+                    });
+                Some(CompletionItem {
+                    label,
+                    insert: expand_snippet(&insert),
+                    detail,
+                    replace,
+                })
+            })
+            .take(200)
+            .collect();
+        if items.is_empty() {
+            self.status = "lsp: no completions".to_owned();
+            self.completion = None;
+        } else {
+            let filtered = (0..items.len()).collect();
+            self.completion = Some(CompletionState {
+                id,
+                items,
+                filtered,
+                query: String::new(),
+                selected: 0,
+            });
+            self.status = "completion".to_owned();
+        }
+    }
+
+    fn apply_definition_response(&mut self, result: &serde_json::Value) {
+        let location = result
+            .as_array()
+            .and_then(|locations| locations.first())
+            .unwrap_or(result);
+        let Some(uri) = location
+            .get("uri")
+            .or_else(|| location.get("targetUri"))
+            .and_then(serde_json::Value::as_str)
+        else {
+            self.status = "lsp: no definition".to_owned();
+            return;
+        };
+        let Some(path) = lsp::uri_to_path(uri) else {
+            self.status = "E: lsp: invalid definition URI".to_owned();
+            return;
+        };
+        let range = location
+            .get("range")
+            .or_else(|| location.get("targetSelectionRange"))
+            .or_else(|| location.get("targetRange"));
+        let line = range
+            .and_then(|range| range.get("start"))
+            .and_then(|start| start.get("line"))
+            .and_then(serde_json::Value::as_u64)
+            .unwrap_or(0) as usize;
+        let character = range
+            .and_then(|range| range.get("start"))
+            .and_then(|start| start.get("character"))
+            .and_then(serde_json::Value::as_u64)
+            .unwrap_or(0) as usize;
+        if self.path.as_ref() != Some(&path) {
+            if let Err(error) = self.open_path(&path) {
+                self.status = format!("E: {error}");
+                return;
+            }
+        }
+        self.cursor = self.offset_at_utf16(line, character);
+        self.status = format!("definition {}", path.display());
+    }
+
+    fn apply_hover_response(&mut self, result: &serde_json::Value) {
+        let Some(contents) = result.get("contents") else {
+            self.status = "lsp: no hover".to_owned();
+            return;
+        };
+        let text = hover_text(contents);
+        if text.is_empty() {
+            self.status = "lsp: no hover".to_owned();
+        } else {
+            self.hover = Some(text);
+            self.status = "hover".to_owned();
+        }
+    }
+
+    fn apply_completion(&mut self) {
+        let Some(completion) = self.completion.take() else {
+            return;
+        };
+        let Some(item) = completion
+            .filtered
+            .get(completion.selected)
+            .and_then(|index| completion.items.get(*index))
+        else {
+            return;
+        };
+        let insert = item.insert.clone();
+        if let Some((start_line, start_char, end_line, end_char)) = item.replace {
+            let start = self.offset_at_utf16(start_line, start_char);
+            let end = self.offset_at_utf16(end_line, end_char).max(start);
+            self.editor.set_selection_bytes(start, end);
+            self.editor.delete(start..end);
+            self.editor.insert(start, &insert);
+            self.cursor = start + insert.len();
+            self.modified = true;
+        } else {
+            self.insert_text(&insert);
+        }
+        self.status = format!("completed {}", item.label);
+        self.dirty = true;
+    }
+
+    fn move_completion(&mut self, delta: isize) {
+        if let Some(completion) = self.completion.as_mut() {
+            completion.selected = completion
+                .selected
+                .saturating_add_signed(delta)
+                .min(completion.filtered.len().saturating_sub(1));
+            self.dirty = true;
+        }
+    }
+
+    fn filter_completion(&mut self) {
+        if let Some(completion) = self.completion.as_mut() {
+            let query = completion.query.to_lowercase();
+            completion.filtered = completion
+                .items
+                .iter()
+                .enumerate()
+                .filter(|(_, item)| item.label.to_lowercase().contains(&query))
+                .map(|(index, _)| index)
+                .collect();
+            completion.selected = completion
+                .selected
+                .min(completion.filtered.len().saturating_sub(1));
+            self.dirty = true;
+        }
+    }
+
     fn poll_lsp(&mut self) {
         let events = self
             .lsp_worker
@@ -1828,6 +2168,9 @@ impl Model {
                     } else {
                         self.status = format!("E: lsp crashed: {error}");
                     }
+                }
+                LspEvent::Response { id, result, error } => {
+                    self.handle_lsp_response(id, result, error);
                 }
                 LspEvent::Error(error) => self.status = format!("E: lsp: {error}"),
                 LspEvent::Log(line) => self.status = format!("lsp: {line}"),
@@ -2097,6 +2440,54 @@ impl Model {
             lines.push(Line::raw(""));
         }
         lines
+    }
+}
+
+fn expand_snippet(text: &str) -> String {
+    let mut output = String::with_capacity(text.len());
+    let bytes = text.as_bytes();
+    let mut index = 0;
+    while index < bytes.len() {
+        if bytes[index] == b'$' {
+            if bytes.get(index + 1) == Some(&b'{')
+                && let Some(end) = text[index + 2..].find('}')
+            {
+                let body = &text[index + 2..index + 2 + end];
+                let default = body.split_once(':').map(|(_, value)| value).unwrap_or("");
+                output.push_str(default);
+                index += end + 3;
+                continue;
+            }
+            if bytes.get(index + 1).is_some_and(u8::is_ascii_digit) {
+                index += 1;
+                while bytes.get(index).is_some_and(u8::is_ascii_digit) {
+                    index += 1;
+                }
+                continue;
+            }
+        }
+        let character = text[index..].chars().next().expect("char");
+        output.push(character);
+        index += character.len_utf8();
+    }
+    output
+}
+
+fn hover_text(value: &serde_json::Value) -> String {
+    match value {
+        serde_json::Value::String(text) => text.clone(),
+        serde_json::Value::Object(object) => object
+            .get("value")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or_default()
+            .to_owned(),
+        serde_json::Value::Array(items) => items
+            .iter()
+            .map(hover_text)
+            .filter(|text| !text.is_empty())
+            .collect::<Vec<_>>()
+            .join("\n"),
+        _ => String::new(),
     }
 }
 
@@ -2530,6 +2921,65 @@ pub fn view(model: &Model, frame: &mut Frame) {
             popup,
         );
     }
+    if let Some(completion) = &model.completion {
+        let width = (area.width * 2 / 5)
+            .max(36)
+            .min(area.width.saturating_sub(2));
+        let height = (completion.filtered.len() as u16 + 2)
+            .min(14)
+            .min(area.height.saturating_sub(2));
+        let popup = Rect {
+            x: area.x + (area.width.saturating_sub(width)) / 2,
+            y: area.y + (area.height.saturating_sub(height)) / 2,
+            width,
+            height,
+        };
+        frame.render_widget(Clear, popup);
+        let mut lines = Vec::new();
+        for (row, index) in completion
+            .filtered
+            .iter()
+            .take(height.saturating_sub(2) as usize)
+            .enumerate()
+        {
+            let item = &completion.items[*index];
+            let text = if item.detail.is_empty() {
+                item.label.clone()
+            } else {
+                format!("{}  {}", item.label, item.detail)
+            };
+            let style = if row == completion.selected {
+                Style::default().fg(Color::Black).bg(Color::Yellow)
+            } else {
+                Style::default()
+            };
+            lines.push(Line::styled(text, style));
+        }
+        frame.render_widget(
+            Paragraph::new(lines)
+                .block(Block::bordered().title(format!("Completion #{}", completion.id))),
+            popup,
+        );
+    }
+    if let Some(hover) = &model.hover {
+        let width = (area.width * 3 / 5)
+            .max(30)
+            .min(area.width.saturating_sub(2));
+        let height = (hover.lines().count() as u16 + 2)
+            .min(14)
+            .min(area.height.saturating_sub(2));
+        let popup = Rect {
+            x: area.x + (area.width.saturating_sub(width)) / 2,
+            y: area.y + (area.height.saturating_sub(height)) / 2,
+            width,
+            height,
+        };
+        frame.render_widget(Clear, popup);
+        frame.render_widget(
+            Paragraph::new(hover.as_str()).block(Block::bordered().title("Hover")),
+            popup,
+        );
+    }
 }
 
 /// Runs the minimal terminal loop in the current directory workspace.
@@ -2701,6 +3151,12 @@ fn handle_key(model: &mut Model, key: KeyEvent) {
             model.object_pending = true;
             return;
         }
+        if pending == 'g' {
+            if key.code == KeyCode::Char('d') {
+                model.request_definition();
+            }
+            return;
+        }
         if let KeyCode::Char(character) = key.code
             && character.is_ascii_digit()
         {
@@ -2759,6 +3215,59 @@ fn handle_key(model: &mut Model, key: KeyEvent) {
             _ => {}
         }
         return;
+    }
+
+    if model.completion.is_some() {
+        let consumed = match key.code {
+            KeyCode::Esc => {
+                model.completion = None;
+                model.dirty = true;
+                true
+            }
+            KeyCode::Up => {
+                model.move_completion(-1);
+                true
+            }
+            KeyCode::Down => {
+                model.move_completion(1);
+                true
+            }
+            KeyCode::Enter | KeyCode::Tab => {
+                model.apply_completion();
+                true
+            }
+            KeyCode::Backspace => {
+                if let Some(completion) = model.completion.as_mut() {
+                    completion.query.pop();
+                }
+                model.backspace();
+                model.filter_completion();
+                true
+            }
+            KeyCode::Char(character) if !control => {
+                if let Some(completion) = model.completion.as_mut() {
+                    completion.query.push(character);
+                }
+                model.insert_text(&character.to_string());
+                model.filter_completion();
+                true
+            }
+            _ => {
+                model.completion = None;
+                false
+            }
+        };
+        if consumed {
+            return;
+        }
+    }
+
+    if model.hover.is_some() {
+        model.hover = None;
+        model.dirty = true;
+        if key.code == KeyCode::Esc {
+            return;
+        }
     }
 
     if model.tree_focus {
@@ -2833,6 +3342,7 @@ fn handle_key(model: &mut Model, key: KeyEvent) {
             KeyCode::Down => model.move_line(1),
             KeyCode::Home => model.move_home(),
             KeyCode::End => model.move_end(),
+            KeyCode::Char(' ') if control => model.request_completion(),
             KeyCode::Char(character) if !control => model.insert_text(&character.to_string()),
             _ => {}
         },
@@ -2841,6 +3351,11 @@ fn handle_key(model: &mut Model, key: KeyEvent) {
                 model.pending = Some(' ');
                 model.dirty = true;
             }
+            KeyCode::Char('g') if !control => {
+                model.pending = Some('g');
+                model.dirty = true;
+            }
+            KeyCode::Char('K') if !control => model.request_hover(),
             KeyCode::Char('q') if !control => {
                 model.macro_wait = Some('q');
                 model.dirty = true;
@@ -3176,6 +3691,21 @@ mod tests {
             .any(|cell| cell.fg == Color::Magenta);
         assert!(colored, "keyword span was not colored");
         model.dirty = false;
+    }
+
+    #[test]
+    fn snippets_drop_placeholders() {
+        assert_eq!(
+            expand_snippet("fn ${1:name}(${2:args}) $0"),
+            "fn name(args) "
+        );
+    }
+
+    #[test]
+    fn utf16_offset_maps_through_emoji() {
+        let model = Model::new(EditorState::from_text("a😀b"), None);
+        assert_eq!(model.offset_at_utf16(0, 1), 1);
+        assert_eq!(model.offset_at_utf16(0, 3), 5);
     }
 
     #[test]

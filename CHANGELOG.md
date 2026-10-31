@@ -6,7 +6,21 @@ All notable changes to Anvil are recorded here. The format follows
 
 ## [Unreleased]
 
-## [0.2.1] - 2026-10-31
+## [0.2.3] - 2026-10-31
+
+### Added
+
+- LSP completion popup with fuzzy label filtering and snippet insertion,
+  `gd` definition jumps, and `K` hover documentation.
+
+### Fixed
+
+- Tab outside Insert mode no longer modifies the buffer; Tab indentation is
+  insert-mode only.
+- Trusted `-no-sandbox-lsp` processes inherit the gateway PATH, fixing child
+  toolchains and Python shebangs for gopls/pyright.
+
+## [0.2.2] - 2026-10-31
 
 ### Added
 
@@ -16,12 +30,10 @@ All notable changes to Anvil are recorded here. The format follows
 
 ### Fixed
 
-- Tab outside Insert mode no longer modifies the buffer; Tab indentation is
-  insert-mode only.
-- Trusted `-no-sandbox-lsp` processes inherit the gateway PATH, fixing child
-  toolchains and Python shebangs for gopls/pyright.
 - `:reconnect` drops the old file-tree worker and LSP worker before replacing
   the gateway session, so later tree/fuzzy operations use the new socket.
+
+## [0.2.1] - 2026-10-31
 
 ### Added
 

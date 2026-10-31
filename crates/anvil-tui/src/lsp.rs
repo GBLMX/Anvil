@@ -159,7 +159,12 @@ pub fn publish_diagnostics(message: &Value) -> Option<(PathBuf, Vec<Diagnostic>)
     }
     let params = message.get("params")?.clone();
     let parsed: PublishDiagnostics = serde_json::from_value(params).ok()?;
-    let encoded = parsed.uri.strip_prefix("file://").unwrap_or(&parsed.uri);
+    Some((uri_to_path(&parsed.uri)?, parsed.diagnostics))
+}
+
+/// Converts a percent-encoded file URI to a local path.
+pub fn uri_to_path(uri: &str) -> Option<PathBuf> {
+    let encoded = uri.strip_prefix("file://")?;
     let mut path = Vec::with_capacity(encoded.len());
     let bytes = encoded.as_bytes();
     let mut index = 0;
@@ -173,10 +178,7 @@ pub fn publish_diagnostics(message: &Value) -> Option<(PathBuf, Vec<Diagnostic>)
             index += 1;
         }
     }
-    Some((
-        PathBuf::from(String::from_utf8(path).ok()?),
-        parsed.diagnostics,
-    ))
+    Some(PathBuf::from(String::from_utf8(path).ok()?))
 }
 
 #[cfg(test)]

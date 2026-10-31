@@ -1,14 +1,32 @@
 use crate::lsp::{Diagnostic, publish_diagnostics};
 use anvil_ipc::GatewayClient;
+use serde_json::Value;
+use std::io::ErrorKind;
 use std::path::PathBuf;
-use std::sync::mpsc::{self, Receiver};
+use std::sync::mpsc::{self, Receiver, Sender};
+use std::time::Duration;
 
 #[derive(Debug)]
 pub enum LspEvent {
     Diagnostics(PathBuf, Vec<Diagnostic>),
+    Response {
+        id: u64,
+        result: Value,
+        error: Option<String>,
+    },
     Crashed(String),
     Error(String),
     Log(String),
+}
+
+/// Commands sent from the UI to the language-server thread.
+pub enum LspCommand {
+    Sync(String),
+    Request {
+        id: u64,
+        method: String,
+        params: Value,
+    },
 }
 
 /// One language-server launch profile.
@@ -21,6 +39,7 @@ pub struct LspConfig {
 
 pub struct LspWorker {
     events: Receiver<LspEvent>,
+    commands: Sender<LspCommand>,
 }
 
 impl LspWorker {
@@ -32,6 +51,7 @@ impl LspWorker {
         text: String,
     ) -> Result<Self, String> {
         let (sender, events) = mpsc::channel();
+        let (command_sender, commands) = mpsc::channel();
         let LspConfig {
             tool,
             args,
@@ -98,12 +118,53 @@ impl LspWorker {
                 "params": {"textDocument": {"uri": uri}}
             });
             let _ = send(&mut client, &did_save);
+            let _ = client.set_read_timeout(Some(Duration::from_millis(50)));
+            let mut version = 1_u64;
             loop {
+                while let Ok(command) = commands.try_recv() {
+                    match command {
+                        LspCommand::Sync(text) => {
+                            version += 1;
+                            let did_change = serde_json::json!({
+                                "jsonrpc": "2.0",
+                                "method": "textDocument/didChange",
+                                "params": {
+                                    "textDocument": {"uri": uri, "version": version},
+                                    "contentChanges": [{"text": text}]
+                                }
+                            });
+                            if let Err(error) = send(&mut client, &did_change) {
+                                let _ = sender.send(LspEvent::Error(error));
+                                return;
+                            }
+                        }
+                        LspCommand::Request { id, method, params } => {
+                            let request = serde_json::json!({
+                                "jsonrpc": "2.0",
+                                "id": id,
+                                "method": method,
+                                "params": params
+                            });
+                            if let Err(error) = send(&mut client, &request) {
+                                let _ = sender.send(LspEvent::Error(error));
+                                return;
+                            }
+                        }
+                    }
+                }
                 let message = match client.recv_notification() {
                     Ok(Some(message)) => message,
                     Ok(None) => {
                         let _ = sender.send(LspEvent::Crashed("gateway closed".to_owned()));
                         return;
+                    }
+                    Err(error)
+                        if matches!(
+                            error.kind(),
+                            Some(ErrorKind::WouldBlock | ErrorKind::TimedOut)
+                        ) =>
+                    {
+                        continue;
                     }
                     Err(error) => {
                         let _ = sender.send(LspEvent::Error(error.to_string()));
@@ -127,6 +188,18 @@ impl LspWorker {
                         let Some(data) = message.params.get("data") else {
                             continue;
                         };
+                        if data.get("method").is_none()
+                            && let Some(id) = data.get("id").and_then(Value::as_u64)
+                        {
+                            let error = data
+                                .get("error")
+                                .and_then(|error| error.get("message"))
+                                .and_then(Value::as_str)
+                                .map(ToOwned::to_owned);
+                            let result = data.get("result").cloned().unwrap_or(Value::Null);
+                            let _ = sender.send(LspEvent::Response { id, result, error });
+                            continue;
+                        }
                         match answer_server_request(&mut client, data) {
                             Ok(true) => continue,
                             Ok(false) => {}
@@ -143,7 +216,26 @@ impl LspWorker {
                 }
             }
         });
-        Ok(Self { events })
+        Ok(Self {
+            events,
+            commands: command_sender,
+        })
+    }
+
+    pub fn sync(&self, text: String) -> Result<(), String> {
+        self.commands
+            .send(LspCommand::Sync(text))
+            .map_err(|_| "lsp worker stopped".to_owned())
+    }
+
+    pub fn request(&self, id: u64, method: &str, params: Value) -> Result<(), String> {
+        self.commands
+            .send(LspCommand::Request {
+                id,
+                method: method.to_owned(),
+                params,
+            })
+            .map_err(|_| "lsp worker stopped".to_owned())
     }
 
     pub fn poll(&self) -> Vec<LspEvent> {
@@ -192,7 +284,7 @@ fn project_root(
     root
 }
 
-fn file_uri(path: &std::path::Path) -> String {
+pub(crate) fn file_uri(path: &std::path::Path) -> String {
     let mut absolute = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
     if absolute.is_relative() {
         if let Ok(current) = std::env::current_dir() {
