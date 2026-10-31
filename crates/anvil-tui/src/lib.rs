@@ -3717,6 +3717,27 @@ mod tests {
     }
 
     #[test]
+    fn definition_response_moves_cursor() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("main.rs");
+        fs::write(&path, "fn foo() {}\nfn main() { foo(); }\n").expect("write");
+        let mut model = Model::open(&path).expect("open");
+        let uri = lsp_worker::file_uri(&path);
+        model.apply_definition_response(&serde_json::json!([{
+            "targetUri": uri,
+            "targetSelectionRange": {
+                "start": {"line": 1, "character": 3},
+                "end": {"line": 1, "character": 7}
+            }
+        }]));
+        assert_eq!(
+            model.path.as_deref(),
+            Some(path.canonicalize().expect("canonical").as_path())
+        );
+        assert_eq!(model.cursor, model.offset_at_utf16(1, 3));
+    }
+
+    #[test]
     fn diagnostics_underline_matching_line() {
         let mut model = Model::new(
             EditorState::from_text("first\nsecond"),
