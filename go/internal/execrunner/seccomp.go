@@ -77,6 +77,17 @@ var allowedSyscalls = []uint32{
 	unix.SYS_INOTIFY_INIT1,
 	unix.SYS_INOTIFY_ADD_WATCH,
 	unix.SYS_INOTIFY_RM_WATCH,
+	unix.SYS_WAIT4,
+	unix.SYS_PIPE2,
+	unix.SYS_DUP2,
+	unix.SYS_FCNTL,
+	unix.SYS_GETUID,
+	unix.SYS_GETGID,
+	unix.SYS_GETEUID,
+	unix.SYS_GETEGID,
+	unix.SYS_GETPPID,
+	unix.SYS_GETPGID,
+	unix.SYS_SETPGID,
 }
 
 type jumpFix struct {
