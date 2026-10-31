@@ -194,6 +194,21 @@ impl Connection {
     pub fn set_read_timeout(&self, timeout: Option<Duration>) -> io::Result<()> {
         self.stream.set_read_timeout(timeout)
     }
+
+    /// Wait until a complete frame may be readable.
+    pub fn wait_readable(&self, timeout: Duration) -> io::Result<bool> {
+        use std::os::fd::AsFd;
+
+        use rustix::event::{PollFd, PollFlags, Timespec, poll};
+        let timeout = Timespec {
+            tv_sec: timeout.as_secs().min(i64::MAX as u64) as i64,
+            tv_nsec: timeout.subsec_nanos() as _,
+        };
+        let fd = self.stream.as_fd();
+        let mut descriptors = [PollFd::new(&fd, PollFlags::IN)];
+        poll(&mut descriptors, Some(&timeout))?;
+        Ok(descriptors[0].revents().contains(PollFlags::IN))
+    }
 }
 
 #[cfg(test)]

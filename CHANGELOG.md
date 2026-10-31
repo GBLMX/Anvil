@@ -6,6 +6,14 @@ All notable changes to Anvil are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.2.4] - 2026-10-31
+
+### Fixed
+
+- LSP command multiplexing now polls socket readability before blocking on a
+  complete Content-Length frame, avoiding partial-frame timeout desync during
+  large completion/hover responses or busy gateway traffic.
+
 ## [0.2.3] - 2026-10-31
 
 ### Added

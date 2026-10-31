@@ -170,13 +170,9 @@ impl GatewayClient {
         Ok(())
     }
 
-    /// Set the underlying socket read timeout.
-    pub fn set_read_timeout(
-        &mut self,
-        timeout: Option<std::time::Duration>,
-    ) -> Result<(), ClientError> {
-        self.connection.set_read_timeout(timeout)?;
-        Ok(())
+    /// Wait until a gateway frame may be readable.
+    pub fn wait_readable(&mut self, timeout: std::time::Duration) -> Result<bool, ClientError> {
+        Ok(self.connection.wait_readable(timeout)?)
     }
 
     /// Block for one server-initiated notification.

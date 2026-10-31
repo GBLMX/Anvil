@@ -1,7 +1,6 @@
 use crate::lsp::{Diagnostic, publish_diagnostics};
 use anvil_ipc::GatewayClient;
 use serde_json::Value;
-use std::io::ErrorKind;
 use std::path::PathBuf;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::time::Duration;
@@ -118,7 +117,6 @@ impl LspWorker {
                 "params": {"textDocument": {"uri": uri}}
             });
             let _ = send(&mut client, &did_save);
-            let _ = client.set_read_timeout(Some(Duration::from_millis(50)));
             let mut version = 1_u64;
             loop {
                 while let Ok(command) = commands.try_recv() {
@@ -152,19 +150,17 @@ impl LspWorker {
                         }
                     }
                 }
+                if !client
+                    .wait_readable(Duration::from_millis(50))
+                    .unwrap_or(false)
+                {
+                    continue;
+                }
                 let message = match client.recv_notification() {
                     Ok(Some(message)) => message,
                     Ok(None) => {
                         let _ = sender.send(LspEvent::Crashed("gateway closed".to_owned()));
                         return;
-                    }
-                    Err(error)
-                        if matches!(
-                            error.kind(),
-                            Some(ErrorKind::WouldBlock | ErrorKind::TimedOut)
-                        ) =>
-                    {
-                        continue;
                     }
                     Err(error) => {
                         let _ = sender.send(LspEvent::Error(error.to_string()));

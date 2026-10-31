@@ -3,7 +3,7 @@
 Anvil is a Linux-first terminal editor built around a small, capability-scoped
 plugin contract.
 
-Status: **0.2.3; Phase 0.7 in progress**. The ratatui editor now includes insert
+Status: **0.2.4; Phase 0.7 in progress**. The ratatui editor now includes insert
 mode (`i`/`a`/`A`/`o`/`O`), `:w`/`:wq`/`:w file`/`:q!`, an unsaved-change
 guard, undo/redo, `x`/`dd`/`yy`/`p`, `w`/`b`/`e` word motions with
 `dw`/`db`/`de`/`yw`/`yb`/`ye`, literal `:s`/`:%s` substitution, `/` search
