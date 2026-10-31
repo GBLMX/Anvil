@@ -6,6 +6,15 @@ All notable changes to Anvil are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-10-31
+
+### Added
+
+- File tree and fuzzy-file enumeration now run in a dedicated `FileWorker`
+  thread over a separate gateway connection; the UI renders a loading state
+  instead of blocking. File discovery uses `rg --files` through `sys.exec`
+  with a bounded `sys.read_dir` fallback.
+
 ## [0.2.0] - 2026-10-31
 
 ### Added

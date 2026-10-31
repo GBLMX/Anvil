@@ -33,11 +33,13 @@ use ratatui::{
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 mod clipboard;
+mod file_worker;
 mod gateway;
 mod host_session;
 pub mod lsp;
 mod lsp_worker;
 mod syntax;
+use file_worker::{FileEvent, FileRequest, FileWorker};
 use gateway::GatewaySession;
 #[cfg(target_os = "linux")]
 use host_session::{HostEvent, HostSession};
@@ -150,6 +152,8 @@ pub struct Model {
     buffers: Vec<Buffer>,
     /// Active buffer index.
     active: usize,
+    /// Background directory and file enumerator.
+    file_worker: Option<FileWorker>,
     /// Flattened workspace tree, when open.
     tree: Vec<TreeEntry>,
     tree_selected: Option<usize>,
@@ -209,6 +213,7 @@ impl Model {
             help_back: None,
             buffers: Vec::new(),
             active: 0,
+            file_worker: None,
             tree: Vec::new(),
             tree_selected: None,
             tree_visible: false,
@@ -1450,6 +1455,75 @@ impl Model {
         }
     }
 
+    fn ensure_file_worker(&mut self) -> bool {
+        if self.file_worker.is_some() {
+            return true;
+        }
+        let Some(session) = self.gateway_session.as_mut() else {
+            return false;
+        };
+        let Ok(client) = session.connect_lsp() else {
+            return false;
+        };
+        self.file_worker = Some(FileWorker::start(client, self.workspace.clone()));
+        true
+    }
+
+    fn poll_file_worker(&mut self) {
+        let events = self
+            .file_worker
+            .as_ref()
+            .map(|worker| worker.poll())
+            .unwrap_or_default();
+        for event in events {
+            match event {
+                FileEvent::Listed(path, Ok(entries)) => {
+                    if path == self.workspace {
+                        self.tree = entries
+                            .into_iter()
+                            .map(|entry| TreeEntry {
+                                path: path.join(entry.name),
+                                depth: 0,
+                                is_dir: entry.is_dir,
+                                expanded: false,
+                            })
+                            .collect();
+                        if self.tree_selected.is_none() && !self.tree.is_empty() {
+                            self.tree_selected = Some(0);
+                        }
+                    } else if let Some(index) =
+                        self.tree.iter().position(|entry| entry.path == path)
+                    {
+                        if self.tree[index].expanded {
+                            let depth = self.tree[index].depth + 1;
+                            let children: Vec<TreeEntry> = entries
+                                .into_iter()
+                                .map(|entry| TreeEntry {
+                                    path: path.join(entry.name),
+                                    depth,
+                                    is_dir: entry.is_dir,
+                                    expanded: false,
+                                })
+                                .collect();
+                            self.tree.splice(index + 1..index + 1, children);
+                        }
+                    }
+                    self.status = "file tree ready".to_owned();
+                }
+                FileEvent::Listed(_, Err(error)) => self.status = format!("E: tree: {error}"),
+                FileEvent::Files(Ok(files)) => {
+                    if let Some(fuzzy) = self.fuzzy.as_mut() {
+                        fuzzy.entries = files;
+                        self.fuzzy_refresh();
+                    }
+                    self.status = "files ready".to_owned();
+                }
+                FileEvent::Files(Err(error)) => self.status = format!("E: files: {error}"),
+            }
+            self.dirty = true;
+        }
+    }
+
     fn tree_entries(&mut self, path: &Path) -> Result<Vec<DirEntry>, String> {
         if let Some(gateway) = self.gateway.as_mut() {
             let relative = if path == self.workspace {
@@ -1494,19 +1568,26 @@ impl Model {
         }
         if self.tree.is_empty() {
             let workspace = self.workspace.clone();
-            match self.tree_entries(&workspace) {
-                Ok(entries) => {
-                    self.tree = entries
-                        .into_iter()
-                        .map(|entry| TreeEntry {
-                            path: workspace.join(entry.name),
-                            depth: 0,
-                            is_dir: entry.is_dir,
-                            expanded: false,
-                        })
-                        .collect();
+            if self.ensure_file_worker() {
+                if let Some(worker) = self.file_worker.as_ref() {
+                    let _ = worker.request(FileRequest::List(workspace));
                 }
-                Err(error) => self.status = format!("E: tree: {error}"),
+                self.status = "loading file tree".to_owned();
+            } else {
+                match self.tree_entries(&workspace) {
+                    Ok(entries) => {
+                        self.tree = entries
+                            .into_iter()
+                            .map(|entry| TreeEntry {
+                                path: workspace.join(entry.name),
+                                depth: 0,
+                                is_dir: entry.is_dir,
+                                expanded: false,
+                            })
+                            .collect();
+                    }
+                    Err(error) => self.status = format!("E: tree: {error}"),
+                }
             }
         }
         self.tree_visible = true;
@@ -1557,6 +1638,12 @@ impl Model {
             {
                 self.tree.remove(index + 1);
             }
+        } else if self.file_worker.is_some() || self.ensure_file_worker() {
+            self.tree[index].expanded = true;
+            if let Some(worker) = self.file_worker.as_ref() {
+                let _ = worker.request(FileRequest::List(entry.path));
+            }
+            self.status = "loading directory".to_owned();
         } else {
             match self.tree_entries(&entry.path) {
                 Ok(children) => {
@@ -1625,6 +1712,20 @@ impl Model {
 
     fn start_fuzzy(&mut self) {
         let workspace = self.workspace.clone();
+        if self.ensure_file_worker() {
+            if let Some(worker) = self.file_worker.as_ref() {
+                let _ = worker.request(FileRequest::Files);
+            }
+            self.fuzzy = Some(FuzzyState {
+                query: String::new(),
+                entries: Vec::new(),
+                filtered: Vec::new(),
+                selected: 0,
+            });
+            self.status = "loading files".to_owned();
+            self.dirty = true;
+            return;
+        }
         let mut entries = Vec::new();
         if let Err(error) = self.collect_files(&workspace, "", &mut entries) {
             self.status = format!("E: files: {error}");
@@ -2509,6 +2610,7 @@ pub fn run_with_workspace(path: Option<PathBuf>, workspace: PathBuf) -> io::Resu
         model.poll_host();
         model.poll_syntax();
         model.poll_lsp();
+        model.poll_file_worker();
         if event::poll(std::time::Duration::from_millis(50))? {
             handle_event(&mut model, event::read()?);
         }

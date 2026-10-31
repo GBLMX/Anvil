@@ -79,6 +79,16 @@ impl From<std::io::Error> for ClientError {
     }
 }
 
+/// Result of one `sys.exec` invocation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExecResult {
+    pub stdout: String,
+    pub stderr: String,
+    pub exit_code: i64,
+    pub timed_out: bool,
+    pub output_truncated: bool,
+}
+
 /// One entry returned by `sys.read_dir`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DirEntry {
@@ -268,6 +278,47 @@ impl GatewayClient {
             self.write_file(path, offset, chunk, index + 1 == chunk_count)?;
         }
         Ok(())
+    }
+
+    /// Run one allowlisted tool through the gateway's sandboxed exec runner.
+    pub fn exec(
+        &mut self,
+        tool: &str,
+        args: &[String],
+        timeout_ms: u64,
+    ) -> Result<ExecResult, ClientError> {
+        let result = self.request(
+            "sys.exec",
+            serde_json::json!({
+                "tool": tool,
+                "args": args,
+                "timeout_ms": timeout_ms,
+            }),
+        )?;
+        Ok(ExecResult {
+            stdout: result
+                .get("stdout")
+                .and_then(serde_json::Value::as_str)
+                .ok_or(ClientError::Protocol("exec stdout"))?
+                .to_owned(),
+            stderr: result
+                .get("stderr")
+                .and_then(serde_json::Value::as_str)
+                .ok_or(ClientError::Protocol("exec stderr"))?
+                .to_owned(),
+            exit_code: result
+                .get("exit_code")
+                .and_then(serde_json::Value::as_i64)
+                .ok_or(ClientError::Protocol("exec exit_code"))?,
+            timed_out: result
+                .get("timed_out")
+                .and_then(serde_json::Value::as_bool)
+                .ok_or(ClientError::Protocol("exec timed_out"))?,
+            output_truncated: result
+                .get("output_truncated")
+                .and_then(serde_json::Value::as_bool)
+                .ok_or(ClientError::Protocol("exec output_truncated"))?,
+        })
     }
 
     /// List one workspace directory through the gateway.

@@ -60,7 +60,7 @@ func validateRg(args []string) error {
 	allowedFlags := map[string]bool{
 		"-n": true, "--line-number": true, "--json": true,
 		"-i": true, "--ignore-case": true, "-F": true, "--fixed-strings": true,
-		"-S": true, "--smart-case": true,
+		"-S": true, "--smart-case": true, "--files": true, "--hidden": true,
 	}
 	for index := 0; index < len(args); index++ {
 		arg := args[index]
