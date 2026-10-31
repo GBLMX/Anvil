@@ -17,6 +17,34 @@ fn type_text(model: &mut Model, text: &str) {
 }
 
 #[test]
+fn renders_start_dashboard_for_an_empty_launch() {
+    let mut model = Model::new(EditorState::from_text(""), None);
+    assert!(model.welcome);
+    let backend = TestBackend::new(80, 24);
+    let mut terminal = Terminal::new(backend).expect("terminal");
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+    let rendered = terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect::<String>();
+    assert!(rendered.contains("ANVIL"));
+    assert!(rendered.contains("Space f"));
+
+    handle_event(&mut model, key(KeyCode::Char('i')));
+    assert!(!model.welcome);
+    assert!(matches!(model.input_mode, InputMode::Insert));
+}
+
+#[test]
+fn start_dashboard_does_not_replace_provided_text() {
+    let model = Model::new(EditorState::from_text("alpha"), None);
+    assert!(!model.welcome);
+}
+
+#[test]
 fn renders_visible_lines() {
     let model = Model::new(EditorState::from_text("alpha\nbeta\ngamma"), None);
     let backend = TestBackend::new(40, 8);

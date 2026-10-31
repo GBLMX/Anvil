@@ -39,6 +39,7 @@ impl Model {
         self.hscroll = buffer.hscroll;
         self.modified = buffer.modified;
         self.search_query = buffer.search_query;
+        self.welcome = false;
         self.syntax.borrow_mut().invalidate();
         self.active = index;
         self.input_mode = InputMode::Normal;

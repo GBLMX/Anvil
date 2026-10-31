@@ -14,6 +14,8 @@ All notable changes to Anvil are recorded here. The format follows
 
 ### Added
 
+- Start dashboard for empty launches: workspace/version context and shortcuts
+  for insert, fuzzy file finding, the file tree, help, and quit.
 - CLI `-h`/`--help`, `-V`/`--version`, and `--workspace=<DIR>` parsing, with
   parser tests and documented usage.
 - Opt-in PGO and BOLT workflow: `scripts/pgo-bolt.sh` builds instrumented and

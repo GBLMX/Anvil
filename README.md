@@ -61,7 +61,8 @@ anvil [OPTIONS] [FILE]
 ```
 
 `FILE` must be inside the selected workspace. Use `--` before a file name that
-starts with a dash.
+starts with a dash. Launching without `FILE` shows the start dashboard; the first
+key dismisses it.
 
 ## Documents
 

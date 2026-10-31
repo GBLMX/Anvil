@@ -264,6 +264,8 @@ pub struct Model {
     object_pending: bool,
     /// Last substring search.
     search_query: String,
+    /// Full-editor start dashboard, shown until the first interaction or file open.
+    welcome: bool,
     /// Buffer replaced by the read-only help page.
     help_back: Option<Buffer>,
     /// All open buffers, including the active one after the first switch.
@@ -334,9 +336,11 @@ pub struct Model {
 impl Model {
     /// Builds a model from text and an optional source path.
     pub fn new(editor: EditorState, path: Option<PathBuf>) -> Self {
+        let welcome = path.is_none() && editor.text().len_bytes() == 0;
         Self {
             editor,
             path,
+            welcome,
             cursor: 0,
             scroll: 0,
             hscroll: 0,
@@ -473,6 +477,7 @@ impl Model {
         self.scroll = 0;
         self.hscroll = 0;
         self.modified = false;
+        self.welcome = false;
         self.input_mode = InputMode::Normal;
         self.pending = None;
         self.status = "Help: :q returns".to_owned();

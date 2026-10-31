@@ -54,6 +54,7 @@ impl Model {
         if timing {
             eprintln!("open_path read={read_done:?} index={:?}", start.elapsed());
         }
+        self.welcome = false;
         self.sync_lsp_active();
         self.dirty = true;
         Ok(())

@@ -5,7 +5,7 @@ use crate::syntax::{Highlight, SyntaxClass};
 use anvil_api::EditorView;
 use ratatui::{
     Frame,
-    layout::Rect,
+    layout::{Alignment, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Clear, Paragraph},
@@ -279,6 +279,10 @@ pub fn view(model: &Model, frame: &mut Frame) {
         height: area.height.saturating_sub(2),
     };
     let mut content = inner;
+    if model.welcome {
+        render_welcome(frame, inner, model);
+        return;
+    }
     if model.tree_visible && inner.width > 50 {
         let sidebar_width = (inner.width / 5).clamp(18, 40).min(inner.width - 20);
         let tree_area = Rect {
@@ -737,6 +741,58 @@ pub fn view(model: &Model, frame: &mut Frame) {
             popup,
         );
     }
+}
+
+fn render_welcome(frame: &mut Frame, area: Rect, model: &Model) {
+    let width = area.width.saturating_sub(4).clamp(12, 64).min(area.width);
+    let height = area.height.saturating_sub(2).clamp(4, 18).min(area.height);
+    let panel = Rect {
+        x: area.x + area.width.saturating_sub(width) / 2,
+        y: area.y + area.height.saturating_sub(height) / 2,
+        width,
+        height,
+    };
+    frame.render_widget(Clear, panel);
+    let mut lines = vec![
+        Line::from(vec![Span::styled(
+            "ANVIL",
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        )]),
+        Line::raw("selection-first terminal editor"),
+        Line::raw(""),
+        Line::from(vec![
+            Span::styled("i", Style::default().fg(Color::Cyan)),
+            Span::raw("      insert"),
+        ]),
+        Line::from(vec![
+            Span::styled("Space f", Style::default().fg(Color::Cyan)),
+            Span::raw(" find file"),
+        ]),
+        Line::from(vec![
+            Span::styled("Space e", Style::default().fg(Color::Cyan)),
+            Span::raw(" file tree"),
+        ]),
+        Line::from(vec![
+            Span::styled(":help", Style::default().fg(Color::Cyan)),
+            Span::raw("   documentation"),
+        ]),
+        Line::from(vec![
+            Span::styled(":q", Style::default().fg(Color::Cyan)),
+            Span::raw("      quit"),
+        ]),
+        Line::raw(""),
+        Line::raw(format!("workspace  {}", model.workspace.display())),
+        Line::raw(format!("version    {}", env!("CARGO_PKG_VERSION"))),
+    ];
+    lines.truncate(usize::from(height.saturating_sub(2)));
+    frame.render_widget(
+        Paragraph::new(lines)
+            .alignment(Alignment::Center)
+            .block(Block::bordered().title(" start ")),
+        panel,
+    );
 }
 
 fn render_split_pane(frame: &mut Frame, area: Rect, buffer: &Buffer, is_active: bool) {
