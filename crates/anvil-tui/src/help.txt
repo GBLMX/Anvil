@@ -36,7 +36,7 @@ Normal mode
   :q!                 force quit, or close help
   :tree               toggle the workspace file tree
   :reconnect          restart the gateway and re-handshake
-  :lsp-start          start rust-analyzer for the current file
+  :lsp-start          start rust-analyzer/gopls/pyright for the current file
   :lsp-stop           stop the language server
   :plugin-start       start the debug plugin host
   :plugin-oom         start host with a 300 MB allocation probe

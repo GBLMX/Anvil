@@ -11,6 +11,14 @@ pub enum LspEvent {
     Log(String),
 }
 
+/// One language-server launch profile.
+pub struct LspConfig {
+    pub tool: String,
+    pub args: Vec<String>,
+    pub language_id: String,
+    pub root_markers: Vec<String>,
+}
+
 pub struct LspWorker {
     events: Receiver<LspEvent>,
 }
@@ -18,21 +26,25 @@ pub struct LspWorker {
 impl LspWorker {
     pub fn start(
         mut client: GatewayClient,
-        tool: &str,
-        args: Vec<String>,
+        config: LspConfig,
         workspace: PathBuf,
         path: PathBuf,
         text: String,
     ) -> Result<Self, String> {
         let (sender, events) = mpsc::channel();
-        let tool = tool.to_owned();
+        let LspConfig {
+            tool,
+            args,
+            language_id,
+            root_markers,
+        } = config;
         std::thread::spawn(move || {
             if let Err(error) = client.lsp_start(&tool, &args) {
                 let _ = sender.send(LspEvent::Error(error.to_string()));
                 return;
             }
             let uri = file_uri(&path);
-            let root = project_root(&workspace, &path);
+            let root = project_root(&workspace, &path, &root_markers);
             let initialize = serde_json::json!({
                 "jsonrpc": "2.0",
                 "id": 1,
@@ -70,7 +82,7 @@ impl LspWorker {
                 "params": {
                     "textDocument": {
                         "uri": uri,
-                        "languageId": "rust",
+                        "languageId": language_id,
                         "version": 1,
                         "text": text
                     }
@@ -158,14 +170,18 @@ fn answer_server_request(
     Ok(true)
 }
 
-fn project_root(workspace: &std::path::Path, path: &std::path::Path) -> std::path::PathBuf {
+fn project_root(
+    workspace: &std::path::Path,
+    path: &std::path::Path,
+    markers: &[String],
+) -> std::path::PathBuf {
     let mut root = workspace.to_path_buf();
     if let Some(parent) = path.parent() {
         for ancestor in parent.ancestors() {
             if !ancestor.starts_with(workspace) {
                 break;
             }
-            if ancestor.join("Cargo.toml").is_file() {
+            if markers.iter().any(|marker| ancestor.join(marker).is_file()) {
                 root = ancestor.to_path_buf();
             }
             if ancestor == workspace {
@@ -267,7 +283,7 @@ mod tests {
         std::fs::write(dir.join("crate/Cargo.toml"), "").expect("crate manifest");
         let path = dir.join("crate/src/main.rs");
         std::fs::write(&path, "").expect("file");
-        assert_eq!(project_root(&dir, &path), dir);
+        assert_eq!(project_root(&dir, &path, &["Cargo.toml".to_owned()]), dir);
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -332,8 +348,12 @@ mod tests {
         let client = anvil_ipc::GatewayClient::connect(&socket, &[1; 32]).expect("client");
         let worker = LspWorker::start(
             client,
-            "rust-analyzer",
-            Vec::new(),
+            LspConfig {
+                tool: "rust-analyzer".to_owned(),
+                args: Vec::new(),
+                language_id: "rust".to_owned(),
+                root_markers: vec!["Cargo.toml".to_owned()],
+            },
             PathBuf::from("/tmp"),
             PathBuf::from("/tmp/a.rs"),
             "fn main() {}".to_owned(),

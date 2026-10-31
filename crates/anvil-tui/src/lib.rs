@@ -43,6 +43,7 @@ use file_worker::{FileEvent, FileRequest, FileWorker};
 use gateway::GatewaySession;
 #[cfg(target_os = "linux")]
 use host_session::{HostEvent, HostSession};
+use lsp_worker::LspConfig;
 use lsp_worker::{LspEvent, LspWorker};
 use syntax::{Highlight, SyntaxClass, SyntaxState};
 
@@ -1801,18 +1802,26 @@ impl Model {
             self.dirty = true;
             return;
         };
+        let Some(settings) = lsp_settings(&path) else {
+            self.status = format!("E: no language server for {}", path.display());
+            self.dirty = true;
+            return;
+        };
         let text = self.editor.text().slice(0..self.editor.text().len_bytes());
-        match LspWorker::start(
-            client,
-            &lsp_tool(),
-            Vec::new(),
-            self.workspace.clone(),
-            path,
-            text,
-        ) {
+        let config = LspConfig {
+            tool: settings.tool,
+            args: settings.args,
+            language_id: settings.language_id,
+            root_markers: settings
+                .root_markers
+                .iter()
+                .map(|marker| (*marker).to_owned())
+                .collect(),
+        };
+        match LspWorker::start(client, config, self.workspace.clone(), path, text) {
             Ok(worker) => {
                 self.lsp_worker = Some(worker);
-                self.status = "lsp starting".to_owned();
+                self.status = format!("{} starting", settings.label);
             }
             Err(error) => self.status = format!("E: lsp start: {error}"),
         }
@@ -2264,19 +2273,87 @@ fn syntax_style(class: SyntaxClass) -> Style {
     Style::default().fg(color)
 }
 
-fn lsp_tool() -> String {
-    if let Some(path) = std::env::var_os("ANVIL_LSP") {
-        return path.to_string_lossy().into_owned();
-    }
-    if let Some(path) = std::env::var_os("PATH") {
-        for directory in std::env::split_paths(&path) {
-            let candidate = directory.join("rust-analyzer");
-            if candidate.is_file() {
-                return candidate.to_string_lossy().into_owned();
+struct LspSettings {
+    tool: String,
+    args: Vec<String>,
+    language_id: String,
+    root_markers: Vec<&'static str>,
+    label: &'static str,
+}
+
+fn lsp_settings(path: &Path) -> Option<LspSettings> {
+    let extension = path
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    let (candidates, args, language_id, root_markers, label, env) = match extension.as_str() {
+        "rs" => (
+            vec!["rust-analyzer"],
+            Vec::new(),
+            "rust",
+            vec!["Cargo.toml"],
+            "rust-analyzer",
+            "ANVIL_LSP_RUST",
+        ),
+        "go" => (
+            vec!["gopls"],
+            Vec::new(),
+            "go",
+            vec!["go.work", "go.mod"],
+            "gopls",
+            "ANVIL_LSP_GO",
+        ),
+        "py" | "pyi" => (
+            vec!["pyright-langserver", "basedpyright-langserver", "pylsp"],
+            Vec::new(),
+            "python",
+            vec![
+                "pyproject.toml",
+                "setup.py",
+                "setup.cfg",
+                "requirements.txt",
+            ],
+            "python language server",
+            "ANVIL_LSP_PYTHON",
+        ),
+        _ => return None,
+    };
+    let (tool, args) = std::env::var_os(env)
+        .or_else(|| std::env::var_os("ANVIL_LSP"))
+        .and_then(|path| {
+            let path = path.to_string_lossy().into_owned();
+            (!path.is_empty()).then_some(path)
+        })
+        .or_else(|| find_tool(&candidates))
+        .map(|tool| {
+            let args = if tool.ends_with("pyright-langserver") {
+                vec!["--stdio".to_owned()]
+            } else {
+                args.clone()
+            };
+            (tool, args)
+        })?;
+    Some(LspSettings {
+        tool,
+        args,
+        language_id: language_id.to_owned(),
+        root_markers,
+        label,
+    })
+}
+
+fn find_tool(candidates: &[&str]) -> Option<String> {
+    let path = std::env::var_os("PATH")?;
+    for directory in std::env::split_paths(&path) {
+        for candidate in candidates {
+            let path = directory.join(candidate);
+            if path.is_file() {
+                return Some(path.to_string_lossy().into_owned());
             }
         }
     }
-    "rust-analyzer".to_owned()
+    candidates.first().map(|candidate| (*candidate).to_owned())
 }
 
 fn find_matches(text: &TextDocument, needle: &str) -> Vec<usize> {
@@ -2993,6 +3070,27 @@ mod tests {
         fuzzy.query = "main".to_owned();
         model.fuzzy_refresh();
         assert_eq!(model.fuzzy.as_ref().expect("fuzzy").filtered.len(), 1);
+    }
+
+    #[test]
+    fn lsp_settings_cover_rust_go_and_python() {
+        assert_eq!(
+            lsp_settings(Path::new("main.rs"))
+                .expect("rust")
+                .language_id,
+            "rust"
+        );
+        assert_eq!(
+            lsp_settings(Path::new("main.go")).expect("go").language_id,
+            "go"
+        );
+        assert_eq!(
+            lsp_settings(Path::new("main.py"))
+                .expect("python")
+                .language_id,
+            "python"
+        );
+        assert!(lsp_settings(Path::new("README.md")).is_none());
     }
 
     #[test]

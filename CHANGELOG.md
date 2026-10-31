@@ -8,6 +8,12 @@ All notable changes to Anvil are recorded here. The format follows
 
 ## [0.2.1] - 2026-10-31
 
+### Added
+
+- Language-server selection is standardized by file type: rust-analyzer for
+  Rust, gopls for Go, and pyright/basedpyright/pylsp for Python, each with its
+  own language id and project-root markers.
+
 ### Fixed
 
 - `:reconnect` drops the old file-tree worker and LSP worker before replacing
