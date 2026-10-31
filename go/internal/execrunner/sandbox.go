@@ -126,7 +126,7 @@ func applyTool(workspace, tool string, runtimePaths, execPaths []string, writeWo
 	for path := range seen {
 		access := uint64(readAccess)
 		if path == workspaceAbs && writeWorkspace {
-			access = readAccess | writeAccess
+			access = readAccess | writeAccess | execAccess
 		} else if path == workspaceAbs {
 			access = readAccess
 		}

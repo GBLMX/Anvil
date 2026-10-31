@@ -44,7 +44,8 @@ impl LspWorker {
                             "publishDiagnostics": {"relatedInformation": true},
                             "synchronization": {"didSave": true}
                         },
-                        "workspace": {"workspaceFolders": true}
+                        "workspace": {"workspaceFolders": true},
+                        "window": {"workDoneProgress": true}
                     }
                 }
             });

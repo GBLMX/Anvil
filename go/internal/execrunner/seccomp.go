@@ -73,6 +73,10 @@ var allowedSyscalls = []uint32{
 	unix.SYS_RSEQ,
 	unix.SYS_TGKILL,
 	unix.SYS_CLONE,
+	unix.SYS_INOTIFY_INIT,
+	unix.SYS_INOTIFY_INIT1,
+	unix.SYS_INOTIFY_ADD_WATCH,
+	unix.SYS_INOTIFY_RM_WATCH,
 }
 
 type jumpFix struct {

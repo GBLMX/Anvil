@@ -29,10 +29,11 @@ All notable changes to Anvil are recorded here. The format follows
 - TUI LSP worker on a second authenticated gateway connection; initialize
   response ordering, initialized, didOpen, publishDiagnostics parsing,
   diagnostics map, and red underlined diagnostic lines. The exec runner grants
-  rustup/cargo read/execute paths, cargo PATH, LSP stderr forwarding, and
-  workspace writes for rust-analyzer. `ANVIL_GATEWAY_LOG` captures gateway/LSP
-  stdout/stderr. End-to-end sandboxed diagnostics remain unverified; direct
-  rust-analyzer diagnostics work.
+  rustup/cargo read/execute paths, cargo PATH, LSP stderr forwarding, workspace
+  write/execute, inotify syscalls, and a workspace-local `TMPDIR`.
+  `ANVIL_GATEWAY_LOG` captures gateway/LSP stdout/stderr. Sandboxed
+  rust-analyzer now reaches cargo metadata, but publishDiagnostics is still not
+  observed.
 
 ## [0.1.1] - 2026-10-31
 

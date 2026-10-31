@@ -736,10 +736,13 @@ func (s *Server) exec(parent context.Context, req request, state *connectionStat
 	var extraEnv []string
 	if home != "" {
 		runtimePaths = append(runtimePaths, filepath.Join(home, ".rustup"), filepath.Join(home, ".cargo"))
+		tmp := filepath.Join(s.cfg.Workspace, ".anvil-tmp")
+		_ = os.MkdirAll(tmp, 0o700)
 		extraEnv = append(extraEnv,
 			"HOME="+home,
 			"RUSTUP_HOME="+filepath.Join(home, ".rustup"),
 			"CARGO_HOME="+filepath.Join(home, ".cargo"),
+			"TMPDIR="+tmp,
 			"PATH="+filepath.Join(home, ".cargo", "bin")+":/usr/bin:/bin",
 		)
 	}
@@ -805,10 +808,13 @@ func (s *Server) lspStart(ctx context.Context, req request, state *connectionSta
 	var extraEnv []string
 	if home != "" {
 		runtimePaths = append(runtimePaths, filepath.Join(home, ".rustup"), filepath.Join(home, ".cargo"))
+		tmp := filepath.Join(s.cfg.Workspace, ".anvil-tmp")
+		_ = os.MkdirAll(tmp, 0o700)
 		extraEnv = append(extraEnv,
 			"HOME="+home,
 			"RUSTUP_HOME="+filepath.Join(home, ".rustup"),
 			"CARGO_HOME="+filepath.Join(home, ".cargo"),
+			"TMPDIR="+tmp,
 			"PATH="+filepath.Join(home, ".cargo", "bin")+":/usr/bin:/bin",
 		)
 	}
