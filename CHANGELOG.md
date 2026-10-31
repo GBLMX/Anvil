@@ -38,6 +38,14 @@ All notable changes to Anvil are recorded here. The format follows
   execute; sandboxed cargo still fails on rustc execution in manual tests. Sandboxed rust-analyzer reaches cargo metadata, but publishDiagnostics
   is still not observed.
 
+### Known limitations
+
+- LSP is experimental and currently blocked by sandboxed toolchain execution:
+  rust-analyzer reaches cargo metadata but not publishDiagnostics under
+  `anvil-exec-runner`.
+- Macros, named registers, text objects, splits, and advanced Ex commands are
+  not implemented yet.
+
 ## [0.1.1] - 2026-10-31
 
 ### Added
