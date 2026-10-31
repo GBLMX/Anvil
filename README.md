@@ -54,7 +54,7 @@ beside the binary or via `ANVIL_GATEWAY`.
 ```text
 anvil [OPTIONS] [FILE]
 
-  -w, --workspace <DIR>  Workspace directory (default: current directory)
+  -w, --workspace <DIR>  Workspace directory; --workspace=DIR is also accepted
   -h, --help             Show help and exit
   -V, --version          Show the version and exit
   --                     Treat the next argument as FILE

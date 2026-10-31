@@ -7,7 +7,7 @@ Usage:
   anvil [OPTIONS] [FILE]
 
 Options:
-  -w, --workspace <DIR>  Workspace directory (default: current directory)
+  -w, --workspace <DIR>  Workspace directory; --workspace=DIR is also accepted
   -h, --help             Show this help and exit
   -V, --version          Show the version and exit
   --                     Treat the next argument as FILE
