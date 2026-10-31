@@ -435,7 +435,8 @@ func restrictSelf(ruleset int) error {
 func RuntimePaths() []string {
 	candidates := []string{
 		"/usr/lib", "/usr/lib64", "/lib", "/lib64", "/etc/ld.so.cache",
-		"/proc/self/maps", "/proc/self/fd",
+		"/proc/self", "/proc/self/maps", "/proc/self/fd", "/proc/self/exe",
+		"/proc/self/status", "/proc/self/cwd",
 	}
 	var paths []string
 	for _, path := range candidates {

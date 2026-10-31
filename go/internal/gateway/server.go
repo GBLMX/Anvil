@@ -733,9 +733,19 @@ func (s *Server) exec(parent context.Context, req request, state *connectionStat
 	defer cancel()
 	home, _ := os.UserHomeDir()
 	var runtimePaths []string
+	var execPaths []string
 	var extraEnv []string
 	if home != "" {
 		runtimePaths = append(runtimePaths, filepath.Join(home, ".rustup"), filepath.Join(home, ".cargo"))
+		for _, pattern := range []string{
+			filepath.Join(home, ".rustup", "toolchains", "*", "bin", "rustc"),
+			filepath.Join(home, ".rustup", "toolchains", "*", "bin", "cargo"),
+			filepath.Join(home, ".rustup", "toolchains", "*", "bin", "rustdoc"),
+			filepath.Join(home, ".rustup", "toolchains", "*", "libexec", "rust-analyzer-proc-macro-srv"),
+		} {
+			matches, _ := filepath.Glob(pattern)
+			execPaths = append(execPaths, matches...)
+		}
 		tmp := filepath.Join(s.cfg.Workspace, ".anvil-tmp")
 		_ = os.MkdirAll(tmp, 0o700)
 		extraEnv = append(extraEnv,
@@ -744,13 +754,14 @@ func (s *Server) exec(parent context.Context, req request, state *connectionStat
 			"CARGO_HOME="+filepath.Join(home, ".cargo"),
 			"TMPDIR="+tmp,
 			"PATH="+filepath.Join(home, ".cargo", "bin")+":/usr/bin:/bin",
+			"RUSTC_WRAPPER=",
 		)
 	}
 	args := []string{
 		"-workspace", s.cfg.Workspace,
 		"-tool", params.Tool,
 		"-runtime-paths", strings.Join(runtimePaths, ","),
-		"-exec-paths", strings.Join(runtimePaths, ","),
+		"-exec-paths", strings.Join(execPaths, ","),
 		"-workspace-write",
 		"-env", strings.Join(extraEnv, ","),
 		"--",
@@ -805,9 +816,19 @@ func (s *Server) lspStart(ctx context.Context, req request, state *connectionSta
 	}
 	home, _ := os.UserHomeDir()
 	var runtimePaths []string
+	var execPaths []string
 	var extraEnv []string
 	if home != "" {
 		runtimePaths = append(runtimePaths, filepath.Join(home, ".rustup"), filepath.Join(home, ".cargo"))
+		for _, pattern := range []string{
+			filepath.Join(home, ".rustup", "toolchains", "*", "bin", "rustc"),
+			filepath.Join(home, ".rustup", "toolchains", "*", "bin", "cargo"),
+			filepath.Join(home, ".rustup", "toolchains", "*", "bin", "rustdoc"),
+			filepath.Join(home, ".rustup", "toolchains", "*", "libexec", "rust-analyzer-proc-macro-srv"),
+		} {
+			matches, _ := filepath.Glob(pattern)
+			execPaths = append(execPaths, matches...)
+		}
 		tmp := filepath.Join(s.cfg.Workspace, ".anvil-tmp")
 		_ = os.MkdirAll(tmp, 0o700)
 		extraEnv = append(extraEnv,
@@ -816,13 +837,14 @@ func (s *Server) lspStart(ctx context.Context, req request, state *connectionSta
 			"CARGO_HOME="+filepath.Join(home, ".cargo"),
 			"TMPDIR="+tmp,
 			"PATH="+filepath.Join(home, ".cargo", "bin")+":/usr/bin:/bin",
+			"RUSTC_WRAPPER=",
 		)
 	}
 	args := []string{
 		"-workspace", s.cfg.Workspace,
 		"-tool", params.Tool,
 		"-runtime-paths", strings.Join(runtimePaths, ","),
-		"-exec-paths", strings.Join(runtimePaths, ","),
+		"-exec-paths", strings.Join(execPaths, ","),
 		"-workspace-write",
 		"-env", strings.Join(extraEnv, ","),
 		"--",
