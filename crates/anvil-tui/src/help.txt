@@ -11,6 +11,7 @@ Normal mode
   ciw / ci" / ci'     change inner word / quoted text
   "a{yy,p}            named yank/put register; "_" is blackhole
   Home / End          line start / end
+  q{reg} / @{reg}     record macro / replay macro; @@ repeats
   i a A o O           insert before / after / line end / below / above
   x                   delete character
   dd                  delete line

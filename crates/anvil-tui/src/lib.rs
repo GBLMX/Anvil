@@ -31,6 +31,7 @@ use ratatui::{
     widgets::{Block, Paragraph},
 };
 
+mod clipboard;
 mod gateway;
 mod host_session;
 pub mod lsp;
@@ -110,6 +111,18 @@ pub struct Model {
     register: Option<char>,
     /// Named yank registers.
     registers: HashMap<char, String>,
+    /// Register name waiting after `q` or `@`.
+    macro_wait: Option<char>,
+    /// Currently recording into a register.
+    recording: Option<char>,
+    /// Recorded key sequence.
+    recording_keys: Vec<KeyEvent>,
+    /// Recorded macros.
+    macros: HashMap<char, Vec<KeyEvent>>,
+    /// Last replayed macro.
+    last_macro: Option<char>,
+    /// Replay guard.
+    replaying: bool,
     /// `c` / `y` operator waiting for an inner text object (`i`).
     object_pending: bool,
     /// Last substring search.
@@ -160,6 +173,12 @@ impl Model {
             register_wait: false,
             register: None,
             registers: HashMap::new(),
+            macro_wait: None,
+            recording: None,
+            recording_keys: Vec::new(),
+            macros: HashMap::new(),
+            last_macro: None,
+            replaying: false,
             object_pending: false,
             search_query: String::new(),
             help_back: None,
@@ -466,8 +485,12 @@ impl Model {
         let Some(range) = self.word_range(motion) else {
             return;
         };
+        let deleted = self.editor.text().slice(range.clone());
         self.editor.set_selection_bytes(range.start, range.end);
         self.editor.delete(range.clone());
+        if let Some(register) = self.register.take() {
+            self.record_register_text(register, &deleted);
+        }
         self.cursor = range.start;
         self.modified = true;
         self.input_mode = InputMode::Insert;
@@ -483,8 +506,12 @@ impl Model {
             self.dirty = true;
             return;
         };
+        let deleted = self.editor.text().slice(range.clone());
         self.editor.set_selection_bytes(range.start, range.end);
         self.editor.delete(range.clone());
+        if let Some(register) = self.register.take() {
+            self.record_register_text(register, &deleted);
+        }
         self.cursor = range.start;
         self.modified = true;
         self.input_mode = InputMode::Insert;
@@ -500,8 +527,12 @@ impl Model {
             self.dirty = true;
             return;
         };
+        let deleted = self.editor.text().slice(range.clone());
         self.editor.set_selection_bytes(range.start, range.end);
         self.editor.delete(range.clone());
+        if let Some(register) = self.register.take() {
+            self.record_register_text(register, &deleted);
+        }
         self.cursor = range.start;
         self.modified = true;
         self.input_mode = InputMode::Insert;
@@ -574,29 +605,27 @@ impl Model {
     }
 
     fn delete_words(&mut self, motion: WordMotion, count: usize) {
+        let mut deleted = String::new();
         for _ in 0..count {
-            self.delete_word(motion);
+            let Some(range) = self.word_range(motion) else {
+                break;
+            };
+            deleted.push_str(&self.editor.text().slice(range.clone()));
+            self.editor.set_selection_bytes(range.start, range.end);
+            self.editor.delete(range.clone());
+            self.cursor = range.start;
+            self.modified = true;
         }
+        if let Some(register) = self.register.take() {
+            self.record_register_text(register, &deleted);
+        }
+        self.dirty = true;
     }
 
     fn yank_words(&mut self, motion: WordMotion, count: usize) {
         for _ in 0..count {
             self.yank_word(motion);
         }
-    }
-
-    fn delete_word(&mut self, motion: WordMotion) {
-        if self.reject_read_only() {
-            return;
-        }
-        let Some(range) = self.word_range(motion) else {
-            return;
-        };
-        self.editor.set_selection_bytes(range.start, range.end);
-        self.editor.delete(range.clone());
-        self.cursor = range.start;
-        self.modified = true;
-        self.dirty = true;
     }
 
     fn yank_word(&mut self, motion: WordMotion) {
@@ -827,24 +856,36 @@ impl Model {
     }
 
     fn delete_lines(&mut self, count: usize) {
-        for _ in 0..count {
-            self.delete_line();
-        }
-    }
-
-    fn delete_line(&mut self) {
         if self.reject_read_only() {
             return;
         }
-        let Some(range) = self.editor.line_range_at(self.cursor) else {
-            self.status = "E: no line".to_owned();
-            self.dirty = true;
+        let Some(position) = self
+            .editor
+            .index()
+            .position(self.editor.text(), self.cursor)
+        else {
             return;
         };
-        self.editor.set_selection_bytes(range.start, range.end);
-        self.cursor = range.start;
-        self.editor.delete(range);
-        self.sync_cursor_from_selection();
+        let Some(start) = self.editor.index().line_to_offset(position.line) else {
+            return;
+        };
+        let Some(last_start) = self
+            .editor
+            .index()
+            .line_to_offset(position.line.saturating_add(count.saturating_sub(1)))
+        else {
+            return;
+        };
+        let Some(last) = self.editor.line_range_at(last_start) else {
+            return;
+        };
+        let deleted = self.editor.text().slice(start..last.end);
+        self.editor.set_selection_bytes(start, last.end);
+        self.editor.delete(start..last.end);
+        self.cursor = start;
+        if let Some(register) = self.register.take() {
+            self.record_register_text(register, &deleted);
+        }
         self.modified = true;
         self.dirty = true;
     }
@@ -878,11 +919,25 @@ impl Model {
     }
 
     fn record_register(&mut self) {
-        if let Some(register) = self.register.take()
-            && register != '_'
-        {
-            self.registers
-                .insert(register, self.editor.yank_text().to_owned());
+        let Some(register) = self.register.take() else {
+            return;
+        };
+        let text = self.editor.yank_text().to_owned();
+        self.record_register_text(register, &text);
+    }
+
+    fn record_register_text(&mut self, register: char, text: &str) {
+        match register {
+            '_' => {}
+            '+' => {
+                if let Err(error) = clipboard::copy(text) {
+                    self.status = format!("E: {error}");
+                    self.dirty = true;
+                }
+            }
+            _ => {
+                self.registers.insert(register, text.to_owned());
+            }
         }
     }
 
@@ -895,10 +950,22 @@ impl Model {
             if register == '_' {
                 return;
             }
-            let Some(text) = self.registers.get(&register).cloned() else {
-                self.status = "E: register empty".to_owned();
-                self.dirty = true;
-                return;
+            let text = if register == '+' {
+                match clipboard::paste() {
+                    Ok(text) => text,
+                    Err(error) => {
+                        self.status = format!("E: {error}");
+                        self.dirty = true;
+                        return;
+                    }
+                }
+            } else {
+                let Some(text) = self.registers.get(&register).cloned() else {
+                    self.status = "E: register empty".to_owned();
+                    self.dirty = true;
+                    return;
+                };
+                text
             };
             self.editor.set_selection_bytes(self.cursor, self.cursor);
             self.editor.insert(self.cursor, &text);
@@ -1890,6 +1957,49 @@ fn handle_key(model: &mut Model, key: KeyEvent) {
         .modifiers
         .contains(crossterm::event::KeyModifiers::CONTROL);
 
+    if let Some(waiting) = model.macro_wait.take() {
+        match waiting {
+            'q' => {
+                model.recording = Some(match key.code {
+                    KeyCode::Char(register) => register,
+                    _ => 'q',
+                });
+                model.recording_keys.clear();
+            }
+            '@' => {
+                let register = match key.code {
+                    KeyCode::Char('@') => model.last_macro,
+                    KeyCode::Char(register) => Some(register),
+                    _ => None,
+                };
+                if let Some(register) = register
+                    && let Some(keys) = model.macros.get(&register).cloned()
+                {
+                    model.last_macro = Some(register);
+                    model.replaying = true;
+                    for key in keys {
+                        handle_key(model, key);
+                    }
+                    model.replaying = false;
+                }
+            }
+            _ => {}
+        }
+        return;
+    }
+
+    if let Some(register) = model.recording {
+        if key.code == KeyCode::Char('q') {
+            model.recording = None;
+            model
+                .macros
+                .insert(register, std::mem::take(&mut model.recording_keys));
+            model.dirty = true;
+            return;
+        }
+        model.recording_keys.push(key);
+    }
+
     if model.register_wait {
         if let KeyCode::Char(character) = key.code {
             model.register = Some(character);
@@ -2000,7 +2110,14 @@ fn handle_key(model: &mut Model, key: KeyEvent) {
             _ => {}
         },
         InputMode::Normal => match key.code {
-            KeyCode::Char('q') => model.request_quit(),
+            KeyCode::Char('q') if !control => {
+                model.macro_wait = Some('q');
+                model.dirty = true;
+            }
+            KeyCode::Char('@') if !control => {
+                model.macro_wait = Some('@');
+                model.dirty = true;
+            }
             KeyCode::Char('i') => model.insert_here(),
             KeyCode::Char(':') => {
                 model.input_mode = InputMode::CommandLine {
@@ -2319,7 +2436,9 @@ mod tests {
         handle_event(&mut model, key(KeyCode::Char('b')));
         handle_event(&mut model, key(KeyCode::Esc));
 
-        handle_event(&mut model, key(KeyCode::Char('q')));
+        for code in [KeyCode::Char(':'), KeyCode::Char('q'), KeyCode::Enter] {
+            handle_event(&mut model, key(code));
+        }
         assert!(!model.quit);
         assert!(model.status.contains("No write since last change"));
 
@@ -2348,6 +2467,27 @@ mod tests {
     }
 
     #[test]
+    fn delete_into_named_register() {
+        let mut model = Model::new(EditorState::from_text("alpha beta"), None);
+        for key_code in [
+            KeyCode::Char('"'),
+            KeyCode::Char('a'),
+            KeyCode::Char('d'),
+            KeyCode::Char('w'),
+        ] {
+            handle_event(&mut model, key(key_code));
+        }
+        assert_eq!(
+            model.registers.get(&'a').map(String::as_str),
+            Some("alpha ")
+        );
+        for key_code in [KeyCode::Char('"'), KeyCode::Char('a'), KeyCode::Char('p')] {
+            handle_event(&mut model, key(key_code));
+        }
+        assert_eq!(model.editor.text().slice(0..10), "alpha beta");
+    }
+
+    #[test]
     fn named_register_yank_and_put() {
         let mut model = Model::new(EditorState::from_text("alpha\nbeta"), None);
         for key_code in [
@@ -2367,6 +2507,26 @@ mod tests {
             handle_event(&mut model, key(key_code));
         }
         assert_eq!(model.editor.text().slice(0..12), "alpha\nalpha\n");
+    }
+
+    #[test]
+    fn macro_records_and_replays() {
+        let mut model = Model::new(EditorState::from_text(""), None);
+        for code in [
+            KeyCode::Char('q'),
+            KeyCode::Char('a'),
+            KeyCode::Char('i'),
+            KeyCode::Char('X'),
+            KeyCode::Esc,
+            KeyCode::Char('q'),
+        ] {
+            handle_event(&mut model, key(code));
+        }
+        assert_eq!(model.macros.get(&'a').map(Vec::len), Some(3));
+        for code in [KeyCode::Char('@'), KeyCode::Char('a')] {
+            handle_event(&mut model, key(code));
+        }
+        assert_eq!(model.editor.text().slice(0..2), "XX");
     }
 
     #[test]
@@ -2706,7 +2866,9 @@ mod tests {
         handle_event(&mut model, key(KeyCode::Enter));
         assert_eq!(model.path.as_ref(), Some(&second));
 
-        handle_event(&mut model, key(KeyCode::Char('q')));
+        for code in [KeyCode::Char(':'), KeyCode::Char('q'), KeyCode::Enter] {
+            handle_event(&mut model, key(code));
+        }
         assert!(!model.quit);
         assert!(model.status.contains("No write since last change"));
 
