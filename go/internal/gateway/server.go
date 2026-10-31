@@ -66,13 +66,12 @@ type Config struct {
 
 // Server accepts framed JSON-RPC connections on a Unix socket.
 type Server struct {
-	cfg          Config
-	listener     net.Listener
-	root         *fsroot.Root
-	tokenMu      sync.Mutex
-	tokenUsed    bool
-	lspTokenUsed bool
-	cgroup       string
+	cfg       Config
+	listener  net.Listener
+	root      *fsroot.Root
+	tokenMu   sync.Mutex
+	tokenUsed bool
+	cgroup    string
 }
 
 // Listen binds the gateway socket with mode 0600.
@@ -246,6 +245,14 @@ type statResult struct {
 	Size int64 `json:"size"`
 }
 
+type readDirParams struct {
+	Path string `json:"path"`
+}
+
+type readDirResult struct {
+	Entries []fsroot.DirEntry `json:"entries"`
+}
+
 type writeParams struct {
 	Path    string `json:"path"`
 	Offset  int64  `json:"offset"`
@@ -395,6 +402,8 @@ func (s *Server) dispatch(ctx context.Context, req request, state *connectionSta
 		return s.readFile(req, state)
 	case "sys.stat":
 		return s.statFile(req, state)
+	case "sys.read_dir":
+		return s.readDir(req, state)
 	case "sys.write_file":
 		return s.writeFile(req, state)
 	case "session.hello":
@@ -441,11 +450,8 @@ func (s *Server) hello(req request, state *connectionState) (interface{}, *rpcEr
 		}
 		s.tokenUsed = true
 	} else if s.cfg.LSPTokenSHA256 != [32]byte{} && subtle.ConstantTimeCompare(hash[:], s.cfg.LSPTokenSHA256[:]) == 1 {
-		if s.lspTokenUsed {
-			s.tokenMu.Unlock()
-			return nil, &rpcError{Code: -32001, Message: "unauthorized"}
-		}
-		s.lspTokenUsed = true
+		// The LSP token is session-bound and may be reused after a worker crash
+		// so the editor can reconnect and restart rust-analyzer.
 	} else {
 		s.tokenMu.Unlock()
 		return nil, &rpcError{Code: -32001, Message: "unauthorized"}
@@ -508,6 +514,39 @@ func (s *Server) statFile(req request, state *connectionState) (interface{}, *rp
 		return nil, &rpcError{Code: code, Message: "stat unavailable"}
 	}
 	return statResult{Size: size}, nil
+}
+
+func (s *Server) readDir(req request, state *connectionState) (interface{}, *rpcError) {
+	var params readDirParams
+	if err := decodeParams(req.Params, &params); err != nil {
+		return nil, &rpcError{Code: -32602, Message: "invalid params"}
+	}
+	path := params.Path
+	if path == "" {
+		path = "."
+	}
+	if path != "." {
+		cleaned, err := workspacePath(path)
+		if err != nil {
+			return nil, &rpcError{Code: -32002, Message: "policy denied"}
+		}
+		path = cleaned
+	}
+	if rpcErr := s.pathPermissionError(state, "fs.read", path); rpcErr != nil {
+		return nil, rpcErr
+	}
+	if s.root == nil {
+		return nil, &rpcError{Code: -32008, Message: "file service unavailable"}
+	}
+	entries, err := s.root.ReadDir(path)
+	if err != nil {
+		code := -32002
+		if errors.Is(err, os.ErrNotExist) {
+			code = -32007
+		}
+		return nil, &rpcError{Code: code, Message: "read_dir unavailable: " + err.Error()}
+	}
+	return readDirResult{Entries: entries}, nil
 }
 
 func (s *Server) readFile(req request, state *connectionState) (interface{}, *rpcError) {
@@ -841,6 +880,7 @@ func (s *Server) lspStart(ctx context.Context, req request, state *connectionSta
 		}
 		go s.forwardLSP(ctx, state, manager)
 		go s.forwardLSPStderr(ctx, state, manager)
+		go s.watchLSP(ctx, state, manager)
 		return map[string]bool{"started": true}, nil
 	}
 	if err := execpolicy.Validate(params.Tool, params.Args); err != nil {
@@ -904,6 +944,7 @@ func (s *Server) lspStart(ctx context.Context, req request, state *connectionSta
 	}
 	go s.forwardLSP(ctx, state, manager)
 	go s.forwardLSPStderr(ctx, state, manager)
+	go s.watchLSP(ctx, state, manager)
 	return map[string]bool{"started": true}, nil
 }
 
@@ -936,6 +977,13 @@ func (s *Server) forwardLSP(ctx context.Context, state *connectionState, manager
 		}
 		log.Printf("LSP Out: %s", string(body))
 		s.notifyLSP(state, "lsp.message", map[string]json.RawMessage{"data": body})
+	}
+}
+
+func (s *Server) watchLSP(ctx context.Context, state *connectionState, manager *lsp.Manager) {
+	_ = manager.Wait()
+	if ctx.Err() == nil {
+		s.notifyLSP(state, "lsp.crashed", map[string]string{"message": "language server exited"})
 	}
 }
 

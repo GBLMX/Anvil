@@ -21,11 +21,14 @@ type Config struct {
 
 // Manager owns a persistent, bidirectional LSP child.
 type Manager struct {
-	cmd    *exec.Cmd
-	stdin  io.WriteCloser
-	stdout *bufio.Reader
-	stderr *bufio.Reader
-	once   sync.Once
+	cmd      *exec.Cmd
+	stdin    io.WriteCloser
+	stdout   *bufio.Reader
+	stderr   *bufio.Reader
+	once     sync.Once
+	waitOnce sync.Once
+	done     chan struct{}
+	waitErr  error
 }
 
 // Start launches the configured process with stdin/stdout pipes.
@@ -55,12 +58,22 @@ func Start(ctx context.Context, cfg Config) (*Manager, error) {
 		_ = stdin.Close()
 		return nil, err
 	}
-	return &Manager{
+	manager := &Manager{
 		cmd:    cmd,
 		stdin:  stdin,
 		stdout: bufio.NewReader(stdout),
 		stderr: bufio.NewReader(stderr),
-	}, nil
+		done:   make(chan struct{}),
+	}
+	go manager.reap()
+	return manager, nil
+}
+
+func (m *Manager) reap() {
+	m.waitOnce.Do(func() {
+		m.waitErr = m.cmd.Wait()
+		close(m.done)
+	})
 }
 
 // Send writes one framed LSP JSON message.
@@ -80,7 +93,8 @@ func (m *Manager) RecvStderr() (string, error) {
 
 // Wait waits for the server process to exit.
 func (m *Manager) Wait() error {
-	return m.cmd.Wait()
+	<-m.done
+	return m.waitErr
 }
 
 // Close closes stdin and waits for the process.
@@ -91,7 +105,8 @@ func (m *Manager) Close() error {
 		if m.cmd.Process != nil {
 			_ = syscall.Kill(-m.cmd.Process.Pid, syscall.SIGKILL)
 		}
-		err = m.cmd.Wait()
+		<-m.done
+		err = m.waitErr
 	})
 	return err
 }

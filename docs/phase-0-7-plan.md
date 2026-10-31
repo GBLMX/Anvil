@@ -1,6 +1,6 @@
 # 0.1.1 / Phase 0.7 Plan
 
-Status: in progress. `v0.1.1` is tagged; `:reconnect` is implemented for 0.1.2;
+Status: in progress. `v0.2.0` adds Tab indentation, the workspace tree, fuzzy file finding, and trusted LSP diagnostics;
 plugin-host is an empty sandboxed process (no VM), and syntax highlighting is
 asynchronous but not incremental.
 

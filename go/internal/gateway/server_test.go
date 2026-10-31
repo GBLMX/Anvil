@@ -628,3 +628,74 @@ func TestSysWriteFileBinary(t *testing.T) {
 		t.Fatalf("file = %q", got)
 	}
 }
+
+func TestSysReadDir(t *testing.T) {
+	workspace := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(workspace, "src"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(workspace, "src", "main.rs"), []byte("fn main() {}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(workspace, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	socket := startGatewayAt(t, workspace, []string{"fs.read:**"})
+	conn := dialGateway(t, socket)
+	if response := sendRequest(t, conn, "hello-1", "session.hello", helloRequestParams(testToken)); response.Error != nil {
+		t.Fatalf("handshake error: %+v", response.Error)
+	}
+	response := sendRequest(t, conn, "read-dir-1", "sys.read_dir", map[string]interface{}{"path": "."})
+	if response.Error != nil {
+		t.Fatalf("read_dir error: %+v", response.Error)
+	}
+	result, ok := response.Result.(map[string]interface{})
+	if !ok {
+		t.Fatalf("result = %#v", response.Result)
+	}
+	entries, ok := result["entries"].([]interface{})
+	if !ok || len(entries) != 1 {
+		t.Fatalf("entries = %#v", result["entries"])
+	}
+	entry, ok := entries[0].(map[string]interface{})
+	if !ok || entry["name"] != "src" || entry["is_dir"] != true {
+		t.Fatalf("entry = %#v", entries[0])
+	}
+}
+
+func TestLSPTokenCanReconnect(t *testing.T) {
+	workspace := t.TempDir()
+	socket := filepath.Join(t.TempDir(), "gateway.sock")
+	mainHash := sha256.Sum256([]byte(testToken))
+	lspToken := "fedcba9876543210fedcba9876543210"
+	lspHash := sha256.Sum256([]byte(lspToken))
+	server, err := Listen(Config{
+		SocketPath:     socket,
+		Workspace:      workspace,
+		PluginID:       "test-plugin",
+		TokenSHA256:    mainHash,
+		LSPTokenSHA256: lspHash,
+		Permissions:    []string{"fs.read:**"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_ = server.Serve(ctx)
+	}()
+	t.Cleanup(func() {
+		cancel()
+		_ = server.Close()
+		<-done
+	})
+	for index := 0; index < 2; index++ {
+		conn := dialGateway(t, socket)
+		if response := sendRequest(t, conn, "hello", "session.hello", helloRequestParams(lspToken)); response.Error != nil {
+			t.Fatalf("lsp handshake %d: %+v", index, response.Error)
+		}
+		_ = conn.Close()
+	}
+}

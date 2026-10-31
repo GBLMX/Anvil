@@ -17,6 +17,7 @@ use sha2::{Digest, Sha256};
 pub struct GatewaySession {
     child: Child,
     socket: PathBuf,
+    lsp_token: [u8; 32],
 }
 
 impl GatewaySession {
@@ -71,7 +72,11 @@ impl GatewaySession {
         let child = command
             .spawn()
             .map_err(|error| format!("start {}: {error}", binary.display()))?;
-        let mut session = Self { child, socket };
+        let mut session = Self {
+            child,
+            socket,
+            lsp_token,
+        };
         let result = (|| {
             let client = session.connect(&token)?;
             let lsp_client = session.connect(&lsp_token)?;
@@ -84,6 +89,12 @@ impl GatewaySession {
                 Err(error)
             }
         }
+    }
+
+    /// Open a fresh authenticated LSP connection.
+    pub fn connect_lsp(&mut self) -> Result<GatewayClient, String> {
+        let token = self.lsp_token;
+        self.connect(&token)
     }
 
     fn connect(&mut self, token: &[u8; 32]) -> Result<GatewayClient, String> {

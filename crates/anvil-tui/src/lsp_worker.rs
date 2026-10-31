@@ -32,13 +32,14 @@ impl LspWorker {
                 return;
             }
             let uri = file_uri(&path);
+            let root = project_root(&workspace, &path);
             let initialize = serde_json::json!({
                 "jsonrpc": "2.0",
                 "id": 1,
                 "method": "initialize",
                 "params": {
                     "processId": null,
-                    "rootUri": file_uri(&workspace),
+                    "rootUri": file_uri(&root),
                     "capabilities": {
                         "textDocument": {
                             "publishDiagnostics": {"relatedInformation": true},
@@ -89,6 +90,16 @@ impl LspWorker {
                 let message = match client.recv_notification() {
                     Ok(Some(message)) => message,
                     Ok(None) => {
+                        if let Ok(log) = std::env::var("ANVIL_LSP_LOG") {
+                            use std::io::Write;
+                            if let Ok(mut file) = std::fs::OpenOptions::new()
+                                .create(true)
+                                .append(true)
+                                .open(log)
+                            {
+                                let _ = writeln!(file, "worker gateway closed");
+                            }
+                        }
                         let _ = sender.send(LspEvent::Crashed("gateway closed".to_owned()));
                         return;
                     }
@@ -99,6 +110,16 @@ impl LspWorker {
                 };
                 match message.method.as_str() {
                     "lsp.crashed" => {
+                        if let Ok(log) = std::env::var("ANVIL_LSP_LOG") {
+                            use std::io::Write;
+                            if let Ok(mut file) = std::fs::OpenOptions::new()
+                                .create(true)
+                                .append(true)
+                                .open(log)
+                            {
+                                let _ = writeln!(file, "worker crashed: {}", message.params);
+                            }
+                        }
                         let _ = sender.send(LspEvent::Crashed(message.params.to_string()));
                         return;
                     }
@@ -170,6 +191,24 @@ fn answer_server_request(
     });
     send(client, &response)?;
     Ok(true)
+}
+
+fn project_root(workspace: &std::path::Path, path: &std::path::Path) -> std::path::PathBuf {
+    let mut root = workspace.to_path_buf();
+    if let Some(parent) = path.parent() {
+        for ancestor in parent.ancestors() {
+            if !ancestor.starts_with(workspace) {
+                break;
+            }
+            if ancestor.join("Cargo.toml").is_file() {
+                root = ancestor.to_path_buf();
+            }
+            if ancestor == workspace {
+                break;
+            }
+        }
+    }
+    root
 }
 
 fn file_uri(path: &std::path::Path) -> String {
@@ -252,6 +291,19 @@ mod tests {
         let uri = file_uri(&path);
         assert!(uri.starts_with("file:///"), "{uri}");
         assert!(uri.ends_with("a%20b%23c.rs"), "{uri}");
+    }
+
+    #[test]
+    fn project_root_prefers_highest_manifest() {
+        let dir = std::env::temp_dir().join(format!("anvil-root-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("crate/src")).expect("dirs");
+        std::fs::write(dir.join("Cargo.toml"), "").expect("root manifest");
+        std::fs::write(dir.join("crate/Cargo.toml"), "").expect("crate manifest");
+        let path = dir.join("crate/src/main.rs");
+        std::fs::write(&path, "").expect("file");
+        assert_eq!(project_root(&dir, &path), dir);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

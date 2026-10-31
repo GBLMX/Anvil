@@ -12,6 +12,9 @@ Normal mode
   "a{yy,p}            named yank/put register; "_" is blackhole
   Home / End          line start / end
   q{reg} / @{reg}     record macro / replay macro; @@ repeats
+  Tab / Shift+Tab     indent / unindent current line
+  Space e             file tree (h/l/Enter expand or open, Esc closes)
+  Space f             fuzzy file finder; type to filter, Enter opens
   i a A o O           insert before / after / line end / below / above
   x                   delete character
   dd                  delete line
@@ -31,7 +34,10 @@ Normal mode
   :bn / :bp           next / previous buffer
   :q                  quit, or close help
   :q!                 force quit, or close help
+  :tree               toggle the workspace file tree
   :reconnect          restart the gateway and re-handshake
+  :lsp-start          start rust-analyzer for the current file
+  :lsp-stop           stop the language server
   :plugin-start       start the debug plugin host
   :plugin-oom         start host with a 300 MB allocation probe
   :plugin-exec        exercise sys.exec (returns unsupported)
@@ -41,6 +47,7 @@ Normal mode
 Insert mode
   Esc                 return to normal mode
   Enter               newline
+  Tab                 insert four spaces
   Backspace / Delete  delete grapheme
   arrows / Home / End move
 

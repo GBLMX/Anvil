@@ -214,3 +214,33 @@ func TestWriteFileInSubdirectory(t *testing.T) {
 		t.Fatalf("file = %q", got)
 	}
 }
+
+func TestReadDirSkipsBuildAndVCS(t *testing.T) {
+	root, dir := testRoot(t)
+	if err := os.MkdirAll(filepath.Join(dir, "src"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "target"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "src", "main.rs"), []byte("fn main() {}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	entries, err := root.ReadDir(".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].Name != "src" || !entries[0].IsDir {
+		t.Fatalf("entries = %#v", entries)
+	}
+	children, err := root.ReadDir("src")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(children) != 1 || children[0].Name != "main.rs" || children[0].IsDir {
+		t.Fatalf("children = %#v", children)
+	}
+}

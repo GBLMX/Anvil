@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 
@@ -161,6 +162,59 @@ func (r *Root) ReadFileAt(path string, offset, max int64) ([]byte, bool, error) 
 	}
 	data = data[:read]
 	return data, offset+int64(read) >= stat.Size, nil
+}
+
+// DirEntry is one child of a workspace directory.
+type DirEntry struct {
+	Name  string `json:"name"`
+	IsDir bool   `json:"is_dir"`
+}
+
+// ReadDir lists a directory beneath the root, excluding VCS and build output.
+func (r *Root) ReadDir(path string) ([]DirEntry, error) {
+	relative := "."
+	if path != "" && path != "." {
+		cleaned, err := cleanRelative(path)
+		if err != nil {
+			return nil, err
+		}
+		relative = cleaned
+	}
+	r.mu.RLock()
+	if r.fd < 0 {
+		r.mu.RUnlock()
+		return nil, errors.New("workspace is closed")
+	}
+	fd, err := openBeneath(r.fd, relative)
+	r.mu.RUnlock()
+	if err != nil {
+		return nil, fmt.Errorf("open directory %q beneath workspace: %w", relative, err)
+	}
+	dir := os.NewFile(uintptr(fd), relative)
+	if dir == nil {
+		_ = unix.Close(fd)
+		return nil, errors.New("create directory handle")
+	}
+	defer dir.Close()
+	entries, err := dir.ReadDir(-1)
+	if err != nil {
+		return nil, fmt.Errorf("read directory %q: %w", relative, err)
+	}
+	result := make([]DirEntry, 0, len(entries))
+	for _, entry := range entries {
+		name := entry.Name()
+		if name == ".git" || name == "target" || name == writeTempPrefix {
+			continue
+		}
+		result = append(result, DirEntry{Name: name, IsDir: entry.IsDir()})
+	}
+	sort.Slice(result, func(i, j int) bool {
+		if result[i].IsDir != result[j].IsDir {
+			return result[i].IsDir
+		}
+		return result[i].Name < result[j].Name
+	})
+	return result, nil
 }
 
 const writeTempPrefix = ".anvil-write-"

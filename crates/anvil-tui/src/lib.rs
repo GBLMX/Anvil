@@ -14,7 +14,7 @@ use std::{
 use anvil_api::EditorView;
 use anvil_core::{TextBuffer, TextDocument, end_word, next_word_start, previous_word_start};
 use anvil_editor::EditorState;
-use anvil_ipc::GatewayClient;
+use anvil_ipc::{DirEntry, GatewayClient};
 use crossterm::{
     cursor::SetCursorStyle,
     event::{self, Event, KeyCode, KeyEvent, KeyEventKind},
@@ -28,8 +28,9 @@ use ratatui::{
     style::Modifier,
     style::{Color, Style},
     text::{Line, Span},
-    widgets::{Block, Paragraph},
+    widgets::{Block, Clear, Paragraph},
 };
+use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 mod clipboard;
 mod gateway;
@@ -80,6 +81,22 @@ pub enum WordMotion {
 }
 
 /// TUI state.
+#[derive(Debug, Clone)]
+struct FuzzyState {
+    query: String,
+    entries: Vec<String>,
+    filtered: Vec<usize>,
+    selected: usize,
+}
+
+#[derive(Debug, Clone)]
+struct TreeEntry {
+    path: PathBuf,
+    depth: usize,
+    is_dir: bool,
+    expanded: bool,
+}
+
 pub struct Model {
     /// Editor state and its shared text/index.
     pub editor: EditorState,
@@ -133,6 +150,12 @@ pub struct Model {
     buffers: Vec<Buffer>,
     /// Active buffer index.
     active: usize,
+    /// Flattened workspace tree, when open.
+    tree: Vec<TreeEntry>,
+    tree_selected: Option<usize>,
+    tree_visible: bool,
+    tree_focus: bool,
+    fuzzy: Option<FuzzyState>,
     /// Gateway client used for file I/O when present.
     gateway: Option<GatewayClient>,
     /// Owning child/socket for the current gateway client.
@@ -141,6 +164,8 @@ pub struct Model {
     lsp_client: Option<GatewayClient>,
     /// Active language-server worker.
     lsp_worker: Option<LspWorker>,
+    /// Number of automatic LSP restarts for this buffer.
+    lsp_retries: u8,
     /// Diagnostics keyed by workspace path.
     diagnostics: HashMap<PathBuf, Vec<lsp::Diagnostic>>,
     /// Workspace root used to resolve all file paths.
@@ -184,10 +209,16 @@ impl Model {
             help_back: None,
             buffers: Vec::new(),
             active: 0,
+            tree: Vec::new(),
+            tree_selected: None,
+            tree_visible: false,
+            tree_focus: false,
+            fuzzy: None,
             gateway: None,
             gateway_session: None,
             lsp_client: None,
             lsp_worker: None,
+            lsp_retries: 0,
             diagnostics: HashMap::new(),
             workspace: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
             require_gateway: false,
@@ -821,6 +852,43 @@ impl Model {
         self.dirty = true;
     }
 
+    fn indent_line(&mut self) {
+        if self.reject_read_only() {
+            return;
+        }
+        let Some(line) = self.editor.line_range_at(self.cursor) else {
+            return;
+        };
+        self.editor.insert(line.start, "    ");
+        if self.cursor >= line.start {
+            self.cursor += 4;
+        }
+        self.modified = true;
+        self.dirty = true;
+    }
+
+    fn unindent_line(&mut self) {
+        if self.reject_read_only() {
+            return;
+        }
+        let Some(line) = self.editor.line_range_at(self.cursor) else {
+            return;
+        };
+        let text = self.editor.text().slice(line.start..line.end);
+        let remove = if text.starts_with('\t') {
+            1
+        } else {
+            text.bytes().take_while(|byte| *byte == b' ').count().min(4)
+        };
+        if remove == 0 {
+            return;
+        }
+        self.editor.delete(line.start..line.start + remove);
+        self.cursor = self.cursor.saturating_sub(remove).max(line.start);
+        self.modified = true;
+        self.dirty = true;
+    }
+
     fn sync_cursor_from_selection(&mut self) {
         self.cursor = self
             .editor
@@ -1382,6 +1450,240 @@ impl Model {
         }
     }
 
+    fn tree_entries(&mut self, path: &Path) -> Result<Vec<DirEntry>, String> {
+        if let Some(gateway) = self.gateway.as_mut() {
+            let relative = if path == self.workspace {
+                ".".to_owned()
+            } else {
+                path.strip_prefix(&self.workspace)
+                    .map_err(|_| format!("path is outside workspace {}", path.display()))?
+                    .to_string_lossy()
+                    .into_owned()
+            };
+            return gateway
+                .read_dir(&relative)
+                .map_err(|error| error.to_string());
+        }
+        let mut entries = Vec::new();
+        for entry in fs::read_dir(path).map_err(|error| error.to_string())? {
+            let entry = entry.map_err(|error| error.to_string())?;
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if name == ".git" || name == "target" {
+                continue;
+            }
+            entries.push(DirEntry {
+                is_dir: entry.file_type().map(|kind| kind.is_dir()).unwrap_or(false),
+                name,
+            });
+        }
+        entries.sort_by(|left, right| {
+            right
+                .is_dir
+                .cmp(&left.is_dir)
+                .then_with(|| left.name.cmp(&right.name))
+        });
+        Ok(entries)
+    }
+
+    fn open_tree(&mut self) {
+        if self.tree_visible && self.tree_focus {
+            self.tree_focus = false;
+            self.tree_visible = false;
+            self.dirty = true;
+            return;
+        }
+        if self.tree.is_empty() {
+            let workspace = self.workspace.clone();
+            match self.tree_entries(&workspace) {
+                Ok(entries) => {
+                    self.tree = entries
+                        .into_iter()
+                        .map(|entry| TreeEntry {
+                            path: workspace.join(entry.name),
+                            depth: 0,
+                            is_dir: entry.is_dir,
+                            expanded: false,
+                        })
+                        .collect();
+                }
+                Err(error) => self.status = format!("E: tree: {error}"),
+            }
+        }
+        self.tree_visible = true;
+        self.tree_focus = true;
+        if self.tree_selected.is_none() {
+            self.tree_selected = (!self.tree.is_empty()).then_some(0);
+        }
+        self.dirty = true;
+    }
+
+    fn tree_move(&mut self, delta: isize) {
+        if self.tree.is_empty() {
+            return;
+        }
+        let current = self.tree_selected.unwrap_or(0);
+        self.tree_selected = Some(
+            current
+                .saturating_add_signed(delta)
+                .min(self.tree.len().saturating_sub(1)),
+        );
+        self.dirty = true;
+    }
+
+    fn tree_toggle(&mut self) {
+        let Some(index) = self.tree_selected else {
+            return;
+        };
+        let Some(entry) = self.tree.get(index).cloned() else {
+            return;
+        };
+        if !entry.is_dir {
+            match self.open_path(&entry.path) {
+                Ok(()) => {
+                    self.tree_focus = false;
+                    self.tree_visible = false;
+                }
+                Err(error) => self.status = format!("E: {error}"),
+            }
+            self.dirty = true;
+            return;
+        }
+        if entry.expanded {
+            self.tree[index].expanded = false;
+            while self
+                .tree
+                .get(index + 1)
+                .is_some_and(|child| child.depth > entry.depth)
+            {
+                self.tree.remove(index + 1);
+            }
+        } else {
+            match self.tree_entries(&entry.path) {
+                Ok(children) => {
+                    self.tree[index].expanded = true;
+                    let children: Vec<TreeEntry> = children
+                        .into_iter()
+                        .map(|child| TreeEntry {
+                            path: entry.path.join(child.name),
+                            depth: entry.depth + 1,
+                            is_dir: child.is_dir,
+                            expanded: false,
+                        })
+                        .collect();
+                    self.tree.splice(index + 1..index + 1, children);
+                }
+                Err(error) => self.status = format!("E: tree: {error}"),
+            }
+        }
+        self.dirty = true;
+    }
+
+    fn tree_collapse(&mut self) {
+        let Some(index) = self.tree_selected else {
+            return;
+        };
+        if self.tree.get(index).is_some_and(|entry| entry.expanded) {
+            self.tree_toggle();
+        } else if self.tree.get(index).is_some_and(|entry| entry.depth > 0) {
+            while self.tree_selected.unwrap_or(0) > 0
+                && self.tree[self.tree_selected.unwrap_or(0)].depth > 0
+            {
+                self.tree_move(-1);
+            }
+            self.tree_selected = self.tree_selected.map(|index| index.saturating_sub(1));
+            self.dirty = true;
+        }
+    }
+
+    fn collect_files(
+        &mut self,
+        directory: &Path,
+        prefix: &str,
+        out: &mut Vec<String>,
+    ) -> Result<(), String> {
+        if out.len() >= 5000 {
+            return Ok(());
+        }
+        let entries = self.tree_entries(directory)?;
+        for entry in entries {
+            let relative = if prefix.is_empty() {
+                entry.name.clone()
+            } else {
+                format!("{prefix}/{}", entry.name)
+            };
+            if entry.is_dir {
+                self.collect_files(&directory.join(&entry.name), &relative, out)?;
+                if out.len() >= 5000 {
+                    break;
+                }
+            } else {
+                out.push(relative);
+            }
+        }
+        Ok(())
+    }
+
+    fn start_fuzzy(&mut self) {
+        let workspace = self.workspace.clone();
+        let mut entries = Vec::new();
+        if let Err(error) = self.collect_files(&workspace, "", &mut entries) {
+            self.status = format!("E: files: {error}");
+            self.dirty = true;
+            return;
+        }
+        entries.sort();
+        let filtered = (0..entries.len()).collect();
+        self.fuzzy = Some(FuzzyState {
+            query: String::new(),
+            entries,
+            filtered,
+            selected: 0,
+        });
+        self.dirty = true;
+    }
+
+    fn fuzzy_refresh(&mut self) {
+        let Some(fuzzy) = self.fuzzy.as_mut() else {
+            return;
+        };
+        let query = fuzzy.query.to_lowercase();
+        fuzzy.filtered = fuzzy
+            .entries
+            .iter()
+            .enumerate()
+            .filter(|(_, entry)| entry.to_lowercase().contains(&query))
+            .map(|(index, _)| index)
+            .collect();
+        fuzzy.selected = fuzzy.selected.min(fuzzy.filtered.len().saturating_sub(1));
+    }
+
+    fn fuzzy_move(&mut self, delta: isize) {
+        let Some(fuzzy) = self.fuzzy.as_mut() else {
+            return;
+        };
+        fuzzy.selected = fuzzy
+            .selected
+            .saturating_add_signed(delta)
+            .min(fuzzy.filtered.len().saturating_sub(1));
+        self.dirty = true;
+    }
+
+    fn fuzzy_open(&mut self) {
+        let Some(fuzzy) = self.fuzzy.take() else {
+            return;
+        };
+        let Some(index) = fuzzy.filtered.get(fuzzy.selected) else {
+            self.dirty = true;
+            return;
+        };
+        let path = self.workspace.join(&fuzzy.entries[*index]);
+        match self.open_path(&path) {
+            Ok(()) => {}
+            Err(error) => self.status = format!("E: {error}"),
+        }
+        self.dirty = true;
+    }
+
     fn start_lsp(&mut self) {
         if self.lsp_worker.is_some() {
             self.status = "lsp already running".to_owned();
@@ -1389,6 +1691,16 @@ impl Model {
             return;
         }
         let Some(client) = self.lsp_client.take() else {
+            if let Ok(log) = std::env::var("ANVIL_LSP_LOG") {
+                use std::io::Write;
+                if let Ok(mut file) = std::fs::OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open(log)
+                {
+                    let _ = writeln!(file, "start_lsp: no client");
+                }
+            }
             self.status = "E: lsp gateway connection unavailable".to_owned();
             self.dirty = true;
             return;
@@ -1411,22 +1723,37 @@ impl Model {
                 self.lsp_worker = Some(worker);
                 self.status = "lsp starting".to_owned();
             }
-            Err(error) => self.status = format!("E: lsp start: {error}"),
+            Err(error) => {
+                if let Ok(log) = std::env::var("ANVIL_LSP_LOG") {
+                    use std::io::Write;
+                    if let Ok(mut file) = std::fs::OpenOptions::new()
+                        .create(true)
+                        .append(true)
+                        .open(log)
+                    {
+                        let _ = writeln!(file, "start_lsp failed: {error}");
+                    }
+                }
+                self.status = format!("E: lsp start: {error}")
+            }
         }
         self.dirty = true;
     }
 
     fn stop_lsp(&mut self) {
         self.lsp_worker = None;
+        self.lsp_retries = 0;
         self.status = "lsp stopped".to_owned();
         self.dirty = true;
     }
 
     fn poll_lsp(&mut self) {
-        let Some(worker) = &self.lsp_worker else {
-            return;
-        };
-        for event in worker.poll() {
+        let events = self
+            .lsp_worker
+            .as_ref()
+            .map(|worker| worker.poll())
+            .unwrap_or_default();
+        for event in events {
             match event {
                 LspEvent::Diagnostics(path, diagnostics) => {
                     self.diagnostics.insert(path, diagnostics);
@@ -1435,7 +1762,58 @@ impl Model {
                         self.diagnostics.values().map(Vec::len).sum::<usize>()
                     );
                 }
-                LspEvent::Crashed(error) => self.status = format!("E: lsp crashed: {error}"),
+                LspEvent::Crashed(error) => {
+                    if let Ok(log) = std::env::var("ANVIL_LSP_LOG") {
+                        use std::io::Write;
+                        if let Ok(mut file) = std::fs::OpenOptions::new()
+                            .create(true)
+                            .append(true)
+                            .open(log)
+                        {
+                            let _ = writeln!(file, "model crashed: {error}");
+                        }
+                    }
+                    self.lsp_worker = None;
+                    if self.lsp_retries < 3 {
+                        self.lsp_retries += 1;
+                        if self.lsp_client.is_none() {
+                            match self.gateway_session.as_mut() {
+                                Some(session) => match session.connect_lsp() {
+                                    Ok(client) => self.lsp_client = Some(client),
+                                    Err(error) => {
+                                        if let Ok(log) = std::env::var("ANVIL_LSP_LOG") {
+                                            use std::io::Write;
+                                            if let Ok(mut file) = std::fs::OpenOptions::new()
+                                                .create(true)
+                                                .append(true)
+                                                .open(log)
+                                            {
+                                                let _ =
+                                                    writeln!(file, "connect_lsp failed: {error}");
+                                            }
+                                        }
+                                    }
+                                },
+                                None => {
+                                    if let Ok(log) = std::env::var("ANVIL_LSP_LOG") {
+                                        use std::io::Write;
+                                        if let Ok(mut file) = std::fs::OpenOptions::new()
+                                            .create(true)
+                                            .append(true)
+                                            .open(log)
+                                        {
+                                            let _ = writeln!(file, "connect_lsp: no session");
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        self.status = format!("lsp crashed, restarting ({}/3)", self.lsp_retries);
+                        self.start_lsp();
+                    } else {
+                        self.status = format!("E: lsp crashed: {error}");
+                    }
+                }
                 LspEvent::Error(error) => self.status = format!("E: lsp: {error}"),
                 LspEvent::Log(line) => self.status = format!("lsp: {line}"),
             }
@@ -1456,6 +1834,48 @@ impl Model {
                     .collect()
             })
             .unwrap_or_default()
+    }
+
+    fn diagnostic_ranges(
+        &self,
+        line_number: usize,
+        line_start: usize,
+        line_end: usize,
+    ) -> Vec<(usize, usize)> {
+        let Some(path) = &self.path else {
+            return Vec::new();
+        };
+        let Some(diagnostics) = self.diagnostics.get(path) else {
+            return Vec::new();
+        };
+        let line = self.editor.text().slice(line_start..line_end);
+        diagnostics
+            .iter()
+            .filter_map(|diagnostic| {
+                if diagnostic.range.start.line as usize > line_number
+                    || (diagnostic.range.end.line as usize) < line_number
+                {
+                    return None;
+                }
+                let start_units = if diagnostic.range.start.line as usize == line_number {
+                    diagnostic.range.start.character as usize
+                } else {
+                    0
+                };
+                let end_units = if diagnostic.range.end.line as usize == line_number {
+                    diagnostic.range.end.character as usize
+                } else {
+                    line.chars().map(char::len_utf16).sum()
+                };
+                let start_byte = utf16_to_byte(&line, start_units);
+                let end_byte = utf16_to_byte(&line, end_units)
+                    .max(start_byte + 1)
+                    .min(line.len());
+                let start = display_column(&line[..start_byte]);
+                let end = display_column(&line[..end_byte]).max(start + 1);
+                Some((start, end))
+            })
+            .collect()
     }
 
     fn reconnect_gateway(&mut self) {
@@ -1507,6 +1927,7 @@ impl Model {
             ("help", "") => self.show_help(),
             ("reconnect", "") => self.reconnect_gateway(),
             ("lsp-start", "") => self.start_lsp(),
+            ("tree", "") => self.open_tree(),
             ("lsp-stop", "") => self.stop_lsp(),
             ("plugin-start", "") => self.start_host(),
             ("plugin-oom", "") => self.start_oom_host(),
@@ -1638,11 +2059,14 @@ impl Model {
             if spans.is_empty() {
                 spans.push(Span::raw(""));
             }
+            expand_tabs(&mut spans);
+            let ranges = self.diagnostic_ranges(line_number, start, line.end);
+            apply_diagnostic_underlines(&mut spans, &ranges);
             let mut rendered = Line::from(spans);
             if Some(line_number) == current {
                 rendered = rendered.style(Style::default().bg(Color::Indexed(236)));
             }
-            if diagnostic_lines.contains(&line_number) {
+            if diagnostic_lines.contains(&line_number) && ranges.is_empty() {
                 rendered = rendered.style(
                     Style::default()
                         .fg(Color::Red)
@@ -1655,6 +2079,91 @@ impl Model {
             lines.push(Line::raw(""));
         }
         lines
+    }
+}
+
+fn utf16_to_byte(text: &str, units: usize) -> usize {
+    let mut seen = 0;
+    for (byte, character) in text.char_indices() {
+        if seen >= units {
+            return byte;
+        }
+        seen += character.len_utf16();
+    }
+    text.len()
+}
+
+fn display_column(text: &str) -> usize {
+    let mut column = 0;
+    for character in text.chars() {
+        if character == '\t' {
+            column += 4 - column % 4;
+        } else if character == '\r' || character.is_control() {
+        } else {
+            column += character.width().unwrap_or(0);
+        }
+    }
+    column
+}
+
+fn apply_diagnostic_underlines(spans: &mut Vec<Span<'_>>, ranges: &[(usize, usize)]) {
+    if ranges.is_empty() {
+        return;
+    }
+    let mut result = Vec::new();
+    let mut column = 0;
+    for span in spans.drain(..) {
+        let mut run = String::new();
+        let mut run_style = span.style;
+        let mut run_underlined = false;
+        for character in span.content.chars() {
+            let width = if character == '\t' {
+                0
+            } else {
+                character.width().unwrap_or(0)
+            };
+            let underlined = ranges
+                .iter()
+                .any(|(start, end)| column < *end && column + width.max(1) > *start);
+            let style = if underlined {
+                span.style.fg(Color::Red).add_modifier(Modifier::UNDERLINED)
+            } else {
+                span.style
+            };
+            if !run.is_empty() && (style != run_style || underlined != run_underlined) {
+                result.push(Span::styled(std::mem::take(&mut run), run_style));
+            }
+            run_style = style;
+            run_underlined = underlined;
+            run.push(character);
+            column += width;
+        }
+        if !run.is_empty() {
+            result.push(Span::styled(run, run_style));
+        }
+    }
+    *spans = result;
+}
+
+fn expand_tabs(spans: &mut Vec<Span<'_>>) {
+    let mut column = 0;
+    for span in spans.iter_mut() {
+        if !span.content.contains('\t') {
+            column += span.content.width();
+            continue;
+        }
+        let mut expanded = String::with_capacity(span.content.len());
+        for character in span.content.chars() {
+            if character == '\t' {
+                let spaces = 4 - column % 4;
+                expanded.extend(std::iter::repeat_n(' ', spaces));
+                column += spaces;
+            } else {
+                expanded.push(character);
+                column += character.width().unwrap_or(0);
+            }
+        }
+        *span = Span::styled(expanded, span.style);
     }
 }
 
@@ -1829,15 +2338,58 @@ pub fn view(model: &Model, frame: &mut Frame) {
         width: area.width.saturating_sub(2),
         height: area.height.saturating_sub(2),
     };
-    let gutter_width = model.gutter_width().min(inner.width);
+    let mut content = inner;
+    if model.tree_visible && inner.width > 50 {
+        let sidebar_width = (inner.width / 5).clamp(18, 40).min(inner.width - 20);
+        let tree_area = Rect {
+            width: sidebar_width,
+            ..inner
+        };
+        let mut lines = Vec::new();
+        for (index, entry) in model.tree.iter().enumerate() {
+            let name = entry
+                .path
+                .file_name()
+                .map(|name| name.to_string_lossy())
+                .unwrap_or_default();
+            let marker = if entry.is_dir {
+                if entry.expanded { "v " } else { "> " }
+            } else {
+                "  "
+            };
+            let text = format!("{}{}{}", "  ".repeat(entry.depth), marker, name);
+            let style = if model.tree_selected == Some(index) {
+                Style::default().fg(Color::Black).bg(Color::Yellow)
+            } else if entry.is_dir {
+                Style::default().fg(Color::Cyan)
+            } else {
+                Style::default()
+            };
+            lines.push(Line::styled(text, style));
+        }
+        if lines.is_empty() {
+            lines.push(Line::raw("empty"));
+        }
+        let mut tree_block = Block::bordered().title("Files");
+        if model.tree_focus {
+            tree_block = tree_block.border_style(Style::default().fg(Color::Yellow));
+        }
+        frame.render_widget(Paragraph::new(lines).block(tree_block), tree_area);
+        content = Rect {
+            x: inner.x + sidebar_width,
+            width: inner.width.saturating_sub(sidebar_width),
+            ..inner
+        };
+    }
+    let gutter_width = model.gutter_width().min(content.width);
     let gutter_area = Rect {
         width: gutter_width,
-        ..inner
+        ..content
     };
     let text_area = Rect {
-        x: inner.x + gutter_width,
-        width: inner.width.saturating_sub(gutter_width),
-        ..inner
+        x: content.x + gutter_width,
+        width: content.width.saturating_sub(gutter_width),
+        ..content
     };
     frame.render_widget(
         Paragraph::new(model.visible_gutter(inner.height)),
@@ -1858,6 +2410,39 @@ pub fn view(model: &Model, frame: &mut Frame) {
         if x < inner.right() && y < inner.bottom() {
             frame.set_cursor_position((x, y));
         }
+    }
+    if let Some(fuzzy) = &model.fuzzy {
+        let width = (area.width * 3 / 5)
+            .max(30)
+            .min(area.width.saturating_sub(2));
+        let height = (area.height / 2).max(8).min(area.height.saturating_sub(2));
+        let popup = Rect {
+            x: area.x + (area.width.saturating_sub(width)) / 2,
+            y: area.y + (area.height.saturating_sub(height)) / 2,
+            width,
+            height,
+        };
+        frame.render_widget(Clear, popup);
+        let mut lines = Vec::new();
+        for (row, index) in fuzzy
+            .filtered
+            .iter()
+            .take(height.saturating_sub(3) as usize)
+            .enumerate()
+        {
+            let name = &fuzzy.entries[*index];
+            let style = if row == fuzzy.selected {
+                Style::default().fg(Color::Black).bg(Color::Yellow)
+            } else {
+                Style::default()
+            };
+            lines.push(Line::styled(name.as_str(), style));
+        }
+        lines.push(Line::raw(format!("> {}", fuzzy.query)));
+        frame.render_widget(
+            Paragraph::new(lines).block(Block::bordered().title("Files")),
+            popup,
+        );
     }
 }
 
@@ -2037,6 +2622,14 @@ fn handle_key(model: &mut Model, key: KeyEvent) {
             return;
         }
         let count = model.take_count();
+        if pending == ' ' {
+            match key.code {
+                KeyCode::Char('e') => model.open_tree(),
+                KeyCode::Char('f') => model.start_fuzzy(),
+                _ => {}
+            }
+            return;
+        }
         match (pending, key.code) {
             ('c', KeyCode::Char('w')) => model.change_word(WordMotion::NextStart),
             ('c', KeyCode::Char('e')) => model.change_word(WordMotion::End),
@@ -2053,6 +2646,50 @@ fn handle_key(model: &mut Model, key: KeyEvent) {
         }
         return;
     }
+    if model.fuzzy.is_some() {
+        match key.code {
+            KeyCode::Esc => {
+                model.fuzzy = None;
+                model.dirty = true;
+            }
+            KeyCode::Enter => model.fuzzy_open(),
+            KeyCode::Up => model.fuzzy_move(-1),
+            KeyCode::Down => model.fuzzy_move(1),
+            KeyCode::Backspace => {
+                if let Some(fuzzy) = model.fuzzy.as_mut() {
+                    fuzzy.query.pop();
+                }
+                model.fuzzy_refresh();
+                model.dirty = true;
+            }
+            KeyCode::Char(character) if !control => {
+                if let Some(fuzzy) = model.fuzzy.as_mut() {
+                    fuzzy.query.push(character);
+                }
+                model.fuzzy_refresh();
+                model.dirty = true;
+            }
+            _ => {}
+        }
+        return;
+    }
+
+    if model.tree_focus {
+        match key.code {
+            KeyCode::Esc => {
+                model.tree_focus = false;
+                model.tree_visible = false;
+                model.dirty = true;
+            }
+            KeyCode::Char('j') | KeyCode::Down => model.tree_move(1),
+            KeyCode::Char('k') | KeyCode::Up => model.tree_move(-1),
+            KeyCode::Char('h') | KeyCode::Left => model.tree_collapse(),
+            KeyCode::Char('l') | KeyCode::Right | KeyCode::Enter => model.tree_toggle(),
+            _ => {}
+        }
+        return;
+    }
+
     match &mut model.input_mode {
         InputMode::CommandLine { buffer } => match key.code {
             KeyCode::Esc => {
@@ -2100,6 +2737,7 @@ fn handle_key(model: &mut Model, key: KeyEvent) {
                 model.dirty = true;
             }
             KeyCode::Enter => model.insert_text("\n"),
+            KeyCode::Tab => model.insert_text("    "),
             KeyCode::Backspace => model.backspace(),
             KeyCode::Delete => model.delete_forward(),
             KeyCode::Left => model.move_char(-1),
@@ -2112,6 +2750,12 @@ fn handle_key(model: &mut Model, key: KeyEvent) {
             _ => {}
         },
         InputMode::Normal => match key.code {
+            KeyCode::Tab => model.indent_line(),
+            KeyCode::BackTab => model.unindent_line(),
+            KeyCode::Char(' ') if !control => {
+                model.pending = Some(' ');
+                model.dirty = true;
+            }
             KeyCode::Char('q') if !control => {
                 model.macro_wait = Some('q');
                 model.dirty = true;
@@ -2258,6 +2902,90 @@ mod tests {
     }
 
     #[test]
+    fn tree_expands_directories() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        fs::create_dir(dir.path().join("src")).expect("dir");
+        fs::write(dir.path().join("src/main.rs"), "fn main() {}").expect("file");
+        fs::write(dir.path().join("Cargo.toml"), "").expect("manifest");
+        let mut model = Model::new(EditorState::from_text(""), None);
+        model.workspace = dir.path().to_path_buf();
+        model.open_tree();
+        assert!(model.tree_visible);
+        let index = model
+            .tree
+            .iter()
+            .position(|entry| entry.path.ends_with("src"))
+            .expect("src");
+        model.tree_selected = Some(index);
+        model.tree_toggle();
+        assert!(
+            model
+                .tree
+                .iter()
+                .any(|entry| entry.path.ends_with("src/main.rs"))
+        );
+        model.tree_toggle();
+        assert!(
+            !model
+                .tree
+                .iter()
+                .any(|entry| entry.path.ends_with("src/main.rs"))
+        );
+    }
+
+    #[test]
+    fn fuzzy_filters_workspace_files() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        fs::create_dir(dir.path().join("src")).expect("dir");
+        fs::write(dir.path().join("src/main.rs"), "fn main() {}").expect("file");
+        fs::write(dir.path().join("src/lib.rs"), "").expect("file");
+        let mut model = Model::new(EditorState::from_text(""), None);
+        model.workspace = dir.path().to_path_buf();
+        model.start_fuzzy();
+        let fuzzy = model.fuzzy.as_mut().expect("fuzzy");
+        fuzzy.query = "main".to_owned();
+        model.fuzzy_refresh();
+        assert_eq!(model.fuzzy.as_ref().expect("fuzzy").filtered.len(), 1);
+    }
+
+    #[test]
+    fn tab_indents_and_backtab_unindents() {
+        let mut model = Model::new(EditorState::from_text("a"), None);
+        handle_event(&mut model, key(KeyCode::Tab));
+        assert_eq!(model.editor.text().slice(0..5), "    a");
+        handle_event(&mut model, key(KeyCode::BackTab));
+        assert_eq!(model.editor.text().slice(0..1), "a");
+    }
+
+    #[test]
+    fn insert_tab_adds_four_spaces() {
+        let mut model = Model::new(EditorState::from_text("a"), None);
+        handle_event(&mut model, key(KeyCode::Char('a')));
+        handle_event(&mut model, key(KeyCode::Tab));
+        assert_eq!(model.editor.text().slice(0..5), "a    ");
+    }
+
+    #[test]
+    fn rendered_tabs_use_display_columns() {
+        let model = Model::new(
+            EditorState::from_text("a\tb"),
+            Some(PathBuf::from("tabs.rs")),
+        );
+        let backend = TestBackend::new(20, 5);
+        let mut terminal = Terminal::new(backend).expect("terminal");
+        terminal.draw(|frame| view(&model, frame)).expect("draw");
+        let content: String = terminal
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .map(|cell| cell.symbol())
+            .collect();
+        assert!(content.contains("a   b"), "{content:?}");
+        assert!(!content.contains('\t'));
+    }
+
+    #[test]
     fn insert_mode_modifies_piece_table() {
         let mut model = Model::new(EditorState::from_text("ac"), None);
         handle_event(&mut model, key(KeyCode::Char('i')));
@@ -2342,6 +3070,14 @@ mod tests {
             .any(|cell| cell.fg == Color::Magenta);
         assert!(colored, "keyword span was not colored");
         model.dirty = false;
+    }
+
+    #[test]
+    fn utf16_columns_map_through_emoji() {
+        let text = "a😀b";
+        assert_eq!(utf16_to_byte(text, 1), 1);
+        assert_eq!(utf16_to_byte(text, 3), 5);
+        assert_eq!(utf16_to_byte(text, 4), 6);
     }
 
     #[test]

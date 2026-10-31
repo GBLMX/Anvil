@@ -79,6 +79,13 @@ impl From<std::io::Error> for ClientError {
     }
 }
 
+/// One entry returned by `sys.read_dir`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DirEntry {
+    pub name: String,
+    pub is_dir: bool,
+}
+
 /// One chunk returned by `sys.read_file`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReadChunk {
@@ -261,6 +268,32 @@ impl GatewayClient {
             self.write_file(path, offset, chunk, index + 1 == chunk_count)?;
         }
         Ok(())
+    }
+
+    /// List one workspace directory through the gateway.
+    pub fn read_dir(&mut self, path: &str) -> Result<Vec<DirEntry>, ClientError> {
+        let result = self.request("sys.read_dir", serde_json::json!({ "path": path }))?;
+        let entries = result
+            .get("entries")
+            .and_then(serde_json::Value::as_array)
+            .ok_or(ClientError::Protocol("read_dir entries"))?;
+        entries
+            .iter()
+            .map(|entry| {
+                let name = entry
+                    .get("name")
+                    .and_then(serde_json::Value::as_str)
+                    .ok_or(ClientError::Protocol("read_dir name"))?;
+                let is_dir = entry
+                    .get("is_dir")
+                    .and_then(serde_json::Value::as_bool)
+                    .ok_or(ClientError::Protocol("read_dir is_dir"))?;
+                Ok(DirEntry {
+                    name: name.to_owned(),
+                    is_dir,
+                })
+            })
+            .collect()
     }
 
     /// Return the workspace-relative regular file size through the gateway.

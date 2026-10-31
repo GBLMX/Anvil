@@ -6,6 +6,8 @@ All notable changes to Anvil are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-31
+
 ### Added
 
 - `:reconnect` restarts the gateway child and performs a fresh handshake,
@@ -31,24 +33,24 @@ All notable changes to Anvil are recorded here. The format follows
 - LSP document and root URIs are canonical absolute `file://` URIs with
   percent-encoding; diagnostics URIs are decoded before path matching.
 - TUI LSP worker on a second authenticated gateway connection; initialize
-  response ordering, initialized, didOpen, publishDiagnostics parsing,
-  diagnostics map, and red underlined diagnostic lines. The exec runner grants
-  rustup/cargo read/execute paths, cargo PATH, LSP stderr forwarding, workspace
-  write/execute, inotify syscalls, and a workspace-local `TMPDIR`.
-  `ANVIL_GATEWAY_LOG` captures gateway/LSP stdout/stderr. The LSP exec profile
-  permits CLONE_THREAD, non-namespace process creation, wait/pipe/fcntl,
-  flock/ioctl, procfs reads, and identity syscalls so cargo check can spawn
-  and reap children. Exact rustc/cargo/rustdoc/proc-macro paths are granted
-  execute; sandboxed cargo still fails on rustc execution in manual tests. Sandboxed rust-analyzer reaches cargo metadata, but publishDiagnostics
-  is still not observed.
+  response ordering, initialized, didOpen, didSave, publishDiagnostics parsing,
+  diagnostics map, and red underlined diagnostic ranges. Trusted local language
+  servers run through `-no-sandbox-lsp`; plugin-host remains sandboxed.
+  `ANVIL_GATEWAY_LOG` captures gateway/LSP traffic.
+
+- Tab / Shift+Tab line indentation, four-space insert-mode Tab, display-width
+  tab expansion, a gateway-backed workspace tree (`Space e` / `:tree`), and a
+  fuzzy file finder (`Space f`). The tree filters `.git` and `target`.
+- LSP restarts up to three times after crashes; the LSP handshake token is
+  reusable only within the owning gateway session so the editor can reconnect.
+  Diagnostics use UTF-16 to
+  byte/display-column mapping for exact underlined ranges.
 
 ### Known limitations
 
-- LSP is experimental and currently blocked by sandboxed toolchain execution:
-  rust-analyzer reaches cargo metadata but not publishDiagnostics under
-  `anvil-exec-runner`.
-- Macros, named registers, text objects, splits, and advanced Ex commands are
-  not implemented yet.
+- LSP is experimental; trusted local language servers use `-no-sandbox-lsp`,
+  while plugin-host remains sandboxed.
+- Splits and advanced Ex commands are not implemented yet.
 
 ## [0.1.1] - 2026-10-31
 
@@ -217,6 +219,14 @@ All notable changes to Anvil are recorded here. The format follows
   the gateway routes `sys.exec` through this runner.
 - Untrusted plugins run outside the editor process; the Go gateway is a policy
   gateway, not the plugin sandbox.
+
+- Tab / Shift+Tab line indentation, four-space insert-mode Tab, display-width
+  tab expansion, a gateway-backed workspace tree (`Space e` / `:tree`), and a
+  fuzzy file finder (`Space f`). The tree filters `.git` and `target`.
+- LSP restarts up to three times after crashes; the LSP handshake token is
+  reusable only within the owning gateway session so the editor can reconnect.
+  Diagnostics use UTF-16 to
+  byte/display-column mapping for exact underlined ranges.
 
 ### Known limitations
 
