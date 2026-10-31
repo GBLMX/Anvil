@@ -6,6 +6,16 @@ All notable changes to Anvil are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.2.6] - 2026-10-31
+
+### Changed
+
+- LSP worker failures are classified as crashes consistently, stale
+  completion/hover/pending state is cleared on stop/restart/reconnect, and an
+  unsupported file no longer consumes the LSP gateway connection.
+- Removed unused `ClientError::kind` and duplicated LSP timeout plumbing; poll
+  readability is the single framed-connection wait path.
+
 ## [0.2.5] - 2026-10-31
 
 ### Fixed

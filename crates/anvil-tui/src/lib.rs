@@ -1788,11 +1788,6 @@ impl Model {
             self.dirty = true;
             return;
         }
-        let Some(client) = self.lsp_client.take() else {
-            self.status = "E: lsp gateway connection unavailable".to_owned();
-            self.dirty = true;
-            return;
-        };
         let Some(path) = self.path.clone() else {
             self.status = "E: lsp requires an open file".to_owned();
             self.dirty = true;
@@ -1800,6 +1795,11 @@ impl Model {
         };
         let Some(settings) = lsp_settings(&path) else {
             self.status = format!("E: no language server for {}", path.display());
+            self.dirty = true;
+            return;
+        };
+        let Some(client) = self.lsp_client.take() else {
+            self.status = "E: lsp gateway connection unavailable".to_owned();
             self.dirty = true;
             return;
         };
@@ -1817,6 +1817,9 @@ impl Model {
         match LspWorker::start(client, config, self.workspace.clone(), path, text) {
             Ok(worker) => {
                 self.lsp_worker = Some(worker);
+                self.pending_lsp.clear();
+                self.completion = None;
+                self.hover = None;
                 self.status = format!("{} starting", settings.label);
             }
             Err(error) => self.status = format!("E: lsp start: {error}"),
@@ -1827,6 +1830,9 @@ impl Model {
     fn stop_lsp(&mut self) {
         self.lsp_worker = None;
         self.lsp_retries = 0;
+        self.pending_lsp.clear();
+        self.completion = None;
+        self.hover = None;
         self.status = "lsp stopped".to_owned();
         self.dirty = true;
     }
@@ -2155,6 +2161,9 @@ impl Model {
                 }
                 LspEvent::Crashed(error) => {
                     self.lsp_worker = None;
+                    self.pending_lsp.clear();
+                    self.completion = None;
+                    self.hover = None;
                     if self.lsp_retries < 3 {
                         self.lsp_retries += 1;
                         if self.lsp_client.is_none() {
@@ -2245,6 +2254,9 @@ impl Model {
         self.file_worker = None;
         self.lsp_worker = None;
         self.lsp_client = None;
+        self.pending_lsp.clear();
+        self.completion = None;
+        self.hover = None;
         self.gateway = None;
         self.gateway_session = None;
         match GatewaySession::start(&self.workspace) {

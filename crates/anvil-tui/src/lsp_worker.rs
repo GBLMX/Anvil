@@ -5,6 +5,9 @@ use std::path::PathBuf;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::time::Duration;
 
+const POLL_INTERVAL: Duration = Duration::from_millis(50);
+const INITIALIZE_ID: u64 = 1;
+
 #[derive(Debug)]
 pub enum LspEvent {
     Diagnostics(PathBuf, Vec<Diagnostic>),
@@ -66,7 +69,7 @@ impl LspWorker {
             let root = project_root(&workspace, &path, &root_markers);
             let initialize = serde_json::json!({
                 "jsonrpc": "2.0",
-                "id": 1,
+                "id": INITIALIZE_ID,
                 "method": "initialize",
                 "params": {
                     "processId": null,
@@ -82,11 +85,11 @@ impl LspWorker {
                 }
             });
             if let Err(error) = send(&mut client, &initialize) {
-                let _ = sender.send(LspEvent::Error(error));
+                let _ = sender.send(LspEvent::Crashed(error));
                 return;
             }
             if let Err(error) = wait_initialize(&mut client) {
-                let _ = sender.send(LspEvent::Error(error));
+                let _ = sender.send(LspEvent::Crashed(error));
                 return;
             }
             let initialized = serde_json::json!({
@@ -108,7 +111,7 @@ impl LspWorker {
                 }
             });
             if let Err(error) = send(&mut client, &did_open) {
-                let _ = sender.send(LspEvent::Error(error));
+                let _ = sender.send(LspEvent::Crashed(error));
                 return;
             }
             let did_save = serde_json::json!({
@@ -132,7 +135,7 @@ impl LspWorker {
                                 }
                             });
                             if let Err(error) = send(&mut client, &did_change) {
-                                let _ = sender.send(LspEvent::Error(error));
+                                let _ = sender.send(LspEvent::Crashed(error));
                                 return;
                             }
                         }
@@ -144,17 +147,19 @@ impl LspWorker {
                                 "params": params
                             });
                             if let Err(error) = send(&mut client, &request) {
-                                let _ = sender.send(LspEvent::Error(error));
+                                let _ = sender.send(LspEvent::Crashed(error));
                                 return;
                             }
                         }
                     }
                 }
-                if !client
-                    .wait_readable(Duration::from_millis(50))
-                    .unwrap_or(false)
-                {
-                    continue;
+                match client.wait_readable(POLL_INTERVAL) {
+                    Ok(true) => {}
+                    Ok(false) => continue,
+                    Err(error) => {
+                        let _ = sender.send(LspEvent::Crashed(error.to_string()));
+                        return;
+                    }
                 }
                 let message = match client.recv_notification() {
                     Ok(Some(message)) => message,
@@ -163,7 +168,7 @@ impl LspWorker {
                         return;
                     }
                     Err(error) => {
-                        let _ = sender.send(LspEvent::Error(error.to_string()));
+                        let _ = sender.send(LspEvent::Crashed(error.to_string()));
                         return;
                     }
                 };
@@ -200,7 +205,7 @@ impl LspWorker {
                             Ok(true) => continue,
                             Ok(false) => {}
                             Err(error) => {
-                                let _ = sender.send(LspEvent::Error(error));
+                                let _ = sender.send(LspEvent::Crashed(error));
                                 return;
                             }
                         }
@@ -324,7 +329,7 @@ fn wait_initialize(client: &mut GatewayClient) -> Result<(), String> {
         if answer_server_request(client, data)? {
             continue;
         }
-        if data.get("id") == Some(&serde_json::json!(1)) {
+        if data.get("id") == Some(&serde_json::json!(INITIALIZE_ID)) {
             return Ok(());
         }
     }

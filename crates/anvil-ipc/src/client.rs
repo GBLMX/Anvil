@@ -53,17 +53,6 @@ impl std::fmt::Display for ClientError {
     }
 }
 
-impl ClientError {
-    /// Return the underlying I/O error kind, when this is an I/O failure.
-    pub fn kind(&self) -> Option<std::io::ErrorKind> {
-        match self {
-            Self::Io(kind) => Some(*kind),
-            Self::Frame(FrameError::Io(kind)) => Some(*kind),
-            _ => None,
-        }
-    }
-}
-
 impl std::error::Error for ClientError {}
 
 impl From<FrameError> for ClientError {

@@ -31,7 +31,7 @@ checksum = "940b3a0ca603d1eade50a4846a2afffd5ef57a9feac2c0e2ec2e14f9ead76000"
 
 [[package]]
 name = "anvil-api"
-version = "0.2.5"
+version = "0.2.6"
 dependencies = [
  "schemars",
  "serde",
@@ -41,7 +41,7 @@ dependencies = [
 
 [[package]]
 name = "anvil-core"
-version = "0.2.5"
+version = "0.2.6"
 dependencies = [
  "criterion",
  "proptest",
@@ -52,7 +52,7 @@ dependencies = [
 
 [[package]]
 name = "anvil-editor"
-version = "0.2.5"
+version = "0.2.6"
 dependencies = [
  "anvil-api",
  "anvil-core",
@@ -61,7 +61,7 @@ dependencies = [
 
 [[package]]
 name = "anvil-ipc"
-version = "0.2.5"
+version = "0.2.6"
 dependencies = [
  "base64",
  "rustix",
@@ -71,7 +71,7 @@ dependencies = [
 
 [[package]]
 name = "anvil-plugin-host"
-version = "0.2.5"
+version = "0.2.6"
 dependencies = [
  "anvil-ipc",
  "libc",
@@ -80,7 +80,7 @@ dependencies = [
 
 [[package]]
 name = "anvil-tui"
-version = "0.2.5"
+version = "0.2.6"
 dependencies = [
  "anvil-api",
  "anvil-core",
