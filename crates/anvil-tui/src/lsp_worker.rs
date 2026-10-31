@@ -123,6 +123,21 @@ impl LspWorker {
                             }
                         }
                         if let Some((path, diagnostics)) = publish_diagnostics(data) {
+                            if let Ok(log) = std::env::var("ANVIL_LSP_LOG") {
+                                use std::io::Write;
+                                if let Ok(mut file) = std::fs::OpenOptions::new()
+                                    .create(true)
+                                    .append(true)
+                                    .open(log)
+                                {
+                                    let _ = writeln!(
+                                        file,
+                                        "publish {} diagnostics={}",
+                                        path.display(),
+                                        diagnostics.len()
+                                    );
+                                }
+                            }
                             let _ = sender.send(LspEvent::Diagnostics(path, diagnostics));
                         }
                     }
