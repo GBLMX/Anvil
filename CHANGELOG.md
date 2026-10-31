@@ -31,9 +31,10 @@ All notable changes to Anvil are recorded here. The format follows
   diagnostics map, and red underlined diagnostic lines. The exec runner grants
   rustup/cargo read/execute paths, cargo PATH, LSP stderr forwarding, workspace
   write/execute, inotify syscalls, and a workspace-local `TMPDIR`.
-  `ANVIL_GATEWAY_LOG` captures gateway/LSP stdout/stderr. Sandboxed
-  rust-analyzer now reaches cargo metadata, but publishDiagnostics is still not
-  observed.
+  `ANVIL_GATEWAY_LOG` captures gateway/LSP stdout/stderr. The LSP exec profile
+  permits CLONE_THREAD and non-namespace process creation so cargo check can
+  spawn. Sandboxed rust-analyzer reaches cargo metadata, but publishDiagnostics
+  is still not observed.
 
 ## [0.1.1] - 2026-10-31
 

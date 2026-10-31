@@ -69,29 +69,29 @@ func LandlockABI() (int, error) {
 // This function is irreversible. It must run in the exec-runner child, never in
 // the gateway or editor process.
 func Apply(workspace string, runtimePaths []string) error {
-	return ApplyTool(workspace, "", runtimePaths)
+	return applyTool(workspace, "", runtimePaths, nil, false, false)
 }
 
 // ApplyToolWithExecute grants execute access to additional runtime binaries
 // (for example a toolchain bin directory) while keeping them read-only.
 func ApplyToolWithExecute(workspace, tool string, runtimePaths, execPaths []string) error {
-	return applyTool(workspace, tool, runtimePaths, execPaths, false)
+	return applyTool(workspace, tool, runtimePaths, execPaths, false, false)
 }
 
 // ApplyToolForLSP grants read/write workspace access and explicit executable
 // runtime paths for a supervised language server.
 func ApplyToolForLSP(workspace, tool string, runtimePaths, execPaths []string) error {
-	return applyTool(workspace, tool, runtimePaths, execPaths, true)
+	return applyTool(workspace, tool, runtimePaths, execPaths, true, true)
 }
 
 // ApplyTool also grants execute access to the tool and its ELF interpreter.
 // Runtime directories stay read-only, so another binary cannot be exec'd.
 // It locks the calling OS thread; the caller must exec on the same goroutine.
 func ApplyTool(workspace, tool string, runtimePaths []string) error {
-	return applyTool(workspace, tool, runtimePaths, nil, false)
+	return applyTool(workspace, tool, runtimePaths, nil, false, false)
 }
 
-func applyTool(workspace, tool string, runtimePaths, execPaths []string, writeWorkspace bool) error {
+func applyTool(workspace, tool string, runtimePaths, execPaths []string, writeWorkspace, allowProcess bool) error {
 	runtime.LockOSThread()
 	threadID := unix.Gettid()
 	abi, err := LandlockABI()
@@ -177,7 +177,7 @@ func applyTool(workspace, tool string, runtimePaths, execPaths []string, writeWo
 	if err := restrictSelf(ruleset); err != nil {
 		return fmt.Errorf("landlock restrict_self: %w", err)
 	}
-	if err := applySeccomp(); err != nil {
+	if err := applySeccomp(allowProcess); err != nil {
 		return fmt.Errorf("seccomp: %w", err)
 	}
 	if unix.Gettid() != threadID {

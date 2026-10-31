@@ -165,7 +165,7 @@ func (b *filterBuilder) finish() ([]unix.SockFilter, error) {
 	return b.insns, nil
 }
 
-func seccompProgram() ([]unix.SockFilter, error) {
+func seccompProgram(allowProcess bool) ([]unix.SockFilter, error) {
 	b := newFilterBuilder()
 	b.label("start")
 	b.ld(seccompDataArch)
@@ -186,9 +186,13 @@ func seccompProgram() ([]unix.SockFilter, error) {
 	b.and(namespaceFlags)
 	b.jeq(0, "clone_no_namespace", "deny")
 	b.label("clone_no_namespace")
-	b.ld(seccompArg0)
-	b.and(unix.CLONE_THREAD)
-	b.jeq(unix.CLONE_THREAD, "clone_allow", "deny")
+	if allowProcess {
+		b.ret(unix.SECCOMP_RET_ALLOW)
+	} else {
+		b.ld(seccompArg0)
+		b.and(unix.CLONE_THREAD)
+		b.jeq(unix.CLONE_THREAD, "clone_allow", "deny")
+	}
 	b.label("clone_allow")
 	b.ret(unix.SECCOMP_RET_ALLOW)
 	b.label("after_clone")
@@ -227,8 +231,8 @@ func seccompProgram() ([]unix.SockFilter, error) {
 	return b.finish()
 }
 
-func applySeccomp() error {
-	instructions, err := seccompProgram()
+func applySeccomp(allowProcess bool) error {
+	instructions, err := seccompProgram(allowProcess)
 	if err != nil {
 		return err
 	}
