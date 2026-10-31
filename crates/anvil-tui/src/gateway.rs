@@ -39,6 +39,10 @@ impl GatewaySession {
         let socket = socket_path()?;
         let socket_arg = socket.to_string_lossy().into_owned();
         let workspace_arg = workspace.to_string_lossy().into_owned();
+        let gateway_stderr = env::var_os("ANVIL_GATEWAY_LOG")
+            .and_then(|path| File::create(path).ok())
+            .map(Stdio::from)
+            .unwrap_or_else(Stdio::null);
         let mut command = Command::new(&binary);
         command
             .arg("-socket")
@@ -55,7 +59,7 @@ impl GatewaySession {
             .arg("-allow-write")
             .stdin(Stdio::null())
             .stdout(Stdio::null())
-            .stderr(Stdio::null());
+            .stderr(gateway_stderr);
         if let Some(runner) = gateway_binary()
             .parent()
             .map(|parent| parent.join("anvil-exec-runner"))

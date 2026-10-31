@@ -39,7 +39,13 @@ impl LspWorker {
                 "params": {
                     "processId": null,
                     "rootUri": format!("file://{}", workspace.display()),
-                    "capabilities": {}
+                    "capabilities": {
+                        "textDocument": {
+                            "publishDiagnostics": {"relatedInformation": true},
+                            "synchronization": {"didSave": true}
+                        },
+                        "workspace": {"workspaceFolders": true}
+                    }
                 }
             });
             if let Err(error) = send(&mut client, &initialize) {

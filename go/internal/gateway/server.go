@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"os"
 	"path/filepath"
@@ -857,6 +858,7 @@ func (s *Server) lspSend(req request, state *connectionState) (interface{}, *rpc
 	if err := decodeParams(req.Params, &params); err != nil || len(params.Data) == 0 {
 		return nil, &rpcError{Code: -32602, Message: "invalid params"}
 	}
+	log.Printf("LSP In: %s", string(params.Data))
 	if err := manager.Send(params.Data); err != nil {
 		return nil, &rpcError{Code: -32008, Message: "lsp send failed"}
 	}
@@ -872,6 +874,7 @@ func (s *Server) forwardLSP(ctx context.Context, state *connectionState, manager
 			}
 			return
 		}
+		log.Printf("LSP Out: %s", string(body))
 		s.notifyLSP(state, "lsp.message", map[string]json.RawMessage{"data": body})
 	}
 }
