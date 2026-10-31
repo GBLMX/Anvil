@@ -35,6 +35,7 @@ beside the binary or via `ANVIL_GATEWAY`.
 - [Plugin-host isolation ADR](docs/adr/0012-plugin-host-isolation.md)
 - [Threat model](docs/threat-model.md)
 - [Architecture](docs/architecture.md)
+- [Current and future architecture maps](docs/architecture-visual.md)
 - [Deployment model](docs/deployment.md)
 - [Ratatui TUI Elm loop plan](docs/ratatui-elm-loop-plan.md)
 - [Performance baseline](docs/performance.md)

@@ -1,6 +1,6 @@
 # Anvil Architecture
 
-Status: Phase 0 baseline.
+Status: `v0.2.7`; Phase 0.7 in progress. See [visual current/future maps](architecture-visual.md).
 
 ## 1. Process model
 
