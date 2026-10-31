@@ -22,8 +22,9 @@ All notable changes to Anvil are recorded here. The format follows
 
 - Gateway `lsp.start` / `lsp.send` / `lsp.stop` routes with persistent
   `internal/lsp` process pipes, sandboxed exec-runner launch, `lsp.message`
-  notifications, and `lsp.crashed` on reader failure. TUI diagnostics UI and
-  worker are still pending.
+  notifications, and `lsp.crashed` on reader failure. `GatewayClient` exposes
+  matching LSP helpers plus blocking notification receive. TUI diagnostics UI
+  and worker are still pending.
 
 ## [0.1.1] - 2026-10-31
 

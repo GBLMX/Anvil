@@ -123,6 +123,38 @@ impl GatewayClient {
         self.notifications.drain(..).collect()
     }
 
+    /// Start a gateway-supervised LSP process.
+    pub fn lsp_start(&mut self, tool: &str, args: &[String]) -> Result<(), ClientError> {
+        self.request("lsp.start", serde_json::json!({"tool": tool, "args": args}))?;
+        Ok(())
+    }
+
+    /// Write one raw LSP JSON message to the supervised process.
+    pub fn lsp_send(&mut self, data: &[u8]) -> Result<(), ClientError> {
+        let message: serde_json::Value = serde_json::from_slice(data)?;
+        self.request("lsp.send", serde_json::json!({"data": message}))?;
+        Ok(())
+    }
+
+    /// Stop the supervised LSP process.
+    pub fn lsp_stop(&mut self) -> Result<(), ClientError> {
+        self.request("lsp.stop", serde_json::json!({}))?;
+        Ok(())
+    }
+
+    /// Block for one server-initiated notification.
+    pub fn recv_notification(&mut self) -> Result<Option<Request>, ClientError> {
+        let Some(frame) = self.connection.recv()? else {
+            return Ok(None);
+        };
+        if let Some(notification) = parse_notification(&frame) {
+            return Ok(Some(notification));
+        }
+        Err(ClientError::Protocol(
+            "unexpected response while waiting for notification",
+        ))
+    }
+
     /// Read at most `max_bytes` from `path` at `offset`.
     pub fn read_file(
         &mut self,
