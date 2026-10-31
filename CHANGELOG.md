@@ -16,6 +16,10 @@ All notable changes to Anvil are recorded here. The format follows
 
 ### Fixed
 
+- Tab outside Insert mode no longer modifies the buffer; Tab indentation is
+  insert-mode only.
+- Trusted `-no-sandbox-lsp` processes inherit the gateway PATH, fixing child
+  toolchains and Python shebangs for gopls/pyright.
 - `:reconnect` drops the old file-tree worker and LSP worker before replacing
   the gateway session, so later tree/fuzzy operations use the new socket.
 
@@ -58,7 +62,7 @@ All notable changes to Anvil are recorded here. The format follows
   servers run through `-no-sandbox-lsp`; plugin-host remains sandboxed.
   `ANVIL_GATEWAY_LOG` captures gateway/LSP traffic.
 
-- Tab / Shift+Tab line indentation, four-space insert-mode Tab, display-width
+- Four-space insert-mode Tab, display-width
   tab expansion, a gateway-backed workspace tree (`Space e` / `:tree`), and a
   fuzzy file finder (`Space f`). The tree filters `.git` and `target`.
 - LSP restarts up to three times after crashes; the LSP handshake token is
@@ -240,7 +244,7 @@ All notable changes to Anvil are recorded here. The format follows
 - Untrusted plugins run outside the editor process; the Go gateway is a policy
   gateway, not the plugin sandbox.
 
-- Tab / Shift+Tab line indentation, four-space insert-mode Tab, display-width
+- Four-space insert-mode Tab, display-width
   tab expansion, a gateway-backed workspace tree (`Space e` / `:tree`), and a
   fuzzy file finder (`Space f`). The tree filters `.git` and `target`.
 - LSP restarts up to three times after crashes; the LSP handshake token is

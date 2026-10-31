@@ -12,7 +12,6 @@ Normal mode
   "a{yy,p}            named yank/put register; "_" is blackhole
   Home / End          line start / end
   q{reg} / @{reg}     record macro / replay macro; @@ repeats
-  Tab / Shift+Tab     indent / unindent current line
   Space e             file tree (h/l/Enter expand or open, Esc closes)
   Space f             fuzzy file finder; type to filter, Enter opens
   i a A o O           insert before / after / line end / below / above

@@ -858,43 +858,6 @@ impl Model {
         self.dirty = true;
     }
 
-    fn indent_line(&mut self) {
-        if self.reject_read_only() {
-            return;
-        }
-        let Some(line) = self.editor.line_range_at(self.cursor) else {
-            return;
-        };
-        self.editor.insert(line.start, "    ");
-        if self.cursor >= line.start {
-            self.cursor += 4;
-        }
-        self.modified = true;
-        self.dirty = true;
-    }
-
-    fn unindent_line(&mut self) {
-        if self.reject_read_only() {
-            return;
-        }
-        let Some(line) = self.editor.line_range_at(self.cursor) else {
-            return;
-        };
-        let text = self.editor.text().slice(line.start..line.end);
-        let remove = if text.starts_with('\t') {
-            1
-        } else {
-            text.bytes().take_while(|byte| *byte == b' ').count().min(4)
-        };
-        if remove == 0 {
-            return;
-        }
-        self.editor.delete(line.start..line.start + remove);
-        self.cursor = self.cursor.saturating_sub(remove).max(line.start);
-        self.modified = true;
-        self.dirty = true;
-    }
-
     fn sync_cursor_from_selection(&mut self) {
         self.cursor = self
             .editor
@@ -2874,8 +2837,6 @@ fn handle_key(model: &mut Model, key: KeyEvent) {
             _ => {}
         },
         InputMode::Normal => match key.code {
-            KeyCode::Tab => model.indent_line(),
-            KeyCode::BackTab => model.unindent_line(),
             KeyCode::Char(' ') if !control => {
                 model.pending = Some(' ');
                 model.dirty = true;
@@ -3094,12 +3055,12 @@ mod tests {
     }
 
     #[test]
-    fn tab_indents_and_backtab_unindents() {
+    fn normal_tab_does_not_insert_text() {
         let mut model = Model::new(EditorState::from_text("a"), None);
         handle_event(&mut model, key(KeyCode::Tab));
-        assert_eq!(model.editor.text().slice(0..5), "    a");
         handle_event(&mut model, key(KeyCode::BackTab));
         assert_eq!(model.editor.text().slice(0..1), "a");
+        assert!(!model.modified);
     }
 
     #[test]

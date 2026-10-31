@@ -855,11 +855,15 @@ func (s *Server) lspStart(ctx context.Context, req request, state *connectionSta
 	}
 	if s.cfg.NoSandboxLSP {
 		home, _ := os.UserHomeDir()
+		path := os.Getenv("PATH")
+		if path == "" {
+			path = "/usr/bin:/bin"
+		}
 		env := []string{
 			"HOME=" + home,
 			"RUSTUP_HOME=" + filepath.Join(home, ".rustup"),
 			"CARGO_HOME=" + filepath.Join(home, ".cargo"),
-			"PATH=" + filepath.Join(home, ".cargo", "bin") + ":/usr/bin:/bin",
+			"PATH=" + path,
 			"RUSTC_WRAPPER=",
 		}
 		manager, err := lsp.Start(ctx, lsp.Config{

@@ -8,7 +8,7 @@ mode (`i`/`a`/`A`/`o`/`O`), `:w`/`:wq`/`:w file`/`:q!`, an unsaved-change
 guard, undo/redo, `x`/`dd`/`yy`/`p`, `w`/`b`/`e` word motions with
 `dw`/`db`/`de`/`yw`/`yb`/`ye`, literal `:s`/`:%s` substitution, `/` search
 with `n`/`N`, multi-buffer switching, horizontal scrolling, and dirty-only
-redraws, Tab/Shift+Tab indentation, a workspace file tree, and a fuzzy file
+redraws, insert-mode Tab indentation, a workspace file tree, and a fuzzy file
 finder. Rust and JSON files use Tree-sitter highlighting on a debounced
 background thread, capped at 256 KiB so large files keep plain-text latency.
 Trusted language servers (rust-analyzer, gopls, pyright/pylsp) run without the
