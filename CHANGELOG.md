@@ -6,6 +6,14 @@ All notable changes to Anvil are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.2.5] - 2026-10-31
+
+### Fixed
+
+- `wait_readable` treats `HUP`/`ERR` as readiness, so a closed gateway or LSP
+  socket reaches `recv_notification` and emits `Crashed` instead of spinning
+  until timeout.
+
 ## [0.2.4] - 2026-10-31
 
 ### Fixed

@@ -207,7 +207,9 @@ impl Connection {
         let fd = self.stream.as_fd();
         let mut descriptors = [PollFd::new(&fd, PollFlags::IN)];
         poll(&mut descriptors, Some(&timeout))?;
-        Ok(descriptors[0].revents().contains(PollFlags::IN))
+        Ok(descriptors[0]
+            .revents()
+            .intersects(PollFlags::IN | PollFlags::HUP | PollFlags::ERR))
     }
 }
 
@@ -259,6 +261,18 @@ mod tests {
             read_frame(&mut header),
             Err(FrameError::TooLarge(oversized))
         );
+    }
+
+    #[test]
+    fn wait_readable_reports_peer_close() {
+        let path = socket_path();
+        let _cleanup = SocketCleanup(path.clone());
+        let listener = Listener::bind(&path).expect("bind");
+        let mut client = Connection::connect(&path).expect("connect");
+        let server = listener.accept().expect("accept");
+        drop(server);
+        assert!(client.wait_readable(Duration::from_secs(1)).expect("poll"));
+        assert_eq!(client.recv().expect("eof"), None);
     }
 
     #[test]
