@@ -245,15 +245,17 @@ impl Model {
     pub fn open(path: impl AsRef<Path>) -> io::Result<Self> {
         let path = path.as_ref().to_path_buf();
         let text = fs::read_to_string(&path)?;
+        let path = path.canonicalize().unwrap_or(path);
         Ok(Self::new(EditorState::from_text(&text), Some(path)))
     }
 
     fn absolute_path(&self, path: &Path) -> Result<PathBuf, String> {
-        if path.is_absolute() {
-            Ok(path.to_path_buf())
+        let joined = if path.is_absolute() {
+            path.to_path_buf()
         } else {
-            Ok(self.workspace.join(path))
-        }
+            self.workspace.join(path)
+        };
+        Ok(joined.canonicalize().unwrap_or(joined))
     }
 
     fn relative_path(&self, path: &Path) -> Result<String, String> {
@@ -2691,6 +2693,37 @@ mod tests {
         type_text(&mut chunked, "o w");
         handle_event(&mut chunked, key(KeyCode::Enter));
         assert_eq!(chunked.cursor, 4);
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn open_resolves_symlink_to_canonical_path() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let target = dir.path().join("target.txt");
+        let link = dir.path().join("link.txt");
+        fs::write(&target, "first\nsecond").expect("write");
+        std::os::unix::fs::symlink(&target, &link).expect("symlink");
+        let mut model = Model::open(&link).expect("open");
+        assert_eq!(model.path.as_deref(), Some(target.as_path()));
+        model.diagnostics.insert(
+            model.path.clone().expect("path"),
+            vec![lsp::Diagnostic {
+                range: lsp::Range {
+                    start: lsp::Position {
+                        line: 1,
+                        character: 0,
+                    },
+                    end: lsp::Position {
+                        line: 1,
+                        character: 3,
+                    },
+                },
+                severity: Some(1),
+                message: "error".to_owned(),
+                source: Some("test".to_owned()),
+            }],
+        );
+        assert_eq!(model.diagnostic_lines(), vec![1]);
     }
 
     #[test]

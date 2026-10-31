@@ -26,6 +26,8 @@ All notable changes to Anvil are recorded here. The format follows
   launches can grant workspace write plus rustup/cargo read/execute paths. `GatewayClient` exposes
   matching LSP helpers plus blocking notification receive.
 
+- Buffer paths are canonicalized before matching LSP diagnostics, including
+  symlinks and `..` segments.
 - LSP document and root URIs are canonical absolute `file://` URIs with
   percent-encoding; diagnostics URIs are decoded before path matching.
 - TUI LSP worker on a second authenticated gateway connection; initialize
