@@ -159,12 +159,24 @@ pub fn publish_diagnostics(message: &Value) -> Option<(PathBuf, Vec<Diagnostic>)
     }
     let params = message.get("params")?.clone();
     let parsed: PublishDiagnostics = serde_json::from_value(params).ok()?;
-    let path = parsed
-        .uri
-        .strip_prefix("file://")
-        .unwrap_or(&parsed.uri)
-        .to_owned();
-    Some((PathBuf::from(path), parsed.diagnostics))
+    let encoded = parsed.uri.strip_prefix("file://").unwrap_or(&parsed.uri);
+    let mut path = Vec::with_capacity(encoded.len());
+    let bytes = encoded.as_bytes();
+    let mut index = 0;
+    while index < bytes.len() {
+        if bytes[index] == b'%' && index + 2 < bytes.len() {
+            let hex = std::str::from_utf8(&bytes[index + 1..index + 3]).ok()?;
+            path.push(u8::from_str_radix(hex, 16).ok()?);
+            index += 3;
+        } else {
+            path.push(bytes[index]);
+            index += 1;
+        }
+    }
+    Some((
+        PathBuf::from(String::from_utf8(path).ok()?),
+        parsed.diagnostics,
+    ))
 }
 
 #[cfg(test)]
@@ -185,6 +197,17 @@ mod tests {
         let body = read_body(&mut reader).expect("read").expect("frame");
         let value: Value = serde_json::from_slice(&body).expect("json");
         assert_eq!(value["method"], "initialized");
+    }
+
+    #[test]
+    fn decodes_publish_diagnostics_uri() {
+        let (path, diagnostics) = publish_diagnostics(&serde_json::json!({
+            "method": "textDocument/publishDiagnostics",
+            "params": {"uri": "file:///tmp/a%20b.rs", "diagnostics": []}
+        }))
+        .expect("diagnostics");
+        assert_eq!(path, PathBuf::from("/tmp/a b.rs"));
+        assert!(diagnostics.is_empty());
     }
 
     #[test]

@@ -31,14 +31,14 @@ impl LspWorker {
                 let _ = sender.send(LspEvent::Error(error.to_string()));
                 return;
             }
-            let uri = format!("file://{}", path.display());
+            let uri = file_uri(&path);
             let initialize = serde_json::json!({
                 "jsonrpc": "2.0",
                 "id": 1,
                 "method": "initialize",
                 "params": {
                     "processId": null,
-                    "rootUri": format!("file://{}", workspace.display()),
+                    "rootUri": file_uri(&workspace),
                     "capabilities": {
                         "textDocument": {
                             "publishDiagnostics": {"relatedInformation": true},
@@ -172,6 +172,25 @@ fn answer_server_request(
     Ok(true)
 }
 
+fn file_uri(path: &std::path::Path) -> String {
+    let mut absolute = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    if absolute.is_relative() {
+        if let Ok(current) = std::env::current_dir() {
+            absolute = current.join(absolute);
+        }
+    }
+    let mut uri = String::from("file://");
+    for byte in absolute.to_string_lossy().bytes() {
+        if byte.is_ascii_alphanumeric() || matches!(byte, b'/' | b':' | b'-' | b'_' | b'.' | b'~') {
+            uri.push(byte as char);
+        } else {
+            use std::fmt::Write as _;
+            let _ = write!(uri, "%{byte:02X}");
+        }
+    }
+    uri
+}
+
 fn send(client: &mut GatewayClient, message: &serde_json::Value) -> Result<(), String> {
     let body = serde_json::to_vec(message).map_err(|error| error.to_string())?;
     client.lsp_send(&body).map_err(|error| error.to_string())
@@ -225,6 +244,14 @@ mod tests {
         connection
             .send(&serde_json::to_vec(&response).expect("response"))
             .expect("send");
+    }
+
+    #[test]
+    fn file_uri_is_absolute_and_encoded() {
+        let path = std::env::temp_dir().join("a b#c.rs");
+        let uri = file_uri(&path);
+        assert!(uri.starts_with("file:///"), "{uri}");
+        assert!(uri.ends_with("a%20b%23c.rs"), "{uri}");
     }
 
     #[test]
