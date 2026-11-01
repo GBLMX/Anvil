@@ -1,8 +1,9 @@
 # Changelog
 
 All notable changes to Anvil are recorded here. The format follows
-[Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
-[Semantic Versioning](https://semver.org/).
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Pre-1.0 version
+lines are release-series labels, not a compatibility promise; `0.4.x` is the
+post-`0.4.0` feature line.
 
 ## [Unreleased]
 
@@ -24,7 +25,8 @@ All notable changes to Anvil are recorded here. The format follows
   [the release policy](docs/polish-and-specification.md).
 - The plugin host stops at the sandboxed empty-host boundary. Plugin runtime,
   loading, capability bindings, gateway control-socket registration, and
-  end-to-end plugin `sys.*` dispatch move to `0.5.0`.
+  end-to-end plugin `sys.*` dispatch move to the post-`0.4.0` feature line;
+  the runtime slice is tracked as `0.4.4`.
 
 ### Added
 

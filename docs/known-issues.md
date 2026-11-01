@@ -1,7 +1,7 @@
 # Known Issues
 
 Status: BUG-001, BUG-004, BUG-005, BUG-006, BUG-007, BUG-008 (0.4.0
-open-buffer and 0.5.0 tree scopes), and BUG-009 are resolved. BUG-002/003
+open-buffer and 0.4.1 tree scopes), and BUG-009 are resolved. BUG-002/003
 remain open.
 
 ## BUG-001: File tree and fuzzy picker do not scroll with the selection
@@ -34,6 +34,7 @@ remain open.
 
 - Area: TUI syntax highlighting
 - Status: Open; not fixed
+- Target: `0.4.2`
 - Severity: feature coverage / usability
 - Current coverage: only Rust and JSON are registered in
   `crates/anvil-tui/src/syntax.rs` (`language_for`).
@@ -64,6 +65,7 @@ remain open.
 
 - Area: TUI syntax highlighting, Markdown
 - Status: Open; not fixed
+- Target: `0.4.3`
 - Severity: feature quality
 - Current behavior: `.md` is not registered at all.
 - Required attention:
@@ -205,7 +207,7 @@ workspace management and should be addressed before adding more UI features.
 ### BUG-008: External file changes are not watched
 
 - Area: Workspace/file lifecycle
-- Priority: High; resolved for the 0.4.0 open-buffer and 0.5.0 tree scopes
+- Priority: High; resolved for the 0.4.0 open-buffer and 0.4.1 tree scopes
 - Status: Resolved 2026-11-01. Tree watching is tracked in
   [#9](https://github.com/GBLMX/Anvil/issues/9).
 - Resolution:

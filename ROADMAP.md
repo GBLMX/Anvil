@@ -5,7 +5,7 @@ in `PROJECT_CHARTER.md`, `docs/phase-0-7-plan.md`, and the ADRs.
 
 ## Current
 
-- Phase 0.7: Polish & Specification.
+- `0.4.x` feature line after the `0.3.0 → 0.4.0` maintenance release.
 - Stabilize the selection-first kernel and its existing tests.
 - Complete the kernel/distribution boundary decision
   ([ADR-0013](docs/adr/0013-kernel-distribution-boundary.md)).
@@ -18,10 +18,10 @@ in `PROJECT_CHARTER.md`, `docs/phase-0-7-plan.md`, and the ADRs.
 2. Version the gateway protocol and add compatibility tests.
 3. Establish a reproducible kernel performance baseline.
 4. Add user keymap/config boundaries without freezing the plugin keymap format.
-5. [0.5.0] Turn the empty plugin host into a tested Lua/TS runtime path;
+5. [0.4.4] Turn the empty plugin host into a tested Lua/TS runtime path;
    activation, concurrency, and lifecycle design is in
    [ADR-0017](docs/adr/0017-plugin-activation-and-lifecycle.md).
-6. [0.5.0] Close the remaining workspace tree watcher validation in
+6. [0.4.1] Close the remaining workspace tree watcher validation in
    [#9](https://github.com/GBLMX/Anvil/issues/9); implementation is described
    in [ADR-0018](docs/adr/0018-workspace-tree-watch.md).
 

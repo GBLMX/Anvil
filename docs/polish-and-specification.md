@@ -14,7 +14,8 @@ contract or release gate.
 
 `0.4.0` closes the empty plugin-host boundary only. A plugin VM/runtime, plugin
 loading, the capability table, gateway control-socket token registration, and
-end-to-end plugin `sys.*` dispatch are explicitly `0.5.0` work.
+end-to-end plugin `sys.*` dispatch belong to the post-`0.4.0` feature line;
+the runtime slice is tracked as `0.4.4`.
 
 ## Allowed work
 

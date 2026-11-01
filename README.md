@@ -6,8 +6,8 @@ The official standard edition is one composition; third-party distributions
 can compose the kernel with their own UI and trusted Rust code. Runtime plugins
 remain untrusted and sandboxed.
 
-Status: **0.4.0; Phase 0.7 empty-host boundary released**.
-Release train: **0.4.0: Polish & Specification (closed)**.
+Status: **0.4.0 released; `0.4.x` feature line active**.
+Release model: **0.3.0 → 0.4.0 maintenance closed**.
 Development uses Rust from `rust-toolchain.toml` and Go **1.26.10 or newer**;
 CI installs the exact Go version from the root `go.mod`. The ratatui editor now
 includes insert
@@ -73,6 +73,7 @@ key dismisses it.
 - [High-frequency command architecture plan](docs/command-architecture-plan.md)
 - [0.3.0 → 0.4.0: Polish & Specification](docs/polish-and-specification.md)
 - [0.3.0 → 0.4.0 / Phase 0.7 plan](docs/phase-0-7-plan.md)
+- [0.4.x feature plan](docs/0.4.x-plan.md)
 - [Plugin-host isolation ADR](docs/adr/0012-plugin-host-isolation.md)
 - [Threat model](docs/threat-model.md)
 - [Architecture](docs/architecture.md)

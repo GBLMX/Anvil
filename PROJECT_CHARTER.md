@@ -1,8 +1,8 @@
 # Anvil Project Charter
 
 Status: **0.4.0 / Phase 0.7 empty-host boundary released. Pre-alpha.**
-Release train: **0.4.0: Polish & Specification**, released 2026-11-01.
-`0.4.x` is patch-only hardening; `0.5.0` starts the next feature train.
+Release model: **0.3.0 → 0.4.0 was the maintenance train**, released
+2026-11-01. Feature development resumes after `0.4.0` on the `0.4.x` line.
 Supersedes: the V1.0 whitepaper draft where it conflicts with the decisions below.
 Changes to this document require an ADR.
 

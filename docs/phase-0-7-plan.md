@@ -1,7 +1,7 @@
 # 0.3.0 → 0.4.0 / Phase 0.7 Plan (Polish & Specification)
 
 Status: released as `0.4.0` on 2026-11-01; plugin runtime, loading, capability
-bindings, and control-socket registration move to `0.5.0`.
+bindings, and control-socket registration move to `0.4.4`.
 `v0.3.0` has trusted LSP diagnostics, completion, hover, definition, rename,
 Code Actions, formatting, and document symbols for Rust, Go, Python,
 TypeScript/JavaScript, C/C++, Java, Lua, JSON, YAML, and shell files, an async
@@ -12,7 +12,7 @@ highlighting is asynchronous but not incremental.
 ## Priorities
 
 1. **Plugin-host empty-host boundary** — close the Phase 0.6 process/sandbox
-   boundary. VM/runtime and plugin loading are explicitly 0.5.0.
+   boundary. VM/runtime and plugin loading are explicitly `0.4.4`.
 2. **LSP contract closure** — decide or implement command-style Code Actions,
    close formatting options, and keep the advertised surface test-backed.
 3. **Specification and documentation hardening** — keys, commands, schemas,
@@ -31,7 +31,7 @@ sandboxed Luau runtime smoke check.
 
 **0.4.0 is scoped to this empty-host boundary only. It does not include a
 plugin VM/runtime, plugin loading, the capability table, gateway control-socket
-registration, or end-to-end plugin `sys.*` dispatch. Those are 0.5.0 work.**
+registration, or end-to-end plugin `sys.*` dispatch. Those are `0.4.4` work.**
 
 Required outcome:
 
@@ -52,7 +52,7 @@ Acceptance:
 0.4.0 gate: the existing empty-host isolation tests pass. There is no
 VM/runtime gate in this release.
 
-Deferred to 0.5.0: plugin VM/runtime, plugin loading, capability table,
+Deferred to `0.4.4`: plugin VM/runtime, plugin loading, capability table,
 gateway control-socket token registration, and end-to-end `sys.*` dispatch.
 
 ## 2. Tree-sitter syntax highlighting

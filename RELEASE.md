@@ -5,11 +5,14 @@ current `0.x` line; it is not a compatibility guarantee.
 
 ## Versioning
 
-- Releases use semantic versioning with a `v` tag: `v0.4.0`, `v0.4.1`.
-- `0.x` releases may contain breaking API changes. A public compatibility
+- Releases use `vX.Y.Z` tags. Before `1.0`, version lines are release-series
+  labels rather than a compatibility promise.
+- `0.x` releases may contain breaking API changes; a public compatibility
   promise starts only when an interface is explicitly frozen.
-- Patch releases are for fixes and security updates; do not add new capability
-  families in a patch release.
+- `0.4.x` is the post-`0.4.0` feature line. A release may add one bounded
+  capability slice; `0.4.x` is not restricted to patch-only changes.
+- Bugfix and security releases still use the same patch-tag format, but each
+  release must state whether it is a fix slice or a feature slice.
 - Rust kernel crates, the gateway protocol, and the plugin API are versioned
   separately once their boundaries are frozen.
 - Windows and macOS are not release targets for v1.
