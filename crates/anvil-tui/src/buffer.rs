@@ -149,6 +149,11 @@ impl Model {
                     (None, None) => was_active,
                     _ => false,
                 });
+        if split_same && self.split.as_ref().is_some_and(|pane| pane.buffer.modified) {
+            self.status = "E: split pane has unsaved changes".to_owned();
+            self.dirty = true;
+            return;
+        }
         if split_same {
             self.split = None;
             self.split_active = false;

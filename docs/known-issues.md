@@ -147,7 +147,7 @@ workspace management and should be addressed before adding more UI features.
   - `..`, absolute paths, symlink-parent escapes, and outside-workspace targets
     are denied.
 - Verification:
-  - `cargo test --workspace --no-fail-fast`: 226 passed, 1 ignored.
+  - `cargo test --workspace --no-fail-fast`: 227 passed, 1 ignored.
   - `go test ./go/...` and `go vet ./go/...` pass.
   - Workspace clippy, fmt, and `git diff --check` pass.
 
@@ -163,8 +163,8 @@ workspace management and should be addressed before adding more UI features.
     skips the dirty guard.
   - Dirty close enters `Save before closing? [Y/n/c]`; `y` saves then closes,
     `n` discards, `c`/Esc cancels.
-  - Closing a buffer clears a split pane showing the same path and keeps the
-    remaining active buffer valid.
+  - Closing a buffer clears a split pane showing the same path only when that
+    pane is clean; a dirty split is refused rather than discarded.
   - Closing the last buffer resets to one clean unnamed buffer instead of
     leaving a stale editor state.
   - The removed `Buffer` and its `EditorState`/`LineIndex`/`PieceTable`
@@ -176,8 +176,8 @@ workspace management and should be addressed before adding more UI features.
   - The active buffer and buffer count remain valid after every close.
 
 - Verification:
-  - `cargo test --workspace --no-fail-fast`: 226 passed, 1 ignored.
-  - `cargo test -p anvil-tui buffer`: 12 passed.
+  - `cargo test --workspace --no-fail-fast`: 227 passed, 1 ignored.
+  - `cargo test -p anvil-tui buffer`: 13 passed.
   - Workspace clippy, fmt, and `git diff --check` pass.
 
 ### BUG-007: LSP does not auto-start for supported files
@@ -272,6 +272,6 @@ workspace management and should be addressed before adding more UI features.
     snapshot infrastructure.
 - Verification:
   - Focused TUI test passes.
-  - `cargo test -p anvil-tui`: 120 passed.
-  - `cargo test --workspace --no-fail-fast`: 226 passed, 1 ignored.
+  - `cargo test -p anvil-tui`: 121 passed.
+  - `cargo test --workspace --no-fail-fast`: 227 passed, 1 ignored.
   - Workspace clippy, fmt, and `git diff --check` pass.

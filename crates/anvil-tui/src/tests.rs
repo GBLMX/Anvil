@@ -1867,6 +1867,29 @@ fn closing_buffer_clears_matching_split() {
 }
 
 #[test]
+fn closing_buffer_refuses_to_drop_dirty_split() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("file.txt");
+    fs::write(&path, "file").expect("write");
+    let mut model = Model::open(&path).expect("open");
+    model.split_vertical();
+    handle_event(&mut model, key(KeyCode::Char('i')));
+    type_text(&mut model, "X");
+    handle_event(&mut model, key(KeyCode::Esc));
+    model.focus_split(true);
+
+    command(&mut model, "bd");
+    assert!(
+        model
+            .split
+            .as_ref()
+            .is_some_and(|pane| pane.buffer.modified)
+    );
+    assert!(model.status.contains("split pane has unsaved changes"));
+    assert_eq!(model.path.as_ref(), Some(&path));
+}
+
+#[test]
 fn quit_guard_checks_inactive_buffers() {
     let dir = tempfile::tempdir().expect("tempdir");
     let first = dir.path().join("first.txt");
