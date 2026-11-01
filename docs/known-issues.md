@@ -223,10 +223,13 @@ workspace management and should be addressed before adding more UI features.
     refresh the workspace tree.
   - Tree refresh preservation of expanded/selected state is part of that
     remaining work.
+  - Tracking issue:
+    [#9: [0.5.0] Workspace tree watcher](https://github.com/GBLMX/Anvil/issues/9).
 - Acceptance:
   - External change to a clean open buffer is reloaded.
   - External change to a dirty buffer prompts and never discards local edits.
-  - External create/delete/rename tree refresh is not yet claimed.
+  - External create/delete/rename tree refresh is explicitly deferred to
+    [#9](https://github.com/GBLMX/Anvil/issues/9) for 0.5.0.
 - Verification:
   - `cargo test --workspace --no-fail-fast`: 230 passed, 1 ignored.
   - `cargo test -p anvil-tui`: 124 passed.
