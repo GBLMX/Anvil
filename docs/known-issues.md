@@ -1,8 +1,8 @@
 # Known Issues
 
 Status: BUG-001, BUG-004, BUG-005, BUG-006, BUG-007, BUG-008 (0.4.0
-open-buffer and 0.4.1 tree scopes), and BUG-009 are resolved. BUG-002/003
-remain open.
+open-buffer and 0.4.1 tree scopes), and BUG-009 are resolved. BUG-002 is
+fixed for 0.4.2; BUG-003 remains open for 0.4.3.
 
 ## BUG-001: File tree and fuzzy picker do not scroll with the selection
 
@@ -33,32 +33,24 @@ remain open.
 ## BUG-002: Syntax highlighting does not cover Anvil project file formats
 
 - Area: TUI syntax highlighting
-- Status: Open; not fixed
+- Status: Fixed 2026-11-01 for the baseline formats; `0.4.2` release pending.
 - Target: `0.4.2`
 - Severity: feature coverage / usability
-- Current coverage: only Rust and JSON are registered in
-  `crates/anvil-tui/src/syntax.rs` (`language_for`).
-- Required baseline: at least the formats used by the Anvil repository:
-  - Rust (`.rs`)
-  - TOML (`.toml`)
-  - Go (`.go`)
-  - Markdown (`.md`)
-  - JSON / JSON with comments (`.json`, `.jsonc`)
-  - YAML (`.yml`, `.yaml`)
-  - Shell (`.sh`, `.bash`)
-  - Python (`.py`) for repository scripts
-  - Extensionless project files such as `go.mod`, `Makefile`, and
-    `Dockerfile`, by filename detection
-- Evidence:
-  - `crates/anvil-tui/Cargo.toml` only includes `tree-sitter-json` and
-    `tree-sitter-rust`.
-  - `language_for` switches on the file extension and has no fallback for
-    extensionless files.
-  - Unsupported files currently clear the syntax cache and render as plain text
-    (`SyntaxState::poll`).
-- Acceptance for a future fix:
-  - Every baseline format is recognized by extension or filename.
-  - Unsupported formats still render safely as plain text.
+- Coverage:
+  - Rust (`.rs`), TOML (`.toml`), Go (`.go`), Bash (`.sh`/`.bash`),
+    Python (`.py`), YAML (`.yml`/`.yaml`), JSON/JSONC (`.json`/`.jsonc`),
+    Makefile, Dockerfile, and `go.mod`.
+  - Markdown remains intentionally separate in BUG-003/`0.4.3`.
+- Resolution:
+  - `language_for` uses a static compiled-query registry keyed by file name
+    and extension; `go.mod` uses a bounded directive/comment/string scanner.
+  - Grammar queries are compiled once, not once per parse request.
+  - Rust keyword walking is limited to Rust; other grammars use their
+    Tree-sitter highlight queries.
+- Acceptance/verification:
+  - Tests cover file-name and extension detection, class output for every
+    baseline format, JSONC comments, and the `go.mod` fallback.
+  - Unsupported files still render safely as plain text.
   - Highlighting remains bounded by `MAX_HIGHLIGHT_BYTES`.
 
 ## BUG-003: Markdown highlighting needs a deliberate grammar and query
@@ -235,8 +227,8 @@ workspace management and should be addressed before adding more UI features.
   - External create/delete/rename refreshes the tree while preserving valid
     selection and expansion.
 - Verification:
-  - `cargo test --workspace --no-fail-fast`: 235 passed, 1 ignored.
-  - `cargo test -p anvil-tui`: 129 passed.
+  - `cargo test --workspace --no-fail-fast`: 237 passed, 1 ignored.
+  - `cargo test -p anvil-tui`: 131 passed.
   - `go test ./...`, `go vet ./...`, and `govulncheck ./...` pass.
   - Workspace clippy, fmt, and `git diff --check` pass.
 

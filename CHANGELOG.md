@@ -5,6 +5,26 @@ All notable changes to Anvil are recorded here. The format follows
 lines are release-series labels, not a compatibility promise; `0.4.x` is the
 post-`0.4.0` feature line.
 
+## [0.4.2] - 2026-11-01
+
+### Added
+
+- Tree-sitter coverage for TOML, Go, Bash, Python, YAML, JSONC, Makefile, and
+  Dockerfile, detected by extension or by the `Makefile`/`Dockerfile`/`go.mod`
+  file name.
+- A bounded `go.mod` directive/comment/string highlighter.
+
+### Changed
+
+- Syntax queries are compiled once in a static registry instead of on every
+  parse request; Rust keyword walking is limited to Rust.
+- JSONC comments and booleans now use the JSON grammar's comment support.
+
+### Fixed
+
+- Unsupported formats continue to fall back to plain text, and the existing
+  256 KiB highlight limit still applies.
+
 ## [0.4.1] - 2026-11-01
 
 ### Added

@@ -31,7 +31,7 @@ checksum = "940b3a0ca603d1eade50a4846a2afffd5ef57a9feac2c0e2ec2e14f9ead76000"
 
 [[package]]
 name = "anvil-api"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "schemars",
  "serde",
@@ -41,7 +41,7 @@ dependencies = [
 
 [[package]]
 name = "anvil-core"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "criterion",
  "proptest",
@@ -52,7 +52,7 @@ dependencies = [
 
 [[package]]
 name = "anvil-editor"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "anvil-api",
  "anvil-core",
@@ -61,7 +61,7 @@ dependencies = [
 
 [[package]]
 name = "anvil-ipc"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "base64",
  "rustix",
@@ -71,7 +71,7 @@ dependencies = [
 
 [[package]]
 name = "anvil-plugin-host"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "anvil-ipc",
  "libc",
@@ -81,7 +81,7 @@ dependencies = [
 
 [[package]]
 name = "anvil-tui"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "anvil-api",
  "anvil-core",
@@ -96,8 +96,15 @@ dependencies = [
  "sha2",
  "tempfile",
  "tree-sitter",
+ "tree-sitter-bash",
+ "tree-sitter-dockerfile-updated",
+ "tree-sitter-go",
  "tree-sitter-json",
+ "tree-sitter-make",
+ "tree-sitter-python",
  "tree-sitter-rust",
+ "tree-sitter-toml-ng",
+ "tree-sitter-yaml",
  "unicode-width",
 ]
 
@@ -2211,6 +2218,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "tree-sitter-bash"
+version = "0.25.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9e5ec769279cc91b561d3df0d8a5deb26b0ad40d183127f409494d6d8fc53062"
+dependencies = [
+ "cc",
+ "tree-sitter-language",
+]
+
+[[package]]
+name = "tree-sitter-dockerfile-updated"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5e61eb704364be179ab9be89e2891c8e77c0041eca5891a5c04164a21f6df7a0"
+dependencies = [
+ "cc",
+ "tree-sitter",
+]
+
+[[package]]
+name = "tree-sitter-go"
+version = "0.25.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c8560a4d2f835cc0d4d2c2e03cbd0dde2f6114b43bc491164238d333e28b16ea"
+dependencies = [
+ "cc",
+ "tree-sitter-language",
+]
+
+[[package]]
 name = "tree-sitter-json"
 version = "0.24.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2227,10 +2264,50 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "009994f150cc0cd50ff54917d5bc8bffe8cad10ca10d81c34da2ec421ae61782"
 
 [[package]]
+name = "tree-sitter-make"
+version = "1.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c5998dc7cbcbdab19fae8aefef982bf2d6544513d8d2e69cc44aec4c63810104"
+dependencies = [
+ "cc",
+ "tree-sitter-language",
+]
+
+[[package]]
+name = "tree-sitter-python"
+version = "0.25.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6bf85fd39652e740bf60f46f4cda9492c3a9ad75880575bf14960f775cb74a1c"
+dependencies = [
+ "cc",
+ "tree-sitter-language",
+]
+
+[[package]]
 name = "tree-sitter-rust"
 version = "0.24.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "439e577dbe07423ec2582ac62c7531120dbfccfa6e5f92406f93dd271a120e45"
+dependencies = [
+ "cc",
+ "tree-sitter-language",
+]
+
+[[package]]
+name = "tree-sitter-toml-ng"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e9adc2c898ae49730e857d75be403da3f92bb81d8e37a2f918a08dd10de5ebb1"
+dependencies = [
+ "cc",
+ "tree-sitter-language",
+]
+
+[[package]]
+name = "tree-sitter-yaml"
+version = "0.7.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "53c223db85f05e34794f065454843b0668ebc15d240ada63e2b5939f43ce7c97"
 dependencies = [
  "cc",
  "tree-sitter-language",
