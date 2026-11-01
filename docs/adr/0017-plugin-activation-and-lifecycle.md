@@ -1,6 +1,7 @@
 # ADR-0017: Plugin Activation, Concurrent Execution, and Resource Isolation
 
-- Status: Proposed; planning only, no runtime implementation in `0.4.0`
+- Status: Accepted; implementation split across `0.4.4`–`0.4.8`; no runtime
+  implementation before `0.4.4`.
 - Date: 2026-11-01
 - Related: [ADR-0001](0001-plugin-isolation.md),
   [ADR-0007](0007-jsonrpc-envelope-and-capability-token.md),

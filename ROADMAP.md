@@ -18,8 +18,9 @@ in `PROJECT_CHARTER.md`, `docs/phase-0-7-plan.md`, and the ADRs.
 2. Version the gateway protocol and add compatibility tests.
 3. Establish a reproducible kernel performance baseline.
 4. Add user keymap/config boundaries without freezing the plugin keymap format.
-5. [0.4.4] Turn the empty plugin host into a tested Lua/TS runtime path;
-   activation, concurrency, and lifecycle design is in
+5. [0.4.4–0.4.8] Split the plugin runtime into gateway capability control,
+   manifest/host loading, activation supervisor, resource isolation, and
+   plugin I/O/document transactions; design is in
    [ADR-0017](docs/adr/0017-plugin-activation-and-lifecycle.md).
 6. [0.4.1] Close the remaining workspace tree watcher validation in
    [#9](https://github.com/GBLMX/Anvil/issues/9); implementation is described
