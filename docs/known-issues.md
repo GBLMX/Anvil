@@ -235,8 +235,8 @@ workspace management and should be addressed before adding more UI features.
   - External create/delete/rename refreshes the tree while preserving valid
     selection and expansion.
 - Verification:
-  - `cargo test --workspace --no-fail-fast`: 234 passed, 1 ignored.
-  - `cargo test -p anvil-tui`: 128 passed.
+  - `cargo test --workspace --no-fail-fast`: 235 passed, 1 ignored.
+  - `cargo test -p anvil-tui`: 129 passed.
   - `go test ./...`, `go vet ./...`, and `govulncheck ./...` pass.
   - Workspace clippy, fmt, and `git diff --check` pass.
 

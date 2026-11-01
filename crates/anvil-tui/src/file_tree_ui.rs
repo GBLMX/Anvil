@@ -1105,4 +1105,23 @@ mod tests {
                 .any(|entry| entry.path == src && entry.expanded)
         );
     }
+
+    #[test]
+    fn tree_watch_cap_is_reported() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let mut model = Model::new(EditorState::from_text(""), None);
+        model.workspace = dir.path().to_path_buf();
+        let workspace = model.workspace.clone();
+        model.tree = (0..MAX_TREE_WATCH_DIRS + 1)
+            .map(|index| TreeEntry {
+                path: workspace.join(format!("d{index}")),
+                depth: 0,
+                is_dir: true,
+                expanded: true,
+            })
+            .collect();
+        model.sync_tree_watches();
+        assert!(model.tree_watch_limited);
+        assert!(model.status.contains("watch limit"));
+    }
 }

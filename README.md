@@ -68,6 +68,7 @@ key dismisses it.
 
 ## Documents
 
+- [Installing Anvil](INSTALL.md)
 - [Project charter](PROJECT_CHARTER.md)
 - [Known issues](docs/known-issues.md)
 - [High-frequency command architecture plan](docs/command-architecture-plan.md)
