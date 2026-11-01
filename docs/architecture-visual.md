@@ -1,6 +1,6 @@
 # Anvil Architecture Maps
 
-Status: current as of `v0.3.0`. Solid paths are implemented. Dashed paths are
+Status: current as of `v0.4.0`. Solid paths are implemented. Dashed paths are
 planned or debug-only.
 
 ## Current architecture

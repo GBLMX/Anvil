@@ -4,13 +4,16 @@ All notable changes to Anvil are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.4.0] - 2026-11-01
 
 ### Release focus
 
-- `0.3.0` → `0.4.0` is the Polish & Specification train: fixes, tests,
+- `0.4.0` closes the Polish & Specification train: fixes, tests,
   documentation, and contract closure only; no new capability families. See
   [the release policy](docs/polish-and-specification.md).
+- The plugin host stops at the sandboxed empty-host boundary. Plugin runtime,
+  loading, capability bindings, gateway control-socket registration, and
+  end-to-end plugin `sys.*` dispatch move to `0.5.0`.
 
 ### Added
 

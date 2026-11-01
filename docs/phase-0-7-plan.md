@@ -1,6 +1,7 @@
 # 0.3.0 → 0.4.0 / Phase 0.7 Plan (Polish & Specification)
 
-Status: in progress inside the [Polish & Specification release train](polish-and-specification.md).
+Status: released as `0.4.0` on 2026-11-01; plugin runtime, loading, capability
+bindings, and control-socket registration move to `0.5.0`.
 `v0.3.0` has trusted LSP diagnostics, completion, hover, definition, rename,
 Code Actions, formatting, and document symbols for Rust, Go, Python,
 TypeScript/JavaScript, C/C++, Java, Lua, JSON, YAML, and shell files, an async

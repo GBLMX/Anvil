@@ -5,7 +5,7 @@ current `0.x` line; it is not a compatibility guarantee.
 
 ## Versioning
 
-- Releases use semantic versioning with a `v` tag: `v0.3.0`, `v0.3.1`.
+- Releases use semantic versioning with a `v` tag: `v0.4.0`, `v0.4.1`.
 - `0.x` releases may contain breaking API changes. A public compatibility
   promise starts only when an interface is explicitly frozen.
 - Patch releases are for fixes and security updates; do not add new capability

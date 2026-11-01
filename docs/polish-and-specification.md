@@ -1,6 +1,7 @@
 # 0.3.0 → 0.4.0: Polish & Specification
 
-Status: active release train. `0.3.x` is the polish phase; `0.4.0` closes it.
+Status: released as `0.4.0` on 2026-11-01. `0.3.x` was the polish phase;
+`0.4.0` closes this train.
 
 ## Intent
 
@@ -14,7 +15,6 @@ contract or release gate.
 `0.4.0` closes the empty plugin-host boundary only. A plugin VM/runtime, plugin
 loading, the capability table, gateway control-socket token registration, and
 end-to-end plugin `sys.*` dispatch are explicitly `0.5.0` work.
-
 
 ## Allowed work
 
