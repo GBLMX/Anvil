@@ -318,3 +318,73 @@ func TestCreateRenameAndRemoveEntries(t *testing.T) {
 		t.Fatal("CreateDir accepted traversal")
 	}
 }
+
+func TestCopyFileDoesNotOverwriteOrFollowSymlinks(t *testing.T) {
+	root, dir := testRoot(t)
+	source := filepath.Join(dir, "source.txt")
+	if err := os.WriteFile(source, []byte("copy me"), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	if err := root.Copy("source.txt", "copy.txt"); err != nil {
+		t.Fatalf("Copy: %v", err)
+	}
+	got, err := os.ReadFile(filepath.Join(dir, "copy.txt"))
+	if err != nil || string(got) != "copy me" {
+		t.Fatalf("copy = %q, %v", got, err)
+	}
+	info, err := os.Stat(filepath.Join(dir, "copy.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o640 {
+		t.Fatalf("copy mode = %o", info.Mode().Perm())
+	}
+	if err := root.Copy("source.txt", "copy.txt"); err == nil {
+		t.Fatal("copy replaced an existing destination")
+	}
+
+	outside := t.TempDir()
+	if err := os.Symlink(source, filepath.Join(dir, "source-link")); err != nil {
+		t.Fatal(err)
+	}
+	if err := root.Copy("source-link", "via-link.txt"); err == nil {
+		t.Fatal("copy followed a source symlink")
+	}
+	if err := os.Symlink(outside, filepath.Join(dir, "outside-link")); err != nil {
+		t.Fatal(err)
+	}
+	if err := root.Copy("source.txt", "outside-link/escape.txt"); err == nil {
+		t.Fatal("copy escaped through a destination-parent symlink")
+	}
+	if _, err := os.Stat(filepath.Join(outside, "escape.txt")); !os.IsNotExist(err) {
+		t.Fatal("copy wrote outside the workspace")
+	}
+}
+
+func TestRemoveAllRecursiveDoesNotFollowSymlinks(t *testing.T) {
+	root, dir := testRoot(t)
+	tree := filepath.Join(dir, "tree")
+	if err := os.MkdirAll(filepath.Join(tree, "nested"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tree, "nested", "file.txt"), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	outside := t.TempDir()
+	outsideFile := filepath.Join(outside, "keep.txt")
+	if err := os.WriteFile(outsideFile, []byte("keep"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(tree, "outside")); err != nil {
+		t.Fatal(err)
+	}
+	if err := root.RemoveAll("tree"); err != nil {
+		t.Fatalf("RemoveAll: %v", err)
+	}
+	if _, err := os.Stat(tree); !os.IsNotExist(err) {
+		t.Fatalf("tree still exists: %v", err)
+	}
+	if got, err := os.ReadFile(outsideFile); err != nil || string(got) != "keep" {
+		t.Fatalf("outside file changed: %q, %v", got, err)
+	}
+}

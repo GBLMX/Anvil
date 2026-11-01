@@ -303,6 +303,18 @@ impl GatewayClient {
         Ok(())
     }
 
+    /// Copy one workspace regular file without replacing an existing target.
+    pub fn copy(&mut self, from: &str, to: &str) -> Result<(), ClientError> {
+        self.request("sys.copy", serde_json::json!({ "from": from, "to": to }))?;
+        Ok(())
+    }
+
+    /// Remove one workspace file, symlink, or directory tree.
+    pub fn remove_all(&mut self, path: &str) -> Result<(), ClientError> {
+        self.request("sys.remove_all", serde_json::json!({ "path": path }))?;
+        Ok(())
+    }
+
     /// Run one allowlisted tool through the gateway's sandboxed exec runner.
     pub fn exec(
         &mut self,

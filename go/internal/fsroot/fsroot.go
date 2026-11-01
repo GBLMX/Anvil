@@ -315,6 +315,195 @@ func (r *Root) Remove(path string) error {
 	return nil
 }
 
+// Copy copies one regular file beneath the root without following a final
+// symlink and without replacing an existing destination.
+//
+// The gateway streams the copy with io.Copy, so file contents never cross the
+// Unix socket or get buffered as one allocation.
+func (r *Root) Copy(from, to string) error {
+	fromRelative, err := cleanRelative(from)
+	if err != nil {
+		return err
+	}
+	toDirName, toName, err := splitRelative(to)
+	if err != nil {
+		return err
+	}
+
+	r.mu.RLock()
+	if r.fd < 0 {
+		r.mu.RUnlock()
+		return errors.New("workspace is closed")
+	}
+	sourceFD, err := openFileNoFollow(r.fd, fromRelative)
+	r.mu.RUnlock()
+	if err != nil {
+		return fmt.Errorf("open copy source %q: %w", from, err)
+	}
+	source := os.NewFile(uintptr(sourceFD), fromRelative)
+	if source == nil {
+		_ = unix.Close(sourceFD)
+		return errors.New("create copy source handle")
+	}
+	defer source.Close()
+
+	var stat unix.Stat_t
+	if err := unix.Fstat(sourceFD, &stat); err != nil {
+		return fmt.Errorf("stat copy source %q: %w", from, err)
+	}
+	if stat.Mode&unix.S_IFMT != unix.S_IFREG {
+		return fmt.Errorf("%q is not a regular file", from)
+	}
+
+	r.mu.RLock()
+	if r.fd < 0 {
+		r.mu.RUnlock()
+		return errors.New("workspace is closed")
+	}
+	dirFD, err := openDirBeneath(r.fd, toDirName)
+	r.mu.RUnlock()
+	if err != nil {
+		return fmt.Errorf("open copy destination directory for %q: %w", to, err)
+	}
+	defer unix.Close(dirFD)
+
+	destFD, err := unix.Openat(
+		dirFD,
+		toName,
+		unix.O_WRONLY|unix.O_CREAT|unix.O_EXCL|unix.O_CLOEXEC|unix.O_NOFOLLOW,
+		0o600,
+	)
+	if err != nil {
+		return fmt.Errorf("create copy destination %q: %w", to, err)
+	}
+	destination := os.NewFile(uintptr(destFD), toName)
+	if destination == nil {
+		_ = unix.Close(destFD)
+		_ = unix.Unlinkat(dirFD, toName, 0)
+		return errors.New("create copy destination handle")
+	}
+
+	committed := false
+	defer func() {
+		if !committed {
+			_ = unix.Unlinkat(dirFD, toName, 0)
+		}
+	}()
+
+	if _, err := io.Copy(destination, source); err != nil {
+		_ = destination.Close()
+		return fmt.Errorf("copy %q to %q: %w", from, to, err)
+	}
+	if err := unix.Fchmod(destFD, uint32(stat.Mode&0o777)); err != nil {
+		_ = destination.Close()
+		return fmt.Errorf("set copy mode for %q: %w", to, err)
+	}
+	if err := destination.Sync(); err != nil {
+		_ = destination.Close()
+		return fmt.Errorf("sync copy destination %q: %w", to, err)
+	}
+	if err := destination.Close(); err != nil {
+		return fmt.Errorf("close copy destination %q: %w", to, err)
+	}
+	committed = true
+	return nil
+}
+
+// RemoveAll removes one file, symlink, or directory tree beneath the root.
+//
+// Directory traversal uses descriptor-relative no-follow opens; a symlink is
+// removed as a link and its target is never traversed.
+func (r *Root) RemoveAll(path string) error {
+	dirName, name, err := splitRelative(path)
+	if err != nil {
+		return err
+	}
+	r.mu.RLock()
+	if r.fd < 0 {
+		r.mu.RUnlock()
+		return errors.New("workspace is closed")
+	}
+	dirFD, err := openDirBeneath(r.fd, dirName)
+	r.mu.RUnlock()
+	if err != nil {
+		return fmt.Errorf("open parent directory for %q: %w", path, err)
+	}
+	defer unix.Close(dirFD)
+	if err := removeEntryAt(dirFD, name); err != nil {
+		return fmt.Errorf("remove %q: %w", path, err)
+	}
+	return nil
+}
+
+func removeEntryAt(parentFD int, name string) error {
+	var stat unix.Stat_t
+	if err := unix.Fstatat(parentFD, name, &stat, unix.AT_SYMLINK_NOFOLLOW); err != nil {
+		return err
+	}
+	if stat.Mode&unix.S_IFMT != unix.S_IFDIR {
+		return unix.Unlinkat(parentFD, name, 0)
+	}
+
+	dirFD, err := openReadDirNoFollow(parentFD, name)
+	if err != nil {
+		return err
+	}
+	dir := os.NewFile(uintptr(dirFD), name)
+	if dir == nil {
+		_ = unix.Close(dirFD)
+		return errors.New("create directory handle")
+	}
+	entries, err := dir.ReadDir(-1)
+	if err != nil {
+		_ = dir.Close()
+		return err
+	}
+	for _, entry := range entries {
+		if err := removeEntryAt(int(dir.Fd()), entry.Name()); err != nil {
+			_ = dir.Close()
+			return err
+		}
+	}
+	if err := dir.Close(); err != nil {
+		return err
+	}
+	return unix.Unlinkat(parentFD, name, unix.AT_REMOVEDIR)
+}
+
+func openFileNoFollow(dirfd int, path string) (int, error) {
+	how := &unix.OpenHow{
+		Flags: uint64(
+			unix.O_RDONLY | unix.O_CLOEXEC | unix.O_NONBLOCK | unix.O_NOFOLLOW,
+		),
+		Resolve: uint64(unix.RESOLVE_BENEATH | unix.RESOLVE_NO_MAGICLINKS),
+	}
+	for range 4 {
+		fd, err := unix.Openat2(dirfd, path, how)
+		if errors.Is(err, unix.EAGAIN) {
+			continue
+		}
+		return fd, err
+	}
+	return -1, unix.EAGAIN
+}
+
+func openReadDirNoFollow(dirfd int, path string) (int, error) {
+	how := &unix.OpenHow{
+		Flags: uint64(
+			unix.O_RDONLY | unix.O_DIRECTORY | unix.O_CLOEXEC | unix.O_NOFOLLOW,
+		),
+		Resolve: uint64(unix.RESOLVE_BENEATH | unix.RESOLVE_NO_MAGICLINKS),
+	}
+	for range 4 {
+		fd, err := unix.Openat2(dirfd, path, how)
+		if errors.Is(err, unix.EAGAIN) {
+			continue
+		}
+		return fd, err
+	}
+	return -1, unix.EAGAIN
+}
+
 const writeTempPrefix = ".anvil-write-"
 
 // WriteTarget is an atomic file replacement in progress.

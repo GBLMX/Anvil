@@ -22,6 +22,14 @@ pub enum FileRequest {
         relative: String,
         revision: u64,
     },
+    /// Move or copy one workspace entry.
+    Transfer {
+        from: PathBuf,
+        to: PathBuf,
+        copy: bool,
+    },
+    /// Delete one workspace entry or directory tree.
+    RemoveAll(PathBuf),
 }
 
 /// A background file-tree result.
@@ -35,6 +43,18 @@ pub enum FileEvent {
         path: PathBuf,
         revision: u64,
         result: Result<Vec<(usize, char)>, String>,
+    },
+    /// A move or copy completed.
+    Transferred {
+        from: PathBuf,
+        to: PathBuf,
+        copy: bool,
+        result: Result<(), String>,
+    },
+    /// A recursive delete completed.
+    Removed {
+        path: PathBuf,
+        result: Result<(), String>,
     },
 }
 
@@ -81,6 +101,35 @@ impl FileWorker {
                         revision,
                         result: git_diff(&mut client, &relative),
                     },
+                    FileRequest::Transfer { from, to, copy } => {
+                        let result = if copy {
+                            client
+                                .copy(
+                                    &relative_path(&workspace, &from),
+                                    &relative_path(&workspace, &to),
+                                )
+                                .map_err(|error| error.to_string())
+                        } else {
+                            client
+                                .rename(
+                                    &relative_path(&workspace, &from),
+                                    &relative_path(&workspace, &to),
+                                )
+                                .map_err(|error| error.to_string())
+                        };
+                        FileEvent::Transferred {
+                            from,
+                            to,
+                            copy,
+                            result,
+                        }
+                    }
+                    FileRequest::RemoveAll(path) => FileEvent::Removed {
+                        result: client
+                            .remove_all(&relative_path(&workspace, &path))
+                            .map_err(|error| error.to_string()),
+                        path,
+                    },
                 };
                 if event_sender.send(event).is_err() {
                     break;
@@ -103,6 +152,18 @@ impl FileWorker {
     /// Drains completed events.
     pub fn poll(&self) -> Vec<FileEvent> {
         self.events.try_iter().collect()
+    }
+}
+
+fn relative_path(workspace: &Path, path: &Path) -> String {
+    let relative = path
+        .strip_prefix(workspace)
+        .map(|path| path.to_string_lossy().into_owned())
+        .unwrap_or_else(|_| ".".to_owned());
+    if relative.is_empty() {
+        ".".to_owned()
+    } else {
+        relative
     }
 }
 

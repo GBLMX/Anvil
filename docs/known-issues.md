@@ -1,7 +1,7 @@
 # Known Issues
 
-Status: mixed. BUG-001, BUG-004, BUG-007, and BUG-009 are fixed; BUG-005 is
-partially fixed; the remaining entries are open.
+Status: mixed. BUG-001, BUG-004, BUG-005, BUG-007, and BUG-009 are fixed;
+the remaining entries are open.
 
 ## BUG-001: File tree and fuzzy picker do not scroll with the selection
 
@@ -124,25 +124,32 @@ workspace management and should be addressed before adding more UI features.
 
 - Area: TUI file tree; gateway filesystem API
 - Priority: Urgent
-- Status: Partially fixed 2026-11-01; rename and delete are implemented for
-  files and empty directories. Move and recursive directory delete remain
-  open.
-- Partial resolution:
-  - `r` renames the selected entry in place; open buffer paths are remapped.
-  - `d` asks for confirmation and removes files or empty directories.
-  - Deleting an entry with an open buffer is refused.
-  - Move-to-another-directory, recursive directory delete, and copy remain
-    open.
-- Remaining plumbing:
-  - Add a move flow that chooses a destination directory and updates open
-    buffer paths.
-  - Decide whether recursive directory deletion is safe; if added, require a
-    stronger confirmation and a non-empty workspace policy.
+- Status: Fixed 2026-11-01; move, copy, recursive delete, and open-path
+  remapping are implemented.
+- Resolution:
+  - `r` renames the selected entry in place.
+  - `m` moves and `c` copies the selected file into a destination directory.
+  - `d` recursively deletes a file, symlink, or directory tree.
+  - Operations run through the Go gateway in the background `FileWorker`; the
+    status bar shows a spinner while a transfer or delete is in flight.
+  - Open buffer paths are remapped after a move.
+  - Gateway additions: `sys.rename` (move), `sys.copy`, and `sys.remove_all`.
+  - `sys.copy` streams with `io.Copy`; recursive delete walks with
+    descriptor-relative no-follow opens; source and destination symlinks are
+    rejected or removed without following.
+  - TUI tests cover move/copy/recursive delete and outside-workspace rejection;
+    Go tests cover copy, no-overwrite, symlink escape, and recursive delete.
 - Acceptance:
-  - Rename/delete work for files and empty directories, including path remapping
-    for open buffers.
-  - `..`, symlink, and outside-workspace attempts are denied.
-  - Failed operations leave the tree and buffers unchanged.
+  - A file can move to another workspace directory; open paths follow it.
+  - A regular file can copy without replacing an existing target.
+  - A non-empty directory can be deleted recursively while a symlink target
+    outside the workspace survives.
+  - `..`, absolute paths, symlink-parent escapes, and outside-workspace targets
+    are denied.
+- Verification:
+  - `cargo test --workspace --no-fail-fast`: 220 passed, 1 ignored.
+  - `go test ./go/...` and `go vet ./go/...` pass.
+  - Workspace clippy, fmt, and `git diff --check` pass.
 
 ### BUG-006: No new-buffer or close-buffer lifecycle
 
@@ -257,6 +264,6 @@ workspace management and should be addressed before adding more UI features.
     snapshot infrastructure.
 - Verification:
   - Focused TUI test passes.
-  - `cargo test -p anvil-tui`: 113 passed.
-  - `cargo test --workspace --no-fail-fast`: 219 passed, 1 ignored.
+  - `cargo test -p anvil-tui`: 114 passed.
+  - `cargo test --workspace --no-fail-fast`: 220 passed, 1 ignored.
   - Workspace clippy, fmt, and `git diff --check` pass.

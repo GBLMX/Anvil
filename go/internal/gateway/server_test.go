@@ -687,6 +687,44 @@ func TestSysReadDir(t *testing.T) {
 	}
 }
 
+func TestSysCopyAndRemoveAll(t *testing.T) {
+	workspace := t.TempDir()
+	if err := os.WriteFile(filepath.Join(workspace, "source.txt"), []byte("copy"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(workspace, "tree", "nested"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(workspace, "tree", "nested", "file.txt"), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	socket := startGatewayAt(t, workspace, []string{"fs.read:**", "fs.write:**"})
+	conn := dialGateway(t, socket)
+	if response := sendRequest(t, conn, "hello-1", "session.hello", helloRequestParams(testToken)); response.Error != nil {
+		t.Fatalf("handshake error: %+v", response.Error)
+	}
+	response := sendRequest(t, conn, "copy-1", "sys.copy", map[string]interface{}{
+		"from": "source.txt",
+		"to":   "copy.txt",
+	})
+	if response.Error != nil {
+		t.Fatalf("copy error: %+v", response.Error)
+	}
+	got, err := os.ReadFile(filepath.Join(workspace, "copy.txt"))
+	if err != nil || string(got) != "copy" {
+		t.Fatalf("copy = %q, %v", got, err)
+	}
+	response = sendRequest(t, conn, "remove-1", "sys.remove_all", map[string]interface{}{
+		"path": "tree",
+	})
+	if response.Error != nil {
+		t.Fatalf("remove_all error: %+v", response.Error)
+	}
+	if _, err := os.Stat(filepath.Join(workspace, "tree")); !os.IsNotExist(err) {
+		t.Fatalf("tree still exists: %v", err)
+	}
+}
+
 func TestLSPTokenCanReconnect(t *testing.T) {
 	workspace := t.TempDir()
 	socket := filepath.Join(t.TempDir(), "gateway.sock")

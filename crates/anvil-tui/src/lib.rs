@@ -113,6 +113,12 @@ pub enum InputMode {
     RenameEntry { path: PathBuf, name: String },
     /// Confirm deletion of a tree entry.
     ConfirmDelete { path: PathBuf },
+    /// Move or copy a tree entry into a destination directory.
+    TransferEntry {
+        path: PathBuf,
+        copy: bool,
+        directory: String,
+    },
 }
 
 /// Vi word motion kind.
@@ -257,6 +263,10 @@ pub struct Model {
     pub dirty: bool,
     /// Short status line.
     pub status: String,
+    /// Background file operation label, if any.
+    busy: Option<String>,
+    /// Spinner frame for the busy label.
+    spinner: usize,
     /// Pending normal-mode operator (`d` or `y`).
     pending: Option<char>,
     /// Numeric count prefix, zero means no count.
@@ -373,6 +383,8 @@ impl Model {
             modified: false,
             dirty: true,
             status: String::new(),
+            busy: None,
+            spinner: 0,
             pending: None,
             count: 0,
             register_wait: false,
@@ -1117,6 +1129,10 @@ pub fn run_with_workspace(path: Option<PathBuf>, workspace: PathBuf) -> io::Resu
         model.poll_syntax();
         model.poll_lsp();
         model.poll_file_worker();
+        if model.busy.is_some() {
+            model.spinner = model.spinner.wrapping_add(1);
+            model.dirty = true;
+        }
         model.poll_inlay_hints(size.height.saturating_sub(2));
         model.poll_git();
         if event::poll(std::time::Duration::from_millis(50))? {

@@ -24,6 +24,8 @@ pub mod method {
     pub const SYS_CREATE_DIR: &str = "sys.create_dir";
     pub const SYS_RENAME: &str = "sys.rename";
     pub const SYS_REMOVE: &str = "sys.remove";
+    pub const SYS_COPY: &str = "sys.copy";
+    pub const SYS_REMOVE_ALL: &str = "sys.remove_all";
     pub const SYS_FETCH: &str = "sys.fetch";
     pub const SYS_EXEC: &str = "sys.exec";
 }
@@ -271,6 +273,8 @@ mod tests {
         assert_eq!(method::EDITOR_GET_VIEW, "editor.get_view");
         assert_eq!(method::EDITOR_SET_MODE, "editor.set_mode");
         assert_eq!(method::SYS_EXEC, "sys.exec");
+        assert_eq!(method::SYS_COPY, "sys.copy");
+        assert_eq!(method::SYS_REMOVE_ALL, "sys.remove_all");
     }
 
     #[test]

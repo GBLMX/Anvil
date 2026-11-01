@@ -57,6 +57,9 @@ All notable changes to Anvil are recorded here. The format follows
 
 - Search mode now preserves Tree-sitter foreground colors; matches patch a
   background layer instead of replacing syntax spans.
+- File tree move/copy now run through gateway `sys.rename`/`sys.copy` in the
+  background worker, and `d` recursively deletes entries through
+  `sys.remove_all`; the status bar shows a spinner while the operation runs.
 - Upgraded the Go module and CI toolchain to Go 1.26.10 and `golang.org/x/sys`
   to v0.44.0, resolving the 45 standard-library vulnerabilities reported by
   `govulncheck` against Go 1.22.3 and the remaining module advisory; CI now

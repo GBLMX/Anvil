@@ -20,7 +20,8 @@ Normal mode
   Ctrl-w q            close the split
   Space e             file tree (h/l/Enter expand or open, H toggles hidden)
   tree a / A         create file / folder in the tree
-  tree r / d         rename / delete the selected entry
+  tree r / m / c     rename / move / copy the selected entry
+  tree d             delete the selected entry recursively
   Space r             rename symbol
   Space a             code actions / quick fixes
   Space s             document symbols

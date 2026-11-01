@@ -217,6 +217,19 @@ for this fixture.
 
 - `fs.write` permission is separate from `fs.read`.
 
+### 5b. Mutations
+
+- `sys.rename` moves one entry without replacing an existing target.
+- `sys.copy` copies one regular file without following a final source symlink
+  and without replacing an existing destination. The gateway streams the copy
+  with `io.Copy`; file bytes never cross the Unix socket.
+- `sys.remove_all` removes a file, symlink, or directory tree. Directory walks
+  use descriptor-relative no-follow opens; symlinks are unlinked, never
+  traversed.
+- All three methods require workspace permissions and reject traversal,
+  absolute paths, and symlink-parent escapes. `sys.copy` requires `fs.read` on
+  the source and `fs.write` on the destination.
+
 ### 6. Permissions
 
 - `fs.read:<glob>` grants read access to matching workspace-relative paths.

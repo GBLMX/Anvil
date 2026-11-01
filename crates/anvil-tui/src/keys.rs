@@ -375,6 +375,8 @@ fn handle_key(model: &mut Model, key: KeyEvent) {
             KeyCode::Char('a') => model.begin_tree_create(CreateKind::File),
             KeyCode::Char('A') => model.begin_tree_create(CreateKind::Directory),
             KeyCode::Char('r') => model.begin_tree_rename(),
+            KeyCode::Char('m') => model.begin_tree_transfer(false),
+            KeyCode::Char('c') => model.begin_tree_transfer(true),
             KeyCode::Char('d') | KeyCode::Delete => model.begin_tree_delete(),
             _ => {}
         }
@@ -448,6 +450,34 @@ fn handle_key(model: &mut Model, key: KeyEvent) {
             }
             KeyCode::Char(character) if !control => {
                 name.push(character);
+                model.dirty = true;
+            }
+            _ => {}
+        },
+        InputMode::TransferEntry {
+            path,
+            copy,
+            directory,
+        } => match key.code {
+            KeyCode::Esc => {
+                model.input_mode = InputMode::Normal;
+                model.tree_focus = model.tree_visible;
+                model.status = "transfer cancelled".to_owned();
+                model.dirty = true;
+            }
+            KeyCode::Enter => {
+                let path = path.clone();
+                let copy = *copy;
+                let directory = std::mem::take(directory);
+                model.input_mode = InputMode::Normal;
+                model.finish_tree_transfer(path, copy, directory);
+            }
+            KeyCode::Backspace => {
+                directory.pop();
+                model.dirty = true;
+            }
+            KeyCode::Char(character) if !control => {
+                directory.push(character);
                 model.dirty = true;
             }
             _ => {}

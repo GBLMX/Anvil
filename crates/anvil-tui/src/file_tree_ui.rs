@@ -90,6 +90,44 @@ impl Model {
                     revision,
                     result,
                 } => self.handle_git_diff(path, revision, result),
+                FileEvent::Transferred {
+                    from,
+                    to,
+                    copy,
+                    result,
+                } => {
+                    self.busy = None;
+                    match result {
+                        Ok(()) => {
+                            if !copy {
+                                self.remap_open_path(&from, &to);
+                            }
+                            self.status = if copy {
+                                format!("copied {}", to.display())
+                            } else {
+                                format!("moved {}", to.display())
+                            };
+                            self.refresh_tree(Some(to));
+                        }
+                        Err(error) => {
+                            self.status = format!("E: {error}");
+                            self.dirty = true;
+                        }
+                    }
+                }
+                FileEvent::Removed { path, result } => {
+                    self.busy = None;
+                    match result {
+                        Ok(()) => {
+                            self.status = format!("deleted {}", path.display());
+                            self.refresh_tree(None);
+                        }
+                        Err(error) => {
+                            self.status = format!("E: {error}");
+                            self.dirty = true;
+                        }
+                    }
+                }
             }
             self.dirty = true;
         }
@@ -473,7 +511,20 @@ impl Model {
         self.dirty = true;
     }
 
+    fn tree_busy(&mut self) -> bool {
+        if self.busy.is_some() {
+            self.status = "E: file operation already in progress".to_owned();
+            self.dirty = true;
+            true
+        } else {
+            false
+        }
+    }
+
     pub(crate) fn begin_tree_create(&mut self, kind: CreateKind) {
+        if self.tree_busy() {
+            return;
+        }
         let directory = self.tree_target_directory();
         self.tree_focus = false;
         self.tree_visible = true;
@@ -486,6 +537,9 @@ impl Model {
     }
 
     pub(crate) fn begin_tree_rename(&mut self) {
+        if self.tree_busy() {
+            return;
+        }
         let Some(index) = self.tree_selected else {
             return;
         };
@@ -506,6 +560,9 @@ impl Model {
     }
 
     pub(crate) fn begin_tree_delete(&mut self) {
+        if self.tree_busy() {
+            return;
+        }
         let Some(index) = self.tree_selected else {
             return;
         };
@@ -524,13 +581,134 @@ impl Model {
         self.dirty = true;
     }
 
+    pub(crate) fn begin_tree_transfer(&mut self, copy: bool) {
+        if self.tree_busy() {
+            return;
+        }
+        let Some(index) = self.tree_selected else {
+            return;
+        };
+        let Some(entry) = self.tree.get(index) else {
+            return;
+        };
+        if copy && entry.is_dir {
+            self.status = "E: copy supports files only".to_owned();
+            self.dirty = true;
+            return;
+        }
+        self.tree_focus = false;
+        self.input_mode = InputMode::TransferEntry {
+            path: entry.path.clone(),
+            copy,
+            directory: String::new(),
+        };
+        self.dirty = true;
+    }
+
+    pub(crate) fn finish_tree_transfer(&mut self, path: PathBuf, copy: bool, directory: String) {
+        if self.tree_busy() {
+            return;
+        }
+        self.tree_focus = true;
+        let directory = directory.trim();
+        let target_directory = if directory.is_empty() {
+            self.workspace.clone()
+        } else {
+            match self.absolute_path(Path::new(directory)) {
+                Ok(path) if path.starts_with(&self.workspace) => path,
+                _ => {
+                    self.status = "E: destination is outside the workspace".to_owned();
+                    self.dirty = true;
+                    return;
+                }
+            }
+        };
+        if self.tree_entries(&target_directory).is_err() {
+            self.status = "E: destination directory does not exist".to_owned();
+            self.dirty = true;
+            return;
+        }
+        let Some(name) = path.file_name() else {
+            self.status = "E: invalid entry name".to_owned();
+            self.dirty = true;
+            return;
+        };
+        let target = target_directory.join(name);
+        if target == path {
+            self.status = "E: source and destination are the same".to_owned();
+            self.dirty = true;
+            return;
+        }
+        match self.tree_entry_exists(&target_directory, &name.to_string_lossy()) {
+            Ok(true) => {
+                self.status = format!("E: already exists: {}", name.to_string_lossy());
+                self.dirty = true;
+                return;
+            }
+            Ok(false) => {}
+            Err(error) => {
+                self.status = format!("E: {error}");
+                self.dirty = true;
+                return;
+            }
+        }
+        if let Some(worker) = self.file_worker.as_ref() {
+            let label = if copy { "copying" } else { "moving" };
+            match worker.request(FileRequest::Transfer {
+                from: path.clone(),
+                to: target.clone(),
+                copy,
+            }) {
+                Ok(()) => {
+                    self.busy = Some(label.to_owned());
+                    self.status = format!("{label} {}…", name.to_string_lossy());
+                    self.dirty = true;
+                    return;
+                }
+                Err(error) => {
+                    self.status = format!("E: {error}");
+                    self.dirty = true;
+                    return;
+                }
+            }
+        }
+        let result = if copy {
+            self.copy_path(&path, &target)
+        } else {
+            self.rename_path(&path, &target)
+        };
+        match result {
+            Ok(()) => {
+                if !copy {
+                    self.remap_open_path(&path, &target);
+                }
+                self.status = format!(
+                    "{} {} to {}",
+                    if copy { "copied" } else { "moved" },
+                    name.to_string_lossy(),
+                    target_directory
+                        .strip_prefix(&self.workspace)
+                        .map(|path| path.display().to_string())
+                        .unwrap_or_else(|_| ".".to_owned())
+                );
+                self.refresh_tree(Some(target));
+            }
+            Err(error) => {
+                self.status = format!("E: {error}");
+                self.dirty = true;
+            }
+        }
+    }
+
     pub(crate) fn finish_tree_create(
         &mut self,
         directory: PathBuf,
         name: String,
         kind: CreateKind,
     ) {
-        self.tree_focus = true;
+        if self.tree_busy() {
+            return;
+        }
         let name = name.trim().to_owned();
         if !Self::valid_tree_name(&name) {
             self.status = "E: invalid entry name".to_owned();
@@ -575,6 +753,9 @@ impl Model {
 
     pub(crate) fn finish_tree_rename(&mut self, path: PathBuf, name: String) {
         self.tree_focus = true;
+        if self.tree_busy() {
+            return;
+        }
         let name = name.trim().to_owned();
         if !Self::valid_tree_name(&name) {
             self.status = "E: invalid entry name".to_owned();
@@ -618,10 +799,33 @@ impl Model {
 
     pub(crate) fn finish_tree_delete(&mut self, path: PathBuf) {
         self.tree_focus = true;
+        if self.tree_busy() {
+            return;
+        }
         if self.path_is_open(&path) {
             self.status = "E: close the open buffer before deleting".to_owned();
             self.dirty = true;
             return;
+        }
+        if let Some(worker) = self.file_worker.as_ref() {
+            match worker.request(FileRequest::RemoveAll(path.clone())) {
+                Ok(()) => {
+                    self.busy = Some("deleting".to_owned());
+                    self.status = format!(
+                        "deleting {}…",
+                        path.file_name()
+                            .map(|name| name.to_string_lossy())
+                            .unwrap_or_default()
+                    );
+                    self.dirty = true;
+                    return;
+                }
+                Err(error) => {
+                    self.status = format!("E: {error}");
+                    self.dirty = true;
+                    return;
+                }
+            }
         }
         match self.remove_path(&path) {
             Ok(()) => self.refresh_tree(None),

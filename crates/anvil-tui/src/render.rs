@@ -13,6 +13,8 @@ use ratatui::{
 };
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
+const SPINNER: [&str; 8] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧"];
+
 fn panel_block(title: impl Into<Line<'static>>) -> Block<'static> {
     Block::bordered()
         .border_type(BorderType::Rounded)
@@ -321,6 +323,13 @@ pub fn view(model: &Model, frame: &mut Frame) {
             format!("new> {name}"),
         ),
         InputMode::RenameEntry { name, .. } => (" REN ", theme::MAGENTA, format!("rename> {name}")),
+        InputMode::TransferEntry {
+            copy, directory, ..
+        } => (
+            if *copy { " CPY " } else { " MOV " },
+            theme::ACCENT,
+            format!("{}>{directory}", if *copy { "copy" } else { "move" }),
+        ),
         InputMode::ConfirmDelete { path } => (
             " DEL ",
             theme::ERROR,
@@ -351,6 +360,11 @@ pub fn view(model: &Model, frame: &mut Frame) {
             };
             (" NOR ", theme::ACCENT, status)
         }
+    };
+    let status = if let Some(busy) = &model.busy {
+        format!("{} {busy}…", SPINNER[model.spinner % SPINNER.len()])
+    } else {
+        status
     };
     let mode = Span::styled(mode_text, theme::mode_badge(mode_color));
     let block = panel_block(title)

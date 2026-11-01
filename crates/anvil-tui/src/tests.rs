@@ -152,6 +152,46 @@ fn tree_creates_and_renames_files_and_directories() {
 }
 
 #[test]
+fn tree_moves_copies_and_recursively_deletes() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let workspace = dir.path().to_path_buf();
+    fs::create_dir(workspace.join("src")).expect("src");
+    fs::create_dir(workspace.join("dest")).expect("dest");
+    let source = workspace.join("src/file.txt");
+    fs::write(&source, "content").expect("source");
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.workspace = workspace.clone();
+    model.open_tree();
+    model.open_path(&source).expect("open");
+
+    model.finish_tree_transfer(source.clone(), false, "dest".to_owned());
+    let moved = workspace.join("dest/file.txt");
+    assert!(!source.exists());
+    assert!(moved.exists());
+    assert_eq!(model.path.as_deref(), Some(moved.as_path()));
+
+    model.finish_tree_transfer(moved.clone(), true, "src".to_owned());
+    assert!(workspace.join("src/file.txt").exists());
+    assert!(moved.exists());
+
+    model.finish_tree_transfer(moved.clone(), true, "../".to_owned());
+    assert!(model.status.contains("outside the workspace"));
+
+    model.refresh_tree(Some(workspace.join("src")));
+    model.begin_tree_transfer(true);
+    assert!(model.status.contains("files only"));
+    model.busy = Some("copying".to_owned());
+    model.finish_tree_transfer(moved.clone(), true, "src".to_owned());
+    assert!(model.status.contains("already in progress"));
+    assert!(moved.exists());
+    model.busy = None;
+
+    model.finish_tree_delete(workspace.join("src"));
+    assert!(!workspace.join("src").exists());
+    assert!(moved.exists());
+}
+
+#[test]
 fn tree_delete_requires_an_unopened_entry() {
     let dir = tempfile::tempdir().expect("tempdir");
     let workspace = dir.path().to_path_buf();

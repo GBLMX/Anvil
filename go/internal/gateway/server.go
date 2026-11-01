@@ -266,6 +266,15 @@ type removeParams struct {
 	Path string `json:"path"`
 }
 
+type copyParams struct {
+	From string `json:"from"`
+	To   string `json:"to"`
+}
+
+type removeAllParams struct {
+	Path string `json:"path"`
+}
+
 type writeParams struct {
 	Path    string `json:"path"`
 	Offset  int64  `json:"offset"`
@@ -425,6 +434,10 @@ func (s *Server) dispatch(ctx context.Context, req request, state *connectionSta
 		return s.rename(req, state)
 	case "sys.remove":
 		return s.remove(req, state)
+	case "sys.copy":
+		return s.copy(req, state)
+	case "sys.remove_all":
+		return s.removeAll(req, state)
 	case "session.hello":
 		return s.hello(req, state)
 	case "sys.exec":
@@ -646,6 +659,55 @@ func (s *Server) remove(req request, state *connectionState) (interface{}, *rpcE
 		return nil, &rpcError{Code: -32008, Message: "file service unavailable"}
 	}
 	if err := s.root.Remove(path); err != nil {
+		return nil, fileMutationError(err)
+	}
+	return map[string]bool{"ok": true}, nil
+}
+
+func (s *Server) copy(req request, state *connectionState) (interface{}, *rpcError) {
+	var params copyParams
+	if err := decodeParams(req.Params, &params); err != nil || params.From == "" || params.To == "" {
+		return nil, &rpcError{Code: -32602, Message: "invalid params"}
+	}
+	from, err := workspacePath(params.From)
+	if err != nil {
+		return nil, &rpcError{Code: -32002, Message: "policy denied"}
+	}
+	to, err := workspacePath(params.To)
+	if err != nil {
+		return nil, &rpcError{Code: -32002, Message: "policy denied"}
+	}
+	if rpcErr := s.pathPermissionError(state, "fs.read", from); rpcErr != nil {
+		return nil, rpcErr
+	}
+	if rpcErr := s.pathPermissionError(state, "fs.write", to); rpcErr != nil {
+		return nil, rpcErr
+	}
+	if s.root == nil {
+		return nil, &rpcError{Code: -32008, Message: "file service unavailable"}
+	}
+	if err := s.root.Copy(from, to); err != nil {
+		return nil, fileMutationError(err)
+	}
+	return map[string]bool{"ok": true}, nil
+}
+
+func (s *Server) removeAll(req request, state *connectionState) (interface{}, *rpcError) {
+	var params removeAllParams
+	if err := decodeParams(req.Params, &params); err != nil || params.Path == "" {
+		return nil, &rpcError{Code: -32602, Message: "invalid params"}
+	}
+	path, err := workspacePath(params.Path)
+	if err != nil {
+		return nil, &rpcError{Code: -32002, Message: "policy denied"}
+	}
+	if rpcErr := s.pathPermissionError(state, "fs.write", path); rpcErr != nil {
+		return nil, rpcErr
+	}
+	if s.root == nil {
+		return nil, &rpcError{Code: -32008, Message: "file service unavailable"}
+	}
+	if err := s.root.RemoveAll(path); err != nil {
 		return nil, fileMutationError(err)
 	}
 	return map[string]bool{"ok": true}, nil

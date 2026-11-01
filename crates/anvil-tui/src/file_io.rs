@@ -168,8 +168,9 @@ impl Model {
 
     pub(crate) fn remove_path(&mut self, path: &Path) -> Result<(), String> {
         if !self.require_gateway {
-            return if path.is_dir() {
-                fs::remove_dir(path).map_err(|error| error.to_string())
+            let metadata = fs::symlink_metadata(path).map_err(|error| error.to_string())?;
+            return if metadata.is_dir() {
+                fs::remove_dir_all(path).map_err(|error| error.to_string())
             } else {
                 fs::remove_file(path).map_err(|error| error.to_string())
             };
@@ -179,7 +180,27 @@ impl Model {
             .gateway
             .as_mut()
             .ok_or_else(|| "gateway unavailable".to_owned())?;
-        gateway.remove(&relative).map_err(|error| error.to_string())
+        gateway
+            .remove_all(&relative)
+            .map_err(|error| error.to_string())
+    }
+
+    pub(crate) fn copy_path(&mut self, from: &Path, to: &Path) -> Result<(), String> {
+        if !self.require_gateway {
+            fs::copy(from, to)
+                .map(|_| ())
+                .map_err(|error| error.to_string())
+        } else {
+            let from_relative = self.relative_path(from)?;
+            let to_relative = self.relative_path(to)?;
+            let gateway = self
+                .gateway
+                .as_mut()
+                .ok_or_else(|| "gateway unavailable".to_owned())?;
+            gateway
+                .copy(&from_relative, &to_relative)
+                .map_err(|error| error.to_string())
+        }
     }
 
     pub(crate) fn save_to(&mut self, path: PathBuf) -> bool {
