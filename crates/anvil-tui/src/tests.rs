@@ -16,6 +16,12 @@ fn type_text(model: &mut Model, text: &str) {
     }
 }
 
+fn command(model: &mut Model, text: &str) {
+    handle_event(model, key(KeyCode::Char(':')));
+    type_text(model, text);
+    handle_event(model, key(KeyCode::Enter));
+}
+
 #[test]
 fn renders_start_dashboard_for_an_empty_launch() {
     let mut model = Model::new(EditorState::from_text(""), None);
@@ -1766,6 +1772,98 @@ fn buffer_commands_require_a_second_buffer() {
     handle_event(&mut model, key(KeyCode::Enter));
     assert_eq!(model.path.as_ref(), Some(&path));
     assert_eq!(model.status, "E: only one buffer");
+}
+
+#[test]
+fn new_and_close_buffer_lifecycle() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("file.txt");
+    fs::write(&path, "file").expect("write");
+    let mut model = Model::open(&path).expect("open");
+
+    command(&mut model, "new");
+    assert_eq!(model.path, None);
+    assert_eq!(model.buffers.len(), 2);
+    assert_eq!(model.active, 1);
+    assert_eq!(model.editor.text().len_bytes(), 0);
+
+    handle_event(&mut model, key(KeyCode::Char('i')));
+    type_text(&mut model, "X");
+    handle_event(&mut model, key(KeyCode::Esc));
+    command(&mut model, "bd");
+    assert!(matches!(
+        model.input_mode,
+        InputMode::ConfirmClose { index: 1 }
+    ));
+    handle_event(&mut model, key(KeyCode::Char('c')));
+    assert_eq!(model.path, None);
+
+    command(&mut model, "bd");
+    handle_event(&mut model, key(KeyCode::Char('n')));
+    assert_eq!(model.path.as_ref(), Some(&path));
+    assert_eq!(model.buffers.len(), 1);
+
+    command(&mut model, "bd");
+    assert_eq!(model.path, None);
+    assert!(model.buffers.is_empty());
+    assert_eq!(model.editor.text().len_bytes(), 0);
+}
+
+#[test]
+fn closing_modified_buffer_can_save_or_discard() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("file.txt");
+    fs::write(&path, "file").expect("write");
+    let mut model = Model::open(&path).expect("open");
+    handle_event(&mut model, key(KeyCode::Char('i')));
+    type_text(&mut model, "X");
+    handle_event(&mut model, key(KeyCode::Esc));
+    command(&mut model, "bd");
+    handle_event(&mut model, key(KeyCode::Char('y')));
+    assert_eq!(fs::read_to_string(&path).expect("read"), "Xfile");
+    assert_eq!(model.path, None);
+    assert!(model.buffers.is_empty());
+
+    fs::write(&path, "file").expect("rewrite");
+    let mut model = Model::open(&path).expect("open");
+    handle_event(&mut model, key(KeyCode::Char('i')));
+    type_text(&mut model, "X");
+    handle_event(&mut model, key(KeyCode::Esc));
+    command(&mut model, "bd");
+    handle_event(&mut model, key(KeyCode::Char('n')));
+    assert_eq!(fs::read_to_string(&path).expect("read"), "file");
+    assert_eq!(model.path, None);
+}
+
+#[test]
+fn close_indexed_buffer_keeps_active_buffer() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let first = dir.path().join("first.txt");
+    let second = dir.path().join("second.txt");
+    fs::write(&first, "first").expect("first");
+    fs::write(&second, "second").expect("second");
+    let mut model = Model::open(&first).expect("open");
+    model.open_path(&second).expect("open second");
+
+    command(&mut model, "bd 1");
+    assert_eq!(model.path.as_ref(), Some(&second));
+    assert_eq!(model.buffers.len(), 1);
+    assert_eq!(model.buffers[0].path.as_ref(), Some(&second));
+}
+
+#[test]
+fn closing_buffer_clears_matching_split() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("file.txt");
+    fs::write(&path, "file").expect("write");
+    let mut model = Model::open(&path).expect("open");
+    model.split_vertical();
+    assert!(model.split.is_some());
+
+    command(&mut model, "bd");
+    assert!(model.split.is_none());
+    assert!(!model.split_active);
+    assert_eq!(model.path, None);
 }
 
 #[test]

@@ -49,6 +49,8 @@ Normal mode
   :wq                 save and quit
   :e file             open or switch file
   :bn / :bp           next / previous buffer
+  :new                create an empty buffer
+  :bd [n] / :bd!      close current or indexed buffer; ! discards
   :q                  quit, or close help
   :q!                 force quit, or close help
   :tree               toggle the workspace file tree

@@ -330,6 +330,11 @@ pub fn view(model: &Model, frame: &mut Frame) {
             theme::ACCENT,
             format!("{}>{directory}", if *copy { "copy" } else { "move" }),
         ),
+        InputMode::ConfirmClose { index } => (
+            " CLS ",
+            theme::WARNING,
+            format!("Save {} before closing? [Y/n/c]", model.buffer_name(*index)),
+        ),
         InputMode::ConfirmDelete { path } => (
             " DEL ",
             theme::ERROR,

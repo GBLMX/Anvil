@@ -150,6 +150,11 @@ impl Model {
             ("e", path) => self.open_file(path),
             ("bn", "") => self.switch_buffer(1),
             ("bp", "") => self.switch_buffer(-1),
+            ("new", "") => self.new_buffer(),
+            ("bd", "") => self.close_buffer(self.active, false),
+            ("bd!", "") => self.close_buffer(self.active, true),
+            ("bd", index) => self.close_buffer_number(index, false),
+            ("bd!", index) => self.close_buffer_number(index, true),
             ("q", "") => self.request_quit(),
             ("q!", "") => self.force_quit(),
             ("help", "") => self.show_help(),
@@ -188,6 +193,20 @@ impl Model {
                 self.dirty = true;
             }
         }
+    }
+
+    fn close_buffer_number(&mut self, argument: &str, force: bool) {
+        let Ok(number) = argument.parse::<usize>() else {
+            self.status = "E: invalid buffer index".to_owned();
+            self.dirty = true;
+            return;
+        };
+        if number == 0 {
+            self.status = "E: buffer indexes start at 1".to_owned();
+            self.dirty = true;
+            return;
+        }
+        self.close_buffer(number - 1, force);
     }
 
     fn find_matches(text: &TextDocument, needle: &str) -> Vec<usize> {

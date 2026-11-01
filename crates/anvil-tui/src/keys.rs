@@ -482,6 +482,26 @@ fn handle_key(model: &mut Model, key: KeyEvent) {
             }
             _ => {}
         },
+        InputMode::ConfirmClose { index } => match key.code {
+            KeyCode::Char('y') | KeyCode::Char('Y') => {
+                let index = *index;
+                if model.save_buffer(index) {
+                    model.input_mode = InputMode::Normal;
+                    model.close_buffer(index, true);
+                }
+            }
+            KeyCode::Char('n') | KeyCode::Char('N') => {
+                let index = *index;
+                model.input_mode = InputMode::Normal;
+                model.close_buffer(index, true);
+            }
+            KeyCode::Esc | KeyCode::Char('c') | KeyCode::Char('C') => {
+                model.input_mode = InputMode::Normal;
+                model.status = "close cancelled".to_owned();
+                model.dirty = true;
+            }
+            _ => {}
+        },
         InputMode::ConfirmDelete { path } => match key.code {
             KeyCode::Char('y') | KeyCode::Char('Y') => {
                 let path = path.clone();

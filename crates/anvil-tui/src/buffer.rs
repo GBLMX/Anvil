@@ -49,6 +49,147 @@ impl Model {
         self.dirty = true;
     }
 
+    fn ensure_current_buffer(&mut self) -> usize {
+        self.sync_active();
+        if self.buffers.is_empty() {
+            self.buffers.push(self.snapshot());
+            self.active = 0;
+        }
+        self.active
+    }
+
+    pub(crate) fn new_buffer(&mut self) {
+        if self.help_back.is_some() {
+            let _ = self.close_help();
+        }
+        self.ensure_current_buffer();
+        self.buffers.push(Buffer {
+            editor: EditorState::from_text(""),
+            path: None,
+            cursor: 0,
+            scroll: 0,
+            hscroll: 0,
+            modified: false,
+            search_query: String::new(),
+        });
+        let index = self.buffers.len() - 1;
+        self.load_buffer(index);
+        self.status = "new buffer".to_owned();
+        self.dirty = true;
+    }
+
+    pub(crate) fn buffer_name(&self, index: usize) -> String {
+        self.buffers
+            .get(index)
+            .and_then(|buffer| buffer.path.as_ref())
+            .map(|path| path.display().to_string())
+            .unwrap_or_else(|| "[no file]".to_owned())
+    }
+
+    pub(crate) fn save_buffer(&mut self, index: usize) -> bool {
+        self.sync_active();
+        if index >= self.buffers.len() {
+            self.status = "E: invalid buffer index".to_owned();
+            self.dirty = true;
+            return false;
+        }
+        if index == self.active {
+            return self.save();
+        }
+        let Some(path) = self.buffers[index].path.clone() else {
+            self.status = "E: buffer has no file name".to_owned();
+            self.dirty = true;
+            return false;
+        };
+        let text = self.buffers[index]
+            .editor
+            .text()
+            .slice(0..self.buffers[index].editor.text().len_bytes());
+        let display = path.display().to_string();
+        match self.write_file(&path, &text) {
+            Ok(()) => {
+                if let Some(buffer) = self.buffers.get_mut(index) {
+                    buffer.modified = false;
+                }
+                self.status = format!("\"{display}\" written");
+                self.dirty = true;
+                true
+            }
+            Err(error) => {
+                self.status = format!("E: {error}");
+                self.dirty = true;
+                false
+            }
+        }
+    }
+
+    pub(crate) fn close_buffer(&mut self, index: usize, force: bool) {
+        self.ensure_current_buffer();
+        if index >= self.buffers.len() {
+            self.status = "E: invalid buffer index".to_owned();
+            self.dirty = true;
+            return;
+        }
+        if self.buffers[index].modified && !force {
+            self.input_mode = InputMode::ConfirmClose { index };
+            self.status = format!("Save {} before closing? [Y/n/c]", self.buffer_name(index));
+            self.dirty = true;
+            return;
+        }
+        self.finish_close_buffer(index);
+    }
+    fn finish_close_buffer(&mut self, index: usize) {
+        let was_active = index == self.active;
+        let target_path = self.buffers[index].path.clone();
+        let split_same =
+            self.split
+                .as_ref()
+                .is_some_and(|pane| match (&target_path, &pane.buffer.path) {
+                    (Some(target), Some(split)) => target == split,
+                    (None, None) => was_active,
+                    _ => false,
+                });
+        if split_same {
+            self.split = None;
+            self.split_active = false;
+        }
+        self.buffers.remove(index);
+        if self.buffers.is_empty() {
+            self.reset_empty_buffer();
+            self.status = "buffer closed".to_owned();
+            self.dirty = true;
+            return;
+        }
+        if was_active {
+            let next = index.min(self.buffers.len() - 1);
+            self.load_buffer(next);
+        } else if index < self.active {
+            self.active -= 1;
+        }
+        self.status = format!("buffer {}/{} closed", index + 1, self.buffers.len() + 1);
+        self.dirty = true;
+    }
+
+    fn reset_empty_buffer(&mut self) {
+        self.editor = EditorState::from_text("");
+        self.path = None;
+        self.cursor = 0;
+        self.scroll = 0;
+        self.hscroll = 0;
+        self.modified = false;
+        self.search_query.clear();
+        self.syntax.borrow_mut().invalidate();
+        self.welcome = false;
+        self.welcome_back = false;
+        self.input_mode = InputMode::Normal;
+        self.pending = None;
+        self.split = None;
+        self.split_active = false;
+        self.active = 0;
+        self.sync_lsp_active();
+        self.dirty = true;
+    }
+
     pub(crate) fn open_file(&mut self, path: &str) {
         if path.is_empty() {
             self.status = "E: file name required".to_owned();

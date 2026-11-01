@@ -14,6 +14,10 @@ All notable changes to Anvil are recorded here. The format follows
 
 ### Added
 
+- Buffer lifecycle commands: `:new` creates an unnamed buffer and `:bd [n]`
+  closes the current or indexed buffer. Dirty close prompts for
+  save/discard/cancel; `:bd!` discards; closing the last buffer leaves one
+  valid empty buffer.
 - Multi-cursor caret insertion now applies text edits without per-edit index
   updates, rebuilds `LineIndex` once, and maps selections in a sorted batch;
   a Criterion benchmark compares it with the legacy transaction path.

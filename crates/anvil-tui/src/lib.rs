@@ -113,6 +113,8 @@ pub enum InputMode {
     RenameEntry { path: PathBuf, name: String },
     /// Confirm deletion of a tree entry.
     ConfirmDelete { path: PathBuf },
+    /// Confirm closing a modified buffer.
+    ConfirmClose { index: usize },
     /// Move or copy a tree entry into a destination directory.
     TransferEntry {
         path: PathBuf,

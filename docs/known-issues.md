@@ -1,7 +1,7 @@
 # Known Issues
 
-Status: mixed. BUG-001, BUG-004, BUG-005, BUG-007, and BUG-009 are fixed;
-the remaining entries are open.
+Status: mixed. BUG-001, BUG-004, BUG-005, BUG-006, BUG-007, and BUG-009
+are fixed; the remaining entries are open.
 
 ## BUG-001: File tree and fuzzy picker do not scroll with the selection
 
@@ -147,7 +147,7 @@ workspace management and should be addressed before adding more UI features.
   - `..`, absolute paths, symlink-parent escapes, and outside-workspace targets
     are denied.
 - Verification:
-  - `cargo test --workspace --no-fail-fast`: 222 passed, 1 ignored.
+  - `cargo test --workspace --no-fail-fast`: 226 passed, 1 ignored.
   - `go test ./go/...` and `go vet ./go/...` pass.
   - Workspace clippy, fmt, and `git diff --check` pass.
 
@@ -155,22 +155,30 @@ workspace management and should be addressed before adding more UI features.
 
 - Area: TUI buffer management
 - Priority: High
-- Status: Open; not fixed
-- Current behavior:
-  - Buffers are created only by opening a file.
-  - Commands provide `:bn`/`:bp` but no new empty buffer, close buffer, or
-    delete buffer.
-  - `:q` quits the editor; `Ctrl-w q` closes only a split pane.
-- Required behavior:
-  - Create an empty buffer without a path.
-  - Close the current buffer, or a named/indexed buffer, with an unsaved-change
-    guard.
-  - Remove the buffer from split-pane references and keep one valid active
-    buffer.
+- Status: Fixed 2026-11-01; new, indexed close, dirty-save prompt, force
+  discard, split cleanup, and last-buffer reset are implemented.
+- Resolution:
+  - `:new` creates an unnamed empty buffer.
+  - `:bd` closes the active buffer; `:bd N` closes a 1-based index; `:bd!`
+    skips the dirty guard.
+  - Dirty close enters `Save before closing? [Y/n/c]`; `y` saves then closes,
+    `n` discards, `c`/Esc cancels.
+  - Closing a buffer clears a split pane showing the same path and keeps the
+    remaining active buffer valid.
+  - Closing the last buffer resets to one clean unnamed buffer instead of
+    leaving a stale editor state.
+  - The removed `Buffer` and its `EditorState`/`LineIndex`/`PieceTable`
+    handles are dropped after removal.
 - Acceptance:
-  - `new`, close, and switch work with modified and unmodified buffers.
-  - Closing a modified buffer requires explicit confirmation or force.
+  - New, close, indexed close, save-before-close, and force-discard work with
+    modified and unmodified buffers.
   - No stale split pane points at a removed buffer.
+  - The active buffer and buffer count remain valid after every close.
+
+- Verification:
+  - `cargo test --workspace --no-fail-fast`: 226 passed, 1 ignored.
+  - `cargo test -p anvil-tui buffer`: 12 passed.
+  - Workspace clippy, fmt, and `git diff --check` pass.
 
 ### BUG-007: LSP does not auto-start for supported files
 
@@ -264,6 +272,6 @@ workspace management and should be addressed before adding more UI features.
     snapshot infrastructure.
 - Verification:
   - Focused TUI test passes.
-  - `cargo test -p anvil-tui`: 116 passed.
-  - `cargo test --workspace --no-fail-fast`: 222 passed, 1 ignored.
+  - `cargo test -p anvil-tui`: 120 passed.
+  - `cargo test --workspace --no-fail-fast`: 226 passed, 1 ignored.
   - Workspace clippy, fmt, and `git diff --check` pass.
