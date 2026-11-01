@@ -878,5 +878,6 @@ impl Model {
         {
             *path = remap(path);
         }
+        self.sync_watch_paths();
     }
 }
