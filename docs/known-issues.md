@@ -147,7 +147,7 @@ workspace management and should be addressed before adding more UI features.
   - `..`, absolute paths, symlink-parent escapes, and outside-workspace targets
     are denied.
 - Verification:
-  - `cargo test --workspace --no-fail-fast`: 220 passed, 1 ignored.
+  - `cargo test --workspace --no-fail-fast`: 222 passed, 1 ignored.
   - `go test ./go/...` and `go vet ./go/...` pass.
   - Workspace clippy, fmt, and `git diff --check` pass.
 
@@ -264,6 +264,6 @@ workspace management and should be addressed before adding more UI features.
     snapshot infrastructure.
 - Verification:
   - Focused TUI test passes.
-  - `cargo test -p anvil-tui`: 114 passed.
-  - `cargo test --workspace --no-fail-fast`: 220 passed, 1 ignored.
+  - `cargo test -p anvil-tui`: 116 passed.
+  - `cargo test --workspace --no-fail-fast`: 222 passed, 1 ignored.
   - Workspace clippy, fmt, and `git diff --check` pass.

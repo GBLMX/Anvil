@@ -360,7 +360,8 @@ fn parse_git_diff(output: &str) -> Vec<(usize, char)> {
 
 #[cfg(test)]
 mod tests {
-    use super::parse_git_diff;
+    use super::{FileEvent, FileRequest, FileWorker, parse_git_diff};
+    use anvil_ipc::GatewayClient;
 
     #[test]
     fn parses_git_hunks_into_line_marks() {
@@ -369,5 +370,78 @@ mod tests {
             parse_git_diff(output),
             vec![(0, '~'), (3, '+'), (4, '+'), (8, '-')]
         );
+    }
+
+    #[test]
+    fn routes_transfer_and_remove_all_through_gateway() {
+        use std::sync::{Arc, Mutex};
+
+        let dir = tempfile::tempdir().expect("tempdir");
+        let workspace = dir.path().to_path_buf();
+        let socket = workspace.join("gateway.sock");
+        let listener = anvil_ipc::Listener::bind(&socket).expect("bind");
+        let methods = Arc::new(Mutex::new(Vec::new()));
+        let server_methods = Arc::clone(&methods);
+        let server = std::thread::spawn(move || {
+            let mut connection = listener.accept().expect("accept");
+            for _ in 0..3 {
+                let frame = connection.recv().expect("recv").expect("frame");
+                let request: serde_json::Value = serde_json::from_slice(&frame).expect("request");
+                server_methods
+                    .lock()
+                    .expect("methods")
+                    .push(request["method"].as_str().expect("method").to_owned());
+                let response = serde_json::json!({
+                    "jsonrpc": "2.0",
+                    "id": request["id"],
+                    "result": {"ok": true},
+                });
+                connection
+                    .send(&serde_json::to_vec(&response).expect("response"))
+                    .expect("send");
+            }
+        });
+
+        let client = GatewayClient::connect(&socket, &[7; 32]).expect("client");
+        let worker = FileWorker::start(client, workspace.clone());
+        worker
+            .request(FileRequest::Transfer {
+                from: workspace.join("source.txt"),
+                to: workspace.join("copy.txt"),
+                copy: true,
+            })
+            .expect("transfer request");
+        assert!(matches!(
+            next_event(&worker),
+            FileEvent::Transferred {
+                result: Ok(()),
+                copy: true,
+                ..
+            }
+        ));
+        worker
+            .request(FileRequest::RemoveAll(workspace.join("source.txt")))
+            .expect("remove request");
+        assert!(matches!(
+            next_event(&worker),
+            FileEvent::Removed { result: Ok(()), .. }
+        ));
+
+        drop(worker);
+        server.join().expect("server");
+        assert_eq!(
+            methods.lock().expect("methods").as_slice(),
+            ["session.hello", "sys.copy", "sys.remove_all"]
+        );
+    }
+
+    fn next_event(worker: &FileWorker) -> FileEvent {
+        for _ in 0..200 {
+            if let Some(event) = worker.poll().into_iter().next() {
+                return event;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        panic!("worker event timed out");
     }
 }

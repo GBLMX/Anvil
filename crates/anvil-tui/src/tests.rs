@@ -79,6 +79,25 @@ fn renders_visible_lines() {
 }
 
 #[test]
+fn busy_operation_renders_spinner() {
+    let mut model = Model::new(EditorState::from_text("alpha"), None);
+    model.busy = Some("copying".to_owned());
+    model.spinner = 0;
+    let backend = TestBackend::new(80, 8);
+    let mut terminal = Terminal::new(backend).expect("terminal");
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+    let rendered = terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect::<String>();
+    assert!(rendered.contains("copying"), "{rendered}");
+    assert!(rendered.contains("⠋"), "{rendered}");
+}
+
+#[test]
 fn indent_guides_do_not_overwrite_code() {
     let model = Model::new(EditorState::from_text("    let value = 42;"), None);
     let backend = TestBackend::new(40, 6);
