@@ -317,6 +317,65 @@ fn tree_expands_directories() {
 }
 
 #[test]
+fn tree_refresh_preserves_selection_and_expansion() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    fs::create_dir(dir.path().join("src")).expect("dir");
+    fs::write(dir.path().join("src/main.rs"), "fn main() {}").expect("file");
+    fs::write(dir.path().join("root.txt"), "").expect("file");
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.workspace = dir.path().to_path_buf();
+    model.open_tree();
+    let src = model
+        .tree
+        .iter()
+        .position(|entry| entry.path.ends_with("src"))
+        .expect("src");
+    model.tree_selected = Some(src);
+    model.tree_toggle();
+    let main = model
+        .tree
+        .iter()
+        .position(|entry| entry.path.ends_with("src/main.rs"))
+        .expect("main");
+    model.tree_selected = Some(main);
+    fs::write(dir.path().join("src/added.rs"), "").expect("new file");
+
+    model.refresh_tree(None);
+    assert!(
+        model
+            .tree
+            .iter()
+            .any(|entry| entry.path.ends_with("src/added.rs"))
+    );
+    assert!(
+        model
+            .tree
+            .iter()
+            .any(|entry| entry.path.ends_with("src") && entry.expanded)
+    );
+    assert_eq!(
+        model.tree[model.tree_selected.expect("selection")].path,
+        dir.path().join("src/main.rs")
+    );
+
+    let renamed = dir.path().join("src/renamed.rs");
+    fs::rename(dir.path().join("src/main.rs"), &renamed).expect("rename");
+    model.refresh_tree(None);
+    assert!(model.tree.iter().any(|entry| entry.path == renamed));
+    assert_eq!(
+        model.tree[model.tree_selected.expect("rename fallback")].path,
+        dir.path().join("src")
+    );
+
+    fs::remove_file(renamed).expect("remove");
+    model.refresh_tree(None);
+    assert_eq!(
+        model.tree[model.tree_selected.expect("delete fallback")].path,
+        dir.path().join("src")
+    );
+}
+
+#[test]
 fn fuzzy_filters_workspace_files() {
     let dir = tempfile::tempdir().expect("tempdir");
     fs::create_dir(dir.path().join("src")).expect("dir");

@@ -11,6 +11,9 @@ use std::time::{Duration, Instant};
 use anvil_ipc::{DirEntry, GatewayClient};
 
 const FILE_LIMIT: usize = 5000;
+pub(crate) const MAX_TREE_WATCH_DIRS: usize = 256;
+const TREE_POLL_INTERVAL: Duration = Duration::from_millis(500);
+const TREE_DEBOUNCE: Duration = Duration::from_millis(500);
 
 /// A background file-tree request.
 pub enum FileRequest {
@@ -32,6 +35,14 @@ pub enum FileRequest {
     },
     /// Delete one workspace entry or directory tree.
     RemoveAll(PathBuf),
+    /// Replace the workspace-tree directory watch set.
+    WatchDirs(Vec<PathBuf>),
+    /// Capture root and expanded directory listings for a tree refresh.
+    TreeSnapshot {
+        generation: u64,
+        root: PathBuf,
+        expanded: Vec<PathBuf>,
+    },
     /// Watch open buffers for external metadata changes.
     Watch(Vec<PathBuf>),
 }
@@ -62,6 +73,15 @@ pub enum FileEvent {
     },
     /// A watched file changed on disk.
     ExternalChanged { path: PathBuf },
+    /// One or more watched directories changed; refresh once.
+    TreeChanged { paths: Vec<PathBuf> },
+    /// Directory watching is unsupported or failed; the tree is stale.
+    TreeWatchUnavailable(String),
+    /// Listings for a generation-scoped tree refresh.
+    TreeSnapshot {
+        generation: u64,
+        listings: Vec<(PathBuf, Result<Vec<DirEntry>, String>)>,
+    },
 }
 
 /// Owns the background worker and its channels.
@@ -77,8 +97,11 @@ impl FileWorker {
         let (event_sender, events) = mpsc::channel();
         std::thread::spawn(move || {
             let mut watched: BTreeMap<PathBuf, Option<(u64, i64)>> = BTreeMap::new();
+            let mut watched_dirs: BTreeMap<PathBuf, Option<(i64, i64)>> = BTreeMap::new();
             let mut pending: BTreeMap<PathBuf, Instant> = BTreeMap::new();
+            let mut pending_dirs: BTreeMap<PathBuf, Instant> = BTreeMap::new();
             let mut next_poll = Instant::now();
+            let mut next_tree_poll = Instant::now();
             loop {
                 match requests.recv_timeout(Duration::from_millis(50)) {
                     Ok(request) => {
@@ -95,6 +118,65 @@ impl FileWorker {
                                 pending.clear();
                                 next_poll = Instant::now() + Duration::from_millis(100);
                                 continue;
+                            }
+                            FileRequest::WatchDirs(paths) => {
+                                watched_dirs.clear();
+                                let mut available = false;
+                                let mut watch_error = None;
+                                for path in paths.into_iter().take(MAX_TREE_WATCH_DIRS) {
+                                    let result = client
+                                        .read_dir_signature(&relative_path(&workspace, &path));
+                                    let signature = match result {
+                                        Ok(signature) => {
+                                            available = true;
+                                            Some((signature.modified_ns, signature.changed_ns))
+                                        }
+                                        Err(error) => {
+                                            watch_error.get_or_insert_with(|| error.to_string());
+                                            None
+                                        }
+                                    };
+                                    watched_dirs.insert(path, signature);
+                                }
+                                pending_dirs.clear();
+                                next_tree_poll = Instant::now() + TREE_POLL_INTERVAL;
+                                if !available
+                                    && let Some(error) = watch_error
+                                    && event_sender
+                                        .send(FileEvent::TreeWatchUnavailable(error))
+                                        .is_err()
+                                {
+                                    break;
+                                }
+                                continue;
+                            }
+                            FileRequest::TreeSnapshot {
+                                generation,
+                                root,
+                                expanded,
+                            } => {
+                                let mut listings = Vec::new();
+                                listings.push((
+                                    root.clone(),
+                                    client
+                                        .read_dir(&relative_path(&workspace, &root))
+                                        .map_err(|error| error.to_string()),
+                                ));
+                                for path in expanded {
+                                    if path == root {
+                                        continue;
+                                    }
+                                    listings.push((
+                                        path.clone(),
+                                        client
+                                            .read_dir(&relative_path(&workspace, &path))
+                                            .map_err(|error| error.to_string()),
+                                    ));
+                                }
+                                FileEvent::TreeSnapshot {
+                                    generation,
+                                    listings,
+                                }
                             }
                             FileRequest::List(path) => FileEvent::Listed(
                                 path.clone(),
@@ -151,18 +233,38 @@ impl FileWorker {
                     Err(mpsc::RecvTimeoutError::Timeout) => {}
                     Err(mpsc::RecvTimeoutError::Disconnected) => break,
                 }
-                if Instant::now() < next_poll {
+                let now = Instant::now();
+                if now >= next_tree_poll {
+                    for path in poll_watched_dirs(&mut client, &workspace, &mut watched_dirs) {
+                        pending_dirs.insert(path, now);
+                    }
+                    let ready: Vec<PathBuf> = pending_dirs
+                        .iter()
+                        .filter(|(_, changed)| now.duration_since(**changed) >= TREE_DEBOUNCE)
+                        .map(|(path, _)| path.clone())
+                        .collect();
+                    if !ready.is_empty() {
+                        for path in &ready {
+                            pending_dirs.remove(path);
+                        }
+                        if event_sender
+                            .send(FileEvent::TreeChanged { paths: ready })
+                            .is_err()
+                        {
+                            return;
+                        }
+                    }
+                    next_tree_poll = now + TREE_POLL_INTERVAL;
+                }
+                if now < next_poll {
                     continue;
                 }
-                let now = Instant::now();
                 for path in poll_watched(&mut client, &workspace, &mut watched) {
                     pending.insert(path, now);
                 }
                 let ready: Vec<PathBuf> = pending
                     .iter()
-                    .filter(|(_, changed)| {
-                        now.duration_since(**changed) >= Duration::from_millis(500)
-                    })
+                    .filter(|(_, changed)| now.duration_since(**changed) >= TREE_DEBOUNCE)
                     .map(|(path, _)| path.clone())
                     .collect();
                 for path in ready {
@@ -219,6 +321,25 @@ fn poll_watched(
             .file_stat(&relative_path(workspace, path))
             .ok()
             .map(|stat| (stat.size, stat.modified_ns));
+        if current != *previous {
+            *previous = current;
+            changed.push(path.clone());
+        }
+    }
+    changed
+}
+
+fn poll_watched_dirs(
+    client: &mut GatewayClient,
+    workspace: &Path,
+    watched: &mut BTreeMap<PathBuf, Option<(i64, i64)>>,
+) -> Vec<PathBuf> {
+    let mut changed = Vec::new();
+    for (path, previous) in watched.iter_mut() {
+        let result = client.read_dir_signature(&relative_path(workspace, path));
+        let current = result
+            .ok()
+            .map(|signature| (signature.modified_ns, signature.changed_ns));
         if current != *previous {
             *previous = current;
             changed.push(path.clone());
@@ -542,8 +663,103 @@ mod tests {
         server.join().expect("server");
     }
 
+    #[test]
+    fn tree_watch_coalesces_directory_changes() {
+        use std::collections::BTreeMap as TestMap;
+
+        let dir = tempfile::tempdir().expect("tempdir");
+        let workspace = dir.path().to_path_buf();
+        let socket = workspace.join("gateway.sock");
+        let listener = anvil_ipc::Listener::bind(&socket).expect("bind");
+        let server = std::thread::spawn(move || {
+            let mut connection = listener.accept().expect("accept");
+            let mut signatures: TestMap<String, i64> = TestMap::new();
+            while let Ok(Some(frame)) = connection.recv() {
+                let request: serde_json::Value = serde_json::from_slice(&frame).expect("request");
+                let result = if request["method"] == "sys.read_dir_signature" {
+                    let path = request["params"]["path"].as_str().unwrap_or("").to_owned();
+                    let signature = signatures.entry(path).or_insert(0);
+                    *signature = (*signature + 1).min(2);
+                    serde_json::json!({
+                        "modified_ns": *signature,
+                        "changed_ns": *signature,
+                    })
+                } else {
+                    serde_json::json!({"ok": true})
+                };
+                let response = serde_json::json!({
+                    "jsonrpc": "2.0",
+                    "id": request["id"],
+                    "result": result,
+                });
+                connection
+                    .send(&serde_json::to_vec(&response).expect("response"))
+                    .expect("send");
+            }
+        });
+
+        let client = GatewayClient::connect(&socket, &[11; 32]).expect("client");
+        let worker = FileWorker::start(client, workspace.clone());
+        worker
+            .request(FileRequest::WatchDirs(vec![
+                workspace.join("a"),
+                workspace.join("b"),
+            ]))
+            .expect("watch dirs");
+        let FileEvent::TreeChanged { paths } = next_event(&worker) else {
+            panic!("expected tree change");
+        };
+        assert_eq!(paths.len(), 2);
+        assert!(paths.contains(&workspace.join("a")));
+        assert!(paths.contains(&workspace.join("b")));
+        drop(worker);
+        server.join().expect("server");
+    }
+
+    #[test]
+    fn tree_watch_reports_unavailable_gateway() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let workspace = dir.path().to_path_buf();
+        let socket = workspace.join("gateway.sock");
+        let listener = anvil_ipc::Listener::bind(&socket).expect("bind");
+        let server = std::thread::spawn(move || {
+            let mut connection = listener.accept().expect("accept");
+            while let Ok(Some(frame)) = connection.recv() {
+                let request: serde_json::Value = serde_json::from_slice(&frame).expect("request");
+                let response = if request["method"] == "sys.read_dir_signature" {
+                    serde_json::json!({
+                        "jsonrpc": "2.0",
+                        "id": request["id"],
+                        "error": {"code": -32601, "message": "method not found"},
+                    })
+                } else {
+                    serde_json::json!({
+                        "jsonrpc": "2.0",
+                        "id": request["id"],
+                        "result": {"ok": true},
+                    })
+                };
+                connection
+                    .send(&serde_json::to_vec(&response).expect("response"))
+                    .expect("send");
+            }
+        });
+
+        let client = GatewayClient::connect(&socket, &[12; 32]).expect("client");
+        let worker = FileWorker::start(client, workspace.clone());
+        worker
+            .request(FileRequest::WatchDirs(vec![workspace]))
+            .expect("watch dirs");
+        assert!(matches!(
+            next_event(&worker),
+            FileEvent::TreeWatchUnavailable(_)
+        ));
+        drop(worker);
+        server.join().expect("server");
+    }
+
     fn next_event(worker: &FileWorker) -> FileEvent {
-        for _ in 0..200 {
+        for _ in 0..1000 {
             if let Some(event) = worker.poll().into_iter().next() {
                 return event;
             }

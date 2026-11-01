@@ -1,8 +1,8 @@
 # Known Issues
 
 Status: BUG-001, BUG-004, BUG-005, BUG-006, BUG-007, BUG-008 (0.4.0
-open-buffer scope), and BUG-009 are resolved. BUG-002/003 remain open; the
-0.5.0 workspace tree watcher is tracked separately in #9.
+open-buffer and 0.5.0 tree scopes), and BUG-009 are resolved. BUG-002/003
+remain open.
 
 ## BUG-001: File tree and fuzzy picker do not scroll with the selection
 
@@ -205,9 +205,8 @@ workspace management and should be addressed before adding more UI features.
 ### BUG-008: External file changes are not watched
 
 - Area: Workspace/file lifecycle
-- Priority: High; resolved for the 0.4.0 open-buffer scope
-- Status: Resolved for 0.4.0 open-buffer scope 2026-11-01. Tree
-  create/delete/rename refresh is tracked separately for 0.5.0 in
+- Priority: High; resolved for the 0.4.0 open-buffer and 0.5.0 tree scopes
+- Status: Resolved 2026-11-01. Tree watching is tracked in
   [#9](https://github.com/GBLMX/Anvil/issues/9).
 - Resolution:
   - `sys.stat` now returns regular-file size and `modified_ns`.
@@ -218,23 +217,25 @@ workspace management and should be addressed before adding more UI features.
     `File changed on disk: <path> [y/N]` and never reload unless confirmed.
   - Watch paths are refreshed after open, save, new/close, split changes, and
     buffer moves.
-  - Worker tests cover metadata-change debounce; TUI tests cover clean reload,
-    dirty refusal, and confirmed reload.
-- Deferred to 0.5.0:
-  - Directories are not yet watched, so external create/delete/rename does not
-    refresh the workspace tree.
-  - Tree refresh preservation of expanded/selected state is part of that work.
-  - Tracking issue:
-    [#9: [0.5.0] Workspace tree watcher](https://github.com/GBLMX/Anvil/issues/9).
+  - `sys.read_dir_signature` polls directory-entry metadata through the gateway
+    with `fs.read` and the existing `openat2` boundary.
+  - `FileWorker::WatchDirs` watches the root and expanded directories, debounces
+    bursts into one `TreeChanged`, and caps the set at 256 directories.
+  - Tree snapshots are generation-scoped and preserve selected/expanded state;
+    background refreshes do not steal focus. Missing watcher support marks the
+    tree stale. See
+    [ADR-0018](adr/0018-workspace-tree-watch.md).
+  - Worker and model tests cover debounce, unavailable gateways, selection,
+    expansion, create, rename, and delete fallback.
 - Acceptance:
   - External change to a clean open buffer is reloaded.
   - External change to a dirty buffer prompts and never discards local edits.
-  - External create/delete/rename tree refresh is explicitly deferred to
-    [#9](https://github.com/GBLMX/Anvil/issues/9) for 0.5.0.
+  - External create/delete/rename refreshes the tree while preserving valid
+    selection and expansion.
 - Verification:
-  - `cargo test --workspace --no-fail-fast`: 230 passed, 1 ignored.
-  - `cargo test -p anvil-tui`: 124 passed.
-  - `go test ./go/...` and `go vet ./go/...` pass.
+  - `cargo test --workspace --no-fail-fast`: 233 passed, 1 ignored.
+  - `cargo test -p anvil-tui`: 127 passed.
+  - `go test ./...`, `go vet ./...`, and `govulncheck ./...` pass.
   - Workspace clippy, fmt, and `git diff --check` pass.
 
 ### BUG-009: Search mode drops Tree-sitter foreground colors

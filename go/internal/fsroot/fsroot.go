@@ -752,3 +752,44 @@ func (r *Root) Stat(path string) (Metadata, error) {
 		ModifiedNS: stat.Mtim.Sec*1e9 + stat.Mtim.Nsec,
 	}, nil
 }
+
+// DirSignature is the directory-entry observation used by the workspace tree
+// poller. mtime/ctime change when entries are created, removed, or renamed.
+type DirSignature struct {
+	ModifiedNS int64
+	ChangedNS  int64
+}
+
+// DirSignature returns the entry-change signature for one directory beneath
+// the root. It never follows a path outside the workspace.
+func (r *Root) DirSignature(path string) (DirSignature, error) {
+	relative := "."
+	if path != "" && path != "." {
+		cleaned, err := cleanRelative(path)
+		if err != nil {
+			return DirSignature{}, err
+		}
+		relative = cleaned
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	if r.fd < 0 {
+		return DirSignature{}, errors.New("workspace is closed")
+	}
+	fd, err := openDirBeneath(r.fd, relative)
+	if err != nil {
+		return DirSignature{}, fmt.Errorf("open directory %q beneath workspace: %w", relative, err)
+	}
+	defer unix.Close(fd)
+	var stat unix.Stat_t
+	if err := unix.Fstat(fd, &stat); err != nil {
+		return DirSignature{}, fmt.Errorf("stat directory %q: %w", relative, err)
+	}
+	if stat.Mode&unix.S_IFMT != unix.S_IFDIR {
+		return DirSignature{}, fmt.Errorf("%q is not a directory", relative)
+	}
+	return DirSignature{
+		ModifiedNS: stat.Mtim.Sec*1e9 + stat.Mtim.Nsec,
+		ChangedNS:  stat.Ctim.Sec*1e9 + stat.Ctim.Nsec,
+	}, nil
+}

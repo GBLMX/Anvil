@@ -687,6 +687,36 @@ func TestSysReadDir(t *testing.T) {
 	}
 }
 
+func TestSysReadDirSignature(t *testing.T) {
+	workspace := t.TempDir()
+	socket := startGatewayAt(t, workspace, []string{"fs.read:**"})
+	conn := dialGateway(t, socket)
+	if response := sendRequest(t, conn, "hello-1", "session.hello", helloRequestParams(testToken)); response.Error != nil {
+		t.Fatalf("handshake error: %+v", response.Error)
+	}
+	signature := func(id string) map[string]interface{} {
+		t.Helper()
+		response := sendRequest(t, conn, id, "sys.read_dir_signature", map[string]interface{}{"path": "."})
+		if response.Error != nil {
+			t.Fatalf("read_dir_signature error: %+v", response.Error)
+		}
+		result, ok := response.Result.(map[string]interface{})
+		if !ok {
+			t.Fatalf("result = %#v", response.Result)
+		}
+		return result
+	}
+	before := signature("signature-1")
+	time.Sleep(time.Millisecond)
+	if err := os.WriteFile(filepath.Join(workspace, "new.txt"), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	after := signature("signature-2")
+	if before["modified_ns"] == after["modified_ns"] && before["changed_ns"] == after["changed_ns"] {
+		t.Fatalf("signature did not change: %#v -> %#v", before, after)
+	}
+}
+
 func TestSysCopyAndRemoveAll(t *testing.T) {
 	workspace := t.TempDir()
 	if err := os.WriteFile(filepath.Join(workspace, "source.txt"), []byte("copy"), 0o600); err != nil {

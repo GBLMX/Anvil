@@ -4,6 +4,17 @@ All notable changes to Anvil are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- Workspace tree watcher: the gateway exposes `sys.read_dir_signature`, and
+  the TUI polls the root plus expanded directories through `FileWorker`.
+  External create, delete, and rename now refresh the tree while preserving
+  selection and expansion; watchers are capped and marked stale when the
+  gateway cannot observe the tree. See
+  [ADR-0018](docs/adr/0018-workspace-tree-watch.md).
+
 ## [0.4.0] - 2026-11-01
 
 ### Release focus

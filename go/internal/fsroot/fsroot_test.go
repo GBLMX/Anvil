@@ -406,3 +406,28 @@ func TestStatReturnsSizeAndModificationTime(t *testing.T) {
 		t.Fatalf("modified = %d", metadata.ModifiedNS)
 	}
 }
+
+func TestDirSignatureChangesOnEntries(t *testing.T) {
+	root, dir := testRoot(t)
+	before, err := root.DirSignature(".")
+	if err != nil {
+		t.Fatalf("DirSignature: %v", err)
+	}
+	time.Sleep(time.Millisecond)
+	if err := os.WriteFile(filepath.Join(dir, "new.txt"), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	after, err := root.DirSignature(".")
+	if err != nil {
+		t.Fatalf("DirSignature: %v", err)
+	}
+	if before.ModifiedNS == after.ModifiedNS && before.ChangedNS == after.ChangedNS {
+		t.Fatalf("signature did not change: %+v", after)
+	}
+	if _, err := root.DirSignature("new.txt"); err == nil {
+		t.Fatal("regular file accepted as a directory")
+	}
+	if _, err := root.DirSignature("../outside"); err == nil {
+		t.Fatal("outside path accepted")
+	}
+}

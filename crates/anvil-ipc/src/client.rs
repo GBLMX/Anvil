@@ -103,6 +103,13 @@ pub struct FileStat {
     pub modified_ns: i64,
 }
 
+/// Directory-entry metadata returned by `sys.read_dir_signature`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DirSignature {
+    pub modified_ns: i64,
+    pub changed_ns: i64,
+}
+
 /// One chunk returned by `sys.read_file`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReadChunk {
@@ -401,6 +408,26 @@ impl GatewayClient {
             .and_then(serde_json::Value::as_i64)
             .unwrap_or(0);
         Ok(FileStat { size, modified_ns })
+    }
+
+    /// Return workspace-relative directory-entry metadata through the gateway.
+    pub fn read_dir_signature(&mut self, path: &str) -> Result<DirSignature, ClientError> {
+        let result = self.request(
+            "sys.read_dir_signature",
+            serde_json::json!({ "path": path }),
+        )?;
+        let modified_ns = result
+            .get("modified_ns")
+            .and_then(serde_json::Value::as_i64)
+            .ok_or(ClientError::Protocol("read_dir_signature modified_ns"))?;
+        let changed_ns = result
+            .get("changed_ns")
+            .and_then(serde_json::Value::as_i64)
+            .ok_or(ClientError::Protocol("read_dir_signature changed_ns"))?;
+        Ok(DirSignature {
+            modified_ns,
+            changed_ns,
+        })
     }
 
     /// Return the workspace-relative regular file size through the gateway.

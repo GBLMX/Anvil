@@ -1,9 +1,10 @@
 //! Workspace tree and fuzzy file finder state.
 
 use super::{CreateKind, FuzzyState, InputMode, Model, TreeEntry};
-use crate::file_worker::{FileEvent, FileRequest, FileWorker};
+use crate::file_worker::{FileEvent, FileRequest, FileWorker, MAX_TREE_WATCH_DIRS};
 use anvil_ipc::DirEntry;
 use std::{
+    collections::{BTreeMap, BTreeSet},
     fs,
     path::{Path, PathBuf},
 };
@@ -75,6 +76,7 @@ impl Model {
                         }
                     }
                     self.status = "file tree ready".to_owned();
+                    self.sync_tree_watches();
                 }
                 FileEvent::Listed(_, Err(error)) => self.status = format!("E: tree: {error}"),
                 FileEvent::Files(Ok(files)) => {
@@ -129,6 +131,19 @@ impl Model {
                     }
                 }
                 FileEvent::ExternalChanged { path } => self.handle_external_change(path),
+                FileEvent::TreeChanged { paths } => {
+                    if !paths.is_empty() {
+                        self.refresh_tree_background();
+                    }
+                }
+                FileEvent::TreeWatchUnavailable(error) => {
+                    self.tree_stale = true;
+                    self.status = format!("E: tree watcher: {error}");
+                }
+                FileEvent::TreeSnapshot {
+                    generation,
+                    listings,
+                } => self.apply_tree_snapshot(generation, listings),
             }
             self.dirty = true;
         }
@@ -206,6 +221,7 @@ impl Model {
         if self.tree_selected.is_none() {
             self.tree_selected = (!self.tree.is_empty()).then_some(0);
         }
+        self.sync_tree_watches();
         self.dirty = true;
     }
 
@@ -274,6 +290,7 @@ impl Model {
                 Err(error) => self.status = format!("E: tree: {error}"),
             }
         }
+        self.sync_tree_watches();
         self.dirty = true;
     }
 
@@ -354,6 +371,7 @@ impl Model {
         } else {
             "hidden files hidden".to_owned()
         };
+        self.sync_tree_watches();
         self.dirty = true;
     }
 
@@ -481,34 +499,188 @@ impl Model {
         }
     }
 
-    pub(crate) fn refresh_tree(&mut self, select: Option<PathBuf>) {
-        self.tree_pending_select = select;
-        self.tree.clear();
-        self.tree_selected = None;
-        self.tree_visible = true;
-        self.tree_focus = true;
-        let workspace = self.workspace.clone();
+    fn expanded_tree_paths(&self) -> BTreeSet<PathBuf> {
+        self.tree
+            .iter()
+            .filter(|entry| entry.is_dir && entry.expanded)
+            .map(|entry| entry.path.clone())
+            .collect()
+    }
+
+    fn sync_tree_watches(&mut self) {
+        let mut directories = vec![self.workspace.clone()];
+        directories.extend(self.expanded_tree_paths());
+        let limited = directories.len() > MAX_TREE_WATCH_DIRS;
+        if limited {
+            directories.truncate(MAX_TREE_WATCH_DIRS);
+        }
+        if limited && !self.tree_watch_limited {
+            self.status =
+                format!("tree watch limit reached ({MAX_TREE_WATCH_DIRS}); auto-refresh limited");
+        }
+        self.tree_watch_limited = limited;
+        if !self.ensure_file_worker() {
+            self.tree_stale = true;
+            return;
+        }
+        let sent = self
+            .file_worker
+            .as_ref()
+            .is_some_and(|worker| worker.request(FileRequest::WatchDirs(directories)).is_ok());
+        self.tree_stale = !sent;
+    }
+
+    fn request_tree_refresh(&mut self, select: Option<PathBuf>) {
+        if select.is_some() {
+            self.tree_pending_select = select;
+        }
+        if self.tree_refresh_in_flight {
+            self.tree_refresh_queued = true;
+            return;
+        }
+        let expanded = self.expanded_tree_paths().into_iter().collect();
         if self.ensure_file_worker() {
-            if let Some(worker) = self.file_worker.as_ref() {
-                let _ = worker.request(FileRequest::List(workspace));
-            }
-        } else {
-            match self.tree_entries(&workspace) {
-                Ok(entries) => {
-                    self.tree = entries
-                        .into_iter()
-                        .map(|entry| TreeEntry {
-                            path: workspace.join(entry.name),
-                            depth: 0,
-                            is_dir: entry.is_dir,
-                            expanded: false,
-                        })
-                        .collect();
-                    self.apply_pending_tree_selection();
-                }
-                Err(error) => self.status = format!("E: tree: {error}"),
+            self.tree_refresh_generation = self.tree_refresh_generation.wrapping_add(1);
+            let generation = self.tree_refresh_generation;
+            let request = FileRequest::TreeSnapshot {
+                generation,
+                root: self.workspace.clone(),
+                expanded,
+            };
+            let sent = self
+                .file_worker
+                .as_ref()
+                .is_some_and(|worker| worker.request(request).is_ok());
+            self.tree_refresh_in_flight = sent;
+            self.tree_stale = !sent;
+            return;
+        }
+        self.rebuild_tree_from_disk();
+    }
+
+    fn refresh_tree_background(&mut self) {
+        self.request_tree_refresh(None);
+    }
+
+    fn rebuild_tree_from_disk(&mut self) {
+        let expanded = self.expanded_tree_paths();
+        let workspace = self.workspace.clone();
+        let mut listings = Vec::new();
+        listings.push((workspace.clone(), self.tree_entries(&workspace)));
+        for path in expanded {
+            if let Ok(entries) = self.tree_entries(&path) {
+                listings.push((path, Ok(entries)));
             }
         }
+        self.tree_refresh_generation = self.tree_refresh_generation.wrapping_add(1);
+        let generation = self.tree_refresh_generation;
+        self.apply_tree_snapshot(generation, listings);
+    }
+
+    fn build_tree_entries(
+        &self,
+        directory: &Path,
+        depth: usize,
+        listings: &BTreeMap<PathBuf, Result<Vec<DirEntry>, String>>,
+        expanded: &BTreeSet<PathBuf>,
+        out: &mut Vec<TreeEntry>,
+    ) {
+        let Some(Ok(entries)) = listings.get(directory) else {
+            return;
+        };
+        for entry in entries {
+            if !self.tree_entry_visible(&entry.name, entry.is_dir) {
+                continue;
+            }
+            let path = directory.join(&entry.name);
+            let is_expanded = entry.is_dir
+                && expanded.contains(&path)
+                && listings.get(&path).is_some_and(Result::is_ok);
+            out.push(TreeEntry {
+                path: path.clone(),
+                depth,
+                is_dir: entry.is_dir,
+                expanded: is_expanded,
+            });
+            if is_expanded {
+                self.build_tree_entries(&path, depth + 1, listings, expanded, out);
+            }
+        }
+    }
+
+    fn select_tree_path(
+        tree: &[TreeEntry],
+        target: Option<&Path>,
+        fallback_index: Option<usize>,
+    ) -> Option<usize> {
+        if let Some(path) = target {
+            if let Some(index) = tree.iter().position(|entry| entry.path == path) {
+                return Some(index);
+            }
+            for ancestor in path.ancestors().skip(1) {
+                if let Some(index) = tree.iter().position(|entry| entry.path == ancestor) {
+                    return Some(index);
+                }
+            }
+        }
+        fallback_index
+            .map(|index| index.min(tree.len().saturating_sub(1)))
+            .filter(|_| !tree.is_empty())
+            .or_else(|| (!tree.is_empty()).then_some(0))
+    }
+
+    fn apply_tree_snapshot(
+        &mut self,
+        generation: u64,
+        listings: Vec<(PathBuf, Result<Vec<DirEntry>, String>)>,
+    ) {
+        if generation != self.tree_refresh_generation {
+            return;
+        }
+        self.tree_refresh_in_flight = false;
+        let previous_path = self
+            .tree_selected
+            .and_then(|index| self.tree.get(index))
+            .map(|entry| entry.path.clone());
+        let previous_index = self.tree_selected;
+        let expanded = self.expanded_tree_paths();
+        let listings: BTreeMap<_, _> = listings.into_iter().collect();
+        match listings.get(&self.workspace) {
+            None => {
+                self.status = "E: tree: missing root listing".to_owned();
+                self.tree_stale = true;
+                self.finish_tree_refresh();
+                return;
+            }
+            Some(Err(error)) => {
+                self.status = format!("E: tree: {error}");
+                self.tree_stale = true;
+                self.finish_tree_refresh();
+                return;
+            }
+            Some(Ok(_)) => {}
+        }
+        let mut tree = Vec::new();
+        self.build_tree_entries(&self.workspace, 0, &listings, &expanded, &mut tree);
+        let target = self.tree_pending_select.take().or(previous_path);
+        self.tree_selected = Self::select_tree_path(&tree, target.as_deref(), previous_index);
+        self.tree = tree;
+        self.tree_stale = false;
+        self.sync_tree_watches();
+        self.finish_tree_refresh();
+    }
+
+    fn finish_tree_refresh(&mut self) {
+        if self.tree_refresh_queued {
+            self.tree_refresh_queued = false;
+            self.refresh_tree_background();
+        }
+    }
+
+    pub(crate) fn refresh_tree(&mut self, select: Option<PathBuf>) {
+        self.tree_visible = true;
+        self.tree_focus = true;
+        self.request_tree_refresh(select);
         self.dirty = true;
     }
 

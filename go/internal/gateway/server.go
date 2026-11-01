@@ -254,6 +254,11 @@ type readDirResult struct {
 	Entries []fsroot.DirEntry `json:"entries"`
 }
 
+type dirSignatureResult struct {
+	Modified int64 `json:"modified_ns"`
+	Changed  int64 `json:"changed_ns"`
+}
+
 type createDirParams struct {
 	Path string `json:"path"`
 }
@@ -427,6 +432,8 @@ func (s *Server) dispatch(ctx context.Context, req request, state *connectionSta
 		return s.statFile(req, state)
 	case "sys.read_dir":
 		return s.readDir(req, state)
+	case "sys.read_dir_signature":
+		return s.readDirSignature(req, state)
 	case "sys.write_file":
 		return s.writeFile(req, state)
 	case "sys.create_dir":
@@ -580,6 +587,42 @@ func (s *Server) readDir(req request, state *connectionState) (interface{}, *rpc
 		return nil, &rpcError{Code: code, Message: "read_dir unavailable: " + err.Error()}
 	}
 	return readDirResult{Entries: entries}, nil
+}
+
+func (s *Server) readDirSignature(req request, state *connectionState) (interface{}, *rpcError) {
+	var params statParams
+	if err := decodeParams(req.Params, &params); err != nil {
+		return nil, &rpcError{Code: -32602, Message: "invalid params"}
+	}
+	path := params.Path
+	if path == "" {
+		path = "."
+	}
+	if path != "." {
+		cleaned, err := workspacePath(path)
+		if err != nil {
+			return nil, &rpcError{Code: -32002, Message: "policy denied"}
+		}
+		path = cleaned
+	}
+	if rpcErr := s.pathPermissionError(state, "fs.read", path); rpcErr != nil {
+		return nil, rpcErr
+	}
+	if s.root == nil {
+		return nil, &rpcError{Code: -32008, Message: "file service unavailable"}
+	}
+	signature, err := s.root.DirSignature(path)
+	if err != nil {
+		code := -32002
+		if errors.Is(err, os.ErrNotExist) {
+			code = -32007
+		}
+		return nil, &rpcError{Code: code, Message: "dir signature unavailable: " + err.Error()}
+	}
+	return dirSignatureResult{
+		Modified: signature.ModifiedNS,
+		Changed:  signature.ChangedNS,
+	}, nil
 }
 
 func fileMutationError(err error) *rpcError {

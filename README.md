@@ -95,6 +95,7 @@ key dismisses it.
 - [Text-model snapshot gate](docs/adr/0009-text-model-snapshot-gate.md)
 - [Cursor and snapshot ownership](docs/adr/0010-cursor-and-snapshot-ownership.md)
 - [Workspace file I/O protocol](docs/adr/0011-workspace-chunked-file-io.md)
+- [Workspace tree watching](docs/adr/0018-workspace-tree-watch.md)
 - [Architecture decision records](docs/adr/)
 - [Governance](GOVERNANCE.md)
 - [Maintainers](MAINTAINERS.md)

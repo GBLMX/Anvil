@@ -437,7 +437,11 @@ pub fn view(model: &Model, frame: &mut Frame) {
         if lines.is_empty() {
             lines.push(Line::styled("empty", theme::panel().fg(theme::MUTED)));
         }
-        let tree_title = if model.show_hidden {
+        let tree_title = if model.tree_stale {
+            "Files · stale"
+        } else if model.tree_watch_limited {
+            "Files · watch limit"
+        } else if model.show_hidden {
             "Files · hidden"
         } else {
             "Files"

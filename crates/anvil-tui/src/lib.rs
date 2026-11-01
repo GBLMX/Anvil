@@ -343,6 +343,11 @@ pub struct Model {
     /// Entry to select after the next tree refresh.
     tree_pending_select: Option<PathBuf>,
     tree_focus: bool,
+    tree_stale: bool,
+    tree_watch_limited: bool,
+    tree_refresh_in_flight: bool,
+    tree_refresh_queued: bool,
+    tree_refresh_generation: u64,
     show_hidden: bool,
     fuzzy: Option<FuzzyState>,
     /// Gateway client used for file I/O when present.
@@ -431,6 +436,11 @@ impl Model {
             tree_visible: false,
             tree_focus: false,
             tree_pending_select: None,
+            tree_stale: false,
+            tree_watch_limited: false,
+            tree_refresh_in_flight: false,
+            tree_refresh_queued: false,
+            tree_refresh_generation: 0,
             show_hidden: false,
             fuzzy: None,
             gateway: None,
