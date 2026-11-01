@@ -237,6 +237,8 @@ workspace management and should be addressed before adding more UI features.
     the base foreground style.
   - Introduce a small style composer with explicit layer order rather than
     mutating spans in mode-specific branches.
+  - Record the render style layer contract as
+    `docs/adr/0016-render-style-layers.md`.
 - Proposed layer order:
   1. syntax foreground
   2. search match background
