@@ -211,6 +211,13 @@ fn syntax_style(class: SyntaxClass) -> Style {
         SyntaxClass::Type => theme::SYNTAX_TYPE,
         SyntaxClass::Property => theme::SYNTAX_PROPERTY,
         SyntaxClass::Constant => theme::SYNTAX_CONSTANT,
+        SyntaxClass::Heading => theme::SYNTAX_HEADING,
+        SyntaxClass::Link => theme::SYNTAX_LINK,
+        SyntaxClass::Code => theme::SYNTAX_CODE,
+        SyntaxClass::Emphasis => theme::SYNTAX_EMPHASIS,
+        SyntaxClass::List => theme::SYNTAX_LIST,
+        SyntaxClass::Quote => theme::SYNTAX_QUOTE,
+        SyntaxClass::Table => theme::SYNTAX_TABLE,
     };
     Style::default().fg(color)
 }

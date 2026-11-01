@@ -5,6 +5,21 @@ All notable changes to Anvil are recorded here. The format follows
 lines are release-series labels, not a compatibility promise; `0.4.x` is the
 post-`0.4.0` feature line.
 
+## [0.4.3] - 2026-11-01
+
+### Added
+
+- Markdown highlighting with `tree-sitter-md` block and inline grammars.
+- Heading, link, code, emphasis, list, quote, table, and frontmatter classes.
+- Fenced code blocks use the nested language grammar when available.
+
+### Fixed
+
+- TOML keys no longer color the entire key/value pair; strings and values keep
+  their own classes.
+- Tree watcher smoke instructions now create a new file instead of touching an
+  existing file.
+
 ## [0.4.2] - 2026-11-01
 
 ### Added

@@ -28,6 +28,13 @@ pub(crate) const SYNTAX_FUNCTION: Color = Color::Rgb(210, 168, 255);
 pub(crate) const SYNTAX_TYPE: Color = Color::Rgb(126, 231, 135);
 pub(crate) const SYNTAX_PROPERTY: Color = Color::Rgb(255, 166, 87);
 pub(crate) const SYNTAX_CONSTANT: Color = Color::Rgb(242, 204, 96);
+pub(crate) const SYNTAX_HEADING: Color = Color::Rgb(255, 123, 114);
+pub(crate) const SYNTAX_LINK: Color = Color::Rgb(88, 166, 255);
+pub(crate) const SYNTAX_CODE: Color = Color::Rgb(126, 231, 135);
+pub(crate) const SYNTAX_EMPHASIS: Color = Color::Rgb(247, 119, 186);
+pub(crate) const SYNTAX_LIST: Color = Color::Rgb(242, 204, 96);
+pub(crate) const SYNTAX_QUOTE: Color = Color::Rgb(139, 148, 158);
+pub(crate) const SYNTAX_TABLE: Color = Color::Rgb(255, 166, 87);
 
 pub(crate) fn text() -> Style {
     Style::default().fg(TEXT).bg(BG)

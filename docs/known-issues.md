@@ -2,7 +2,7 @@
 
 Status: BUG-001, BUG-004, BUG-005, BUG-006, BUG-007, BUG-008 (0.4.0
 open-buffer and 0.4.1 tree scopes), and BUG-009 are resolved. BUG-002 is
-fixed in 0.4.2; BUG-003 remains open for 0.4.3.
+fixed in 0.4.2; BUG-003 is fixed for 0.4.3.
 
 ## BUG-001: File tree and fuzzy picker do not scroll with the selection
 
@@ -56,30 +56,22 @@ fixed in 0.4.2; BUG-003 remains open for 0.4.3.
 ## BUG-003: Markdown highlighting needs a deliberate grammar and query
 
 - Area: TUI syntax highlighting, Markdown
-- Status: Open; not fixed
+- Status: Fixed 2026-11-01; `0.4.3` release pending.
 - Target: `0.4.3`
 - Severity: feature quality
-- Current behavior: `.md` is not registered at all.
-- Required attention:
-  - headings and heading levels
-  - fenced and inline code, including fence language tags
-  - emphasis and strong emphasis
-  - links, images, and reference links
-  - lists, task markers, and block quotes
-  - tables
-  - HTML blocks and frontmatter
-  - preserve plain-text fallback for malformed Markdown
-- Notes:
-  - Do not treat Markdown punctuation as code tokens; fenced code should use
-    the nested language grammar where available.
-  - Large Markdown files should still obey the existing 256 KiB highlight
-    limit and remain editable without highlighting.
-- Acceptance for a future fix:
-  - Headings, links, inline code, fenced code, emphasis, lists, quotes, and
-    tables have visibly distinct classes.
-  - Malformed input never panics or shifts text; the editor remains usable.
-  - Markdown tests cover fenced code, nested lists, frontmatter, and a broken
-    fence.
+- Resolution:
+  - `tree-sitter-md` block and inline grammars, used without its optional
+    second tree-sitter runtime.
+  - Heading, link, code, emphasis, list, quote, table, and frontmatter classes.
+  - Inline trees are parsed per `inline`/`pipe_table_cell` range and offset
+    back into the document.
+  - Fenced code uses the nested language grammar when available; unknown fences
+    keep a code class.
+- Acceptance/verification:
+  - Tests cover headings, links, inline code, fenced code, emphasis, lists,
+    quotes, tables, frontmatter, and a broken fence.
+  - Malformed input does not panic or shift text.
+  - Highlighting remains bounded by `MAX_HIGHLIGHT_BYTES`.
 
 ## Urgent foundational gaps
 
@@ -227,8 +219,8 @@ workspace management and should be addressed before adding more UI features.
   - External create/delete/rename refreshes the tree while preserving valid
     selection and expansion.
 - Verification:
-  - `cargo test --workspace --no-fail-fast`: 237 passed, 1 ignored.
-  - `cargo test -p anvil-tui`: 131 passed.
+  - `cargo test --workspace --no-fail-fast`: 239 passed, 1 ignored.
+  - `cargo test -p anvil-tui`: 133 passed.
   - `go test ./...`, `go vet ./...`, and `govulncheck ./...` pass.
   - Workspace clippy, fmt, and `git diff --check` pass.
 

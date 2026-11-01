@@ -8,9 +8,10 @@ use tree_sitter::{Language, Parser, Query, QueryCursor, StreamingIterator};
 const MAX_HIGHLIGHT_BYTES: usize = 256 * 1024;
 const DEBOUNCE: Duration = Duration::from_millis(50);
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 enum SyntaxKind {
     TreeSitter,
+    Markdown,
     GoMod,
 }
 
@@ -18,6 +19,8 @@ struct SyntaxLanguage {
     kind: SyntaxKind,
     language: Option<Language>,
     query: Option<Query>,
+    inline_language: Option<Language>,
+    inline_query: Option<Query>,
     rust_keywords: bool,
 }
 
@@ -28,7 +31,24 @@ impl SyntaxLanguage {
             kind: SyntaxKind::TreeSitter,
             language: Some(language),
             query: compiled,
+            inline_language: None,
+            inline_query: None,
             rust_keywords,
+        }
+    }
+
+    fn markdown() -> Self {
+        let block = Language::new(tree_sitter_md::LANGUAGE);
+        let inline = Language::new(tree_sitter_md::INLINE_LANGUAGE);
+        let query = Query::new(&block, include_str!("syntax/markdown.scm")).ok();
+        let inline_query = Query::new(&inline, include_str!("syntax/markdown_inline.scm")).ok();
+        Self {
+            kind: SyntaxKind::Markdown,
+            language: Some(block),
+            query,
+            inline_language: Some(inline),
+            inline_query,
+            rust_keywords: false,
         }
     }
 
@@ -37,6 +57,8 @@ impl SyntaxLanguage {
             kind: SyntaxKind::GoMod,
             language: None,
             query: None,
+            inline_language: None,
+            inline_query: None,
             rust_keywords: false,
         }
     }
@@ -106,6 +128,7 @@ static DOCKERFILE: LazyLock<SyntaxLanguage> = LazyLock::new(|| {
     )
 });
 static GO_MOD: LazyLock<SyntaxLanguage> = LazyLock::new(SyntaxLanguage::go_mod);
+static MARKDOWN: LazyLock<SyntaxLanguage> = LazyLock::new(SyntaxLanguage::markdown);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SyntaxClass {
@@ -117,6 +140,13 @@ pub enum SyntaxClass {
     Type,
     Property,
     Constant,
+    Heading,
+    Link,
+    Code,
+    Emphasis,
+    List,
+    Quote,
+    Table,
 }
 
 #[derive(Clone, Debug)]
@@ -287,37 +317,159 @@ fn parse_source(source: &str, path: &Path) -> Option<Vec<Highlight>> {
     let definition = language_for(path)?;
     let mut highlights = match definition.kind {
         SyntaxKind::GoMod => parse_go_mod(source),
+        SyntaxKind::Markdown => parse_markdown(source, definition)?,
         SyntaxKind::TreeSitter => {
-            let language = definition.language.as_ref()?;
-            let query = definition.query.as_ref()?;
-            let mut parser = Parser::new();
-            parser.set_language(language).ok()?;
-            let tree = parser.parse(source, None)?;
             let mut highlights = Vec::new();
-            let mut cursor = QueryCursor::new();
-            let mut matches = cursor.matches(query, tree.root_node(), source.as_bytes());
-            while let Some(captures) = matches.next() {
-                for capture in captures.captures {
-                    let Some(class) = class_for(query.capture_names()[capture.index as usize])
-                    else {
-                        continue;
-                    };
-                    let range = capture.node.byte_range();
-                    highlights.push(Highlight {
-                        start: range.start,
-                        end: range.end,
-                        class,
-                    });
-                }
-            }
-            if definition.rust_keywords {
-                walk_keywords(tree.root_node(), &mut highlights);
-            }
+            parse_grammar(source, definition, 0, &mut highlights)?;
             highlights
         }
     };
     highlights.sort_by_key(|highlight| (highlight.start, highlight.end));
     Some(highlights)
+}
+
+fn parse_grammar(
+    source: &str,
+    definition: &SyntaxLanguage,
+    base: usize,
+    highlights: &mut Vec<Highlight>,
+) -> Option<()> {
+    let language = definition.language.as_ref()?;
+    let query = definition.query.as_ref()?;
+    let mut parser = Parser::new();
+    parser.set_language(language).ok()?;
+    let tree = parser.parse(source, None)?;
+    collect_query(tree.root_node(), query, source, base, highlights);
+    if definition.rust_keywords {
+        walk_keywords(tree.root_node(), base, highlights);
+    }
+    Some(())
+}
+
+fn collect_query(
+    root: tree_sitter::Node<'_>,
+    query: &Query,
+    source: &str,
+    base: usize,
+    highlights: &mut Vec<Highlight>,
+) {
+    let mut cursor = QueryCursor::new();
+    let mut matches = cursor.matches(query, root, source.as_bytes());
+    while let Some(captures) = matches.next() {
+        for capture in captures.captures {
+            let Some(class) = class_for(query.capture_names()[capture.index as usize]) else {
+                continue;
+            };
+            let range = capture.node.byte_range();
+            highlights.push(Highlight {
+                start: base + range.start,
+                end: base + range.end,
+                class,
+            });
+        }
+    }
+}
+
+fn parse_markdown(source: &str, definition: &SyntaxLanguage) -> Option<Vec<Highlight>> {
+    let block_language = definition.language.as_ref()?;
+    let block_query = definition.query.as_ref()?;
+    let inline_language = definition.inline_language.as_ref()?;
+    let inline_query = definition.inline_query.as_ref()?;
+    let mut parser = Parser::new();
+    parser.set_language(block_language).ok()?;
+    let tree = parser.parse(source, None)?;
+    let mut highlights = Vec::new();
+    collect_query(tree.root_node(), block_query, source, 0, &mut highlights);
+
+    let mut inline_nodes = Vec::new();
+    collect_kind(tree.root_node(), "inline", &mut inline_nodes);
+    collect_kind(tree.root_node(), "pipe_table_cell", &mut inline_nodes);
+    for node in inline_nodes {
+        let start = node.start_byte();
+        let end = node.end_byte();
+        let Some(text) = source.get(start..end) else {
+            continue;
+        };
+        let mut inline_parser = Parser::new();
+        inline_parser.set_language(inline_language).ok()?;
+        let inline_tree = inline_parser.parse(text, None)?;
+        collect_query(
+            inline_tree.root_node(),
+            inline_query,
+            text,
+            start,
+            &mut highlights,
+        );
+    }
+
+    let mut fences = Vec::new();
+    collect_kind(tree.root_node(), "fenced_code_block", &mut fences);
+    for fence in fences {
+        let Some(content) = child_kind(fence, "code_fence_content") else {
+            continue;
+        };
+        let start = content.start_byte();
+        let end = content.end_byte();
+        let Some(text) = source.get(start..end) else {
+            continue;
+        };
+        let tag = child_kind(fence, "info_string")
+            .and_then(|info| child_kind(info, "language"))
+            .and_then(|language| source.get(language.byte_range()))
+            .and_then(|tag| tag.split_whitespace().next())
+            .and_then(language_for_tag);
+        let nested = tag.is_some_and(|definition| {
+            definition.kind != SyntaxKind::Markdown
+                && parse_grammar(text, definition, start, &mut highlights).is_some()
+        });
+        if !nested && start < end {
+            highlights.push(Highlight {
+                start,
+                end,
+                class: SyntaxClass::Code,
+            });
+        }
+    }
+    Some(highlights)
+}
+
+fn collect_kind<'tree>(
+    node: tree_sitter::Node<'tree>,
+    kind: &str,
+    out: &mut Vec<tree_sitter::Node<'tree>>,
+) {
+    if node.kind() == kind {
+        out.push(node);
+    }
+    for index in 0..node.child_count() {
+        if let Some(child) = node.child(index) {
+            collect_kind(child, kind, out);
+        }
+    }
+}
+
+fn child_kind<'tree>(
+    node: tree_sitter::Node<'tree>,
+    kind: &str,
+) -> Option<tree_sitter::Node<'tree>> {
+    (0..node.child_count())
+        .filter_map(|index| node.child(index))
+        .find(|child| child.kind() == kind)
+}
+
+fn language_for_tag(tag: &str) -> Option<&'static SyntaxLanguage> {
+    match tag.to_ascii_lowercase().as_str() {
+        "rust" | "rs" => Some(&*RUST),
+        "go" | "golang" => Some(&*GO),
+        "bash" | "sh" | "shell" => Some(&*BASH),
+        "python" | "py" => Some(&*PYTHON),
+        "toml" => Some(&*TOML),
+        "yaml" | "yml" => Some(&*YAML),
+        "json" | "jsonc" => Some(&*JSON),
+        "make" | "makefile" => Some(&*MAKE),
+        "dockerfile" | "docker" => Some(&*DOCKERFILE),
+        _ => None,
+    }
 }
 
 fn parse_go_mod(source: &str) -> Vec<Highlight> {
@@ -384,7 +536,7 @@ const KEYWORDS: &[&str] = &[
     "dyn", "true", "false", "null",
 ];
 
-fn walk_keywords(node: tree_sitter::Node<'_>, highlights: &mut Vec<Highlight>) {
+fn walk_keywords(node: tree_sitter::Node<'_>, base: usize, highlights: &mut Vec<Highlight>) {
     if node.child_count() == 0 {
         let kind = node.kind();
         if KEYWORDS.contains(&kind)
@@ -392,8 +544,8 @@ fn walk_keywords(node: tree_sitter::Node<'_>, highlights: &mut Vec<Highlight>) {
         {
             let range = node.byte_range();
             highlights.push(Highlight {
-                start: range.start,
-                end: range.end,
+                start: base + range.start,
+                end: base + range.end,
                 class: if matches!(kind, "true" | "false" | "null") {
                     SyntaxClass::Constant
                 } else {
@@ -405,7 +557,7 @@ fn walk_keywords(node: tree_sitter::Node<'_>, highlights: &mut Vec<Highlight>) {
     }
     for index in 0..node.child_count() {
         if let Some(child) = node.child(index) {
-            walk_keywords(child, highlights);
+            walk_keywords(child, base, highlights);
         }
     }
 }
@@ -422,6 +574,13 @@ fn class_for(name: &str) -> Option<SyntaxClass> {
         "type" => SyntaxClass::Type,
         "property" | "attribute" | "label" => SyntaxClass::Property,
         "constant" | "constant.builtin" | "constant.macro" | "boolean" => SyntaxClass::Constant,
+        "heading" => SyntaxClass::Heading,
+        "link" => SyntaxClass::Link,
+        "code" => SyntaxClass::Code,
+        "emphasis" => SyntaxClass::Emphasis,
+        "list" => SyntaxClass::List,
+        "quote" => SyntaxClass::Quote,
+        "table" => SyntaxClass::Table,
         _ => return None,
     })
 }
@@ -442,6 +601,7 @@ fn language_for(path: &Path) -> Option<&'static SyntaxLanguage> {
         "py" => Some(&*PYTHON),
         "toml" => Some(&*TOML),
         "yml" | "yaml" => Some(&*YAML),
+        "md" | "markdown" => Some(&*MARKDOWN),
         _ => None,
     }
 }
@@ -488,13 +648,14 @@ mod tests {
             "x.yaml",
             "x.json",
             "x.jsonc",
+            "x.md",
+            "x.markdown",
             "Makefile",
             "Dockerfile",
             "go.mod",
         ] {
             assert!(language_for(Path::new(path)).is_some(), "{path}");
         }
-        assert!(language_for(Path::new("x.md")).is_none());
         assert!(language_for(Path::new("x.unknown")).is_none());
     }
 
@@ -519,6 +680,41 @@ mod tests {
                 "{path} did not produce {class:?}: {highlights:?}"
             );
         }
+    }
+
+    #[test]
+    fn markdown_highlights_blocks_inline_and_fences() {
+        let source = "# Heading\n\n- [link](https://example.com) `code` *em* **strong**\n\n> quote\n\n| a | b |\n|---|---|\n\n```rust\nfn main() {}\n```\n";
+        let highlights = parse_source(source, Path::new("x.md")).expect("parse");
+        for class in [
+            SyntaxClass::Heading,
+            SyntaxClass::Link,
+            SyntaxClass::Code,
+            SyntaxClass::Emphasis,
+            SyntaxClass::List,
+            SyntaxClass::Quote,
+            SyntaxClass::Table,
+            SyntaxClass::Keyword,
+        ] {
+            assert!(
+                highlights.iter().any(|highlight| highlight.class == class),
+                "missing {class:?}: {highlights:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn markdown_frontmatter_and_broken_fences_are_safe() {
+        let frontmatter = parse_source("---\ntitle: Anvil\n---\n# Title\n", Path::new("x.md"))
+            .expect("frontmatter parse");
+        assert!(
+            frontmatter
+                .iter()
+                .any(|highlight| highlight.class == SyntaxClass::Property)
+        );
+        let broken =
+            parse_source("```rust\nfn main() {\n", Path::new("x.md")).expect("broken fence parse");
+        assert!(!broken.is_empty());
     }
 
     #[test]

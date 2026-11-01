@@ -6,7 +6,7 @@ The official standard edition is one composition; third-party distributions
 can compose the kernel with their own UI and trusted Rust code. Runtime plugins
 remain untrusted and sandboxed.
 
-Status: **0.4.2 released; `0.4.x` feature line active**.
+Status: **0.4.3 released; `0.4.x` feature line active**.
 Release model: **0.3.0 → 0.4.0 maintenance closed**.
 Development uses Rust from `rust-toolchain.toml` and Go **1.26.10 or newer**;
 CI installs the exact Go version from the root `go.mod`. The ratatui editor now
@@ -17,8 +17,8 @@ mode (`i`/`a`/`A`/`o`/`O`), multi-cursor selection (`s`/`Alt-s`/`C`),
 `dw`/`db`/`de`/`yw`/`yb`/`ye`, literal `:s`/`:%s` substitution, `/` search
 with `n`/`N`, multi-buffer switching, vertical splits with independent pane cursors,
 horizontal scrolling, and dirty-only redraws, insert-mode Tab indentation, a workspace file tree, and a fuzzy file
-finder. Rust, TOML, Go, Bash, Python, YAML, JSON/JSONC, Makefile, and
-Dockerfile use Tree-sitter highlighting on a debounced background thread,
+finder. Rust, TOML, Go, Bash, Python, YAML, JSON/JSONC, Markdown, Makefile,
+and Dockerfile use Tree-sitter highlighting on a debounced background thread,
 capped at 256 KiB so large files keep plain-text latency.
 Trusted language servers (rust-analyzer, gopls, pyright/pylsp,
 typescript-language-server/vtsls, clangd, jdtls, lua-language-server,
