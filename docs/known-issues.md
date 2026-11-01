@@ -2,7 +2,7 @@
 
 Status: BUG-001, BUG-004, BUG-005, BUG-006, BUG-007, BUG-008 (0.4.0
 open-buffer and 0.4.1 tree scopes), and BUG-009 are resolved. BUG-002 is
-fixed for 0.4.2; BUG-003 remains open for 0.4.3.
+fixed in 0.4.2; BUG-003 remains open for 0.4.3.
 
 ## BUG-001: File tree and fuzzy picker do not scroll with the selection
 
@@ -33,7 +33,7 @@ fixed for 0.4.2; BUG-003 remains open for 0.4.3.
 ## BUG-002: Syntax highlighting does not cover Anvil project file formats
 
 - Area: TUI syntax highlighting
-- Status: Fixed 2026-11-01 for the baseline formats; `0.4.2` release pending.
+- Status: Fixed 2026-11-01 in `0.4.2`.
 - Target: `0.4.2`
 - Severity: feature coverage / usability
 - Coverage:
