@@ -285,6 +285,24 @@ impl GatewayClient {
         Ok(())
     }
 
+    /// Create one workspace directory without creating parents.
+    pub fn create_dir(&mut self, path: &str) -> Result<(), ClientError> {
+        self.request("sys.create_dir", serde_json::json!({ "path": path }))?;
+        Ok(())
+    }
+
+    /// Rename one workspace entry without replacing an existing target.
+    pub fn rename(&mut self, from: &str, to: &str) -> Result<(), ClientError> {
+        self.request("sys.rename", serde_json::json!({ "from": from, "to": to }))?;
+        Ok(())
+    }
+
+    /// Remove one workspace file, symlink, or empty directory.
+    pub fn remove(&mut self, path: &str) -> Result<(), ClientError> {
+        self.request("sys.remove", serde_json::json!({ "path": path }))?;
+        Ok(())
+    }
+
     /// Run one allowlisted tool through the gateway's sandboxed exec runner.
     pub fn exec(
         &mut self,

@@ -19,6 +19,8 @@ Normal mode
   Ctrl-w h / l        focus the left / right pane
   Ctrl-w q            close the split
   Space e             file tree (h/l/Enter expand or open, H toggles hidden)
+  tree a / A         create file / folder in the tree
+  tree r / d         rename / delete the selected entry
   Space r             rename symbol
   Space a             code actions / quick fixes
   Space s             document symbols

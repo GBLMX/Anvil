@@ -137,6 +137,51 @@ impl Model {
             .map_err(|error| error.to_string())
     }
 
+    pub(crate) fn create_dir(&mut self, path: &Path) -> Result<(), String> {
+        if !self.require_gateway {
+            return fs::create_dir(path).map_err(|error| error.to_string());
+        }
+        let relative = self.relative_path(path)?;
+        let gateway = self
+            .gateway
+            .as_mut()
+            .ok_or_else(|| "gateway unavailable".to_owned())?;
+        gateway
+            .create_dir(&relative)
+            .map_err(|error| error.to_string())
+    }
+
+    pub(crate) fn rename_path(&mut self, from: &Path, to: &Path) -> Result<(), String> {
+        if !self.require_gateway {
+            return fs::rename(from, to).map_err(|error| error.to_string());
+        }
+        let from_relative = self.relative_path(from)?;
+        let to_relative = self.relative_path(to)?;
+        let gateway = self
+            .gateway
+            .as_mut()
+            .ok_or_else(|| "gateway unavailable".to_owned())?;
+        gateway
+            .rename(&from_relative, &to_relative)
+            .map_err(|error| error.to_string())
+    }
+
+    pub(crate) fn remove_path(&mut self, path: &Path) -> Result<(), String> {
+        if !self.require_gateway {
+            return if path.is_dir() {
+                fs::remove_dir(path).map_err(|error| error.to_string())
+            } else {
+                fs::remove_file(path).map_err(|error| error.to_string())
+            };
+        }
+        let relative = self.relative_path(path)?;
+        let gateway = self
+            .gateway
+            .as_mut()
+            .ok_or_else(|| "gateway unavailable".to_owned())?;
+        gateway.remove(&relative).map_err(|error| error.to_string())
+    }
+
     pub(crate) fn save_to(&mut self, path: PathBuf) -> bool {
         if self.reject_read_only() {
             return false;

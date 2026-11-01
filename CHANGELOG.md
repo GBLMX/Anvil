@@ -23,6 +23,9 @@ All notable changes to Anvil are recorded here. The format follows
   badges, panel surfaces, and WCAG-AA text/syntax contrast.
 - Fixed line-number gutter clipping and indentation guides overwriting the
   first code character.
+- Workspace tree create (`a`/`A`), rename (`r`), and confirmed delete
+  (`d`) through confined `sys.create_dir`/`sys.rename`/`sys.remove` gateway
+  operations; tree and fuzzy lists now scroll to keep the selection visible.
 - CLI `-h`/`--help`, `-V`/`--version`, and `--workspace=<DIR>` parsing, with
   parser tests and documented usage.
 - Opt-in PGO and BOLT workflow: `scripts/pgo-bolt.sh` builds instrumented and

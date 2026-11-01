@@ -21,6 +21,9 @@ pub mod method {
     pub const UI_STATUS: &str = "ui.status";
     pub const EVENT_SUBSCRIBE: &str = "event.subscribe";
     pub const SYS_READ_FILE: &str = "sys.read_file";
+    pub const SYS_CREATE_DIR: &str = "sys.create_dir";
+    pub const SYS_RENAME: &str = "sys.rename";
+    pub const SYS_REMOVE: &str = "sys.remove";
     pub const SYS_FETCH: &str = "sys.fetch";
     pub const SYS_EXEC: &str = "sys.exec";
 }

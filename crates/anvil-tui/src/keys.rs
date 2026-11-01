@@ -372,6 +372,10 @@ fn handle_key(model: &mut Model, key: KeyEvent) {
             KeyCode::Char('h') | KeyCode::Left => model.tree_collapse(),
             KeyCode::Char('l') | KeyCode::Right | KeyCode::Enter => model.tree_toggle(),
             KeyCode::Char('H') => model.toggle_hidden(),
+            KeyCode::Char('a') => model.begin_tree_create(CreateKind::File),
+            KeyCode::Char('A') => model.begin_tree_create(CreateKind::Directory),
+            KeyCode::Char('r') => model.begin_tree_rename(),
+            KeyCode::Char('d') | KeyCode::Delete => model.begin_tree_delete(),
             _ => {}
         }
         return;
@@ -395,6 +399,69 @@ fn handle_key(model: &mut Model, key: KeyEvent) {
             }
             KeyCode::Char(character) if !control => {
                 name.push(character);
+                model.dirty = true;
+            }
+            _ => {}
+        },
+        InputMode::Create {
+            directory,
+            name,
+            kind,
+        } => match key.code {
+            KeyCode::Esc => {
+                model.input_mode = InputMode::Normal;
+                model.tree_focus = model.tree_visible;
+                model.dirty = true;
+            }
+            KeyCode::Enter => {
+                let directory = directory.clone();
+                let name = std::mem::take(name);
+                let kind = *kind;
+                model.input_mode = InputMode::Normal;
+                model.finish_tree_create(directory, name, kind);
+            }
+            KeyCode::Backspace => {
+                name.pop();
+                model.dirty = true;
+            }
+            KeyCode::Char(character) if !control => {
+                name.push(character);
+                model.dirty = true;
+            }
+            _ => {}
+        },
+        InputMode::RenameEntry { path, name } => match key.code {
+            KeyCode::Esc => {
+                model.input_mode = InputMode::Normal;
+                model.tree_focus = model.tree_visible;
+                model.dirty = true;
+            }
+            KeyCode::Enter => {
+                let path = path.clone();
+                let name = std::mem::take(name);
+                model.input_mode = InputMode::Normal;
+                model.finish_tree_rename(path, name);
+            }
+            KeyCode::Backspace => {
+                name.pop();
+                model.dirty = true;
+            }
+            KeyCode::Char(character) if !control => {
+                name.push(character);
+                model.dirty = true;
+            }
+            _ => {}
+        },
+        InputMode::ConfirmDelete { path } => match key.code {
+            KeyCode::Char('y') | KeyCode::Char('Y') => {
+                let path = path.clone();
+                model.input_mode = InputMode::Normal;
+                model.finish_tree_delete(path);
+            }
+            KeyCode::Esc | KeyCode::Char('n') | KeyCode::Char('N') => {
+                model.input_mode = InputMode::Normal;
+                model.tree_focus = model.tree_visible;
+                model.status = "delete cancelled".to_owned();
                 model.dirty = true;
             }
             _ => {}

@@ -1,9 +1,12 @@
 //! Workspace tree and fuzzy file finder state.
 
-use super::{FuzzyState, Model, TreeEntry};
+use super::{CreateKind, FuzzyState, InputMode, Model, TreeEntry};
 use crate::file_worker::{FileEvent, FileRequest, FileWorker};
 use anvil_ipc::DirEntry;
-use std::{fs, path::Path};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
 impl Model {
     fn tree_entry_visible(&self, name: &str, is_dir: bool) -> bool {
@@ -53,6 +56,7 @@ impl Model {
                         if self.tree_selected.is_none() && !self.tree.is_empty() {
                             self.tree_selected = Some(0);
                         }
+                        self.apply_pending_tree_selection();
                     } else if let Some(index) =
                         self.tree.iter().position(|entry| entry.path == path)
                     {
@@ -395,5 +399,279 @@ impl Model {
             Err(error) => self.status = format!("E: {error}"),
         }
         self.dirty = true;
+    }
+
+    fn valid_tree_name(name: &str) -> bool {
+        !name.is_empty()
+            && name != "."
+            && name != ".."
+            && !name.contains('/')
+            && !name.contains('\\')
+            && !name.chars().any(char::is_control)
+    }
+
+    fn tree_target_directory(&self) -> PathBuf {
+        let Some(index) = self.tree_selected else {
+            return self.workspace.clone();
+        };
+        let Some(entry) = self.tree.get(index) else {
+            return self.workspace.clone();
+        };
+        if entry.is_dir {
+            entry.path.clone()
+        } else {
+            entry
+                .path
+                .parent()
+                .map(Path::to_path_buf)
+                .unwrap_or_else(|| self.workspace.clone())
+        }
+    }
+
+    fn tree_entry_exists(&mut self, directory: &Path, name: &str) -> Result<bool, String> {
+        self.tree_entries(directory)
+            .map(|entries| entries.iter().any(|entry| entry.name == name))
+    }
+
+    fn apply_pending_tree_selection(&mut self) {
+        let Some(path) = self.tree_pending_select.take() else {
+            return;
+        };
+        if let Some(index) = self.tree.iter().position(|entry| entry.path == path) {
+            self.tree_selected = Some(index);
+        }
+    }
+
+    pub(crate) fn refresh_tree(&mut self, select: Option<PathBuf>) {
+        self.tree_pending_select = select;
+        self.tree.clear();
+        self.tree_selected = None;
+        self.tree_visible = true;
+        self.tree_focus = true;
+        let workspace = self.workspace.clone();
+        if self.ensure_file_worker() {
+            if let Some(worker) = self.file_worker.as_ref() {
+                let _ = worker.request(FileRequest::List(workspace));
+            }
+        } else {
+            match self.tree_entries(&workspace) {
+                Ok(entries) => {
+                    self.tree = entries
+                        .into_iter()
+                        .map(|entry| TreeEntry {
+                            path: workspace.join(entry.name),
+                            depth: 0,
+                            is_dir: entry.is_dir,
+                            expanded: false,
+                        })
+                        .collect();
+                    self.apply_pending_tree_selection();
+                }
+                Err(error) => self.status = format!("E: tree: {error}"),
+            }
+        }
+        self.dirty = true;
+    }
+
+    pub(crate) fn begin_tree_create(&mut self, kind: CreateKind) {
+        let directory = self.tree_target_directory();
+        self.tree_focus = false;
+        self.tree_visible = true;
+        self.input_mode = InputMode::Create {
+            directory,
+            name: String::new(),
+            kind,
+        };
+        self.dirty = true;
+    }
+
+    pub(crate) fn begin_tree_rename(&mut self) {
+        let Some(index) = self.tree_selected else {
+            return;
+        };
+        let Some(entry) = self.tree.get(index) else {
+            return;
+        };
+        let Some(name) = entry.path.file_name().and_then(|name| name.to_str()) else {
+            self.status = "E: invalid entry name".to_owned();
+            self.dirty = true;
+            return;
+        };
+        self.tree_focus = false;
+        self.input_mode = InputMode::RenameEntry {
+            path: entry.path.clone(),
+            name: name.to_owned(),
+        };
+        self.dirty = true;
+    }
+
+    pub(crate) fn begin_tree_delete(&mut self) {
+        let Some(index) = self.tree_selected else {
+            return;
+        };
+        let Some(entry) = self.tree.get(index) else {
+            return;
+        };
+        if self.path_is_open(&entry.path) {
+            self.status = "E: close the open buffer before deleting".to_owned();
+            self.dirty = true;
+            return;
+        }
+        self.tree_focus = false;
+        self.input_mode = InputMode::ConfirmDelete {
+            path: entry.path.clone(),
+        };
+        self.dirty = true;
+    }
+
+    pub(crate) fn finish_tree_create(
+        &mut self,
+        directory: PathBuf,
+        name: String,
+        kind: CreateKind,
+    ) {
+        self.tree_focus = true;
+        let name = name.trim().to_owned();
+        if !Self::valid_tree_name(&name) {
+            self.status = "E: invalid entry name".to_owned();
+            self.dirty = true;
+            return;
+        }
+        match self.tree_entry_exists(&directory, &name) {
+            Ok(true) => {
+                self.status = format!("E: already exists: {name}");
+                self.dirty = true;
+                return;
+            }
+            Ok(false) => {}
+            Err(error) => {
+                self.status = format!("E: {error}");
+                self.dirty = true;
+                return;
+            }
+        }
+        let target = directory.join(&name);
+        let result = match kind {
+            CreateKind::File => self.write_file(&target, ""),
+            CreateKind::Directory => self.create_dir(&target),
+        };
+        match result {
+            Ok(()) => {
+                if matches!(kind, CreateKind::File)
+                    && let Err(error) = self.open_path(&target)
+                {
+                    self.status = format!("E: {error}");
+                    self.dirty = true;
+                    return;
+                }
+                self.refresh_tree(Some(target));
+            }
+            Err(error) => {
+                self.status = format!("E: {error}");
+                self.dirty = true;
+            }
+        }
+    }
+
+    pub(crate) fn finish_tree_rename(&mut self, path: PathBuf, name: String) {
+        self.tree_focus = true;
+        let name = name.trim().to_owned();
+        if !Self::valid_tree_name(&name) {
+            self.status = "E: invalid entry name".to_owned();
+            self.dirty = true;
+            return;
+        }
+        let Some(parent) = path.parent() else {
+            self.status = "E: invalid entry path".to_owned();
+            self.dirty = true;
+            return;
+        };
+        let target = parent.join(&name);
+        if target == path {
+            self.refresh_tree(Some(path));
+            return;
+        }
+        match self.tree_entry_exists(parent, &name) {
+            Ok(true) => {
+                self.status = format!("E: already exists: {name}");
+                self.dirty = true;
+                return;
+            }
+            Ok(false) => {}
+            Err(error) => {
+                self.status = format!("E: {error}");
+                self.dirty = true;
+                return;
+            }
+        }
+        match self.rename_path(&path, &target) {
+            Ok(()) => {
+                self.remap_open_path(&path, &target);
+                self.refresh_tree(Some(target));
+            }
+            Err(error) => {
+                self.status = format!("E: {error}");
+                self.dirty = true;
+            }
+        }
+    }
+
+    pub(crate) fn finish_tree_delete(&mut self, path: PathBuf) {
+        self.tree_focus = true;
+        if self.path_is_open(&path) {
+            self.status = "E: close the open buffer before deleting".to_owned();
+            self.dirty = true;
+            return;
+        }
+        match self.remove_path(&path) {
+            Ok(()) => self.refresh_tree(None),
+            Err(error) => {
+                self.status = format!("E: {error}");
+                self.dirty = true;
+            }
+        }
+    }
+
+    fn path_is_open(&self, path: &Path) -> bool {
+        self.path
+            .as_ref()
+            .is_some_and(|open| open == path || open.starts_with(path))
+            || self.buffers.iter().any(|buffer| {
+                buffer
+                    .path
+                    .as_ref()
+                    .is_some_and(|open| open == path || open.starts_with(path))
+            })
+            || self.split.as_ref().is_some_and(|pane| {
+                pane.buffer
+                    .path
+                    .as_ref()
+                    .is_some_and(|open| open == path || open.starts_with(path))
+            })
+    }
+
+    fn remap_open_path(&mut self, from: &Path, to: &Path) {
+        let remap = |path: &Path| {
+            if path == from {
+                to.to_path_buf()
+            } else if let Ok(rest) = path.strip_prefix(from) {
+                to.join(rest)
+            } else {
+                path.to_path_buf()
+            }
+        };
+        if let Some(path) = self.path.as_mut() {
+            *path = remap(path);
+        }
+        for buffer in &mut self.buffers {
+            if let Some(path) = buffer.path.as_mut() {
+                *path = remap(path);
+            }
+        }
+        if let Some(pane) = self.split.as_mut()
+            && let Some(path) = pane.buffer.path.as_mut()
+        {
+            *path = remap(path);
+        }
     }
 }

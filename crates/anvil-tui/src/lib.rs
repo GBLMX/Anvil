@@ -82,6 +82,13 @@ struct Pane {
     buffer: Buffer,
 }
 
+/// Kind of entry created from the file tree.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CreateKind {
+    File,
+    Directory,
+}
+
 /// The small state machine needed by TUI-1.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum InputMode {
@@ -95,6 +102,16 @@ pub enum InputMode {
     CommandLine { buffer: String },
     /// Incremental substring search.
     Search { query: String },
+    /// Create a file or directory in the tree.
+    Create {
+        directory: PathBuf,
+        name: String,
+        kind: CreateKind,
+    },
+    /// Rename a tree entry.
+    RenameEntry { path: PathBuf, name: String },
+    /// Confirm deletion of a tree entry.
+    ConfirmDelete { path: PathBuf },
 }
 
 /// Vi word motion kind.
@@ -308,6 +325,8 @@ pub struct Model {
     tree: Vec<TreeEntry>,
     tree_selected: Option<usize>,
     tree_visible: bool,
+    /// Entry to select after the next tree refresh.
+    tree_pending_select: Option<PathBuf>,
     tree_focus: bool,
     show_hidden: bool,
     fuzzy: Option<FuzzyState>,
@@ -394,6 +413,7 @@ impl Model {
             tree_selected: None,
             tree_visible: false,
             tree_focus: false,
+            tree_pending_select: None,
             show_hidden: false,
             fuzzy: None,
             gateway: None,

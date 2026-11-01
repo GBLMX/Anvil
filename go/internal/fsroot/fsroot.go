@@ -217,6 +217,104 @@ func (r *Root) ReadDir(path string) ([]DirEntry, error) {
 	return result, nil
 }
 
+func splitRelative(path string) (string, string, error) {
+	relative, err := cleanRelative(path)
+	if err != nil {
+		return "", "", err
+	}
+	dirName := filepath.Dir(relative)
+	name := filepath.Base(relative)
+	if name == "." || name == ".." || name == string(filepath.Separator) {
+		return "", "", fmt.Errorf("%w: invalid entry name %q", ErrInvalidPath, name)
+	}
+	return dirName, name, nil
+}
+
+// CreateDir creates one directory beneath the root without creating parents.
+func (r *Root) CreateDir(path string) error {
+	dirName, name, err := splitRelative(path)
+	if err != nil {
+		return err
+	}
+	r.mu.RLock()
+	if r.fd < 0 {
+		r.mu.RUnlock()
+		return errors.New("workspace is closed")
+	}
+	dirFD, err := openDirBeneath(r.fd, dirName)
+	r.mu.RUnlock()
+	if err != nil {
+		return fmt.Errorf("open parent directory for %q: %w", path, err)
+	}
+	defer unix.Close(dirFD)
+	if err := unix.Mkdirat(dirFD, name, 0o755); err != nil {
+		return fmt.Errorf("create directory %q: %w", path, err)
+	}
+	return nil
+}
+
+// Rename moves one entry beneath the root without replacing an existing target.
+func (r *Root) Rename(from, to string) error {
+	fromDirName, fromName, err := splitRelative(from)
+	if err != nil {
+		return err
+	}
+	toDirName, toName, err := splitRelative(to)
+	if err != nil {
+		return err
+	}
+	r.mu.RLock()
+	if r.fd < 0 {
+		r.mu.RUnlock()
+		return errors.New("workspace is closed")
+	}
+	fromFD, err := openDirBeneath(r.fd, fromDirName)
+	if err != nil {
+		r.mu.RUnlock()
+		return fmt.Errorf("open source directory for %q: %w", from, err)
+	}
+	toFD, err := openDirBeneath(r.fd, toDirName)
+	r.mu.RUnlock()
+	if err != nil {
+		_ = unix.Close(fromFD)
+		return fmt.Errorf("open destination directory for %q: %w", to, err)
+	}
+	defer unix.Close(fromFD)
+	defer unix.Close(toFD)
+	if err := unix.Renameat2(fromFD, fromName, toFD, toName, unix.RENAME_NOREPLACE); err != nil {
+		return fmt.Errorf("rename %q to %q: %w", from, to, err)
+	}
+	return nil
+}
+
+// Remove deletes one file, symlink, or empty directory beneath the root.
+func (r *Root) Remove(path string) error {
+	dirName, name, err := splitRelative(path)
+	if err != nil {
+		return err
+	}
+	r.mu.RLock()
+	if r.fd < 0 {
+		r.mu.RUnlock()
+		return errors.New("workspace is closed")
+	}
+	dirFD, err := openDirBeneath(r.fd, dirName)
+	r.mu.RUnlock()
+	if err != nil {
+		return fmt.Errorf("open parent directory for %q: %w", path, err)
+	}
+	defer unix.Close(dirFD)
+	if err := unix.Unlinkat(dirFD, name, 0); err != nil {
+		if errors.Is(err, unix.EISDIR) {
+			err = unix.Unlinkat(dirFD, name, unix.AT_REMOVEDIR)
+		}
+		if err != nil {
+			return fmt.Errorf("remove %q: %w", path, err)
+		}
+	}
+	return nil
+}
+
 const writeTempPrefix = ".anvil-write-"
 
 // WriteTarget is an atomic file replacement in progress.

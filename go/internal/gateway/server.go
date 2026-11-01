@@ -253,6 +253,19 @@ type readDirResult struct {
 	Entries []fsroot.DirEntry `json:"entries"`
 }
 
+type createDirParams struct {
+	Path string `json:"path"`
+}
+
+type renameParams struct {
+	From string `json:"from"`
+	To   string `json:"to"`
+}
+
+type removeParams struct {
+	Path string `json:"path"`
+}
+
 type writeParams struct {
 	Path    string `json:"path"`
 	Offset  int64  `json:"offset"`
@@ -406,6 +419,12 @@ func (s *Server) dispatch(ctx context.Context, req request, state *connectionSta
 		return s.readDir(req, state)
 	case "sys.write_file":
 		return s.writeFile(req, state)
+	case "sys.create_dir":
+		return s.createDir(req, state)
+	case "sys.rename":
+		return s.rename(req, state)
+	case "sys.remove":
+		return s.remove(req, state)
 	case "session.hello":
 		return s.hello(req, state)
 	case "sys.exec":
@@ -547,6 +566,89 @@ func (s *Server) readDir(req request, state *connectionState) (interface{}, *rpc
 		return nil, &rpcError{Code: code, Message: "read_dir unavailable: " + err.Error()}
 	}
 	return readDirResult{Entries: entries}, nil
+}
+
+func fileMutationError(err error) *rpcError {
+	code := -32008
+	switch {
+	case errors.Is(err, fsroot.ErrInvalidPath):
+		code = -32002
+	case errors.Is(err, os.ErrNotExist):
+		code = -32007
+	case errors.Is(err, os.ErrExist), errors.Is(err, unix.EEXIST), errors.Is(err, unix.ENOTEMPTY):
+		code = -32009
+	}
+	return &rpcError{Code: code, Message: "file operation unavailable"}
+}
+
+func (s *Server) createDir(req request, state *connectionState) (interface{}, *rpcError) {
+	var params createDirParams
+	if err := decodeParams(req.Params, &params); err != nil || params.Path == "" {
+		return nil, &rpcError{Code: -32602, Message: "invalid params"}
+	}
+	path, err := workspacePath(params.Path)
+	if err != nil {
+		return nil, &rpcError{Code: -32002, Message: "policy denied"}
+	}
+	if rpcErr := s.pathPermissionError(state, "fs.write", path); rpcErr != nil {
+		return nil, rpcErr
+	}
+	if s.root == nil {
+		return nil, &rpcError{Code: -32008, Message: "file service unavailable"}
+	}
+	if err := s.root.CreateDir(path); err != nil {
+		return nil, fileMutationError(err)
+	}
+	return map[string]bool{"ok": true}, nil
+}
+
+func (s *Server) rename(req request, state *connectionState) (interface{}, *rpcError) {
+	var params renameParams
+	if err := decodeParams(req.Params, &params); err != nil || params.From == "" || params.To == "" {
+		return nil, &rpcError{Code: -32602, Message: "invalid params"}
+	}
+	from, err := workspacePath(params.From)
+	if err != nil {
+		return nil, &rpcError{Code: -32002, Message: "policy denied"}
+	}
+	to, err := workspacePath(params.To)
+	if err != nil {
+		return nil, &rpcError{Code: -32002, Message: "policy denied"}
+	}
+	if rpcErr := s.pathPermissionError(state, "fs.write", from); rpcErr != nil {
+		return nil, rpcErr
+	}
+	if rpcErr := s.pathPermissionError(state, "fs.write", to); rpcErr != nil {
+		return nil, rpcErr
+	}
+	if s.root == nil {
+		return nil, &rpcError{Code: -32008, Message: "file service unavailable"}
+	}
+	if err := s.root.Rename(from, to); err != nil {
+		return nil, fileMutationError(err)
+	}
+	return map[string]bool{"ok": true}, nil
+}
+
+func (s *Server) remove(req request, state *connectionState) (interface{}, *rpcError) {
+	var params removeParams
+	if err := decodeParams(req.Params, &params); err != nil || params.Path == "" {
+		return nil, &rpcError{Code: -32602, Message: "invalid params"}
+	}
+	path, err := workspacePath(params.Path)
+	if err != nil {
+		return nil, &rpcError{Code: -32002, Message: "policy denied"}
+	}
+	if rpcErr := s.pathPermissionError(state, "fs.write", path); rpcErr != nil {
+		return nil, rpcErr
+	}
+	if s.root == nil {
+		return nil, &rpcError{Code: -32008, Message: "file service unavailable"}
+	}
+	if err := s.root.Remove(path); err != nil {
+		return nil, fileMutationError(err)
+	}
+	return map[string]bool{"ok": true}, nil
 }
 
 func (s *Server) readFile(req request, state *connectionState) (interface{}, *rpcError) {

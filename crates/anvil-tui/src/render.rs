@@ -258,6 +258,26 @@ pub fn view(model: &Model, frame: &mut Frame) {
         InputMode::CommandLine { buffer } => (" CMD ", theme::WARNING, format!(":{buffer}")),
         InputMode::Search { query } => (" SRC ", theme::WARNING, format!("/{query}")),
         InputMode::Insert => (" INS ", theme::SUCCESS, String::new()),
+        InputMode::Create { name, kind, .. } => (
+            if matches!(kind, CreateKind::Directory) {
+                " DIR "
+            } else {
+                " NEW "
+            },
+            theme::ACCENT,
+            format!("new> {name}"),
+        ),
+        InputMode::RenameEntry { name, .. } => (" REN ", theme::MAGENTA, format!("rename> {name}")),
+        InputMode::ConfirmDelete { path } => (
+            " DEL ",
+            theme::ERROR,
+            format!(
+                "delete {}? (y/N)",
+                path.file_name()
+                    .map(|name| name.to_string_lossy())
+                    .unwrap_or_default()
+            ),
+        ),
         InputMode::Normal => {
             let position = model
                 .editor
@@ -305,7 +325,18 @@ pub fn view(model: &Model, frame: &mut Frame) {
             ..inner
         };
         let mut lines = Vec::new();
-        for (index, entry) in model.tree.iter().enumerate() {
+        let visible_height = tree_area.height.saturating_sub(2) as usize;
+        let start = model
+            .tree_selected
+            .unwrap_or(0)
+            .saturating_sub(visible_height.saturating_sub(1));
+        for (index, entry) in model
+            .tree
+            .iter()
+            .enumerate()
+            .skip(start)
+            .take(visible_height)
+        {
             let name = entry
                 .path
                 .file_name()
@@ -512,18 +543,15 @@ pub fn view(model: &Model, frame: &mut Frame) {
         };
         frame.render_widget(Clear, popup);
         let mut lines = Vec::new();
-        for (row, index) in fuzzy
-            .filtered
-            .iter()
-            .take(height.saturating_sub(3) as usize)
-            .enumerate()
-        {
+        let visible = height.saturating_sub(3) as usize;
+        let start = fuzzy.selected.saturating_sub(visible.saturating_sub(1));
+        for (row, index) in fuzzy.filtered.iter().skip(start).take(visible).enumerate() {
             let name = &fuzzy.entries[*index];
             lines.push(fuzzy_path_line(
                 name,
                 &fuzzy.query,
                 width.saturating_sub(2) as usize,
-                row == fuzzy.selected,
+                start + row == fuzzy.selected,
             ));
         }
         lines.push(Line::styled(

@@ -1,12 +1,12 @@
 # Known Issues
 
-Status: open bugs recorded for a later fix. Nothing in this document is fixed
-by the current change.
+Status: mixed. BUG-001 and BUG-004 are fixed; BUG-005 is partially fixed;
+the remaining entries are open.
 
 ## BUG-001: File tree and fuzzy picker do not scroll with the selection
 
 - Area: TUI, `Space e` file tree and `Space f` fuzzy file picker
-- Status: Open; not fixed
+- Status: Fixed 2026-11-01; tree and fuzzy viewports follow the selected row.
 - Severity: usability
 - Repro:
   1. Open a workspace with more tree entries or fuzzy results than fit in the
@@ -17,16 +17,16 @@ by the current change.
   start of the list. The selected row can disappear below the panel.
 - Expected: the list should scroll to keep the selected row visible, including
   when moving up from the bottom and when the list is filtered.
-- Evidence:
+- Original evidence (fixed):
   - Tree rendering iterates the full `model.tree` and renders a `Paragraph`
     without a scroll offset (`crates/anvil-tui/src/render.rs`, tree block).
   - Fuzzy rendering uses `filtered.iter().take(height - 3)` from index zero and
     has no selected-item offset (`crates/anvil-tui/src/render.rs`, fuzzy block).
   - Selection movement only changes `tree_selected` / `fuzzy.selected`
     (`crates/anvil-tui/src/file_tree_ui.rs`).
-- Acceptance for a future fix:
+- Verification:
   - Both panels keep the selected row visible at the top and bottom edges.
-  - Filtering resets or clamps the scroll position without hiding the selection.
+  - Regression tests select the last row in a 20-entry tree and fuzzy list.
   - Existing selection and filtering behavior remains unchanged.
 
 ## BUG-002: Syntax highlighting does not cover Anvil project file formats
@@ -95,25 +95,25 @@ workspace management and should be addressed before adding more UI features.
 
 - Area: TUI `Space e` file tree; gateway filesystem API
 - Priority: Urgent
-- Status: Open; not fixed
-- Current behavior:
-  - `Space e` supports movement, expand/collapse, open, and hidden-file toggle
-    only.
-  - The gateway has `sys.write_file` but no directory creation API.
-  - `:w path` can create a file only when its parent directory already exists.
-  - There is no way to create a folder from Anvil.
-- Required interaction:
+- Status: Fixed 2026-11-01; `a`/`A` create entries through confined gateway
+  operations.
+- Original behavior:
+  - Tree navigation, expand/collapse, and open only.
+  - The gateway had no directory creation API.
+  - `:w path` could create a file only when its parent existed.
+- Implemented resolution:
   - `a` creates a file and `A` creates a directory in the selected directory,
     or in the selected file's parent.
   - Inline prompt; `Enter` creates, `Esc` cancels.
-  - A created file opens; a created directory expands and selects.
-  - Reject empty names, absolute paths, `..`, `/`, control characters, and
-    existing targets without overwrite.
-- Required plumbing:
-  - Add a workspace-confined `sys.create_dir` gateway method using the root
-    dirfd and `mkdirat`; require `fs.write`.
-  - Use `sys.write_file` for the empty new file.
-  - Refresh the tree through `FileWorker` and keep the new entry visible.
+  - A created file opens; a created directory is selected after refresh.
+  - Names are single components; empty, `.`/`..`, separators, control
+    characters, and existing targets are rejected without overwrite.
+  - `sys.create_dir`, `sys.rename`, and `sys.remove` use the workspace root
+    dirfd and require `fs.write`; empty files use `sys.write_file`.
+  - Tree refresh keeps the new entry selected.
+- Verification:
+  - TUI tests cover create/rename/delete and open-buffer delete guards.
+  - Go fsroot tests cover confined create/rename/delete and no-replace.
 - Acceptance:
   - File and directory creation work in the tree without direct `std::fs`
     access.
@@ -124,20 +124,23 @@ workspace management and should be addressed before adding more UI features.
 
 - Area: TUI file tree; gateway filesystem API
 - Priority: Urgent
-- Status: Open; not fixed
-- Current behavior: no tree keys or gateway methods exist for rename, unlink,
-  move, or copy.
-- Required interaction:
-  - Rename current entry; delete current entry with explicit confirmation.
-  - Never delete a modified open buffer without a clear guard.
-  - Update open buffer paths and close affected split panes safely.
-  - Keep operations workspace-confined and preserve revision/conflict checks.
-- Required plumbing:
-  - Add confined gateway methods for rename and unlink; do not shell out.
-  - Add a confirmation state so destructive operations cannot run from a stray
-    key press.
+- Status: Partially fixed 2026-11-01; rename and delete are implemented for
+  files and empty directories. Move and recursive directory delete remain
+  open.
+- Partial resolution:
+  - `r` renames the selected entry in place; open buffer paths are remapped.
+  - `d` asks for confirmation and removes files or empty directories.
+  - Deleting an entry with an open buffer is refused.
+  - Move-to-another-directory, recursive directory delete, and copy remain
+    open.
+- Remaining plumbing:
+  - Add a move flow that chooses a destination directory and updates open
+    buffer paths.
+  - Decide whether recursive directory deletion is safe; if added, require a
+    stronger confirmation and a non-empty workspace policy.
 - Acceptance:
-  - Rename/delete work for files and directories, including open buffers.
+  - Rename/delete work for files and empty directories, including path remapping
+    for open buffers.
   - `..`, symlink, and outside-workspace attempts are denied.
   - Failed operations leave the tree and buffers unchanged.
 

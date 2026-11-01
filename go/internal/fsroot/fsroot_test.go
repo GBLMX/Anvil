@@ -270,3 +270,51 @@ func TestReadDirSkipsBuildAndVCS(t *testing.T) {
 		t.Fatalf("children = %#v", children)
 	}
 }
+
+func TestCreateRenameAndRemoveEntries(t *testing.T) {
+	root, dir := testRoot(t)
+	if err := root.CreateDir("components"); err != nil {
+		t.Fatalf("CreateDir: %v", err)
+	}
+	if info, err := os.Stat(filepath.Join(dir, "components")); err != nil || !info.IsDir() {
+		t.Fatalf("created directory: info=%v err=%v", info, err)
+	}
+	write, err := root.CreateWrite("components/old.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := write.Write([]byte("content")); err != nil {
+		write.Abort()
+		t.Fatal(err)
+	}
+	if err := write.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	if err := root.Rename("components/old.txt", "components/new.txt"); err != nil {
+		t.Fatalf("Rename: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "components", "old.txt")); !os.IsNotExist(err) {
+		t.Fatalf("old entry still exists: %v", err)
+	}
+	if got, err := os.ReadFile(filepath.Join(dir, "components", "new.txt")); err != nil || string(got) != "content" {
+		t.Fatalf("renamed file = %q, %v", got, err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "components", "taken.txt"), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := root.Rename("components/new.txt", "components/taken.txt"); err == nil {
+		t.Fatal("rename replaced an existing target")
+	}
+	if err := root.Remove("components/new.txt"); err != nil {
+		t.Fatalf("Remove file: %v", err)
+	}
+	if err := root.Remove("components/taken.txt"); err != nil {
+		t.Fatalf("Remove file: %v", err)
+	}
+	if err := root.Remove("components"); err != nil {
+		t.Fatalf("Remove empty directory: %v", err)
+	}
+	if err := root.CreateDir("../escape"); err == nil {
+		t.Fatal("CreateDir accepted traversal")
+	}
+}

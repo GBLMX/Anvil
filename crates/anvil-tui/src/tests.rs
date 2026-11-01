@@ -125,6 +125,101 @@ fn tree_visibility_toggles_hidden_directories() {
 }
 
 #[test]
+fn tree_creates_and_renames_files_and_directories() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let workspace = dir.path().to_path_buf();
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.workspace = workspace.clone();
+    model.open_tree();
+
+    model.finish_tree_create(workspace.clone(), "new.txt".to_owned(), CreateKind::File);
+    let file = workspace.join("new.txt");
+    assert!(file.exists());
+    assert_eq!(model.path.as_deref(), Some(file.as_path()));
+
+    model.finish_tree_rename(file.clone(), "renamed.txt".to_owned());
+    let renamed = workspace.join("renamed.txt");
+    assert!(renamed.exists());
+    assert!(!file.exists());
+    assert_eq!(model.path.as_deref(), Some(renamed.as_path()));
+
+    model.finish_tree_create(
+        workspace.clone(),
+        "components".to_owned(),
+        CreateKind::Directory,
+    );
+    assert!(workspace.join("components").is_dir());
+}
+
+#[test]
+fn tree_delete_requires_an_unopened_entry() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let workspace = dir.path().to_path_buf();
+    fs::write(workspace.join("open.txt"), "open").expect("open file");
+    fs::write(workspace.join("closed.txt"), "closed").expect("closed file");
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.workspace = workspace.clone();
+    model.open_tree();
+    model.open_path(workspace.join("open.txt")).expect("open");
+
+    model.refresh_tree(Some(workspace.join("open.txt")));
+    model.begin_tree_delete();
+    assert!(model.status.contains("close the open buffer"));
+
+    model.refresh_tree(Some(workspace.join("closed.txt")));
+    model.finish_tree_delete(workspace.join("closed.txt"));
+    assert!(!workspace.join("closed.txt").exists());
+}
+
+#[test]
+fn tree_selection_scrolls_into_view() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    for index in 0..20 {
+        fs::write(dir.path().join(format!("f{index:02}.txt")), "").expect("file");
+    }
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.workspace = dir.path().to_path_buf();
+    model.welcome = false;
+    model.open_tree();
+    model.tree_selected = Some(19);
+
+    let backend = TestBackend::new(80, 12);
+    let mut terminal = Terminal::new(backend).expect("terminal");
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+    let rendered = terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect::<String>();
+    assert!(rendered.contains("f19.txt"), "{rendered}");
+}
+
+#[test]
+fn fuzzy_selection_scrolls_into_view() {
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.welcome = false;
+    model.fuzzy = Some(FuzzyState {
+        query: String::new(),
+        entries: (0..20).map(|index| format!("f{index:02}.txt")).collect(),
+        filtered: (0..20).collect(),
+        selected: 19,
+    });
+
+    let backend = TestBackend::new(80, 12);
+    let mut terminal = Terminal::new(backend).expect("terminal");
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+    let rendered = terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect::<String>();
+    assert!(rendered.contains("f19.txt"), "{rendered}");
+}
+#[test]
 fn tree_expands_directories() {
     let dir = tempfile::tempdir().expect("tempdir");
     fs::create_dir(dir.path().join("src")).expect("dir");
