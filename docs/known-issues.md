@@ -2,7 +2,7 @@
 
 Status: BUG-001, BUG-004, BUG-005, BUG-006, BUG-007, BUG-008 (0.4.0
 open-buffer and 0.4.1 tree scopes), and BUG-009 are resolved. BUG-002 is
-fixed in 0.4.2; BUG-003 is fixed for 0.4.3.
+fixed in 0.4.2; BUG-003 is fixed in 0.4.3.
 
 ## BUG-001: File tree and fuzzy picker do not scroll with the selection
 
@@ -56,7 +56,7 @@ fixed in 0.4.2; BUG-003 is fixed for 0.4.3.
 ## BUG-003: Markdown highlighting needs a deliberate grammar and query
 
 - Area: TUI syntax highlighting, Markdown
-- Status: Fixed 2026-11-01; `0.4.3` release pending.
+- Status: Fixed 2026-11-01 in `0.4.3`.
 - Target: `0.4.3`
 - Severity: feature quality
 - Resolution:
