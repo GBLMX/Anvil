@@ -1,7 +1,8 @@
 # Known Issues
 
-Status: mixed. BUG-001, BUG-004, BUG-005, BUG-006, BUG-007, and BUG-009
-are fixed; the remaining entries are open.
+Status: BUG-001, BUG-004, BUG-005, BUG-006, BUG-007, BUG-008 (0.4.0
+open-buffer scope), and BUG-009 are resolved. BUG-002/003 remain open; the
+0.5.0 workspace tree watcher is tracked separately in #9.
 
 ## BUG-001: File tree and fuzzy picker do not scroll with the selection
 
@@ -204,9 +205,9 @@ workspace management and should be addressed before adding more UI features.
 ### BUG-008: External file changes are not watched
 
 - Area: Workspace/file lifecycle
-- Priority: High
-- Status: Partially fixed 2026-11-01; open-buffer external changes are in
-  0.4.0 scope. Tree create/delete/rename refresh is scheduled for 0.5.0 in
+- Priority: High; resolved for the 0.4.0 open-buffer scope
+- Status: Resolved for 0.4.0 open-buffer scope 2026-11-01. Tree
+  create/delete/rename refresh is tracked separately for 0.5.0 in
   [#9](https://github.com/GBLMX/Anvil/issues/9).
 - Resolution:
   - `sys.stat` now returns regular-file size and `modified_ns`.
@@ -219,11 +220,10 @@ workspace management and should be addressed before adding more UI features.
     buffer moves.
   - Worker tests cover metadata-change debounce; TUI tests cover clean reload,
     dirty refusal, and confirmed reload.
-- Remaining:
+- Deferred to 0.5.0:
   - Directories are not yet watched, so external create/delete/rename does not
     refresh the workspace tree.
-  - Tree refresh preservation of expanded/selected state is part of that
-    remaining work.
+  - Tree refresh preservation of expanded/selected state is part of that work.
   - Tracking issue:
     [#9: [0.5.0] Workspace tree watcher](https://github.com/GBLMX/Anvil/issues/9).
 - Acceptance:
