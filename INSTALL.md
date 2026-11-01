@@ -75,8 +75,8 @@ Confirm:
 - `Space e` opens the file tree;
 - opening and saving a file works;
 - `:reconnect` starts a fresh gateway;
-- an external `touch`, `mkdir`, `rm`, or `mv` refreshes the tree after the
-  debounce interval.
+- creating a new file (for example `touch new.txt`), `mkdir`, `rm`, or `mv`
+  refreshes the tree after the debounce interval.
 
 If opening or saving reports that the gateway is unavailable, check that all
 four binaries are in the same directory and that the gateway starts with the
