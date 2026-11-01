@@ -81,6 +81,7 @@ key dismisses it.
 - [Ratatui TUI Elm loop plan](docs/ratatui-elm-loop-plan.md)
 - [Performance baseline](docs/performance.md)
 - [Go gateway benchmarks](docs/benchmarks/go-gateway.md)
+- [File operation benchmarks](docs/benchmarks/file-operations.md)
 - [Text model benchmark](docs/benchmarks/text-model.md)
 - [Editor benchmarks](docs/benchmarks/editor.md)
 - [Line index stress](docs/benchmarks/line-index-stress.md)
