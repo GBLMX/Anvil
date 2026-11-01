@@ -584,18 +584,19 @@ impl Model {
         listings: &BTreeMap<PathBuf, Result<Vec<DirEntry>, String>>,
         expanded: &BTreeSet<PathBuf>,
         out: &mut Vec<TreeEntry>,
-    ) {
+    ) -> bool {
         let Some(Ok(entries)) = listings.get(directory) else {
-            return;
+            return false;
         };
+        let mut needs_listing = false;
         for entry in entries {
             if !self.tree_entry_visible(&entry.name, entry.is_dir) {
                 continue;
             }
             let path = directory.join(&entry.name);
-            let is_expanded = entry.is_dir
-                && expanded.contains(&path)
-                && listings.get(&path).is_some_and(Result::is_ok);
+            let listing = listings.get(&path);
+            let is_expanded =
+                entry.is_dir && expanded.contains(&path) && !matches!(listing, Some(Err(_)));
             out.push(TreeEntry {
                 path: path.clone(),
                 depth,
@@ -603,9 +604,17 @@ impl Model {
                 expanded: is_expanded,
             });
             if is_expanded {
-                self.build_tree_entries(&path, depth + 1, listings, expanded, out);
+                match listing {
+                    Some(Ok(_)) => {
+                        needs_listing |=
+                            self.build_tree_entries(&path, depth + 1, listings, expanded, out);
+                    }
+                    Some(Err(_)) => {}
+                    None => needs_listing = true,
+                }
             }
         }
+        needs_listing
     }
 
     fn select_tree_path(
@@ -661,11 +670,15 @@ impl Model {
             Some(Ok(_)) => {}
         }
         let mut tree = Vec::new();
-        self.build_tree_entries(&self.workspace, 0, &listings, &expanded, &mut tree);
+        let needs_listing =
+            self.build_tree_entries(&self.workspace, 0, &listings, &expanded, &mut tree);
         let target = self.tree_pending_select.take().or(previous_path);
         self.tree_selected = Self::select_tree_path(&tree, target.as_deref(), previous_index);
         self.tree = tree;
         self.tree_stale = false;
+        if needs_listing {
+            self.tree_refresh_queued = true;
+        }
         self.sync_tree_watches();
         self.finish_tree_refresh();
     }
@@ -1051,5 +1064,45 @@ impl Model {
             *path = remap(path);
         }
         self.sync_watch_paths();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::EditorState;
+
+    #[test]
+    fn snapshot_keeps_expansion_missing_from_listing() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let workspace = dir.path().to_path_buf();
+        let src = workspace.join("src");
+        fs::create_dir(&src).expect("src");
+        let mut model = Model::new(EditorState::from_text(""), None);
+        model.workspace = workspace.clone();
+        model.tree = vec![TreeEntry {
+            path: src.clone(),
+            depth: 0,
+            is_dir: true,
+            expanded: true,
+        }];
+        model.tree_selected = Some(0);
+        model.tree_refresh_generation = 1;
+        model.apply_tree_snapshot(
+            1,
+            vec![(
+                workspace,
+                Ok(vec![DirEntry {
+                    name: "src".to_owned(),
+                    is_dir: true,
+                }]),
+            )],
+        );
+        assert!(
+            model
+                .tree
+                .iter()
+                .any(|entry| entry.path == src && entry.expanded)
+        );
     }
 }
