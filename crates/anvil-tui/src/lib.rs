@@ -336,12 +336,12 @@ pub struct Model {
     gateway_session: Option<GatewaySession>,
     /// Second authenticated gateway connection owned by the LSP worker.
     lsp_client: Option<GatewayClient>,
-    /// Active language-server worker.
-    lsp_worker: Option<LspWorker>,
-    /// Tool and language id currently owned by `lsp_worker`.
+    /// Language-server workers keyed by `(tool, language_id)`.
+    lsp_workers: HashMap<(String, String), LspWorker>,
+    /// Active language-server key used by the UI.
     lsp_config: Option<(String, String)>,
-    /// Number of automatic LSP restarts for this buffer.
-    lsp_retries: u8,
+    /// Automatic restart counts per language server.
+    lsp_retries: HashMap<(String, String), u8>,
     /// Diagnostics keyed by workspace path.
     diagnostics: HashMap<PathBuf, Vec<lsp::Diagnostic>>,
     /// Workspace root used to resolve all file paths.
@@ -419,9 +419,9 @@ impl Model {
             gateway: None,
             gateway_session: None,
             lsp_client: None,
-            lsp_worker: None,
+            lsp_workers: HashMap::new(),
             lsp_config: None,
-            lsp_retries: 0,
+            lsp_retries: HashMap::new(),
             diagnostics: HashMap::new(),
             workspace: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
             require_gateway: false,
@@ -657,27 +657,48 @@ impl Model {
         }
     }
 
+    fn clear_lsp_ui(&mut self) {
+        self.clear_lsp_requests();
+        self.completion = None;
+        self.hover = None;
+        self.diagnostic_popup = None;
+        self.code_actions = None;
+        self.document_symbols = None;
+    }
+
+    fn active_lsp_worker(&self) -> Option<&LspWorker> {
+        self.lsp_config
+            .as_ref()
+            .and_then(|key| self.lsp_workers.get(key))
+    }
+
+    fn lsp_key(path: &Path) -> Option<(String, String)> {
+        lsp_settings(path).map(|settings| (settings.tool, settings.language_id))
+    }
+
     pub(crate) fn sync_lsp_active(&mut self) {
         let Some(path) = self.path.clone() else {
+            self.lsp_config = None;
+            self.clear_lsp_ui();
             return;
         };
         let Some(settings) = lsp_settings(&path) else {
-            if self.lsp_worker.is_some() {
-                self.stop_lsp();
-            }
+            self.lsp_config = None;
+            self.clear_lsp_ui();
             return;
         };
         let desired = (settings.tool.clone(), settings.language_id.clone());
-        if self.lsp_worker.is_some() {
-            if self.lsp_config.as_ref() != Some(&desired) {
-                self.stop_lsp();
-                self.start_lsp();
-                return;
-            }
-            let text = self.editor.text().slice(0..self.editor.text().len_bytes());
-            if let Some(worker) = self.lsp_worker.as_ref() {
-                let _ = worker.sync(&path, text);
-            }
+        if !self.lsp_workers.contains_key(&desired) {
+            self.start_lsp();
+            return;
+        }
+        if self.lsp_config.as_ref() != Some(&desired) {
+            self.lsp_config = Some(desired.clone());
+            self.clear_lsp_ui();
+        }
+        let text = self.editor.text().slice(0..self.editor.text().len_bytes());
+        if let Some(worker) = self.active_lsp_worker() {
+            let _ = worker.sync(&path, text);
         }
     }
 
@@ -693,14 +714,14 @@ impl Model {
             return;
         };
         let desired = (settings.tool.clone(), settings.language_id.clone());
-        if self.lsp_worker.is_some() {
-            if self.lsp_config.as_ref() == Some(&desired) {
-                self.sync_lsp_active();
-                self.status = "lsp already running".to_owned();
-            } else {
-                self.stop_lsp();
-                self.start_lsp();
+        if self.lsp_workers.contains_key(&desired) {
+            self.lsp_config = Some(desired.clone());
+            self.clear_lsp_ui();
+            let text = self.editor.text().slice(0..self.editor.text().len_bytes());
+            if let Some(worker) = self.lsp_workers.get(&desired) {
+                let _ = worker.sync(&path, text);
             }
+            self.status = "lsp already running".to_owned();
             self.dirty = true;
             return;
         }
@@ -726,14 +747,10 @@ impl Model {
         };
         match LspWorker::start(client, config, self.workspace.clone(), path, text) {
             Ok(worker) => {
-                self.lsp_worker = Some(worker);
-                self.lsp_config = Some(desired);
-                self.clear_lsp_requests();
-                self.completion = None;
-                self.hover = None;
-                self.diagnostic_popup = None;
-                self.code_actions = None;
-                self.document_symbols = None;
+                self.lsp_workers.insert(desired.clone(), worker);
+                self.lsp_config = Some(desired.clone());
+                self.lsp_retries.entry(desired).or_insert(0);
+                self.clear_lsp_ui();
                 self.status = if settings.label == "jdtls" {
                     "jdtls starting (indexing workspace)".to_owned()
                 } else {
@@ -746,75 +763,79 @@ impl Model {
     }
 
     fn stop_lsp(&mut self) {
-        self.lsp_worker = None;
-        self.lsp_config = None;
-        self.lsp_retries = 0;
-        self.clear_lsp_requests();
-        self.completion = None;
-        self.hover = None;
-        self.diagnostic_popup = None;
-        self.code_actions = None;
-        self.document_symbols = None;
+        if let Some(key) = self.lsp_config.take() {
+            self.lsp_workers.remove(&key);
+            self.lsp_retries.remove(&key);
+        }
+        self.clear_lsp_ui();
         self.status = "lsp stopped".to_owned();
         self.dirty = true;
     }
 
-    fn poll_lsp(&mut self) {
-        let events = self
-            .lsp_worker
-            .as_ref()
-            .map(|worker| worker.poll())
-            .unwrap_or_default();
-        for event in events {
-            match event {
-                LspEvent::Diagnostics(path, diagnostics) => {
-                    self.diagnostics.insert(path, diagnostics);
-                    self.status = format!(
-                        "lsp diagnostics: {}",
-                        self.diagnostics.values().map(Vec::len).sum::<usize>()
-                    );
-                }
-                LspEvent::Crashed(error) => {
-                    self.lsp_worker = None;
+    fn handle_lsp_event(&mut self, key: &(String, String), event: LspEvent) {
+        let active = self.lsp_config.as_ref() == Some(key);
+        match event {
+            LspEvent::Diagnostics(path, diagnostics) => {
+                self.diagnostics.insert(path, diagnostics);
+                self.status = format!(
+                    "lsp diagnostics: {}",
+                    self.diagnostics.values().map(Vec::len).sum::<usize>()
+                );
+            }
+            LspEvent::Crashed(error) => {
+                self.lsp_workers.remove(key);
+                if active {
                     self.lsp_config = None;
-                    self.clear_lsp_requests();
-                    self.completion = None;
-                    self.hover = None;
-                    self.diagnostic_popup = None;
-                    self.code_actions = None;
-                    self.document_symbols = None;
-                    if self.lsp_retries < 3 {
-                        self.lsp_retries += 1;
-                        if self.lsp_client.is_none() {
-                            self.lsp_client = self
-                                .gateway_session
-                                .as_mut()
-                                .and_then(|session| session.connect_lsp().ok());
-                        }
-                        self.status = format!("lsp crashed, restarting ({}/3)", self.lsp_retries);
+                    self.clear_lsp_ui();
+                    let retries = {
+                        let retries = self.lsp_retries.entry(key.clone()).or_insert(0);
+                        *retries += 1;
+                        *retries
+                    };
+                    if retries <= 3 {
+                        self.status = format!("lsp crashed, restarting ({retries}/3)");
                         self.start_lsp();
                     } else {
                         self.status = format!("E: lsp crashed: {error}");
                     }
                 }
-                LspEvent::Response { id, result, error } => {
-                    self.handle_lsp_response(id, result, error);
-                }
-                LspEvent::StartupError(error) => {
-                    self.lsp_worker = None;
+            }
+            LspEvent::Response { id, result, error } => {
+                self.handle_lsp_response(id, result, error);
+            }
+            LspEvent::StartupError(error) => {
+                self.lsp_workers.remove(key);
+                if active {
                     self.lsp_config = None;
-                    self.clear_lsp_requests();
-                    self.completion = None;
-                    self.hover = None;
-                    self.diagnostic_popup = None;
-                    self.code_actions = None;
-                    self.document_symbols = None;
+                    self.clear_lsp_ui();
                     self.status = format!("E: lsp startup failed: {error}");
                 }
-                LspEvent::Error(error) => self.status = format!("E: lsp: {error}"),
-                LspEvent::Log(line) => self.status = format!("lsp: {line}"),
             }
-            self.dirty = true;
+            LspEvent::Error(error) => {
+                if active {
+                    self.status = format!("E: lsp: {error}");
+                }
+            }
+            LspEvent::Log(line) => {
+                if active {
+                    self.status = format!("lsp: {line}");
+                }
+            }
+        }
+        self.dirty = true;
+    }
+
+    fn poll_lsp(&mut self) {
+        let keys: Vec<(String, String)> = self.lsp_workers.keys().cloned().collect();
+        for key in keys {
+            let events = self
+                .lsp_workers
+                .get(&key)
+                .map(LspWorker::poll)
+                .unwrap_or_default();
+            for event in events {
+                self.handle_lsp_event(&key, event);
+            }
         }
     }
 
@@ -882,15 +903,11 @@ impl Model {
             return;
         }
         self.file_worker = None;
-        self.lsp_worker = None;
+        self.lsp_workers.clear();
         self.lsp_client = None;
         self.lsp_config = None;
-        self.clear_lsp_requests();
-        self.completion = None;
-        self.hover = None;
-        self.diagnostic_popup = None;
-        self.code_actions = None;
-        self.document_symbols = None;
+        self.lsp_retries.clear();
+        self.clear_lsp_ui();
         self.gateway = None;
         self.gateway_session = None;
         match GatewaySession::start(&self.workspace) {

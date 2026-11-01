@@ -345,13 +345,13 @@ impl Model {
             self.dirty = true;
             return false;
         };
-        let Some(worker) = self.lsp_worker.as_ref() else {
+        let id = self.next_lsp_request;
+        self.next_lsp_request += 1;
+        let Some(worker) = self.active_lsp_worker() else {
             self.status = "E: lsp is not running".to_owned();
             self.dirty = true;
             return false;
         };
-        let id = self.next_lsp_request;
-        self.next_lsp_request += 1;
         let text = self.editor.text().slice(0..self.editor.text().len_bytes());
         if let Err(error) = worker
             .sync(&path, text)
@@ -460,7 +460,9 @@ impl Model {
     }
 
     pub(crate) fn notify_lsp_save(&mut self, path: &std::path::Path, text: &str) {
-        if let Some(worker) = self.lsp_worker.as_ref() {
+        if let Some(key) = Self::lsp_key(path)
+            && let Some(worker) = self.lsp_workers.get(&key)
+        {
             let _ = worker.save(path, text.to_owned());
         }
     }
@@ -541,7 +543,7 @@ impl Model {
     }
 
     pub(crate) fn auto_completion(&mut self) {
-        if self.lsp_worker.is_some() {
+        if self.active_lsp_worker().is_some() {
             self.request_completion();
         }
     }

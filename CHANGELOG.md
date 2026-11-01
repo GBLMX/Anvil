@@ -26,6 +26,9 @@ All notable changes to Anvil are recorded here. The format follows
 - Workspace tree create (`a`/`A`), rename (`r`), and confirmed delete
   (`d`) through confined `sys.create_dir`/`sys.rename`/`sys.remove` gateway
   operations; tree and fuzzy lists now scroll to keep the selection visible.
+- LSP starts automatically for supported files and keeps one worker per
+  `(tool, language_id)`, so switching Rust ↔ Go no longer stops the other
+  language server.
 - CLI `-h`/`--help`, `-V`/`--version`, and `--workspace=<DIR>` parsing, with
   parser tests and documented usage.
 - Opt-in PGO and BOLT workflow: `scripts/pgo-bolt.sh` builds instrumented and

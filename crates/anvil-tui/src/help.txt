@@ -52,8 +52,8 @@ Normal mode
   :q!                 force quit, or close help
   :tree               toggle the workspace file tree
   :reconnect          restart the gateway and re-handshake
-  :lsp-start          start the detected language server for the current file
-  :lsp-stop           stop the language server
+  :lsp-start          ensure the detected language server is active
+  :lsp-stop           stop the active language server
   :format              format the current document
   :symbols             document symbols
   :plugin-start       start the debug plugin host

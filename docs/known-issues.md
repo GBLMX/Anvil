@@ -1,7 +1,7 @@
 # Known Issues
 
-Status: mixed. BUG-001 and BUG-004 are fixed; BUG-005 is partially fixed;
-the remaining entries are open.
+Status: mixed. BUG-001, BUG-004, and BUG-007 are fixed; BUG-005 is partially
+fixed; the remaining entries are open.
 
 ## BUG-001: File tree and fuzzy picker do not scroll with the selection
 
@@ -169,23 +169,22 @@ workspace management and should be addressed before adding more UI features.
 
 - Area: LSP lifecycle
 - Priority: High (policy/UX gap)
-- Status: Open; not fixed
-- Current behavior:
-  - Opening a supported file calls `sync_lsp_active`, but that function only
-    syncs an already-running worker.
-  - A language server starts only through `:lsp-start` (or crash restart).
-  - Users opening a Rust/Go/TypeScript file see no diagnostics until they run
-    the command manually.
-- Required decision:
-  - Choose explicit-start versus auto-start as the default policy.
-  - If auto-start is enabled, start once per supported file/language and avoid
-    duplicate servers; `:lsp-stop` remains explicit.
-  - If explicit-start is intentional, document it prominently.
+- Status: Fixed 2026-11-01; supported files start their language server on
+  open, and each `(tool, language_id)` keeps its own worker.
+- Original behavior:
+  - Opening a supported file only synced an already-running worker.
+  - A single worker was replaced when switching languages, so Rust ↔ Go
+    switching restarted the server and dropped the previous session.
+- Resolution:
+  - `sync_lsp_active` starts a missing worker for the current file.
+  - Workers are keyed by `(tool, language_id)` and reused across buffers.
+  - Switching Rust ↔ Go keeps both workers alive; diagnostics stay keyed by
+    path.
+  - Crash restart is bounded per language.
 - Acceptance:
-  - The lifecycle is deterministic and does not spawn duplicate servers on
-    buffer switches.
+  - Buffer switches do not spawn duplicate workers for the same language.
+  - Switching languages does not stop the other language server.
   - A crashed server follows the existing bounded restart policy.
-  - The status/help text matches the selected policy.
 
 ### BUG-008: External file changes are not watched
 

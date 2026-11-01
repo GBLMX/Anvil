@@ -28,6 +28,8 @@ formatting (`Space F`), document symbols (`Space s`), signature help, and
 workspace symbols (`Space S`) use canonicalized LSP UTF-16 positions. Rename, code-action, and formatting edits go through a shared
 `WorkspaceEdit` engine; unopened files become background buffers, and `:wa`
 saves every modified buffer without silently writing files during an edit.
+Supported files start their language server automatically; each
+`(tool, language_id)` keeps its own worker while the session is open.
 Language servers are not bundled; install them on `PATH`.
 
 - TypeScript support requires a project-local compiler: run
