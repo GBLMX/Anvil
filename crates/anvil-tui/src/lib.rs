@@ -52,7 +52,8 @@ mod workspace_edit;
 pub(crate) use keys::handle_event;
 pub use render::view;
 use render::{
-    apply_diagnostic_underlines, display_column, expand_tabs, push_syntax_spans, utf16_to_byte,
+    apply_diagnostic_underlines, apply_search_highlights, display_column, expand_tabs,
+    push_syntax_spans, utf16_to_byte,
 };
 mod syntax;
 use file_worker::FileWorker;
@@ -1000,37 +1001,29 @@ impl Model {
             };
             let mut spans = Vec::new();
             let mut base = start;
-            let syntax_guard = if needle.is_empty() {
-                Some(self.syntax.borrow())
+            let search_ranges = if needle.is_empty() {
+                Vec::new()
             } else {
-                None
-            };
-            let highlights = syntax_guard
-                .as_deref()
-                .map(SyntaxState::highlights)
-                .unwrap_or(&[]);
-            for chunk in text.chunks(start..line.end) {
-                if needle.is_empty() {
-                    push_syntax_spans(&mut spans, chunk, base, highlights);
-                } else {
-                    let mut from = 0;
-                    for (at, _) in chunk.match_indices(needle) {
-                        if at > from {
-                            spans.push(Span::raw(&chunk[from..at]));
-                        }
-                        let style = if base + at == self.cursor {
-                            theme::mode_badge(theme::WARNING)
-                        } else {
-                            theme::selected()
-                        };
-                        spans.push(Span::styled(&chunk[at..at + needle.len()], style));
-                        from = at + needle.len();
+                let mut ranges = Vec::new();
+                let mut last_end = start;
+                for at in Self::find_matches_in(text, needle, start..line.end) {
+                    let end = at + needle.len();
+                    if at < last_end {
+                        continue;
                     }
-                    if from < chunk.len() {
-                        spans.push(Span::raw(&chunk[from..]));
-                    }
+                    ranges.push((at, end));
+                    last_end = end;
                 }
+                ranges
+            };
+            let syntax_guard = self.syntax.borrow();
+            let highlights = syntax_guard.highlights();
+            for chunk in text.chunks(start..line.end) {
+                push_syntax_spans(&mut spans, chunk, base, highlights);
                 base += chunk.len();
+            }
+            if !needle.is_empty() {
+                apply_search_highlights(&mut spans, start, &search_ranges, self.cursor);
             }
             if spans.is_empty() {
                 spans.push(Span::raw(""));

@@ -194,7 +194,7 @@ impl Model {
         Self::find_matches_in(text, needle, 0..text.len_bytes())
     }
 
-    fn find_matches_in(
+    pub(crate) fn find_matches_in(
         text: &TextDocument,
         needle: &str,
         range: std::ops::Range<usize>,

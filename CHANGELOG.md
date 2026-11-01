@@ -55,6 +55,8 @@ All notable changes to Anvil are recorded here. The format follows
 
 ### Fixed
 
+- Search mode now preserves Tree-sitter foreground colors; matches patch a
+  background layer instead of replacing syntax spans.
 - Upgraded the Go module and CI toolchain to Go 1.26.10 and `golang.org/x/sys`
   to v0.44.0, resolving the 45 standard-library vulnerabilities reported by
   `govulncheck` against Go 1.22.3 and the remaining module advisory; CI now

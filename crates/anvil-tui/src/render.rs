@@ -146,6 +146,59 @@ pub(crate) fn push_syntax_spans<'a>(
     }
 }
 
+/// Applies search backgrounds without replacing existing syntax foregrounds.
+pub(crate) fn apply_search_highlights<'a>(
+    spans: &mut Vec<Span<'a>>,
+    line_start: usize,
+    ranges: &[(usize, usize)],
+    active_start: usize,
+) {
+    if ranges.is_empty() {
+        return;
+    }
+    let mut result = Vec::with_capacity(spans.len() + ranges.len());
+    let mut offset = line_start;
+    for span in spans.drain(..) {
+        let content = span.content.as_ref();
+        let span_start = offset;
+        let span_end = offset + content.len();
+        offset = span_end;
+        let mut cursor = span_start;
+        for &(start, end) in ranges {
+            if end <= span_start {
+                continue;
+            }
+            if start >= span_end {
+                break;
+            }
+            let match_start = start.max(span_start);
+            let match_end = end.min(span_end);
+            if match_start > cursor {
+                let from = cursor - span_start;
+                let to = match_start - span_start;
+                result.push(Span::styled(content[from..to].to_owned(), span.style));
+            }
+            let overlay = if start == active_start {
+                theme::search_active()
+            } else {
+                theme::search_match()
+            };
+            let from = match_start - span_start;
+            let to = match_end - span_start;
+            result.push(Span::styled(
+                content[from..to].to_owned(),
+                span.style.patch(overlay),
+            ));
+            cursor = match_end;
+        }
+        if cursor < span_end {
+            let from = cursor - span_start;
+            result.push(Span::styled(content[from..].to_owned(), span.style));
+        }
+    }
+    *spans = result;
+}
+
 fn syntax_style(class: SyntaxClass) -> Style {
     let color = match class {
         SyntaxClass::Keyword => theme::SYNTAX_KEYWORD,

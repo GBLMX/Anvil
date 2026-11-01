@@ -274,4 +274,5 @@ are accepted under the same dual-license terms.
 - [0013: Rust kernel and distribution boundary](docs/adr/0013-kernel-distribution-boundary.md)
 - [0014: Plugin WIT seams](docs/adr/0014-plugin-wit-seams.md)
 - [0015: Command-line completion](docs/adr/0015-command-line-completion.md)
+- [0016: Render style layers](docs/adr/0016-render-style-layers.md)
 - [0017: Plugin activation and lifecycle](docs/adr/0017-plugin-activation-and-lifecycle.md)

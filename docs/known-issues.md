@@ -1,7 +1,7 @@
 # Known Issues
 
-Status: mixed. BUG-001, BUG-004, and BUG-007 are fixed; BUG-005 is partially
-fixed; the remaining entries are open.
+Status: mixed. BUG-001, BUG-004, BUG-007, and BUG-009 are fixed; BUG-005 is
+partially fixed; the remaining entries are open.
 
 ## BUG-001: File tree and fuzzy picker do not scroll with the selection
 
@@ -210,7 +210,7 @@ workspace management and should be addressed before adding more UI features.
 
 - Area: TUI search rendering
 - Priority: High
-- Status: Open; not fixed
+- Status: Fixed 2026-11-01; search overlays preserve syntax foregrounds.
 - Reproduction:
   1. Open a Rust file with active Tree-sitter highlighting.
   2. Press `/` and type a character, for example `e`.
@@ -223,7 +223,7 @@ workspace management and should be addressed before adding more UI features.
   - Syntax foreground colors remain intact.
   - Search only adds a background color/underline to matched ranges.
   - The active match can use a brighter background while retaining syntax fg.
-- Evidence:
+- Original evidence:
   - `crates/anvil-tui/src/lib.rs` `visible_lines` only obtains the syntax cache
     when `needle.is_empty()`.
   - When a search query is non-empty, the branch emits `Span::raw` for
@@ -231,13 +231,15 @@ workspace management and should be addressed before adding more UI features.
     `push_syntax_spans`.
   - Search styles are built from fresh `Style::default()` layers rather than
     patching the existing syntax span style.
-- Fix direction:
-  - Always build the syntax spans first.
-  - Split matched ranges and apply only background/modifier overlays, preserving
-    the base foreground style.
-  - Introduce a small style composer with explicit layer order rather than
-    mutating spans in mode-specific branches.
-  - Record the render style layer contract as
+- Resolution:
+  - `visible_lines` always builds syntax spans, regardless of input mode.
+  - `apply_search_highlights` splits existing spans at match boundaries and
+    patches only background/modifier styles.
+  - Normal and active matches use dedicated background styles; active matches
+    are selected by start offset.
+  - Search rendering reuses the chunk-safe `find_matches_in` matcher.
+  - `search_preserves_syntax_and_adds_background` covers keyword fg + active bg.
+  - The layer contract is recorded in
     `docs/adr/0016-render-style-layers.md`.
 - Proposed layer order:
   1. syntax foreground
@@ -253,3 +255,8 @@ workspace management and should be addressed before adding more UI features.
   - Diagnostics underlines still compose with search backgrounds.
   - Add a `TestBackend` regression test for fg+bg composition without requiring
     snapshot infrastructure.
+- Verification:
+  - Focused TUI test passes.
+  - `cargo test -p anvil-tui`: 113 passed.
+  - `cargo test --workspace --no-fail-fast`: 219 passed, 1 ignored.
+  - Workspace clippy, fmt, and `git diff --check` pass.

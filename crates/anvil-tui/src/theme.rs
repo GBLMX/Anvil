@@ -52,6 +52,14 @@ pub(crate) fn selected() -> Style {
         .add_modifier(Modifier::BOLD)
 }
 
+pub(crate) fn search_match() -> Style {
+    Style::default().bg(SELECTION)
+}
+
+pub(crate) fn search_active() -> Style {
+    Style::default().bg(WARNING).add_modifier(Modifier::BOLD)
+}
+
 pub(crate) fn current_line() -> Style {
     Style::default().fg(TEXT).bg(SURFACE_ALT)
 }

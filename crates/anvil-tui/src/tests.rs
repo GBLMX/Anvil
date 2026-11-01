@@ -560,6 +560,50 @@ fn syntax_keyword_is_rendered() {
 }
 
 #[test]
+fn search_preserves_syntax_and_adds_background() {
+    let mut model = Model::new(
+        EditorState::from_text("fn main() {} fn"),
+        Some(PathBuf::from("sample.rs")),
+    );
+    for _ in 0..200 {
+        model.poll_syntax();
+        if !model.syntax.borrow().highlights().is_empty() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    assert!(
+        !model.syntax.borrow().highlights().is_empty(),
+        "no syntax highlights produced"
+    );
+    handle_event(&mut model, key(KeyCode::Char('/')));
+    type_text(&mut model, "fn");
+    let lines = model.visible_lines(8);
+    let keyword = lines[0]
+        .spans
+        .iter()
+        .find(|span| span.content.as_ref() == "fn")
+        .expect("keyword span");
+    assert_eq!(keyword.style.fg, Some(theme::SYNTAX_KEYWORD));
+    assert_eq!(keyword.style.bg, Some(theme::WARNING));
+    let backgrounds = lines[0]
+        .spans
+        .iter()
+        .filter(|span| span.content.as_ref() == "fn")
+        .filter_map(|span| span.style.bg)
+        .collect::<Vec<_>>();
+    assert!(backgrounds.contains(&theme::WARNING));
+    assert!(backgrounds.contains(&theme::SELECTION));
+    let backend = TestBackend::new(80, 8);
+    let mut terminal = Terminal::new(backend).expect("terminal");
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+    let rendered = terminal.backend().buffer().content().iter().any(|cell| {
+        cell.symbol() == "f" && cell.fg == theme::SYNTAX_KEYWORD && cell.bg == theme::WARNING
+    });
+    assert!(rendered, "search overlay replaced the syntax foreground");
+}
+
+#[test]
 fn snippets_drop_placeholders() {
     assert_eq!(
         lsp_ui::expand_snippet("fn ${1:name}(${2:args}) $0"),
