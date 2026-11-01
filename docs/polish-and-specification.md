@@ -9,6 +9,13 @@ correctness, security, UX consistency, documentation, and executable
 specifications. A feature may land only when it closes an existing advertised
 contract or release gate.
 
+## Plugin-host scope
+
+`0.4.0` closes the empty plugin-host boundary only. A plugin VM/runtime, plugin
+loading, the capability table, gateway control-socket token registration, and
+end-to-end plugin `sys.*` dispatch are explicitly `0.5.0` work.
+
+
 ## Allowed work
 
 - Bug, crash, data-loss, and security fixes.

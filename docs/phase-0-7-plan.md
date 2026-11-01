@@ -10,8 +10,8 @@ highlighting is asynchronous but not incremental.
 
 ## Priorities
 
-1. **Plugin-host isolation** — the remaining Phase 0.6 security boundary and a
-   prerequisite for a plugin ecosystem.
+1. **Plugin-host empty-host boundary** — close the Phase 0.6 process/sandbox
+   boundary. VM/runtime and plugin loading are explicitly 0.5.0.
 2. **LSP contract closure** — decide or implement command-style Code Actions,
    close formatting options, and keep the advertised surface test-backed.
 3. **Specification and documentation hardening** — keys, commands, schemas,
@@ -19,18 +19,27 @@ highlighting is asynchronous but not incremental.
 4. **Reliability and performance evidence** — crash/reconnect paths,
    regression measurements, and release gates.
 
-## 1. Plugin-host isolation
+## 1. Plugin-host empty-host boundary (0.4.0 scope)
 
 Contract: [ADR-0012](adr/0012-plugin-host-isolation.md).
-Empty-host slice implemented: token FD, fd closure, Landlock FS read + no-exec rules, seccomp native-ABI + AF_UNIX-only sockets (TCP/UDP denied), `session.hello`, host-side UDS EOF exit, isolation tests, cgroup attach/OOM classification, framed host dispatch, the TUI debug HostSession, and a sandboxed Luau runtime smoke check. Plugin loading and the capability table are pending.
+Empty-host slice implemented: token FD, fd closure, Landlock FS read + no-exec
+rules, seccomp native-ABI + AF_UNIX-only sockets (TCP/UDP denied),
+`session.hello`, host-side UDS EOF exit, isolation tests, cgroup attach/OOM
+classification, framed host dispatch, the TUI debug HostSession, and a
+sandboxed Luau runtime smoke check.
+
+**0.4.0 is scoped to this empty-host boundary only. It does not include a
+plugin VM/runtime, plugin loading, the capability table, gateway control-socket
+registration, or end-to-end plugin `sys.*` dispatch. Those are 0.5.0 work.**
 
 Required outcome:
 
 - Plugin processes run under the same workspace/openat2 boundary as gateway
   file I/O, with no ambient host filesystem or network access.
 - A plugin cannot reuse the TUI's gateway token or inherited FDs.
-- Capability grants are per plugin and fail closed.
 - Crash, cancellation, timeout, and gateway restart leave no live children.
+- No plugin code is loaded; the Luau smoke check only proves runtime
+  initialization inside the sandbox.
 
 Acceptance:
 
@@ -39,8 +48,11 @@ Acceptance:
 - Plugin death does not take down the TUI or gateway.
 - Security tests cover FD inheritance, token reuse, and workspace escape.
 
-Remaining gate: VM/runtime, gateway control-socket token registration, and
-end-to-end `sys.*` dispatch beyond the current `sys.ping`/mock `sys.exec`.
+0.4.0 gate: the existing empty-host isolation tests pass. There is no
+VM/runtime gate in this release.
+
+Deferred to 0.5.0: plugin VM/runtime, plugin loading, capability table,
+gateway control-socket token registration, and end-to-end `sys.*` dispatch.
 
 ## 2. Tree-sitter syntax highlighting
 
