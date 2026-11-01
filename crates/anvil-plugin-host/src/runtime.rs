@@ -18,6 +18,37 @@ pub(crate) fn smoke() -> Result<i32> {
     Ok(value)
 }
 
+/// Loads and executes one validated Luau entry inside the sandbox.
+pub(crate) fn run_file(path: &std::path::Path) -> Result<()> {
+    let source = std::fs::read_to_string(path)
+        .map_err(|error| mlua::Error::RuntimeError(format!("read plugin: {error}")))?;
+    let lua = Lua::new();
+    lua.globals().set("require", mlua::Value::Nil)?;
+    lua.sandbox(true)?;
+    lua.load(source).exec()
+}
+
+#[cfg(test)]
+mod file_tests {
+    use super::*;
+
+    #[test]
+    fn runs_validated_luau_entry() {
+        let path = std::env::temp_dir().join(format!(
+            "anvil-plugin-{}-{}.luau",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("time")
+                .as_nanos()
+        ));
+        std::fs::write(&path, "return 42").expect("write");
+        let result = run_file(&path);
+        let _ = std::fs::remove_file(path);
+        result.expect("run plugin");
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #[test]

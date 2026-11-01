@@ -6,7 +6,7 @@ use std::io::{BufRead, BufReader, Write};
 use std::os::unix::net::UnixListener;
 use std::path::Path;
 use std::process::{Command, Stdio};
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 fn host_bin() -> &'static Path {
     Path::new(env!("CARGO_BIN_EXE_anvil-plugin-host"))
@@ -20,6 +20,35 @@ fn host_reads_token_and_sends_hello() {
     assert!(hello.contains("session.hello"), "{hello}");
     assert!(hello.contains("\"session_id\":\"empty\""), "{hello}");
     assert_eq!(host.wait().expect("wait").code(), Some(0));
+}
+
+#[test]
+fn host_loads_validated_plugin_entry() {
+    let root = std::env::temp_dir().join(format!(
+        "anvil-plugin-{}-{}",
+        std::process::id(),
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("time")
+            .as_nanos()
+    ));
+    std::fs::create_dir_all(&root).expect("plugin root");
+    std::fs::write(root.join("run.luau"), "return 42").expect("entry");
+    std::fs::write(
+        root.join("plugin.json"),
+        br#"{"id":"demo","version":"0.1.0","entry":"run.luau","activation_events":["onStartup"],"commands":[{"id":"demo.run","title":"Run"}]}"#,
+    )
+    .expect("manifest");
+    let mut host = spawn(
+        host_bin(),
+        &["--plugin".to_owned(), root.display().to_string()],
+        Token([21; 32]),
+    )
+    .expect("spawn host");
+    let hello = host.read_hello().expect("hello");
+    assert!(!hello.is_empty());
+    assert_eq!(host.wait().expect("wait").code(), Some(0));
+    let _ = std::fs::remove_dir_all(root);
 }
 
 #[test]

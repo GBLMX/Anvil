@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
 	"net"
 	"net/http"
@@ -146,6 +147,60 @@ func TestHandshake(t *testing.T) {
 	}
 	if result["api_version"] != APIVersion {
 		t.Fatalf("api_version = %v", result["api_version"])
+	}
+}
+
+func TestPluginRegistrationAndRevoke(t *testing.T) {
+	workspace := t.TempDir()
+	if err := os.WriteFile(filepath.Join(workspace, "file.txt"), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	socket := startGatewayAt(t, workspace, []string{"fs.read:**"})
+	editor := dialGateway(t, socket)
+	if response := sendRequest(t, editor, "hello-1", "session.hello", helloRequestParams(testToken)); response.Error != nil {
+		t.Fatalf("editor handshake: %+v", response.Error)
+	}
+	pluginToken := strings.Repeat("p", 32)
+	hash := sha256.Sum256([]byte(pluginToken))
+	register := sendRequest(t, editor, "register-1", "plugin.register", map[string]interface{}{
+		"plugin_id":    "demo",
+		"token_sha256": hex.EncodeToString(hash[:]),
+		"permissions":  []string{"fs.read:**"},
+	})
+	if register.Error != nil {
+		t.Fatalf("register: %+v", register.Error)
+	}
+
+	plugin := dialGateway(t, socket)
+	hello := sendRequest(t, plugin, "hello-plugin", "session.hello", helloRequestParams(pluginToken))
+	if hello.Error != nil {
+		t.Fatalf("plugin handshake: %+v", hello.Error)
+	}
+	result, _ := hello.Result.(map[string]interface{})
+	if result["plugin_id"] != "demo" {
+		t.Fatalf("plugin_id = %v", result["plugin_id"])
+	}
+	if response := sendRequest(t, plugin, "plugin-read", "sys.read_dir", map[string]interface{}{"path": "."}); response.Error != nil {
+		t.Fatalf("plugin read: %+v", response.Error)
+	}
+	if response := sendRequest(t, plugin, "plugin-control", "plugin.register", map[string]interface{}{
+		"plugin_id":    "other",
+		"token_sha256": hex.EncodeToString(make([]byte, 32)),
+		"permissions":  []string{},
+	}); response.Error == nil {
+		t.Fatal("plugin registered another plugin")
+	}
+
+	revoke := sendRequest(t, editor, "revoke-1", "plugin.revoke", map[string]interface{}{"plugin_id": "demo"})
+	if revoke.Error != nil {
+		t.Fatalf("revoke: %+v", revoke.Error)
+	}
+	if response := sendRequest(t, plugin, "plugin-read-after", "sys.read_dir", map[string]interface{}{"path": "."}); response.Error == nil {
+		t.Fatal("revoked plugin retained access")
+	}
+	second := dialGateway(t, socket)
+	if response := sendRequest(t, second, "hello-revoked", "session.hello", helloRequestParams(pluginToken)); response.Error == nil {
+		t.Fatal("revoked plugin re-handshaked")
 	}
 }
 

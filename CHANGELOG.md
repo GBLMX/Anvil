@@ -5,6 +5,22 @@ All notable changes to Anvil are recorded here. The format follows
 lines are release-series labels, not a compatibility promise; `0.4.x` is the
 post-`0.4.0` feature line.
 
+## [0.4.5] - 2026-11-02
+
+This release bundles the `0.4.4` gateway capability control plane and the
+`0.4.5` manifest/host-loading slice.
+
+### Added
+
+- `plugin.register`/`plugin.revoke` on an editor-authenticated gateway session.
+- Per-plugin token hashes and grants; plugin handshakes receive only their own
+  permission set, and revoke immediately removes access.
+- `GatewayClient::register_plugin`/`revoke_plugin`.
+- Bounded `plugin.json` manifest validation and a sandboxed `--plugin <dir>`
+  host path that loads one Luau entry after token read and sandbox setup.
+- Plugin-root read access in the host Landlock rules; manifest validation
+  rejects escaping entries, duplicate commands, and unknown activation events.
+
 ## [0.4.3] - 2026-11-01
 
 ### Added

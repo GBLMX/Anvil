@@ -64,6 +64,13 @@ type Config struct {
 	CgroupRoot     string
 }
 
+type pluginGrant struct {
+	ID          string
+	TokenSHA256 [32]byte
+	Permissions []string
+	Handshaken  bool
+}
+
 // Server accepts framed JSON-RPC connections on a Unix socket.
 type Server struct {
 	cfg       Config
@@ -71,6 +78,8 @@ type Server struct {
 	root      *fsroot.Root
 	tokenMu   sync.Mutex
 	tokenUsed bool
+	pluginMu  sync.Mutex
+	plugins   map[string]pluginGrant
 	cgroup    string
 }
 
@@ -118,7 +127,13 @@ func Listen(cfg Config) (*Server, error) {
 		}
 		cgroupPath = path
 	}
-	return &Server{cfg: cfg, listener: listener, root: root, cgroup: cgroupPath}, nil
+	return &Server{
+		cfg:      cfg,
+		listener: listener,
+		root:     root,
+		plugins:  map[string]pluginGrant{},
+		cgroup:   cgroupPath,
+	}, nil
 }
 
 // Addr returns the bound Unix socket path.
@@ -192,6 +207,15 @@ type helloParams struct {
 	Protocol   string `json:"protocol"`
 }
 
+type pluginRegisterParams struct {
+	PluginID    string   `json:"plugin_id"`
+	TokenSHA256 string   `json:"token_sha256"`
+	Permissions []string `json:"permissions"`
+}
+
+type pluginRevokeParams struct {
+	PluginID string `json:"plugin_id"`
+}
 type execParams struct {
 	Tool      string   `json:"tool"`
 	Args      []string `json:"args"`
@@ -307,6 +331,8 @@ type pendingWrite struct {
 type connectionState struct {
 	mu          sync.Mutex
 	handshaken  bool
+	isEditor    bool
+	pluginID    string
 	sessionID   string
 	permissions []string
 	writesMu    sync.Mutex
@@ -446,6 +472,10 @@ func (s *Server) dispatch(ctx context.Context, req request, state *connectionSta
 		return s.copy(req, state)
 	case "sys.remove_all":
 		return s.removeAll(req, state)
+	case "plugin.register":
+		return s.registerPlugin(req, state)
+	case "plugin.revoke":
+		return s.revokePlugin(req, state)
 	case "session.hello":
 		return s.hello(req, state)
 	case "sys.exec":
@@ -489,22 +519,134 @@ func (s *Server) hello(req request, state *connectionState) (interface{}, *rpcEr
 			return nil, &rpcError{Code: -32001, Message: "unauthorized"}
 		}
 		s.tokenUsed = true
+		state.isEditor = true
+		s.tokenMu.Unlock()
 	} else if s.cfg.LSPTokenSHA256 != [32]byte{} && subtle.ConstantTimeCompare(hash[:], s.cfg.LSPTokenSHA256[:]) == 1 {
 		// The LSP token is session-bound and may be reused after a worker crash
 		// so the editor can reconnect and restart rust-analyzer.
+		s.tokenMu.Unlock()
 	} else {
 		s.tokenMu.Unlock()
-		return nil, &rpcError{Code: -32001, Message: "unauthorized"}
+		grant, ok := s.consumePluginGrant(hash)
+		if !ok {
+			return nil, &rpcError{Code: -32001, Message: "unauthorized"}
+		}
+		state.pluginID = grant.ID
+		state.permissions = append([]string{}, grant.Permissions...)
 	}
-	s.tokenMu.Unlock()
 	state.handshaken = true
 	state.sessionID = randomID()
+	pluginID := s.cfg.PluginID
+	if state.pluginID != "" {
+		pluginID = state.pluginID
+	}
 	return map[string]interface{}{
 		"session_id":  state.sessionID,
-		"plugin_id":   s.cfg.PluginID,
+		"plugin_id":   pluginID,
 		"api_version": APIVersion,
 		"permissions": state.permissions,
 	}, nil
+}
+
+func (s *Server) consumePluginGrant(hash [32]byte) (pluginGrant, bool) {
+	s.pluginMu.Lock()
+	defer s.pluginMu.Unlock()
+	for id, grant := range s.plugins {
+		if !grant.Handshaken && subtle.ConstantTimeCompare(hash[:], grant.TokenSHA256[:]) == 1 {
+			grant.Handshaken = true
+			s.plugins[id] = grant
+			return grant, true
+		}
+	}
+	return pluginGrant{}, false
+}
+
+func (s *Server) effectivePermissions(state *connectionState) []string {
+	if state.pluginID == "" {
+		return state.permissions
+	}
+	s.pluginMu.Lock()
+	defer s.pluginMu.Unlock()
+	grant, ok := s.plugins[state.pluginID]
+	if !ok {
+		return nil
+	}
+	return grant.Permissions
+}
+
+func (s *Server) registerPlugin(req request, state *connectionState) (interface{}, *rpcError) {
+	state.mu.Lock()
+	editor := state.handshaken && state.isEditor
+	state.mu.Unlock()
+	if !editor {
+		return nil, &rpcError{Code: -32003, Message: "editor session required"}
+	}
+	var params pluginRegisterParams
+	if err := decodeParams(req.Params, &params); err != nil {
+		return nil, &rpcError{Code: -32602, Message: "invalid params"}
+	}
+	pluginID := strings.TrimSpace(params.PluginID)
+	if pluginID == "" || len(pluginID) > 128 {
+		return nil, &rpcError{Code: -32602, Message: "invalid plugin id"}
+	}
+	decoded, err := hex.DecodeString(params.TokenSHA256)
+	if err != nil || len(decoded) != 32 {
+		return nil, &rpcError{Code: -32602, Message: "invalid token hash"}
+	}
+	var hash [32]byte
+	copy(hash[:], decoded)
+	if subtle.ConstantTimeCompare(hash[:], s.cfg.TokenSHA256[:]) == 1 ||
+		(s.cfg.LSPTokenSHA256 != [32]byte{} &&
+			subtle.ConstantTimeCompare(hash[:], s.cfg.LSPTokenSHA256[:]) == 1) {
+		return nil, &rpcError{Code: -32002, Message: "reserved token hash"}
+	}
+	if len(params.Permissions) > 64 {
+		return nil, &rpcError{Code: -32602, Message: "too many permissions"}
+	}
+	permissions := make([]string, 0, len(params.Permissions))
+	for _, permission := range params.Permissions {
+		if permission == "" || len(permission) > 256 {
+			return nil, &rpcError{Code: -32602, Message: "invalid permission"}
+		}
+		permissions = append(permissions, permission)
+	}
+	grant := pluginGrant{
+		ID:          pluginID,
+		TokenSHA256: hash,
+		Permissions: permissions,
+	}
+	s.pluginMu.Lock()
+	defer s.pluginMu.Unlock()
+	if _, exists := s.plugins[pluginID]; exists {
+		return nil, &rpcError{Code: -32009, Message: "plugin already registered"}
+	}
+	for _, existing := range s.plugins {
+		if subtle.ConstantTimeCompare(hash[:], existing.TokenSHA256[:]) == 1 {
+			return nil, &rpcError{Code: -32009, Message: "token already registered"}
+		}
+	}
+	s.plugins[pluginID] = grant
+	return map[string]interface{}{
+		"plugin_id":  pluginID,
+		"registered": true,
+	}, nil
+}
+
+func (s *Server) revokePlugin(req request, state *connectionState) (interface{}, *rpcError) {
+	state.mu.Lock()
+	editor := state.handshaken && state.isEditor
+	state.mu.Unlock()
+	if !editor {
+		return nil, &rpcError{Code: -32003, Message: "editor session required"}
+	}
+	var params pluginRevokeParams
+	if err := decodeParams(req.Params, &params); err != nil || params.PluginID == "" {
+		return nil, &rpcError{Code: -32602, Message: "invalid params"}
+	}
+	s.pluginMu.Lock()
+	delete(s.plugins, params.PluginID)
+	s.pluginMu.Unlock()
+	return map[string]interface{}{"revoked": true}, nil
 }
 
 func (s *Server) fetch(parent context.Context, req request, state *connectionState) (interface{}, *rpcError) {
@@ -1241,7 +1383,8 @@ func (s *Server) permissionError(state *connectionState, wanted string) *rpcErro
 	if !state.handshaken {
 		return &rpcError{Code: -32003, Message: "session required"}
 	}
-	for _, permission := range state.permissions {
+	permissions := s.effectivePermissions(state)
+	for _, permission := range permissions {
 		if permission == wanted {
 			return nil
 		}
@@ -1259,7 +1402,8 @@ func (s *Server) pathPermissionError(state *connectionState, base, path string) 
 	if err != nil {
 		return &rpcError{Code: -32002, Message: "policy denied"}
 	}
-	for _, permission := range state.permissions {
+	permissions := s.effectivePermissions(state)
+	for _, permission := range permissions {
 		if permission == base {
 			return nil
 		}

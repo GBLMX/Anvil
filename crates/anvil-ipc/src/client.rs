@@ -430,6 +430,33 @@ impl GatewayClient {
         })
     }
 
+    /// Register a plugin token and grant set with an editor session.
+    pub fn register_plugin(
+        &mut self,
+        plugin_id: &str,
+        token_hash: &[u8; 32],
+        permissions: &[String],
+    ) -> Result<(), ClientError> {
+        self.request(
+            "plugin.register",
+            serde_json::json!({
+                "plugin_id": plugin_id,
+                "token_sha256": hex_lower(token_hash),
+                "permissions": permissions,
+            }),
+        )?;
+        Ok(())
+    }
+
+    /// Revoke a plugin registration from an editor session.
+    pub fn revoke_plugin(&mut self, plugin_id: &str) -> Result<(), ClientError> {
+        self.request(
+            "plugin.revoke",
+            serde_json::json!({ "plugin_id": plugin_id }),
+        )?;
+        Ok(())
+    }
+
     /// Return the workspace-relative regular file size through the gateway.
     pub fn file_size(&mut self, path: &str) -> Result<u64, ClientError> {
         self.file_stat(path).map(|stat| stat.size)
@@ -763,6 +790,14 @@ pub fn is_policy_denied(error: &ClientError) -> bool {
     )
 }
 
+fn hex_lower(bytes: &[u8]) -> String {
+    use std::fmt::Write as _;
+    let mut output = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        let _ = write!(output, "{byte:02x}");
+    }
+    output
+}
 #[cfg(test)]
 mod tests {
     use super::*;

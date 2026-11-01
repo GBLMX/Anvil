@@ -5,6 +5,9 @@ use std::process::ExitCode;
 mod runtime;
 
 #[cfg(target_os = "linux")]
+mod manifest;
+
+#[cfg(target_os = "linux")]
 mod linux {
     use super::*;
 
@@ -29,6 +32,7 @@ mod linux {
         let mut check_write = false;
         let mut check_uds = false;
         let mut lua_smoke = false;
+        let mut plugin = None;
         let mut socket = None;
         let mut args = std::env::args().skip(1);
         while let Some(arg) = args.next() {
@@ -64,6 +68,12 @@ mod linux {
                 "--check-write" => check_write = true,
                 "--check-uds" => check_uds = true,
                 "--lua-smoke" => lua_smoke = true,
+                "--plugin" => {
+                    plugin = Some(
+                        args.next()
+                            .ok_or_else(|| io::Error::other("missing --plugin value"))?,
+                    );
+                }
                 "--socket" => {
                     socket = Some(
                         args.next()
@@ -73,6 +83,7 @@ mod linux {
                 other => return Err(io::Error::other(format!("unknown argument: {other}"))),
             }
         }
+        let plugin_root = plugin.map(std::fs::canonicalize).transpose()?;
         let token_fd = token_fd.ok_or_else(|| io::Error::other("--token-fd is required"))?;
 
         let _token = read_token(token_fd)?;
@@ -90,7 +101,7 @@ mod linux {
                 return Err(io::Error::last_os_error());
             }
         }
-        apply_landlock()?;
+        apply_landlock(plugin_root.as_deref())?;
         apply_seccomp()?;
 
         if lua_smoke {
@@ -102,6 +113,11 @@ mod linux {
                     return Ok(32);
                 }
             }
+        }
+        if let Some(root) = plugin_root.as_deref() {
+            let manifest = crate::manifest::PluginManifest::load(root).map_err(io::Error::other)?;
+            let entry = manifest.entry_path(root).map_err(io::Error::other)?;
+            runtime::run_file(&entry).map_err(|error| io::Error::other(error.to_string()))?;
         }
 
         if allocate_mb > 0 {
@@ -228,7 +244,7 @@ mod linux {
         parent_fd: i32,
     }
 
-    fn apply_landlock() -> io::Result<()> {
+    fn apply_landlock(plugin_root: Option<&std::path::Path>) -> io::Result<()> {
         let abi = unsafe {
             libc::syscall(
                 libc::SYS_landlock_create_ruleset,
@@ -282,13 +298,19 @@ mod linux {
         }
         let ruleset = ruleset as i32;
 
-        for (path, allowed) in [
-            ("/usr", ACCESS_READ_FILE | ACCESS_READ_DIR),
-            ("/lib", ACCESS_READ_FILE | ACCESS_READ_DIR),
-            ("/lib64", ACCESS_READ_FILE | ACCESS_READ_DIR),
-            ("/etc/ld.so.cache", ACCESS_READ_FILE),
-        ] {
-            let c_path = std::ffi::CString::new(path)?;
+        use std::os::unix::ffi::OsStrExt;
+
+        let mut paths: Vec<(std::path::PathBuf, u64)> = vec![
+            ("/usr".into(), ACCESS_READ_FILE | ACCESS_READ_DIR),
+            ("/lib".into(), ACCESS_READ_FILE | ACCESS_READ_DIR),
+            ("/lib64".into(), ACCESS_READ_FILE | ACCESS_READ_DIR),
+            ("/etc/ld.so.cache".into(), ACCESS_READ_FILE),
+        ];
+        if let Some(root) = plugin_root {
+            paths.push((root.to_path_buf(), ACCESS_READ_FILE | ACCESS_READ_DIR));
+        }
+        for (path, allowed) in paths {
+            let c_path = std::ffi::CString::new(path.as_os_str().as_bytes())?;
             let fd = unsafe { libc::open(c_path.as_ptr(), libc::O_PATH | libc::O_CLOEXEC) };
             if fd < 0 {
                 continue;
