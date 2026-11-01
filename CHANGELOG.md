@@ -5,7 +5,7 @@ All notable changes to Anvil are recorded here. The format follows
 lines are release-series labels, not a compatibility promise; `0.4.x` is the
 post-`0.4.0` feature line.
 
-## [Unreleased]
+## [0.4.1] - 2026-11-01
 
 ### Added
 
@@ -15,6 +15,16 @@ post-`0.4.0` feature line.
   selection and expansion; watchers are capped and marked stale when the
   gateway cannot observe the tree. See
   [ADR-0018](docs/adr/0018-workspace-tree-watch.md).
+
+### Fixed
+
+- In-flight tree snapshots no longer collapse a directory expanded after the
+  snapshot was requested; missing listings queue a follow-up refresh.
+
+### Changed
+
+- Added [INSTALL.md](INSTALL.md) with source build, sibling-binary, runtime,
+  verification, and uninstall instructions.
 
 ## [0.4.0] - 2026-11-01
 

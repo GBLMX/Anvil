@@ -1,6 +1,6 @@
 # Anvil Project Charter
 
-Status: **0.4.0 / Phase 0.7 empty-host boundary released. Pre-alpha.**
+Status: **0.4.1 / post-`0.4.0` feature line. Pre-alpha.**
 Release model: **0.3.0 → 0.4.0 was the maintenance train**, released
 2026-11-01. Feature development resumes after `0.4.0` on the `0.4.x` line.
 Supersedes: the V1.0 whitepaper draft where it conflicts with the decisions below.
