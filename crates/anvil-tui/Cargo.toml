@@ -30,7 +30,7 @@ anvil-ipc = { path = "../anvil-ipc", version = "0.4.5" }
 anvil-plugin-host = { path = "../anvil-plugin-host", version = "0.4.5" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-sha2 = "0.10"
+sha2 = "0.11"
 crossterm = "0.29"
 ratatui = "0.30"
 unicode-width = "0.2"
