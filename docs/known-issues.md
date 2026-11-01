@@ -205,3 +205,49 @@ workspace management and should be addressed before adding more UI features.
   - External change to a clean open buffer is surfaced or reloaded.
   - External change to a dirty buffer prompts or marks a conflict; it never
     discards local edits.
+
+### BUG-009: Search mode drops Tree-sitter foreground colors
+
+- Area: TUI search rendering
+- Priority: High
+- Status: Open; not fixed
+- Reproduction:
+  1. Open a Rust file with active Tree-sitter highlighting.
+  2. Press `/` and type a character, for example `e`.
+  3. Observe the viewport.
+- Actual:
+  - Search matches show a background highlight.
+  - All syntax foreground colors disappear; the rest of the viewport renders as
+    plain white/gray.
+- Expected:
+  - Syntax foreground colors remain intact.
+  - Search only adds a background color/underline to matched ranges.
+  - The active match can use a brighter background while retaining syntax fg.
+- Evidence:
+  - `crates/anvil-tui/src/lib.rs` `visible_lines` only obtains the syntax cache
+    when `needle.is_empty()`.
+  - When a search query is non-empty, the branch emits `Span::raw` for
+    non-matches and search-only styles for matches, bypassing
+    `push_syntax_spans`.
+  - Search styles are built from fresh `Style::default()` layers rather than
+    patching the existing syntax span style.
+- Fix direction:
+  - Always build the syntax spans first.
+  - Split matched ranges and apply only background/modifier overlays, preserving
+    the base foreground style.
+  - Introduce a small style composer with explicit layer order rather than
+    mutating spans in mode-specific branches.
+- Proposed layer order:
+  1. syntax foreground
+  2. search match background
+  3. active search match background + bold
+  4. selection background
+  5. cursorline background
+  6. LSP diagnostic underline/modifier
+- Acceptance:
+  - A search over a Rust keyword keeps its syntax fg and gains search bg.
+  - Non-matching spans retain syntax colors.
+  - Active match is distinguishable without replacing fg.
+  - Diagnostics underlines still compose with search backgrounds.
+  - Add a `TestBackend` regression test for fg+bg composition without requiring
+    snapshot infrastructure.
