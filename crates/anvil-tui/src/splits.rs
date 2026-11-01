@@ -14,6 +14,7 @@ impl Model {
         });
         self.split_active = false;
         self.status = "vertical split".to_owned();
+        self.sync_watch_paths();
         self.dirty = true;
     }
 
@@ -36,6 +37,7 @@ impl Model {
         self.split = Some(Pane { buffer: current });
         self.restore_buffer(other.buffer);
         self.split_active = right;
+        self.sync_watch_paths();
         self.status = if right { "right pane" } else { "left pane" }.to_owned();
         self.dirty = true;
     }
@@ -62,6 +64,7 @@ impl Model {
         }
         self.split_active = false;
         self.status = "split closed".to_owned();
+        self.sync_watch_paths();
         self.dirty = true;
     }
 

@@ -75,6 +75,7 @@ impl Model {
         let index = self.buffers.len() - 1;
         self.load_buffer(index);
         self.status = "new buffer".to_owned();
+        self.sync_watch_paths();
         self.dirty = true;
     }
 
@@ -137,6 +138,7 @@ impl Model {
             return;
         }
         self.finish_close_buffer(index);
+        self.sync_watch_paths();
     }
     fn finish_close_buffer(&mut self, index: usize) {
         let was_active = index == self.active;

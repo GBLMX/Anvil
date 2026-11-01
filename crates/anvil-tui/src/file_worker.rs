@@ -3,8 +3,10 @@
 //! The UI thread never performs a gateway directory read. One worker owns a
 //! dedicated authenticated connection; requests and results use mpsc.
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, Sender};
+use std::time::{Duration, Instant};
 
 use anvil_ipc::{DirEntry, GatewayClient};
 
@@ -30,6 +32,8 @@ pub enum FileRequest {
     },
     /// Delete one workspace entry or directory tree.
     RemoveAll(PathBuf),
+    /// Watch open buffers for external metadata changes.
+    Watch(Vec<PathBuf>),
 }
 
 /// A background file-tree result.
@@ -56,6 +60,8 @@ pub enum FileEvent {
         path: PathBuf,
         result: Result<(), String>,
     },
+    /// A watched file changed on disk.
+    ExternalChanged { path: PathBuf },
 }
 
 /// Owns the background worker and its channels.
@@ -70,70 +76,105 @@ impl FileWorker {
         let (request_sender, requests) = mpsc::channel();
         let (event_sender, events) = mpsc::channel();
         std::thread::spawn(move || {
-            while let Ok(request) = requests.recv() {
-                let event = match request {
-                    FileRequest::List(path) => {
-                        let relative = path
-                            .strip_prefix(&workspace)
-                            .map(|path| path.to_string_lossy().into_owned())
-                            .unwrap_or_else(|_| ".".to_owned());
-                        let relative = if relative.is_empty() {
-                            ".".to_owned()
-                        } else {
-                            relative
+            let mut watched: BTreeMap<PathBuf, Option<(u64, i64)>> = BTreeMap::new();
+            let mut pending: BTreeMap<PathBuf, Instant> = BTreeMap::new();
+            let mut next_poll = Instant::now();
+            loop {
+                match requests.recv_timeout(Duration::from_millis(50)) {
+                    Ok(request) => {
+                        let event = match request {
+                            FileRequest::Watch(paths) => {
+                                watched.clear();
+                                for path in paths {
+                                    let stat = client
+                                        .file_stat(&relative_path(&workspace, &path))
+                                        .ok()
+                                        .map(|stat| (stat.size, stat.modified_ns));
+                                    watched.insert(path, stat);
+                                }
+                                pending.clear();
+                                next_poll = Instant::now() + Duration::from_millis(100);
+                                continue;
+                            }
+                            FileRequest::List(path) => FileEvent::Listed(
+                                path.clone(),
+                                client
+                                    .read_dir(&relative_path(&workspace, &path))
+                                    .map_err(|error| error.to_string()),
+                            ),
+                            FileRequest::Files { hidden } => {
+                                FileEvent::Files(files(&mut client, &workspace, hidden))
+                            }
+                            FileRequest::GitDiff {
+                                path,
+                                relative,
+                                revision,
+                            } => FileEvent::GitDiff {
+                                path,
+                                revision,
+                                result: git_diff(&mut client, &relative),
+                            },
+                            FileRequest::Transfer { from, to, copy } => {
+                                let result = if copy {
+                                    client
+                                        .copy(
+                                            &relative_path(&workspace, &from),
+                                            &relative_path(&workspace, &to),
+                                        )
+                                        .map_err(|error| error.to_string())
+                                } else {
+                                    client
+                                        .rename(
+                                            &relative_path(&workspace, &from),
+                                            &relative_path(&workspace, &to),
+                                        )
+                                        .map_err(|error| error.to_string())
+                                };
+                                FileEvent::Transferred {
+                                    from,
+                                    to,
+                                    copy,
+                                    result,
+                                }
+                            }
+                            FileRequest::RemoveAll(path) => FileEvent::Removed {
+                                result: client
+                                    .remove_all(&relative_path(&workspace, &path))
+                                    .map_err(|error| error.to_string()),
+                                path,
+                            },
                         };
-                        FileEvent::Listed(
-                            path,
-                            client
-                                .read_dir(&relative)
-                                .map_err(|error| error.to_string()),
-                        )
-                    }
-                    FileRequest::Files { hidden } => {
-                        FileEvent::Files(files(&mut client, &workspace, hidden))
-                    }
-                    FileRequest::GitDiff {
-                        path,
-                        relative,
-                        revision,
-                    } => FileEvent::GitDiff {
-                        path,
-                        revision,
-                        result: git_diff(&mut client, &relative),
-                    },
-                    FileRequest::Transfer { from, to, copy } => {
-                        let result = if copy {
-                            client
-                                .copy(
-                                    &relative_path(&workspace, &from),
-                                    &relative_path(&workspace, &to),
-                                )
-                                .map_err(|error| error.to_string())
-                        } else {
-                            client
-                                .rename(
-                                    &relative_path(&workspace, &from),
-                                    &relative_path(&workspace, &to),
-                                )
-                                .map_err(|error| error.to_string())
-                        };
-                        FileEvent::Transferred {
-                            from,
-                            to,
-                            copy,
-                            result,
+                        if event_sender.send(event).is_err() {
+                            break;
                         }
                     }
-                    FileRequest::RemoveAll(path) => FileEvent::Removed {
-                        result: client
-                            .remove_all(&relative_path(&workspace, &path))
-                            .map_err(|error| error.to_string()),
-                        path,
-                    },
-                };
-                if event_sender.send(event).is_err() {
-                    break;
+                    Err(mpsc::RecvTimeoutError::Timeout) => {}
+                    Err(mpsc::RecvTimeoutError::Disconnected) => break,
                 }
+                if Instant::now() < next_poll {
+                    continue;
+                }
+                let now = Instant::now();
+                for path in poll_watched(&mut client, &workspace, &mut watched) {
+                    pending.insert(path, now);
+                }
+                let ready: Vec<PathBuf> = pending
+                    .iter()
+                    .filter(|(_, changed)| {
+                        now.duration_since(**changed) >= Duration::from_millis(500)
+                    })
+                    .map(|(path, _)| path.clone())
+                    .collect();
+                for path in ready {
+                    pending.remove(&path);
+                    if event_sender
+                        .send(FileEvent::ExternalChanged { path })
+                        .is_err()
+                    {
+                        return;
+                    }
+                }
+                next_poll = now + Duration::from_millis(100);
             }
         });
         Self {
@@ -165,6 +206,25 @@ fn relative_path(workspace: &Path, path: &Path) -> String {
     } else {
         relative
     }
+}
+
+fn poll_watched(
+    client: &mut GatewayClient,
+    workspace: &Path,
+    watched: &mut BTreeMap<PathBuf, Option<(u64, i64)>>,
+) -> Vec<PathBuf> {
+    let mut changed = Vec::new();
+    for (path, previous) in watched.iter_mut() {
+        let current = client
+            .file_stat(&relative_path(workspace, path))
+            .ok()
+            .map(|stat| (stat.size, stat.modified_ns));
+        if current != *previous {
+            *previous = current;
+            changed.push(path.clone());
+        }
+    }
+    changed
 }
 
 fn files(
@@ -433,6 +493,53 @@ mod tests {
             methods.lock().expect("methods").as_slice(),
             ["session.hello", "sys.copy", "sys.remove_all"]
         );
+    }
+
+    #[test]
+    fn watch_emits_one_external_change_after_metadata_changes() {
+        use std::sync::{Arc, Mutex};
+
+        let dir = tempfile::tempdir().expect("tempdir");
+        let workspace = dir.path().to_path_buf();
+        let socket = workspace.join("gateway.sock");
+        let listener = anvil_ipc::Listener::bind(&socket).expect("bind");
+        let stat_calls = Arc::new(Mutex::new(0usize));
+        let server_calls = Arc::clone(&stat_calls);
+        let server = std::thread::spawn(move || {
+            let mut connection = listener.accept().expect("accept");
+            for _ in 0..3 {
+                let frame = connection.recv().expect("recv").expect("frame");
+                let request: serde_json::Value = serde_json::from_slice(&frame).expect("request");
+                let result = if request["method"] == "sys.stat" {
+                    let mut calls = server_calls.lock().expect("calls");
+                    *calls += 1;
+                    let stamp = *calls as u64;
+                    serde_json::json!({"size": stamp, "modified_ns": stamp})
+                } else {
+                    serde_json::json!({"ok": true})
+                };
+                let response = serde_json::json!({
+                    "jsonrpc": "2.0",
+                    "id": request["id"],
+                    "result": result,
+                });
+                connection
+                    .send(&serde_json::to_vec(&response).expect("response"))
+                    .expect("send");
+            }
+        });
+
+        let client = GatewayClient::connect(&socket, &[9; 32]).expect("client");
+        let worker = FileWorker::start(client, workspace.clone());
+        worker
+            .request(FileRequest::Watch(vec![workspace.join("watched.txt")]))
+            .expect("watch");
+        assert!(matches!(
+            next_event(&worker),
+            FileEvent::ExternalChanged { .. }
+        ));
+        drop(worker);
+        server.join().expect("server");
     }
 
     fn next_event(worker: &FileWorker) -> FileEvent {

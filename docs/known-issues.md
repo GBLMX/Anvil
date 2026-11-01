@@ -147,7 +147,7 @@ workspace management and should be addressed before adding more UI features.
   - `..`, absolute paths, symlink-parent escapes, and outside-workspace targets
     are denied.
 - Verification:
-  - `cargo test --workspace --no-fail-fast`: 227 passed, 1 ignored.
+  - `cargo test --workspace --no-fail-fast`: 230 passed, 1 ignored.
   - `go test ./go/...` and `go vet ./go/...` pass.
   - Workspace clippy, fmt, and `git diff --check` pass.
 
@@ -176,7 +176,7 @@ workspace management and should be addressed before adding more UI features.
   - The active buffer and buffer count remain valid after every close.
 
 - Verification:
-  - `cargo test --workspace --no-fail-fast`: 227 passed, 1 ignored.
+  - `cargo test --workspace --no-fail-fast`: 230 passed, 1 ignored.
   - `cargo test -p anvil-tui buffer`: 13 passed.
   - Workspace clippy, fmt, and `git diff --check` pass.
 
@@ -205,21 +205,33 @@ workspace management and should be addressed before adding more UI features.
 
 - Area: Workspace/file lifecycle
 - Priority: High
-- Status: Open; not fixed
-- Current behavior:
-  - `FileWorker` only lists directories/files on explicit requests.
-  - No filesystem watcher refreshes the tree or open buffers after an external
-    edit, create, rename, or delete.
-  - A buffer can display stale contents while the disk has changed.
-- Required behavior:
-  - Detect external changes and mark or reload affected buffers safely.
-  - Refresh the tree without dropping the selected entry or expanded state.
-  - Never overwrite dirty in-memory edits silently.
+- Status: Partially fixed 2026-11-01; open-buffer external changes are watched.
+  Tree create/delete/rename refresh remains open.
+- Resolution:
+  - `sys.stat` now returns regular-file size and `modified_ns`.
+  - `FileWorker::Watch` polls registered open-buffer paths through the gateway
+    every 100 ms and emits only after 500 ms of unchanged metadata; the
+    baseline is then updated, so one burst produces one notification.
+  - Clean buffers reload from disk; dirty buffers enter
+    `File changed on disk: <path> [y/N]` and never reload unless confirmed.
+  - Watch paths are refreshed after open, save, new/close, split changes, and
+    buffer moves.
+  - Worker tests cover metadata-change debounce; TUI tests cover clean reload,
+    dirty refusal, and confirmed reload.
+- Remaining:
+  - Directories are not yet watched, so external create/delete/rename does not
+    refresh the workspace tree.
+  - Tree refresh preservation of expanded/selected state is part of that
+    remaining work.
 - Acceptance:
-  - External create/delete/rename updates the tree.
-  - External change to a clean open buffer is surfaced or reloaded.
-  - External change to a dirty buffer prompts or marks a conflict; it never
-    discards local edits.
+  - External change to a clean open buffer is reloaded.
+  - External change to a dirty buffer prompts and never discards local edits.
+  - External create/delete/rename tree refresh is not yet claimed.
+- Verification:
+  - `cargo test --workspace --no-fail-fast`: 230 passed, 1 ignored.
+  - `cargo test -p anvil-tui`: 124 passed.
+  - `go test ./go/...` and `go vet ./go/...` pass.
+  - Workspace clippy, fmt, and `git diff --check` pass.
 
 ### BUG-009: Search mode drops Tree-sitter foreground colors
 
@@ -272,6 +284,6 @@ workspace management and should be addressed before adding more UI features.
     snapshot infrastructure.
 - Verification:
   - Focused TUI test passes.
-  - `cargo test -p anvil-tui`: 121 passed.
-  - `cargo test --workspace --no-fail-fast`: 227 passed, 1 ignored.
+  - `cargo test -p anvil-tui`: 124 passed.
+  - `cargo test --workspace --no-fail-fast`: 230 passed, 1 ignored.
   - Workspace clippy, fmt, and `git diff --check` pass.

@@ -128,6 +128,7 @@ impl Model {
                         }
                     }
                 }
+                FileEvent::ExternalChanged { path } => self.handle_external_change(path),
             }
             self.dirty = true;
         }

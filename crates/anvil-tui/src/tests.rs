@@ -1890,6 +1890,42 @@ fn closing_buffer_refuses_to_drop_dirty_split() {
 }
 
 #[test]
+fn external_clean_change_reloads() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("file.txt");
+    fs::write(&path, "old").expect("write");
+    let mut model = Model::open(&path).expect("open");
+    fs::write(&path, "disk").expect("external write");
+
+    model.handle_external_change(path.clone());
+    assert_eq!(model.editor.text().slice(0..4), "disk");
+    assert!(!model.modified);
+    assert!(model.status.contains("reloaded"));
+}
+
+#[test]
+fn external_dirty_change_requires_confirmation() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("file.txt");
+    fs::write(&path, "old").expect("write");
+    let mut model = Model::open(&path).expect("open");
+    handle_event(&mut model, key(KeyCode::Char('i')));
+    type_text(&mut model, "X");
+    handle_event(&mut model, key(KeyCode::Esc));
+    fs::write(&path, "disk").expect("external write");
+
+    model.handle_external_change(path.clone());
+    assert!(matches!(model.input_mode, InputMode::ConfirmReload { .. }));
+    handle_event(&mut model, key(KeyCode::Char('n')));
+    assert_eq!(model.editor.text().slice(0..4), "Xold");
+
+    model.handle_external_change(path);
+    handle_event(&mut model, key(KeyCode::Char('y')));
+    assert_eq!(model.editor.text().slice(0..4), "disk");
+    assert!(!model.modified);
+}
+
+#[test]
 fn quit_guard_checks_inactive_buffers() {
     let dir = tempfile::tempdir().expect("tempdir");
     let first = dir.path().join("first.txt");

@@ -242,7 +242,8 @@ type statParams struct {
 }
 
 type statResult struct {
-	Size int64 `json:"size"`
+	Size     int64 `json:"size"`
+	Modified int64 `json:"modified_ns"`
 }
 
 type readDirParams struct {
@@ -537,7 +538,7 @@ func (s *Server) statFile(req request, state *connectionState) (interface{}, *rp
 	if s.root == nil {
 		return nil, &rpcError{Code: -32008, Message: "file service unavailable"}
 	}
-	size, err := s.root.Size(path)
+	metadata, err := s.root.Stat(path)
 	if err != nil {
 		code := -32002
 		if errors.Is(err, os.ErrNotExist) {
@@ -545,7 +546,7 @@ func (s *Server) statFile(req request, state *connectionState) (interface{}, *rp
 		}
 		return nil, &rpcError{Code: code, Message: "stat unavailable"}
 	}
-	return statResult{Size: size}, nil
+	return statResult{Size: metadata.Size, Modified: metadata.ModifiedNS}, nil
 }
 
 func (s *Server) readDir(req request, state *connectionState) (interface{}, *rpcError) {

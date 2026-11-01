@@ -57,6 +57,7 @@ impl Model {
         self.welcome = false;
         self.welcome_back = false;
         self.sync_lsp_active();
+        self.sync_watch_paths();
         self.dirty = true;
         Ok(())
     }
@@ -203,6 +204,88 @@ impl Model {
         }
     }
 
+    pub(crate) fn sync_watch_paths(&mut self) {
+        if !self.ensure_file_worker() {
+            return;
+        }
+        let mut paths = Vec::new();
+        if let Some(path) = &self.path {
+            paths.push(path.clone());
+        }
+        for buffer in &self.buffers {
+            if let Some(path) = &buffer.path {
+                paths.push(path.clone());
+            }
+        }
+        if let Some(pane) = &self.split
+            && let Some(path) = &pane.buffer.path
+        {
+            paths.push(path.clone());
+        }
+        paths.sort();
+        paths.dedup();
+        if let Some(worker) = self.file_worker.as_ref() {
+            let _ = worker.request(crate::file_worker::FileRequest::Watch(paths));
+        }
+    }
+
+    pub(crate) fn handle_external_change(&mut self, path: PathBuf) {
+        let modified = if self.path.as_ref() == Some(&path) {
+            self.modified
+        } else {
+            self.buffers
+                .iter()
+                .find(|buffer| buffer.path.as_ref() == Some(&path))
+                .is_some_and(|buffer| buffer.modified)
+        };
+        if modified {
+            if matches!(
+                &self.input_mode,
+                InputMode::ConfirmReload { path: pending } if pending == &path
+            ) {
+                return;
+            }
+            self.input_mode = InputMode::ConfirmReload { path: path.clone() };
+            self.status = format!("File changed on disk: {} [y/N]", path.display());
+            self.dirty = true;
+        } else if let Err(error) = self.reload_external(&path) {
+            self.status = format!("E: {error}");
+            self.dirty = true;
+        }
+    }
+
+    pub(crate) fn reload_external(&mut self, path: &Path) -> Result<(), String> {
+        let text = self.read_file(path)?;
+        let cursor = self.cursor.min(text.len());
+        if self.path.as_deref() == Some(path) {
+            self.editor = EditorState::from_text(&text);
+            self.cursor = cursor;
+            self.modified = false;
+            self.syntax.borrow_mut().invalidate();
+            self.sync_lsp_active();
+        }
+        if let Some(buffer) = self
+            .buffers
+            .iter_mut()
+            .find(|buffer| buffer.path.as_deref() == Some(path))
+        {
+            buffer.editor = EditorState::from_text(&text);
+            buffer.cursor = cursor.min(buffer.editor.text().len_bytes());
+            buffer.modified = false;
+        }
+        if let Some(pane) = self.split.as_mut()
+            && pane.buffer.path.as_deref() == Some(path)
+        {
+            pane.buffer.editor = EditorState::from_text(&text);
+            pane.buffer.cursor = cursor.min(pane.buffer.editor.text().len_bytes());
+            pane.buffer.modified = false;
+        }
+        self.sync_active();
+        self.status = format!("reloaded {}", path.display());
+        self.dirty = true;
+        Ok(())
+    }
+
     pub(crate) fn save_to(&mut self, path: PathBuf) -> bool {
         if self.reject_read_only() {
             return false;
@@ -225,6 +308,7 @@ impl Model {
                 self.git_due = Some(Instant::now());
                 self.sync_lsp_active();
                 self.notify_lsp_save(&path, &text);
+                self.sync_watch_paths();
                 self.status = format!("\"{display}\" written");
                 self.dirty = true;
                 true

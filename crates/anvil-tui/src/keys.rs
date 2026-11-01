@@ -502,6 +502,22 @@ fn handle_key(model: &mut Model, key: KeyEvent) {
             }
             _ => {}
         },
+        InputMode::ConfirmReload { path } => match key.code {
+            KeyCode::Char('y') | KeyCode::Char('Y') => {
+                let path = path.clone();
+                model.input_mode = InputMode::Normal;
+                if let Err(error) = model.reload_external(&path) {
+                    model.status = format!("E: {error}");
+                    model.dirty = true;
+                }
+            }
+            KeyCode::Esc | KeyCode::Char('n') | KeyCode::Char('N') => {
+                model.input_mode = InputMode::Normal;
+                model.status = "kept local buffer".to_owned();
+                model.dirty = true;
+            }
+            _ => {}
+        },
         InputMode::ConfirmDelete { path } => match key.code {
             KeyCode::Char('y') | KeyCode::Char('Y') => {
                 let path = path.clone();

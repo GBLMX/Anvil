@@ -388,3 +388,21 @@ func TestRemoveAllRecursiveDoesNotFollowSymlinks(t *testing.T) {
 		t.Fatalf("outside file changed: %q, %v", got, err)
 	}
 }
+
+func TestStatReturnsSizeAndModificationTime(t *testing.T) {
+	root, dir := testRoot(t)
+	path := filepath.Join(dir, "watched.txt")
+	if err := os.WriteFile(path, []byte("watch"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	metadata, err := root.Stat("watched.txt")
+	if err != nil {
+		t.Fatalf("Stat: %v", err)
+	}
+	if metadata.Size != 5 {
+		t.Fatalf("size = %d", metadata.Size)
+	}
+	if metadata.ModifiedNS <= 0 {
+		t.Fatalf("modified = %d", metadata.ModifiedNS)
+	}
+}

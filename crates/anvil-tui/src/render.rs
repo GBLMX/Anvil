@@ -335,6 +335,11 @@ pub fn view(model: &Model, frame: &mut Frame) {
             theme::WARNING,
             format!("Save {} before closing? [Y/n/c]", model.buffer_name(*index)),
         ),
+        InputMode::ConfirmReload { path } => (
+            " REL ",
+            theme::WARNING,
+            format!("File changed on disk: {} [y/N]", path.display()),
+        ),
         InputMode::ConfirmDelete { path } => (
             " DEL ",
             theme::ERROR,

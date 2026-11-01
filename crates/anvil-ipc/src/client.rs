@@ -96,6 +96,13 @@ pub struct DirEntry {
     pub is_dir: bool,
 }
 
+/// One regular-file metadata result from `sys.stat`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FileStat {
+    pub size: u64,
+    pub modified_ns: i64,
+}
+
 /// One chunk returned by `sys.read_file`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReadChunk {
@@ -382,13 +389,23 @@ impl GatewayClient {
             .collect()
     }
 
-    /// Return the workspace-relative regular file size through the gateway.
-    pub fn file_size(&mut self, path: &str) -> Result<u64, ClientError> {
+    /// Return workspace-relative regular file metadata through the gateway.
+    pub fn file_stat(&mut self, path: &str) -> Result<FileStat, ClientError> {
         let result = self.request("sys.stat", serde_json::json!({ "path": path }))?;
-        result
+        let size = result
             .get("size")
             .and_then(serde_json::Value::as_u64)
-            .ok_or(ClientError::Protocol("stat size"))
+            .ok_or(ClientError::Protocol("stat size"))?;
+        let modified_ns = result
+            .get("modified_ns")
+            .and_then(serde_json::Value::as_i64)
+            .unwrap_or(0);
+        Ok(FileStat { size, modified_ns })
+    }
+
+    /// Return the workspace-relative regular file size through the gateway.
+    pub fn file_size(&mut self, path: &str) -> Result<u64, ClientError> {
+        self.file_stat(path).map(|stat| stat.size)
     }
 
     /// Read a complete file with a bounded pipeline of binary requests.

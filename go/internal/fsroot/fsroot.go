@@ -717,3 +717,38 @@ func (r *Root) Size(path string) (int64, error) {
 	}
 	return stat.Size, nil
 }
+
+// Metadata is the regular-file observation used by the external-change poller.
+type Metadata struct {
+	Size       int64
+	ModifiedNS int64
+}
+
+// Stat returns size and mtime for one regular file beneath the root.
+func (r *Root) Stat(path string) (Metadata, error) {
+	relative, err := cleanRelative(path)
+	if err != nil {
+		return Metadata{}, err
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	if r.fd < 0 {
+		return Metadata{}, errors.New("workspace is closed")
+	}
+	fd, err := openBeneath(r.fd, relative)
+	if err != nil {
+		return Metadata{}, fmt.Errorf("open %q beneath workspace: %w", relative, err)
+	}
+	defer unix.Close(fd)
+	var stat unix.Stat_t
+	if err := unix.Fstat(fd, &stat); err != nil {
+		return Metadata{}, fmt.Errorf("stat %q: %w", relative, err)
+	}
+	if stat.Mode&unix.S_IFMT != unix.S_IFREG {
+		return Metadata{}, fmt.Errorf("%q is not a regular file", relative)
+	}
+	return Metadata{
+		Size:       stat.Size,
+		ModifiedNS: stat.Mtim.Sec*1e9 + stat.Mtim.Nsec,
+	}, nil
+}

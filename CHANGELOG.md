@@ -61,6 +61,9 @@ All notable changes to Anvil are recorded here. The format follows
 
 - Search mode now preserves Tree-sitter foreground colors; matches patch a
   background layer instead of replacing syntax spans.
+- Open buffers now watch external metadata changes through the gateway in the
+  background `FileWorker`: clean buffers reload, dirty buffers prompt before
+  reloading, and unchanged metadata is debounced.
 - File tree move/copy now run through gateway `sys.rename`/`sys.copy` in the
   background worker, and `d` recursively deletes entries through
   `sys.remove_all`; the status bar shows a spinner while the operation runs.

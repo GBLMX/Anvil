@@ -115,6 +115,8 @@ pub enum InputMode {
     ConfirmDelete { path: PathBuf },
     /// Confirm closing a modified buffer.
     ConfirmClose { index: usize },
+    /// Confirm reloading a dirty buffer changed on disk.
+    ConfirmReload { path: PathBuf },
     /// Move or copy a tree entry into a destination directory.
     TransferEntry {
         path: PathBuf,
