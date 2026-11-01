@@ -54,6 +54,8 @@ directory listing. The TUI:
 - rebuilds the flattened tree from the snapshot;
 - preserves expanded paths and the selected path when it still exists;
 - falls back to the nearest surviving parent, then the nearest index;
+- keeps a newly expanded directory expanded even when the in-flight snapshot
+  predates it, and queues a follow-up snapshot for the missing listing;
 - leaves tree visibility and focus unchanged for background refreshes;
 - rewrites the watch set after applying the new tree.
 
