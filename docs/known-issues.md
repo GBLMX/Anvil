@@ -205,8 +205,9 @@ workspace management and should be addressed before adding more UI features.
 
 - Area: Workspace/file lifecycle
 - Priority: High
-- Status: Partially fixed 2026-11-01; open-buffer external changes are watched.
-  Tree create/delete/rename refresh remains open.
+- Status: Partially fixed 2026-11-01; open-buffer external changes are in
+  0.4.0 scope. Tree create/delete/rename refresh is scheduled for 0.5.0 in
+  [#9](https://github.com/GBLMX/Anvil/issues/9).
 - Resolution:
   - `sys.stat` now returns regular-file size and `modified_ns`.
   - `FileWorker::Watch` polls registered open-buffer paths through the gateway

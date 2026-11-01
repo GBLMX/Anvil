@@ -21,6 +21,9 @@ in `PROJECT_CHARTER.md`, `docs/phase-0-7-plan.md`, and the ADRs.
 5. Turn the empty plugin host into a tested Lua/TS runtime path; activation,
    concurrency, and lifecycle design is in
    [ADR-0017](docs/adr/0017-plugin-activation-and-lifecycle.md).
+6. [0.5.0] Watch the workspace tree for external create/delete/rename while
+   preserving expansion and selection:
+   [#9](https://github.com/GBLMX/Anvil/issues/9).
 
 ## Later
 
