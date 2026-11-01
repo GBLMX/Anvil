@@ -272,3 +272,6 @@ are accepted under the same dual-license terms.
 - [0011: Workspace-scoped chunked file I/O](docs/adr/0011-workspace-chunked-file-io.md)
 - [0012: Plugin-host isolation](docs/adr/0012-plugin-host-isolation.md)
 - [0013: Rust kernel and distribution boundary](docs/adr/0013-kernel-distribution-boundary.md)
+- [0014: Plugin WIT seams](docs/adr/0014-plugin-wit-seams.md)
+- [0015: Command-line completion](docs/adr/0015-command-line-completion.md)
+- [0017: Plugin activation and lifecycle](docs/adr/0017-plugin-activation-and-lifecycle.md)
