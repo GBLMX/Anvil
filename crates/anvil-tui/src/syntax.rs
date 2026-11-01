@@ -80,7 +80,7 @@ static PYTHON: LazyLock<SyntaxLanguage> = LazyLock::new(|| {
 static TOML: LazyLock<SyntaxLanguage> = LazyLock::new(|| {
     SyntaxLanguage::grammar(
         Language::new(tree_sitter_toml_ng::LANGUAGE),
-        tree_sitter_toml_ng::HIGHLIGHTS_QUERY,
+        include_str!("syntax/toml.scm"),
         false,
     )
 });
