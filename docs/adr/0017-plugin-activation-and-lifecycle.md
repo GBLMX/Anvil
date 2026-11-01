@@ -1,11 +1,14 @@
-# ADR-0017: Plugin Activation Events and Host Lifecycle
+# ADR-0017: Plugin Activation, Concurrent Execution, and Resource Isolation
 
 - Status: Proposed; planning only, no runtime implementation in `0.4.0`
 - Date: 2026-11-01
 - Related: [ADR-0001](0001-plugin-isolation.md),
   [ADR-0007](0007-jsonrpc-envelope-and-capability-token.md),
   [ADR-0012](0012-plugin-host-isolation.md),
-  [ADR-0013](0013-kernel-distribution-boundary.md)
+  [ADR-0013](0013-kernel-distribution-boundary.md),
+  [ADR-0002](0002-go-daemon.md),
+  [ADR-0006](0006-upstream-dependencies.md),
+  [ADR-0011](0011-workspace-chunked-file-io.md)
 
 ## Context
 
@@ -18,8 +21,18 @@ Activation events are the scheduling layer above the existing isolation
 boundary. They must not become a second permission system or a hidden startup
 path for untrusted code.
 
-This ADR is ordered by dependency, not by feature appeal. Each decision assumes
-the decisions before it.
+The broader problem is shared execution. A plugin that spins, leaks memory, or
+crashes must not be able to freeze the editor loop or corrupt another plugin.
+ADR-0001 and ADR-0012 already select a process boundary; this ADR connects that
+boundary to activation, scheduling, resource limits, and state synchronization.
+
+The current implementation has an empty sandboxed host, no plugin loading path,
+no gateway connection from the host, and cgroup limits for pids and memory only.
+CPU weight, plugin snapshots, and gateway-mediated plugin I/O are proposed here,
+not implemented.
+
+The activation decisions are ordered by dependency. Concurrency, resource
+isolation, and the I/O boundary apply to every stage after host startup.
 
 ## Prerequisites
 
@@ -33,6 +46,13 @@ the decisions before it.
    lifecycle API.
 4. The capability table and real plugin loading path exist. Activation is not
    useful if the host cannot load a plugin after it starts.
+5. A read-only document snapshot and transaction contract exists with a base
+   revision and an explicit conflict error.
+6. The delegated cgroup v2 root can set CPU weight, `memory.max`, and
+   `pids.max`. Missing cgroup support fails closed rather than running without
+   the promised limits.
+7. Plugin `sys.*` I/O routes through the gateway with the plugin token and grant
+   set; the host has no ambient filesystem/network path.
 
 ## Decision
 
@@ -221,6 +241,73 @@ A scoped state API would be a new capability family and needs its own ADR.
 Using unrestricted `sys.write_file` as "state" is rejected because it grants
 workspace write access, not isolated plugin storage.
 
+## Concurrent Execution and Resource Isolation
+
+### Process-level actor model
+
+- Every plugin, or an explicitly declared trust group, runs in its own
+  plugin-host process. The editor never loads Lua/TS code in-process.
+- Hosts communicate with the editor and gateway only through Unix domain
+  sockets and the JSON-RPC envelope. There is no shared mutable state.
+- A plugin receives read-only document snapshots, not a `PieceTable` handle.
+  It submits edits as transactions against a base revision.
+- Thread-only isolation is rejected: threads share an address space, so a
+  segfault, allocator bug, or process-wide OOM can still take down the editor.
+
+### cgroup v2 resource isolation
+
+- Each host is placed in its own cgroup v2 path before plugin code initializes.
+- The supervisor sets `memory.max`, `pids.max`, and `cpu.weight`. Memory and
+  process limits are hard containment; CPU weight is scheduler priority, not a
+  hard quota.
+- OOM kills are attributed by cgroup and surfaced as a plugin failure, not as
+  an editor failure.
+- If the delegated cgroup cannot be created or written, the plugin fails
+  closed. It does not run with a promise of limits that are not active.
+- The global host budget from section 6 applies in addition to per-host
+  limits.
+
+### Kernel defense in depth
+
+- `no_new_privs`, a native-ABI seccomp allowlist, and Landlock rules are applied
+  before VM initialization, following ADR-0012.
+- The host receives no editor/gateway descriptors, no ambient workspace path,
+  and no network access. `sys.*` calls are the only privileged side effects.
+- Sandbox setup failure prevents plugin startup; there is no trusted-mode
+  fallback.
+
+### Optimistic concurrency
+
+- The editor core remains the single writer for document state.
+- A plugin transaction includes the base revision and the targeted buffer id.
+  The core validates the base, applies the edit atomically, and returns a new
+  revision.
+- A stale base revision is rejected with a conflict error. The plugin may
+  re-read the snapshot and retry; the core never merges arbitrary concurrent
+  edits silently.
+- Plugins cannot call internal mutation methods or share a mutable snapshot.
+  High-frequency read-only views may be cached by the host.
+
+### I/O stays outside the UI thread
+
+- Plugin filesystem, network, and exec access goes through gateway `sys.*`
+  methods under the plugin's token and grants.
+- Plugins cannot use ambient `std::fs`, sockets, or subprocesses from the VM.
+  The plugin host's own JSON-RPC socket is the only transport it needs.
+- The editor and plugin host may perform CPU work concurrently, but the TUI
+  event loop remains the only renderer and command dispatcher.
+- JSON-RPC serialization is an accepted cost. A future shared-memory path is
+  explicitly deferred and must not become an ambient capability.
+
+### Failure containment
+
+- A crash, OOM kill, sandbox violation, or hung request terminates only the
+  affected host and fails its pending requests.
+- The supervisor applies bounded restart/backoff and disables repeatedly
+  crashing plugins instead of creating a restart loop.
+- An infinite loop consumes its cgroup CPU share; it must not block the
+  editor's main loop or the gateway.
+
 ## Lifecycle
 
 ```text
@@ -263,6 +350,14 @@ ready -> dispatch request -> response
 - `onWorkspaceContains` does not recurse or follow symlinks.
 - `onStartup` without consent does not start a runtime plugin.
 - Activation never bypasses a missing capability grant.
+- An OOM-killed or SIGKILLed host leaves the editor and other hosts usable.
+- An infinite-loop plugin consumes only its cgroup share and does not delay a
+  TUI frame or gateway response.
+- A transaction with a stale base revision returns a conflict and does not
+  partially apply.
+- A plugin cannot read, write, fetch, or exec outside its granted gateway
+  surface.
+- Missing or unwritable cgroup limits prevent the host from starting.
 
 ## Rejected alternatives
 
@@ -295,6 +390,31 @@ Rejected: a live host can execute before its token and grants are registered.
 Rejected: ADR-0013 defines no such runtime trust class. `onStartup` requires an
 explicit consent or trust decision.
 
+### In-process thread isolation
+
+Rejected: threads share memory and process-wide failure domains. A segfault,
+allocator corruption, or OOM can still kill the editor, and cgroups apply to
+the process, not an individual plugin thread.
+
+### In-process WebAssembly runtime
+
+Rejected as the v1 isolation boundary: it relies on the runtime's own
+memory-safety guarantee and gives less direct control over filesystem,
+network, and process limits. A Wasm host in a separate process remains a
+possible later implementation.
+
+### Stable Rust ABI plugins
+
+Rejected: Rust has no stable ABI; dynamic loading would couple plugin builds to
+compiler versions and disable the process boundary. Rust extensions remain
+source-level distribution code per ADR-0013.
+
+### Shared memory for the first implementation
+
+Rejected for now: it needs a separate lifetime, synchronization, and security
+design. JSON-RPC snapshots are the baseline; mmap and descriptor passing are
+future work.
+
 ### Use `sys.write_file` as plugin state persistence
 
 Rejected: it is workspace write access, not scoped plugin state. A scoped state
@@ -309,6 +429,10 @@ Positive:
 - Capability enforcement stays in one place.
 - Host counts and idle cost are bounded.
 - Startup behavior is explicit rather than implied by "core".
+- A plugin crash, OOM, or sandbox violation is contained to its host.
+- Plugin CPU work can use other cores without coupling to the render loop.
+- The core remains the single writer and rejects stale transactions.
+- Concurrent edits have explicit conflict semantics instead of silent merges.
 
 Negative:
 
@@ -317,6 +441,22 @@ Negative:
 - Idle termination loses in-memory plugin state.
 - A future session extraction must own the supervisor; implementing it in the
   TUI would deepen the current boundary debt.
+- JSON-RPC adds serialization and copy overhead for snapshots and frequent
+  events.
+- Out-of-process debugging needs dedicated log/trace tooling.
+- Concurrent plugin edits need retry/conflict UX and tests.
+- Resource enforcement depends on a delegated cgroup v2 root.
+- The core still owns serialized document state; this is not a zero-lock design.
+
+## Future Work
+
+- Evaluate shared memory (`mmap`) with descriptor passing for high-frequency
+  snapshots after the JSON-RPC path has measured overhead.
+- Consider `cpu.max` in addition to `cpu.weight` if scheduler weight is not a
+  strong enough fairness guarantee.
+- Provide a `cargo anvil-plugin-dev` workflow for out-of-process logs, traces,
+  and a local sandbox harness.
+- Revisit a process-hosted Wasm runtime without changing the trust boundary.
 
 ## Open questions
 
@@ -325,3 +465,10 @@ Negative:
 - The precise consent UX for `onStartup`.
 - Whether a future scoped state capability is needed before idle termination is
   enabled by default.
+- Default `cpu.weight`, `memory.max`, and `pids.max` values, and the maximum
+  number of concurrent hosts.
+- Conflict retry policy for plugin transactions: immediate retry, user prompt,
+  or plugin-specific backoff.
+- Whether JSON-RPC snapshot overhead stays within the latency budget at the
+  largest supported document size.
+- Whether shared memory needs its own ADR before any implementation.
