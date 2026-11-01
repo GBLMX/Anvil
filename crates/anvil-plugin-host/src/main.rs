@@ -2,6 +2,9 @@ use std::io::{self, Write};
 use std::process::ExitCode;
 
 #[cfg(target_os = "linux")]
+mod runtime;
+
+#[cfg(target_os = "linux")]
 mod linux {
     use super::*;
 
@@ -25,6 +28,7 @@ mod linux {
         let mut check_exec = false;
         let mut check_write = false;
         let mut check_uds = false;
+        let mut lua_smoke = false;
         let mut socket = None;
         let mut args = std::env::args().skip(1);
         while let Some(arg) = args.next() {
@@ -59,6 +63,7 @@ mod linux {
                 "--check-exec" => check_exec = true,
                 "--check-write" => check_write = true,
                 "--check-uds" => check_uds = true,
+                "--lua-smoke" => lua_smoke = true,
                 "--socket" => {
                     socket = Some(
                         args.next()
@@ -87,6 +92,17 @@ mod linux {
         }
         apply_landlock()?;
         apply_seccomp()?;
+
+        if lua_smoke {
+            match runtime::smoke() {
+                Ok(42) => return Ok(0),
+                Ok(_) => return Ok(31),
+                Err(error) => {
+                    let _ = writeln!(io::stderr(), "luau smoke failed: {error}");
+                    return Ok(32);
+                }
+            }
+        }
 
         if allocate_mb > 0 {
             std::thread::sleep(std::time::Duration::from_millis(100));

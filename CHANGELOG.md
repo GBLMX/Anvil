@@ -29,6 +29,8 @@ All notable changes to Anvil are recorded here. The format follows
 - LSP starts automatically for supported files and keeps one worker per
   `(tool, language_id)`, so switching Rust ↔ Go no longer stops the other
   language server.
+- Plugin-host now initializes a sandboxed Luau runtime for a smoke check after
+  Landlock/seccomp; plugin loading and capability bindings remain pending.
 - CLI `-h`/`--help`, `-V`/`--version`, and `--workspace=<DIR>` parsing, with
   parser tests and documented usage.
 - Opt-in PGO and BOLT workflow: `scripts/pgo-bolt.sh` builds instrumented and
