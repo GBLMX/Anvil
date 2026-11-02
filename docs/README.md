@@ -20,6 +20,7 @@ Status: index for current architecture, plans, ADRs, and resolved bug records.
 | [0.4.x](0.4.x-plan.md) | plugin lifecycle, I/O, session/protocol | active |
 | [0.5.x](0.5.x-plan.md) | modal editing and modern TUI interaction | planned |
 | [0.6.x](0.6.x-plan.md) | signed packages, download manager, marketplace | planned |
+| [0.7.x](0.7.x-plan.md) | official optional Rust modules (source-level, trusted) | planned |
 | [Linux platform](linux-platform-plan.md) | seccomp/cgroup, atomic install, watcher measurements | planned |
 | [Command architecture](command-architecture-plan.md) | command registry, keymap trie, effects | partially implemented |
 | [Keymap configuration](keymap.md) | TOML overrides and key syntax | current |

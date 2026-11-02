@@ -36,6 +36,10 @@ in `PROJECT_CHARTER.md`, `docs/phase-0-7-plan.md`, and the ADRs.
 ## Later
 
 - A standard-edition composition crate and a sample third-party distribution.
+- [0.7.x] Official optional Rust modules: source-level only, feature-gated,
+  trusted in-process code; see [docs/0.7.x-plan.md](docs/0.7.x-plan.md).
+  Blocked on `0.4.9`, `0.6.0`, the standard-edition composition crate, and the
+  module two-consumer gate.
 - Broader language/tooling support after the kernel boundary is stable.
 - Release signing, SBOM, and provenance after release automation exists.
 - Signed plugin packages, a bounded download manager, installed-plugin

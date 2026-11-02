@@ -84,6 +84,7 @@ key dismisses it.
 - [0.4.x feature plan](docs/0.4.x-plan.md)
 - [0.5.x interaction and UI plan](docs/0.5.x-plan.md)
 - [0.6.x distribution and marketplace plan](docs/0.6.x-plan.md)
+- [0.7.x official optional Rust modules plan](docs/0.7.x-plan.md)
 - [Linux platform plan](docs/linux-platform-plan.md)
 - [Keymap configuration](docs/keymap.md)
 - [Plugin-host isolation ADR](docs/adr/0012-plugin-host-isolation.md)
