@@ -22,7 +22,7 @@ impl PluginSession {
         plugin_id: &str,
         permissions: &[String],
     ) -> Result<Self, String> {
-        Self::start_mode(gateway, workspace, plugin_id, permissions, false)
+        Self::start_mode(gateway, workspace, plugin_id, permissions, None, false)
     }
 
     pub(crate) fn start_oom(
@@ -31,7 +31,24 @@ impl PluginSession {
         plugin_id: &str,
         permissions: &[String],
     ) -> Result<Self, String> {
-        Self::start_mode(gateway, workspace, plugin_id, permissions, true)
+        Self::start_mode(gateway, workspace, plugin_id, permissions, None, true)
+    }
+
+    pub(crate) fn start_plugin(
+        gateway: &mut GatewayClient,
+        workspace: &Path,
+        plugin_id: &str,
+        plugin_root: &Path,
+        permissions: &[String],
+    ) -> Result<Self, String> {
+        Self::start_mode(
+            gateway,
+            workspace,
+            plugin_id,
+            permissions,
+            Some(plugin_root),
+            false,
+        )
     }
 
     fn start_mode(
@@ -39,6 +56,7 @@ impl PluginSession {
         workspace: &Path,
         plugin_id: &str,
         permissions: &[String],
+        plugin_root: Option<&Path>,
         oom: bool,
     ) -> Result<Self, String> {
         let token = host_session::new_token();
@@ -48,6 +66,8 @@ impl PluginSession {
             .map_err(|error| format!("register plugin: {error}"))?;
         let host = if oom {
             HostSession::start_oom_with_token(workspace, token)
+        } else if let Some(plugin_root) = plugin_root {
+            HostSession::start_with_token_plugin(workspace, plugin_root, token)
         } else {
             HostSession::start_with_token(workspace, token)
         };

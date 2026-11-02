@@ -32,6 +32,19 @@ post-`0.4.0` feature line.
   server's invalid EOF offset error.
 - Workspace tree entries include inode identity, so selection follows an
   external rename when the new path remains visible.
+- `plugin.json` now reads the documented camelCase `activationEvents` key;
+  the previous snake_case spelling remains accepted as an alias.
+
+### Added
+
+- Plugin activation matching for `onStartup`, `onLanguage`, and
+  `onWorkspaceContains`; matching hosts start with an empty grant set.
+- `onStartup` activation requires `ANVIL_PLUGIN_ALLOW_STARTUP=1`; workspace
+  activation can be disabled with `ANVIL_PLUGIN_DISABLE_WORKSPACE_ACTIVATION=1`.
+- Multiple plugin hosts keyed by plugin id, with per-plugin status and revoke
+  on stop or failure.
+- Language activation is deduplicated per plugin; workspace-marker activation
+  reads workspace root entries through the gateway.
 
 ### Changed
 

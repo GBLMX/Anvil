@@ -12,7 +12,7 @@ pub struct PluginManifest {
     pub id: String,
     pub version: String,
     pub entry: String,
-    #[serde(default)]
+    #[serde(default, rename = "activationEvents", alias = "activation_events")]
     pub activation_events: Vec<String>,
     #[serde(default)]
     pub commands: Vec<PluginCommand>,

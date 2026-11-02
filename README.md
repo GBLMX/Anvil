@@ -44,8 +44,12 @@ The plugin-host path has an empty sandboxed host with token-FD delivery,
 with AF_UNIX-only sockets, cgroup v2 limits with OOM classification, framed
 `sys.ping`/`sys.exec` dispatch, and a TUI debug `PluginSession`
 (`:plugin-start`/`:plugin-exec`/`:plugin-stop`/`:plugin-oom`). Local plugin
-manifests are discovered from child directories of `ANVIL_PLUGIN_DIR`; runtime
-activation is not wired yet. This is not a VM or public plugin API.
+manifests are discovered from child directories of `ANVIL_PLUGIN_DIR`.
+`onLanguage` and `onWorkspaceContains` events start matching sandboxed hosts
+with no grants. `onStartup` requires explicit opt-in via
+`ANVIL_PLUGIN_ALLOW_STARTUP=1`; workspace activation is disabled with
+`ANVIL_PLUGIN_DISABLE_WORKSPACE_ACTIVATION=1`. `onCommand` dispatch and the
+supervisor lifecycle are still pending. This is not a VM or public plugin API.
 
 Phase 0 still consists of the `anvil-api` contracts, `anvil-core` PieceTable,
 `anvil-editor` snapshots, `anvil-ipc` framing/JSON-RPC/Unix transport, and the

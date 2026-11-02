@@ -47,6 +47,7 @@ mod host_session;
 mod inlay_hints;
 pub mod lsp;
 mod lsp_ui;
+mod plugin_activation;
 mod plugin_discovery;
 mod plugin_session;
 mod splits;
@@ -74,6 +75,7 @@ use host_session::HostEvent;
 use lsp_worker::LspConfig;
 use lsp_worker::{LspEvent, LspWorker};
 #[cfg(target_os = "linux")]
+use plugin_activation::ActivationEvent;
 use plugin_session::{DEBUG_PERMISSIONS, DEBUG_PLUGIN_ID, PluginSession};
 use syntax::SyntaxState;
 
@@ -260,6 +262,17 @@ struct TreeEntry {
     expanded: bool,
 }
 
+#[cfg(target_os = "linux")]
+fn startup_activation_allowed() -> bool {
+    std::env::var_os("ANVIL_PLUGIN_ALLOW_STARTUP")
+        .is_some_and(|value| value == "1" || value == "true")
+}
+
+#[cfg(target_os = "linux")]
+fn workspace_activation_enabled() -> bool {
+    std::env::var_os("ANVIL_PLUGIN_DISABLE_WORKSPACE_ACTIVATION").is_none()
+}
+
 pub struct Model {
     /// Editor state and its shared text/index.
     pub editor: EditorState,
@@ -389,9 +402,9 @@ pub struct Model {
     /// Discovered local plugins.
     #[cfg(target_os = "linux")]
     plugins: Vec<plugin_discovery::PluginDescriptor>,
-    /// Debug plugin session, when started.
+    /// Running plugin host sessions keyed by plugin id.
     #[cfg(target_os = "linux")]
-    host: Option<PluginSession>,
+    hosts: HashMap<String, PluginSession>,
 }
 
 impl Model {
@@ -476,7 +489,7 @@ impl Model {
             #[cfg(target_os = "linux")]
             plugins: Vec::new(),
             #[cfg(target_os = "linux")]
-            host: None,
+            hosts: HashMap::new(),
         }
     }
 
@@ -633,8 +646,108 @@ impl Model {
     }
 
     #[cfg(target_os = "linux")]
+    fn activate_plugins(&mut self, event: ActivationEvent) {
+        let candidates = self
+            .plugins
+            .iter()
+            .filter(|plugin| plugin_activation::matches(&plugin.manifest.activation_events, &event))
+            .cloned()
+            .collect::<Vec<_>>();
+        for plugin in candidates {
+            let plugin_id = plugin.manifest.id.clone();
+            if self.hosts.contains_key(&plugin_id) {
+                continue;
+            }
+            let Some(gateway) = self.gateway.as_mut() else {
+                return;
+            };
+            let permissions = Vec::new();
+            match PluginSession::start_plugin(
+                gateway,
+                &self.workspace,
+                &plugin_id,
+                &plugin.root,
+                &permissions,
+            ) {
+                Ok(host) => {
+                    self.hosts.insert(plugin_id.clone(), host);
+                    self.status = format!("plugin {plugin_id} starting");
+                    self.dirty = true;
+                }
+                Err(error) => {
+                    self.status = format!("E: plugin {plugin_id}: {error}");
+                    self.dirty = true;
+                }
+            }
+        }
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    fn activate_plugins(&mut self, _event: ActivationEvent) {}
+
+    #[cfg(target_os = "linux")]
+    fn activate_workspace_plugins(&mut self) {
+        if !workspace_activation_enabled() {
+            return;
+        }
+        let mut markers = Vec::new();
+        for plugin in &self.plugins {
+            for value in &plugin.manifest.activation_events {
+                let Some(ActivationEvent::WorkspaceContains(marker)) =
+                    plugin_activation::parse_event(value)
+                else {
+                    continue;
+                };
+                if !markers.contains(&marker) {
+                    markers.push(marker);
+                }
+            }
+        }
+        if markers.is_empty() {
+            return;
+        }
+        let Some(gateway) = self.gateway.as_mut() else {
+            return;
+        };
+        let entries = match gateway.read_dir(".") {
+            Ok(entries) => entries,
+            Err(error) => {
+                self.status = format!("E: workspace activation: {error}");
+                self.dirty = true;
+                return;
+            }
+        };
+        let names = entries
+            .iter()
+            .map(|entry| entry.name.as_str())
+            .collect::<Vec<_>>();
+        for marker in markers {
+            if names.contains(&marker.as_str()) {
+                self.activate_plugins(ActivationEvent::WorkspaceContains(marker));
+            }
+        }
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    fn activate_workspace_plugins(&mut self) {}
+
+    #[cfg(target_os = "linux")]
+    fn activate_current_language(&mut self) {
+        let Some(path) = self.path.as_ref() else {
+            return;
+        };
+        let Some(settings) = lsp_settings(path) else {
+            return;
+        };
+        self.activate_plugins(ActivationEvent::Language(settings.language_id.clone()));
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    fn activate_current_language(&mut self) {}
+
+    #[cfg(target_os = "linux")]
     fn start_oom_host(&mut self) {
-        if self.host.is_some() {
+        if self.hosts.contains_key(DEBUG_PLUGIN_ID) {
             self.status = "plugin host already running".to_owned();
             self.dirty = true;
             return;
@@ -650,7 +763,7 @@ impl Model {
             .collect::<Vec<_>>();
         match PluginSession::start_oom(gateway, &self.workspace, DEBUG_PLUGIN_ID, &permissions) {
             Ok(host) => {
-                self.host = Some(host);
+                self.hosts.insert(DEBUG_PLUGIN_ID.to_owned(), host);
                 self.status = "plugin host OOM probe starting".to_owned();
             }
             Err(error) => self.status = format!("E: {error}"),
@@ -666,7 +779,7 @@ impl Model {
 
     #[cfg(target_os = "linux")]
     fn start_host(&mut self) {
-        if self.host.is_some() {
+        if self.hosts.contains_key(DEBUG_PLUGIN_ID) {
             self.status = "plugin host already running".to_owned();
             self.dirty = true;
             return;
@@ -682,7 +795,7 @@ impl Model {
             .collect::<Vec<_>>();
         match PluginSession::start(gateway, &self.workspace, DEBUG_PLUGIN_ID, &permissions) {
             Ok(host) => {
-                self.host = Some(host);
+                self.hosts.insert(DEBUG_PLUGIN_ID.to_owned(), host);
                 self.status = "plugin host starting".to_owned();
             }
             Err(error) => self.status = format!("E: {error}"),
@@ -698,7 +811,7 @@ impl Model {
 
     #[cfg(target_os = "linux")]
     fn exec_host(&mut self) {
-        let Some(host) = &self.host else {
+        let Some(host) = self.hosts.get(DEBUG_PLUGIN_ID) else {
             self.status = "E: plugin host not running".to_owned();
             self.dirty = true;
             return;
@@ -714,7 +827,7 @@ impl Model {
 
     #[cfg(target_os = "linux")]
     fn stop_host(&mut self) {
-        let Some(mut host) = self.host.take() else {
+        let Some(mut host) = self.hosts.remove(DEBUG_PLUGIN_ID) else {
             self.status = "plugin host not running".to_owned();
             self.dirty = true;
             return;
@@ -731,37 +844,41 @@ impl Model {
 
     #[cfg(target_os = "linux")]
     pub fn poll_host(&mut self) {
-        let Some(host) = &mut self.host else {
-            return;
-        };
-        let mut stop = false;
-        for event in host.poll() {
-            match event {
-                HostEvent::Ready => self.status = "plugin host connected".to_owned(),
-                HostEvent::Pong => self.status = "plugin host ready".to_owned(),
-                HostEvent::ExecUnsupported => {
-                    self.status = "plugin sys.exec not implemented yet".to_owned();
+        let mut stop = Vec::new();
+        for (plugin_id, host) in &mut self.hosts {
+            for event in host.poll() {
+                match event {
+                    HostEvent::Ready => {
+                        self.status = format!("plugin {plugin_id} connected");
+                    }
+                    HostEvent::Pong => {
+                        self.status = format!("plugin {plugin_id} ready");
+                    }
+                    HostEvent::ExecUnsupported => {
+                        self.status = format!("plugin {plugin_id}: sys.exec unsupported");
+                    }
+                    HostEvent::Error(error) => {
+                        self.status = format!("E: plugin {plugin_id}: {error}");
+                        stop.push(plugin_id.clone());
+                    }
+                    HostEvent::Exited(anvil_plugin_host::HostExit::OomKilled) => {
+                        self.status = format!("⚠ Plugin {plugin_id}: out of memory");
+                        stop.push(plugin_id.clone());
+                    }
+                    HostEvent::Exited(_) => {
+                        self.status = format!("plugin {plugin_id} exited");
+                        stop.push(plugin_id.clone());
+                    }
                 }
-                HostEvent::Error(error) => {
-                    self.status = format!("E: plugin host: {error}");
-                    stop = true;
-                }
-                HostEvent::Exited(anvil_plugin_host::HostExit::OomKilled) => {
-                    self.status = "⚠ Plugin Killed: Out of Memory".to_owned();
-                    stop = true;
-                }
-                HostEvent::Exited(_) => {
-                    self.status = "plugin host exited".to_owned();
-                    stop = true;
+                self.dirty = true;
+            }
+        }
+        if let Some(gateway) = self.gateway.as_mut() {
+            for plugin_id in stop {
+                if let Some(mut host) = self.hosts.remove(&plugin_id) {
+                    host.stop(gateway);
                 }
             }
-            self.dirty = true;
-        }
-        if stop
-            && let Some(mut host) = self.host.take()
-            && let Some(gateway) = self.gateway.as_mut()
-        {
-            host.stop(gateway);
         }
     }
 
@@ -811,6 +928,7 @@ impl Model {
             self.clear_lsp_ui();
             return;
         };
+        self.activate_plugins(ActivationEvent::Language(settings.language_id.clone()));
         let desired = (settings.tool.clone(), settings.language_id.clone());
         if !self.lsp_workers.contains_key(&desired) {
             self.start_lsp();
@@ -1241,6 +1359,14 @@ pub fn run_with_workspace(path: Option<PathBuf>, workspace: PathBuf) -> io::Resu
         }
         model.dirty = true;
     }
+    #[cfg(target_os = "linux")]
+    if startup_activation_allowed() {
+        model.activate_plugins(ActivationEvent::Startup);
+    }
+    #[cfg(target_os = "linux")]
+    model.activate_workspace_plugins();
+    #[cfg(target_os = "linux")]
+    model.activate_current_language();
     let model_ready = start.elapsed();
     let mut terminal = TerminalSession::start()?;
     let terminal_ready = start.elapsed();

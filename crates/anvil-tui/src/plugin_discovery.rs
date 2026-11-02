@@ -9,7 +9,6 @@ const MAX_PLUGINS: usize = 128;
 
 #[derive(Clone, Debug)]
 pub(crate) struct PluginDescriptor {
-    #[allow(dead_code)] // Consumed by the activation/start slice.
     pub(crate) root: PathBuf,
     pub(crate) manifest: PluginManifest,
 }
@@ -81,6 +80,10 @@ mod tests {
         let plugins = discover_from(directory.path()).expect("discover");
         assert_eq!(plugins.len(), 1);
         assert_eq!(plugins[0].manifest.id, "demo");
+        assert_eq!(
+            plugins[0].manifest.activation_events,
+            vec!["onStartup".to_owned()]
+        );
     }
 
     #[test]

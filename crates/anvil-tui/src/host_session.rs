@@ -34,7 +34,24 @@ impl HostSession {
     pub(crate) fn start_with_token(workspace: &Path, token: Token) -> Result<Self, String> {
         let host = host_binary()?;
         let cgroup_root = std::env::var_os("ANVIL_CGROUP_ROOT").map(PathBuf::from);
-        Self::start_with_host_token(workspace, &host, None, cgroup_root, token)
+        Self::start_with_host_token(workspace, &host, None, cgroup_root, token, None)
+    }
+
+    pub(crate) fn start_with_token_plugin(
+        workspace: &Path,
+        plugin_root: &Path,
+        token: Token,
+    ) -> Result<Self, String> {
+        let host = host_binary()?;
+        let cgroup_root = std::env::var_os("ANVIL_CGROUP_ROOT").map(PathBuf::from);
+        Self::start_with_host_token(
+            workspace,
+            &host,
+            None,
+            cgroup_root,
+            token,
+            Some(plugin_root),
+        )
     }
 
     pub(crate) fn start_oom_with_token(workspace: &Path, token: Token) -> Result<Self, String> {
@@ -42,7 +59,7 @@ impl HostSession {
         let root = std::env::var_os("ANVIL_CGROUP_ROOT")
             .map(PathBuf::from)
             .unwrap_or_else(|| PathBuf::from("/sys/fs/cgroup"));
-        Self::start_with_host_token(workspace, &host, Some(300), Some(root), token)
+        Self::start_with_host_token(workspace, &host, Some(300), Some(root), token, None)
     }
 
     #[cfg(test)]
@@ -52,7 +69,7 @@ impl HostSession {
         allocate_mb: Option<u32>,
         cgroup_root: Option<PathBuf>,
     ) -> Result<Self, String> {
-        Self::start_with_host_token(workspace, host, allocate_mb, cgroup_root, new_token())
+        Self::start_with_host_token(workspace, host, allocate_mb, cgroup_root, new_token(), None)
     }
 
     fn start_with_host_token(
@@ -61,6 +78,7 @@ impl HostSession {
         allocate_mb: Option<u32>,
         cgroup_root: Option<PathBuf>,
         token: Token,
+        plugin_root: Option<&Path>,
     ) -> Result<Self, String> {
         let socket = std::env::temp_dir().join(format!(
             "anvil-host-{}-{}.sock",
@@ -89,6 +107,10 @@ impl HostSession {
         if let Some(mb) = allocate_mb {
             args.push("--allocate-mb".to_owned());
             args.push(mb.to_string());
+        }
+        if let Some(plugin_root) = plugin_root {
+            args.push("--plugin".to_owned());
+            args.push(plugin_root.display().to_string());
         }
         let process = spawn(host, &args, token).map_err(|error| format!("spawn host: {error}"))?;
         if let Some(cgroup) = &cgroup {
