@@ -17,9 +17,15 @@ use anvil_editor::EditorState;
 use anvil_ipc::GatewayClient;
 use crossterm::{
     cursor::SetCursorStyle,
-    event::{self, Event, KeyEvent},
+    event::{
+        self, Event, KeyEvent, KeyboardEnhancementFlags, PopKeyboardEnhancementFlags,
+        PushKeyboardEnhancementFlags,
+    },
     execute,
-    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
+    terminal::{
+        EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
+        supports_keyboard_enhancement,
+    },
 };
 use ratatui::{
     Terminal,
@@ -43,6 +49,9 @@ pub mod lsp;
 mod lsp_ui;
 mod splits;
 use lsp_ui::lsp_settings;
+mod command;
+mod input;
+mod keymap;
 mod keys;
 mod lsp_worker;
 mod render;
@@ -259,6 +268,8 @@ pub struct Model {
     pub hscroll: usize,
     /// Input state.
     pub input_mode: InputMode,
+    /// In-memory keymap overrides.
+    keymap: keymap::KeymapConfig,
     /// Set by `q` / `:q`.
     pub quit: bool,
     /// Whether the file has unsaved changes.
@@ -388,6 +399,7 @@ impl Model {
             scroll: 0,
             hscroll: 0,
             input_mode: InputMode::Normal,
+            keymap: keymap::KeymapConfig::default(),
             quit: false,
             modified: false,
             dirty: true,
@@ -456,6 +468,22 @@ impl Model {
             #[cfg(target_os = "linux")]
             host: None,
         }
+    }
+
+    pub(crate) fn load_keymap_config_from(&mut self, path: &Path) -> Result<(), String> {
+        let config = keymap::KeymapConfig::from_path(path)?;
+        self.keymap = config;
+        Ok(())
+    }
+
+    pub(crate) fn load_keymap_config(&mut self) -> Result<(), String> {
+        let Some(path) = keymap::KeyChord::default_path() else {
+            return Ok(());
+        };
+        if !path.exists() {
+            return Ok(());
+        }
+        self.load_keymap_config_from(&path)
     }
 
     /// Builds a model that uses `gateway` for all file I/O.
@@ -547,7 +575,9 @@ impl Model {
         self.hscroll = saved.hscroll;
         self.modified = saved.modified;
         self.search_query = saved.search_query;
-        self.syntax.borrow_mut().invalidate();
+        self.syntax
+            .borrow_mut()
+            .switch_path(self.path.as_deref(), false);
         self.input_mode = InputMode::Normal;
         self.welcome = std::mem::take(&mut self.welcome_back);
         self.pending = None;
@@ -1088,7 +1118,18 @@ pub fn run(path: Option<PathBuf>) -> io::Result<()> {
 pub fn run_with_workspace(path: Option<PathBuf>, workspace: PathBuf) -> io::Result<()> {
     let timing = std::env::var_os("ANVIL_OPEN_TIMING").is_some();
     let start = Instant::now();
-    let workspace = workspace.canonicalize()?;
+    let workspace = workspace.canonicalize().map_err(|error| {
+        io::Error::new(
+            error.kind(),
+            format!("workspace {}: {error}", workspace.display()),
+        )
+    })?;
+    if !workspace.is_dir() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("workspace is not a directory: {}", workspace.display()),
+        ));
+    }
     let (mut model, session) = match GatewaySession::start(&workspace) {
         Ok((session, client, lsp_client)) => {
             let mut model = Model::with_gateway(client, workspace.clone());
@@ -1111,6 +1152,16 @@ pub fn run_with_workspace(path: Option<PathBuf>, workspace: PathBuf) -> io::Resu
         }
     };
     model.gateway_session = session;
+    if let Err(error) = model.load_keymap_config() {
+        let message = format!("E: keymap config: {error}");
+        if model.status.is_empty() {
+            model.status = message;
+        } else {
+            model.status.push_str(" | ");
+            model.status.push_str(&message);
+        }
+        model.dirty = true;
+    }
     let model_ready = start.elapsed();
     let mut terminal = TerminalSession::start()?;
     let terminal_ready = start.elapsed();
@@ -1160,22 +1211,39 @@ pub fn run_with_workspace(path: Option<PathBuf>, workspace: PathBuf) -> io::Resu
 
 struct TerminalSession {
     terminal: Terminal<CrosstermBackend<Stdout>>,
+    keyboard_enhancement: bool,
 }
 
 impl TerminalSession {
     fn start() -> io::Result<Self> {
         enable_raw_mode()?;
+        let supported = supports_keyboard_enhancement().unwrap_or(false);
         let mut stdout = io::stdout();
         if let Err(error) = execute!(stdout, EnterAlternateScreen) {
             let _ = disable_raw_mode();
             return Err(error);
         }
+        let keyboard_enhancement = supported
+            && execute!(
+                stdout,
+                PushKeyboardEnhancementFlags(
+                    KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
+                        | KeyboardEnhancementFlags::REPORT_EVENT_TYPES,
+                )
+            )
+            .is_ok();
         let backend = CrosstermBackend::new(stdout);
         match Terminal::new(backend) {
-            Ok(terminal) => Ok(Self { terminal }),
+            Ok(terminal) => Ok(Self {
+                terminal,
+                keyboard_enhancement,
+            }),
             Err(error) => {
-                let _ = disable_raw_mode();
+                if keyboard_enhancement {
+                    let _ = execute!(io::stdout(), PopKeyboardEnhancementFlags);
+                }
                 let _ = execute!(io::stdout(), LeaveAlternateScreen);
+                let _ = disable_raw_mode();
                 Err(error)
             }
         }
@@ -1195,12 +1263,15 @@ impl TerminalSession {
 
 impl Drop for TerminalSession {
     fn drop(&mut self) {
-        let _ = disable_raw_mode();
+        if self.keyboard_enhancement {
+            let _ = execute!(self.terminal.backend_mut(), PopKeyboardEnhancementFlags);
+        }
         let _ = execute!(
             self.terminal.backend_mut(),
             SetCursorStyle::DefaultUserShape,
             LeaveAlternateScreen
         );
+        let _ = disable_raw_mode();
         let _ = self.terminal.show_cursor();
     }
 }

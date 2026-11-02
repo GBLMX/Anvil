@@ -1,4 +1,5 @@
 use anvil_core::{TextBuffer, TextDocument};
+use std::collections::{HashMap, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
 use std::sync::mpsc::{self, Receiver, Sender};
@@ -7,6 +8,7 @@ use tree_sitter::{Language, Parser, Query, QueryCursor, StreamingIterator};
 
 const MAX_HIGHLIGHT_BYTES: usize = 256 * 1024;
 const DEBOUNCE: Duration = Duration::from_millis(50);
+const CACHE_LIMIT: usize = 32;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum SyntaxKind {
@@ -185,6 +187,64 @@ impl SyntaxCache {
     }
 }
 
+#[derive(Default)]
+struct SyntaxCacheStore {
+    entries: HashMap<PathBuf, SyntaxCache>,
+    order: VecDeque<PathBuf>,
+}
+
+impl SyntaxCacheStore {
+    #[cfg(test)]
+    fn contains(&self, path: &Path) -> bool {
+        self.entries.contains_key(path)
+    }
+
+    fn take(&mut self, path: &Path) -> Option<SyntaxCache> {
+        self.order.retain(|cached| cached != path);
+        let cache = self.entries.remove(path);
+        self.check();
+        cache
+    }
+
+    fn remove(&mut self, path: &Path) {
+        self.order.retain(|cached| cached != path);
+        self.entries.remove(path);
+        self.check();
+    }
+
+    fn insert(&mut self, cache: SyntaxCache) {
+        let Some(path) = cache.path.clone() else {
+            return;
+        };
+        self.order.retain(|cached| cached != &path);
+        self.order.push_back(path.clone());
+        self.entries.insert(path, cache);
+        while self.entries.len() > CACHE_LIMIT {
+            let Some(oldest) = self.order.pop_front() else {
+                break;
+            };
+            self.entries.remove(&oldest);
+        }
+        self.check();
+    }
+
+    fn check(&self) {
+        debug_assert_eq!(self.entries.len(), self.order.len());
+        debug_assert!(
+            self.order
+                .iter()
+                .all(|path| self.entries.contains_key(path))
+        );
+        debug_assert_eq!(
+            self.order
+                .iter()
+                .collect::<std::collections::HashSet<_>>()
+                .len(),
+            self.order.len()
+        );
+    }
+}
+
 struct ParseRequest {
     epoch: u64,
     revision: u64,
@@ -235,6 +295,7 @@ impl SyntaxWorker {
 
 pub struct SyntaxState {
     cache: SyntaxCache,
+    cached: SyntaxCacheStore,
     worker: SyntaxWorker,
     last_activity: Instant,
     in_flight: bool,
@@ -245,6 +306,7 @@ impl Default for SyntaxState {
     fn default() -> Self {
         Self {
             cache: SyntaxCache::default(),
+            cached: SyntaxCacheStore::default(),
             worker: SyntaxWorker::start(),
             last_activity: Instant::now(),
             in_flight: false,
@@ -259,9 +321,39 @@ impl SyntaxState {
     }
 
     pub fn invalidate(&mut self) {
+        if let Some(path) = self.cache.path.clone() {
+            self.cached.remove(&path);
+        }
         self.epoch = self.epoch.wrapping_add(1);
         self.cache.clear(0, None);
         self.in_flight = false;
+    }
+
+    pub fn switch_path(&mut self, path: Option<&Path>, revalidate: bool) {
+        self.epoch = self.epoch.wrapping_add(1);
+        self.in_flight = false;
+        if self.cache.path.as_deref() == path {
+            if revalidate {
+                self.cache.revision = u64::MAX;
+            }
+            return;
+        }
+        let previous = std::mem::take(&mut self.cache);
+        let target = path.and_then(|path| self.cached.take(path));
+        let had_cache = target.is_some();
+        let mut next = target.unwrap_or_default();
+        if previous.path.is_some() {
+            self.remember(previous);
+        }
+        next.path = path.map(Path::to_path_buf);
+        if revalidate || !had_cache {
+            next.revision = u64::MAX;
+        }
+        self.cache = next;
+    }
+
+    fn remember(&mut self, cache: SyntaxCache) {
+        self.cached.insert(cache);
     }
 
     /// Returns true when the cache changed and the caller should redraw.
@@ -280,10 +372,10 @@ impl SyntaxState {
         }
         let path_changed = self.cache.path.as_deref() != path;
         if path_changed {
-            self.cache.clear(u64::MAX, path);
+            self.switch_path(path, true);
             changed = true;
         }
-        if !path_changed && self.cache.matches(revision, path) {
+        if self.cache.matches(revision, path) {
             return changed;
         }
         if self.in_flight || self.last_activity.elapsed() < DEBOUNCE {
@@ -725,5 +817,134 @@ mod tests {
         let changed = state.poll(&document, 1, Some(Path::new("x.rs")));
         assert!(changed);
         assert!(state.highlights().is_empty());
+    }
+
+    #[test]
+    fn poll_applies_worker_highlights() {
+        let mut state = SyntaxState::default();
+        let document = text("fn main() {}");
+        for _ in 0..100 {
+            state.poll(&document, 1, Some(Path::new("x.rs")));
+            if !state.highlights().is_empty() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(!state.highlights().is_empty());
+    }
+
+    #[test]
+    fn switching_to_an_uncached_path_still_parses() {
+        let mut state = SyntaxState::default();
+        let document = text("fn main() {}");
+        state.switch_path(Some(Path::new("new.rs")), false);
+        for _ in 0..100 {
+            state.poll(&document, 0, Some(Path::new("new.rs")));
+            if !state.highlights().is_empty() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(!state.highlights().is_empty());
+    }
+
+    #[test]
+    fn switching_back_reuses_cached_highlights() {
+        let mut state = SyntaxState::default();
+        let path = PathBuf::from("cached.rs");
+        state.cache.apply(
+            7,
+            path.clone(),
+            vec![Highlight {
+                start: 0,
+                end: 2,
+                class: SyntaxClass::Keyword,
+            }],
+        );
+        state.switch_path(Some(Path::new("other.rs")), false);
+        state.switch_path(Some(&path), false);
+        assert_eq!(state.highlights().len(), 1);
+    }
+
+    #[test]
+    fn invalidate_drops_the_cached_path() {
+        let mut state = SyntaxState::default();
+        let path = PathBuf::from("cached.rs");
+        state.cache.apply(7, path.clone(), Vec::new());
+        state.invalidate();
+        state.switch_path(Some(&path), false);
+        assert!(state.highlights().is_empty());
+    }
+
+    #[test]
+    fn cache_evicts_the_least_recently_used_path() {
+        let mut state = SyntaxState::default();
+        let cached = |index: usize| SyntaxCache {
+            revision: 0,
+            path: Some(PathBuf::from(format!("{index}.rs"))),
+            highlights: Vec::new(),
+        };
+        for index in 0..CACHE_LIMIT {
+            state.remember(cached(index));
+        }
+        state.remember(cached(0));
+        state.remember(cached(CACHE_LIMIT));
+        assert!(state.cached.contains(Path::new("0.rs")));
+        assert!(!state.cached.contains(Path::new("1.rs")));
+    }
+
+    #[test]
+    fn repeated_hits_do_not_duplicate_order_entries() {
+        let mut state = SyntaxState::default();
+        for _ in 0..10 {
+            state.remember(SyntaxCache {
+                revision: 0,
+                path: Some(PathBuf::from("0.rs")),
+                highlights: Vec::new(),
+            });
+        }
+        assert_eq!(state.cached.order.len(), 1);
+        assert!(state.cached.contains(Path::new("0.rs")));
+    }
+
+    #[test]
+    fn invalidate_removes_only_the_active_path() {
+        let mut state = SyntaxState::default();
+        let cache = |index: usize| SyntaxCache {
+            revision: 0,
+            path: Some(PathBuf::from(format!("{index}.rs"))),
+            highlights: Vec::new(),
+        };
+        state.remember(cache(0));
+        state.remember(cache(1));
+        state.cache = cache(0);
+        state.invalidate();
+        assert!(!state.cached.contains(Path::new("0.rs")));
+        assert!(state.cached.contains(Path::new("1.rs")));
+    }
+
+    #[test]
+    fn switching_to_lru_front_keeps_highlights() {
+        let mut state = SyntaxState::default();
+        let cached = |index: usize| SyntaxCache {
+            revision: 0,
+            path: Some(PathBuf::from(format!("{index}.rs"))),
+            highlights: if index == 0 {
+                vec![Highlight {
+                    start: 0,
+                    end: 1,
+                    class: SyntaxClass::Keyword,
+                }]
+            } else {
+                Vec::new()
+            },
+        };
+        for index in 0..CACHE_LIMIT {
+            state.remember(cached(index));
+        }
+        state.cache = cached(99);
+        state.switch_path(Some(Path::new("0.rs")), false);
+        assert_eq!(state.highlights().len(), 1);
+        assert_eq!(state.cache.path.as_deref(), Some(Path::new("0.rs")));
     }
 }

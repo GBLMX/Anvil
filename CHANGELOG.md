@@ -5,6 +5,41 @@ All notable changes to Anvil are recorded here. The format follows
 lines are release-series labels, not a compatibility promise; `0.4.x` is the
 post-`0.4.0` feature line.
 
+## [Unreleased]
+
+### Fixed
+
+- `C`/`Alt-C` multi-cursor creation now seeds the active caret from the moved
+  cursor instead of a stale file-start selection.
+- Alt-modified ASCII letter bindings normalize case before dispatch, so
+  terminals reporting either `Alt+C` or `Alt+c` resolve to the same action.
+- Repeated key events are dispatched like presses, so keyboard protocols that
+  report hold/repeat do not lose autorepeat.
+- `Esc` in normal mode merges multiple cursors back into the primary cursor.
+  Insert-mode `Esc` only returns to normal mode and preserves the cursors.
+- Text-entry and pending states reject Ctrl/Alt/Super-modified characters
+  instead of treating them as plain input.
+- Command matching uses a shared key wrapper for modifier flags and Alt
+  character normalization.
+- Ignored key-release events no longer count as syntax activity.
+- `0` now moves to the line start when no count is pending instead of being
+  consumed as a count.
+- Pending change, split, and space-prefixed commands consume the count, so
+  `2cw` does not leak the count into the next motion.
+- Syntax highlights use a 32-entry LRU path cache and are restored before the
+  first frame; uncached files keep the normal text color until parsing completes.
+
+### Changed
+
+- Keyboard enhancement flags are enabled only when the terminal reports
+  support, and popped on exit. Unsupported terminals keep the legacy key path.
+
+- Normal-mode and operator-pending bindings resolve through a dedicated keymap
+  module; terminal key normalization lives in an input adapter.
+- Normal and operator-pending commands have stable namespaced IDs and a
+  read-only registry. An optional TOML keymap validates overrides against those
+  IDs and applies them atomically.
+
 ## [0.4.5] - 2026-11-02
 
 This release bundles the `0.4.4` gateway capability control plane and the

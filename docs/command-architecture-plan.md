@@ -1,7 +1,9 @@
 # High-Frequency Command Architecture Plan
 
-Status: planning only. No command registry, keymap trie, effect queue, Lua
-keymap host, or command capability matrix is implemented by this document.
+Status: partially implemented. Stable command IDs, a read-only metadata
+registry, and TOML keymap overrides for normal and operator-pending bindings
+exist. There is still no keymap trie, effect queue, Lua/Luau keymap host, or
+command capability matrix.
 
 ## Goal
 
@@ -31,10 +33,12 @@ times per minute:
 
 ## Current State
 
-- `crates/anvil-tui/src/commands.rs` dispatches Ex commands with string
-  matching; it is not a command registry.
-- `crates/anvil-tui/src/keys.rs` resolves keys through hardcoded `pending`
-  state and `match` arms; there is no trie.
+- `crates/anvil-tui/src/command.rs` defines stable command IDs and a read-only
+  metadata registry for normal and operator-pending commands.
+- `crates/anvil-tui/src/commands.rs` still dispatches Ex commands with string
+  matching; it is not wired to the command registry.
+- `crates/anvil-tui/src/keymap.rs` resolves normal and pending chords and loads
+  TOML overrides for both; it has no trie.
 - `crates/anvil-tui/src/lsp_ui.rs` calls LSP operations directly; they are not
   command IDs or effects.
 - `crates/anvil-tui/src/workspace_edit.rs` applies edits to buffers and may read

@@ -78,7 +78,9 @@ impl Model {
         self.search_query = buffer.search_query;
         self.input_mode = InputMode::Normal;
         self.pending = None;
-        self.syntax.borrow_mut().invalidate();
+        self.syntax
+            .borrow_mut()
+            .switch_path(self.path.as_deref(), false);
         self.sync_lsp_active();
         self.dirty = true;
     }

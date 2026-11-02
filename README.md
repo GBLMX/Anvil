@@ -76,6 +76,7 @@ key dismisses it.
 - [0.3.0 → 0.4.0: Polish & Specification](docs/polish-and-specification.md)
 - [0.3.0 → 0.4.0 / Phase 0.7 plan](docs/phase-0-7-plan.md)
 - [0.4.x feature plan](docs/0.4.x-plan.md)
+- [Keymap configuration](docs/keymap.md)
 - [Plugin-host isolation ADR](docs/adr/0012-plugin-host-isolation.md)
 - [Threat model](docs/threat-model.md)
 - [Architecture](docs/architecture.md)
@@ -99,6 +100,7 @@ key dismisses it.
 - [Cursor and snapshot ownership](docs/adr/0010-cursor-and-snapshot-ownership.md)
 - [Workspace file I/O protocol](docs/adr/0011-workspace-chunked-file-io.md)
 - [Workspace tree watching](docs/adr/0018-workspace-tree-watch.md)
+- [Terminal keyboard enhancement](docs/adr/0019-terminal-keyboard-enhancement.md)
 - [Architecture decision records](docs/adr/)
 - [Governance](GOVERNANCE.md)
 - [Maintainers](MAINTAINERS.md)
@@ -141,8 +143,9 @@ key dismisses it.
   runtime. cgroup limits require a delegated cgroup2 root; without one the host
   fails closed rather than pretending limits are active.
 - The native editor/API interaction model is selection-first. The current TUI
-  exposes that core through a Vim-like keymap implemented in Rust; Lua/TS
-  keymap plugins and user remapping are not implemented yet.
+  exposes that core through a Vim-like keymap implemented in Rust. Normal and
+  operator-pending bindings can be remapped through
+  [keymap.toml](docs/keymap.md); Lua/TS keymap plugins are not implemented yet.
 - Full untrusted-plugin support targets Linux 5.13+ (Landlock). Linux 5.6-5.12
   may run the editor with trusted plugins only.
 

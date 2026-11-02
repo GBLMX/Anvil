@@ -1,13 +1,21 @@
 //! Keyboard dispatch for normal, insert, command, and overlay modes.
 
+use crate::command::{CommandContext, is_registered};
+use crate::input::{KeyPress, is_action_key};
+use crate::keymap::{NormalCommand, PendingCommand, resolve_normal, resolve_pending};
+
 use super::*;
-use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind};
+
+use crossterm::event::{Event, KeyCode};
 
 pub(crate) fn handle_event(model: &mut Model, event: Event) {
-    model.syntax.borrow_mut().note_activity();
     match event {
-        Event::Key(key) if key.kind == KeyEventKind::Press => handle_key(model, key),
+        Event::Key(key) if is_action_key(&key) => {
+            model.syntax.borrow_mut().note_activity();
+            handle_key(model, KeyPress::from_key(key));
+        }
         Event::Paste(text) => {
+            model.syntax.borrow_mut().note_activity();
             model.pending = None;
             if let InputMode::Insert = model.input_mode {
                 model.insert_text(&text);
@@ -27,10 +35,9 @@ pub(crate) fn handle_event(model: &mut Model, event: Event) {
     }
 }
 
-fn handle_key(model: &mut Model, key: KeyEvent) {
-    let control = key
-        .modifiers
-        .contains(crossterm::event::KeyModifiers::CONTROL);
+fn handle_key(model: &mut Model, key: KeyPress) {
+    let control = key.ctrl();
+    let text_input = key.text_input();
 
     if model.welcome {
         if key.code == KeyCode::Esc {
@@ -66,7 +73,7 @@ fn handle_key(model: &mut Model, key: KeyEvent) {
                     model.last_macro = Some(register);
                     model.replaying = true;
                     for key in keys {
-                        handle_key(model, key);
+                        handle_key(model, KeyPress::from_key(key));
                     }
                     model.replaying = false;
                 }
@@ -85,11 +92,11 @@ fn handle_key(model: &mut Model, key: KeyEvent) {
             model.dirty = true;
             return;
         }
-        model.recording_keys.push(key);
+        model.recording_keys.push(key.event());
     }
 
     if model.register_wait {
-        if let KeyCode::Char(character) = key.code {
+        if text_input && let KeyCode::Char(character) = key.code {
             model.register = Some(character);
             model.register_wait = false;
             model.dirty = true;
@@ -98,79 +105,96 @@ fn handle_key(model: &mut Model, key: KeyEvent) {
     }
     if let Some(pending) = model.pending.take() {
         model.dirty = true;
-        if model.object_pending {
-            model.object_pending = false;
-            if pending == 'c' {
-                match key.code {
-                    KeyCode::Char('w') => model.change_inner_word(),
-                    KeyCode::Char('"') => model.change_inner_quote('"'),
-                    KeyCode::Char('\'') => model.change_inner_quote('\''),
-                    _ => {}
+        if key.ctrl() || key.alt() || key.super_key() {
+            model.status = "E: modifier not valid in pending command".to_owned();
+            return;
+        }
+        let object_pending = model.object_pending;
+        model.object_pending = false;
+        let command = resolve_pending(pending, key, object_pending, &model.keymap);
+        if command.is_none() && !object_pending && !matches!(pending, 'g' | ']' | '[') {
+            let _ = model.take_count();
+        }
+        if let Some(command) = command {
+            debug_assert!(
+                command
+                    .id()
+                    .is_none_or(|id| is_registered(id, CommandContext::Pending))
+            );
+            match command {
+                PendingCommand::ObjectPending => {
+                    model.pending = Some('c');
+                    model.object_pending = true;
+                }
+                PendingCommand::ChangeInnerWord => model.change_inner_word(),
+                PendingCommand::ChangeInnerQuote(quote) => model.change_inner_quote(quote),
+                PendingCommand::Definition => model.request_definition(),
+                PendingCommand::Diagnostic(forward) => model.jump_diagnostic(forward),
+                PendingCommand::Count { pending, digit } => {
+                    model.push_count(digit);
+                    model.pending = Some(pending);
+                }
+                PendingCommand::SplitVertical => {
+                    let _ = model.take_count();
+                    model.split_vertical();
+                }
+                PendingCommand::FocusSplit(right) => {
+                    let _ = model.take_count();
+                    model.focus_split(right);
+                }
+                PendingCommand::CloseSplit => {
+                    let _ = model.take_count();
+                    model.close_split();
+                }
+                PendingCommand::OpenTree => {
+                    let _ = model.take_count();
+                    model.open_tree();
+                }
+                PendingCommand::StartFuzzy => {
+                    let _ = model.take_count();
+                    model.start_fuzzy();
+                }
+                PendingCommand::StartRename => {
+                    let _ = model.take_count();
+                    model.start_rename();
+                }
+                PendingCommand::CodeActions => {
+                    let _ = model.take_count();
+                    model.request_code_actions();
+                }
+                PendingCommand::DocumentSymbols => {
+                    let _ = model.take_count();
+                    model.request_document_symbols();
+                }
+                PendingCommand::WorkspaceSymbols => {
+                    let _ = model.take_count();
+                    model.request_workspace_symbols();
+                }
+                PendingCommand::Formatting => {
+                    let _ = model.take_count();
+                    model.request_formatting();
+                }
+                PendingCommand::ChangeWord(motion) => {
+                    let _ = model.take_count();
+                    model.change_word(motion);
+                }
+                PendingCommand::DeleteLines => {
+                    let count = model.take_count();
+                    model.delete_lines(count);
+                }
+                PendingCommand::YankLines => {
+                    let count = model.take_count();
+                    model.yank_lines(count);
+                }
+                PendingCommand::DeleteWords(motion) => {
+                    let count = model.take_count();
+                    model.delete_words(motion, count);
+                }
+                PendingCommand::YankWords(motion) => {
+                    let count = model.take_count();
+                    model.yank_words(motion, count);
                 }
             }
-            return;
-        }
-        if pending == 'c' && key.code == KeyCode::Char('i') {
-            model.pending = Some('c');
-            model.object_pending = true;
-            return;
-        }
-        if pending == 'g' {
-            if key.code == KeyCode::Char('d') {
-                model.request_definition();
-            }
-            return;
-        }
-        if pending == ']' || pending == '[' {
-            if key.code == KeyCode::Char('d') {
-                model.jump_diagnostic(pending == ']');
-            }
-            return;
-        }
-        if let KeyCode::Char(character) = key.code
-            && character.is_ascii_digit()
-        {
-            model.count = model.count.saturating_mul(10) + usize::from(character as u8 - b'0');
-            model.pending = Some(pending);
-            return;
-        }
-        let count = model.take_count();
-        if pending == 'w' {
-            match key.code {
-                KeyCode::Char('v') => model.split_vertical(),
-                KeyCode::Char('h') => model.focus_split(false),
-                KeyCode::Char('l') => model.focus_split(true),
-                KeyCode::Char('q') => model.close_split(),
-                _ => {}
-            }
-            return;
-        }
-        if pending == ' ' {
-            match key.code {
-                KeyCode::Char('e') => model.open_tree(),
-                KeyCode::Char('f') => model.start_fuzzy(),
-                KeyCode::Char('r') => model.start_rename(),
-                KeyCode::Char('a') => model.request_code_actions(),
-                KeyCode::Char('s') => model.request_document_symbols(),
-                KeyCode::Char('S') => model.request_workspace_symbols(),
-                KeyCode::Char('F') => model.request_formatting(),
-                _ => {}
-            }
-            return;
-        }
-        match (pending, key.code) {
-            ('c', KeyCode::Char('w')) => model.change_word(WordMotion::NextStart),
-            ('c', KeyCode::Char('e')) => model.change_word(WordMotion::End),
-            ('c', KeyCode::Char('b')) => model.change_word(WordMotion::PreviousStart),
-            ('d', KeyCode::Char('d')) => model.delete_lines(count),
-            ('y', KeyCode::Char('y')) => model.yank_lines(count),
-            ('d', KeyCode::Char('w')) => model.delete_words(WordMotion::NextStart, count),
-            ('d', KeyCode::Char('e')) => model.delete_words(WordMotion::End, count),
-            ('d', KeyCode::Char('b')) => model.delete_words(WordMotion::PreviousStart, count),
-            ('y', KeyCode::Char('w')) => model.yank_words(WordMotion::NextStart, count),
-            ('y', KeyCode::Char('e')) => model.yank_words(WordMotion::End, count),
-            ('y', KeyCode::Char('b')) => model.yank_words(WordMotion::PreviousStart, count),
-            _ => {}
         }
         return;
     }
@@ -190,7 +214,7 @@ fn handle_key(model: &mut Model, key: KeyEvent) {
                 model.fuzzy_refresh();
                 model.dirty = true;
             }
-            KeyCode::Char(character) if !control => {
+            KeyCode::Char(character) if text_input => {
                 if let Some(fuzzy) = model.fuzzy.as_mut() {
                     fuzzy.query.push(character);
                 }
@@ -227,7 +251,7 @@ fn handle_key(model: &mut Model, key: KeyEvent) {
                 model.filter_workspace_symbols();
                 true
             }
-            KeyCode::Char(character) if !control => {
+            KeyCode::Char(character) if text_input => {
                 if let Some(symbols) = model.workspace_symbols.as_mut() {
                     symbols.query.push(character);
                 }
@@ -326,7 +350,7 @@ fn handle_key(model: &mut Model, key: KeyEvent) {
                 model.filter_completion();
                 true
             }
-            KeyCode::Char(character) if !control => {
+            KeyCode::Char(character) if text_input => {
                 if let Some(completion) = model.completion.as_mut() {
                     completion.query.push(character);
                 }
@@ -399,7 +423,7 @@ fn handle_key(model: &mut Model, key: KeyEvent) {
                 name.pop();
                 model.dirty = true;
             }
-            KeyCode::Char(character) if !control => {
+            KeyCode::Char(character) if text_input => {
                 name.push(character);
                 model.dirty = true;
             }
@@ -426,7 +450,7 @@ fn handle_key(model: &mut Model, key: KeyEvent) {
                 name.pop();
                 model.dirty = true;
             }
-            KeyCode::Char(character) if !control => {
+            KeyCode::Char(character) if text_input => {
                 name.push(character);
                 model.dirty = true;
             }
@@ -448,7 +472,7 @@ fn handle_key(model: &mut Model, key: KeyEvent) {
                 name.pop();
                 model.dirty = true;
             }
-            KeyCode::Char(character) if !control => {
+            KeyCode::Char(character) if text_input => {
                 name.push(character);
                 model.dirty = true;
             }
@@ -476,7 +500,7 @@ fn handle_key(model: &mut Model, key: KeyEvent) {
                 directory.pop();
                 model.dirty = true;
             }
-            KeyCode::Char(character) if !control => {
+            KeyCode::Char(character) if text_input => {
                 directory.push(character);
                 model.dirty = true;
             }
@@ -546,7 +570,7 @@ fn handle_key(model: &mut Model, key: KeyEvent) {
                 buffer.pop();
                 model.dirty = true;
             }
-            KeyCode::Char(character) if !control => {
+            KeyCode::Char(character) if text_input => {
                 buffer.push(character);
                 model.dirty = true;
             }
@@ -566,7 +590,7 @@ fn handle_key(model: &mut Model, key: KeyEvent) {
                 query.pop();
                 model.dirty = true;
             }
-            KeyCode::Char(character) if !control => {
+            KeyCode::Char(character) if text_input => {
                 query.push(character);
                 model.dirty = true;
             }
@@ -590,7 +614,7 @@ fn handle_key(model: &mut Model, key: KeyEvent) {
             KeyCode::Home => model.move_home(),
             KeyCode::End => model.move_end(),
             KeyCode::Char(' ') if control => model.request_completion(),
-            KeyCode::Char(character) if !control => {
+            KeyCode::Char(character) if text_input => {
                 model.insert_text(&character.to_string());
                 if matches!(character, '.' | ':') {
                     model.auto_completion();
@@ -598,93 +622,65 @@ fn handle_key(model: &mut Model, key: KeyEvent) {
             }
             _ => {}
         },
-        InputMode::Normal => match key.code {
-            KeyCode::Char(' ') if !control => {
-                model.pending = Some(' ');
-                model.dirty = true;
-            }
-            KeyCode::Char('g') if !control => {
-                model.pending = Some('g');
-                model.dirty = true;
-            }
-            KeyCode::Char(']') if !control => {
-                model.pending = Some(']');
-                model.dirty = true;
-            }
-            KeyCode::Char('[') if !control => {
-                model.pending = Some('[');
-                model.dirty = true;
-            }
-            KeyCode::Char('K') if !control => model.request_hover(),
-            KeyCode::Char('q') if !control => {
-                model.macro_wait = Some('q');
-                model.dirty = true;
-            }
-            KeyCode::Char('@') if !control => {
-                model.macro_wait = Some('@');
-                model.dirty = true;
-            }
-            KeyCode::Char('s') if key.modifiers.contains(crossterm::event::KeyModifiers::ALT) => {
-                model.split_selection_lines();
-            }
-            KeyCode::Char('s') if !control => model.select_word_occurrences(),
-            KeyCode::Char('C') if key.modifiers.contains(crossterm::event::KeyModifiers::ALT) => {
-                model.extend_line_cursor(true);
-            }
-            KeyCode::Char('C') if !control => model.extend_line_cursor(false),
-            KeyCode::Char('i') => model.insert_here(),
-            KeyCode::Char(':') => {
-                model.input_mode = InputMode::CommandLine {
-                    buffer: String::new(),
-                };
-                model.dirty = true;
-            }
-            KeyCode::Char('/') => {
-                model.input_mode = InputMode::Search {
-                    query: String::new(),
-                };
-                model.dirty = true;
-            }
-            KeyCode::Char('a') if !control => model.append(),
-            KeyCode::Char('A') if !control => model.append_line_end(),
-            KeyCode::Char('o') if !control => model.open_below(),
-            KeyCode::Char('O') if !control => model.open_above(),
-            KeyCode::Char('n') if !control => model.search_next(true),
-            KeyCode::Char('N') if !control => model.search_next(false),
-            KeyCode::Char('d') if !control => model.pending = Some('d'),
-            KeyCode::Char('y') if !control => model.pending = Some('y'),
-            KeyCode::Char('c') if !control => model.pending = Some('c'),
-            KeyCode::Char('"') if !control => {
-                model.register_wait = true;
-                model.dirty = true;
-            }
-            KeyCode::Char('x') if !control => {
-                let count = model.take_count();
-                for _ in 0..count {
-                    model.delete_forward();
+        InputMode::Normal => {
+            if let Some(command) = resolve_normal(key, model.count, &model.keymap) {
+                match command {
+                    NormalCommand::CollapseSelections => model.collapse_selections(),
+                    NormalCommand::Pending(pending) => {
+                        model.pending = Some(pending);
+                        model.dirty = true;
+                    }
+                    NormalCommand::Hover => model.request_hover(),
+                    NormalCommand::MacroRecord => {
+                        model.macro_wait = Some('q');
+                        model.dirty = true;
+                    }
+                    NormalCommand::MacroReplay => {
+                        model.macro_wait = Some('@');
+                        model.dirty = true;
+                    }
+                    NormalCommand::SplitSelection => model.split_selection_lines(),
+                    NormalCommand::SelectWord => model.select_word_occurrences(),
+                    NormalCommand::ExtendLine(up) => model.extend_line_cursor(up),
+                    NormalCommand::InsertHere => model.insert_here(),
+                    NormalCommand::CommandLine => {
+                        model.input_mode = InputMode::CommandLine {
+                            buffer: String::new(),
+                        };
+                        model.dirty = true;
+                    }
+                    NormalCommand::Search => {
+                        model.input_mode = InputMode::Search {
+                            query: String::new(),
+                        };
+                        model.dirty = true;
+                    }
+                    NormalCommand::Append => model.append(),
+                    NormalCommand::AppendLineEnd => model.append_line_end(),
+                    NormalCommand::OpenBelow => model.open_below(),
+                    NormalCommand::OpenAbove => model.open_above(),
+                    NormalCommand::SearchNext(forward) => model.search_next(forward),
+                    NormalCommand::RegisterWait => {
+                        model.register_wait = true;
+                        model.dirty = true;
+                    }
+                    NormalCommand::DeleteForward => {
+                        let count = model.take_count();
+                        for _ in 0..count {
+                            model.delete_forward();
+                        }
+                    }
+                    NormalCommand::Put => model.put_register(),
+                    NormalCommand::Undo => model.undo(),
+                    NormalCommand::Redo => model.redo(),
+                    NormalCommand::Count(character) => model.push_count(character),
+                    NormalCommand::MoveHome => model.move_home(),
+                    NormalCommand::MoveEnd => model.move_end(),
+                    NormalCommand::MoveWords(motion) => model.move_words(motion),
+                    NormalCommand::MoveChars(delta) => model.move_chars(delta),
+                    NormalCommand::MoveLine(delta) => model.move_lines(delta),
                 }
             }
-            KeyCode::Char('p') if !control => model.put_register(),
-            KeyCode::Char('u') if !control => model.undo(),
-            KeyCode::Char('r') if control => model.redo(),
-            KeyCode::Char(character) if !control && character.is_ascii_digit() => {
-                model.push_count(character);
-            }
-            KeyCode::Char('0') if !control && model.count == 0 => model.move_home(),
-            KeyCode::Char('w') if control => {
-                model.pending = Some('w');
-                model.dirty = true;
-            }
-            KeyCode::Char('w') if !control => model.move_words(WordMotion::NextStart),
-            KeyCode::Char('b') if !control => model.move_words(WordMotion::PreviousStart),
-            KeyCode::Char('e') if !control => model.move_words(WordMotion::End),
-            KeyCode::Char('h') | KeyCode::Left => model.move_chars(-1),
-            KeyCode::Char('l') | KeyCode::Right => model.move_chars(1),
-            KeyCode::Char('j') | KeyCode::Down => model.move_lines(1),
-            KeyCode::Char('k') | KeyCode::Up => model.move_lines(-1),
-            KeyCode::Home => model.move_home(),
-            KeyCode::End => model.move_end(),
-            _ => {}
-        },
+        }
     }
 }

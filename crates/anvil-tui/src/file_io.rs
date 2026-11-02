@@ -49,7 +49,9 @@ impl Model {
             self.scroll = 0;
             self.hscroll = 0;
             self.modified = false;
-            self.syntax.borrow_mut().invalidate();
+            self.syntax
+                .borrow_mut()
+                .switch_path(self.path.as_deref(), true);
         }
         if timing {
             eprintln!("open_path read={read_done:?} index={:?}", start.elapsed());

@@ -26,7 +26,14 @@ enum Command {
     Version,
 }
 
-fn main() -> std::io::Result<()> {
+fn main() {
+    if let Err(error) = run() {
+        eprintln!("anvil: {error}");
+        process::exit(1);
+    }
+}
+
+fn run() -> std::io::Result<()> {
     match parse_args(env::args_os().skip(1)) {
         Ok(Command::Help) => {
             print!("{USAGE}");

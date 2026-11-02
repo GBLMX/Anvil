@@ -212,7 +212,7 @@ impl Model {
         ) else {
             return;
         };
-        self.cursor = offset;
+        self.set_caret(offset);
         self.dirty = true;
     }
 
@@ -230,22 +230,29 @@ impl Model {
             self.editor.next_grapheme_boundary(self.cursor)
         };
         if let Some(offset) = next {
-            self.cursor = offset;
+            self.set_caret(offset);
             self.dirty = true;
         }
     }
 
     pub(crate) fn move_home(&mut self) {
         if let Some(line) = self.editor.index().offset_to_line(self.cursor) {
-            self.cursor = line.start;
+            self.set_caret(line.start);
             self.dirty = true;
         }
     }
 
     pub(crate) fn move_end(&mut self) {
         if let Some(line) = self.editor.index().offset_to_line(self.cursor) {
-            self.cursor = line.end;
+            self.set_caret(line.end);
             self.dirty = true;
+        }
+    }
+
+    fn set_caret(&mut self, offset: usize) {
+        self.cursor = offset;
+        if self.editor.selection_bytes().len() <= 1 {
+            self.editor.set_selection_bytes(offset, offset);
         }
     }
 
@@ -383,6 +390,12 @@ impl Model {
         let column = self.cursor.saturating_sub(line.start);
         let target_offset = target.start + column.min(target.end.saturating_sub(target.start));
         let mut selections = self.editor.selection_bytes();
+        if selections.len() == 1
+            && selections[0].0 == selections[0].1
+            && selections[0].0 != self.cursor
+        {
+            selections[0] = (self.cursor, self.cursor);
+        }
         selections.push((target_offset, target_offset));
         selections.sort_unstable();
         selections.dedup();
@@ -391,6 +404,17 @@ impl Model {
         }
         self.cursor = target_offset;
         self.status = format!("{} cursors", self.editor.selection_bytes().len());
+        self.dirty = true;
+    }
+
+    pub(crate) fn collapse_selections(&mut self) {
+        let selections = self.editor.selection_bytes();
+        if selections.len() <= 1 && selections.iter().all(|(anchor, head)| anchor == head) {
+            return;
+        }
+        self.sync_cursor_from_selection();
+        self.editor.set_selection_bytes(self.cursor, self.cursor);
+        self.status = "cursors merged".to_owned();
         self.dirty = true;
     }
 

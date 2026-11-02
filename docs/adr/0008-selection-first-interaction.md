@@ -69,9 +69,9 @@ mode-specific path.
   Its Normal/Insert/Search input states and `pending`/`object_pending` fields
   are UI key-sequence state; they compose core actions and are not a second
   native editing kernel.
-- Lua/TS keymap plugins, user remapping, and a configurable default keymap are
-  not implemented. The interim adapter can be replaced without changing the
-  core action API.
+- Lua/TS keymap plugins and a configurable default keymap are deferred. TOML
+  user overrides for normal and operator-pending bindings exist; the interim
+  adapter can be replaced without changing the core action API.
 
 ## Consequences
 

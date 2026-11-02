@@ -1,5 +1,7 @@
 use super::*;
-use crossterm::event::{KeyCode, KeyModifiers};
+use crate::input::KeyPress;
+use crate::keymap::{KeyChord, NormalCommand, PendingCommand};
+use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::{Terminal, backend::TestBackend};
 
 fn key(code: KeyCode) -> Event {
@@ -8,6 +10,26 @@ fn key(code: KeyCode) -> Event {
 
 fn ctrl(code: KeyCode) -> Event {
     Event::Key(KeyEvent::new(code, KeyModifiers::CONTROL))
+}
+
+fn alt(code: KeyCode) -> Event {
+    Event::Key(KeyEvent::new(code, KeyModifiers::ALT))
+}
+
+fn repeat(code: KeyCode) -> Event {
+    Event::Key(KeyEvent::new_with_kind(
+        code,
+        KeyModifiers::NONE,
+        KeyEventKind::Repeat,
+    ))
+}
+
+fn release(code: KeyCode) -> Event {
+    Event::Key(KeyEvent::new_with_kind(
+        code,
+        KeyModifiers::NONE,
+        KeyEventKind::Release,
+    ))
 }
 
 fn type_text(model: &mut Model, text: &str) {
@@ -557,6 +579,103 @@ fn split_selection_lines_creates_one_caret_per_line() {
     assert!(model.editor.set_selection_bytes(0, 7));
     model.split_selection_lines();
     assert_eq!(model.editor.selection_bytes().len(), 2);
+}
+
+#[test]
+fn add_cursor_after_motion_uses_the_moved_caret() {
+    let mut model = Model::new(EditorState::from_text("alpha\nbeta\ngamma"), None);
+    handle_event(&mut model, key(KeyCode::Char('j')));
+    handle_event(&mut model, key(KeyCode::Char('C')));
+    assert_eq!(model.editor.selection_bytes(), vec![(6, 6), (11, 11)]);
+
+    handle_event(&mut model, key(KeyCode::Char('i')));
+    type_text(&mut model, "X");
+    let len = model.editor.text().len_bytes();
+    assert_eq!(model.editor.text().slice(0..len), "alpha\nXbeta\nXgamma");
+}
+
+#[test]
+fn escape_merges_cursors_only_in_normal_mode() {
+    let mut model = Model::new(EditorState::from_text("alpha\nbeta\ngamma"), None);
+    handle_event(&mut model, key(KeyCode::Char('j')));
+    handle_event(&mut model, key(KeyCode::Char('C')));
+    assert_eq!(model.editor.selection_bytes().len(), 2);
+
+    handle_event(&mut model, key(KeyCode::Esc));
+    assert_eq!(model.editor.selection_bytes(), vec![(6, 6)]);
+
+    handle_event(&mut model, key(KeyCode::Char('C')));
+    handle_event(&mut model, key(KeyCode::Char('i')));
+    handle_event(&mut model, key(KeyCode::Esc));
+    assert_eq!(model.editor.selection_bytes().len(), 2);
+    assert!(matches!(model.input_mode, InputMode::Normal));
+
+    handle_event(&mut model, key(KeyCode::Esc));
+    assert_eq!(model.editor.selection_bytes(), vec![(6, 6)]);
+    assert_eq!(model.cursor, 6);
+    let len = model.editor.text().len_bytes();
+    assert_eq!(model.editor.text().slice(0..len), "alpha\nbeta\ngamma");
+}
+
+#[test]
+fn alt_c_adds_a_cursor_above_for_both_keycodes() {
+    for code in [KeyCode::Char('c'), KeyCode::Char('C')] {
+        let mut model = Model::new(EditorState::from_text("alpha\nbeta\ngamma"), None);
+        handle_event(&mut model, key(KeyCode::Char('j')));
+        handle_event(&mut model, alt(code));
+        assert_eq!(model.editor.selection_bytes(), vec![(0, 0), (6, 6)]);
+    }
+}
+
+#[test]
+fn alt_s_is_case_insensitive() {
+    for code in [KeyCode::Char('s'), KeyCode::Char('S')] {
+        let mut model = Model::new(EditorState::from_text("one\ntwo\nthree"), None);
+        assert!(model.editor.set_selection_bytes(0, 7));
+        handle_event(&mut model, alt(code));
+        assert_eq!(model.editor.selection_bytes().len(), 2);
+    }
+}
+
+#[test]
+fn pending_commands_ignore_alt_modifiers() {
+    let mut model = Model::new(EditorState::from_text("one two"), None);
+    handle_event(&mut model, key(KeyCode::Char('d')));
+    handle_event(&mut model, alt(KeyCode::Char('w')));
+    assert_eq!(model.editor.text().slice(0..7), "one two");
+    assert!(model.pending.is_none());
+}
+
+#[test]
+fn insert_ignores_alt_modified_characters() {
+    let mut model = Model::new(EditorState::from_text("abc"), None);
+    handle_event(&mut model, key(KeyCode::Char('i')));
+    handle_event(&mut model, alt(KeyCode::Char('j')));
+    assert_eq!(model.editor.text().slice(0..3), "abc");
+    assert!(matches!(model.input_mode, InputMode::Insert));
+}
+
+#[test]
+fn normal_mode_ignores_alt_commands() {
+    let mut model = Model::new(EditorState::from_text("abc"), None);
+    handle_event(&mut model, alt(KeyCode::Char('i')));
+    handle_event(&mut model, alt(KeyCode::Char('d')));
+    assert!(matches!(model.input_mode, InputMode::Normal));
+    assert!(model.pending.is_none());
+}
+
+#[test]
+fn repeated_key_events_still_dispatch() {
+    let mut model = Model::new(EditorState::from_text("abc"), None);
+    handle_event(&mut model, repeat(KeyCode::Char('l')));
+    assert_eq!(model.cursor, 1);
+}
+
+#[test]
+fn released_key_events_are_ignored() {
+    let mut model = Model::new(EditorState::from_text("abc"), None);
+    handle_event(&mut model, release(KeyCode::Char('l')));
+    assert_eq!(model.cursor, 0);
 }
 
 #[test]
@@ -1502,6 +1621,75 @@ fn change_inner_word_and_quote() {
 }
 
 #[test]
+fn pending_commands_consume_the_count() {
+    let mut model = Model::new(EditorState::from_text("one two"), None);
+    for key_code in [KeyCode::Char('2'), KeyCode::Char('c'), KeyCode::Char('w')] {
+        handle_event(&mut model, key(key_code));
+    }
+    assert_eq!(model.count, 0);
+
+    let mut model = Model::new(EditorState::from_text("one"), None);
+    handle_event(&mut model, key(KeyCode::Char('2')));
+    handle_event(&mut model, ctrl(KeyCode::Char('w')));
+    handle_event(&mut model, key(KeyCode::Char('v')));
+    assert_eq!(model.count, 0);
+    assert!(model.split.is_some());
+
+    let mut model = Model::new(EditorState::from_text("one"), None);
+    handle_event(&mut model, key(KeyCode::Char('2')));
+    handle_event(&mut model, key(KeyCode::Char('d')));
+    handle_event(&mut model, key(KeyCode::Char('x')));
+    assert_eq!(model.count, 0);
+}
+
+#[test]
+fn model_uses_keymap_overrides() {
+    let mut model = Model::new(EditorState::from_text("abc"), None);
+    let chord = KeyChord::from_key(KeyPress::from_key(KeyEvent::new(
+        KeyCode::Char('z'),
+        KeyModifiers::NONE,
+    )));
+    assert!(model.keymap.bind(chord, NormalCommand::MoveEnd));
+    handle_event(&mut model, key(KeyCode::Char('z')));
+    assert_eq!(model.cursor, 3);
+}
+
+#[test]
+fn model_uses_pending_keymap_overrides() {
+    let mut model = Model::new(EditorState::from_text("one"), None);
+    let chord = KeyChord::from_key(KeyPress::from_key(KeyEvent::new(
+        KeyCode::Char('d'),
+        KeyModifiers::NONE,
+    )));
+    assert!(
+        model
+            .keymap
+            .bind_pending('d', chord, PendingCommand::YankLines)
+    );
+    handle_event(&mut model, key(KeyCode::Char('d')));
+    handle_event(&mut model, key(KeyCode::Char('d')));
+    assert_eq!(model.editor.text().slice(0..3), "one");
+}
+
+#[test]
+fn model_loads_keymap_config_from_file() {
+    let directory = tempfile::tempdir().expect("tempdir");
+    let path = directory.path().join("keymap.toml");
+    std::fs::write(
+        &path,
+        r#"
+[keymap.normal]
+x = "cursor.line_end"
+"#,
+    )
+    .expect("write keymap");
+    let mut model = Model::new(EditorState::from_text("abc"), None);
+    model.load_keymap_config_from(&path).expect("load keymap");
+    handle_event(&mut model, key(KeyCode::Char('x')));
+    assert_eq!(model.cursor, 3);
+}
+
+#[test]
 fn counts_repeat_motions_and_operators() {
     let mut model = Model::new(EditorState::from_text("a b c d"), None);
     handle_event(&mut model, key(KeyCode::Char('3')));
@@ -1513,6 +1701,14 @@ fn counts_repeat_motions_and_operators() {
     handle_event(&mut model, key(KeyCode::Char('2')));
     handle_event(&mut model, key(KeyCode::Char('w')));
     assert_eq!(model.editor.text().slice(0..3), "c d");
+}
+
+#[test]
+fn zero_moves_to_the_line_start_without_a_count() {
+    let mut model = Model::new(EditorState::from_text("abcdef"), None);
+    model.cursor = 4;
+    handle_event(&mut model, key(KeyCode::Char('0')));
+    assert_eq!(model.cursor, 0);
 }
 
 #[test]

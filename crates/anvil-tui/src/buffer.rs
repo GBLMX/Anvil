@@ -41,7 +41,9 @@ impl Model {
         self.search_query = buffer.search_query;
         self.welcome = false;
         self.welcome_back = false;
-        self.syntax.borrow_mut().invalidate();
+        self.syntax
+            .borrow_mut()
+            .switch_path(self.path.as_deref(), false);
         self.active = index;
         self.input_mode = InputMode::Normal;
         self.pending = None;
@@ -185,7 +187,7 @@ impl Model {
         self.hscroll = 0;
         self.modified = false;
         self.search_query.clear();
-        self.syntax.borrow_mut().invalidate();
+        self.syntax.borrow_mut().switch_path(None, false);
         self.welcome = false;
         self.welcome_back = false;
         self.input_mode = InputMode::Normal;
