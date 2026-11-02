@@ -235,7 +235,11 @@ connection reaches D-Bus or another user service.
 - Deny `execve`, `execveat`, `fexecve`, and unnecessary `memfd_create` after
   sandbox setup.
 - Deny `mount`, new mount API calls, `umount2`, `pivot_root`, `chroot`, `setns`,
-  and `unshare`; reject namespace flags on `clone`/`clone3`.
+  and `unshare`.
+- Reject namespace bits in `clone` flags (arg0). Classic seccomp cannot inspect
+  `clone3`'s pointer argument; deny `clone3` or validate it with seccomp user
+  notification plus supervisor checks. Do not claim BPF validates `clone3`
+  flags.
 - Deny `open_by_handle_at`, `ptrace`, `process_vm_*`, `pidfd_getfd`,
   `io_uring_*`, `bpf`, `perf_event_open`, and `userfaultfd`.
 - Pre-connect the editor UDS before sandboxing and pass the FD; deny `socket`,
@@ -267,7 +271,7 @@ connection reaches D-Bus or another user service.
 | IPC | wrong token, replayed token, wrong workspace, concurrent cancel |
 | Reload | 1000 reloads, fd/RSS/child checks |
 | Signals | `kill`/`tgkill`/`pidfd_send_signal`, SIGIO `F_SETOWN`/`O_ASYNC`, supervisor survives |
-| Composition | `memfd_create`+`execveat`, `mount`, `ptrace`, `open_by_handle_at`, D-Bus AF_UNIX connect |
+| Composition | `memfd_create`+`execveat`, `clone3` namespace flags, `mount`, `ptrace`, `open_by_handle_at`, D-Bus AF_UNIX connect |
 
 ## 8. Residual risks after Phase 0
 

@@ -86,8 +86,12 @@ Seccomp must close the class, not just the CVE.
 - Deny memory execution: `execve`, `execveat`, `fexecve`, and
   `memfd_create` unless a measured runtime path requires it.
 - Deny namespace/mount escapes: `mount`, new mount API calls, `umount2`,
-  `pivot_root`, `chroot`, `setns`, and `unshare`; reject namespace flags on
-  `clone`/`clone3`.
+  `pivot_root`, `chroot`, `setns`, and `unshare`.
+- Reject namespace bits in `clone` flags (arg0) with a BPF mask. Classic seccomp
+  cannot dereference `clone3`'s pointed-to flags: deny `clone3` after sandbox
+  unless a measured runtime path needs it. If threads require it, use seccomp
+  user notification with supervisor validation or pre-create the needed threads;
+  do not claim BPF validates `clone3` flags.
 - Deny introspection and kernel attack surface: `ptrace`,
   `process_vm_readv/writev`, `kcmp`, `pidfd_getfd`, `open_by_handle_at`,
   `io_uring_*`, `bpf`, `perf_event_open`, `userfaultfd`, and `keyctl`.
