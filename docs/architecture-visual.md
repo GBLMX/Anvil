@@ -222,11 +222,14 @@ flowchart LR
     J["0.6.4 marketplace browse"]
     K["0.6.5 install/update/consent"]
     L["0.6.6 revocation/provenance"]
+    GATE["ADR-0013<br/>two-consumer gate"]
+    SIGN["release signing + provenance<br/>external gate"]
 
     A --> B --> C
     C --> D --> E --> E2
-    C --> F
+    C --> GATE --> F
     F --> G
+    SIGN --> G
     G --> H
     G --> I
     H --> J
@@ -238,11 +241,12 @@ flowchart LR
 
 Parallel windows:
 
-- After `0.4.9`: `0.5.1–0.5.6` and `0.6.0` may run in parallel.
-- After `0.6.0`: package/download core `0.6.1–0.6.3` may run in parallel with
-  the UI line.
-- `0.6.4`/`0.6.5` wait for both `0.5.7` and `0.6.2`; `0.6.1` does not wait for
-  the UI line.
+- After `0.4.9`: `0.5.1–0.5.6` and API-freeze work may run in parallel, but
+  `0.6.0` cannot freeze until the ADR-0013 two-consumer gate passes.
+- Package work waits for `0.6.0` **and** release signing/provenance; only then
+  may package/download core `0.6.1–0.6.3` run in parallel with the UI line.
+- `0.6.4`/`0.6.5` wait for `0.5.7`, `0.6.2`, and the signing gate; `0.6.1`
+  does not wait for the UI line, but does wait for API freeze and signing.
 - `0.6.3` depends only on `0.6.1`.
 - Linux substrate work is not a separate release: L1 attaches to `0.4.7`, L2
   to `0.4.8`/`0.6.1`, and L3/L4 stay measurement-gated.
