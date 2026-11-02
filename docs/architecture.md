@@ -1,6 +1,9 @@
 # Anvil Architecture
 
-Status: `v0.4.0`; Phase 0.7 empty-host boundary released. See
+Status: current as of 2026-11-03; `0.4.6b` plugin activation matching is
+landed. Distribution and UI work are planned in
+[0.5.x](0.5.x-plan.md), [0.6.x](0.6.x-plan.md), and
+[Linux platform](linux-platform-plan.md). See
 [visual current/future maps](architecture-visual.md).
 
 ## 1. Process model
@@ -15,7 +18,7 @@ Status: `v0.4.0`; Phase 0.7 empty-host boundary released. See
         │ (per plugin host)            │ (grants, health)
 ┌───────▼───────────────┐              │
 │ Plugin host (host A)  │              │
-│ Lua/QuickJS + sandbox │              │
+│ Luau + sandbox        │              │
 └───────┬───────────────┘              │
         │ sys.* UDS + token            │
 ┌───────▼──────────────────────────────▼────────┐
@@ -46,7 +49,7 @@ only when they are in the same explicitly declared trust group.
 
 **Plugin host**
 
-- Owns Lua/QuickJS and the plugin's lifetime.
+- Owns the Luau runtime and the plugin's lifetime; QuickJS remains planned.
 - Starts with no ambient filesystem, network, or process authority.
 - Applies Landlock/seccomp/`no_new_privs` before loading plugin code.
 - Serves plugin calls; routes `editor/ui/event` to the editor and `sys.*` to the
@@ -216,7 +219,7 @@ crates/
   anvil-core/          text model, commands, snapshots
   anvil-editor/        selection-first editor state and snapshots
   anvil-ipc/           UDS transport, JSON-RPC framing
-  anvil-plugin-host/   Lua/QuickJS host and sandbox
+  anvil-plugin-host/   Luau host + sandbox (QuickJS planned)
   anvil-tui/           terminal frontend
 go/
   cmd/anvil-gateway/   gateway entry point

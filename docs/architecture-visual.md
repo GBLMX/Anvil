@@ -1,7 +1,9 @@
 # Anvil Architecture Maps
 
-Status: current as of `v0.4.0`. Solid paths are implemented. Dashed paths are
-planned or debug-only.
+Status: current as of 2026-11-03. Solid paths are implemented; dashed paths
+are planned or debug-only. `0.4.6b` activation matching is landed; `0.5.x`
+interaction/UI, `0.6.x` distribution, and Linux substrate work are planned in
+the linked plans.
 
 ## Current architecture
 
@@ -15,7 +17,7 @@ flowchart TB
         SYNTAX["syntax.rs worker<br/>Tree-sitter"]
         TREEUI["file_tree_ui.rs<br/>tree · fuzzy state"]
         LSPUI["lsp_ui.rs<br/>requests · completion · hover · definition<br/>code actions · rename · formatting · symbols"]
-        HOST["host_session<br/>debug plugin launcher"]
+        PLUGINS["plugin_session + activation<br/>hosts keyed by plugin id"]
         IPC["anvil-ipc<br/>GatewayClient"]
 
         MAIN --> KEYS --> MODEL
@@ -23,18 +25,17 @@ flowchart TB
         MODEL --> SYNTAX
         MODEL --> TREEUI
         MODEL --> LSPUI
+        MODEL --> PLUGINS
         MODEL --> IPC
     end
 
     subgraph WORKERS["background workers"]
         FW["FileWorker<br/>own GatewayClient"]
         LW["LspWorker<br/>own GatewayClient"]
-        OPEN["future async open/save<br/>not implemented"]
     end
 
     TREEUI --> FW
     LSPUI --> LW
-    MODEL -.-> OPEN
 
     subgraph GATEWAY["anvil-gateway · Go · per session"]
         ROUTER["JSON-RPC router"]
@@ -60,17 +61,17 @@ flowchart TB
 
     LSPMGR --> LS["rust-analyzer · gopls · pyright<br/>trusted · no sandbox"]
 
-    subgraph PLUGIN["anvil-plugin-host · untrusted · current empty/debug"]
-        PH["process group<br/>Landlock · seccomp · cgroup"]
+    subgraph PLUGIN["anvil-plugin-host · untrusted · Luau + sandbox"]
+        PH["process group<br/>Luau entry · Landlock · seccomp · cgroup"]
     end
 
-    HOST -. token FD + debug --> PH
+    PLUGINS -. token FD + activation --> PH
     PH -. sys.* UDS + token --> ROUTER
 
     subgraph CORE["Rust libraries"]
         EDITOR["anvil-editor"]
         CORE_TXT["anvil-core<br/>PieceTable · LineIndex"]
-        API["anvil-api<br/>contracts"]
+        API["anvil-api<br/>Rust DTOs · JSON Schema · TS/Lua"]
     end
 
     MODEL --> EDITOR
@@ -82,11 +83,11 @@ flowchart TB
 
 | Component | Trust | Responsibility |
 |---|---|---|
-| `anvil-tui` | trusted | buffer, input, UI, command state |
+| `anvil-tui` | trusted | buffer, input, UI, command state, plugin activation |
 | `anvil-gateway` | trusted | per-session policy and I/O |
 | `anvil-exec-runner` | trusted | sandboxed `rg` / `fd` launch |
 | LSP process | trusted | `-no-sandbox-lsp`, separate from plugin-host |
-| `anvil-plugin-host` | untrusted | empty sandbox/debug host; no Lua/QuickJS runtime yet |
+| `anvil-plugin-host` | untrusted | Luau entry loaded; Landlock/seccomp/cgroup sandbox; capability API pending |
 
 ## Future architecture
 
@@ -176,11 +177,79 @@ flowchart TB
     EDITOR2 --> API2
 ```
 
-## Planned sequence
+The planned `0.4.9` boundary extracts command registry, focus/overlay state,
+effects, and plugin lifecycle from `anvil-tui` into `anvil-session`; the TUI
+becomes an input adapter and renderer. `0.5.x` interaction state is session-owned;
+the renderer must not become a second owner of focus, palette, or notification
+state.
 
-1. **LSP second-tier polish** — command-style code actions and workspace-edit
-   resource operations.
-2. **Async open/save** — remove remaining synchronous file I/O from the UI path.
-3. **Model extraction** — `model.rs`, `file_io.rs`, `commands.rs`; current
-   `lib.rs` still owns the Model core.
-4. **Plugin runtime** — Lua/QuickJS host, control-socket grants, VM isolation.
+## Planned distribution path
+
+```mermaid
+flowchart LR
+    UI["marketplace / plugin manager view<br/>built-in TUI"]
+    SERVICE["install service<br/>session-owned"]
+    FETCH["installer gateway role<br/>-allow-fetch · exact hosts · fetch-max"]
+    VERIFY["verify digest + signature<br/>source class"]
+    STORE["content-addressed store<br/>stage · fsync · renameat2"]
+    DISCOVER["plugin discovery + activation<br/>0.4.6"]
+
+    UI --> SERVICE
+    SERVICE --> FETCH
+    SERVICE --> VERIFY
+    VERIFY --> STORE
+    STORE --> DISCOVER
+```
+
+The plugin host never receives the installer token or a network handle.
+`0.5.7` supplies the notification/progress surface; it is not a dependency of
+the package/download core.
+
+## Delivery dependency graph
+
+```mermaid
+flowchart LR
+    A["0.4.7 Linux/security<br/>seccomp · cgroup · signal closure"]
+    B["0.4.8 plugin I/O<br/>DTO closure"]
+    C["0.4.9 session + protocol<br/>API negotiation"]
+    D["0.5.1–0.5.6 interaction/UI"]
+    E["0.5.7 notifications/progress"]
+    E2["0.5.8–0.5.9 search/mouse"]
+    F["0.6.0 API v1 freeze"]
+    G["0.6.1 package format"]
+    H["0.6.2 download manager"]
+    I["0.6.3 installed-plugin manager"]
+    J["0.6.4 marketplace browse"]
+    K["0.6.5 install/update/consent"]
+    L["0.6.6 revocation/provenance"]
+
+    A --> B --> C
+    C --> D --> E --> E2
+    C --> F
+    F --> G
+    G --> H
+    G --> I
+    H --> J
+    E --> J
+    J --> K
+    E --> K
+    K --> L
+```
+
+Parallel windows:
+
+- After `0.4.9`: `0.5.1–0.5.6` and `0.6.0` may run in parallel.
+- After `0.6.0`: package/download core `0.6.1–0.6.3` may run in parallel with
+  the UI line.
+- `0.6.4`/`0.6.5` wait for both `0.5.7` and `0.6.2`; `0.6.1` does not wait for
+  the UI line.
+- `0.6.3` depends only on `0.6.1`.
+- Linux substrate work is not a separate release: L1 attaches to `0.4.7`, L2
+  to `0.4.8`/`0.6.1`, and L3/L4 stay measurement-gated.
+
+Plans:
+
+- [0.5.x interaction/UI](0.5.x-plan.md)
+- [0.6.x distribution](0.6.x-plan.md)
+- [Linux platform](linux-platform-plan.md)
+- [Command architecture](command-architecture-plan.md)
