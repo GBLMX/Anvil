@@ -165,6 +165,7 @@ impl Model {
             ("format", "") => self.request_formatting(),
             ("symbols", "") => self.request_document_symbols(),
             ("plugin-start", "") => self.start_host(),
+            ("plugin-list", "") => self.list_plugins(),
             ("plugin-oom", "") => self.start_oom_host(),
             ("plugin-exec", "") => self.exec_host(),
             ("plugin-stop", "") => self.stop_host(),

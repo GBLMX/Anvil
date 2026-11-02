@@ -45,6 +45,8 @@ post-`0.4.0` feature line.
   IDs and applies them atomically.
 - Debug plugin hosts now register a per-session grant before spawn and revoke
   on stop or failure through a dedicated plugin session coordinator.
+- Local plugin manifests are discovered from `ANVIL_PLUGIN_DIR` with duplicate
+  id rejection; activation is not wired yet.
 
 ## [0.4.5] - 2026-11-02
 

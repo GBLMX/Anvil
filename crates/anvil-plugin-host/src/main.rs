@@ -5,11 +5,9 @@ use std::process::ExitCode;
 mod runtime;
 
 #[cfg(target_os = "linux")]
-mod manifest;
-
-#[cfg(target_os = "linux")]
 mod linux {
     use super::*;
+    use anvil_plugin_host::manifest::PluginManifest;
 
     pub fn main() -> ExitCode {
         match run() {
@@ -115,7 +113,7 @@ mod linux {
             }
         }
         if let Some(root) = plugin_root.as_deref() {
-            let manifest = crate::manifest::PluginManifest::load(root).map_err(io::Error::other)?;
+            let manifest = PluginManifest::load(root).map_err(io::Error::other)?;
             let entry = manifest.entry_path(root).map_err(io::Error::other)?;
             runtime::run_file(&entry).map_err(|error| io::Error::other(error.to_string()))?;
         }

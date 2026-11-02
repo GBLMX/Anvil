@@ -101,6 +101,7 @@ same user as the editor.
 | `ANVIL_GATEWAY_LOG` | Gateway stderr destination |
 | `ANVIL_RG` | Explicit `rg` path for fuzzy file listing |
 | `ANVIL_GIT` | Explicit `git` path for gutter diffs |
+| `ANVIL_PLUGIN_DIR` | Directory whose child directories contain `plugin.json` |
 
 ## Uninstall
 

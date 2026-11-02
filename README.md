@@ -42,9 +42,10 @@ Language servers are not bundled; install them on `PATH`.
 The plugin-host path has an empty sandboxed host with token-FD delivery,
 `close_range`, `no_new_privs`, Landlock read/no-exec rules, native-ABI seccomp
 with AF_UNIX-only sockets, cgroup v2 limits with OOM classification, framed
-`sys.ping`/`sys.exec` dispatch, and a TUI debug `HostSession`
-(`:plugin-start`/`:plugin-exec`/`:plugin-stop`/`:plugin-oom`). This is not yet
-a VM or public plugin API.
+`sys.ping`/`sys.exec` dispatch, and a TUI debug `PluginSession`
+(`:plugin-start`/`:plugin-exec`/`:plugin-stop`/`:plugin-oom`). Local plugin
+manifests are discovered from child directories of `ANVIL_PLUGIN_DIR`; runtime
+activation is not wired yet. This is not a VM or public plugin API.
 
 Phase 0 still consists of the `anvil-api` contracts, `anvil-core` PieceTable,
 `anvil-editor` snapshots, `anvil-ipc` framing/JSON-RPC/Unix transport, and the

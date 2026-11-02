@@ -47,6 +47,7 @@ mod host_session;
 mod inlay_hints;
 pub mod lsp;
 mod lsp_ui;
+mod plugin_discovery;
 mod plugin_session;
 mod splits;
 use lsp_ui::lsp_settings;
@@ -385,6 +386,9 @@ pub struct Model {
     require_gateway: bool,
     /// Tree-sitter highlights cached by editor revision and path.
     syntax: RefCell<SyntaxState>,
+    /// Discovered local plugins.
+    #[cfg(target_os = "linux")]
+    plugins: Vec<plugin_discovery::PluginDescriptor>,
     /// Debug plugin session, when started.
     #[cfg(target_os = "linux")]
     host: Option<PluginSession>,
@@ -470,6 +474,8 @@ impl Model {
             require_gateway: false,
             syntax: RefCell::new(SyntaxState::default()),
             #[cfg(target_os = "linux")]
+            plugins: Vec::new(),
+            #[cfg(target_os = "linux")]
             host: None,
         }
     }
@@ -488,6 +494,12 @@ impl Model {
             return Ok(());
         }
         self.load_keymap_config_from(&path)
+    }
+
+    #[cfg(target_os = "linux")]
+    pub(crate) fn load_plugins(&mut self) -> Result<(), String> {
+        self.plugins = plugin_discovery::discover()?;
+        Ok(())
     }
 
     /// Builds a model that uses `gateway` for all file I/O.
@@ -595,6 +607,28 @@ impl Model {
     fn jump_to(&mut self, offset: usize) {
         self.cursor = offset;
         self.editor.set_selection_bytes(offset, offset);
+        self.dirty = true;
+    }
+
+    #[cfg(target_os = "linux")]
+    fn list_plugins(&mut self) {
+        if self.plugins.is_empty() {
+            self.status = "no plugins (set ANVIL_PLUGIN_DIR)".to_owned();
+        } else {
+            let plugins = self
+                .plugins
+                .iter()
+                .map(|plugin| plugin.manifest.id.as_str())
+                .collect::<Vec<_>>()
+                .join(", ");
+            self.status = format!("plugins: {plugins}");
+        }
+        self.dirty = true;
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    fn list_plugins(&mut self) {
+        self.status = "plugins are Linux-only".to_owned();
         self.dirty = true;
     }
 
@@ -1187,6 +1221,18 @@ pub fn run_with_workspace(path: Option<PathBuf>, workspace: PathBuf) -> io::Resu
     model.gateway_session = session;
     if let Err(error) = model.load_keymap_config() {
         let message = format!("E: keymap config: {error}");
+        if model.status.is_empty() {
+            model.status = message;
+        } else {
+            model.status.push_str(" | ");
+            model.status.push_str(&message);
+        }
+        model.dirty = true;
+    }
+
+    #[cfg(target_os = "linux")]
+    if let Err(error) = model.load_plugins() {
+        let message = format!("E: plugins: {error}");
         if model.status.is_empty() {
             model.status = message;
         } else {

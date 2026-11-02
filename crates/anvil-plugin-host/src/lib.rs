@@ -6,6 +6,9 @@
 
 use std::path::Path;
 
+#[cfg(target_os = "linux")]
+pub mod manifest;
+
 /// A fresh 32-byte capability token for one host process.
 #[derive(Clone, Copy)]
 pub struct Token(pub [u8; 32]);
