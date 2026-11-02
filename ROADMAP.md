@@ -25,12 +25,23 @@ in `PROJECT_CHARTER.md`, `docs/phase-0-7-plan.md`, and the ADRs.
 6. [0.4.1] Close the remaining workspace tree watcher validation in
    [#9](https://github.com/GBLMX/Anvil/issues/9); implementation is described
    in [ADR-0018](docs/adr/0018-workspace-tree-watch.md).
+7. [0.5.x] Core interaction and modern TUI UI: last-change repeat, operator
+   grammar, command palette, quick-open preview, tabs/status, notification and
+   problems panels, search/replace, and focus/accessibility; see
+   [docs/0.5.x-plan.md](docs/0.5.x-plan.md).
+8. [0.4.7–0.6.1] Linux substrate hardening: cgroup attach before exec, pidfd
+   lifecycle, atomic install/rollback, `statx` identity, and measured watcher
+   backends; see [docs/linux-platform-plan.md](docs/linux-platform-plan.md).
 
 ## Later
 
 - A standard-edition composition crate and a sample third-party distribution.
 - Broader language/tooling support after the kernel boundary is stable.
 - Release signing, SBOM, and provenance after release automation exists.
+- Signed plugin packages, a bounded download manager, installed-plugin
+  management, and a marketplace index/UI; see
+  [docs/0.6.x-plan.md](docs/0.6.x-plan.md). Blocked on plugin lifecycle, the
+  plugin API v1 freeze, release signing/provenance, and the `0.5.x` feedback UI.
 - Optional PGO/BOLT for the official binary only after representative workload
   measurements.
 - Windows/macOS remain out of scope for v1.
