@@ -252,6 +252,7 @@ struct TreeEntry {
     path: PathBuf,
     depth: usize,
     is_dir: bool,
+    ino: u64,
     expanded: bool,
 }
 

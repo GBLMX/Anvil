@@ -30,6 +30,8 @@ post-`0.4.0` feature line.
   first frame; uncached files keep the normal text color until parsing completes.
 - Inlay hint viewport ranges clamp to the last line, avoiding the language
   server's invalid EOF offset error.
+- Workspace tree entries include inode identity, so selection follows an
+  external rename when the new path remains visible.
 
 ### Changed
 

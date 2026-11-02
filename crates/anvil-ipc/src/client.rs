@@ -94,6 +94,7 @@ pub struct ExecResult {
 pub struct DirEntry {
     pub name: String,
     pub is_dir: bool,
+    pub ino: u64,
 }
 
 /// One regular-file metadata result from `sys.stat`.
@@ -391,6 +392,10 @@ impl GatewayClient {
                 Ok(DirEntry {
                     name: name.to_owned(),
                     is_dir,
+                    ino: entry
+                        .get("ino")
+                        .and_then(serde_json::Value::as_u64)
+                        .unwrap_or(0),
                 })
             })
             .collect()

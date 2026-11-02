@@ -211,6 +211,9 @@ workspace management and should be addressed before adding more UI features.
     background refreshes do not steal focus. Missing watcher support marks the
     tree stale. See
     [ADR-0018](adr/0018-workspace-tree-watch.md).
+  - `sys.read_dir` entries include an inode; tree snapshots match the selected
+    entry by exact path, then inode, then nearest parent after an external
+    rename.
   - Worker and model tests cover debounce, unavailable gateways, selection,
     expansion, create, rename, and delete fallback.
 - Acceptance:
