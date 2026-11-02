@@ -1086,7 +1086,7 @@ impl Model {
         let edit_revision = self.pending_edit_revision.remove(&id);
         let edit_path = self.pending_edit_path.remove(&id);
         if let Some(error) = error {
-            self.status = format!("E: lsp: {error}");
+            self.status = format!("E: lsp {kind:?}: {error}");
             self.dirty = true;
             return;
         }

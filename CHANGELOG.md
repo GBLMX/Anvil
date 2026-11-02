@@ -28,6 +28,8 @@ post-`0.4.0` feature line.
   `2cw` does not leak the count into the next motion.
 - Syntax highlights use a 32-entry LRU path cache and are restored before the
   first frame; uncached files keep the normal text color until parsing completes.
+- Inlay hint viewport ranges clamp to the last line, avoiding the language
+  server's invalid EOF offset error.
 
 ### Changed
 
