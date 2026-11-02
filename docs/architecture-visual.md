@@ -250,6 +250,9 @@ Parallel windows:
 - `0.6.3` depends only on `0.6.1`.
 - Linux substrate work is not a separate release: L1 attaches to `0.4.7`, L2
   to `0.4.8`/`0.6.1`, and L3/L4 stay measurement-gated.
+- Performance re-run points are defined in
+  [performance.md](performance.md#11-re-run-triggers); full gates align with
+  `0.4.9`, `0.6.0`/`0.6.1`, and release tags.
 
 Plans:
 
@@ -257,3 +260,4 @@ Plans:
 - [0.6.x distribution](0.6.x-plan.md)
 - [Linux platform](linux-platform-plan.md)
 - [Command architecture](command-architecture-plan.md)
+- [Performance gates](performance.md)
