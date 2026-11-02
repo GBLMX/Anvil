@@ -75,12 +75,16 @@ key dismisses it.
 ## Documents
 
 - [Installing Anvil](INSTALL.md)
+- [Documentation index](docs/README.md)
 - [Project charter](PROJECT_CHARTER.md)
 - [Known issues](docs/known-issues.md)
 - [High-frequency command architecture plan](docs/command-architecture-plan.md)
 - [0.3.0 → 0.4.0: Polish & Specification](docs/polish-and-specification.md)
 - [0.3.0 → 0.4.0 / Phase 0.7 plan](docs/phase-0-7-plan.md)
 - [0.4.x feature plan](docs/0.4.x-plan.md)
+- [0.5.x interaction and UI plan](docs/0.5.x-plan.md)
+- [0.6.x distribution and marketplace plan](docs/0.6.x-plan.md)
+- [Linux platform plan](docs/linux-platform-plan.md)
 - [Keymap configuration](docs/keymap.md)
 - [Plugin-host isolation ADR](docs/adr/0012-plugin-host-isolation.md)
 - [Threat model](docs/threat-model.md)
