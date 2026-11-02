@@ -31,25 +31,36 @@ pub struct HostSession {
 }
 
 impl HostSession {
-    pub fn start(workspace: &Path) -> Result<Self, String> {
+    pub(crate) fn start_with_token(workspace: &Path, token: Token) -> Result<Self, String> {
         let host = host_binary()?;
         let cgroup_root = std::env::var_os("ANVIL_CGROUP_ROOT").map(PathBuf::from);
-        Self::start_with_host(workspace, &host, None, cgroup_root)
+        Self::start_with_host_token(workspace, &host, None, cgroup_root, token)
     }
 
-    pub fn start_oom(workspace: &Path) -> Result<Self, String> {
+    pub(crate) fn start_oom_with_token(workspace: &Path, token: Token) -> Result<Self, String> {
         let host = host_binary()?;
         let root = std::env::var_os("ANVIL_CGROUP_ROOT")
             .map(PathBuf::from)
             .unwrap_or_else(|| PathBuf::from("/sys/fs/cgroup"));
-        Self::start_with_host(workspace, &host, Some(300), Some(root))
+        Self::start_with_host_token(workspace, &host, Some(300), Some(root), token)
     }
 
+    #[cfg(test)]
     pub(crate) fn start_with_host(
+        workspace: &Path,
+        host: &Path,
+        allocate_mb: Option<u32>,
+        cgroup_root: Option<PathBuf>,
+    ) -> Result<Self, String> {
+        Self::start_with_host_token(workspace, host, allocate_mb, cgroup_root, new_token())
+    }
+
+    fn start_with_host_token(
         _workspace: &Path,
         host: &Path,
         allocate_mb: Option<u32>,
         cgroup_root: Option<PathBuf>,
+        token: Token,
     ) -> Result<Self, String> {
         let socket = std::env::temp_dir().join(format!(
             "anvil-host-{}-{}.sock",
@@ -79,7 +90,6 @@ impl HostSession {
             args.push("--allocate-mb".to_owned());
             args.push(mb.to_string());
         }
-        let token = token();
         let process = spawn(host, &args, token).map_err(|error| format!("spawn host: {error}"))?;
         if let Some(cgroup) = &cgroup {
             process
@@ -253,7 +263,7 @@ fn host_binary() -> Result<PathBuf, String> {
     }
 }
 
-fn token() -> Token {
+pub(crate) fn new_token() -> Token {
     let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|time| time.as_nanos())

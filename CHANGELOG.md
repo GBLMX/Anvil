@@ -43,6 +43,8 @@ post-`0.4.0` feature line.
 - Normal and operator-pending commands have stable namespaced IDs and a
   read-only registry. An optional TOML keymap validates overrides against those
   IDs and applies them atomically.
+- Debug plugin hosts now register a per-session grant before spawn and revoke
+  on stop or failure through a dedicated plugin session coordinator.
 
 ## [0.4.5] - 2026-11-02
 

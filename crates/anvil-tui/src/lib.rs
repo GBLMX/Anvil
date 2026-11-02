@@ -47,6 +47,7 @@ mod host_session;
 mod inlay_hints;
 pub mod lsp;
 mod lsp_ui;
+mod plugin_session;
 mod splits;
 use lsp_ui::lsp_settings;
 mod command;
@@ -68,9 +69,11 @@ mod syntax;
 use file_worker::FileWorker;
 use gateway::GatewaySession;
 #[cfg(target_os = "linux")]
-use host_session::{HostEvent, HostSession};
+use host_session::HostEvent;
 use lsp_worker::LspConfig;
 use lsp_worker::{LspEvent, LspWorker};
+#[cfg(target_os = "linux")]
+use plugin_session::{DEBUG_PERMISSIONS, DEBUG_PLUGIN_ID, PluginSession};
 use syntax::SyntaxState;
 
 const MAX_OPEN_BYTES: usize = 256 * 1024 * 1024;
@@ -382,9 +385,9 @@ pub struct Model {
     require_gateway: bool,
     /// Tree-sitter highlights cached by editor revision and path.
     syntax: RefCell<SyntaxState>,
-    /// Debug plugin host session, when started.
+    /// Debug plugin session, when started.
     #[cfg(target_os = "linux")]
-    host: Option<HostSession>,
+    host: Option<PluginSession>,
 }
 
 impl Model {
@@ -602,7 +605,16 @@ impl Model {
             self.dirty = true;
             return;
         }
-        match HostSession::start_oom(&self.workspace) {
+        let Some(gateway) = self.gateway.as_mut() else {
+            self.status = "E: gateway unavailable".to_owned();
+            self.dirty = true;
+            return;
+        };
+        let permissions = DEBUG_PERMISSIONS
+            .iter()
+            .map(|permission| (*permission).to_owned())
+            .collect::<Vec<_>>();
+        match PluginSession::start_oom(gateway, &self.workspace, DEBUG_PLUGIN_ID, &permissions) {
             Ok(host) => {
                 self.host = Some(host);
                 self.status = "plugin host OOM probe starting".to_owned();
@@ -625,7 +637,16 @@ impl Model {
             self.dirty = true;
             return;
         }
-        match HostSession::start(&self.workspace) {
+        let Some(gateway) = self.gateway.as_mut() else {
+            self.status = "E: gateway unavailable".to_owned();
+            self.dirty = true;
+            return;
+        };
+        let permissions = DEBUG_PERMISSIONS
+            .iter()
+            .map(|permission| (*permission).to_owned())
+            .collect::<Vec<_>>();
+        match PluginSession::start(gateway, &self.workspace, DEBUG_PLUGIN_ID, &permissions) {
             Ok(host) => {
                 self.host = Some(host);
                 self.status = "plugin host starting".to_owned();
@@ -659,7 +680,14 @@ impl Model {
 
     #[cfg(target_os = "linux")]
     fn stop_host(&mut self) {
-        self.host = None;
+        let Some(mut host) = self.host.take() else {
+            self.status = "plugin host not running".to_owned();
+            self.dirty = true;
+            return;
+        };
+        if let Some(gateway) = self.gateway.as_mut() {
+            host.stop(gateway);
+        }
         self.status = "plugin host stopped".to_owned();
         self.dirty = true;
     }
@@ -686,6 +714,7 @@ impl Model {
                 }
                 HostEvent::Exited(anvil_plugin_host::HostExit::OomKilled) => {
                     self.status = "⚠ Plugin Killed: Out of Memory".to_owned();
+                    stop = true;
                 }
                 HostEvent::Exited(_) => {
                     self.status = "plugin host exited".to_owned();
@@ -694,8 +723,11 @@ impl Model {
             }
             self.dirty = true;
         }
-        if stop {
-            self.host = None;
+        if stop
+            && let Some(mut host) = self.host.take()
+            && let Some(gateway) = self.gateway.as_mut()
+        {
+            host.stop(gateway);
         }
     }
 
