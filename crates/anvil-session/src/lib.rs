@@ -55,7 +55,41 @@ impl From<ApplyEditError> for SessionError {
     }
 }
 
+/// Owned active-document state used by a frontend session.
+#[derive(Debug, Clone)]
+pub struct DocumentSession {
+    editor: EditorState,
+}
 
+impl DocumentSession {
+    pub fn new(editor: EditorState) -> Self {
+        Self { editor }
+    }
+
+    pub fn into_inner(self) -> EditorState {
+        self.editor
+    }
+}
+
+impl From<EditorState> for DocumentSession {
+    fn from(editor: EditorState) -> Self {
+        Self::new(editor)
+    }
+}
+
+impl std::ops::Deref for DocumentSession {
+    type Target = EditorState;
+
+    fn deref(&self) -> &Self::Target {
+        &self.editor
+    }
+}
+
+impl std::ops::DerefMut for DocumentSession {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.editor
+    }
+}
 /// One active document in a frontend-neutral session.
 pub struct Session<'a> {
     editor: &'a mut EditorState,

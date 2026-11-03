@@ -66,7 +66,7 @@ impl Model {
         }
         self.ensure_current_buffer();
         self.buffers.push(Buffer {
-            editor: EditorState::from_text(""),
+            editor: EditorState::from_text("").into(),
             path: None,
             cursor: 0,
             scroll: 0,
@@ -180,7 +180,7 @@ impl Model {
     }
 
     fn reset_empty_buffer(&mut self) {
-        self.editor = EditorState::from_text("");
+        self.editor = EditorState::from_text("").into();
         self.path = None;
         self.cursor = 0;
         self.scroll = 0;
@@ -250,7 +250,7 @@ impl Model {
             self.buffers.push(self.snapshot());
         }
         self.buffers.push(Buffer {
-            editor: EditorState::from_text(&text),
+            editor: EditorState::from_text(&text).into(),
             path: Some(path.clone()),
             cursor: 0,
             scroll: 0,

@@ -15,6 +15,7 @@ use std::{
 use anvil_core::{TextBuffer, TextDocument, end_word, next_word_start, previous_word_start};
 use anvil_editor::EditorState;
 use anvil_ipc::GatewayClient;
+use anvil_session::DocumentSession;
 use crossterm::{
     cursor::SetCursorStyle,
     event::{
@@ -48,6 +49,7 @@ pub mod lsp;
 mod lsp_ui;
 mod plugin_activation;
 mod plugin_discovery;
+mod plugin_document;
 mod splits;
 use lsp_ui::lsp_settings;
 mod command;
@@ -86,7 +88,7 @@ const HELP_TEXT: &str = include_str!("help.txt");
 
 #[derive(Clone)]
 struct Buffer {
-    editor: EditorState,
+    editor: DocumentSession,
     path: Option<PathBuf>,
     cursor: usize,
     scroll: usize,
@@ -276,7 +278,7 @@ fn workspace_activation_enabled() -> bool {
 
 pub struct Model {
     /// Editor state and its shared text/index.
-    pub editor: EditorState,
+    pub editor: DocumentSession,
     /// Optional source path.
     pub path: Option<PathBuf>,
     /// Cursor byte offset.
@@ -413,7 +415,7 @@ impl Model {
     pub fn new(editor: EditorState, path: Option<PathBuf>) -> Self {
         let welcome = path.is_none() && editor.text().len_bytes() == 0;
         Self {
-            editor,
+            editor: DocumentSession::from(editor),
             path,
             welcome,
             welcome_back: false,
@@ -571,7 +573,7 @@ impl Model {
             self.dirty = true;
             return;
         }
-        let editor = std::mem::replace(&mut self.editor, EditorState::from_text(HELP_TEXT));
+        let editor = std::mem::replace(&mut self.editor, EditorState::from_text(HELP_TEXT).into());
         let saved = Buffer {
             editor,
             path: self.path.take(),
