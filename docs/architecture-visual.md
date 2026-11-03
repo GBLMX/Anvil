@@ -1,7 +1,7 @@
 # Anvil Architecture Maps
 
 Status: current as of 2026-11-03. Solid paths are implemented; dashed paths
-are planned or debug-only. `0.4.6c` activation and host supervision are landed; `0.5.x`
+are planned or debug-only. `0.4.7c-b` cgroup-before-exec limits, supervision, idle reclaim, and seccomp closure are landed; `0.4.9` document session and plugin host lifecycle extraction landed. Command registry, focus/overlay state, and effects are deferred to `0.5.0`; `0.5.x`
 interaction/UI, `0.6.x` distribution, and Linux substrate work are planned in
 the linked plans.
 
@@ -177,9 +177,10 @@ flowchart TB
     EDITOR2 --> API2
 ```
 
-The planned `0.4.9` boundary extracts command registry, focus/overlay state,
-effects, and plugin lifecycle from `anvil-tui` into `anvil-session`; the TUI
-becomes an input adapter and renderer. `0.5.x` interaction state is session-owned;
+The `0.4.9` boundary extracts document state and plugin host lifecycle from
+`anvil-tui` into `anvil-session`. Command registry, focus/overlay state, and
+effects remain TUI-owned and move in `0.5.0`; the TUI then becomes an input
+adapter and renderer. `0.5.x` interaction state is session-owned;
 the renderer must not become a second owner of focus, palette, or notification
 state.
 

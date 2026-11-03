@@ -32,7 +32,7 @@ reliable lifecycle. It is not a catalogue of every available syscall.
 |---|---|
 | `openat2` with `RESOLVE_BENEATH` | gateway workspace confinement |
 | Landlock | plugin-host and exec-runner filesystem rules |
-| seccomp | AF_UNIX-only sockets and dangerous syscall denial |
+| seccomp | preconnected editor UDS; dangerous syscall and signal denial |
 | `no_new_privs` | before Landlock/seccomp |
 | cgroup v2 `memory.max` / `pids.max` | plugin-host limits |
 | `PR_SET_PDEATHSIG` | child cleanup |
@@ -43,9 +43,10 @@ reliable lifecycle. It is not a catalogue of every available syscall.
 
 Known gaps:
 
-- cgroup attach currently happens after spawn, so the child can run briefly
-  before limits apply.
-- Child stop/wait relies on PID; PID reuse and leaves are not fully closed.
+- cgroup placement is now performed before `execve`; structured
+  `memory.events`/`memory.peak`/`pids.peak` reporting is still missing.
+- Host stop uses `pidfd` where available and falls back to `cgroup.kill` or the
+  process group; reaping still goes through the `Child` handle.
 - cgroup OOM/CPU accounting is not surfaced as structured state.
 - Install/update paths are not implemented yet; there is no `O_TMPFILE`,
   `renameat2`, or parent-directory fsync contract.
@@ -56,6 +57,10 @@ Known gaps:
 ## 3. Phases
 
 ### L1: Process and cgroup hardening (`0.4.7`)
+
+Status: `0.4.7b` landed for cgroup-before-exec, `pidfd`/`cgroup.kill` stop,
+core-dump suppression, mandatory limits, and idle reclaim. Structured
+memory/CPU reporting remains.
 
 - Move cgroup placement before plugin execution: attach in `pre_exec` before
   `execve`, or use `clone3(CLONE_INTO_CGROUP)` where the process API permits it.
@@ -72,6 +77,9 @@ Known gaps:
   fail closed.
 
 ### L1b: Seccomp closure for signal and composition bypasses (`0.4.7`)
+
+Status: `0.4.7c-a/b` landed; the editor socket is connected before
+Landlock/seccomp and the syscall denylist closes the listed bypass classes.
 
 `LANDLOCK_SCOPE_SIGNAL` is not currently enabled by Anvil, so
 CVE-2026-72183's exact scope path is not reachable today. The same authority is
@@ -126,7 +134,7 @@ Seccomp must close the class, not just the CVE.
 
 - On kernels with Landlock network support, add network rules as
   defense-in-depth; seccomp remains authoritative on older kernels.
-- Keep plugin-host sockets AF_UNIX-only.
+- Keep the preconnected plugin-host transport AF_UNIX-only.
 - Installer fetch uses the fixed host allowlist and bounded body policy from
   [0.6.x-plan.md](0.6.x-plan.md); no arbitrary manifest URLs.
 - Desktop notifications, if added, use an optional trusted XDG/D-Bus path from

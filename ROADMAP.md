@@ -10,8 +10,24 @@ in `PROJECT_CHARTER.md`, `docs/phase-0-7-plan.md`, and the ADRs.
 - Complete the kernel/distribution boundary decision
   ([ADR-0013](docs/adr/0013-kernel-distribution-boundary.md)).
 - Keep the interim TUI keymap clearly separated from kernel semantics.
-- `0.4.6c` plugin host supervision: single-flight startup, bounded admission,
+- `0.4.6c` plugin host supervision: single-flight startup, bounded start queue,
   start timeout, crash backoff, explicit disable/re-enable, and drain-before-kill.
+- `0.4.7a` cgroup-before-exec resource limits, `pidfd`/`cgroup.kill` stop,
+  core dump suppression, and global running/queued-start caps.
+- `0.4.7b` idle host reclaim: 60-second idle timeout with drain, token revoke,
+  socket/cgroup cleanup, and queued-start capacity release.
+- `0.4.7c-a` preconnected editor Unix socket before Landlock/seccomp; the
+  post-sandbox transport no longer opens sockets.
+- `0.4.7c-b` seccomp denylist for signals, SIGIO, exec/memfd, mounts,
+  namespaces, introspection, `clone3`, and post-sandbox sockets.
+- `0.4.8a` method catalog and document snapshot/apply-edit DTOs, generated
+  JSON, TypeScript, and Lua method bindings.
+- `0.4.8b` plugin host gateway preconnect and authenticated `sys.*` forwarding.
+- `0.4.8c` editor-side snapshot and revision-checked transaction contract with
+  status-bar rejection reporting.
+- `0.4.9` rescoped: API-version hello/manifest validation, document session,
+  and plugin host lifecycle landed. Command registry, focus/overlay state, and
+  effects moved to `0.5.0`.
 
 ## Next
 
@@ -22,8 +38,10 @@ in `PROJECT_CHARTER.md`, `docs/phase-0-7-plan.md`, and the ADRs.
 4. Add user keymap/config boundaries without freezing the plugin keymap format.
 5. [0.4.4–0.4.8] Split the plugin runtime into gateway capability control,
    manifest/host loading, activation supervisor, resource isolation, and
-   plugin I/O/document transactions; 0.4.6c supervisor is landed, with
-   resource isolation and plugin I/O remaining. Design is in
+   plugin I/O/document transactions; 0.4.6c supervision, 0.4.7a resource
+   placement, idle reclaim, and seccomp closure are landed, with plugin I/O
+   remaining. User-visible plugin commands/notifications additionally require
+   the `0.5.x` command-palette and notification/status surface. Design is in
    [ADR-0017](docs/adr/0017-plugin-activation-and-lifecycle.md).
 6. [0.4.1] Close the remaining workspace tree watcher validation in
    [#9](https://github.com/GBLMX/Anvil/issues/9); implementation is described
