@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Result of `editor.get_snapshot`.",
+  "properties": {
+    "buffer_id": {
+      "description": "Editor-owned buffer identity.",
+      "format": "uint64",
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "revision": {
+      "description": "Monotonic document revision at snapshot time.",
+      "format": "uint64",
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "text": {
+      "description": "Full UTF-8 document text.",
+      "type": "string"
+    }
+  },
+  "required": [
+    "buffer_id",
+    "revision",
+    "text"
+  ],
+  "title": "DocumentSnapshot",
+  "type": "object"
+}

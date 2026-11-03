@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Half-open UTF-8 byte range used by document transactions.",
+  "properties": {
+    "end": {
+      "description": "Exclusive UTF-8 byte offset.",
+      "format": "uint64",
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "start": {
+      "description": "Inclusive UTF-8 byte offset.",
+      "format": "uint64",
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "start",
+    "end"
+  ],
+  "title": "TextRange",
+  "type": "object"
+}

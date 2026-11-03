@@ -1,0 +1,75 @@
+{
+  "$defs": {
+    "DocumentEdit": {
+      "description": "One replacement in a document transaction.",
+      "properties": {
+        "range": {
+          "$ref": "#/$defs/TextRange"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "range",
+        "text"
+      ],
+      "type": "object"
+    },
+    "TextRange": {
+      "description": "Half-open UTF-8 byte range used by document transactions.",
+      "properties": {
+        "end": {
+          "description": "Exclusive UTF-8 byte offset.",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "start": {
+          "description": "Inclusive UTF-8 byte offset.",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "start",
+        "end"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Payload for `editor.apply_edit`.",
+  "properties": {
+    "base_revision": {
+      "description": "Revision the edits were computed against.",
+      "format": "uint64",
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "buffer_id": {
+      "description": "Editor-owned buffer identity.",
+      "format": "uint64",
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "edits": {
+      "items": {
+        "$ref": "#/$defs/DocumentEdit"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "buffer_id",
+    "base_revision",
+    "edits"
+  ],
+  "title": "ApplyEditRequest",
+  "type": "object"
+}

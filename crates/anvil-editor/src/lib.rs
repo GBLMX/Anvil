@@ -1,6 +1,6 @@
 //! Editor state, immutable snapshots, and `editor.get_view` projection.
 
-use std::{ops::Range, sync::Arc};
+use std::{fmt, ops::Range, sync::Arc};
 
 use anvil_api::{EditorView, InteractionMode, Selection, TextPosition, Viewport};
 use anvil_core::{LineIndex, TextBuffer, TextDocument};
@@ -13,6 +13,32 @@ pub const DEFAULT_VIEWPORT: Viewport = Viewport {
     width: 80,
     height: 24,
 };
+
+/// Why an editor transaction could not commit.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ApplyEditError {
+    /// The caller's base revision is no longer current.
+    StaleRevision { expected: u64, actual: u64 },
+    /// The edit ranges were empty, overlapping, out of bounds, or not on a
+    /// UTF-8 boundary.
+    InvalidEdit,
+}
+
+impl fmt::Display for ApplyEditError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::StaleRevision { expected, actual } => {
+                write!(
+                    formatter,
+                    "stale revision: expected {expected}, actual {actual}"
+                )
+            }
+            Self::InvalidEdit => formatter.write_str("invalid edit transaction"),
+        }
+    }
+}
+
+impl std::error::Error for ApplyEditError {}
 
 /// One reversible text edit.
 #[derive(Debug, Clone)]
@@ -319,6 +345,24 @@ impl EditorState {
         }
         self.push_record(EditAction::Transaction(actions), before);
         true
+    }
+
+    /// Applies a transaction only if it was computed against `base_revision`.
+    pub fn apply_transaction_at(
+        &mut self,
+        base_revision: u64,
+        edits: Vec<(Range<usize>, String)>,
+    ) -> Result<u64, ApplyEditError> {
+        if base_revision != self.revision {
+            return Err(ApplyEditError::StaleRevision {
+                expected: base_revision,
+                actual: self.revision,
+            });
+        }
+        if !self.apply_transaction(edits) {
+            return Err(ApplyEditError::InvalidEdit);
+        }
+        Ok(self.revision)
     }
 
     /// Replaces or inserts at every current selection as one transaction.
@@ -704,6 +748,24 @@ mod tests {
         assert!(!state.apply_transaction(vec![(0..4, "x".to_owned()), (3..6, "y".to_owned())]));
         assert_eq!(state.text().slice(0..6), "abcdef");
         assert_eq!(state.undo_depth(), 0);
+    }
+
+    #[test]
+    fn transaction_at_rejects_stale_revision_without_mutation() {
+        let mut state = EditorState::from_text("abcdef");
+        assert_eq!(
+            state.apply_transaction_at(1, vec![(0..1, "x".to_owned())]),
+            Err(ApplyEditError::StaleRevision {
+                expected: 1,
+                actual: 0
+            })
+        );
+        assert_eq!(state.text().slice(0..6), "abcdef");
+        assert_eq!(
+            state.apply_transaction_at(0, vec![(0..1, "x".to_owned())]),
+            Ok(1)
+        );
+        assert_eq!(state.text().slice(0..6), "xbcdef");
     }
 
     #[test]

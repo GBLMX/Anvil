@@ -14,6 +14,7 @@ pub const API_VERSION: &str = "0.1.0";
 /// Stable JSON-RPC method names.
 pub mod method {
     pub const EDITOR_GET_VIEW: &str = "editor.get_view";
+    pub const EDITOR_GET_SNAPSHOT: &str = "editor.get_snapshot";
     pub const EDITOR_SET_MODE: &str = "editor.set_mode";
     pub const EDITOR_APPLY_EDIT: &str = "editor.apply_edit";
     pub const EDITOR_REGISTER_COMMAND: &str = "editor.register_command";
@@ -29,6 +30,112 @@ pub mod method {
     pub const SYS_FETCH: &str = "sys.fetch";
     pub const SYS_EXEC: &str = "sys.exec";
 }
+
+/// A method parameter/result type in the catalog.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MethodType {
+    /// No parameter object is sent.
+    Empty,
+    /// The DTO contract is not defined yet.
+    Pending,
+    /// Named DTO in `anvil-api`.
+    Named(&'static str),
+}
+
+/// One method's generated-catalog entry.
+#[derive(Debug, Clone, Copy)]
+pub struct MethodSpec {
+    /// Stable JSON-RPC method name.
+    pub name: &'static str,
+    /// Parameter type.
+    pub params: MethodType,
+    /// Result type.
+    pub result: MethodType,
+}
+
+/// The single source of truth for the plugin method catalog.
+pub const METHODS: &[MethodSpec] = &[
+    MethodSpec {
+        name: method::EDITOR_GET_VIEW,
+        params: MethodType::Empty,
+        result: MethodType::Named("EditorView"),
+    },
+    MethodSpec {
+        name: method::EDITOR_GET_SNAPSHOT,
+        params: MethodType::Empty,
+        result: MethodType::Named("DocumentSnapshot"),
+    },
+    MethodSpec {
+        name: method::EDITOR_SET_MODE,
+        params: MethodType::Named("SetModeRequest"),
+        result: MethodType::Named("SetModeResponse"),
+    },
+    MethodSpec {
+        name: method::EDITOR_APPLY_EDIT,
+        params: MethodType::Named("ApplyEditRequest"),
+        result: MethodType::Named("ApplyEditResponse"),
+    },
+    MethodSpec {
+        name: method::EDITOR_REGISTER_COMMAND,
+        params: MethodType::Pending,
+        result: MethodType::Pending,
+    },
+    MethodSpec {
+        name: method::UI_NOTIFY,
+        params: MethodType::Pending,
+        result: MethodType::Pending,
+    },
+    MethodSpec {
+        name: method::UI_STATUS,
+        params: MethodType::Pending,
+        result: MethodType::Pending,
+    },
+    MethodSpec {
+        name: method::EVENT_SUBSCRIBE,
+        params: MethodType::Pending,
+        result: MethodType::Pending,
+    },
+    MethodSpec {
+        name: method::SYS_READ_FILE,
+        params: MethodType::Pending,
+        result: MethodType::Pending,
+    },
+    MethodSpec {
+        name: method::SYS_CREATE_DIR,
+        params: MethodType::Pending,
+        result: MethodType::Pending,
+    },
+    MethodSpec {
+        name: method::SYS_RENAME,
+        params: MethodType::Pending,
+        result: MethodType::Pending,
+    },
+    MethodSpec {
+        name: method::SYS_REMOVE,
+        params: MethodType::Pending,
+        result: MethodType::Pending,
+    },
+    MethodSpec {
+        name: method::SYS_COPY,
+        params: MethodType::Pending,
+        result: MethodType::Pending,
+    },
+    MethodSpec {
+        name: method::SYS_REMOVE_ALL,
+        params: MethodType::Pending,
+        result: MethodType::Pending,
+    },
+    MethodSpec {
+        name: method::SYS_FETCH,
+        params: MethodType::Pending,
+        result: MethodType::Pending,
+    },
+    MethodSpec {
+        name: method::SYS_EXEC,
+        params: MethodType::Pending,
+        result: MethodType::Pending,
+    },
+];
 
 /// Stable plugin-facing error kinds.
 ///
@@ -180,6 +287,71 @@ pub struct SetModeResponse {
     pub mode: InteractionMode,
 }
 
+/// Half-open UTF-8 byte range used by document transactions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[ts(export)]
+pub struct TextRange {
+    /// Inclusive UTF-8 byte offset.
+    #[ts(type = "number")]
+    #[schemars(range(max = 9007199254740991i64))]
+    pub start: u64,
+    /// Exclusive UTF-8 byte offset.
+    #[ts(type = "number")]
+    #[schemars(range(max = 9007199254740991i64))]
+    pub end: u64,
+}
+
+/// One replacement in a document transaction.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[ts(export)]
+pub struct DocumentEdit {
+    pub range: TextRange,
+    pub text: String,
+}
+
+/// Payload for `editor.apply_edit`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[ts(export)]
+pub struct ApplyEditRequest {
+    /// Editor-owned buffer identity.
+    #[ts(type = "number")]
+    #[schemars(range(max = 9007199254740991i64))]
+    pub buffer_id: u64,
+    /// Revision the edits were computed against.
+    #[ts(type = "number")]
+    #[schemars(range(max = 9007199254740991i64))]
+    pub base_revision: u64,
+    pub edits: Vec<DocumentEdit>,
+}
+
+/// Result of `editor.apply_edit`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[ts(export)]
+pub struct ApplyEditResponse {
+    /// Revision after the transaction commits.
+    #[ts(type = "number")]
+    #[schemars(range(max = 9007199254740991i64))]
+    pub revision: u64,
+    /// Number of replacements applied.
+    pub applied_edits: u32,
+}
+
+/// Result of `editor.get_snapshot`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[ts(export)]
+pub struct DocumentSnapshot {
+    /// Editor-owned buffer identity.
+    #[ts(type = "number")]
+    #[schemars(range(max = 9007199254740991i64))]
+    pub buffer_id: u64,
+    /// Monotonic document revision at snapshot time.
+    #[ts(type = "number")]
+    #[schemars(range(max = 9007199254740991i64))]
+    pub revision: u64,
+    /// Full UTF-8 document text.
+    pub text: String,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -271,10 +443,76 @@ mod tests {
     #[test]
     fn method_names_are_stable() {
         assert_eq!(method::EDITOR_GET_VIEW, "editor.get_view");
+        assert_eq!(method::EDITOR_GET_SNAPSHOT, "editor.get_snapshot");
         assert_eq!(method::EDITOR_SET_MODE, "editor.set_mode");
+        assert_eq!(method::EDITOR_APPLY_EDIT, "editor.apply_edit");
         assert_eq!(method::SYS_EXEC, "sys.exec");
         assert_eq!(method::SYS_COPY, "sys.copy");
         assert_eq!(method::SYS_REMOVE_ALL, "sys.remove_all");
+    }
+
+    #[test]
+    fn method_catalog_covers_every_constant() {
+        let names = [
+            method::EDITOR_GET_VIEW,
+            method::EDITOR_GET_SNAPSHOT,
+            method::EDITOR_SET_MODE,
+            method::EDITOR_APPLY_EDIT,
+            method::EDITOR_REGISTER_COMMAND,
+            method::UI_NOTIFY,
+            method::UI_STATUS,
+            method::EVENT_SUBSCRIBE,
+            method::SYS_READ_FILE,
+            method::SYS_CREATE_DIR,
+            method::SYS_RENAME,
+            method::SYS_REMOVE,
+            method::SYS_COPY,
+            method::SYS_REMOVE_ALL,
+            method::SYS_FETCH,
+            method::SYS_EXEC,
+        ];
+        assert_eq!(METHODS.len(), names.len());
+        for name in names {
+            assert!(
+                METHODS.iter().any(|spec| spec.name == name),
+                "missing method catalog entry: {name}"
+            );
+        }
+        let view = METHODS
+            .iter()
+            .find(|spec| spec.name == method::EDITOR_GET_VIEW)
+            .expect("view method");
+        assert_eq!(view.params, MethodType::Empty);
+        let exec = METHODS
+            .iter()
+            .find(|spec| spec.name == method::SYS_EXEC)
+            .expect("exec method");
+        assert_eq!(exec.params, MethodType::Pending);
+        assert_eq!(exec.result, MethodType::Pending);
+    }
+
+    #[test]
+    fn transaction_contract_round_trips() {
+        let request = ApplyEditRequest {
+            buffer_id: 3,
+            base_revision: 8,
+            edits: vec![DocumentEdit {
+                range: TextRange { start: 2, end: 4 },
+                text: "ok".to_owned(),
+            }],
+        };
+        let encoded = serde_json::to_string(&request).unwrap();
+        let decoded: ApplyEditRequest = serde_json::from_str(&encoded).unwrap();
+        assert_eq!(decoded, request);
+
+        let snapshot = DocumentSnapshot {
+            buffer_id: 3,
+            revision: 9,
+            text: "hello".to_owned(),
+        };
+        let decoded: DocumentSnapshot =
+            serde_json::from_str(&serde_json::to_string(&snapshot).unwrap()).unwrap();
+        assert_eq!(decoded, snapshot);
     }
 
     #[test]
