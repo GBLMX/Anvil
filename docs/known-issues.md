@@ -10,7 +10,7 @@ the plans linked below.
 |---|---|---|
 | Plugin sandbox | seccomp still allows signal delivery, async SIGIO, memfd execution, mount, ptrace, io_uring, and AF_UNIX/D-Bus paths | [threat model T9/T10](threat-model.md), [Linux L1b](linux-platform-plan.md) |
 | Plugin API | v1 is not frozen; only `editor.get_view` and `editor.set_mode` have full DTOs; TS/Lua stubs cover a subset | [0.6.0](0.6.x-plan.md), [ADR-0003](adr/0003-idl.md) |
-| Plugin lifecycle | No global running-host budget or idle reclaim yet; the supervisor's admission cap is per editor process | [0.4.7](0.4.x-plan.md) |
+| Plugin lifecycle | No global running-host budget or queued-start budget yet; active starts are admission-capped and excess starts are rejected for a later activation event | [0.4.7](0.4.x-plan.md) |
 | Plugin commands | `onCommand` activation is parsed and matched but not dispatched until the command index is wired | [0.4.x](0.4.x-plan.md) |
 | Distribution | No signed package format, download manager, installed-plugin manager, or marketplace yet | [0.6.x](0.6.x-plan.md) |
 | Performance | Full gate suite has not been run on the reference machine | [performance](performance.md) |
