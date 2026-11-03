@@ -1,7 +1,7 @@
 # Anvil Architecture Maps
 
 Status: current as of 2026-11-03. Solid paths are implemented; dashed paths
-are planned or debug-only. `0.4.6b` activation matching is landed; `0.5.x`
+are planned or debug-only. `0.4.6c` activation and host supervision are landed; `0.5.x`
 interaction/UI, `0.6.x` distribution, and Linux substrate work are planned in
 the linked plans.
 
@@ -17,7 +17,7 @@ flowchart TB
         SYNTAX["syntax.rs worker<br/>Tree-sitter"]
         TREEUI["file_tree_ui.rs<br/>tree · fuzzy state"]
         LSPUI["lsp_ui.rs<br/>requests · completion · hover · definition<br/>code actions · rename · formatting · symbols"]
-        PLUGINS["plugin_session + activation<br/>hosts keyed by plugin id"]
+        PLUGINS["plugin_supervisor + activation<br/>single-flight · backoff · drain"]
         IPC["anvil-ipc<br/>GatewayClient"]
 
         MAIN --> KEYS --> MODEL

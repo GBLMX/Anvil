@@ -50,6 +50,7 @@ mod lsp_ui;
 mod plugin_activation;
 mod plugin_discovery;
 mod plugin_session;
+mod plugin_supervisor;
 mod splits;
 use lsp_ui::lsp_settings;
 mod command;
@@ -70,13 +71,14 @@ use render::{
 mod syntax;
 use file_worker::FileWorker;
 use gateway::GatewaySession;
-#[cfg(target_os = "linux")]
-use host_session::HostEvent;
 use lsp_worker::LspConfig;
 use lsp_worker::{LspEvent, LspWorker};
 #[cfg(target_os = "linux")]
 use plugin_activation::ActivationEvent;
-use plugin_session::{DEBUG_PERMISSIONS, DEBUG_PLUGIN_ID, PluginSession};
+#[cfg(target_os = "linux")]
+use plugin_session::{DEBUG_PERMISSIONS, DEBUG_PLUGIN_ID};
+#[cfg(target_os = "linux")]
+use plugin_supervisor::{HostState, PluginSupervisor, StartMode, SupervisorEvent};
 use syntax::SyntaxState;
 
 const MAX_OPEN_BYTES: usize = 256 * 1024 * 1024;
@@ -402,9 +404,9 @@ pub struct Model {
     /// Discovered local plugins.
     #[cfg(target_os = "linux")]
     plugins: Vec<plugin_discovery::PluginDescriptor>,
-    /// Running plugin host sessions keyed by plugin id.
+    /// Plugin host supervisor keyed by plugin id.
     #[cfg(target_os = "linux")]
-    hosts: HashMap<String, PluginSession>,
+    plugin_supervisor: PluginSupervisor,
 }
 
 impl Model {
@@ -489,7 +491,7 @@ impl Model {
             #[cfg(target_os = "linux")]
             plugins: Vec::new(),
             #[cfg(target_os = "linux")]
-            hosts: HashMap::new(),
+            plugin_supervisor: PluginSupervisor::new(),
         }
     }
 
@@ -631,7 +633,13 @@ impl Model {
             let plugins = self
                 .plugins
                 .iter()
-                .map(|plugin| plugin.manifest.id.as_str())
+                .map(|plugin| {
+                    format!(
+                        "{} ({})",
+                        plugin.manifest.id,
+                        self.plugin_supervisor.state(&plugin.manifest.id).as_str()
+                    )
+                })
                 .collect::<Vec<_>>()
                 .join(", ");
             self.status = format!("plugins: {plugins}");
@@ -653,24 +661,27 @@ impl Model {
             .filter(|plugin| plugin_activation::matches(&plugin.manifest.activation_events, &event))
             .cloned()
             .collect::<Vec<_>>();
+        let Some(gateway) = self.gateway.as_mut() else {
+            return;
+        };
         for plugin in candidates {
             let plugin_id = plugin.manifest.id.clone();
-            if self.hosts.contains_key(&plugin_id) {
+            if matches!(
+                self.plugin_supervisor.state(&plugin_id),
+                HostState::Registering
+                    | HostState::Starting
+                    | HostState::Ready
+                    | HostState::Draining
+            ) {
                 continue;
             }
-            let Some(gateway) = self.gateway.as_mut() else {
-                return;
-            };
-            let permissions = Vec::new();
-            match PluginSession::start_plugin(
-                gateway,
-                &self.workspace,
+            match self.plugin_supervisor.activate(
                 &plugin_id,
                 &plugin.root,
-                &permissions,
+                gateway,
+                &self.workspace,
             ) {
-                Ok(host) => {
-                    self.hosts.insert(plugin_id.clone(), host);
+                Ok(()) => {
                     self.status = format!("plugin {plugin_id} starting");
                     self.dirty = true;
                 }
@@ -747,11 +758,6 @@ impl Model {
 
     #[cfg(target_os = "linux")]
     fn start_oom_host(&mut self) {
-        if self.hosts.contains_key(DEBUG_PLUGIN_ID) {
-            self.status = "plugin host already running".to_owned();
-            self.dirty = true;
-            return;
-        }
         let Some(gateway) = self.gateway.as_mut() else {
             self.status = "E: gateway unavailable".to_owned();
             self.dirty = true;
@@ -761,11 +767,14 @@ impl Model {
             .iter()
             .map(|permission| (*permission).to_owned())
             .collect::<Vec<_>>();
-        match PluginSession::start_oom(gateway, &self.workspace, DEBUG_PLUGIN_ID, &permissions) {
-            Ok(host) => {
-                self.hosts.insert(DEBUG_PLUGIN_ID.to_owned(), host);
-                self.status = "plugin host OOM probe starting".to_owned();
-            }
+        match self.plugin_supervisor.start_debug(
+            DEBUG_PLUGIN_ID,
+            StartMode::Oom,
+            &permissions,
+            gateway,
+            &self.workspace,
+        ) {
+            Ok(()) => self.status = "plugin host OOM probe starting".to_owned(),
             Err(error) => self.status = format!("E: {error}"),
         }
         self.dirty = true;
@@ -779,11 +788,6 @@ impl Model {
 
     #[cfg(target_os = "linux")]
     fn start_host(&mut self) {
-        if self.hosts.contains_key(DEBUG_PLUGIN_ID) {
-            self.status = "plugin host already running".to_owned();
-            self.dirty = true;
-            return;
-        }
         let Some(gateway) = self.gateway.as_mut() else {
             self.status = "E: gateway unavailable".to_owned();
             self.dirty = true;
@@ -793,11 +797,14 @@ impl Model {
             .iter()
             .map(|permission| (*permission).to_owned())
             .collect::<Vec<_>>();
-        match PluginSession::start(gateway, &self.workspace, DEBUG_PLUGIN_ID, &permissions) {
-            Ok(host) => {
-                self.hosts.insert(DEBUG_PLUGIN_ID.to_owned(), host);
-                self.status = "plugin host starting".to_owned();
-            }
+        match self.plugin_supervisor.start_debug(
+            DEBUG_PLUGIN_ID,
+            StartMode::Normal,
+            &permissions,
+            gateway,
+            &self.workspace,
+        ) {
+            Ok(()) => self.status = "plugin host starting".to_owned(),
             Err(error) => self.status = format!("E: {error}"),
         }
         self.dirty = true;
@@ -811,13 +818,14 @@ impl Model {
 
     #[cfg(target_os = "linux")]
     fn exec_host(&mut self) {
-        let Some(host) = self.hosts.get(DEBUG_PLUGIN_ID) else {
-            self.status = "E: plugin host not running".to_owned();
-            self.dirty = true;
-            return;
-        };
-        if !host.exec() {
-            self.status = "E: plugin host channel closed".to_owned();
+        match self.plugin_supervisor.exec(DEBUG_PLUGIN_ID) {
+            Ok(plugin_supervisor::ExecOutcome::Sent) => {
+                self.status = "plugin host request sent".to_owned()
+            }
+            Ok(plugin_supervisor::ExecOutcome::Queued) => {
+                self.status = "plugin host request queued".to_owned()
+            }
+            Err(error) => self.status = format!("E: {error}"),
         }
         self.dirty = true;
     }
@@ -827,15 +835,13 @@ impl Model {
 
     #[cfg(target_os = "linux")]
     fn stop_host(&mut self) {
-        let Some(mut host) = self.hosts.remove(DEBUG_PLUGIN_ID) else {
-            self.status = "plugin host not running".to_owned();
-            self.dirty = true;
-            return;
-        };
-        if let Some(gateway) = self.gateway.as_mut() {
-            host.stop(gateway);
+        match self
+            .plugin_supervisor
+            .stop(DEBUG_PLUGIN_ID, self.gateway.as_mut())
+        {
+            Ok(()) => self.status = "plugin host stopped".to_owned(),
+            Err(error) => self.status = format!("E: {error}"),
         }
-        self.status = "plugin host stopped".to_owned();
         self.dirty = true;
     }
 
@@ -843,40 +849,69 @@ impl Model {
     fn stop_host(&mut self) {}
 
     #[cfg(target_os = "linux")]
-    pub fn poll_host(&mut self) {
-        let mut stop = Vec::new();
-        for (plugin_id, host) in &mut self.hosts {
-            for event in host.poll() {
-                match event {
-                    HostEvent::Ready => {
-                        self.status = format!("plugin {plugin_id} connected");
-                    }
-                    HostEvent::Pong => {
-                        self.status = format!("plugin {plugin_id} ready");
-                    }
-                    HostEvent::ExecUnsupported => {
-                        self.status = format!("plugin {plugin_id}: sys.exec unsupported");
-                    }
-                    HostEvent::Error(error) => {
-                        self.status = format!("E: plugin {plugin_id}: {error}");
-                        stop.push(plugin_id.clone());
-                    }
-                    HostEvent::Exited(anvil_plugin_host::HostExit::OomKilled) => {
-                        self.status = format!("⚠ Plugin {plugin_id}: out of memory");
-                        stop.push(plugin_id.clone());
-                    }
-                    HostEvent::Exited(_) => {
-                        self.status = format!("plugin {plugin_id} exited");
-                        stop.push(plugin_id.clone());
-                    }
-                }
-                self.dirty = true;
-            }
+    fn enable_plugin(&mut self, plugin_id: &str) {
+        let Some(plugin) = self
+            .plugins
+            .iter()
+            .find(|plugin| plugin.manifest.id == plugin_id)
+            .cloned()
+        else {
+            self.status = format!("E: unknown plugin: {plugin_id}");
+            self.dirty = true;
+            return;
+        };
+        let Some(gateway) = self.gateway.as_mut() else {
+            self.status = "E: gateway unavailable".to_owned();
+            self.dirty = true;
+            return;
+        };
+        if let Err(error) = self.plugin_supervisor.enable(plugin_id) {
+            self.status = format!("E: plugin {plugin_id}: {error}");
+            self.dirty = true;
+            return;
         }
-        if let Some(gateway) = self.gateway.as_mut() {
-            for plugin_id in stop {
-                if let Some(mut host) = self.hosts.remove(&plugin_id) {
-                    host.stop(gateway);
+        match self
+            .plugin_supervisor
+            .activate(plugin_id, &plugin.root, gateway, &self.workspace)
+        {
+            Ok(()) => self.status = format!("plugin {plugin_id} starting"),
+            Err(error) => self.status = format!("E: plugin {plugin_id}: {error}"),
+        }
+        self.dirty = true;
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    fn enable_plugin(&mut self, _plugin_id: &str) {}
+
+    #[cfg(target_os = "linux")]
+    pub fn poll_host(&mut self) {
+        let events = self.plugin_supervisor.poll(self.gateway.as_mut());
+        for event in events {
+            match event {
+                SupervisorEvent::State {
+                    plugin_id,
+                    state,
+                    detail,
+                } => {
+                    self.status = match state {
+                        HostState::Starting => format!("plugin {plugin_id} starting"),
+                        HostState::Ready => format!("plugin {plugin_id} ready"),
+                        HostState::Failed => format!(
+                            "E: plugin {plugin_id}: {}",
+                            detail.unwrap_or_else(|| "start failed".to_owned())
+                        ),
+                        HostState::Disabled => format!(
+                            "E: plugin {plugin_id} disabled ({}); run :plugin-enable {plugin_id}",
+                            detail.unwrap_or_else(|| "repeated failures".to_owned())
+                        ),
+                        HostState::Stopped => format!("plugin {plugin_id} stopped"),
+                        _ => format!("plugin {plugin_id} {}", state.as_str()),
+                    };
+                    self.dirty = true;
+                }
+                SupervisorEvent::Message { plugin_id, message } => {
+                    self.status = format!("plugin {plugin_id}: {message}");
+                    self.dirty = true;
                 }
             }
         }
@@ -1411,6 +1446,13 @@ pub fn run_with_workspace(path: Option<PathBuf>, workspace: PathBuf) -> io::Resu
         if model.quit {
             return Ok(());
         }
+    }
+}
+
+#[cfg(target_os = "linux")]
+impl Drop for Model {
+    fn drop(&mut self) {
+        self.plugin_supervisor.shutdown(self.gateway.as_mut());
     }
 }
 

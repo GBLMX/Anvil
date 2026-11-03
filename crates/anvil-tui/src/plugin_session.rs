@@ -10,7 +10,6 @@ pub(crate) const DEBUG_PLUGIN_ID: &str = "debug";
 pub(crate) const DEBUG_PERMISSIONS: &[&str] = &["sys.exec"];
 
 pub struct PluginSession {
-    plugin_id: String,
     host: HostSession,
     stopped: bool,
 }
@@ -73,7 +72,6 @@ impl PluginSession {
         };
         match host {
             Ok(host) => Ok(Self {
-                plugin_id: plugin_id.to_owned(),
                 host,
                 stopped: false,
             }),
@@ -92,12 +90,15 @@ impl PluginSession {
         self.host.exec()
     }
 
-    pub(crate) fn stop(&mut self, gateway: &mut GatewayClient) {
+    pub(crate) fn drain(&mut self, timeout: std::time::Duration) {
+        self.host.drain(timeout);
+    }
+
+    pub(crate) fn stop(&mut self) {
         if self.stopped {
             return;
         }
         self.host.stop();
-        let _ = gateway.revoke_plugin(&self.plugin_id);
         self.stopped = true;
     }
 }

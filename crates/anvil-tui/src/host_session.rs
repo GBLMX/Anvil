@@ -3,7 +3,7 @@ use anvil_plugin_host::{Cgroup, HostExit, HostProcess, Token, spawn};
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -26,6 +26,8 @@ pub struct HostSession {
     commands: Sender<HostCommand>,
     events: Receiver<HostEvent>,
     alive: Arc<AtomicBool>,
+    pending: Arc<AtomicUsize>,
+    accepting: Arc<AtomicBool>,
     socket: PathBuf,
     exited: bool,
 }
@@ -121,7 +123,10 @@ impl HostSession {
         let (command_tx, command_rx) = mpsc::channel();
         let (event_tx, event_rx) = mpsc::channel();
         let alive = Arc::new(AtomicBool::new(true));
+        let pending = Arc::new(AtomicUsize::new(0));
+        let accepting = Arc::new(AtomicBool::new(true));
         let thread_alive = Arc::clone(&alive);
+        let thread_pending = Arc::clone(&pending);
         std::thread::spawn(move || {
             let mut connection = loop {
                 if !thread_alive.load(Ordering::Relaxed) {
@@ -154,13 +159,15 @@ impl HostSession {
             while thread_alive.load(Ordering::Relaxed) {
                 match command_rx.recv_timeout(Duration::from_millis(100)) {
                     Ok(HostCommand::Exec) => {
-                        if !request(
+                        let result = request(
                             &mut connection,
                             next_id,
                             "sys.exec",
                             &event_tx,
                             &thread_alive,
-                        ) {
+                        );
+                        thread_pending.fetch_sub(1, Ordering::AcqRel);
+                        if !result {
                             return;
                         }
                         next_id += 1;
@@ -176,6 +183,8 @@ impl HostSession {
             commands: command_tx,
             events: event_rx,
             alive,
+            pending,
+            accepting,
             socket,
             exited: false,
         })
@@ -187,7 +196,23 @@ impl HostSession {
     }
 
     pub fn exec(&self) -> bool {
-        self.commands.send(HostCommand::Exec).is_ok()
+        if !self.accepting.load(Ordering::Acquire) {
+            return false;
+        }
+        self.pending.fetch_add(1, Ordering::AcqRel);
+        if self.commands.send(HostCommand::Exec).is_err() {
+            self.pending.fetch_sub(1, Ordering::AcqRel);
+            return false;
+        }
+        true
+    }
+
+    pub fn drain(&self, timeout: Duration) {
+        self.accepting.store(false, Ordering::Release);
+        let deadline = std::time::Instant::now() + timeout;
+        while self.pending.load(Ordering::Acquire) > 0 && std::time::Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(5));
+        }
     }
 
     pub fn poll(&mut self) -> Vec<HostEvent> {
@@ -205,6 +230,7 @@ impl HostSession {
     }
 
     pub fn stop(&mut self) {
+        self.accepting.store(false, Ordering::Release);
         self.alive.store(false, Ordering::Relaxed);
         self.host.terminate();
         let _ = std::fs::remove_file(&self.socket);
@@ -242,6 +268,10 @@ fn request(
     }
     match connection.recv() {
         Ok(Some(frame)) => match serde_json::from_slice::<serde_json::Value>(&frame) {
+            Ok(response) if !response_matches_id(&response, id) => {
+                let _ = events.send(HostEvent::Error("host RPC id mismatch".to_owned()));
+                false
+            }
             Ok(response) if response.get("result").is_some() => {
                 let _ = events.send(HostEvent::Pong);
                 true
@@ -267,6 +297,10 @@ fn request(
             false
         }
     }
+}
+
+fn response_matches_id(response: &serde_json::Value, id: u64) -> bool {
+    response.get("id").and_then(serde_json::Value::as_u64) == Some(id)
 }
 
 fn host_binary() -> Result<PathBuf, String> {
@@ -301,6 +335,22 @@ pub(crate) fn new_token() -> Token {
 mod tests {
     use super::*;
     use nix::libc;
+
+    #[test]
+    fn host_responses_must_match_the_request_id() {
+        assert!(response_matches_id(
+            &serde_json::json!({"jsonrpc": "2.0", "id": 7, "result": {}}),
+            7
+        ));
+        assert!(!response_matches_id(
+            &serde_json::json!({"jsonrpc": "2.0", "id": 8, "result": {}}),
+            7
+        ));
+        assert!(!response_matches_id(
+            &serde_json::json!({"jsonrpc": "2.0", "result": {}}),
+            7
+        ));
+    }
 
     #[test]
     fn host_sigkill_is_reported_without_blocking_the_loop() {

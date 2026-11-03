@@ -10,6 +10,8 @@ in `PROJECT_CHARTER.md`, `docs/phase-0-7-plan.md`, and the ADRs.
 - Complete the kernel/distribution boundary decision
   ([ADR-0013](docs/adr/0013-kernel-distribution-boundary.md)).
 - Keep the interim TUI keymap clearly separated from kernel semantics.
+- `0.4.6c` plugin host supervision: single-flight startup, bounded admission,
+  start timeout, crash backoff, explicit disable/re-enable, and drain-before-kill.
 
 ## Next
 
@@ -20,7 +22,8 @@ in `PROJECT_CHARTER.md`, `docs/phase-0-7-plan.md`, and the ADRs.
 4. Add user keymap/config boundaries without freezing the plugin keymap format.
 5. [0.4.4–0.4.8] Split the plugin runtime into gateway capability control,
    manifest/host loading, activation supervisor, resource isolation, and
-   plugin I/O/document transactions; design is in
+   plugin I/O/document transactions; 0.4.6c supervisor is landed, with
+   resource isolation and plugin I/O remaining. Design is in
    [ADR-0017](docs/adr/0017-plugin-activation-and-lifecycle.md).
 6. [0.4.1] Close the remaining workspace tree watcher validation in
    [#9](https://github.com/GBLMX/Anvil/issues/9); implementation is described

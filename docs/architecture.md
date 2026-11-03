@@ -1,7 +1,7 @@
 # Anvil Architecture
 
-Status: current as of 2026-11-03; `0.4.6b` plugin activation matching is
-landed. Distribution and UI work are planned in
+Status: current as of 2026-11-03; `0.4.6c` plugin activation and host
+supervision are landed. Distribution and UI work are planned in
 [0.5.x](0.5.x-plan.md), [0.6.x](0.6.x-plan.md), and
 [Linux platform](linux-platform-plan.md). See
 [visual current/future maps](architecture-visual.md).
@@ -241,7 +241,7 @@ docs/
 | Failure | Behavior |
 |---|---|
 | Gateway crash | Plugin `sys.*` fails; editor survives; gateway restart allowed |
-| Plugin host crash | Plugin disabled; editor and other plugins continue |
+| Plugin host crash | That plugin enters bounded backoff; repeated failures disable it; editor and other plugins continue |
 | Sandbox setup failure | Plugin not started; no fallback to ambient access |
 | Editor crash | Gateway sees EOF, kills children, exits |
 | Malformed frame | Connection closed; plugin disabled |

@@ -43,6 +43,11 @@ post-`0.4.0` feature line.
   activation can be disabled with `ANVIL_PLUGIN_DISABLE_WORKSPACE_ACTIVATION=1`.
 - Multiple plugin hosts keyed by plugin id, with per-plugin status and revoke
   on stop or failure.
+- Plugin host supervisor with explicit lifecycle states, single-flight startup,
+  an admission cap, start timeout, crash backoff, queue-until-ready requests,
+  drain-before-kill, and response-id validation.
+- Repeated host failures disable a plugin until `:plugin-enable <id>` is run;
+  `:plugin-list` reports each discovered plugin's host state.
 - Language activation is deduplicated per plugin; workspace-marker activation
   reads workspace root entries through the gateway.
 

@@ -60,9 +60,11 @@ Normal mode
   :format              format the current document
   :symbols             document symbols
   :plugin-start       start the debug plugin host
+  :plugin-list        list discovered plugins and their host state
   :plugin-oom         start host with a 300 MB allocation probe
   :plugin-exec        exercise sys.exec (returns unsupported)
   :plugin-stop        stop the plugin host
+  :plugin-enable <id> re-enable a disabled plugin and start it
   :help               this page
 
 Insert mode
