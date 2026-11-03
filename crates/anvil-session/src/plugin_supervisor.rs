@@ -9,14 +9,17 @@ use std::time::{Duration, Instant};
 
 pub(crate) const START_TIMEOUT: Duration = Duration::from_secs(2);
 pub(crate) const STOP_DRAIN_TIMEOUT: Duration = Duration::from_millis(500);
-const MAX_ACTIVE_STARTS: usize = 8;
+pub(crate) const IDLE_TIMEOUT: Duration = Duration::from_secs(60);
+const MAX_RUNNING_HOSTS: usize = 8;
+const MAX_QUEUED_STARTS: usize = 8;
 const MAX_PENDING_CALLS: usize = 32;
 const MAX_FAILURES: usize = 3;
 const FAILURE_WINDOW: Duration = Duration::from_secs(60);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum HostState {
+pub enum HostState {
     Unloaded,
+    Queued,
     Registering,
     Starting,
     Ready,
@@ -27,9 +30,10 @@ pub(crate) enum HostState {
 }
 
 impl HostState {
-    pub(crate) fn as_str(self) -> &'static str {
+    pub fn as_str(self) -> &'static str {
         match self {
             Self::Unloaded => "unloaded",
+            Self::Queued => "queued",
             Self::Registering => "registering",
             Self::Starting => "starting",
             Self::Ready => "ready",
@@ -42,19 +46,25 @@ impl HostState {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum StartMode {
+pub enum StartMode {
     Normal,
     Oom,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum ExecOutcome {
+pub enum ExecOutcome {
     Sent,
     Queued,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum StartOutcome {
+    Started,
+    Queued,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) enum SupervisorEvent {
+pub enum SupervisorEvent {
     State {
         plugin_id: String,
         state: HostState,
@@ -77,10 +87,19 @@ struct StartRequest<'a> {
     permissions: &'a [String],
 }
 
+struct PendingStart {
+    plugin_id: String,
+    plugin_root: Option<std::path::PathBuf>,
+    mode: StartMode,
+    permissions: Vec<String>,
+    workspace: std::path::PathBuf,
+}
+
 struct PluginEntry {
     state: HostState,
     host: Option<Box<dyn ManagedHost>>,
     started_at: Option<Instant>,
+    last_activity: Option<Instant>,
     retry_at: Option<Instant>,
     failures: Vec<Instant>,
     pending: VecDeque<PendingCall>,
@@ -92,6 +111,7 @@ impl PluginEntry {
             state: HostState::Unloaded,
             host: None,
             started_at: None,
+            last_activity: None,
             retry_at: None,
             failures: Vec::new(),
             pending: VecDeque::new(),
@@ -102,6 +122,7 @@ impl PluginEntry {
 pub(crate) trait ManagedHost {
     fn poll(&mut self) -> Vec<HostEvent>;
     fn exec(&mut self) -> bool;
+    fn has_pending(&self) -> bool;
     fn drain(&mut self, timeout: Duration);
     fn stop(&mut self);
 }
@@ -113,6 +134,10 @@ impl ManagedHost for PluginSession {
 
     fn exec(&mut self) -> bool {
         PluginSession::exec(self)
+    }
+
+    fn has_pending(&self) -> bool {
+        PluginSession::has_pending(self)
     }
 
     fn drain(&mut self, timeout: Duration) {
@@ -164,16 +189,24 @@ impl HostLauncher for SystemLauncher {
     }
 }
 
-pub(crate) struct PluginSupervisor {
+pub struct PluginSupervisor {
     launcher: Box<dyn HostLauncher>,
     entries: HashMap<String, PluginEntry>,
+    pending_starts: VecDeque<PendingStart>,
+}
+
+impl Default for PluginSupervisor {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl PluginSupervisor {
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             launcher: Box::new(SystemLauncher),
             entries: HashMap::new(),
+            pending_starts: VecDeque::new(),
         }
     }
 
@@ -182,16 +215,17 @@ impl PluginSupervisor {
         Self {
             launcher,
             entries: HashMap::new(),
+            pending_starts: VecDeque::new(),
         }
     }
 
-    pub(crate) fn activate(
+    pub fn activate(
         &mut self,
         plugin_id: &str,
         plugin_root: &Path,
         gateway: &mut GatewayClient,
         workspace: &Path,
-    ) -> Result<(), String> {
+    ) -> Result<StartOutcome, String> {
         self.start_at(
             Instant::now(),
             plugin_id,
@@ -205,14 +239,14 @@ impl PluginSupervisor {
         )
     }
 
-    pub(crate) fn start_debug(
+    pub fn start_debug(
         &mut self,
         plugin_id: &str,
         mode: StartMode,
         permissions: &[String],
         gateway: &mut GatewayClient,
         workspace: &Path,
-    ) -> Result<(), String> {
+    ) -> Result<StartOutcome, String> {
         self.start_at(
             Instant::now(),
             plugin_id,
@@ -233,7 +267,7 @@ impl PluginSupervisor {
         request: StartRequest<'_>,
         mut gateway: Option<&mut GatewayClient>,
         workspace: &Path,
-    ) -> Result<(), String> {
+    ) -> Result<StartOutcome, String> {
         if let Some(entry) = self.entries.get(plugin_id) {
             match entry.state {
                 HostState::Disabled => {
@@ -241,6 +275,7 @@ impl PluginSupervisor {
                         "plugin {plugin_id} disabled; run :plugin-enable {plugin_id}"
                     ));
                 }
+                HostState::Queued => return Ok(StartOutcome::Queued),
                 HostState::Failed | HostState::Unloaded | HostState::Stopped => {}
                 _ => return Err(format!("plugin {plugin_id} already active")),
             }
@@ -253,14 +288,34 @@ impl PluginSupervisor {
                 ));
             }
         }
-        if self
-            .entries
-            .values()
-            .filter(|entry| matches!(entry.state, HostState::Registering | HostState::Starting))
-            .count()
-            >= MAX_ACTIVE_STARTS
-        {
-            return Err("plugin start queue full".to_owned());
+        if self.running_hosts() >= MAX_RUNNING_HOSTS {
+            if self
+                .pending_starts
+                .iter()
+                .any(|pending| pending.plugin_id == plugin_id)
+            {
+                return Ok(StartOutcome::Queued);
+            }
+            if self.pending_starts.len() >= MAX_QUEUED_STARTS {
+                return Err("plugin start queue full".to_owned());
+            }
+            let entry = self
+                .entries
+                .entry(plugin_id.to_owned())
+                .or_insert_with(PluginEntry::new);
+            entry.state = HostState::Queued;
+            entry.started_at = None;
+            entry.last_activity = None;
+            entry.retry_at = None;
+            entry.pending.clear();
+            self.pending_starts.push_back(PendingStart {
+                plugin_id: plugin_id.to_owned(),
+                plugin_root: request.plugin_root.map(Path::to_path_buf),
+                mode: request.mode,
+                permissions: request.permissions.to_vec(),
+                workspace: workspace.to_path_buf(),
+            });
+            return Ok(StartOutcome::Queued);
         }
         let entry = self
             .entries
@@ -268,6 +323,7 @@ impl PluginSupervisor {
             .or_insert_with(PluginEntry::new);
         entry.state = HostState::Registering;
         entry.started_at = None;
+        entry.last_activity = None;
         entry.retry_at = None;
         entry.pending.clear();
 
@@ -287,7 +343,7 @@ impl PluginSupervisor {
                 entry.host = Some(host);
                 entry.state = HostState::Starting;
                 entry.started_at = Some(now);
-                Ok(())
+                Ok(StartOutcome::Started)
             }
             Err(error) => {
                 self.fail_at(plugin_id, now, error.clone(), gateway);
@@ -296,7 +352,83 @@ impl PluginSupervisor {
         }
     }
 
-    pub(crate) fn exec(&mut self, plugin_id: &str) -> Result<ExecOutcome, String> {
+    fn running_hosts(&self) -> usize {
+        self.entries
+            .values()
+            .filter(|entry| {
+                matches!(
+                    entry.state,
+                    HostState::Starting | HostState::Ready | HostState::Draining
+                )
+            })
+            .count()
+    }
+
+    fn drain_pending(&mut self, now: Instant, mut gateway: Option<&mut GatewayClient>) {
+        while self.running_hosts() < MAX_RUNNING_HOSTS {
+            let Some(pending) = self.pending_starts.pop_front() else {
+                return;
+            };
+            if let Some(entry) = self.entries.get_mut(&pending.plugin_id)
+                && entry.state == HostState::Queued
+            {
+                entry.state = HostState::Stopped;
+            }
+            let request = StartRequest {
+                plugin_root: pending.plugin_root.as_deref(),
+                mode: pending.mode,
+                permissions: &pending.permissions,
+            };
+            let _ = self.start_at(
+                now,
+                &pending.plugin_id,
+                request,
+                gateway.as_deref_mut(),
+                &pending.workspace,
+            );
+        }
+    }
+
+    fn reclaim_idle(
+        &mut self,
+        now: Instant,
+        mut gateway: Option<&mut GatewayClient>,
+        events: &mut Vec<SupervisorEvent>,
+    ) {
+        let ids = self.entries.keys().cloned().collect::<Vec<_>>();
+        for plugin_id in ids {
+            let idle = self.entries.get(&plugin_id).is_some_and(|entry| {
+                entry.state == HostState::Ready
+                    && entry.pending.is_empty()
+                    && entry
+                        .last_activity
+                        .is_some_and(|activity| now.duration_since(activity) >= IDLE_TIMEOUT)
+                    && entry.host.as_ref().is_some_and(|host| !host.has_pending())
+            });
+            if !idle {
+                continue;
+            }
+            let entry = self.entries.get_mut(&plugin_id).expect("idle plugin entry");
+            entry.state = HostState::Draining;
+            if let Some(mut host) = entry.host.take() {
+                host.drain(STOP_DRAIN_TIMEOUT);
+                host.stop();
+            }
+            entry.state = HostState::Stopped;
+            entry.last_activity = None;
+            entry.pending.clear();
+            if let Some(gateway) = gateway.as_deref_mut() {
+                let _ = gateway.revoke_plugin(&plugin_id);
+            }
+            events.push(SupervisorEvent::State {
+                plugin_id,
+                state: HostState::Stopped,
+                detail: Some("idle".to_owned()),
+            });
+        }
+    }
+
+    pub fn exec(&mut self, plugin_id: &str) -> Result<ExecOutcome, String> {
         let entry = self
             .entries
             .get_mut(plugin_id)
@@ -304,6 +436,7 @@ impl PluginSupervisor {
         match entry.state {
             HostState::Ready => {
                 if entry.host.as_mut().is_some_and(|host| host.exec()) {
+                    entry.last_activity = Some(Instant::now());
                     Ok(ExecOutcome::Sent)
                 } else {
                     Err(format!("plugin {plugin_id} host channel closed"))
@@ -323,11 +456,27 @@ impl PluginSupervisor {
         }
     }
 
-    pub(crate) fn stop(
+    pub fn stop(
         &mut self,
         plugin_id: &str,
         gateway: Option<&mut GatewayClient>,
     ) -> Result<(), String> {
+        if self
+            .entries
+            .get(plugin_id)
+            .is_some_and(|entry| entry.state == HostState::Queued)
+        {
+            self.pending_starts
+                .retain(|pending| pending.plugin_id != plugin_id);
+            let entry = self
+                .entries
+                .get_mut(plugin_id)
+                .expect("queued plugin entry");
+            entry.state = HostState::Stopped;
+            entry.last_activity = None;
+            entry.pending.clear();
+            return Ok(());
+        }
         let Some(entry) = self.entries.get_mut(plugin_id) else {
             return Err(format!("plugin {plugin_id} is not loaded"));
         };
@@ -347,12 +496,13 @@ impl PluginSupervisor {
         }
         entry.state = HostState::Stopped;
         entry.started_at = None;
+        entry.last_activity = None;
         entry.retry_at = None;
         entry.pending.clear();
         Ok(())
     }
 
-    pub(crate) fn enable(&mut self, plugin_id: &str) -> Result<(), String> {
+    pub fn enable(&mut self, plugin_id: &str) -> Result<(), String> {
         let entry = self
             .entries
             .get_mut(plugin_id)
@@ -361,19 +511,20 @@ impl PluginSupervisor {
             return Err(format!("plugin {plugin_id} is not disabled"));
         }
         entry.state = HostState::Stopped;
+        entry.last_activity = None;
         entry.failures.clear();
         entry.retry_at = None;
         Ok(())
     }
 
-    pub(crate) fn state(&self, plugin_id: &str) -> HostState {
+    pub fn state(&self, plugin_id: &str) -> HostState {
         self.entries
             .get(plugin_id)
             .map(|entry| entry.state)
             .unwrap_or(HostState::Unloaded)
     }
 
-    pub(crate) fn poll(&mut self, gateway: Option<&mut GatewayClient>) -> Vec<SupervisorEvent> {
+    pub fn poll(&mut self, gateway: Option<&mut GatewayClient>) -> Vec<SupervisorEvent> {
         self.poll_at(Instant::now(), gateway)
     }
 
@@ -422,6 +573,7 @@ impl PluginSupervisor {
                         }
                         entry.state = HostState::Ready;
                         entry.started_at = None;
+                        entry.last_activity = Some(now);
                         events.push(SupervisorEvent::State {
                             plugin_id: plugin_id.clone(),
                             state: HostState::Ready,
@@ -429,10 +581,15 @@ impl PluginSupervisor {
                         });
                         self.flush_pending(&plugin_id, now, gateway.as_deref_mut(), &mut events);
                     }
-                    HostEvent::Pong => events.push(SupervisorEvent::Message {
-                        plugin_id: plugin_id.clone(),
-                        message: "ready".to_owned(),
-                    }),
+                    HostEvent::Pong => {
+                        if let Some(entry) = self.entries.get_mut(&plugin_id) {
+                            entry.last_activity = Some(now);
+                        }
+                        events.push(SupervisorEvent::Message {
+                            plugin_id: plugin_id.clone(),
+                            message: "ready".to_owned(),
+                        });
+                    }
                     HostEvent::ExecUnsupported => events.push(SupervisorEvent::Message {
                         plugin_id: plugin_id.clone(),
                         message: "sys.exec unsupported".to_owned(),
@@ -463,6 +620,8 @@ impl PluginSupervisor {
                 }
             }
         }
+        self.reclaim_idle(now, gateway.as_deref_mut(), &mut events);
+        self.drain_pending(now, gateway);
         events
     }
 
@@ -489,6 +648,9 @@ impl PluginSupervisor {
                     PendingCall::Exec => host.exec(),
                 });
             if sent {
+                if let Some(entry) = self.entries.get_mut(plugin_id) {
+                    entry.last_activity = Some(now);
+                }
                 continue;
             }
             let detail = self.fail_at(plugin_id, now, "host channel closed".to_owned(), gateway);
@@ -520,6 +682,7 @@ impl PluginSupervisor {
         }
         entry.pending.clear();
         entry.started_at = None;
+        entry.last_activity = None;
         entry
             .failures
             .retain(|failure| now.duration_since(*failure) <= FAILURE_WINDOW);
@@ -538,7 +701,7 @@ impl PluginSupervisor {
         }
     }
 
-    pub(crate) fn shutdown(&mut self, mut gateway: Option<&mut GatewayClient>) {
+    pub fn shutdown(&mut self, mut gateway: Option<&mut GatewayClient>) {
         let ids = self.entries.keys().cloned().collect::<Vec<_>>();
         for plugin_id in ids {
             let _ = self.stop(&plugin_id, gateway.as_deref_mut());
@@ -566,6 +729,7 @@ mod tests {
     struct FakeHostState {
         events: VecDeque<HostEvent>,
         execs: usize,
+        pending: usize,
         drains: usize,
         stopped: bool,
     }
@@ -585,8 +749,14 @@ mod tests {
         }
 
         fn exec(&mut self) -> bool {
-            self.state.lock().expect("fake host").execs += 1;
+            let mut state = self.state.lock().expect("fake host");
+            state.execs += 1;
+            state.pending += 1;
             true
+        }
+
+        fn has_pending(&self) -> bool {
+            self.state.lock().expect("fake host").pending > 0
         }
 
         fn drain(&mut self, _timeout: Duration) {
@@ -685,7 +855,7 @@ mod tests {
         supervisor: &mut PluginSupervisor,
         now: Instant,
         plugin_id: &str,
-    ) -> Result<(), String> {
+    ) -> Result<StartOutcome, String> {
         supervisor.start_at(
             now,
             plugin_id,
@@ -783,19 +953,84 @@ mod tests {
     fn start_admission_and_request_queue_are_bounded() {
         let (mut supervisor, launcher) = supervisor();
         let now = Instant::now();
-        for index in 0..MAX_ACTIVE_STARTS {
-            start(&mut supervisor, now, &format!("plugin-{index}")).expect("start");
+        for index in 0..MAX_RUNNING_HOSTS {
+            assert_eq!(
+                start(&mut supervisor, now, &format!("plugin-{index}")).expect("start"),
+                StartOutcome::Started
+            );
         }
-        start(&mut supervisor, now, "overflow").expect_err("start cap");
-        assert_eq!(launcher.starts.load(Ordering::Relaxed), MAX_ACTIVE_STARTS);
+        for index in 0..MAX_QUEUED_STARTS {
+            assert_eq!(
+                start(&mut supervisor, now, &format!("queued-{index}")).expect("queue"),
+                StartOutcome::Queued
+            );
+        }
+        start(&mut supervisor, now, "overflow").expect_err("start queue cap");
+        assert_eq!(launcher.starts.load(Ordering::Relaxed), MAX_RUNNING_HOSTS);
+        supervisor.stop("plugin-0", None).expect("stop");
+        supervisor.poll_at(now, None);
+        assert_eq!(
+            launcher.starts.load(Ordering::Relaxed),
+            MAX_RUNNING_HOSTS + 1
+        );
 
         for _ in 0..MAX_PENDING_CALLS {
             assert_eq!(
-                supervisor.exec("plugin-0").expect("queue"),
+                supervisor.exec("plugin-1").expect("queue"),
                 ExecOutcome::Queued
             );
         }
-        supervisor.exec("plugin-0").expect_err("request cap");
+        supervisor.exec("plugin-1").expect_err("request cap");
+    }
+
+    #[test]
+    fn idle_ready_host_is_reclaimed() {
+        let (mut supervisor, launcher) = supervisor();
+        let now = Instant::now();
+        start(&mut supervisor, now, "demo").expect("start");
+        launcher
+            .state
+            .lock()
+            .expect("fake host")
+            .events
+            .push_back(HostEvent::Ready);
+        supervisor.poll_at(now, None);
+        assert_eq!(supervisor.state("demo"), HostState::Ready);
+
+        let events = supervisor.poll_at(now + IDLE_TIMEOUT, None);
+        assert_eq!(supervisor.state("demo"), HostState::Stopped);
+        assert!(events.iter().any(|event| matches!(
+            event,
+            SupervisorEvent::State {
+                state: HostState::Stopped,
+                detail: Some(detail),
+                ..
+            } if detail == "idle"
+        )));
+        let state = launcher.state.lock().expect("fake host");
+        assert_eq!(state.drains, 1);
+        assert!(state.stopped);
+    }
+
+    #[test]
+    fn pending_request_blocks_idle_reclaim() {
+        let (mut supervisor, launcher) = supervisor();
+        let now = Instant::now();
+        start(&mut supervisor, now, "demo").expect("start");
+        launcher
+            .state
+            .lock()
+            .expect("fake host")
+            .events
+            .push_back(HostEvent::Ready);
+        supervisor.poll_at(now, None);
+        supervisor.exec("demo").expect("exec");
+        supervisor.poll_at(now + IDLE_TIMEOUT + Duration::from_secs(1), None);
+        assert_eq!(supervisor.state("demo"), HostState::Ready);
+
+        launcher.state.lock().expect("fake host").pending = 0;
+        supervisor.poll_at(now + IDLE_TIMEOUT + Duration::from_secs(1), None);
+        assert_eq!(supervisor.state("demo"), HostState::Stopped);
     }
 
     #[test]

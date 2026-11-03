@@ -127,16 +127,19 @@ pub struct GatewayClient {
     next_id: u64,
     poisoned: bool,
     notifications: VecDeque<Request>,
+    socket: std::path::PathBuf,
 }
 
 impl GatewayClient {
     /// Connect to `socket` and perform `session.hello`.
     pub fn connect(socket: impl AsRef<Path>, token: &[u8; 32]) -> Result<Self, ClientError> {
+        let socket = socket.as_ref().to_path_buf();
         let mut client = Self {
-            connection: Connection::connect(socket)?,
+            connection: Connection::connect(&socket)?,
             next_id: 1,
             poisoned: false,
             notifications: VecDeque::new(),
+            socket,
         };
         client.request(
             "session.hello",
@@ -147,6 +150,20 @@ impl GatewayClient {
             }),
         )?;
         Ok(client)
+    }
+
+    /// Socket path used by this client.
+    pub fn socket_path(&self) -> &Path {
+        &self.socket
+    }
+
+    /// Forward one JSON-RPC method through the authenticated gateway session.
+    pub fn call(
+        &mut self,
+        method: &str,
+        params: serde_json::Value,
+    ) -> Result<serde_json::Value, ClientError> {
+        self.request(method, params)
     }
 
     /// Drain server-initiated notifications received while waiting for

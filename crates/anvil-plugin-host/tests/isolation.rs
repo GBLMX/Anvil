@@ -1,11 +1,12 @@
 #![cfg(target_os = "linux")]
 
-use anvil_ipc::write_frame;
-use anvil_plugin_host::{Token, spawn};
+use anvil_ipc::{read_frame, write_frame};
+use anvil_plugin_host::{Cgroup, Token, spawn, spawn_in_cgroup};
 use std::io::{BufRead, BufReader, Write};
 use std::os::unix::net::UnixListener;
 use std::path::Path;
 use std::process::{Command, Stdio};
+use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 fn host_bin() -> &'static Path {
@@ -19,6 +20,7 @@ fn host_reads_token_and_sends_hello() {
     let hello = String::from_utf8(hello).expect("utf8");
     assert!(hello.contains("session.hello"), "{hello}");
     assert!(hello.contains("\"session_id\":\"empty\""), "{hello}");
+    assert!(hello.contains("\"api_version\":\"0.1.0\""), "{hello}");
     assert_eq!(host.wait().expect("wait").code(), Some(0));
 }
 
@@ -59,10 +61,21 @@ fn host_closes_all_but_stdio() {
 }
 
 #[test]
-fn host_allows_unix_sockets() {
+fn host_denies_unix_sockets() {
     let mut host =
         spawn(host_bin(), &["--check-uds".to_owned()], Token([7; 32])).expect("spawn host");
-    assert_eq!(host.wait().expect("wait").code(), Some(23));
+    assert_eq!(host.wait().expect("wait").code(), Some(24));
+}
+
+#[test]
+fn host_denies_hardening_bypasses() {
+    let mut host = spawn(
+        host_bin(),
+        &["--check-hardening".to_owned()],
+        Token([8; 32]),
+    )
+    .expect("spawn host");
+    assert_eq!(host.wait().expect("wait").code(), Some(0));
 }
 
 #[test]
@@ -114,6 +127,91 @@ fn host_answers_sys_ping_and_rejects_sys_exec() {
         .expect("shutdown");
     assert_eq!(host.wait().expect("wait").code(), Some(0));
     let _ = std::fs::remove_file(&path);
+}
+
+#[test]
+fn host_forwards_sys_exec_to_gateway() {
+    let suffix = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("time")
+        .as_nanos();
+    let gateway_path = std::env::temp_dir().join(format!(
+        "anvil-gateway-rpc-{}-{suffix}.sock",
+        std::process::id()
+    ));
+    let editor_path = std::env::temp_dir().join(format!(
+        "anvil-editor-rpc-{}-{suffix}.sock",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_file(&gateway_path);
+    let _ = std::fs::remove_file(&editor_path);
+    let gateway = UnixListener::bind(&gateway_path).expect("bind gateway");
+    let editor_listener = UnixListener::bind(&editor_path).expect("bind editor");
+    let gateway_thread = thread::spawn(move || {
+        let (mut connection, _) = gateway.accept().expect("accept gateway");
+        let hello = read_frame(&mut connection)
+            .expect("read hello")
+            .expect("hello frame");
+        let hello: serde_json::Value = serde_json::from_slice(&hello).expect("hello json");
+        write_frame(
+            &mut connection,
+            serde_json::to_string(&serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": hello["id"],
+                "result": { "plugin_id": "demo" }
+            }))
+            .expect("hello response")
+            .as_bytes(),
+        )
+        .expect("write hello");
+        let request = read_frame(&mut connection)
+            .expect("read exec")
+            .expect("exec frame");
+        let request: serde_json::Value = serde_json::from_slice(&request).expect("exec json");
+        assert_eq!(request["method"], "sys.exec");
+        assert_eq!(request["params"]["tool"], "true");
+        write_frame(
+            &mut connection,
+            serde_json::to_string(&serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": request["id"],
+                "result": { "ok": true }
+            }))
+            .expect("exec response")
+            .as_bytes(),
+        )
+        .expect("write exec");
+    });
+
+    let mut host = spawn(
+        host_bin(),
+        &[
+            "--socket".to_owned(),
+            editor_path.display().to_string(),
+            "--gateway-socket".to_owned(),
+            gateway_path.display().to_string(),
+        ],
+        Token([14; 32]),
+    )
+    .expect("spawn host");
+    let _ = host.read_hello().expect("hello");
+    let mut editor = editor_listener.accept().expect("accept editor").0;
+    write_frame(
+        &mut editor,
+        br#"{"jsonrpc":"2.0","id":9,"method":"sys.exec","params":{"tool":"true","args":[],"timeout_ms":1000}}"#,
+    )
+    .expect("exec");
+    let response = read_frame(&mut editor).expect("read").expect("response");
+    let response: serde_json::Value = serde_json::from_slice(&response).expect("response json");
+    assert_eq!(response["result"]["ok"], true);
+
+    editor
+        .shutdown(std::net::Shutdown::Write)
+        .expect("shutdown editor");
+    assert_eq!(host.wait().expect("wait").code(), Some(0));
+    gateway_thread.join().expect("gateway thread");
+    let _ = std::fs::remove_file(gateway_path);
+    let _ = std::fs::remove_file(editor_path);
 }
 
 #[test]
@@ -176,17 +274,23 @@ fn editor_uds_eof_exits_host() {
 #[test]
 fn host_can_join_delegated_cgroup() {
     let name = format!("anvil-plugin-test-{}", std::process::id());
-    let Ok(mut cgroup) = anvil_plugin_host::Cgroup::create("/sys/fs/cgroup", &name, 64, 256 << 20)
-    else {
+    let Ok(root) = Cgroup::detect_root() else {
         return;
     };
-    let mut host = spawn(host_bin(), &["--hold".to_owned()], Token([11; 32])).expect("spawn host");
-    host.attach_cgroup(&cgroup).expect("attach");
-    unsafe {
-        libc::kill(host.id() as i32, libc::SIGKILL);
-    }
-    let _ = host.wait();
-    cgroup.remove().expect("remove cgroup");
+    let Ok(cgroup) = Cgroup::create(&root, &name, 64, 256 << 20, 100) else {
+        return;
+    };
+    let cgroup_path = cgroup.path().to_path_buf();
+    let mut host = spawn_in_cgroup(host_bin(), &["--hold".to_owned()], Token([11; 32]), cgroup)
+        .expect("spawn host");
+    let membership =
+        std::fs::read_to_string(format!("/proc/{}/cgroup", host.id())).expect("read host cgroup");
+    assert!(
+        membership.contains(cgroup_path.file_name().unwrap().to_str().unwrap()),
+        "{membership}"
+    );
+    host.terminate();
+    assert!(!cgroup_path.exists(), "cgroup was not removed");
 }
 
 #[test]

@@ -81,6 +81,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "anvil-session"
+version = "0.4.5"
+dependencies = [
+ "anvil-api",
+ "anvil-core",
+ "anvil-editor",
+ "anvil-ipc",
+ "anvil-plugin-host",
+ "nix 0.31.3",
+ "serde_json",
+ "sha2",
+]
+
+[[package]]
 name = "anvil-tui"
 version = "0.4.5"
 dependencies = [
@@ -89,8 +103,8 @@ dependencies = [
  "anvil-editor",
  "anvil-ipc",
  "anvil-plugin-host",
+ "anvil-session",
  "crossterm",
- "nix 0.31.3",
  "ratatui",
  "serde",
  "serde_json",

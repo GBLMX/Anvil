@@ -43,14 +43,11 @@ mod file_tree_ui;
 mod file_worker;
 mod gateway;
 mod git_gutter;
-mod host_session;
 mod inlay_hints;
 pub mod lsp;
 mod lsp_ui;
 mod plugin_activation;
 mod plugin_discovery;
-mod plugin_session;
-mod plugin_supervisor;
 mod splits;
 use lsp_ui::lsp_settings;
 mod command;
@@ -69,16 +66,18 @@ use render::{
     push_syntax_spans, utf16_to_byte,
 };
 mod syntax;
+#[cfg(target_os = "linux")]
+use anvil_session::plugin_session::{DEBUG_PERMISSIONS, DEBUG_PLUGIN_ID};
+#[cfg(target_os = "linux")]
+use anvil_session::plugin_supervisor::{
+    ExecOutcome, HostState, PluginSupervisor, StartMode, StartOutcome, SupervisorEvent,
+};
 use file_worker::FileWorker;
 use gateway::GatewaySession;
 use lsp_worker::LspConfig;
 use lsp_worker::{LspEvent, LspWorker};
 #[cfg(target_os = "linux")]
 use plugin_activation::ActivationEvent;
-#[cfg(target_os = "linux")]
-use plugin_session::{DEBUG_PERMISSIONS, DEBUG_PLUGIN_ID};
-#[cfg(target_os = "linux")]
-use plugin_supervisor::{HostState, PluginSupervisor, StartMode, SupervisorEvent};
 use syntax::SyntaxState;
 
 const MAX_OPEN_BYTES: usize = 256 * 1024 * 1024;
@@ -668,7 +667,8 @@ impl Model {
             let plugin_id = plugin.manifest.id.clone();
             if matches!(
                 self.plugin_supervisor.state(&plugin_id),
-                HostState::Registering
+                HostState::Queued
+                    | HostState::Registering
                     | HostState::Starting
                     | HostState::Ready
                     | HostState::Draining
@@ -681,8 +681,12 @@ impl Model {
                 gateway,
                 &self.workspace,
             ) {
-                Ok(()) => {
+                Ok(StartOutcome::Started) => {
                     self.status = format!("plugin {plugin_id} starting");
+                    self.dirty = true;
+                }
+                Ok(StartOutcome::Queued) => {
+                    self.status = format!("plugin {plugin_id} queued");
                     self.dirty = true;
                 }
                 Err(error) => {
@@ -774,7 +778,8 @@ impl Model {
             gateway,
             &self.workspace,
         ) {
-            Ok(()) => self.status = "plugin host OOM probe starting".to_owned(),
+            Ok(StartOutcome::Started) => self.status = "plugin host OOM probe starting".to_owned(),
+            Ok(StartOutcome::Queued) => self.status = "plugin host OOM probe queued".to_owned(),
             Err(error) => self.status = format!("E: {error}"),
         }
         self.dirty = true;
@@ -804,7 +809,8 @@ impl Model {
             gateway,
             &self.workspace,
         ) {
-            Ok(()) => self.status = "plugin host starting".to_owned(),
+            Ok(StartOutcome::Started) => self.status = "plugin host starting".to_owned(),
+            Ok(StartOutcome::Queued) => self.status = "plugin host queued".to_owned(),
             Err(error) => self.status = format!("E: {error}"),
         }
         self.dirty = true;
@@ -819,12 +825,8 @@ impl Model {
     #[cfg(target_os = "linux")]
     fn exec_host(&mut self) {
         match self.plugin_supervisor.exec(DEBUG_PLUGIN_ID) {
-            Ok(plugin_supervisor::ExecOutcome::Sent) => {
-                self.status = "plugin host request sent".to_owned()
-            }
-            Ok(plugin_supervisor::ExecOutcome::Queued) => {
-                self.status = "plugin host request queued".to_owned()
-            }
+            Ok(ExecOutcome::Sent) => self.status = "plugin host request sent".to_owned(),
+            Ok(ExecOutcome::Queued) => self.status = "plugin host request queued".to_owned(),
             Err(error) => self.status = format!("E: {error}"),
         }
         self.dirty = true;
@@ -874,7 +876,8 @@ impl Model {
             .plugin_supervisor
             .activate(plugin_id, &plugin.root, gateway, &self.workspace)
         {
-            Ok(()) => self.status = format!("plugin {plugin_id} starting"),
+            Ok(StartOutcome::Started) => self.status = format!("plugin {plugin_id} starting"),
+            Ok(StartOutcome::Queued) => self.status = format!("plugin {plugin_id} queued"),
             Err(error) => self.status = format!("E: plugin {plugin_id}: {error}"),
         }
         self.dirty = true;
@@ -904,7 +907,10 @@ impl Model {
                             "E: plugin {plugin_id} disabled ({}); run :plugin-enable {plugin_id}",
                             detail.unwrap_or_else(|| "repeated failures".to_owned())
                         ),
-                        HostState::Stopped => format!("plugin {plugin_id} stopped"),
+                        HostState::Stopped => match detail {
+                            Some(detail) => format!("plugin {plugin_id} stopped ({detail})"),
+                            None => format!("plugin {plugin_id} stopped"),
+                        },
                         _ => format!("plugin {plugin_id} {}", state.as_str()),
                     };
                     self.dirty = true;

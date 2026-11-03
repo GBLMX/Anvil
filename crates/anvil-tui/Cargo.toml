@@ -28,6 +28,7 @@ anvil-core = { path = "../anvil-core", version = "0.4.5" }
 anvil-editor = { path = "../anvil-editor", version = "0.4.5" }
 anvil-ipc = { path = "../anvil-ipc", version = "0.4.5" }
 anvil-plugin-host = { path = "../anvil-plugin-host", version = "0.4.5" }
+anvil-session = { path = "../anvil-session", version = "0.4.5" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 toml_edit = "0.25"
@@ -41,7 +42,6 @@ name = "anvil"
 path = "src/main.rs"
 
 [dev-dependencies]
-nix = { version = "0.31", features = ["poll", "process", "signal", "term"] }
 tempfile = "3"
 
 [[bench]]

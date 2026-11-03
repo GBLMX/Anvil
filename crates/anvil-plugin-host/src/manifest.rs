@@ -12,6 +12,8 @@ pub struct PluginManifest {
     pub id: String,
     pub version: String,
     pub entry: String,
+    #[serde(default = "default_api")]
+    pub api: String,
     #[serde(default, rename = "activationEvents", alias = "activation_events")]
     pub activation_events: Vec<String>,
     #[serde(default)]
@@ -61,6 +63,9 @@ impl PluginManifest {
         if self.version.is_empty() || self.version.len() > 64 {
             return Err("invalid plugin version".to_owned());
         }
+        if self.api.is_empty() || self.api.len() > 64 || !self.api.starts_with("0.1") {
+            return Err("unsupported plugin API".to_owned());
+        }
         let entry = Path::new(&self.entry);
         if entry.as_os_str().is_empty()
             || entry.is_absolute()
@@ -95,6 +100,10 @@ impl PluginManifest {
     }
 }
 
+fn default_api() -> String {
+    "0.1".to_owned()
+}
+
 fn valid_event(event: &str) -> bool {
     event == "onStartup"
         || ["onCommand:", "onLanguage:", "onWorkspaceContains:"]
@@ -115,6 +124,7 @@ mod tests {
             id: "demo".to_owned(),
             version: "0.1.0".to_owned(),
             entry: entry.to_owned(),
+            api: "0.1".to_owned(),
             activation_events: vec!["onStartup".to_owned()],
             commands: vec![PluginCommand {
                 id: "demo.run".to_owned(),
@@ -129,6 +139,13 @@ mod tests {
         assert!(manifest("/run.luau").validate().is_err());
         let mut invalid = manifest("run.luau");
         invalid.activation_events = vec!["onUnknown".to_owned()];
+        assert!(invalid.validate().is_err());
+    }
+
+    #[test]
+    fn rejects_unsupported_plugin_api() {
+        let mut invalid = manifest("run.luau");
+        invalid.api = "0.2".to_owned();
         assert!(invalid.validate().is_err());
     }
 

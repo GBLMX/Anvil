@@ -1,5 +1,5 @@
 use anvil_ipc::{Connection, FrameError, Listener};
-use anvil_plugin_host::{Cgroup, HostExit, HostProcess, Token, spawn};
+use anvil_plugin_host::{Cgroup, HostExit, HostProcess, Token, spawn, spawn_in_cgroup};
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -22,7 +22,6 @@ enum HostCommand {
 
 pub struct HostSession {
     host: HostProcess,
-    cgroup: Option<Cgroup>,
     commands: Sender<HostCommand>,
     events: Receiver<HostEvent>,
     alive: Arc<AtomicBool>,
@@ -32,20 +31,53 @@ pub struct HostSession {
     exited: bool,
 }
 
+struct SocketCleanup(Option<PathBuf>);
+
+impl SocketCleanup {
+    fn new(path: PathBuf) -> Self {
+        Self(Some(path))
+    }
+
+    fn keep(mut self) -> PathBuf {
+        self.0.take().expect("socket cleanup guard armed")
+    }
+}
+
+impl Drop for SocketCleanup {
+    fn drop(&mut self) {
+        if let Some(path) = self.0.take() {
+            let _ = std::fs::remove_file(path);
+        }
+    }
+}
+
 impl HostSession {
-    pub(crate) fn start_with_token(workspace: &Path, token: Token) -> Result<Self, String> {
+    pub(crate) fn start_with_token(
+        workspace: &Path,
+        token: Token,
+        gateway_socket: Option<&Path>,
+    ) -> Result<Self, String> {
         let host = host_binary()?;
-        let cgroup_root = std::env::var_os("ANVIL_CGROUP_ROOT").map(PathBuf::from);
-        Self::start_with_host_token(workspace, &host, None, cgroup_root, token, None)
+        let cgroup_root = Some(cgroup_root()?);
+        Self::start_with_host_token(
+            workspace,
+            &host,
+            None,
+            cgroup_root,
+            token,
+            None,
+            gateway_socket,
+        )
     }
 
     pub(crate) fn start_with_token_plugin(
         workspace: &Path,
         plugin_root: &Path,
         token: Token,
+        gateway_socket: Option<&Path>,
     ) -> Result<Self, String> {
         let host = host_binary()?;
-        let cgroup_root = std::env::var_os("ANVIL_CGROUP_ROOT").map(PathBuf::from);
+        let cgroup_root = Some(cgroup_root()?);
         Self::start_with_host_token(
             workspace,
             &host,
@@ -53,15 +85,26 @@ impl HostSession {
             cgroup_root,
             token,
             Some(plugin_root),
+            gateway_socket,
         )
     }
 
-    pub(crate) fn start_oom_with_token(workspace: &Path, token: Token) -> Result<Self, String> {
+    pub(crate) fn start_oom_with_token(
+        workspace: &Path,
+        token: Token,
+        gateway_socket: Option<&Path>,
+    ) -> Result<Self, String> {
         let host = host_binary()?;
-        let root = std::env::var_os("ANVIL_CGROUP_ROOT")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from("/sys/fs/cgroup"));
-        Self::start_with_host_token(workspace, &host, Some(300), Some(root), token, None)
+        let root = cgroup_root()?;
+        Self::start_with_host_token(
+            workspace,
+            &host,
+            Some(300),
+            Some(root),
+            token,
+            None,
+            gateway_socket,
+        )
     }
 
     #[cfg(test)]
@@ -71,7 +114,15 @@ impl HostSession {
         allocate_mb: Option<u32>,
         cgroup_root: Option<PathBuf>,
     ) -> Result<Self, String> {
-        Self::start_with_host_token(workspace, host, allocate_mb, cgroup_root, new_token(), None)
+        Self::start_with_host_token(
+            workspace,
+            host,
+            allocate_mb,
+            cgroup_root,
+            new_token(),
+            None,
+            None,
+        )
     }
 
     fn start_with_host_token(
@@ -81,7 +132,25 @@ impl HostSession {
         cgroup_root: Option<PathBuf>,
         token: Token,
         plugin_root: Option<&Path>,
+        gateway_socket: Option<&Path>,
     ) -> Result<Self, String> {
+        let cgroup = match cgroup_root {
+            Some(root) => {
+                let name = format!(
+                    "anvil-plugin-{}-{}",
+                    std::process::id(),
+                    SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .map(|time| time.as_nanos())
+                        .unwrap_or_default()
+                );
+                Some(
+                    Cgroup::create(root, &name, 64, 256 << 20, 100)
+                        .map_err(|error| format!("cgroup: {error}"))?,
+                )
+            }
+            None => None,
+        };
         let socket = std::env::temp_dir().join(format!(
             "anvil-host-{}-{}.sock",
             std::process::id(),
@@ -91,20 +160,11 @@ impl HostSession {
                 .unwrap_or_default()
         ));
         let _ = std::fs::remove_file(&socket);
+        let cleanup = SocketCleanup::new(socket.clone());
         let listener = Listener::bind(&socket).map_err(|error| error.to_string())?;
         listener
             .set_nonblocking(true)
             .map_err(|error| error.to_string())?;
-        let cgroup = match cgroup_root {
-            Some(root) => {
-                let name = format!("anvil-plugin-{}", std::process::id());
-                Some(
-                    Cgroup::create(root, &name, 64, 256 << 20)
-                        .map_err(|error| format!("cgroup: {error}"))?,
-                )
-            }
-            None => None,
-        };
         let mut args = vec!["--socket".to_owned(), socket.display().to_string()];
         if let Some(mb) = allocate_mb {
             args.push("--allocate-mb".to_owned());
@@ -114,12 +174,15 @@ impl HostSession {
             args.push("--plugin".to_owned());
             args.push(plugin_root.display().to_string());
         }
-        let process = spawn(host, &args, token).map_err(|error| format!("spawn host: {error}"))?;
-        if let Some(cgroup) = &cgroup {
-            process
-                .attach_cgroup(cgroup)
-                .map_err(|error| format!("attach cgroup: {error}"))?;
+        if let Some(gateway_socket) = gateway_socket {
+            args.push("--gateway-socket".to_owned());
+            args.push(gateway_socket.display().to_string());
         }
+        let process = match cgroup {
+            Some(cgroup) => spawn_in_cgroup(host, &args, token, cgroup),
+            None => spawn(host, &args, token),
+        }
+        .map_err(|error| format!("spawn host: {error}"))?;
         let (command_tx, command_rx) = mpsc::channel();
         let (event_tx, event_rx) = mpsc::channel();
         let alive = Arc::new(AtomicBool::new(true));
@@ -179,13 +242,12 @@ impl HostSession {
         });
         Ok(Self {
             host: process,
-            cgroup,
             commands: command_tx,
             events: event_rx,
             alive,
             pending,
             accepting,
-            socket,
+            socket: cleanup.keep(),
             exited: false,
         })
     }
@@ -207,6 +269,10 @@ impl HostSession {
         true
     }
 
+    pub fn has_pending(&self) -> bool {
+        self.pending.load(Ordering::Acquire) > 0
+    }
+
     pub fn drain(&self, timeout: Duration) {
         self.accepting.store(false, Ordering::Release);
         let deadline = std::time::Instant::now() + timeout;
@@ -223,7 +289,7 @@ impl HostSession {
             self.exited = true;
             events.push(HostEvent::Exited(anvil_plugin_host::classify_exit(
                 status,
-                self.cgroup.is_some(),
+                self.host.memory_limited(),
             )));
         }
         events
@@ -319,6 +385,13 @@ fn host_binary() -> Result<PathBuf, String> {
     }
 }
 
+fn cgroup_root() -> Result<PathBuf, String> {
+    if let Some(root) = std::env::var_os("ANVIL_CGROUP_ROOT") {
+        return Ok(PathBuf::from(root));
+    }
+    Cgroup::detect_root().map_err(|error| format!("cgroup: {error}"))
+}
+
 pub(crate) fn new_token() -> Token {
     let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -350,6 +423,28 @@ mod tests {
             &serde_json::json!({"jsonrpc": "2.0", "result": {}}),
             7
         ));
+    }
+
+    #[test]
+    fn socket_cleanup_removes_unkept_paths() {
+        let path = std::env::temp_dir().join(format!(
+            "anvil-socket-guard-test-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map(|time| time.as_nanos())
+                .unwrap_or_default()
+        ));
+        std::fs::write(&path, b"x").expect("socket placeholder");
+        {
+            let _cleanup = SocketCleanup::new(path.clone());
+        }
+        assert!(!path.exists());
+
+        std::fs::write(&path, b"x").expect("socket placeholder");
+        let kept = SocketCleanup::new(path.clone()).keep();
+        assert!(kept.exists());
+        let _ = std::fs::remove_file(kept);
     }
 
     #[test]
@@ -417,13 +512,10 @@ mod tests {
             eprintln!("skipping OOM test: plugin host binary not built");
             return;
         };
-        let root = std::env::var_os("ANVIL_CGROUP_ROOT")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from("/sys/fs/cgroup"));
-        if !root.is_dir() {
-            eprintln!("skipping OOM test: cgroup2 unavailable");
+        let Ok(root) = cgroup_root() else {
+            eprintln!("skipping OOM test: no delegated cgroup2 root");
             return;
-        }
+        };
         let Ok(mut session) =
             HostSession::start_with_host(Path::new("."), &host, Some(300), Some(root))
         else {

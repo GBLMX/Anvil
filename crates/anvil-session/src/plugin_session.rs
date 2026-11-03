@@ -6,8 +6,8 @@ use std::path::Path;
 
 use crate::host_session::{self, HostEvent, HostSession};
 
-pub(crate) const DEBUG_PLUGIN_ID: &str = "debug";
-pub(crate) const DEBUG_PERMISSIONS: &[&str] = &["sys.exec"];
+pub const DEBUG_PLUGIN_ID: &str = "debug";
+pub const DEBUG_PERMISSIONS: &[&str] = &["sys.exec"];
 
 pub struct PluginSession {
     host: HostSession,
@@ -63,12 +63,18 @@ impl PluginSession {
         gateway
             .register_plugin(plugin_id, &hash.into(), permissions)
             .map_err(|error| format!("register plugin: {error}"))?;
+        let gateway_socket = gateway.socket_path().to_path_buf();
         let host = if oom {
-            HostSession::start_oom_with_token(workspace, token)
+            HostSession::start_oom_with_token(workspace, token, Some(&gateway_socket))
         } else if let Some(plugin_root) = plugin_root {
-            HostSession::start_with_token_plugin(workspace, plugin_root, token)
+            HostSession::start_with_token_plugin(
+                workspace,
+                plugin_root,
+                token,
+                Some(&gateway_socket),
+            )
         } else {
-            HostSession::start_with_token(workspace, token)
+            HostSession::start_with_token(workspace, token, Some(&gateway_socket))
         };
         match host {
             Ok(host) => Ok(Self {
@@ -88,6 +94,10 @@ impl PluginSession {
 
     pub(crate) fn exec(&self) -> bool {
         self.host.exec()
+    }
+
+    pub(crate) fn has_pending(&self) -> bool {
+        self.host.has_pending()
     }
 
     pub(crate) fn drain(&mut self, timeout: std::time::Duration) {
