@@ -40,6 +40,9 @@ in `PROJECT_CHARTER.md`, `docs/phase-0-7-plan.md`, and the ADRs.
   trusted in-process code; see [docs/0.7.x-plan.md](docs/0.7.x-plan.md).
   Blocked on `0.4.9`, `0.6.0`, the standard-edition composition crate, and the
   module two-consumer gate.
+- Optional TachyonFX-style UI effects: `anvil-tui` only, non-default feature,
+  ADR and performance gate required; see the deferred section in
+  [docs/0.5.x-plan.md](docs/0.5.x-plan.md). Not before the `0.5.9` baseline.
 - Broader language/tooling support after the kernel boundary is stable.
 - Release signing, SBOM, and provenance after release automation exists.
 - Signed plugin packages, a bounded download manager, installed-plugin
