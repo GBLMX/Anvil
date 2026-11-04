@@ -693,6 +693,49 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             _ => {}
         },
         InputMode::Normal => {
+            if model.visual_anchor.is_some() {
+                match key.code {
+                    KeyCode::Esc | KeyCode::Char('v') => {
+                        model.exit_visual();
+                        return;
+                    }
+                    KeyCode::Char('V') => {
+                        model.begin_visual(true);
+                        return;
+                    }
+                    KeyCode::Char('d') => {
+                        model.delete_visual();
+                        return;
+                    }
+                    KeyCode::Char('y') => {
+                        model.yank_visual();
+                        return;
+                    }
+                    KeyCode::Char('c') => {
+                        model.delete_visual();
+                        model.ui.input_mode = InputMode::Insert;
+                        model.begin_insert(InsertOrigin::InsertHere);
+                        return;
+                    }
+                    _ => {}
+                }
+            }
+            if key.ctrl() && key.code == KeyCode::Char('v') {
+                model.status = "E: block selection is not supported".to_owned();
+                model.dirty = true;
+                return;
+            }
+            match key.code {
+                KeyCode::Char('v') => {
+                    model.begin_visual(false);
+                    return;
+                }
+                KeyCode::Char('V') => {
+                    model.begin_visual(true);
+                    return;
+                }
+                _ => {}
+            }
             if let Some(command) = resolve_normal(key, model.count, &model.keymap) {
                 match command {
                     NormalCommand::CollapseSelections => model.collapse_selections(),
@@ -755,6 +798,9 @@ fn handle_key(model: &mut Model, key: KeyPress) {
                     NormalCommand::MoveChars(delta) => model.move_chars(delta),
                     NormalCommand::MoveLine(delta) => model.move_lines(delta),
                 }
+            }
+            if model.visual_anchor.is_some() {
+                model.sync_visual_selection();
             }
         }
     }

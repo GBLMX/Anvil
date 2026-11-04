@@ -322,6 +322,10 @@ pub struct Model {
     pub path: Option<PathBuf>,
     /// Cursor byte offset.
     pub cursor: usize,
+    /// Anchor for the selection-first visual adapter.
+    visual_anchor: Option<usize>,
+    /// Whether the visual adapter selects whole lines.
+    visual_line: bool,
     /// First visible line, independent of the cursor.
     pub scroll: usize,
     /// First visible display column.
@@ -462,6 +466,8 @@ impl Model {
             welcome,
             welcome_back: false,
             cursor: 0,
+            visual_anchor: None,
+            visual_line: false,
             scroll: 0,
             hscroll: 0,
             ui: UiState::default(),

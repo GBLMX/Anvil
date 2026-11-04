@@ -2620,3 +2620,20 @@ fn paragraph_text_objects_honor_counts() {
     }
     assert_eq!(model.editor.text().len_bytes(), 0);
 }
+
+#[test]
+fn visual_adapter_maps_character_and_line_selection() {
+    let mut character = Model::new(EditorState::from_text("abc\ndef"), None);
+    character.cursor = 0;
+    handle_event(&mut character, key(KeyCode::Char('v')));
+    handle_event(&mut character, key(KeyCode::Right));
+    handle_event(&mut character, key(KeyCode::Char('d')));
+    assert_eq!(character.editor.text().slice(0..4), "c\nde");
+
+    let mut line = Model::new(EditorState::from_text("abc\ndef"), None);
+    line.cursor = 0;
+    handle_event(&mut line, key(KeyCode::Char('V')));
+    handle_event(&mut line, key(KeyCode::Down));
+    handle_event(&mut line, key(KeyCode::Char('d')));
+    assert_eq!(line.editor.text().len_bytes(), 0);
+}

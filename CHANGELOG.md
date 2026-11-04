@@ -12,6 +12,9 @@ post-`0.5.0` feature line.
 - Word, quote, bracket/parenthesis/brace, paragraph, and tag text objects
   support `d`/`y`/`c`; word and paragraph objects honor counts.
 
+- `v`/`V` map character and line selection onto the selection-first model;
+  block selection is rejected explicitly.
+
 - Semantic last-change repeat: `.` replays the last successful delete, change,
   or insert session; an explicit count overrides the recorded delete count.
   The scope is session-wide and applies to the active buffer.

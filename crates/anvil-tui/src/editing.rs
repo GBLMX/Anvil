@@ -849,6 +849,72 @@ impl Model {
         self.dirty = true;
     }
 
+    pub(crate) fn begin_visual(&mut self, line: bool) {
+        self.visual_anchor = Some(self.cursor);
+        self.visual_line = line;
+        self.sync_visual_selection();
+        self.dirty = true;
+    }
+
+    pub(crate) fn exit_visual(&mut self) {
+        self.visual_anchor = None;
+        self.editor.set_selection_bytes(self.cursor, self.cursor);
+        self.dirty = true;
+    }
+
+    pub(crate) fn sync_visual_selection(&mut self) {
+        let Some(anchor) = self.visual_anchor else {
+            return;
+        };
+        let (start, end) = if self.visual_line {
+            let Some(anchor_line) = self.editor.index().offset_to_line(anchor) else {
+                return;
+            };
+            let Some(cursor_line) = self.editor.index().offset_to_line(self.cursor) else {
+                return;
+            };
+            let start_line = anchor_line.line.min(cursor_line.line);
+            let end_line = anchor_line.line.max(cursor_line.line);
+            let Some(start) = self.editor.index().line_to_offset(start_line) else {
+                return;
+            };
+            let Some(last) = self.editor.index().line_to_offset(end_line) else {
+                return;
+            };
+            let Some(last) = self.editor.line_range_at(last) else {
+                return;
+            };
+            (start, last.end)
+        } else {
+            let start = anchor.min(self.cursor);
+            let last = anchor.max(self.cursor);
+            let end = self.editor.next_grapheme_boundary(last).unwrap_or(last);
+            (start, end)
+        };
+        if start < end {
+            self.editor.set_selection_bytes(start, end);
+        }
+    }
+
+    pub(crate) fn yank_visual(&mut self) {
+        let Some((anchor, head)) = self.editor.selection_bytes().first().copied() else {
+            return;
+        };
+        let range = anchor.min(head)..anchor.max(head);
+        if range.start < range.end && self.editor.yank(range) {
+            self.record_register();
+        }
+        self.exit_visual();
+    }
+
+    pub(crate) fn delete_visual(&mut self) {
+        if !self.delete_selections(false) {
+            self.exit_visual();
+            return;
+        }
+        self.exit_visual();
+    }
+
     pub(crate) fn insert_text(&mut self, text: &str) {
         if text.is_empty() {
             return;
