@@ -12,6 +12,10 @@ cpu:         12th Gen Intel(R) Core(TM) i7-12700H
 criterion:   0.5.1
 ```
 
+
+These numbers were recorded with criterion 0.5.1. The current dev-dependency
+is 0.8.2; regenerate the baseline before comparing new results.
+
 Command:
 
 ```bash

@@ -34,15 +34,15 @@ The dependency set should avoid:
 | Lua | `mlua` with `luau` | `0.12` | Luau sandbox removes dangerous stdlib; vendored runtime |
 | JS | `rquickjs` | `0.14` | QuickJS-NG bindings; no V8/Deno |
 | Sandbox | `landlock`, `seccompiler`, `rustix` | `0.4`, `0.5`, `1` | Unprivileged Landlock/seccomp without libseccomp |
-| Sandbox (Go) | `golang.org/x/sys/unix` | `0.30` | Landlock/seccomp syscalls in the exec runner |
+| Sandbox (Go) | `golang.org/x/sys/unix` | `0.49` | Landlock/seccomp syscalls in the exec runner |
 | IPC | `serde`, `serde_json` | `1` | Length-prefixed JSON-RPC; no `jsonrpsee` |
 | Config/manifest | `serde`, `toml_edit` | `1`, `0.25` | Comment-preserving TOML; shared format |
 | CLI | `clap` | `4` | `anvil doctor` and build commands |
 | Errors | `thiserror`, `anyhow` | `2`, `1` | Typed core errors; anyhow only at binaries |
 | Logs | `tracing`, `tracing-subscriber` | `0.1`, `0.3` | Structured fields without a logging framework |
-| IDL | `schemars`, `ts-rs` | `1`, `11` | Schema/TS from Rust types; Luau/LuaLS template |
+| IDL | `schemars`, `ts-rs` | `1`, `12` | Schema/TS from Rust types; Luau/LuaLS template |
 | Unicode | `unicode-segmentation`, `unicode-width` | `1`, `0.2` | Grapheme and cell-width correctness |
-| Dev | `tempfile`, `proptest`, `criterion`, `libfuzzer-sys` | `3`, `1`, `0.5`, `0.4` | Fixtures, properties, benchmarks, fuzz targets |
+| Dev | `tempfile`, `proptest`, `criterion`, `libfuzzer-sys` | `3`, `1`, `0.8`, `0.4` | Fixtures, properties, benchmarks, fuzz targets |
 
 ### Go
 
