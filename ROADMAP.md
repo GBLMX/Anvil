@@ -5,7 +5,7 @@ in `PROJECT_CHARTER.md`, `docs/phase-0-7-plan.md`, and the ADRs.
 
 ## Current
 
-- `0.4.x` feature line after the `0.3.0 → 0.4.0` maintenance release.
+- `0.5.x` feature line after the `0.5.0` session extraction release.
 - Stabilize the selection-first kernel and its existing tests.
 - Complete the kernel/distribution boundary decision
   ([ADR-0013](docs/adr/0013-kernel-distribution-boundary.md)).
