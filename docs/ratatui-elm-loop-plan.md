@@ -282,6 +282,45 @@ Layout tests must cover:
 Delivery mapping: `0.5.3` palette/which-key, `0.5.4` icons, `0.5.5` status,
 `0.5.6` tabs, `0.5.9` mouse hit-testing against these rects.
 
+### 8.5 Yazi reference model
+
+Yazi is a study reference, not a dependency or a visual template. Borrow the
+interaction and task invariants, not its runtime or keybindings.
+
+| Yazi area | Adopt | Anvil slice |
+|---|---|---|
+| Core/UI split | State and actions stay outside terminal rendering | `anvil-session` / `anvil-tui` |
+| Component dispatch | One focus owner; each pane/overlay consumes input explicitly | `0.5.3`, `0.5.9` |
+| Keymap + help panel | Registry-backed which-key and prefix continuations | `0.5.3` |
+| Async preview | Request id, generation, cancellation, stale-result drop, byte/line/time caps | `0.5.4` |
+| Task manager | Bounded background work, progress, completion/failure, no modal blocking | `0.5.7` |
+| Adaptive panes | Ratio plus minimum sizes; chrome collapses before the editor | `0.5.5`, `0.5.6` |
+| Theme tokens | Semantic roles with text/ASCII fallback | `0.5.4`, `0.5.5` |
+| Config merge | Defaults, user overrides, validation errors with locations | `0.5.3` |
+
+Do not adopt:
+
+- Tokio as a new runtime; Anvil keeps its no-Tokio v1 constraint.
+- Lua or plugins executing inside the editor process; Anvil keeps the external
+  sandboxed plugin host.
+- File-manager-specific preview transports as v1 requirements.
+- Yazi/LazyVim keybindings, icon requirements, or color skins.
+
+Delivery gates:
+
+- `0.5.3`: command registry -> keymap continuations -> which-key; one overlay
+  stack; palette closes on execute, `Esc`, or focus loss.
+- `0.5.4`: preview worker with request id, generation, cancellation, and
+  bounded output; stale previews never overwrite newer selections.
+- `0.5.5`/`0.5.6`: pure `Layout` plus tab/status truncation at 40/80/200
+  columns.
+- `0.5.7`: bounded task/notification queue; progress is non-blocking and
+  failures remain visible.
+- `0.5.9`: mouse hit-testing uses the same rects as keyboard focus.
+
+Non-goals: copying Yazi's file-manager UI, adding a second runtime, or making
+icons/animation mandatory.
+
 ## 9. Input and selection-first
 
 - Key events become core `EditorCommand`/motion requests.
