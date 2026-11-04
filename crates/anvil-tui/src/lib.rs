@@ -16,7 +16,7 @@ use anvil_core::{TextBuffer, TextDocument, end_word, next_word_start, previous_w
 use anvil_editor::EditorState;
 use anvil_ipc::GatewayClient;
 use anvil_session::DocumentSession;
-use anvil_session::ui::FocusState;
+use anvil_session::ui::{InputMode, UiState};
 use crossterm::{
     cursor::SetCursorStyle,
     event::{
@@ -99,48 +99,6 @@ struct Buffer {
 
 struct Pane {
     buffer: Buffer,
-}
-
-/// Kind of entry created from the file tree.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CreateKind {
-    File,
-    Directory,
-}
-
-/// The small state machine needed by TUI-1.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum InputMode {
-    /// Navigation, insert entry, command entry.
-    Normal,
-    /// Text insertion at the cursor.
-    Insert,
-    /// Rename symbol input.
-    Rename { name: String },
-    /// Ex-style command line.
-    CommandLine { buffer: String },
-    /// Incremental substring search.
-    Search { query: String },
-    /// Create a file or directory in the tree.
-    Create {
-        directory: PathBuf,
-        name: String,
-        kind: CreateKind,
-    },
-    /// Rename a tree entry.
-    RenameEntry { path: PathBuf, name: String },
-    /// Confirm deletion of a tree entry.
-    ConfirmDelete { path: PathBuf },
-    /// Confirm closing a modified buffer.
-    ConfirmClose { index: usize },
-    /// Confirm reloading a dirty buffer changed on disk.
-    ConfirmReload { path: PathBuf },
-    /// Move or copy a tree entry into a destination directory.
-    TransferEntry {
-        path: PathBuf,
-        copy: bool,
-        directory: String,
-    },
 }
 
 /// Vi word motion kind.
@@ -288,7 +246,7 @@ pub struct Model {
     /// First visible display column.
     pub hscroll: usize,
     /// Input state.
-    pub input_mode: InputMode,
+    pub ui: UiState,
     /// In-memory keymap overrides.
     keymap: keymap::KeymapConfig,
     /// Set by `q` / `:q`.
@@ -366,8 +324,6 @@ pub struct Model {
     inlay_checked: Option<(PathBuf, u64, usize, usize)>,
     /// Secondary pane when a vertical split is open.
     split: Option<Pane>,
-    /// Focus ownership for the tree and split pane.
-    pub focus: FocusState,
     /// Flattened workspace tree, when open.
     tree: Vec<TreeEntry>,
     tree_selected: Option<usize>,
@@ -421,7 +377,7 @@ impl Model {
             cursor: 0,
             scroll: 0,
             hscroll: 0,
-            input_mode: InputMode::Normal,
+            ui: UiState::default(),
             keymap: keymap::KeymapConfig::default(),
             quit: false,
             modified: false,
@@ -465,7 +421,6 @@ impl Model {
             inlay_pending: None,
             inlay_checked: None,
             split: None,
-            focus: FocusState::default(),
             tree: Vec::new(),
             tree_selected: None,
             tree_visible: false,
@@ -588,7 +543,7 @@ impl Model {
         self.modified = false;
         self.welcome_back = self.welcome;
         self.welcome = false;
-        self.input_mode = InputMode::Normal;
+        self.ui.input_mode = InputMode::Normal;
         self.pending = None;
         self.status = "Help: :q returns".to_owned();
         self.dirty = true;
@@ -608,7 +563,7 @@ impl Model {
         self.syntax
             .borrow_mut()
             .switch_path(self.path.as_deref(), false);
-        self.input_mode = InputMode::Normal;
+        self.ui.input_mode = InputMode::Normal;
         self.welcome = std::mem::take(&mut self.welcome_back);
         self.pending = None;
         self.status = "Returned from help".to_owned();
@@ -1268,7 +1223,7 @@ impl Model {
         let total = index.len_lines();
         let end = (self.scroll + usize::from(height)).min(total);
         let current = self.current_line();
-        let needle = match &self.input_mode {
+        let needle = match &self.ui.input_mode {
             InputMode::Search { query } => query.as_str(),
             _ => self.search_query.as_str(),
         };
@@ -1414,7 +1369,7 @@ pub fn run_with_workspace(path: Option<PathBuf>, workspace: PathBuf) -> io::Resu
     let mut first_draw = true;
     let mut insert_cursor: Option<bool> = None;
     loop {
-        let wants_bar = matches!(model.input_mode, InputMode::Insert);
+        let wants_bar = matches!(model.ui.input_mode, InputMode::Insert);
         if insert_cursor != Some(wants_bar) {
             terminal.set_cursor_shape(wants_bar)?;
             insert_cursor = Some(wants_bar);

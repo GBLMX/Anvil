@@ -1,6 +1,7 @@
 use super::*;
 use crate::input::KeyPress;
 use crate::keymap::{KeyChord, NormalCommand, PendingCommand};
+use anvil_session::ui::CreateKind;
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::{Terminal, backend::TestBackend};
 
@@ -63,7 +64,7 @@ fn renders_start_dashboard_for_an_empty_launch() {
 
     handle_event(&mut model, key(KeyCode::Char('i')));
     assert!(!model.welcome);
-    assert!(matches!(model.input_mode, InputMode::Insert));
+    assert!(matches!(model.ui.input_mode, InputMode::Insert));
 }
 
 #[test]
@@ -513,7 +514,7 @@ fn closing_focused_split_restores_left_pane() {
     model.cursor = 5;
     model.close_split();
     assert!(model.split.is_none());
-    assert!(!model.focus.split);
+    assert!(!model.ui.focus.split);
     assert_eq!(model.cursor, 0);
     assert_eq!(model.editor.text().slice(0..4), "left");
 }
@@ -526,10 +527,10 @@ fn ctrl_w_v_opens_split_and_ctrl_w_h_l_switches_focus() {
     assert!(model.split.is_some());
     handle_event(&mut model, ctrl(KeyCode::Char('w')));
     handle_event(&mut model, key(KeyCode::Char('l')));
-    assert!(model.focus.split);
+    assert!(model.ui.focus.split);
     handle_event(&mut model, ctrl(KeyCode::Char('w')));
     handle_event(&mut model, key(KeyCode::Char('h')));
-    assert!(!model.focus.split);
+    assert!(!model.ui.focus.split);
 }
 
 #[test]
@@ -538,15 +539,15 @@ fn split_panes_keep_independent_cursors() {
     model.cursor = 1;
     model.split_vertical();
     assert!(model.split.is_some());
-    assert!(!model.focus.split);
+    assert!(!model.ui.focus.split);
     model.focus_split(true);
-    assert!(model.focus.split);
+    assert!(model.ui.focus.split);
     assert_eq!(model.cursor, 1);
     model.cursor = 5;
     model.scroll = 2;
     model.hscroll = 3;
     model.focus_split(false);
-    assert!(!model.focus.split);
+    assert!(!model.ui.focus.split);
     assert_eq!(model.cursor, 1);
     assert_eq!(model.scroll, 0);
     assert_eq!(model.hscroll, 0);
@@ -608,7 +609,7 @@ fn escape_merges_cursors_only_in_normal_mode() {
     handle_event(&mut model, key(KeyCode::Char('i')));
     handle_event(&mut model, key(KeyCode::Esc));
     assert_eq!(model.editor.selection_bytes().len(), 2);
-    assert!(matches!(model.input_mode, InputMode::Normal));
+    assert!(matches!(model.ui.input_mode, InputMode::Normal));
 
     handle_event(&mut model, key(KeyCode::Esc));
     assert_eq!(model.editor.selection_bytes(), vec![(6, 6)]);
@@ -652,7 +653,7 @@ fn insert_ignores_alt_modified_characters() {
     handle_event(&mut model, key(KeyCode::Char('i')));
     handle_event(&mut model, alt(KeyCode::Char('j')));
     assert_eq!(model.editor.text().slice(0..3), "abc");
-    assert!(matches!(model.input_mode, InputMode::Insert));
+    assert!(matches!(model.ui.input_mode, InputMode::Insert));
 }
 
 #[test]
@@ -660,7 +661,7 @@ fn normal_mode_ignores_alt_commands() {
     let mut model = Model::new(EditorState::from_text("abc"), None);
     handle_event(&mut model, alt(KeyCode::Char('i')));
     handle_event(&mut model, alt(KeyCode::Char('d')));
-    assert!(matches!(model.input_mode, InputMode::Normal));
+    assert!(matches!(model.ui.input_mode, InputMode::Normal));
     assert!(model.pending.is_none());
 }
 
@@ -723,7 +724,7 @@ fn insert_mode_modifies_piece_table() {
     handle_event(&mut model, key(KeyCode::Esc));
     assert_eq!(model.editor.text().slice(0..3), "bac");
     assert!(model.modified);
-    assert_eq!(model.input_mode, InputMode::Normal);
+    assert_eq!(model.ui.input_mode, InputMode::Normal);
 }
 
 #[test]
@@ -1944,11 +1945,11 @@ fn help_is_read_only_and_returns_to_the_previous_buffer() {
     handle_event(&mut model, key(KeyCode::Enter));
     assert!(model.help_back.is_some());
     assert_eq!(model.editor.text().slice(0..HELP_TEXT.len()), HELP_TEXT);
-    assert_eq!(model.input_mode, InputMode::Normal);
+    assert_eq!(model.ui.input_mode, InputMode::Normal);
 
     handle_event(&mut model, key(KeyCode::Char('i')));
     type_text(&mut model, "Z");
-    assert_eq!(model.input_mode, InputMode::Normal);
+    assert_eq!(model.ui.input_mode, InputMode::Normal);
     assert!(model.status.contains("read-only"));
     assert_eq!(model.editor.text().slice(0..HELP_TEXT.len()), HELP_TEXT);
 
@@ -2047,7 +2048,7 @@ fn new_and_close_buffer_lifecycle() {
     handle_event(&mut model, key(KeyCode::Esc));
     command(&mut model, "bd");
     assert!(matches!(
-        model.input_mode,
+        model.ui.input_mode,
         InputMode::ConfirmClose { index: 1 }
     ));
     handle_event(&mut model, key(KeyCode::Char('c')));
@@ -2117,7 +2118,7 @@ fn closing_buffer_clears_matching_split() {
 
     command(&mut model, "bd");
     assert!(model.split.is_none());
-    assert!(!model.focus.split);
+    assert!(!model.ui.focus.split);
     assert_eq!(model.path, None);
 }
 
@@ -2170,7 +2171,10 @@ fn external_dirty_change_requires_confirmation() {
     fs::write(&path, "disk").expect("external write");
 
     model.handle_external_change(path.clone());
-    assert!(matches!(model.input_mode, InputMode::ConfirmReload { .. }));
+    assert!(matches!(
+        model.ui.input_mode,
+        InputMode::ConfirmReload { .. }
+    ));
     handle_event(&mut model, key(KeyCode::Char('n')));
     assert_eq!(model.editor.text().slice(0..4), "Xold");
 

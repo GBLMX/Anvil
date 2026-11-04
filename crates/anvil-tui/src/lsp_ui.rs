@@ -1,12 +1,13 @@
 //! LSP request state, completion, definition, and hover UI behavior.
 
 use super::{
-    CodeActionItem, CodeActionState, CompletionItem, CompletionState, InputMode, LspRequestKind,
-    Model, SignatureHelpState, SignatureItem, SymbolItem, SymbolState, WorkspaceEdit,
-    WorkspaceSymbolItem, WorkspaceSymbolState,
+    CodeActionItem, CodeActionState, CompletionItem, CompletionState, LspRequestKind, Model,
+    SignatureHelpState, SignatureItem, SymbolItem, SymbolState, WorkspaceEdit, WorkspaceSymbolItem,
+    WorkspaceSymbolState,
 };
 use crate::{lsp, lsp_worker};
 use anvil_core::TextBuffer;
+use anvil_session::ui::InputMode;
 use std::path::Path;
 
 pub(crate) struct LspSettings {
@@ -623,7 +624,7 @@ impl Model {
         self.cancel_code_actions();
         self.hover = None;
         self.diagnostic_popup = None;
-        self.input_mode = InputMode::Rename {
+        self.ui.input_mode = InputMode::Rename {
             name: String::new(),
         };
         self.status = "rename symbol".to_owned();

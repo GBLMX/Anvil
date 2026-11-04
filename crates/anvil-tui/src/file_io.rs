@@ -242,12 +242,12 @@ impl Model {
         };
         if modified {
             if matches!(
-                &self.input_mode,
-                InputMode::ConfirmReload { path: pending } if pending == &path
+                &self.ui.input_mode,
+                InputMode::ConfirmReload { path: pending } if pending.as_path() == path
             ) {
                 return;
             }
-            self.input_mode = InputMode::ConfirmReload { path: path.clone() };
+            self.ui.input_mode = InputMode::ConfirmReload { path: path.clone() };
             self.status = format!("File changed on disk: {} [y/N]", path.display());
             self.dirty = true;
         } else if let Err(error) = self.reload_external(&path) {

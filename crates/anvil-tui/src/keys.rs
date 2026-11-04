@@ -3,6 +3,7 @@
 use crate::input::{KeyPress, is_action_key};
 use crate::keymap::{NormalCommand, PendingCommand, resolve_normal, resolve_pending};
 use anvil_session::command::{CommandContext, is_registered};
+use anvil_session::ui::CreateKind;
 
 use super::*;
 
@@ -17,15 +18,15 @@ pub(crate) fn handle_event(model: &mut Model, event: Event) {
         Event::Paste(text) => {
             model.syntax.borrow_mut().note_activity();
             model.pending = None;
-            if let InputMode::Insert = model.input_mode {
+            if let InputMode::Insert = model.ui.input_mode {
                 model.insert_text(&text);
-            } else if let InputMode::CommandLine { buffer } = &mut model.input_mode {
+            } else if let InputMode::CommandLine { buffer } = &mut model.ui.input_mode {
                 buffer.push_str(&text);
                 model.dirty = true;
-            } else if let InputMode::Search { query } = &mut model.input_mode {
+            } else if let InputMode::Search { query } = &mut model.ui.input_mode {
                 query.push_str(&text);
                 model.dirty = true;
-            } else if let InputMode::Rename { name } = &mut model.input_mode {
+            } else if let InputMode::Rename { name } = &mut model.ui.input_mode {
                 name.push_str(&text);
                 model.dirty = true;
             }
@@ -384,10 +385,10 @@ fn handle_key(model: &mut Model, key: KeyPress) {
         }
     }
 
-    if model.focus.tree {
+    if model.ui.focus.tree {
         match key.code {
             KeyCode::Esc => {
-                model.focus.tree = false;
+                model.ui.focus.tree = false;
                 model.tree_visible = false;
                 model.dirty = true;
             }
@@ -407,16 +408,16 @@ fn handle_key(model: &mut Model, key: KeyPress) {
         return;
     }
 
-    match &mut model.input_mode {
+    match &mut model.ui.input_mode {
         InputMode::Rename { name } => match key.code {
             KeyCode::Esc => {
-                model.input_mode = InputMode::Normal;
+                model.ui.input_mode = InputMode::Normal;
                 model.status = "rename cancelled".to_owned();
                 model.dirty = true;
             }
             KeyCode::Enter => {
                 let new_name = std::mem::take(name);
-                model.input_mode = InputMode::Normal;
+                model.ui.input_mode = InputMode::Normal;
                 model.request_rename(&new_name);
             }
             KeyCode::Backspace => {
@@ -435,15 +436,15 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             kind,
         } => match key.code {
             KeyCode::Esc => {
-                model.input_mode = InputMode::Normal;
-                model.focus.tree = model.tree_visible;
+                model.ui.input_mode = InputMode::Normal;
+                model.ui.focus.tree = model.tree_visible;
                 model.dirty = true;
             }
             KeyCode::Enter => {
                 let directory = directory.clone();
                 let name = std::mem::take(name);
                 let kind = *kind;
-                model.input_mode = InputMode::Normal;
+                model.ui.input_mode = InputMode::Normal;
                 model.finish_tree_create(directory, name, kind);
             }
             KeyCode::Backspace => {
@@ -458,14 +459,14 @@ fn handle_key(model: &mut Model, key: KeyPress) {
         },
         InputMode::RenameEntry { path, name } => match key.code {
             KeyCode::Esc => {
-                model.input_mode = InputMode::Normal;
-                model.focus.tree = model.tree_visible;
+                model.ui.input_mode = InputMode::Normal;
+                model.ui.focus.tree = model.tree_visible;
                 model.dirty = true;
             }
             KeyCode::Enter => {
                 let path = path.clone();
                 let name = std::mem::take(name);
-                model.input_mode = InputMode::Normal;
+                model.ui.input_mode = InputMode::Normal;
                 model.finish_tree_rename(path, name);
             }
             KeyCode::Backspace => {
@@ -484,8 +485,8 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             directory,
         } => match key.code {
             KeyCode::Esc => {
-                model.input_mode = InputMode::Normal;
-                model.focus.tree = model.tree_visible;
+                model.ui.input_mode = InputMode::Normal;
+                model.ui.focus.tree = model.tree_visible;
                 model.status = "transfer cancelled".to_owned();
                 model.dirty = true;
             }
@@ -493,7 +494,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
                 let path = path.clone();
                 let copy = *copy;
                 let directory = std::mem::take(directory);
-                model.input_mode = InputMode::Normal;
+                model.ui.input_mode = InputMode::Normal;
                 model.finish_tree_transfer(path, copy, directory);
             }
             KeyCode::Backspace => {
@@ -510,17 +511,17 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             KeyCode::Char('y') | KeyCode::Char('Y') => {
                 let index = *index;
                 if model.save_buffer(index) {
-                    model.input_mode = InputMode::Normal;
+                    model.ui.input_mode = InputMode::Normal;
                     model.close_buffer(index, true);
                 }
             }
             KeyCode::Char('n') | KeyCode::Char('N') => {
                 let index = *index;
-                model.input_mode = InputMode::Normal;
+                model.ui.input_mode = InputMode::Normal;
                 model.close_buffer(index, true);
             }
             KeyCode::Esc | KeyCode::Char('c') | KeyCode::Char('C') => {
-                model.input_mode = InputMode::Normal;
+                model.ui.input_mode = InputMode::Normal;
                 model.status = "close cancelled".to_owned();
                 model.dirty = true;
             }
@@ -529,14 +530,14 @@ fn handle_key(model: &mut Model, key: KeyPress) {
         InputMode::ConfirmReload { path } => match key.code {
             KeyCode::Char('y') | KeyCode::Char('Y') => {
                 let path = path.clone();
-                model.input_mode = InputMode::Normal;
+                model.ui.input_mode = InputMode::Normal;
                 if let Err(error) = model.reload_external(&path) {
                     model.status = format!("E: {error}");
                     model.dirty = true;
                 }
             }
             KeyCode::Esc | KeyCode::Char('n') | KeyCode::Char('N') => {
-                model.input_mode = InputMode::Normal;
+                model.ui.input_mode = InputMode::Normal;
                 model.status = "kept local buffer".to_owned();
                 model.dirty = true;
             }
@@ -545,12 +546,12 @@ fn handle_key(model: &mut Model, key: KeyPress) {
         InputMode::ConfirmDelete { path } => match key.code {
             KeyCode::Char('y') | KeyCode::Char('Y') => {
                 let path = path.clone();
-                model.input_mode = InputMode::Normal;
+                model.ui.input_mode = InputMode::Normal;
                 model.finish_tree_delete(path);
             }
             KeyCode::Esc | KeyCode::Char('n') | KeyCode::Char('N') => {
-                model.input_mode = InputMode::Normal;
-                model.focus.tree = model.tree_visible;
+                model.ui.input_mode = InputMode::Normal;
+                model.ui.focus.tree = model.tree_visible;
                 model.status = "delete cancelled".to_owned();
                 model.dirty = true;
             }
@@ -558,12 +559,12 @@ fn handle_key(model: &mut Model, key: KeyPress) {
         },
         InputMode::CommandLine { buffer } => match key.code {
             KeyCode::Esc => {
-                model.input_mode = InputMode::Normal;
+                model.ui.input_mode = InputMode::Normal;
                 model.dirty = true;
             }
             KeyCode::Enter => {
                 let command = std::mem::take(buffer);
-                model.input_mode = InputMode::Normal;
+                model.ui.input_mode = InputMode::Normal;
                 model.execute_command(command.trim());
             }
             KeyCode::Backspace => {
@@ -578,12 +579,12 @@ fn handle_key(model: &mut Model, key: KeyPress) {
         },
         InputMode::Search { query } => match key.code {
             KeyCode::Esc => {
-                model.input_mode = InputMode::Normal;
+                model.ui.input_mode = InputMode::Normal;
                 model.dirty = true;
             }
             KeyCode::Enter => {
                 let query = std::mem::take(query);
-                model.input_mode = InputMode::Normal;
+                model.ui.input_mode = InputMode::Normal;
                 model.execute_search(query);
             }
             KeyCode::Backspace => {
@@ -600,7 +601,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             KeyCode::Esc => {
                 model.cancel_completion();
                 model.cancel_signature_help();
-                model.input_mode = InputMode::Normal;
+                model.ui.input_mode = InputMode::Normal;
                 model.dirty = true;
             }
             KeyCode::Enter => model.insert_text("\n"),
@@ -644,13 +645,13 @@ fn handle_key(model: &mut Model, key: KeyPress) {
                     NormalCommand::ExtendLine(up) => model.extend_line_cursor(up),
                     NormalCommand::InsertHere => model.insert_here(),
                     NormalCommand::CommandLine => {
-                        model.input_mode = InputMode::CommandLine {
+                        model.ui.input_mode = InputMode::CommandLine {
                             buffer: String::new(),
                         };
                         model.dirty = true;
                     }
                     NormalCommand::Search => {
-                        model.input_mode = InputMode::Search {
+                        model.ui.input_mode = InputMode::Search {
                             query: String::new(),
                         };
                         model.dirty = true;

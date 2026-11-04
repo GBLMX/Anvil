@@ -45,7 +45,7 @@ impl Model {
             .borrow_mut()
             .switch_path(self.path.as_deref(), false);
         self.active = index;
-        self.input_mode = InputMode::Normal;
+        self.ui.input_mode = InputMode::Normal;
         self.pending = None;
         self.sync_lsp_active();
         self.dirty = true;
@@ -134,7 +134,7 @@ impl Model {
             return;
         }
         if self.buffers[index].modified && !force {
-            self.input_mode = InputMode::ConfirmClose { index };
+            self.ui.input_mode = InputMode::ConfirmClose { index };
             self.status = format!("Save {} before closing? [Y/n/c]", self.buffer_name(index));
             self.dirty = true;
             return;
@@ -160,7 +160,7 @@ impl Model {
         }
         if split_same {
             self.split = None;
-            self.focus.split = false;
+            self.ui.focus.split = false;
         }
         self.buffers.remove(index);
         if self.buffers.is_empty() {
@@ -190,10 +190,10 @@ impl Model {
         self.syntax.borrow_mut().switch_path(None, false);
         self.welcome = false;
         self.welcome_back = false;
-        self.input_mode = InputMode::Normal;
+        self.ui.input_mode = InputMode::Normal;
         self.pending = None;
         self.split = None;
-        self.focus.split = false;
+        self.ui.focus.split = false;
         self.active = 0;
         self.sync_lsp_active();
         self.dirty = true;

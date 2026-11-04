@@ -38,7 +38,7 @@ impl Model {
         }
         self.cursor = range.start;
         self.modified = true;
-        self.input_mode = InputMode::Insert;
+        self.ui.input_mode = InputMode::Insert;
         self.dirty = true;
     }
 
@@ -59,7 +59,7 @@ impl Model {
         }
         self.cursor = range.start;
         self.modified = true;
-        self.input_mode = InputMode::Insert;
+        self.ui.input_mode = InputMode::Insert;
         self.dirty = true;
     }
 
@@ -80,7 +80,7 @@ impl Model {
         }
         self.cursor = range.start;
         self.modified = true;
-        self.input_mode = InputMode::Insert;
+        self.ui.input_mode = InputMode::Insert;
         self.dirty = true;
     }
 
@@ -291,7 +291,7 @@ impl Model {
         if self.reject_read_only() {
             return;
         }
-        self.input_mode = InputMode::Insert;
+        self.ui.input_mode = InputMode::Insert;
         self.dirty = true;
     }
 
@@ -330,7 +330,7 @@ impl Model {
             .first()
             .map(|(start, _)| *start)
             .unwrap_or(cursor);
-        self.input_mode = InputMode::Insert;
+        self.ui.input_mode = InputMode::Insert;
         self.status = format!("{} selections", self.editor.selection_bytes().len());
         self.dirty = true;
     }
@@ -625,7 +625,7 @@ impl Model {
         {
             self.move_char(1);
         }
-        self.input_mode = InputMode::Insert;
+        self.ui.input_mode = InputMode::Insert;
         self.dirty = true;
     }
 
@@ -636,7 +636,7 @@ impl Model {
         if let Some(line) = self.editor.index().offset_to_line(self.cursor) {
             self.cursor = line.end;
         }
-        self.input_mode = InputMode::Insert;
+        self.ui.input_mode = InputMode::Insert;
         self.dirty = true;
     }
 
@@ -648,7 +648,7 @@ impl Model {
             self.cursor = line.end;
         }
         self.insert_text("\n");
-        self.input_mode = InputMode::Insert;
+        self.ui.input_mode = InputMode::Insert;
     }
 
     pub(crate) fn open_above(&mut self) {
@@ -663,7 +663,7 @@ impl Model {
         self.cursor = start;
         self.insert_text("\n");
         self.cursor = start;
-        self.input_mode = InputMode::Insert;
+        self.ui.input_mode = InputMode::Insert;
     }
 
     pub(crate) fn backspace(&mut self) {

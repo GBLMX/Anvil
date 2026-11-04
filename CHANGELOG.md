@@ -90,8 +90,8 @@ post-`0.4.0` feature line.
   id rejection; activation is not wired yet.
 - Command IDs and the read-only command registry now live in `anvil-session`;
   the TUI keeps only key resolution and keymap state.
-- Focus ownership now uses `anvil-session::ui::FocusState`; overlay state and
-  effects remain TUI-owned.
+- Focus and overlay/input state now use `anvil-session::ui::UiState`; effects
+  remain TUI-owned.
 - Dependency baselines moved to criterion 0.8, tree-sitter 0.26, sha2 0.11,
   ts-rs 12, base64 0.23, `golang.org/x/sys` 0.49, and setup-node 7. The
   Landlock ruleset uses `Handled_access_fs`; tree-sitter child indexes are

@@ -4,6 +4,7 @@ use super::*;
 use crate::syntax::{Highlight, SyntaxClass};
 use crate::theme;
 use anvil_api::EditorView;
+use anvil_session::ui::CreateKind;
 use ratatui::{
     Frame,
     layout::{Alignment, Rect},
@@ -315,7 +316,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
     } else {
         title
     };
-    let (mode_text, mode_color, status) = match &model.input_mode {
+    let (mode_text, mode_color, status) = match &model.ui.input_mode {
         InputMode::Rename { name } => (" REN ", theme::MAGENTA, format!("rename> {name}")),
         InputMode::CommandLine { buffer } => (" CMD ", theme::WARNING, format!(":{buffer}")),
         InputMode::Search { query } => (" SRC ", theme::WARNING, format!("/{query}")),
@@ -454,7 +455,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
             "Files"
         };
         let mut tree_block = panel_block(tree_title);
-        if model.focus.tree {
+        if model.ui.focus.tree {
             tree_block = tree_block.border_style(theme::border(true));
         }
         frame.render_widget(
@@ -604,7 +605,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
     }
     if let Some(split) = &model.split {
         let half = inner.width / 2;
-        let split_area = if model.focus.split {
+        let split_area = if model.ui.focus.split {
             Rect {
                 width: half,
                 ..inner
@@ -616,7 +617,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
                 ..inner
             }
         };
-        render_split_pane(frame, split_area, &split.buffer, model.focus.split);
+        render_split_pane(frame, split_area, &split.buffer, model.ui.focus.split);
     }
     if let Some(fuzzy) = &model.fuzzy {
         let width = (area.width * 3 / 5)

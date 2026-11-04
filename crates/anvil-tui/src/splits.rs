@@ -12,7 +12,7 @@ impl Model {
         self.split = Some(Pane {
             buffer: self.snapshot(),
         });
-        self.focus.split = false;
+        self.ui.focus.split = false;
         self.status = "vertical split".to_owned();
         self.sync_watch_paths();
         self.dirty = true;
@@ -22,12 +22,12 @@ impl Model {
         if self.split.is_none() {
             return;
         }
-        if self.focus.split && self.modified {
+        if self.ui.focus.split && self.modified {
             self.status = "No write since last change (:q! to override)".to_owned();
             self.dirty = true;
             return;
         }
-        if self.focus.split == right {
+        if self.ui.focus.split == right {
             return;
         }
         let current = self.snapshot();
@@ -36,7 +36,7 @@ impl Model {
         };
         self.split = Some(Pane { buffer: current });
         self.restore_buffer(other.buffer);
-        self.focus.split = right;
+        self.ui.focus.split = right;
         self.sync_watch_paths();
         self.status = if right { "right pane" } else { "left pane" }.to_owned();
         self.dirty = true;
@@ -46,7 +46,7 @@ impl Model {
         if self.split.is_none() {
             return;
         }
-        if self.focus.split && self.modified {
+        if self.ui.focus.split && self.modified {
             self.status = "No write since last change (:q! to override)".to_owned();
             self.dirty = true;
             return;
@@ -56,13 +56,13 @@ impl Model {
             self.dirty = true;
             return;
         }
-        if self.focus.split {
+        if self.ui.focus.split {
             let other = self.split.take().expect("split");
             self.restore_buffer(other.buffer);
         } else {
             self.split = None;
         }
-        self.focus.split = false;
+        self.ui.focus.split = false;
         self.status = "split closed".to_owned();
         self.sync_watch_paths();
         self.dirty = true;
@@ -76,7 +76,7 @@ impl Model {
         self.hscroll = buffer.hscroll;
         self.modified = buffer.modified;
         self.search_query = buffer.search_query;
-        self.input_mode = InputMode::Normal;
+        self.ui.input_mode = InputMode::Normal;
         self.pending = None;
         self.syntax
             .borrow_mut()
