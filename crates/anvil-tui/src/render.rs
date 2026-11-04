@@ -299,8 +299,9 @@ fn fuzzy_path_line(path: &str, query: &str, max_width: usize, selected: bool) ->
     Line::from(spans)
 }
 
-fn apply_code_block_background(model: &Model, lines: &mut [Line<'_>], width: u16) {
+pub(crate) fn apply_code_block_background(model: &Model, lines: &mut [Line<'_>], width: u16) {
     let current = model.current_line();
+    let target = usize::from(width).saturating_add(model.hscroll);
     for (offset, line) in lines.iter_mut().enumerate() {
         let line_number = model.scroll + offset;
         if !model.line_in_code_block(line_number) {
@@ -313,10 +314,10 @@ fn apply_code_block_background(model: &Model, lines: &mut [Line<'_>], width: u16
         };
         let used = line.width();
         let mut rendered = std::mem::replace(line, Line::raw("")).style(style);
-        if used < usize::from(width) {
+        if used < target {
             rendered
                 .spans
-                .push(Span::styled(" ".repeat(usize::from(width) - used), style));
+                .push(Span::styled(" ".repeat(target - used), style));
         }
         *line = rendered;
     }

@@ -2728,6 +2728,29 @@ fn markdown_fenced_code_renders_a_full_width_background() {
 }
 
 #[test]
+fn fenced_code_background_reaches_right_edge_when_hscrolled() {
+    let mut model = Model::new(EditorState::from_text("```rust\nfn main() {}\n```\n"), None);
+    model.path = Some(PathBuf::from("x.md"));
+    model.hscroll = 1;
+    for _ in 0..100 {
+        model.poll_syntax();
+        if model
+            .syntax
+            .borrow()
+            .highlights()
+            .iter()
+            .any(|highlight| highlight.class == syntax::SyntaxClass::CodeBlock)
+        {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(2));
+    }
+    let mut lines = model.visible_lines(8);
+    crate::render::apply_code_block_background(&model, &mut lines, 20);
+    assert_eq!(lines[1].width(), 21);
+}
+
+#[test]
 fn cursorline_overlays_fenced_code_background() {
     let mut model = Model::new(EditorState::from_text("```rust\nfn main() {}\n```\n"), None);
     model.path = Some(PathBuf::from("x.md"));
