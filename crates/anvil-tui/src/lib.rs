@@ -16,6 +16,7 @@ use anvil_core::{TextBuffer, TextDocument, end_word, next_word_start, previous_w
 use anvil_editor::EditorState;
 use anvil_ipc::GatewayClient;
 use anvil_session::DocumentSession;
+use anvil_session::ui::FocusState;
 use crossterm::{
     cursor::SetCursorStyle,
     event::{
@@ -365,15 +366,14 @@ pub struct Model {
     inlay_checked: Option<(PathBuf, u64, usize, usize)>,
     /// Secondary pane when a vertical split is open.
     split: Option<Pane>,
-    /// Whether the active pane is the right-hand split.
-    split_active: bool,
+    /// Focus ownership for the tree and split pane.
+    pub focus: FocusState,
     /// Flattened workspace tree, when open.
     tree: Vec<TreeEntry>,
     tree_selected: Option<usize>,
     tree_visible: bool,
     /// Entry to select after the next tree refresh.
     tree_pending_select: Option<PathBuf>,
-    tree_focus: bool,
     tree_stale: bool,
     tree_watch_limited: bool,
     tree_refresh_in_flight: bool,
@@ -465,11 +465,10 @@ impl Model {
             inlay_pending: None,
             inlay_checked: None,
             split: None,
-            split_active: false,
+            focus: FocusState::default(),
             tree: Vec::new(),
             tree_selected: None,
             tree_visible: false,
-            tree_focus: false,
             tree_pending_select: None,
             tree_stale: false,
             tree_watch_limited: false,

@@ -7,6 +7,7 @@ pub mod command;
 mod host_session;
 pub mod plugin_session;
 pub mod plugin_supervisor;
+pub mod ui;
 use anvil_api::{ApplyEditRequest, DocumentSnapshot};
 use anvil_core::TextBuffer;
 use anvil_editor::{ApplyEditError, EditorState};

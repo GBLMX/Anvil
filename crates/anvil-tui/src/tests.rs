@@ -513,7 +513,7 @@ fn closing_focused_split_restores_left_pane() {
     model.cursor = 5;
     model.close_split();
     assert!(model.split.is_none());
-    assert!(!model.split_active);
+    assert!(!model.focus.split);
     assert_eq!(model.cursor, 0);
     assert_eq!(model.editor.text().slice(0..4), "left");
 }
@@ -526,10 +526,10 @@ fn ctrl_w_v_opens_split_and_ctrl_w_h_l_switches_focus() {
     assert!(model.split.is_some());
     handle_event(&mut model, ctrl(KeyCode::Char('w')));
     handle_event(&mut model, key(KeyCode::Char('l')));
-    assert!(model.split_active);
+    assert!(model.focus.split);
     handle_event(&mut model, ctrl(KeyCode::Char('w')));
     handle_event(&mut model, key(KeyCode::Char('h')));
-    assert!(!model.split_active);
+    assert!(!model.focus.split);
 }
 
 #[test]
@@ -538,15 +538,15 @@ fn split_panes_keep_independent_cursors() {
     model.cursor = 1;
     model.split_vertical();
     assert!(model.split.is_some());
-    assert!(!model.split_active);
+    assert!(!model.focus.split);
     model.focus_split(true);
-    assert!(model.split_active);
+    assert!(model.focus.split);
     assert_eq!(model.cursor, 1);
     model.cursor = 5;
     model.scroll = 2;
     model.hscroll = 3;
     model.focus_split(false);
-    assert!(!model.split_active);
+    assert!(!model.focus.split);
     assert_eq!(model.cursor, 1);
     assert_eq!(model.scroll, 0);
     assert_eq!(model.hscroll, 0);
@@ -2117,7 +2117,7 @@ fn closing_buffer_clears_matching_split() {
 
     command(&mut model, "bd");
     assert!(model.split.is_none());
-    assert!(!model.split_active);
+    assert!(!model.focus.split);
     assert_eq!(model.path, None);
 }
 

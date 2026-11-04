@@ -384,10 +384,10 @@ fn handle_key(model: &mut Model, key: KeyPress) {
         }
     }
 
-    if model.tree_focus {
+    if model.focus.tree {
         match key.code {
             KeyCode::Esc => {
-                model.tree_focus = false;
+                model.focus.tree = false;
                 model.tree_visible = false;
                 model.dirty = true;
             }
@@ -436,7 +436,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
         } => match key.code {
             KeyCode::Esc => {
                 model.input_mode = InputMode::Normal;
-                model.tree_focus = model.tree_visible;
+                model.focus.tree = model.tree_visible;
                 model.dirty = true;
             }
             KeyCode::Enter => {
@@ -459,7 +459,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
         InputMode::RenameEntry { path, name } => match key.code {
             KeyCode::Esc => {
                 model.input_mode = InputMode::Normal;
-                model.tree_focus = model.tree_visible;
+                model.focus.tree = model.tree_visible;
                 model.dirty = true;
             }
             KeyCode::Enter => {
@@ -485,7 +485,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
         } => match key.code {
             KeyCode::Esc => {
                 model.input_mode = InputMode::Normal;
-                model.tree_focus = model.tree_visible;
+                model.focus.tree = model.tree_visible;
                 model.status = "transfer cancelled".to_owned();
                 model.dirty = true;
             }
@@ -550,7 +550,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             }
             KeyCode::Esc | KeyCode::Char('n') | KeyCode::Char('N') => {
                 model.input_mode = InputMode::Normal;
-                model.tree_focus = model.tree_visible;
+                model.focus.tree = model.tree_visible;
                 model.status = "delete cancelled".to_owned();
                 model.dirty = true;
             }

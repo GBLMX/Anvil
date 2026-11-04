@@ -188,8 +188,8 @@ impl Model {
     }
 
     pub(crate) fn open_tree(&mut self) {
-        if self.tree_visible && self.tree_focus {
-            self.tree_focus = false;
+        if self.tree_visible && self.focus.tree {
+            self.focus.tree = false;
             self.tree_visible = false;
             self.dirty = true;
             return;
@@ -221,7 +221,7 @@ impl Model {
             }
         }
         self.tree_visible = true;
-        self.tree_focus = true;
+        self.focus.tree = true;
         if self.tree_selected.is_none() {
             self.tree_selected = (!self.tree.is_empty()).then_some(0);
         }
@@ -252,7 +252,7 @@ impl Model {
         if !entry.is_dir {
             match self.open_path(&entry.path) {
                 Ok(()) => {
-                    self.tree_focus = false;
+                    self.focus.tree = false;
                     self.tree_visible = false;
                 }
                 Err(error) => self.status = format!("E: {error}"),
@@ -705,7 +705,7 @@ impl Model {
 
     pub(crate) fn refresh_tree(&mut self, select: Option<PathBuf>) {
         self.tree_visible = true;
-        self.tree_focus = true;
+        self.focus.tree = true;
         self.request_tree_refresh(select);
         self.dirty = true;
     }
@@ -725,7 +725,7 @@ impl Model {
             return;
         }
         let directory = self.tree_target_directory();
-        self.tree_focus = false;
+        self.focus.tree = false;
         self.tree_visible = true;
         self.input_mode = InputMode::Create {
             directory,
@@ -750,7 +750,7 @@ impl Model {
             self.dirty = true;
             return;
         };
-        self.tree_focus = false;
+        self.focus.tree = false;
         self.input_mode = InputMode::RenameEntry {
             path: entry.path.clone(),
             name: name.to_owned(),
@@ -773,7 +773,7 @@ impl Model {
             self.dirty = true;
             return;
         }
-        self.tree_focus = false;
+        self.focus.tree = false;
         self.input_mode = InputMode::ConfirmDelete {
             path: entry.path.clone(),
         };
@@ -795,7 +795,7 @@ impl Model {
             self.dirty = true;
             return;
         }
-        self.tree_focus = false;
+        self.focus.tree = false;
         self.input_mode = InputMode::TransferEntry {
             path: entry.path.clone(),
             copy,
@@ -808,7 +808,7 @@ impl Model {
         if self.tree_busy() {
             return;
         }
-        self.tree_focus = true;
+        self.focus.tree = true;
         let directory = directory.trim();
         let target_directory = if directory.is_empty() {
             self.workspace.clone()
@@ -951,7 +951,7 @@ impl Model {
     }
 
     pub(crate) fn finish_tree_rename(&mut self, path: PathBuf, name: String) {
-        self.tree_focus = true;
+        self.focus.tree = true;
         if self.tree_busy() {
             return;
         }
@@ -997,7 +997,7 @@ impl Model {
     }
 
     pub(crate) fn finish_tree_delete(&mut self, path: PathBuf) {
-        self.tree_focus = true;
+        self.focus.tree = true;
         if self.tree_busy() {
             return;
         }

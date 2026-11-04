@@ -454,7 +454,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
             "Files"
         };
         let mut tree_block = panel_block(tree_title);
-        if model.tree_focus {
+        if model.focus.tree {
             tree_block = tree_block.border_style(theme::border(true));
         }
         frame.render_widget(
@@ -604,7 +604,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
     }
     if let Some(split) = &model.split {
         let half = inner.width / 2;
-        let split_area = if model.split_active {
+        let split_area = if model.focus.split {
             Rect {
                 width: half,
                 ..inner
@@ -616,7 +616,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
                 ..inner
             }
         };
-        render_split_pane(frame, split_area, &split.buffer, model.split_active);
+        render_split_pane(frame, split_area, &split.buffer, model.focus.split);
     }
     if let Some(fuzzy) = &model.fuzzy {
         let width = (area.width * 3 / 5)

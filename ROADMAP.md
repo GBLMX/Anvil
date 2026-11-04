@@ -26,8 +26,8 @@ in `PROJECT_CHARTER.md`, `docs/phase-0-7-plan.md`, and the ADRs.
 - `0.4.8c` editor-side snapshot and revision-checked transaction contract with
   status-bar rejection reporting.
 - `0.4.9` rescoped: API-version hello/manifest validation, document session,
-  plugin host lifecycle, and the command registry landed. Focus/overlay state
-  and effects moved to `0.5.0`.
+  plugin host lifecycle, command registry, and focus ownership type landed.
+  Overlay state and effects moved to `0.5.0`.
 
 ## Next
 

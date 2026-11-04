@@ -12,7 +12,7 @@ impl Model {
         self.split = Some(Pane {
             buffer: self.snapshot(),
         });
-        self.split_active = false;
+        self.focus.split = false;
         self.status = "vertical split".to_owned();
         self.sync_watch_paths();
         self.dirty = true;
@@ -22,12 +22,12 @@ impl Model {
         if self.split.is_none() {
             return;
         }
-        if self.split_active && self.modified {
+        if self.focus.split && self.modified {
             self.status = "No write since last change (:q! to override)".to_owned();
             self.dirty = true;
             return;
         }
-        if self.split_active == right {
+        if self.focus.split == right {
             return;
         }
         let current = self.snapshot();
@@ -36,7 +36,7 @@ impl Model {
         };
         self.split = Some(Pane { buffer: current });
         self.restore_buffer(other.buffer);
-        self.split_active = right;
+        self.focus.split = right;
         self.sync_watch_paths();
         self.status = if right { "right pane" } else { "left pane" }.to_owned();
         self.dirty = true;
@@ -46,7 +46,7 @@ impl Model {
         if self.split.is_none() {
             return;
         }
-        if self.split_active && self.modified {
+        if self.focus.split && self.modified {
             self.status = "No write since last change (:q! to override)".to_owned();
             self.dirty = true;
             return;
@@ -56,13 +56,13 @@ impl Model {
             self.dirty = true;
             return;
         }
-        if self.split_active {
+        if self.focus.split {
             let other = self.split.take().expect("split");
             self.restore_buffer(other.buffer);
         } else {
             self.split = None;
         }
-        self.split_active = false;
+        self.focus.split = false;
         self.status = "split closed".to_owned();
         self.sync_watch_paths();
         self.dirty = true;

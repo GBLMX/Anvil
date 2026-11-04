@@ -160,7 +160,7 @@ impl Model {
         }
         if split_same {
             self.split = None;
-            self.split_active = false;
+            self.focus.split = false;
         }
         self.buffers.remove(index);
         if self.buffers.is_empty() {
@@ -193,7 +193,7 @@ impl Model {
         self.input_mode = InputMode::Normal;
         self.pending = None;
         self.split = None;
-        self.split_active = false;
+        self.focus.split = false;
         self.active = 0;
         self.sync_lsp_active();
         self.dirty = true;
