@@ -474,6 +474,10 @@ pub(crate) enum PendingCommand {
         open: char,
         around: bool,
     },
+    OperatorParagraph {
+        operator: char,
+        around: bool,
+    },
     ChangeInnerWord,
     ChangeInnerQuote(char),
     Definition,
@@ -534,6 +538,7 @@ impl PendingCommand {
             | OperatorWord { .. }
             | OperatorQuote { .. }
             | OperatorBracket { .. }
+            | OperatorParagraph { .. }
             | Count { .. } => None,
         }
     }
@@ -615,6 +620,10 @@ pub(crate) fn pending_action(
             KeyCode::Char('<') | KeyCode::Char('>') => Some(PendingCommand::OperatorBracket {
                 operator,
                 open: '<',
+                around: pending.is_ascii_uppercase(),
+            }),
+            KeyCode::Char('p') => Some(PendingCommand::OperatorParagraph {
+                operator,
                 around: pending.is_ascii_uppercase(),
             }),
             _ => None,

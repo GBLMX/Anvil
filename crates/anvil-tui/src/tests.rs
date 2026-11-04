@@ -2538,3 +2538,29 @@ fn bracket_text_objects_support_delete_change_and_around() {
     handle_event(&mut change, key(KeyCode::Esc));
     assert_eq!(change.editor.text().slice(0..7), "call(X)");
 }
+
+#[test]
+fn paragraph_text_objects_delete_and_change() {
+    let mut inner = Model::new(EditorState::from_text("a\nb\n\nc\nd"), None);
+    inner.cursor = 1;
+    for key_code in [KeyCode::Char('d'), KeyCode::Char('i'), KeyCode::Char('p')] {
+        handle_event(&mut inner, key(key_code));
+    }
+    assert_eq!(inner.editor.text().slice(0..3), "\nc\n");
+
+    let mut around = Model::new(EditorState::from_text("a\nb\n\nc\nd"), None);
+    around.cursor = 1;
+    for key_code in [KeyCode::Char('d'), KeyCode::Char('a'), KeyCode::Char('p')] {
+        handle_event(&mut around, key(key_code));
+    }
+    assert_eq!(around.editor.text().slice(0..3), "c\nd");
+
+    let mut change = Model::new(EditorState::from_text("a\nb\n\nc\nd"), None);
+    change.cursor = 1;
+    for key_code in [KeyCode::Char('c'), KeyCode::Char('i'), KeyCode::Char('p')] {
+        handle_event(&mut change, key(key_code));
+    }
+    type_text(&mut change, "X");
+    handle_event(&mut change, key(KeyCode::Esc));
+    assert_eq!(change.editor.text().slice(0..3), "X\nc");
+}

@@ -336,6 +336,94 @@ impl Model {
         self.dirty = true;
     }
 
+    fn line_is_blank(&self, line: usize) -> bool {
+        let Some(start) = self.editor.index().line_to_offset(line) else {
+            return true;
+        };
+        let Some(range) = self.editor.line_range_at(start) else {
+            return true;
+        };
+        self.editor
+            .text()
+            .slice(range.start..range.end)
+            .trim()
+            .is_empty()
+    }
+
+    pub(crate) fn paragraph_range(&self, around: bool) -> Option<std::ops::Range<usize>> {
+        let position = self
+            .editor
+            .index()
+            .position(self.editor.text(), self.cursor)?;
+        let mut start = position.line;
+        let mut end = position.line;
+        if self.line_is_blank(position.line) {
+            while start > 0 && self.line_is_blank(start - 1) {
+                start -= 1;
+            }
+            while end + 1 < self.editor.index().len_lines() && self.line_is_blank(end + 1) {
+                end += 1;
+            }
+        } else {
+            while start > 0 && !self.line_is_blank(start - 1) {
+                start -= 1;
+            }
+            while end + 1 < self.editor.index().len_lines() && !self.line_is_blank(end + 1) {
+                end += 1;
+            }
+            if around {
+                while end + 1 < self.editor.index().len_lines() && self.line_is_blank(end + 1) {
+                    end += 1;
+                }
+            }
+        }
+        let start = self.editor.index().line_to_offset(start)?;
+        let last = self.editor.index().line_to_offset(end)?;
+        let end = self.editor.line_range_at(last)?.end;
+        (start < end).then_some(start..end)
+    }
+
+    pub(crate) fn apply_paragraph_operator(&mut self, operator: char, around: bool) {
+        let Some(range) = self.paragraph_range(around) else {
+            self.status = "E: no paragraph object".to_owned();
+            self.dirty = true;
+            return;
+        };
+        match operator {
+            'y' => {
+                let cursor = self.cursor;
+                self.editor.set_selection_bytes(range.start, range.end);
+                if self.editor.yank(range) {
+                    self.record_register();
+                }
+                let _ = self.editor.set_selection_bytes(cursor, cursor);
+            }
+            'c' => {
+                let deleted = self.editor.text().slice(range.clone());
+                self.editor.set_selection_bytes(range.start, range.end);
+                self.editor.delete(range.clone());
+                self.cursor = range.start;
+                if let Some(register) = self.register.take() {
+                    self.record_register_text(register, &deleted);
+                }
+                self.modified = true;
+                self.begin_insert(InsertOrigin::ChangeParagraph { around });
+            }
+            'd' => {
+                let deleted = self.editor.text().slice(range.clone());
+                self.editor.set_selection_bytes(range.start, range.end);
+                self.editor.delete(range.clone());
+                self.cursor = range.start;
+                if let Some(register) = self.register.take() {
+                    self.record_register_text(register, &deleted);
+                }
+                self.modified = true;
+            }
+            _ => return,
+        }
+        self.dirty = true;
+    }
+
     pub(crate) fn word_range(&self, motion: WordMotion) -> Option<std::ops::Range<usize>> {
         let text = self.editor.text();
         let (start, end) = match motion {

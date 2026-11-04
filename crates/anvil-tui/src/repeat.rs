@@ -60,6 +60,10 @@ impl Model {
                 around,
                 inserted: session.text,
             },
+            InsertOrigin::ChangeParagraph { around } => LastChange::ChangeParagraph {
+                around,
+                inserted: session.text,
+            },
         };
         self.last_change = Some(last);
     }
@@ -117,6 +121,11 @@ impl Model {
                 inserted,
             } => {
                 if let Some(range) = self.bracket_range(open, around) {
+                    self.replace_now(range, &inserted);
+                }
+            }
+            LastChange::ChangeParagraph { around, inserted } => {
+                if let Some(range) = self.paragraph_range(around) {
                     self.replace_now(range, &inserted);
                 }
             }
