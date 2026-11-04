@@ -2359,9 +2359,19 @@ fn backspace_at_document_start_and_line_boundaries_is_safe() {
     assert_eq!(empty.editor.text().len_bytes(), 0);
 
     let mut lines = Model::new(EditorState::from_text("a\nb\nc"), None);
-    lines.cursor = 2;
-    lines.backspace();
-    assert_eq!(lines.editor.text().slice(0..4), "ab\nc");
+    for _ in 0..2 {
+        let newline = lines
+            .editor
+            .text()
+            .slice(0..lines.editor.text().len_bytes())
+            .find('\n');
+        let Some(newline) = newline else {
+            break;
+        };
+        lines.cursor = newline + 1;
+        lines.backspace();
+    }
+    assert_eq!(lines.editor.text().slice(0..3), "abc");
     for _ in 0..2000 {
         lines.backspace();
     }
