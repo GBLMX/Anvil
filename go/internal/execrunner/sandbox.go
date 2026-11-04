@@ -375,7 +375,7 @@ func handledAccess(abi int) uint64 {
 }
 
 func createRuleset(access uint64) (int, error) {
-	attr := unix.LandlockRulesetAttr{Access_fs: access}
+	attr := unix.LandlockRulesetAttr{Handled_access_fs: access}
 	fd, _, errno := unix.Syscall(
 		unix.SYS_LANDLOCK_CREATE_RULESET,
 		uintptr(unsafe.Pointer(&attr)),
