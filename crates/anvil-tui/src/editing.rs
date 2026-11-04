@@ -38,7 +38,7 @@ impl Model {
         }
         self.cursor = range.start;
         self.modified = true;
-        self.ui.input_mode = InputMode::Insert;
+        self.begin_insert(InsertOrigin::ChangeWord(motion));
         self.dirty = true;
     }
 
@@ -59,7 +59,7 @@ impl Model {
         }
         self.cursor = range.start;
         self.modified = true;
-        self.ui.input_mode = InputMode::Insert;
+        self.begin_insert(InsertOrigin::ChangeInnerWord);
         self.dirty = true;
     }
 
@@ -80,7 +80,7 @@ impl Model {
         }
         self.cursor = range.start;
         self.modified = true;
-        self.ui.input_mode = InputMode::Insert;
+        self.begin_insert(InsertOrigin::ChangeInnerQuote(quote));
         self.dirty = true;
     }
 
@@ -160,6 +160,9 @@ impl Model {
             self.editor.delete(range.clone());
             self.cursor = range.start;
             self.modified = true;
+        }
+        if !deleted.is_empty() {
+            self.last_change = Some(LastChange::DeleteWords { motion, count });
         }
         if let Some(register) = self.register.take() {
             self.record_register_text(register, &deleted);
@@ -291,7 +294,7 @@ impl Model {
         if self.reject_read_only() {
             return;
         }
-        self.ui.input_mode = InputMode::Insert;
+        self.begin_insert(InsertOrigin::InsertHere);
         self.dirty = true;
     }
 
@@ -330,7 +333,7 @@ impl Model {
             .first()
             .map(|(start, _)| *start)
             .unwrap_or(cursor);
-        self.ui.input_mode = InputMode::Insert;
+        self.begin_insert(InsertOrigin::InsertHere);
         self.status = format!("{} selections", self.editor.selection_bytes().len());
         self.dirty = true;
     }
@@ -430,6 +433,7 @@ impl Model {
             if self.editor.insert_at_selections(text) {
                 self.sync_cursor_from_selection();
                 self.modified = true;
+                self.capture_insert(text);
             }
             self.maybe_request_signature_help(text);
             self.dirty = true;
@@ -439,6 +443,7 @@ impl Model {
         self.editor.insert(self.cursor, text);
         self.cursor += text.len();
         self.modified = true;
+        self.capture_insert(text);
         self.maybe_request_signature_help(text);
         self.dirty = true;
     }
@@ -517,6 +522,7 @@ impl Model {
         self.editor.set_selection_bytes(start, last.end);
         self.editor.delete(start..last.end);
         self.cursor = start;
+        self.last_change = Some(LastChange::DeleteLines { count });
         if let Some(register) = self.register.take() {
             self.record_register_text(register, &deleted);
         }
@@ -625,7 +631,7 @@ impl Model {
         {
             self.move_char(1);
         }
-        self.ui.input_mode = InputMode::Insert;
+        self.begin_insert(InsertOrigin::Append);
         self.dirty = true;
     }
 
@@ -636,7 +642,7 @@ impl Model {
         if let Some(line) = self.editor.index().offset_to_line(self.cursor) {
             self.cursor = line.end;
         }
-        self.ui.input_mode = InputMode::Insert;
+        self.begin_insert(InsertOrigin::AppendLineEnd);
         self.dirty = true;
     }
 
@@ -648,7 +654,7 @@ impl Model {
             self.cursor = line.end;
         }
         self.insert_text("\n");
-        self.ui.input_mode = InputMode::Insert;
+        self.begin_insert(InsertOrigin::OpenBelow);
     }
 
     pub(crate) fn open_above(&mut self) {
@@ -663,7 +669,7 @@ impl Model {
         self.cursor = start;
         self.insert_text("\n");
         self.cursor = start;
-        self.ui.input_mode = InputMode::Insert;
+        self.begin_insert(InsertOrigin::OpenAbove);
     }
 
     pub(crate) fn backspace(&mut self) {

@@ -49,6 +49,7 @@ pub const DELETE_FORWARD: CommandId = CommandId::new("editor.delete_forward");
 pub const PUT: CommandId = CommandId::new("editor.put");
 pub const UNDO: CommandId = CommandId::new("editor.undo");
 pub const REDO: CommandId = CommandId::new("editor.redo");
+pub const REPEAT_CHANGE: CommandId = CommandId::new("editor.repeat_change");
 pub const LINE_START: CommandId = CommandId::new("cursor.line_start");
 pub const LINE_END: CommandId = CommandId::new("cursor.line_end");
 pub const WORD_NEXT: CommandId = CommandId::new("cursor.word_next");
@@ -109,6 +110,7 @@ pub const COMMANDS: &[CommandSpec] = &[
     spec(PUT, NORMAL),
     spec(UNDO, NORMAL),
     spec(REDO, NORMAL),
+    spec(REPEAT_CHANGE, NORMAL),
     spec(LINE_START, NORMAL),
     spec(LINE_END, NORMAL),
     spec(WORD_NEXT, NORMAL),

@@ -5,6 +5,15 @@ All notable changes to Anvil are recorded here. The format follows
 lines are release-series labels, not a compatibility promise; `0.5.x` is the
 post-`0.5.0` feature line.
 
+
+## [Unreleased]
+
+### Added
+
+- Semantic last-change repeat: `.` replays the last successful delete, change,
+  or insert session; an explicit count overrides the recorded delete count.
+  The scope is session-wide and applies to the active buffer.
+
 ## [0.5.0] - 2026-11-04
 
 ### Fixed

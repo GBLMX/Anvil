@@ -604,6 +604,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             KeyCode::Esc => {
                 model.cancel_completion();
                 model.cancel_signature_help();
+                model.finish_insert_session();
                 model.ui.input_mode = InputMode::Normal;
                 model.dirty = true;
             }
@@ -677,6 +678,11 @@ fn handle_key(model: &mut Model, key: KeyPress) {
                     NormalCommand::Put => model.put_register(),
                     NormalCommand::Undo => model.undo(),
                     NormalCommand::Redo => model.redo(),
+                    NormalCommand::RepeatChange => {
+                        let count = model.count;
+                        let _ = model.take_count();
+                        model.repeat_last_change(count);
+                    }
                     NormalCommand::Count(character) => model.push_count(character),
                     NormalCommand::MoveHome => model.move_home(),
                     NormalCommand::MoveEnd => model.move_end(),

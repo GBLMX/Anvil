@@ -2269,3 +2269,61 @@ fn gateway_refuses_paths_outside_workspace() {
         model.status
     );
 }
+
+#[test]
+fn dot_repeats_word_delete() {
+    let mut model = Model::new(EditorState::from_text("one two three"), None);
+    handle_event(&mut model, key(KeyCode::Char('d')));
+    handle_event(&mut model, key(KeyCode::Char('w')));
+    assert_eq!(model.editor.text().slice(0..9), "two three");
+    handle_event(&mut model, key(KeyCode::Char('.')));
+    assert_eq!(model.editor.text().slice(0..5), "three");
+}
+
+#[test]
+fn dot_count_overrides_recorded_delete_count() {
+    let mut model = Model::new(EditorState::from_text("one two three"), None);
+    handle_event(&mut model, key(KeyCode::Char('2')));
+    handle_event(&mut model, key(KeyCode::Char('d')));
+    handle_event(&mut model, key(KeyCode::Char('w')));
+    assert_eq!(model.editor.text().slice(0..5), "three");
+    handle_event(&mut model, key(KeyCode::Char('3')));
+    handle_event(&mut model, key(KeyCode::Char('.')));
+    assert_eq!(model.editor.text().len_bytes(), 0);
+}
+
+#[test]
+fn dot_repeats_append_line_end_insert() {
+    let mut model = Model::new(EditorState::from_text("x"), None);
+    handle_event(&mut model, key(KeyCode::Char('A')));
+    type_text(&mut model, "foo");
+    handle_event(&mut model, key(KeyCode::Esc));
+    handle_event(&mut model, key(KeyCode::Char('.')));
+    assert_eq!(model.editor.text().slice(0..7), "xfoofoo");
+}
+
+#[test]
+fn dot_repeats_inner_word_change() {
+    let mut model = Model::new(EditorState::from_text("one two"), None);
+    handle_event(&mut model, key(KeyCode::Char('c')));
+    handle_event(&mut model, key(KeyCode::Char('i')));
+    handle_event(&mut model, key(KeyCode::Char('w')));
+    type_text(&mut model, "X");
+    handle_event(&mut model, key(KeyCode::Esc));
+    assert_eq!(model.editor.text().slice(0..5), "X two");
+    handle_event(&mut model, key(KeyCode::Char('w')));
+    handle_event(&mut model, key(KeyCode::Char('.')));
+    assert_eq!(model.editor.text().slice(0..3), "X X");
+}
+
+#[test]
+fn failed_delete_preserves_previous_last_change() {
+    let mut model = Model::new(EditorState::from_text("one"), None);
+    handle_event(&mut model, key(KeyCode::Char('d')));
+    handle_event(&mut model, key(KeyCode::Char('w')));
+    let previous = model.last_change.clone();
+    assert_eq!(model.editor.text().len_bytes(), 0);
+    handle_event(&mut model, key(KeyCode::Char('d')));
+    handle_event(&mut model, key(KeyCode::Char('w')));
+    assert_eq!(model.last_change, previous);
+}

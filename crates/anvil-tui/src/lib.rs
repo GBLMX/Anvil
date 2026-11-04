@@ -52,6 +52,7 @@ mod lsp_ui;
 mod plugin_activation;
 mod plugin_discovery;
 mod plugin_document;
+mod repeat;
 mod splits;
 use lsp_ui::lsp_settings;
 mod input;
@@ -109,6 +110,61 @@ pub enum WordMotion {
     NextStart,
     PreviousStart,
     End,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum LastChange {
+    DeleteWords {
+        motion: WordMotion,
+        count: usize,
+    },
+    DeleteLines {
+        count: usize,
+    },
+    ChangeWord {
+        motion: WordMotion,
+        inserted: String,
+    },
+    ChangeInnerWord {
+        inserted: String,
+    },
+    ChangeInnerQuote {
+        quote: char,
+        inserted: String,
+    },
+    InsertAtCursor {
+        text: String,
+    },
+    Append {
+        text: String,
+    },
+    AppendLineEnd {
+        text: String,
+    },
+    OpenBelow {
+        text: String,
+    },
+    OpenAbove {
+        text: String,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum InsertOrigin {
+    InsertHere,
+    Append,
+    AppendLineEnd,
+    OpenBelow,
+    OpenAbove,
+    ChangeWord(WordMotion),
+    ChangeInnerWord,
+    ChangeInnerQuote(char),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct InsertSession {
+    origin: InsertOrigin,
+    text: String,
 }
 
 /// TUI state.
@@ -249,6 +305,10 @@ pub struct Model {
     pub hscroll: usize,
     /// Input state.
     pub ui: UiState,
+    /// Last successful semantic change for `.`.
+    last_change: Option<LastChange>,
+    /// Text captured by the current insert session.
+    insert_session: Option<InsertSession>,
     /// Typed effects produced by command dispatch.
     effects: EffectQueue,
     /// In-memory keymap overrides.
@@ -382,6 +442,8 @@ impl Model {
             scroll: 0,
             hscroll: 0,
             ui: UiState::default(),
+            last_change: None,
+            insert_session: None,
             effects: EffectQueue::new(EFFECT_QUEUE_CAPACITY),
             keymap: keymap::KeymapConfig::default(),
             quit: false,

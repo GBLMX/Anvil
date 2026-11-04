@@ -35,6 +35,7 @@ pub(crate) enum NormalCommand {
     Put,
     Undo,
     Redo,
+    RepeatChange,
     Count(char),
     MoveHome,
     MoveEnd,
@@ -68,6 +69,7 @@ impl NormalCommand {
             Put => Some(command::PUT),
             Undo => Some(command::UNDO),
             Redo => Some(command::REDO),
+            RepeatChange => Some(command::REPEAT_CHANGE),
             MoveHome => Some(command::LINE_START),
             MoveEnd => Some(command::LINE_END),
             MoveWords(WordMotion::NextStart) => Some(command::WORD_NEXT),
@@ -106,6 +108,7 @@ impl NormalCommand {
             "editor.put" => Self::Put,
             "editor.undo" => Self::Undo,
             "editor.redo" => Self::Redo,
+            "editor.repeat_change" => Self::RepeatChange,
             "cursor.line_start" => Self::MoveHome,
             "cursor.line_end" => Self::MoveEnd,
             "cursor.word_next" => Self::MoveWords(WordMotion::NextStart),
@@ -156,6 +159,7 @@ pub(crate) fn normal_action(key: KeyPress, count: usize) -> Option<NormalCommand
         KeyCode::Char('p') if text_input => Some(NormalCommand::Put),
         KeyCode::Char('u') if text_input => Some(NormalCommand::Undo),
         KeyCode::Char('r') if key.ctrl() => Some(NormalCommand::Redo),
+        KeyCode::Char('.') if text_input => Some(NormalCommand::RepeatChange),
         KeyCode::Char('0') if text_input && count == 0 => Some(NormalCommand::MoveHome),
         KeyCode::Char(character) if text_input && character.is_ascii_digit() => {
             Some(NormalCommand::Count(character))
