@@ -9,8 +9,8 @@ post-`0.5.0` feature line.
 ## [Unreleased]
 
 ### Added
-- Word, quote, bracket/parenthesis/brace, and paragraph text objects support
-  `d`/`y`/`c`, including nested bracket pairs.
+- Word, quote, bracket/parenthesis/brace, paragraph, and tag text objects
+  support `d`/`y`/`c`, including nested bracket pairs.
 
 - Semantic last-change repeat: `.` replays the last successful delete, change,
   or insert session; an explicit count overrides the recorded delete count.

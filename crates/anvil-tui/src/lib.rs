@@ -145,6 +145,10 @@ enum LastChange {
         around: bool,
         inserted: String,
     },
+    ChangeTag {
+        around: bool,
+        inserted: String,
+    },
     InsertAtCursor {
         text: String,
     },
@@ -175,6 +179,7 @@ enum InsertOrigin {
     ChangeAroundQuote(char),
     ChangeBracket { open: char, around: bool },
     ChangeParagraph { around: bool },
+    ChangeTag { around: bool },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

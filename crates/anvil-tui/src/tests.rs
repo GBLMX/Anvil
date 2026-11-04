@@ -2564,3 +2564,29 @@ fn paragraph_text_objects_delete_and_change() {
     handle_event(&mut change, key(KeyCode::Esc));
     assert_eq!(change.editor.text().slice(0..3), "X\nc");
 }
+
+#[test]
+fn tag_text_objects_delete_change_and_around() {
+    let mut inner = Model::new(EditorState::from_text("<p>hi</p>"), None);
+    inner.cursor = 4;
+    for key_code in [KeyCode::Char('d'), KeyCode::Char('i'), KeyCode::Char('t')] {
+        handle_event(&mut inner, key(key_code));
+    }
+    assert_eq!(inner.editor.text().len_bytes(), 7);
+
+    let mut around = Model::new(EditorState::from_text("<p>hi</p>"), None);
+    around.cursor = 4;
+    for key_code in [KeyCode::Char('d'), KeyCode::Char('a'), KeyCode::Char('t')] {
+        handle_event(&mut around, key(key_code));
+    }
+    assert_eq!(around.editor.text().len_bytes(), 0);
+
+    let mut change = Model::new(EditorState::from_text("<p>hi</p>"), None);
+    change.cursor = 4;
+    for key_code in [KeyCode::Char('c'), KeyCode::Char('i'), KeyCode::Char('t')] {
+        handle_event(&mut change, key(key_code));
+    }
+    type_text(&mut change, "X");
+    handle_event(&mut change, key(KeyCode::Esc));
+    assert_eq!(change.editor.text().slice(0..3), "<p>");
+}

@@ -64,6 +64,10 @@ impl Model {
                 around,
                 inserted: session.text,
             },
+            InsertOrigin::ChangeTag { around } => LastChange::ChangeTag {
+                around,
+                inserted: session.text,
+            },
         };
         self.last_change = Some(last);
     }
@@ -126,6 +130,11 @@ impl Model {
             }
             LastChange::ChangeParagraph { around, inserted } => {
                 if let Some(range) = self.paragraph_range(around) {
+                    self.replace_now(range, &inserted);
+                }
+            }
+            LastChange::ChangeTag { around, inserted } => {
+                if let Some(range) = self.tag_range(around) {
                     self.replace_now(range, &inserted);
                 }
             }

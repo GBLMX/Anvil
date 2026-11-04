@@ -434,6 +434,73 @@ impl Model {
         (start < end).then_some(start..end)
     }
 
+    pub(crate) fn tag_range(&self, around: bool) -> Option<std::ops::Range<usize>> {
+        let line = self.editor.line_range_at(self.cursor)?;
+        let text = self.editor.text().slice(line.start..line.end);
+        let local = self.cursor.saturating_sub(line.start).min(text.len());
+        let open_start = text[..local].rfind('<')?;
+        if text[open_start..].starts_with("</") {
+            return None;
+        }
+        let open_end = text[open_start..].find('>')? + open_start;
+        let name = text[open_start + 1..open_end]
+            .split(|character: char| character.is_whitespace() || character == '/')
+            .next()?;
+        if name.is_empty() {
+            return None;
+        }
+        let close = format!("</{name}>");
+        let close_start = text[open_end + 1..].find(&close)? + open_end + 1;
+        let close_end = close_start + close.len();
+        let (start, end) = if around {
+            (open_start, close_end)
+        } else {
+            (open_end + 1, close_start)
+        };
+        (start < end).then_some(line.start + start..line.start + end)
+    }
+
+    pub(crate) fn apply_tag_operator(&mut self, operator: char, around: bool) {
+        let Some(range) = self.tag_range(around) else {
+            self.status = "E: no tag object".to_owned();
+            self.dirty = true;
+            return;
+        };
+        match operator {
+            'y' => {
+                let cursor = self.cursor;
+                self.editor.set_selection_bytes(range.start, range.end);
+                if self.editor.yank(range) {
+                    self.record_register();
+                }
+                let _ = self.editor.set_selection_bytes(cursor, cursor);
+            }
+            'c' => {
+                let deleted = self.editor.text().slice(range.clone());
+                self.editor.set_selection_bytes(range.start, range.end);
+                self.editor.delete(range.clone());
+                self.cursor = range.start;
+                if let Some(register) = self.register.take() {
+                    self.record_register_text(register, &deleted);
+                }
+                self.modified = true;
+                self.begin_insert(InsertOrigin::ChangeTag { around });
+            }
+            'd' => {
+                let deleted = self.editor.text().slice(range.clone());
+                self.editor.set_selection_bytes(range.start, range.end);
+                self.editor.delete(range.clone());
+                self.cursor = range.start;
+                if let Some(register) = self.register.take() {
+                    self.record_register_text(register, &deleted);
+                }
+                self.modified = true;
+            }
+            _ => return,
+        }
+        self.dirty = true;
+    }
+
     pub(crate) fn word_end_exclusive(&self) -> usize {
         let text = self.editor.text();
         let end = end_word(text, self.cursor);
