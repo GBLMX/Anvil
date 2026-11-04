@@ -2092,6 +2092,26 @@ fn closing_modified_buffer_can_save_or_discard() {
 }
 
 #[test]
+fn failed_save_keeps_close_confirmation_open() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let mut model = Model::new(EditorState::from_text("dirty"), None);
+    model.path = Some(dir.path().to_path_buf());
+    model.modified = true;
+    model.ui.input_mode = InputMode::ConfirmClose { index: 0 };
+    model.queue_effect(Effect::SaveBuffer {
+        index: 0,
+        close: true,
+    });
+    model.drain_effects();
+
+    assert!(matches!(
+        model.ui.input_mode,
+        InputMode::ConfirmClose { index: 0 }
+    ));
+    assert!(model.status.starts_with("E:"), "{}", model.status);
+}
+
+#[test]
 fn close_indexed_buffer_keeps_active_buffer() {
     let dir = tempfile::tempdir().expect("tempdir");
     let first = dir.path().join("first.txt");

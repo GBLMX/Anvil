@@ -223,6 +223,7 @@ impl Model {
                 Effect::TreeDelete(path) => self.finish_tree_delete(path),
                 Effect::SaveBuffer { index, close } => {
                     if self.save_buffer(index) && close {
+                        self.ui.input_mode = InputMode::Normal;
                         self.close_buffer(index, true);
                     }
                 }

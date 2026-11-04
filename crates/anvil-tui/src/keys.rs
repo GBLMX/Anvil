@@ -519,7 +519,6 @@ fn handle_key(model: &mut Model, key: KeyPress) {
         InputMode::ConfirmClose { index } => match key.code {
             KeyCode::Char('y') | KeyCode::Char('Y') => {
                 let index = *index;
-                model.ui.input_mode = InputMode::Normal;
                 model.queue_effect(Effect::SaveBuffer { index, close: true });
             }
             KeyCode::Char('n') | KeyCode::Char('N') => {
