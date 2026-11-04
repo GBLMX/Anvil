@@ -192,7 +192,7 @@ impl Model {
         self.drain_effects();
     }
 
-    fn queue_effect(&mut self, effect: Effect) {
+    pub(crate) fn queue_effect(&mut self, effect: Effect) {
         if self.effects.push(effect).is_err() {
             self.status = "E: effect queue full".to_owned();
             self.dirty = true;
@@ -216,6 +216,14 @@ impl Model {
                     let path = path.to_string_lossy().into_owned();
                     self.open_file(&path);
                 }
+                Effect::LspCompletion => self.request_completion(),
+                Effect::LspSignatureHelp(trigger) => self.request_signature_help(trigger),
+                Effect::LspDefinition => self.request_definition(),
+                Effect::LspHover => self.request_hover(),
+                Effect::LspCodeActions => self.request_code_actions(),
+                Effect::LspDocumentSymbols => self.request_document_symbols(),
+                Effect::LspWorkspaceSymbols => self.request_workspace_symbols(),
+                Effect::LspRename(name) => self.request_rename(&name),
                 Effect::LspFormat => self.request_formatting(),
             }
         }

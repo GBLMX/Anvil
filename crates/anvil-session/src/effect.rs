@@ -14,6 +14,22 @@ pub enum Effect {
     SaveAll,
     /// Open a file in the session.
     Open(PathBuf),
+    /// Request completion at the cursor.
+    LspCompletion,
+    /// Request signature help after a trigger character.
+    LspSignatureHelp(char),
+    /// Request definition.
+    LspDefinition,
+    /// Request hover.
+    LspHover,
+    /// Request code actions.
+    LspCodeActions,
+    /// Request document symbols.
+    LspDocumentSymbols,
+    /// Request workspace symbols.
+    LspWorkspaceSymbols,
+    /// Rename the symbol at the cursor.
+    LspRename(String),
     /// Request formatting for the active buffer.
     LspFormat,
 }

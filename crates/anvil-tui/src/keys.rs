@@ -34,6 +34,7 @@ pub(crate) fn handle_event(model: &mut Model, event: Event) {
         Event::Resize(_, _) => model.dirty = true,
         _ => {}
     }
+    model.drain_effects();
 }
 
 fn handle_key(model: &mut Model, key: KeyPress) {
@@ -129,7 +130,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
                 }
                 PendingCommand::ChangeInnerWord => model.change_inner_word(),
                 PendingCommand::ChangeInnerQuote(quote) => model.change_inner_quote(quote),
-                PendingCommand::Definition => model.request_definition(),
+                PendingCommand::Definition => model.queue_effect(Effect::LspDefinition),
                 PendingCommand::Diagnostic(forward) => model.jump_diagnostic(forward),
                 PendingCommand::Count { pending, digit } => {
                     model.push_count(digit);
@@ -161,19 +162,19 @@ fn handle_key(model: &mut Model, key: KeyPress) {
                 }
                 PendingCommand::CodeActions => {
                     let _ = model.take_count();
-                    model.request_code_actions();
+                    model.queue_effect(Effect::LspCodeActions);
                 }
                 PendingCommand::DocumentSymbols => {
                     let _ = model.take_count();
-                    model.request_document_symbols();
+                    model.queue_effect(Effect::LspDocumentSymbols);
                 }
                 PendingCommand::WorkspaceSymbols => {
                     let _ = model.take_count();
-                    model.request_workspace_symbols();
+                    model.queue_effect(Effect::LspWorkspaceSymbols);
                 }
                 PendingCommand::Formatting => {
                     let _ = model.take_count();
-                    model.request_formatting();
+                    model.queue_effect(Effect::LspFormat);
                 }
                 PendingCommand::ChangeWord(motion) => {
                     let _ = model.take_count();
@@ -418,7 +419,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             KeyCode::Enter => {
                 let new_name = std::mem::take(name);
                 model.ui.input_mode = InputMode::Normal;
-                model.request_rename(&new_name);
+                model.queue_effect(Effect::LspRename(new_name));
             }
             KeyCode::Backspace => {
                 name.pop();
@@ -614,7 +615,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             KeyCode::Down => model.move_line(1),
             KeyCode::Home => model.move_home(),
             KeyCode::End => model.move_end(),
-            KeyCode::Char(' ') if control => model.request_completion(),
+            KeyCode::Char(' ') if control => model.queue_effect(Effect::LspCompletion),
             KeyCode::Char(character) if text_input => {
                 model.insert_text(&character.to_string());
                 if matches!(character, '.' | ':') {
@@ -631,7 +632,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
                         model.pending = Some(pending);
                         model.dirty = true;
                     }
-                    NormalCommand::Hover => model.request_hover(),
+                    NormalCommand::Hover => model.queue_effect(Effect::LspHover),
                     NormalCommand::MacroRecord => {
                         model.macro_wait = Some('q');
                         model.dirty = true;
