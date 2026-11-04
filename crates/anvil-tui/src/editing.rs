@@ -908,6 +908,21 @@ impl Model {
     }
 
     pub(crate) fn delete_visual(&mut self) {
+        let selections = self.editor.selection_bytes();
+        let deleted = selections
+            .first()
+            .copied()
+            .map(|(anchor, head)| self.editor.text().slice(anchor.min(head)..anchor.max(head)))
+            .unwrap_or_default();
+        if let Some((anchor, head)) = selections.first().copied() {
+            let range = anchor.min(head)..anchor.max(head);
+            if range.start < range.end {
+                let _ = self.editor.yank(range);
+            }
+        }
+        if let Some(register) = self.register.take() {
+            self.record_register_text(register, &deleted);
+        }
         if !self.delete_selections(false) {
             self.exit_visual();
             return;

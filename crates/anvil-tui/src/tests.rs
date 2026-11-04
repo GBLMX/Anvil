@@ -2637,3 +2637,56 @@ fn visual_adapter_maps_character_and_line_selection() {
     handle_event(&mut line, key(KeyCode::Char('d')));
     assert_eq!(line.editor.text().len_bytes(), 0);
 }
+
+#[test]
+fn visual_delete_keeps_register_and_undo() {
+    let mut model = Model::new(EditorState::from_text("abc"), None);
+    model.cursor = 0;
+    for key_code in [KeyCode::Char('v'), KeyCode::Right, KeyCode::Char('d')] {
+        handle_event(&mut model, key(key_code));
+    }
+    assert_eq!(model.editor.text().slice(0..1), "c");
+    handle_event(&mut model, key(KeyCode::Char('p')));
+    assert_eq!(model.editor.text().slice(0..3), "abc");
+}
+
+#[test]
+fn visual_delete_undoes_and_handles_reversal_and_empty_buffer() {
+    let mut reversed = Model::new(EditorState::from_text("abc"), None);
+    reversed.cursor = 2;
+    for key_code in [KeyCode::Char('v'), KeyCode::Left, KeyCode::Char('d')] {
+        handle_event(&mut reversed, key(key_code));
+    }
+    assert_eq!(reversed.editor.text().slice(0..1), "a");
+    handle_event(&mut reversed, key(KeyCode::Char('u')));
+    assert_eq!(reversed.editor.text().slice(0..3), "abc");
+
+    let mut empty = Model::new(EditorState::from_text(""), None);
+    for key_code in [KeyCode::Char('v'), KeyCode::Char('d')] {
+        handle_event(&mut empty, key(key_code));
+    }
+    assert_eq!(empty.editor.text().len_bytes(), 0);
+}
+
+#[test]
+fn unknown_object_failure_preserves_text() {
+    let mut model = Model::new(EditorState::from_text("abc"), None);
+    model.cursor = 0;
+    for key_code in [KeyCode::Char('d'), KeyCode::Char('i'), KeyCode::Char('"')] {
+        handle_event(&mut model, key(key_code));
+    }
+    assert_eq!(model.editor.text().slice(0..3), "abc");
+    assert!(model.status.starts_with("E:"));
+}
+
+#[test]
+fn visual_delete_applies_to_multiple_selections_in_one_undo() {
+    let mut model = Model::new(EditorState::from_text("foo foo"), None);
+    model.cursor = 0;
+    model.select_word_occurrences();
+    model.delete_visual();
+    model.ui.input_mode = InputMode::Normal;
+    assert_eq!(model.editor.text().slice(0..1), " ");
+    handle_event(&mut model, key(KeyCode::Char('u')));
+    assert_eq!(model.editor.text().len_bytes(), 7);
+}
