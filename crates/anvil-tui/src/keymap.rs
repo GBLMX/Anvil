@@ -460,13 +460,23 @@ pub(crate) fn resolve_normal(
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum PendingCommand {
     ObjectPending,
-    OperatorWord { operator: char, around: bool },
-    OperatorQuote { operator: char, quote: char },
+    OperatorWord {
+        operator: char,
+        around: bool,
+    },
+    OperatorQuote {
+        operator: char,
+        quote: char,
+        around: bool,
+    },
     ChangeInnerWord,
     ChangeInnerQuote(char),
     Definition,
     Diagnostic(bool),
-    Count { pending: char, digit: char },
+    Count {
+        pending: char,
+        digit: char,
+    },
     SplitVertical,
     FocusSplit(bool),
     CloseSplit,
@@ -571,10 +581,12 @@ pub(crate) fn pending_action(
             KeyCode::Char('"') => Some(PendingCommand::OperatorQuote {
                 operator,
                 quote: '"',
+                around: pending.is_ascii_uppercase(),
             }),
             KeyCode::Char('\'') => Some(PendingCommand::OperatorQuote {
                 operator,
                 quote: '\'',
+                around: pending.is_ascii_uppercase(),
             }),
             _ => None,
         };

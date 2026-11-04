@@ -51,6 +51,10 @@ impl Model {
                 quote,
                 inserted: session.text,
             },
+            InsertOrigin::ChangeAroundQuote(quote) => LastChange::ChangeAroundQuote {
+                quote,
+                inserted: session.text,
+            },
         };
         self.last_change = Some(last);
     }
@@ -94,6 +98,11 @@ impl Model {
             }
             LastChange::ChangeInnerQuote { quote, inserted } => {
                 if let Some(range) = self.inner_quote_range(quote) {
+                    self.replace_now(range, &inserted);
+                }
+            }
+            LastChange::ChangeAroundQuote { quote, inserted } => {
+                if let Some(range) = self.around_quote_range(quote) {
                     self.replace_now(range, &inserted);
                 }
             }

@@ -2490,3 +2490,25 @@ fn delete_inner_quote_does_not_change() {
     }
     assert_eq!(model.editor.text().slice(0..10), "say \"\" now");
 }
+
+#[test]
+fn delete_around_quote_removes_delimiters() {
+    let mut model = Model::new(EditorState::from_text("say \"hello\" now"), None);
+    model.cursor = 6;
+    for key_code in [KeyCode::Char('d'), KeyCode::Char('a'), KeyCode::Char('"')] {
+        handle_event(&mut model, key(key_code));
+    }
+    assert_eq!(model.editor.text().slice(0..8), "say  now");
+}
+
+#[test]
+fn change_around_quote_repeats_with_quotes() {
+    let mut model = Model::new(EditorState::from_text("say \"hello\" now"), None);
+    model.cursor = 6;
+    for key_code in [KeyCode::Char('c'), KeyCode::Char('a'), KeyCode::Char('"')] {
+        handle_event(&mut model, key(key_code));
+    }
+    type_text(&mut model, "X");
+    handle_event(&mut model, key(KeyCode::Esc));
+    assert_eq!(model.editor.text().slice(0..9), "say X now");
+}

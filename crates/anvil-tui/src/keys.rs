@@ -169,9 +169,13 @@ fn handle_key(model: &mut Model, key: KeyPress) {
                     let count = model.take_count();
                     model.apply_word_operator(operator, around, count);
                 }
-                PendingCommand::OperatorQuote { operator, quote } => {
+                PendingCommand::OperatorQuote {
+                    operator,
+                    quote,
+                    around,
+                } => {
                     let _ = model.take_count();
-                    model.apply_quote_operator(operator, quote);
+                    model.apply_quote_operator(operator, quote, around);
                 }
                 PendingCommand::ChangeInnerWord => model.change_inner_word(),
                 PendingCommand::ChangeInnerQuote(quote) => model.change_inner_quote(quote),

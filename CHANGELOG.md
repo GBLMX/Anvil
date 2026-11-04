@@ -9,8 +9,8 @@ post-`0.5.0` feature line.
 ## [Unreleased]
 
 ### Added
-- Word text objects now support `diw`, `daw`, `ciw`, `caw`, `yiw`, and `yaw`;
-  inner quotes support `di"`, `yi"`, and `ci"` through the same operator path.
+- Word and inner/outer quote text objects support `d`/`y`/`c`, including
+  `di"`, `da"`, `yi"`, `ya"`, `ci"`, and `ca"`.
 
 - Semantic last-change repeat: `.` replays the last successful delete, change,
   or insert session; an explicit count overrides the recorded delete count.

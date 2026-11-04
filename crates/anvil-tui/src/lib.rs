@@ -132,6 +132,10 @@ enum LastChange {
         quote: char,
         inserted: String,
     },
+    ChangeAroundQuote {
+        quote: char,
+        inserted: String,
+    },
     InsertAtCursor {
         text: String,
     },
@@ -159,6 +163,7 @@ enum InsertOrigin {
     ChangeWord(WordMotion),
     ChangeInnerWord,
     ChangeInnerQuote(char),
+    ChangeAroundQuote(char),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

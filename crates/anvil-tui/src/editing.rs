@@ -129,6 +129,17 @@ impl Model {
             .then_some(line.start + left + quote.len_utf8()..line.start + right)
     }
 
+    pub(crate) fn around_quote_range(&self, quote: char) -> Option<std::ops::Range<usize>> {
+        let inner = self.inner_quote_range(quote)?;
+        let text = self.editor.text();
+        let start = inner.start.checked_sub(quote.len_utf8())?;
+        let end = inner.end.checked_add(quote.len_utf8())?;
+        (end <= text.len_bytes()
+            && text.slice(start..inner.start) == quote.to_string()
+            && text.slice(inner.end..end) == quote.to_string())
+        .then_some(start..end)
+    }
+
     pub(crate) fn around_word_range(&self) -> Option<std::ops::Range<usize>> {
         let inner = self.inner_word_range()?;
         let line = self.editor.line_range_at(inner.start)?;
@@ -203,8 +214,13 @@ impl Model {
         self.dirty = true;
     }
 
-    pub(crate) fn apply_quote_operator(&mut self, operator: char, quote: char) {
-        let Some(range) = self.inner_quote_range(quote) else {
+    pub(crate) fn apply_quote_operator(&mut self, operator: char, quote: char, around: bool) {
+        let range = if around {
+            self.around_quote_range(quote)
+        } else {
+            self.inner_quote_range(quote)
+        };
+        let Some(range) = range else {
             self.status = "E: no quote object".to_owned();
             self.dirty = true;
             return;
@@ -227,7 +243,11 @@ impl Model {
                     self.record_register_text(register, &deleted);
                 }
                 self.modified = true;
-                self.begin_insert(InsertOrigin::ChangeInnerQuote(quote));
+                self.begin_insert(if around {
+                    InsertOrigin::ChangeAroundQuote(quote)
+                } else {
+                    InsertOrigin::ChangeInnerQuote(quote)
+                });
             }
             'd' => {
                 let deleted = self.editor.text().slice(range.clone());
