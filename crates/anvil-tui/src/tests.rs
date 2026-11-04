@@ -2327,3 +2327,25 @@ fn failed_delete_preserves_previous_last_change() {
     handle_event(&mut model, key(KeyCode::Char('w')));
     assert_eq!(model.last_change, previous);
 }
+
+#[test]
+fn empty_insert_does_not_replace_last_change() {
+    let mut model = Model::new(EditorState::from_text("one two three"), None);
+    handle_event(&mut model, key(KeyCode::Char('d')));
+    handle_event(&mut model, key(KeyCode::Char('w')));
+    handle_event(&mut model, key(KeyCode::Char('i')));
+    handle_event(&mut model, key(KeyCode::Esc));
+    handle_event(&mut model, key(KeyCode::Char('.')));
+    assert_eq!(model.editor.text().slice(0..5), "three");
+}
+
+#[test]
+fn backspace_updates_insert_session_text() {
+    let mut model = Model::new(EditorState::from_text(""), None);
+    handle_event(&mut model, key(KeyCode::Char('i')));
+    type_text(&mut model, "abc");
+    handle_event(&mut model, key(KeyCode::Backspace));
+    handle_event(&mut model, key(KeyCode::Esc));
+    handle_event(&mut model, key(KeyCode::Char('.')));
+    assert_eq!(model.editor.text().slice(0..4), "abab");
+}

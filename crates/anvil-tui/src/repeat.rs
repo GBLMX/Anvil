@@ -22,6 +22,13 @@ impl Model {
         let Some(session) = self.insert_session.take() else {
             return;
         };
+        if matches!(
+            session.origin,
+            InsertOrigin::InsertHere | InsertOrigin::Append | InsertOrigin::AppendLineEnd
+        ) && session.text.is_empty()
+        {
+            return;
+        }
         let last = match session.origin {
             InsertOrigin::InsertHere => LastChange::InsertAtCursor { text: session.text },
             InsertOrigin::Append => LastChange::Append { text: session.text },
@@ -41,6 +48,12 @@ impl Model {
             },
         };
         self.last_change = Some(last);
+    }
+
+    pub(crate) fn trim_insert_session(&mut self) {
+        if let Some(session) = self.insert_session.as_mut() {
+            let _ = session.text.pop();
+        }
     }
 
     pub(crate) fn repeat_last_change(&mut self, count: usize) {

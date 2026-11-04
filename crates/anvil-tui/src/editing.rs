@@ -678,6 +678,7 @@ impl Model {
         }
         self.cancel_signature_help();
         if self.delete_selections(false) {
+            self.trim_insert_session();
             return;
         }
         let Some(start) = self.editor.previous_grapheme_boundary(self.cursor) else {
@@ -690,7 +691,7 @@ impl Model {
         self.editor.delete(start..self.cursor);
         self.cursor = start;
         self.modified = true;
-        self.dirty = true;
+        self.trim_insert_session();
     }
 
     pub(crate) fn delete_forward(&mut self) {

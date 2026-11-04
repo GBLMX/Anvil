@@ -14,6 +14,11 @@ post-`0.5.0` feature line.
   or insert session; an explicit count overrides the recorded delete count.
   The scope is session-wide and applies to the active buffer.
 
+### Fixed
+
+- Empty insert sessions no longer replace the previous last change; backspace
+  removes the deleted text from the captured insert session.
+
 ## [0.5.0] - 2026-11-04
 
 ### Fixed
