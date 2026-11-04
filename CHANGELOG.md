@@ -2,10 +2,10 @@
 
 All notable changes to Anvil are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Pre-1.0 version
-lines are release-series labels, not a compatibility promise; `0.4.x` is the
-post-`0.4.0` feature line.
+lines are release-series labels, not a compatibility promise; `0.5.x` is the
+post-`0.5.0` feature line.
 
-## [Unreleased]
+## [0.5.0] - 2026-11-04
 
 ### Fixed
 
