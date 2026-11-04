@@ -55,6 +55,10 @@ in `PROJECT_CHARTER.md`, `docs/phase-0-7-plan.md`, and the ADRs.
 8. [0.4.7–0.6.1] Linux substrate hardening: cgroup attach before exec, pidfd
    lifecycle, atomic install/rollback, `statx` identity, and measured watcher
    backends; see [docs/linux-platform-plan.md](docs/linux-platform-plan.md).
+9. [post-0.5] IDE capabilities: completion resolve/snippets, references,
+   folding/semantic tokens, search/replace, problems, session restore, Git
+   diff/hunks, and separate task/terminal/debug adapters; see
+   [docs/ide-capability-plan.md](docs/ide-capability-plan.md).
 
 ## Later
 
