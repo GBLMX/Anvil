@@ -52,7 +52,6 @@ mod plugin_discovery;
 mod plugin_document;
 mod splits;
 use lsp_ui::lsp_settings;
-mod command;
 mod input;
 mod keymap;
 mod keys;

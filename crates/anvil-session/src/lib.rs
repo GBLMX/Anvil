@@ -3,6 +3,7 @@
 //! The terminal frontend and a future headless frontend use the same session
 //! contract; this crate does not depend on the TUI.
 
+pub mod command;
 mod host_session;
 pub mod plugin_session;
 pub mod plugin_supervisor;

@@ -33,8 +33,8 @@ times per minute:
 
 ## Current State
 
-- `crates/anvil-tui/src/command.rs` defines stable command IDs and a read-only
-  metadata registry for normal and operator-pending commands.
+- `crates/anvil-session/src/command.rs` defines stable command IDs and a
+  read-only metadata registry for normal and operator-pending commands.
 - `crates/anvil-tui/src/commands.rs` still dispatches Ex commands with string
   matching; it is not wired to the command registry.
 - `crates/anvil-tui/src/keymap.rs` resolves normal and pending chords and loads
@@ -73,9 +73,8 @@ Lua never appears in the per-key resolution loop.
 
 ## 1. CommandRegistry
 
-Place the registry in a future `anvil-session`/`anvil-command` boundary, not
-`anvil-core`. `anvil-core::EditCommand` is a text/undo primitive, not a UI
-command.
+The registry lives in `anvil-session`, not `anvil-core`.
+`anvil-core::EditCommand` is a text/undo primitive, not a UI command.
 
 Each command descriptor should include:
 

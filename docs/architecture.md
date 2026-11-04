@@ -1,9 +1,10 @@
 # Anvil Architecture
 
-Status: current as of 2026-11-03; `0.4.7c-b` cgroup-before-exec limits, host
+Status: current as of 2026-11-04; `0.4.7c-b` cgroup-before-exec limits, host
 supervision, idle reclaim, and seccomp closure are landed. `0.4.9` document
-session and plugin host lifecycle extraction are landed; command registry,
-focus/overlay state, and effects are deferred to `0.5.0`. Distribution and UI work are planned in
+session and plugin host lifecycle extraction are landed; the command registry
+now lives in `anvil-session`. Focus/overlay state and effects are deferred to
+`0.5.0`. Distribution and UI work are planned in
 [0.5.x](0.5.x-plan.md), [0.6.x](0.6.x-plan.md), and
 [Linux platform](linux-platform-plan.md). See
 [visual current/future maps](architecture-visual.md).
@@ -13,8 +14,8 @@ focus/overlay state, and effects are deferred to `0.5.0`. Distribution and UI wo
 ```text
 ┌──────────────────────────────────────────────┐
 │ Editor (Rust, trusted)                       │
-│ input · text buffer · view · snapshots        │
-│ command registry · plugin lifecycle           │
+│ input · view · rendering                      │
+│ anvil-session: documents · commands · plugins │
 └───────┬──────────────────────────────┬────────┘
         │ editor API UDS               │ control UDS
         │ (per plugin host)            │ (grants, health)
@@ -42,8 +43,8 @@ only when they are in the same explicitly declared trust group.
 
 **Editor**
 
-- Owns the text buffer, selection, viewport, input, command registry, and
-  snapshots.
+- Owns the embedded `anvil-session`: documents, command registry, and plugin
+  lifecycle.
 - Decides which plugins are enabled in a workspace.
 - Issues a per-plugin capability token and registers the grant with the gateway.
 - Serves `editor.*`, `ui.*`, and `event.*` requests from the plugin host.

@@ -1,8 +1,8 @@
 //! Keyboard dispatch for normal, insert, command, and overlay modes.
 
-use crate::command::{CommandContext, is_registered};
 use crate::input::{KeyPress, is_action_key};
 use crate::keymap::{NormalCommand, PendingCommand, resolve_normal, resolve_pending};
+use anvil_session::command::{CommandContext, is_registered};
 
 use super::*;
 

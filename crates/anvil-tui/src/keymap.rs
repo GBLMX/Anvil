@@ -9,8 +9,8 @@ use toml_edit::{DocumentMut, Item};
 use crossterm::event::KeyCode;
 
 use crate::WordMotion;
-use crate::command::{self, CommandContext, CommandId, is_registered};
 use crate::input::KeyPress;
+use anvil_session::command::{self, CommandContext, CommandId, is_registered};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum NormalCommand {
