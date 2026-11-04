@@ -1,6 +1,6 @@
 [
   (code_span)
-] @code
+] @inline_code
 
 [
   (emphasis)

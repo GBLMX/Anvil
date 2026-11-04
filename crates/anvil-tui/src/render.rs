@@ -221,13 +221,14 @@ fn syntax_style(class: SyntaxClass) -> Style {
         SyntaxClass::Heading => theme::SYNTAX_HEADING,
         SyntaxClass::Link => theme::SYNTAX_LINK,
         SyntaxClass::Code => theme::SYNTAX_CODE,
+        SyntaxClass::InlineCode => theme::SYNTAX_CODE,
         SyntaxClass::Emphasis => theme::SYNTAX_EMPHASIS,
         SyntaxClass::List => theme::SYNTAX_LIST,
         SyntaxClass::Quote => theme::SYNTAX_QUOTE,
         SyntaxClass::Table => theme::SYNTAX_TABLE,
         SyntaxClass::CodeBlock => theme::SYNTAX_CODE,
     };
-    if class == SyntaxClass::Code {
+    if class == SyntaxClass::InlineCode {
         return Style::default().fg(color).bg(theme::CODE_BLOCK_BG);
     }
     Style::default().fg(color)

@@ -2779,3 +2779,34 @@ fn inline_code_gets_a_background_span() {
         .expect("inline code");
     assert_eq!(buffer.content()[code].bg, theme::CODE_BLOCK_BG);
 }
+
+#[test]
+fn search_background_overlays_fenced_code_background() {
+    let mut model = Model::new(EditorState::from_text("```rust\nfn main() {}\n```\n"), None);
+    model.path = Some(PathBuf::from("x.md"));
+    model.cursor = 0;
+    model.search_query = "fn".to_owned();
+    for _ in 0..100 {
+        model.poll_syntax();
+        if model
+            .syntax
+            .borrow()
+            .highlights()
+            .iter()
+            .any(|highlight| highlight.class == syntax::SyntaxClass::CodeBlock)
+        {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(2));
+    }
+    let backend = TestBackend::new(40, 8);
+    let mut terminal = Terminal::new(backend).expect("terminal");
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+    let buffer = terminal.backend().buffer();
+    let keyword = buffer
+        .content()
+        .iter()
+        .position(|cell| cell.symbol() == "f")
+        .expect("code text");
+    assert_eq!(buffer.content()[keyword].bg, theme::SELECTION);
+}
