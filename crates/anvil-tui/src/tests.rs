@@ -2349,3 +2349,53 @@ fn backspace_updates_insert_session_text() {
     handle_event(&mut model, key(KeyCode::Char('.')));
     assert_eq!(model.editor.text().slice(0..4), "abab");
 }
+
+#[test]
+fn backspace_at_document_start_and_line_boundaries_is_safe() {
+    let mut empty = Model::new(EditorState::from_text(""), None);
+    for _ in 0..2000 {
+        empty.backspace();
+    }
+    assert_eq!(empty.editor.text().len_bytes(), 0);
+
+    let mut lines = Model::new(EditorState::from_text("a\nb\nc"), None);
+    lines.cursor = 2;
+    lines.backspace();
+    assert_eq!(lines.editor.text().slice(0..4), "ab\nc");
+    for _ in 0..2000 {
+        lines.backspace();
+    }
+    assert_eq!(lines.cursor, 0);
+}
+
+#[test]
+fn bracketed_multiline_paste_preserves_lines_and_undoes_once() {
+    let mut model = Model::new(EditorState::from_text(""), None);
+    handle_event(&mut model, key(KeyCode::Char('i')));
+    handle_event(&mut model, Event::Paste("one\ntwo\n".to_owned()));
+    assert_eq!(model.editor.text().slice(0..8), "one\ntwo\n");
+    handle_event(&mut model, key(KeyCode::Esc));
+    handle_event(&mut model, key(KeyCode::Char('u')));
+    assert_eq!(model.editor.text().len_bytes(), 0);
+}
+
+#[test]
+fn wide_characters_use_display_columns() {
+    let mut model = Model::new(EditorState::from_text(""), None);
+    handle_event(&mut model, key(KeyCode::Char('i')));
+    type_text(&mut model, "你好");
+    let position = model
+        .editor
+        .index()
+        .position(model.editor.text(), model.cursor)
+        .expect("position");
+    assert_eq!(position.display_column, 4);
+    model.backspace();
+    assert_eq!(model.editor.text().slice(0..3), "你");
+    let position = model
+        .editor
+        .index()
+        .position(model.editor.text(), model.cursor)
+        .expect("position");
+    assert_eq!(position.display_column, 2);
+}

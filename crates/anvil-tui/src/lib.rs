@@ -21,8 +21,8 @@ use anvil_session::ui::{InputMode, UiState};
 use crossterm::{
     cursor::SetCursorStyle,
     event::{
-        self, Event, KeyEvent, KeyboardEnhancementFlags, PopKeyboardEnhancementFlags,
-        PushKeyboardEnhancementFlags,
+        self, DisableBracketedPaste, EnableBracketedPaste, Event, KeyEvent,
+        KeyboardEnhancementFlags, PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags,
     },
     execute,
     terminal::{
@@ -1494,7 +1494,7 @@ impl TerminalSession {
         enable_raw_mode()?;
         let supported = supports_keyboard_enhancement().unwrap_or(false);
         let mut stdout = io::stdout();
-        if let Err(error) = execute!(stdout, EnterAlternateScreen) {
+        if let Err(error) = execute!(stdout, EnterAlternateScreen, EnableBracketedPaste) {
             let _ = disable_raw_mode();
             return Err(error);
         }
@@ -1517,7 +1517,7 @@ impl TerminalSession {
                 if keyboard_enhancement {
                     let _ = execute!(io::stdout(), PopKeyboardEnhancementFlags);
                 }
-                let _ = execute!(io::stdout(), LeaveAlternateScreen);
+                let _ = execute!(io::stdout(), LeaveAlternateScreen, DisableBracketedPaste);
                 let _ = disable_raw_mode();
                 Err(error)
             }
@@ -1543,6 +1543,7 @@ impl Drop for TerminalSession {
         }
         let _ = execute!(
             self.terminal.backend_mut(),
+            DisableBracketedPaste,
             SetCursorStyle::DefaultUserShape,
             LeaveAlternateScreen
         );
