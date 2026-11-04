@@ -210,6 +210,78 @@ Initial layout:
 - Color and style policies are centralized; views do not hardcode terminal
   colors.
 
+### 8.1 Reference-pattern decisions
+
+Borrow interaction structure from mature terminal editors; do not copy their
+decoration.
+
+| Pattern | Decision | Slice |
+|---|---|---|
+| LazyVim-style entry dashboard | Keep an entry list in the existing welcome overlay; no giant ASCII logo as the main surface | `0.5.3` / existing |
+| Icon-rich menus | Use data-driven icon roles with text fallback; never require Nerd Fonts | `0.5.4` |
+| Helix-style tree + editor + tabs | Keep tree, editor, split, and tab regions; no transparent/floating terminal windows | `0.5.5`–`0.5.6` |
+| Which-key panel | Adopt a bounded bottom-right keymap continuation panel fed by the command registry | `0.5.3` |
+| Status segments | Adopt explicit priority and deterministic truncation, not a fixed copy of another status line | `0.5.5` |
+| Glow, shadow, animation | Reject for the default UI; optional effects remain deferred after `0.5.9` | deferred |
+
+The target is information density and keyboard reachability, not visual parity
+with Neovim or Helix.
+
+### 8.2 Regions and priority
+
+```text
+┌──────────────────────────────────────────────┐
+│ tabs (optional, bounded)                     │
+├───────────────┬──────────────────────────────┤
+│ tree          │ editor / split                │
+│ (optional)    │                              │
+│               ├──────────────────────────────┤
+│               │ which-key / overlay           │
+├───────────────┴──────────────────────────────┤
+│ status segments                              │
+└──────────────────────────────────────────────┘
+```
+
+- `Layout` is a pure function of terminal size, visibility flags, and focus.
+- The editor receives the remaining area after fixed chrome.
+- Tree width is bounded; it collapses before the editor becomes unusable.
+- Tabs and status segments truncate deterministically.
+- Overlays render after editor/tree and before the status line.
+- Resize recomputes layout once; it never re-lays out the full document.
+
+Priority when width is insufficient:
+
+1. editor
+2. status mode and errors
+3. active tab/path
+4. tree
+5. secondary status segments
+6. icons and decorative labels
+
+### 8.3 Focus and overlays
+
+- One focus owner at a time: editor, tree, split, or overlay.
+- Opening an overlay records the previous owner; closing restores it.
+- Which-key, palette, completion, hover, and notifications use one overlay
+  stack, not independent modal flags.
+- `Esc` unwinds exactly one layer.
+- An overlay that cannot render at the current size closes or degrades before
+  covering the whole editor.
+
+### 8.4 Verification
+
+Layout tests must cover:
+
+- 40, 80, and 200 columns;
+- tree visible/hidden, split open/closed, palette/which-key open;
+- long paths and many tabs;
+- missing icons and ASCII fallback;
+- resize while an overlay is open;
+- no segment panic at one-column widths.
+
+Delivery mapping: `0.5.3` palette/which-key, `0.5.4` icons, `0.5.5` status,
+`0.5.6` tabs, `0.5.9` mouse hit-testing against these rects.
+
 ## 9. Input and selection-first
 
 - Key events become core `EditorCommand`/motion requests.
