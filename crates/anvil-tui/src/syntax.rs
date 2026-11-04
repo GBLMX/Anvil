@@ -533,7 +533,7 @@ fn collect_kind<'tree>(
     if node.kind() == kind {
         out.push(node);
     }
-    for index in 0..node.child_count() {
+    for index in 0..u32::try_from(node.child_count()).expect("child count fits u32") {
         if let Some(child) = node.child(index) {
             collect_kind(child, kind, out);
         }
@@ -544,7 +544,7 @@ fn child_kind<'tree>(
     node: tree_sitter::Node<'tree>,
     kind: &str,
 ) -> Option<tree_sitter::Node<'tree>> {
-    (0..node.child_count())
+    (0..u32::try_from(node.child_count()).expect("child count fits u32"))
         .filter_map(|index| node.child(index))
         .find(|child| child.kind() == kind)
 }
@@ -647,7 +647,7 @@ fn walk_keywords(node: tree_sitter::Node<'_>, base: usize, highlights: &mut Vec<
         }
         return;
     }
-    for index in 0..node.child_count() {
+    for index in 0..u32::try_from(node.child_count()).expect("child count fits u32") {
         if let Some(child) = node.child(index) {
             walk_keywords(child, base, highlights);
         }
