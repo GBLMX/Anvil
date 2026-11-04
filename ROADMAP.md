@@ -26,8 +26,9 @@ in `PROJECT_CHARTER.md`, `docs/phase-0-7-plan.md`, and the ADRs.
 - `0.4.8c` editor-side snapshot and revision-checked transaction contract with
   status-bar rejection reporting.
 - `0.4.9` rescoped: API-version hello/manifest validation, document session,
-  plugin host lifecycle, command registry, focus state, and overlay/input state
-  landed. Effects moved to `0.5.0`.
+  plugin host lifecycle, command registry, focus state, overlay/input state,
+  and the bounded effect queue landed. Remaining direct TUI effects still need
+  migration in `0.5.0`.
 
 ## Next
 

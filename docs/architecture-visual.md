@@ -1,7 +1,7 @@
 # Anvil Architecture Maps
 
 Status: current as of 2026-11-03. Solid paths are implemented; dashed paths
-are planned or debug-only. `0.4.7c-b` cgroup-before-exec limits, supervision, idle reclaim, and seccomp closure are landed; `0.4.9` document session, command registry, focus state, overlay/input state, and plugin host lifecycle extraction landed. Effects are deferred to `0.5.0`; `0.5.x`
+are planned or debug-only. `0.4.7c-b` cgroup-before-exec limits, supervision, idle reclaim, and seccomp closure are landed; `0.4.9` document session, command registry, focus state, overlay/input state, and plugin host lifecycle extraction landed. The bounded effect queue is landed; remaining direct TUI effects still need migration. `0.5.x`
 interaction/UI, `0.6.x` distribution, and Linux substrate work are planned in
 the linked plans.
 

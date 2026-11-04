@@ -3,8 +3,9 @@
 Status: current as of 2026-11-04; `0.4.7c-b` cgroup-before-exec limits, host
 supervision, idle reclaim, and seccomp closure are landed. `0.4.9` document
 session and plugin host lifecycle extraction are landed; the command registry,
-focus state, and overlay/input state now live in `anvil-session`. Effects are
-deferred to `0.5.0`. Distribution and UI work are planned in
+focus state, and overlay/input state now live in `anvil-session`. The bounded
+effect queue is landed; remaining direct TUI effects still need migration.
+Distribution and UI work are planned in
 [0.5.x](0.5.x-plan.md), [0.6.x](0.6.x-plan.md), and
 [Linux platform](linux-platform-plan.md). See
 [visual current/future maps](architecture-visual.md).

@@ -138,16 +138,10 @@ impl Model {
         let name = parts.next().unwrap_or_default();
         let argument = parts.next().unwrap_or_default().trim();
         match (name, argument) {
-            ("w", "") => {
-                self.save();
-            }
-            ("w", path) => {
-                self.save_as(path);
-            }
-            ("wa", "") => {
-                self.save_all();
-            }
-            ("e", path) => self.open_file(path),
+            ("w", "") => self.queue_effect(Effect::Save),
+            ("w", path) => self.queue_effect(Effect::SaveAs(path.into())),
+            ("wa", "") => self.queue_effect(Effect::SaveAll),
+            ("e", path) => self.queue_effect(Effect::Open(path.into())),
             ("bn", "") => self.switch_buffer(1),
             ("bp", "") => self.switch_buffer(-1),
             ("new", "") => self.new_buffer(),
@@ -162,7 +156,7 @@ impl Model {
             ("lsp-start", "") => self.start_lsp(),
             ("tree", "") => self.open_tree(),
             ("lsp-stop", "") => self.stop_lsp(),
-            ("format", "") => self.request_formatting(),
+            ("format", "") => self.queue_effect(Effect::LspFormat),
             ("symbols", "") => self.request_document_symbols(),
             ("plugin-start", "") => self.start_host(),
             ("plugin-list", "") => self.list_plugins(),
@@ -193,6 +187,36 @@ impl Model {
             _ => {
                 self.status = format!("E: unknown command: {command}");
                 self.dirty = true;
+            }
+        }
+        self.drain_effects();
+    }
+
+    fn queue_effect(&mut self, effect: Effect) {
+        if self.effects.push(effect).is_err() {
+            self.status = "E: effect queue full".to_owned();
+            self.dirty = true;
+        }
+    }
+
+    pub(crate) fn drain_effects(&mut self) {
+        while let Some(queued) = self.effects.pop() {
+            match queued.effect {
+                Effect::Save => {
+                    self.save();
+                }
+                Effect::SaveAs(path) => {
+                    let path = path.to_string_lossy().into_owned();
+                    self.save_as(&path);
+                }
+                Effect::SaveAll => {
+                    self.save_all();
+                }
+                Effect::Open(path) => {
+                    let path = path.to_string_lossy().into_owned();
+                    self.open_file(&path);
+                }
+                Effect::LspFormat => self.request_formatting(),
             }
         }
     }

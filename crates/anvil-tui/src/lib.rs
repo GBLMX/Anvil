@@ -16,6 +16,7 @@ use anvil_core::{TextBuffer, TextDocument, end_word, next_word_start, previous_w
 use anvil_editor::EditorState;
 use anvil_ipc::GatewayClient;
 use anvil_session::DocumentSession;
+use anvil_session::effect::{Effect, EffectQueue};
 use anvil_session::ui::{InputMode, UiState};
 use crossterm::{
     cursor::SetCursorStyle,
@@ -83,6 +84,7 @@ use plugin_activation::ActivationEvent;
 use syntax::SyntaxState;
 
 const MAX_OPEN_BYTES: usize = 256 * 1024 * 1024;
+const EFFECT_QUEUE_CAPACITY: usize = 32;
 
 const HELP_TEXT: &str = include_str!("help.txt");
 
@@ -247,6 +249,8 @@ pub struct Model {
     pub hscroll: usize,
     /// Input state.
     pub ui: UiState,
+    /// Typed effects produced by command dispatch.
+    effects: EffectQueue,
     /// In-memory keymap overrides.
     keymap: keymap::KeymapConfig,
     /// Set by `q` / `:q`.
@@ -378,6 +382,7 @@ impl Model {
             scroll: 0,
             hscroll: 0,
             ui: UiState::default(),
+            effects: EffectQueue::new(EFFECT_QUEUE_CAPACITY),
             keymap: keymap::KeymapConfig::default(),
             quit: false,
             modified: false,
