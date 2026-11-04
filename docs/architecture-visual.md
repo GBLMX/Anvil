@@ -177,11 +177,10 @@ flowchart TB
     EDITOR2 --> API2
 ```
 
-The `0.4.9` boundary extracts document state, the command registry, focus
-state, overlay/input state, and plugin host lifecycle from `anvil-tui` into
-`anvil-session`. Effects remain TUI-owned and move in `0.5.0`; the TUI then
-becomes an input adapter and renderer.
-`0.5.x` interaction state is session-owned;
+The `0.4.9`/`0.5.0` boundary extracts document state, the command registry,
+focus state, overlay/input state, the effect queue, and plugin host lifecycle
+from `anvil-tui` into `anvil-session`. The TUI is the input adapter and
+renderer. `0.5.x` interaction state is session-owned;
 the renderer must not become a second owner of focus, palette, or notification
 state.
 

@@ -27,8 +27,9 @@ in `PROJECT_CHARTER.md`, `docs/phase-0-7-plan.md`, and the ADRs.
   status-bar rejection reporting.
 - `0.4.9` rescoped: API-version hello/manifest validation, document session,
   plugin host lifecycle, command registry, focus state, overlay/input state,
-  and the bounded effect queue landed. Remaining direct TUI effects still need
-  migration in `0.5.0`.
+  and the bounded effect queue landed.
+- `0.5.0` session extraction is complete: command-visible effects route through
+  `anvil-session`; the TUI is the input adapter and renderer.
 
 ## Next
 

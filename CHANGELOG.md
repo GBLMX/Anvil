@@ -66,9 +66,9 @@ post-`0.4.0` feature line.
   mutation and reported in the status bar.
 - Host `session.hello` now carries `api_version`; plugin manifests declare and
   validate the supported `0.1` API line before loading.
-- New `anvil-session` owns active document state, revision-checked plugin
-  transactions, and plugin host lifecycle. Command registry, focus/overlay
-  state, and effects remain TUI-owned and move in `0.5.0`.
+- `anvil-session` owns active document state, the command registry, focus and
+  overlay state, revision-checked plugin transactions, plugin host lifecycle,
+  and the bounded effect queue. The TUI is the input adapter and renderer.
 - Repeated host failures disable a plugin until `:plugin-enable <id>` is run;
   `:plugin-list` reports each discovered plugin's host state.
 - Language activation is deduplicated per plugin; workspace-marker activation
