@@ -140,6 +140,37 @@ impl Model {
         .then_some(start..end)
     }
 
+    pub(crate) fn bracket_range(&self, open: char, around: bool) -> Option<std::ops::Range<usize>> {
+        let close = match open {
+            '(' => ')',
+            '[' => ']',
+            '{' => '}',
+            '<' => '>',
+            _ => return None,
+        };
+        let line = self.editor.line_range_at(self.cursor)?;
+        let text = self.editor.text().slice(line.start..line.end);
+        let local = self.cursor.saturating_sub(line.start).min(text.len());
+        let mut stack = Vec::new();
+        for (index, character) in text.char_indices() {
+            if character == open {
+                stack.push(index);
+            } else if character == close
+                && let Some(start) = stack.pop()
+                && start <= local
+                && local <= index
+            {
+                let (start, end) = if around {
+                    (start, index + close.len_utf8())
+                } else {
+                    (start + open.len_utf8(), index)
+                };
+                return (start < end).then_some(line.start + start..line.start + end);
+            }
+        }
+        None
+    }
+
     pub(crate) fn around_word_range(&self) -> Option<std::ops::Range<usize>> {
         let inner = self.inner_word_range()?;
         let line = self.editor.line_range_at(inner.start)?;
@@ -248,6 +279,47 @@ impl Model {
                 } else {
                     InsertOrigin::ChangeInnerQuote(quote)
                 });
+            }
+            'd' => {
+                let deleted = self.editor.text().slice(range.clone());
+                self.editor.set_selection_bytes(range.start, range.end);
+                self.editor.delete(range.clone());
+                self.cursor = range.start;
+                if let Some(register) = self.register.take() {
+                    self.record_register_text(register, &deleted);
+                }
+                self.modified = true;
+            }
+            _ => return,
+        }
+        self.dirty = true;
+    }
+
+    pub(crate) fn apply_bracket_operator(&mut self, operator: char, open: char, around: bool) {
+        let Some(range) = self.bracket_range(open, around) else {
+            self.status = "E: no bracket object".to_owned();
+            self.dirty = true;
+            return;
+        };
+        match operator {
+            'y' => {
+                let cursor = self.cursor;
+                self.editor.set_selection_bytes(range.start, range.end);
+                if self.editor.yank(range) {
+                    self.record_register();
+                }
+                let _ = self.editor.set_selection_bytes(cursor, cursor);
+            }
+            'c' => {
+                let deleted = self.editor.text().slice(range.clone());
+                self.editor.set_selection_bytes(range.start, range.end);
+                self.editor.delete(range.clone());
+                self.cursor = range.start;
+                if let Some(register) = self.register.take() {
+                    self.record_register_text(register, &deleted);
+                }
+                self.modified = true;
+                self.begin_insert(InsertOrigin::ChangeBracket { open, around });
             }
             'd' => {
                 let deleted = self.editor.text().slice(range.clone());

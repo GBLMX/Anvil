@@ -2512,3 +2512,29 @@ fn change_around_quote_repeats_with_quotes() {
     handle_event(&mut model, key(KeyCode::Esc));
     assert_eq!(model.editor.text().slice(0..9), "say X now");
 }
+
+#[test]
+fn bracket_text_objects_support_delete_change_and_around() {
+    let mut inner = Model::new(EditorState::from_text("call(foo, bar)"), None);
+    inner.cursor = 6;
+    for key_code in [KeyCode::Char('d'), KeyCode::Char('i'), KeyCode::Char('(')] {
+        handle_event(&mut inner, key(key_code));
+    }
+    assert_eq!(inner.editor.text().slice(0..6), "call()");
+
+    let mut around = Model::new(EditorState::from_text("call(foo, bar)"), None);
+    around.cursor = 6;
+    for key_code in [KeyCode::Char('d'), KeyCode::Char('a'), KeyCode::Char('(')] {
+        handle_event(&mut around, key(key_code));
+    }
+    assert_eq!(around.editor.text().slice(0..4), "call");
+
+    let mut change = Model::new(EditorState::from_text("call(foo, bar)"), None);
+    change.cursor = 6;
+    for key_code in [KeyCode::Char('c'), KeyCode::Char('i'), KeyCode::Char('(')] {
+        handle_event(&mut change, key(key_code));
+    }
+    type_text(&mut change, "X");
+    handle_event(&mut change, key(KeyCode::Esc));
+    assert_eq!(change.editor.text().slice(0..7), "call(X)");
+}

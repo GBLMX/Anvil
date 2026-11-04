@@ -178,6 +178,14 @@ fn handle_key(model: &mut Model, key: KeyPress) {
                     model.apply_quote_operator(operator, quote, around);
                 }
                 PendingCommand::ChangeInnerWord => model.change_inner_word(),
+                PendingCommand::OperatorBracket {
+                    operator,
+                    open,
+                    around,
+                } => {
+                    let _ = model.take_count();
+                    model.apply_bracket_operator(operator, open, around);
+                }
                 PendingCommand::ChangeInnerQuote(quote) => model.change_inner_quote(quote),
                 PendingCommand::Definition => model.queue_effect(Effect::LspDefinition),
                 PendingCommand::Diagnostic(forward) => model.jump_diagnostic(forward),

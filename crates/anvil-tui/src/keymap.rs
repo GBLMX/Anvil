@@ -469,6 +469,11 @@ pub(crate) enum PendingCommand {
         quote: char,
         around: bool,
     },
+    OperatorBracket {
+        operator: char,
+        open: char,
+        around: bool,
+    },
     ChangeInnerWord,
     ChangeInnerQuote(char),
     Definition,
@@ -525,7 +530,11 @@ impl PendingCommand {
             YankWords(WordMotion::NextStart) => Some(command::YANK_WORDS_NEXT),
             YankWords(WordMotion::End) => Some(command::YANK_WORDS_END),
             YankWords(WordMotion::PreviousStart) => Some(command::YANK_WORDS_PREVIOUS),
-            ObjectPending | OperatorWord { .. } | OperatorQuote { .. } | Count { .. } => None,
+            ObjectPending
+            | OperatorWord { .. }
+            | OperatorQuote { .. }
+            | OperatorBracket { .. }
+            | Count { .. } => None,
         }
     }
 
@@ -586,6 +595,26 @@ pub(crate) fn pending_action(
             KeyCode::Char('\'') => Some(PendingCommand::OperatorQuote {
                 operator,
                 quote: '\'',
+                around: pending.is_ascii_uppercase(),
+            }),
+            KeyCode::Char('(') | KeyCode::Char(')') => Some(PendingCommand::OperatorBracket {
+                operator,
+                open: '(',
+                around: pending.is_ascii_uppercase(),
+            }),
+            KeyCode::Char('[') | KeyCode::Char(']') => Some(PendingCommand::OperatorBracket {
+                operator,
+                open: '[',
+                around: pending.is_ascii_uppercase(),
+            }),
+            KeyCode::Char('{') | KeyCode::Char('}') => Some(PendingCommand::OperatorBracket {
+                operator,
+                open: '{',
+                around: pending.is_ascii_uppercase(),
+            }),
+            KeyCode::Char('<') | KeyCode::Char('>') => Some(PendingCommand::OperatorBracket {
+                operator,
+                open: '<',
                 around: pending.is_ascii_uppercase(),
             }),
             _ => None,

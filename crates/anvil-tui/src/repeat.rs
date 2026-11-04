@@ -55,6 +55,11 @@ impl Model {
                 quote,
                 inserted: session.text,
             },
+            InsertOrigin::ChangeBracket { open, around } => LastChange::ChangeBracket {
+                open,
+                around,
+                inserted: session.text,
+            },
         };
         self.last_change = Some(last);
     }
@@ -103,6 +108,15 @@ impl Model {
             }
             LastChange::ChangeAroundQuote { quote, inserted } => {
                 if let Some(range) = self.around_quote_range(quote) {
+                    self.replace_now(range, &inserted);
+                }
+            }
+            LastChange::ChangeBracket {
+                open,
+                around,
+                inserted,
+            } => {
+                if let Some(range) = self.bracket_range(open, around) {
                     self.replace_now(range, &inserted);
                 }
             }

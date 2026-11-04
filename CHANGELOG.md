@@ -9,8 +9,8 @@ post-`0.5.0` feature line.
 ## [Unreleased]
 
 ### Added
-- Word and inner/outer quote text objects support `d`/`y`/`c`, including
-  `di"`, `da"`, `yi"`, `ya"`, `ci"`, and `ca"`.
+- Word, inner/outer quote, and bracket/parenthesis/brace text objects support
+  `d`/`y`/`c`, including nested bracket pairs.
 
 - Semantic last-change repeat: `.` replays the last successful delete, change,
   or insert session; an explicit count overrides the recorded delete count.
