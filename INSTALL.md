@@ -89,7 +89,8 @@ same user as the editor.
 - The gateway performs workspace path confinement and `fs.read`/`fs.write`
   permission checks. It is not the plugin sandbox.
 - `sys.exec` runs through `anvil-exec-runner`, which applies Landlock/seccomp.
-- cgroup v2 limits are optional. Without a delegated cgroup root, exec falls
+- Plugin hosts require a delegated cgroup v2 root; limits are applied before
+  `execve` and startup fails closed without one. The exec runner still falls
   back to `RLIMIT_NPROC`; see [the deployment model](docs/deployment.md).
 - Plugins are not loaded in the editor process.
 
@@ -101,6 +102,8 @@ same user as the editor.
 | `ANVIL_GATEWAY_LOG` | Gateway stderr destination |
 | `ANVIL_RG` | Explicit `rg` path for fuzzy file listing |
 | `ANVIL_GIT` | Explicit `git` path for gutter diffs |
+| `ANVIL_PLUGIN_DIR` | Directory whose child directories contain `plugin.json` |
+| `ANVIL_CGROUP_ROOT` | Explicit delegated cgroup v2 root for plugin hosts |
 
 ## Uninstall
 

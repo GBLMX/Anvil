@@ -15,6 +15,7 @@ use std::{
 use anvil_core::{TextBuffer, TextDocument, end_word, next_word_start, previous_word_start};
 use anvil_editor::EditorState;
 use anvil_ipc::GatewayClient;
+use anvil_session::DocumentSession;
 use crossterm::{
     cursor::SetCursorStyle,
     event::{
@@ -43,10 +44,12 @@ mod file_tree_ui;
 mod file_worker;
 mod gateway;
 mod git_gutter;
-mod host_session;
 mod inlay_hints;
 pub mod lsp;
 mod lsp_ui;
+mod plugin_activation;
+mod plugin_discovery;
+mod plugin_document;
 mod splits;
 use lsp_ui::lsp_settings;
 mod command;
@@ -65,12 +68,18 @@ use render::{
     push_syntax_spans, utf16_to_byte,
 };
 mod syntax;
+#[cfg(target_os = "linux")]
+use anvil_session::plugin_session::{DEBUG_PERMISSIONS, DEBUG_PLUGIN_ID};
+#[cfg(target_os = "linux")]
+use anvil_session::plugin_supervisor::{
+    ExecOutcome, HostState, PluginSupervisor, StartMode, StartOutcome, SupervisorEvent,
+};
 use file_worker::FileWorker;
 use gateway::GatewaySession;
-#[cfg(target_os = "linux")]
-use host_session::{HostEvent, HostSession};
 use lsp_worker::LspConfig;
 use lsp_worker::{LspEvent, LspWorker};
+#[cfg(target_os = "linux")]
+use plugin_activation::ActivationEvent;
 use syntax::SyntaxState;
 
 const MAX_OPEN_BYTES: usize = 256 * 1024 * 1024;
@@ -79,7 +88,7 @@ const HELP_TEXT: &str = include_str!("help.txt");
 
 #[derive(Clone)]
 struct Buffer {
-    editor: EditorState,
+    editor: DocumentSession,
     path: Option<PathBuf>,
     cursor: usize,
     scroll: usize,
@@ -252,12 +261,24 @@ struct TreeEntry {
     path: PathBuf,
     depth: usize,
     is_dir: bool,
+    ino: u64,
     expanded: bool,
+}
+
+#[cfg(target_os = "linux")]
+fn startup_activation_allowed() -> bool {
+    std::env::var_os("ANVIL_PLUGIN_ALLOW_STARTUP")
+        .is_some_and(|value| value == "1" || value == "true")
+}
+
+#[cfg(target_os = "linux")]
+fn workspace_activation_enabled() -> bool {
+    std::env::var_os("ANVIL_PLUGIN_DISABLE_WORKSPACE_ACTIVATION").is_none()
 }
 
 pub struct Model {
     /// Editor state and its shared text/index.
-    pub editor: EditorState,
+    pub editor: DocumentSession,
     /// Optional source path.
     pub path: Option<PathBuf>,
     /// Cursor byte offset.
@@ -381,9 +402,12 @@ pub struct Model {
     require_gateway: bool,
     /// Tree-sitter highlights cached by editor revision and path.
     syntax: RefCell<SyntaxState>,
-    /// Debug plugin host session, when started.
+    /// Discovered local plugins.
     #[cfg(target_os = "linux")]
-    host: Option<HostSession>,
+    plugins: Vec<plugin_discovery::PluginDescriptor>,
+    /// Plugin host supervisor keyed by plugin id.
+    #[cfg(target_os = "linux")]
+    plugin_supervisor: PluginSupervisor,
 }
 
 impl Model {
@@ -391,7 +415,7 @@ impl Model {
     pub fn new(editor: EditorState, path: Option<PathBuf>) -> Self {
         let welcome = path.is_none() && editor.text().len_bytes() == 0;
         Self {
-            editor,
+            editor: DocumentSession::from(editor),
             path,
             welcome,
             welcome_back: false,
@@ -466,7 +490,9 @@ impl Model {
             require_gateway: false,
             syntax: RefCell::new(SyntaxState::default()),
             #[cfg(target_os = "linux")]
-            host: None,
+            plugins: Vec::new(),
+            #[cfg(target_os = "linux")]
+            plugin_supervisor: PluginSupervisor::new(),
         }
     }
 
@@ -484,6 +510,12 @@ impl Model {
             return Ok(());
         }
         self.load_keymap_config_from(&path)
+    }
+
+    #[cfg(target_os = "linux")]
+    pub(crate) fn load_plugins(&mut self) -> Result<(), String> {
+        self.plugins = plugin_discovery::discover()?;
+        Ok(())
     }
 
     /// Builds a model that uses `gateway` for all file I/O.
@@ -541,7 +573,7 @@ impl Model {
             self.dirty = true;
             return;
         }
-        let editor = std::mem::replace(&mut self.editor, EditorState::from_text(HELP_TEXT));
+        let editor = std::mem::replace(&mut self.editor, EditorState::from_text(HELP_TEXT).into());
         let saved = Buffer {
             editor,
             path: self.path.take(),
@@ -595,17 +627,161 @@ impl Model {
     }
 
     #[cfg(target_os = "linux")]
-    fn start_oom_host(&mut self) {
-        if self.host.is_some() {
-            self.status = "plugin host already running".to_owned();
-            self.dirty = true;
+    fn list_plugins(&mut self) {
+        if self.plugins.is_empty() {
+            self.status = "no plugins (set ANVIL_PLUGIN_DIR)".to_owned();
+        } else {
+            let plugins = self
+                .plugins
+                .iter()
+                .map(|plugin| {
+                    format!(
+                        "{} ({})",
+                        plugin.manifest.id,
+                        self.plugin_supervisor.state(&plugin.manifest.id).as_str()
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join(", ");
+            self.status = format!("plugins: {plugins}");
+        }
+        self.dirty = true;
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    fn list_plugins(&mut self) {
+        self.status = "plugins are Linux-only".to_owned();
+        self.dirty = true;
+    }
+
+    #[cfg(target_os = "linux")]
+    fn activate_plugins(&mut self, event: ActivationEvent) {
+        let candidates = self
+            .plugins
+            .iter()
+            .filter(|plugin| plugin_activation::matches(&plugin.manifest.activation_events, &event))
+            .cloned()
+            .collect::<Vec<_>>();
+        let Some(gateway) = self.gateway.as_mut() else {
+            return;
+        };
+        for plugin in candidates {
+            let plugin_id = plugin.manifest.id.clone();
+            if matches!(
+                self.plugin_supervisor.state(&plugin_id),
+                HostState::Queued
+                    | HostState::Registering
+                    | HostState::Starting
+                    | HostState::Ready
+                    | HostState::Draining
+            ) {
+                continue;
+            }
+            match self.plugin_supervisor.activate(
+                &plugin_id,
+                &plugin.root,
+                gateway,
+                &self.workspace,
+            ) {
+                Ok(StartOutcome::Started) => {
+                    self.status = format!("plugin {plugin_id} starting");
+                    self.dirty = true;
+                }
+                Ok(StartOutcome::Queued) => {
+                    self.status = format!("plugin {plugin_id} queued");
+                    self.dirty = true;
+                }
+                Err(error) => {
+                    self.status = format!("E: plugin {plugin_id}: {error}");
+                    self.dirty = true;
+                }
+            }
+        }
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    fn activate_plugins(&mut self, _event: ActivationEvent) {}
+
+    #[cfg(target_os = "linux")]
+    fn activate_workspace_plugins(&mut self) {
+        if !workspace_activation_enabled() {
             return;
         }
-        match HostSession::start_oom(&self.workspace) {
-            Ok(host) => {
-                self.host = Some(host);
-                self.status = "plugin host OOM probe starting".to_owned();
+        let mut markers = Vec::new();
+        for plugin in &self.plugins {
+            for value in &plugin.manifest.activation_events {
+                let Some(ActivationEvent::WorkspaceContains(marker)) =
+                    plugin_activation::parse_event(value)
+                else {
+                    continue;
+                };
+                if !markers.contains(&marker) {
+                    markers.push(marker);
+                }
             }
+        }
+        if markers.is_empty() {
+            return;
+        }
+        let Some(gateway) = self.gateway.as_mut() else {
+            return;
+        };
+        let entries = match gateway.read_dir(".") {
+            Ok(entries) => entries,
+            Err(error) => {
+                self.status = format!("E: workspace activation: {error}");
+                self.dirty = true;
+                return;
+            }
+        };
+        let names = entries
+            .iter()
+            .map(|entry| entry.name.as_str())
+            .collect::<Vec<_>>();
+        for marker in markers {
+            if names.contains(&marker.as_str()) {
+                self.activate_plugins(ActivationEvent::WorkspaceContains(marker));
+            }
+        }
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    fn activate_workspace_plugins(&mut self) {}
+
+    #[cfg(target_os = "linux")]
+    fn activate_current_language(&mut self) {
+        let Some(path) = self.path.as_ref() else {
+            return;
+        };
+        let Some(settings) = lsp_settings(path) else {
+            return;
+        };
+        self.activate_plugins(ActivationEvent::Language(settings.language_id.clone()));
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    fn activate_current_language(&mut self) {}
+
+    #[cfg(target_os = "linux")]
+    fn start_oom_host(&mut self) {
+        let Some(gateway) = self.gateway.as_mut() else {
+            self.status = "E: gateway unavailable".to_owned();
+            self.dirty = true;
+            return;
+        };
+        let permissions = DEBUG_PERMISSIONS
+            .iter()
+            .map(|permission| (*permission).to_owned())
+            .collect::<Vec<_>>();
+        match self.plugin_supervisor.start_debug(
+            DEBUG_PLUGIN_ID,
+            StartMode::Oom,
+            &permissions,
+            gateway,
+            &self.workspace,
+        ) {
+            Ok(StartOutcome::Started) => self.status = "plugin host OOM probe starting".to_owned(),
+            Ok(StartOutcome::Queued) => self.status = "plugin host OOM probe queued".to_owned(),
             Err(error) => self.status = format!("E: {error}"),
         }
         self.dirty = true;
@@ -619,16 +795,24 @@ impl Model {
 
     #[cfg(target_os = "linux")]
     fn start_host(&mut self) {
-        if self.host.is_some() {
-            self.status = "plugin host already running".to_owned();
+        let Some(gateway) = self.gateway.as_mut() else {
+            self.status = "E: gateway unavailable".to_owned();
             self.dirty = true;
             return;
-        }
-        match HostSession::start(&self.workspace) {
-            Ok(host) => {
-                self.host = Some(host);
-                self.status = "plugin host starting".to_owned();
-            }
+        };
+        let permissions = DEBUG_PERMISSIONS
+            .iter()
+            .map(|permission| (*permission).to_owned())
+            .collect::<Vec<_>>();
+        match self.plugin_supervisor.start_debug(
+            DEBUG_PLUGIN_ID,
+            StartMode::Normal,
+            &permissions,
+            gateway,
+            &self.workspace,
+        ) {
+            Ok(StartOutcome::Started) => self.status = "plugin host starting".to_owned(),
+            Ok(StartOutcome::Queued) => self.status = "plugin host queued".to_owned(),
             Err(error) => self.status = format!("E: {error}"),
         }
         self.dirty = true;
@@ -642,13 +826,10 @@ impl Model {
 
     #[cfg(target_os = "linux")]
     fn exec_host(&mut self) {
-        let Some(host) = &self.host else {
-            self.status = "E: plugin host not running".to_owned();
-            self.dirty = true;
-            return;
-        };
-        if !host.exec() {
-            self.status = "E: plugin host channel closed".to_owned();
+        match self.plugin_supervisor.exec(DEBUG_PLUGIN_ID) {
+            Ok(ExecOutcome::Sent) => self.status = "plugin host request sent".to_owned(),
+            Ok(ExecOutcome::Queued) => self.status = "plugin host request queued".to_owned(),
+            Err(error) => self.status = format!("E: {error}"),
         }
         self.dirty = true;
     }
@@ -658,8 +839,13 @@ impl Model {
 
     #[cfg(target_os = "linux")]
     fn stop_host(&mut self) {
-        self.host = None;
-        self.status = "plugin host stopped".to_owned();
+        match self
+            .plugin_supervisor
+            .stop(DEBUG_PLUGIN_ID, self.gateway.as_mut())
+        {
+            Ok(()) => self.status = "plugin host stopped".to_owned(),
+            Err(error) => self.status = format!("E: {error}"),
+        }
         self.dirty = true;
     }
 
@@ -667,34 +853,75 @@ impl Model {
     fn stop_host(&mut self) {}
 
     #[cfg(target_os = "linux")]
-    pub fn poll_host(&mut self) {
-        let Some(host) = &mut self.host else {
+    fn enable_plugin(&mut self, plugin_id: &str) {
+        let Some(plugin) = self
+            .plugins
+            .iter()
+            .find(|plugin| plugin.manifest.id == plugin_id)
+            .cloned()
+        else {
+            self.status = format!("E: unknown plugin: {plugin_id}");
+            self.dirty = true;
             return;
         };
-        let mut stop = false;
-        for event in host.poll() {
+        let Some(gateway) = self.gateway.as_mut() else {
+            self.status = "E: gateway unavailable".to_owned();
+            self.dirty = true;
+            return;
+        };
+        if let Err(error) = self.plugin_supervisor.enable(plugin_id) {
+            self.status = format!("E: plugin {plugin_id}: {error}");
+            self.dirty = true;
+            return;
+        }
+        match self
+            .plugin_supervisor
+            .activate(plugin_id, &plugin.root, gateway, &self.workspace)
+        {
+            Ok(StartOutcome::Started) => self.status = format!("plugin {plugin_id} starting"),
+            Ok(StartOutcome::Queued) => self.status = format!("plugin {plugin_id} queued"),
+            Err(error) => self.status = format!("E: plugin {plugin_id}: {error}"),
+        }
+        self.dirty = true;
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    fn enable_plugin(&mut self, _plugin_id: &str) {}
+
+    #[cfg(target_os = "linux")]
+    pub fn poll_host(&mut self) {
+        let events = self.plugin_supervisor.poll(self.gateway.as_mut());
+        for event in events {
             match event {
-                HostEvent::Ready => self.status = "plugin host connected".to_owned(),
-                HostEvent::Pong => self.status = "plugin host ready".to_owned(),
-                HostEvent::ExecUnsupported => {
-                    self.status = "plugin sys.exec not implemented yet".to_owned();
+                SupervisorEvent::State {
+                    plugin_id,
+                    state,
+                    detail,
+                } => {
+                    self.status = match state {
+                        HostState::Starting => format!("plugin {plugin_id} starting"),
+                        HostState::Ready => format!("plugin {plugin_id} ready"),
+                        HostState::Failed => format!(
+                            "E: plugin {plugin_id}: {}",
+                            detail.unwrap_or_else(|| "start failed".to_owned())
+                        ),
+                        HostState::Disabled => format!(
+                            "E: plugin {plugin_id} disabled ({}); run :plugin-enable {plugin_id}",
+                            detail.unwrap_or_else(|| "repeated failures".to_owned())
+                        ),
+                        HostState::Stopped => match detail {
+                            Some(detail) => format!("plugin {plugin_id} stopped ({detail})"),
+                            None => format!("plugin {plugin_id} stopped"),
+                        },
+                        _ => format!("plugin {plugin_id} {}", state.as_str()),
+                    };
+                    self.dirty = true;
                 }
-                HostEvent::Error(error) => {
-                    self.status = format!("E: plugin host: {error}");
-                    stop = true;
-                }
-                HostEvent::Exited(anvil_plugin_host::HostExit::OomKilled) => {
-                    self.status = "⚠ Plugin Killed: Out of Memory".to_owned();
-                }
-                HostEvent::Exited(_) => {
-                    self.status = "plugin host exited".to_owned();
-                    stop = true;
+                SupervisorEvent::Message { plugin_id, message } => {
+                    self.status = format!("plugin {plugin_id}: {message}");
+                    self.dirty = true;
                 }
             }
-            self.dirty = true;
-        }
-        if stop {
-            self.host = None;
         }
     }
 
@@ -744,6 +971,7 @@ impl Model {
             self.clear_lsp_ui();
             return;
         };
+        self.activate_plugins(ActivationEvent::Language(settings.language_id.clone()));
         let desired = (settings.tool.clone(), settings.language_id.clone());
         if !self.lsp_workers.contains_key(&desired) {
             self.start_lsp();
@@ -1162,6 +1390,26 @@ pub fn run_with_workspace(path: Option<PathBuf>, workspace: PathBuf) -> io::Resu
         }
         model.dirty = true;
     }
+
+    #[cfg(target_os = "linux")]
+    if let Err(error) = model.load_plugins() {
+        let message = format!("E: plugins: {error}");
+        if model.status.is_empty() {
+            model.status = message;
+        } else {
+            model.status.push_str(" | ");
+            model.status.push_str(&message);
+        }
+        model.dirty = true;
+    }
+    #[cfg(target_os = "linux")]
+    if startup_activation_allowed() {
+        model.activate_plugins(ActivationEvent::Startup);
+    }
+    #[cfg(target_os = "linux")]
+    model.activate_workspace_plugins();
+    #[cfg(target_os = "linux")]
+    model.activate_current_language();
     let model_ready = start.elapsed();
     let mut terminal = TerminalSession::start()?;
     let terminal_ready = start.elapsed();
@@ -1206,6 +1454,13 @@ pub fn run_with_workspace(path: Option<PathBuf>, workspace: PathBuf) -> io::Resu
         if model.quit {
             return Ok(());
         }
+    }
+}
+
+#[cfg(target_os = "linux")]
+impl Drop for Model {
+    fn drop(&mut self) {
+        self.plugin_supervisor.shutdown(self.gateway.as_mut());
     }
 }
 

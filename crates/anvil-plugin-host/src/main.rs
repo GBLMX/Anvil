@@ -5,11 +5,9 @@ use std::process::ExitCode;
 mod runtime;
 
 #[cfg(target_os = "linux")]
-mod manifest;
-
-#[cfg(target_os = "linux")]
 mod linux {
     use super::*;
+    use anvil_plugin_host::manifest::PluginManifest;
 
     pub fn main() -> ExitCode {
         match run() {
@@ -31,9 +29,11 @@ mod linux {
         let mut check_exec = false;
         let mut check_write = false;
         let mut check_uds = false;
+        let mut check_hardening = false;
         let mut lua_smoke = false;
         let mut plugin = None;
         let mut socket = None;
+        let mut gateway_socket = None;
         let mut args = std::env::args().skip(1);
         while let Some(arg) = args.next() {
             match arg.as_str() {
@@ -67,6 +67,7 @@ mod linux {
                 "--check-exec" => check_exec = true,
                 "--check-write" => check_write = true,
                 "--check-uds" => check_uds = true,
+                "--check-hardening" => check_hardening = true,
                 "--lua-smoke" => lua_smoke = true,
                 "--plugin" => {
                     plugin = Some(
@@ -80,13 +81,19 @@ mod linux {
                             .ok_or_else(|| io::Error::other("missing --socket value"))?,
                     );
                 }
+                "--gateway-socket" => {
+                    gateway_socket = Some(
+                        args.next()
+                            .ok_or_else(|| io::Error::other("missing --gateway-socket value"))?,
+                    );
+                }
                 other => return Err(io::Error::other(format!("unknown argument: {other}"))),
             }
         }
         let plugin_root = plugin.map(std::fs::canonicalize).transpose()?;
         let token_fd = token_fd.ok_or_else(|| io::Error::other("--token-fd is required"))?;
 
-        let _token = read_token(token_fd)?;
+        let token = read_token(token_fd)?;
         close_extra_fds()?;
         if check_fds {
             let count = std::fs::read_dir("/proc/self/fd")?.count();
@@ -96,14 +103,30 @@ mod linux {
             }
             return Ok(0);
         }
+        let mut gateway = match gateway_socket.as_deref() {
+            Some(path) => Some(
+                anvil_ipc::GatewayClient::connect(path, &token)
+                    .map_err(|error| io::Error::other(error.to_string()))?,
+            ),
+            None => None,
+        };
+        let editor = match socket.as_deref() {
+            Some(path) => Some(anvil_ipc::Connection::connect(path)?),
+            None => None,
+        };
         unsafe {
             if libc::prctl(libc::PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) != 0 {
+                return Err(io::Error::last_os_error());
+            }
+            if libc::prctl(libc::PR_SET_DUMPABLE, 0) != 0 {
                 return Err(io::Error::last_os_error());
             }
         }
         apply_landlock(plugin_root.as_deref())?;
         apply_seccomp()?;
-
+        if check_hardening {
+            return Ok(run_hardening_checks());
+        }
         if lua_smoke {
             match runtime::smoke() {
                 Ok(42) => return Ok(0),
@@ -115,7 +138,7 @@ mod linux {
             }
         }
         if let Some(root) = plugin_root.as_deref() {
-            let manifest = crate::manifest::PluginManifest::load(root).map_err(io::Error::other)?;
+            let manifest = PluginManifest::load(root).map_err(io::Error::other)?;
             let entry = manifest.entry_path(root).map_err(io::Error::other)?;
             runtime::run_file(&entry).map_err(|error| io::Error::other(error.to_string()))?;
         }
@@ -181,14 +204,94 @@ mod linux {
         }
 
         send_hello()?;
-        if let Some(path) = socket {
-            watch_editor(&path)?;
+        if let Some(mut connection) = editor {
+            watch_editor(&mut connection, gateway.as_mut())?;
             return Ok(0);
         }
         if hold {
             std::thread::sleep(std::time::Duration::from_secs(60));
         }
         Ok(0)
+    }
+
+    fn run_hardening_checks() -> u8 {
+        let denied = |result: libc::c_int| {
+            result == -1 && io::Error::last_os_error().raw_os_error() == Some(libc::EPERM)
+        };
+        if !denied(unsafe { libc::kill(libc::getpid(), 0) }) {
+            return 40;
+        }
+        if !denied(unsafe { libc::fcntl(0, libc::F_SETOWN, libc::getpid()) }) {
+            return 41;
+        }
+        if !denied(unsafe { libc::fcntl(0, libc::F_SETFL, libc::O_ASYNC) }) {
+            return 42;
+        }
+        if !denied(unsafe { libc::ioctl(0, libc::FIOASYNC, std::ptr::null::<u8>()) }) {
+            return 43;
+        }
+        if !denied(unsafe {
+            libc::syscall(libc::SYS_memfd_create, c"anvil".as_ptr(), 0) as libc::c_int
+        }) {
+            return 44;
+        }
+        if !denied(unsafe {
+            libc::mount(
+                c"none".as_ptr(),
+                c"/tmp".as_ptr(),
+                c"tmpfs".as_ptr(),
+                0,
+                std::ptr::null(),
+            )
+        }) {
+            return 45;
+        }
+        if !denied(unsafe { libc::ptrace(libc::PTRACE_TRACEME, 0, 0, 0) as libc::c_int }) {
+            return 46;
+        }
+        if !denied(unsafe { libc::unshare(libc::CLONE_NEWNS) }) {
+            return 47;
+        }
+        if !denied(unsafe {
+            libc::syscall(libc::SYS_clone3, std::ptr::null::<u8>(), 0) as libc::c_int
+        }) {
+            return 48;
+        }
+        if std::process::Command::new("/bin/sh")
+            .arg("-c")
+            .arg("exit 0")
+            .status()
+            .is_ok()
+        {
+            return 49;
+        }
+        match std::os::unix::net::UnixStream::connect("/run/dbus/system_bus_socket") {
+            Err(error) if error.raw_os_error() == Some(libc::EPERM) => {}
+            _ => return 50,
+        }
+        match std::os::unix::net::UnixStream::pair() {
+            Err(error) if error.raw_os_error() == Some(libc::EPERM) => {}
+            _ => return 51,
+        }
+        let pidfd = unsafe { libc::syscall(libc::SYS_pidfd_open, libc::getpid(), 0) };
+        if pidfd >= 0 {
+            let result = unsafe {
+                libc::syscall(
+                    libc::SYS_pidfd_send_signal,
+                    pidfd,
+                    libc::SIGCONT,
+                    std::ptr::null::<libc::siginfo_t>(),
+                    0,
+                ) as libc::c_int
+            };
+            unsafe {
+                libc::close(pidfd as libc::c_int);
+            }
+            if !denied(result) {
+                return 52;
+            }
+        }
+        0
     }
 
     fn read_token(fd: i32) -> io::Result<[u8; 32]> {
@@ -373,109 +476,79 @@ mod linux {
     const BPF_RET: u16 = 0x06;
     const SECCOMP_RET_ERRNO: u32 = 0x0005_0000;
     const SECCOMP_RET_ALLOW: u32 = 0x7fff_0000;
+    const NR: u32 = 0;
+    const ARCH: u32 = 4;
+    const ARG0: u32 = 16;
+    const ARG1: u32 = 24;
+    const ARG2: u32 = 32;
+    const F_SETOWN_EX: u32 = 15;
+    const F_SETSIG: u32 = 10;
 
     fn apply_seccomp() -> io::Result<()> {
-        const NR: u32 = 0;
-        const ARCH: u32 = 4;
-        const ARG0: u32 = 16;
         #[cfg(target_arch = "x86_64")]
         const NATIVE_ARCH: u32 = 0xC000_003E;
         #[cfg(target_arch = "aarch64")]
         const NATIVE_ARCH: u32 = 0xC000_00B7;
         #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
         const NATIVE_ARCH: u32 = 0;
-        let filter = [
-            SockFilter {
-                code: BPF_LD | BPF_W | BPF_ABS,
-                jt: 0,
-                jf: 0,
-                k: ARCH,
-            },
-            SockFilter {
-                code: BPF_JMP | BPF_JEQ | BPF_K,
-                jt: 1,
-                jf: 0,
-                k: NATIVE_ARCH,
-            },
-            SockFilter {
-                code: BPF_RET | BPF_K,
-                jt: 0,
-                jf: 0,
-                k: SECCOMP_RET_ERRNO | libc::EPERM as u32,
-            },
-            SockFilter {
-                code: BPF_LD | BPF_W | BPF_ABS,
-                jt: 0,
-                jf: 0,
-                k: NR,
-            },
-            SockFilter {
-                code: BPF_JMP | BPF_JSET | BPF_K,
-                jt: 0,
-                jf: 1,
-                k: 0x4000_0000,
-            },
-            SockFilter {
-                code: BPF_RET | BPF_K,
-                jt: 0,
-                jf: 0,
-                k: SECCOMP_RET_ERRNO | libc::EPERM as u32,
-            },
-            SockFilter {
-                code: BPF_JMP | BPF_JEQ | BPF_K,
-                jt: 0,
-                jf: 3,
-                k: libc::SYS_socket as u32,
-            },
-            SockFilter {
-                code: BPF_LD | BPF_W | BPF_ABS,
-                jt: 0,
-                jf: 0,
-                k: ARG0,
-            },
-            SockFilter {
-                code: BPF_JMP | BPF_JEQ | BPF_K,
-                jt: 1,
-                jf: 0,
-                k: libc::AF_UNIX as u32,
-            },
-            SockFilter {
-                code: BPF_RET | BPF_K,
-                jt: 0,
-                jf: 0,
-                k: SECCOMP_RET_ERRNO | libc::EPERM as u32,
-            },
-            SockFilter {
-                code: BPF_JMP | BPF_JEQ | BPF_K,
-                jt: 0,
-                jf: 3,
-                k: libc::SYS_socketpair as u32,
-            },
-            SockFilter {
-                code: BPF_LD | BPF_W | BPF_ABS,
-                jt: 0,
-                jf: 0,
-                k: ARG0,
-            },
-            SockFilter {
-                code: BPF_JMP | BPF_JEQ | BPF_K,
-                jt: 1,
-                jf: 0,
-                k: libc::AF_UNIX as u32,
-            },
-            SockFilter {
-                code: BPF_RET | BPF_K,
-                jt: 0,
-                jf: 0,
-                k: SECCOMP_RET_ERRNO | libc::EPERM as u32,
-            },
-            SockFilter {
-                code: BPF_RET | BPF_K,
-                jt: 0,
-                jf: 0,
-                k: SECCOMP_RET_ALLOW,
-            },
-        ];
+        let mut filter = Vec::new();
+        push(&mut filter, BPF_LD | BPF_W | BPF_ABS, ARCH);
+        jump(&mut filter, BPF_JMP | BPF_JEQ | BPF_K, NATIVE_ARCH, 1, 0);
+        ret(&mut filter, SECCOMP_RET_ERRNO | libc::EPERM as u32);
+        push(&mut filter, BPF_LD | BPF_W | BPF_ABS, NR);
+        jump(&mut filter, BPF_JMP | BPF_JSET | BPF_K, 0x4000_0000, 0, 1);
+        ret(&mut filter, SECCOMP_RET_ERRNO | libc::EPERM as u32);
+
+        for nr in [
+            libc::SYS_kill,
+            libc::SYS_tkill,
+            libc::SYS_tgkill,
+            libc::SYS_rt_sigqueueinfo,
+            libc::SYS_rt_tgsigqueueinfo,
+            libc::SYS_pidfd_send_signal,
+            libc::SYS_execve,
+            libc::SYS_execveat,
+            libc::SYS_memfd_create,
+            libc::SYS_mount,
+            libc::SYS_umount2,
+            libc::SYS_pivot_root,
+            libc::SYS_chroot,
+            libc::SYS_setns,
+            libc::SYS_unshare,
+            libc::SYS_open_tree,
+            libc::SYS_move_mount,
+            libc::SYS_fsopen,
+            libc::SYS_fsconfig,
+            libc::SYS_fsmount,
+            libc::SYS_fspick,
+            libc::SYS_mount_setattr,
+            libc::SYS_ptrace,
+            libc::SYS_process_vm_readv,
+            libc::SYS_process_vm_writev,
+            libc::SYS_kcmp,
+            libc::SYS_pidfd_getfd,
+            libc::SYS_open_by_handle_at,
+            libc::SYS_io_uring_setup,
+            libc::SYS_io_uring_enter,
+            libc::SYS_io_uring_register,
+            libc::SYS_bpf,
+            libc::SYS_perf_event_open,
+            libc::SYS_userfaultfd,
+            libc::SYS_keyctl,
+            libc::SYS_clone3,
+            libc::SYS_socket,
+            libc::SYS_socketpair,
+            libc::SYS_connect,
+        ] {
+            deny_syscall(&mut filter, nr);
+        }
+        deny_arg0_mask(&mut filter, libc::SYS_clone, 0x7e02_0080, ARG0);
+        push(&mut filter, BPF_LD | BPF_W | BPF_ABS, NR);
+        deny_fcntl(&mut filter, libc::SYS_fcntl, ARG1, ARG2);
+        push(&mut filter, BPF_LD | BPF_W | BPF_ABS, NR);
+        deny_ioctl(&mut filter, libc::SYS_ioctl, ARG1);
+        push(&mut filter, BPF_LD | BPF_W | BPF_ABS, NR);
+        ret(&mut filter, SECCOMP_RET_ALLOW);
         let program = SockFprog {
             len: filter.len() as u16,
             filter: filter.as_ptr(),
@@ -488,12 +561,99 @@ mod linux {
         Ok(())
     }
 
-    fn watch_editor(path: &str) -> io::Result<()> {
-        let mut connection = anvil_ipc::Connection::connect(path)?;
+    fn push(filter: &mut Vec<SockFilter>, code: u16, k: u32) {
+        filter.push(SockFilter {
+            code,
+            jt: 0,
+            jf: 0,
+            k,
+        });
+    }
+
+    fn jump(filter: &mut Vec<SockFilter>, code: u16, k: u32, jt: u8, jf: u8) {
+        filter.push(SockFilter { code, jt, jf, k });
+    }
+
+    fn ret(filter: &mut Vec<SockFilter>, k: u32) {
+        push(filter, BPF_RET | BPF_K, k);
+    }
+
+    fn deny_syscall(filter: &mut Vec<SockFilter>, nr: libc::c_long) {
+        jump(filter, BPF_JMP | BPF_JEQ | BPF_K, nr as u32, 0, 1);
+        ret(filter, SECCOMP_RET_ERRNO | libc::EPERM as u32);
+    }
+
+    fn deny_arg0_mask(filter: &mut Vec<SockFilter>, nr: libc::c_long, mask: u32, arg0_offset: u32) {
+        let start = filter.len();
+        jump(filter, BPF_JMP | BPF_JEQ | BPF_K, nr as u32, 0, 0);
+        push(filter, BPF_LD | BPF_W | BPF_ABS, arg0_offset);
+        jump(filter, BPF_JMP | BPF_JSET | BPF_K, mask, 0, 1);
+        ret(filter, SECCOMP_RET_ERRNO | libc::EPERM as u32);
+        let end = filter.len();
+        filter[start].jf = (end - start - 1) as u8;
+    }
+
+    fn deny_fcntl(
+        filter: &mut Vec<SockFilter>,
+        nr: libc::c_long,
+        arg1_offset: u32,
+        arg2_offset: u32,
+    ) {
+        let start = filter.len();
+        jump(filter, BPF_JMP | BPF_JEQ | BPF_K, nr as u32, 0, 0);
+        push(filter, BPF_LD | BPF_W | BPF_ABS, arg1_offset);
+        for command in [libc::F_SETOWN as u32, F_SETOWN_EX, F_SETSIG] {
+            jump(filter, BPF_JMP | BPF_JEQ | BPF_K, command, 0, 1);
+            ret(filter, SECCOMP_RET_ERRNO | libc::EPERM as u32);
+        }
+        let setfl = filter.len();
+        jump(
+            filter,
+            BPF_JMP | BPF_JEQ | BPF_K,
+            libc::F_SETFL as u32,
+            0,
+            0,
+        );
+        push(filter, BPF_LD | BPF_W | BPF_ABS, arg2_offset);
+        jump(
+            filter,
+            BPF_JMP | BPF_JSET | BPF_K,
+            libc::O_ASYNC as u32,
+            0,
+            1,
+        );
+        ret(filter, SECCOMP_RET_ERRNO | libc::EPERM as u32);
+        let end = filter.len();
+        filter[setfl].jf = (end - setfl - 1) as u8;
+        filter[start].jf = (end - start - 1) as u8;
+    }
+
+    fn deny_ioctl(filter: &mut Vec<SockFilter>, nr: libc::c_long, arg1_offset: u32) {
+        let start = filter.len();
+        jump(filter, BPF_JMP | BPF_JEQ | BPF_K, nr as u32, 0, 0);
+        push(filter, BPF_LD | BPF_W | BPF_ABS, arg1_offset);
+        jump(
+            filter,
+            BPF_JMP | BPF_JEQ | BPF_K,
+            libc::FIOASYNC as u32,
+            0,
+            1,
+        );
+        ret(filter, SECCOMP_RET_ERRNO | libc::EPERM as u32);
+        let end = filter.len();
+        filter[start].jf = (end - start - 1) as u8;
+    }
+
+    fn watch_editor(
+        connection: &mut anvil_ipc::Connection,
+        mut gateway: Option<&mut anvil_ipc::GatewayClient>,
+    ) -> io::Result<()> {
         loop {
             match connection.recv() {
                 Ok(None) => return Ok(()),
-                Ok(Some(frame)) => handle_rpc(&mut connection, &frame)?,
+                Ok(Some(frame)) => {
+                    handle_rpc(connection, gateway.as_deref_mut(), &frame)?;
+                }
                 Err(error) => {
                     return Err(io::Error::other(format!("editor frame: {error}")));
                 }
@@ -501,7 +661,11 @@ mod linux {
         }
     }
 
-    fn handle_rpc(connection: &mut anvil_ipc::Connection, frame: &[u8]) -> io::Result<()> {
+    fn handle_rpc(
+        connection: &mut anvil_ipc::Connection,
+        gateway: Option<&mut anvil_ipc::GatewayClient>,
+        frame: &[u8],
+    ) -> io::Result<()> {
         let Ok(request) = serde_json::from_slice::<serde_json::Value>(frame) else {
             return Ok(());
         };
@@ -509,20 +673,37 @@ mod linux {
             .get("id")
             .cloned()
             .unwrap_or(serde_json::Value::Null);
-        let response = match request.get("method").and_then(|value| value.as_str()) {
-            Some("sys.ping") => serde_json::json!({
+        let Some(method) = request.get("method").and_then(|value| value.as_str()) else {
+            return Ok(());
+        };
+        let params = request
+            .get("params")
+            .cloned()
+            .unwrap_or_else(|| serde_json::json!({}));
+        let response = match method {
+            "sys.ping" => serde_json::json!({
                 "jsonrpc": "2.0",
                 "id": id,
                 "result": "pong"
             }),
-            Some("sys.exec") => serde_json::json!({
-                "jsonrpc": "2.0",
-                "id": id,
-                "error": {
-                    "code": -32008,
-                    "message": "sys.exec is not implemented yet"
-                }
-            }),
+            method if method.starts_with("sys.") => match gateway {
+                Some(gateway) => match gateway.call(method, params) {
+                    Ok(result) => serde_json::json!({
+                        "jsonrpc": "2.0",
+                        "id": id,
+                        "result": result
+                    }),
+                    Err(error) => rpc_error(id, error),
+                },
+                None => serde_json::json!({
+                    "jsonrpc": "2.0",
+                    "id": id,
+                    "error": {
+                        "code": -32008,
+                        "message": "gateway unavailable"
+                    }
+                }),
+            },
             _ => return Ok(()),
         };
         let body = serde_json::to_vec(&response)
@@ -532,11 +713,32 @@ mod linux {
             .map_err(|error| io::Error::other(format!("send rpc response: {error}")))
     }
 
+    fn rpc_error(id: serde_json::Value, error: anvil_ipc::ClientError) -> serde_json::Value {
+        let (code, message) = match error {
+            anvil_ipc::ClientError::Rpc { code, message } => (code, message),
+            other => (-32000, other.to_string()),
+        };
+        serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": id,
+            "error": { "code": code, "message": message }
+        })
+    }
+
     fn send_hello() -> io::Result<()> {
-        let body = br#"{"jsonrpc":"2.0","method":"session.hello","params":{"session_id":"empty","protocol":"anvil-ipc/1"}}"#;
+        let body = serde_json::to_vec(&serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "session.hello",
+            "params": {
+                "session_id": "empty",
+                "protocol": "anvil-ipc/1",
+                "api_version": "0.1.0"
+            }
+        }))
+        .map_err(|error| io::Error::other(format!("encode hello: {error}")))?;
         let mut stdout = io::stdout().lock();
         stdout.write_all(&(body.len() as u32).to_be_bytes())?;
-        stdout.write_all(body)?;
+        stdout.write_all(&body)?;
         stdout.flush()
     }
 }

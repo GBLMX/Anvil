@@ -32,7 +32,7 @@ impl Model {
                 self.active = 0;
             }
             self.buffers.push(Buffer {
-                editor: EditorState::from_text(&text),
+                editor: EditorState::from_text(&text).into(),
                 path: Some(absolute),
                 cursor: 0,
                 scroll: 0,
@@ -43,7 +43,7 @@ impl Model {
             let index = self.buffers.len() - 1;
             self.load_buffer(index);
         } else {
-            self.editor = EditorState::from_text(&text);
+            self.editor = EditorState::from_text(&text).into();
             self.path = Some(absolute);
             self.cursor = 0;
             self.scroll = 0;
@@ -260,7 +260,7 @@ impl Model {
         let text = self.read_file(path)?;
         let cursor = self.cursor.min(text.len());
         if self.path.as_deref() == Some(path) {
-            self.editor = EditorState::from_text(&text);
+            self.editor = EditorState::from_text(&text).into();
             self.cursor = cursor;
             self.modified = false;
             self.syntax.borrow_mut().invalidate();
@@ -271,14 +271,14 @@ impl Model {
             .iter_mut()
             .find(|buffer| buffer.path.as_deref() == Some(path))
         {
-            buffer.editor = EditorState::from_text(&text);
+            buffer.editor = EditorState::from_text(&text).into();
             buffer.cursor = cursor.min(buffer.editor.text().len_bytes());
             buffer.modified = false;
         }
         if let Some(pane) = self.split.as_mut()
             && pane.buffer.path.as_deref() == Some(path)
         {
-            pane.buffer.editor = EditorState::from_text(&text);
+            pane.buffer.editor = EditorState::from_text(&text).into();
             pane.buffer.cursor = cursor.min(pane.buffer.editor.text().len_bytes());
             pane.buffer.modified = false;
         }

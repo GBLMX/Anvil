@@ -203,6 +203,49 @@ reuses an old approval.
 - Signed manifest or at minimum a lockfile with hash.
 - Display requested file roots, hosts, and executables before approval.
 
+
+### T9. Signal and async I/O injection
+
+**Attack:** a sandboxed plugin signals or kills the editor, gateway, or
+supervisor. The SIGIO path can arm a file/socket with `F_SETOWN`, `F_SETSIG`,
+and `O_ASYNC`, then let the kernel signal a process group. This class includes
+CVE-2026-72183; `LANDLOCK_SCOPE_SIGNAL` alone is not a sufficient boundary.
+
+**Required:**
+
+- Plugin-host seccomp denies `kill`, `tkill`, `tgkill`,
+  `rt_sigqueueinfo`, `rt_tgsigqueueinfo`, and `pidfd_send_signal`.
+- Seccomp denies `F_SETOWN`, `F_SETOWN_EX`, `F_SETSIG`, `F_SETFL` with
+  `O_ASYNC`, and `FIOASYNC`.
+- The host has its own process group/session and `PDEATHSIG`; the supervisor
+  uses pidfd for stop/wait.
+- `LANDLOCK_SCOPE_SIGNAL` is defense-in-depth only on patched kernels; seccomp
+  remains authoritative.
+- Tests prove every attempted signal path returns `EPERM` and the supervisor
+  remains alive.
+
+### T10. Memory execution, mount, and Unix-socket escape
+
+**Attack:** `memfd_create` + `execveat` executes bytes without a filesystem
+path; mount/re-mount changes the Landlock path view; an allowed AF_UNIX
+connection reaches D-Bus or another user service.
+
+**Required:**
+
+- Deny `execve`, `execveat`, `fexecve`, and unnecessary `memfd_create` after
+  sandbox setup.
+- Deny `mount`, new mount API calls, `umount2`, `pivot_root`, `chroot`, `setns`,
+  and `unshare`.
+- Reject namespace bits in `clone` flags (arg0). Classic seccomp cannot inspect
+  `clone3`'s pointer argument; deny `clone3` or validate it with seccomp user
+  notification plus supervisor checks. Do not claim BPF validates `clone3`
+  flags.
+- Deny `open_by_handle_at`, `ptrace`, `process_vm_*`, `pidfd_getfd`,
+  `io_uring_*`, `bpf`, `perf_event_open`, and `userfaultfd`.
+- Pre-connect the editor UDS before sandboxing and pass the FD; deny `socket`,
+  `socketpair`, and `connect` in the plugin host.
+- Tests cover each attempted bypass and a D-Bus/abstract-socket connect.
+
 ## 6. Security invariants
 
 1. No plugin can read/write outside the workspace through `sys.*`.
@@ -213,6 +256,9 @@ reuses an old approval.
 6. No local process can impersonate a plugin without its capability token.
 7. A failed sandbox setup fails closed.
 8. A stale snapshot cannot mutate the editor buffer.
+9. No plugin can signal or kill a process outside its own process group.
+10. No plugin can execute memory-backed bytes, mount filesystems, or join a
+    namespace after sandbox setup.
 
 ## 7. Test matrix
 
@@ -224,6 +270,8 @@ reuses an old approval.
 | Plugin host | removed stdlib functions, native module load, memory limit, CPU interrupt |
 | IPC | wrong token, replayed token, wrong workspace, concurrent cancel |
 | Reload | 1000 reloads, fd/RSS/child checks |
+| Signals | `kill`/`tgkill`/`pidfd_send_signal`, SIGIO `F_SETOWN`/`O_ASYNC`, supervisor survives |
+| Composition | `memfd_create`+`execveat`, `clone3` namespace flags, `mount`, `ptrace`, `open_by_handle_at`, D-Bus AF_UNIX connect |
 
 ## 8. Residual risks after Phase 0
 

@@ -51,6 +51,7 @@ impl Model {
                                 path: path.join(entry.name),
                                 depth: 0,
                                 is_dir: entry.is_dir,
+                                ino: entry.ino,
                                 expanded: false,
                             })
                             .collect();
@@ -69,6 +70,7 @@ impl Model {
                                     path: path.join(entry.name),
                                     depth,
                                     is_dir: entry.is_dir,
+                                    ino: entry.ino,
                                     expanded: false,
                                 })
                                 .collect();
@@ -173,6 +175,7 @@ impl Model {
             entries.push(DirEntry {
                 is_dir: entry.file_type().map(|kind| kind.is_dir()).unwrap_or(false),
                 name,
+                ino: 0,
             });
         }
         entries.sort_by(|left, right| {
@@ -208,6 +211,7 @@ impl Model {
                                 path: workspace.join(entry.name),
                                 depth: 0,
                                 is_dir: entry.is_dir,
+                                ino: entry.ino,
                                 expanded: false,
                             })
                             .collect();
@@ -282,6 +286,7 @@ impl Model {
                             path: entry.path.join(child.name),
                             depth: entry.depth + 1,
                             is_dir: child.is_dir,
+                            ino: child.ino,
                             expanded: false,
                         })
                         .collect();
@@ -360,6 +365,7 @@ impl Model {
                         path: workspace.join(entry.name),
                         depth: 0,
                         is_dir: entry.is_dir,
+                        ino: entry.ino,
                         expanded: false,
                     })
                     .collect();
@@ -601,6 +607,7 @@ impl Model {
                 path: path.clone(),
                 depth,
                 is_dir: entry.is_dir,
+                ino: entry.ino,
                 expanded: is_expanded,
             });
             if is_expanded {
@@ -621,9 +628,15 @@ impl Model {
         tree: &[TreeEntry],
         target: Option<&Path>,
         fallback_index: Option<usize>,
+        identity: Option<u64>,
     ) -> Option<usize> {
         if let Some(path) = target {
             if let Some(index) = tree.iter().position(|entry| entry.path == path) {
+                return Some(index);
+            }
+            if let Some(ino) = identity
+                && let Some(index) = tree.iter().position(|entry| entry.ino == ino)
+            {
                 return Some(index);
             }
             for ancestor in path.ancestors().skip(1) {
@@ -647,10 +660,9 @@ impl Model {
             return;
         }
         self.tree_refresh_in_flight = false;
-        let previous_path = self
-            .tree_selected
-            .and_then(|index| self.tree.get(index))
-            .map(|entry| entry.path.clone());
+        let previous = self.tree_selected.and_then(|index| self.tree.get(index));
+        let previous_path = previous.map(|entry| entry.path.clone());
+        let previous_ino = previous.map(|entry| entry.ino).filter(|ino| *ino != 0);
         let previous_index = self.tree_selected;
         let expanded = self.expanded_tree_paths();
         let listings: BTreeMap<_, _> = listings.into_iter().collect();
@@ -673,7 +685,8 @@ impl Model {
         let needs_listing =
             self.build_tree_entries(&self.workspace, 0, &listings, &expanded, &mut tree);
         let target = self.tree_pending_select.take().or(previous_path);
-        self.tree_selected = Self::select_tree_path(&tree, target.as_deref(), previous_index);
+        self.tree_selected =
+            Self::select_tree_path(&tree, target.as_deref(), previous_index, previous_ino);
         self.tree = tree;
         self.tree_stale = false;
         if needs_listing {
@@ -1084,6 +1097,7 @@ mod tests {
             path: src.clone(),
             depth: 0,
             is_dir: true,
+            ino: 0,
             expanded: true,
         }];
         model.tree_selected = Some(0);
@@ -1095,6 +1109,7 @@ mod tests {
                 Ok(vec![DirEntry {
                     name: "src".to_owned(),
                     is_dir: true,
+                    ino: 0,
                 }]),
             )],
         );
@@ -1104,6 +1119,36 @@ mod tests {
                 .iter()
                 .any(|entry| entry.path == src && entry.expanded)
         );
+    }
+
+    #[test]
+    fn snapshot_follows_external_rename_by_inode() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let workspace = dir.path().to_path_buf();
+        let mut model = Model::new(EditorState::from_text(""), None);
+        model.workspace = workspace.clone();
+        model.tree = vec![TreeEntry {
+            path: workspace.join("old.rs"),
+            depth: 0,
+            is_dir: false,
+            ino: 42,
+            expanded: false,
+        }];
+        model.tree_selected = Some(0);
+        model.tree_refresh_generation = 1;
+        model.apply_tree_snapshot(
+            1,
+            vec![(
+                workspace.clone(),
+                Ok(vec![DirEntry {
+                    name: "new.rs".to_owned(),
+                    is_dir: false,
+                    ino: 42,
+                }]),
+            )],
+        );
+        let selected = model.tree_selected.expect("selection");
+        assert_eq!(model.tree[selected].path, workspace.join("new.rs"));
     }
 
     #[test]
@@ -1117,6 +1162,7 @@ mod tests {
                 path: workspace.join(format!("d{index}")),
                 depth: 0,
                 is_dir: true,
+                ino: 0,
                 expanded: true,
             })
             .collect();

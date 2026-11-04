@@ -168,6 +168,7 @@ func (r *Root) ReadFileAt(path string, offset, max int64) ([]byte, bool, error) 
 type DirEntry struct {
 	Name  string `json:"name"`
 	IsDir bool   `json:"is_dir"`
+	Ino   uint64 `json:"ino"`
 }
 
 // ReadDir lists a directory beneath the root, excluding VCS and build output.
@@ -206,7 +207,12 @@ func (r *Root) ReadDir(path string) ([]DirEntry, error) {
 		if name == ".git" || name == "target" || name == writeTempPrefix {
 			continue
 		}
-		result = append(result, DirEntry{Name: name, IsDir: entry.IsDir()})
+		ino := uint64(0)
+		var stat unix.Stat_t
+		if err := unix.Fstatat(int(dir.Fd()), name, &stat, unix.AT_SYMLINK_NOFOLLOW); err == nil {
+			ino = stat.Ino
+		}
+		result = append(result, DirEntry{Name: name, IsDir: entry.IsDir(), Ino: ino})
 	}
 	sort.Slice(result, func(i, j int) bool {
 		if result[i].IsDir != result[j].IsDir {

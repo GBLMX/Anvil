@@ -259,14 +259,17 @@ func TestReadDirSkipsBuildAndVCS(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(entries) != 1 || entries[0].Name != "src" || !entries[0].IsDir {
+	if len(entries) != 1 || entries[0].Name != "src" || !entries[0].IsDir || entries[0].Ino == 0 {
 		t.Fatalf("entries = %#v", entries)
 	}
 	children, err := root.ReadDir("src")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(children) != 1 || children[0].Name != "main.rs" || children[0].IsDir {
+	if len(children) != 1 ||
+		children[0].Name != "main.rs" ||
+		children[0].IsDir ||
+		children[0].Ino == 0 {
 		t.Fatalf("children = %#v", children)
 	}
 }

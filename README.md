@@ -39,12 +39,17 @@ Language servers are not bundled; install them on `PATH`.
   configure CMake with `-DCMAKE_EXPORT_COMPILE_COMMANDS=ON`. Without it, clangd
   may report unresolved includes.
 
-The plugin-host path has an empty sandboxed host with token-FD delivery,
+The plugin-host path has a sandboxed host with token-FD delivery,
 `close_range`, `no_new_privs`, Landlock read/no-exec rules, native-ABI seccomp
-with AF_UNIX-only sockets, cgroup v2 limits with OOM classification, framed
-`sys.ping`/`sys.exec` dispatch, and a TUI debug `HostSession`
-(`:plugin-start`/`:plugin-exec`/`:plugin-stop`/`:plugin-oom`). This is not yet
-a VM or public plugin API.
+with a preconnected editor socket and dangerous-syscall denial, cgroup-before-exec v2 limits with OOM classification,
+`sys.ping`/`sys.exec` dispatch, and a TUI debug `PluginSession`
+(`:plugin-start`/`:plugin-exec`/`:plugin-stop`/`:plugin-oom`). Local plugin
+manifests are discovered from child directories of `ANVIL_PLUGIN_DIR`.
+`onLanguage` and `onWorkspaceContains` events start matching sandboxed hosts
+with no grants. `onStartup` requires explicit opt-in via
+`ANVIL_PLUGIN_ALLOW_STARTUP=1`; workspace activation is disabled with
+`ANVIL_PLUGIN_DISABLE_WORKSPACE_ACTIVATION=1`. `onCommand` dispatch and the
+optional `LANDLOCK_SCOPE_SIGNAL` layer are still pending. This is not a VM or public plugin API.
 
 Phase 0 still consists of the `anvil-api` contracts, `anvil-core` PieceTable,
 `anvil-editor` snapshots, `anvil-ipc` framing/JSON-RPC/Unix transport, and the
@@ -70,12 +75,17 @@ key dismisses it.
 ## Documents
 
 - [Installing Anvil](INSTALL.md)
+- [Documentation index](docs/README.md)
 - [Project charter](PROJECT_CHARTER.md)
 - [Known issues](docs/known-issues.md)
 - [High-frequency command architecture plan](docs/command-architecture-plan.md)
 - [0.3.0 → 0.4.0: Polish & Specification](docs/polish-and-specification.md)
 - [0.3.0 → 0.4.0 / Phase 0.7 plan](docs/phase-0-7-plan.md)
 - [0.4.x feature plan](docs/0.4.x-plan.md)
+- [0.5.x interaction and UI plan](docs/0.5.x-plan.md)
+- [0.6.x distribution and marketplace plan](docs/0.6.x-plan.md)
+- [0.7.x official optional Rust modules plan](docs/0.7.x-plan.md)
+- [Linux platform plan](docs/linux-platform-plan.md)
 - [Keymap configuration](docs/keymap.md)
 - [Plugin-host isolation ADR](docs/adr/0012-plugin-host-isolation.md)
 - [Threat model](docs/threat-model.md)
@@ -139,9 +149,9 @@ key dismisses it.
   on a background worker after a 50 ms debounce; stale spans remain visible
   until the replacement arrives. Files over 256 KiB are intentionally plain
   text.
-- The empty plugin host is a real process/sandbox boundary, but not yet a plugin
-  runtime. cgroup limits require a delegated cgroup2 root; without one the host
-  fails closed rather than pretending limits are active.
+- The plugin host is a real process/sandbox boundary. cgroup v2 limits are
+  applied before `execve`; a missing delegated cgroup2 root fails closed rather
+  than running without the promised limits.
 - The native editor/API interaction model is selection-first. The current TUI
   exposes that core through a Vim-like keymap implemented in Rust. Normal and
   operator-pending bindings can be remapped through

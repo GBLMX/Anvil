@@ -1,10 +1,26 @@
-# Known Issues
+# Known Issues and Resolved Bugs
 
-Status: BUG-001, BUG-004, BUG-005, BUG-006, BUG-007, BUG-008 (0.4.0
-open-buffer and 0.4.1 tree scopes), and BUG-009 are resolved. BUG-002 is
-fixed in 0.4.2; BUG-003 is fixed in 0.4.3.
+Status: BUG-001 through BUG-009 are resolved. This file is the regression
+ledger plus current cross-cutting limitations; active implementation work is in
+the plans linked below.
 
-## BUG-001: File tree and fuzzy picker do not scroll with the selection
+## Current limitations
+
+| Area | Limitation | Tracking |
+|---|---|---|
+| Plugin sandbox | `LANDLOCK_SCOPE_SIGNAL` is not enabled; seccomp remains the primary signal control | [threat model T9/T10](threat-model.md), [Linux L1b](linux-platform-plan.md) |
+| Plugin API | v1 is not frozen; view, mode, snapshot, and apply-edit DTOs exist, while UI/event/sys DTOs are pending | [0.6.0](0.6.x-plan.md), [ADR-0003](adr/0003-idl.md) |
+| Plugin commands | `onCommand` activation is parsed and matched but not dispatched until the command index and `0.5.x` command/notification surface are wired | [0.4.x](0.4.x-plan.md), [0.5.x](0.5.x-plan.md) |
+| Distribution | No signed package format, download manager, installed-plugin manager, or marketplace yet | [0.6.x](0.6.x-plan.md) |
+| Performance | Full gate suite has not been run on the reference machine | [performance](performance.md) |
+| Persistence | Session/tab/undo restore and crash recovery are not defined | [0.5.6](0.5.x-plan.md) |
+| Configuration | No unified config/theme/icon schema or hot-reload contract | [0.5.x](0.5.x-plan.md) |
+| LSP | Language servers are not bundled or lifecycle-managed | [INSTALL](../INSTALL.md) |
+| Release | Signing, SBOM, and provenance are still pending | [0.6.1](0.6.x-plan.md), [RELEASE](../RELEASE.md) |
+
+## Resolved bug ledger
+
+### BUG-001: File tree and fuzzy picker do not scroll with the selection
 
 - Area: TUI, `Space e` file tree and `Space f` fuzzy file picker
 - Status: Fixed 2026-11-01; tree and fuzzy viewports follow the selected row.
@@ -30,7 +46,7 @@ fixed in 0.4.2; BUG-003 is fixed in 0.4.3.
   - Regression tests select the last row in a 20-entry tree and fuzzy list.
   - Existing selection and filtering behavior remains unchanged.
 
-## BUG-002: Syntax highlighting does not cover Anvil project file formats
+### BUG-002: Syntax highlighting does not cover Anvil project file formats
 
 - Area: TUI syntax highlighting
 - Status: Fixed 2026-11-01 in `0.4.2`.
@@ -53,7 +69,7 @@ fixed in 0.4.2; BUG-003 is fixed in 0.4.3.
   - Unsupported files still render safely as plain text.
   - Highlighting remains bounded by `MAX_HIGHLIGHT_BYTES`.
 
-## BUG-003: Markdown highlighting needs a deliberate grammar and query
+### BUG-003: Markdown highlighting needs a deliberate grammar and query
 
 - Area: TUI syntax highlighting, Markdown
 - Status: Fixed 2026-11-01 in `0.4.3`.
@@ -72,11 +88,6 @@ fixed in 0.4.2; BUG-003 is fixed in 0.4.3.
     quotes, tables, frontmatter, and a broken fence.
   - Malformed input does not panic or shift text.
   - Highlighting remains bounded by `MAX_HIGHLIGHT_BYTES`.
-
-## Urgent foundational gaps
-
-These are missing capabilities, not regressions. They block normal IDE-like
-workspace management and should be addressed before adding more UI features.
 
 ### BUG-004: File tree cannot create files or directories
 
@@ -211,6 +222,9 @@ workspace management and should be addressed before adding more UI features.
     background refreshes do not steal focus. Missing watcher support marks the
     tree stale. See
     [ADR-0018](adr/0018-workspace-tree-watch.md).
+  - `sys.read_dir` entries include an inode; tree snapshots match the selected
+    entry by exact path, then inode, then nearest parent after an external
+    rename.
   - Worker and model tests cover debounce, unavailable gateways, selection,
     expansion, create, rename, and delete fallback.
 - Acceptance:

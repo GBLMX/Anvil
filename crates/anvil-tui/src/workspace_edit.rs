@@ -61,11 +61,11 @@ impl WorkspaceEdit {
         let mut states: HashMap<PathBuf, EditorState> = HashMap::new();
         for buffer in &model.buffers {
             if let Some(path) = &buffer.path {
-                states.insert(path.clone(), buffer.editor.clone());
+                states.insert(path.clone(), buffer.editor.clone().into_inner());
             }
         }
         if let Some(path) = &model.path {
-            states.insert(path.clone(), model.editor.clone());
+            states.insert(path.clone(), model.editor.clone().into_inner());
         }
 
         let mut prepared: HashMap<PathBuf, EditorState> = HashMap::new();
@@ -108,7 +108,7 @@ impl WorkspaceEdit {
 
         for (path, state) in prepared {
             if model.path.as_ref() == Some(&path) {
-                model.editor = state;
+                model.editor = state.into();
                 model.cursor = model.cursor.min(model.editor.text().len_bytes());
                 model.modified = true;
                 model.syntax.borrow_mut().invalidate();
@@ -126,11 +126,11 @@ impl WorkspaceEdit {
                 .iter_mut()
                 .find(|buffer| buffer.path.as_ref() == Some(&path))
             {
-                buffer.editor = state;
+                buffer.editor = state.into();
                 buffer.modified = true;
             } else {
                 model.buffers.push(Buffer {
-                    editor: state,
+                    editor: state.into(),
                     path: Some(path),
                     cursor: 0,
                     scroll: 0,

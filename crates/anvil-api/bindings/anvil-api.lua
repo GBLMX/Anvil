@@ -20,6 +20,24 @@
 ---| "conflict"
 ---| "internal_error"
 
+---@class ApplyEditRequest
+---@field base_revision integer
+---@field buffer_id integer
+---@field edits DocumentEdit[]
+
+---@class ApplyEditResponse
+---@field applied_edits integer
+---@field revision integer
+
+---@class DocumentEdit
+---@field range TextRange
+---@field text string
+
+---@class DocumentSnapshot
+---@field buffer_id integer
+---@field revision integer
+---@field text string
+
 ---@class EditorView
 ---@field interaction_mode InteractionMode
 ---@field revision integer
@@ -31,6 +49,10 @@
 
 ---@class SetModeResponse
 ---@field mode InteractionMode
+
+---@class TextRange
+---@field end integer
+---@field start integer
 
 ---@alias InteractionMode
 ---| "select"

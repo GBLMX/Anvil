@@ -28,6 +28,51 @@ post-`0.4.0` feature line.
   `2cw` does not leak the count into the next motion.
 - Syntax highlights use a 32-entry LRU path cache and are restored before the
   first frame; uncached files keep the normal text color until parsing completes.
+- Inlay hint viewport ranges clamp to the last line, avoiding the language
+  server's invalid EOF offset error.
+- Workspace tree entries include inode identity, so selection follows an
+  external rename when the new path remains visible.
+- `plugin.json` now reads the documented camelCase `activationEvents` key;
+  the previous snake_case spelling remains accepted as an alias.
+
+### Added
+
+- Plugin activation matching for `onStartup`, `onLanguage`, and
+  `onWorkspaceContains`; matching hosts start with an empty grant set.
+- `onStartup` activation requires `ANVIL_PLUGIN_ALLOW_STARTUP=1`; workspace
+  activation can be disabled with `ANVIL_PLUGIN_DISABLE_WORKSPACE_ACTIVATION=1`.
+- Multiple plugin hosts keyed by plugin id, with per-plugin status and revoke
+  on stop or failure.
+- Plugin host supervisor with explicit lifecycle states, single-flight startup,
+  bounded running and queued-start caps, start timeout, crash backoff,
+  queue-until-ready requests, drain-before-kill, and response-id validation.
+- Plugin hosts are placed in a unique cgroup v2 before `execve`; memory,
+  memory.swap, pids, and CPU limits are mandatory. Host stop uses `pidfd`,
+  falls back to `cgroup.kill`/process groups, and disables core dumps.
+- Idle plugin hosts are drained and stopped after 60 seconds without activity;
+  their token, socket, and cgroup are removed.
+- The plugin host connects its editor Unix socket before Landlock/seccomp, so
+  the post-sandbox transport no longer needs `socket` or `connect`.
+- Plugin-host seccomp now denies signal delivery, SIGIO registration,
+  memory-execution, namespace/mount, introspection, `clone3`, and
+  post-sandbox socket/connect paths; `clone` rejects namespace flags.
+- API method catalog (`METHODS`) plus document snapshot and apply-edit DTOs;
+  generated JSON, TypeScript, and Lua method bindings are driven from the same
+  table.
+- Plugin hosts now preconnect the authenticated gateway before sandboxing and
+  forward `sys.*` requests through the gateway token and grants.
+- Editor-side plugin document contract: active-buffer snapshots and
+  revision-checked transactions; stale or invalid edits are rejected without
+  mutation and reported in the status bar.
+- Host `session.hello` now carries `api_version`; plugin manifests declare and
+  validate the supported `0.1` API line before loading.
+- New `anvil-session` owns active document state, revision-checked plugin
+  transactions, and plugin host lifecycle. Command registry, focus/overlay
+  state, and effects remain TUI-owned and move in `0.5.0`.
+- Repeated host failures disable a plugin until `:plugin-enable <id>` is run;
+  `:plugin-list` reports each discovered plugin's host state.
+- Language activation is deduplicated per plugin; workspace-marker activation
+  reads workspace root entries through the gateway.
 
 ### Changed
 
@@ -39,6 +84,10 @@ post-`0.4.0` feature line.
 - Normal and operator-pending commands have stable namespaced IDs and a
   read-only registry. An optional TOML keymap validates overrides against those
   IDs and applies them atomically.
+- Debug plugin hosts now register a per-session grant before spawn and revoke
+  on stop or failure through a dedicated plugin session coordinator.
+- Local plugin manifests are discovered from `ANVIL_PLUGIN_DIR` with duplicate
+  id rejection; activation is not wired yet.
 
 ## [0.4.5] - 2026-11-02
 

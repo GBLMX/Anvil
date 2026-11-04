@@ -16,6 +16,54 @@ run on the reference machine.
 CI may run on a different machine. Absolute gates belong on the reference
 machine; shared CI uses relative regression thresholds.
 
+## 1.1 Re-run triggers
+
+Performance is re-run at dependency boundaries, not after every commit.
+
+| Trigger | Required run |
+|---|---|
+| Documentation/plan-only change | None |
+| `0.4.6b` activation work | Targeted: `first_frame_plugin`, host start, startup activation on/off |
+| Before `0.4.7` | Reference-machine full baseline (currently missing) |
+| `0.4.7` resource/security | Targeted: plugin start, reload, OOM, process/cgroup cleanup |
+| `0.4.8` plugin I/O | Targeted: UDS round trip, `sys.read_file`, `sys.fetch`, `sys.exec` |
+| `0.4.9` session/protocol | Full hot path: first frame, 1/10/100 MB open, edit, scroll, key-to-screen |
+| Any `0.5.x` slice touching input/render | Targeted: first frame, key-to-screen, scroll, palette/preview/tabs |
+| `0.6.0` / `0.6.1` | Full gates plus package verification, install throughput, and plugin start |
+| Any release tag | Full gates in this document |
+
+Absolute gates run only on the reference machine. Shared CI may run relative
+regressions; a p99 regression over 10% with at least 30 samples fails the gate.
+Security tests are never waived for performance.
+
+## 1.2 Early-code optimization policy
+
+Do not optimize code because it is old, large, or visually suspect. Optimize
+only after a reproducible measurement shows a gate or a user-visible hot path
+miss.
+
+| Finding | Action |
+|---|---|
+| Misses a gate in section 3 | Open one targeted optimization slice with before/after numbers |
+| Within gates, no user-visible stall | Leave it; do not churn the code |
+| Large file blocks a `0.5.0` boundary change | Refactor as part of that slice, not as a performance rewrite |
+| Search or open has a p99 outlier | Re-measure first; then optimize only that path |
+
+Current candidate: 100 MB `/` search reports p99 around 230 ms in the
+historical spot check. That is a re-measurement target, not a mandate to change
+the search implementation yet.
+
+Baseline commands:
+
+```bash
+cargo bench -p anvil-core --bench text_model
+go build -o target/release/anvil-gateway ./go/cmd/anvil-gateway
+cargo bench -p anvil-tui --bench e2e_edit --features e2e-bench
+```
+
+Record results under `docs/benchmarks/` before and after the change. A refactor
+without a measured regression does not count as an optimization.
+
 ## 2. Definitions
 
 ### First frame

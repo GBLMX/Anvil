@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Result of `editor.apply_edit`.",
+  "properties": {
+    "applied_edits": {
+      "description": "Number of replacements applied.",
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "revision": {
+      "description": "Revision after the transaction commits.",
+      "format": "uint64",
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "revision",
+    "applied_edits"
+  ],
+  "title": "ApplyEditResponse",
+  "type": "object"
+}

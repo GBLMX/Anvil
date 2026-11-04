@@ -12,7 +12,7 @@ impl Model {
         };
         let revision = self.editor.revision();
         let start = self.scroll;
-        let end = (start + usize::from(height)).min(self.editor.index().len_lines());
+        let end = visible_end_line(start, usize::from(height), self.editor.index().len_lines());
         let signature = (path.clone(), revision, start, end);
         if let Some(pending) = &self.inlay_pending {
             if (pending.1.clone(), pending.2, pending.3, pending.4) != signature {
@@ -113,6 +113,12 @@ impl Model {
     }
 }
 
+fn visible_end_line(start: usize, height: usize, line_count: usize) -> usize {
+    (start + height)
+        .min(line_count.saturating_sub(1))
+        .max(start)
+}
+
 fn inlay_label(value: &serde_json::Value) -> String {
     match value {
         serde_json::Value::String(label) => label.clone(),
@@ -156,7 +162,7 @@ fn insert_virtual_span(spans: &mut Vec<Span<'_>>, at: usize, label: String) {
 
 #[cfg(test)]
 mod tests {
-    use super::{inlay_label, insert_virtual_span};
+    use super::{inlay_label, insert_virtual_span, visible_end_line};
     use ratatui::text::Span;
 
     #[test]
@@ -177,5 +183,12 @@ mod tests {
             .map(|span| span.content.as_ref())
             .collect::<String>();
         assert_eq!(text, "let x: i32 = 1;");
+    }
+
+    #[test]
+    fn viewport_range_never_exceeds_the_last_line() {
+        assert_eq!(visible_end_line(0, 24, 4), 3);
+        assert_eq!(visible_end_line(0, 24, 0), 0);
+        assert_eq!(visible_end_line(3, 24, 4), 3);
     }
 }

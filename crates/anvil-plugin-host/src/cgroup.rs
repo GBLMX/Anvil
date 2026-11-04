@@ -16,12 +16,13 @@ pub struct Cgroup {
 }
 
 impl Cgroup {
-    /// Creates `<root>/<name>` and writes `pids.max` and `memory.max`.
+    /// Creates `<root>/<name>` and writes the mandatory limits.
     pub fn create(
         root: impl AsRef<Path>,
         name: &str,
         pids_max: u32,
         memory_max_bytes: u64,
+        cpu_weight: u32,
     ) -> io::Result<Self> {
         if name.is_empty() || name.contains('/') {
             return Err(io::Error::new(
@@ -44,7 +45,39 @@ impl Cgroup {
         };
         cgroup.write("pids.max", &pids_max.to_string())?;
         cgroup.write("memory.max", &memory_max_bytes.to_string())?;
+        if cgroup.path.join("memory.swap.max").exists() {
+            cgroup.write("memory.swap.max", "0")?;
+        }
+        cgroup.write("cpu.weight", &cpu_weight.to_string())?;
         Ok(cgroup)
+    }
+
+    /// Finds the nearest writable delegated cgroup2 ancestor.
+    ///
+    /// Systemd user services normally expose a writable `app.slice` or service
+    /// cgroup; the global `/sys/fs/cgroup` root is not writable.
+    pub fn detect_root() -> io::Result<PathBuf> {
+        let contents = fs::read_to_string("/proc/self/cgroup")?;
+        let relative = contents
+            .lines()
+            .find_map(|line| line.strip_prefix("0::"))
+            .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "cgroup v2 entry missing"))?;
+        let mut current = Path::new("/sys/fs/cgroup").join(relative.trim_start_matches('/'));
+        loop {
+            if is_delegated(&current) {
+                return Ok(current);
+            }
+            if current == Path::new("/sys/fs/cgroup") {
+                break;
+            }
+            if !current.pop() {
+                break;
+            }
+        }
+        Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "no writable delegated cgroup v2 root; set ANVIL_CGROUP_ROOT",
+        ))
     }
 
     pub fn path(&self) -> &Path {
@@ -53,6 +86,16 @@ impl Cgroup {
 
     pub fn attach(&self, pid: u32) -> io::Result<()> {
         self.write("cgroup.procs", &pid.to_string())
+    }
+
+    pub fn procs_file(&self) -> io::Result<fs::File> {
+        fs::OpenOptions::new()
+            .write(true)
+            .open(self.path.join("cgroup.procs"))
+    }
+
+    pub fn kill(&self) -> io::Result<()> {
+        self.write("cgroup.kill", "1")
     }
 
     fn write(&self, file: &str, value: &str) -> io::Result<()> {
@@ -73,6 +116,24 @@ impl Cgroup {
 }
 
 const CGROUP2_SUPER_MAGIC: libc::c_long = 0x6367_7270;
+
+fn is_delegated(root: &Path) -> bool {
+    if !root.is_dir() || !is_cgroup2(root).unwrap_or(false) {
+        return false;
+    }
+    let procs = root.join("cgroup.procs");
+    if fs::OpenOptions::new().write(true).open(&procs).is_err()
+        || fs::read_to_string(&procs)
+            .map(|value| !value.trim().is_empty())
+            .unwrap_or(true)
+    {
+        return false;
+    }
+    let controllers = fs::read_to_string(root.join("cgroup.subtree_control")).unwrap_or_default();
+    ["cpu", "memory", "pids"]
+        .iter()
+        .all(|name| controllers.split_whitespace().any(|value| value == *name))
+}
 
 fn is_cgroup2(root: &Path) -> io::Result<bool> {
     let path = std::ffi::CString::new(root.as_os_str().as_bytes())?;
@@ -95,8 +156,8 @@ mod tests {
 
     #[test]
     fn rejects_path_traversal_names() {
-        assert!(Cgroup::create("/tmp", "../escape", 64, 256 << 20).is_err());
-        assert!(Cgroup::create("/tmp", "", 64, 256 << 20).is_err());
+        assert!(Cgroup::create("/tmp", "../escape", 64, 256 << 20, 100).is_err());
+        assert!(Cgroup::create("/tmp", "", 64, 256 << 20, 100).is_err());
     }
 
     #[test]
@@ -104,28 +165,37 @@ mod tests {
         let root = std::env::temp_dir().join(format!("anvil-not-cgroup-{}", std::process::id()));
         let _ = fs::create_dir(&root);
         let name = format!("anvil-plugin-not-cgroup-{}", std::process::id());
-        assert!(Cgroup::create(&root, &name, 64, 256 << 20).is_err());
+        assert!(Cgroup::create(&root, &name, 64, 256 << 20, 100).is_err());
         let _ = fs::remove_dir(&root);
     }
 
     #[test]
     fn writes_limits_when_delegated_root_is_available() {
-        let root = Path::new("/sys/fs/cgroup");
-        if !root.is_dir() {
+        let Ok(root) = Cgroup::detect_root() else {
             return;
-        }
+        };
         let name = format!("anvil-plugin-test-{}", std::process::id());
-        let Ok(mut cgroup) = Cgroup::create(root, &name, 64, 256 << 20) else {
+        let Ok(mut cgroup) = Cgroup::create(&root, &name, 64, 256 << 20, 100) else {
             eprintln!("skipping cgroup limit test: no delegated writable cgroup2 root");
             return;
         };
         assert_eq!(
-            fs::read_to_string(cgroup.path().join("pids.max")).expect("pids"),
+            fs::read_to_string(cgroup.path().join("pids.max"))
+                .expect("pids")
+                .trim(),
             "64"
         );
         assert_eq!(
-            fs::read_to_string(cgroup.path().join("memory.max")).expect("memory"),
+            fs::read_to_string(cgroup.path().join("memory.max"))
+                .expect("memory")
+                .trim(),
             (256u64 << 20).to_string()
+        );
+        assert_eq!(
+            fs::read_to_string(cgroup.path().join("cpu.weight"))
+                .expect("cpu")
+                .trim(),
+            "100"
         );
         cgroup.remove().expect("remove");
     }

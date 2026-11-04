@@ -65,9 +65,11 @@ the title becomes `Files · stale`; buffers and file operations remain usable.
 ### 4. Rename is observed as an entry change
 
 Polling identifies the affected parent directory, not the old/new name pair.
-If the selected entry was renamed by an external actor, the original path no
-longer exists and selection falls back to its nearest surviving parent. The
-refreshed tree still shows the new entry.
+Directory snapshots include each entry's inode, and the tree keeps that identity
+with the selected row. After a refresh, selection tries the exact path first,
+then the same inode, then the nearest surviving parent. If the renamed entry is
+not visible because its new parent is collapsed, the parent fallback still
+retains the correct expansion set.
 
 ## Consequences
 

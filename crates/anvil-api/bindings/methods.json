@@ -1,0 +1,82 @@
+[
+  {
+    "name": "editor.get_view",
+    "params": "empty",
+    "result": "EditorView"
+  },
+  {
+    "name": "editor.get_snapshot",
+    "params": "empty",
+    "result": "DocumentSnapshot"
+  },
+  {
+    "name": "editor.set_mode",
+    "params": "SetModeRequest",
+    "result": "SetModeResponse"
+  },
+  {
+    "name": "editor.apply_edit",
+    "params": "ApplyEditRequest",
+    "result": "ApplyEditResponse"
+  },
+  {
+    "name": "editor.register_command",
+    "params": "pending",
+    "result": "pending"
+  },
+  {
+    "name": "ui.notify",
+    "params": "pending",
+    "result": "pending"
+  },
+  {
+    "name": "ui.status",
+    "params": "pending",
+    "result": "pending"
+  },
+  {
+    "name": "event.subscribe",
+    "params": "pending",
+    "result": "pending"
+  },
+  {
+    "name": "sys.read_file",
+    "params": "pending",
+    "result": "pending"
+  },
+  {
+    "name": "sys.create_dir",
+    "params": "pending",
+    "result": "pending"
+  },
+  {
+    "name": "sys.rename",
+    "params": "pending",
+    "result": "pending"
+  },
+  {
+    "name": "sys.remove",
+    "params": "pending",
+    "result": "pending"
+  },
+  {
+    "name": "sys.copy",
+    "params": "pending",
+    "result": "pending"
+  },
+  {
+    "name": "sys.remove_all",
+    "params": "pending",
+    "result": "pending"
+  },
+  {
+    "name": "sys.fetch",
+    "params": "pending",
+    "result": "pending"
+  },
+  {
+    "name": "sys.exec",
+    "params": "pending",
+    "result": "pending"
+  }
+]
