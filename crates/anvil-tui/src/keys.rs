@@ -446,7 +446,11 @@ fn handle_key(model: &mut Model, key: KeyPress) {
                 let name = std::mem::take(name);
                 let kind = *kind;
                 model.ui.input_mode = InputMode::Normal;
-                model.finish_tree_create(directory, name, kind);
+                model.queue_effect(Effect::TreeCreate {
+                    directory,
+                    name,
+                    kind,
+                });
             }
             KeyCode::Backspace => {
                 name.pop();
@@ -468,7 +472,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
                 let path = path.clone();
                 let name = std::mem::take(name);
                 model.ui.input_mode = InputMode::Normal;
-                model.finish_tree_rename(path, name);
+                model.queue_effect(Effect::TreeRename { path, name });
             }
             KeyCode::Backspace => {
                 name.pop();
@@ -496,7 +500,11 @@ fn handle_key(model: &mut Model, key: KeyPress) {
                 let copy = *copy;
                 let directory = std::mem::take(directory);
                 model.ui.input_mode = InputMode::Normal;
-                model.finish_tree_transfer(path, copy, directory);
+                model.queue_effect(Effect::TreeTransfer {
+                    path,
+                    copy,
+                    directory,
+                });
             }
             KeyCode::Backspace => {
                 directory.pop();
@@ -548,7 +556,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             KeyCode::Char('y') | KeyCode::Char('Y') => {
                 let path = path.clone();
                 model.ui.input_mode = InputMode::Normal;
-                model.finish_tree_delete(path);
+                model.queue_effect(Effect::TreeDelete(path));
             }
             KeyCode::Esc | KeyCode::Char('n') | KeyCode::Char('N') => {
                 model.ui.input_mode = InputMode::Normal;

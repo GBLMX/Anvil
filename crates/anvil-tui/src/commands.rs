@@ -225,6 +225,18 @@ impl Model {
                 Effect::LspWorkspaceSymbols => self.request_workspace_symbols(),
                 Effect::LspRename(name) => self.request_rename(&name),
                 Effect::LspFormat => self.request_formatting(),
+                Effect::TreeCreate {
+                    directory,
+                    name,
+                    kind,
+                } => self.finish_tree_create(directory, name, kind),
+                Effect::TreeRename { path, name } => self.finish_tree_rename(path, name),
+                Effect::TreeTransfer {
+                    path,
+                    copy,
+                    directory,
+                } => self.finish_tree_transfer(path, copy, directory),
+                Effect::TreeDelete(path) => self.finish_tree_delete(path),
             }
         }
     }

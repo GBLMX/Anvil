@@ -1,5 +1,6 @@
 //! Bounded typed effects for frontend-neutral command execution.
 
+use crate::ui::CreateKind;
 use std::collections::VecDeque;
 use std::path::PathBuf;
 
@@ -32,6 +33,22 @@ pub enum Effect {
     LspRename(String),
     /// Request formatting for the active buffer.
     LspFormat,
+    /// Create a file or directory from the tree.
+    TreeCreate {
+        directory: PathBuf,
+        name: String,
+        kind: CreateKind,
+    },
+    /// Rename a tree entry.
+    TreeRename { path: PathBuf, name: String },
+    /// Move or copy a tree entry.
+    TreeTransfer {
+        path: PathBuf,
+        copy: bool,
+        directory: String,
+    },
+    /// Delete a tree entry.
+    TreeDelete(PathBuf),
 }
 
 /// One queued effect with its request id.
