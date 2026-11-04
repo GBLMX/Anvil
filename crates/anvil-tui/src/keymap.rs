@@ -461,6 +461,7 @@ pub(crate) fn resolve_normal(
 pub(crate) enum PendingCommand {
     ObjectPending,
     OperatorWord { operator: char, around: bool },
+    OperatorQuote { operator: char, quote: char },
     ChangeInnerWord,
     ChangeInnerQuote(char),
     Definition,
@@ -514,7 +515,7 @@ impl PendingCommand {
             YankWords(WordMotion::NextStart) => Some(command::YANK_WORDS_NEXT),
             YankWords(WordMotion::End) => Some(command::YANK_WORDS_END),
             YankWords(WordMotion::PreviousStart) => Some(command::YANK_WORDS_PREVIOUS),
-            ObjectPending | OperatorWord { .. } | Count { .. } => None,
+            ObjectPending | OperatorWord { .. } | OperatorQuote { .. } | Count { .. } => None,
         }
     }
 
@@ -567,8 +568,14 @@ pub(crate) fn pending_action(
                 operator,
                 around: pending.is_ascii_uppercase(),
             }),
-            KeyCode::Char('"') => Some(PendingCommand::ChangeInnerQuote('"')),
-            KeyCode::Char('\'') => Some(PendingCommand::ChangeInnerQuote('\'')),
+            KeyCode::Char('"') => Some(PendingCommand::OperatorQuote {
+                operator,
+                quote: '"',
+            }),
+            KeyCode::Char('\'') => Some(PendingCommand::OperatorQuote {
+                operator,
+                quote: '\'',
+            }),
             _ => None,
         };
     }

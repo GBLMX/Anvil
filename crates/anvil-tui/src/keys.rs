@@ -169,6 +169,10 @@ fn handle_key(model: &mut Model, key: KeyPress) {
                     let count = model.take_count();
                     model.apply_word_operator(operator, around, count);
                 }
+                PendingCommand::OperatorQuote { operator, quote } => {
+                    let _ = model.take_count();
+                    model.apply_quote_operator(operator, quote);
+                }
                 PendingCommand::ChangeInnerWord => model.change_inner_word(),
                 PendingCommand::ChangeInnerQuote(quote) => model.change_inner_quote(quote),
                 PendingCommand::Definition => model.queue_effect(Effect::LspDefinition),

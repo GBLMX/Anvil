@@ -203,6 +203,47 @@ impl Model {
         self.dirty = true;
     }
 
+    pub(crate) fn apply_quote_operator(&mut self, operator: char, quote: char) {
+        let Some(range) = self.inner_quote_range(quote) else {
+            self.status = "E: no quote object".to_owned();
+            self.dirty = true;
+            return;
+        };
+        match operator {
+            'y' => {
+                let cursor = self.cursor;
+                self.editor.set_selection_bytes(range.start, range.end);
+                if self.editor.yank(range) {
+                    self.record_register();
+                }
+                let _ = self.editor.set_selection_bytes(cursor, cursor);
+            }
+            'c' => {
+                let deleted = self.editor.text().slice(range.clone());
+                self.editor.set_selection_bytes(range.start, range.end);
+                self.editor.delete(range.clone());
+                self.cursor = range.start;
+                if let Some(register) = self.register.take() {
+                    self.record_register_text(register, &deleted);
+                }
+                self.modified = true;
+                self.begin_insert(InsertOrigin::ChangeInnerQuote(quote));
+            }
+            'd' => {
+                let deleted = self.editor.text().slice(range.clone());
+                self.editor.set_selection_bytes(range.start, range.end);
+                self.editor.delete(range.clone());
+                self.cursor = range.start;
+                if let Some(register) = self.register.take() {
+                    self.record_register_text(register, &deleted);
+                }
+                self.modified = true;
+            }
+            _ => return,
+        }
+        self.dirty = true;
+    }
+
     pub(crate) fn word_range(&self, motion: WordMotion) -> Option<std::ops::Range<usize>> {
         let text = self.editor.text();
         let (start, end) = match motion {

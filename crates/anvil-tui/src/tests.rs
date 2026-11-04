@@ -2480,3 +2480,13 @@ fn change_inner_and_around_word() {
     handle_event(&mut around, key(KeyCode::Esc));
     assert_eq!(around.editor.text().slice(0..4), "Xtwo");
 }
+
+#[test]
+fn delete_inner_quote_does_not_change() {
+    let mut model = Model::new(EditorState::from_text("say \"hello\" now"), None);
+    model.cursor = 6;
+    for key_code in [KeyCode::Char('d'), KeyCode::Char('i'), KeyCode::Char('"')] {
+        handle_event(&mut model, key(key_code));
+    }
+    assert_eq!(model.editor.text().slice(0..10), "say \"\" now");
+}
