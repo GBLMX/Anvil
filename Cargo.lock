@@ -105,6 +105,7 @@ dependencies = [
  "anvil-plugin-host",
  "anvil-session",
  "crossterm",
+ "nix 0.31.3",
  "ratatui",
  "serde",
  "serde_json",
