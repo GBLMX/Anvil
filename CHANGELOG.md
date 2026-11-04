@@ -19,7 +19,8 @@ post-`0.5.0` feature line.
 - Empty insert sessions no longer replace the previous last change; backspace
   removes the deleted text from the captured insert session.
 - Bracketed paste is enabled while the TUI owns the terminal and disabled on
-  exit or unwind; multi-line paste preserves line breaks and undoes as one
+  exit or unwind; startup cleanup restores the alternate screen. Pasted CRLF/CR
+  is normalized, and multi-line paste preserves line breaks and undoes as one
   transaction.
 - Added regression coverage for repeated backspace at document start/line
   boundaries and for wide-character display-column motion.

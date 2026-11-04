@@ -1494,7 +1494,12 @@ impl TerminalSession {
         enable_raw_mode()?;
         let supported = supports_keyboard_enhancement().unwrap_or(false);
         let mut stdout = io::stdout();
-        if let Err(error) = execute!(stdout, EnterAlternateScreen, EnableBracketedPaste) {
+        if let Err(error) = execute!(stdout, EnterAlternateScreen) {
+            let _ = disable_raw_mode();
+            return Err(error);
+        }
+        if let Err(error) = execute!(stdout, EnableBracketedPaste) {
+            let _ = execute!(stdout, DisableBracketedPaste, LeaveAlternateScreen);
             let _ = disable_raw_mode();
             return Err(error);
         }

@@ -18,16 +18,17 @@ pub(crate) fn handle_event(model: &mut Model, event: Event) {
         Event::Paste(text) => {
             model.syntax.borrow_mut().note_activity();
             model.pending = None;
+            let text = normalize_paste(&text);
             if let InputMode::Insert = model.ui.input_mode {
                 model.insert_text(&text);
             } else if let InputMode::CommandLine { buffer } = &mut model.ui.input_mode {
-                buffer.push_str(&text);
+                buffer.push_str(&text.replace('\n', " "));
                 model.dirty = true;
             } else if let InputMode::Search { query } = &mut model.ui.input_mode {
-                query.push_str(&text);
+                query.push_str(&text.replace('\n', " "));
                 model.dirty = true;
             } else if let InputMode::Rename { name } = &mut model.ui.input_mode {
-                name.push_str(&text);
+                name.push_str(&text.replace('\n', " "));
                 model.dirty = true;
             }
         }
@@ -35,6 +36,10 @@ pub(crate) fn handle_event(model: &mut Model, event: Event) {
         _ => {}
     }
     model.drain_effects();
+}
+
+fn normalize_paste(text: &str) -> String {
+    text.replace("\r\n", "\n").replace('\r', "\n")
 }
 
 fn handle_key(model: &mut Model, key: KeyPress) {

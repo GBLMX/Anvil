@@ -2399,3 +2399,22 @@ fn wide_characters_use_display_columns() {
         .expect("position");
     assert_eq!(position.display_column, 2);
 }
+
+#[test]
+fn paste_normalizes_crlf_and_cr() {
+    let mut model = Model::new(EditorState::from_text(""), None);
+    handle_event(&mut model, key(KeyCode::Char('i')));
+    handle_event(&mut model, Event::Paste("a\r\nb\rc".to_owned()));
+    assert_eq!(model.editor.text().slice(0..5), "a\nb\nc");
+}
+
+#[test]
+fn command_line_paste_does_not_embed_newlines() {
+    let mut model = Model::new(EditorState::from_text(""), None);
+    handle_event(&mut model, key(KeyCode::Char(':')));
+    handle_event(&mut model, Event::Paste("w\r\nq".to_owned()));
+    match &model.ui.input_mode {
+        InputMode::CommandLine { buffer } => assert_eq!(buffer, "w q"),
+        other => panic!("unexpected mode: {other:?}"),
+    }
+}
