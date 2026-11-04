@@ -1,7 +1,7 @@
 # Contextual Keymap Router Analysis
 
-Status: analysis only. No router, leader timeout, or preset files are
-implemented yet.
+Status: planned into `0.5.3` in [0.5.x-plan.md](0.5.x-plan.md). No router,
+leader timeout, or preset files are implemented yet.
 
 Source issue: `[Feature] Implement Contextual Keymap Router and Space-Leader
 Ergonomics`, with the accepted ADR-0020 addendum on F-key compatibility.
