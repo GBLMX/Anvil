@@ -33,8 +33,8 @@ in `PROJECT_CHARTER.md`, `docs/phase-0-7-plan.md`, and the ADRs.
 
 ## Next
 
-1. Extract `anvil-session` from the TUI so a frontend can use the kernel without
-   forking the terminal UI.
+1. [0.5.1] Implement last-change repeat: semantic last-change descriptor,
+   `.` replay, count override, and insert-session grouping.
 2. Version the gateway protocol and add compatibility tests.
 3. Establish a reproducible kernel performance baseline.
 4. Add user keymap/config boundaries without freezing the plugin keymap format.
