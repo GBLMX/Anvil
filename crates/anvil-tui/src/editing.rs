@@ -97,11 +97,12 @@ impl Model {
                 2
             }
         };
-        let current = text[..local]
+        let current = text[local..]
             .chars()
-            .next_back()
-            .or_else(|| text[local..].chars().next())
-            .map(class_of)?;
+            .next()
+            .map(class_of)
+            .filter(|class| *class != 0)
+            .or_else(|| text[..local].chars().next_back().map(class_of))?;
         let mut start = local;
         for (index, character) in text[..local].char_indices().rev() {
             if class_of(character) != current {
@@ -195,12 +196,41 @@ impl Model {
         Some(line.start + start..line.start + end)
     }
 
-    pub(crate) fn apply_word_operator(&mut self, operator: char, around: bool, _count: usize) {
-        let range = if around {
-            self.around_word_range()
-        } else {
-            self.inner_word_range()
-        };
+    fn word_object_range(&mut self, around: bool, count: usize) -> Option<std::ops::Range<usize>> {
+        let saved = self.cursor;
+        let mut cursor = saved;
+        let mut selected: Option<std::ops::Range<usize>> = None;
+        for iteration in 0..count.max(1) {
+            if iteration > 0 {
+                let text = self.editor.text();
+                while let Some(character) = text.slice(cursor..text.len_bytes()).chars().next() {
+                    if !character.is_whitespace() {
+                        break;
+                    }
+                    cursor += character.len_utf8();
+                }
+            }
+            self.cursor = cursor;
+            let Some(next) = (if around {
+                self.around_word_range()
+            } else {
+                self.inner_word_range()
+            }) else {
+                break;
+            };
+            cursor = next.end;
+            if let Some(range) = selected.as_mut() {
+                range.end = next.end;
+            } else {
+                selected = Some(next);
+            }
+        }
+        self.cursor = saved;
+        selected
+    }
+
+    pub(crate) fn apply_word_operator(&mut self, operator: char, around: bool, count: usize) {
+        let range = self.word_object_range(around, count);
         let Some(range) = range else {
             self.status = "E: no word object".to_owned();
             self.dirty = true;
@@ -383,8 +413,41 @@ impl Model {
         (start < end).then_some(start..end)
     }
 
-    pub(crate) fn apply_paragraph_operator(&mut self, operator: char, around: bool) {
-        let Some(range) = self.paragraph_range(around) else {
+    fn paragraph_object_range(
+        &mut self,
+        around: bool,
+        count: usize,
+    ) -> Option<std::ops::Range<usize>> {
+        let saved = self.cursor;
+        let mut cursor = saved;
+        let mut selected: Option<std::ops::Range<usize>> = None;
+        for iteration in 0..count.max(1) {
+            if iteration > 0 {
+                let text = self.editor.text();
+                while let Some(character) = text.slice(cursor..text.len_bytes()).chars().next() {
+                    if !character.is_whitespace() {
+                        break;
+                    }
+                    cursor += character.len_utf8();
+                }
+            }
+            self.cursor = cursor;
+            let Some(next) = self.paragraph_range(around) else {
+                break;
+            };
+            cursor = next.end;
+            if let Some(range) = selected.as_mut() {
+                range.end = next.end;
+            } else {
+                selected = Some(next);
+            }
+        }
+        self.cursor = saved;
+        selected
+    }
+
+    pub(crate) fn apply_paragraph_operator(&mut self, operator: char, around: bool, count: usize) {
+        let Some(range) = self.paragraph_object_range(around, count) else {
             self.status = "E: no paragraph object".to_owned();
             self.dirty = true;
             return;

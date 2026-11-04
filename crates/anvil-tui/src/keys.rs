@@ -187,8 +187,8 @@ fn handle_key(model: &mut Model, key: KeyPress) {
                     model.apply_bracket_operator(operator, open, around);
                 }
                 PendingCommand::OperatorParagraph { operator, around } => {
-                    let _ = model.take_count();
-                    model.apply_paragraph_operator(operator, around);
+                    let count = model.take_count();
+                    model.apply_paragraph_operator(operator, around, count);
                 }
                 PendingCommand::OperatorTag { operator, around } => {
                     let _ = model.take_count();

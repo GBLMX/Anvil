@@ -2590,3 +2590,33 @@ fn tag_text_objects_delete_change_and_around() {
     handle_event(&mut change, key(KeyCode::Esc));
     assert_eq!(change.editor.text().slice(0..3), "<p>");
 }
+
+#[test]
+fn word_text_objects_honor_counts() {
+    let mut model = Model::new(EditorState::from_text("one two three"), None);
+    model.cursor = 0;
+    for key_code in [
+        KeyCode::Char('2'),
+        KeyCode::Char('d'),
+        KeyCode::Char('i'),
+        KeyCode::Char('w'),
+    ] {
+        handle_event(&mut model, key(key_code));
+    }
+    assert_eq!(model.editor.text().slice(0..6), " three");
+}
+
+#[test]
+fn paragraph_text_objects_honor_counts() {
+    let mut model = Model::new(EditorState::from_text("a\nb\n\nc\nd"), None);
+    model.cursor = 0;
+    for key_code in [
+        KeyCode::Char('2'),
+        KeyCode::Char('d'),
+        KeyCode::Char('i'),
+        KeyCode::Char('p'),
+    ] {
+        handle_event(&mut model, key(key_code));
+    }
+    assert_eq!(model.editor.text().len_bytes(), 0);
+}
