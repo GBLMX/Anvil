@@ -2,6 +2,7 @@
 
 This is a directional roadmap, not a release commitment. The detailed gates stay
 in `PROJECT_CHARTER.md`, `docs/phase-0-7-plan.md`, and the ADRs.
+Canonical layer/order: [docs/README.md § Delivery hierarchy](docs/README.md#delivery-hierarchy).
 
 ## Current
 

@@ -13,6 +13,38 @@ Status: index for current architecture, plans, ADRs, and resolved bug records.
 - [Threat model](threat-model.md) — adversaries, mitigations, invariants
 - [Performance baseline](performance.md) — gates and re-run triggers
 
+## Delivery hierarchy
+
+This is the canonical order. Detailed slices stay in the linked plans; a
+feature does not jump a layer because it is convenient to implement.
+
+| Layer | Scope | Owner |
+|---|---|---|
+| L0 Kernel | text, selection, undo, snapshots | `anvil-core` / `anvil-editor` |
+| L1 Platform | gateway, sandbox, exec runner, plugin host | `anvil-ipc` / Go / `anvil-plugin-host` |
+| L2 Session | documents, commands, focus/overlay, effects | `anvil-session` |
+| L3 Interaction | palette, preview, tabs, status, notifications, search, mouse | `anvil-tui` + `0.5.x` |
+| L4 Editor intelligence | completion depth, references, structure, LSP edits | `ide-capability-plan.md` P0 |
+| L5 Workflow adapters | Git, session restore, tasks, terminal, debugger | P0 then `ide-capability-plan.md` P1 |
+| L6 Distribution/ecosystem | signing, packages, marketplace, modules, collaboration | `0.6.x` / `0.7.x` / P2 |
+
+Order:
+
+1. `0.5.2`–`0.5.9` interaction/UI slices.
+2. IDE P0: LSP depth, session restore, Git, settings.
+3. IDE P1: tasks, terminal, debugger, multi-root.
+4. `0.6.0`/`0.6.1` distribution and signing.
+5. `0.7.x` official optional Rust modules.
+6. P2 ecosystem/collaboration.
+
+Cross-cutting tracks that do not jump the queue:
+
+- Linux substrate hardening runs continuously; release gates still apply.
+- Performance baselines are re-run at the documented triggers, not after every
+  commit.
+- Search/replace, problems, quick-open preview, and icon theme belong to
+  `0.5.4`/`0.5.7`/`0.5.8`; the IDE plan does not re-schedule them.
+
 ## Active plans
 
 | Plan | Scope | Status |
