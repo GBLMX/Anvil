@@ -519,10 +519,8 @@ fn handle_key(model: &mut Model, key: KeyPress) {
         InputMode::ConfirmClose { index } => match key.code {
             KeyCode::Char('y') | KeyCode::Char('Y') => {
                 let index = *index;
-                if model.save_buffer(index) {
-                    model.ui.input_mode = InputMode::Normal;
-                    model.close_buffer(index, true);
-                }
+                model.ui.input_mode = InputMode::Normal;
+                model.queue_effect(Effect::SaveBuffer { index, close: true });
             }
             KeyCode::Char('n') | KeyCode::Char('N') => {
                 let index = *index;
@@ -540,10 +538,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             KeyCode::Char('y') | KeyCode::Char('Y') => {
                 let path = path.clone();
                 model.ui.input_mode = InputMode::Normal;
-                if let Err(error) = model.reload_external(&path) {
-                    model.status = format!("E: {error}");
-                    model.dirty = true;
-                }
+                model.queue_effect(Effect::Reload(path));
             }
             KeyCode::Esc | KeyCode::Char('n') | KeyCode::Char('N') => {
                 model.ui.input_mode = InputMode::Normal;

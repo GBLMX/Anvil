@@ -152,38 +152,22 @@ impl Model {
             ("q", "") => self.request_quit(),
             ("q!", "") => self.force_quit(),
             ("help", "") => self.show_help(),
-            ("reconnect", "") => self.reconnect_gateway(),
-            ("lsp-start", "") => self.start_lsp(),
+            ("reconnect", "") => self.queue_effect(Effect::ReconnectGateway),
+            ("lsp-start", "") => self.queue_effect(Effect::LspStart),
             ("tree", "") => self.open_tree(),
-            ("lsp-stop", "") => self.stop_lsp(),
+            ("lsp-stop", "") => self.queue_effect(Effect::LspStop),
             ("format", "") => self.queue_effect(Effect::LspFormat),
-            ("symbols", "") => self.request_document_symbols(),
-            ("plugin-start", "") => self.start_host(),
-            ("plugin-list", "") => self.list_plugins(),
-            ("plugin-oom", "") => self.start_oom_host(),
-            ("plugin-exec", "") => self.exec_host(),
-            ("plugin-stop", "") => self.stop_host(),
-            ("plugin-enable", plugin_id) => self.enable_plugin(plugin_id),
-            ("wq", "") => {
-                if self.save() {
-                    if self.any_modified() {
-                        self.status = "E: other buffers have unsaved changes".to_owned();
-                        self.dirty = true;
-                    } else {
-                        self.quit = true;
-                    }
-                }
+            ("symbols", "") => self.queue_effect(Effect::LspDocumentSymbols),
+            ("plugin-start", "") => self.queue_effect(Effect::PluginStart),
+            ("plugin-list", "") => self.queue_effect(Effect::PluginList),
+            ("plugin-oom", "") => self.queue_effect(Effect::PluginOom),
+            ("plugin-exec", "") => self.queue_effect(Effect::PluginExec),
+            ("plugin-stop", "") => self.queue_effect(Effect::PluginStop),
+            ("plugin-enable", plugin_id) => {
+                self.queue_effect(Effect::PluginEnable(plugin_id.to_owned()))
             }
-            ("wq", path) => {
-                if self.save_as(path) {
-                    if self.any_modified() {
-                        self.status = "E: other buffers have unsaved changes".to_owned();
-                        self.dirty = true;
-                    } else {
-                        self.quit = true;
-                    }
-                }
-            }
+            ("wq", "") => self.queue_effect(Effect::SaveAndQuit),
+            ("wq", path) => self.queue_effect(Effect::SaveAsAndQuit(path.into())),
             _ => {
                 self.status = format!("E: unknown command: {command}");
                 self.dirty = true;
@@ -237,10 +221,49 @@ impl Model {
                     directory,
                 } => self.finish_tree_transfer(path, copy, directory),
                 Effect::TreeDelete(path) => self.finish_tree_delete(path),
+                Effect::SaveBuffer { index, close } => {
+                    if self.save_buffer(index) && close {
+                        self.close_buffer(index, true);
+                    }
+                }
+                Effect::SaveAndQuit => {
+                    if self.save() {
+                        self.finish_save_quit();
+                    }
+                }
+                Effect::SaveAsAndQuit(path) => {
+                    let path = path.to_string_lossy().into_owned();
+                    if self.save_as(&path) {
+                        self.finish_save_quit();
+                    }
+                }
+                Effect::Reload(path) => {
+                    if let Err(error) = self.reload_external(&path) {
+                        self.status = format!("E: {error}");
+                        self.dirty = true;
+                    }
+                }
+                Effect::ReconnectGateway => self.reconnect_gateway(),
+                Effect::LspStart => self.start_lsp(),
+                Effect::LspStop => self.stop_lsp(),
+                Effect::PluginStart => self.start_host(),
+                Effect::PluginList => self.list_plugins(),
+                Effect::PluginOom => self.start_oom_host(),
+                Effect::PluginExec => self.exec_host(),
+                Effect::PluginStop => self.stop_host(),
+                Effect::PluginEnable(plugin_id) => self.enable_plugin(&plugin_id),
             }
         }
     }
 
+    fn finish_save_quit(&mut self) {
+        if self.any_modified() {
+            self.status = "E: other buffers have unsaved changes".to_owned();
+            self.dirty = true;
+        } else {
+            self.quit = true;
+        }
+    }
     fn close_buffer_number(&mut self, argument: &str, force: bool) {
         let Ok(number) = argument.parse::<usize>() else {
             self.status = "E: invalid buffer index".to_owned();

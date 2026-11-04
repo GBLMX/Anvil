@@ -49,6 +49,32 @@ pub enum Effect {
     },
     /// Delete a tree entry.
     TreeDelete(PathBuf),
+    /// Save a buffer, optionally closing it after a successful write.
+    SaveBuffer { index: usize, close: bool },
+    /// Save, then quit if no other buffers remain dirty.
+    SaveAndQuit,
+    /// Save to a path, then quit if no other buffers remain dirty.
+    SaveAsAndQuit(PathBuf),
+    /// Reload a buffer after an external change.
+    Reload(PathBuf),
+    /// Reconnect the gateway.
+    ReconnectGateway,
+    /// Start the active language server.
+    LspStart,
+    /// Stop the active language server.
+    LspStop,
+    /// Start the default plugin host.
+    PluginStart,
+    /// List discovered plugins.
+    PluginList,
+    /// Start a plugin host with the OOM probe.
+    PluginOom,
+    /// Execute one request on the debug plugin host.
+    PluginExec,
+    /// Stop the plugin host.
+    PluginStop,
+    /// Re-enable a disabled plugin.
+    PluginEnable(String),
 }
 
 /// One queued effect with its request id.
