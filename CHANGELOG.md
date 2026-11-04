@@ -22,6 +22,9 @@ post-`0.5.0` feature line.
   exit or unwind; startup cleanup restores the alternate screen. Pasted CRLF/CR
   is normalized, and multi-line paste preserves line breaks and undoes as one
   transaction.
+- Paste input strips control characters and is capped at 8 MiB; insert sessions
+  are invalidated after cursor movement or selection deletion so `.` cannot
+  replay a stale partial edit.
 - Added regression coverage for repeated backspace at document start/line
   boundaries and for wide-character display-column motion.
 

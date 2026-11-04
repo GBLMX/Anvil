@@ -165,6 +165,8 @@ enum InsertOrigin {
 struct InsertSession {
     origin: InsertOrigin,
     text: String,
+    start: usize,
+    valid: bool,
 }
 
 /// TUI state.

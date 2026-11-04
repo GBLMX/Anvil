@@ -253,6 +253,9 @@ impl Model {
     }
 
     fn set_caret(&mut self, offset: usize) {
+        if let Some(session) = self.insert_session.as_mut() {
+            session.valid = false;
+        }
         self.cursor = offset;
         if self.editor.selection_bytes().len() <= 1 {
             self.editor.set_selection_bytes(offset, offset);
@@ -677,8 +680,11 @@ impl Model {
             return;
         }
         self.cancel_signature_help();
+        let at_insert_end = self.insert_session.as_ref().is_some_and(|session| {
+            session.valid && self.cursor == session.start + session.text.len()
+        });
         if self.delete_selections(false) {
-            self.trim_insert_session();
+            self.trim_insert_session(false);
             return;
         }
         let Some(start) = self.editor.previous_grapheme_boundary(self.cursor) else {
@@ -691,7 +697,7 @@ impl Model {
         self.editor.delete(start..self.cursor);
         self.cursor = start;
         self.modified = true;
-        self.trim_insert_session();
+        self.trim_insert_session(at_insert_end);
     }
 
     pub(crate) fn delete_forward(&mut self) {

@@ -18,7 +18,11 @@ pub(crate) fn handle_event(model: &mut Model, event: Event) {
         Event::Paste(text) => {
             model.syntax.borrow_mut().note_activity();
             model.pending = None;
-            let text = normalize_paste(&text);
+            let (text, truncated) = normalize_paste(&text);
+            if truncated {
+                model.status = "E: paste truncated".to_owned();
+                model.dirty = true;
+            }
             if let InputMode::Insert = model.ui.input_mode {
                 model.insert_text(&text);
             } else if let InputMode::CommandLine { buffer } = &mut model.ui.input_mode {
@@ -38,8 +42,31 @@ pub(crate) fn handle_event(model: &mut Model, event: Event) {
     model.drain_effects();
 }
 
-fn normalize_paste(text: &str) -> String {
-    text.replace("\r\n", "\n").replace('\r', "\n")
+const MAX_PASTE_BYTES: usize = 8 * 1024 * 1024;
+
+fn normalize_paste(text: &str) -> (String, bool) {
+    let mut output = String::new();
+    let mut chars = text.chars().peekable();
+    let mut truncated = false;
+    while let Some(character) = chars.next() {
+        let character = if character == '\r' {
+            if chars.peek() == Some(&'\n') {
+                chars.next();
+            }
+            '\n'
+        } else {
+            character
+        };
+        if character.is_control() && !matches!(character, '\n' | '\t') {
+            continue;
+        }
+        if output.len() + character.len_utf8() > MAX_PASTE_BYTES {
+            truncated = true;
+            break;
+        }
+        output.push(character);
+    }
+    (output, truncated)
 }
 
 fn handle_key(model: &mut Model, key: KeyPress) {

@@ -7,6 +7,8 @@ impl Model {
         self.insert_session = Some(InsertSession {
             origin,
             text: String::new(),
+            start: self.cursor,
+            valid: true,
         });
         self.ui.input_mode = InputMode::Insert;
         self.dirty = true;
@@ -22,6 +24,9 @@ impl Model {
         let Some(session) = self.insert_session.take() else {
             return;
         };
+        if !session.valid {
+            return;
+        }
         if matches!(
             session.origin,
             InsertOrigin::InsertHere | InsertOrigin::Append | InsertOrigin::AppendLineEnd
@@ -50,10 +55,15 @@ impl Model {
         self.last_change = Some(last);
     }
 
-    pub(crate) fn trim_insert_session(&mut self) {
-        if let Some(session) = self.insert_session.as_mut() {
-            let _ = session.text.pop();
+    pub(crate) fn trim_insert_session(&mut self, at_end: bool) {
+        let Some(session) = self.insert_session.as_mut() else {
+            return;
+        };
+        if !at_end {
+            session.valid = false;
+            return;
         }
+        let _ = session.text.pop();
     }
 
     pub(crate) fn repeat_last_change(&mut self, count: usize) {

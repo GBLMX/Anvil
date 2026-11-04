@@ -2428,3 +2428,21 @@ fn command_line_paste_does_not_embed_newlines() {
         other => panic!("unexpected mode: {other:?}"),
     }
 }
+
+#[test]
+fn moved_insert_session_does_not_poison_last_change() {
+    let mut model = Model::new(EditorState::from_text("abc"), None);
+    model.begin_insert(InsertOrigin::InsertHere);
+    model.capture_insert("x");
+    model.move_char(-1);
+    model.finish_insert_session();
+    assert!(model.last_change.is_none());
+}
+
+#[test]
+fn paste_drops_control_characters() {
+    let mut model = Model::new(EditorState::from_text(""), None);
+    handle_event(&mut model, key(KeyCode::Char('i')));
+    handle_event(&mut model, Event::Paste("a\u{7}b\u{1b}c".to_owned()));
+    assert_eq!(model.editor.text().slice(0..3), "abc");
+}
