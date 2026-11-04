@@ -3,6 +3,10 @@
 Anvil loads an optional TOML keymap at startup. It can remap normal-mode and
 operator-pending bindings without changing the built-in defaults.
 
+The proposed contextual router, Space-leader timeout, F-key compatibility, and
+preset work are analyzed in
+[keymap-router-analysis.md](keymap-router-analysis.md).
+
 ## Location
 
 Checked in order:
