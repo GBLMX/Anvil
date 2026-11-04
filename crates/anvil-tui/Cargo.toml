@@ -42,6 +42,7 @@ name = "anvil"
 path = "src/main.rs"
 
 [dev-dependencies]
+nix = { version = "0.31", features = ["poll", "process", "signal", "term"] }
 tempfile = "3"
 
 [[bench]]
