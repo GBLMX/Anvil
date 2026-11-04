@@ -1,7 +1,8 @@
 # IDE Capability Plan
 
-Status: planned; starts after the `0.5.x` interaction slices unless a safety or
-data-integrity gate pulls an item earlier.
+Status: planned for work after the `0.5.x` slices. Search/replace, problems,
+quick-open preview, and icon themes are owned by `0.5.4`/`0.5.7`/`0.5.8`; this
+plan does not re-schedule them.
 
 Scope: editor-level capabilities that make Anvil usable for daily software work
 without turning the kernel into a full IDE. Anvil remains Linux-first, with no
@@ -25,8 +26,8 @@ Tokio runtime, no in-process plugin UI, and no embedded WebView.
 | Completion | label/insert/detail popup | `completionItem/resolve`, snippets, placeholders, docs, ranking |
 | Navigation | definition, hover, symbols | references, document highlight, call hierarchy |
 | Structure | diagnostics, code actions, format, rename | folding ranges, semantic tokens, code lens, workspace edits |
-| Search | literal `/`, `n`/`N` | project search, incremental replace, regex/whole-word, undo transaction |
-| Problems | status strings and popups | bounded problems panel, severity/source, jump, stale cleanup |
+| Search | literal `/`, `n`/`N` | `0.5.8` owns search/replace UI; post-0.5 extends multi-file/project search only if measured |
+| Problems | status strings and popups | `0.5.7` owns the bounded problems panel; no post-0.5 duplicate |
 | Session | in-memory only | restore buffers/cursors/layout; crash backup; persistent undo |
 | Git | gutter marks | diff view, hunk staging, blame, conflict handling |
 | Settings | partial keymap config | merged settings, validation errors, theme roles |
@@ -43,9 +44,9 @@ read-only/large-file/stale-result failure behavior.
 - Multi-root workspaces with per-root gateway/trust policy.
 - Code folding with session persistence.
 - Auto-save, swap files, and external-change conflict resolution.
-- Quick-open preview and icon theme with ASCII fallback.
 
-These are separate adapters, not `anvil-session` monoliths.
+These are separate adapters, not `anvil-session` monoliths. Quick-open preview
+and icon theme are not repeated here; they are `0.5.4`.
 
 ## 4. P2: ecosystem and collaboration
 
@@ -68,15 +69,15 @@ Not required for v1.
 
 ## 6. Sequence
 
-1. Finish `0.5.3`–`0.5.9` interaction and layout slices.
+1. Finish `0.5.3`–`0.5.9`: palette/which-key, preview/icons, status/tabs,
+   notifications/problems, search/replace, mouse/accessibility.
 2. LSP depth: completion resolve/snippets, references, folding, semantic
    tokens, workspace edits.
-3. Search/replace and problems panel.
-4. Session restore, crash backup, persistent undo.
-5. Git diff/hunk/blame/conflict.
-6. Settings, theme, and keymap boundaries.
-7. P1 adapters: tasks, terminal, debugger.
-8. P2 only after package signing and the `0.6.x` distribution boundary.
+3. Session restore, crash backup, persistent undo.
+4. Git diff/hunk/blame/conflict.
+5. Settings and remaining theme/keymap boundaries.
+6. P1 adapters: tasks, terminal, debugger.
+7. P2 only after package signing and the `0.6.x` distribution boundary.
 
 ## 7. Gates
 
