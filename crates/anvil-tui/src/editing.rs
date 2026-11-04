@@ -129,6 +129,80 @@ impl Model {
             .then_some(line.start + left + quote.len_utf8()..line.start + right)
     }
 
+    pub(crate) fn around_word_range(&self) -> Option<std::ops::Range<usize>> {
+        let inner = self.inner_word_range()?;
+        let line = self.editor.line_range_at(inner.start)?;
+        let text = self.editor.text().slice(line.start..line.end);
+        let mut start = inner.start - line.start;
+        let mut end = inner.end - line.start;
+        while let Some(character) = text[end..].chars().next() {
+            if !character.is_whitespace() {
+                break;
+            }
+            end += character.len_utf8();
+        }
+        if end == inner.end - line.start {
+            while start > 0 {
+                let character = text[..start].chars().next_back()?;
+                if !character.is_whitespace() {
+                    break;
+                }
+                start -= character.len_utf8();
+            }
+        }
+        Some(line.start + start..line.start + end)
+    }
+
+    pub(crate) fn apply_word_operator(&mut self, operator: char, around: bool, _count: usize) {
+        let range = if around {
+            self.around_word_range()
+        } else {
+            self.inner_word_range()
+        };
+        let Some(range) = range else {
+            self.status = "E: no word object".to_owned();
+            self.dirty = true;
+            return;
+        };
+        match operator {
+            'y' => {
+                let cursor = self.cursor;
+                self.editor.set_selection_bytes(range.start, range.end);
+                if self.editor.yank(range) {
+                    self.record_register();
+                }
+                let _ = self.editor.set_selection_bytes(cursor, cursor);
+            }
+            'c' => {
+                let deleted = self.editor.text().slice(range.clone());
+                self.editor.set_selection_bytes(range.start, range.end);
+                self.editor.delete(range.clone());
+                self.cursor = range.start;
+                if let Some(register) = self.register.take() {
+                    self.record_register_text(register, &deleted);
+                }
+                self.modified = true;
+                self.begin_insert(if around {
+                    InsertOrigin::ChangeWord(WordMotion::NextStart)
+                } else {
+                    InsertOrigin::ChangeInnerWord
+                });
+            }
+            'd' => {
+                let deleted = self.editor.text().slice(range.clone());
+                self.editor.set_selection_bytes(range.start, range.end);
+                self.editor.delete(range.clone());
+                self.cursor = range.start;
+                if let Some(register) = self.register.take() {
+                    self.record_register_text(register, &deleted);
+                }
+                self.modified = true;
+            }
+            _ => return,
+        }
+        self.dirty = true;
+    }
+
     pub(crate) fn word_range(&self, motion: WordMotion) -> Option<std::ops::Range<usize>> {
         let text = self.editor.text();
         let (start, end) = match motion {

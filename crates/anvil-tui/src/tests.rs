@@ -2446,3 +2446,37 @@ fn paste_drops_control_characters() {
     handle_event(&mut model, Event::Paste("a\u{7}b\u{1b}c".to_owned()));
     assert_eq!(model.editor.text().slice(0..3), "abc");
 }
+
+#[test]
+fn delete_inner_and_around_word() {
+    let mut inner = Model::new(EditorState::from_text("one two"), None);
+    handle_event(&mut inner, key(KeyCode::Char('d')));
+    handle_event(&mut inner, key(KeyCode::Char('i')));
+    handle_event(&mut inner, key(KeyCode::Char('w')));
+    assert_eq!(inner.editor.text().slice(0..4), " two");
+
+    let mut around = Model::new(EditorState::from_text("one two"), None);
+    handle_event(&mut around, key(KeyCode::Char('d')));
+    handle_event(&mut around, key(KeyCode::Char('a')));
+    handle_event(&mut around, key(KeyCode::Char('w')));
+    assert_eq!(around.editor.text().slice(0..3), "two");
+}
+
+#[test]
+fn change_inner_and_around_word() {
+    let mut inner = Model::new(EditorState::from_text("one two"), None);
+    handle_event(&mut inner, key(KeyCode::Char('c')));
+    handle_event(&mut inner, key(KeyCode::Char('i')));
+    handle_event(&mut inner, key(KeyCode::Char('w')));
+    type_text(&mut inner, "X");
+    handle_event(&mut inner, key(KeyCode::Esc));
+    assert_eq!(inner.editor.text().slice(0..5), "X two");
+
+    let mut around = Model::new(EditorState::from_text("one two"), None);
+    handle_event(&mut around, key(KeyCode::Char('c')));
+    handle_event(&mut around, key(KeyCode::Char('a')));
+    handle_event(&mut around, key(KeyCode::Char('w')));
+    type_text(&mut around, "X");
+    handle_event(&mut around, key(KeyCode::Esc));
+    assert_eq!(around.editor.text().slice(0..4), "Xtwo");
+}

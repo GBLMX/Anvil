@@ -460,6 +460,7 @@ pub(crate) fn resolve_normal(
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum PendingCommand {
     ObjectPending,
+    OperatorWord { operator: char, around: bool },
     ChangeInnerWord,
     ChangeInnerQuote(char),
     Definition,
@@ -513,7 +514,7 @@ impl PendingCommand {
             YankWords(WordMotion::NextStart) => Some(command::YANK_WORDS_NEXT),
             YankWords(WordMotion::End) => Some(command::YANK_WORDS_END),
             YankWords(WordMotion::PreviousStart) => Some(command::YANK_WORDS_PREVIOUS),
-            ObjectPending | Count { .. } => None,
+            ObjectPending | OperatorWord { .. } | Count { .. } => None,
         }
     }
 
@@ -557,17 +558,23 @@ pub(crate) fn pending_action(
     object_pending: bool,
 ) -> Option<PendingCommand> {
     if object_pending {
-        if pending != 'c' {
+        let operator = pending.to_ascii_lowercase();
+        if !matches!(operator, 'd' | 'y' | 'c') {
             return None;
         }
         return match key.code {
-            KeyCode::Char('w') => Some(PendingCommand::ChangeInnerWord),
+            KeyCode::Char('w') => Some(PendingCommand::OperatorWord {
+                operator,
+                around: pending.is_ascii_uppercase(),
+            }),
             KeyCode::Char('"') => Some(PendingCommand::ChangeInnerQuote('"')),
             KeyCode::Char('\'') => Some(PendingCommand::ChangeInnerQuote('\'')),
             _ => None,
         };
     }
-    if pending == 'c' && key.code == KeyCode::Char('i') {
+    if matches!(pending, 'd' | 'y' | 'c')
+        && matches!(key.code, KeyCode::Char('i') | KeyCode::Char('a'))
+    {
         return Some(PendingCommand::ObjectPending);
     }
     if pending == 'g' {
@@ -665,7 +672,10 @@ mod tests {
         );
         assert_eq!(
             pending_action('c', key(KeyCode::Char('w'), KeyModifiers::NONE), true),
-            Some(PendingCommand::ChangeInnerWord)
+            Some(PendingCommand::OperatorWord {
+                operator: 'c',
+                around: false,
+            })
         );
     }
 

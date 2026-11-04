@@ -157,8 +157,17 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             );
             match command {
                 PendingCommand::ObjectPending => {
-                    model.pending = Some('c');
+                    let operator = pending.to_ascii_lowercase();
+                    model.pending = Some(if key.code == KeyCode::Char('a') {
+                        operator.to_ascii_uppercase()
+                    } else {
+                        operator
+                    });
                     model.object_pending = true;
+                }
+                PendingCommand::OperatorWord { operator, around } => {
+                    let count = model.take_count();
+                    model.apply_word_operator(operator, around, count);
                 }
                 PendingCommand::ChangeInnerWord => model.change_inner_word(),
                 PendingCommand::ChangeInnerQuote(quote) => model.change_inner_quote(quote),

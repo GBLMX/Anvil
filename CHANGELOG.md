@@ -9,6 +9,8 @@ post-`0.5.0` feature line.
 ## [Unreleased]
 
 ### Added
+- Word text objects now support `diw`, `daw`, `ciw`, `caw`, `yiw`, and `yaw`
+  through the shared operator/object path.
 
 - Semantic last-change repeat: `.` replays the last successful delete, change,
   or insert session; an explicit count overrides the recorded delete count.
