@@ -2690,3 +2690,92 @@ fn visual_delete_applies_to_multiple_selections_in_one_undo() {
     handle_event(&mut model, key(KeyCode::Char('u')));
     assert_eq!(model.editor.text().len_bytes(), 7);
 }
+
+#[test]
+fn markdown_fenced_code_renders_a_full_width_background() {
+    let mut model = Model::new(EditorState::from_text("```rust\nfn main() {}\n```\n"), None);
+    model.path = Some(PathBuf::from("x.md"));
+    for _ in 0..100 {
+        model.poll_syntax();
+        if model
+            .syntax
+            .borrow()
+            .highlights()
+            .iter()
+            .any(|highlight| highlight.class == syntax::SyntaxClass::CodeBlock)
+        {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(2));
+    }
+    let backend = TestBackend::new(40, 8);
+    let mut terminal = Terminal::new(backend).expect("terminal");
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+    let buffer = terminal.backend().buffer();
+    let width = buffer.area.width as usize;
+    let cells = buffer.content();
+    let keyword = cells
+        .iter()
+        .position(|cell| cell.symbol() == "f")
+        .expect("code text");
+    assert_eq!(cells[keyword].fg, theme::SYNTAX_KEYWORD);
+    assert_eq!(cells[keyword].bg, theme::CODE_BLOCK_BG);
+    let row = keyword / width;
+    assert!(
+        cells[row * width + width - 2].bg == theme::CODE_BLOCK_BG,
+        "code background does not reach the right edge"
+    );
+}
+
+#[test]
+fn cursorline_overlays_fenced_code_background() {
+    let mut model = Model::new(EditorState::from_text("```rust\nfn main() {}\n```\n"), None);
+    model.path = Some(PathBuf::from("x.md"));
+    model.cursor = "```rust\n".len();
+    for _ in 0..100 {
+        model.poll_syntax();
+        if model
+            .syntax
+            .borrow()
+            .highlights()
+            .iter()
+            .any(|highlight| highlight.class == syntax::SyntaxClass::CodeBlock)
+        {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(2));
+    }
+    let backend = TestBackend::new(40, 8);
+    let mut terminal = Terminal::new(backend).expect("terminal");
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+    let buffer = terminal.backend().buffer();
+    let keyword = buffer
+        .content()
+        .iter()
+        .position(|cell| cell.symbol() == "f")
+        .expect("code text");
+    assert_eq!(buffer.content()[keyword].bg, theme::SURFACE_ALT);
+}
+
+#[test]
+fn inline_code_gets_a_background_span() {
+    let mut model = Model::new(EditorState::from_text("before `code` after"), None);
+    model.path = Some(PathBuf::from("x.md"));
+    for _ in 0..100 {
+        model.poll_syntax();
+        if !model.syntax.borrow().highlights().is_empty() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(2));
+    }
+    let backend = TestBackend::new(40, 8);
+    let mut terminal = Terminal::new(backend).expect("terminal");
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+    let buffer = terminal.backend().buffer();
+    let code = buffer
+        .content()
+        .iter()
+        .position(|cell| cell.symbol() == "c")
+        .expect("inline code");
+    assert_eq!(buffer.content()[code].bg, theme::CODE_BLOCK_BG);
+}

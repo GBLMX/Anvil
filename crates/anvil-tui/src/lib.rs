@@ -1279,6 +1279,21 @@ impl Model {
             .map(|position| position.line)
     }
 
+    fn line_in_code_block(&self, line_number: usize) -> bool {
+        let Some(start) = self.editor.index().line_to_offset(line_number) else {
+            return false;
+        };
+        let Some(line) = self.editor.index().offset_to_line(start) else {
+            return false;
+        };
+        let line_end = line.end.max(start + 1);
+        self.syntax.borrow().highlights().iter().any(|highlight| {
+            highlight.class == syntax::SyntaxClass::CodeBlock
+                && highlight.start < line_end
+                && highlight.end > start
+        })
+    }
+
     fn visible_gutter(&self, height: u16) -> Vec<Line<'static>> {
         let index = self.editor.index();
         let end = (self.scroll + usize::from(height)).min(index.len_lines());

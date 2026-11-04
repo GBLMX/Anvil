@@ -15,6 +15,9 @@ post-`0.5.0` feature line.
 - `v`/`V` map character and line selection onto the selection-first model;
   block selection is rejected explicitly.
 
+- Markdown fenced code blocks render with a full-width background, and inline
+  code spans use the same subtle background without replacing syntax colors.
+
 - Semantic last-change repeat: `.` replays the last successful delete, change,
   or insert session; an explicit count overrides the recorded delete count.
   The scope is session-wide and applies to the active buffer.

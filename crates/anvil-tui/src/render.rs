@@ -125,6 +125,9 @@ pub(crate) fn push_syntax_spans<'a>(
         if highlight.start >= chunk_end {
             break;
         }
+        if highlight.class == SyntaxClass::CodeBlock {
+            continue;
+        }
         let start = highlight.start.max(base).max(cursor);
         let end = highlight.end.min(chunk_end);
         if end <= start {
@@ -203,6 +206,9 @@ pub(crate) fn apply_search_highlights<'a>(
 }
 
 fn syntax_style(class: SyntaxClass) -> Style {
+    if class == SyntaxClass::CodeBlock {
+        return theme::code_block();
+    }
     let color = match class {
         SyntaxClass::Keyword => theme::SYNTAX_KEYWORD,
         SyntaxClass::String => theme::SYNTAX_STRING,
@@ -219,7 +225,11 @@ fn syntax_style(class: SyntaxClass) -> Style {
         SyntaxClass::List => theme::SYNTAX_LIST,
         SyntaxClass::Quote => theme::SYNTAX_QUOTE,
         SyntaxClass::Table => theme::SYNTAX_TABLE,
+        SyntaxClass::CodeBlock => theme::SYNTAX_CODE,
     };
+    if class == SyntaxClass::Code {
+        return Style::default().fg(color).bg(theme::CODE_BLOCK_BG);
+    }
     Style::default().fg(color)
 }
 
@@ -286,6 +296,29 @@ fn fuzzy_path_line(path: &str, query: &str, max_width: usize, selected: bool) ->
         spans.push(Span::styled(clipped[cursor..].to_owned(), base));
     }
     Line::from(spans)
+}
+
+fn apply_code_block_background(model: &Model, lines: &mut [Line<'_>], width: u16) {
+    let current = model.current_line();
+    for (offset, line) in lines.iter_mut().enumerate() {
+        let line_number = model.scroll + offset;
+        if !model.line_in_code_block(line_number) {
+            continue;
+        }
+        let style = if current == Some(line_number) {
+            theme::current_line()
+        } else {
+            theme::code_block()
+        };
+        let used = line.width();
+        let mut rendered = std::mem::replace(line, Line::raw("")).style(style);
+        if used < usize::from(width) {
+            rendered
+                .spans
+                .push(Span::styled(" ".repeat(usize::from(width) - used), style));
+        }
+        *line = rendered;
+    }
 }
 
 pub fn view(model: &Model, frame: &mut Frame) {
@@ -484,8 +517,10 @@ pub fn view(model: &Model, frame: &mut Frame) {
         Paragraph::new(model.visible_gutter(inner.height)).style(theme::text()),
         gutter_area,
     );
+    let mut lines = model.visible_lines(inner.height);
+    apply_code_block_background(model, &mut lines, text_area.width);
     frame.render_widget(
-        Paragraph::new(model.visible_lines(inner.height))
+        Paragraph::new(lines)
             .style(theme::text())
             .scroll((0, u16::try_from(model.hscroll).unwrap_or(u16::MAX))),
         text_area,

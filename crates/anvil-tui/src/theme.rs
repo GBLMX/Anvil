@@ -8,6 +8,7 @@ use ratatui::style::{Color, Modifier, Style};
 pub(crate) const BG: Color = Color::Rgb(13, 17, 23);
 pub(crate) const SURFACE: Color = Color::Rgb(22, 27, 34);
 pub(crate) const SURFACE_ALT: Color = Color::Rgb(30, 35, 46);
+pub(crate) const CODE_BLOCK_BG: Color = Color::Rgb(36, 40, 59);
 pub(crate) const BORDER: Color = Color::Rgb(48, 54, 61);
 pub(crate) const TEXT: Color = Color::Rgb(230, 237, 243);
 pub(crate) const MUTED: Color = Color::Rgb(139, 148, 158);
@@ -69,6 +70,9 @@ pub(crate) fn search_active() -> Style {
 
 pub(crate) fn current_line() -> Style {
     Style::default().fg(TEXT).bg(SURFACE_ALT)
+}
+pub(crate) fn code_block() -> Style {
+    Style::default().bg(CODE_BLOCK_BG)
 }
 
 pub(crate) fn mode_badge(color: Color) -> Style {

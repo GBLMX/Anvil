@@ -149,6 +149,8 @@ pub enum SyntaxClass {
     List,
     Quote,
     Table,
+    /// Marker range for a fenced code block; rendering uses it as a background.
+    CodeBlock,
 }
 
 #[derive(Clone, Debug)]
@@ -497,6 +499,13 @@ fn parse_markdown(source: &str, definition: &SyntaxLanguage) -> Option<Vec<Highl
     let mut fences = Vec::new();
     collect_kind(tree.root_node(), "fenced_code_block", &mut fences);
     for fence in fences {
+        if fence.end_byte() > fence.start_byte() {
+            highlights.push(Highlight {
+                start: fence.start_byte(),
+                end: fence.end_byte(),
+                class: SyntaxClass::CodeBlock,
+            });
+        }
         let Some(content) = child_kind(fence, "code_fence_content") else {
             continue;
         };
@@ -787,6 +796,7 @@ mod tests {
             SyntaxClass::Quote,
             SyntaxClass::Table,
             SyntaxClass::Keyword,
+            SyntaxClass::CodeBlock,
         ] {
             assert!(
                 highlights.iter().any(|highlight| highlight.class == class),
