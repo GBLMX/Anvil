@@ -134,9 +134,9 @@ That is enough for a leader deadline without a new thread:
 
 The leader state must not run before popup routing. Recommended routing order:
 
-```text
-Overlay/Popup > CommandLine/Search/Rename > PendingLeader > FileTree > Editor > Global
-```
+Modal/Popup > CommandLine > Rename/Search > Editor > FileTree > Global
+
+PendingLeader is not a context. It must not shadow an active overlay.
 
 If leader routing must be first, active overlays must explicitly cancel the
 leader on entry, or `Space` will steal keys from an open popup.

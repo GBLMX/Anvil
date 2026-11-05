@@ -9,10 +9,10 @@
 pub enum KeymapContext {
     /// Fallback bindings that apply everywhere.
     Global,
-    /// The text editor and its normal/insert input modes.
-    Editor,
     /// The workspace file tree.
     FileTree,
+    /// The text editor and its normal/insert input modes.
+    Editor,
     /// Incremental search input.
     Search,
     /// Symbol or file rename input.
@@ -31,8 +31,8 @@ impl KeymapContext {
     pub const fn priority(self) -> u8 {
         match self {
             Self::Global => 0,
-            Self::Editor => 1,
-            Self::FileTree => 2,
+            Self::FileTree => 1,
+            Self::Editor => 2,
             Self::Search => 3,
             Self::Rename => 4,
             Self::CommandLine => 5,
@@ -49,8 +49,8 @@ impl KeymapContext {
             Self::CommandLine,
             Self::Rename,
             Self::Search,
-            Self::FileTree,
             Self::Editor,
+            Self::FileTree,
             Self::Global,
         ]
     }
@@ -79,6 +79,7 @@ mod tests {
         assert!(KeymapContext::Popup.priority() > KeymapContext::Editor.priority());
         assert!(KeymapContext::Popup.priority() > KeymapContext::FileTree.priority());
         assert!(KeymapContext::Modal.priority() > KeymapContext::Popup.priority());
-        assert!(KeymapContext::Global.priority() < KeymapContext::Editor.priority());
+        assert!(KeymapContext::Editor.priority() > KeymapContext::FileTree.priority());
+        assert!(KeymapContext::Global.priority() < KeymapContext::FileTree.priority());
     }
 }
