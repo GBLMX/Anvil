@@ -354,6 +354,8 @@ pub struct Model {
     spinner: usize,
     /// Pending normal-mode operator (`d` or `y`).
     pending: Option<char>,
+    /// Deadline for a pending Space leader.
+    leader_deadline: Option<Instant>,
     /// Numeric count prefix, zero means no count.
     count: usize,
     /// Waiting for a register name after `"`.
@@ -482,6 +484,7 @@ impl Model {
             busy: None,
             spinner: 0,
             pending: None,
+            leader_deadline: None,
             count: 0,
             register_wait: false,
             register: None,
@@ -598,6 +601,24 @@ impl Model {
         let count = self.count.max(1);
         self.count = 0;
         count
+    }
+
+    fn begin_pending(&mut self, pending: char) {
+        self.pending = Some(pending);
+        self.leader_deadline =
+            (pending == ' ').then(|| Instant::now() + Duration::from_millis(600));
+        self.dirty = true;
+    }
+
+    fn expire_leader(&mut self) {
+        let Some(deadline) = self.leader_deadline else {
+            return;
+        };
+        if self.pending == Some(' ') && Instant::now() >= deadline {
+            self.pending = None;
+            self.leader_deadline = None;
+            self.dirty = true;
+        }
     }
 
     /// Moves the cursor by repeated vi word motions.
@@ -1512,6 +1533,7 @@ pub fn run_with_workspace(path: Option<PathBuf>, workspace: PathBuf) -> io::Resu
         }
         model.poll_inlay_hints(size.height.saturating_sub(2));
         model.poll_git();
+        model.expire_leader();
         if event::poll(std::time::Duration::from_millis(50))? {
             handle_event(&mut model, event::read()?);
         }

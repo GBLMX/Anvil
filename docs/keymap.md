@@ -32,6 +32,8 @@ w = "editor.delete_words_next"
 
 [keymap.pending." "]
 f = "picker.fuzzy"
+1 = "view.focus_editor"
+2 = "tree.open"
 r = "editor.rename_symbol"
 ```
 
@@ -42,11 +44,15 @@ active and the startup status line reports the error.
 The configuration is parsed and validated before it replaces the active keymap.
 It is not hot-reloaded.
 
+The Space leader expires after 600 ms. `Space 1` focuses the editor and
+`Space 2` opens the file tree; the existing `Space e`/`Space f` bindings remain.
+
 ## Key syntax
 
 - A single character: `x`, `S`
 - Named keys: `space`, `esc`, `tab`, `enter`, `backspace`, `delete`, `insert`,
-  `left`, `right`, `up`, `down`, `home`, `end`, `pageup`, `pagedown`
+  `left`, `right`, `up`, `down`, `home`, `end`, `pageup`, `pagedown`,
+  `f1`–`f12`
 - Modifiers: `ctrl-`, `alt-`, `super-`, `shift-`
 - Examples: `ctrl-w`, `alt-c`, `shift-s`, `ctrl-shift-p`
 

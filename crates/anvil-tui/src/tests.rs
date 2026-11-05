@@ -308,6 +308,36 @@ fn fuzzy_selection_scrolls_into_view() {
     assert!(rendered.contains("f19.txt"), "{rendered}");
 }
 #[test]
+fn space_leader_focuses_editor_and_tree() {
+    let mut model = Model::new(EditorState::from_text("alpha"), None);
+    model.welcome = false;
+    model.open_tree();
+    assert!(model.ui.focus.tree);
+    for key_code in [KeyCode::Char(' '), KeyCode::Char('1')] {
+        handle_event(&mut model, key(key_code));
+    }
+    assert!(!model.ui.focus.tree);
+    assert!(model.tree_visible);
+    for key_code in [KeyCode::Char(' '), KeyCode::Char('2')] {
+        handle_event(&mut model, key(key_code));
+    }
+    assert!(model.tree_visible);
+    assert!(model.ui.focus.tree);
+}
+
+#[test]
+fn space_leader_expires_without_consuming_next_key() {
+    let mut model = Model::new(EditorState::from_text("alpha\nbeta"), None);
+    handle_event(&mut model, key(KeyCode::Char(' ')));
+    assert_eq!(model.pending, Some(' '));
+    model.leader_deadline = Some(std::time::Instant::now());
+    model.expire_leader();
+    assert_eq!(model.pending, None);
+    handle_event(&mut model, key(KeyCode::Char('j')));
+    assert_eq!(model.cursor, 6);
+}
+
+#[test]
 fn tree_expands_directories() {
     let dir = tempfile::tempdir().expect("tempdir");
     fs::create_dir(dir.path().join("src")).expect("dir");

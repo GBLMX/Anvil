@@ -138,6 +138,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
         return;
     }
     if let Some(pending) = model.pending.take() {
+        model.leader_deadline = None;
         model.dirty = true;
         if key.ctrl() || key.alt() || key.super_key() {
             model.status = "E: modifier not valid in pending command".to_owned();
@@ -158,7 +159,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             match command {
                 PendingCommand::ObjectPending => {
                     let operator = pending.to_ascii_lowercase();
-                    model.pending = Some(if key.code == KeyCode::Char('a') {
+                    model.begin_pending(if key.code == KeyCode::Char('a') {
                         operator.to_ascii_uppercase()
                     } else {
                         operator
@@ -199,7 +200,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
                 PendingCommand::Diagnostic(forward) => model.jump_diagnostic(forward),
                 PendingCommand::Count { pending, digit } => {
                     model.push_count(digit);
-                    model.pending = Some(pending);
+                    model.begin_pending(pending);
                 }
                 PendingCommand::SplitVertical => {
                     let _ = model.take_count();
@@ -208,6 +209,10 @@ fn handle_key(model: &mut Model, key: KeyPress) {
                 PendingCommand::FocusSplit(right) => {
                     let _ = model.take_count();
                     model.focus_split(right);
+                }
+                PendingCommand::FocusEditor => {
+                    let _ = model.take_count();
+                    model.focus_editor();
                 }
                 PendingCommand::CloseSplit => {
                     let _ = model.take_count();
@@ -452,6 +457,10 @@ fn handle_key(model: &mut Model, key: KeyPress) {
     }
 
     if model.ui.focus.tree {
+        if key.code == KeyCode::Char(' ') && text_input {
+            model.begin_pending(' ');
+            return;
+        }
         match key.code {
             KeyCode::Esc => {
                 model.ui.focus.tree = false;
@@ -740,8 +749,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
                 match command {
                     NormalCommand::CollapseSelections => model.collapse_selections(),
                     NormalCommand::Pending(pending) => {
-                        model.pending = Some(pending);
-                        model.dirty = true;
+                        model.begin_pending(pending);
                     }
                     NormalCommand::Hover => model.queue_effect(Effect::LspHover),
                     NormalCommand::MacroRecord => {

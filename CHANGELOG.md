@@ -22,6 +22,10 @@ post-`0.5.0` feature line.
   or insert session; an explicit count overrides the recorded delete count.
   The scope is session-wide and applies to the active buffer.
 
+- Space leader is deadline-bound and exposes `Space 1` focus editor /
+  `Space 2` file tree; user keymaps may bind `f1`–`f12` while defaults remain
+  F-key free.
+
 ### Fixed
 
 - Empty insert sessions no longer replace the previous last change; backspace

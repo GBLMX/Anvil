@@ -18,6 +18,12 @@ impl Model {
         self.dirty = true;
     }
 
+    pub(crate) fn focus_editor(&mut self) {
+        self.ui.focus.tree = false;
+        self.ui.focus.split = false;
+        self.dirty = true;
+    }
+
     pub(crate) fn focus_split(&mut self, right: bool) {
         if self.split.is_none() {
             return;

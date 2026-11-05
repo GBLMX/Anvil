@@ -67,6 +67,7 @@ pub const DIAGNOSTICS_NEXT: CommandId = CommandId::new("diagnostics.next");
 pub const DIAGNOSTICS_PREVIOUS: CommandId = CommandId::new("diagnostics.previous");
 pub const SPLIT_VERTICAL: CommandId = CommandId::new("view.split_vertical");
 pub const FOCUS_LEFT: CommandId = CommandId::new("view.focus_left");
+pub const FOCUS_EDITOR: CommandId = CommandId::new("view.focus_editor");
 pub const FOCUS_RIGHT: CommandId = CommandId::new("view.focus_right");
 pub const CLOSE_SPLIT: CommandId = CommandId::new("view.close_split");
 pub const TREE_OPEN: CommandId = CommandId::new("tree.open");
@@ -128,6 +129,7 @@ pub const COMMANDS: &[CommandSpec] = &[
     spec(SPLIT_VERTICAL, PENDING),
     spec(FOCUS_LEFT, PENDING),
     spec(FOCUS_RIGHT, PENDING),
+    spec(FOCUS_EDITOR, PENDING),
     spec(CLOSE_SPLIT, PENDING),
     spec(TREE_OPEN, PENDING),
     spec(FUZZY, PENDING),

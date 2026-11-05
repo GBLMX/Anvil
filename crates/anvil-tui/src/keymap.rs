@@ -270,6 +270,11 @@ impl KeyChord {
 }
 
 fn parse_key_name(name: &str) -> Result<KeyCode, String> {
+    for number in 1..=12 {
+        if name.eq_ignore_ascii_case(&format!("f{number}")) {
+            return Ok(KeyCode::F(number));
+        }
+    }
     let code = match name {
         "space" => KeyCode::Char(' '),
         "esc" | "escape" => KeyCode::Esc,
@@ -492,6 +497,7 @@ pub(crate) enum PendingCommand {
     },
     SplitVertical,
     FocusSplit(bool),
+    FocusEditor,
     CloseSplit,
     OpenTree,
     StartFuzzy,
@@ -518,6 +524,7 @@ impl PendingCommand {
             Diagnostic(false) => Some(command::DIAGNOSTICS_PREVIOUS),
             SplitVertical => Some(command::SPLIT_VERTICAL),
             FocusSplit(true) => Some(command::FOCUS_RIGHT),
+            FocusEditor => Some(command::FOCUS_EDITOR),
             FocusSplit(false) => Some(command::FOCUS_LEFT),
             CloseSplit => Some(command::CLOSE_SPLIT),
             OpenTree => Some(command::TREE_OPEN),
@@ -558,6 +565,7 @@ impl PendingCommand {
             "view.split_vertical" => Self::SplitVertical,
             "view.focus_left" => Self::FocusSplit(false),
             "view.focus_right" => Self::FocusSplit(true),
+            "view.focus_editor" => Self::FocusEditor,
             "view.close_split" => Self::CloseSplit,
             "tree.open" => Self::OpenTree,
             "picker.fuzzy" => Self::StartFuzzy,
@@ -652,6 +660,7 @@ pub(crate) fn pending_action(
     }
     if let KeyCode::Char(character) = key.code
         && character.is_ascii_digit()
+        && !(pending == ' ' && matches!(character, '1' | '2' | '3'))
     {
         return Some(PendingCommand::Count {
             pending,
@@ -661,6 +670,8 @@ pub(crate) fn pending_action(
     match (pending, key.code) {
         ('w', KeyCode::Char('v')) => Some(PendingCommand::SplitVertical),
         ('w', KeyCode::Char('h')) => Some(PendingCommand::FocusSplit(false)),
+        (' ', KeyCode::Char('1')) => Some(PendingCommand::FocusEditor),
+        (' ', KeyCode::Char('2')) => Some(PendingCommand::OpenTree),
         ('w', KeyCode::Char('l')) => Some(PendingCommand::FocusSplit(true)),
         ('w', KeyCode::Char('q')) => Some(PendingCommand::CloseSplit),
         (' ', KeyCode::Char('e')) => Some(PendingCommand::OpenTree),
@@ -885,5 +896,25 @@ x = "editor.not_a_command"
         )
         .expect_err("duplicate chord");
         assert!(error.contains("duplicate"), "{error}");
+    }
+
+    #[test]
+    fn toml_accepts_function_keys() {
+        let config = KeymapConfig::from_toml(
+            r#"
+[keymap.normal]
+F1 = "editor.undo"
+f12 = "editor.redo"
+"#,
+        )
+        .expect("function keys are configurable");
+        assert_eq!(
+            resolve_normal(key(KeyCode::F(1), KeyModifiers::NONE), 0, &config),
+            Some(NormalCommand::Undo)
+        );
+        assert_eq!(
+            resolve_normal(key(KeyCode::F(12), KeyModifiers::NONE), 0, &config),
+            Some(NormalCommand::Redo)
+        );
     }
 }
