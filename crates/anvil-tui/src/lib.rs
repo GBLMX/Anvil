@@ -17,6 +17,7 @@ use anvil_editor::EditorState;
 use anvil_ipc::GatewayClient;
 use anvil_session::DocumentSession;
 use anvil_session::effect::{Effect, EffectQueue};
+use anvil_session::keymap::KeymapContext;
 use anvil_session::ui::{InputMode, UiState};
 use crossterm::{
     cursor::SetCursorStyle,
@@ -1291,6 +1292,36 @@ impl Model {
 
     fn gutter_width(&self) -> u16 {
         (self.gutter_digits() + 2) as u16
+    }
+
+    fn keymap_context(&self) -> KeymapContext {
+        if self.visual_anchor.is_some() {
+            return KeymapContext::Modal;
+        }
+        if self.fuzzy.is_some()
+            || self.workspace_symbols.is_some()
+            || self.document_symbols.is_some()
+            || self.code_actions.is_some()
+            || self.completion.is_some()
+            || self.hover.is_some()
+            || self.diagnostic_popup.is_some()
+            || self.help_back.is_some()
+        {
+            return KeymapContext::Popup;
+        }
+        match &self.ui.input_mode {
+            InputMode::CommandLine { .. } => KeymapContext::CommandLine,
+            InputMode::Search { .. } => KeymapContext::Search,
+            InputMode::Rename { .. } => KeymapContext::Rename,
+            InputMode::Create { .. }
+            | InputMode::RenameEntry { .. }
+            | InputMode::ConfirmDelete { .. }
+            | InputMode::ConfirmClose { .. }
+            | InputMode::ConfirmReload { .. }
+            | InputMode::TransferEntry { .. } => KeymapContext::Popup,
+            InputMode::Normal | InputMode::Insert if self.ui.focus.tree => KeymapContext::FileTree,
+            InputMode::Normal | InputMode::Insert => KeymapContext::Editor,
+        }
     }
 
     fn current_line(&self) -> Option<usize> {

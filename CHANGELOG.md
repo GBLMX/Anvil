@@ -26,6 +26,9 @@ post-`0.5.0` feature line.
   `Space 2` file tree; user keymaps may bind `f1`–`f12` while defaults remain
   F-key free.
 
+- Keymap context identifiers define strict overlay/command-line/editor/tree
+  routing priority, with active-context detection for the TUI.
+
 ### Fixed
 
 - Empty insert sessions no longer replace the previous last change; backspace

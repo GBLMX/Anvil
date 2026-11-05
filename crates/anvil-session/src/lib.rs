@@ -6,6 +6,7 @@
 pub mod command;
 pub mod effect;
 mod host_session;
+pub mod keymap;
 pub mod plugin_session;
 pub mod plugin_supervisor;
 pub mod ui;

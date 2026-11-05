@@ -456,7 +456,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
         }
     }
 
-    if model.ui.focus.tree {
+    if model.keymap_context() == KeymapContext::FileTree {
         if key.code == KeyCode::Char(' ') && text_input {
             model.begin_pending(' ');
             return;

@@ -372,6 +372,32 @@ fn popup_consumes_j_before_editor_motion() {
 }
 
 #[test]
+fn keymap_context_prefers_popup_then_command_line_then_tree() {
+    let mut model = Model::new(EditorState::from_text("alpha"), None);
+    model.welcome = false;
+    model.ui.focus.tree = true;
+    assert_eq!(model.keymap_context(), KeymapContext::FileTree);
+
+    model.fuzzy = Some(FuzzyState {
+        query: String::new(),
+        entries: vec!["a".to_owned()],
+        filtered: vec![0],
+        selected: 0,
+    });
+    assert_eq!(model.keymap_context(), KeymapContext::Popup);
+
+    model.fuzzy = None;
+    model.ui.input_mode = InputMode::CommandLine {
+        buffer: String::new(),
+    };
+    assert_eq!(model.keymap_context(), KeymapContext::CommandLine);
+
+    model.ui.input_mode = InputMode::Normal;
+    model.visual_anchor = Some(0);
+    assert_eq!(model.keymap_context(), KeymapContext::Modal);
+}
+
+#[test]
 fn tree_expands_directories() {
     let dir = tempfile::tempdir().expect("tempdir");
     fs::create_dir(dir.path().join("src")).expect("dir");
