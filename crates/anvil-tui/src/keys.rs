@@ -1,7 +1,10 @@
 //! Keyboard dispatch for normal, insert, command, and overlay modes.
 
 use crate::input::{KeyPress, is_action_key};
-use crate::keymap::{NormalCommand, PendingCommand, resolve_normal, resolve_pending};
+use crate::keymap::{
+    ContextAction, NormalCommand, PendingCommand, resolve_normal, resolve_normal_in_context,
+    resolve_pending,
+};
 use anvil_session::command::{CommandContext, is_registered};
 use anvil_session::ui::CreateKind;
 
@@ -67,6 +70,130 @@ fn normalize_paste(text: &str) -> (String, bool) {
         output.push(character);
     }
     (output, truncated)
+}
+
+fn execute_pending_command(
+    model: &mut Model,
+    command: PendingCommand,
+    pending: char,
+    key: KeyPress,
+) {
+    debug_assert!(
+        command
+            .id()
+            .is_none_or(|id| is_registered(id, CommandContext::Pending))
+    );
+    match command {
+        PendingCommand::ObjectPending => {
+            let operator = pending.to_ascii_lowercase();
+            model.begin_pending(if key.code == KeyCode::Char('a') {
+                operator.to_ascii_uppercase()
+            } else {
+                operator
+            });
+            model.object_pending = true;
+        }
+        PendingCommand::OperatorWord { operator, around } => {
+            let count = model.take_count();
+            model.apply_word_operator(operator, around, count);
+        }
+        PendingCommand::OperatorQuote {
+            operator,
+            quote,
+            around,
+        } => {
+            let _ = model.take_count();
+            model.apply_quote_operator(operator, quote, around);
+        }
+        PendingCommand::ChangeInnerWord => model.change_inner_word(),
+        PendingCommand::OperatorBracket {
+            operator,
+            open,
+            around,
+        } => {
+            let _ = model.take_count();
+            model.apply_bracket_operator(operator, open, around);
+        }
+        PendingCommand::OperatorParagraph { operator, around } => {
+            let count = model.take_count();
+            model.apply_paragraph_operator(operator, around, count);
+        }
+        PendingCommand::OperatorTag { operator, around } => {
+            let _ = model.take_count();
+            model.apply_tag_operator(operator, around);
+        }
+        PendingCommand::ChangeInnerQuote(quote) => model.change_inner_quote(quote),
+        PendingCommand::Definition => model.queue_effect(Effect::LspDefinition),
+        PendingCommand::Diagnostic(forward) => model.jump_diagnostic(forward),
+        PendingCommand::Count { pending, digit } => {
+            model.push_count(digit);
+            model.begin_pending(pending);
+        }
+        PendingCommand::SplitVertical => {
+            let _ = model.take_count();
+            model.split_vertical();
+        }
+        PendingCommand::FocusSplit(right) => {
+            let _ = model.take_count();
+            model.focus_split(right);
+        }
+        PendingCommand::FocusEditor => {
+            let _ = model.take_count();
+            model.focus_editor();
+        }
+        PendingCommand::CloseSplit => {
+            let _ = model.take_count();
+            model.close_split();
+        }
+        PendingCommand::OpenTree => {
+            let _ = model.take_count();
+            model.open_tree();
+        }
+        PendingCommand::StartFuzzy => {
+            let _ = model.take_count();
+            model.start_fuzzy();
+        }
+        PendingCommand::StartRename => {
+            let _ = model.take_count();
+            model.start_rename();
+        }
+        PendingCommand::CodeActions => {
+            let _ = model.take_count();
+            model.queue_effect(Effect::LspCodeActions);
+        }
+        PendingCommand::DocumentSymbols => {
+            let _ = model.take_count();
+            model.queue_effect(Effect::LspDocumentSymbols);
+        }
+        PendingCommand::WorkspaceSymbols => {
+            let _ = model.take_count();
+            model.queue_effect(Effect::LspWorkspaceSymbols);
+        }
+        PendingCommand::Formatting => {
+            let _ = model.take_count();
+            model.queue_effect(Effect::LspFormat);
+        }
+        PendingCommand::ChangeWord(motion) => {
+            let _ = model.take_count();
+            model.change_word(motion);
+        }
+        PendingCommand::DeleteLines => {
+            let count = model.take_count();
+            model.delete_lines(count);
+        }
+        PendingCommand::YankLines => {
+            let count = model.take_count();
+            model.yank_lines(count);
+        }
+        PendingCommand::DeleteWords(motion) => {
+            let count = model.take_count();
+            model.delete_words(motion, count);
+        }
+        PendingCommand::YankWords(motion) => {
+            let count = model.take_count();
+            model.yank_words(motion, count);
+        }
+    }
 }
 
 fn handle_key(model: &mut Model, key: KeyPress) {
@@ -151,122 +278,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             let _ = model.take_count();
         }
         if let Some(command) = command {
-            debug_assert!(
-                command
-                    .id()
-                    .is_none_or(|id| is_registered(id, CommandContext::Pending))
-            );
-            match command {
-                PendingCommand::ObjectPending => {
-                    let operator = pending.to_ascii_lowercase();
-                    model.begin_pending(if key.code == KeyCode::Char('a') {
-                        operator.to_ascii_uppercase()
-                    } else {
-                        operator
-                    });
-                    model.object_pending = true;
-                }
-                PendingCommand::OperatorWord { operator, around } => {
-                    let count = model.take_count();
-                    model.apply_word_operator(operator, around, count);
-                }
-                PendingCommand::OperatorQuote {
-                    operator,
-                    quote,
-                    around,
-                } => {
-                    let _ = model.take_count();
-                    model.apply_quote_operator(operator, quote, around);
-                }
-                PendingCommand::ChangeInnerWord => model.change_inner_word(),
-                PendingCommand::OperatorBracket {
-                    operator,
-                    open,
-                    around,
-                } => {
-                    let _ = model.take_count();
-                    model.apply_bracket_operator(operator, open, around);
-                }
-                PendingCommand::OperatorParagraph { operator, around } => {
-                    let count = model.take_count();
-                    model.apply_paragraph_operator(operator, around, count);
-                }
-                PendingCommand::OperatorTag { operator, around } => {
-                    let _ = model.take_count();
-                    model.apply_tag_operator(operator, around);
-                }
-                PendingCommand::ChangeInnerQuote(quote) => model.change_inner_quote(quote),
-                PendingCommand::Definition => model.queue_effect(Effect::LspDefinition),
-                PendingCommand::Diagnostic(forward) => model.jump_diagnostic(forward),
-                PendingCommand::Count { pending, digit } => {
-                    model.push_count(digit);
-                    model.begin_pending(pending);
-                }
-                PendingCommand::SplitVertical => {
-                    let _ = model.take_count();
-                    model.split_vertical();
-                }
-                PendingCommand::FocusSplit(right) => {
-                    let _ = model.take_count();
-                    model.focus_split(right);
-                }
-                PendingCommand::FocusEditor => {
-                    let _ = model.take_count();
-                    model.focus_editor();
-                }
-                PendingCommand::CloseSplit => {
-                    let _ = model.take_count();
-                    model.close_split();
-                }
-                PendingCommand::OpenTree => {
-                    let _ = model.take_count();
-                    model.open_tree();
-                }
-                PendingCommand::StartFuzzy => {
-                    let _ = model.take_count();
-                    model.start_fuzzy();
-                }
-                PendingCommand::StartRename => {
-                    let _ = model.take_count();
-                    model.start_rename();
-                }
-                PendingCommand::CodeActions => {
-                    let _ = model.take_count();
-                    model.queue_effect(Effect::LspCodeActions);
-                }
-                PendingCommand::DocumentSymbols => {
-                    let _ = model.take_count();
-                    model.queue_effect(Effect::LspDocumentSymbols);
-                }
-                PendingCommand::WorkspaceSymbols => {
-                    let _ = model.take_count();
-                    model.queue_effect(Effect::LspWorkspaceSymbols);
-                }
-                PendingCommand::Formatting => {
-                    let _ = model.take_count();
-                    model.queue_effect(Effect::LspFormat);
-                }
-                PendingCommand::ChangeWord(motion) => {
-                    let _ = model.take_count();
-                    model.change_word(motion);
-                }
-                PendingCommand::DeleteLines => {
-                    let count = model.take_count();
-                    model.delete_lines(count);
-                }
-                PendingCommand::YankLines => {
-                    let count = model.take_count();
-                    model.yank_lines(count);
-                }
-                PendingCommand::DeleteWords(motion) => {
-                    let count = model.take_count();
-                    model.delete_words(motion, count);
-                }
-                PendingCommand::YankWords(motion) => {
-                    let count = model.take_count();
-                    model.yank_words(motion, count);
-                }
-            }
+            execute_pending_command(model, command, pending, key);
         }
         return;
     }
@@ -745,7 +757,23 @@ fn handle_key(model: &mut Model, key: KeyPress) {
                 }
                 _ => {}
             }
-            if let Some(command) = resolve_normal(key, model.count, &model.keymap) {
+            let context = model.keymap_context();
+            let command = if context == KeymapContext::Editor {
+                resolve_normal_in_context(context, key, model.count, &model.keymap)
+            } else {
+                resolve_normal(key, model.count, &model.keymap).map(ContextAction::Normal)
+            };
+            if let Some(command) = command {
+                let command = match command {
+                    ContextAction::Normal(command) => command,
+                    ContextAction::Pending(command) => {
+                        execute_pending_command(model, command, ' ', key);
+                        if model.visual_anchor.is_some() {
+                            model.sync_visual_selection();
+                        }
+                        return;
+                    }
+                };
                 match command {
                     NormalCommand::CollapseSelections => model.collapse_selections(),
                     NormalCommand::Pending(pending) => {

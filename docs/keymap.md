@@ -1,10 +1,9 @@
 # Keymap Configuration
 
-Anvil loads an optional TOML keymap at startup. It can remap normal-mode and
-operator-pending bindings without changing the built-in defaults.
-
-The proposed contextual router, Space-leader timeout, F-key compatibility, and
-preset work are analyzed in
+Anvil loads an optional TOML keymap at startup. It can remap normal-mode,
+operator-pending, and editor/global context bindings without changing the
+built-in defaults. Context identifiers, the Space-leader timeout, F-key
+compatibility, and bundled presets are documented in
 [keymap-router-analysis.md](keymap-router-analysis.md).
 
 ## Location
@@ -14,13 +13,18 @@ Checked in order:
 1. `ANVIL_KEYMAP`
 2. `$XDG_CONFIG_HOME/anvil/keymap.toml`
 3. `~/.config/anvil/keymap.toml`
+4. `ANVIL_KEYMAP_PRESET` when no keymap file exists
 
 A missing file keeps the default keymap. `ANVIL_KEYMAP` is intended for an
-explicit path and for tests.
+explicit path and for tests. `ANVIL_KEYMAP_PRESET` selects a bundled preset by
+name (`ergo` or `vim`).
 
 ## Format
 
 ```toml
+# Optional base preset; user tables override its bindings.
+preset = "ergo"
+
 [keymap.normal]
 x = "editor.undo"
 alt-c = "selection.extend_up"
@@ -35,11 +39,40 @@ f = "picker.fuzzy"
 1 = "view.focus_editor"
 2 = "tree.open"
 r = "editor.rename_symbol"
+
+[keymap.contexts.editor]
+"ctrl-w" = "view.split_vertical"
+
+[keymap.contexts.global]
+"alt-u" = "editor.undo"
 ```
 
-Each value is a command ID. Unknown IDs, invalid contexts, malformed keys,
-duplicate chords, or an oversized file reject the entire file; defaults remain
-active and the startup status line reports the error.
+Each value is a command ID. Unknown IDs, invalid or unknown contexts, malformed
+keys, duplicate chords within a context, or an oversized file reject the entire
+file; defaults remain active and the startup status line reports the error.
+
+Context bindings take precedence over `[keymap.normal]` and the built-in
+defaults. `editor` bindings apply while the editor is focused; `global`
+bindings are the fallback within a dispatched context. Context values may use
+normal commands or direct operator-pending commands such as
+`view.split_vertical`; commands that only make sense after an operator prefix
+are rejected. The
+`file_tree`, `popup`, and `modal` sections are validated now but only the
+`editor` and `global` sections are dispatched until the remaining router
+branches move onto the context stack.
+
+## Presets
+
+Two bundled presets are available:
+
+- `anvil-ergo.toml` (`ergo`, also `default`): the ergonomic Space leader with
+  `Space 1/2/3` and the compatibility aliases.
+- `anvil-vim.toml` (`vim`): explicit Vim-style normal bindings.
+
+Bundled presets do not bind F1–F12. A keymap file selects a preset with the
+top-level `preset` key and can override any of its bindings in the normal,
+pending, or context tables. Without a keymap file, `ANVIL_KEYMAP_PRESET` may be
+used; the built-in defaults remain active if neither is present.
 
 The configuration is parsed and validated before it replaces the active keymap.
 It is not hot-reloaded.
@@ -131,6 +164,9 @@ editor.yank_words_previous
 
 - Maximum file size: 64 KiB.
 - No includes, environment expansion, or Lua execution.
-- Only normal and operator-pending contexts are configurable in this version.
+- Normal and operator-pending bindings remain configurable. Context tables are
+  parsed and validated, but only `editor` and `global` dispatch today.
 - Insert, command-line, search, rename, and overlay input keep their built-in
   behavior.
+- Presets are additive over the built-in fallback; they cannot remove a default
+  binding yet.

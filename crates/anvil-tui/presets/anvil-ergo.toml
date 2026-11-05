@@ -1,0 +1,17 @@
+# Bundled ergonomic preset.
+#
+# The built-in Vim-style motions and operators remain as fallbacks. This preset
+# adds the discoverable Space leader and keeps the compatibility aliases.
+# Bundled presets must not use F1-F12.
+
+[keymap.pending." "]
+1 = "view.focus_editor"
+2 = "tree.open"
+3 = "view.focus_right"
+e = "tree.open"
+f = "picker.fuzzy"
+r = "editor.rename_symbol"
+a = "lsp.code_action"
+s = "lsp.document_symbols"
+S = "lsp.workspace_symbols"
+F = "lsp.format"

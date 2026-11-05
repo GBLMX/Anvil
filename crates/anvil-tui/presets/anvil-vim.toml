@@ -1,0 +1,31 @@
+# Bundled Vim preset.
+#
+# Motions and operators mirror the built-in Vim-like fallback. The preset is
+# explicit so users can select it as a base and override individual chords.
+# Bundled presets must not use F1-F12.
+
+[keymap.normal]
+h = "cursor.left"
+j = "cursor.down"
+k = "cursor.up"
+l = "cursor.right"
+w = "cursor.word_next"
+b = "cursor.word_previous"
+e = "cursor.word_end"
+"$" = "cursor.line_end"
+u = "editor.undo"
+"ctrl-r" = "editor.redo"
+"." = "editor.repeat_change"
+x = "editor.delete_forward"
+p = "editor.put"
+i = "editor.insert_here"
+a = "editor.append"
+A = "editor.append_line_end"
+o = "editor.open_below"
+O = "editor.open_above"
+s = "selection.word_occurrences"
+K = "lsp.hover"
+":" = "command_line.open"
+"/" = "search.open"
+n = "search.next"
+N = "search.previous"

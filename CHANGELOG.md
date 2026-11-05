@@ -28,6 +28,8 @@ post-`0.5.0` feature line.
 
 - Keymap context identifiers define strict overlay/command-line/editor/tree
   routing priority, with a derived context-stack projection for the TUI.
+  Contextual TOML sections now validate commands and apply editor/global
+  bindings, and bundled ergo/Vim presets can be selected as a config base.
 
 - Pending prefixes render a dynamic which-key panel from the active keymap
   continuations, including `i`/`a` text-object extenders and their nested

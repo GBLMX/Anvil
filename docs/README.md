@@ -50,7 +50,7 @@ Cross-cutting tracks that do not jump the queue:
 | Plan | Scope | Status |
 |---|---|---|
 | [0.4.x](0.4.x-plan.md) | plugin lifecycle, I/O, session/protocol | landed / rescoped |
-| [0.5.x](0.5.x-plan.md) | modal editing and modern TUI interaction | active; 0.5.1 landed |
+| [0.5.x](0.5.x-plan.md) | modal editing and modern TUI interaction | active; 0.5.2 landed, 0.5.3 partial |
 | [IDE capabilities](ide-capability-plan.md) | LSP depth, search, sessions, Git, adapters | planned after 0.5 |
 | [0.6.x](0.6.x-plan.md) | signed packages, download manager, marketplace | planned |
 | [0.7.x](0.7.x-plan.md) | official optional Rust modules (source-level, trusted) | planned |

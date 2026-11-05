@@ -1,16 +1,20 @@
 //! Keymap resolution for normal-mode bindings.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use toml_edit::{DocumentMut, Item};
+use serde::Deserialize;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use crate::WordMotion;
 use crate::input::KeyPress;
 use anvil_session::command::{self, CommandContext, CommandId, is_registered};
+use anvil_session::keymap::KeymapContext;
+
+pub(crate) const ANVIL_ERGO_PRESET: &str = include_str!("../presets/anvil-ergo.toml");
+pub(crate) const ANVIL_VIM_PRESET: &str = include_str!("../presets/anvil-vim.toml");
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum NormalCommand {
@@ -339,10 +343,47 @@ fn parse_key_name(name: &str) -> Result<KeyCode, String> {
     Ok(code)
 }
 
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct KeymapFile {
+    #[serde(default)]
+    preset: Option<String>,
+    #[serde(default)]
+    keymap: Option<KeymapSections>,
+}
+
+#[derive(Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct KeymapSections {
+    #[serde(default)]
+    normal: HashMap<String, String>,
+    #[serde(default)]
+    pending: HashMap<String, HashMap<String, String>>,
+    #[serde(default)]
+    contexts: HashMap<String, HashMap<String, String>>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ContextAction {
+    Normal(NormalCommand),
+    Pending(PendingCommand),
+}
+
+impl ContextAction {
+    fn from_id(id: &str) -> Option<Self> {
+        NormalCommand::from_id(id).map(Self::Normal).or_else(|| {
+            PendingCommand::from_id(id)
+                .filter(|command| command.is_direct())
+                .map(Self::Pending)
+        })
+    }
+}
+
 #[derive(Debug, Default)]
 pub(crate) struct KeymapConfig {
     normal: HashMap<KeyChord, NormalCommand>,
     pending: HashMap<(char, KeyChord), PendingCommand>,
+    contexts: HashMap<KeymapContext, HashMap<KeyChord, ContextAction>>,
 }
 
 impl KeymapConfig {
@@ -364,70 +405,111 @@ impl KeymapConfig {
     }
 
     pub(crate) fn from_toml(text: &str) -> Result<Self, String> {
-        let document = text
-            .parse::<DocumentMut>()
-            .map_err(|error| format!("invalid TOML: {error}"))?;
-        let keymap = document
-            .get("keymap")
-            .and_then(Item::as_table)
-            .ok_or_else(|| "missing [keymap] table".to_owned())?;
-        for (name, _) in keymap.iter() {
-            if name != "normal" && name != "pending" {
-                return Err(format!("unknown keymap section {name:?}"));
+        let file: KeymapFile = toml_edit::de::from_str(text)
+            .map_err(|error| format!("invalid keymap TOML: {error}"))?;
+        let mut config = match file.preset.as_deref() {
+            Some(name) => Self::from_preset(name)?,
+            None => Self::default(),
+        };
+        let Some(sections) = file.keymap else {
+            if file.preset.is_some() {
+                return Ok(config);
             }
+            return Err("missing [keymap] table".to_owned());
+        };
+        config.apply_sections(sections)?;
+        Ok(config)
+    }
+
+    pub(crate) fn from_preset(name: &str) -> Result<Self, String> {
+        let normalized = name.trim().to_ascii_lowercase();
+        let text = match normalized.as_str() {
+            "default" | "ergo" | "anvil-default" | "anvil-ergo" => ANVIL_ERGO_PRESET,
+            "vim" | "anvil-vim" => ANVIL_VIM_PRESET,
+            _ => {
+                return Err(format!(
+                    "unknown keymap preset {name:?}; available presets: ergo, vim"
+                ));
+            }
+        };
+        let file: KeymapFile = toml_edit::de::from_str(text)
+            .map_err(|error| format!("invalid bundled preset {name:?}: {error}"))?;
+        if file.preset.is_some() {
+            return Err(format!(
+                "bundled preset {name:?} must not select another preset"
+            ));
         }
+        let sections = file
+            .keymap
+            .ok_or_else(|| format!("bundled preset {name:?} has no [keymap] table"))?;
         let mut config = Self::default();
-        if let Some(item) = keymap.get("normal") {
-            let table = item
-                .as_table()
-                .ok_or_else(|| "[keymap.normal] must be a table".to_owned())?;
-            for (spec, item) in table.iter() {
-                let chord = KeyChord::parse(spec)
-                    .map_err(|error| format!("keymap.normal.{spec}: {error}"))?;
-                let value = item
-                    .as_str()
-                    .ok_or_else(|| format!("keymap.normal.{spec} must be a string"))?;
-                let command = NormalCommand::from_id(value)
-                    .ok_or_else(|| format!("unknown normal command {value:?}"))?;
-                if !config.bind(chord, command) {
-                    return Err(format!("invalid or duplicate normal binding {spec:?}"));
-                }
+        config.apply_sections(sections)?;
+        Ok(config)
+    }
+
+    fn apply_sections(&mut self, sections: KeymapSections) -> Result<(), String> {
+        let mut seen_normal = HashSet::new();
+        for (spec, value) in sections.normal {
+            let chord =
+                KeyChord::parse(&spec).map_err(|error| format!("keymap.normal.{spec}: {error}"))?;
+            let command = NormalCommand::from_id(&value)
+                .ok_or_else(|| format!("unknown normal command {value:?}"))?;
+            if command.id().is_none() {
+                return Err(format!(
+                    "normal binding {spec:?} cannot use a state command"
+                ));
             }
+            if !seen_normal.insert(chord) {
+                return Err(format!("duplicate normal binding {spec:?}"));
+            }
+            self.normal.insert(chord, command);
         }
-        if let Some(item) = keymap.get("pending") {
-            let table = item
-                .as_table()
-                .ok_or_else(|| "[keymap.pending] must be a table".to_owned())?;
-            for (prefix_name, item) in table.iter() {
-                let mut characters = prefix_name.chars();
-                let Some(prefix) = characters.next() else {
-                    return Err("empty pending prefix".to_owned());
-                };
-                if characters.next().is_some() {
+        for (prefix_name, bindings) in sections.pending {
+            let mut characters = prefix_name.chars();
+            let Some(prefix) = characters.next() else {
+                return Err("empty pending prefix".to_owned());
+            };
+            if characters.next().is_some() {
+                return Err(format!(
+                    "pending prefix must be one character: {prefix_name:?}"
+                ));
+            }
+            let mut seen_pending = HashSet::new();
+            for (spec, value) in bindings {
+                let chord = KeyChord::parse(&spec)
+                    .map_err(|error| format!("keymap.pending.{prefix_name}.{spec}: {error}"))?;
+                let command = PendingCommand::from_id(&value)
+                    .ok_or_else(|| format!("unknown pending command {value:?}"))?;
+                if !seen_pending.insert(chord) {
                     return Err(format!(
-                        "pending prefix must be one character: {prefix_name:?}"
+                        "duplicate pending binding {prefix_name:?}.{spec:?}"
                     ));
                 }
-                let bindings = item
-                    .as_table()
-                    .ok_or_else(|| format!("keymap.pending.{prefix_name} must be a table"))?;
-                for (spec, item) in bindings.iter() {
-                    let chord = KeyChord::parse(spec)
-                        .map_err(|error| format!("keymap.pending.{prefix_name}.{spec}: {error}"))?;
-                    let value = item.as_str().ok_or_else(|| {
-                        format!("keymap.pending.{prefix_name}.{spec} must be a string")
-                    })?;
-                    let command = PendingCommand::from_id(value)
-                        .ok_or_else(|| format!("unknown pending command {value:?}"))?;
-                    if !config.bind_pending(prefix, chord, command) {
-                        return Err(format!(
-                            "invalid or duplicate pending binding {prefix_name:?}.{spec:?}"
-                        ));
-                    }
-                }
+                self.pending.insert((prefix, chord), command);
             }
         }
-        Ok(config)
+        for (context_name, bindings) in sections.contexts {
+            let context = KeymapContext::from_name(&context_name)
+                .ok_or_else(|| format!("unknown keymap context {context_name:?}"))?;
+            let mut seen_context = HashSet::new();
+            for (spec, value) in bindings {
+                let chord = KeyChord::parse(&spec)
+                    .map_err(|error| format!("keymap.contexts.{context_name}.{spec}: {error}"))?;
+                let action = ContextAction::from_id(&value).ok_or_else(|| {
+                    format!("unknown or non-direct context command {value:?} for {context_name:?}")
+                })?;
+                if !seen_context.insert(chord) {
+                    return Err(format!(
+                        "duplicate context binding {context_name:?}.{spec:?}"
+                    ));
+                }
+                self.contexts
+                    .entry(context)
+                    .or_default()
+                    .insert(chord, action);
+            }
+        }
+        Ok(())
     }
 
     #[allow(dead_code)] // Config files will call this before the loader lands.
@@ -491,6 +573,27 @@ impl KeymapConfig {
     fn resolve(&self, key: KeyPress) -> Option<NormalCommand> {
         self.normal.get(&KeyChord::from_key(key)).copied()
     }
+
+    pub(crate) fn resolve_context(
+        &self,
+        context: KeymapContext,
+        key: KeyPress,
+    ) -> Option<ContextAction> {
+        let chord = KeyChord::from_key(key);
+        let binding = |context| {
+            self.contexts
+                .get(&context)
+                .and_then(|bindings| bindings.get(&chord))
+                .copied()
+        };
+        binding(context).or_else(|| {
+            if context == KeymapContext::Global {
+                None
+            } else {
+                binding(KeymapContext::Global)
+            }
+        })
+    }
 }
 
 pub(crate) fn resolve_pending(
@@ -521,6 +624,17 @@ pub(crate) fn resolve_normal(
                 .is_none_or(|id| is_registered(id, CommandContext::Normal))
         })
     })
+}
+
+pub(crate) fn resolve_normal_in_context(
+    context: KeymapContext,
+    key: KeyPress,
+    count: usize,
+    config: &KeymapConfig,
+) -> Option<ContextAction> {
+    config
+        .resolve_context(context, key)
+        .or_else(|| resolve_normal(key, count, config).map(ContextAction::Normal))
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -676,6 +790,32 @@ impl PendingCommand {
             Self::Count { .. } => "count".to_owned(),
             _ => "command".to_owned(),
         }
+    }
+
+    pub(crate) fn is_direct(self) -> bool {
+        matches!(
+            self,
+            Self::ChangeInnerWord
+                | Self::ChangeInnerQuote(_)
+                | Self::Definition
+                | Self::Diagnostic(_)
+                | Self::SplitVertical
+                | Self::FocusSplit(_)
+                | Self::FocusEditor
+                | Self::CloseSplit
+                | Self::OpenTree
+                | Self::StartFuzzy
+                | Self::StartRename
+                | Self::CodeActions
+                | Self::DocumentSymbols
+                | Self::WorkspaceSymbols
+                | Self::Formatting
+                | Self::ChangeWord(_)
+                | Self::DeleteLines
+                | Self::YankLines
+                | Self::DeleteWords(_)
+                | Self::YankWords(_)
+        )
     }
 
     pub(crate) fn from_id(id: &str) -> Option<Self> {
@@ -1038,6 +1178,143 @@ f12 = "editor.redo"
         assert_eq!(
             resolve_normal(key(KeyCode::F(12), KeyModifiers::NONE), 0, &config),
             Some(NormalCommand::Redo)
+        );
+    }
+
+    #[test]
+    fn context_bindings_override_normal_bindings_and_global_falls_back() {
+        let config = KeymapConfig::from_toml(
+            r#"
+[keymap.contexts.global]
+"alt-u" = "editor.redo"
+
+[keymap.contexts.editor]
+"ctrl-w" = "view.split_vertical"
+"alt-u" = "editor.undo"
+"#,
+        )
+        .expect("valid contextual keymap");
+        assert_eq!(
+            resolve_normal_in_context(
+                KeymapContext::Editor,
+                key(KeyCode::Char('w'), KeyModifiers::CONTROL),
+                0,
+                &config
+            ),
+            Some(ContextAction::Pending(PendingCommand::SplitVertical))
+        );
+        assert_eq!(
+            resolve_normal_in_context(
+                KeymapContext::Editor,
+                key(KeyCode::Char('u'), KeyModifiers::ALT),
+                0,
+                &config
+            ),
+            Some(ContextAction::Normal(NormalCommand::Undo))
+        );
+        assert_eq!(
+            resolve_normal_in_context(
+                KeymapContext::FileTree,
+                key(KeyCode::Char('u'), KeyModifiers::ALT),
+                0,
+                &config
+            ),
+            Some(ContextAction::Normal(NormalCommand::Redo))
+        );
+    }
+
+    #[test]
+    fn context_schema_rejects_unknown_contexts_and_state_commands() {
+        let unknown_context = KeymapConfig::from_toml(
+            r#"
+[keymap.contexts.unknown]
+x = "editor.undo"
+"#,
+        )
+        .expect_err("unknown context");
+        assert!(
+            unknown_context.contains("unknown keymap context"),
+            "{unknown_context}"
+        );
+
+        let state_command = KeymapConfig::from_toml(
+            r#"
+[keymap.contexts.editor]
+x = "editor.change_inner_word"
+"#,
+        )
+        .expect("direct pending commands are allowed");
+        assert_eq!(
+            resolve_normal_in_context(
+                KeymapContext::Editor,
+                key(KeyCode::Char('x'), KeyModifiers::NONE),
+                0,
+                &state_command
+            ),
+            Some(ContextAction::Pending(PendingCommand::ChangeInnerWord))
+        );
+
+        let invalid = KeymapConfig::from_toml(
+            r#"
+[keymap.contexts.editor]
+x = "not.a.command"
+"#,
+        )
+        .expect_err("unknown command");
+        assert!(invalid.contains("unknown or non-direct"), "{invalid}");
+    }
+
+    #[test]
+    fn bundled_presets_parse_without_function_keys() {
+        for name in ["ergo", "vim"] {
+            let config = KeymapConfig::from_preset(name).expect("bundled preset parses");
+            assert!(
+                config
+                    .normal
+                    .keys()
+                    .all(|chord| !matches!(chord.code, KeyCode::F(_))),
+                "{name} normal bindings contain an F-key"
+            );
+            assert!(
+                config
+                    .pending
+                    .keys()
+                    .all(|(_, chord)| !matches!(chord.code, KeyCode::F(_))),
+                "{name} pending bindings contain an F-key"
+            );
+            assert!(
+                config
+                    .contexts
+                    .values()
+                    .flatten()
+                    .all(|(chord, _)| !matches!(chord.code, KeyCode::F(_))),
+                "{name} context bindings contain an F-key"
+            );
+        }
+    }
+
+    #[test]
+    fn config_can_select_a_preset_as_its_base() {
+        let config = KeymapConfig::from_toml(
+            r#"
+preset = "vim"
+
+[keymap.normal]
+x = "editor.undo"
+"#,
+        )
+        .expect("preset base with override");
+        assert_eq!(
+            resolve_normal(key(KeyCode::Char('x'), KeyModifiers::NONE), 0, &config),
+            Some(NormalCommand::Undo)
+        );
+        assert_eq!(
+            resolve_normal(key(KeyCode::Char('j'), KeyModifiers::NONE), 0, &config),
+            Some(NormalCommand::MoveLine(1))
+        );
+        assert!(
+            KeymapConfig::from_toml(r#"preset = "missing""#).is_err(),
+            "unknown presets must be rejected"
         );
     }
 

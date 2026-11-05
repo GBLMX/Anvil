@@ -27,6 +27,32 @@ pub enum KeymapContext {
 }
 
 impl KeymapContext {
+    pub fn from_name(name: &str) -> Option<Self> {
+        Some(match name.to_ascii_lowercase().as_str() {
+            "global" => Self::Global,
+            "file_tree" | "filetree" | "tree" => Self::FileTree,
+            "editor" => Self::Editor,
+            "search" => Self::Search,
+            "rename" => Self::Rename,
+            "command_line" | "commandline" | "cmdline" => Self::CommandLine,
+            "popup" | "overlay" => Self::Popup,
+            "modal" => Self::Modal,
+            _ => return None,
+        })
+    }
+
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Global => "global",
+            Self::FileTree => "file_tree",
+            Self::Editor => "editor",
+            Self::Search => "search",
+            Self::Rename => "rename",
+            Self::CommandLine => "command_line",
+            Self::Popup => "popup",
+            Self::Modal => "modal",
+        }
+    }
     /// Higher values consume key events before lower values.
     pub const fn priority(self) -> u8 {
         match self {
@@ -72,6 +98,27 @@ mod tests {
                 pair[1]
             );
         }
+    }
+
+    #[test]
+    fn context_names_round_trip() {
+        for context in KeymapContext::route_order() {
+            assert_eq!(
+                KeymapContext::from_name(context.as_str()),
+                Some(context),
+                "{} must round-trip",
+                context.as_str()
+            );
+        }
+        assert_eq!(
+            KeymapContext::from_name("commandline"),
+            Some(KeymapContext::CommandLine)
+        );
+        assert_eq!(
+            KeymapContext::from_name("tree"),
+            Some(KeymapContext::FileTree)
+        );
+        assert_eq!(KeymapContext::from_name("missing"), None);
     }
 
     #[test]

@@ -153,9 +153,10 @@ key dismisses it.
   applied before `execve`; a missing delegated cgroup2 root fails closed rather
   than running without the promised limits.
 - The native editor/API interaction model is selection-first. The current TUI
-  exposes that core through a Vim-like keymap implemented in Rust. Normal and
-  operator-pending bindings can be remapped through
-  [keymap.toml](docs/keymap.md); Lua/TS keymap plugins are not implemented yet.
+  exposes that core through a Vim-like keymap implemented in Rust. Normal,
+  operator-pending, and editor/global context bindings can be remapped through
+  [keymap.toml](docs/keymap.md), and bundled ergo/Vim presets can be selected as
+  a base. Lua/TS keymap plugins are not implemented yet.
 - Full untrusted-plugin support targets Linux 5.13+ (Landlock). Linux 5.6-5.12
   may run the editor with trusted plugins only.
 

@@ -1,6 +1,6 @@
 use super::*;
 use crate::input::KeyPress;
-use crate::keymap::{KeyChord, NormalCommand, PendingCommand};
+use crate::keymap::{KeyChord, KeymapConfig, NormalCommand, PendingCommand};
 use anvil_session::ui::CreateKind;
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::{Terminal, backend::TestBackend};
@@ -1806,6 +1806,21 @@ fn model_uses_keymap_overrides() {
     assert!(model.keymap.bind(chord, NormalCommand::MoveEnd));
     handle_event(&mut model, key(KeyCode::Char('z')));
     assert_eq!(model.cursor, 3);
+}
+
+#[test]
+fn context_keymap_runs_direct_pending_action() {
+    let mut model = Model::new(EditorState::from_text("abc"), None);
+    model.welcome = false;
+    model.keymap = KeymapConfig::from_toml(
+        r#"
+[keymap.contexts.editor]
+"ctrl-w" = "view.split_vertical"
+"#,
+    )
+    .expect("valid contextual keymap");
+    handle_event(&mut model, ctrl(KeyCode::Char('w')));
+    assert!(model.split.is_some());
 }
 
 #[test]

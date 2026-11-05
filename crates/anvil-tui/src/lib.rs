@@ -556,13 +556,15 @@ impl Model {
     }
 
     pub(crate) fn load_keymap_config(&mut self) -> Result<(), String> {
-        let Some(path) = keymap::KeyChord::default_path() else {
-            return Ok(());
-        };
-        if !path.exists() {
-            return Ok(());
+        if let Some(path) = keymap::KeyChord::default_path()
+            && path.exists()
+        {
+            return self.load_keymap_config_from(&path);
         }
-        self.load_keymap_config_from(&path)
+        if let Some(preset) = std::env::var_os("ANVIL_KEYMAP_PRESET") {
+            self.keymap = keymap::KeymapConfig::from_preset(&preset.to_string_lossy())?;
+        }
+        Ok(())
     }
 
     #[cfg(target_os = "linux")]
