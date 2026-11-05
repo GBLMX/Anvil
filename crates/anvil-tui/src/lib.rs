@@ -1294,34 +1294,52 @@ impl Model {
         (self.gutter_digits() + 2) as u16
     }
 
-    fn keymap_context(&self) -> KeymapContext {
-        if self.visual_anchor.is_some() {
-            return KeymapContext::Modal;
+    fn active_keymap_contexts(&self) -> Vec<KeymapContext> {
+        let mut contexts = vec![KeymapContext::Global];
+        contexts.push(if self.ui.focus.tree {
+            KeymapContext::FileTree
+        } else {
+            KeymapContext::Editor
+        });
+        let input = match &self.ui.input_mode {
+            InputMode::CommandLine { .. } => Some(KeymapContext::CommandLine),
+            InputMode::Search { .. } => Some(KeymapContext::Search),
+            InputMode::Rename { .. } => Some(KeymapContext::Rename),
+            InputMode::Create { .. }
+            | InputMode::RenameEntry { .. }
+            | InputMode::ConfirmDelete { .. }
+            | InputMode::ConfirmClose { .. }
+            | InputMode::ConfirmReload { .. }
+            | InputMode::TransferEntry { .. } => Some(KeymapContext::Popup),
+            InputMode::Normal | InputMode::Insert => None,
+        };
+        if let Some(context) = input
+            && contexts.last() != Some(&context)
+        {
+            contexts.push(context);
         }
-        if self.fuzzy.is_some()
+        let overlay = self.fuzzy.is_some()
             || self.workspace_symbols.is_some()
             || self.document_symbols.is_some()
             || self.code_actions.is_some()
             || self.completion.is_some()
             || self.hover.is_some()
             || self.diagnostic_popup.is_some()
-            || self.help_back.is_some()
-        {
-            return KeymapContext::Popup;
+            || self.help_back.is_some();
+        if overlay && contexts.last() != Some(&KeymapContext::Popup) {
+            contexts.push(KeymapContext::Popup);
         }
-        match &self.ui.input_mode {
-            InputMode::CommandLine { .. } => KeymapContext::CommandLine,
-            InputMode::Search { .. } => KeymapContext::Search,
-            InputMode::Rename { .. } => KeymapContext::Rename,
-            InputMode::Create { .. }
-            | InputMode::RenameEntry { .. }
-            | InputMode::ConfirmDelete { .. }
-            | InputMode::ConfirmClose { .. }
-            | InputMode::ConfirmReload { .. }
-            | InputMode::TransferEntry { .. } => KeymapContext::Popup,
-            InputMode::Normal | InputMode::Insert if self.ui.focus.tree => KeymapContext::FileTree,
-            InputMode::Normal | InputMode::Insert => KeymapContext::Editor,
+        if self.visual_anchor.is_some() {
+            contexts.push(KeymapContext::Modal);
         }
+        contexts
+    }
+
+    fn keymap_context(&self) -> KeymapContext {
+        self.active_keymap_contexts()
+            .last()
+            .copied()
+            .unwrap_or(KeymapContext::Global)
     }
 
     fn current_line(&self) -> Option<usize> {

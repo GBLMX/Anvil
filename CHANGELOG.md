@@ -27,7 +27,7 @@ post-`0.5.0` feature line.
   F-key free.
 
 - Keymap context identifiers define strict overlay/command-line/editor/tree
-  routing priority, with active-context detection for the TUI.
+  routing priority, with a derived context-stack projection for the TUI.
 
 ### Fixed
 

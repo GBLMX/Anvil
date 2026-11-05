@@ -376,7 +376,10 @@ fn keymap_context_prefers_popup_then_command_line_then_tree() {
     let mut model = Model::new(EditorState::from_text("alpha"), None);
     model.welcome = false;
     model.ui.focus.tree = true;
-    assert_eq!(model.keymap_context(), KeymapContext::FileTree);
+    assert_eq!(
+        model.active_keymap_contexts(),
+        vec![KeymapContext::Global, KeymapContext::FileTree]
+    );
 
     model.fuzzy = Some(FuzzyState {
         query: String::new(),
@@ -384,17 +387,38 @@ fn keymap_context_prefers_popup_then_command_line_then_tree() {
         filtered: vec![0],
         selected: 0,
     });
-    assert_eq!(model.keymap_context(), KeymapContext::Popup);
+    assert_eq!(
+        model.active_keymap_contexts(),
+        vec![
+            KeymapContext::Global,
+            KeymapContext::FileTree,
+            KeymapContext::Popup
+        ]
+    );
 
     model.fuzzy = None;
     model.ui.input_mode = InputMode::CommandLine {
         buffer: String::new(),
     };
-    assert_eq!(model.keymap_context(), KeymapContext::CommandLine);
+    assert_eq!(
+        model.active_keymap_contexts(),
+        vec![
+            KeymapContext::Global,
+            KeymapContext::FileTree,
+            KeymapContext::CommandLine
+        ]
+    );
 
     model.ui.input_mode = InputMode::Normal;
     model.visual_anchor = Some(0);
-    assert_eq!(model.keymap_context(), KeymapContext::Modal);
+    assert_eq!(
+        model.active_keymap_contexts(),
+        vec![
+            KeymapContext::Global,
+            KeymapContext::FileTree,
+            KeymapContext::Modal
+        ]
+    );
 }
 
 #[test]
