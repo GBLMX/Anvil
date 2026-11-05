@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 use toml_edit::{DocumentMut, Item};
 
-use crossterm::event::KeyCode;
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use crate::WordMotion;
 use crate::input::KeyPress;
@@ -258,6 +258,40 @@ impl KeyChord {
         })
     }
 
+    pub(crate) fn label(self) -> String {
+        let mut label = String::new();
+        if self.ctrl {
+            label.push_str("ctrl-");
+        }
+        if self.alt {
+            label.push_str("alt-");
+        }
+        if self.super_key {
+            label.push_str("super-");
+        }
+        label.push_str(&match self.code {
+            KeyCode::Char(' ') => "space".to_owned(),
+            KeyCode::Char(character) => character.to_string(),
+            KeyCode::Esc => "esc".to_owned(),
+            KeyCode::Tab => "tab".to_owned(),
+            KeyCode::Enter => "enter".to_owned(),
+            KeyCode::Backspace => "backspace".to_owned(),
+            KeyCode::Delete => "delete".to_owned(),
+            KeyCode::Insert => "insert".to_owned(),
+            KeyCode::Left => "left".to_owned(),
+            KeyCode::Right => "right".to_owned(),
+            KeyCode::Up => "up".to_owned(),
+            KeyCode::Down => "down".to_owned(),
+            KeyCode::Home => "home".to_owned(),
+            KeyCode::End => "end".to_owned(),
+            KeyCode::PageUp => "pageup".to_owned(),
+            KeyCode::PageDown => "pagedown".to_owned(),
+            KeyCode::F(number) => format!("f{number}"),
+            _ => format!("{:?}", self.code).to_ascii_lowercase(),
+        });
+        label
+    }
+
     pub(crate) fn default_path() -> Option<PathBuf> {
         if let Some(path) = std::env::var_os("ANVIL_KEYMAP") {
             return Some(PathBuf::from(path));
@@ -425,6 +459,30 @@ impl KeymapConfig {
         }
         self.pending.insert((prefix, chord), command);
         true
+    }
+
+    pub(crate) fn pending_actions(&self, prefix: char) -> Vec<(String, String)> {
+        let mut entries = HashMap::new();
+        for byte in 32u8..=126 {
+            let character = char::from(byte);
+            let key =
+                KeyPress::from_key(KeyEvent::new(KeyCode::Char(character), KeyModifiers::NONE));
+            if let Some(command) = pending_action(prefix, key, false)
+                && let Some(id) = command.id()
+            {
+                entries.insert(character.to_string(), id.as_str().to_owned());
+            }
+        }
+        for ((candidate_prefix, chord), command) in &self.pending {
+            if *candidate_prefix == prefix
+                && let Some(id) = command.id()
+            {
+                entries.insert(chord.label(), id.as_str().to_owned());
+            }
+        }
+        let mut actions = entries.into_iter().collect::<Vec<_>>();
+        actions.sort_by(|left, right| left.0.cmp(&right.0));
+        actions
     }
 
     fn resolve(&self, key: KeyPress) -> Option<NormalCommand> {

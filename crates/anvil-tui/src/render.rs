@@ -570,40 +570,45 @@ pub fn view(model: &Model, frame: &mut Frame) {
             }
         }
     }
-    if model.pending == Some(' ') {
-        let entries = [
-            ("e", "file tree"),
-            ("f", "fuzzy files"),
-            ("r", "rename"),
-            ("a", "code actions"),
-            ("s", "symbols"),
-            ("S", "workspace symbols"),
-            ("F", "format"),
-        ];
-        let width = 30.min(area.width.saturating_sub(4));
-        let height = (entries.len() as u16 + 2).min(area.height.saturating_sub(2));
-        let popup = Rect {
-            x: area.x + area.width.saturating_sub(width + 2),
-            y: area.y + area.height.saturating_sub(height + 2),
-            width,
-            height,
-        };
-        frame.render_widget(Clear, popup);
-        let lines = entries
-            .iter()
-            .map(|(key, description)| {
-                Line::from(vec![
-                    Span::styled(format!(" {key:<2}"), Style::default().fg(theme::ACCENT)),
-                    Span::raw(format!(" {description}")),
-                ])
-            })
-            .collect::<Vec<_>>();
-        frame.render_widget(
-            Paragraph::new(lines)
-                .style(theme::panel())
-                .block(panel_block("Space")),
-            popup,
-        );
+    if let Some(prefix) = model.pending {
+        let entries = model.pending_hints();
+        if !entries.is_empty() {
+            let available = usize::from(area.width.saturating_sub(2)).max(1);
+            let width = entries
+                .iter()
+                .map(|(key, action)| key.len() + action.len() + 5)
+                .max()
+                .unwrap_or(24)
+                .clamp(20.min(available), available) as u16;
+            let height = (entries.len() as u16 + 2).min(area.height.saturating_sub(2));
+            let popup = Rect {
+                x: area.x + area.width.saturating_sub(width + 2),
+                y: area.y + area.height.saturating_sub(height + 2),
+                width,
+                height,
+            };
+            frame.render_widget(Clear, popup);
+            let lines = entries
+                .iter()
+                .map(|(key, action)| {
+                    Line::from(vec![
+                        Span::styled(format!(" {key:<2}"), Style::default().fg(theme::ACCENT)),
+                        Span::raw(format!(" {action}")),
+                    ])
+                })
+                .collect::<Vec<_>>();
+            let title = if prefix == ' ' {
+                "space".to_owned()
+            } else {
+                prefix.to_string()
+            };
+            frame.render_widget(
+                Paragraph::new(lines)
+                    .style(theme::panel())
+                    .block(panel_block(title)),
+                popup,
+            );
+        }
     }
     if let Some(position) = model
         .editor

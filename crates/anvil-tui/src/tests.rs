@@ -372,6 +372,25 @@ fn popup_consumes_j_before_editor_motion() {
 }
 
 #[test]
+fn pending_space_renders_keymap_continuations() {
+    let mut model = Model::new(EditorState::from_text("alpha"), None);
+    model.welcome = false;
+    model.begin_pending(' ');
+    let backend = TestBackend::new(100, 20);
+    let mut terminal = Terminal::new(backend).expect("terminal");
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+    let rendered = terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect::<String>();
+    assert!(rendered.contains("picker.fuzzy"), "{rendered}");
+    assert!(rendered.contains("view.focus_editor"), "{rendered}");
+}
+
+#[test]
 fn keymap_context_prefers_popup_then_command_line_then_tree() {
     let mut model = Model::new(EditorState::from_text("alpha"), None);
     model.welcome = false;

@@ -1342,6 +1342,12 @@ impl Model {
             .unwrap_or(KeymapContext::Global)
     }
 
+    fn pending_hints(&self) -> Vec<(String, String)> {
+        self.pending
+            .map(|prefix| self.keymap.pending_actions(prefix))
+            .unwrap_or_default()
+    }
+
     fn current_line(&self) -> Option<usize> {
         self.editor
             .index()
