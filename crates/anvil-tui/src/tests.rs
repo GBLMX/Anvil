@@ -338,6 +338,40 @@ fn space_leader_expires_without_consuming_next_key() {
 }
 
 #[test]
+fn popup_consumes_j_before_editor_motion() {
+    let mut model = Model::new(EditorState::from_text("alpha\nbeta"), None);
+    model.welcome = false;
+    model.document_symbols = Some(SymbolState {
+        items: vec![
+            SymbolItem {
+                name: "alpha".to_owned(),
+                detail: None,
+                line: 0,
+                character: 0,
+                depth: 0,
+            },
+            SymbolItem {
+                name: "beta".to_owned(),
+                detail: None,
+                line: 1,
+                character: 0,
+                depth: 0,
+            },
+        ],
+        selected: 0,
+    });
+    handle_event(&mut model, key(KeyCode::Char('j')));
+    assert_eq!(model.cursor, 0);
+    assert_eq!(
+        model
+            .document_symbols
+            .as_ref()
+            .map(|symbols| symbols.selected),
+        Some(1)
+    );
+}
+
+#[test]
 fn tree_expands_directories() {
     let dir = tempfile::tempdir().expect("tempdir");
     fs::create_dir(dir.path().join("src")).expect("dir");

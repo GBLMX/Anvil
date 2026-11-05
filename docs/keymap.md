@@ -105,6 +105,7 @@ diagnostics.previous
 view.split_vertical
 view.focus_left
 view.focus_right
+view.focus_editor
 view.close_split
 tree.open
 picker.fuzzy
