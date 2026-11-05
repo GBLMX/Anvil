@@ -391,6 +391,26 @@ fn pending_space_renders_keymap_continuations() {
 }
 
 #[test]
+fn pending_operator_which_key_shows_text_object_extenders() {
+    let mut model = Model::new(EditorState::from_text("alpha"), None);
+    model.welcome = false;
+    model.begin_pending('d');
+    handle_event(&mut model, key(KeyCode::Char('i')));
+    let backend = TestBackend::new(100, 24);
+    let mut terminal = Terminal::new(backend).expect("terminal");
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+    let rendered = terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect::<String>();
+    assert!(rendered.contains("w "), "{rendered}");
+    assert!(rendered.contains("delete inner word"), "{rendered}");
+}
+
+#[test]
 fn keymap_context_prefers_popup_then_command_line_then_tree() {
     let mut model = Model::new(EditorState::from_text("alpha"), None);
     model.welcome = false;

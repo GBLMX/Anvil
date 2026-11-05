@@ -1344,7 +1344,7 @@ impl Model {
 
     fn pending_hints(&self) -> Vec<(String, String)> {
         self.pending
-            .map(|prefix| self.keymap.pending_actions(prefix))
+            .map(|prefix| self.keymap.pending_actions(prefix, self.object_pending))
             .unwrap_or_default()
     }
 

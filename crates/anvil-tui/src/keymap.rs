@@ -461,30 +461,33 @@ impl KeymapConfig {
         true
     }
 
-    pub(crate) fn pending_actions(&self, prefix: char) -> Vec<(String, String)> {
+    pub(crate) fn pending_actions(
+        &self,
+        prefix: char,
+        object_pending: bool,
+    ) -> Vec<(String, String)> {
         let mut entries = HashMap::new();
         for byte in 32u8..=126 {
             let character = char::from(byte);
             let key =
                 KeyPress::from_key(KeyEvent::new(KeyCode::Char(character), KeyModifiers::NONE));
-            if let Some(command) = pending_action(prefix, key, false)
-                && let Some(id) = command.id()
+            if let Some(command) = pending_action(prefix, key, object_pending)
+                && !matches!(command, PendingCommand::Count { .. })
             {
-                entries.insert(character.to_string(), id.as_str().to_owned());
+                entries.insert(character.to_string(), command.label());
             }
         }
-        for ((candidate_prefix, chord), command) in &self.pending {
-            if *candidate_prefix == prefix
-                && let Some(id) = command.id()
-            {
-                entries.insert(chord.label(), id.as_str().to_owned());
+        if !object_pending {
+            for ((candidate_prefix, chord), command) in &self.pending {
+                if *candidate_prefix == prefix {
+                    entries.insert(chord.label(), command.label());
+                }
             }
         }
         let mut actions = entries.into_iter().collect::<Vec<_>>();
         actions.sort_by(|left, right| left.0.cmp(&right.0));
         actions
     }
-
     fn resolve(&self, key: KeyPress) -> Option<NormalCommand> {
         self.normal.get(&KeyChord::from_key(key)).copied()
     }
@@ -610,6 +613,68 @@ impl PendingCommand {
             | OperatorParagraph { .. }
             | OperatorTag { .. }
             | Count { .. } => None,
+        }
+    }
+
+    pub(crate) fn label(self) -> String {
+        if let Some(id) = self.id() {
+            return id.as_str().to_owned();
+        }
+        let operator_name = |operator: char| match operator {
+            'd' => "delete",
+            'c' => "change",
+            'y' => "yank",
+            _ => "operate",
+        };
+        let around = |around: bool| if around { "around" } else { "inner" };
+        match self {
+            Self::ObjectPending => "text object".to_owned(),
+            Self::OperatorWord {
+                operator,
+                around: is_around,
+            } => {
+                format!("{} {} word", operator_name(operator), around(is_around))
+            }
+            Self::OperatorQuote {
+                operator,
+                quote,
+                around: is_around,
+            } => {
+                format!(
+                    "{} {} {quote} quote",
+                    operator_name(operator),
+                    around(is_around)
+                )
+            }
+            Self::OperatorBracket {
+                operator,
+                open,
+                around: is_around,
+            } => {
+                format!(
+                    "{} {} {open} block",
+                    operator_name(operator),
+                    around(is_around)
+                )
+            }
+            Self::OperatorParagraph {
+                operator,
+                around: is_around,
+            } => {
+                format!(
+                    "{} {} paragraph",
+                    operator_name(operator),
+                    around(is_around)
+                )
+            }
+            Self::OperatorTag {
+                operator,
+                around: is_around,
+            } => {
+                format!("{} {} tag", operator_name(operator), around(is_around))
+            }
+            Self::Count { .. } => "count".to_owned(),
+            _ => "command".to_owned(),
         }
     }
 
@@ -973,6 +1038,38 @@ f12 = "editor.redo"
         assert_eq!(
             resolve_normal(key(KeyCode::F(12), KeyModifiers::NONE), 0, &config),
             Some(NormalCommand::Redo)
+        );
+    }
+
+    #[test]
+    fn pending_actions_include_text_object_extenders() {
+        let config = KeymapConfig::default();
+        let actions = config.pending_actions('d', false);
+        assert!(
+            actions
+                .iter()
+                .any(|(key, action)| key == "i" && action == "text object"),
+            "{actions:?}"
+        );
+        assert!(
+            actions
+                .iter()
+                .any(|(key, action)| key == "a" && action == "text object"),
+            "{actions:?}"
+        );
+        let inner = config.pending_actions('d', true);
+        assert!(
+            inner
+                .iter()
+                .any(|(key, action)| key == "w" && action == "delete inner word"),
+            "{inner:?}"
+        );
+        let around = config.pending_actions('D', true);
+        assert!(
+            around
+                .iter()
+                .any(|(key, action)| key == "w" && action == "delete around word"),
+            "{around:?}"
         );
     }
 }

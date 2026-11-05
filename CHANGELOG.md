@@ -30,7 +30,8 @@ post-`0.5.0` feature line.
   routing priority, with a derived context-stack projection for the TUI.
 
 - Pending prefixes render a dynamic which-key panel from the active keymap
-  continuations instead of a hardcoded Space list.
+  continuations, including `i`/`a` text-object extenders and their nested
+  object actions.
 
 ### Fixed
 
