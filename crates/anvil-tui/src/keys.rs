@@ -196,6 +196,79 @@ fn execute_pending_command(
     }
 }
 
+fn execute_normal_command(model: &mut Model, command: NormalCommand) {
+    match command {
+        NormalCommand::CollapseSelections => model.collapse_selections(),
+        NormalCommand::Pending(pending) => model.begin_pending(pending),
+        NormalCommand::Hover => model.queue_effect(Effect::LspHover),
+        NormalCommand::MacroRecord => {
+            model.macro_wait = Some('q');
+            model.dirty = true;
+        }
+        NormalCommand::MacroReplay => {
+            model.macro_wait = Some('@');
+            model.dirty = true;
+        }
+        NormalCommand::SplitSelection => model.split_selection_lines(),
+        NormalCommand::SelectWord => model.select_word_occurrences(),
+        NormalCommand::ExtendLine(up) => model.extend_line_cursor(up),
+        NormalCommand::InsertHere => model.insert_here(),
+        NormalCommand::CommandLine => {
+            model.ui.input_mode = InputMode::CommandLine {
+                buffer: String::new(),
+            };
+            model.dirty = true;
+        }
+        NormalCommand::Search => {
+            model.ui.input_mode = InputMode::Search {
+                query: String::new(),
+            };
+            model.dirty = true;
+        }
+        NormalCommand::Append => model.append(),
+        NormalCommand::AppendLineEnd => model.append_line_end(),
+        NormalCommand::OpenBelow => model.open_below(),
+        NormalCommand::OpenAbove => model.open_above(),
+        NormalCommand::SearchNext(forward) => model.search_next(forward),
+        NormalCommand::RegisterWait => {
+            model.register_wait = true;
+            model.dirty = true;
+        }
+        NormalCommand::DeleteForward => {
+            let count = model.take_count();
+            for _ in 0..count {
+                model.delete_forward();
+            }
+        }
+        NormalCommand::Put => model.put_register(),
+        NormalCommand::Undo => model.undo(),
+        NormalCommand::Redo => model.redo(),
+        NormalCommand::RepeatChange => {
+            let count = model.count;
+            let _ = model.take_count();
+            model.repeat_last_change(count);
+        }
+        NormalCommand::Count(character) => model.push_count(character),
+        NormalCommand::MoveHome => model.move_home(),
+        NormalCommand::MoveEnd => model.move_end(),
+        NormalCommand::MoveWords(motion) => model.move_words(motion),
+        NormalCommand::MoveChars(delta) => model.move_chars(delta),
+        NormalCommand::MoveLine(delta) => model.move_lines(delta),
+    }
+}
+
+fn execute_context_action(model: &mut Model, action: ContextAction, key: KeyPress) {
+    match action {
+        ContextAction::Normal(command) => execute_normal_command(model, command),
+        ContextAction::Pending(command) => {
+            execute_pending_command(model, command, ' ', key);
+        }
+    }
+    if model.visual_anchor.is_some() {
+        model.sync_visual_selection();
+    }
+}
+
 fn handle_key(model: &mut Model, key: KeyPress) {
     let control = key.ctrl();
     let text_input = key.text_input();
@@ -264,6 +337,15 @@ fn handle_key(model: &mut Model, key: KeyPress) {
         }
         return;
     }
+    if model.keymap_context() == KeymapContext::Popup {
+        model.pending = None;
+        model.leader_deadline = None;
+        if let Some(action) = model.keymap.resolve_context(KeymapContext::Popup, key) {
+            execute_context_action(model, action, key);
+            return;
+        }
+    }
+
     if let Some(pending) = model.pending.take() {
         model.leader_deadline = None;
         model.dirty = true;
@@ -469,6 +551,10 @@ fn handle_key(model: &mut Model, key: KeyPress) {
     }
 
     if model.keymap_context() == KeymapContext::FileTree {
+        if let Some(action) = model.keymap.resolve_context(KeymapContext::FileTree, key) {
+            execute_context_action(model, action, key);
+            return;
+        }
         if key.code == KeyCode::Char(' ') && text_input {
             model.begin_pending(' ');
             return;
@@ -715,6 +801,10 @@ fn handle_key(model: &mut Model, key: KeyPress) {
         },
         InputMode::Normal => {
             if model.visual_anchor.is_some() {
+                if let Some(action) = model.keymap.resolve_context(KeymapContext::Modal, key) {
+                    execute_context_action(model, action, key);
+                    return;
+                }
                 match key.code {
                     KeyCode::Esc | KeyCode::Char('v') => {
                         model.exit_visual();
@@ -774,66 +864,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
                         return;
                     }
                 };
-                match command {
-                    NormalCommand::CollapseSelections => model.collapse_selections(),
-                    NormalCommand::Pending(pending) => {
-                        model.begin_pending(pending);
-                    }
-                    NormalCommand::Hover => model.queue_effect(Effect::LspHover),
-                    NormalCommand::MacroRecord => {
-                        model.macro_wait = Some('q');
-                        model.dirty = true;
-                    }
-                    NormalCommand::MacroReplay => {
-                        model.macro_wait = Some('@');
-                        model.dirty = true;
-                    }
-                    NormalCommand::SplitSelection => model.split_selection_lines(),
-                    NormalCommand::SelectWord => model.select_word_occurrences(),
-                    NormalCommand::ExtendLine(up) => model.extend_line_cursor(up),
-                    NormalCommand::InsertHere => model.insert_here(),
-                    NormalCommand::CommandLine => {
-                        model.ui.input_mode = InputMode::CommandLine {
-                            buffer: String::new(),
-                        };
-                        model.dirty = true;
-                    }
-                    NormalCommand::Search => {
-                        model.ui.input_mode = InputMode::Search {
-                            query: String::new(),
-                        };
-                        model.dirty = true;
-                    }
-                    NormalCommand::Append => model.append(),
-                    NormalCommand::AppendLineEnd => model.append_line_end(),
-                    NormalCommand::OpenBelow => model.open_below(),
-                    NormalCommand::OpenAbove => model.open_above(),
-                    NormalCommand::SearchNext(forward) => model.search_next(forward),
-                    NormalCommand::RegisterWait => {
-                        model.register_wait = true;
-                        model.dirty = true;
-                    }
-                    NormalCommand::DeleteForward => {
-                        let count = model.take_count();
-                        for _ in 0..count {
-                            model.delete_forward();
-                        }
-                    }
-                    NormalCommand::Put => model.put_register(),
-                    NormalCommand::Undo => model.undo(),
-                    NormalCommand::Redo => model.redo(),
-                    NormalCommand::RepeatChange => {
-                        let count = model.count;
-                        let _ = model.take_count();
-                        model.repeat_last_change(count);
-                    }
-                    NormalCommand::Count(character) => model.push_count(character),
-                    NormalCommand::MoveHome => model.move_home(),
-                    NormalCommand::MoveEnd => model.move_end(),
-                    NormalCommand::MoveWords(motion) => model.move_words(motion),
-                    NormalCommand::MoveChars(delta) => model.move_chars(delta),
-                    NormalCommand::MoveLine(delta) => model.move_lines(delta),
-                }
+                execute_normal_command(model, command);
             }
             if model.visual_anchor.is_some() {
                 model.sync_visual_selection();

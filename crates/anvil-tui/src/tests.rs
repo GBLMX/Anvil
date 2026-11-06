@@ -461,6 +461,50 @@ fn keymap_context_prefers_popup_then_command_line_then_tree() {
 }
 
 #[test]
+fn file_tree_context_bindings_dispatch_before_hardcoded_keys() {
+    let mut model = Model::new(EditorState::from_text("alpha"), None);
+    model.welcome = false;
+    model.open_tree();
+    assert!(model.ui.focus.tree);
+    model.keymap = crate::keymap::KeymapConfig::from_toml(
+        r#"
+[keymap.contexts.file_tree]
+x = "view.focus_editor"
+"#,
+    )
+    .expect("context keymap");
+    handle_event(&mut model, key(KeyCode::Char('x')));
+    assert!(!model.ui.focus.tree);
+}
+
+#[test]
+fn popup_context_bindings_dispatch_before_popup_keys() {
+    let mut model = Model::new(EditorState::from_text("alpha"), None);
+    model.welcome = false;
+    model.open_tree();
+    model.document_symbols = Some(SymbolState {
+        items: vec![SymbolItem {
+            name: "alpha".to_owned(),
+            detail: None,
+            line: 0,
+            character: 0,
+            depth: 0,
+        }],
+        selected: 0,
+    });
+    model.keymap = crate::keymap::KeymapConfig::from_toml(
+        r#"
+[keymap.contexts.popup]
+x = "view.focus_editor"
+"#,
+    )
+    .expect("context keymap");
+    handle_event(&mut model, key(KeyCode::Char('x')));
+    assert!(!model.ui.focus.tree);
+    assert!(model.document_symbols.is_some());
+}
+
+#[test]
 fn tree_expands_directories() {
     let dir = tempfile::tempdir().expect("tempdir");
     fs::create_dir(dir.path().join("src")).expect("dir");

@@ -56,9 +56,9 @@ defaults. `editor` bindings apply while the editor is focused; `global`
 bindings are the fallback within a dispatched context. Context values may use
 normal commands or direct operator-pending commands such as
 `view.split_vertical`; commands that only make sense after an operator prefix
-are rejected. The
-`file_tree`, `popup`, and `modal` sections are validated now but only the
-`editor` and `global` sections are dispatched until the remaining router
+are rejected. The `editor`, `file_tree`, `popup`, `modal`, and `global`
+sections are dispatched. `command_line`, `search`, and `rename` sections are
+validated but keep their built-in input handling until the remaining router
 branches move onto the context stack.
 
 ## Presets
