@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Sandboxed process result.",
+  "properties": {
+    "exit_code": {
+      "format": "int64",
+      "type": "integer"
+    },
+    "output_truncated": {
+      "type": "boolean"
+    },
+    "stderr": {
+      "type": "string"
+    },
+    "stdout": {
+      "type": "string"
+    },
+    "timed_out": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "stdout",
+    "stderr",
+    "exit_code",
+    "timed_out",
+    "output_truncated"
+  ],
+  "title": "ExecResponse",
+  "type": "object"
+}

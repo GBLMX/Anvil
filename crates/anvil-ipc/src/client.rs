@@ -145,7 +145,7 @@ impl GatewayClient {
             "session.hello",
             serde_json::json!({
                 "token": general_purpose::URL_SAFE_NO_PAD.encode(token),
-                "api_version": "0.1.0",
+                "api_version": "1.0.0",
                 "protocol": "anvil-jsonrpc-1",
             }),
         )?;

@@ -7,8 +7,12 @@ use std::{
 };
 
 use anvil_api::{
-    API_VERSION, ApiError, ApplyEditRequest, ApplyEditResponse, DocumentEdit, DocumentSnapshot,
-    EditorView, METHODS, MethodType, SetModeRequest, SetModeResponse, TextRange,
+    API_VERSION, ApiError, ApplyEditRequest, ApplyEditResponse, CopyRequest, DocumentEdit,
+    DocumentSnapshot, EditorView, EmptyResponse, EventSubscribeRequest, EventSubscribeResponse,
+    ExecRequest, ExecResponse, FetchRequest, FetchResponse, METHODS, MethodType,
+    NotificationSeverity, NotifyRequest, PathRequest, ReadFileRequest, ReadFileResponse,
+    RegisterCommandRequest, RegisterCommandResponse, RenameRequest, SetModeRequest,
+    SetModeResponse, StatusRequest, TextRange,
 };
 use schemars::schema_for;
 use serde_json::Value;
@@ -80,7 +84,6 @@ fn lua_for_schema(name: &str, schema: &Value) -> String {
 fn method_type_name(value: MethodType) -> String {
     match value {
         MethodType::Empty => "empty".to_owned(),
-        MethodType::Pending => "pending".to_owned(),
         MethodType::Named(name) => name.to_owned(),
     }
 }
@@ -98,6 +101,32 @@ fn main() -> Result<(), Box<dyn Error>> {
         ("DocumentEdit", schema_for!(DocumentEdit)),
         ("SetModeRequest", schema_for!(SetModeRequest)),
         ("SetModeResponse", schema_for!(SetModeResponse)),
+        (
+            "RegisterCommandRequest",
+            schema_for!(RegisterCommandRequest),
+        ),
+        (
+            "RegisterCommandResponse",
+            schema_for!(RegisterCommandResponse),
+        ),
+        ("NotificationSeverity", schema_for!(NotificationSeverity)),
+        ("NotifyRequest", schema_for!(NotifyRequest)),
+        ("StatusRequest", schema_for!(StatusRequest)),
+        ("EventSubscribeRequest", schema_for!(EventSubscribeRequest)),
+        (
+            "EventSubscribeResponse",
+            schema_for!(EventSubscribeResponse),
+        ),
+        ("PathRequest", schema_for!(PathRequest)),
+        ("ReadFileRequest", schema_for!(ReadFileRequest)),
+        ("ReadFileResponse", schema_for!(ReadFileResponse)),
+        ("RenameRequest", schema_for!(RenameRequest)),
+        ("CopyRequest", schema_for!(CopyRequest)),
+        ("FetchRequest", schema_for!(FetchRequest)),
+        ("FetchResponse", schema_for!(FetchResponse)),
+        ("ExecRequest", schema_for!(ExecRequest)),
+        ("ExecResponse", schema_for!(ExecResponse)),
+        ("EmptyResponse", schema_for!(EmptyResponse)),
         ("ApiError", schema_for!(ApiError)),
     ];
 
@@ -126,6 +155,23 @@ fn main() -> Result<(), Box<dyn Error>> {
             "DocumentEdit" => "document-edit.schema.json",
             "SetModeRequest" => "set-mode-request.schema.json",
             "SetModeResponse" => "set-mode-response.schema.json",
+            "RegisterCommandRequest" => "register-command-request.schema.json",
+            "RegisterCommandResponse" => "register-command-response.schema.json",
+            "NotificationSeverity" => "notification-severity.schema.json",
+            "NotifyRequest" => "notify-request.schema.json",
+            "StatusRequest" => "status-request.schema.json",
+            "EventSubscribeRequest" => "event-subscribe-request.schema.json",
+            "EventSubscribeResponse" => "event-subscribe-response.schema.json",
+            "PathRequest" => "path-request.schema.json",
+            "ReadFileRequest" => "read-file-request.schema.json",
+            "ReadFileResponse" => "read-file-response.schema.json",
+            "RenameRequest" => "rename-request.schema.json",
+            "CopyRequest" => "copy-request.schema.json",
+            "FetchRequest" => "fetch-request.schema.json",
+            "FetchResponse" => "fetch-response.schema.json",
+            "ExecRequest" => "exec-request.schema.json",
+            "ExecResponse" => "exec-response.schema.json",
+            "EmptyResponse" => "empty-response.schema.json",
             "ApiError" => "api-error.schema.json",
             other => unreachable!("unhandled root {other}"),
         };

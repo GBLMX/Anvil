@@ -1,6 +1,6 @@
 //! Bounded discovery of local plugin manifests.
 
-use anvil_plugin_host::manifest::PluginManifest;
+use anvil_plugin_host::manifest::{MANIFEST_FILE, PluginManifest};
 use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -45,7 +45,7 @@ pub(crate) fn discover_from(root: &Path) -> Result<Vec<PluginDescriptor>, String
             continue;
         }
         let plugin_root = entry.path();
-        if !plugin_root.join("plugin.json").is_file() {
+        if !plugin_root.join(MANIFEST_FILE).is_file() {
             continue;
         }
         if plugins.len() >= MAX_PLUGINS {

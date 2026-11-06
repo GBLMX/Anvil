@@ -6,7 +6,7 @@ The official standard edition is one composition; third-party distributions
 can compose the kernel with their own UI and trusted Rust code. Runtime plugins
 remain untrusted and sandboxed.
 
-Status: **0.5.10 landed; `0.5.x` feature line active**.
+Status: **0.6.0 landed; Plugin API v1 frozen**.
 Release model: **`0.4.x` maintenance closed**.
 Development uses Rust from `rust-toolchain.toml` and Go **1.26.10 or newer**;
 CI installs the exact Go version from the root `go.mod`. The ratatui editor now

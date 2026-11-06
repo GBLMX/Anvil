@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Request to run one allowlisted tool.",
+  "properties": {
+    "args": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "timeout_ms": {
+      "format": "uint64",
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "tool": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "tool",
+    "args",
+    "timeout_ms"
+  ],
+  "title": "ExecRequest",
+  "type": "object"
+}

@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Bounded HTTP fetch result.",
+  "properties": {
+    "body": {
+      "type": "string"
+    },
+    "content_type": {
+      "type": "string"
+    },
+    "status": {
+      "format": "uint16",
+      "maximum": 65535,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "truncated": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "status",
+    "content_type",
+    "body",
+    "truncated"
+  ],
+  "title": "FetchResponse",
+  "type": "object"
+}

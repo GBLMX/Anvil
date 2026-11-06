@@ -21,62 +21,62 @@
   },
   {
     "name": "editor.register_command",
-    "params": "pending",
-    "result": "pending"
+    "params": "RegisterCommandRequest",
+    "result": "RegisterCommandResponse"
   },
   {
     "name": "ui.notify",
-    "params": "pending",
-    "result": "pending"
+    "params": "NotifyRequest",
+    "result": "EmptyResponse"
   },
   {
     "name": "ui.status",
-    "params": "pending",
-    "result": "pending"
+    "params": "StatusRequest",
+    "result": "EmptyResponse"
   },
   {
     "name": "event.subscribe",
-    "params": "pending",
-    "result": "pending"
+    "params": "EventSubscribeRequest",
+    "result": "EventSubscribeResponse"
   },
   {
     "name": "sys.read_file",
-    "params": "pending",
-    "result": "pending"
+    "params": "ReadFileRequest",
+    "result": "ReadFileResponse"
   },
   {
     "name": "sys.create_dir",
-    "params": "pending",
-    "result": "pending"
+    "params": "PathRequest",
+    "result": "EmptyResponse"
   },
   {
     "name": "sys.rename",
-    "params": "pending",
-    "result": "pending"
+    "params": "RenameRequest",
+    "result": "EmptyResponse"
   },
   {
     "name": "sys.remove",
-    "params": "pending",
-    "result": "pending"
+    "params": "PathRequest",
+    "result": "EmptyResponse"
   },
   {
     "name": "sys.copy",
-    "params": "pending",
-    "result": "pending"
+    "params": "CopyRequest",
+    "result": "EmptyResponse"
   },
   {
     "name": "sys.remove_all",
-    "params": "pending",
-    "result": "pending"
+    "params": "PathRequest",
+    "result": "EmptyResponse"
   },
   {
     "name": "sys.fetch",
-    "params": "pending",
-    "result": "pending"
+    "params": "FetchRequest",
+    "result": "FetchResponse"
   },
   {
     "name": "sys.exec",
-    "params": "pending",
-    "result": "pending"
+    "params": "ExecRequest",
+    "result": "ExecResponse"
   }
 ]

@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Base64-encoded file chunk.",
+  "properties": {
+    "data": {
+      "type": "string"
+    },
+    "eof": {
+      "type": "boolean"
+    },
+    "next_offset": {
+      "format": "uint64",
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "data",
+    "next_offset",
+    "eof"
+  ],
+  "title": "ReadFileResponse",
+  "type": "object"
+}

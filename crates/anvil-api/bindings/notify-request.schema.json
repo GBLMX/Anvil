@@ -1,0 +1,29 @@
+{
+  "$defs": {
+    "NotificationSeverity": {
+      "description": "Notification severity.",
+      "enum": [
+        "info",
+        "warning",
+        "error"
+      ],
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Request to show a transient notification.",
+  "properties": {
+    "message": {
+      "type": "string"
+    },
+    "severity": {
+      "$ref": "#/$defs/NotificationSeverity"
+    }
+  },
+  "required": [
+    "message",
+    "severity"
+  ],
+  "title": "NotifyRequest",
+  "type": "object"
+}

@@ -4,12 +4,14 @@
 //! ADR-0003 and ADR-0008. It deliberately does not depend on the editor, TUI,
 //! or platform crates.
 
+use std::collections::BTreeMap;
+
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 /// The public plugin API version carried by generated stubs.
-pub const API_VERSION: &str = "0.1.0";
+pub const API_VERSION: &str = "1.0.0";
 
 /// Stable JSON-RPC method names.
 pub mod method {
@@ -36,8 +38,6 @@ pub mod method {
 pub enum MethodType {
     /// No parameter object is sent.
     Empty,
-    /// The DTO contract is not defined yet.
-    Pending,
     /// Named DTO in `anvil-api`.
     Named(&'static str),
 }
@@ -77,63 +77,63 @@ pub const METHODS: &[MethodSpec] = &[
     },
     MethodSpec {
         name: method::EDITOR_REGISTER_COMMAND,
-        params: MethodType::Pending,
-        result: MethodType::Pending,
+        params: MethodType::Named("RegisterCommandRequest"),
+        result: MethodType::Named("RegisterCommandResponse"),
     },
     MethodSpec {
         name: method::UI_NOTIFY,
-        params: MethodType::Pending,
-        result: MethodType::Pending,
+        params: MethodType::Named("NotifyRequest"),
+        result: MethodType::Named("EmptyResponse"),
     },
     MethodSpec {
         name: method::UI_STATUS,
-        params: MethodType::Pending,
-        result: MethodType::Pending,
+        params: MethodType::Named("StatusRequest"),
+        result: MethodType::Named("EmptyResponse"),
     },
     MethodSpec {
         name: method::EVENT_SUBSCRIBE,
-        params: MethodType::Pending,
-        result: MethodType::Pending,
+        params: MethodType::Named("EventSubscribeRequest"),
+        result: MethodType::Named("EventSubscribeResponse"),
     },
     MethodSpec {
         name: method::SYS_READ_FILE,
-        params: MethodType::Pending,
-        result: MethodType::Pending,
+        params: MethodType::Named("ReadFileRequest"),
+        result: MethodType::Named("ReadFileResponse"),
     },
     MethodSpec {
         name: method::SYS_CREATE_DIR,
-        params: MethodType::Pending,
-        result: MethodType::Pending,
+        params: MethodType::Named("PathRequest"),
+        result: MethodType::Named("EmptyResponse"),
     },
     MethodSpec {
         name: method::SYS_RENAME,
-        params: MethodType::Pending,
-        result: MethodType::Pending,
+        params: MethodType::Named("RenameRequest"),
+        result: MethodType::Named("EmptyResponse"),
     },
     MethodSpec {
         name: method::SYS_REMOVE,
-        params: MethodType::Pending,
-        result: MethodType::Pending,
+        params: MethodType::Named("PathRequest"),
+        result: MethodType::Named("EmptyResponse"),
     },
     MethodSpec {
         name: method::SYS_COPY,
-        params: MethodType::Pending,
-        result: MethodType::Pending,
+        params: MethodType::Named("CopyRequest"),
+        result: MethodType::Named("EmptyResponse"),
     },
     MethodSpec {
         name: method::SYS_REMOVE_ALL,
-        params: MethodType::Pending,
-        result: MethodType::Pending,
+        params: MethodType::Named("PathRequest"),
+        result: MethodType::Named("EmptyResponse"),
     },
     MethodSpec {
         name: method::SYS_FETCH,
-        params: MethodType::Pending,
-        result: MethodType::Pending,
+        params: MethodType::Named("FetchRequest"),
+        result: MethodType::Named("FetchResponse"),
     },
     MethodSpec {
         name: method::SYS_EXEC,
-        params: MethodType::Pending,
-        result: MethodType::Pending,
+        params: MethodType::Named("ExecRequest"),
+        result: MethodType::Named("ExecResponse"),
     },
 ];
 
@@ -352,6 +352,159 @@ pub struct DocumentSnapshot {
     pub text: String,
 }
 
+/// No result fields.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[ts(export)]
+pub struct EmptyResponse {}
+
+/// Request to register a plugin command.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[ts(export)]
+pub struct RegisterCommandRequest {
+    pub id: String,
+    pub title: String,
+}
+
+/// Result of registering a plugin command.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[ts(export)]
+pub struct RegisterCommandResponse {
+    pub command_id: String,
+}
+
+/// Notification severity.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+#[non_exhaustive]
+pub enum NotificationSeverity {
+    Info,
+    Warning,
+    Error,
+}
+
+/// Request to show a transient notification.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[ts(export)]
+pub struct NotifyRequest {
+    pub message: String,
+    pub severity: NotificationSeverity,
+}
+
+/// Request to replace the status line.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[ts(export)]
+pub struct StatusRequest {
+    pub message: String,
+}
+
+/// Request to subscribe to editor events.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[ts(export)]
+pub struct EventSubscribeRequest {
+    pub events: Vec<String>,
+}
+
+/// Subscription identity returned by `event.subscribe`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[ts(export)]
+pub struct EventSubscribeResponse {
+    #[ts(type = "number")]
+    #[schemars(range(max = 9007199254740991i64))]
+    pub subscription_id: u64,
+}
+
+/// Path-only filesystem request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[ts(export)]
+pub struct PathRequest {
+    pub path: String,
+}
+
+/// Request to read a bounded file chunk.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[ts(export)]
+pub struct ReadFileRequest {
+    pub path: String,
+    #[ts(type = "number")]
+    #[schemars(range(max = 9007199254740991i64))]
+    pub offset: u64,
+    #[ts(type = "number")]
+    #[schemars(range(max = 9007199254740991i64))]
+    pub max_bytes: u64,
+}
+
+/// Base64-encoded file chunk.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[ts(export)]
+pub struct ReadFileResponse {
+    pub data: String,
+    #[ts(type = "number")]
+    #[schemars(range(max = 9007199254740991i64))]
+    pub next_offset: u64,
+    pub eof: bool,
+}
+
+/// Request to move or rename one workspace entry.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[ts(export)]
+pub struct RenameRequest {
+    pub from: String,
+    pub to: String,
+}
+
+/// Request to copy one workspace entry.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[ts(export)]
+pub struct CopyRequest {
+    pub from: String,
+    pub to: String,
+}
+
+/// Request to perform one allowlisted HTTP fetch.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[ts(export)]
+pub struct FetchRequest {
+    pub url: String,
+    #[ts(type = "number")]
+    #[schemars(range(max = 9007199254740991i64))]
+    pub max_bytes: u64,
+    #[serde(default)]
+    pub headers: BTreeMap<String, String>,
+}
+
+/// Bounded HTTP fetch result.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[ts(export)]
+pub struct FetchResponse {
+    pub status: u16,
+    pub content_type: String,
+    pub body: String,
+    pub truncated: bool,
+}
+
+/// Request to run one allowlisted tool.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[ts(export)]
+pub struct ExecRequest {
+    pub tool: String,
+    pub args: Vec<String>,
+    #[ts(type = "number")]
+    #[schemars(range(max = 9007199254740991i64))]
+    pub timeout_ms: u64,
+}
+
+/// Sandboxed process result.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[ts(export)]
+pub struct ExecResponse {
+    pub stdout: String,
+    pub stderr: String,
+    pub exit_code: i64,
+    pub timed_out: bool,
+    pub output_truncated: bool,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -487,8 +640,8 @@ mod tests {
             .iter()
             .find(|spec| spec.name == method::SYS_EXEC)
             .expect("exec method");
-        assert_eq!(exec.params, MethodType::Pending);
-        assert_eq!(exec.result, MethodType::Pending);
+        assert_eq!(exec.params, MethodType::Named("ExecRequest"));
+        assert_eq!(exec.result, MethodType::Named("ExecResponse"));
     }
 
     #[test]

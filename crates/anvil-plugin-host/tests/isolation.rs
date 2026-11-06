@@ -20,7 +20,7 @@ fn host_reads_token_and_sends_hello() {
     let hello = String::from_utf8(hello).expect("utf8");
     assert!(hello.contains("session.hello"), "{hello}");
     assert!(hello.contains("\"session_id\":\"empty\""), "{hello}");
-    assert!(hello.contains("\"api_version\":\"0.1.0\""), "{hello}");
+    assert!(hello.contains("\"api_version\":\"1.0.0\""), "{hello}");
     assert_eq!(host.wait().expect("wait").code(), Some(0));
 }
 

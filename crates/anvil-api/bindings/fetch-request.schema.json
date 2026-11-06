@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Request to perform one allowlisted HTTP fetch.",
+  "properties": {
+    "headers": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "default": {},
+      "type": "object"
+    },
+    "max_bytes": {
+      "format": "uint64",
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "url": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "url",
+    "max_bytes"
+  ],
+  "title": "FetchRequest",
+  "type": "object"
+}

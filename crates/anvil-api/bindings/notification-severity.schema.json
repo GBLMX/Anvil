@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Notification severity.",
+  "enum": [
+    "info",
+    "warning",
+    "error"
+  ],
+  "title": "NotificationSeverity",
+  "type": "string"
+}

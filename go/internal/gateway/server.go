@@ -45,7 +45,7 @@ const (
 	// Protocol is the v1 JSON-RPC protocol name.
 	Protocol = "anvil-jsonrpc-1"
 	// APIVersion is the public API version.
-	APIVersion = "0.1.0"
+	APIVersion = "1.0.0"
 )
 
 // Config is the minimum per-session gateway configuration.
@@ -504,7 +504,7 @@ func (s *Server) hello(req request, state *connectionState) (interface{}, *rpcEr
 	if err := decodeParams(req.Params, &params); err != nil {
 		return nil, &rpcError{Code: -32602, Message: "invalid params"}
 	}
-	if params.Protocol != Protocol || (params.APIVersion != APIVersion && params.APIVersion != "0.1") {
+	if params.Protocol != Protocol || (params.APIVersion != APIVersion && params.APIVersion != "1.0") {
 		return nil, &rpcError{Code: -32600, Message: "unsupported protocol"}
 	}
 	rawToken, err := base64.RawURLEncoding.DecodeString(strings.TrimRight(params.Token, "="))

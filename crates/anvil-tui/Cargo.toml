@@ -23,12 +23,12 @@ tree-sitter-yaml = "0.7"
 tree-sitter-make = "1.1"
 tree-sitter-dockerfile-updated = "0.2"
 tree-sitter-md = "0.5"
-anvil-api = { path = "../anvil-api", version = "0.5.10" }
-anvil-core = { path = "../anvil-core", version = "0.5.10" }
-anvil-editor = { path = "../anvil-editor", version = "0.5.10" }
-anvil-ipc = { path = "../anvil-ipc", version = "0.5.10" }
-anvil-plugin-host = { path = "../anvil-plugin-host", version = "0.5.10" }
-anvil-session = { path = "../anvil-session", version = "0.5.10" }
+anvil-api = { path = "../anvil-api", version = "0.6.0" }
+anvil-core = { path = "../anvil-core", version = "0.6.0" }
+anvil-editor = { path = "../anvil-editor", version = "0.6.0" }
+anvil-ipc = { path = "../anvil-ipc", version = "0.6.0" }
+anvil-plugin-host = { path = "../anvil-plugin-host", version = "0.6.0" }
+anvil-session = { path = "../anvil-session", version = "0.6.0" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 toml_edit = { version = "0.25", features = ["serde"] }

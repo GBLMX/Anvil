@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Request to subscribe to editor events.",
+  "properties": {
+    "events": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "events"
+  ],
+  "title": "EventSubscribeRequest",
+  "type": "object"
+}

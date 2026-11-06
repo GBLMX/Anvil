@@ -732,7 +732,7 @@ mod linux {
             "params": {
                 "session_id": "empty",
                 "protocol": "anvil-ipc/1",
-                "api_version": "0.1.0"
+                "api_version": "1.0.0"
             }
         }))
         .map_err(|error| io::Error::other(format!("encode hello: {error}")))?;

@@ -6,6 +6,7 @@ use std::path::{Component, Path, PathBuf};
 const MAX_MANIFEST_BYTES: u64 = 64 * 1024;
 const MAX_EVENTS: usize = 64;
 const MAX_COMMANDS: usize = 128;
+pub const MANIFEST_FILE: &str = "plugin.json";
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 pub struct PluginManifest {
@@ -28,7 +29,7 @@ pub struct PluginCommand {
 
 impl PluginManifest {
     pub fn load(root: &Path) -> Result<Self, String> {
-        let path = root.join("plugin.json");
+        let path = root.join(MANIFEST_FILE);
         let metadata = std::fs::metadata(&path)
             .map_err(|error| format!("manifest {}: {error}", path.display()))?;
         if metadata.len() > MAX_MANIFEST_BYTES {
@@ -63,7 +64,7 @@ impl PluginManifest {
         if self.version.is_empty() || self.version.len() > 64 {
             return Err("invalid plugin version".to_owned());
         }
-        if self.api.is_empty() || self.api.len() > 64 || !self.api.starts_with("0.1") {
+        if self.api.is_empty() || self.api.len() > 64 || !supported_api(&self.api) {
             return Err("unsupported plugin API".to_owned());
         }
         let entry = Path::new(&self.entry);
@@ -101,7 +102,11 @@ impl PluginManifest {
 }
 
 fn default_api() -> String {
-    "0.1".to_owned()
+    "1.0".to_owned()
+}
+
+fn supported_api(api: &str) -> bool {
+    matches!(api, "1" | "1.0" | "1.0.0")
 }
 
 fn valid_event(event: &str) -> bool {
@@ -124,7 +129,7 @@ mod tests {
             id: "demo".to_owned(),
             version: "0.1.0".to_owned(),
             entry: entry.to_owned(),
-            api: "0.1".to_owned(),
+            api: "1.0".to_owned(),
             activation_events: vec!["onStartup".to_owned()],
             commands: vec![PluginCommand {
                 id: "demo.run".to_owned(),
@@ -146,6 +151,8 @@ mod tests {
     fn rejects_unsupported_plugin_api() {
         let mut invalid = manifest("run.luau");
         invalid.api = "0.2".to_owned();
+        assert!(invalid.validate().is_err());
+        invalid.api = "1.1".to_owned();
         assert!(invalid.validate().is_err());
     }
 

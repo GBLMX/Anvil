@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Subscription identity returned by `event.subscribe`.",
+  "properties": {
+    "subscription_id": {
+      "format": "uint64",
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "subscription_id"
+  ],
+  "title": "EventSubscribeResponse",
+  "type": "object"
+}
