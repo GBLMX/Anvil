@@ -3981,3 +3981,13 @@ fn dense_substitution_is_rejected() {
     assert!(model.status.contains("too many matches"));
     assert_eq!(model.editor.text().len_bytes(), text.len());
 }
+
+#[test]
+fn line_substitution_ignores_dense_prefix() {
+    let text = "a\n".repeat(10_050);
+    let mut model = Model::new(EditorState::from_text(&text), None);
+    model.cursor = text.len() - 2;
+    model.execute_command("s/a/b/");
+    assert!(model.status.contains("1 replacements"));
+    assert_eq!(model.editor.text().slice(text.len() - 2..text.len()), "b\n");
+}

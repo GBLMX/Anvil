@@ -34,9 +34,9 @@ impl Model {
             };
             line.start..line.end
         };
-        let text = self.editor.text().slice(0..self.editor.text().len_bytes());
+        let search_text = self.editor.text().slice(range.clone());
         let (matches, truncated) = match crate::search::find_matches_limited(
-            &text,
+            &search_text,
             old,
             self.search.options,
             crate::search::MAX_SEARCH_MATCHES,
@@ -55,7 +55,7 @@ impl Model {
         }
         let mut matches = matches
             .into_iter()
-            .filter(|found| found.start >= range.start && found.end <= range.end)
+            .map(|found| range.start + found.start..range.start + found.end)
             .collect::<Vec<_>>();
         if !flags.contains('g') {
             matches.truncate(1);

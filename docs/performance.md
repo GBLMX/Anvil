@@ -344,8 +344,9 @@ in the document. A 100 MB `/` search measured **15.0 s** before the fix and
 **22–30 ms** after replacing it with local `GraphemeCursor` checks.
 
 Match collection is capped at 10,000. Dense all-`a` inputs stop at the cap, the
-search status appends `+`, and `:%s/.../g` refuses rather than allocating an
-unbounded range vector.
+search status appends `+`, and substitution applies the cap to the requested
+range, so `:s` on one line ignores a dense prefix. `:%s/.../g` refuses rather
+than allocating an unbounded range vector.
 
 The editor A1/A3 misses are reproducible, not scheduler noise. The same
 locked-core p99 harness at `b669315` measured A1 **30–43 µs** and A3
