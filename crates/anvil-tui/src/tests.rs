@@ -1093,6 +1093,15 @@ fn split_focus_restores_buffer_state_and_active_tab() {
 }
 
 #[test]
+fn split_focus_resets_stale_search_matches() {
+    let mut model = Model::new(EditorState::from_text("foo"), None);
+    model.commit_search("foo".to_owned());
+    assert_eq!(model.search.matches.len(), 1);
+    model.split_vertical();
+    model.focus_split(true);
+    assert!(model.search.matches.is_empty());
+}
+#[test]
 fn closing_focused_split_restores_left_pane() {
     let mut model = Model::new(EditorState::from_text("left\nright"), None);
     model.split_vertical();
@@ -3741,4 +3750,84 @@ fn search_background_overlays_fenced_code_background() {
         .position(|cell| cell.symbol() == "f")
         .expect("code text");
     assert_eq!(buffer.content()[keyword].bg, theme::SELECTION);
+}
+
+#[test]
+fn mouse_hit_test_boundaries_and_cjk_snap() {
+    let mut model = Model::new(EditorState::from_text("你好"), None);
+    model.viewport_width = 20;
+    model.viewport_height = 8;
+    let _ = mouse_hit_boundary(&model, 0, 0, 20, 8);
+    let _ = mouse_hit_boundary(&model, 19, 7, 20, 8);
+    let _ = mouse_hit_boundary(&model, 20, 8, 20, 8);
+
+    let press = crossterm::event::MouseEvent {
+        kind: crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left),
+        column: 7,
+        row: 1,
+        modifiers: crossterm::event::KeyModifiers::NONE,
+    };
+    handle_event(&mut model, Event::Mouse(press));
+    assert_eq!(model.cursor, 3);
+}
+
+#[test]
+fn dragging_outside_then_keyboard_resets_pointer() {
+    let mut model = Model::new(EditorState::from_text("abc"), None);
+    model.viewport_width = 20;
+    model.viewport_height = 8;
+    let down = crossterm::event::MouseEvent {
+        kind: crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left),
+        column: 5,
+        row: 1,
+        modifiers: crossterm::event::KeyModifiers::NONE,
+    };
+    let drag = crossterm::event::MouseEvent {
+        kind: crossterm::event::MouseEventKind::Drag(crossterm::event::MouseButton::Left),
+        column: 100,
+        row: 100,
+        modifiers: crossterm::event::KeyModifiers::NONE,
+    };
+    handle_event(&mut model, Event::Mouse(down));
+    handle_event(&mut model, Event::Mouse(drag));
+    assert!(matches!(
+        model.pointer,
+        crate::mouse::PointerState::Dragging(_)
+    ));
+    handle_event(&mut model, key(KeyCode::Char('j')));
+    assert_eq!(model.pointer, crate::mouse::PointerState::Idle);
+}
+
+#[test]
+fn clicking_outside_peek_restores_focus() {
+    let mut model = Model::new(
+        EditorState::from_text("one"),
+        Some(PathBuf::from("diag.rs")),
+    );
+    model.viewport_width = 40;
+    model.viewport_height = 12;
+    model
+        .diagnostics
+        .insert(PathBuf::from("diag.rs"), vec![diagnostic(0, 0, "problem")]);
+    model.ui.focus.split = true;
+    model.jump_diagnostic(true);
+    let click = crossterm::event::MouseEvent {
+        kind: crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left),
+        column: 0,
+        row: 0,
+        modifiers: crossterm::event::KeyModifiers::NONE,
+    };
+    handle_event(&mut model, Event::Mouse(click));
+    assert!(model.ui.diagnostic_peek.is_none());
+    assert!(model.ui.focus.split);
+}
+
+fn mouse_hit_boundary(
+    model: &Model,
+    col: u16,
+    row: u16,
+    width: u16,
+    height: u16,
+) -> crate::mouse::Target {
+    crate::mouse::hit_test(model, col, row, width, height)
 }

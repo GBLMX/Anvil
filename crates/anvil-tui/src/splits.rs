@@ -101,6 +101,7 @@ impl Model {
         self.visual_anchor = buffer.visual_anchor;
         self.visual_line = buffer.visual_line;
         self.search_query = buffer.search_query;
+        self.search.reset_for_buffer();
         if let Some(active) = active {
             self.active = active;
         }

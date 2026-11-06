@@ -114,7 +114,10 @@ fn notification_lines(model: &Model) -> Vec<Line<'static>> {
         .map(|notification| {
             let (marker, color) = match notification.severity {
                 anvil_session::ui::NotificationSeverity::Error => ("!", theme::ERROR),
-                anvil_session::ui::NotificationSeverity::Warning => ("▲", theme::WARNING),
+                anvil_session::ui::NotificationSeverity::Warning => (
+                    if icon_theme::ascii_mode() { "!" } else { "▲" },
+                    theme::WARNING,
+                ),
                 anvil_session::ui::NotificationSeverity::Info => ("i", theme::ACCENT),
             };
             let suffix = if notification.count > 1 {
@@ -171,10 +174,10 @@ fn problem_lines(model: &Model, width: usize) -> (Vec<Line<'static>>, Option<usi
             ));
         }
         let severity = match problem.severity {
-            Some(1) => "E",
-            Some(2) => "W",
-            Some(3) => "I",
-            _ => "D",
+            Some(1) => "[E]",
+            Some(2) => "[W]",
+            Some(3) => "[I]",
+            _ => "[D]",
         };
         let source = problem
             .source
@@ -231,10 +234,10 @@ fn diagnostic_peek_lines(peek: &anvil_session::ui::DiagnosticPeek) -> Vec<Line<'
     let mut lines = Vec::new();
     for diagnostic in &peek.diagnostics {
         let severity = match diagnostic.severity {
-            Some(1) => "E",
-            Some(2) => "W",
-            Some(3) => "I",
-            _ => "D",
+            Some(1) => "[E]",
+            Some(2) => "[W]",
+            Some(3) => "[I]",
+            _ => "[D]",
         };
         let source = diagnostic.source.as_deref().unwrap_or("");
         let code = diagnostic.code.as_deref().unwrap_or("");
@@ -921,7 +924,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
         }
     }
     if let Some(split) = &model.split {
-        let half = inner.width / 2;
+        let half = inner.width.saturating_mul(model.split_ratio.min(100)) / 100;
         let split_area = if model.ui.focus.split {
             Rect {
                 width: half,

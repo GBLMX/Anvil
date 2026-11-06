@@ -174,11 +174,22 @@ pub(crate) fn icon_for(path: &str) -> Option<Icon> {
 }
 
 pub(crate) fn icon_text(icon: Icon) -> Option<String> {
+    icon_text_with(icon, ascii_mode())
+}
+
+pub(crate) fn icon_text_with(icon: Icon, ascii: bool) -> Option<String> {
+    if ascii {
+        return Some(format!("[{}] ", icon.glyph));
+    }
     match UnicodeWidthStr::width(icon.glyph) {
         0 | 3.. => None,
         1 => Some(format!("{} ", icon.glyph)),
         _ => Some(icon.glyph.to_owned()),
     }
+}
+
+pub(crate) fn ascii_mode() -> bool {
+    std::env::var_os("ANVIL_ASCII_MODE").is_some_and(|value| value == "1")
 }
 
 #[cfg(test)]
@@ -223,5 +234,14 @@ mod tests {
             })
             .is_none()
         );
+    }
+
+    #[test]
+    fn ascii_fallback_uses_text_labels() {
+        let icon = Icon {
+            glyph: "R",
+            color: theme::TEXT,
+        };
+        assert_eq!(icon_text_with(icon, true).as_deref(), Some("[R] "));
     }
 }

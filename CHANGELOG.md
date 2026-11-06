@@ -9,6 +9,13 @@ post-`0.5.0` feature line.
 ## [Unreleased]
 
 
+## [0.5.9] - 2026-11-06
+
+### Added
+- Mouse capture with a single pointer state machine, wide-character hit-testing,
+  click-to-focus, drag selection with edge scrolling, wheel scrolling, split
+  resize, overlay click trapping, and an ASCII icon/severity fallback.
+
 ## [0.5.8] - 2026-11-06
 
 ### Added

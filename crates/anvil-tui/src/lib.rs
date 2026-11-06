@@ -22,8 +22,9 @@ use anvil_session::ui::{InputMode, UiState};
 use crossterm::{
     cursor::SetCursorStyle,
     event::{
-        self, DisableBracketedPaste, EnableBracketedPaste, Event, KeyEvent,
-        KeyboardEnhancementFlags, PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags,
+        self, DisableBracketedPaste, DisableMouseCapture, EnableBracketedPaste, EnableMouseCapture,
+        Event, KeyEvent, KeyboardEnhancementFlags, PopKeyboardEnhancementFlags,
+        PushKeyboardEnhancementFlags,
     },
     execute,
     terminal::{
@@ -53,6 +54,7 @@ mod inlay_hints;
 pub mod lsp;
 mod lsp_ui;
 mod modal;
+mod mouse;
 mod overlays;
 mod plugin_activation;
 mod plugin_discovery;
@@ -396,6 +398,9 @@ pub struct Model {
     /// Spinner frame for the busy label.
     spinner: usize,
     viewport_height: u16,
+    viewport_width: u16,
+    split_ratio: u16,
+    pointer: mouse::PointerState,
     /// Pending normal-mode operator (`d` or `y`).
     pending: Option<char>,
     /// Deadline for a pending Space leader.
@@ -540,6 +545,9 @@ impl Model {
             busy_progress: None,
             spinner: 0,
             viewport_height: 24,
+            viewport_width: 80,
+            split_ratio: 50,
+            pointer: mouse::PointerState::Idle,
             pending: None,
             leader_deadline: None,
             count: 0,
@@ -1632,6 +1640,7 @@ pub fn run_with_workspace(path: Option<PathBuf>, workspace: PathBuf) -> io::Resu
         }
         let size = terminal.terminal.size()?;
         model.viewport_height = size.height;
+        model.viewport_width = size.width;
         model.ensure_cursor_visible(size.height.saturating_sub(2), size.width.saturating_sub(2));
         model.tick_status();
         model.tick_search();
@@ -1696,6 +1705,11 @@ impl TerminalSession {
             let _ = disable_raw_mode();
             return Err(error);
         }
+        if let Err(error) = execute!(stdout, EnableMouseCapture) {
+            let _ = execute!(stdout, DisableBracketedPaste, LeaveAlternateScreen);
+            let _ = disable_raw_mode();
+            return Err(error);
+        }
         let keyboard_enhancement = supported
             && execute!(
                 stdout,
@@ -1741,6 +1755,7 @@ impl Drop for TerminalSession {
         }
         let _ = execute!(
             self.terminal.backend_mut(),
+            DisableMouseCapture,
             DisableBracketedPaste,
             SetCursorStyle::DefaultUserShape,
             LeaveAlternateScreen
