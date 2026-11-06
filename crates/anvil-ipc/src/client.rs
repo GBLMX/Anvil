@@ -172,6 +172,23 @@ impl GatewayClient {
         self.notifications.drain(..).collect()
     }
 
+    /// Poll notifications currently readable on the gateway connection.
+    pub fn poll_notifications(&mut self) -> Result<Vec<Request>, ClientError> {
+        let mut notifications = self.take_notifications();
+        while self
+            .connection
+            .wait_readable(std::time::Duration::from_millis(0))?
+        {
+            let Some(frame) = self.connection.recv()? else {
+                break;
+            };
+            if let Some(notification) = parse_notification(&frame) {
+                notifications.push(notification);
+            }
+        }
+        Ok(notifications)
+    }
+
     /// Start a gateway-supervised LSP process.
     pub fn lsp_start(&mut self, tool: &str, args: &[String]) -> Result<(), ClientError> {
         self.request("lsp.start", serde_json::json!({"tool": tool, "args": args}))?;

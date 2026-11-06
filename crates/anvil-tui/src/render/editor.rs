@@ -768,6 +768,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
             popup,
         );
     }
+    crate::pkg_install::render(model, frame, frame.area());
 }
 
 fn render_welcome(frame: &mut Frame, area: Rect, model: &Model) {

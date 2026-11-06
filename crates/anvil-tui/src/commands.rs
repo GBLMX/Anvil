@@ -117,6 +117,14 @@ impl Model {
             ("q", "") => self.request_quit(),
             ("q!", "") => self.force_quit(),
             ("help", "") => self.show_help(),
+            ("pkg", argument) => {
+                if let Some(url) = argument.strip_prefix("install ") {
+                    self.start_pkg_install(url.trim());
+                } else {
+                    self.status = "E: usage: :pkg install <url>".to_owned();
+                    self.dirty = true;
+                }
+            }
             ("reconnect", "") => self.queue_effect(Effect::ReconnectGateway),
             ("lsp-start", "") => self.queue_effect(Effect::LspStart),
             ("tree", "") => self.open_tree(),

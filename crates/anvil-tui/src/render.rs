@@ -19,7 +19,7 @@ pub use editor::view;
 
 pub(crate) const SPINNER: [&str; 8] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧"];
 
-fn panel_block(title: impl Into<Line<'static>>) -> Block<'static> {
+pub(crate) fn panel_block(title: impl Into<Line<'static>>) -> Block<'static> {
     Block::bordered()
         .border_type(BorderType::Rounded)
         .border_style(theme::border(false))

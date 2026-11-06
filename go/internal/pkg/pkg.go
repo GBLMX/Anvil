@@ -13,6 +13,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -63,11 +64,18 @@ func DecodePublicKey(value string) (ed25519.PublicKey, error) {
 	return ed25519.PublicKey(raw), nil
 }
 
-// ReadSignature accepts a raw 64-byte signature or a hex/base64 text file.
+// ReadSignature accepts a raw 64-byte signature, hex/base64 text, or a JSON
+// envelope with a "signature" field.
 func ReadSignature(path string) ([]byte, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read signature: %w", err)
+	}
+	var envelope struct {
+		Signature string `json:"signature"`
+	}
+	if json.Unmarshal(data, &envelope) == nil && envelope.Signature != "" {
+		return decodeSignatureText(envelope.Signature)
 	}
 	if len(data) == ed25519.SignatureSize {
 		return data, nil
@@ -83,6 +91,39 @@ func ReadSignature(path string) ([]byte, error) {
 		return decoded, nil
 	}
 	return nil, errors.New("signature must be 64 raw bytes or hex/base64")
+}
+
+// ReadSignatureWithKey accepts a detached signature and an optional public key
+// carried in a JSON envelope: {"public_key":"hex","signature":"hex/base64"}.
+func ReadSignatureWithKey(path string) ([]byte, string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, "", fmt.Errorf("read signature: %w", err)
+	}
+	var envelope struct {
+		PublicKey string `json:"public_key"`
+		Signature string `json:"signature"`
+	}
+	if json.Unmarshal(data, &envelope) == nil && envelope.Signature != "" {
+		signature, err := decodeSignatureText(envelope.Signature)
+		if err != nil {
+			return nil, "", err
+		}
+		return signature, envelope.PublicKey, nil
+	}
+	signature, err := ReadSignature(path)
+	return signature, "", err
+}
+
+func decodeSignatureText(value string) ([]byte, error) {
+	value = strings.TrimSpace(value)
+	if decoded, err := hex.DecodeString(value); err == nil && len(decoded) == ed25519.SignatureSize {
+		return decoded, nil
+	}
+	if decoded, err := base64.StdEncoding.DecodeString(value); err == nil && len(decoded) == ed25519.SignatureSize {
+		return decoded, nil
+	}
+	return nil, errors.New("signature must be 64 bytes in hex or base64")
 }
 
 // VerifyFile verifies archivePath against a detached signature and returns the
@@ -180,6 +221,15 @@ func Install(archivePath, signaturePath string, publicKey ed25519.PublicKey, des
 	return digest, nil
 }
 
+// DigestFile returns the SHA-256 digest of a package archive.
+func DigestFile(path string) ([32]byte, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return [32]byte{}, fmt.Errorf("open package: %w", err)
+	}
+	defer file.Close()
+	return sha256File(file)
+}
 func sha256File(file *os.File) ([32]byte, error) {
 	hash := sha256.New()
 	if _, err := io.Copy(hash, io.LimitReader(file, MaxPackageBytes+1)); err != nil {
@@ -313,6 +363,60 @@ func ensureDir(root *fsroot.Root, name string) error {
 	return nil
 }
 
+// ManifestInfo is the capability-relevant subset of plugin.json.
+type ManifestInfo struct {
+	ID          string   `json:"id"`
+	Version     string   `json:"version"`
+	Entry       string   `json:"entry"`
+	Permissions []string `json:"permissions"`
+}
+
+// InspectArchive reads the root plugin.json without extracting the package.
+func InspectArchive(path string) (ManifestInfo, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return ManifestInfo{}, fmt.Errorf("open package: %w", err)
+	}
+	defer file.Close()
+	gzipReader, err := gzip.NewReader(file)
+	if err != nil {
+		return ManifestInfo{}, fmt.Errorf("%w: gzip: %v", ErrInvalidArchive, err)
+	}
+	defer gzipReader.Close()
+	reader := tar.NewReader(gzipReader)
+	for {
+		header, err := reader.Next()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return ManifestInfo{}, fmt.Errorf("%w: tar: %v", ErrInvalidArchive, err)
+		}
+		name, err := safeName(header.Name)
+		if err != nil {
+			return ManifestInfo{}, err
+		}
+		if name != "plugin.json" {
+			continue
+		}
+		if header.Typeflag != tar.TypeReg && header.Typeflag != tar.TypeRegA {
+			return ManifestInfo{}, fmt.Errorf("%w: plugin.json is not a regular file", ErrInvalidArchive)
+		}
+		if header.Size < 0 || header.Size > 1<<20 {
+			return ManifestInfo{}, fmt.Errorf("%w: plugin.json is too large", ErrInvalidArchive)
+		}
+		data, err := io.ReadAll(io.LimitReader(reader, header.Size))
+		if err != nil {
+			return ManifestInfo{}, fmt.Errorf("%w: read plugin.json: %v", ErrInvalidArchive, err)
+		}
+		var info ManifestInfo
+		if err := json.Unmarshal(data, &info); err != nil || info.ID == "" {
+			return ManifestInfo{}, fmt.Errorf("%w: invalid plugin.json", ErrInvalidArchive)
+		}
+		return info, nil
+	}
+	return ManifestInfo{}, fmt.Errorf("%w: plugin.json is required", ErrInvalidArchive)
+}
 func rootHasManifest(stage string) (string, error) {
 	file, err := os.Open(filepath.Join(stage, "plugin.json"))
 	if err != nil {

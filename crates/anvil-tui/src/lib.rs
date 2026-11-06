@@ -56,6 +56,7 @@ mod lsp_ui;
 mod modal;
 mod mouse;
 mod overlays;
+mod pkg_install;
 mod plugin_activation;
 mod plugin_discovery;
 mod plugin_document;
@@ -519,6 +520,7 @@ pub struct Model {
     /// Plugin host supervisor keyed by plugin id.
     #[cfg(target_os = "linux")]
     plugin_supervisor: PluginSupervisor,
+    pkg_install: Option<pkg_install::PkgInstallState>,
 }
 
 impl Model {
@@ -625,6 +627,7 @@ impl Model {
             plugins: Vec::new(),
             #[cfg(target_os = "linux")]
             plugin_supervisor: PluginSupervisor::new(),
+            pkg_install: None,
         }
     }
 

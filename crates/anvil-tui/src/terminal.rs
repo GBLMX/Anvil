@@ -107,6 +107,7 @@ pub fn run_with_workspace(path: Option<PathBuf>, workspace: PathBuf) -> io::Resu
             }
         }
         model.poll_host();
+        model.poll_pkg_notifications();
         model.poll_syntax();
         model.poll_lsp();
         model.poll_file_worker();

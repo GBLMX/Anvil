@@ -149,6 +149,12 @@ func (s *Server) dispatch(ctx context.Context, req request, state *connectionSta
 		return s.exec(ctx, req, state)
 	case "sys.fetch":
 		return s.fetch(ctx, req, state)
+	case "pkg.download":
+		return s.packageDownload(req, state)
+	case "pkg.install":
+		return s.packageInstall(req, state)
+	case "pkg.trust":
+		return s.packageTrust(req, state)
 	case "lsp.start":
 		return s.lspStart(ctx, req, state)
 	case "lsp.send":

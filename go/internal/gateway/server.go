@@ -44,18 +44,23 @@ const (
 
 // Config is the minimum per-session gateway configuration.
 type Config struct {
-	SocketPath     string
-	Workspace      string
-	PluginID       string
-	TokenSHA256    [32]byte
-	LSPTokenSHA256 [32]byte
-	Permissions    []string
-	ExecRunner     string
-	NoSandboxLSP   bool
-	ExecTimeout    time.Duration
-	MaxOutput      int
-	Fetcher        *fetch.Client
-	CgroupRoot     string
+	SocketPath      string
+	Workspace       string
+	PluginID        string
+	TokenSHA256     [32]byte
+	LSPTokenSHA256  [32]byte
+	Permissions     []string
+	ExecRunner      string
+	NoSandboxLSP    bool
+	ExecTimeout     time.Duration
+	MaxOutput       int
+	Fetcher         *fetch.Client
+	PackageFetcher  *fetch.Client
+	PluginDir       string
+	TrustStorePath  string
+	DownloadWorkers int
+	DownloadQueue   int
+	CgroupRoot      string
 }
 
 type pluginGrant struct {
@@ -75,6 +80,7 @@ type Server struct {
 	pluginMu  sync.Mutex
 	plugins   map[string]pluginGrant
 	cgroup    string
+	downloads *downloadQueue
 }
 
 // Listen binds the gateway socket with mode 0600.
@@ -124,9 +130,21 @@ func Listen(cfg Config) (*Server, error) {
 	return &Server{
 		cfg:      cfg,
 		listener: listener,
-		root:     root,
-		plugins:  map[string]pluginGrant{},
-		cgroup:   cgroupPath,
+		downloads: func() *downloadQueue {
+			if cfg.PackageFetcher == nil {
+				return nil
+			}
+			return newDownloadQueue(
+				context.Background(),
+				cfg.PackageFetcher,
+				cfg.TrustStorePath,
+				cfg.DownloadWorkers,
+				cfg.DownloadQueue,
+			)
+		}(),
+		root:    root,
+		plugins: map[string]pluginGrant{},
+		cgroup:  cgroupPath,
 	}, nil
 }
 
@@ -140,6 +158,9 @@ func (s *Server) Close() error {
 	_ = os.Remove(s.cfg.SocketPath)
 	if s.root != nil {
 		_ = s.root.Close()
+	}
+	if s.downloads != nil {
+		s.downloads.close()
 	}
 	if s.cgroup != "" {
 		_ = os.Remove(s.cgroup)

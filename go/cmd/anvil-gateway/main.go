@@ -41,6 +41,10 @@ func main() {
 	pluginSignature := flag.String("plugin-signature", "", "detached Ed25519 signature file")
 	pluginPublicKey := flag.String("plugin-public-key", "", "Ed25519 public key as hex or base64")
 	pluginInstallDir := flag.String("plugin-install-dir", "", "destination directory for -install-plugin")
+	pluginDir := flag.String("plugin-dir", os.Getenv("ANVIL_PLUGIN_DIR"), "installed plugin directory")
+	downloadWorkers := flag.Int("download-workers", 3, "maximum concurrent package downloads")
+	downloadQueue := flag.Int("download-queue", 16, "maximum queued package downloads")
+	pluginTrustStore := flag.String("plugin-trust-store", pkg.DefaultTrustStorePath(), "trusted Ed25519 key store")
 	flag.Parse()
 
 	if *installPlugin != "" {
@@ -129,19 +133,37 @@ func main() {
 			granted = append(granted, "sys.fetch")
 		}
 	}
+	var packageFetcher *fetch.Client
+	if *allowFetch {
+		hosts := splitPermissions(*fetchAllow)
+		packageFetcher, err = fetch.New(fetch.Config{
+			AllowedHosts: hosts,
+			MaxBody:      pkg.MaxPackageBytes,
+			Timeout:      *fetchTimeout,
+		})
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "anvil-gateway: package fetch: %v\n", err)
+			os.Exit(2)
+		}
+	}
 	server, err := gateway.Listen(gateway.Config{
-		SocketPath:     *socket,
-		Workspace:      workspacePath,
-		PluginID:       *pluginID,
-		TokenSHA256:    [32]byte(hash),
-		LSPTokenSHA256: lspHash,
-		Permissions:    granted,
-		ExecRunner:     runnerPath,
-		NoSandboxLSP:   *noSandboxLSP,
-		ExecTimeout:    *execTimeout,
-		MaxOutput:      *maxOutput,
-		Fetcher:        fetcher,
-		CgroupRoot:     *cgroupRoot,
+		SocketPath:      *socket,
+		Workspace:       workspacePath,
+		PluginID:        *pluginID,
+		TokenSHA256:     [32]byte(hash),
+		LSPTokenSHA256:  lspHash,
+		Permissions:     granted,
+		ExecRunner:      runnerPath,
+		NoSandboxLSP:    *noSandboxLSP,
+		ExecTimeout:     *execTimeout,
+		MaxOutput:       *maxOutput,
+		Fetcher:         fetcher,
+		CgroupRoot:      *cgroupRoot,
+		PackageFetcher:  packageFetcher,
+		PluginDir:       *pluginDir,
+		TrustStorePath:  *pluginTrustStore,
+		DownloadWorkers: *downloadWorkers,
+		DownloadQueue:   *downloadQueue,
 	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "anvil-gateway: %v\n", err)

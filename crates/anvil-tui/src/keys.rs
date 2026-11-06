@@ -290,6 +290,15 @@ fn execute_command_id(model: &mut Model, id: &str, key: KeyPress) -> bool {
 fn handle_key(model: &mut Model, key: KeyPress) {
     let control = key.ctrl();
     let text_input = key.text_input();
+    if model.pkg_install.is_some() {
+        match key.code {
+            KeyCode::Esc => model.cancel_pkg_install(),
+            KeyCode::Enter => model.confirm_pkg_install(),
+            KeyCode::Char('t') => model.trust_pkg_key(),
+            _ => {}
+        }
+        return;
+    }
 
     if model.welcome {
         if key.code == KeyCode::Esc {

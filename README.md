@@ -47,6 +47,9 @@ with a preconnected editor socket and dangerous-syscall denial, cgroup-before-ex
 `sys.ping`/`sys.exec` dispatch, and a TUI debug `PluginSession`
 (`:plugin-start`/`:plugin-exec`/`:plugin-stop`/`:plugin-oom`). Local plugin
 manifests are discovered from child directories of `ANVIL_PLUGIN_DIR`.
+`:pkg install <url>` downloads a signed package through the gateway, shows its
+declared capabilities, and installs only the reviewed SHA-256 digest. Downloads
+require `-allow-fetch` and an explicit `-fetch-allow` host.
 `onLanguage` and `onWorkspaceContains` events start matching sandboxed hosts
 with no grants. `onStartup` requires explicit opt-in via
 `ANVIL_PLUGIN_ALLOW_STARTUP=1`; workspace activation is disabled with
