@@ -35,17 +35,28 @@ impl Model {
             line.start..line.end
         };
         let text = self.editor.text().slice(0..self.editor.text().len_bytes());
-        let mut matches = match crate::search::find_matches(&text, old, self.search.options) {
-            Ok(matches) => matches
-                .into_iter()
-                .filter(|found| found.start >= range.start && found.end <= range.end)
-                .collect::<Vec<_>>(),
+        let (matches, truncated) = match crate::search::find_matches_limited(
+            &text,
+            old,
+            self.search.options,
+            crate::search::MAX_SEARCH_MATCHES,
+        ) {
+            Ok(result) => result,
             Err(error) => {
                 self.status = format!("E: {error}");
                 self.dirty = true;
                 return;
             }
         };
+        if truncated {
+            self.status = "E: too many matches; narrow the range".to_owned();
+            self.dirty = true;
+            return;
+        }
+        let mut matches = matches
+            .into_iter()
+            .filter(|found| found.start >= range.start && found.end <= range.end)
+            .collect::<Vec<_>>();
         if !flags.contains('g') {
             matches.truncate(1);
         }

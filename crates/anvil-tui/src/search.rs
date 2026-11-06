@@ -8,6 +8,7 @@ use std::{
 use unicode_segmentation::GraphemeCursor;
 
 const SEARCH_DEBOUNCE: Duration = Duration::from_millis(50);
+pub(crate) const MAX_SEARCH_MATCHES: usize = 10_000;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(crate) struct SearchOptions {
@@ -22,6 +23,7 @@ pub(crate) struct SearchState {
     pub(crate) matches: Vec<Range<usize>>,
     pub(crate) current: usize,
     pub(crate) error: Option<String>,
+    pub(crate) truncated: bool,
     origin: Option<(usize, Vec<(usize, usize)>)>,
     pub(crate) due: Option<Instant>,
 }
@@ -32,6 +34,7 @@ impl SearchState {
         self.matches.clear();
         self.current = 0;
         self.error = None;
+        self.truncated = false;
         self.due = None;
     }
 
@@ -53,6 +56,7 @@ impl SearchState {
     pub(crate) fn restore_origin(&mut self) -> Option<(usize, Vec<(usize, usize)>)> {
         self.due = None;
         self.error = None;
+        self.truncated = false;
         self.matches.clear();
         self.origin.take()
     }
@@ -61,6 +65,7 @@ impl SearchState {
         self.matches.clear();
         self.current = 0;
         self.error = None;
+        self.truncated = false;
         self.due = None;
         self.origin = None;
     }
@@ -70,13 +75,26 @@ impl SearchState {
     }
 }
 
+#[cfg(test)]
 pub(crate) fn find_matches(
     text: &str,
     query: &str,
     options: SearchOptions,
 ) -> Result<Vec<Range<usize>>, String> {
+    find_matches_limited(text, query, options, usize::MAX).map(|(matches, _)| matches)
+}
+
+pub(crate) fn find_matches_limited(
+    text: &str,
+    query: &str,
+    options: SearchOptions,
+    limit: usize,
+) -> Result<(Vec<Range<usize>>, bool), String> {
     if query.is_empty() {
-        return Ok(Vec::new());
+        return Ok((Vec::new(), false));
+    }
+    if limit == 0 {
+        return Ok((Vec::new(), true));
     }
     let pattern = if options.regex {
         query.to_owned()
@@ -88,6 +106,7 @@ pub(crate) fn find_matches(
         .build()
         .map_err(|error| error.to_string())?;
     let mut matches = Vec::new();
+    let mut truncated = false;
     for found in regex.find_iter(text) {
         if found.start() == found.end()
             || !is_grapheme_boundary(text, found.start())
@@ -104,9 +123,13 @@ pub(crate) fn find_matches(
         {
             continue;
         }
+        if matches.len() >= limit {
+            truncated = true;
+            break;
+        }
         matches.push(found.start()..found.end());
     }
-    Ok(matches)
+    Ok((matches, truncated))
 }
 
 fn is_word_char(character: char) -> bool {
@@ -186,5 +209,28 @@ mod tests {
             find_matches("e\u{301} e", "e", literal()).expect("after"),
             vec![4..5]
         );
+    }
+
+    #[test]
+    fn dense_matches_are_truncated() {
+        for megabytes in [1, 10] {
+            let text = "a".repeat(megabytes * 1024 * 1024);
+            let (matches, truncated) =
+                find_matches_limited(&text, "a", literal(), MAX_SEARCH_MATCHES).expect("matches");
+            assert_eq!(matches.len(), MAX_SEARCH_MATCHES);
+            assert!(truncated);
+        }
+    }
+
+    #[test]
+    #[ignore = "manual dense search boundary"]
+    fn dense_100mb_search_is_bounded() {
+        let text = "a".repeat(100 * 1024 * 1024);
+        let start = std::time::Instant::now();
+        let (matches, truncated) =
+            find_matches_limited(&text, "a", literal(), MAX_SEARCH_MATCHES).expect("matches");
+        println!("dense-100MB-search-ms={}", start.elapsed().as_millis());
+        assert_eq!(matches.len(), MAX_SEARCH_MATCHES);
+        assert!(truncated);
     }
 }

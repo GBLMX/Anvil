@@ -3972,3 +3972,12 @@ fn hit_test_extreme_dimensions_do_not_overflow() {
         );
     }
 }
+
+#[test]
+fn dense_substitution_is_rejected() {
+    let text = "a".repeat(1024 * 1024);
+    let mut model = Model::new(EditorState::from_text(&text), None);
+    model.execute_command("%s/a/b/g");
+    assert!(model.status.contains("too many matches"));
+    assert_eq!(model.editor.text().len_bytes(), text.len());
+}

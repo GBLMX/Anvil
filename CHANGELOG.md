@@ -24,6 +24,8 @@ post-`0.5.0` feature line.
 - Search no longer builds a full-document grapheme-boundary set; 100 MB
   search dropped from 15 s to 22–30 ms.
 - Split hit-testing no longer overflows at extreme terminal widths.
+- Dense searches now cap at 10,000 matches, and oversized global
+  substitutions fail instead of accumulating an unbounded range vector.
 
 ## [0.5.8] - 2026-11-06
 

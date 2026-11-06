@@ -1,7 +1,7 @@
 //! Model-side incremental search and replace transitions.
 
 use super::*;
-use crate::search::find_matches;
+use crate::search::{MAX_SEARCH_MATCHES, find_matches_limited};
 
 impl Model {
     pub(crate) fn begin_search(&mut self) {
@@ -54,11 +54,12 @@ impl Model {
             self.search.matches.clear();
             self.search.current = 0;
             self.search.error = None;
+            self.search.truncated = false;
             return true;
         }
         let text = self.editor.text().slice(0..self.editor.text().len_bytes());
-        match find_matches(&text, query, self.search.options) {
-            Ok(matches) => {
+        match find_matches_limited(&text, query, self.search.options, MAX_SEARCH_MATCHES) {
+            Ok((matches, truncated)) => {
                 let cursor = self.cursor;
                 let current = matches
                     .iter()
@@ -76,6 +77,7 @@ impl Model {
                 self.search.matches = matches;
                 self.search.current = current;
                 self.search.error = None;
+                self.search.truncated = truncated;
                 if committed {
                     self.status = self.search_status(query);
                 }
@@ -135,11 +137,12 @@ impl Model {
         if let Some(error) = &self.search.error {
             return format!("/{query}{flags} error: {error}");
         }
+        let suffix = if self.search.truncated { "+" } else { "" };
         if self.search.matches.is_empty() {
             format!("/{query}{flags} [0/0]")
         } else {
             format!(
-                "/{query}{flags} [{}/{}]",
+                "/{query}{flags} [{}/{}{suffix}]",
                 self.search.current + 1,
                 self.search.matches.len()
             )

@@ -334,6 +334,7 @@ Release build used Cargo defaults, not the reference-machine LTO profile.
 | 100 MB key-to-screen p99 | 130 µs Rust / 846 µs PTY | pass |
 | 100 MB scroll p99 | 145 µs Rust / 606 µs PTY | pass |
 | 100 MB search p99 | 28 ms Rust / 30 ms PTY | pass |
+| Dense all-`a` search, 1/10/100 MB | capped at 10,000 matches; 100 MB 0 ms, 109 MB RSS | pass |
 | 100 MB open first frame | 113 ms Rust / 163 ms model | pass |
 | PTY terminal setup without reply | 2.0 s | terminal-query artifact |
 | 100k line-index stress | chunk count 1,281; offset p99 2.8 µs | pass |
@@ -341,6 +342,10 @@ Release build used Cargo defaults, not the reference-machine LTO profile.
 The 0.5.9 search path previously built a `HashSet` of every grapheme boundary
 in the document. A 100 MB `/` search measured **15.0 s** before the fix and
 **22–30 ms** after replacing it with local `GraphemeCursor` checks.
+
+Match collection is capped at 10,000. Dense all-`a` inputs stop at the cap, the
+search status appends `+`, and `:%s/.../g` refuses rather than allocating an
+unbounded range vector.
 
 The editor A1/A3 misses are reproducible, not scheduler noise. The same
 locked-core p99 harness at `b669315` measured A1 **30–43 µs** and A3
