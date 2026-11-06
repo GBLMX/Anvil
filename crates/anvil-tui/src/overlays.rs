@@ -99,6 +99,10 @@ impl Model {
         if diagnostics.is_empty() {
             return false;
         }
+        let line_count = diagnostics
+            .iter()
+            .map(|diagnostic| 1 + diagnostic.message.lines().count() + diagnostic.related.len())
+            .sum();
         self.ui.diagnostic_peek = Some(DiagnosticPeek {
             path,
             revision: self.editor.revision(),
@@ -107,6 +111,7 @@ impl Model {
             focus: self.ui.focus,
             diagnostics,
             selected: 0,
+            line_count,
             scroll: 0,
         });
         self.dirty = true;
@@ -121,11 +126,12 @@ impl Model {
     }
 
     pub(crate) fn scroll_diagnostic_peek(&mut self, delta: isize) {
+        let visible = usize::from(self.viewport_height.saturating_sub(4)).clamp(1, 10);
         if let Some(peek) = self.ui.diagnostic_peek.as_mut() {
             peek.scroll = peek
                 .scroll
                 .saturating_add_signed(delta)
-                .min(peek.diagnostics.len().saturating_sub(1));
+                .min(peek.line_count.saturating_sub(visible));
             self.dirty = true;
         }
     }

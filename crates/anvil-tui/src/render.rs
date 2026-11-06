@@ -199,6 +199,34 @@ fn problem_lines(model: &Model, width: usize) -> (Vec<Line<'static>>, Option<usi
     (lines, selected_line)
 }
 
+pub(crate) fn diagnostic_peek_rect(
+    area: Rect,
+    cursor_y: u16,
+    width: u16,
+    desired_height: u16,
+) -> Option<Rect> {
+    let bottom = area.y + area.height;
+    let below = bottom.saturating_sub(cursor_y.saturating_add(1));
+    let above = cursor_y.saturating_sub(area.y);
+    let max_height = below.max(above).min(area.height.saturating_sub(2));
+    let height = desired_height.min(max_height);
+    if height == 0 {
+        return None;
+    }
+    let y = if below >= height {
+        cursor_y.saturating_add(1)
+    } else {
+        cursor_y.saturating_sub(height)
+    };
+    let width = width.min(area.width);
+    Some(Rect {
+        x: area.x + (area.width.saturating_sub(width)) / 2,
+        y,
+        width,
+        height,
+    })
+}
+
 fn diagnostic_peek_lines(peek: &anvil_session::ui::DiagnosticPeek) -> Vec<Line<'static>> {
     let mut lines = Vec::new();
     for diagnostic in &peek.diagnostics {
@@ -1134,39 +1162,19 @@ pub fn view(model: &Model, frame: &mut Frame) {
             .y
             .saturating_add(cursor_line.saturating_sub(model.scroll as u16))
             .min(area.y + area.height.saturating_sub(1));
-        let bottom = area.y + area.height;
-        let mut y = if cursor_y + 1 + height <= bottom {
-            cursor_y + 1
-        } else if cursor_y > area.y + height {
-            cursor_y - height
-        } else {
-            area.y + (area.height.saturating_sub(height)) / 2
-        };
-        y = y.min(bottom.saturating_sub(height));
-        if y <= cursor_y && cursor_y < y + height {
-            y = if cursor_y + 1 + height <= bottom {
-                cursor_y + 1
-            } else {
-                cursor_y.saturating_sub(height)
-            };
+        if let Some(popup) = diagnostic_peek_rect(area, cursor_y, width, height) {
+            frame.render_widget(Clear, popup);
+            frame.render_widget(
+                Paragraph::new(lines)
+                    .style(theme::panel())
+                    .scroll((u16::try_from(peek.scroll).unwrap_or(u16::MAX), 0))
+                    .block(panel_block(format!(
+                        "Diagnostics ({})",
+                        peek.diagnostics.len()
+                    ))),
+                popup,
+            );
         }
-        let popup = Rect {
-            x: area.x + (area.width.saturating_sub(width)) / 2,
-            y,
-            width,
-            height,
-        };
-        frame.render_widget(Clear, popup);
-        frame.render_widget(
-            Paragraph::new(lines)
-                .style(theme::panel())
-                .scroll((u16::try_from(peek.scroll).unwrap_or(u16::MAX), 0))
-                .block(panel_block(format!(
-                    "Diagnostics ({})",
-                    peek.diagnostics.len()
-                ))),
-            popup,
-        );
     }
     if let Some(actions) = &model.code_actions {
         let width = (area.width * 3 / 5)

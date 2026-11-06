@@ -393,6 +393,7 @@ pub struct Model {
     busy_progress: Option<u64>,
     /// Spinner frame for the busy label.
     spinner: usize,
+    viewport_height: u16,
     /// Pending normal-mode operator (`d` or `y`).
     pending: Option<char>,
     /// Deadline for a pending Space leader.
@@ -535,6 +536,7 @@ impl Model {
             busy: None,
             busy_progress: None,
             spinner: 0,
+            viewport_height: 24,
             pending: None,
             leader_deadline: None,
             count: 0,
@@ -1644,6 +1646,7 @@ pub fn run_with_workspace(path: Option<PathBuf>, workspace: PathBuf) -> io::Resu
             insert_cursor = Some(wants_bar);
         }
         let size = terminal.terminal.size()?;
+        model.viewport_height = size.height;
         model.ensure_cursor_visible(size.height.saturating_sub(2), size.width.saturating_sub(2));
         model.tick_status();
         if model.dirty {

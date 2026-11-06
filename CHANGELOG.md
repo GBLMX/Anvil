@@ -15,7 +15,8 @@ post-`0.5.0` feature line.
 - Bounded, deduplicating notifications; non-blocking progress with completion,
   failure, and cancellation; a problems panel sourced from the existing LSP
   cache; and Diagnostic Peek v2 with merged same-line diagnostics, related
-  locations, revision pruning, focus restoration, and narrow-viewport fallback.
+  locations, revision pruning, focus restoration, rendered-line scrolling, and
+  cursor-safe narrow-viewport placement.
 
 ## [0.5.6] - 2026-11-06
 

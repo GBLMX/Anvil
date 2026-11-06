@@ -263,6 +263,7 @@ pub struct DiagnosticPeek {
     pub focus: FocusState,
     pub diagnostics: Vec<PeekDiagnostic>,
     pub selected: usize,
+    pub line_count: usize,
     pub scroll: usize,
 }
 

@@ -2063,6 +2063,35 @@ fn diagnostic_peek_clears_on_revision_change() {
 }
 
 #[test]
+fn diagnostic_peek_avoids_cursor_and_scrolls_long_messages() {
+    let area = ratatui::layout::Rect {
+        x: 0,
+        y: 0,
+        width: 30,
+        height: 8,
+    };
+    let rect = crate::render::diagnostic_peek_rect(area, 3, 20, 6).expect("peek rect");
+    assert!(rect.height < 6);
+    assert!(rect.y > 3 || rect.y + rect.height <= 3);
+
+    let mut model = Model::new(
+        EditorState::from_text("one"),
+        Some(PathBuf::from("diag.rs")),
+    );
+    let message = (0..20)
+        .map(|index| format!("line {index}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    model
+        .diagnostics
+        .insert(PathBuf::from("diag.rs"), vec![diagnostic(0, 0, &message)]);
+    model.viewport_height = 10;
+    model.jump_diagnostic(true);
+    model.scroll_diagnostic_peek(5);
+    assert!(model.ui.diagnostic_peek.as_ref().expect("peek").scroll > 0);
+}
+
+#[test]
 fn problems_panel_jumps_to_selected_problem() {
     let mut model = Model::new(
         EditorState::from_text("one\ntwo"),
