@@ -1,10 +1,12 @@
 //! Single-flight plugin host supervision and bounded failure handling.
 
+use crate::editor_service::{EditorRequest, EditorService};
 use crate::host_session::HostEvent;
 use crate::plugin_session::PluginSession;
 use anvil_ipc::GatewayClient;
 use std::collections::{HashMap, VecDeque};
 use std::path::Path;
+use std::sync::mpsc::{self, Receiver, Sender};
 use std::time::{Duration, Instant};
 
 pub(crate) const START_TIMEOUT: Duration = Duration::from_secs(2);
@@ -150,6 +152,7 @@ impl ManagedHost for PluginSession {
 }
 
 pub(crate) trait HostLauncher {
+    #[allow(clippy::too_many_arguments)]
     fn start(
         &self,
         gateway: Option<&mut GatewayClient>,
@@ -158,12 +161,14 @@ pub(crate) trait HostLauncher {
         plugin_root: Option<&Path>,
         mode: StartMode,
         permissions: &[String],
+        editor_socket: Option<&Path>,
     ) -> Result<Box<dyn ManagedHost>, String>;
 }
 
 struct SystemLauncher;
 
 impl HostLauncher for SystemLauncher {
+    #[allow(clippy::too_many_arguments)]
     fn start(
         &self,
         gateway: Option<&mut GatewayClient>,
@@ -172,17 +177,23 @@ impl HostLauncher for SystemLauncher {
         plugin_root: Option<&Path>,
         mode: StartMode,
         permissions: &[String],
+        editor_socket: Option<&Path>,
     ) -> Result<Box<dyn ManagedHost>, String> {
         let gateway = gateway.ok_or_else(|| "gateway unavailable".to_owned())?;
         let host = match (mode, plugin_root) {
             (StartMode::Oom, _) => {
-                PluginSession::start_oom(gateway, workspace, plugin_id, permissions)
+                PluginSession::start_oom(gateway, workspace, plugin_id, permissions, editor_socket)
             }
-            (StartMode::Normal, Some(root)) => {
-                PluginSession::start_plugin(gateway, workspace, plugin_id, root, permissions)
-            }
+            (StartMode::Normal, Some(root)) => PluginSession::start_plugin(
+                gateway,
+                workspace,
+                plugin_id,
+                root,
+                permissions,
+                editor_socket,
+            ),
             (StartMode::Normal, None) => {
-                PluginSession::start(gateway, workspace, plugin_id, permissions)
+                PluginSession::start(gateway, workspace, plugin_id, permissions, editor_socket)
             }
         }?;
         Ok(Box::new(host))
@@ -193,6 +204,9 @@ pub struct PluginSupervisor {
     launcher: Box<dyn HostLauncher>,
     entries: HashMap<String, PluginEntry>,
     pending_starts: VecDeque<PendingStart>,
+    editor_tx: Sender<EditorRequest>,
+    editor_service: Option<EditorService>,
+    editor_requests: Receiver<EditorRequest>,
 }
 
 impl Default for PluginSupervisor {
@@ -203,19 +217,41 @@ impl Default for PluginSupervisor {
 
 impl PluginSupervisor {
     pub fn new() -> Self {
+        let (editor_tx, editor_requests) = mpsc::channel();
         Self {
             launcher: Box::new(SystemLauncher),
             entries: HashMap::new(),
             pending_starts: VecDeque::new(),
+            editor_service: None,
+            editor_tx,
+            editor_requests,
         }
     }
 
     #[cfg(test)]
     fn with_launcher(launcher: Box<dyn HostLauncher>) -> Self {
+        let (editor_tx, editor_requests) = mpsc::channel();
         Self {
             launcher,
             entries: HashMap::new(),
             pending_starts: VecDeque::new(),
+            editor_service: None,
+            editor_tx,
+            editor_requests,
+        }
+    }
+
+    pub fn editor_socket(&self) -> Option<&Path> {
+        self.editor_service.as_ref().map(EditorService::path)
+    }
+
+    pub fn poll_editor_request(&self) -> Option<EditorRequest> {
+        self.editor_requests.try_recv().ok()
+    }
+
+    pub fn ensure_editor_service(&mut self) {
+        if self.editor_service.is_none() {
+            self.editor_service = EditorService::start(self.editor_tx.clone()).ok();
         }
     }
 
@@ -268,6 +304,11 @@ impl PluginSupervisor {
         mut gateway: Option<&mut GatewayClient>,
         workspace: &Path,
     ) -> Result<StartOutcome, String> {
+        self.ensure_editor_service();
+        let editor_socket = self
+            .editor_service
+            .as_ref()
+            .map(|service| service.path().to_path_buf());
         if let Some(entry) = self.entries.get(plugin_id) {
             match entry.state {
                 HostState::Disabled => {
@@ -334,6 +375,7 @@ impl PluginSupervisor {
             request.plugin_root,
             request.mode,
             request.permissions,
+            editor_socket.as_deref(),
         ) {
             Ok(host) => {
                 let entry = self
@@ -795,6 +837,7 @@ mod tests {
     }
 
     impl HostLauncher for FakeLauncher {
+        #[allow(clippy::too_many_arguments)]
         fn start(
             &self,
             gateway: Option<&mut GatewayClient>,
@@ -803,6 +846,7 @@ mod tests {
             plugin_root: Option<&Path>,
             mode: StartMode,
             permissions: &[String],
+            _editor_socket: Option<&Path>,
         ) -> Result<Box<dyn ManagedHost>, String> {
             self.start_impl(
                 gateway,
@@ -818,6 +862,7 @@ mod tests {
     struct SharedLauncher(Arc<FakeLauncher>);
 
     impl HostLauncher for SharedLauncher {
+        #[allow(clippy::too_many_arguments)]
         fn start(
             &self,
             gateway: Option<&mut GatewayClient>,
@@ -826,6 +871,7 @@ mod tests {
             plugin_root: Option<&Path>,
             mode: StartMode,
             permissions: &[String],
+            _editor_socket: Option<&Path>,
         ) -> Result<Box<dyn ManagedHost>, String> {
             self.0.start_impl(
                 gateway,

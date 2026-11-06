@@ -20,8 +20,17 @@ impl PluginSession {
         workspace: &Path,
         plugin_id: &str,
         permissions: &[String],
+        editor_socket: Option<&Path>,
     ) -> Result<Self, String> {
-        Self::start_mode(gateway, workspace, plugin_id, permissions, None, false)
+        Self::start_mode(
+            gateway,
+            workspace,
+            plugin_id,
+            permissions,
+            editor_socket,
+            None,
+            false,
+        )
     }
 
     pub(crate) fn start_oom(
@@ -29,8 +38,17 @@ impl PluginSession {
         workspace: &Path,
         plugin_id: &str,
         permissions: &[String],
+        editor_socket: Option<&Path>,
     ) -> Result<Self, String> {
-        Self::start_mode(gateway, workspace, plugin_id, permissions, None, true)
+        Self::start_mode(
+            gateway,
+            workspace,
+            plugin_id,
+            permissions,
+            editor_socket,
+            None,
+            true,
+        )
     }
 
     pub(crate) fn start_plugin(
@@ -39,12 +57,14 @@ impl PluginSession {
         plugin_id: &str,
         plugin_root: &Path,
         permissions: &[String],
+        editor_socket: Option<&Path>,
     ) -> Result<Self, String> {
         Self::start_mode(
             gateway,
             workspace,
             plugin_id,
             permissions,
+            editor_socket,
             Some(plugin_root),
             false,
         )
@@ -55,6 +75,7 @@ impl PluginSession {
         workspace: &Path,
         plugin_id: &str,
         permissions: &[String],
+        editor_socket: Option<&Path>,
         plugin_root: Option<&Path>,
         oom: bool,
     ) -> Result<Self, String> {
@@ -65,16 +86,22 @@ impl PluginSession {
             .map_err(|error| format!("register plugin: {error}"))?;
         let gateway_socket = gateway.socket_path().to_path_buf();
         let host = if oom {
-            HostSession::start_oom_with_token(workspace, token, Some(&gateway_socket))
+            HostSession::start_oom_with_token(
+                workspace,
+                token,
+                Some(&gateway_socket),
+                editor_socket,
+            )
         } else if let Some(plugin_root) = plugin_root {
             HostSession::start_with_token_plugin(
                 workspace,
                 plugin_root,
                 token,
                 Some(&gateway_socket),
+                editor_socket,
             )
         } else {
-            HostSession::start_with_token(workspace, token, Some(&gateway_socket))
+            HostSession::start_with_token(workspace, token, Some(&gateway_socket), editor_socket)
         };
         match host {
             Ok(host) => Ok(Self {

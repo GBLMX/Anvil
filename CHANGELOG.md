@@ -18,6 +18,9 @@ post-`0.5.0` feature line.
   change.
 
 ### Fixed
+- `HostSession` now receives the editor RPC socket from the supervisor and
+  passes `--editor-socket` to plugin hosts, so production `editor.*` calls
+  reach the active buffer instead of returning `-32008`.
 - Inlay hints are requested only after the server advertises
   `inlayHintProvider`, avoiding `Method not found` noise from Markdown and
   other servers without that capability.

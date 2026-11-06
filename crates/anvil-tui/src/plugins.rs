@@ -299,6 +299,7 @@ impl Model {
                 }
             }
         }
+        self.poll_editor_requests();
     }
 
     #[cfg(not(target_os = "linux"))]

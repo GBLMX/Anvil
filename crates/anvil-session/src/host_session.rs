@@ -56,6 +56,7 @@ impl HostSession {
         workspace: &Path,
         token: Token,
         gateway_socket: Option<&Path>,
+        editor_socket: Option<&Path>,
     ) -> Result<Self, String> {
         let host = host_binary()?;
         let cgroup_root = Some(cgroup_root()?);
@@ -67,6 +68,7 @@ impl HostSession {
             token,
             None,
             gateway_socket,
+            editor_socket,
         )
     }
 
@@ -75,6 +77,7 @@ impl HostSession {
         plugin_root: &Path,
         token: Token,
         gateway_socket: Option<&Path>,
+        editor_socket: Option<&Path>,
     ) -> Result<Self, String> {
         let host = host_binary()?;
         let cgroup_root = Some(cgroup_root()?);
@@ -86,6 +89,7 @@ impl HostSession {
             token,
             Some(plugin_root),
             gateway_socket,
+            editor_socket,
         )
     }
 
@@ -93,6 +97,7 @@ impl HostSession {
         workspace: &Path,
         token: Token,
         gateway_socket: Option<&Path>,
+        editor_socket: Option<&Path>,
     ) -> Result<Self, String> {
         let host = host_binary()?;
         let root = cgroup_root()?;
@@ -104,6 +109,7 @@ impl HostSession {
             token,
             None,
             gateway_socket,
+            editor_socket,
         )
     }
 
@@ -113,6 +119,7 @@ impl HostSession {
         host: &Path,
         allocate_mb: Option<u32>,
         cgroup_root: Option<PathBuf>,
+        editor_socket: Option<&Path>,
     ) -> Result<Self, String> {
         Self::start_with_host_token(
             workspace,
@@ -122,9 +129,11 @@ impl HostSession {
             new_token(),
             None,
             None,
+            editor_socket,
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn start_with_host_token(
         _workspace: &Path,
         host: &Path,
@@ -133,6 +142,7 @@ impl HostSession {
         token: Token,
         plugin_root: Option<&Path>,
         gateway_socket: Option<&Path>,
+        editor_socket: Option<&Path>,
     ) -> Result<Self, String> {
         let cgroup = match cgroup_root {
             Some(root) => {
@@ -177,6 +187,10 @@ impl HostSession {
         if let Some(gateway_socket) = gateway_socket {
             args.push("--gateway-socket".to_owned());
             args.push(gateway_socket.display().to_string());
+        }
+        if let Some(editor_socket) = editor_socket {
+            args.push("--editor-socket".to_owned());
+            args.push(editor_socket.display().to_string());
         }
         let process = match cgroup {
             Some(cgroup) => spawn_in_cgroup(host, &args, token, cgroup),
@@ -461,7 +475,7 @@ mod tests {
             eprintln!("skipping SIGKILL test: plugin host binary not built");
             return;
         };
-        let Ok(mut session) = HostSession::start_with_host(Path::new("."), &host, None, None)
+        let Ok(mut session) = HostSession::start_with_host(Path::new("."), &host, None, None, None)
         else {
             eprintln!("skipping SIGKILL test: host did not start");
             return;
@@ -517,7 +531,7 @@ mod tests {
             return;
         };
         let Ok(mut session) =
-            HostSession::start_with_host(Path::new("."), &host, Some(300), Some(root))
+            HostSession::start_with_host(Path::new("."), &host, Some(300), Some(root), None)
         else {
             eprintln!("skipping OOM test: no delegated cgroup2 root");
             return;
@@ -536,5 +550,50 @@ mod tests {
             );
             std::thread::sleep(Duration::from_millis(20));
         }
+    }
+
+    #[test]
+    fn host_receives_editor_socket_argument() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = std::env::temp_dir().join(format!(
+            "anvil-host-args-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map(|time| time.as_nanos())
+                .unwrap_or_default()
+        ));
+        std::fs::create_dir_all(&dir).expect("temp dir");
+        let script = dir.join("host.sh");
+        let editor_socket = dir.join("editor.sock");
+        std::fs::write(
+            &script,
+            "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$0.args\"\nsleep 1\n",
+        )
+        .expect("script");
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).expect("chmod");
+        let session =
+            HostSession::start_with_host(Path::new("."), &script, None, None, Some(&editor_socket))
+                .expect("start host");
+        let args_path = PathBuf::from(format!("{}.args", script.display()));
+        let deadline = std::time::Instant::now() + Duration::from_secs(2);
+        let args = loop {
+            if let Ok(args) = std::fs::read_to_string(&args_path) {
+                break args;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "host did not write args"
+            );
+            std::thread::sleep(Duration::from_millis(10));
+        };
+        assert!(args.contains("--editor-socket"), "{args}");
+        assert!(
+            args.contains(editor_socket.to_string_lossy().as_ref()),
+            "{args}"
+        );
+        drop(session);
+        let _ = std::fs::remove_dir_all(dir);
     }
 }
