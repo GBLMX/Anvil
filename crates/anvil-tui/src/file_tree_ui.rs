@@ -118,10 +118,12 @@ impl Model {
                                 format!("moved {}", to.display())
                             };
                             self.refresh_tree(Some(to));
+                            self.finish_busy_progress(None);
                         }
                         Err(error) => {
                             self.status = format!("E: {error}");
                             self.dirty = true;
+                            self.finish_busy_progress(Some(&error));
                         }
                     }
                 }
@@ -132,10 +134,12 @@ impl Model {
                             self.mark_missing(&path);
                             self.status = format!("deleted {}", path.display());
                             self.refresh_tree(None);
+                            self.finish_busy_progress(None);
                         }
                         Err(error) => {
                             self.status = format!("E: {error}");
                             self.dirty = true;
+                            self.finish_busy_progress(Some(&error));
                         }
                     }
                 }
@@ -956,6 +960,11 @@ impl Model {
             }) {
                 Ok(()) => {
                     self.busy = Some(label.to_owned());
+                    self.busy_progress = Some(self.ui.progress.start(
+                        label,
+                        name.to_string_lossy().into_owned(),
+                        false,
+                    ));
                     self.status = format!("{label} {}…", name.to_string_lossy());
                     self.dirty = true;
                     return;
@@ -1106,6 +1115,11 @@ impl Model {
             match worker.request(FileRequest::RemoveAll(path.clone())) {
                 Ok(()) => {
                     self.busy = Some("deleting".to_owned());
+                    self.busy_progress = Some(self.ui.progress.start(
+                        "deleting",
+                        path.display().to_string(),
+                        false,
+                    ));
                     self.status = format!(
                         "deleting {}…",
                         path.file_name()

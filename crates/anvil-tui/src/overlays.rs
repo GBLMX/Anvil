@@ -17,6 +17,16 @@ impl Model {
         self.dirty = true;
     }
 
+    pub(crate) fn finish_busy_progress(&mut self, error: Option<&str>) {
+        if let Some(id) = self.busy_progress.take() {
+            self.ui.progress.finish(id);
+            if let Some(error) = error {
+                self.notify(NotificationSeverity::Error, "file", error);
+            }
+            self.dirty = true;
+        }
+    }
+
     pub(crate) fn rebuild_problems(&mut self) {
         let mut problems = Vec::new();
         for (path, diagnostics) in &self.diagnostics {

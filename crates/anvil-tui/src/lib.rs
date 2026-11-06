@@ -390,6 +390,7 @@ pub struct Model {
     pub status: String,
     /// Background file operation label, if any.
     busy: Option<String>,
+    busy_progress: Option<u64>,
     /// Spinner frame for the busy label.
     spinner: usize,
     /// Pending normal-mode operator (`d` or `y`).
@@ -532,6 +533,7 @@ impl Model {
             dirty: true,
             status: String::new(),
             busy: None,
+            busy_progress: None,
             spinner: 0,
             pending: None,
             leader_deadline: None,
