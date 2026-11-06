@@ -71,11 +71,7 @@ impl Model {
                 .scope_label(Some(path.as_path()), self.cursor)
                 .map(str::to_owned)
         });
-        let text = match symbol {
-            Some(symbol) => format!("{path} › {symbol}"),
-            None => path,
-        };
-        middle_ellipsis(&text, width)
+        breadcrumb_with_symbol(&path, symbol.as_deref(), width)
     }
 
     pub(crate) fn status_text(&self, width: usize) -> String {
@@ -135,6 +131,26 @@ impl Model {
     }
 }
 
+fn breadcrumb_with_symbol(path: &str, symbol: Option<&str>, width: usize) -> String {
+    let Some(symbol) = symbol else {
+        return middle_ellipsis(path, width);
+    };
+    const SEPARATOR_WIDTH: usize = 3;
+    if width <= SEPARATOR_WIDTH + 4 {
+        return middle_ellipsis(path, width);
+    }
+    let symbol_budget = (width / 3).clamp(4, 16);
+    let path_budget = width - SEPARATOR_WIDTH - symbol_budget;
+    if path_budget < 4 {
+        return middle_ellipsis(path, width);
+    }
+    format!(
+        "{} › {}",
+        middle_ellipsis(path, path_budget),
+        take_prefix_ellipsis(symbol, symbol_budget)
+    )
+}
+
 pub(crate) fn middle_ellipsis(text: &str, max_width: usize) -> String {
     if max_width == 0 {
         return String::new();
@@ -156,6 +172,16 @@ pub(crate) fn middle_ellipsis(text: &str, max_width: usize) -> String {
         budget.saturating_sub(UnicodeWidthStr::width(suffix.as_str())),
     );
     format!("{prefix}...{suffix}")
+}
+
+fn take_prefix_ellipsis(text: &str, max_width: usize) -> String {
+    if UnicodeWidthStr::width(text) <= max_width {
+        return text.to_owned();
+    }
+    if max_width <= 1 {
+        return take_prefix(text, max_width);
+    }
+    format!("{}…", take_prefix(text, max_width - 1))
 }
 
 fn fit_segments(segments: &[String], width: usize) -> String {
@@ -257,6 +283,19 @@ mod tests {
         assert_eq!(middle_ellipsis("abcdef", 0), "");
         assert_eq!(middle_ellipsis("abcdef", 1), "a");
         assert_eq!(middle_ellipsis("abcdef", 3), "abc");
+    }
+
+    #[test]
+    fn long_symbols_do_not_drop_the_filename() {
+        let text = breadcrumb_with_symbol(
+            "src/company/project/module/Button.tsx",
+            Some("very_long_function_name_that_would_swallow_the_path"),
+            40,
+        );
+        assert!(UnicodeWidthStr::width(text.as_str()) <= 40);
+        assert!(text.contains("Button.tsx"), "{text}");
+        assert!(text.contains(" › "), "{text}");
+        assert!(text.starts_with("src/"), "{text}");
     }
 
     #[test]
