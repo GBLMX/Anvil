@@ -3822,6 +3822,29 @@ fn clicking_outside_peek_restores_focus() {
     assert!(model.ui.focus.split);
 }
 
+#[test]
+fn dragging_split_handle_updates_ratio() {
+    let mut model = Model::new(EditorState::from_text("abc"), None);
+    model.viewport_width = 40;
+    model.viewport_height = 12;
+    model.split_vertical();
+    let down = crossterm::event::MouseEvent {
+        kind: crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left),
+        column: 20,
+        row: 3,
+        modifiers: crossterm::event::KeyModifiers::NONE,
+    };
+    let drag = crossterm::event::MouseEvent {
+        kind: crossterm::event::MouseEventKind::Drag(crossterm::event::MouseButton::Left),
+        column: 30,
+        row: 3,
+        modifiers: crossterm::event::KeyModifiers::NONE,
+    };
+    handle_event(&mut model, Event::Mouse(down));
+    handle_event(&mut model, Event::Mouse(drag));
+    assert!(model.split_ratio > 50);
+}
+
 fn mouse_hit_boundary(
     model: &Model,
     col: u16,
