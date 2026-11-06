@@ -82,6 +82,9 @@ dependencies = [
 name = "anvil-plugin-host"
 version = "0.6.0"
 dependencies = [
+ "anvil-api",
+ "anvil-core",
+ "anvil-editor",
  "anvil-ipc",
  "libc",
  "mlua",

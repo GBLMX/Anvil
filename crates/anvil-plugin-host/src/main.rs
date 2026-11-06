@@ -8,6 +8,7 @@ mod runtime;
 mod linux {
     use super::*;
     use anvil_plugin_host::manifest::PluginManifest;
+    use std::time::Duration;
 
     pub fn main() -> ExitCode {
         match run() {
@@ -33,6 +34,8 @@ mod linux {
         let mut lua_smoke = false;
         let mut plugin = None;
         let mut socket = None;
+        let mut editor_socket = None;
+        let mut editor_timeout_ms = 2_000u64;
         let mut gateway_socket = None;
         let mut args = std::env::args().skip(1);
         while let Some(arg) = args.next() {
@@ -87,6 +90,20 @@ mod linux {
                             .ok_or_else(|| io::Error::other("missing --gateway-socket value"))?,
                     );
                 }
+                "--editor-socket" => {
+                    editor_socket = Some(
+                        args.next()
+                            .ok_or_else(|| io::Error::other("missing --editor-socket value"))?,
+                    );
+                }
+                "--editor-timeout-ms" => {
+                    let value = args
+                        .next()
+                        .ok_or_else(|| io::Error::other("missing --editor-timeout-ms value"))?;
+                    editor_timeout_ms = value
+                        .parse()
+                        .map_err(|_| io::Error::other("invalid --editor-timeout-ms"))?;
+                }
                 other => return Err(io::Error::other(format!("unknown argument: {other}"))),
             }
         }
@@ -112,6 +129,10 @@ mod linux {
         };
         let editor = match socket.as_deref() {
             Some(path) => Some(anvil_ipc::Connection::connect(path)?),
+            None => None,
+        };
+        let mut editor_proxy = match editor_socket.as_deref() {
+            Some(path) => Some(EditorProxy::connect(path, editor_timeout_ms)?),
             None => None,
         };
         unsafe {
@@ -205,7 +226,7 @@ mod linux {
 
         send_hello()?;
         if let Some(mut connection) = editor {
-            watch_editor(&mut connection, gateway.as_mut())?;
+            watch_editor(&mut connection, gateway.as_mut(), editor_proxy.as_mut())?;
             return Ok(0);
         }
         if hold {
@@ -644,15 +665,177 @@ mod linux {
         filter[start].jf = (end - start - 1) as u8;
     }
 
+    struct EditorProxy {
+        connection: anvil_ipc::Connection,
+        next_id: u64,
+        timeout: Duration,
+    }
+
+    struct ProxyError {
+        code: i32,
+        message: String,
+    }
+
+    impl EditorProxy {
+        fn connect(path: &str, timeout_ms: u64) -> io::Result<Self> {
+            Ok(Self {
+                connection: anvil_ipc::Connection::connect(path)?,
+                next_id: 1,
+                timeout: Duration::from_millis(timeout_ms),
+            })
+        }
+
+        fn call(
+            &mut self,
+            control: &mut anvil_ipc::Connection,
+            cancel_id: &serde_json::Value,
+            method: &str,
+            params: serde_json::Value,
+        ) -> Result<serde_json::Value, ProxyError> {
+            let request_id = self.next_id;
+            self.next_id = self.next_id.saturating_add(1);
+            let request = serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "method": method,
+                "params": params,
+            });
+            let body = serde_json::to_vec(&request)
+                .map_err(|error| ProxyError::internal(format!("encode proxy request: {error}")))?;
+            self.connection
+                .send(&body)
+                .map_err(|error| ProxyError::unavailable(format!("editor send: {error}")))?;
+            let deadline = std::time::Instant::now() + self.timeout;
+            loop {
+                let now = std::time::Instant::now();
+                if now >= deadline {
+                    return Err(ProxyError::timeout());
+                }
+                if control
+                    .wait_readable(Duration::from_millis(10))
+                    .map_err(|error| ProxyError::unavailable(format!("control poll: {error}")))?
+                {
+                    match control.recv() {
+                        Ok(None) => return Err(ProxyError::cancelled()),
+                        Ok(Some(frame)) => {
+                            if is_cancel_request(&frame, cancel_id) {
+                                return Err(ProxyError::cancelled());
+                            }
+                        }
+                        Err(error) => {
+                            return Err(ProxyError::cancelled_with(format!(
+                                "control recv: {error}"
+                            )));
+                        }
+                    }
+                }
+                let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+                if remaining.is_zero() {
+                    return Err(ProxyError::timeout());
+                }
+                if !self
+                    .connection
+                    .wait_readable(remaining.min(Duration::from_millis(50)))
+                    .map_err(|error| ProxyError::unavailable(format!("editor poll: {error}")))?
+                {
+                    continue;
+                }
+                let frame = match self.connection.recv() {
+                    Ok(Some(frame)) => frame,
+                    Ok(None) => {
+                        return Err(ProxyError::unavailable("editor proxy closed".to_owned()));
+                    }
+                    Err(error) => {
+                        return Err(ProxyError::unavailable(format!("editor recv: {error}")));
+                    }
+                };
+                let Ok(response) = serde_json::from_slice::<serde_json::Value>(&frame) else {
+                    continue;
+                };
+                if response.get("id") != Some(&serde_json::json!(request_id)) {
+                    continue;
+                }
+                if let Some(error) = response.get("error") {
+                    return Err(ProxyError {
+                        code: error
+                            .get("code")
+                            .and_then(serde_json::Value::as_i64)
+                            .and_then(|code| i32::try_from(code).ok())
+                            .unwrap_or(-32603),
+                        message: error
+                            .get("message")
+                            .and_then(serde_json::Value::as_str)
+                            .unwrap_or("editor proxy error")
+                            .to_owned(),
+                    });
+                }
+                return Ok(response
+                    .get("result")
+                    .cloned()
+                    .unwrap_or(serde_json::Value::Null));
+            }
+        }
+    }
+
+    impl ProxyError {
+        fn cancelled() -> Self {
+            Self {
+                code: -32004,
+                message: "cancelled".to_owned(),
+            }
+        }
+
+        fn cancelled_with(message: String) -> Self {
+            Self {
+                code: -32004,
+                message,
+            }
+        }
+
+        fn timeout() -> Self {
+            Self {
+                code: -32005,
+                message: "editor proxy timed out".to_owned(),
+            }
+        }
+
+        fn unavailable(message: String) -> Self {
+            Self {
+                code: -32008,
+                message,
+            }
+        }
+
+        fn internal(message: String) -> Self {
+            Self {
+                code: -32603,
+                message,
+            }
+        }
+    }
+
+    fn is_cancel_request(frame: &[u8], cancel_id: &serde_json::Value) -> bool {
+        let Ok(value) = serde_json::from_slice::<serde_json::Value>(frame) else {
+            return false;
+        };
+        value.get("method").and_then(serde_json::Value::as_str) == Some("$/cancelRequest")
+            && value.get("params").and_then(|params| params.get("id")) == Some(cancel_id)
+    }
     fn watch_editor(
         connection: &mut anvil_ipc::Connection,
         mut gateway: Option<&mut anvil_ipc::GatewayClient>,
+        mut editor_proxy: Option<&mut EditorProxy>,
     ) -> io::Result<()> {
         loop {
             match connection.recv() {
                 Ok(None) => return Ok(()),
                 Ok(Some(frame)) => {
-                    handle_rpc(connection, gateway.as_deref_mut(), &frame)?;
+                    handle_rpc(
+                        connection,
+                        gateway.as_deref_mut(),
+                        editor_proxy.as_deref_mut(),
+                        &frame,
+                    )?;
                 }
                 Err(error) => {
                     return Err(io::Error::other(format!("editor frame: {error}")));
@@ -664,6 +847,7 @@ mod linux {
     fn handle_rpc(
         connection: &mut anvil_ipc::Connection,
         gateway: Option<&mut anvil_ipc::GatewayClient>,
+        editor_proxy: Option<&mut EditorProxy>,
         frame: &[u8],
     ) -> io::Result<()> {
         let Ok(request) = serde_json::from_slice::<serde_json::Value>(frame) else {
@@ -704,6 +888,20 @@ mod linux {
                     }
                 }),
             },
+            method if method.starts_with("editor.") => match editor_proxy {
+                Some(proxy) => match proxy.call(connection, &id, method, params) {
+                    Ok(result) => serde_json::json!({
+                        "jsonrpc": "2.0",
+                        "id": id,
+                        "result": result
+                    }),
+                    Err(error) => rpc_proxy_error(id, error),
+                },
+                None => rpc_proxy_error(
+                    id,
+                    ProxyError::unavailable("editor proxy unavailable".to_owned()),
+                ),
+            },
             _ => return Ok(()),
         };
         let body = serde_json::to_vec(&response)
@@ -722,6 +920,14 @@ mod linux {
             "jsonrpc": "2.0",
             "id": id,
             "error": { "code": code, "message": message }
+        })
+    }
+
+    fn rpc_proxy_error(id: serde_json::Value, error: ProxyError) -> serde_json::Value {
+        serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": id,
+            "error": { "code": error.code, "message": error.message }
         })
     }
 

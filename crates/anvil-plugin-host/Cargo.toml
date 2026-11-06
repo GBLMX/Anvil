@@ -16,6 +16,11 @@ libc = "0.2"
 serde_json = "1"
 mlua = { version = "0.12", features = ["luau", "vendored"] }
 
+[target.'cfg(target_os = "linux")'.dev-dependencies]
+anvil-editor = { path = "../anvil-editor", version = "0.6.0" }
+anvil-core = { path = "../anvil-core", version = "0.6.0" }
+anvil-api = { path = "../anvil-api", version = "0.6.0" }
+
 [[bin]]
 name = "anvil-plugin-host"
 path = "src/main.rs"
