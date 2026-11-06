@@ -1500,6 +1500,8 @@ impl Model {
         let current = self.current_line();
 
         let diagnostic_lines = self.diagnostic_lines();
+        let hscroll = self.hscroll;
+        let visible_width = usize::from(width);
         let mut lines = Vec::with_capacity(end.saturating_sub(self.scroll));
         for line_number in self.scroll..end {
             let Some(start) = index.line_to_offset(line_number) else {
@@ -1531,24 +1533,33 @@ impl Model {
             if spans.is_empty() {
                 spans.push(Span::raw(""));
             }
-            if render_start == start {
-                self.insert_inlay_hints(line_number, start, line.end, &mut spans);
-            }
+            self.insert_inlay_hints(line_number, render_start, render_end, &mut spans);
             if pad > 0 {
                 spans.insert(0, Span::raw(" ".repeat(pad)));
             }
             expand_tabs(&mut spans, pad);
-            let ranges = if render_start == start && pad == 0 {
+            let diagnostic = diagnostic_lines.contains(&line_number);
+            let full_ranges = if diagnostic {
                 self.diagnostic_ranges(line_number, start, line.end)
             } else {
                 Vec::new()
             };
+            let ranges = full_ranges
+                .iter()
+                .filter_map(|(range_start, range_end)| {
+                    let start =
+                        (*range_start as isize - hscroll as isize + pad as isize).max(0) as usize;
+                    let end = (*range_end as isize - hscroll as isize + pad as isize)
+                        .min(visible_width as isize);
+                    (end > start as isize).then_some((start, end as usize))
+                })
+                .collect::<Vec<_>>();
             apply_diagnostic_underlines(&mut spans, &ranges);
             let mut rendered = Line::from(spans);
             if Some(line_number) == current {
                 rendered = rendered.style(theme::current_line());
             }
-            if diagnostic_lines.contains(&line_number) && ranges.is_empty() {
+            if diagnostic && full_ranges.is_empty() && hscroll == 0 && render_start == start {
                 rendered = rendered.style(
                     Style::default()
                         .fg(theme::ERROR)

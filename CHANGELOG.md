@@ -22,6 +22,8 @@ post-`0.5.0` feature line.
 - Single-line inserts update only the affected line chunk instead of rebuilding
   the line index; 100 MB A1 p99 fell from 105 µs to 2.3 µs.
 - 100 MB A3 merge-delete p99 fell from 175 µs to 92.6 µs.
+- Horizontally windowed lines preserve diagnostics underlines and visible
+  inlay hints instead of dropping annotations.
 
 
 ## [0.5.9] - 2026-11-06

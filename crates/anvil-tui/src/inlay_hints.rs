@@ -95,8 +95,8 @@ impl Model {
     pub(crate) fn insert_inlay_hints(
         &self,
         line: usize,
-        line_start: usize,
-        line_end: usize,
+        visible_start: usize,
+        visible_end: usize,
         spans: &mut Vec<Span<'_>>,
     ) {
         let mut hints = self
@@ -107,8 +107,10 @@ impl Model {
         hints.sort_by_key(|hint| std::cmp::Reverse(hint.character));
         for hint in hints {
             let offset = self.offset_at_utf16(line, hint.character);
-            let relative = offset.saturating_sub(line_start).min(line_end - line_start);
-            insert_virtual_span(spans, relative, hint.label.clone());
+            if offset < visible_start || offset > visible_end {
+                continue;
+            }
+            insert_virtual_span(spans, offset - visible_start, hint.label.clone());
         }
     }
 }

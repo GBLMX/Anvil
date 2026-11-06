@@ -4016,3 +4016,70 @@ fn long_line_cursor_at_end_render_stays_bounded() {
         "cursor-at-end render took {elapsed:?}"
     );
 }
+
+#[test]
+fn diagnostics_follow_horizontal_window() {
+    let mut model = Model::new(
+        EditorState::from_text("abcdefghij"),
+        Some(PathBuf::from("diag.rs")),
+    );
+    model.hscroll = 5;
+    model.diagnostics.insert(
+        PathBuf::from("diag.rs"),
+        vec![lsp::Diagnostic {
+            range: lsp::Range {
+                start: lsp::Position {
+                    line: 0,
+                    character: 6,
+                },
+                end: lsp::Position {
+                    line: 0,
+                    character: 8,
+                },
+            },
+            severity: Some(1),
+            message: "error".to_owned(),
+            source: Some("test".to_owned()),
+            extra: serde_json::Map::new(),
+        }],
+    );
+    let mut terminal = Terminal::new(TestBackend::new(80, 8)).expect("terminal");
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+    let cells = terminal.backend().buffer().content();
+    let underlined = |symbol: &str| {
+        cells.iter().any(|cell| {
+            cell.symbol() == symbol && cell.modifier.contains(ratatui::style::Modifier::UNDERLINED)
+        })
+    };
+    assert!(!underlined("f"));
+    assert!(underlined("g"));
+}
+
+#[test]
+fn inlay_hints_follow_horizontal_window() {
+    let mut model = Model::new(EditorState::from_text("abcdefghij"), None);
+    model.hscroll = 5;
+    model.inlay_hints = vec![
+        InlayHint {
+            line: 0,
+            character: 7,
+            label: ":visible".to_owned(),
+        },
+        InlayHint {
+            line: 0,
+            character: 1,
+            label: ":hidden".to_owned(),
+        },
+    ];
+    let mut terminal = Terminal::new(TestBackend::new(80, 8)).expect("terminal");
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+    let rendered = terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect::<String>();
+    assert!(rendered.contains(":visible"));
+    assert!(!rendered.contains(":hidden"));
+}
