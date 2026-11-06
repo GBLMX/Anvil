@@ -72,6 +72,7 @@ pub const FOCUS_RIGHT: CommandId = CommandId::new("view.focus_right");
 pub const CLOSE_SPLIT: CommandId = CommandId::new("view.close_split");
 pub const TREE_OPEN: CommandId = CommandId::new("tree.open");
 pub const FUZZY: CommandId = CommandId::new("picker.fuzzy");
+pub const COMMAND_PALETTE: CommandId = CommandId::new("command_palette.open");
 pub const RENAME_SYMBOL: CommandId = CommandId::new("editor.rename_symbol");
 pub const CODE_ACTION: CommandId = CommandId::new("lsp.code_action");
 pub const DOCUMENT_SYMBOLS: CommandId = CommandId::new("lsp.document_symbols");
@@ -133,6 +134,7 @@ pub const COMMANDS: &[CommandSpec] = &[
     spec(CLOSE_SPLIT, PENDING),
     spec(TREE_OPEN, PENDING),
     spec(FUZZY, PENDING),
+    spec(COMMAND_PALETTE, PENDING),
     spec(RENAME_SYMBOL, PENDING),
     spec(CODE_ACTION, PENDING),
     spec(DOCUMENT_SYMBOLS, PENDING),

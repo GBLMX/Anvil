@@ -77,8 +77,9 @@ used; the built-in defaults remain active if neither is present.
 The configuration is parsed and validated before it replaces the active keymap.
 It is not hot-reloaded.
 
-The Space leader expires after 600 ms. `Space 1` focuses the editor and
-`Space 2` opens the file tree; the existing `Space e`/`Space f` bindings remain.
+The Space leader expires after 600 ms. `Space 1` focuses the editor,
+`Space 2` opens the file tree, and `Space p` opens the command palette; the
+existing `Space e`/`Space f` bindings remain.
 
 ## Key syntax
 

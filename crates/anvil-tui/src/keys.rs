@@ -152,6 +152,10 @@ fn execute_pending_command(
             let _ = model.take_count();
             model.start_fuzzy();
         }
+        PendingCommand::CommandPalette => {
+            let _ = model.take_count();
+            model.open_command_palette();
+        }
         PendingCommand::StartRename => {
             let _ = model.take_count();
             model.start_rename();
@@ -268,6 +272,20 @@ fn execute_context_action(model: &mut Model, action: ContextAction, key: KeyPres
     }
 }
 
+fn execute_command_id(model: &mut Model, id: &str, key: KeyPress) -> bool {
+    if let Some(command) = NormalCommand::from_id(id) {
+        execute_normal_command(model, command);
+        return true;
+    }
+    if let Some(command) = PendingCommand::from_id(id)
+        && command.is_direct()
+    {
+        execute_pending_command(model, command, ' ', key);
+        return true;
+    }
+    false
+}
+
 fn handle_key(model: &mut Model, key: KeyPress) {
     let control = key.ctrl();
     let text_input = key.text_input();
@@ -336,6 +354,37 @@ fn handle_key(model: &mut Model, key: KeyPress) {
         }
         return;
     }
+    if model.command_palette.is_some() {
+        match key.code {
+            KeyCode::Esc => model.close_command_palette(),
+            KeyCode::Up => model.move_command_palette(-1),
+            KeyCode::Down => model.move_command_palette(1),
+            KeyCode::Char('p') if key.ctrl() => model.move_command_palette(-1),
+            KeyCode::Char('n') if key.ctrl() => model.move_command_palette(1),
+            KeyCode::Enter => {
+                let id = model.selected_command_id();
+                model.close_command_palette();
+                if let Some(id) = id {
+                    execute_command_id(model, &id, key);
+                }
+            }
+            KeyCode::Backspace => {
+                if let Some(palette) = model.command_palette.as_mut() {
+                    palette.query.pop();
+                }
+                model.refresh_command_palette();
+            }
+            KeyCode::Char(character) if text_input => {
+                if let Some(palette) = model.command_palette.as_mut() {
+                    palette.query.push(character);
+                }
+                model.refresh_command_palette();
+            }
+            _ => {}
+        }
+        return;
+    }
+
     if model.keymap_context() == KeymapContext::Popup {
         model.pending = None;
         model.leader_deadline = None;

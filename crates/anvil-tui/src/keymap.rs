@@ -605,6 +605,11 @@ impl KeymapConfig {
     }
 }
 
+pub(crate) fn executable_command(id: &str) -> bool {
+    NormalCommand::from_id(id).is_some()
+        || PendingCommand::from_id(id).is_some_and(PendingCommand::is_direct)
+}
+
 pub(crate) fn resolve_pending(
     prefix: char,
     key: KeyPress,
@@ -686,6 +691,7 @@ pub(crate) enum PendingCommand {
     CloseSplit,
     OpenTree,
     StartFuzzy,
+    CommandPalette,
     StartRename,
     CodeActions,
     DocumentSymbols,
@@ -714,6 +720,7 @@ impl PendingCommand {
             CloseSplit => Some(command::CLOSE_SPLIT),
             OpenTree => Some(command::TREE_OPEN),
             StartFuzzy => Some(command::FUZZY),
+            CommandPalette => Some(command::COMMAND_PALETTE),
             StartRename => Some(command::RENAME_SYMBOL),
             CodeActions => Some(command::CODE_ACTION),
             DocumentSymbols => Some(command::DOCUMENT_SYMBOLS),
@@ -842,6 +849,7 @@ impl PendingCommand {
             "view.close_split" => Self::CloseSplit,
             "tree.open" => Self::OpenTree,
             "picker.fuzzy" => Self::StartFuzzy,
+            "command_palette.open" => Self::CommandPalette,
             "editor.rename_symbol" => Self::StartRename,
             "lsp.code_action" => Self::CodeActions,
             "lsp.document_symbols" => Self::DocumentSymbols,
@@ -949,6 +957,7 @@ pub(crate) fn pending_action(
         ('w', KeyCode::Char('q')) => Some(PendingCommand::CloseSplit),
         (' ', KeyCode::Char('e')) => Some(PendingCommand::OpenTree),
         (' ', KeyCode::Char('f')) => Some(PendingCommand::StartFuzzy),
+        (' ', KeyCode::Char('p')) => Some(PendingCommand::CommandPalette),
         (' ', KeyCode::Char('r')) => Some(PendingCommand::StartRename),
         (' ', KeyCode::Char('a')) => Some(PendingCommand::CodeActions),
         (' ', KeyCode::Char('s')) => Some(PendingCommand::DocumentSymbols),

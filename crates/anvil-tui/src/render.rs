@@ -661,6 +661,51 @@ pub fn view(model: &Model, frame: &mut Frame) {
         };
         render_split_pane(frame, split_area, &split.buffer, model.ui.focus.split);
     }
+    if let Some(palette) = &model.command_palette {
+        let width = (area.width * 3 / 5)
+            .max(40)
+            .min(area.width.saturating_sub(2));
+        let height = (area.height * 3 / 5)
+            .max(10)
+            .min(area.height.saturating_sub(2));
+        let popup = Rect {
+            x: area.x + area.width.saturating_sub(width) / 2,
+            y: area.y + area.height.saturating_sub(height) / 2,
+            width,
+            height,
+        };
+        frame.render_widget(Clear, popup);
+        let visible = height.saturating_sub(3) as usize;
+        let start = palette.selected.saturating_sub(visible.saturating_sub(1));
+        let mut lines = vec![Line::styled(
+            format!("> {}", palette.query),
+            Style::default().fg(theme::ACCENT),
+        )];
+        for (row, index) in palette
+            .filtered
+            .iter()
+            .skip(start)
+            .take(visible)
+            .enumerate()
+        {
+            let style = if start + row == palette.selected {
+                theme::selected()
+            } else {
+                theme::panel()
+            };
+            lines.push(Line::styled(palette.items[*index].clone(), style));
+        }
+        if palette.filtered.is_empty() {
+            lines.push(Line::styled("no commands", theme::panel().fg(theme::MUTED)));
+        }
+        frame.render_widget(
+            Paragraph::new(lines)
+                .style(theme::panel())
+                .block(panel_block("Commands")),
+            popup,
+        );
+    }
+
     if let Some(fuzzy) = &model.fuzzy {
         let width = (area.width * 3 / 5)
             .max(30)

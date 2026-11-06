@@ -35,6 +35,9 @@ post-`0.5.0` feature line.
   continuations, including `i`/`a` text-object extenders and their nested
   object actions.
 
+- `Space p` opens a command palette backed by the shared command registry with
+  query filtering and context labels.
+
 ### Fixed
 
 - Empty insert sessions no longer replace the previous last change; backspace

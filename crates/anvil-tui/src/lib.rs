@@ -40,6 +40,7 @@ use ratatui::{
 
 mod buffer;
 mod clipboard;
+mod command_palette;
 mod commands;
 mod editing;
 mod file_io;
@@ -196,6 +197,14 @@ struct InsertSession {
 struct FuzzyState {
     query: String,
     entries: Vec<String>,
+    filtered: Vec<usize>,
+    selected: usize,
+}
+
+#[derive(Debug, Clone)]
+struct CommandPaletteState {
+    query: String,
+    items: Vec<String>,
     filtered: Vec<usize>,
     selected: usize,
 }
@@ -431,6 +440,7 @@ pub struct Model {
     tree_refresh_generation: u64,
     show_hidden: bool,
     fuzzy: Option<FuzzyState>,
+    command_palette: Option<CommandPaletteState>,
     /// Gateway client used for file I/O when present.
     gateway: Option<GatewayClient>,
     /// Owning child/socket for the current gateway client.
@@ -532,6 +542,7 @@ impl Model {
             tree_refresh_generation: 0,
             show_hidden: false,
             fuzzy: None,
+            command_palette: None,
             gateway: None,
             gateway_session: None,
             lsp_client: None,
@@ -1320,7 +1331,8 @@ impl Model {
         {
             contexts.push(context);
         }
-        let overlay = self.fuzzy.is_some()
+        let overlay = self.command_palette.is_some()
+            || self.fuzzy.is_some()
             || self.workspace_symbols.is_some()
             || self.document_symbols.is_some()
             || self.code_actions.is_some()

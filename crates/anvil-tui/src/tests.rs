@@ -576,6 +576,24 @@ a = "editor.undo"
 }
 
 #[test]
+fn command_palette_filters_and_executes_registry_commands() {
+    let mut model = Model::new(EditorState::from_text("alpha"), None);
+    model.welcome = false;
+    model.open_tree();
+    assert!(model.ui.focus.tree);
+    for key_code in [KeyCode::Char(' '), KeyCode::Char('p')] {
+        handle_event(&mut model, key(key_code));
+    }
+    assert!(model.command_palette.is_some());
+    for character in "focus_editor".chars() {
+        handle_event(&mut model, key(KeyCode::Char(character)));
+    }
+    handle_event(&mut model, key(KeyCode::Enter));
+    assert!(!model.ui.focus.tree);
+    assert!(model.command_palette.is_none());
+}
+
+#[test]
 
 fn search_and_rename_contexts_consume_explicit_bindings() {
     let keymap = crate::keymap::KeymapConfig::from_toml(
