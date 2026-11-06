@@ -992,6 +992,12 @@ fn lsp_settings_cover_builtin_languages() {
         ("main.yaml", "yaml"),
         ("main.yml", "yaml"),
         ("main.sh", "shellscript"),
+        ("README.md", "markdown"),
+        ("Cargo.toml", "toml"),
+        ("index.html", "html"),
+        ("style.css", "css"),
+        ("style.scss", "scss"),
+        ("main.zig", "zig"),
     ] {
         assert_eq!(
             lsp_settings(Path::new(path))
@@ -1009,7 +1015,15 @@ fn lsp_settings_cover_builtin_languages() {
         lsp_settings(Path::new("main.sh")).expect("shell").args,
         vec!["start"]
     );
-    assert!(lsp_settings(Path::new("README.md")).is_none());
+    assert_eq!(
+        lsp_settings(Path::new("README.md")).expect("markdown").args,
+        vec!["server"]
+    );
+    assert_eq!(
+        lsp_settings(Path::new("Cargo.toml")).expect("toml").args,
+        vec!["lsp", "stdio"]
+    );
+    assert!(lsp_settings(Path::new("README.txt")).is_none());
 }
 
 #[test]

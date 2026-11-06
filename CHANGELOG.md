@@ -7,6 +7,14 @@ post-`0.5.0` feature line.
 
 
 ## [Unreleased]
+### Added
+- Markdown (`marksman`), TOML (`taplo`), HTML, CSS/SCSS/Less, and Zig
+  (`zls`) language-server discovery.
+
+### Fixed
+- Inlay hints are requested only after the server advertises
+  `inlayHintProvider`, avoiding `Method not found` noise from Markdown and
+  other servers without that capability.
 
 ## [0.6.0] - 2026-11-06
 

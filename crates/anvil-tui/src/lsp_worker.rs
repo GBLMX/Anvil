@@ -17,6 +17,9 @@ pub enum LspEvent {
         result: Value,
         error: Option<String>,
     },
+    Capabilities {
+        inlay_hints: bool,
+    },
     Crashed(String),
     StartupError(String),
     Error(String),
@@ -110,10 +113,14 @@ impl LspWorker {
                 let _ = sender.send(LspEvent::Crashed(error));
                 return;
             }
-            if let Err(error) = wait_initialize(&mut client) {
-                let _ = sender.send(LspEvent::StartupError(error));
-                return;
-            }
+            let inlay_hints = match wait_initialize(&mut client) {
+                Ok(inlay_hints) => inlay_hints,
+                Err(error) => {
+                    let _ = sender.send(LspEvent::StartupError(error));
+                    return;
+                }
+            };
+            let _ = sender.send(LspEvent::Capabilities { inlay_hints });
             let initialized = serde_json::json!({
                 "jsonrpc": "2.0",
                 "method": "initialized",
@@ -387,7 +394,7 @@ fn send(client: &mut GatewayClient, message: &serde_json::Value) -> Result<(), S
     client.lsp_send(&body).map_err(|error| error.to_string())
 }
 
-fn wait_initialize(client: &mut GatewayClient) -> Result<(), String> {
+fn wait_initialize(client: &mut GatewayClient) -> Result<bool, String> {
     loop {
         let Some(message) = client
             .recv_notification()
@@ -415,7 +422,14 @@ fn wait_initialize(client: &mut GatewayClient) -> Result<(), String> {
             {
                 return Err(format!("initialize failed: {error}"));
             }
-            return Ok(());
+            let provider = data
+                .get("result")
+                .and_then(|result| result.get("capabilities"))
+                .and_then(|capabilities| capabilities.get("inlayHintProvider"));
+            let inlay_hints = provider
+                .and_then(Value::as_bool)
+                .unwrap_or_else(|| provider.is_some());
+            return Ok(inlay_hints);
         }
     }
 }

@@ -23,8 +23,10 @@ and Dockerfile use Tree-sitter highlighting on a debounced background thread,
 capped at 256 KiB so large files keep plain-text latency.
 Trusted language servers (rust-analyzer, gopls, pyright/pylsp,
 typescript-language-server/vtsls, clangd, jdtls, lua-language-server,
-vscode-json-language-server, yaml-language-server, bash-language-server) run
-without the plugin sandbox; diagnostics, completion (`Ctrl+Space`), definition (`gd`),
+vscode-json-language-server, yaml-language-server, bash-language-server,
+marksman, taplo, vscode-html-language-server, vscode-css-language-server, zls)
+run without the plugin sandbox; diagnostics, completion (`Ctrl+Space`),
+definition (`gd`),
 hover (`K`), rename (`Space r`), code actions/quick fixes (`Space a`),
 formatting (`Space F`), document symbols (`Space s`), signature help, and
 workspace symbols (`Space S`) use canonicalized LSP UTF-16 positions. Rename, code-action, and formatting edits go through a shared

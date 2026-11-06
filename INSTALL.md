@@ -24,8 +24,9 @@ I/O is refused unless `ANVIL_GATEWAY` points at the gateway binary.
 Language servers are not bundled. Install the servers you want on `PATH`:
 `rust-analyzer`, `gopls`, `pyright`/`pylsp`, `typescript-language-server` or
 `vtsls`, `clangd`, `jdtls`, `lua-language-server`,
-`vscode-json-language-server`, `yaml-language-server`, and/or
-`bash-language-server`.
+`vscode-json-language-server`, `yaml-language-server`,
+`bash-language-server`, `marksman`, `taplo`, `vscode-html-language-server`,
+`vscode-css-language-server`, and/or `zls`.
 
 ## Build
 

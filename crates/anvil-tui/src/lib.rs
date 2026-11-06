@@ -464,6 +464,7 @@ pub struct Model {
     inlay_hints: Vec<InlayHint>,
     inlay_pending: Option<(u64, PathBuf, u64, usize, usize)>,
     inlay_checked: Option<(PathBuf, u64, usize, usize)>,
+    inlay_support: HashMap<(String, String), bool>,
     /// Secondary pane when a vertical split is open.
     split: Option<Pane>,
     /// Flattened workspace tree, when open.
@@ -584,6 +585,7 @@ impl Model {
             inlay_hints: Vec::new(),
             inlay_pending: None,
             inlay_checked: None,
+            inlay_support: HashMap::new(),
             split: None,
             tree: Vec::new(),
             tree_selected: None,
@@ -1192,6 +1194,7 @@ impl Model {
         if let Some(key) = self.lsp_config.take() {
             self.lsp_workers.remove(&key);
             self.lsp_retries.remove(&key);
+            self.inlay_support.remove(&key);
         }
         self.clear_lsp_ui();
         self.status = "lsp stopped".to_owned();
@@ -1201,6 +1204,14 @@ impl Model {
     fn handle_lsp_event(&mut self, key: &(String, String), event: LspEvent) {
         let active = self.lsp_config.as_ref() == Some(key);
         match event {
+            LspEvent::Capabilities { inlay_hints } => {
+                self.inlay_support.insert(key.clone(), inlay_hints);
+                if active {
+                    self.inlay_hints.clear();
+                    self.inlay_pending = None;
+                    self.inlay_checked = None;
+                }
+            }
             LspEvent::Diagnostics(path, diagnostics) => {
                 self.diagnostics.insert(path, diagnostics);
                 self.status = format!(

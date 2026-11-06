@@ -10,6 +10,17 @@ impl Model {
             self.inlay_hints.clear();
             return;
         };
+        let supported = self
+            .lsp_config
+            .as_ref()
+            .and_then(|key| self.inlay_support.get(key))
+            .copied()
+            .unwrap_or(false);
+        if !supported {
+            self.inlay_hints.clear();
+            self.inlay_pending = None;
+            return;
+        }
         let revision = self.editor.revision();
         let start = self.scroll;
         let end = visible_end_line(start, usize::from(height), self.editor.index().len_lines());
