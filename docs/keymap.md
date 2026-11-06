@@ -52,14 +52,14 @@ keys, duplicate chords within a context, or an oversized file reject the entire
 file; defaults remain active and the startup status line reports the error.
 
 Context bindings take precedence over `[keymap.normal]` and the built-in
-defaults. `editor` bindings apply while the editor is focused; `global`
-bindings are the fallback within a dispatched context. Context values may use
-normal commands or direct operator-pending commands such as
-`view.split_vertical`; commands that only make sense after an operator prefix
-are rejected. The `editor`, `file_tree`, `popup`, `modal`, and `global`
-sections are dispatched. `command_line`, `search`, and `rename` sections are
-validated but keep their built-in input handling until the remaining router
-branches move onto the context stack.
+defaults. Context values may use normal commands or direct operator-pending
+commands such as `view.split_vertical`; commands that only make sense after an
+operator prefix are rejected. All context sections are dispatched:
+`editor`, `file_tree`, `popup`, `modal`, `command_line`, `search`, `rename`,
+and `global`. Text-input contexts use only their own explicit bindings and do
+not fall back to `global`. For editor and file-tree handling, `global` bindings
+are applied after the active context's built-in keys are left unhandled;
+popup/modal built-ins consume first and do not fall back to global bindings.
 
 ## Presets
 

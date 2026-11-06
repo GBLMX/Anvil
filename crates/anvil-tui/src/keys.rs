@@ -2,8 +2,7 @@
 
 use crate::input::{KeyPress, is_action_key};
 use crate::keymap::{
-    ContextAction, NormalCommand, PendingCommand, resolve_normal, resolve_normal_in_context,
-    resolve_pending,
+    ContextAction, NormalCommand, PendingCommand, resolve_normal, resolve_pending,
 };
 use anvil_session::command::{CommandContext, is_registered};
 use anvil_session::ui::CreateKind;
@@ -340,7 +339,10 @@ fn handle_key(model: &mut Model, key: KeyPress) {
     if model.keymap_context() == KeymapContext::Popup {
         model.pending = None;
         model.leader_deadline = None;
-        if let Some(action) = model.keymap.resolve_context(KeymapContext::Popup, key) {
+        if let Some(action) = model
+            .keymap
+            .resolve_context_exact(KeymapContext::Popup, key)
+        {
             execute_context_action(model, action, key);
             return;
         }
@@ -551,7 +553,10 @@ fn handle_key(model: &mut Model, key: KeyPress) {
     }
 
     if model.keymap_context() == KeymapContext::FileTree {
-        if let Some(action) = model.keymap.resolve_context(KeymapContext::FileTree, key) {
+        if let Some(action) = model
+            .keymap
+            .resolve_context_exact(KeymapContext::FileTree, key)
+        {
             execute_context_action(model, action, key);
             return;
         }
@@ -576,8 +581,25 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             KeyCode::Char('m') => model.begin_tree_transfer(false),
             KeyCode::Char('c') => model.begin_tree_transfer(true),
             KeyCode::Char('d') | KeyCode::Delete => model.begin_tree_delete(),
-            _ => {}
+            _ => {
+                if let Some(action) = model.keymap.resolve_context(KeymapContext::Global, key) {
+                    execute_context_action(model, action, key);
+                }
+            }
         }
+        return;
+    }
+
+    let text_context = match &model.ui.input_mode {
+        InputMode::CommandLine { .. } => Some(KeymapContext::CommandLine),
+        InputMode::Search { .. } => Some(KeymapContext::Search),
+        InputMode::Rename { .. } => Some(KeymapContext::Rename),
+        _ => None,
+    };
+    if let Some(context) = text_context
+        && let Some(action) = model.keymap.resolve_context_exact(context, key)
+    {
+        execute_context_action(model, action, key);
         return;
     }
 
@@ -801,7 +823,10 @@ fn handle_key(model: &mut Model, key: KeyPress) {
         },
         InputMode::Normal => {
             if model.visual_anchor.is_some() {
-                if let Some(action) = model.keymap.resolve_context(KeymapContext::Modal, key) {
+                if let Some(action) = model
+                    .keymap
+                    .resolve_context_exact(KeymapContext::Modal, key)
+                {
                     execute_context_action(model, action, key);
                     return;
                 }
@@ -849,9 +874,25 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             }
             let context = model.keymap_context();
             let command = if context == KeymapContext::Editor {
-                resolve_normal_in_context(context, key, model.count, &model.keymap)
+                model
+                    .keymap
+                    .resolve_context_exact(context, key)
+                    .or_else(|| {
+                        resolve_normal(key, model.count, &model.keymap).map(ContextAction::Normal)
+                    })
+                    .or_else(|| {
+                        model
+                            .keymap
+                            .resolve_context_exact(KeymapContext::Global, key)
+                    })
             } else {
-                resolve_normal(key, model.count, &model.keymap).map(ContextAction::Normal)
+                resolve_normal(key, model.count, &model.keymap)
+                    .map(ContextAction::Normal)
+                    .or_else(|| {
+                        model
+                            .keymap
+                            .resolve_context_exact(KeymapContext::Global, key)
+                    })
             };
             if let Some(command) = command {
                 let command = match command {

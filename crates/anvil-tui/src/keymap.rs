@@ -574,23 +574,32 @@ impl KeymapConfig {
         self.normal.get(&KeyChord::from_key(key)).copied()
     }
 
+    fn context_binding(&self, context: KeymapContext, key: KeyPress) -> Option<ContextAction> {
+        let chord = KeyChord::from_key(key);
+        self.contexts
+            .get(&context)
+            .and_then(|bindings| bindings.get(&chord))
+            .copied()
+    }
+
+    pub(crate) fn resolve_context_exact(
+        &self,
+        context: KeymapContext,
+        key: KeyPress,
+    ) -> Option<ContextAction> {
+        self.context_binding(context, key)
+    }
+
     pub(crate) fn resolve_context(
         &self,
         context: KeymapContext,
         key: KeyPress,
     ) -> Option<ContextAction> {
-        let chord = KeyChord::from_key(key);
-        let binding = |context| {
-            self.contexts
-                .get(&context)
-                .and_then(|bindings| bindings.get(&chord))
-                .copied()
-        };
-        binding(context).or_else(|| {
+        self.context_binding(context, key).or_else(|| {
             if context == KeymapContext::Global {
                 None
             } else {
-                binding(KeymapContext::Global)
+                self.context_binding(KeymapContext::Global, key)
             }
         })
     }
@@ -626,6 +635,7 @@ pub(crate) fn resolve_normal(
     })
 }
 
+#[cfg(test)]
 pub(crate) fn resolve_normal_in_context(
     context: KeymapContext,
     key: KeyPress,

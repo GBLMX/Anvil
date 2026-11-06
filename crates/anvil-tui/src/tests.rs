@@ -505,6 +505,120 @@ x = "view.focus_editor"
 }
 
 #[test]
+fn global_context_does_not_shadow_open_popup() {
+    let mut model = Model::new(EditorState::from_text("alpha\nbeta"), None);
+    model.welcome = false;
+    model.document_symbols = Some(SymbolState {
+        items: vec![
+            SymbolItem {
+                name: "alpha".to_owned(),
+                detail: None,
+                line: 0,
+                character: 0,
+                depth: 0,
+            },
+            SymbolItem {
+                name: "beta".to_owned(),
+                detail: None,
+                line: 1,
+                character: 0,
+                depth: 0,
+            },
+        ],
+        selected: 0,
+    });
+    model.keymap = crate::keymap::KeymapConfig::from_toml(
+        r#"
+[keymap.contexts.global]
+j = "editor.undo"
+"#,
+    )
+    .expect("global keymap");
+    handle_event(&mut model, key(KeyCode::Char('j')));
+    assert_eq!(model.cursor, 0);
+    assert_eq!(
+        model
+            .document_symbols
+            .as_ref()
+            .map(|symbols| symbols.selected),
+        Some(1)
+    );
+}
+
+#[test]
+fn command_line_context_is_explicit_without_global_fallback() {
+    let mut model = Model::new(EditorState::from_text("alpha"), None);
+    model.welcome = false;
+    model.open_tree();
+    model.keymap = crate::keymap::KeymapConfig::from_toml(
+        r#"
+[keymap.contexts.global]
+a = "editor.undo"
+
+[keymap.contexts.command_line]
+"ctrl-x" = "view.focus_editor"
+"#,
+    )
+    .expect("context keymap");
+    model.ui.input_mode = InputMode::CommandLine {
+        buffer: String::new(),
+    };
+    handle_event(&mut model, ctrl(KeyCode::Char('x')));
+    assert!(!model.ui.focus.tree);
+    handle_event(&mut model, key(KeyCode::Char('a')));
+    assert_eq!(
+        match &model.ui.input_mode {
+            InputMode::CommandLine { buffer } => buffer.as_str(),
+            _ => "",
+        },
+        "a"
+    );
+}
+
+#[test]
+
+fn search_and_rename_contexts_consume_explicit_bindings() {
+    let keymap = crate::keymap::KeymapConfig::from_toml(
+        r#"
+[keymap.contexts.search]
+"ctrl-x" = "view.focus_editor"
+
+[keymap.contexts.rename]
+"ctrl-y" = "view.focus_editor"
+"#,
+    )
+    .expect("context keymap");
+
+    let mut search = Model::new(EditorState::from_text("alpha"), None);
+    search.welcome = false;
+    search.open_tree();
+    search.keymap = keymap;
+    search.ui.input_mode = InputMode::Search {
+        query: String::new(),
+    };
+    handle_event(&mut search, ctrl(KeyCode::Char('x')));
+    assert!(!search.ui.focus.tree);
+    assert!(matches!(search.ui.input_mode, InputMode::Search { .. }));
+
+    let mut rename = Model::new(EditorState::from_text("alpha"), None);
+    rename.welcome = false;
+    rename.open_tree();
+    rename.keymap = crate::keymap::KeymapConfig::from_toml(
+        r#"
+[keymap.contexts.rename]
+"ctrl-y" = "view.focus_editor"
+"#,
+    )
+    .expect("rename keymap");
+    rename.ui.input_mode = InputMode::Rename {
+        name: "alpha".to_owned(),
+    };
+    handle_event(&mut rename, ctrl(KeyCode::Char('y')));
+    assert!(!rename.ui.focus.tree);
+    assert!(matches!(rename.ui.input_mode, InputMode::Rename { .. }));
+}
+
+#[test]
 fn tree_expands_directories() {
     let dir = tempfile::tempdir().expect("tempdir");
     fs::create_dir(dir.path().join("src")).expect("dir");
