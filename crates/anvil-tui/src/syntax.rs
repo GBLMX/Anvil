@@ -161,10 +161,19 @@ pub struct Highlight {
     pub class: SyntaxClass,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Scope {
+    pub start: usize,
+    pub end: usize,
+    pub depth: usize,
+    pub label: String,
+}
+
 #[derive(Default)]
 pub struct SyntaxCache {
     revision: u64,
     path: Option<PathBuf>,
+    scopes: Vec<Scope>,
     highlights: Vec<Highlight>,
 }
 
@@ -173,20 +182,32 @@ impl SyntaxCache {
         self.revision == revision && self.path.as_deref() == path
     }
 
-    fn apply(&mut self, revision: u64, path: PathBuf, highlights: Vec<Highlight>) {
+    fn apply(
+        &mut self,
+        revision: u64,
+        path: PathBuf,
+        highlights: Vec<Highlight>,
+        scopes: Vec<Scope>,
+    ) {
         self.revision = revision;
         self.path = Some(path);
         self.highlights = highlights;
+        self.scopes = scopes;
     }
 
     fn clear(&mut self, revision: u64, path: Option<&Path>) {
         self.revision = revision;
         self.path = path.map(Path::to_path_buf);
         self.highlights.clear();
+        self.scopes.clear();
     }
 
     pub fn highlights(&self) -> &[Highlight] {
         &self.highlights
+    }
+
+    pub fn scope_at(&self, offset: usize) -> Option<&Scope> {
+        scope_at_offset(&self.scopes, offset)
     }
 }
 
@@ -260,6 +281,7 @@ struct ParseResult {
     revision: u64,
     path: PathBuf,
     highlights: Vec<Highlight>,
+    scopes: Vec<Scope>,
 }
 
 struct SyntaxWorker {
@@ -276,11 +298,13 @@ impl SyntaxWorker {
                 let Some(highlights) = parse_source(&request.source, &request.path) else {
                     continue;
                 };
+                let scopes = parse_scopes(&request.source, &request.path).unwrap_or_default();
                 let _ = result_tx.send(ParseResult {
                     epoch: request.epoch,
                     revision: request.revision,
                     path: request.path,
                     highlights,
+                    scopes,
                 });
             }
         });
@@ -368,8 +392,12 @@ impl SyntaxState {
                 && result.revision == revision
                 && path == Some(result.path.as_path())
             {
-                self.cache
-                    .apply(result.revision, result.path, result.highlights);
+                self.cache.apply(
+                    result.revision,
+                    result.path,
+                    result.highlights,
+                    result.scopes,
+                );
                 changed = true;
             }
         }
@@ -406,6 +434,113 @@ impl SyntaxState {
     pub fn highlights(&self) -> &[Highlight] {
         self.cache.highlights()
     }
+
+    pub fn scope_label(&self, path: Option<&Path>, offset: usize) -> Option<&str> {
+        if self.cache.path.as_deref() != path {
+            return None;
+        }
+        self.cache
+            .scope_at(offset)
+            .map(|scope| scope.label.as_str())
+    }
+}
+
+fn parse_scopes(source: &str, path: &Path) -> Option<Vec<Scope>> {
+    let definition = language_for(path)?;
+    if definition.kind != SyntaxKind::TreeSitter && definition.kind != SyntaxKind::Markdown {
+        return Some(Vec::new());
+    }
+    let language = definition.language.as_ref()?;
+    let mut parser = Parser::new();
+    parser.set_language(language).ok()?;
+    let tree = parser.parse(source, None)?;
+    let mut scopes = Vec::new();
+    walk_scope_nodes(tree.root_node(), source, 0, 0, &mut scopes);
+    Some(scopes)
+}
+
+fn walk_scope_nodes(
+    node: tree_sitter::Node<'_>,
+    source: &str,
+    base: usize,
+    depth: usize,
+    scopes: &mut Vec<Scope>,
+) {
+    let next_depth = if is_scope_kind(node.kind()) {
+        if let Some(label) = scope_label(node, source) {
+            let range = node.byte_range();
+            scopes.push(Scope {
+                start: base + range.start,
+                end: base + range.end,
+                depth,
+                label,
+            });
+            depth + 1
+        } else {
+            depth
+        }
+    } else {
+        depth
+    };
+    for index in 0..u32::try_from(node.child_count()).expect("child count fits u32") {
+        if let Some(child) = node.child(index) {
+            walk_scope_nodes(child, source, base, next_depth, scopes);
+        }
+    }
+}
+
+fn is_scope_kind(kind: &str) -> bool {
+    matches!(
+        kind,
+        "function_item"
+            | "struct_item"
+            | "enum_item"
+            | "trait_item"
+            | "impl_item"
+            | "mod_item"
+            | "union_item"
+            | "function_declaration"
+            | "method_declaration"
+            | "type_declaration"
+            | "function_definition"
+            | "class_definition"
+            | "class_declaration"
+            | "method_definition"
+            | "interface_declaration"
+            | "atx_heading"
+            | "setext_heading"
+    )
+}
+
+fn scope_label(node: tree_sitter::Node<'_>, source: &str) -> Option<String> {
+    let text = node
+        .child_by_field_name("name")
+        .or_else(|| node.child_by_field_name("type"))
+        .and_then(|child| source.get(child.byte_range()))
+        .map(str::trim)
+        .filter(|text| !text.is_empty())
+        .map(str::to_owned)
+        .or_else(|| {
+            source
+                .get(node.byte_range())
+                .and_then(|text| text.lines().next())
+                .map(|line| line.trim_start_matches('#').trim())
+                .filter(|line| !line.is_empty())
+                .map(str::to_owned)
+        })?;
+    let text = if node.kind() == "impl_item" {
+        format!("impl {text}")
+    } else {
+        text
+    };
+    Some(text.chars().take(48).collect())
+}
+
+fn scope_at_offset(scopes: &[Scope], offset: usize) -> Option<&Scope> {
+    scopes
+        .iter()
+        .filter(|scope| scope.start <= offset && offset <= scope.end)
+        .max_by_key(|scope| scope.depth)
 }
 
 fn parse_source(source: &str, path: &Path) -> Option<Vec<Highlight>> {
@@ -716,6 +851,37 @@ mod tests {
     fn text(value: &str) -> TextDocument {
         TextDocument::from_text(value)
     }
+    #[test]
+    fn tracks_innermost_tree_sitter_scope() {
+        let source = "fn outer() {\n    fn inner() {}\n}\n";
+        let scopes = parse_scopes(source, Path::new("x.rs")).expect("scopes");
+        assert!(scopes.iter().any(|scope| scope.label == "outer"));
+        assert!(scopes.iter().any(|scope| scope.label == "inner"));
+        let cursor = source.find("inner() {}").expect("inner") + 2;
+        assert_eq!(
+            scope_at_offset(&scopes, cursor).map(|scope| scope.label.as_str()),
+            Some("inner")
+        );
+    }
+
+    #[test]
+    fn cached_scope_lookup_requires_the_matching_path() {
+        let mut state = SyntaxState::default();
+        let path = PathBuf::from("main.rs");
+        state.cache.apply(
+            1,
+            path.clone(),
+            Vec::new(),
+            vec![Scope {
+                start: 0,
+                end: 20,
+                depth: 0,
+                label: "main".to_owned(),
+            }],
+        );
+        assert_eq!(state.scope_label(Some(&path), 3), Some("main"));
+        assert_eq!(state.scope_label(Some(Path::new("other.rs")), 3), None);
+    }
 
     #[test]
     fn rust_highlights_keywords_strings_numbers() {
@@ -872,6 +1038,7 @@ mod tests {
                 end: 2,
                 class: SyntaxClass::Keyword,
             }],
+            Vec::new(),
         );
         state.switch_path(Some(Path::new("other.rs")), false);
         state.switch_path(Some(&path), false);
@@ -882,7 +1049,7 @@ mod tests {
     fn invalidate_drops_the_cached_path() {
         let mut state = SyntaxState::default();
         let path = PathBuf::from("cached.rs");
-        state.cache.apply(7, path.clone(), Vec::new());
+        state.cache.apply(7, path.clone(), Vec::new(), Vec::new());
         state.invalidate();
         state.switch_path(Some(&path), false);
         assert!(state.highlights().is_empty());
@@ -895,6 +1062,7 @@ mod tests {
             revision: 0,
             path: Some(PathBuf::from(format!("{index}.rs"))),
             highlights: Vec::new(),
+            scopes: Vec::new(),
         };
         for index in 0..CACHE_LIMIT {
             state.remember(cached(index));
@@ -913,6 +1081,7 @@ mod tests {
                 revision: 0,
                 path: Some(PathBuf::from("0.rs")),
                 highlights: Vec::new(),
+                scopes: Vec::new(),
             });
         }
         assert_eq!(state.cached.order.len(), 1);
@@ -926,6 +1095,7 @@ mod tests {
             revision: 0,
             path: Some(PathBuf::from(format!("{index}.rs"))),
             highlights: Vec::new(),
+            scopes: Vec::new(),
         };
         state.remember(cache(0));
         state.remember(cache(1));
@@ -950,6 +1120,7 @@ mod tests {
             } else {
                 Vec::new()
             },
+            scopes: Vec::new(),
         };
         for index in 0..CACHE_LIMIT {
             state.remember(cached(index));

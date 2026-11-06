@@ -371,6 +371,31 @@ fn fuzzy_preview_stacks_below_list_on_narrow_terminals() {
 }
 
 #[test]
+fn status_bar_renders_path_diagnostics_and_position() {
+    let mut model = Model::new(EditorState::from_text("x"), None);
+    model.welcome = false;
+    model.workspace = PathBuf::from("/ws");
+    model.path = Some(PathBuf::from(
+        "/ws/src/company/project/module/very/long/path/Button.tsx",
+    ));
+
+    let backend = TestBackend::new(80, 20);
+    let mut terminal = Terminal::new(backend).expect("terminal");
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+    let rendered = terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect::<String>();
+    assert!(rendered.contains("..."), "{rendered}");
+    assert!(rendered.contains("Button.tsx"), "{rendered}");
+    assert!(rendered.contains("diag 0"), "{rendered}");
+    assert!(rendered.contains("Ln 1, Col 1"), "{rendered}");
+}
+
+#[test]
 fn space_leader_focuses_editor_and_tree() {
     let mut model = Model::new(EditorState::from_text("alpha"), None);
     model.welcome = false;

@@ -28,6 +28,11 @@ post-`0.5.0` feature line.
   width-aware text fallback. `anvil --help` documents the quick-open preview and
   the gateway/ripgrep overrides.
 
+- Breadcrumbs use workspace-relative paths with middle ellipsis and fall back to
+  cached Tree-sitter scopes when no symbol is selected. The status bar now uses
+  ordered segments with width caps, a 200 ms diagnostic hysteresis, and a
+  cached git branch label.
+
 - Markdown fenced code blocks render with a full-width background, and inline
   code spans use the same subtle background without replacing syntax colors.
 

@@ -14,7 +14,7 @@ use ratatui::{
 };
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
-const SPINNER: [&str; 8] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧"];
+pub(crate) const SPINNER: [&str; 8] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧"];
 
 fn panel_block(title: impl Into<Line<'static>>) -> Block<'static> {
     Block::bordered()
@@ -377,11 +377,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
     let title = if model.help_back.is_some() {
         "[help]".to_owned()
     } else {
-        let name = model
-            .path
-            .as_ref()
-            .map(|path| path.display().to_string())
-            .unwrap_or_else(|| "[no file]".to_owned());
+        let name = model.breadcrumb_text(usize::from(area.width).saturating_sub(6));
         let name = if model.modified {
             format!("[+] {name}")
         } else {
@@ -441,26 +437,11 @@ pub fn view(model: &Model, frame: &mut Frame) {
                     .unwrap_or_default()
             ),
         ),
-        InputMode::Normal => {
-            let position = model
-                .editor
-                .index()
-                .position(model.editor.text(), model.cursor);
-            let location = match position {
-                Some(position) => format!(
-                    " Ln {}, Col {} ",
-                    position.line + 1,
-                    position.grapheme_column + 1
-                ),
-                None => " Ln 1, Col 1 ".to_owned(),
-            };
-            let status = if model.status.is_empty() {
-                location
-            } else {
-                format!("{} ·{location}", model.status)
-            };
-            (" NOR ", theme::ACCENT, status)
-        }
+        InputMode::Normal => (
+            " NOR ",
+            theme::ACCENT,
+            model.status_text(usize::from(area.width).saturating_sub(7)),
+        ),
     };
     let status = if let Some(busy) = &model.busy {
         format!("{} {busy}…", SPINNER[model.spinner % SPINNER.len()])

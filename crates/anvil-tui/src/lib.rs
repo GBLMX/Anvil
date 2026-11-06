@@ -58,6 +58,7 @@ mod plugin_discovery;
 mod plugin_document;
 mod repeat;
 mod splits;
+mod status_line;
 use lsp_ui::lsp_settings;
 mod input;
 mod keymap;
@@ -481,6 +482,11 @@ pub struct Model {
     lsp_retries: HashMap<(String, String), u8>,
     /// Diagnostics keyed by workspace path.
     diagnostics: HashMap<PathBuf, Vec<lsp::Diagnostic>>,
+    diagnostic_count_shown: usize,
+    diagnostic_count_pending: Option<(usize, Instant)>,
+    diagnostic_path: Option<PathBuf>,
+    git_branch: Option<String>,
+    git_branch_checked: bool,
     /// Workspace root used to resolve all file paths.
     workspace: PathBuf,
     /// Reject file operations instead of falling back when the gateway is absent.
@@ -580,6 +586,11 @@ impl Model {
             lsp_config: None,
             lsp_retries: HashMap::new(),
             diagnostics: HashMap::new(),
+            diagnostic_count_shown: 0,
+            diagnostic_count_pending: None,
+            diagnostic_path: None,
+            git_branch: None,
+            git_branch_checked: false,
             workspace: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
             require_gateway: false,
             syntax: RefCell::new(SyntaxState::default()),
@@ -1607,6 +1618,7 @@ pub fn run_with_workspace(path: Option<PathBuf>, workspace: PathBuf) -> io::Resu
         }
         let size = terminal.terminal.size()?;
         model.ensure_cursor_visible(size.height.saturating_sub(2), size.width.saturating_sub(2));
+        model.tick_status();
         if model.dirty {
             terminal.terminal.draw(|frame| view(&model, frame))?;
             model.dirty = false;
