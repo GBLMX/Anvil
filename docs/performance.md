@@ -342,6 +342,12 @@ The 0.5.9 search path previously built a `HashSet` of every grapheme boundary
 in the document. A 100 MB `/` search measured **15.0 s** before the fix and
 **22–30 ms** after replacing it with local `GraphemeCursor` checks.
 
+The editor A1/A3 misses are reproducible, not scheduler noise. The same
+locked-core p99 harness at `b669315` measured A1 **30–43 µs** and A3
+**60–66 µs**; current A1 is **105 µs** and A3 is **175 µs**. This is a
+regression target for a separate optimization slice before claiming M4 on
+this workstation.
+
 The 100 MB single-line frame remains above the 33 ms scroll budget because
 `visible_lines` materializes the whole line before horizontal clipping. It no
 longer hangs, but the line-width path needs a windowed renderer before the
