@@ -11,6 +11,11 @@ post-`0.5.0` feature line.
 - Markdown (`marksman`), TOML (`taplo`), HTML, CSS/SCSS/Less, and Zig
   (`zls`) language-server discovery.
 
+### Changed
+- Split the TUI runtime, layout, and plugin lifecycle out of `lib.rs`; split
+  TUI tests by domain; split gateway handlers into `rpc.go`, `fs.go`,
+  `lsp.go`, and `process.go`. No behavior change.
+
 ### Fixed
 - Inlay hints are requested only after the server advertises
   `inlayHintProvider`, avoiding `Method not found` noise from Markdown and
