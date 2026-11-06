@@ -1,6 +1,68 @@
 //! Sandboxed Luau runtime primitives.
 
-use mlua::{Lua, Result};
+use anvil_ipc::Connection;
+use mlua::{Lua, LuaSerdeExt, Result, Value, Variadic};
+use serde_json::{Value as JsonValue, json};
+use std::cell::RefCell;
+use std::io::Write;
+use std::path::Path;
+use std::rc::Rc;
+use std::time::Duration;
+
+/// Blocking editor RPC client owned by the Luau runtime.
+pub(crate) struct EditorClient {
+    connection: Connection,
+    next_id: u64,
+}
+
+impl EditorClient {
+    pub(crate) fn connect(path: &Path) -> std::io::Result<Self> {
+        let connection = Connection::connect(path)?;
+        connection.set_read_timeout(Some(Duration::from_secs(2)))?;
+        Ok(Self {
+            connection,
+            next_id: 1,
+        })
+    }
+
+    fn call(&mut self, method: &str, params: JsonValue) -> std::result::Result<JsonValue, String> {
+        let id = self.next_id;
+        self.next_id = self.next_id.saturating_add(1);
+        let request = json!({
+            "jsonrpc": "2.0",
+            "id": id,
+            "method": method,
+            "params": params,
+        });
+        self.connection
+            .send(
+                serde_json::to_string(&request)
+                    .map_err(|error| error.to_string())?
+                    .as_bytes(),
+            )
+            .map_err(|error| error.to_string())?;
+        loop {
+            let frame = self
+                .connection
+                .recv()
+                .map_err(|error| error.to_string())?
+                .ok_or_else(|| "editor socket closed".to_owned())?;
+            let response: JsonValue =
+                serde_json::from_slice(&frame).map_err(|error| error.to_string())?;
+            if response.get("id") != Some(&json!(id)) {
+                continue;
+            }
+            if let Some(error) = response.get("error") {
+                return Err(error
+                    .get("message")
+                    .and_then(JsonValue::as_str)
+                    .unwrap_or("editor RPC failed")
+                    .to_owned());
+            }
+            return Ok(response.get("result").cloned().unwrap_or(JsonValue::Null));
+        }
+    }
+}
 
 /// Initializes Luau with its sandbox enabled and runs a deterministic check.
 pub(crate) fn smoke() -> Result<i32> {
@@ -19,13 +81,79 @@ pub(crate) fn smoke() -> Result<i32> {
 }
 
 /// Loads and executes one validated Luau entry inside the sandbox.
-pub(crate) fn run_file(path: &std::path::Path) -> Result<()> {
+pub(crate) fn run_file(path: &Path, editor: Option<EditorClient>) -> Result<()> {
     let source = std::fs::read_to_string(path)
         .map_err(|error| mlua::Error::RuntimeError(format!("read plugin: {error}")))?;
     let lua = Lua::new();
     lua.globals().set("require", mlua::Value::Nil)?;
     lua.sandbox(true)?;
+    install_print(&lua)?;
+    install_editor(&lua, editor)?;
     lua.load(source).exec()
+}
+
+fn install_print(lua: &Lua) -> Result<()> {
+    let print = lua.create_function(|lua, values: Variadic<Value>| {
+        let mut output = String::new();
+        for (index, value) in values.into_iter().enumerate() {
+            if index > 0 {
+                output.push('\t');
+            }
+            let debug = format!("{value:?}");
+            if let Some(text) = lua.coerce_string(value)? {
+                output.push_str(&text.to_string_lossy());
+            } else {
+                output.push_str(&debug);
+            }
+        }
+        let _ = writeln!(std::io::stderr(), "{output}");
+        Ok(())
+    })?;
+    lua.globals().set("print", print)
+}
+
+fn install_editor(lua: &Lua, editor: Option<EditorClient>) -> Result<()> {
+    let table = lua.create_table()?;
+    if let Some(editor) = editor {
+        let editor = Rc::new(RefCell::new(editor));
+
+        let get_client = Rc::clone(&editor);
+        table.set(
+            "get_view",
+            lua.create_function(move |lua, ()| {
+                let value = get_client
+                    .borrow_mut()
+                    .call("editor.get_view", json!({}))
+                    .map_err(mlua::Error::RuntimeError)?;
+                lua.to_value(&value)
+            })?,
+        )?;
+
+        let edit_client = Rc::clone(&editor);
+        table.set(
+            "apply_edit",
+            lua.create_function(move |lua, value: Value| {
+                let params: JsonValue = lua.from_value(value)?;
+                let result = edit_client
+                    .borrow_mut()
+                    .call("editor.apply_edit", params)
+                    .map_err(mlua::Error::RuntimeError)?;
+                lua.to_value(&result)
+            })?,
+        )?;
+    } else {
+        for method in ["get_view", "apply_edit"] {
+            table.set(
+                method,
+                lua.create_function(|_, ()| {
+                    Err::<Value, _>(mlua::Error::RuntimeError(
+                        "editor socket unavailable".to_owned(),
+                    ))
+                })?,
+            )?;
+        }
+    }
+    lua.globals().set("editor", table)
 }
 
 #[cfg(test)]
@@ -43,7 +171,7 @@ mod file_tests {
                 .as_nanos()
         ));
         std::fs::write(&path, "return 42").expect("write");
-        let result = run_file(&path);
+        let result = run_file(&path, None);
         let _ = std::fs::remove_file(path);
         result.expect("run plugin");
     }
@@ -51,8 +179,90 @@ mod file_tests {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     #[test]
     fn luau_sandbox_runs_without_ambient_io() {
         assert_eq!(super::smoke().expect("sandboxed Luau"), 42);
+    }
+
+    #[test]
+    fn luau_editor_get_view_uses_editor_socket() {
+        use anvil_ipc::Listener;
+
+        let socket = std::env::temp_dir().join(format!(
+            "anvil-luau-editor-{}-{}.sock",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("time")
+                .as_nanos()
+        ));
+        let listener = Listener::bind(&socket).expect("listen");
+        let server = std::thread::spawn(move || {
+            let mut connection = listener.accept().expect("accept");
+            let frame = connection.recv().expect("read").expect("request");
+            let request: JsonValue = serde_json::from_slice(&frame).expect("json");
+            assert_eq!(request["method"], "editor.get_view");
+            let response = json!({
+                "jsonrpc": "2.0",
+                "id": request["id"],
+                "result": {
+                    "revision": 0,
+                    "interaction_mode": "select",
+                    "viewport": {
+                        "first_line": 0,
+                        "first_column": 0,
+                        "line_count": 24,
+                        "width": 80,
+                        "height": 24
+                    },
+                    "selections": [{
+                        "anchor": {
+                            "byte_offset": 5,
+                            "line": 2,
+                            "grapheme_column": 4,
+                            "display_column": 4
+                        },
+                        "head": {
+                            "byte_offset": 5,
+                            "line": 2,
+                            "grapheme_column": 4,
+                            "display_column": 4
+                        }
+                    }]
+                }
+            });
+            connection
+                .send(
+                    serde_json::to_string(&response)
+                        .expect("response")
+                        .as_bytes(),
+                )
+                .expect("send");
+
+            let frame = connection.recv().expect("read").expect("apply request");
+            let request: JsonValue = serde_json::from_slice(&frame).expect("apply json");
+            assert_eq!(request["method"], "editor.apply_edit");
+            assert_eq!(request["params"]["buffer_id"], 1);
+            assert_eq!(request["params"]["edits"].as_array().map(Vec::len), Some(1));
+            let response = json!({
+                "jsonrpc": "2.0",
+                "id": request["id"],
+                "result": { "revision": 1, "applied_edits": 1 }
+            });
+            connection
+                .send(
+                    serde_json::to_string(&response)
+                        .expect("apply response")
+                        .as_bytes(),
+                )
+                .expect("apply send");
+        });
+        let fixture =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/editor_bridge/main.luau");
+        let client = EditorClient::connect(&socket).expect("connect editor");
+        run_file(&fixture, Some(client)).expect("run bridge plugin");
+        server.join().expect("server");
+        let _ = std::fs::remove_file(socket);
     }
 }

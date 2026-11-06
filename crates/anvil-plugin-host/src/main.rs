@@ -135,6 +135,10 @@ mod linux {
             Some(path) => Some(EditorProxy::connect(path, editor_timeout_ms)?),
             None => None,
         };
+        let mut editor_bridge = match editor_socket.as_deref() {
+            Some(path) => Some(runtime::EditorClient::connect(std::path::Path::new(path))?),
+            None => None,
+        };
         unsafe {
             if libc::prctl(libc::PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) != 0 {
                 return Err(io::Error::last_os_error());
@@ -161,7 +165,8 @@ mod linux {
         if let Some(root) = plugin_root.as_deref() {
             let manifest = PluginManifest::load(root).map_err(io::Error::other)?;
             let entry = manifest.entry_path(root).map_err(io::Error::other)?;
-            runtime::run_file(&entry).map_err(|error| io::Error::other(error.to_string()))?;
+            runtime::run_file(&entry, editor_bridge.take())
+                .map_err(|error| io::Error::other(error.to_string()))?;
         }
 
         if allocate_mb > 0 {

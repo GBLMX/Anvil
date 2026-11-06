@@ -15,6 +15,7 @@ import (
 
 	"github.com/GBLMX/Anvil/go/internal/fetch"
 	"github.com/GBLMX/Anvil/go/internal/gateway"
+	"github.com/GBLMX/Anvil/go/internal/pkg"
 )
 
 func main() {
@@ -36,8 +37,30 @@ func main() {
 	fetchAllow := flag.String("fetch-allow", "", "comma-separated exact fetch hosts")
 	fetchMax := flag.Int64("fetch-max", fetch.DefaultMaxBody, "maximum fetch body bytes")
 	fetchTimeout := flag.Duration("fetch-timeout", 10*time.Second, "fetch timeout")
+	installPlugin := flag.String("install-plugin", "", "verify and install one .anvil-plugin archive, then exit")
+	pluginSignature := flag.String("plugin-signature", "", "detached Ed25519 signature file")
+	pluginPublicKey := flag.String("plugin-public-key", "", "Ed25519 public key as hex or base64")
+	pluginInstallDir := flag.String("plugin-install-dir", "", "destination directory for -install-plugin")
 	flag.Parse()
 
+	if *installPlugin != "" {
+		if *pluginSignature == "" || *pluginPublicKey == "" || *pluginInstallDir == "" {
+			fmt.Fprintln(os.Stderr, "anvil-gateway: -install-plugin requires -plugin-signature, -plugin-public-key, and -plugin-install-dir")
+			os.Exit(2)
+		}
+		publicKey, err := pkg.DecodePublicKey(*pluginPublicKey)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "anvil-gateway: public key: %v\n", err)
+			os.Exit(2)
+		}
+		digest, err := pkg.Install(*installPlugin, *pluginSignature, publicKey, *pluginInstallDir)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "anvil-gateway: install plugin: %v\n", err)
+			os.Exit(2)
+		}
+		fmt.Printf("installed %s sha256=%x\n", *pluginInstallDir, digest)
+		return
+	}
 	if *socket == "" || *workspace == "" || *tokenHash == "" {
 		fmt.Fprintln(os.Stderr, "anvil-gateway: -socket, -workspace, and -token-sha256 are required")
 		os.Exit(2)
