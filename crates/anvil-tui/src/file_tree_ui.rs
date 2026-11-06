@@ -417,6 +417,7 @@ impl Model {
                 message: Some("preview unavailable: gateway".to_owned()),
                 ..PreviewState::default()
             };
+            self.status = "E: preview: gateway unavailable".to_owned();
             self.dirty = true;
             return;
         }
@@ -434,6 +435,7 @@ impl Model {
         {
             self.preview.loading = false;
             self.preview.message = Some("preview worker stopped".to_owned());
+            self.status = "E: preview: worker stopped".to_owned();
         }
         self.dirty = true;
     }
@@ -452,6 +454,9 @@ impl Model {
         self.preview.loading = false;
         match result {
             Ok(preview) => {
+                if self.status.starts_with("E: preview:") {
+                    self.status = "preview ready".to_owned();
+                }
                 self.preview.lines = preview.lines;
                 self.preview.truncated = preview.truncated;
                 self.preview.message = None;
@@ -459,7 +464,8 @@ impl Model {
             Err(error) => {
                 self.preview.lines.clear();
                 self.preview.truncated = false;
-                self.preview.message = Some(error);
+                self.preview.message = Some(error.clone());
+                self.status = format!("E: preview: {error}");
             }
         }
         self.dirty = true;

@@ -22,8 +22,10 @@ post-`0.5.0` feature line.
   share one transaction path, keeping register and undo behavior aligned.
 
 - Quick-open previews the selected file through the gateway worker, capped at
-  64 KiB, 200 lines, and 500 ms; stale generations are discarded. File icons
-  come from name/extension rules with a width-aware text fallback.
+  64 KiB, 200 lines, and 500 ms; stale generations are discarded. Previews sit
+  beside the list when wide and stack below it when narrow; failures also
+  surface in the status line. File icons come from name/extension rules with a
+  width-aware text fallback.
 
 - Markdown fenced code blocks render with a full-width background, and inline
   code spans use the same subtle background without replacing syntax colors.

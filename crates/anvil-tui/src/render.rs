@@ -755,14 +755,20 @@ pub fn view(model: &Model, frame: &mut Frame) {
     }
 
     if let Some(fuzzy) = &model.fuzzy {
-        let preview_split = area.width >= 80;
-        let width = if preview_split {
+        let horizontal = area.width >= 80;
+        let stacked = !horizontal && area.height >= 16;
+        let width = if horizontal {
             (area.width * 3 / 4).max(60)
         } else {
             (area.width * 3 / 5).max(30)
         }
         .min(area.width.saturating_sub(2));
-        let height = (area.height / 2).max(8).min(area.height.saturating_sub(2));
+        let height = if stacked {
+            (area.height * 3 / 4).max(10)
+        } else {
+            (area.height / 2).max(8)
+        }
+        .min(area.height.saturating_sub(2));
         let popup = Rect {
             x: area.x + (area.width.saturating_sub(width)) / 2,
             y: area.y + (area.height.saturating_sub(height)) / 2,
@@ -770,19 +776,27 @@ pub fn view(model: &Model, frame: &mut Frame) {
             height,
         };
         frame.render_widget(Clear, popup);
-        let list_width = if preview_split {
+        let list_width = if horizontal {
             (popup.width * 55 / 100)
                 .max(20)
                 .min(popup.width.saturating_sub(20))
         } else {
             popup.width
         };
+        let list_height = if stacked {
+            (popup.height * 3 / 5)
+                .max(6)
+                .min(popup.height.saturating_sub(4))
+        } else {
+            popup.height
+        };
         let list_area = Rect {
             width: list_width,
+            height: list_height,
             ..popup
         };
         let mut lines = Vec::new();
-        let visible = height.saturating_sub(3) as usize;
+        let visible = list_area.height.saturating_sub(3) as usize;
         let start = fuzzy.selected.saturating_sub(visible.saturating_sub(1));
         for (row, index) in fuzzy.filtered.iter().skip(start).take(visible).enumerate() {
             let name = &fuzzy.entries[*index];
@@ -807,12 +821,23 @@ pub fn view(model: &Model, frame: &mut Frame) {
                 })),
             list_area,
         );
-        if preview_split {
-            let preview_area = Rect {
+        let preview_area = if horizontal {
+            Some(Rect {
                 x: popup.x + list_width,
                 width: popup.width - list_width,
                 ..popup
-            };
+            })
+        } else if stacked {
+            Some(Rect {
+                x: popup.x,
+                y: popup.y + list_height,
+                width: popup.width,
+                height: popup.height - list_height,
+            })
+        } else {
+            None
+        };
+        if let Some(preview_area) = preview_area {
             frame.render_widget(
                 Paragraph::new(fuzzy_preview_lines(model))
                     .style(theme::panel())

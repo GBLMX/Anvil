@@ -340,6 +340,37 @@ fn fuzzy_preview_and_icon_render_on_wide_terminals() {
 }
 
 #[test]
+fn fuzzy_preview_stacks_below_list_on_narrow_terminals() {
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.welcome = false;
+    model.fuzzy = Some(FuzzyState {
+        query: String::new(),
+        entries: vec!["src/main.rs".to_owned()],
+        filtered: vec![0],
+        selected: 0,
+    });
+    model.preview = PreviewState {
+        path: Some("src/main.rs".to_owned()),
+        lines: vec!["fn main() {}".to_owned()],
+        ..PreviewState::default()
+    };
+
+    let backend = TestBackend::new(60, 20);
+    let mut terminal = Terminal::new(backend).expect("terminal");
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+    let rendered = terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect::<String>();
+    assert!(rendered.contains("src/main.rs"), "{rendered}");
+    assert!(rendered.contains("Preview"), "{rendered}");
+    assert!(rendered.contains("fn main() {}"), "{rendered}");
+}
+
+#[test]
 fn space_leader_focuses_editor_and_tree() {
     let mut model = Model::new(EditorState::from_text("alpha"), None);
     model.welcome = false;
@@ -839,6 +870,7 @@ fn preview_failure_keeps_the_list_usable() {
     );
     assert!(!model.preview.loading);
     assert_eq!(model.preview.message.as_deref(), Some("gateway failed"));
+    assert!(model.status.contains("E: preview: gateway failed"));
 }
 
 #[test]
@@ -856,6 +888,7 @@ fn preview_without_worker_reports_gateway_unavailable() {
         model.preview.message.as_deref(),
         Some("preview unavailable: gateway")
     );
+    assert!(model.status.contains("E: preview: gateway unavailable"));
 }
 
 #[test]
