@@ -873,6 +873,28 @@ fn handle_key(model: &mut Model, key: KeyPress) {
         },
         InputMode::Normal => {
             if model.visual_anchor.is_some() {
+                if model.modal_layer == Some(ModalLayer::Surround) {
+                    match key.code {
+                        KeyCode::Esc => model.cancel_modal_layer(),
+                        KeyCode::Char('(') | KeyCode::Char(')') => {
+                            model.surround_selection('(', ')');
+                        }
+                        KeyCode::Char('[') | KeyCode::Char(']') => {
+                            model.surround_selection('[', ']');
+                        }
+                        KeyCode::Char('{') | KeyCode::Char('}') => {
+                            model.surround_selection('{', '}');
+                        }
+                        KeyCode::Char('<') | KeyCode::Char('>') => {
+                            model.surround_selection('<', '>');
+                        }
+                        KeyCode::Char('"') => model.surround_selection('"', '"'),
+                        KeyCode::Char('\'') => model.surround_selection('\'', '\''),
+                        KeyCode::Char('`') => model.surround_selection('`', '`'),
+                        _ => model.cancel_modal_layer(),
+                    }
+                    return;
+                }
                 if let Some(action) = model
                     .keymap
                     .resolve_context_exact(KeymapContext::Modal, key)
@@ -887,6 +909,10 @@ fn handle_key(model: &mut Model, key: KeyPress) {
                     }
                     KeyCode::Char('V') => {
                         model.begin_visual(true);
+                        return;
+                    }
+                    KeyCode::Char('s') => {
+                        model.begin_surround();
                         return;
                     }
                     KeyCode::Char('d') => {

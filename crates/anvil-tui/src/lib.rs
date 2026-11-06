@@ -51,6 +51,7 @@ mod git_gutter;
 mod inlay_hints;
 pub mod lsp;
 mod lsp_ui;
+mod modal;
 mod plugin_activation;
 mod plugin_discovery;
 mod plugin_document;
@@ -331,6 +332,11 @@ fn workspace_activation_enabled() -> bool {
     std::env::var_os("ANVIL_PLUGIN_DISABLE_WORKSPACE_ACTIVATION").is_none()
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ModalLayer {
+    Surround,
+}
+
 pub struct Model {
     /// Editor state and its shared text/index.
     pub editor: DocumentSession,
@@ -342,6 +348,7 @@ pub struct Model {
     visual_anchor: Option<usize>,
     /// Whether the visual adapter selects whole lines.
     visual_line: bool,
+    modal_layer: Option<ModalLayer>,
     /// First visible line, independent of the cursor.
     pub scroll: usize,
     /// First visible display column.
@@ -488,6 +495,7 @@ impl Model {
             cursor: 0,
             visual_anchor: None,
             visual_line: false,
+            modal_layer: None,
             scroll: 0,
             hscroll: 0,
             ui: UiState::default(),

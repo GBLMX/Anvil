@@ -2999,6 +2999,24 @@ fn visual_adapter_maps_character_and_line_selection() {
 }
 
 #[test]
+fn visual_surround_uses_operation_scoped_modal_layer() {
+    let mut model = Model::new(EditorState::from_text("word"), None);
+    model.welcome = false;
+    model.cursor = 0;
+    for key_code in [
+        KeyCode::Char('v'),
+        KeyCode::Right,
+        KeyCode::Char('s'),
+        KeyCode::Char('('),
+    ] {
+        handle_event(&mut model, key(key_code));
+    }
+    assert_eq!(model.editor.text().slice(0..6), "(wo)rd");
+    assert!(model.modal_layer.is_none());
+    assert!(model.visual_anchor.is_none());
+}
+
+#[test]
 fn visual_delete_keeps_register_and_undo() {
     let mut model = Model::new(EditorState::from_text("abc"), None);
     model.cursor = 0;

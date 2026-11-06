@@ -15,6 +15,9 @@ post-`0.5.0` feature line.
 - `v`/`V` map character and line selection onto the selection-first model;
   block selection is rejected explicitly.
 
+- Visual selection supports operation-scoped surround: `s` then a bracket,
+  quote, or backtick wraps the selection; `Esc` cancels.
+
 - Markdown fenced code blocks render with a full-width background, and inline
   code spans use the same subtle background without replacing syntax colors.
 

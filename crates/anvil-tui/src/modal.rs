@@ -1,0 +1,47 @@
+//! Operation-scoped modal layers.
+
+use super::*;
+
+impl Model {
+    pub(crate) fn begin_surround(&mut self) {
+        if self.visual_anchor.is_none() {
+            self.status = "E: surround needs a visual selection".to_owned();
+            self.dirty = true;
+            return;
+        }
+        self.modal_layer = Some(ModalLayer::Surround);
+        self.status = "surround: ( [ { < \" ' ` ; Esc cancels".to_owned();
+        self.dirty = true;
+    }
+
+    pub(crate) fn cancel_modal_layer(&mut self) {
+        if self.modal_layer.take().is_some() {
+            self.status = "surround cancelled".to_owned();
+            self.dirty = true;
+        }
+    }
+
+    pub(crate) fn surround_selection(&mut self, open: char, close: char) {
+        let selections = self.editor.selection_bytes();
+        let mut edits = Vec::new();
+        for (anchor, head) in selections {
+            let start = anchor.min(head);
+            let end = anchor.max(head);
+            if start == end {
+                continue;
+            }
+            edits.push((end..end, close.to_string()));
+            edits.push((start..start, open.to_string()));
+        }
+        if edits.is_empty() || !self.editor.apply_transaction(edits) {
+            self.cancel_modal_layer();
+            return;
+        }
+        self.modal_layer = None;
+        self.sync_cursor_from_selection();
+        self.modified = true;
+        self.exit_visual();
+        self.status = format!("surrounded with {open}{close}");
+        self.dirty = true;
+    }
+}

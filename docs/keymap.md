@@ -81,6 +81,10 @@ The Space leader expires after 600 ms. `Space 1` focuses the editor,
 `Space 2` opens the file tree, and `Space p` opens the command palette; the
 existing `Space e`/`Space f` bindings remain.
 
+Visual `v`/`V` selections support `d`, `y`, and `c`. Press `s` to open the
+operation-scoped surround layer, then `(`/`)`, `[`/`]`, `{`/`}`, `<`/`>`,
+`"`, `'`, or `` ` `` to wrap the selection. `Esc` cancels the layer.
+
 ## Key syntax
 
 - A single character: `x`, `S`
