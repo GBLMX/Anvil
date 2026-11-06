@@ -27,7 +27,7 @@ Normal mode
   Space s             document symbols
   Space S             workspace symbols
   Space F             format the current document
-  Space f             fuzzy file finder; type to filter, Enter opens
+  Space f             fuzzy file finder; type to filter, Enter opens, previews
   gd                  go to definition
   ]d / [d             next / previous diagnostic
   K                   hover documentation

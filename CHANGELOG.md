@@ -21,6 +21,10 @@ post-`0.5.0` feature line.
 - `d`, `y`, and `c` over word, quote, bracket, paragraph, and tag objects now
   share one transaction path, keeping register and undo behavior aligned.
 
+- Quick-open previews the selected file through the gateway worker, capped at
+  64 KiB, 200 lines, and 500 ms; stale generations are discarded. File icons
+  come from name/extension rules with a width-aware text fallback.
+
 - Markdown fenced code blocks render with a full-width background, and inline
   code spans use the same subtle background without replacing syntax colors.
 

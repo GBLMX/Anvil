@@ -14,6 +14,17 @@ const FILE_LIMIT: usize = 5000;
 pub(crate) const MAX_TREE_WATCH_DIRS: usize = 256;
 const TREE_POLL_INTERVAL: Duration = Duration::from_millis(500);
 const TREE_DEBOUNCE: Duration = Duration::from_millis(500);
+pub(crate) const PREVIEW_MAX_BYTES: usize = 64 * 1024;
+pub(crate) const PREVIEW_MAX_LINES: usize = 200;
+const PREVIEW_TIMEOUT: Duration = Duration::from_millis(500);
+const PREVIEW_CHUNK: usize = 16 * 1024;
+
+/// Bounded text preview returned by the worker.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct PreviewData {
+    pub(crate) lines: Vec<String>,
+    pub(crate) truncated: bool,
+}
 
 /// A background file-tree request.
 pub enum FileRequest {
@@ -21,6 +32,8 @@ pub enum FileRequest {
     List(PathBuf),
     /// Enumerate workspace files with `rg --files`, or a bounded fallback.
     Files { hidden: bool },
+    /// Read a bounded preview for one workspace-relative file.
+    Preview { path: String, generation: u64 },
     /// Compare one workspace file with HEAD for gutter marks.
     GitDiff {
         path: PathBuf,
@@ -53,6 +66,12 @@ pub enum FileEvent {
     Listed(PathBuf, Result<Vec<DirEntry>, String>),
     /// Workspace-relative files in sorted order.
     Files(Result<Vec<String>, String>),
+    /// Bounded preview result for one workspace-relative file.
+    Preview {
+        path: String,
+        generation: u64,
+        result: Result<PreviewData, String>,
+    },
     /// Git gutter marks keyed by zero-based line.
     GitDiff {
         path: PathBuf,
@@ -187,6 +206,11 @@ impl FileWorker {
                             FileRequest::Files { hidden } => {
                                 FileEvent::Files(files(&mut client, &workspace, hidden))
                             }
+                            FileRequest::Preview { path, generation } => FileEvent::Preview {
+                                result: read_preview(&mut client, &path),
+                                path,
+                                generation,
+                            },
                             FileRequest::GitDiff {
                                 path,
                                 relative,
@@ -296,6 +320,61 @@ impl FileWorker {
     pub fn poll(&self) -> Vec<FileEvent> {
         self.events.try_iter().collect()
     }
+}
+
+fn read_preview(client: &mut GatewayClient, path: &str) -> Result<PreviewData, String> {
+    let started = Instant::now();
+    let size = client.file_size(path).map_err(|error| error.to_string())?;
+    let limit = usize::try_from(size)
+        .unwrap_or(usize::MAX)
+        .min(PREVIEW_MAX_BYTES);
+    let mut data = Vec::new();
+    let mut offset = 0;
+    let mut truncated = size > PREVIEW_MAX_BYTES as u64;
+    while data.len() < limit {
+        if started.elapsed() > PREVIEW_TIMEOUT {
+            return Err("preview timed out".to_owned());
+        }
+        let remaining = limit - data.len();
+        let chunk = client
+            .read_file(path, offset, remaining.min(PREVIEW_CHUNK))
+            .map_err(|error| error.to_string())?;
+        if chunk.data.is_empty() {
+            break;
+        }
+        data.extend_from_slice(&chunk.data);
+        offset = chunk.next_offset;
+        if chunk.eof {
+            break;
+        }
+    }
+    if data.len() >= PREVIEW_MAX_BYTES {
+        truncated = true;
+    }
+    decode_preview(data, truncated)
+}
+
+fn decode_preview(data: Vec<u8>, mut truncated: bool) -> Result<PreviewData, String> {
+    let text = match std::str::from_utf8(&data) {
+        Ok(text) => text,
+        Err(error) if truncated && error.error_len().is_none() => {
+            std::str::from_utf8(&data[..error.valid_up_to()])
+                .map_err(|_| "binary or invalid UTF-8".to_owned())?
+        }
+        Err(_) => return Err("binary or invalid UTF-8".to_owned()),
+    };
+    if text.contains('\0') {
+        return Err("binary file".to_owned());
+    }
+    let mut lines = Vec::new();
+    for line in text.split('\n') {
+        if lines.len() >= PREVIEW_MAX_LINES {
+            truncated = true;
+            break;
+        }
+        lines.push(line.trim_end_matches('\r').to_owned());
+    }
+    Ok(PreviewData { lines, truncated })
 }
 
 fn relative_path(workspace: &Path, path: &Path) -> String {
@@ -541,7 +620,9 @@ fn parse_git_diff(output: &str) -> Vec<(usize, char)> {
 
 #[cfg(test)]
 mod tests {
-    use super::{FileEvent, FileRequest, FileWorker, parse_git_diff};
+    use super::{
+        FileEvent, FileRequest, FileWorker, PREVIEW_MAX_LINES, decode_preview, parse_git_diff,
+    };
     use anvil_ipc::GatewayClient;
 
     #[test]
@@ -754,6 +835,81 @@ mod tests {
             next_event(&worker),
             FileEvent::TreeWatchUnavailable(_)
         ));
+        drop(worker);
+        server.join().expect("server");
+    }
+
+    #[test]
+    fn preview_decode_bounds_lines_and_rejects_binary() {
+        let long = (0..=PREVIEW_MAX_LINES)
+            .map(|line| format!("line {line}\r"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let decoded = decode_preview(long.into_bytes(), false).expect("preview");
+        assert_eq!(decoded.lines.len(), PREVIEW_MAX_LINES);
+        assert_eq!(decoded.lines[0], "line 0");
+        assert!(decoded.truncated);
+
+        assert!(decode_preview(vec![0xff], false).is_err());
+        assert!(decode_preview(b"a\0b".to_vec(), false).is_err());
+
+        let partial = decode_preview(b"ok\xe2\x82".to_vec(), true).expect("truncated UTF-8");
+        assert_eq!(partial.lines, ["ok"]);
+        assert!(partial.truncated);
+    }
+
+    #[test]
+    fn preview_reads_through_gateway() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let workspace = dir.path().to_path_buf();
+        let socket = workspace.join("gateway.sock");
+        let listener = anvil_ipc::Listener::bind(&socket).expect("bind");
+        let server = std::thread::spawn(move || {
+            let mut connection = listener.accept().expect("accept");
+            for _ in 0..3 {
+                let frame = connection.recv().expect("recv").expect("frame");
+                let request: serde_json::Value = serde_json::from_slice(&frame).expect("request");
+                let result = match request["method"].as_str().unwrap_or_default() {
+                    "sys.stat" => serde_json::json!({"size": 12, "modified_ns": 0}),
+                    "sys.read_file" => serde_json::json!({
+                        "data": "aGVsbG8Kd29ybGQK",
+                        "next_offset": 12,
+                        "eof": true,
+                    }),
+                    _ => serde_json::json!({"ok": true}),
+                };
+                let response = serde_json::json!({
+                    "jsonrpc": "2.0",
+                    "id": request["id"],
+                    "result": result,
+                });
+                connection
+                    .send(&serde_json::to_vec(&response).expect("response"))
+                    .expect("send");
+            }
+        });
+
+        let client = GatewayClient::connect(&socket, &[13; 32]).expect("client");
+        let worker = FileWorker::start(client, workspace);
+        worker
+            .request(FileRequest::Preview {
+                path: "src/main.rs".to_owned(),
+                generation: 7,
+            })
+            .expect("preview");
+        let FileEvent::Preview {
+            path,
+            generation,
+            result,
+        } = next_event(&worker)
+        else {
+            panic!("expected preview");
+        };
+        assert_eq!(path, "src/main.rs");
+        assert_eq!(generation, 7);
+        let preview = result.expect("preview result");
+        assert_eq!(preview.lines, ["hello", "world", ""]);
+        assert!(!preview.truncated);
         drop(worker);
         server.join().expect("server");
     }

@@ -1,4 +1,5 @@
 use super::*;
+use crate::file_worker::PreviewData;
 use crate::input::KeyPress;
 use crate::keymap::{KeyChord, KeymapConfig, NormalCommand, PendingCommand};
 use anvil_session::ui::CreateKind;
@@ -307,6 +308,37 @@ fn fuzzy_selection_scrolls_into_view() {
         .collect::<String>();
     assert!(rendered.contains("f19.txt"), "{rendered}");
 }
+#[test]
+fn fuzzy_preview_and_icon_render_on_wide_terminals() {
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.welcome = false;
+    model.fuzzy = Some(FuzzyState {
+        query: String::new(),
+        entries: vec!["src/main.rs".to_owned()],
+        filtered: vec![0],
+        selected: 0,
+    });
+    model.preview = PreviewState {
+        path: Some("src/main.rs".to_owned()),
+        lines: vec!["fn main() {}".to_owned()],
+        ..PreviewState::default()
+    };
+
+    let backend = TestBackend::new(80, 20);
+    let mut terminal = Terminal::new(backend).expect("terminal");
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+    let rendered = terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect::<String>();
+    assert!(rendered.contains("R src/main.rs"), "{rendered}");
+    assert!(rendered.contains("Preview"), "{rendered}");
+    assert!(rendered.contains("fn main() {}"), "{rendered}");
+}
+
 #[test]
 fn space_leader_focuses_editor_and_tree() {
     let mut model = Model::new(EditorState::from_text("alpha"), None);
@@ -756,6 +788,74 @@ fn fuzzy_filters_workspace_files() {
     fuzzy.query = "main".to_owned();
     model.fuzzy_refresh();
     assert_eq!(model.fuzzy.as_ref().expect("fuzzy").filtered.len(), 1);
+}
+#[test]
+fn stale_preview_results_are_discarded() {
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.preview_generation = 2;
+    model.preview = PreviewState {
+        path: Some("src/main.rs".to_owned()),
+        loading: true,
+        ..PreviewState::default()
+    };
+
+    model.handle_preview(
+        "src/main.rs".to_owned(),
+        1,
+        Ok(PreviewData {
+            lines: vec!["stale".to_owned()],
+            truncated: false,
+        }),
+    );
+    assert!(model.preview.loading);
+    assert!(model.preview.lines.is_empty());
+
+    model.handle_preview(
+        "src/main.rs".to_owned(),
+        2,
+        Ok(PreviewData {
+            lines: vec!["fresh".to_owned()],
+            truncated: true,
+        }),
+    );
+    assert!(!model.preview.loading);
+    assert_eq!(model.preview.lines, ["fresh"]);
+    assert!(model.preview.truncated);
+}
+
+#[test]
+fn preview_failure_keeps_the_list_usable() {
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.preview_generation = 1;
+    model.preview = PreviewState {
+        path: Some("src/main.rs".to_owned()),
+        loading: true,
+        ..PreviewState::default()
+    };
+    model.handle_preview(
+        "src/main.rs".to_owned(),
+        1,
+        Err("gateway failed".to_owned()),
+    );
+    assert!(!model.preview.loading);
+    assert_eq!(model.preview.message.as_deref(), Some("gateway failed"));
+}
+
+#[test]
+fn preview_without_worker_reports_gateway_unavailable() {
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.fuzzy = Some(FuzzyState {
+        query: String::new(),
+        entries: vec!["src/main.rs".to_owned()],
+        filtered: vec![0],
+        selected: 0,
+    });
+    model.request_preview();
+    assert!(!model.preview.loading);
+    assert_eq!(
+        model.preview.message.as_deref(),
+        Some("preview unavailable: gateway")
+    );
 }
 
 #[test]

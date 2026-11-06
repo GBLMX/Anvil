@@ -273,18 +273,38 @@ fn fuzzy_match_ranges(path: &str, query: &str) -> Vec<(usize, usize)> {
 }
 
 fn fuzzy_path_line(path: &str, query: &str, max_width: usize, selected: bool) -> Line<'static> {
-    let clipped = clip_path(path, max_width);
     let base = if selected {
         theme::selected()
     } else {
         theme::panel()
     };
+    let icon = icon_theme::icon_for(path)
+        .and_then(|icon| icon_theme::icon_text(icon).map(|text| (text, icon.color)));
+    let icon_width = icon
+        .as_ref()
+        .map(|(text, _)| UnicodeWidthStr::width(text.as_str()))
+        .unwrap_or(0);
+    let show_icon = icon_width > 0 && icon_width < max_width;
+    let path_width = if show_icon {
+        max_width.saturating_sub(icon_width)
+    } else {
+        max_width
+    };
+    let clipped = clip_path(path, path_width);
     let ranges = fuzzy_match_ranges(&clipped, query);
+    let mut spans = Vec::new();
+    if show_icon {
+        let (text, color) = icon.expect("checked icon");
+        spans.push(Span::styled(text, base.fg(color)));
+    }
     if ranges.is_empty() {
-        return Line::styled(clipped, base);
+        if spans.is_empty() {
+            return Line::styled(clipped, base);
+        }
+        spans.push(Span::styled(clipped, base));
+        return Line::from(spans);
     }
     let match_style = base.add_modifier(Modifier::BOLD | Modifier::UNDERLINED);
-    let mut spans = Vec::new();
     let mut cursor = 0;
     for (start, end) in ranges {
         if start > cursor {
@@ -293,12 +313,40 @@ fn fuzzy_path_line(path: &str, query: &str, max_width: usize, selected: bool) ->
         spans.push(Span::styled(clipped[start..end].to_owned(), match_style));
         cursor = end;
     }
+
     if cursor < clipped.len() {
         spans.push(Span::styled(clipped[cursor..].to_owned(), base));
     }
     Line::from(spans)
 }
 
+fn fuzzy_preview_lines(model: &Model) -> Vec<Line<'static>> {
+    let preview = &model.preview;
+    if preview.loading {
+        return vec![Line::styled(
+            "loading preview…",
+            theme::panel().fg(theme::MUTED),
+        )];
+    }
+    if let Some(message) = &preview.message {
+        return vec![Line::styled(
+            message.clone(),
+            theme::panel().fg(theme::ERROR),
+        )];
+    }
+    let mut lines: Vec<Line<'static>> = preview
+        .lines
+        .iter()
+        .map(|line| Line::styled(line.clone(), theme::panel()))
+        .collect();
+    if preview.truncated {
+        lines.push(Line::styled(
+            "… preview truncated",
+            theme::panel().fg(theme::MUTED),
+        ));
+    }
+    lines
+}
 pub(crate) fn apply_code_block_background(model: &Model, lines: &mut [Line<'_>], width: u16) {
     let current = model.current_line();
     let target = usize::from(width).saturating_add(model.hscroll);
@@ -707,9 +755,13 @@ pub fn view(model: &Model, frame: &mut Frame) {
     }
 
     if let Some(fuzzy) = &model.fuzzy {
-        let width = (area.width * 3 / 5)
-            .max(30)
-            .min(area.width.saturating_sub(2));
+        let preview_split = area.width >= 80;
+        let width = if preview_split {
+            (area.width * 3 / 4).max(60)
+        } else {
+            (area.width * 3 / 5).max(30)
+        }
+        .min(area.width.saturating_sub(2));
         let height = (area.height / 2).max(8).min(area.height.saturating_sub(2));
         let popup = Rect {
             x: area.x + (area.width.saturating_sub(width)) / 2,
@@ -718,6 +770,17 @@ pub fn view(model: &Model, frame: &mut Frame) {
             height,
         };
         frame.render_widget(Clear, popup);
+        let list_width = if preview_split {
+            (popup.width * 55 / 100)
+                .max(20)
+                .min(popup.width.saturating_sub(20))
+        } else {
+            popup.width
+        };
+        let list_area = Rect {
+            width: list_width,
+            ..popup
+        };
         let mut lines = Vec::new();
         let visible = height.saturating_sub(3) as usize;
         let start = fuzzy.selected.saturating_sub(visible.saturating_sub(1));
@@ -726,7 +789,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
             lines.push(fuzzy_path_line(
                 name,
                 &fuzzy.query,
-                width.saturating_sub(2) as usize,
+                list_area.width.saturating_sub(2) as usize,
                 start + row == fuzzy.selected,
             ));
         }
@@ -742,8 +805,21 @@ pub fn view(model: &Model, frame: &mut Frame) {
                 } else {
                     "Files"
                 })),
-            popup,
+            list_area,
         );
+        if preview_split {
+            let preview_area = Rect {
+                x: popup.x + list_width,
+                width: popup.width - list_width,
+                ..popup
+            };
+            frame.render_widget(
+                Paragraph::new(fuzzy_preview_lines(model))
+                    .style(theme::panel())
+                    .block(panel_block("Preview")),
+                preview_area,
+            );
+        }
     }
     if let Some(diagnostic) = &model.diagnostic_popup {
         let width = (area.width * 3 / 4)

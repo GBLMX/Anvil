@@ -420,6 +420,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
         match key.code {
             KeyCode::Esc => {
                 model.fuzzy = None;
+                model.clear_preview();
                 model.dirty = true;
             }
             KeyCode::Enter => model.fuzzy_open(),

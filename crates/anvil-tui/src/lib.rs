@@ -48,6 +48,7 @@ mod file_tree_ui;
 mod file_worker;
 mod gateway;
 mod git_gutter;
+mod icon_theme;
 mod inlay_hints;
 pub mod lsp;
 mod lsp_ui;
@@ -200,6 +201,15 @@ struct FuzzyState {
     entries: Vec<String>,
     filtered: Vec<usize>,
     selected: usize,
+}
+
+#[derive(Debug, Clone, Default)]
+struct PreviewState {
+    path: Option<String>,
+    lines: Vec<String>,
+    message: Option<String>,
+    loading: bool,
+    truncated: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -453,6 +463,8 @@ pub struct Model {
     tree_refresh_generation: u64,
     show_hidden: bool,
     fuzzy: Option<FuzzyState>,
+    preview: PreviewState,
+    preview_generation: u64,
     command_palette: Option<CommandPaletteState>,
     command_palette_recents: Vec<String>,
     /// Gateway client used for file I/O when present.
@@ -557,6 +569,8 @@ impl Model {
             tree_refresh_generation: 0,
             show_hidden: false,
             fuzzy: None,
+            preview: PreviewState::default(),
+            preview_generation: 0,
             command_palette: None,
             command_palette_recents: Vec::new(),
             gateway: None,
