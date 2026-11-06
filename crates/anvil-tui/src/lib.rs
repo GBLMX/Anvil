@@ -202,9 +202,15 @@ struct FuzzyState {
 }
 
 #[derive(Debug, Clone)]
+struct CommandPaletteItem {
+    id: String,
+    label: String,
+}
+
+#[derive(Debug, Clone)]
 struct CommandPaletteState {
     query: String,
-    items: Vec<String>,
+    items: Vec<CommandPaletteItem>,
     filtered: Vec<usize>,
     selected: usize,
 }
@@ -441,6 +447,7 @@ pub struct Model {
     show_hidden: bool,
     fuzzy: Option<FuzzyState>,
     command_palette: Option<CommandPaletteState>,
+    command_palette_recents: Vec<String>,
     /// Gateway client used for file I/O when present.
     gateway: Option<GatewayClient>,
     /// Owning child/socket for the current gateway client.
@@ -543,6 +550,7 @@ impl Model {
             show_hidden: false,
             fuzzy: None,
             command_palette: None,
+            command_palette_recents: Vec::new(),
             gateway: None,
             gateway_session: None,
             lsp_client: None,

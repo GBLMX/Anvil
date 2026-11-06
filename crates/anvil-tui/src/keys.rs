@@ -365,6 +365,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
                 let id = model.selected_command_id();
                 model.close_command_palette();
                 if let Some(id) = id {
+                    model.remember_command(&id);
                     execute_command_id(model, &id, key);
                 }
             }

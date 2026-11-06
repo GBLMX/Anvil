@@ -693,7 +693,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
             } else {
                 theme::panel()
             };
-            lines.push(Line::styled(palette.items[*index].clone(), style));
+            lines.push(Line::styled(palette.items[*index].label.clone(), style));
         }
         if palette.filtered.is_empty() {
             lines.push(Line::styled("no commands", theme::panel().fg(theme::MUTED)));

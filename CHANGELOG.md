@@ -36,7 +36,7 @@ post-`0.5.0` feature line.
   object actions.
 
 - `Space p` opens a command palette backed by the shared command registry with
-  query filtering and context labels.
+  derived titles, query filtering, context labels, and recent-command ordering.
 
 ### Fixed
 

@@ -588,9 +588,25 @@ fn command_palette_filters_and_executes_registry_commands() {
     for character in "focus_editor".chars() {
         handle_event(&mut model, key(KeyCode::Char(character)));
     }
+    let backend = TestBackend::new(120, 20);
+    let mut terminal = Terminal::new(backend).expect("terminal");
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+    let rendered = terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect::<String>();
+    assert!(rendered.contains("View Focus Editor"), "{rendered}");
     handle_event(&mut model, key(KeyCode::Enter));
     assert!(!model.ui.focus.tree);
     assert!(model.command_palette.is_none());
+    model.open_command_palette();
+    assert_eq!(
+        model.selected_command_id().as_deref(),
+        Some("view.focus_editor")
+    );
 }
 
 #[test]
