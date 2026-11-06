@@ -22,6 +22,11 @@ impl Model {
     }
 
     pub(crate) fn surround_selection(&mut self, open: char, close: char) {
+        if self.reject_read_only() {
+            self.modal_layer = None;
+            self.exit_visual();
+            return;
+        }
         let selections = self.editor.selection_bytes();
         let mut edits = Vec::new();
         for (anchor, head) in selections {

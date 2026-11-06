@@ -908,6 +908,10 @@ impl Model {
     }
 
     pub(crate) fn delete_visual(&mut self) {
+        if self.reject_read_only() {
+            self.exit_visual();
+            return;
+        }
         let selections = self.editor.selection_bytes();
         let deleted = selections
             .first()

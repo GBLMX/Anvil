@@ -924,6 +924,10 @@ fn handle_key(model: &mut Model, key: KeyPress) {
                         return;
                     }
                     KeyCode::Char('c') => {
+                        if model.reject_read_only() {
+                            model.exit_visual();
+                            return;
+                        }
                         model.delete_visual();
                         model.ui.input_mode = InputMode::Insert;
                         model.begin_insert(InsertOrigin::InsertHere);

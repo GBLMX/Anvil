@@ -2341,6 +2341,34 @@ fn help_refuses_writes() {
 }
 
 #[test]
+fn visual_operations_refuse_writes_to_help_buffer() {
+    let mut model = Model::new(EditorState::from_text("data"), None);
+    handle_event(&mut model, key(KeyCode::Char(':')));
+    type_text(&mut model, "help");
+    handle_event(&mut model, key(KeyCode::Enter));
+
+    let cases: [&[KeyCode]; 3] = [
+        &[
+            KeyCode::Char('v'),
+            KeyCode::Right,
+            KeyCode::Char('s'),
+            KeyCode::Char('('),
+        ],
+        &[KeyCode::Char('v'), KeyCode::Right, KeyCode::Char('d')],
+        &[KeyCode::Char('v'), KeyCode::Right, KeyCode::Char('c')],
+    ];
+    for keys in cases {
+        for &key_code in keys {
+            handle_event(&mut model, key(key_code));
+        }
+        assert!(model.status.contains("read-only"));
+        assert!(model.modal_layer.is_none());
+        assert!(model.visual_anchor.is_none());
+        assert_eq!(model.editor.text().slice(0..HELP_TEXT.len()), HELP_TEXT);
+    }
+}
+
+#[test]
 fn multi_buffer_switch_preserves_per_buffer_state() {
     let dir = tempfile::tempdir().expect("tempdir");
     let first = dir.path().join("first.txt");
