@@ -8,6 +8,8 @@ post-`0.5.0` feature line.
 
 ## [Unreleased]
 
+## [0.5.5] - 2026-11-06
+
 ### Added
 - Word, quote, bracket/parenthesis/brace, paragraph, and tag text objects
   support `d`/`y`/`c`; word and paragraph objects honor counts.

@@ -8,11 +8,11 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-anvil-api = { path = "../anvil-api", version = "0.5.0" }
-anvil-core = { path = "../anvil-core", version = "0.5.0" }
-anvil-editor = { path = "../anvil-editor", version = "0.5.0" }
-anvil-ipc = { path = "../anvil-ipc", version = "0.5.0" }
-anvil-plugin-host = { path = "../anvil-plugin-host", version = "0.5.0" }
+anvil-api = { path = "../anvil-api", version = "0.5.5" }
+anvil-core = { path = "../anvil-core", version = "0.5.5" }
+anvil-editor = { path = "../anvil-editor", version = "0.5.5" }
+anvil-ipc = { path = "../anvil-ipc", version = "0.5.5" }
+anvil-plugin-host = { path = "../anvil-plugin-host", version = "0.5.5" }
 sha2 = "0.11"
 serde_json = "1"
 
