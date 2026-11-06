@@ -312,3 +312,40 @@ uds_roundtrip p99:
 hot_reload p99:
 reload_leak:          child_processes:
 ```
+
+## 8. 2026-11-06 boundary run
+
+Environment: i7-12700H, 15 GiB RAM, Linux 7.3.1, Rust 1.88.0,
+Go 1.26.10, `powersave` governor. CPU sampled at 4.3 GHz on pinned P-cores.
+Release build used Cargo defaults, not the reference-machine LTO profile.
+
+### Boundary results
+
+| Scenario | Observation | Gate |
+|---|---:|---:|
+| Empty document render | < 1 ms | pass |
+| 1 MB single-line render | 1 ms | pass |
+| 100 MB single-line render | 100 ms, 314 MB peak RSS | no hang; frame budget missed |
+| Max `u16` terminal hit-test | no overflow | pass |
+| Empty editor A1 p99 | 37.2 µs | < 50 µs |
+| 1 MB editor A1 p99 | 59.7 µs | < 50 µs |
+| 100 MB editor A1 p99 | 105.1 µs | < 50 µs |
+| 100 MB editor A3 p99 | 174.6 µs | < 100 µs |
+| 100 MB key-to-screen p99 | 130 µs Rust / 846 µs PTY | pass |
+| 100 MB scroll p99 | 145 µs Rust / 606 µs PTY | pass |
+| 100 MB search p99 | 28 ms Rust / 30 ms PTY | pass |
+| 100 MB open first frame | 113 ms Rust / 163 ms model | pass |
+| PTY terminal setup without reply | 2.0 s | terminal-query artifact |
+| 100k line-index stress | chunk count 1,281; offset p99 2.8 µs | pass |
+
+The 0.5.9 search path previously built a `HashSet` of every grapheme boundary
+in the document. A 100 MB `/` search measured **15.0 s** before the fix and
+**22–30 ms** after replacing it with local `GraphemeCursor` checks.
+
+The 100 MB single-line frame remains above the 33 ms scroll budget because
+`visible_lines` materializes the whole line before horizontal clipping. It no
+longer hangs, but the line-width path needs a windowed renderer before the
+frame budget can be claimed.
+
+The PTY 2 s startup is crossterm's keyboard-enhancement query timeout. A real
+terminal that answers the query avoids it; the synthetic PTY does not.

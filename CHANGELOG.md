@@ -21,6 +21,9 @@ post-`0.5.0` feature line.
   account for the tree sidebar.
 - Clicking outside command palette, fuzzy finder, code actions, symbols, and
   completion popups now closes them.
+- Search no longer builds a full-document grapheme-boundary set; 100 MB
+  search dropped from 15 s to 22–30 ms.
+- Split hit-testing no longer overflows at extreme terminal widths.
 
 ## [0.5.8] - 2026-11-06
 

@@ -2,11 +2,10 @@
 
 use regex::RegexBuilder;
 use std::{
-    collections::HashSet,
     ops::Range,
     time::{Duration, Instant},
 };
-use unicode_segmentation::UnicodeSegmentation;
+use unicode_segmentation::GraphemeCursor;
 
 const SEARCH_DEBOUNCE: Duration = Duration::from_millis(50);
 
@@ -88,16 +87,11 @@ pub(crate) fn find_matches(
         .case_insensitive(!options.case_sensitive)
         .build()
         .map_err(|error| error.to_string())?;
-    let boundaries: HashSet<usize> = text
-        .grapheme_indices(true)
-        .map(|(offset, _)| offset)
-        .chain(std::iter::once(text.len()))
-        .collect();
     let mut matches = Vec::new();
     for found in regex.find_iter(text) {
         if found.start() == found.end()
-            || !boundaries.contains(&found.start())
-            || !boundaries.contains(&found.end())
+            || !is_grapheme_boundary(text, found.start())
+            || !is_grapheme_boundary(text, found.end())
         {
             continue;
         }
@@ -117,6 +111,17 @@ pub(crate) fn find_matches(
 
 fn is_word_char(character: char) -> bool {
     character.is_alphanumeric() || character == '_'
+}
+
+fn is_grapheme_boundary(text: &str, offset: usize) -> bool {
+    if offset == 0 || offset == text.len() {
+        return true;
+    }
+    if !text.is_char_boundary(offset) {
+        return false;
+    }
+    let mut cursor = GraphemeCursor::new(offset, text.len(), true);
+    matches!(cursor.is_boundary(text, 0), Ok(true))
 }
 
 #[cfg(test)]
@@ -168,5 +173,18 @@ mod tests {
             ..literal()
         };
         assert!(find_matches("Cat", "cat", case).expect("case").is_empty());
+    }
+
+    #[test]
+    fn matches_do_not_split_grapheme_clusters() {
+        assert!(
+            find_matches("e\u{301}", "e", literal())
+                .expect("combining")
+                .is_empty()
+        );
+        assert_eq!(
+            find_matches("e\u{301} e", "e", literal()).expect("after"),
+            vec![4..5]
+        );
     }
 }

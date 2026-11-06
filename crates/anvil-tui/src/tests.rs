@@ -3935,3 +3935,40 @@ fn clicking_outside_fuzzy_closes_it() {
     handle_event(&mut model, Event::Mouse(click));
     assert!(model.fuzzy.is_none());
 }
+
+#[test]
+#[ignore = "manual long-line render boundary"]
+fn long_line_render_stays_bounded() {
+    let megabytes = std::env::var("ANVIL_LONG_LINE_MB")
+        .ok()
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(10);
+    let text = "x".repeat(megabytes * 1024 * 1024);
+    let model = Model::new(EditorState::from_text(&text), None);
+    let mut terminal = Terminal::new(TestBackend::new(120, 40)).expect("terminal");
+    let start = std::time::Instant::now();
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+    let elapsed = start.elapsed();
+    println!("long-line-{megabytes}MB-render-ms={}", elapsed.as_millis());
+    assert!(
+        elapsed < std::time::Duration::from_secs(1),
+        "long-line render took {elapsed:?}"
+    );
+}
+
+#[test]
+fn hit_test_extreme_dimensions_do_not_overflow() {
+    let mut model = Model::new(EditorState::from_text("abc"), None);
+    model.tree_visible = true;
+    model.split_vertical();
+    for (width, height) in [(0, 0), (1, 1), (2, 2), (u16::MAX, u16::MAX)] {
+        let _ = mouse_hit_boundary(&model, 0, 0, width, height);
+        let _ = mouse_hit_boundary(
+            &model,
+            width.saturating_sub(1),
+            height.saturating_sub(1),
+            width,
+            height,
+        );
+    }
+}

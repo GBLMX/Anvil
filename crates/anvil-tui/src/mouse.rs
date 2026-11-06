@@ -223,7 +223,9 @@ fn editor_area(model: &Model, width: u16, height: u16) -> Option<Rect> {
 }
 
 fn split_x(inner: Rect, ratio: u16) -> u16 {
-    inner.x + inner.width * ratio.min(100) / 100
+    inner
+        .x
+        .saturating_add((u32::from(inner.width) * u32::from(ratio.min(100)) / 100) as u16)
 }
 
 fn pane_at(model: &Model, inner: Rect, col: u16) -> (Side, u16, u16) {
