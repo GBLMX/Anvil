@@ -16,6 +16,12 @@ post-`0.5.0` feature line.
   click-to-focus, drag selection with edge scrolling, wheel scrolling, split
   resize, overlay click trapping, and an ASCII icon/severity fallback.
 
+### Fixed
+- Mouse drag selection and split resizing now share the editor layout and
+  account for the tree sidebar.
+- Clicking outside command palette, fuzzy finder, code actions, symbols, and
+  completion popups now closes them.
+
 ## [0.5.8] - 2026-11-06
 
 ### Added

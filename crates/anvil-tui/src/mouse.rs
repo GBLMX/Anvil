@@ -49,13 +49,7 @@ pub(crate) fn handle_mouse(model: &mut Model, mouse: MouseEvent, width: u16, hei
         if mouse.kind == MouseEventKind::Down(MouseButton::Left)
             && !inside_overlay(model, mouse.column, mouse.row, area)
         {
-            if model.ui.diagnostic_peek.is_some() {
-                model.close_diagnostic_peek();
-            }
-            if model.ui.problems.visible {
-                model.ui.problems.visible = false;
-                model.dirty = true;
-            }
+            close_outside_overlay(model);
         }
         return true;
     }
@@ -101,16 +95,19 @@ pub(crate) fn handle_mouse(model: &mut Model, mouse: MouseEvent, width: u16, hei
                     model.pointer = PointerState::Dragging(kind);
                     match kind {
                         DragKind::Editor { anchor } => {
-                            let line = editor_line_at(model, mouse.row);
-                            let column = editor_column_at(model, mouse.column, width);
                             edge_scroll(model, mouse.row, height);
-                            let head = offset_for_position(model, line, column);
-                            model.editor.set_selection_bytes(anchor, head);
-                            model.cursor = head;
+                            if let Some((_, line, column)) =
+                                editor_position_at(model, mouse.column, mouse.row, width, height)
+                            {
+                                let head = offset_for_position(model, line, column);
+                                model.editor.set_selection_bytes(anchor, head);
+                                model.cursor = head;
+                            }
                         }
                         DragKind::Split => {
-                            let ratio = split_ratio_at(mouse.column, width);
-                            model.split_ratio = ratio;
+                            if let Some(inner) = editor_area(model, width, height) {
+                                model.split_ratio = split_ratio_at(inner, mouse.column);
+                            }
                         }
                     }
                     model.dirty = true;
@@ -152,6 +149,47 @@ pub(crate) fn hit_test(model: &Model, col: u16, row: u16, width: u16, height: u1
     if col >= width || row >= height {
         return Target::Outside;
     }
+    let Some((inner, tab_row)) = content_rect(model, width, height) else {
+        return Target::Outside;
+    };
+    if tab_row == Some(row) {
+        return Target::Tabs(tab_at(model, col.saturating_sub(inner.x), inner.width));
+    }
+    let mut editor_inner = inner;
+    if model.tree_visible && editor_inner.width > 50 {
+        let sidebar = sidebar_width(editor_inner);
+        if col < editor_inner.x.saturating_add(sidebar) {
+            let visible = editor_inner.height.saturating_sub(2) as usize;
+            let start = model
+                .tree_selected
+                .unwrap_or(0)
+                .saturating_sub(visible.saturating_sub(1));
+            let index =
+                start.saturating_add(row.saturating_sub(editor_inner.y.saturating_add(1)) as usize);
+            return Target::Tree(index);
+        }
+        editor_inner.x = editor_inner.x.saturating_add(sidebar);
+        editor_inner.width = editor_inner.width.saturating_sub(sidebar);
+    }
+    if row == height.saturating_sub(1) {
+        return Target::Status;
+    }
+    let split_x = split_x(editor_inner, model.split_ratio);
+    if model.split.is_some() && col.abs_diff(split_x) <= 1 {
+        return Target::SplitHandle;
+    }
+    let (side, line, column) = editor_position_at(model, col, row, width, height).unwrap_or((
+        Side::Left,
+        model.scroll,
+        model.hscroll,
+    ));
+    Target::Editor { side, line, column }
+}
+
+fn content_rect(model: &Model, width: u16, height: u16) -> Option<(Rect, Option<u16>)> {
+    if model.welcome {
+        return None;
+    }
     let mut inner = Rect {
         x: 1,
         y: 1,
@@ -159,50 +197,61 @@ pub(crate) fn hit_test(model: &Model, col: u16, row: u16, width: u16, height: u1
         height: height.saturating_sub(2),
     };
     if inner.width == 0 || inner.height == 0 {
-        return Target::Outside;
+        return None;
     }
+    let mut tab_row = None;
     if model.buffers.len() > 1 || model.help_back.is_some() {
-        if row == inner.y {
-            return Target::Tabs(tab_at(model, col.saturating_sub(inner.x), inner.width));
-        }
+        tab_row = Some(inner.y);
         inner.y = inner.y.saturating_add(1);
         inner.height = inner.height.saturating_sub(1);
     }
+    Some((inner, tab_row))
+}
+
+fn sidebar_width(inner: Rect) -> u16 {
+    (inner.width / 5).clamp(18, 40).min(inner.width - 20)
+}
+
+fn editor_area(model: &Model, width: u16, height: u16) -> Option<Rect> {
+    let (mut inner, _) = content_rect(model, width, height)?;
     if model.tree_visible && inner.width > 50 {
-        let sidebar = (inner.width / 5).clamp(18, 40).min(inner.width - 20);
-        if col < inner.x.saturating_add(sidebar) {
-            let visible = inner.height.saturating_sub(2) as usize;
-            let start = model
-                .tree_selected
-                .unwrap_or(0)
-                .saturating_sub(visible.saturating_sub(1));
-            let index =
-                start.saturating_add(row.saturating_sub(inner.y.saturating_add(1)) as usize);
-            return Target::Tree(index);
-        }
+        let sidebar = sidebar_width(inner);
         inner.x = inner.x.saturating_add(sidebar);
         inner.width = inner.width.saturating_sub(sidebar);
     }
-    if row == height.saturating_sub(1) {
-        return Target::Status;
-    }
-    let split_x = inner.x + inner.width * model.split_ratio.min(100) / 100;
-    if model.split.is_some() && col.abs_diff(split_x) <= 1 {
-        return Target::SplitHandle;
-    }
-    let (pane_x, pane_width, side) = if model.split.is_some() {
+    Some(inner)
+}
+
+fn split_x(inner: Rect, ratio: u16) -> u16 {
+    inner.x + inner.width * ratio.min(100) / 100
+}
+
+fn pane_at(model: &Model, inner: Rect, col: u16) -> (Side, u16, u16) {
+    let split_x = split_x(inner, model.split_ratio);
+    if model.split.is_some() {
         if col < split_x {
-            (inner.x, split_x.saturating_sub(inner.x), Side::Left)
+            (Side::Left, inner.x, split_x.saturating_sub(inner.x))
         } else {
             (
+                Side::Right,
                 split_x,
                 inner.x.saturating_add(inner.width).saturating_sub(split_x),
-                Side::Right,
             )
         }
     } else {
-        (inner.x, inner.width, Side::Left)
-    };
+        (Side::Left, inner.x, inner.width)
+    }
+}
+
+fn editor_position_at(
+    model: &Model,
+    col: u16,
+    row: u16,
+    width: u16,
+    height: u16,
+) -> Option<(Side, usize, usize)> {
+    let inner = editor_area(model, width, height)?;
+    let (side, pane_x, pane_width) = pane_at(model, inner, col);
     let gutter = model.gutter_width().min(pane_width);
     let line = model
         .scroll
@@ -210,7 +259,7 @@ pub(crate) fn hit_test(model: &Model, col: u16, row: u16, width: u16, height: u1
     let column = col
         .saturating_sub(pane_x.saturating_add(gutter))
         .saturating_add(model.hscroll as u16) as usize;
-    Target::Editor { side, line, column }
+    Some((side, line, column))
 }
 
 fn overlay_open(model: &Model) -> bool {
@@ -221,6 +270,33 @@ fn overlay_open(model: &Model) -> bool {
         || model.code_actions.is_some()
         || model.document_symbols.is_some()
         || model.completion.is_some()
+}
+
+fn close_outside_overlay(model: &mut Model) {
+    if model.ui.diagnostic_peek.is_some() {
+        model.close_diagnostic_peek();
+    }
+    if model.ui.problems.visible {
+        model.ui.problems.visible = false;
+        model.dirty = true;
+    }
+    if model.command_palette.is_some() {
+        model.close_command_palette();
+    }
+    if model.fuzzy.is_some() {
+        model.fuzzy = None;
+        model.clear_preview();
+        model.dirty = true;
+    }
+    if model.code_actions.is_some() {
+        model.cancel_code_actions();
+    }
+    if model.document_symbols.is_some() {
+        model.cancel_document_symbols();
+    }
+    if model.completion.is_some() {
+        model.cancel_completion();
+    }
 }
 
 fn inside_overlay(model: &Model, col: u16, row: u16, area: Rect) -> bool {
@@ -261,16 +337,27 @@ fn inside_overlay(model: &Model, col: u16, row: u16, area: Rect) -> bool {
             width,
             height,
         };
-        return col >= popup.x
-            && col < popup.x + popup.width
-            && row >= popup.y
-            && row < popup.y + popup.height;
+        return crate::render::rect_contains(popup, col, row);
     }
-    model.command_palette.is_some()
-        || model.fuzzy.is_some()
-        || model.code_actions.is_some()
-        || model.document_symbols.is_some()
-        || model.completion.is_some()
+    if model.command_palette.is_some() {
+        return crate::render::rect_contains(crate::render::command_palette_rect(area), col, row);
+    }
+    if model.fuzzy.is_some() {
+        return crate::render::rect_contains(crate::render::fuzzy_rect(area), col, row);
+    }
+    if let Some(actions) = &model.code_actions {
+        let popup = crate::render::code_actions_rect(area, actions.items.len());
+        return crate::render::rect_contains(popup, col, row);
+    }
+    if let Some(symbols) = &model.document_symbols {
+        let popup = crate::render::document_symbols_rect(area, symbols.items.len());
+        return crate::render::rect_contains(popup, col, row);
+    }
+    if let Some(completion) = &model.completion {
+        let popup = crate::render::completion_rect(area, completion.filtered.len());
+        return crate::render::rect_contains(popup, col, row);
+    }
+    false
 }
 
 fn focus_editor_side(model: &mut Model, side: Side) {
@@ -287,24 +374,6 @@ fn focus_editor_side(model: &mut Model, side: Side) {
             model.focus_editor();
         }
     }
-}
-
-fn editor_line_at(model: &Model, row: u16) -> usize {
-    let top = if model.buffers.len() > 1 || model.help_back.is_some() {
-        2
-    } else {
-        1
-    };
-    model
-        .scroll
-        .saturating_add(row.saturating_sub(top) as usize)
-        .min(model.editor.index().len_lines().saturating_sub(1))
-}
-
-fn editor_column_at(model: &Model, col: u16, _width: u16) -> usize {
-    let gutter = model.gutter_width();
-    col.saturating_sub(1u16.saturating_add(gutter))
-        .saturating_add(model.hscroll as u16) as usize
 }
 
 fn edge_scroll(model: &mut Model, row: u16, height: u16) {
@@ -349,13 +418,13 @@ fn offset_for_position(model: &Model, line: usize, column: usize) -> usize {
     line_range.start + text.trim_end_matches('\n').len()
 }
 
-fn split_ratio_at(col: u16, width: u16) -> u16 {
-    let usable = width.saturating_sub(2);
-    if usable == 0 {
+fn split_ratio_at(inner: Rect, col: u16) -> u16 {
+    if inner.width == 0 {
         return 50;
     }
-    let relative = col.saturating_sub(1).min(usable);
-    ((u32::from(relative) * 100) / u32::from(usable)).clamp(20, 80) as u16
+    let relative = col.saturating_sub(inner.x).min(inner.width);
+    ((u32::from(relative) * 100 + u32::from(inner.width) / 2) / u32::from(inner.width))
+        .clamp(20, 80) as u16
 }
 
 fn tab_at(model: &Model, offset: u16, _width: u16) -> usize {

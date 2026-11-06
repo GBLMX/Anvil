@@ -3854,3 +3854,84 @@ fn mouse_hit_boundary(
 ) -> crate::mouse::Target {
     crate::mouse::hit_test(model, col, row, width, height)
 }
+
+#[test]
+fn tree_visible_drag_keeps_editor_origin() {
+    let mut model = Model::new(EditorState::from_text("abc\ndef"), None);
+    model.viewport_width = 80;
+    model.viewport_height = 12;
+    model.tree_visible = true;
+    let press = crossterm::event::MouseEvent {
+        kind: crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left),
+        column: 20,
+        row: 2,
+        modifiers: crossterm::event::KeyModifiers::NONE,
+    };
+    let drag = crossterm::event::MouseEvent {
+        kind: crossterm::event::MouseEventKind::Drag(crossterm::event::MouseButton::Left),
+        column: 20,
+        row: 2,
+        modifiers: crossterm::event::KeyModifiers::NONE,
+    };
+    handle_event(&mut model, Event::Mouse(press));
+    let cursor = model.cursor;
+    handle_event(&mut model, Event::Mouse(drag));
+    assert_eq!(model.cursor, cursor);
+}
+
+#[test]
+fn tree_visible_split_resize_uses_editor_width() {
+    let mut model = Model::new(EditorState::from_text("abc"), None);
+    model.viewport_width = 80;
+    model.viewport_height = 12;
+    model.tree_visible = true;
+    model.split_vertical();
+    let press = crossterm::event::MouseEvent {
+        kind: crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left),
+        column: 49,
+        row: 3,
+        modifiers: crossterm::event::KeyModifiers::NONE,
+    };
+    let drag = crossterm::event::MouseEvent {
+        kind: crossterm::event::MouseEventKind::Drag(crossterm::event::MouseButton::Left),
+        column: 54,
+        row: 3,
+        modifiers: crossterm::event::KeyModifiers::NONE,
+    };
+    handle_event(&mut model, Event::Mouse(press));
+    handle_event(&mut model, Event::Mouse(drag));
+    assert_eq!(model.split_ratio, 58);
+}
+
+#[test]
+fn clicking_outside_command_palette_closes_it() {
+    let mut model = Model::new(EditorState::from_text("one"), None);
+    model.open_command_palette();
+    let click = crossterm::event::MouseEvent {
+        kind: crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left),
+        column: 0,
+        row: 0,
+        modifiers: crossterm::event::KeyModifiers::NONE,
+    };
+    handle_event(&mut model, Event::Mouse(click));
+    assert!(model.command_palette.is_none());
+}
+
+#[test]
+fn clicking_outside_fuzzy_closes_it() {
+    let mut model = Model::new(EditorState::from_text("one"), None);
+    model.fuzzy = Some(FuzzyState {
+        query: String::new(),
+        entries: vec!["src/main.rs".to_owned()],
+        filtered: vec![0],
+        selected: 0,
+    });
+    let click = crossterm::event::MouseEvent {
+        kind: crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left),
+        column: 0,
+        row: 0,
+        modifiers: crossterm::event::KeyModifiers::NONE,
+    };
+    handle_event(&mut model, Event::Mouse(click));
+    assert!(model.fuzzy.is_none());
+}

@@ -25,6 +25,77 @@ fn panel_block(title: impl Into<Line<'static>>) -> Block<'static> {
         .title(title)
 }
 
+fn centered_rect(area: Rect, width: u16, height: u16) -> Rect {
+    Rect {
+        x: area.x + area.width.saturating_sub(width) / 2,
+        y: area.y + area.height.saturating_sub(height) / 2,
+        width,
+        height,
+    }
+}
+
+pub(crate) fn command_palette_rect(area: Rect) -> Rect {
+    let width = (area.width * 3 / 5)
+        .max(40)
+        .min(area.width.saturating_sub(2));
+    let height = (area.height * 3 / 5)
+        .max(10)
+        .min(area.height.saturating_sub(2));
+    centered_rect(area, width, height)
+}
+
+pub(crate) fn fuzzy_rect(area: Rect) -> Rect {
+    let horizontal = area.width >= 80;
+    let stacked = !horizontal && area.height >= 16;
+    let width = if horizontal {
+        (area.width * 3 / 4).max(60)
+    } else {
+        (area.width * 3 / 5).max(30)
+    }
+    .min(area.width.saturating_sub(2));
+    let height = if stacked {
+        (area.height * 3 / 4).max(10)
+    } else {
+        (area.height / 2).max(8)
+    }
+    .min(area.height.saturating_sub(2));
+    centered_rect(area, width, height)
+}
+
+pub(crate) fn code_actions_rect(area: Rect, items: usize) -> Rect {
+    let width = (area.width * 3 / 5)
+        .max(36)
+        .min(area.width.saturating_sub(2));
+    let height = (items as u16 + 2)
+        .min(14)
+        .min(area.height.saturating_sub(2));
+    centered_rect(area, width, height)
+}
+
+pub(crate) fn document_symbols_rect(area: Rect, items: usize) -> Rect {
+    let width = (area.width * 3 / 5)
+        .max(36)
+        .min(area.width.saturating_sub(2));
+    let height = (items as u16 + 2)
+        .min(16)
+        .min(area.height.saturating_sub(2));
+    centered_rect(area, width, height)
+}
+
+pub(crate) fn completion_rect(area: Rect, items: usize) -> Rect {
+    let width = (area.width * 2 / 5)
+        .max(36)
+        .min(area.width.saturating_sub(2));
+    let height = (items as u16 + 2)
+        .min(14)
+        .min(area.height.saturating_sub(2));
+    centered_rect(area, width, height)
+}
+
+pub(crate) fn rect_contains(rect: Rect, col: u16, row: u16) -> bool {
+    col >= rect.x && col < rect.x + rect.width && row >= rect.y && row < rect.y + rect.height
+}
+
 fn buffer_bar_line(model: &Model, width: u16) -> Line<'static> {
     let width = usize::from(width);
     let mut tabs: Vec<(String, Style)> = model
@@ -924,36 +995,25 @@ pub fn view(model: &Model, frame: &mut Frame) {
         }
     }
     if let Some(split) = &model.split {
-        let half = inner.width.saturating_mul(model.split_ratio.min(100)) / 100;
+        let half = content.width.saturating_mul(model.split_ratio.min(100)) / 100;
         let split_area = if model.ui.focus.split {
             Rect {
                 width: half,
-                ..inner
+                ..content
             }
         } else {
             Rect {
-                x: inner.x + half,
-                width: inner.width.saturating_sub(half),
-                ..inner
+                x: content.x + half,
+                width: content.width.saturating_sub(half),
+                ..content
             }
         };
         render_split_pane(frame, split_area, &split.buffer, model.ui.focus.split);
     }
     if let Some(palette) = &model.command_palette {
-        let width = (area.width * 3 / 5)
-            .max(40)
-            .min(area.width.saturating_sub(2));
-        let height = (area.height * 3 / 5)
-            .max(10)
-            .min(area.height.saturating_sub(2));
-        let popup = Rect {
-            x: area.x + area.width.saturating_sub(width) / 2,
-            y: area.y + area.height.saturating_sub(height) / 2,
-            width,
-            height,
-        };
+        let popup = command_palette_rect(area);
         frame.render_widget(Clear, popup);
-        let visible = height.saturating_sub(3) as usize;
+        let visible = popup.height.saturating_sub(3) as usize;
         let start = palette.selected.saturating_sub(visible.saturating_sub(1));
         let mut lines = vec![Line::styled(
             format!("> {}", palette.query),
@@ -987,24 +1047,8 @@ pub fn view(model: &Model, frame: &mut Frame) {
     if let Some(fuzzy) = &model.fuzzy {
         let horizontal = area.width >= 80;
         let stacked = !horizontal && area.height >= 16;
-        let width = if horizontal {
-            (area.width * 3 / 4).max(60)
-        } else {
-            (area.width * 3 / 5).max(30)
-        }
-        .min(area.width.saturating_sub(2));
-        let height = if stacked {
-            (area.height * 3 / 4).max(10)
-        } else {
-            (area.height / 2).max(8)
-        }
-        .min(area.height.saturating_sub(2));
-        let popup = Rect {
-            x: area.x + (area.width.saturating_sub(width)) / 2,
-            y: area.y + (area.height.saturating_sub(height)) / 2,
-            width,
-            height,
-        };
+        let popup = fuzzy_rect(area);
+
         frame.render_widget(Clear, popup);
         let list_width = if horizontal {
             (popup.width * 55 / 100)
