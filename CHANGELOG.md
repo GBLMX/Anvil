@@ -12,9 +12,10 @@ post-`0.5.0` feature line.
   (`zls`) language-server discovery.
 
 ### Changed
-- Split the TUI runtime, layout, and plugin lifecycle out of `lib.rs`; split
-  TUI tests by domain; split gateway handlers into `rpc.go`, `fs.go`,
-  `lsp.go`, and `process.go`. No behavior change.
+- Split TUI runtime/layout/plugin, renderer, LSP settings/responses, and tree
+  navigation/mutations/fuzzy modules; split TUI tests by domain; split gateway
+  handlers into `rpc.go`, `fs.go`, `lsp.go`, and `process.go`. No behavior
+  change.
 
 ### Fixed
 - Inlay hints are requested only after the server advertises
