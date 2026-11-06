@@ -75,13 +75,35 @@ impl Model {
     }
 
     pub(crate) fn restore_buffer(&mut self, buffer: Buffer) {
+        let active = match buffer.path.as_ref() {
+            Some(path) => self
+                .buffers
+                .iter()
+                .position(|candidate| candidate.path.as_ref() == Some(path)),
+            None => self
+                .buffers
+                .get(self.active)
+                .filter(|candidate| candidate.path.is_none())
+                .map(|_| self.active)
+                .or_else(|| {
+                    self.buffers
+                        .iter()
+                        .position(|candidate| candidate.path.is_none())
+                }),
+        };
         self.editor = buffer.editor;
         self.path = buffer.path;
         self.cursor = buffer.cursor;
         self.scroll = buffer.scroll;
         self.hscroll = buffer.hscroll;
         self.modified = buffer.modified;
+        self.missing = buffer.missing;
+        self.visual_anchor = buffer.visual_anchor;
+        self.visual_line = buffer.visual_line;
         self.search_query = buffer.search_query;
+        if let Some(active) = active {
+            self.active = active;
+        }
         self.ui.input_mode = InputMode::Normal;
         self.pending = None;
         self.syntax

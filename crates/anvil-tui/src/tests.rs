@@ -1010,6 +1010,33 @@ fn split_panes_hold_different_buffers() {
 }
 
 #[test]
+fn split_focus_restores_buffer_state_and_active_tab() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let left = dir.path().join("left.txt");
+    let right = dir.path().join("right.txt");
+    fs::write(&left, "left").expect("left");
+    fs::write(&right, "right").expect("right");
+    let mut model = Model::open(&left).expect("open left");
+    model.split_vertical();
+    model.focus_split(true);
+    model.open_path(&right).expect("open right");
+    model.mark_missing(&right);
+    handle_event(&mut model, key(KeyCode::Char('v')));
+    handle_event(&mut model, key(KeyCode::Right));
+    assert_eq!(model.active, 1);
+
+    model.focus_split(false);
+    assert_eq!(model.active, 0);
+    assert!(model.visual_anchor.is_none());
+    assert!(!model.missing);
+
+    model.focus_split(true);
+    assert_eq!(model.active, 1);
+    assert_eq!(model.visual_anchor, Some(0));
+    assert!(model.missing);
+}
+
+#[test]
 fn closing_focused_split_restores_left_pane() {
     let mut model = Model::new(EditorState::from_text("left\nright"), None);
     model.split_vertical();

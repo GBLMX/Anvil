@@ -14,6 +14,8 @@ post-`0.5.0` feature line.
 ### Added
 - Buffer tab bar with active, dirty, missing-file, and read-only states,
   active-centered overflow scrolling, and per-buffer visual selections.
+- Split focus and close restore missing/visual buffer state and resync the
+  active tab.
 
 ## [0.5.5] - 2026-11-06
 
