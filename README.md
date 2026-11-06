@@ -72,6 +72,10 @@ anvil [OPTIONS] [FILE]
 starts with a dash. Launching without `FILE` shows the start dashboard; the first
 key dismisses it.
 
+Quick open: `Space f` filters workspace files and previews the selected file
+through the gateway. Wide terminals show the preview beside the list; narrow
+terminals stack it below.
+
 ## Documents
 
 - [Installing Anvil](INSTALL.md)

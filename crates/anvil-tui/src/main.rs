@@ -12,6 +12,14 @@ Options:
   -V, --version          Show the version and exit
   --                     Treat the next argument as FILE
 
+Environment:
+  ANVIL_GATEWAY          Explicit path to anvil-gateway
+  ANVIL_RG               Explicit ripgrep path for fuzzy file listing
+
+Quick open:
+  Space f                Fuzzy file finder; the selected file previews through
+                         the gateway. Enter opens it.
+
 FILE must be inside the selected workspace. Use -- before a file name that
 starts with a dash.
 ";
@@ -154,6 +162,13 @@ mod tests {
     fn accepts_help_flags() {
         assert_eq!(parse_args(args(&["-h"])).unwrap(), Command::Help);
         assert_eq!(parse_args(args(&["--help"])).unwrap(), Command::Help);
+    }
+
+    #[test]
+    fn help_documents_preview_and_gateway_override() {
+        assert!(USAGE.contains("Space f"));
+        assert!(USAGE.contains("previews"));
+        assert!(USAGE.contains("ANVIL_GATEWAY"));
     }
 
     #[test]

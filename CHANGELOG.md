@@ -25,7 +25,8 @@ post-`0.5.0` feature line.
   64 KiB, 200 lines, and 500 ms; stale generations are discarded. Previews sit
   beside the list when wide and stack below it when narrow; failures also
   surface in the status line. File icons come from name/extension rules with a
-  width-aware text fallback.
+  width-aware text fallback. `anvil --help` documents the quick-open preview and
+  the gateway/ripgrep overrides.
 
 - Markdown fenced code blocks render with a full-width background, and inline
   code spans use the same subtle background without replacing syntax colors.

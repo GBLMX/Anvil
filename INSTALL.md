@@ -74,6 +74,7 @@ Confirm:
 - the editor renders and `:q` exits;
 - `Space e` opens the file tree;
 - opening and saving a file works;
+- `Space f` lists workspace files, previews the selection, and Enter opens it;
 - `:reconnect` starts a fresh gateway;
 - creating a new file (for example `touch new.txt`), `mkdir`, `rm`, or `mv`
   refreshes the tree after the debounce interval.
