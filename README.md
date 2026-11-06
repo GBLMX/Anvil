@@ -6,7 +6,7 @@ The official standard edition is one composition; third-party distributions
 can compose the kernel with their own UI and trusted Rust code. Runtime plugins
 remain untrusted and sandboxed.
 
-Status: **0.5.9 landed; `0.5.x` feature line active**.
+Status: **0.5.10 landed; `0.5.x` feature line active**.
 Release model: **`0.4.x` maintenance closed**.
 Development uses Rust from `rust-toolchain.toml` and Go **1.26.10 or newer**;
 CI installs the exact Go version from the root `go.mod`. The ratatui editor now
@@ -56,6 +56,9 @@ Phase 0 still consists of the `anvil-api` contracts, `anvil-core` PieceTable,
 Go gateway with `openat2`, Landlock/seccomp exec sandboxing, SSRF-constrained
 fetch, and a synchronous Rust gateway client. The TUI discovers the gateway
 beside the binary or via `ANVIL_GATEWAY`.
+
+Set `ANVIL_SKIP_TERMINAL_QUERY=1` for CI or synthetic PTYs; it bypasses
+crossterm's blocking keyboard-enhancement query.
 
 ## Usage
 

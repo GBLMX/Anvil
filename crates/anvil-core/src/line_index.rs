@@ -16,6 +16,21 @@ const MIN_LINES: usize = 512;
 const TAB_WIDTH: usize = 4;
 const GRAPHEME_WINDOW: usize = 64;
 const PARALLEL_LINE_SCAN: usize = 4 << 20;
+const COLUMN_CACHE_MIN_BYTES: usize = 64 * 1024;
+const COLUMN_CHECKPOINT_BYTES: usize = 16 * 1024;
+
+#[derive(Debug, Clone, Copy)]
+struct ColumnCheckpoint {
+    byte: usize,
+    grapheme: usize,
+    display: usize,
+}
+
+#[derive(Debug, Clone)]
+struct LineColumns {
+    line_start: usize,
+    checkpoints: Vec<ColumnCheckpoint>,
+}
 
 fn floor_char_boundary<B: TextBuffer>(buffer: &B, mut offset: usize) -> usize {
     while offset > 0 && !buffer.is_char_boundary(offset) {
@@ -71,13 +86,16 @@ pub struct LineIndex {
     first_lines: Vec<usize>,
     ends: Vec<usize>,
     starts: Vec<Arc<[usize]>>,
+    columns: Vec<LineColumns>,
 }
 
 impl LineIndex {
     /// Builds an index from initial text.
     pub fn from_text(text: &str) -> Self {
         let starts = line_starts(text);
-        Self::from_chunks(text.len(), build_chunks(&starts, text.len(), 0))
+        let mut index = Self::from_chunks(text.len(), build_chunks(&starts, text.len(), 0));
+        index.build_columns(text);
+        index
     }
 
     /// Builds an index from the current buffer.
@@ -232,6 +250,48 @@ impl LineIndex {
         }
     }
 
+    fn build_columns(&mut self, text: &str) {
+        self.columns.clear();
+        for chunk in 0..self.starts.len() {
+            let base = self.bases[chunk];
+            for (line, relative_start) in self.starts[chunk].iter().enumerate() {
+                let start = base + *relative_start;
+                let next = if line + 1 < self.starts[chunk].len() {
+                    base + self.starts[chunk][line + 1]
+                } else if chunk + 1 < self.starts.len() {
+                    self.bases[chunk + 1]
+                } else {
+                    self.len
+                };
+                let end = if next > start && text.as_bytes().get(next - 1) == Some(&b'\n') {
+                    next - 1
+                } else {
+                    next
+                };
+                if end.saturating_sub(start) > COLUMN_CACHE_MIN_BYTES {
+                    self.columns.push(build_line_columns(text, start, end));
+                }
+            }
+        }
+    }
+
+    fn columns_for_line(&self, line_start: usize) -> Option<&LineColumns> {
+        self.columns
+            .binary_search_by_key(&line_start, |columns| columns.line_start)
+            .ok()
+            .map(|index| &self.columns[index])
+    }
+
+    fn column_checkpoint(&self, line_start: usize, byte: usize) -> Option<ColumnCheckpoint> {
+        let columns = self.columns_for_line(line_start)?;
+        let relative = byte.saturating_sub(line_start);
+        let index = columns
+            .checkpoints
+            .partition_point(|checkpoint| checkpoint.byte <= relative)
+            .saturating_sub(1);
+        columns.checkpoints.get(index).copied()
+    }
+
     /// Returns the cursor coordinates for a byte offset.
     pub fn position<B: TextBuffer>(&self, buffer: &B, offset: usize) -> Option<Position> {
         if offset > buffer.len_bytes() || !buffer.is_char_boundary(offset) || self.starts.is_empty()
@@ -239,9 +299,20 @@ impl LineIndex {
             return None;
         }
         let line = self.offset_to_line(offset)?;
-        let prefix = buffer.slice(line.start..offset);
-        let grapheme_column = prefix.graphemes(true).count();
-        let display_column = display_width(&prefix);
+        let (grapheme_column, display_column) =
+            if let Some(checkpoint) = self.column_checkpoint(line.start, offset) {
+                let prefix = buffer.slice(line.start + checkpoint.byte..offset);
+                (
+                    checkpoint.grapheme + prefix.graphemes(true).count(),
+                    checkpoint.display + display_width_from(&prefix, checkpoint.display),
+                )
+            } else {
+                let prefix = buffer.slice(line.start..offset);
+                (
+                    prefix.graphemes(true).count(),
+                    display_width_from(&prefix, 0),
+                )
+            };
         Some(Position {
             byte_offset: offset,
             line: line.line,
@@ -277,11 +348,25 @@ impl LineIndex {
     ) -> Option<usize> {
         let start = self.line_to_offset(line)?;
         let line = self.offset_to_line(start)?;
-        let text = buffer.slice(start..line.end);
-        let mut width = 0;
+        let (scan_start, mut width, scan_end) =
+            if let Some(columns) = self.columns_for_line(line.start) {
+                let index = columns
+                    .checkpoints
+                    .partition_point(|checkpoint| checkpoint.display <= column)
+                    .saturating_sub(1);
+                let checkpoint = columns.checkpoints[index];
+                let end = columns
+                    .checkpoints
+                    .get(index + 1)
+                    .map_or(line.end, |next| line.start + next.byte);
+                (line.start + checkpoint.byte, checkpoint.display, end)
+            } else {
+                (start, 0, line.end)
+            };
+        let text = buffer.slice(scan_start..scan_end);
         for (byte, character) in text.char_indices() {
             if width >= column {
-                return Some(start + byte);
+                return Some(scan_start + byte);
             }
             width += display_char_width(character, width);
         }
@@ -294,6 +379,7 @@ impl LineIndex {
     pub fn apply_edit<B: TextBuffer>(&mut self, buffer: &B, range: Range<usize>) {
         let new_len = buffer.len_bytes();
         assert!(range.start <= range.end && range.end <= self.len);
+        self.columns.clear();
         if new_len == 0 || self.starts.is_empty() {
             *self = Self::from_buffer(buffer);
             return;
@@ -371,7 +457,35 @@ impl LineIndex {
         );
         self.len = new_len;
         if middle_needs_normalize {
-            self.normalize();
+            self.normalize_window(first_chunk, first_chunk + middle.len());
+        }
+    }
+
+    /// Applies an insertion that cannot change line structure.
+    pub fn apply_insert<B: TextBuffer>(&mut self, buffer: &B, at: usize, text: &str) {
+        if text.is_empty() || text.contains('\n') || self.starts.is_empty() {
+            self.apply_edit(buffer, at..at);
+            return;
+        }
+        let Some(line) = self.offset_to_line(at) else {
+            self.apply_edit(buffer, at..at);
+            return;
+        };
+        let chunk = self.chunk_for_line(line.line);
+        let base = self.bases[chunk];
+        let delta = text.len();
+        self.columns.clear();
+        self.len = buffer.len_bytes();
+        self.ends[chunk] = self.ends[chunk].saturating_add(delta);
+        for index in chunk + 1..self.starts.len() {
+            self.bases[index] = self.bases[index].saturating_add(delta);
+            self.ends[index] = self.ends[index].saturating_add(delta);
+        }
+        let starts = Arc::make_mut(&mut self.starts[chunk]);
+        for start in starts.iter_mut() {
+            if base + *start > at {
+                *start = start.saturating_add(delta);
+            }
         }
     }
 
@@ -381,89 +495,72 @@ impl LineIndex {
             .saturating_sub(1)
     }
 
-    fn normalize(&mut self) {
-        let mut chunks = self.to_chunks();
-        let mut split = Vec::new();
-        for chunk in chunks.drain(..) {
-            if chunk.starts.len() <= MAX_LINES {
-                split.push(chunk);
-            } else {
-                let chunk_count = chunk.starts.len().div_ceil(TARGET_LINES);
-                let chunk_size = chunk.starts.len().div_ceil(chunk_count);
-                for (part_index, part) in chunk.starts.chunks(chunk_size).enumerate() {
-                    let base = chunk.base + part[0];
-                    let end = chunk
-                        .starts
-                        .get((part_index + 1) * chunk_size)
-                        .map(|start| chunk.base + start)
-                        .unwrap_or(chunk.end);
-                    let starts: Vec<usize> = part.iter().map(|start| start - part[0]).collect();
-                    split.push(LineChunk {
-                        base,
-                        first_line: chunk.first_line,
-                        end,
-                        starts: Arc::from(starts),
-                    });
-                }
-                if let Some(last) = split.last_mut() {
-                    last.end = chunk.end;
-                }
-            }
-        }
-        recompute_first_lines(&mut split);
-        let mut index = 0;
-        while index < split.len() {
-            if split[index].starts.len() >= MIN_LINES {
+    fn normalize_window(&mut self, first: usize, last: usize) {
+        let mut end = (last + 1).min(self.starts.len());
+        let mut index = first.saturating_sub(1);
+        while index < end {
+            if self.starts[index].len() >= MIN_LINES {
                 index += 1;
                 continue;
             }
-            if split.len() == 1 {
+            if self.starts.len() == 1 {
                 break;
             }
             let (left, right) = if index == 0 {
                 (0, 1)
-            } else if index + 1 == split.len()
-                || split[index - 1].starts.len() <= split[index + 1].starts.len()
+            } else if index + 1 == self.starts.len()
+                || self.starts[index - 1].len() <= self.starts[index + 1].len()
             {
                 (index - 1, index)
             } else {
                 (index, index + 1)
             };
-            let total = split[left].starts.len() + split[right].starts.len();
-            let mut starts = absolute_starts(&split[left]);
-            starts.extend(absolute_starts(&split[right]));
+            let left_base = self.bases[left];
+            let right_end = self.ends[right];
+            let left_first_line = self.first_lines[left];
+            let mut starts: Vec<usize> = self.starts[left]
+                .iter()
+                .map(|start| left_base + start)
+                .collect();
+            starts.extend(
+                self.starts[right]
+                    .iter()
+                    .map(|start| self.bases[right] + start),
+            );
+            let total = starts.len();
             let split_at = if total <= MAX_LINES { total } else { total / 2 };
-            let left_base = split[left].base;
-            let right_end = split[right].end;
-            let left_first_line = split[left].first_line;
-            split[left].starts = Arc::from(
+            self.starts[left] = Arc::from(
                 starts[..split_at]
                     .iter()
                     .map(|start| start - left_base)
                     .collect::<Vec<_>>(),
             );
-            split[left].end = if split_at == total {
+            self.bases[left] = left_base;
+            self.ends[left] = if split_at == total {
                 right_end
             } else {
                 starts[split_at]
             };
             if split_at == total {
-                split.remove(right);
+                self.bases.remove(right);
+                self.first_lines.remove(right);
+                self.ends.remove(right);
+                self.starts.remove(right);
+                end = end.saturating_sub(1);
             } else {
-                split[right].base = starts[split_at];
-                split[right].first_line = left_first_line + split_at;
-                split[right].starts = Arc::from(
+                let right_base = starts[split_at];
+                self.bases[right] = right_base;
+                self.first_lines[right] = left_first_line + split_at;
+                self.ends[right] = right_end;
+                self.starts[right] = Arc::from(
                     starts[split_at..]
                         .iter()
-                        .map(|start| start - starts[split_at])
+                        .map(|start| start - right_base)
                         .collect::<Vec<_>>(),
                 );
-                split[right].end = right_end;
             }
-            recompute_first_lines(&mut split);
             index = left;
         }
-        self.adopt_chunks(split);
     }
 
     fn from_chunks(len: usize, chunks: Vec<LineChunk>) -> Self {
@@ -473,6 +570,7 @@ impl LineIndex {
             first_lines: Vec::with_capacity(chunks.len()),
             ends: Vec::with_capacity(chunks.len()),
             starts: Vec::with_capacity(chunks.len()),
+            columns: Vec::new(),
         };
         index.adopt_chunks(chunks);
         index
@@ -484,17 +582,6 @@ impl LineIndex {
         self.ends = chunks.iter().map(|chunk| chunk.end).collect();
         self.starts = chunks.into_iter().map(|chunk| chunk.starts).collect();
     }
-
-    fn to_chunks(&self) -> Vec<LineChunk> {
-        (0..self.starts.len())
-            .map(|index| LineChunk {
-                base: self.bases[index],
-                first_line: self.first_lines[index],
-                end: self.ends[index],
-                starts: Arc::clone(&self.starts[index]),
-            })
-            .collect()
-    }
 }
 
 fn line_starts(text: &str) -> Vec<usize> {
@@ -502,6 +589,9 @@ fn line_starts(text: &str) -> Vec<usize> {
         return Vec::new();
     }
     let bytes = text.as_bytes();
+    if bytes.len() < PARALLEL_LINE_SCAN {
+        return serial_line_starts(bytes);
+    }
     let configured = std::env::var("ANVIL_LINE_SCAN_WORKERS")
         .ok()
         .and_then(|value| value.parse::<usize>().ok())
@@ -601,24 +691,8 @@ fn build_chunks(starts: &[usize], len: usize, first_line: usize) -> Vec<LineChun
     chunks
 }
 
-fn absolute_starts(chunk: &LineChunk) -> Vec<usize> {
-    chunk
-        .starts
-        .iter()
-        .map(|start| chunk.base + start)
-        .collect()
-}
-
 fn add_delta(value: usize, delta: isize) -> usize {
     (value as isize + delta).max(0) as usize
-}
-
-fn recompute_first_lines(chunks: &mut [LineChunk]) {
-    let mut first_line = 0;
-    for chunk in chunks {
-        chunk.first_line = first_line;
-        first_line += chunk.starts.len();
-    }
 }
 
 fn display_char_width(character: char, column: usize) -> usize {
@@ -631,12 +705,77 @@ fn display_char_width(character: char, column: usize) -> usize {
     }
 }
 
+#[cfg(test)]
 fn display_width(text: &str) -> usize {
     let mut column = 0;
     for character in text.chars() {
         column += display_char_width(character, column);
     }
     column
+}
+
+fn display_width_from(text: &str, start: usize) -> usize {
+    let mut column = start;
+    for character in text.chars() {
+        column += display_char_width(character, column);
+    }
+    column - start
+}
+
+fn build_line_columns(text: &str, start: usize, end: usize) -> LineColumns {
+    let slice = &text[start..end];
+    let mut checkpoints = Vec::new();
+    let mut grapheme = 0;
+    let mut display = 0;
+    let mut next_checkpoint = 0;
+    let ascii = slice.is_ascii();
+    if ascii && slice.bytes().all(|byte| (0x20..0x7f).contains(&byte)) {
+        for byte in (0..slice.len()).step_by(COLUMN_CHECKPOINT_BYTES) {
+            checkpoints.push(ColumnCheckpoint {
+                byte,
+                grapheme: byte,
+                display: byte,
+            });
+        }
+    } else if ascii {
+        for (byte, character) in slice.bytes().enumerate() {
+            if byte >= next_checkpoint {
+                checkpoints.push(ColumnCheckpoint {
+                    byte,
+                    grapheme,
+                    display,
+                });
+                next_checkpoint = (byte / COLUMN_CHECKPOINT_BYTES + 1) * COLUMN_CHECKPOINT_BYTES;
+            }
+            display += if character == b'\t' {
+                TAB_WIDTH - display % TAB_WIDTH
+            } else if character == b'\r' || character.is_ascii_control() {
+                0
+            } else {
+                1
+            };
+            grapheme += 1;
+        }
+    } else {
+        for (byte, cluster) in slice.grapheme_indices(true) {
+            if byte >= next_checkpoint {
+                checkpoints.push(ColumnCheckpoint {
+                    byte,
+                    grapheme,
+                    display,
+                });
+                next_checkpoint = (byte / COLUMN_CHECKPOINT_BYTES + 1) * COLUMN_CHECKPOINT_BYTES;
+            }
+            for character in cluster.chars() {
+                display += display_char_width(character, display);
+            }
+            grapheme += 1;
+        }
+    }
+    LineColumns {
+        line_start: start,
+        checkpoints,
+    }
 }
 #[cfg(test)]
 mod tests {
@@ -776,5 +915,76 @@ mod tests {
             edited.starts.last().unwrap(),
             clone.starts.last().unwrap()
         ));
+    }
+
+    #[test]
+    fn sparse_columns_match_linear_scan() {
+        let text = format!("\t你好\x7f{}", "x".repeat(70_000));
+        let buffer = PieceTable::from_text(&text);
+        let index = LineIndex::from_buffer(&buffer);
+        assert!(!index.columns.is_empty());
+
+        for offset in [0, 1, 4, 16_384, 65_536, text.len()] {
+            let position = index.position(&buffer, offset).expect("position");
+            assert_eq!(
+                position.grapheme_column,
+                text[..offset].graphemes(true).count()
+            );
+            assert_eq!(position.display_column, display_width(&text[..offset]));
+        }
+
+        let total = display_width(&text);
+        for column in [0, 1, 4, 5, 16_384, 65_536, total] {
+            let mut expected = text.len();
+            let mut width = 0;
+            for (byte, character) in text.char_indices() {
+                if width >= column {
+                    expected = byte;
+                    break;
+                }
+                width += display_char_width(character, width);
+            }
+            assert_eq!(
+                index.offset_at_display_column(&buffer, 0, column),
+                Some(expected)
+            );
+        }
+    }
+
+    #[test]
+    #[ignore = "manual 100MB column cache boundary"]
+    fn sparse_columns_100mb() {
+        let text = "x".repeat(100 * 1024 * 1024);
+        let buffer = PieceTable::from_text(&text);
+        let started = std::time::Instant::now();
+        let index = LineIndex::from_buffer(&buffer);
+        let build = started.elapsed();
+        let started = std::time::Instant::now();
+        let position = index.position(&buffer, text.len()).expect("position");
+        let position_time = started.elapsed();
+        let started = std::time::Instant::now();
+        let offset = index
+            .offset_at_display_column(&buffer, 0, text.len() - 1)
+            .expect("column");
+        let column_time = started.elapsed();
+        println!("columns-100MB build={build:?} position={position_time:?} column={column_time:?}");
+        assert_eq!(position.display_column, text.len());
+        assert_eq!(offset, text.len() - 1);
+    }
+
+    #[test]
+    fn indexed_insert_matches_rebuilt_index() {
+        let mut buffer = PieceTable::from_text("abc\ndef\n");
+        let mut index = LineIndex::from_buffer(&buffer);
+        buffer.insert(2, "x");
+        index.apply_insert(&buffer, 2, "x");
+        assert_index_matches(&buffer, &index);
+        buffer.insert(0, "start");
+        index.apply_insert(&buffer, 0, "start");
+        assert_index_matches(&buffer, &index);
+        let end = buffer.len_bytes();
+        buffer.insert(end, "tail");
+        index.apply_insert(&buffer, end, "tail");
+        assert_index_matches(&buffer, &index);
     }
 }

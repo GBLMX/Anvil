@@ -1492,7 +1492,7 @@ impl Model {
         lines
     }
 
-    fn visible_lines(&self, height: u16) -> Vec<Line<'_>> {
+    fn visible_lines(&self, height: u16, width: u16) -> Vec<Line<'_>> {
         let index = self.editor.index();
         let text = self.editor.text();
         let total = index.len_lines();
@@ -1508,30 +1508,41 @@ impl Model {
             let Some(line) = index.offset_to_line(start) else {
                 break;
             };
+            let (render_start, render_end, pad) =
+                self.line_window(line_number, start, line.end, usize::from(width));
             let mut spans = Vec::new();
-            let mut base = start;
+            let mut base = render_start;
             let search_ranges: Vec<(usize, usize)> = self
                 .search
                 .matches
                 .iter()
-                .filter(|range| range.start < line.end && range.end > start)
-                .map(|range| (range.start.max(start), range.end.min(line.end)))
+                .filter(|range| range.start < render_end && range.end > render_start)
+                .map(|range| (range.start.max(render_start), range.end.min(render_end)))
                 .collect();
             let syntax_guard = self.syntax.borrow();
             let highlights = syntax_guard.highlights();
-            for chunk in text.chunks(start..line.end) {
+            for chunk in text.chunks(render_start..render_end) {
                 push_syntax_spans(&mut spans, chunk, base, highlights);
                 base += chunk.len();
             }
             if !search_ranges.is_empty() {
-                apply_search_highlights(&mut spans, start, &search_ranges, self.cursor);
+                apply_search_highlights(&mut spans, render_start, &search_ranges, self.cursor);
             }
             if spans.is_empty() {
                 spans.push(Span::raw(""));
             }
-            self.insert_inlay_hints(line_number, start, line.end, &mut spans);
-            expand_tabs(&mut spans);
-            let ranges = self.diagnostic_ranges(line_number, start, line.end);
+            if render_start == start {
+                self.insert_inlay_hints(line_number, start, line.end, &mut spans);
+            }
+            if pad > 0 {
+                spans.insert(0, Span::raw(" ".repeat(pad)));
+            }
+            expand_tabs(&mut spans, pad);
+            let ranges = if render_start == start && pad == 0 {
+                self.diagnostic_ranges(line_number, start, line.end)
+            } else {
+                Vec::new()
+            };
             apply_diagnostic_underlines(&mut spans, &ranges);
             let mut rendered = Line::from(spans);
             if Some(line_number) == current {
@@ -1550,6 +1561,45 @@ impl Model {
             lines.push(Line::raw(""));
         }
         lines
+    }
+
+    fn line_window(
+        &self,
+        line_number: usize,
+        start: usize,
+        end: usize,
+        width: usize,
+    ) -> (usize, usize, usize) {
+        let index = self.editor.index();
+        let text = self.editor.text();
+        let hscroll = self.hscroll;
+        let Some(start_offset) = index.offset_at_display_column(text, line_number, hscroll) else {
+            return (start, end, 0);
+        };
+        let start_display = index
+            .position(text, start_offset)
+            .map_or(0, |position| position.display_column);
+        let (render_start, pad) = if start_display < hscroll {
+            let next = index
+                .next_grapheme_boundary(text, start_offset)
+                .unwrap_or(end)
+                .min(end);
+            let next_display = index
+                .position(text, next)
+                .map_or(start_display, |position| position.display_column);
+            (next, next_display.saturating_sub(hscroll))
+        } else {
+            (start_offset, 0)
+        };
+        let target = hscroll.saturating_add(width);
+        let mut render_end = index
+            .offset_at_display_column(text, line_number, target)
+            .unwrap_or(end)
+            .min(end);
+        if render_end < render_start {
+            render_end = render_start;
+        }
+        (render_start, render_end, pad)
     }
 }
 
@@ -1694,7 +1744,11 @@ struct TerminalSession {
 impl TerminalSession {
     fn start() -> io::Result<Self> {
         enable_raw_mode()?;
-        let supported = supports_keyboard_enhancement().unwrap_or(false);
+        let supported = if std::env::var_os("ANVIL_SKIP_TERMINAL_QUERY").is_some() {
+            false
+        } else {
+            supports_keyboard_enhancement().unwrap_or(false)
+        };
         let mut stdout = io::stdout();
         if let Err(error) = execute!(stdout, EnterAlternateScreen) {
             let _ = disable_raw_mode();

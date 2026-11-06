@@ -232,3 +232,22 @@ temporary file rather than accumulating the whole document.
 - Search is Enter-triggered linear scanning, not live incremental highlighting.
   Live search highlighting needs an incremental index and is a separate
   engineering effort.
+
+## 0.5.10 viewport and startup
+
+Measured 2026-11-06 on the same i7-12700H, 120x40 TestBackend/PTY.
+
+| Scenario | Result |
+|---|---:|
+| 100 MB single-line render, column 0 | < 1 ms |
+| 100 MB single-line render, cursor at end | 1 ms |
+| 100 MB single-line peak RSS | 212 MB |
+| 100 MB open, Rust first frame | 122 ms |
+| 100 MB open, PTY first frame with `ANVIL_SKIP_TERMINAL_QUERY=1` | 209 ms |
+| PTY key-to-screen p99 | 595 µs |
+| PTY scroll p99 | 721 µs |
+| PTY search p99 | 28.3 ms |
+
+The cursor-at-end case exercises the sparse column cache and the windowed
+renderer. The 212 MB RSS is dominated by the 100 MB text plus PieceTable and
+line index; it is not a render-only allocation.

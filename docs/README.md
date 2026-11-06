@@ -30,7 +30,7 @@ feature does not jump a layer because it is convenient to implement.
 
 Order:
 
-1. `0.5.2`–`0.5.9` interaction/UI slices.
+1. `0.5.2`–`0.5.10` interaction/UI slices.
 2. IDE P0: LSP depth, session restore, Git, settings.
 3. IDE P1: tasks, terminal, debugger, multi-root.
 4. `0.6.0`/`0.6.1` distribution and signing.

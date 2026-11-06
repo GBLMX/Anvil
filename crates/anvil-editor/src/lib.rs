@@ -525,7 +525,7 @@ impl EditorState {
 
     fn apply_insert(&mut self, at: usize, text: &str) {
         self.apply_insert_text(at, text);
-        Arc::make_mut(&mut self.index).apply_edit(&*self.text, at..at);
+        Arc::make_mut(&mut self.index).apply_insert(&*self.text, at, text);
     }
 
     fn apply_insert_text(&mut self, at: usize, text: &str) {

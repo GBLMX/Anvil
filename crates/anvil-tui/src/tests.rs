@@ -1418,7 +1418,7 @@ fn search_preserves_syntax_and_adds_background() {
     handle_event(&mut model, key(KeyCode::Char('/')));
     type_text(&mut model, "fn");
     handle_event(&mut model, key(KeyCode::Enter));
-    let lines = model.visible_lines(8);
+    let lines = model.visible_lines(8, 80);
     let keyword = lines[0]
         .spans
         .iter()
@@ -3662,7 +3662,7 @@ fn fenced_code_background_reaches_right_edge_when_hscrolled() {
         }
         std::thread::sleep(std::time::Duration::from_millis(2));
     }
-    let mut lines = model.visible_lines(8);
+    let mut lines = model.visible_lines(8, 80);
     crate::render::apply_code_block_background(&model, &mut lines, 20);
     assert_eq!(lines[1].width(), 21);
 }
@@ -3951,7 +3951,7 @@ fn long_line_render_stays_bounded() {
     let elapsed = start.elapsed();
     println!("long-line-{megabytes}MB-render-ms={}", elapsed.as_millis());
     assert!(
-        elapsed < std::time::Duration::from_secs(1),
+        elapsed < std::time::Duration::from_millis(10),
         "long-line render took {elapsed:?}"
     );
 }
@@ -3990,4 +3990,29 @@ fn line_substitution_ignores_dense_prefix() {
     model.execute_command("s/a/b/");
     assert!(model.status.contains("1 replacements"));
     assert_eq!(model.editor.text().slice(text.len() - 2..text.len()), "b\n");
+}
+
+#[test]
+#[ignore = "manual 100MB cursor-at-end boundary"]
+fn long_line_cursor_at_end_render_stays_bounded() {
+    let megabytes = std::env::var("ANVIL_LONG_LINE_MB")
+        .ok()
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(100);
+    let text = "x".repeat(megabytes * 1024 * 1024);
+    let mut model = Model::new(EditorState::from_text(&text), None);
+    model.cursor = text.len();
+    model.hscroll = text.len().saturating_sub(100);
+    let mut terminal = Terminal::new(TestBackend::new(120, 40)).expect("terminal");
+    let start = std::time::Instant::now();
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+    let elapsed = start.elapsed();
+    println!(
+        "long-line-{megabytes}MB-cursor-end-render-ms={}",
+        elapsed.as_millis()
+    );
+    assert!(
+        elapsed < std::time::Duration::from_millis(10),
+        "cursor-at-end render took {elapsed:?}"
+    );
 }

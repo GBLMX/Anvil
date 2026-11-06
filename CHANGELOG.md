@@ -8,6 +8,21 @@ post-`0.5.0` feature line.
 
 ## [Unreleased]
 
+## [0.5.10] - 2026-11-06
+
+### Added
+- Sparse column checkpoints for lines over 64 KiB, keeping cursor column
+  lookup bounded to one 16 KiB checkpoint window.
+- `ANVIL_SKIP_TERMINAL_QUERY=1` bypasses crossterm's blocking keyboard
+  enhancement query.
+
+### Fixed
+- Horizontal viewport rendering now materializes only the visible line window,
+  including cursor-at-end and large-hscroll cases.
+- Single-line inserts update only the affected line chunk instead of rebuilding
+  the line index; 100 MB A1 p99 fell from 105 µs to 2.3 µs.
+- 100 MB A3 merge-delete p99 fell from 175 µs to 92.6 µs.
+
 
 ## [0.5.9] - 2026-11-06
 

@@ -88,3 +88,20 @@ B1/B2/B3/B4 are `cargo test` cases, not Criterion performance cases.
 M4 is **accepted** under the locked-core, 1,000-sample performance gate. All
 A and C cases pass, B1-B4 pass, and the 100k stress run passes with sampled
 index consistency checks.
+
+## 0.5.10 regression fix
+
+Measured 2026-11-06 with the locked 1,000-sample p99 harness after the indexed
+single-line insert and local chunk normalization changes.
+
+| Case | p50 | p95 | p99 | Target | Result |
+|---|---:|---:|---:|---:|---|
+| A1 middle insert | 1.316 µs | 1.720 µs | 2.335 µs | < 50 µs | PASS |
+| A2 split insert | 29.673 µs | 38.574 µs | 57.573 µs | < 100 µs | PASS |
+| A3 merge delete | 60.563 µs | 79.190 µs | 92.563 µs | < 100 µs | PASS |
+| A4 paste 10k lines | 162.696 µs | 217.751 µs | 303.177 µs | < 2 ms | PASS |
+| A5 append | 796 ns | 1.322 µs | 1.376 µs | < 10 µs | PASS |
+
+A1 uses the new no-newline insert path: it updates only the affected line
+chunk's starts and shifts following chunk bases/ends. A3 uses local chunk
+rebalancing instead of rebuilding the whole index.

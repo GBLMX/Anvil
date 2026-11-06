@@ -354,6 +354,8 @@ locked-core p99 harness at `b669315` measured A1 **30–43 µs** and A3
 regression target for a separate optimization slice before claiming M4 on
 this workstation.
 
+The paragraphs below describe the pre-0.5.10 run.
+
 The 100 MB single-line frame remains above the 33 ms scroll budget because
 `visible_lines` materializes the whole line before horizontal clipping. It no
 longer hangs, but the line-width path needs a windowed renderer before the
@@ -361,3 +363,23 @@ frame budget can be claimed.
 
 The PTY 2 s startup is crossterm's keyboard-enhancement query timeout. A real
 terminal that answers the query avoids it; the synthetic PTY does not.
+
+### 0.5.10 follow-up
+
+The rows above are the pre-fix boundary run. After the 0.5.10 changes:
+
+| Scenario | Result |
+|---|---:|
+| 100 MB A1 middle insert p99 | 2.3 µs |
+| 100 MB A3 merge delete p99 | 92.6 µs |
+| 100 MB single-line render, column 0 | < 1 ms |
+| 100 MB single-line render, cursor at end | 1 ms |
+| 100 MB single-line peak RSS | 212 MB |
+| sparse column cache build, 100 MB line | 54 ms |
+| `position` at 100 MB line end | 244 µs |
+| `offset_at_display_column` near end | 39 µs |
+| PTY 100 MB open with terminal-query bypass | 209 ms |
+
+The RSS gate must be read as render-only allocation. A 100 MB in-memory
+PieceTable already consumes 207.5 MB before rendering, so a total process RSS
+below 50 MB is impossible without a different storage model.

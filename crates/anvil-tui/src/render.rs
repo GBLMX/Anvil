@@ -398,8 +398,7 @@ pub(crate) fn apply_diagnostic_underlines(spans: &mut Vec<Span<'_>>, ranges: &[(
     *spans = result;
 }
 
-pub(crate) fn expand_tabs(spans: &mut Vec<Span<'_>>) {
-    let mut column = 0;
+pub(crate) fn expand_tabs(spans: &mut Vec<Span<'_>>, mut column: usize) {
     for span in spans.iter_mut() {
         if !span.content.contains('\t') {
             column += span.content.width();
@@ -868,14 +867,9 @@ pub fn view(model: &Model, frame: &mut Frame) {
         Paragraph::new(model.visible_gutter(inner.height)).style(theme::text()),
         gutter_area,
     );
-    let mut lines = model.visible_lines(inner.height);
+    let mut lines = model.visible_lines(inner.height, text_area.width);
     apply_code_block_background(model, &mut lines, text_area.width);
-    frame.render_widget(
-        Paragraph::new(lines)
-            .style(theme::text())
-            .scroll((0, u16::try_from(model.hscroll).unwrap_or(u16::MAX))),
-        text_area,
-    );
+    frame.render_widget(Paragraph::new(lines).style(theme::text()), text_area);
     let visible_end =
         (model.scroll + usize::from(inner.height)).min(model.editor.index().len_lines());
     for line_number in model.scroll..visible_end {
@@ -885,13 +879,14 @@ pub fn view(model: &Model, frame: &mut Frame) {
         let Some(line) = model.editor.index().offset_to_line(start) else {
             continue;
         };
-        let slice = model.editor.text().slice(start..line.end);
         let mut columns = 0;
-        for character in slice.chars() {
-            match character {
-                ' ' => columns += 1,
-                '\t' => columns += 4 - columns % 4,
-                _ => break,
+        'indent: for chunk in model.editor.text().chunks(start..line.end) {
+            for character in chunk.chars() {
+                match character {
+                    ' ' => columns += 1,
+                    '\t' => columns += 4 - columns % 4,
+                    _ => break 'indent,
+                }
             }
         }
         let style = if model.current_line() == Some(line_number) {
