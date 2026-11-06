@@ -222,12 +222,7 @@ fn execute_normal_command(model: &mut Model, command: NormalCommand) {
             };
             model.dirty = true;
         }
-        NormalCommand::Search => {
-            model.ui.input_mode = InputMode::Search {
-                query: String::new(),
-            };
-            model.dirty = true;
-        }
+        NormalCommand::Search => model.begin_search(),
         NormalCommand::Append => model.append(),
         NormalCommand::AppendLineEnd => model.append_line_end(),
         NormalCommand::OpenBelow => model.open_below(),
@@ -871,26 +866,33 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             }
             _ => {}
         },
-        InputMode::Search { query } => match key.code {
-            KeyCode::Esc => {
-                model.ui.input_mode = InputMode::Normal;
-                model.dirty = true;
+        InputMode::Search { query } => {
+            if key.ctrl() {
+                match key.code {
+                    KeyCode::Char('r') => model.toggle_search_regex(),
+                    KeyCode::Char('w') => model.toggle_search_whole_word(),
+                    KeyCode::Char('c') => model.toggle_search_case(),
+                    _ => {}
+                }
+                return;
             }
-            KeyCode::Enter => {
-                let query = std::mem::take(query);
-                model.ui.input_mode = InputMode::Normal;
-                model.execute_search(query);
+            match key.code {
+                KeyCode::Esc => model.cancel_search(),
+                KeyCode::Enter => {
+                    let query = std::mem::take(query);
+                    model.commit_search(query);
+                }
+                KeyCode::Backspace => {
+                    query.pop();
+                    model.schedule_search();
+                }
+                KeyCode::Char(character) if text_input => {
+                    query.push(character);
+                    model.schedule_search();
+                }
+                _ => {}
             }
-            KeyCode::Backspace => {
-                query.pop();
-                model.dirty = true;
-            }
-            KeyCode::Char(character) if text_input => {
-                query.push(character);
-                model.dirty = true;
-            }
-            _ => {}
-        },
+        }
         InputMode::Insert => match key.code {
             KeyCode::Esc => {
                 model.cancel_completion();

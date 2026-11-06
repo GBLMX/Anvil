@@ -9,6 +9,13 @@ post-`0.5.0` feature line.
 ## [Unreleased]
 
 
+## [0.5.8] - 2026-11-06
+
+### Added
+- Debounced incremental literal/regex search with case and whole-word options,
+  multi-selection matches, current/total counts, `n`/`N`, and Esc cursor
+  restoration; replace one/all are atomic and read-only safe.
+
 ## [0.5.7] - 2026-11-06
 
 ### Added

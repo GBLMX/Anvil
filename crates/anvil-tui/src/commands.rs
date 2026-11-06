@@ -3,62 +3,6 @@
 use super::*;
 
 impl Model {
-    pub(crate) fn execute_search(&mut self, query: String) {
-        if query.is_empty() {
-            if self.search_query.is_empty() {
-                self.status = "E: no previous search".to_owned();
-                self.dirty = true;
-            } else {
-                self.search_next(true);
-            }
-            return;
-        }
-        self.search_query = query;
-        let matches = Self::find_matches(self.editor.text(), &self.search_query);
-        if matches.is_empty() {
-            self.status = format!("E: pattern not found: {}", self.search_query);
-            self.dirty = true;
-            return;
-        }
-        let target = matches
-            .iter()
-            .copied()
-            .find(|&offset| offset >= self.cursor)
-            .unwrap_or(matches[0]);
-        self.jump_to(target);
-        self.status = format!("/{}", self.search_query);
-    }
-
-    pub(crate) fn search_next(&mut self, forward: bool) {
-        if self.search_query.is_empty() {
-            self.status = "E: no previous search".to_owned();
-            self.dirty = true;
-            return;
-        }
-        let matches = Self::find_matches(self.editor.text(), &self.search_query);
-        if matches.is_empty() {
-            self.status = format!("E: pattern not found: {}", self.search_query);
-            self.dirty = true;
-            return;
-        }
-        let target = if forward {
-            matches
-                .iter()
-                .copied()
-                .find(|&offset| offset > self.cursor)
-                .unwrap_or(matches[0])
-        } else {
-            matches
-                .iter()
-                .rev()
-                .copied()
-                .find(|&offset| offset < self.cursor)
-                .unwrap_or(matches[matches.len() - 1])
-        };
-        self.jump_to(target);
-        self.status = format!("/{}", self.search_query);
-    }
-
     fn substitute(&mut self, whole: bool, spec: &str) {
         if self.reject_read_only() {
             return;
@@ -90,39 +34,42 @@ impl Model {
             };
             line.start..line.end
         };
-        let matches = Self::find_matches_in(self.editor.text(), old, range);
-        let matches = if flags.contains('g') {
-            let mut non_overlapping = Vec::new();
-            let mut end = 0;
-            for start in matches {
-                if start >= end {
-                    non_overlapping.push(start);
-                    end = start + old.len();
-                }
+        let text = self.editor.text().slice(0..self.editor.text().len_bytes());
+        let mut matches = match crate::search::find_matches(&text, old, self.search.options) {
+            Ok(matches) => matches
+                .into_iter()
+                .filter(|found| found.start >= range.start && found.end <= range.end)
+                .collect::<Vec<_>>(),
+            Err(error) => {
+                self.status = format!("E: {error}");
+                self.dirty = true;
+                return;
             }
-            non_overlapping
-        } else {
-            matches.into_iter().take(1).collect()
         };
+        if !flags.contains('g') {
+            matches.truncate(1);
+        }
         if matches.is_empty() {
             self.status = "E: pattern not found".to_owned();
             self.dirty = true;
             return;
         }
-        let first = matches[0];
-        for start in matches.into_iter().rev() {
-            let end = start + old.len();
-            self.editor.set_selection_bytes(start, end);
-            self.editor.delete(start..end);
-            if !new.is_empty() {
-                self.editor.insert(start, new);
-            }
+        let first = matches[0].start;
+        let count = matches.len();
+        let edits = matches
+            .into_iter()
+            .map(|range| (range, new.to_owned()))
+            .collect();
+        if !self.editor.apply_transaction(edits) {
+            self.status = "E: substitution failed".to_owned();
+            self.dirty = true;
+            return;
         }
         self.cursor = first.min(self.editor.text().len_bytes());
         self.editor.set_selection_bytes(self.cursor, self.cursor);
         self.modified = true;
         self.dirty = true;
-        self.status = "substitution applied".to_owned();
+        self.status = format!("{count} replacements applied");
     }
 
     pub(crate) fn execute_command(&mut self, command: &str) {
@@ -143,6 +90,12 @@ impl Model {
             ("wa", "") => self.queue_effect(Effect::SaveAll),
             ("e", path) => self.queue_effect(Effect::Open(path.into())),
             ("problems", "") => self.toggle_problems(),
+            ("replace", value) => {
+                self.replace_current(value);
+            }
+            ("replace-all", value) => {
+                self.replace_all(value);
+            }
             ("bn", "") => self.switch_buffer(1),
             ("bp", "") => self.switch_buffer(-1),
             ("new", "") => self.new_buffer(),
@@ -278,49 +231,5 @@ impl Model {
             return;
         }
         self.close_buffer(number - 1, force);
-    }
-
-    fn find_matches(text: &TextDocument, needle: &str) -> Vec<usize> {
-        Self::find_matches_in(text, needle, 0..text.len_bytes())
-    }
-
-    pub(crate) fn find_matches_in(
-        text: &TextDocument,
-        needle: &str,
-        range: std::ops::Range<usize>,
-    ) -> Vec<usize> {
-        let needle = needle.as_bytes();
-        if needle.is_empty() || needle.len() > range.end.saturating_sub(range.start) {
-            return Vec::new();
-        }
-        let mut matches = Vec::new();
-        let mut carry = Vec::new();
-        let mut processed = range.start;
-        for chunk in text.chunks(range) {
-            if chunk.is_empty() {
-                continue;
-            }
-            let mut window = Vec::with_capacity(carry.len() + chunk.len());
-            window.extend_from_slice(&carry);
-            window.extend_from_slice(chunk.as_bytes());
-            let window_start = processed.saturating_sub(carry.len());
-            let mut from = 0;
-            while from + needle.len() <= window.len() {
-                let Some(local) = window[from..]
-                    .windows(needle.len())
-                    .position(|candidate| candidate == needle)
-                else {
-                    break;
-                };
-                let at = from + local;
-                matches.push(window_start + at);
-                from = at + 1;
-            }
-            let keep = needle.len().saturating_sub(1).min(window.len());
-            carry.clear();
-            carry.extend_from_slice(&window[window.len() - keep..]);
-            processed += chunk.len();
-        }
-        matches
     }
 }

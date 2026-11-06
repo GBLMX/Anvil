@@ -632,7 +632,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
     let (mode_text, mode_color, status) = match &model.ui.input_mode {
         InputMode::Rename { name } => (" REN ", theme::MAGENTA, format!("rename> {name}")),
         InputMode::CommandLine { buffer } => (" CMD ", theme::WARNING, format!(":{buffer}")),
-        InputMode::Search { query } => (" SRC ", theme::WARNING, format!("/{query}")),
+        InputMode::Search { query } => (" SRC ", theme::WARNING, model.search_status(query)),
         InputMode::Insert => (" INS ", theme::SUCCESS, String::new()),
         InputMode::Create { name, kind, .. } => (
             if matches!(kind, CreateKind::Directory) {

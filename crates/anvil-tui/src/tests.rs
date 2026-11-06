@@ -1408,6 +1408,7 @@ fn search_preserves_syntax_and_adds_background() {
     );
     handle_event(&mut model, key(KeyCode::Char('/')));
     type_text(&mut model, "fn");
+    handle_event(&mut model, key(KeyCode::Enter));
     let lines = model.visible_lines(8);
     let keyword = lines[0]
         .spans
@@ -2554,6 +2555,60 @@ fn search_cycles_and_crosses_chunk_boundaries() {
 }
 
 #[test]
+fn incremental_search_debounces_and_esc_restores_cursor() {
+    let mut model = Model::new(EditorState::from_text("foo foo"), None);
+    model.cursor = 5;
+    handle_event(&mut model, key(KeyCode::Char('/')));
+    type_text(&mut model, "foo");
+    assert!(model.search.matches.is_empty());
+    model.search.due = Some(std::time::Instant::now());
+    model.tick_search();
+    assert_eq!(model.search.matches.len(), 2);
+    handle_event(&mut model, key(KeyCode::Esc));
+    assert_eq!(model.cursor, 5);
+    assert!(model.search.matches.is_empty());
+    assert!(matches!(model.ui.input_mode, InputMode::Normal));
+}
+
+#[test]
+fn invalid_regex_keeps_previous_matches() {
+    let mut model = Model::new(EditorState::from_text("foo foo"), None);
+    model.commit_search("foo".to_owned());
+    assert_eq!(model.search.matches.len(), 2);
+    model.search.options.regex = true;
+    model.commit_search("[a-".to_owned());
+    assert!(model.search.error.is_some());
+    assert_eq!(model.search.matches.len(), 2);
+}
+
+#[test]
+fn replace_all_is_one_undo_and_handles_unicode() {
+    let mut model = Model::new(EditorState::from_text(&"x ".repeat(100)), None);
+    model.commit_search("x".to_owned());
+    assert_eq!(model.search.matches.len(), 100);
+    assert!(model.replace_all("y"));
+    assert_eq!(model.editor.text().slice(0..3), "y y");
+    model.undo();
+    assert_eq!(model.editor.text().slice(0..3), "x x");
+
+    let mut unicode = Model::new(EditorState::from_text("你好 你好"), None);
+    unicode.commit_search("你好".to_owned());
+    assert_eq!(unicode.search.matches.len(), 2);
+    assert!(unicode.replace_all("hi"));
+    assert_eq!(unicode.editor.text().slice(0..5), "hi hi");
+}
+
+#[test]
+fn replacement_rejects_read_only_help() {
+    let mut model = Model::new(EditorState::from_text(""), None);
+    command(&mut model, "help");
+    model.commit_search("Anvil".to_owned());
+    let before = model.editor.text().slice(0..5);
+    assert!(!model.replace_all("X"));
+    assert_eq!(model.editor.text().slice(0..5), before);
+}
+
+#[test]
 #[cfg(unix)]
 fn open_resolves_symlink_to_canonical_path() {
     let dir = tempfile::tempdir().expect("tempdir");
@@ -3661,7 +3716,8 @@ fn search_background_overlays_fenced_code_background() {
     let mut model = Model::new(EditorState::from_text("```rust\nfn main() {}\n```\n"), None);
     model.path = Some(PathBuf::from("x.md"));
     model.cursor = 0;
-    model.search_query = "fn".to_owned();
+    model.commit_search("fn".to_owned());
+    model.cursor = 10;
     for _ in 0..100 {
         model.poll_syntax();
         if model

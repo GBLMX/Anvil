@@ -41,8 +41,11 @@ Normal mode
   yw / yb / ye        yank word forward / back / end
   p                   put unnamed register
   u / Ctrl+r          undo / redo
-  /pattern            search
+  /pattern            incremental search; Enter accepts, Esc restores cursor
   n / N               next / previous match
+  Ctrl-r / Ctrl-w / Ctrl-c  regex / whole-word / case toggles in search
+  :replace text       replace current match
+  :replace-all text   replace all matches atomically
   :w                  save
   :w file             save as
   :wa                 save all modified buffers

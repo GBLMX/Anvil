@@ -12,7 +12,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use anvil_core::{TextBuffer, TextDocument, end_word, next_word_start, previous_word_start};
+use anvil_core::{TextBuffer, end_word, next_word_start, previous_word_start};
 use anvil_editor::EditorState;
 use anvil_ipc::GatewayClient;
 use anvil_session::DocumentSession;
@@ -58,6 +58,8 @@ mod plugin_activation;
 mod plugin_discovery;
 mod plugin_document;
 mod repeat;
+mod search;
+mod search_ui;
 mod splits;
 mod status_line;
 use lsp_ui::lsp_settings;
@@ -422,6 +424,7 @@ pub struct Model {
     object_pending: bool,
     /// Last substring search.
     search_query: String,
+    search: search::SearchState,
     /// Full-editor start dashboard, shown until the first interaction or file open.
     welcome: bool,
     /// Dashboard state to restore after closing the help page.
@@ -551,6 +554,7 @@ impl Model {
             replaying: false,
             object_pending: false,
             search_query: String::new(),
+            search: search::SearchState::default(),
             help_back: None,
             buffers: Vec::new(),
             active: 0,
@@ -753,14 +757,6 @@ impl Model {
         self.status = "Returned from help".to_owned();
         self.dirty = true;
         true
-    }
-
-    /// Inserts text at the cursor.
-    /// Inserts the unnamed register at the cursor.
-    fn jump_to(&mut self, offset: usize) {
-        self.cursor = offset;
-        self.editor.set_selection_bytes(offset, offset);
-        self.dirty = true;
     }
 
     #[cfg(target_os = "linux")]
@@ -1494,10 +1490,7 @@ impl Model {
         let total = index.len_lines();
         let end = (self.scroll + usize::from(height)).min(total);
         let current = self.current_line();
-        let needle = match &self.ui.input_mode {
-            InputMode::Search { query } => query.as_str(),
-            _ => self.search_query.as_str(),
-        };
+
         let diagnostic_lines = self.diagnostic_lines();
         let mut lines = Vec::with_capacity(end.saturating_sub(self.scroll));
         for line_number in self.scroll..end {
@@ -1509,28 +1502,20 @@ impl Model {
             };
             let mut spans = Vec::new();
             let mut base = start;
-            let search_ranges = if needle.is_empty() {
-                Vec::new()
-            } else {
-                let mut ranges = Vec::new();
-                let mut last_end = start;
-                for at in Self::find_matches_in(text, needle, start..line.end) {
-                    let end = at + needle.len();
-                    if at < last_end {
-                        continue;
-                    }
-                    ranges.push((at, end));
-                    last_end = end;
-                }
-                ranges
-            };
+            let search_ranges: Vec<(usize, usize)> = self
+                .search
+                .matches
+                .iter()
+                .filter(|range| range.start < line.end && range.end > start)
+                .map(|range| (range.start.max(start), range.end.min(line.end)))
+                .collect();
             let syntax_guard = self.syntax.borrow();
             let highlights = syntax_guard.highlights();
             for chunk in text.chunks(start..line.end) {
                 push_syntax_spans(&mut spans, chunk, base, highlights);
                 base += chunk.len();
             }
-            if !needle.is_empty() {
+            if !search_ranges.is_empty() {
                 apply_search_highlights(&mut spans, start, &search_ranges, self.cursor);
             }
             if spans.is_empty() {
@@ -1649,6 +1634,7 @@ pub fn run_with_workspace(path: Option<PathBuf>, workspace: PathBuf) -> io::Resu
         model.viewport_height = size.height;
         model.ensure_cursor_visible(size.height.saturating_sub(2), size.width.saturating_sub(2));
         model.tick_status();
+        model.tick_search();
         if model.dirty {
             terminal.terminal.draw(|frame| view(&model, frame))?;
             model.dirty = false;

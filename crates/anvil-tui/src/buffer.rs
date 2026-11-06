@@ -45,6 +45,7 @@ impl Model {
         self.hscroll = buffer.hscroll;
         self.modified = buffer.modified;
         self.search_query = buffer.search_query;
+        self.search.reset_for_buffer();
         self.welcome = false;
         self.welcome_back = false;
         self.syntax
@@ -200,6 +201,7 @@ impl Model {
         self.visual_anchor = None;
         self.visual_line = false;
         self.search_query.clear();
+        self.search.reset_for_buffer();
         self.syntax.borrow_mut().switch_path(None, false);
         self.welcome = false;
         self.welcome_back = false;
