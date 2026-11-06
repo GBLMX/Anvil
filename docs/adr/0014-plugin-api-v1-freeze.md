@@ -32,15 +32,18 @@ snapshot, atomic apply-edit, and workspace mutation helpers:
 
 ## Consumers
 
-The freeze gate is satisfied by three consumers:
+The contract freeze gate is satisfied by two consumers:
 
 1. The official editor/session path uses the Rust DTO catalog for view,
    snapshot, mode, and atomic edits.
 2. `crates/anvil-api/tests/contract_consumer.rs` is an independent consumer that
    round-trips every request DTO and checks the catalog for empty contracts.
-3. `crates/anvil-plugin-host/tests/editor_proxy.rs` drives the host proxy over
-   Unix sockets and compares view/snapshot/mode/apply DTOs, revisions, stale
-   errors, cancellation, and timeout behavior with the first-party editor.
+
+`crates/anvil-plugin-host/tests/editor_proxy.rs` is a test-only harness, not a
+production consumer: it drives the host proxy over Unix sockets and compares
+view/snapshot/mode/apply DTOs, revisions, stale errors, cancellation, and
+timeout behavior with the first-party editor. `HostSession` does not yet pass
+`--editor-socket`, so normal startup returns `-32008` for `editor.*` calls.
 
 ## Marketplace boundary
 

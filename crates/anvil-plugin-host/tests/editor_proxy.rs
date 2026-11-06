@@ -342,3 +342,26 @@ fn proxy_times_out_without_an_editor_reply() {
     assert_eq!(host.wait().expect("wait").code(), Some(0));
     editor_thread.join().expect("editor thread");
 }
+
+#[test]
+fn host_without_editor_socket_reports_proxy_unavailable() {
+    let control_path = socket_path("no-proxy");
+    let _ = std::fs::remove_file(&control_path);
+    let listener = UnixListener::bind(&control_path).expect("bind control");
+    let mut host = spawn(
+        host_bin(),
+        &["--socket".to_owned(), control_path.display().to_string()],
+        Token([32; 32]),
+    )
+    .expect("spawn host");
+    let _ = host.read_hello().expect("hello");
+    let mut control = listener.accept().expect("accept control").0;
+
+    let response = rpc(&mut control, 1, "editor.get_view", serde_json::json!({}));
+    assert_eq!(response["error"]["code"], -32008);
+
+    control
+        .shutdown(std::net::Shutdown::Write)
+        .expect("shutdown");
+    assert_eq!(host.wait().expect("wait").code(), Some(0));
+}

@@ -13,9 +13,10 @@ post-`0.5.0` feature line.
 ### Added
 - Plugin API v1 (`1.0.0`) with complete DTOs for every catalog method,
   generated JSON Schema, TypeScript, and LuaLS stubs.
-- Plugin-host editor proxy for `editor.get_view`, `get_snapshot`, `set_mode`,
-  and `apply_edit`, with DTO/revision/error/cancellation/timeout parity tests
-  against the first-party editor.
+- Test-only plugin-host editor proxy for `editor.get_view`, `get_snapshot`,
+  `set_mode`, and `apply_edit`, with DTO/revision/error/cancellation/timeout
+  parity tests. `HostSession` wiring remains pending, so normal startup still
+  answers `editor.*` with `-32008`.
 - `session.hello` now negotiates API `1.0.0`; plugins declare `api` as `1`,
   `1.0`, or `1.0.0`.
 - Manifest path frozen to `plugin.json`; the v1 contract is documented in
