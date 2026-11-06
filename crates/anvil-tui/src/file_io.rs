@@ -34,10 +34,13 @@ impl Model {
             self.buffers.push(Buffer {
                 editor: EditorState::from_text(&text).into(),
                 path: Some(absolute),
+                visual_anchor: None,
+                visual_line: false,
                 cursor: 0,
                 scroll: 0,
                 hscroll: 0,
                 modified: false,
+                missing: false,
                 search_query: String::new(),
             });
             let index = self.buffers.len() - 1;
@@ -49,6 +52,7 @@ impl Model {
             self.scroll = 0;
             self.hscroll = 0;
             self.modified = false;
+            self.missing = false;
             self.syntax
                 .borrow_mut()
                 .switch_path(self.path.as_deref(), true);
@@ -255,14 +259,38 @@ impl Model {
             self.dirty = true;
         }
     }
+    pub(crate) fn mark_missing(&mut self, path: &Path) {
+        let affected = |candidate: &Path| candidate == path || candidate.starts_with(path);
+        if self.path.as_deref().is_some_and(affected) {
+            self.missing = true;
+        }
+        for buffer in &mut self.buffers {
+            if buffer.path.as_deref().is_some_and(affected) {
+                buffer.missing = true;
+            }
+        }
+        if let Some(pane) = self.split.as_mut()
+            && pane.buffer.path.as_deref().is_some_and(affected)
+        {
+            pane.buffer.missing = true;
+        }
+        self.dirty = true;
+    }
 
     pub(crate) fn reload_external(&mut self, path: &Path) -> Result<(), String> {
-        let text = self.read_file(path)?;
+        let text = match self.read_file(path) {
+            Ok(text) => text,
+            Err(error) => {
+                self.mark_missing(path);
+                return Err(error);
+            }
+        };
         let cursor = self.cursor.min(text.len());
         if self.path.as_deref() == Some(path) {
             self.editor = EditorState::from_text(&text).into();
             self.cursor = cursor;
             self.modified = false;
+            self.missing = false;
             self.syntax.borrow_mut().invalidate();
             self.sync_lsp_active();
         }
@@ -274,6 +302,7 @@ impl Model {
             buffer.editor = EditorState::from_text(&text).into();
             buffer.cursor = cursor.min(buffer.editor.text().len_bytes());
             buffer.modified = false;
+            buffer.missing = false;
         }
         if let Some(pane) = self.split.as_mut()
             && pane.buffer.path.as_deref() == Some(path)
@@ -281,6 +310,7 @@ impl Model {
             pane.buffer.editor = EditorState::from_text(&text).into();
             pane.buffer.cursor = cursor.min(pane.buffer.editor.text().len_bytes());
             pane.buffer.modified = false;
+            pane.buffer.missing = false;
         }
         self.sync_active();
         self.status = format!("reloaded {}", path.display());
@@ -306,6 +336,7 @@ impl Model {
             Ok(()) => {
                 self.path = Some(path.clone());
                 self.modified = false;
+                self.missing = false;
                 self.git_checked = None;
                 self.git_due = Some(Instant::now());
                 self.sync_lsp_active();
@@ -366,6 +397,7 @@ impl Model {
                 Ok(()) => {
                     if let Some(buffer) = self.buffers.get_mut(index) {
                         buffer.modified = false;
+                        buffer.missing = false;
                     }
                 }
                 Err(error) => {

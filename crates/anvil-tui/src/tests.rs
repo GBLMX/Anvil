@@ -2563,6 +2563,27 @@ fn multi_buffer_switch_preserves_per_buffer_state() {
 }
 
 #[test]
+fn switching_buffers_preserves_visual_selection() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let first = dir.path().join("first.txt");
+    let second = dir.path().join("second.txt");
+    fs::write(&first, "first").expect("write first");
+    fs::write(&second, "second").expect("write second");
+    let mut model = Model::open(&first).expect("open first");
+    model.open_path(&second).expect("open second");
+    command(&mut model, "bp");
+
+    handle_event(&mut model, key(KeyCode::Char('v')));
+    handle_event(&mut model, key(KeyCode::Right));
+    assert!(model.visual_anchor.is_some());
+
+    command(&mut model, "bn");
+    assert!(model.visual_anchor.is_none());
+    command(&mut model, "bp");
+    assert_eq!(model.visual_anchor, Some(0));
+}
+
+#[test]
 fn buffer_commands_require_a_second_buffer() {
     let dir = tempfile::tempdir().expect("tempdir");
     let path = dir.path().join("only.txt");
@@ -2709,6 +2730,81 @@ fn closing_buffer_refuses_to_drop_dirty_split() {
     );
     assert!(model.status.contains("split pane has unsaved changes"));
     assert_eq!(model.path.as_ref(), Some(&path));
+}
+
+#[test]
+fn buffer_bar_shows_dirty_missing_and_read_only_states() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let first = dir.path().join("first.txt");
+    let second = dir.path().join("second.txt");
+    fs::write(&first, "first").expect("first");
+    fs::write(&second, "second").expect("second");
+    let mut model = Model::open(&first).expect("open first");
+    model.open_path(&second).expect("open second");
+    model.buffers[0].modified = true;
+    model.mark_missing(&second);
+
+    let render = |model: &Model, width: u16, height: u16| {
+        let backend = TestBackend::new(width, height);
+        let mut terminal = Terminal::new(backend).expect("terminal");
+        terminal.draw(|frame| view(model, frame)).expect("draw");
+        terminal
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .map(|cell| cell.symbol())
+            .collect::<String>()
+    };
+    let rendered = render(&model, 80, 12);
+    assert!(rendered.contains("first.txt ●"), "{rendered}");
+    assert!(rendered.contains("second.txt !"), "{rendered}");
+
+    command(&mut model, "help");
+    let rendered = render(&model, 80, 12);
+    assert!(rendered.contains("[help] RO"), "{rendered}");
+}
+
+#[test]
+fn buffer_bar_scrolls_to_many_buffers() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let mut model: Option<Model> = None;
+    for index in 0..10 {
+        let path = dir.path().join(format!("f{index}.txt"));
+        fs::write(&path, "x").expect("write");
+        match model.as_mut() {
+            Some(model) => model.open_path(&path).expect("open"),
+            None => model = Some(Model::open(&path).expect("open first")),
+        }
+    }
+    let model = model.expect("model");
+    assert_eq!(model.buffers.len(), 10);
+    assert_eq!(model.active, 9);
+
+    let backend = TestBackend::new(40, 12);
+    let mut terminal = Terminal::new(backend).expect("terminal");
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+    let rendered = terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect::<String>();
+    assert!(rendered.contains("‹"), "{rendered}");
+    assert!(rendered.contains("f9.txt"), "{rendered}");
+}
+
+#[test]
+fn deleted_file_marks_the_buffer_missing() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("gone.txt");
+    fs::write(&path, "data").expect("write");
+    let mut model = Model::open(&path).expect("open");
+    fs::remove_file(&path).expect("remove");
+
+    assert!(model.reload_external(&path).is_err());
+    assert!(model.missing);
 }
 
 #[test]

@@ -129,6 +129,7 @@ impl Model {
                     self.busy = None;
                     match result {
                         Ok(()) => {
+                            self.mark_missing(&path);
                             self.status = format!("deleted {}", path.display());
                             self.refresh_tree(None);
                         }

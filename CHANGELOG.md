@@ -8,6 +8,13 @@ post-`0.5.0` feature line.
 
 ## [Unreleased]
 
+
+## [0.5.6] - 2026-11-06
+
+### Added
+- Buffer tab bar with active, dirty, missing-file, and read-only states,
+  active-centered overflow scrolling, and per-buffer visual selections.
+
 ## [0.5.5] - 2026-11-06
 
 ### Added

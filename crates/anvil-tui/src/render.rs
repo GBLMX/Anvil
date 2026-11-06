@@ -25,6 +25,84 @@ fn panel_block(title: impl Into<Line<'static>>) -> Block<'static> {
         .title(title)
 }
 
+fn buffer_bar_line(model: &Model, width: u16) -> Line<'static> {
+    let width = usize::from(width);
+    let mut tabs: Vec<(String, Style)> = model
+        .buffers
+        .iter()
+        .map(|buffer| {
+            let name = buffer
+                .path
+                .as_ref()
+                .and_then(|path| path.file_name())
+                .map(|name| name.to_string_lossy().into_owned())
+                .unwrap_or_else(|| "[no file]".to_owned());
+            let marker = if buffer.missing {
+                " !"
+            } else if buffer.modified {
+                " ●"
+            } else {
+                ""
+            };
+            (format!(" {name}{marker} "), theme::panel())
+        })
+        .collect();
+    let mut active = model.active.min(tabs.len().saturating_sub(1));
+    if model.help_back.is_some() {
+        tabs.push((" [help] RO ".to_owned(), theme::selected()));
+        active = tabs.len() - 1;
+    }
+    if tabs.is_empty() {
+        return Line::default();
+    }
+    tabs[active].1 = theme::selected();
+    let tab_width = |index: usize| UnicodeWidthStr::width(tabs[index].0.as_str());
+    let mut start = active;
+    let mut end = active + 1;
+    let mut used = tab_width(active);
+    while used < width {
+        let mut progressed = false;
+        if end < tabs.len() {
+            let next = tab_width(end) + 1;
+            if used + next <= width {
+                used += next;
+                end += 1;
+                progressed = true;
+            }
+        }
+        if start > 0 {
+            let next = tab_width(start - 1) + 1;
+            if used + next <= width {
+                used += next;
+                start -= 1;
+                progressed = true;
+            }
+        }
+        if !progressed {
+            break;
+        }
+    }
+    let mut spans = Vec::new();
+    if start > 0 {
+        spans.push(Span::styled("‹", theme::panel().fg(theme::MUTED)));
+    }
+    for (index, (label, style)) in tabs.iter().enumerate().take(end).skip(start) {
+        if index > start {
+            spans.push(Span::styled("│", theme::panel().fg(theme::BORDER)));
+        }
+        let label = if UnicodeWidthStr::width(label.as_str()) > width {
+            crate::status_line::middle_ellipsis(label, width)
+        } else {
+            label.clone()
+        };
+        spans.push(Span::styled(label, *style));
+    }
+    if end < tabs.len() {
+        spans.push(Span::styled("›", theme::panel().fg(theme::MUTED)));
+    }
+    Line::from(spans)
+}
+
 pub(crate) fn utf16_to_byte(text: &str, units: usize) -> usize {
     let mut seen = 0;
     for (byte, character) in text.char_indices() {
@@ -456,12 +534,24 @@ pub fn view(model: &Model, frame: &mut Frame) {
             Span::styled(status, theme::status()),
         ]));
     frame.render_widget(block, area);
-    let inner = Rect {
+    let mut inner = Rect {
         x: area.x + 1,
         y: area.y + 1,
         width: area.width.saturating_sub(2),
         height: area.height.saturating_sub(2),
     };
+    if !model.welcome && (model.buffers.len() > 1 || model.help_back.is_some()) {
+        let bar = Rect {
+            height: inner.height.min(1),
+            ..inner
+        };
+        frame.render_widget(
+            Paragraph::new(buffer_bar_line(model, bar.width)).style(theme::panel()),
+            bar,
+        );
+        inner.y = inner.y.saturating_add(1);
+        inner.height = inner.height.saturating_sub(1);
+    }
     let mut content = inner;
     if model.welcome {
         render_welcome(frame, inner, model);

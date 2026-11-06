@@ -9,7 +9,10 @@ impl Model {
             path: self.path.clone(),
             cursor: self.cursor,
             scroll: self.scroll,
+            missing: self.missing,
             hscroll: self.hscroll,
+            visual_anchor: self.visual_anchor,
+            visual_line: self.visual_line,
             modified: self.modified,
             search_query: self.search_query.clone(),
         }
@@ -32,6 +35,9 @@ impl Model {
         let Some(buffer) = self.buffers.get(index).cloned() else {
             return;
         };
+        self.missing = buffer.missing;
+        self.visual_anchor = buffer.visual_anchor;
+        self.visual_line = buffer.visual_line;
         self.editor = buffer.editor;
         self.path = buffer.path;
         self.cursor = buffer.cursor;
@@ -69,7 +75,10 @@ impl Model {
             editor: EditorState::from_text("").into(),
             path: None,
             cursor: 0,
+            missing: false,
             scroll: 0,
+            visual_anchor: None,
+            visual_line: false,
             hscroll: 0,
             modified: false,
             search_query: String::new(),
@@ -113,6 +122,7 @@ impl Model {
             Ok(()) => {
                 if let Some(buffer) = self.buffers.get_mut(index) {
                     buffer.modified = false;
+                    buffer.missing = false;
                 }
                 self.status = format!("\"{display}\" written");
                 self.dirty = true;
@@ -186,6 +196,9 @@ impl Model {
         self.scroll = 0;
         self.hscroll = 0;
         self.modified = false;
+        self.missing = false;
+        self.visual_anchor = None;
+        self.visual_line = false;
         self.search_query.clear();
         self.syntax.borrow_mut().switch_path(None, false);
         self.welcome = false;
@@ -253,6 +266,9 @@ impl Model {
             editor: EditorState::from_text(&text).into(),
             path: Some(path.clone()),
             cursor: 0,
+            missing: false,
+            visual_anchor: None,
+            visual_line: false,
             scroll: 0,
             hscroll: 0,
             modified: false,

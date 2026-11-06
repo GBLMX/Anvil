@@ -102,6 +102,9 @@ struct Buffer {
     scroll: usize,
     hscroll: usize,
     modified: bool,
+    missing: bool,
+    visual_anchor: Option<usize>,
+    visual_line: bool,
     search_query: String,
 }
 
@@ -378,6 +381,8 @@ pub struct Model {
     pub quit: bool,
     /// Whether the file has unsaved changes.
     pub modified: bool,
+    /// Whether the active file disappeared outside the editor.
+    pub missing: bool,
     /// Whether the next loop iteration should render.
     pub dirty: bool,
     /// Short status line.
@@ -523,6 +528,7 @@ impl Model {
             keymap: keymap::KeymapConfig::default(),
             quit: false,
             modified: false,
+            missing: false,
             dirty: true,
             status: String::new(),
             busy: None,
@@ -705,7 +711,10 @@ impl Model {
             cursor: self.cursor,
             scroll: self.scroll,
             hscroll: self.hscroll,
+            visual_anchor: self.visual_anchor,
+            visual_line: self.visual_line,
             modified: self.modified,
+            missing: self.missing,
             search_query: std::mem::take(&mut self.search_query),
         };
         self.help_back = Some(saved);
