@@ -18,6 +18,9 @@ post-`0.5.0` feature line.
 - Visual selection supports operation-scoped surround: `s` then a bracket,
   quote, or backtick wraps the selection; `Esc` cancels.
 
+- `d`, `y`, and `c` over word, quote, bracket, paragraph, and tag objects now
+  share one transaction path, keeping register and undo behavior aligned.
+
 - Markdown fenced code blocks render with a full-width background, and inline
   code spans use the same subtle background without replacing syntax colors.
 

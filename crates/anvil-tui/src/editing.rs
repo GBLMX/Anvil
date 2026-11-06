@@ -229,13 +229,12 @@ impl Model {
         selected
     }
 
-    pub(crate) fn apply_word_operator(&mut self, operator: char, around: bool, count: usize) {
-        let range = self.word_object_range(around, count);
-        let Some(range) = range else {
-            self.status = "E: no word object".to_owned();
-            self.dirty = true;
-            return;
-        };
+    fn apply_operator_range(
+        &mut self,
+        operator: char,
+        range: std::ops::Range<usize>,
+        change_origin: InsertOrigin,
+    ) {
         match operator {
             'y' => {
                 let cursor = self.cursor;
@@ -254,11 +253,7 @@ impl Model {
                     self.record_register_text(register, &deleted);
                 }
                 self.modified = true;
-                self.begin_insert(if around {
-                    InsertOrigin::ChangeWord(WordMotion::NextStart)
-                } else {
-                    InsertOrigin::ChangeInnerWord
-                });
+                self.begin_insert(change_origin);
             }
             'd' => {
                 let deleted = self.editor.text().slice(range.clone());
@@ -273,6 +268,21 @@ impl Model {
             _ => return,
         }
         self.dirty = true;
+    }
+
+    pub(crate) fn apply_word_operator(&mut self, operator: char, around: bool, count: usize) {
+        let range = self.word_object_range(around, count);
+        let Some(range) = range else {
+            self.status = "E: no word object".to_owned();
+            self.dirty = true;
+            return;
+        };
+        let origin = if around {
+            InsertOrigin::ChangeWord(WordMotion::NextStart)
+        } else {
+            InsertOrigin::ChangeInnerWord
+        };
+        self.apply_operator_range(operator, range, origin);
     }
 
     pub(crate) fn apply_quote_operator(&mut self, operator: char, quote: char, around: bool) {
@@ -286,43 +296,12 @@ impl Model {
             self.dirty = true;
             return;
         };
-        match operator {
-            'y' => {
-                let cursor = self.cursor;
-                self.editor.set_selection_bytes(range.start, range.end);
-                if self.editor.yank(range) {
-                    self.record_register();
-                }
-                let _ = self.editor.set_selection_bytes(cursor, cursor);
-            }
-            'c' => {
-                let deleted = self.editor.text().slice(range.clone());
-                self.editor.set_selection_bytes(range.start, range.end);
-                self.editor.delete(range.clone());
-                self.cursor = range.start;
-                if let Some(register) = self.register.take() {
-                    self.record_register_text(register, &deleted);
-                }
-                self.modified = true;
-                self.begin_insert(if around {
-                    InsertOrigin::ChangeAroundQuote(quote)
-                } else {
-                    InsertOrigin::ChangeInnerQuote(quote)
-                });
-            }
-            'd' => {
-                let deleted = self.editor.text().slice(range.clone());
-                self.editor.set_selection_bytes(range.start, range.end);
-                self.editor.delete(range.clone());
-                self.cursor = range.start;
-                if let Some(register) = self.register.take() {
-                    self.record_register_text(register, &deleted);
-                }
-                self.modified = true;
-            }
-            _ => return,
-        }
-        self.dirty = true;
+        let origin = if around {
+            InsertOrigin::ChangeAroundQuote(quote)
+        } else {
+            InsertOrigin::ChangeInnerQuote(quote)
+        };
+        self.apply_operator_range(operator, range, origin);
     }
 
     pub(crate) fn apply_bracket_operator(&mut self, operator: char, open: char, around: bool) {
@@ -331,39 +310,11 @@ impl Model {
             self.dirty = true;
             return;
         };
-        match operator {
-            'y' => {
-                let cursor = self.cursor;
-                self.editor.set_selection_bytes(range.start, range.end);
-                if self.editor.yank(range) {
-                    self.record_register();
-                }
-                let _ = self.editor.set_selection_bytes(cursor, cursor);
-            }
-            'c' => {
-                let deleted = self.editor.text().slice(range.clone());
-                self.editor.set_selection_bytes(range.start, range.end);
-                self.editor.delete(range.clone());
-                self.cursor = range.start;
-                if let Some(register) = self.register.take() {
-                    self.record_register_text(register, &deleted);
-                }
-                self.modified = true;
-                self.begin_insert(InsertOrigin::ChangeBracket { open, around });
-            }
-            'd' => {
-                let deleted = self.editor.text().slice(range.clone());
-                self.editor.set_selection_bytes(range.start, range.end);
-                self.editor.delete(range.clone());
-                self.cursor = range.start;
-                if let Some(register) = self.register.take() {
-                    self.record_register_text(register, &deleted);
-                }
-                self.modified = true;
-            }
-            _ => return,
-        }
-        self.dirty = true;
+        self.apply_operator_range(
+            operator,
+            range,
+            InsertOrigin::ChangeBracket { open, around },
+        );
     }
 
     fn line_is_blank(&self, line: usize) -> bool {
@@ -452,39 +403,7 @@ impl Model {
             self.dirty = true;
             return;
         };
-        match operator {
-            'y' => {
-                let cursor = self.cursor;
-                self.editor.set_selection_bytes(range.start, range.end);
-                if self.editor.yank(range) {
-                    self.record_register();
-                }
-                let _ = self.editor.set_selection_bytes(cursor, cursor);
-            }
-            'c' => {
-                let deleted = self.editor.text().slice(range.clone());
-                self.editor.set_selection_bytes(range.start, range.end);
-                self.editor.delete(range.clone());
-                self.cursor = range.start;
-                if let Some(register) = self.register.take() {
-                    self.record_register_text(register, &deleted);
-                }
-                self.modified = true;
-                self.begin_insert(InsertOrigin::ChangeParagraph { around });
-            }
-            'd' => {
-                let deleted = self.editor.text().slice(range.clone());
-                self.editor.set_selection_bytes(range.start, range.end);
-                self.editor.delete(range.clone());
-                self.cursor = range.start;
-                if let Some(register) = self.register.take() {
-                    self.record_register_text(register, &deleted);
-                }
-                self.modified = true;
-            }
-            _ => return,
-        }
-        self.dirty = true;
+        self.apply_operator_range(operator, range, InsertOrigin::ChangeParagraph { around });
     }
 
     pub(crate) fn word_range(&self, motion: WordMotion) -> Option<std::ops::Range<usize>> {
@@ -529,39 +448,7 @@ impl Model {
             self.dirty = true;
             return;
         };
-        match operator {
-            'y' => {
-                let cursor = self.cursor;
-                self.editor.set_selection_bytes(range.start, range.end);
-                if self.editor.yank(range) {
-                    self.record_register();
-                }
-                let _ = self.editor.set_selection_bytes(cursor, cursor);
-            }
-            'c' => {
-                let deleted = self.editor.text().slice(range.clone());
-                self.editor.set_selection_bytes(range.start, range.end);
-                self.editor.delete(range.clone());
-                self.cursor = range.start;
-                if let Some(register) = self.register.take() {
-                    self.record_register_text(register, &deleted);
-                }
-                self.modified = true;
-                self.begin_insert(InsertOrigin::ChangeTag { around });
-            }
-            'd' => {
-                let deleted = self.editor.text().slice(range.clone());
-                self.editor.set_selection_bytes(range.start, range.end);
-                self.editor.delete(range.clone());
-                self.cursor = range.start;
-                if let Some(register) = self.register.take() {
-                    self.record_register_text(register, &deleted);
-                }
-                self.modified = true;
-            }
-            _ => return,
-        }
-        self.dirty = true;
+        self.apply_operator_range(operator, range, InsertOrigin::ChangeTag { around });
     }
 
     pub(crate) fn word_end_exclusive(&self) -> usize {

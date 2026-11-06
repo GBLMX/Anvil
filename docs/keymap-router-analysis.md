@@ -255,7 +255,6 @@ The TUI-local router with context identifiers in `anvil-session`, F-key parsing
 only, a deadline-based leader, serde-backed contexts, and bundled presets is in
 place. Do not move UI contexts into `anvil-editor`.
 
-Next, finish the ordered context stack for popup/tree/modal branches, then
-build the command palette from the command registry. Operation-scoped
-`ModalLayer` bindings and the unified `Operation × RangeProvider` transaction
-path remain separate `0.5.3` slices.
+The command palette, operation-scoped `ModalLayer`, and shared operator/range
+transaction path are landed. Continue with the ordered context stack for
+popup/tree/modal branches as the next router slice.
