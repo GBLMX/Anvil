@@ -103,6 +103,134 @@ fn buffer_bar_line(model: &Model, width: u16) -> Line<'static> {
     Line::from(spans)
 }
 
+fn notification_lines(model: &Model) -> Vec<Line<'static>> {
+    model
+        .ui
+        .notifications
+        .items()
+        .iter()
+        .rev()
+        .take(5)
+        .map(|notification| {
+            let (marker, color) = match notification.severity {
+                anvil_session::ui::NotificationSeverity::Error => ("!", theme::ERROR),
+                anvil_session::ui::NotificationSeverity::Warning => ("▲", theme::WARNING),
+                anvil_session::ui::NotificationSeverity::Info => ("i", theme::ACCENT),
+            };
+            let suffix = if notification.count > 1 {
+                format!(" ×{}", notification.count)
+            } else {
+                String::new()
+            };
+            Line::styled(
+                format!(
+                    "{marker} {}: {}{suffix}",
+                    notification.source, notification.message
+                ),
+                theme::panel().fg(color),
+            )
+        })
+        .collect()
+}
+
+fn progress_lines(model: &Model) -> Vec<Line<'static>> {
+    model
+        .ui
+        .progress
+        .items()
+        .iter()
+        .take(5)
+        .map(|item| {
+            let fraction = item
+                .fraction
+                .map(|value| format!("{value}% "))
+                .unwrap_or_default();
+            let cancel = if item.cancellable {
+                " · cancellable"
+            } else {
+                ""
+            };
+            Line::styled(
+                format!("{fraction}{}: {}{cancel}", item.title, item.message),
+                theme::panel().fg(theme::ACCENT),
+            )
+        })
+        .collect()
+}
+
+fn problem_lines(model: &Model, width: usize) -> (Vec<Line<'static>>, Option<usize>) {
+    let mut lines = Vec::new();
+    let mut selected_line = None;
+    let mut current_path = None;
+    for (index, problem) in model.ui.problems.items.iter().enumerate() {
+        if current_path.as_ref() != Some(&problem.path) {
+            current_path = Some(problem.path.clone());
+            lines.push(Line::styled(
+                problem.path.display().to_string(),
+                theme::panel().fg(theme::ACCENT),
+            ));
+        }
+        let severity = match problem.severity {
+            Some(1) => "E",
+            Some(2) => "W",
+            Some(3) => "I",
+            _ => "D",
+        };
+        let source = problem
+            .source
+            .as_deref()
+            .or(problem.code.as_deref())
+            .unwrap_or("");
+        let message =
+            crate::status_line::middle_ellipsis(&problem.message, width.saturating_sub(12));
+        let text = format!(
+            "{severity} {}:{} {source} {message}",
+            problem.line + 1,
+            problem.character + 1
+        );
+        let style = if index == model.ui.problems.selected {
+            selected_line = Some(lines.len());
+            theme::selected()
+        } else {
+            theme::panel()
+        };
+        lines.push(Line::styled(text, style));
+    }
+    (lines, selected_line)
+}
+
+fn diagnostic_peek_lines(peek: &anvil_session::ui::DiagnosticPeek) -> Vec<Line<'static>> {
+    let mut lines = Vec::new();
+    for diagnostic in &peek.diagnostics {
+        let severity = match diagnostic.severity {
+            Some(1) => "E",
+            Some(2) => "W",
+            Some(3) => "I",
+            _ => "D",
+        };
+        let source = diagnostic.source.as_deref().unwrap_or("");
+        let code = diagnostic.code.as_deref().unwrap_or("");
+        lines.push(Line::styled(
+            format!("{severity} {source} {code}"),
+            theme::panel().fg(match diagnostic.severity {
+                Some(1) => theme::ERROR,
+                Some(2) => theme::WARNING,
+                _ => theme::ACCENT,
+            }),
+        ));
+        for line in diagnostic.message.lines() {
+            lines.push(Line::styled(line.to_owned(), theme::panel()));
+        }
+        for related in &diagnostic.related {
+            lines.push(Line::styled(
+                format!("  ↳ {related}"),
+                theme::panel().fg(theme::MUTED),
+            ));
+        }
+    }
+    lines
+}
+
 pub(crate) fn utf16_to_byte(text: &str, units: usize) -> usize {
     let mut seen = 0;
     for (byte, character) in text.char_indices() {
@@ -917,11 +1045,63 @@ pub fn view(model: &Model, frame: &mut Frame) {
             );
         }
     }
-    if let Some(diagnostic) = &model.diagnostic_popup {
+    let notifications = notification_lines(model);
+    if !notifications.is_empty() {
+        let width = (area.width / 2).max(24).min(area.width.saturating_sub(2));
+        let height = (notifications.len() as u16 + 2)
+            .min(7)
+            .min(area.height.saturating_sub(2));
+        let popup = Rect {
+            x: area.x + area.width.saturating_sub(width + 1),
+            y: area.y + 1,
+            width,
+            height,
+        };
+        frame.render_widget(Clear, popup);
+        frame.render_widget(
+            Paragraph::new(notifications)
+                .style(theme::panel())
+                .block(panel_block("Notifications")),
+            popup,
+        );
+    }
+    let progress = progress_lines(model);
+    if !progress.is_empty() {
+        let width = (area.width / 2).max(24).min(area.width.saturating_sub(2));
+        let height = (progress.len() as u16 + 2)
+            .min(7)
+            .min(area.height.saturating_sub(2));
+        let popup = Rect {
+            x: area.x + 1,
+            y: area.y + area.height.saturating_sub(height + 2),
+            width,
+            height,
+        };
+        frame.render_widget(Clear, popup);
+        frame.render_widget(
+            Paragraph::new(progress)
+                .style(theme::panel())
+                .block(panel_block("Progress")),
+            popup,
+        );
+    }
+    if model.ui.problems.visible {
         let width = (area.width * 3 / 4)
             .max(30)
             .min(area.width.saturating_sub(2));
-        let height = 6_u16.min(area.height.saturating_sub(2));
+        let (all_lines, selected_line) = problem_lines(model, width.saturating_sub(2) as usize);
+        let height = (all_lines.len() as u16 + 2)
+            .min(18)
+            .min(area.height.saturating_sub(2));
+        let visible = height.saturating_sub(2) as usize;
+        let start = selected_line
+            .unwrap_or(0)
+            .saturating_sub(visible.saturating_sub(1));
+        let mut lines: Vec<Line<'static>> =
+            all_lines.into_iter().skip(start).take(visible).collect();
+        if lines.is_empty() {
+            lines.push(Line::styled("no problems", theme::panel().fg(theme::MUTED)));
+        }
         let popup = Rect {
             x: area.x + (area.width.saturating_sub(width)) / 2,
             y: area.y + (area.height.saturating_sub(height)) / 2,
@@ -930,9 +1110,61 @@ pub fn view(model: &Model, frame: &mut Frame) {
         };
         frame.render_widget(Clear, popup);
         frame.render_widget(
-            Paragraph::new(diagnostic.as_str())
+            Paragraph::new(lines)
                 .style(theme::panel())
-                .block(panel_block("Diagnostic")),
+                .block(panel_block("Problems")),
+            popup,
+        );
+    }
+    if let Some(peek) = &model.ui.diagnostic_peek {
+        let width = (area.width * 2 / 3)
+            .max(30)
+            .min(area.width.saturating_sub(2));
+        let lines = diagnostic_peek_lines(peek);
+        let height = (lines.len() as u16 + 2)
+            .min(12)
+            .min(area.height.saturating_sub(2));
+        let cursor_line = model
+            .editor
+            .index()
+            .position(model.editor.text(), model.cursor)
+            .map(|position| position.line as u16)
+            .unwrap_or(0);
+        let cursor_y = area
+            .y
+            .saturating_add(cursor_line.saturating_sub(model.scroll as u16))
+            .min(area.y + area.height.saturating_sub(1));
+        let bottom = area.y + area.height;
+        let mut y = if cursor_y + 1 + height <= bottom {
+            cursor_y + 1
+        } else if cursor_y > area.y + height {
+            cursor_y - height
+        } else {
+            area.y + (area.height.saturating_sub(height)) / 2
+        };
+        y = y.min(bottom.saturating_sub(height));
+        if y <= cursor_y && cursor_y < y + height {
+            y = if cursor_y + 1 + height <= bottom {
+                cursor_y + 1
+            } else {
+                cursor_y.saturating_sub(height)
+            };
+        }
+        let popup = Rect {
+            x: area.x + (area.width.saturating_sub(width)) / 2,
+            y,
+            width,
+            height,
+        };
+        frame.render_widget(Clear, popup);
+        frame.render_widget(
+            Paragraph::new(lines)
+                .style(theme::panel())
+                .scroll((u16::try_from(peek.scroll).unwrap_or(u16::MAX), 0))
+                .block(panel_block(format!(
+                    "Diagnostics ({})",
+                    peek.diagnostics.len()
+                ))),
             popup,
         );
     }

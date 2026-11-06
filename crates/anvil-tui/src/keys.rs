@@ -595,14 +595,60 @@ fn handle_key(model: &mut Model, key: KeyPress) {
         }
     }
 
-    if model.diagnostic_popup.is_some() {
-        model.diagnostic_popup = None;
-        model.dirty = true;
-        if key.code == KeyCode::Esc {
-            return;
+    if model.ui.diagnostic_peek.is_some() {
+        match key.code {
+            KeyCode::Esc => {
+                model.close_diagnostic_peek();
+                return;
+            }
+            KeyCode::Up => {
+                model.scroll_diagnostic_peek(-1);
+                return;
+            }
+            KeyCode::Down => {
+                model.scroll_diagnostic_peek(1);
+                return;
+            }
+            KeyCode::PageUp => {
+                model.scroll_diagnostic_peek(-5);
+                return;
+            }
+            KeyCode::PageDown => {
+                model.scroll_diagnostic_peek(5);
+                return;
+            }
+            KeyCode::Enter => {
+                model.close_diagnostic_peek();
+                model.request_code_actions();
+                return;
+            }
+            _ => model.close_diagnostic_peek(),
         }
     }
-
+    if model.ui.problems.visible {
+        match key.code {
+            KeyCode::Esc => {
+                model.ui.problems.visible = false;
+                model.dirty = true;
+                return;
+            }
+            KeyCode::Up => {
+                model.ui.problems.move_selection(-1);
+                model.dirty = true;
+                return;
+            }
+            KeyCode::Down => {
+                model.ui.problems.move_selection(1);
+                model.dirty = true;
+                return;
+            }
+            KeyCode::Enter => {
+                model.jump_problem();
+                return;
+            }
+            _ => {}
+        }
+    }
     if model.keymap_context() == KeymapContext::FileTree {
         if let Some(action) = model
             .keymap

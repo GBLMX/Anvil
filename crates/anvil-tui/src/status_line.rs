@@ -14,6 +14,7 @@ const STATUS_SEPARATOR: &str = " · ";
 
 impl Model {
     pub(crate) fn tick_status(&mut self) {
+        self.prune_diagnostic_peek();
         if !self.git_branch_checked {
             self.git_branch_checked = true;
             self.git_branch = detect_git_branch(&self.workspace);

@@ -438,20 +438,8 @@ impl Model {
         let Some(&(line, character)) = selected else {
             return;
         };
-        let Some(diagnostic) = primary.iter().find(|diagnostic| {
-            diagnostic.range.start.line as usize == line
-                && diagnostic.range.start.character as usize == character
-        }) else {
-            return;
-        };
-        let label = match diagnostic.severity {
-            Some(1) => "E",
-            Some(2) => "W",
-            Some(3) => "I",
-            _ => "D",
-        };
-        self.diagnostic_popup = Some(format!("{label}: {}", diagnostic.message));
         self.cursor = self.offset_at_utf16(line, character);
+        self.open_diagnostic_peek(path, line as u32, character as u32);
         let index = positions
             .iter()
             .position(|item| *item == (line, character))
@@ -494,7 +482,7 @@ impl Model {
         self.cancel_document_symbols();
         self.cancel_signature_help();
         self.hover = None;
-        self.diagnostic_popup = None;
+        self.ui.diagnostic_peek = None;
         let Some(uri) = self.path.as_ref().map(|path| lsp_worker::file_uri(path)) else {
             return;
         };
@@ -552,7 +540,7 @@ impl Model {
     pub(crate) fn request_completion(&mut self) {
         self.cancel_completion();
         self.hover = None;
-        self.diagnostic_popup = None;
+        self.ui.diagnostic_peek = None;
         self.cancel_code_actions();
         let Some(uri) = self.path.as_ref().map(|path| lsp_worker::file_uri(path)) else {
             return;
@@ -577,7 +565,7 @@ impl Model {
 
     pub(crate) fn request_definition(&mut self) {
         self.cancel_completion();
-        self.diagnostic_popup = None;
+        self.ui.diagnostic_peek = None;
         self.cancel_code_actions();
         let Some(uri) = self.path.as_ref().map(|path| lsp_worker::file_uri(path)) else {
             return;
@@ -601,7 +589,7 @@ impl Model {
 
     pub(crate) fn request_hover(&mut self) {
         self.cancel_completion();
-        self.diagnostic_popup = None;
+        self.ui.diagnostic_peek = None;
         self.cancel_code_actions();
         let Some(uri) = self.path.as_ref().map(|path| lsp_worker::file_uri(path)) else {
             return;
@@ -623,7 +611,7 @@ impl Model {
         self.cancel_completion();
         self.cancel_code_actions();
         self.hover = None;
-        self.diagnostic_popup = None;
+        self.ui.diagnostic_peek = None;
         self.ui.input_mode = InputMode::Rename {
             name: String::new(),
         };
@@ -658,7 +646,7 @@ impl Model {
         self.cancel_completion();
         self.cancel_code_actions();
         self.hover = None;
-        self.diagnostic_popup = None;
+        self.ui.diagnostic_peek = None;
         let Some(path) = self.path.clone() else {
             return;
         };
@@ -726,7 +714,7 @@ impl Model {
         self.cancel_document_symbols();
         self.cancel_workspace_symbols();
         self.hover = None;
-        self.diagnostic_popup = None;
+        self.ui.diagnostic_peek = None;
         let Some(path) = self.path.as_ref() else {
             return;
         };
@@ -860,7 +848,7 @@ impl Model {
         self.cancel_code_actions();
         self.cancel_document_symbols();
         self.hover = None;
-        self.diagnostic_popup = None;
+        self.ui.diagnostic_peek = None;
         let Some(uri) = self.path.as_ref().map(|path| lsp_worker::file_uri(path)) else {
             return;
         };
@@ -905,7 +893,7 @@ impl Model {
             .retain(|_, kind| *kind != LspRequestKind::Formatting);
         self.prune_edit_requests();
         self.hover = None;
-        self.diagnostic_popup = None;
+        self.ui.diagnostic_peek = None;
         let Some(path) = self.path.clone() else {
             return;
         };

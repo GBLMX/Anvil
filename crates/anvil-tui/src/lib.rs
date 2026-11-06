@@ -53,6 +53,7 @@ mod inlay_hints;
 pub mod lsp;
 mod lsp_ui;
 mod modal;
+mod overlays;
 mod plugin_activation;
 mod plugin_discovery;
 mod plugin_document;
@@ -446,7 +447,6 @@ pub struct Model {
     next_lsp_request: u64,
     completion: Option<CompletionState>,
     hover: Option<String>,
-    diagnostic_popup: Option<String>,
     code_actions: Option<CodeActionState>,
     document_symbols: Option<SymbolState>,
     signature_help: Option<SignatureHelpState>,
@@ -561,7 +561,6 @@ impl Model {
             next_lsp_request: 2,
             completion: None,
             hover: None,
-            diagnostic_popup: None,
             code_actions: None,
             document_symbols: None,
             signature_help: None,
@@ -1079,7 +1078,7 @@ impl Model {
         self.clear_lsp_requests();
         self.completion = None;
         self.hover = None;
-        self.diagnostic_popup = None;
+        self.ui.diagnostic_peek = None;
         self.code_actions = None;
         self.document_symbols = None;
     }
@@ -1200,6 +1199,7 @@ impl Model {
                     "lsp diagnostics: {}",
                     self.diagnostics.values().map(Vec::len).sum::<usize>()
                 );
+                self.rebuild_problems();
             }
             LspEvent::Crashed(error) => {
                 self.lsp_workers.remove(key);
@@ -1216,6 +1216,11 @@ impl Model {
                         self.start_lsp();
                     } else {
                         self.status = format!("E: lsp crashed: {error}");
+                        self.notify(
+                            anvil_session::ui::NotificationSeverity::Error,
+                            "lsp",
+                            format!("crashed: {error}"),
+                        );
                     }
                 }
             }
@@ -1228,11 +1233,21 @@ impl Model {
                     self.lsp_config = None;
                     self.clear_lsp_ui();
                     self.status = format!("E: lsp startup failed: {error}");
+                    self.notify(
+                        anvil_session::ui::NotificationSeverity::Error,
+                        "lsp",
+                        format!("startup failed: {error}"),
+                    );
                 }
             }
             LspEvent::Error(error) => {
                 if active {
                     self.status = format!("E: lsp: {error}");
+                    self.notify(
+                        anvil_session::ui::NotificationSeverity::Error,
+                        "lsp",
+                        error.clone(),
+                    );
                 }
             }
             LspEvent::Log(line) => {
@@ -1388,7 +1403,8 @@ impl Model {
             || self.code_actions.is_some()
             || self.completion.is_some()
             || self.hover.is_some()
-            || self.diagnostic_popup.is_some()
+            || self.ui.diagnostic_peek.is_some()
+            || self.ui.problems.visible
             || self.help_back.is_some();
         if overlay && contexts.last() != Some(&KeymapContext::Popup) {
             contexts.push(KeymapContext::Popup);

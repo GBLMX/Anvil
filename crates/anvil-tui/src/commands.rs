@@ -142,6 +142,7 @@ impl Model {
             ("w", path) => self.queue_effect(Effect::SaveAs(path.into())),
             ("wa", "") => self.queue_effect(Effect::SaveAll),
             ("e", path) => self.queue_effect(Effect::Open(path.into())),
+            ("problems", "") => self.toggle_problems(),
             ("bn", "") => self.switch_buffer(1),
             ("bp", "") => self.switch_buffer(-1),
             ("new", "") => self.new_buffer(),

@@ -9,6 +9,14 @@ post-`0.5.0` feature line.
 ## [Unreleased]
 
 
+## [0.5.7] - 2026-11-06
+
+### Added
+- Bounded, deduplicating notifications; non-blocking progress with completion,
+  failure, and cancellation; a problems panel sourced from the existing LSP
+  cache; and Diagnostic Peek v2 with merged same-line diagnostics, related
+  locations, revision pruning, focus restoration, and narrow-viewport fallback.
+
 ## [0.5.6] - 2026-11-06
 
 ### Added

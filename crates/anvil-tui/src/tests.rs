@@ -46,6 +46,22 @@ fn command(model: &mut Model, text: &str) {
     handle_event(model, key(KeyCode::Enter));
 }
 
+fn diagnostic(line: u32, character: u32, message: &str) -> crate::lsp::Diagnostic {
+    crate::lsp::Diagnostic {
+        range: crate::lsp::Range {
+            start: crate::lsp::Position { line, character },
+            end: crate::lsp::Position {
+                line,
+                character: character + 1,
+            },
+        },
+        severity: Some(1),
+        message: message.to_owned(),
+        source: Some("test".to_owned()),
+        extra: serde_json::Map::new(),
+    }
+}
+
 #[test]
 fn renders_start_dashboard_for_an_empty_launch() {
     let mut model = Model::new(EditorState::from_text(""), None);
@@ -368,6 +384,46 @@ fn fuzzy_preview_stacks_below_list_on_narrow_terminals() {
     assert!(rendered.contains("src/main.rs"), "{rendered}");
     assert!(rendered.contains("Preview"), "{rendered}");
     assert!(rendered.contains("fn main() {}"), "{rendered}");
+}
+
+#[test]
+fn notification_progress_and_problems_render_without_focus_change() {
+    let mut model = Model::new(EditorState::from_text("x"), None);
+    model.welcome = false;
+    model.notify(
+        anvil_session::ui::NotificationSeverity::Info,
+        "test",
+        "hello",
+    );
+    let progress = model.ui.progress.start("copy", "working", true);
+    model
+        .diagnostics
+        .insert(PathBuf::from("diag.rs"), vec![diagnostic(0, 0, "problem")]);
+    model.rebuild_problems();
+    model.ui.problems.visible = true;
+    let focus = model.ui.focus;
+
+    let render = |model: &Model| {
+        let backend = TestBackend::new(60, 16);
+        let mut terminal = Terminal::new(backend).expect("terminal");
+        terminal.draw(|frame| view(model, frame)).expect("draw");
+        terminal
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .map(|cell| cell.symbol())
+            .collect::<String>()
+    };
+    let rendered = render(&model);
+    assert!(rendered.contains("Notifications"), "{rendered}");
+    assert!(rendered.contains("Progress"), "{rendered}");
+    assert!(rendered.contains("Problems"), "{rendered}");
+    assert_eq!(model.ui.focus, focus);
+
+    model.ui.progress.finish(progress);
+    let rendered = render(&model);
+    assert!(!rendered.contains("Progress"), "{rendered}");
 }
 
 #[test]
@@ -1927,20 +1983,101 @@ fn diagnostic_jump_cycles_between_lines() {
     assert_eq!(model.cursor, model.offset_at_utf16(2, 0));
     assert!(
         model
-            .diagnostic_popup
-            .as_deref()
-            .is_some_and(|text| text.contains("second"))
+            .ui
+            .diagnostic_peek
+            .as_ref()
+            .is_some_and(|peek| peek.diagnostics[0].message.contains("second"))
     );
     model.jump_diagnostic(false);
     assert_eq!(model.cursor, 0);
     assert!(
         model
-            .diagnostic_popup
-            .as_deref()
-            .is_some_and(|text| text.contains("first"))
+            .ui
+            .diagnostic_peek
+            .as_ref()
+            .is_some_and(|peek| peek.diagnostics[0].message.contains("first"))
     );
     model.jump_diagnostic(false);
     assert_eq!(model.cursor, model.offset_at_utf16(2, 0));
+}
+
+#[test]
+fn diagnostic_peek_merges_same_line_and_restores_focus() {
+    let mut model = Model::new(
+        EditorState::from_text("one\ntwo"),
+        Some(PathBuf::from("diag.rs")),
+    );
+    let mut first = diagnostic(0, 0, "first");
+    first.extra.insert(
+        "relatedInformation".to_owned(),
+        serde_json::json!([{
+            "message": "see also",
+            "location": {
+                "uri": "file:///tmp/related.rs",
+                "range": {"start": {"line": 1, "character": 0}, "end": {"line": 1, "character": 1}}
+            }
+        }]),
+    );
+    model.diagnostics.insert(
+        PathBuf::from("diag.rs"),
+        vec![first, diagnostic(0, 2, "second")],
+    );
+    model.ui.focus.split = true;
+    model.jump_diagnostic(true);
+    let peek = model.ui.diagnostic_peek.as_ref().expect("peek");
+    assert_eq!(peek.diagnostics.len(), 2);
+    assert!(peek.diagnostics[0].related[0].contains("related.rs"));
+    let backend = TestBackend::new(30, 8);
+    let mut terminal = Terminal::new(backend).expect("terminal");
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+    let rendered = terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect::<String>();
+    assert!(rendered.contains("Diagnostics"), "{rendered}");
+
+    assert!(model.ui.focus.split);
+
+    handle_event(&mut model, key(KeyCode::Esc));
+    assert!(model.ui.diagnostic_peek.is_none());
+    assert!(model.ui.focus.split);
+}
+
+#[test]
+fn diagnostic_peek_clears_on_revision_change() {
+    let mut model = Model::new(
+        EditorState::from_text("one"),
+        Some(PathBuf::from("diag.rs")),
+    );
+    model
+        .diagnostics
+        .insert(PathBuf::from("diag.rs"), vec![diagnostic(0, 0, "first")]);
+    model.jump_diagnostic(true);
+    assert!(model.ui.diagnostic_peek.is_some());
+    model.editor.insert(0, "x");
+    model.tick_status();
+    assert!(model.ui.diagnostic_peek.is_none());
+}
+
+#[test]
+fn problems_panel_jumps_to_selected_problem() {
+    let mut model = Model::new(
+        EditorState::from_text("one\ntwo"),
+        Some(PathBuf::from("diag.rs")),
+    );
+    model
+        .diagnostics
+        .insert(PathBuf::from("diag.rs"), vec![diagnostic(1, 1, "problem")]);
+    model.rebuild_problems();
+    model.ui.problems.visible = true;
+    model.ui.focus.tree = true;
+    model.jump_problem();
+    assert_eq!(model.cursor, model.offset_at_utf16(1, 1));
+    assert!(!model.ui.focus.tree);
+    assert!(!model.ui.problems.visible);
 }
 
 #[test]

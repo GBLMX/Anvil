@@ -29,7 +29,7 @@ impl Model {
         self.cancel_completion();
         self.clear_lsp_requests();
         self.hover = None;
-        self.diagnostic_popup = None;
+        self.ui.diagnostic_peek = None;
         self.code_actions = None;
         self.document_symbols = None;
         let Some(buffer) = self.buffers.get(index).cloned() else {
