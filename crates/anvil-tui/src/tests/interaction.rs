@@ -622,6 +622,100 @@ fn lsp_settings_cover_builtin_languages() {
     assert!(lsp_settings(Path::new("README.txt")).is_none());
 }
 
+#[test]
+fn theme_command_switches_and_lists_builtins() {
+    assert_eq!(theme::name(), "anvil-dark");
+    let mut model = Model::new(EditorState::from_text("alpha"), None);
+    model.execute_command("theme one-dark");
+    assert_eq!(theme::name(), "one-dark");
+    assert!(model.status.contains("one-dark"));
+    model.execute_command("theme missing");
+    assert_eq!(theme::name(), "one-dark");
+    assert!(model.status.starts_with("E:"));
+    model.execute_command("theme");
+    assert!(model.status.contains("solarized-light"));
+    model.execute_command("theme anvil-dark");
+    assert_eq!(theme::name(), "anvil-dark");
+}
+
+#[test]
+fn command_palette_previews_and_applies_themes() {
+    let mut model = Model::new(EditorState::from_text("alpha"), None);
+    model.open_command_palette();
+    model.command_palette.as_mut().expect("palette").query = "solarized".to_owned();
+    model.refresh_command_palette();
+    assert_eq!(theme::name(), "solarized-light");
+    model.close_command_palette();
+    assert_eq!(theme::name(), "anvil-dark");
+    model.open_command_palette();
+    model.command_palette.as_mut().expect("palette").query = "solarized".to_owned();
+    model.refresh_command_palette();
+    handle_event(&mut model, key(KeyCode::Enter));
+    assert_eq!(theme::name(), "solarized-light");
+    assert!(model.command_palette.is_none());
+    model.execute_command("theme anvil-dark");
+}
+
+#[test]
+fn theme_auto_and_save_persist_choice() {
+    let directory = std::env::temp_dir().join(format!("anvil-theme-{}", std::process::id()));
+    std::fs::create_dir_all(&directory).expect("temp dir");
+    let path = directory.join("settings.toml");
+    unsafe { std::env::set_var("ANVIL_SETTINGS", &path) };
+    let mut model = Model::new(EditorState::from_text("alpha"), None);
+    model.execute_command("theme nord");
+    model.execute_command("theme-save");
+    assert!(model.status.contains("theme saved"));
+    assert!(
+        std::fs::read_to_string(&path)
+            .expect("settings")
+            .contains("name = \"nord\"")
+    );
+    model.execute_command("theme-auto nord solarized-light");
+    assert!(model.status.contains("auto"));
+    model.execute_command("theme-save");
+    let text = std::fs::read_to_string(&path).expect("settings");
+    assert!(text.contains("mode = \"auto\""));
+    assert!(text.contains("dark = \"nord\""));
+    unsafe { std::env::remove_var("ANVIL_SETTINGS") };
+    std::fs::remove_dir_all(directory).expect("cleanup");
+    model.execute_command("theme anvil-dark");
+}
+
+#[test]
+fn typescript_uses_configured_tsserver() {
+    let directory = std::env::temp_dir().join(format!("anvil-ts-{}", std::process::id()));
+    std::fs::create_dir_all(&directory).expect("temp dir");
+    let tsserver = directory.join("tsserver.js");
+    std::fs::write(&tsserver, "").expect("tsserver");
+    unsafe { std::env::set_var("ANVIL_TSSERVER", &tsserver) };
+    let settings = lsp_settings(Path::new("main.ts")).expect("typescript");
+    unsafe { std::env::remove_var("ANVIL_TSSERVER") };
+    let project = directory.join("project");
+    let project_tsserver = project.join("node_modules/typescript/lib/tsserver.js");
+    std::fs::create_dir_all(project_tsserver.parent().expect("tsserver parent"))
+        .expect("project tsserver dir");
+    std::fs::write(&project_tsserver, "").expect("project tsserver");
+    let source = project.join("src/main.ts");
+    std::fs::create_dir_all(source.parent().expect("source parent")).expect("source dir");
+    unsafe { std::env::set_var("ANVIL_LSP_TYPESCRIPT", "typescript-language-server") };
+    let project_settings = lsp_settings(&source).expect("typescript");
+    unsafe { std::env::remove_var("ANVIL_LSP_TYPESCRIPT") };
+    let project_options = project_settings
+        .initialization_options
+        .expect("project tsserver options");
+    assert_eq!(
+        project_options["tsserver"]["path"],
+        project_tsserver.to_string_lossy().as_ref()
+    );
+    let options = settings.initialization_options.expect("tsserver options");
+    assert_eq!(
+        options["tsserver"]["path"],
+        tsserver.to_string_lossy().as_ref()
+    );
+    std::fs::remove_dir_all(directory).expect("cleanup");
+}
+
 #[cfg(target_os = "linux")]
 #[test]
 fn managed_state_errors_are_visible_and_fail_closed() {

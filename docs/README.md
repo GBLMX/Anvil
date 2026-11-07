@@ -57,6 +57,7 @@ Cross-cutting tracks that do not jump the queue:
 | [Linux platform](linux-platform-plan.md) | seccomp/cgroup, atomic install, watcher measurements | planned |
 | [Command architecture](command-architecture-plan.md) | command registry, keymap trie, effects | partially implemented |
 | [Keymap configuration](keymap.md) | TOML overrides and key syntax | current |
+| [Theme and settings](theme-settings-plan.md) | built-in semantic themes, selection, deferred Settings overlay | active; theme core next |
 | [Deployment](deployment.md) | gateway, exec-runner, cgroup boundaries | current |
 
 ## Historical plans

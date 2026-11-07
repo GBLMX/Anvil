@@ -35,11 +35,19 @@ Supported files start their language server automatically; each
 `(tool, language_id)` keeps its own worker while the session is open.
 Language servers are not bundled; install them on `PATH`.
 
-- TypeScript support requires a project-local compiler: run
-  `npm install -D typescript` (or `pnpm add -D typescript`) in the project.
+- TypeScript prefers a project-local compiler (`npm install -D typescript`).
+  Without one, the global `tsc` installation is used; override the compiler
+  path with `ANVIL_TSSERVER=/path/to/tsserver.js`.
 - C/C++ support works best with a compilation database: `bear -- make`, or
   configure CMake with `-DCMAKE_EXPORT_COMPILE_COMMANDS=ON`. Without it, clangd
   may report unresolved includes.
+
+Built-in semantic themes are `anvil-dark`, `one-dark`, `gruvbox-dark`,
+`nord`, `catppuccin-mocha`, and `solarized-light`. Use `:theme` to list them,
+`:theme <name>` to switch, and `:theme-auto [dark] [light]` for background
+matching. `:theme-save` writes `$XDG_CONFIG_HOME/anvil/settings.toml`
+(override with `ANVIL_SETTINGS`); `ANVIL_THEME` selects the startup theme.
+The command palette (`Space p`) lists themes and previews them while arrowing.
 
 The plugin-host path has a sandboxed host with token-FD delivery,
 `close_range`, `no_new_privs`, Landlock read/no-exec rules, native-ABI seccomp

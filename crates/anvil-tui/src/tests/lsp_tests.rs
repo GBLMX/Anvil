@@ -661,7 +661,7 @@ fn diagnostics_underline_matching_line() {
         .buffer()
         .content()
         .iter()
-        .any(|cell| cell.fg == theme::ERROR);
+        .any(|cell| cell.fg == theme::error());
     assert!(red, "diagnostic line was not rendered red");
 }
 

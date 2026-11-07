@@ -158,11 +158,11 @@ fn buffer_bar_line(model: &Model, width: u16) -> Line<'static> {
     }
     let mut spans = Vec::new();
     if start > 0 {
-        spans.push(Span::styled("‹", theme::panel().fg(theme::MUTED)));
+        spans.push(Span::styled("‹", theme::panel().fg(theme::muted())));
     }
     for (index, (label, style)) in tabs.iter().enumerate().take(end).skip(start) {
         if index > start {
-            spans.push(Span::styled("│", theme::panel().fg(theme::BORDER)));
+            spans.push(Span::styled("│", theme::panel().fg(theme::border_color())));
         }
         let label = if UnicodeWidthStr::width(label.as_str()) > width {
             crate::status_line::middle_ellipsis(label, width)
@@ -172,7 +172,7 @@ fn buffer_bar_line(model: &Model, width: u16) -> Line<'static> {
         spans.push(Span::styled(label, *style));
     }
     if end < tabs.len() {
-        spans.push(Span::styled("›", theme::panel().fg(theme::MUTED)));
+        spans.push(Span::styled("›", theme::panel().fg(theme::muted())));
     }
     Line::from(spans)
 }
@@ -187,12 +187,12 @@ fn notification_lines(model: &Model) -> Vec<Line<'static>> {
         .take(5)
         .map(|notification| {
             let (marker, color) = match notification.severity {
-                anvil_session::ui::NotificationSeverity::Error => ("!", theme::ERROR),
+                anvil_session::ui::NotificationSeverity::Error => ("!", theme::error()),
                 anvil_session::ui::NotificationSeverity::Warning => (
                     if icon_theme::ascii_mode() { "!" } else { "▲" },
-                    theme::WARNING,
+                    theme::warning(),
                 ),
-                anvil_session::ui::NotificationSeverity::Info => ("i", theme::ACCENT),
+                anvil_session::ui::NotificationSeverity::Info => ("i", theme::accent()),
             };
             let suffix = if notification.count > 1 {
                 format!(" ×{}", notification.count)
@@ -229,7 +229,7 @@ fn progress_lines(model: &Model) -> Vec<Line<'static>> {
             };
             Line::styled(
                 format!("{fraction}{}: {}{cancel}", item.title, item.message),
-                theme::panel().fg(theme::ACCENT),
+                theme::panel().fg(theme::accent()),
             )
         })
         .collect()
@@ -244,7 +244,7 @@ fn problem_lines(model: &Model, width: usize) -> (Vec<Line<'static>>, Option<usi
             current_path = Some(problem.path.clone());
             lines.push(Line::styled(
                 problem.path.display().to_string(),
-                theme::panel().fg(theme::ACCENT),
+                theme::panel().fg(theme::accent()),
             ));
         }
         let severity = match problem.severity {
@@ -318,9 +318,9 @@ fn diagnostic_peek_lines(peek: &anvil_session::ui::DiagnosticPeek) -> Vec<Line<'
         lines.push(Line::styled(
             format!("{severity} {source} {code}"),
             theme::panel().fg(match diagnostic.severity {
-                Some(1) => theme::ERROR,
-                Some(2) => theme::WARNING,
-                _ => theme::ACCENT,
+                Some(1) => theme::error(),
+                Some(2) => theme::warning(),
+                _ => theme::accent(),
             }),
         ));
         for line in diagnostic.message.lines() {
@@ -329,7 +329,7 @@ fn diagnostic_peek_lines(peek: &anvil_session::ui::DiagnosticPeek) -> Vec<Line<'
         for related in &diagnostic.related {
             lines.push(Line::styled(
                 format!("  ↳ {related}"),
-                theme::panel().fg(theme::MUTED),
+                theme::panel().fg(theme::muted()),
             ));
         }
     }
@@ -381,7 +381,7 @@ pub(crate) fn apply_diagnostic_underlines(spans: &mut Vec<Span<'_>>, ranges: &[(
                 .any(|(start, end)| column < *end && column + width.max(1) > *start);
             let style = if underlined {
                 span.style
-                    .fg(theme::ERROR)
+                    .fg(theme::error())
                     .add_modifier(Modifier::UNDERLINED)
             } else {
                 span.style
@@ -520,26 +520,26 @@ fn syntax_style(class: SyntaxClass) -> Style {
         return theme::code_block();
     }
     let color = match class {
-        SyntaxClass::Keyword => theme::SYNTAX_KEYWORD,
-        SyntaxClass::String => theme::SYNTAX_STRING,
-        SyntaxClass::Comment => theme::SYNTAX_COMMENT,
-        SyntaxClass::Number => theme::SYNTAX_NUMBER,
-        SyntaxClass::Function => theme::SYNTAX_FUNCTION,
-        SyntaxClass::Type => theme::SYNTAX_TYPE,
-        SyntaxClass::Property => theme::SYNTAX_PROPERTY,
-        SyntaxClass::Constant => theme::SYNTAX_CONSTANT,
-        SyntaxClass::Heading => theme::SYNTAX_HEADING,
-        SyntaxClass::Link => theme::SYNTAX_LINK,
-        SyntaxClass::Code => theme::SYNTAX_CODE,
-        SyntaxClass::InlineCode => theme::SYNTAX_CODE,
-        SyntaxClass::Emphasis => theme::SYNTAX_EMPHASIS,
-        SyntaxClass::List => theme::SYNTAX_LIST,
-        SyntaxClass::Quote => theme::SYNTAX_QUOTE,
-        SyntaxClass::Table => theme::SYNTAX_TABLE,
-        SyntaxClass::CodeBlock => theme::SYNTAX_CODE,
+        SyntaxClass::Keyword => theme::syntax_keyword(),
+        SyntaxClass::String => theme::syntax_string(),
+        SyntaxClass::Comment => theme::syntax_comment(),
+        SyntaxClass::Number => theme::syntax_number(),
+        SyntaxClass::Function => theme::syntax_function(),
+        SyntaxClass::Type => theme::syntax_type(),
+        SyntaxClass::Property => theme::syntax_property(),
+        SyntaxClass::Constant => theme::syntax_constant(),
+        SyntaxClass::Heading => theme::syntax_heading(),
+        SyntaxClass::Link => theme::syntax_link(),
+        SyntaxClass::Code => theme::syntax_code(),
+        SyntaxClass::InlineCode => theme::syntax_code(),
+        SyntaxClass::Emphasis => theme::syntax_emphasis(),
+        SyntaxClass::List => theme::syntax_list(),
+        SyntaxClass::Quote => theme::syntax_quote(),
+        SyntaxClass::Table => theme::syntax_table(),
+        SyntaxClass::CodeBlock => theme::syntax_code(),
     };
     if class == SyntaxClass::InlineCode {
-        return Style::default().fg(color).bg(theme::CODE_BLOCK_BG);
+        return Style::default().fg(color).bg(theme::code_block_bg());
     }
     Style::default().fg(color)
 }
@@ -589,7 +589,7 @@ fn fuzzy_path_line(path: &str, query: &str, max_width: usize, selected: bool) ->
         theme::panel()
     };
     let icon = icon_theme::icon_for(path)
-        .and_then(|icon| icon_theme::icon_text(icon).map(|text| (text, icon.color)));
+        .and_then(|icon| icon_theme::icon_text(icon).map(|text| (text, (icon.color)())));
     let icon_width = icon
         .as_ref()
         .map(|(text, _)| UnicodeWidthStr::width(text.as_str()))
@@ -635,13 +635,13 @@ fn fuzzy_preview_lines(model: &Model) -> Vec<Line<'static>> {
     if preview.loading {
         return vec![Line::styled(
             "loading preview…",
-            theme::panel().fg(theme::MUTED),
+            theme::panel().fg(theme::muted()),
         )];
     }
     if let Some(message) = &preview.message {
         return vec![Line::styled(
             message.clone(),
-            theme::panel().fg(theme::ERROR),
+            theme::panel().fg(theme::error()),
         )];
     }
     let mut lines: Vec<Line<'static>> = preview
@@ -652,7 +652,7 @@ fn fuzzy_preview_lines(model: &Model) -> Vec<Line<'static>> {
     if preview.truncated {
         lines.push(Line::styled(
             "… preview truncated",
-            theme::panel().fg(theme::MUTED),
+            theme::panel().fg(theme::muted()),
         ));
     }
     lines

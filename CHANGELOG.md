@@ -28,6 +28,12 @@ post-`0.5.0` feature line.
   rollback, and store-size display.
 - `:pkg install-file` local signed-package inspection/install and a separate
   fetch-only installer gateway role.
+- Host stop/revoke before package update, with permission changes clearing
+  grants and disabling the updated plugin.
+- Semantic built-in themes (`anvil-dark`, `one-dark`, `gruvbox-dark`, `nord`,
+  `catppuccin-mocha`, `solarized-light`), command-palette preview/selection,
+  `:theme` / `:theme-auto`, `:theme-save` persistence in `settings.toml`, and
+  `ANVIL_THEME` startup selection.
 
 ### Changed
 - Split TUI runtime/layout/plugin, renderer, LSP settings/responses, and tree
@@ -39,6 +45,8 @@ post-`0.5.0` feature line.
 - `HostSession` now receives the editor RPC socket from the supervisor and
   passes `--editor-socket` to plugin hosts, so production `editor.*` calls
   reach the active buffer instead of returning `-32008`.
+- TypeScript LSP startup now passes a `tsserver.path`, using the project
+  compiler, the global `tsc` installation, or `ANVIL_TSSERVER`.
 - Inlay hints are requested only after the server advertises
   `inlayHintProvider`, avoiding `Method not found` noise from Markdown and
   other servers without that capability.

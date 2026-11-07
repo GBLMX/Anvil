@@ -49,6 +49,7 @@ pub struct LspConfig {
     pub args: Vec<String>,
     pub language_id: String,
     pub root_markers: Vec<String>,
+    pub initialization_options: Option<serde_json::Value>,
 }
 
 pub struct LspWorker {
@@ -71,6 +72,7 @@ impl LspWorker {
             args,
             language_id,
             root_markers,
+            initialization_options,
         } = config;
         std::thread::spawn(move || {
             if let Err(error) = client.lsp_start(&tool, &args) {
@@ -79,7 +81,7 @@ impl LspWorker {
             }
             let uri = file_uri(&path);
             let root = project_root(&workspace, &path, &root_markers);
-            let initialize = serde_json::json!({
+            let mut initialize = serde_json::json!({
                 "jsonrpc": "2.0",
                 "id": INITIALIZE_ID,
                 "method": "initialize",
@@ -109,6 +111,9 @@ impl LspWorker {
                     }
                 }
             });
+            if let Some(options) = initialization_options {
+                initialize["params"]["initializationOptions"] = options;
+            }
             if let Err(error) = send(&mut client, &initialize) {
                 let _ = sender.send(LspEvent::Crashed(error));
                 return;
@@ -544,6 +549,7 @@ mod tests {
                 tool: "rust-analyzer".to_owned(),
                 args: Vec::new(),
                 language_id: "rust".to_owned(),
+                initialization_options: None,
                 root_markers: vec!["Cargo.toml".to_owned()],
             },
             PathBuf::from("/tmp"),

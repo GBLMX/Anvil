@@ -7,7 +7,7 @@ use unicode_width::UnicodeWidthStr;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct Icon {
     pub(crate) glyph: &'static str,
-    pub(crate) color: Color,
+    pub(crate) color: fn() -> Color,
 }
 
 struct IconRule {
@@ -20,35 +20,35 @@ const RULES: &[IconRule] = &[
         name: "Cargo.toml",
         icon: Icon {
             glyph: "R",
-            color: theme::SYNTAX_TYPE,
+            color: theme::syntax_type,
         },
     },
     IconRule {
         name: "Cargo.lock",
         icon: Icon {
             glyph: "L",
-            color: theme::SYNTAX_CONSTANT,
+            color: theme::syntax_constant,
         },
     },
     IconRule {
         name: "Dockerfile",
         icon: Icon {
             glyph: "D",
-            color: theme::ACCENT,
+            color: theme::accent,
         },
     },
     IconRule {
         name: "Makefile",
         icon: Icon {
             glyph: "M",
-            color: theme::SYNTAX_PROPERTY,
+            color: theme::syntax_property,
         },
     },
     IconRule {
         name: "LICENSE",
         icon: Icon {
             glyph: "L",
-            color: theme::WARNING,
+            color: theme::warning,
         },
     },
 ];
@@ -58,105 +58,105 @@ const EXTENSIONS: &[(&str, Icon)] = &[
         "rs",
         Icon {
             glyph: "R",
-            color: theme::SYNTAX_TYPE,
+            color: theme::syntax_type,
         },
     ),
     (
         "toml",
         Icon {
             glyph: "T",
-            color: theme::SYNTAX_PROPERTY,
+            color: theme::syntax_property,
         },
     ),
     (
         "md",
         Icon {
             glyph: "M",
-            color: theme::SYNTAX_LINK,
+            color: theme::syntax_link,
         },
     ),
     (
         "json",
         Icon {
             glyph: "J",
-            color: theme::SYNTAX_CONSTANT,
+            color: theme::syntax_constant,
         },
     ),
     (
         "yaml",
         Icon {
             glyph: "Y",
-            color: theme::SYNTAX_CONSTANT,
+            color: theme::syntax_constant,
         },
     ),
     (
         "yml",
         Icon {
             glyph: "Y",
-            color: theme::SYNTAX_CONSTANT,
+            color: theme::syntax_constant,
         },
     ),
     (
         "sh",
         Icon {
             glyph: "$",
-            color: theme::SYNTAX_FUNCTION,
+            color: theme::syntax_function,
         },
     ),
     (
         "py",
         Icon {
             glyph: "P",
-            color: theme::SYNTAX_KEYWORD,
+            color: theme::syntax_keyword,
         },
     ),
     (
         "js",
         Icon {
             glyph: "J",
-            color: theme::SYNTAX_CONSTANT,
+            color: theme::syntax_constant,
         },
     ),
     (
         "jsx",
         Icon {
             glyph: "J",
-            color: theme::SYNTAX_CONSTANT,
+            color: theme::syntax_constant,
         },
     ),
     (
         "ts",
         Icon {
             glyph: "T",
-            color: theme::SYNTAX_LINK,
+            color: theme::syntax_link,
         },
     ),
     (
         "tsx",
         Icon {
             glyph: "T",
-            color: theme::SYNTAX_LINK,
+            color: theme::syntax_link,
         },
     ),
     (
         "html",
         Icon {
             glyph: "<",
-            color: theme::SYNTAX_PROPERTY,
+            color: theme::syntax_property,
         },
     ),
     (
         "css",
         Icon {
             glyph: "#",
-            color: theme::SYNTAX_LINK,
+            color: theme::syntax_link,
         },
     ),
     (
         "lock",
         Icon {
             glyph: "L",
-            color: theme::SYNTAX_CONSTANT,
+            color: theme::syntax_constant,
         },
     ),
 ];
@@ -208,21 +208,21 @@ mod tests {
     fn icon_cells_respect_display_width() {
         let single = icon_text(Icon {
             glyph: "R",
-            color: theme::TEXT,
+            color: theme::text_color,
         })
         .expect("single width");
         assert_eq!(UnicodeWidthStr::width(single.as_str()), 2);
 
         let wide = icon_text(Icon {
             glyph: "界",
-            color: theme::TEXT,
+            color: theme::text_color,
         })
         .expect("double width");
         assert_eq!(UnicodeWidthStr::width(wide.as_str()), 2);
 
         let ambiguous = icon_text(Icon {
             glyph: "·",
-            color: theme::TEXT,
+            color: theme::text_color,
         })
         .expect("ambiguous width");
         assert!(UnicodeWidthStr::width(ambiguous.as_str()) <= 2);
@@ -230,7 +230,7 @@ mod tests {
         assert!(
             icon_text(Icon {
                 glyph: "abcd",
-                color: theme::TEXT,
+                color: theme::text_color,
             })
             .is_none()
         );
@@ -240,7 +240,7 @@ mod tests {
     fn ascii_fallback_uses_text_labels() {
         let icon = Icon {
             glyph: "R",
-            color: theme::TEXT,
+            color: theme::text_color,
         };
         assert_eq!(icon_text_with(icon, true).as_deref(), Some("[R] "));
     }

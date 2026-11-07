@@ -144,7 +144,7 @@ fn inlay_label(value: &serde_json::Value) -> String {
 }
 
 fn insert_virtual_span(spans: &mut Vec<Span<'_>>, at: usize, label: String) {
-    let style = Style::default().fg(theme::MUTED);
+    let style = Style::default().fg(theme::muted());
     let mut offset = 0;
     for index in 0..spans.len() {
         let length = spans[index].content.len();

@@ -50,14 +50,14 @@ impl Model {
             };
             let marker = self.git_marker(line_number).unwrap_or(' ');
             let number = format!("{display:>digits$} ");
-            let mut style = Style::default().fg(theme::MUTED);
+            let mut style = Style::default().fg(theme::muted());
             if Some(line_number) == current {
                 style = theme::current_line();
             }
             let marker_style = match marker {
-                '+' => Style::default().fg(theme::SUCCESS),
-                '-' => Style::default().fg(theme::ERROR),
-                '~' => Style::default().fg(theme::WARNING),
+                '+' => Style::default().fg(theme::success()),
+                '-' => Style::default().fg(theme::error()),
+                '~' => Style::default().fg(theme::warning()),
                 _ => Style::default(),
             };
             lines.push(Line::from(vec![
@@ -141,7 +141,7 @@ impl Model {
             if diagnostic && full_ranges.is_empty() && hscroll == 0 && render_start == start {
                 rendered = rendered.style(
                     Style::default()
-                        .fg(theme::ERROR)
+                        .fg(theme::error())
                         .add_modifier(Modifier::UNDERLINED),
                 );
             }

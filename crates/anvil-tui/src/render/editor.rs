@@ -26,40 +26,42 @@ pub fn view(model: &Model, frame: &mut Frame) {
         title
     };
     let (mode_text, mode_color, status) = match &model.ui.input_mode {
-        InputMode::Rename { name } => (" REN ", theme::MAGENTA, format!("rename> {name}")),
-        InputMode::CommandLine { buffer } => (" CMD ", theme::WARNING, format!(":{buffer}")),
-        InputMode::Search { query } => (" SRC ", theme::WARNING, model.search_status(query)),
-        InputMode::Insert => (" INS ", theme::SUCCESS, String::new()),
+        InputMode::Rename { name } => (" REN ", theme::magenta(), format!("rename> {name}")),
+        InputMode::CommandLine { buffer } => (" CMD ", theme::warning(), format!(":{buffer}")),
+        InputMode::Search { query } => (" SRC ", theme::warning(), model.search_status(query)),
+        InputMode::Insert => (" INS ", theme::success(), String::new()),
         InputMode::Create { name, kind, .. } => (
             if matches!(kind, CreateKind::Directory) {
                 " DIR "
             } else {
                 " NEW "
             },
-            theme::ACCENT,
+            theme::accent(),
             format!("new> {name}"),
         ),
-        InputMode::RenameEntry { name, .. } => (" REN ", theme::MAGENTA, format!("rename> {name}")),
+        InputMode::RenameEntry { name, .. } => {
+            (" REN ", theme::magenta(), format!("rename> {name}"))
+        }
         InputMode::TransferEntry {
             copy, directory, ..
         } => (
             if *copy { " CPY " } else { " MOV " },
-            theme::ACCENT,
+            theme::accent(),
             format!("{}>{directory}", if *copy { "copy" } else { "move" }),
         ),
         InputMode::ConfirmClose { index } => (
             " CLS ",
-            theme::WARNING,
+            theme::warning(),
             format!("Save {} before closing? [Y/n/c]", model.buffer_name(*index)),
         ),
         InputMode::ConfirmReload { path } => (
             " REL ",
-            theme::WARNING,
+            theme::warning(),
             format!("File changed on disk: {} [y/N]", path.display()),
         ),
         InputMode::ConfirmDelete { path } => (
             " DEL ",
-            theme::ERROR,
+            theme::error(),
             format!(
                 "delete {}? (y/N)",
                 path.file_name()
@@ -69,7 +71,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
         ),
         InputMode::Normal => (
             " NOR ",
-            theme::ACCENT,
+            theme::accent(),
             model.status_text(usize::from(area.width).saturating_sub(7)),
         ),
     };
@@ -142,14 +144,14 @@ pub fn view(model: &Model, frame: &mut Frame) {
             let style = if model.tree_selected == Some(index) {
                 theme::selected()
             } else if entry.is_dir {
-                Style::default().fg(theme::ACCENT).bg(theme::SURFACE)
+                Style::default().fg(theme::accent()).bg(theme::surface())
             } else {
                 theme::panel()
             };
             lines.push(Line::styled(text, style));
         }
         if lines.is_empty() {
-            lines.push(Line::styled("empty", theme::panel().fg(theme::MUTED)));
+            lines.push(Line::styled("empty", theme::panel().fg(theme::muted())));
         }
         let tree_title = if model.tree_stale {
             "Files · stale"
@@ -213,9 +215,9 @@ pub fn view(model: &Model, frame: &mut Frame) {
             }
         }
         let style = if model.current_line() == Some(line_number) {
-            Style::default().fg(theme::MUTED)
+            Style::default().fg(theme::muted())
         } else {
-            Style::default().fg(theme::DIM)
+            Style::default().fg(theme::dim())
         };
         for level in 1..=columns / 4 {
             let column = level * 4;
@@ -259,7 +261,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
                 .iter()
                 .map(|(key, action)| {
                     Line::from(vec![
-                        Span::styled(format!(" {key:<2}"), Style::default().fg(theme::ACCENT)),
+                        Span::styled(format!(" {key:<2}"), Style::default().fg(theme::accent())),
                         Span::raw(format!(" {action}")),
                     ])
                 })
@@ -300,7 +302,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
             frame.render_widget(
                 Paragraph::new("│").style(
                     Style::default()
-                        .fg(theme::ACCENT)
+                        .fg(theme::accent())
                         .add_modifier(Modifier::DIM),
                 ),
                 Rect {
@@ -335,7 +337,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
         let start = palette.selected.saturating_sub(visible.saturating_sub(1));
         let mut lines = vec![Line::styled(
             format!("> {}", palette.query),
-            Style::default().fg(theme::ACCENT),
+            Style::default().fg(theme::accent()),
         )];
         for (row, index) in palette
             .filtered
@@ -352,7 +354,10 @@ pub fn view(model: &Model, frame: &mut Frame) {
             lines.push(Line::styled(palette.items[*index].label.clone(), style));
         }
         if palette.filtered.is_empty() {
-            lines.push(Line::styled("no commands", theme::panel().fg(theme::MUTED)));
+            lines.push(Line::styled(
+                "no commands",
+                theme::panel().fg(theme::muted()),
+            ));
         }
         frame.render_widget(
             Paragraph::new(lines)
@@ -401,7 +406,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
         }
         lines.push(Line::styled(
             format!("> {}", fuzzy.query),
-            Style::default().fg(theme::ACCENT).bg(theme::SURFACE),
+            Style::default().fg(theme::accent()).bg(theme::surface()),
         ));
         frame.render_widget(
             Paragraph::new(lines)
@@ -493,7 +498,10 @@ pub fn view(model: &Model, frame: &mut Frame) {
         let mut lines: Vec<Line<'static>> =
             all_lines.into_iter().skip(start).take(visible).collect();
         if lines.is_empty() {
-            lines.push(Line::styled("no problems", theme::panel().fg(theme::MUTED)));
+            lines.push(Line::styled(
+                "no problems",
+                theme::panel().fg(theme::muted()),
+            ));
         }
         let popup = Rect {
             x: area.x + (area.width.saturating_sub(width)) / 2,
@@ -570,7 +578,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
             let style = if row == actions.selected {
                 theme::selected()
             } else if item.disabled.is_some() {
-                theme::panel().fg(theme::MUTED)
+                theme::panel().fg(theme::muted())
             } else {
                 theme::panel()
             };
@@ -637,14 +645,14 @@ pub fn view(model: &Model, frame: &mut Frame) {
         frame.render_widget(Clear, popup);
         let mut lines = vec![Line::styled(
             item.label.clone(),
-            Style::default().fg(theme::ACCENT).bg(theme::SURFACE),
+            Style::default().fg(theme::accent()).bg(theme::surface()),
         )];
         if !item.documentation.is_empty() {
             lines.push(Line::raw(item.documentation.clone()));
         }
         lines.push(Line::styled(
             format!("parameter {}", signature.active_parameter + 1),
-            Style::default().fg(theme::MUTED).bg(theme::SURFACE),
+            Style::default().fg(theme::muted()).bg(theme::surface()),
         ));
         frame.render_widget(
             Paragraph::new(lines)
@@ -671,7 +679,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
         let start = symbols.selected.saturating_sub(visible.saturating_sub(1));
         let mut lines = vec![Line::styled(
             format!("> {}", symbols.query),
-            Style::default().fg(theme::ACCENT).bg(theme::SURFACE),
+            Style::default().fg(theme::accent()).bg(theme::surface()),
         )];
         for (row, index) in symbols
             .filtered
@@ -696,7 +704,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
         if lines.len() == 1 {
             lines.push(Line::styled(
                 "no symbols",
-                Style::default().fg(theme::MUTED).bg(theme::SURFACE),
+                Style::default().fg(theme::muted()).bg(theme::surface()),
             ));
         }
         frame.render_widget(
@@ -787,43 +795,43 @@ fn render_welcome(frame: &mut Frame, area: Rect, model: &Model) {
         Line::from(vec![Span::styled(
             "ANVIL",
             Style::default()
-                .fg(theme::ACCENT)
-                .bg(theme::SURFACE)
+                .fg(theme::accent())
+                .bg(theme::surface())
                 .add_modifier(Modifier::BOLD),
         )]),
         Line::styled(
             "selection-first terminal editor",
-            Style::default().fg(theme::MUTED).bg(theme::SURFACE),
+            Style::default().fg(theme::muted()).bg(theme::surface()),
         ),
         Line::raw(""),
         Line::from(vec![
-            Span::styled("i", Style::default().fg(theme::ACCENT)),
+            Span::styled("i", Style::default().fg(theme::accent())),
             Span::raw("      insert"),
         ]),
         Line::from(vec![
-            Span::styled("Space f", Style::default().fg(theme::ACCENT)),
+            Span::styled("Space f", Style::default().fg(theme::accent())),
             Span::raw(" find file"),
         ]),
         Line::from(vec![
-            Span::styled("Space e", Style::default().fg(theme::ACCENT)),
+            Span::styled("Space e", Style::default().fg(theme::accent())),
             Span::raw(" file tree"),
         ]),
         Line::from(vec![
-            Span::styled("?", Style::default().fg(theme::ACCENT)),
+            Span::styled("?", Style::default().fg(theme::accent())),
             Span::raw("      help"),
         ]),
         Line::from(vec![
-            Span::styled(":q", Style::default().fg(theme::ACCENT)),
+            Span::styled(":q", Style::default().fg(theme::accent())),
             Span::raw("      quit"),
         ]),
         Line::raw(""),
         Line::styled(
             format!("workspace  {}", model.workspace.display()),
-            Style::default().fg(theme::MUTED).bg(theme::SURFACE),
+            Style::default().fg(theme::muted()).bg(theme::surface()),
         ),
         Line::styled(
             format!("version    {}", env!("CARGO_PKG_VERSION")),
-            Style::default().fg(theme::MUTED).bg(theme::SURFACE),
+            Style::default().fg(theme::muted()).bg(theme::surface()),
         ),
     ];
     lines.truncate(usize::from(height.saturating_sub(2)));
@@ -866,7 +874,7 @@ fn render_split_pane(frame: &mut Frame, area: Rect, buffer: &Buffer, is_active: 
         lines.push(Line::from(vec![
             Span::styled(
                 format!("{:>digits$} ", line_number + 1, digits = digits),
-                Style::default().fg(theme::MUTED),
+                Style::default().fg(theme::muted()),
             ),
             Span::raw(text),
         ]));

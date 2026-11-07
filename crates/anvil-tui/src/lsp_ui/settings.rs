@@ -1,12 +1,13 @@
 //! Language-server discovery and per-extension settings.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 pub(crate) struct LspSettings {
     pub(crate) tool: String,
     pub(crate) args: Vec<String>,
     pub(crate) language_id: String,
     pub(crate) root_markers: Vec<&'static str>,
     pub(crate) label: &'static str,
+    pub(crate) initialization_options: Option<serde_json::Value>,
 }
 
 pub(crate) fn lsp_settings(path: &Path) -> Option<LspSettings> {
@@ -233,12 +234,14 @@ pub(crate) fn lsp_settings(path: &Path) -> Option<LspSettings> {
             };
             (tool, args)
         })?;
+    let initialization_options = tsserver_options(&tool, path);
     Some(LspSettings {
         tool,
         args,
         language_id: language_id.to_owned(),
         root_markers,
         label,
+        initialization_options,
     })
 }
 
@@ -253,4 +256,33 @@ fn find_tool(candidates: &[&str]) -> Option<String> {
         }
     }
     candidates.first().map(|candidate| (*candidate).to_owned())
+}
+
+fn tsserver_options(tool: &str, source: &Path) -> Option<serde_json::Value> {
+    if !tool.ends_with("typescript-language-server") {
+        return None;
+    }
+    let path = std::env::var_os("ANVIL_TSSERVER")
+        .map(PathBuf::from)
+        .filter(|path| path.is_file())
+        .or_else(|| find_project_tsserver(source))
+        .or_else(find_tsserver)?;
+    Some(serde_json::json!({"tsserver": {"path": path}}))
+}
+
+fn find_project_tsserver(source: &Path) -> Option<PathBuf> {
+    let mut directory = source.parent()?;
+    loop {
+        let candidate = directory.join("node_modules/typescript/lib/tsserver.js");
+        if candidate.is_file() {
+            return Some(candidate);
+        }
+        directory = directory.parent()?;
+    }
+}
+fn find_tsserver() -> Option<PathBuf> {
+    let tsc = find_tool(&["tsc"])?;
+    let tsc = PathBuf::from(tsc).canonicalize().ok()?;
+    let candidate = tsc.parent()?.parent()?.join("lib/tsserver.js");
+    candidate.is_file().then_some(candidate)
 }

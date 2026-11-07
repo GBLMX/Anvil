@@ -75,6 +75,7 @@ mod keys;
 mod lsp_worker;
 mod render;
 mod theme;
+mod theme_config;
 use workspace_edit::WorkspaceEdit;
 mod workspace_edit;
 pub(crate) use keys::handle_event;
@@ -233,6 +234,7 @@ struct CommandPaletteItem {
     id: String,
     label: String,
     plugin_id: Option<String>,
+    theme: Option<&'static str>,
 }
 
 #[derive(Debug, Clone)]
@@ -241,6 +243,7 @@ struct CommandPaletteState {
     items: Vec<CommandPaletteItem>,
     filtered: Vec<usize>,
     selected: usize,
+    preview_original: Option<theme::Choice>,
 }
 
 #[derive(Debug, Clone)]
@@ -923,6 +926,7 @@ impl Model {
                 .iter()
                 .map(|marker| (*marker).to_owned())
                 .collect(),
+            initialization_options: settings.initialization_options,
         };
         match LspWorker::start(client, config, self.workspace.clone(), path, text) {
             Ok(worker) => {

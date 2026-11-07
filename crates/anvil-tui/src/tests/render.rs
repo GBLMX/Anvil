@@ -26,11 +26,11 @@ fn markdown_fenced_code_renders_a_full_width_background() {
         .iter()
         .position(|cell| cell.symbol() == "f")
         .expect("code text");
-    assert_eq!(cells[keyword].fg, theme::SYNTAX_KEYWORD);
-    assert_eq!(cells[keyword].bg, theme::CODE_BLOCK_BG);
+    assert_eq!(cells[keyword].fg, theme::syntax_keyword());
+    assert_eq!(cells[keyword].bg, theme::code_block_bg());
     let row = keyword / width;
     assert!(
-        cells[row * width + width - 2].bg == theme::CODE_BLOCK_BG,
+        cells[row * width + width - 2].bg == theme::code_block_bg(),
         "code background does not reach the right edge"
     );
 }
@@ -85,7 +85,7 @@ fn cursorline_overlays_fenced_code_background() {
         .iter()
         .position(|cell| cell.symbol() == "f")
         .expect("code text");
-    assert_eq!(buffer.content()[keyword].bg, theme::SURFACE_ALT);
+    assert_eq!(buffer.content()[keyword].bg, theme::surface_alt());
 }
 
 #[test]
@@ -108,7 +108,7 @@ fn inline_code_gets_a_background_span() {
         .iter()
         .position(|cell| cell.symbol() == "c")
         .expect("inline code");
-    assert_eq!(buffer.content()[code].bg, theme::CODE_BLOCK_BG);
+    assert_eq!(buffer.content()[code].bg, theme::code_block_bg());
 }
 
 #[test]
@@ -140,7 +140,25 @@ fn search_background_overlays_fenced_code_background() {
         .iter()
         .position(|cell| cell.symbol() == "f")
         .expect("code text");
-    assert_eq!(buffer.content()[keyword].bg, theme::SELECTION);
+    assert_eq!(buffer.content()[keyword].bg, theme::selection());
+}
+
+#[test]
+fn switching_theme_repaints_backgrounds() {
+    let mut model = Model::new(EditorState::from_text("alpha"), None);
+    model.execute_command("theme solarized-light");
+    let backend = TestBackend::new(40, 8);
+    let mut terminal = Terminal::new(backend).expect("terminal");
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+    assert!(
+        terminal
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .any(|cell| cell.bg == ratatui::style::Color::Rgb(253, 246, 227))
+    );
+    model.execute_command("theme anvil-dark");
 }
 
 #[test]

@@ -12,6 +12,8 @@ use serde::Deserialize;
 
 use crate::gateway::GatewaySession;
 use crate::{Model, theme};
+#[cfg(target_os = "linux")]
+use anvil_session::plugin_supervisor::HostState;
 
 #[derive(Clone, Debug, Default, Deserialize)]
 pub(crate) struct PkgManifest {
@@ -270,11 +272,37 @@ impl Model {
             signature_path,
             public_key,
             digest,
+            manifest,
             ..
         }) = self.pkg_install.clone()
         else {
             return;
         };
+        #[cfg(target_os = "linux")]
+        if self
+            .plugins
+            .iter()
+            .any(|plugin| plugin.manifest.id == manifest.id)
+            && matches!(
+                self.plugin_supervisor.state(&manifest.id),
+                HostState::Queued
+                    | HostState::Registering
+                    | HostState::Starting
+                    | HostState::Ready
+                    | HostState::Draining
+            )
+        {
+            let Some(gateway) = self.gateway.as_mut() else {
+                self.status = "E: gateway unavailable".to_owned();
+                self.dirty = true;
+                return;
+            };
+            if let Err(error) = self.plugin_supervisor.stop(&manifest.id, Some(gateway)) {
+                self.status = format!("E: stop plugin {}: {error}", manifest.id);
+                self.dirty = true;
+                return;
+            }
+        }
         let Some((_, gateway)) = self.installer.as_mut() else {
             self.status = "E: pkg install requires installer gateway".to_owned();
             return;
@@ -433,7 +461,7 @@ pub(crate) fn render(model: &Model, frame: &mut Frame, area: Rect) {
         Line::from(vec![Span::styled(
             format!("{} {}", safe(&manifest.id), safe(&manifest.version)),
             Style::default()
-                .fg(theme::ACCENT)
+                .fg(theme::accent())
                 .add_modifier(Modifier::BOLD),
         )]),
         Line::from(format!(
@@ -459,7 +487,7 @@ pub(crate) fn render(model: &Model, frame: &mut Frame, area: Rect) {
         lines.push(Line::raw(""));
         lines.push(Line::from(Span::styled(
             safe(error),
-            Style::default().fg(theme::ERROR),
+            Style::default().fg(theme::error()),
         )));
     }
     lines.push(Line::raw(""));
@@ -595,5 +623,15 @@ mod tests {
         );
         assert_eq!(url_host("http://example.com/plugin"), None);
         assert_eq!(url_host("https:///plugin"), None);
+    }
+
+    #[test]
+    fn official_manifest_without_permissions_parses() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../plugins/official/trim-whitespace/plugin.json");
+        let data = std::fs::read_to_string(path).expect("official manifest");
+        let manifest: PkgManifest = serde_json::from_str(&data).expect("parse manifest");
+        assert_eq!(manifest.id, "anvil.official.trim-whitespace");
+        assert!(manifest.permissions.is_empty());
     }
 }

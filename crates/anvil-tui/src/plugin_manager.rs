@@ -243,7 +243,7 @@ pub(crate) fn render(model: &Model, frame: &mut Frame, area: Rect) {
     let mut lines = vec![Line::from(vec![Span::styled(
         "Installed plugins",
         Style::default()
-            .fg(theme::ACCENT)
+            .fg(theme::accent())
             .add_modifier(Modifier::BOLD),
     )])];
     let safe = |value: &str| value.escape_default().to_string();
@@ -269,7 +269,7 @@ pub(crate) fn render(model: &Model, frame: &mut Frame, area: Rect) {
             state
         );
         lines.push(Line::from(if index == manager.selected {
-            Span::styled(line, Style::default().fg(theme::ACCENT))
+            Span::styled(line, Style::default().fg(theme::accent()))
         } else {
             Span::raw(line)
         }));

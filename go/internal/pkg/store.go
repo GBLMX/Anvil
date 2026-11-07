@@ -327,6 +327,10 @@ func (s *Store) AddInstalledVersion(pluginID, digest, version, manifestHash, sou
 				GrantedPermissions: append([]string(nil), permissions...),
 			}
 		}
+		if exists && !samePermissions(plugin.GrantedPermissions, permissions) {
+			plugin.Enabled = false
+			plugin.GrantedPermissions = []string{}
+		}
 		for _, installed := range plugin.Versions {
 			if strings.EqualFold(installed.Digest, digest) {
 				plugin.ActiveDigest = digest
@@ -360,6 +364,22 @@ func (s *Store) SetEnabled(pluginID string, enabled bool) error {
 		state.Plugins[pluginID] = plugin
 		return nil
 	})
+}
+
+func samePermissions(left, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	leftSet := make(map[string]struct{}, len(left))
+	for _, permission := range left {
+		leftSet[permission] = struct{}{}
+	}
+	for _, permission := range right {
+		if _, exists := leftSet[permission]; !exists {
+			return false
+		}
+	}
+	return true
 }
 
 // InstallPackage verifies a package and commits it to the content-addressed

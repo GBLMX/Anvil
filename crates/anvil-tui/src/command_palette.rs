@@ -44,9 +44,23 @@ impl Model {
                         contexts.join("+")
                     ),
                     plugin_id: None,
+                    theme: None,
                 }
             })
             .collect::<Vec<_>>();
+        for name in theme::names() {
+            let current = if name == theme::name() {
+                " [current]"
+            } else {
+                ""
+            };
+            items.push(CommandPaletteItem {
+                id: format!("theme.{name}"),
+                label: format!("Theme: {name}{current}"),
+                plugin_id: None,
+                theme: Some(name),
+            });
+        }
         #[cfg(target_os = "linux")]
         for plugin in self.plugins.iter().filter(|plugin| plugin.enabled) {
             for command in &plugin.manifest.commands {
@@ -65,6 +79,7 @@ impl Model {
                         plugin.manifest.id.escape_default()
                     ),
                     plugin_id: Some(plugin.manifest.id.clone()),
+                    theme: None,
                 });
             }
         }
@@ -74,6 +89,7 @@ impl Model {
             items,
             filtered,
             selected: 0,
+            preview_original: Some(theme::choice()),
         });
         self.refresh_command_palette();
         self.pending = None;
@@ -82,7 +98,11 @@ impl Model {
     }
 
     pub(crate) fn close_command_palette(&mut self) {
-        self.command_palette = None;
+        if let Some(palette) = self.command_palette.take()
+            && let Some(original) = palette.preview_original
+        {
+            let _ = theme::apply_choice(original, false);
+        }
         self.dirty = true;
     }
 
@@ -112,6 +132,7 @@ impl Model {
         palette.selected = palette
             .selected
             .min(palette.filtered.len().saturating_sub(1));
+        self.preview_selected_theme();
         self.dirty = true;
     }
 
@@ -128,6 +149,7 @@ impl Model {
         } else {
             (palette.selected + delta.unsigned_abs()).min(last)
         };
+        self.preview_selected_theme();
         self.dirty = true;
     }
 
@@ -136,7 +158,30 @@ impl Model {
         palette
             .items
             .get(*palette.filtered.get(palette.selected)?)
+            .filter(|item| item.theme.is_none())
             .map(|item| (item.id.clone(), item.plugin_id.clone()))
+    }
+
+    pub(crate) fn selected_theme(&self) -> Option<&'static str> {
+        let palette = self.command_palette.as_ref()?;
+        palette
+            .items
+            .get(*palette.filtered.get(palette.selected)?)
+            .and_then(|item| item.theme)
+    }
+
+    fn preview_selected_theme(&mut self) {
+        let selected = self.selected_theme();
+        let original = self
+            .command_palette
+            .as_ref()
+            .and_then(|palette| palette.preview_original);
+        if let Some(name) = selected {
+            let _ = theme::apply_choice(theme::Choice::Fixed(name), false);
+        } else if let Some(original) = original {
+            let _ = theme::apply_choice(original, false);
+        }
+        self.dirty = true;
     }
 
     pub(crate) fn remember_command(&mut self, id: &str) {

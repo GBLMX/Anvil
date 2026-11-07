@@ -420,3 +420,71 @@ func TestPackageLifecycleInstallEnableDisableRollbackUninstall(t *testing.T) {
 		t.Fatalf("state after lifecycle: %#v %v", state, err)
 	}
 }
+
+func TestStorePermissionChangeDisablesUpdatedPlugin(t *testing.T) {
+	store, err := NewStore(filepath.Join(t.TempDir(), "plugins"))
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	first, second := testDigest(12), testDigest(13)
+	for _, digest := range []string{first, second} {
+		entry, err := store.EntryPath(digest)
+		if err != nil {
+			t.Fatalf("entry: %v", err)
+		}
+		if err := os.MkdirAll(filepath.Join(entry, "root"), 0o700); err != nil {
+			t.Fatalf("entry root: %v", err)
+		}
+	}
+	if err := store.AddInstalledVersion("demo", first, "1.0.0", "", "local-file", []string{"fs.read:**"}); err != nil {
+		t.Fatalf("first version: %v", err)
+	}
+	if err := store.SetEnabled("demo", true); err != nil {
+		t.Fatalf("enable: %v", err)
+	}
+	if err := store.AddInstalledVersion("demo", second, "2.0.0", "", "local-file", []string{"fs.read:**", "sys.exec"}); err != nil {
+		t.Fatalf("second version: %v", err)
+	}
+	state, err := store.ReadState()
+	if err != nil {
+		t.Fatalf("state: %v", err)
+	}
+	plugin := state.Plugins["demo"]
+	if plugin.Enabled || len(plugin.GrantedPermissions) != 0 {
+		t.Fatalf("permission change retained consent: %#v", plugin)
+	}
+}
+
+func TestStorePermissionStableKeepsEnabledPreference(t *testing.T) {
+	store, err := NewStore(filepath.Join(t.TempDir(), "plugins"))
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	first, second := testDigest(14), testDigest(15)
+	for _, digest := range []string{first, second} {
+		entry, err := store.EntryPath(digest)
+		if err != nil {
+			t.Fatalf("entry: %v", err)
+		}
+		if err := os.MkdirAll(filepath.Join(entry, "root"), 0o700); err != nil {
+			t.Fatalf("entry root: %v", err)
+		}
+	}
+	permissions := []string{"fs.read:**"}
+	if err := store.AddInstalledVersion("demo", first, "1.0.0", "", "local-file", permissions); err != nil {
+		t.Fatalf("first version: %v", err)
+	}
+	if err := store.SetEnabled("demo", true); err != nil {
+		t.Fatalf("enable: %v", err)
+	}
+	if err := store.AddInstalledVersion("demo", second, "2.0.0", "", "local-file", permissions); err != nil {
+		t.Fatalf("second version: %v", err)
+	}
+	state, err := store.ReadState()
+	if err != nil {
+		t.Fatalf("state: %v", err)
+	}
+	if !state.Plugins["demo"].Enabled {
+		t.Fatalf("stable permissions lost enabled preference: %#v", state.Plugins["demo"])
+	}
+}

@@ -397,9 +397,16 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             KeyCode::Char('p') if key.ctrl() => model.move_command_palette(-1),
             KeyCode::Char('n') if key.ctrl() => model.move_command_palette(1),
             KeyCode::Enter => {
+                let theme_name = model.selected_theme();
                 let selected = model.selected_command();
                 model.close_command_palette();
-                if let Some((id, plugin_id)) = selected {
+                if let Some(name) = theme_name {
+                    model.status = match theme::set_theme(name) {
+                        Ok(()) => format!("theme: {}", theme::name()),
+                        Err(error) => format!("E: {error}"),
+                    };
+                    model.dirty = true;
+                } else if let Some((id, plugin_id)) = selected {
                     model.remember_command(&id);
                     if let Some(plugin_id) = plugin_id {
                         model.run_plugin_command(&plugin_id, &id);

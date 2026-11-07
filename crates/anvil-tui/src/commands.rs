@@ -117,6 +117,54 @@ impl Model {
             ("q", "") => self.request_quit(),
             ("q!", "") => self.force_quit(),
             ("help", "") => self.show_help(),
+            ("theme", argument) => {
+                if argument.is_empty() {
+                    self.status = format!(
+                        "theme: {} ({:?}); available: {}",
+                        theme::name(),
+                        theme::choice(),
+                        theme::names().join(", ")
+                    );
+                } else {
+                    match theme::set_theme(argument) {
+                        Ok(()) => self.status = format!("theme: {}", theme::name()),
+                        Err(error) => self.status = format!("E: {error}"),
+                    }
+                }
+                self.dirty = true;
+            }
+            ("theme-auto", argument) => {
+                let (dark, light) = if argument.is_empty() {
+                    theme::auto_mapping()
+                } else {
+                    let parts = argument.split_whitespace().collect::<Vec<_>>();
+                    if let [dark, light] = parts.as_slice() {
+                        (*dark, *light)
+                    } else {
+                        self.status = "E: usage: :theme-auto [dark] [light]".to_owned();
+                        self.dirty = true;
+                        return;
+                    }
+                };
+                match theme::set_auto(dark, light) {
+                    Ok(()) => {
+                        self.status = format!(
+                            "theme: auto (dark {}, light {})",
+                            theme::auto_mapping().0,
+                            theme::auto_mapping().1
+                        );
+                    }
+                    Err(error) => self.status = format!("E: {error}"),
+                }
+                self.dirty = true;
+            }
+            ("theme-save", "") => {
+                self.status = match theme_config::save() {
+                    Ok(path) => format!("theme saved: {}", path.display()),
+                    Err(error) => format!("E: {error}"),
+                };
+                self.dirty = true;
+            }
             ("pkg", argument) => {
                 if let Some(url) = argument.strip_prefix("install ") {
                     self.start_pkg_install(url.trim());

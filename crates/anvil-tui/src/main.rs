@@ -15,6 +15,9 @@ Options:
 Environment:
   ANVIL_GATEWAY          Explicit path to anvil-gateway
   ANVIL_RG               Explicit ripgrep path for fuzzy file listing
+  ANVIL_THEME            Startup theme: anvil-dark, one-dark, gruvbox-dark,
+                         nord, catppuccin-mocha, solarized-light
+  ANVIL_SETTINGS         Explicit settings.toml path
 
 Quick open:
   Space f                Fuzzy file finder; the selected file previews through

@@ -176,6 +176,9 @@ func (s *Server) packageInspect(req request, state *connectionState) (interface{
 	if err != nil {
 		return nil, &rpcError{Code: -32009, Message: err.Error()}
 	}
+	if manifest.Permissions == nil {
+		manifest.Permissions = []string{}
+	}
 	trustPath := s.cfg.TrustStorePath
 	if trustPath == "" {
 		trustPath = pkg.DefaultTrustStorePath()

@@ -44,6 +44,29 @@ pub fn run_with_workspace(path: Option<PathBuf>, workspace: PathBuf) -> io::Resu
         }
     };
     model.gateway_session = session;
+    if let Err(error) = theme_config::load() {
+        let message = format!("E: theme config: {error}");
+        if model.status.is_empty() {
+            model.status = message;
+        } else {
+            model.status.push_str(" | ");
+            model.status.push_str(&message);
+        }
+        model.dirty = true;
+    }
+    if let Some(theme_name) = std::env::var_os("ANVIL_THEME") {
+        let theme_name = theme_name.to_string_lossy();
+        if let Err(error) = theme::set_startup_theme(&theme_name) {
+            let message = format!("E: {error}");
+            if model.status.is_empty() {
+                model.status = message;
+            } else {
+                model.status.push_str(" | ");
+                model.status.push_str(&message);
+            }
+            model.dirty = true;
+        }
+    }
     if let Err(error) = model.load_keymap_config() {
         let message = format!("E: keymap config: {error}");
         if model.status.is_empty() {
