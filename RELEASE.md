@@ -3,6 +3,15 @@
 Anvil is pre-alpha. This document describes the release procedure for the
 current `0.x` line; it is not a compatibility guarantee.
 
+## Release freeze
+
+`0.6.0` is frozen for long-term internal polish. Do not create release tags or
+publish releases during this phase. `.github/workflows/release.yml` rejects a
+`0.6.0` tag, and `scripts/check-frozen-version.sh` fails CI on an accidental
+version bump. Unfreeze only by updating the version, freeze check, roadmap, and
+internal-polish exit gates in one intentional change.
+
+
 ## Versioning
 
 - Releases use `vX.Y.Z` tags. Before `1.0`, version lines are release-series

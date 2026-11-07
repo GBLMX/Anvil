@@ -11,6 +11,7 @@ Status: index for current architecture, plans, ADRs, and resolved bug records.
 - [Architecture maps](architecture-visual.md) — current/future diagrams and
   delivery DAG
 - [Threat model](threat-model.md) — adversaries, mitigations, invariants
+- [Internal polish plan](internal-polish-plan.md) — frozen `0.6.0` phase
 - [Performance baseline](performance.md) — gates and re-run triggers
 
 ## Delivery hierarchy
@@ -51,6 +52,7 @@ Cross-cutting tracks that do not jump the queue:
 |---|---|---|
 | [0.4.x](0.4.x-plan.md) | plugin lifecycle, I/O, session/protocol | landed / rescoped |
 | [0.5.x](0.5.x-plan.md) | modal editing and modern TUI interaction | landed |
+| [Internal polish](internal-polish-plan.md) | P0/P1 feature polish under frozen `0.6.0` | active |
 | [IDE capabilities](ide-capability-plan.md) | LSP depth, search, sessions, Git, adapters | planned after 0.5 |
 | [0.6.x](0.6.x-plan.md) | signed packages, download manager, marketplace | 0.6.0–0.6.3 and official-only release landed; marketplace planned |
 | [0.7.x](0.7.x-plan.md) | official optional Rust modules (source-level, trusted) | planned |

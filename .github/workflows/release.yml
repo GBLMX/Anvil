@@ -38,6 +38,10 @@ jobs:
             echo "tag $GITHUB_REF_NAME does not match Cargo.toml $cargo_version" >&2
             exit 1
           fi
+          if [ "$version" = "0.6.0" ]; then
+            echo "0.6.0 is frozen for internal polish; no release is allowed" >&2
+            exit 1
+          fi
           if [ -z "$PLUGIN_SIGNING_KEY" ] || [ -z "$RELEASE_SIGNING_KEY" ]; then
             echo "ANVIL_PLUGIN_SIGNING_KEY and ANVIL_RELEASE_SIGNING_KEY are required" >&2
             exit 1

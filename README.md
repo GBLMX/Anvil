@@ -6,8 +6,8 @@ The official standard edition is one composition; third-party distributions
 can compose the kernel with their own UI and trusted Rust code. Runtime plugins
 remain untrusted and sandboxed.
 
-Status: **0.6.0 API contract frozen; HostSession editor RPC proxy wired**.
-Release model: **`0.4.x` maintenance closed**.
+Status: **0.6.0 frozen for long-term internal polish; no public release or
+tag during this phase**. See [internal polish plan](docs/internal-polish-plan.md).
 Development uses Rust from `rust-toolchain.toml` and Go **1.26.10 or newer**;
 CI installs the exact Go version from the root `go.mod`. The ratatui editor now
 includes insert

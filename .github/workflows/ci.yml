@@ -117,6 +117,9 @@ jobs:
             echo 'present=false' >> "$GITHUB_OUTPUT"
             echo 'No Cargo.toml yet; Rust checks will activate when the workspace lands.'
           fi
+      - name: Check frozen version
+        if: steps.detect.outputs.present == 'true'
+        run: scripts/check-frozen-version.sh
       - name: Install pinned Rust toolchain
         if: steps.detect.outputs.present == 'true'
         run: rustup show
