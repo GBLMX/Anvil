@@ -60,6 +60,10 @@ Release artifacts are not yet published automatically. Until signing and SBOM
 generation are implemented, a release must state that limitation rather than
 implying a supply-chain guarantee.
 
+`scripts/release-layout.sh` assembles the binaries plus official plugin sources.
+When `ANVIL_PLUGIN_SIGNING_KEY` is set, it also emits signed official packages
+under `share/anvil/packages` for first-install import into the managed store.
+
 The standard edition and third-party distributions use the same kernel source
 boundary described in `docs/adr/0013-kernel-distribution-boundary.md`.
 

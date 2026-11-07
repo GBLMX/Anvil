@@ -18,6 +18,8 @@ Environment:
   ANVIL_THEME            Startup theme: anvil-dark, one-dark, gruvbox-dark,
                          nord, catppuccin-mocha, solarized-light
   ANVIL_SETTINGS         Explicit settings.toml path
+  ANVIL_BUNDLED_PLUGIN_DIR  Explicit bundled official plugin directory
+  ANVIL_PLUGIN_DIR       Additional local plugin directory
 
 Quick open:
   Space f                Fuzzy file finder; the selected file previews through

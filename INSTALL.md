@@ -38,6 +38,27 @@ GOTOOLCHAIN=go1.26.10 go build -o target/release/anvil-gateway ./go/cmd/anvil-ga
 GOTOOLCHAIN=go1.26.10 go build -o target/release/anvil-exec-runner ./go/cmd/anvil-exec-runner
 ```
 
+## Release layout
+
+Build a self-contained layout with the binaries and official plugin sources:
+
+```bash
+scripts/release-layout.sh "$PWD/dist/anvil"
+```
+
+The layout is:
+
+```text
+bin/anvil
+bin/anvil-gateway
+bin/anvil-exec-runner
+bin/anvil-plugin-host
+share/anvil/plugins/trim-whitespace/
+```
+
+`anvil` discovers `../share/anvil/plugins` relative to itself. A portable
+layout may instead place plugins in `bin/plugins/`.
+
 ## Install for one user
 
 ```bash
@@ -49,6 +70,30 @@ install -m 0755 \
   target/release/anvil-plugin-host \
   "$HOME/.local/bin/"
 ```
+
+Official plugin sources ship under `share/anvil/plugins`. For a manual
+`~/.local/bin` install:
+
+```bash
+install -d "$HOME/.local/share/anvil/plugins"
+cp -R plugins/official/. "$HOME/.local/share/anvil/plugins/"
+```
+
+If the release also ships signed packages under `share/anvil/packages`, import
+them into the managed store so they can be enabled, disabled, and updated:
+
+```bash
+for package in "$HOME/.local/share/anvil/packages"/*.anvil-plugin; do
+  anvil-gateway \
+    -install-plugin "$package" \
+    -plugin-signature "$package.sig" \
+    -plugin-public-key "$(cat "$HOME/.local/share/anvil/packages/official.pub")" \
+    -plugin-source official
+done
+```
+
+Bundled sources are a read-only fallback. A managed package with the same ID
+takes precedence.
 
 Make sure `$HOME/.local/bin` is on `PATH`:
 
@@ -104,6 +149,7 @@ same user as the editor.
 | `ANVIL_GATEWAY_LOG` | Gateway stderr destination |
 | `ANVIL_RG` | Explicit `rg` path for fuzzy file listing |
 | `ANVIL_GIT` | Explicit `git` path for gutter diffs |
+| `ANVIL_BUNDLED_PLUGIN_DIR` | Explicit bundled official plugin directory |
 | `ANVIL_PLUGIN_DIR` | Directory whose child directories contain `plugin.json` |
 | `ANVIL_CGROUP_ROOT` | Explicit delegated cgroup v2 root for plugin hosts |
 

@@ -682,7 +682,9 @@ impl Model {
 
     #[cfg(target_os = "linux")]
     pub(crate) fn load_plugins(&mut self) -> Result<(), String> {
-        let mut plugins = plugin_discovery::discover()?;
+        let mut plugins = plugin_discovery::discover_bundled()?;
+        let local = plugin_discovery::discover()?;
+        let mut conflicts = plugin_discovery::merge_local(&mut plugins, local);
         let managed = if let Some(gateway) = self.gateway.as_mut() {
             match gateway.call("pkg.installed", serde_json::json!({})) {
                 Ok(value) => {
@@ -697,22 +699,20 @@ impl Model {
         } else {
             Ok(Vec::new())
         };
-        let conflicts = match managed {
+        let managed_conflicts = match managed {
             Ok(managed) => plugin_discovery::merge_managed(&mut plugins, managed),
             Err(error) => {
                 self.plugins = plugins;
                 return Err(error);
             }
         };
+        conflicts.extend(managed_conflicts);
         self.plugins = plugins;
         if let Some(manager) = self.plugin_manager.as_mut() {
             manager.selected = manager.selected.min(self.plugins.len().saturating_sub(1));
         }
         if !conflicts.is_empty() {
-            return Err(format!(
-                "duplicate managed/local plugin ids: {}",
-                conflicts.join(", ")
-            ));
+            return Err(format!("duplicate plugin ids: {}", conflicts.join(", ")));
         }
         Ok(())
     }

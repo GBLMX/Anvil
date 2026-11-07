@@ -15,6 +15,10 @@ post-`0.5.0` feature line.
 - Signed `.anvil-plugin` installs via `anvil-gateway -install-plugin`, with
   Ed25519 verification, SHA-256 pinning, bounded gzip/tar extraction, and
   `fsroot` path confinement.
+- Bundled official plugin discovery under `share/anvil/plugins`, with managed
+  packages taking precedence and release-layout assembly.
+- Official plugin packaging/signing and `-plugin-source official` bootstrap
+  into the managed store.
 - Gateway package-download jobs with bounded concurrency, progress and failure
   notifications, capability review, trust-on-first-use key approval, and
   digest-pinned installation through `:pkg install <url>`.

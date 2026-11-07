@@ -41,6 +41,7 @@ func main() {
 	pluginSignature := flag.String("plugin-signature", "", "detached Ed25519 signature file")
 	pluginPublicKey := flag.String("plugin-public-key", "", "Ed25519 public key as hex or base64")
 	pluginStore := flag.String("plugin-store", "", "content-addressed plugin store root")
+	pluginSource := flag.String("plugin-source", "local-file", "installed source: local-file or official")
 	role := flag.String("role", "editor", "gateway role: editor or installer")
 	downloadWorkers := flag.Int("download-workers", 3, "maximum concurrent package downloads")
 	downloadQueue := flag.Int("download-queue", 16, "maximum queued package downloads")
@@ -57,12 +58,16 @@ func main() {
 			fmt.Fprintln(os.Stderr, "anvil-gateway: -install-plugin requires -plugin-signature and -plugin-public-key")
 			os.Exit(2)
 		}
+		if *pluginSource != "official" && *pluginSource != "local-file" {
+			fmt.Fprintln(os.Stderr, "anvil-gateway: -plugin-source must be official or local-file")
+			os.Exit(2)
+		}
 		publicKey, err := pkg.DecodePublicKey(*pluginPublicKey)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "anvil-gateway: public key: %v\n", err)
 			os.Exit(2)
 		}
-		if err := pkg.AddTrustedKey(*pluginTrustStore, "local-file", publicKey); err != nil {
+		if err := pkg.AddTrustedKey(*pluginTrustStore, *pluginSource, publicKey); err != nil {
 			fmt.Fprintf(os.Stderr, "anvil-gateway: trust plugin key: %v\n", err)
 			os.Exit(2)
 		}
@@ -72,7 +77,7 @@ func main() {
 			publicKey,
 			"",
 			*pluginTrustStore,
-			"local-file",
+			*pluginSource,
 		)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "anvil-gateway: install plugin: %v\n", err)

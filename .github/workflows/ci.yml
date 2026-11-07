@@ -189,3 +189,53 @@ jobs:
       - name: Stress symlink race
         if: steps.detect.outputs.present == 'true'
         run: cd "$(dirname "${{ steps.detect.outputs.file }}")" && go test -run '^TestSymlinkSwapCannotEscape$' -count=100 ./go/internal/execrunner
+
+  release-layout:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install pinned Rust toolchain
+        run: rustup show
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Build release layout
+        run: scripts/release-layout.sh "$RUNNER_TEMP/anvil-layout"
+      - name: Verify bundled plugin layout
+        run: |
+          test -x "$RUNNER_TEMP/anvil-layout/bin/anvil"
+          test -x "$RUNNER_TEMP/anvil-layout/bin/anvil-gateway"
+          test -f "$RUNNER_TEMP/anvil-layout/share/anvil/plugins/trim-whitespace/plugin.json"
+
+  official-plugin-package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Build gateway
+        run: go build -o "$RUNNER_TEMP/anvil-gateway" ./go/cmd/anvil-gateway
+      - name: Package and sign official plugin
+        run: |
+          openssl genpkey -algorithm ED25519 -out "$RUNNER_TEMP/official.pem"
+          scripts/package-official-plugin.sh \
+            plugins/official/trim-whitespace \
+            "$RUNNER_TEMP/official.pem" \
+            "$RUNNER_TEMP/packages"
+      - name: Install official package
+        run: |
+          package="$(find "$RUNNER_TEMP/packages" -name '*.anvil-plugin' -print -quit)"
+          "$RUNNER_TEMP/anvil-gateway" \
+            -install-plugin "$package" \
+            -plugin-signature "$package.sig" \
+            -plugin-public-key "$(cat "$RUNNER_TEMP/packages/official.pub")" \
+            -plugin-store "$RUNNER_TEMP/store" \
+            -plugin-trust-store "$RUNNER_TEMP/trust.json" \
+            -plugin-source official
+      - name: Verify official source
+        run: |
+          grep -q '"source": "official"' "$RUNNER_TEMP/store/state.json"
+          find "$RUNNER_TEMP/store/store" -name package.anvil-plugin -print -quit | grep -q .

@@ -58,7 +58,12 @@ impl Model {
             return;
         };
         if plugin.digest.is_none() {
-            self.status = format!("E: plugin {} is a local plugin", plugin.manifest.id);
+            let kind = if plugin.source.as_deref() == Some("official") {
+                "bundled official plugin; install a signed package to manage it"
+            } else {
+                "local plugin"
+            };
+            self.status = format!("E: plugin {} is a {kind}", plugin.manifest.id);
             self.dirty = true;
             return;
         }
