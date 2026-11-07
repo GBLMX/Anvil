@@ -50,14 +50,14 @@ Cross-cutting tracks that do not jump the queue:
 | Plan | Scope | Status |
 |---|---|---|
 | [0.4.x](0.4.x-plan.md) | plugin lifecycle, I/O, session/protocol | landed / rescoped |
-| [0.5.x](0.5.x-plan.md) | modal editing and modern TUI interaction | active; 0.5.2 landed, 0.5.3 partial |
+| [0.5.x](0.5.x-plan.md) | modal editing and modern TUI interaction | landed |
 | [IDE capabilities](ide-capability-plan.md) | LSP depth, search, sessions, Git, adapters | planned after 0.5 |
-| [0.6.x](0.6.x-plan.md) | signed packages, download manager, marketplace | planned |
+| [0.6.x](0.6.x-plan.md) | signed packages, download manager, marketplace | 0.6.0–0.6.3 and official-only release landed; marketplace planned |
 | [0.7.x](0.7.x-plan.md) | official optional Rust modules (source-level, trusted) | planned |
 | [Linux platform](linux-platform-plan.md) | seccomp/cgroup, atomic install, watcher measurements | planned |
 | [Command architecture](command-architecture-plan.md) | command registry, keymap trie, effects | partially implemented |
 | [Keymap configuration](keymap.md) | TOML overrides and key syntax | current |
-| [Theme and settings](theme-settings-plan.md) | built-in semantic themes, selection, deferred Settings overlay | active; theme core next |
+| [Theme and settings](theme-settings-plan.md) | built-in semantic themes, selection, deferred Settings overlay | theme/settings persistence landed; overlay gated |
 | [Deployment](deployment.md) | gateway, exec-runner, cgroup boundaries | current |
 
 ## Historical plans

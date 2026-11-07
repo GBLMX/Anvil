@@ -1,9 +1,10 @@
 # Anvil Architecture Maps
 
-Status: current as of 2026-11-03. Solid paths are implemented; dashed paths
-are planned or debug-only. `0.4.7c-b` cgroup-before-exec limits, supervision, idle reclaim, and seccomp closure are landed; `0.4.9` document session, command registry, focus state, overlay/input state, and plugin host lifecycle extraction landed. The bounded effect queue is landed; remaining direct TUI effects still need migration. `0.5.x`
-interaction/UI, `0.6.x` distribution, and Linux substrate work are planned in
-the linked plans.
+Status: current as of 2026-11-07. Solid paths are implemented; dashed paths
+are planned or debug-only. `0.5.x` interaction/UI is landed. The official-only
+distribution path (signed layout, installer, bundled fallback, managed store)
+is landed; marketplace/index work remains planned. Linux substrate work stays
+measurement-gated in the linked plan.
 
 ## Current architecture
 
@@ -184,27 +185,48 @@ renderer. `0.5.x` interaction state is session-owned;
 the renderer must not become a second owner of focus, palette, or notification
 state.
 
-## Planned distribution path
+## Distribution paths
+
+The official-only path is implemented. A release layout carries sources for
+fallback discovery, signed packages for managed install, and the installer that
+wires them together.
 
 ```mermaid
 flowchart LR
-    UI["marketplace / plugin manager view<br/>built-in TUI"]
-    SERVICE["install service<br/>session-owned"]
-    FETCH["installer gateway role<br/>-allow-fetch · exact hosts · fetch-max"]
-    VERIFY["verify digest + signature<br/>source class"]
-    STORE["content-addressed store<br/>stage · fsync · renameat2"]
-    DISCOVER["plugin discovery + activation<br/>0.4.6"]
+    SRC["plugins/official"] --> LAYOUT["release-layout.sh"]
+    KEY["release signing secrets"] --> LAYOUT
+    LAYOUT --> PACK["official .anvil-plugin + .sig"]
+    LAYOUT --> ART["tarball<br/>install.sh · SHA256SUMS.sig · SBOM · attestation"]
+    ART --> INST["install.sh"]
+    INST --> BIN["bin/"]
+    INST --> BUN["share/anvil/official/plugins"]
+    INST --> PKG["share/anvil/packages"]
+    PKG --> BOOT["anvil-gateway -install-bundled"]
+    BOOT --> STORE["managed store"]
+    BUN --> DISC["plugin discovery"]
+    STORE --> DISC
+```
 
-    UI --> SERVICE
-    SERVICE --> FETCH
-    SERVICE --> VERIFY
-    VERIFY --> STORE
-    STORE --> DISCOVER
+Managed packages override bundled sources with the same plugin ID. The
+installer is idempotent and is rerun on upgrade.
+
+The marketplace path is still planned. It adds a signed index and revocation
+documents; package bytes never travel through `sys.fetch`.
+
+```mermaid
+flowchart LR
+    UI["marketplace / plugin manager<br/>planned"] --> SERVICE["install service"]
+    SERVICE --> FETCH["sys.fetch<br/>index + revocations"]
+    SERVICE --> DOWNLOAD["pkg.download<br/>bounded queue"]
+    FETCH --> VERIFY["verify index + package signature"]
+    DOWNLOAD --> VERIFY
+    VERIFY --> STORE["content-addressed store"]
+    STORE --> DISC["discovery + manager"]
 ```
 
 The plugin host never receives the installer token or a network handle.
-`0.5.7` supplies the notification/progress surface; it is not a dependency of
-the package/download core.
+`sys.fetch` is installer-role only; package archives use the bounded
+`pkg.download` queue.
 
 ## Delivery dependency graph
 
@@ -213,18 +235,18 @@ flowchart LR
     A["0.4.7 Linux/security<br/>seccomp · cgroup · signal closure"]
     B["0.4.8 plugin I/O<br/>DTO closure"]
     C["0.4.9 session + protocol<br/>API negotiation"]
-    D["0.5.1–0.5.6 interaction/UI"]
-    E["0.5.7 notifications/progress"]
-    E2["0.5.8–0.5.9 search/mouse"]
-    F["0.6.0 API v1 freeze"]
-    G["0.6.1 package format"]
-    H["0.6.2 download manager"]
-    I["0.6.3 installed-plugin manager"]
-    J["0.6.4 marketplace browse"]
-    K["0.6.5 install/update/consent"]
-    L["0.6.6 revocation/provenance"]
+    D["0.5.1–0.5.6 interaction/UI<br/>landed"]
+    E["0.5.7 notifications/progress<br/>landed"]
+    E2["0.5.8–0.5.9 search/mouse<br/>landed"]
+    F["0.6.0 API v1 freeze<br/>landed"]
+    G["0.6.1 package format<br/>landed; signed index pending"]
+    H["0.6.2 download manager<br/>landed; index wiring pending"]
+    I["0.6.3 installed-plugin manager<br/>landed"]
+    J["0.6.4 marketplace browse<br/>planned"]
+    K["0.6.5 install/update/consent<br/>planned"]
+    L["0.6.6 revocation/provenance<br/>planned"]
     GATE["ADR-0013<br/>two-consumer gate"]
-    SIGN["release signing + provenance<br/>external gate"]
+    SIGN["release signing + provenance<br/>workflow landed; production keys external"]
 
     A --> B --> C
     C --> D --> E --> E2
@@ -244,10 +266,10 @@ Parallel windows:
 
 - After `0.4.9`: `0.5.1–0.5.6` and API-freeze work may run in parallel, but
   `0.6.0` cannot freeze until the ADR-0013 two-consumer gate passes.
-- Package work waits for `0.6.0` **and** release signing/provenance; only then
-  may package/download core `0.6.1–0.6.3` run in parallel with the UI line.
-- `0.6.4`/`0.6.5` wait for `0.5.7`, `0.6.2`, and the signing gate; `0.6.1`
-  does not wait for the UI line, but does wait for API freeze and signing.
+- Package core `0.6.1`–`0.6.3` and the official-only release layout are
+  landed. Marketplace `0.6.4`+ waits for the signed index and production
+  signing keys.
+- `0.6.4`/`0.6.5` wait for `0.5.7`, `0.6.2`, and the signing gate.
 - `0.6.3` depends only on `0.6.1`.
 - Linux substrate work is not a separate release: L1 attaches to `0.4.7`, L2
   to `0.4.8`/`0.6.1`, and L3/L4 stay measurement-gated.

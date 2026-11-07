@@ -1,13 +1,10 @@
 # Anvil Architecture
 
-Status: current as of 2026-11-04; `0.4.7c-b` cgroup-before-exec limits, host
-supervision, idle reclaim, and seccomp closure are landed. `0.4.9` document
-session and plugin host lifecycle extraction are landed; the command registry,
-focus state, and overlay/input state now live in `anvil-session`. The bounded
-effect queue is landed; remaining direct TUI effects still need migration.
-Distribution and UI work are planned in
-[0.5.x](0.5.x-plan.md), [0.6.x](0.6.x-plan.md), and
-[Linux platform](linux-platform-plan.md). See
+Status: current as of 2026-11-07. `0.4.7c-b` cgroup-before-exec limits,
+host supervision, idle reclaim, and seccomp closure are landed. `0.4.9`
+session extraction and `0.5.x` interaction/UI are landed. The official-only
+plugin distribution path is landed: signed layout, installer, bundled
+fallback, and managed store. Marketplace/index work remains planned. See
 [visual current/future maps](architecture-visual.md).
 
 ## 1. Process model
@@ -239,6 +236,35 @@ docs/
   license gate is not implemented yet.
 - The gateway and editor are packaged together but versioned independently.
 - No gateway is installed as a global service; it is per session.
+
+## 6.1 Official plugin distribution
+
+The official-only release path is separate from the future marketplace:
+
+```text
+install.sh
+  -> bin/ (anvil, gateway, exec-runner, plugin-host)
+  -> share/anvil/official/plugins/  (bundled fallback)
+  -> share/anvil/packages/          (signed packages, optional)
+  -> anvil-gateway -install-bundled
+       -> $XDG_DATA_HOME/anvil/plugins/store/<digest>/
+```
+
+- `install.sh` copies the layout, replaces the bundled plugin/package sets,
+  and runs the idempotent bootstrap when signed packages exist.
+- Bundled sources are discovered as `official` and are read-only. A managed
+  package with the same plugin ID takes precedence.
+- Managed packages live in the content-addressed store and support
+  enable/disable, uninstall, and rollback.
+- Official package signatures use Ed25519 over the package SHA-256 digest.
+  Release checksums, SBOM, and build provenance are separate release artifacts.
+- The signed index and revocation documents in
+  [ADR-0021](adr/0021-signed-plugin-index.md) are planned; `sys.fetch` will
+  carry only index/revocation metadata, never package archives.
+- Package archives continue through the bounded `pkg.download` queue.
+
+Installation and verification steps are in [INSTALL.md](../INSTALL.md) and
+[RELEASE.md](../RELEASE.md).
 
 ## 7. Failure modes
 

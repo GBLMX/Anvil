@@ -86,6 +86,35 @@ enabled.
 per-session, this is equivalent to a per-session grant in the current model.
 Per-session permission negotiation remains a follow-up.
 
+## Official plugin installation
+
+The official-only release layout is:
+
+```text
+bin/anvil
+bin/anvil-gateway
+bin/anvil-exec-runner
+bin/anvil-plugin-host
+install.sh
+share/anvil/official/plugins/
+share/anvil/packages/        # signed releases
+```
+
+`install.sh [prefix]` copies the binaries and bundled sources, replaces the
+bundled package set, and runs `anvil-gateway -install-bundled` when signed
+packages are present. The bootstrap is idempotent; rerunning it after an
+upgrade activates new package digests while preserving enable/disable state
+when permissions are unchanged.
+
+Managed packages live under `$XDG_DATA_HOME/anvil/plugins/store/<digest>/`;
+bundled sources under `share/anvil/official/plugins` are a read-only fallback.
+Managed packages with the same plugin ID take precedence.
+
+Release verification uses the signed `SHA256SUMS`, SPDX SBOM, and GitHub
+build-provenance attestation described in [RELEASE.md](../RELEASE.md). The
+package signature is checked against `share/anvil/packages/official.pub`
+before a package enters the store.
+
 ## TUI startup ordering
 
 The TUI must not block on gateway startup. The required ordering is:

@@ -58,16 +58,19 @@ The plugin-host path has a sandboxed host with token-FD delivery,
 `close_range`, `no_new_privs`, Landlock read/no-exec rules, native-ABI seccomp
 with a preconnected editor socket and dangerous-syscall denial, cgroup-before-exec v2 limits with OOM classification,
 `sys.ping`/`sys.exec` dispatch, and a TUI debug `PluginSession`
-(`:plugin-start`/`:plugin-exec`/`:plugin-stop`/`:plugin-oom`). Local plugin
-manifests are discovered from child directories of `ANVIL_PLUGIN_DIR`.
+(`:plugin-start`/`:plugin-exec`/`:plugin-stop`/`:plugin-oom`).
+Official release layouts install plugin sources under
+`share/anvil/official/plugins` and, when signed, packages under
+`share/anvil/packages`. `install.sh` copies them and runs
+`anvil-gateway -install-bundled`; managed packages take precedence over the
+bundled fallback and support enable/disable, uninstall, and rollback.
 `:pkg install <url>` downloads a signed package through the gateway, shows its
 declared capabilities, and installs only the reviewed SHA-256 digest. Downloads
 require `-allow-fetch` and an explicit `-fetch-allow` host.
 `:pkg install-file <package> <signature> <public-key>` reviews and installs a
 local signed package without network access.
-`plugins/official/trim-whitespace` is the first official Luau plugin. Point
-`ANVIL_PLUGIN_DIR` at `plugins/official`, open the command palette
-(`Space p`), and run `Trim Trailing Whitespace`.
+For development, point `ANVIL_PLUGIN_DIR` at `plugins/official`, open the
+command palette (`Space p`), and run `Trim Trailing Whitespace`.
 `onLanguage` and `onWorkspaceContains` events start matching sandboxed hosts
 with no grants. `onStartup` requires explicit opt-in via
 `ANVIL_PLUGIN_ALLOW_STARTUP=1`; workspace activation is disabled with
