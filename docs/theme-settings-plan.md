@@ -93,9 +93,10 @@ runtime (:theme command)
   > built-in default
 ```
 
-A runtime `:theme` or `:theme-auto` choice is session-only and is stored as a
-`ThemeChoice` (`Fixed(id)` or `Auto`). A separate `:theme-save` persists the
-current runtime choice; it never persists an env value. `ANVIL_THEME` selects a
+A runtime `:theme` or `:theme-auto` choice is stored as a `ThemeChoice`
+(`Fixed(id)` or `Auto`) and written to `settings.toml` immediately.
+`:theme-save` re-writes the current runtime choice explicitly; neither path
+persists an env value. `ANVIL_THEME` selects a
 fixed theme ID and is a non-fallback environment override; there is no
 fallback-env variant until a concrete need exists.
 
@@ -134,9 +135,10 @@ Fallback semantics are split by lifecycle:
   in the status line. No partial application.
 - **Runtime:** `:theme <unknown>` or a failed preview keeps the currently
   active theme and reports the error. It never resets to the built-in default.
-- **Persistence:** `:theme-save` validates the current choice and writes
-  atomically. A failed write leaves the active theme unchanged and reports the
-  error; the previous file remains valid.
+- **Persistence:** `:theme`, `:theme-auto`, command-palette commits, and
+  `:theme-save` validate the current choice and write atomically. A failed
+  write leaves the active theme unchanged and reports the error; the previous
+  file remains valid.
 
 ### 4.3 Built-in themes
 
@@ -221,9 +223,9 @@ current palette is `anvil-dark`.
   asserts background and foreground styles on representative widgets.
 
 ### 6.2 Selection and persistence
-Status: done. `settings.toml`, `:theme`, `:theme-auto` with OSC 11 /
-`COLORFGBG` detection, `:theme-save`, `ANVIL_THEME`, command-palette theme
-rows, preview, and cancel restore landed.
+Status: done. `settings.toml`, automatic persistence from `:theme` /
+`:theme-auto` and command-palette commits, `:theme-save`, `ANVIL_THEME`,
+command-palette theme rows, preview, and cancel restore landed.
 
 - Add `settings.toml` loading with explicit path resolution, modeled after
   keymap configuration.
