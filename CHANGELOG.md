@@ -32,8 +32,8 @@ post-`0.5.0` feature line.
   grants and disabling the updated plugin.
 - Semantic built-in themes (`anvil-dark`, `one-dark`, `gruvbox-dark`, `nord`,
   `catppuccin-mocha`, `solarized-light`), command-palette preview/selection,
-  `:theme` / `:theme-auto`, `:theme-save` persistence in `settings.toml`, and
-  `ANVIL_THEME` startup selection.
+  `:theme` / `:theme-auto` with OSC 11 / `COLORFGBG` detection, `:theme-save`
+  persistence in `settings.toml`, and `ANVIL_THEME` startup selection.
 
 ### Changed
 - Split TUI runtime/layout/plugin, renderer, LSP settings/responses, and tree

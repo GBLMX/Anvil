@@ -39,6 +39,9 @@ unicode-width = "0.2"
 regex = "1"
 unicode-segmentation = "1"
 
+[target.'cfg(unix)'.dependencies]
+nix = { version = "0.31", features = ["poll"] }
+
 [[bin]]
 name = "anvil"
 path = "src/main.rs"

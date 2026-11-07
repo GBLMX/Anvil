@@ -44,9 +44,10 @@ Language servers are not bundled; install them on `PATH`.
 
 Built-in semantic themes are `anvil-dark`, `one-dark`, `gruvbox-dark`,
 `nord`, `catppuccin-mocha`, and `solarized-light`. Use `:theme` to list them,
-`:theme <name>` to switch, and `:theme-auto [dark] [light]` for background
-matching. `:theme-save` writes `$XDG_CONFIG_HOME/anvil/settings.toml`
-(override with `ANVIL_SETTINGS`); `ANVIL_THEME` selects the startup theme.
+`:theme <name>` to switch, and `:theme-auto [dark] [light]` for OSC 11 /
+`COLORFGBG` background matching. `:theme-save` writes
+`$XDG_CONFIG_HOME/anvil/settings.toml` (override with `ANVIL_SETTINGS`);
+`ANVIL_THEME` selects the startup theme.
 The command palette (`Space p`) lists themes and previews them while arrowing.
 
 The plugin-host path has a sandboxed host with token-FD delivery,
@@ -78,7 +79,7 @@ fetch, and a synchronous Rust gateway client. The TUI discovers the gateway
 beside the binary or via `ANVIL_GATEWAY`.
 
 Set `ANVIL_SKIP_TERMINAL_QUERY=1` for CI or synthetic PTYs; it bypasses
-crossterm's blocking keyboard-enhancement query.
+crossterm's keyboard-enhancement query and the OSC 11 background query.
 
 ## Usage
 

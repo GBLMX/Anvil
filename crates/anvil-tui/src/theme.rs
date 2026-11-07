@@ -271,6 +271,7 @@ thread_local! {
     static AUTO: Cell<(&'static str, &'static str)> =
         const { Cell::new(("anvil-dark", "solarized-light")) };
     static RUNTIME: RefCell<Option<Choice>> = const { RefCell::new(None) };
+    static BACKGROUND_IS_LIGHT: Cell<Option<bool>> = const { Cell::new(None) };
 }
 
 fn active() -> &'static Theme {
@@ -297,7 +298,14 @@ pub(crate) fn canonical(name: &str) -> Result<&'static str, String> {
     resolve(name).map(|theme| theme.name)
 }
 
+pub(crate) fn set_background_is_light(value: Option<bool>) {
+    BACKGROUND_IS_LIGHT.with(|background| background.set(value));
+}
+
 fn terminal_is_light() -> bool {
+    if let Some(value) = BACKGROUND_IS_LIGHT.with(Cell::get) {
+        return value;
+    }
     std::env::var("COLORFGBG")
         .ok()
         .and_then(|value| {
@@ -604,5 +612,31 @@ mod tests {
         let error = set_theme("missing").expect_err("unknown theme");
         assert!(error.contains("available:"));
         assert_eq!(name(), original);
+    }
+
+    #[test]
+    fn auto_mode_uses_detected_background() {
+        set_background_is_light(Some(true));
+        apply_choice(
+            Choice::Auto {
+                dark: "nord",
+                light: "solarized-light",
+            },
+            true,
+        )
+        .expect("light auto");
+        assert_eq!(name(), "solarized-light");
+        set_background_is_light(Some(false));
+        apply_choice(
+            Choice::Auto {
+                dark: "nord",
+                light: "solarized-light",
+            },
+            true,
+        )
+        .expect("dark auto");
+        assert_eq!(name(), "nord");
+        set_background_is_light(None);
+        set_startup_theme("anvil-dark").expect("reset");
     }
 }

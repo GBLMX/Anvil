@@ -87,6 +87,7 @@ use render::{
 mod layout;
 mod syntax;
 mod terminal;
+mod terminal_background;
 #[cfg(target_os = "linux")]
 use anvil_session::plugin_session::{DEBUG_PERMISSIONS, DEBUG_PLUGIN_ID};
 #[cfg(target_os = "linux")]

@@ -22,6 +22,7 @@ pub fn run_with_workspace(path: Option<PathBuf>, workspace: PathBuf) -> io::Resu
             format!("workspace is not a directory: {}", workspace.display()),
         ));
     }
+    theme::set_background_is_light(terminal_background::query_is_light());
     let (mut model, session) = match GatewaySession::start(&workspace) {
         Ok((session, client, lsp_client)) => {
             let mut model = Model::with_gateway(client, workspace.clone());

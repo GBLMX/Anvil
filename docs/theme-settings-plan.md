@@ -221,8 +221,9 @@ current palette is `anvil-dark`.
   asserts background and foreground styles on representative widgets.
 
 ### 6.2 Selection and persistence
-Status: done. `settings.toml`, `:theme`, `:theme-auto`, `:theme-save`,
-`ANVIL_THEME`, command-palette theme rows, preview, and cancel restore landed.
+Status: done. `settings.toml`, `:theme`, `:theme-auto` with OSC 11 /
+`COLORFGBG` detection, `:theme-save`, `ANVIL_THEME`, command-palette theme
+rows, preview, and cancel restore landed.
 
 - Add `settings.toml` loading with explicit path resolution, modeled after
   keymap configuration.
