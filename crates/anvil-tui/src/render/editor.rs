@@ -334,26 +334,31 @@ pub fn view(model: &Model, frame: &mut Frame) {
         let popup = command_palette_rect(area);
         frame.render_widget(Clear, popup);
         let visible = popup.height.saturating_sub(3) as usize;
-        let start = palette.selected.saturating_sub(visible.saturating_sub(1));
+        let selected = palette.table.selected_index();
+        let start = selected.saturating_sub(visible.saturating_sub(1));
         let mut lines = vec![Line::styled(
-            format!("> {}", palette.query),
+            format!("> {}", palette.table.query()),
             Style::default().fg(theme::accent()),
         )];
         for (row, index) in palette
-            .filtered
+            .table
+            .filtered()
             .iter()
             .skip(start)
             .take(visible)
             .enumerate()
         {
-            let style = if start + row == palette.selected {
+            let style = if start + row == selected {
                 theme::selected()
             } else {
                 theme::panel()
             };
-            lines.push(Line::styled(palette.items[*index].label.clone(), style));
+            lines.push(Line::styled(
+                palette.table.items()[*index].label.clone(),
+                style,
+            ));
         }
-        if palette.filtered.is_empty() {
+        if palette.table.is_empty() {
             lines.push(Line::styled(
                 "no commands",
                 theme::panel().fg(theme::muted()),
@@ -363,6 +368,38 @@ pub fn view(model: &Model, frame: &mut Frame) {
             Paragraph::new(lines)
                 .style(theme::panel())
                 .block(panel_block("Commands")),
+            popup,
+        );
+    }
+
+    if let Some(completion) = &model.command_completion {
+        let popup = crate::render::command_completion_rect(area, completion.filtered().len());
+        frame.render_widget(Clear, popup);
+        let visible = popup.height.saturating_sub(2) as usize;
+        let selected = completion.selected_index();
+        let start = selected.saturating_sub(visible.saturating_sub(1));
+        let mut lines = Vec::new();
+        for (row, index) in completion
+            .filtered()
+            .iter()
+            .skip(start)
+            .take(visible)
+            .enumerate()
+        {
+            let style = if start + row == selected {
+                theme::selected()
+            } else {
+                theme::panel()
+            };
+            lines.push(Line::styled(
+                completion.items()[*index].label.to_owned(),
+                style,
+            ));
+        }
+        frame.render_widget(
+            Paragraph::new(lines)
+                .style(theme::panel())
+                .block(panel_block("Commands · Tab accept · Esc close")),
             popup,
         );
     }

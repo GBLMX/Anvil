@@ -332,7 +332,8 @@ fn command_palette_includes_plugin_commands() {
         .command_palette
         .as_ref()
         .expect("palette")
-        .items
+        .table
+        .items()
         .iter()
         .find(|item| item.id == "demo.trim")
         .expect("plugin command");
@@ -639,16 +640,83 @@ fn theme_command_switches_and_lists_builtins() {
 }
 
 #[test]
+fn command_line_tab_completes_and_enter_executes() {
+    let mut model = Model::new(EditorState::from_text("alpha"), None);
+    model.welcome = false;
+    handle_event(&mut model, key(KeyCode::Char(':')));
+    for character in "the".chars() {
+        handle_event(&mut model, key(KeyCode::Char(character)));
+    }
+    model.dirty = false;
+    handle_event(&mut model, key(KeyCode::Tab));
+    assert!(model.command_completion.is_some());
+    assert!(model.dirty);
+    handle_event(&mut model, key(KeyCode::Tab));
+    assert!(matches!(
+        &model.ui.input_mode,
+        InputMode::CommandLine { buffer } if buffer == "theme "
+    ));
+    handle_event(&mut model, key(KeyCode::Enter));
+    assert!(matches!(model.ui.input_mode, InputMode::Normal));
+    assert!(model.status.contains("available:"));
+}
+
+#[test]
+fn command_line_tab_opens_theme_argument_list() {
+    let mut model = Model::new(EditorState::from_text("alpha"), None);
+    model.welcome = false;
+    handle_event(&mut model, key(KeyCode::Char(':')));
+    for character in "theme ".chars() {
+        handle_event(&mut model, key(KeyCode::Char(character)));
+    }
+    handle_event(&mut model, key(KeyCode::Tab));
+    assert!(model.command_completion.is_some());
+    assert!(matches!(
+        &model.ui.input_mode,
+        InputMode::CommandLine { buffer } if buffer == "theme "
+    ));
+}
+
+#[test]
+fn command_line_completes_theme_argument() {
+    let mut model = Model::new(EditorState::from_text("alpha"), None);
+    model.welcome = false;
+    handle_event(&mut model, key(KeyCode::Char(':')));
+    for character in "theme so".chars() {
+        handle_event(&mut model, key(KeyCode::Char(character)));
+    }
+    handle_event(&mut model, key(KeyCode::Tab));
+    handle_event(&mut model, key(KeyCode::Tab));
+    assert!(matches!(
+        &model.ui.input_mode,
+        InputMode::CommandLine { buffer } if buffer == "theme solarized-light "
+    ));
+    handle_event(&mut model, key(KeyCode::Enter));
+    assert_eq!(theme::name(), "solarized-light");
+    model.execute_command("theme anvil-dark");
+}
+
+#[test]
 fn command_palette_previews_and_applies_themes() {
     let mut model = Model::new(EditorState::from_text("alpha"), None);
     model.open_command_palette();
-    model.command_palette.as_mut().expect("palette").query = "solarized".to_owned();
+    *model
+        .command_palette
+        .as_mut()
+        .expect("palette")
+        .table
+        .query_mut() = "solarized".to_owned();
     model.refresh_command_palette();
     assert_eq!(theme::name(), "solarized-light");
     model.close_command_palette();
     assert_eq!(theme::name(), "anvil-dark");
     model.open_command_palette();
-    model.command_palette.as_mut().expect("palette").query = "solarized".to_owned();
+    *model
+        .command_palette
+        .as_mut()
+        .expect("palette")
+        .table
+        .query_mut() = "solarized".to_owned();
     model.refresh_command_palette();
     handle_event(&mut model, key(KeyCode::Enter));
     assert_eq!(theme::name(), "solarized-light");
@@ -663,9 +731,9 @@ fn theme_auto_and_save_persist_choice() {
     let path = directory.join("settings.toml");
     unsafe { std::env::set_var("ANVIL_SETTINGS", &path) };
     let mut model = Model::new(EditorState::from_text("alpha"), None);
+    model.persist_theme = true;
     model.execute_command("theme nord");
-    model.execute_command("theme-save");
-    assert!(model.status.contains("theme saved"));
+    assert!(model.status.contains("saved"));
     assert!(
         std::fs::read_to_string(&path)
             .expect("settings")
@@ -673,10 +741,18 @@ fn theme_auto_and_save_persist_choice() {
     );
     model.execute_command("theme-auto nord solarized-light");
     assert!(model.status.contains("auto"));
-    model.execute_command("theme-save");
     let text = std::fs::read_to_string(&path).expect("settings");
     assert!(text.contains("mode = \"auto\""));
     assert!(text.contains("dark = \"nord\""));
+    model.persist_theme = false;
+    model.execute_command("theme one-dark");
+    model.execute_command("theme-save");
+    assert!(model.status.contains("theme saved"));
+    assert!(
+        std::fs::read_to_string(&path)
+            .expect("settings")
+            .contains("name = \"one-dark\"")
+    );
     unsafe { std::env::remove_var("ANVIL_SETTINGS") };
     std::fs::remove_dir_all(directory).expect("cleanup");
     model.execute_command("theme anvil-dark");

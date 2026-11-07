@@ -3,6 +3,7 @@
 //! The first settings slice only owns `[theme]`; other sections can be added
 //! without changing the path or the atomic write.
 
+use crate::Model;
 use crate::theme::{self, Choice};
 use serde::Deserialize;
 use std::fs;
@@ -131,6 +132,18 @@ fn parse(text: &str) -> Result<Choice, String> {
 
 fn escape(value: &str) -> String {
     value.replace('\\', "\\\\").replace('"', "\\\"")
+}
+
+impl Model {
+    pub(crate) fn persist_theme_status(&self, status: String) -> String {
+        if !self.persist_theme {
+            return status;
+        }
+        match save() {
+            Ok(_) => format!("{status} (saved)"),
+            Err(error) => format!("{status}; E: {error}"),
+        }
+    }
 }
 
 #[cfg(test)]

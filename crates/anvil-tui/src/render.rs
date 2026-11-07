@@ -47,6 +47,20 @@ pub(crate) fn command_palette_rect(area: Rect) -> Rect {
     centered_rect(area, width, height)
 }
 
+pub(crate) fn command_completion_rect(area: Rect, items: usize) -> Rect {
+    let width = area.width.saturating_sub(4).clamp(20, 72);
+    let height = (items as u16 + 2)
+        .min(8)
+        .min(area.height.saturating_sub(2))
+        .max(3);
+    Rect {
+        x: area.x + 1,
+        y: area.height.saturating_sub(height + 1),
+        width,
+        height,
+    }
+}
+
 pub(crate) fn fuzzy_rect(area: Rect) -> Rect {
     let horizontal = area.width >= 80;
     let stacked = !horizontal && area.height >= 16;

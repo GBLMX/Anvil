@@ -127,7 +127,10 @@ impl Model {
                     );
                 } else {
                     match theme::set_theme(argument) {
-                        Ok(()) => self.status = format!("theme: {}", theme::name()),
+                        Ok(()) => {
+                            let status = format!("theme: {}", theme::name());
+                            self.status = self.persist_theme_status(status);
+                        }
                         Err(error) => self.status = format!("E: {error}"),
                     }
                 }
@@ -148,11 +151,12 @@ impl Model {
                 };
                 match theme::set_auto(dark, light) {
                     Ok(()) => {
-                        self.status = format!(
+                        let status = format!(
                             "theme: auto (dark {}, light {})",
                             theme::auto_mapping().0,
                             theme::auto_mapping().1
                         );
+                        self.status = self.persist_theme_status(status);
                     }
                     Err(error) => self.status = format!("E: {error}"),
                 }

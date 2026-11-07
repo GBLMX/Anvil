@@ -83,13 +83,9 @@ impl Model {
                 });
             }
         }
-        let filtered = (0..items.len()).collect();
         self.command_palette = Some(CommandPaletteState {
-            query: String::new(),
-            items,
-            filtered,
-            selected: 0,
-            preview_original: Some(theme::choice()),
+            table: SelectionTable::new(items),
+            theme_picker: theme_picker::ThemePicker::new(),
         });
         self.refresh_command_palette();
         self.pending = None;
@@ -98,10 +94,21 @@ impl Model {
     }
 
     pub(crate) fn close_command_palette(&mut self) {
-        if let Some(palette) = self.command_palette.take()
-            && let Some(original) = palette.preview_original
-        {
-            let _ = theme::apply_choice(original, false);
+        if let Some(palette) = self.command_palette.take() {
+            palette.theme_picker.cancel();
+        }
+        self.dirty = true;
+    }
+
+    pub(crate) fn commit_theme(&mut self, name: &str) {
+        if let Some(palette) = self.command_palette.take() {
+            self.status = match palette.theme_picker.commit(name) {
+                Ok(()) => {
+                    let status = format!("theme: {}", theme::name());
+                    self.persist_theme_status(status)
+                }
+                Err(error) => format!("E: {error}"),
+            };
         }
         self.dirty = true;
     }
@@ -111,27 +118,16 @@ impl Model {
         let Some(palette) = self.command_palette.as_mut() else {
             return;
         };
-        let query = palette.query.to_ascii_lowercase();
-        palette.filtered = palette
-            .items
-            .iter()
-            .enumerate()
-            .filter(|(_, item)| {
-                query.is_empty() || item.label.to_ascii_lowercase().contains(&query)
-            })
-            .map(|(index, _)| index)
-            .collect();
-        if query.is_empty() {
-            palette.filtered.sort_by_key(|index| {
+        let empty_query = palette.table.query().is_empty();
+        palette.table.refresh();
+        if empty_query {
+            palette.table.sort_filtered_by(|item| {
                 recents
                     .iter()
-                    .position(|id| id == &palette.items[*index].id)
+                    .position(|id| id == &item.id)
                     .unwrap_or(usize::MAX)
             });
         }
-        palette.selected = palette
-            .selected
-            .min(palette.filtered.len().saturating_sub(1));
         self.preview_selected_theme();
         self.dirty = true;
     }
@@ -140,15 +136,7 @@ impl Model {
         let Some(palette) = self.command_palette.as_mut() else {
             return;
         };
-        if palette.filtered.is_empty() {
-            return;
-        }
-        let last = palette.filtered.len() - 1;
-        palette.selected = if delta < 0 {
-            palette.selected.saturating_sub(delta.unsigned_abs())
-        } else {
-            (palette.selected + delta.unsigned_abs()).min(last)
-        };
+        palette.table.move_by(delta);
         self.preview_selected_theme();
         self.dirty = true;
     }
@@ -156,30 +144,24 @@ impl Model {
     pub(crate) fn selected_command(&self) -> Option<(String, Option<String>)> {
         let palette = self.command_palette.as_ref()?;
         palette
-            .items
-            .get(*palette.filtered.get(palette.selected)?)
+            .table
+            .selected()
             .filter(|item| item.theme.is_none())
             .map(|item| (item.id.clone(), item.plugin_id.clone()))
     }
 
     pub(crate) fn selected_theme(&self) -> Option<&'static str> {
-        let palette = self.command_palette.as_ref()?;
-        palette
-            .items
-            .get(*palette.filtered.get(palette.selected)?)
+        self.command_palette
+            .as_ref()?
+            .table
+            .selected()
             .and_then(|item| item.theme)
     }
 
     fn preview_selected_theme(&mut self) {
         let selected = self.selected_theme();
-        let original = self
-            .command_palette
-            .as_ref()
-            .and_then(|palette| palette.preview_original);
-        if let Some(name) = selected {
-            let _ = theme::apply_choice(theme::Choice::Fixed(name), false);
-        } else if let Some(original) = original {
-            let _ = theme::apply_choice(original, false);
+        if let Some(palette) = self.command_palette.as_ref() {
+            palette.theme_picker.preview(selected);
         }
         self.dirty = true;
     }

@@ -43,12 +43,16 @@ Language servers are not bundled; install them on `PATH`.
   may report unresolved includes.
 
 Built-in semantic themes are `anvil-dark`, `one-dark`, `gruvbox-dark`,
-`nord`, `catppuccin-mocha`, and `solarized-light`. Use `:theme` to list them,
-`:theme <name>` to switch, and `:theme-auto [dark] [light]` for OSC 11 /
-`COLORFGBG` background matching. `:theme-save` writes
+`nord`, `catppuccin-mocha`, and `solarized-light`. Use `:theme` to list them.
+`:theme <name>` and `:theme-auto [dark] [light]` switch and persist to
 `$XDG_CONFIG_HOME/anvil/settings.toml` (override with `ANVIL_SETTINGS`);
+`:theme-save` re-saves the runtime choice explicitly.
 `ANVIL_THEME` selects the startup theme.
 The command palette (`Space p`) lists themes and previews them while arrowing.
+
+At the `:` prompt, `Tab` completes Ex command names, `:theme` /
+`:theme-auto` arguments, and `:plugin-enable` IDs; `Up`/`Down` selects a
+candidate and `Enter` accepts it. `Esc` closes the completion list first.
 
 The plugin-host path has a sandboxed host with token-FD delivery,
 `close_range`, `no_new_privs`, Landlock read/no-exec rules, native-ABI seccomp

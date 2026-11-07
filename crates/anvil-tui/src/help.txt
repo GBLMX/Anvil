@@ -46,6 +46,7 @@ Normal mode
   Ctrl-r / Ctrl-w / Ctrl-c  regex / whole-word / case toggles in search
   :replace text       replace current match
   :replace-all text   replace all matches atomically
+  :prefix<Tab>        complete commands, theme args, plugin IDs; Esc closes
   :w                  save
   :w file             save as
   :wa                 save all modified buffers
@@ -71,9 +72,9 @@ Normal mode
   :plugin-exec        exercise sys.exec (returns unsupported)
   :plugin-stop        stop the plugin host
   :plugin-enable <id> re-enable a disabled plugin and start it
-  :theme [name]        list or switch built-in theme
-  :theme-auto [dark] [light]  match terminal background
-  :theme-save         persist the runtime theme choice
+  :theme [name]        list or switch and remember built-in theme
+  :theme-auto [dark] [light]  match background and remember
+  :theme-save         re-save the runtime theme choice
   :pkg install <url>  download, review, and install a signed plugin package
   :pkg install-file <package> <signature> <key>  review and install a local package
   :help               this page

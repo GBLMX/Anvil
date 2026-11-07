@@ -226,6 +226,7 @@ fn execute_normal_command(model: &mut Model, command: NormalCommand) {
             model.ui.input_mode = InputMode::CommandLine {
                 buffer: String::new(),
             };
+            model.command_completion = None;
             model.dirty = true;
         }
         NormalCommand::Search => model.begin_search(),
@@ -397,16 +398,13 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             KeyCode::Char('p') if key.ctrl() => model.move_command_palette(-1),
             KeyCode::Char('n') if key.ctrl() => model.move_command_palette(1),
             KeyCode::Enter => {
-                let theme_name = model.selected_theme();
+                if let Some(name) = model.selected_theme() {
+                    model.commit_theme(name);
+                    return;
+                }
                 let selected = model.selected_command();
                 model.close_command_palette();
-                if let Some(name) = theme_name {
-                    model.status = match theme::set_theme(name) {
-                        Ok(()) => format!("theme: {}", theme::name()),
-                        Err(error) => format!("E: {error}"),
-                    };
-                    model.dirty = true;
-                } else if let Some((id, plugin_id)) = selected {
+                if let Some((id, plugin_id)) = selected {
                     model.remember_command(&id);
                     if let Some(plugin_id) = plugin_id {
                         model.run_plugin_command(&plugin_id, &id);
@@ -417,13 +415,13 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             }
             KeyCode::Backspace => {
                 if let Some(palette) = model.command_palette.as_mut() {
-                    palette.query.pop();
+                    palette.table.query_mut().pop();
                 }
                 model.refresh_command_palette();
             }
             KeyCode::Char(character) if text_input => {
                 if let Some(palette) = model.command_palette.as_mut() {
-                    palette.query.push(character);
+                    palette.table.query_mut().push(character);
                 }
                 model.refresh_command_palette();
             }
@@ -899,19 +897,30 @@ fn handle_key(model: &mut Model, key: KeyPress) {
         },
         InputMode::CommandLine { buffer } => match key.code {
             KeyCode::Esc => {
-                model.ui.input_mode = InputMode::Normal;
+                if !model.close_command_completion() {
+                    model.ui.input_mode = InputMode::Normal;
+                }
                 model.dirty = true;
             }
+            KeyCode::Tab => model.complete_command_line(),
+            KeyCode::Up => model.move_command_completion(-1),
+            KeyCode::Down => model.move_command_completion(1),
             KeyCode::Enter => {
-                let command = std::mem::take(buffer);
-                model.ui.input_mode = InputMode::Normal;
-                model.execute_command(command.trim());
+                if model.command_completion.is_some() {
+                    model.complete_command_line();
+                } else {
+                    let command = std::mem::take(buffer);
+                    model.ui.input_mode = InputMode::Normal;
+                    model.execute_command(command.trim());
+                }
             }
             KeyCode::Backspace => {
+                model.command_completion = None;
                 buffer.pop();
                 model.dirty = true;
             }
             KeyCode::Char(character) if text_input => {
+                model.command_completion = None;
                 buffer.push(character);
                 model.dirty = true;
             }

@@ -41,6 +41,7 @@ use ratatui::{
 
 mod buffer;
 mod clipboard;
+mod command_line;
 mod command_palette;
 mod commands;
 mod editing;
@@ -50,12 +51,16 @@ mod file_worker;
 mod gateway;
 mod git_gutter;
 mod icon_theme;
+use command_line::CommandCompletion;
 mod inlay_hints;
 pub mod lsp;
 mod lsp_ui;
 mod modal;
 mod mouse;
 mod overlays;
+mod selection_table;
+mod theme_picker;
+use selection_table::{SelectionItem, SelectionTable};
 mod pkg_install;
 mod plugin_activation;
 mod plugin_discovery;
@@ -240,11 +245,14 @@ struct CommandPaletteItem {
 
 #[derive(Debug, Clone)]
 struct CommandPaletteState {
-    query: String,
-    items: Vec<CommandPaletteItem>,
-    filtered: Vec<usize>,
-    selected: usize,
-    preview_original: Option<theme::Choice>,
+    table: SelectionTable<CommandPaletteItem>,
+    theme_picker: theme_picker::ThemePicker,
+}
+
+impl SelectionItem for CommandPaletteItem {
+    fn label(&self) -> &str {
+        &self.label
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -495,6 +503,8 @@ pub struct Model {
     preview: PreviewState,
     preview_generation: u64,
     command_palette: Option<CommandPaletteState>,
+    command_completion: Option<CommandCompletion>,
+    persist_theme: bool,
     command_palette_recents: Vec<String>,
     /// Gateway client used for file I/O when present.
     gateway: Option<GatewayClient>,
@@ -620,6 +630,8 @@ impl Model {
             preview: PreviewState::default(),
             preview_generation: 0,
             command_palette: None,
+            command_completion: None,
+            persist_theme: !cfg!(test),
             command_palette_recents: Vec::new(),
             gateway: None,
             gateway_session: None,
