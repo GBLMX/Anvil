@@ -87,6 +87,7 @@ struct StartRequest<'a> {
     plugin_root: Option<&'a Path>,
     mode: StartMode,
     permissions: &'a [String],
+    command: Option<&'a str>,
 }
 
 struct PendingStart {
@@ -94,6 +95,7 @@ struct PendingStart {
     plugin_root: Option<std::path::PathBuf>,
     mode: StartMode,
     permissions: Vec<String>,
+    command: Option<String>,
     workspace: std::path::PathBuf,
 }
 
@@ -162,6 +164,7 @@ pub(crate) trait HostLauncher {
         mode: StartMode,
         permissions: &[String],
         editor_socket: Option<&Path>,
+        command: Option<&str>,
     ) -> Result<Box<dyn ManagedHost>, String>;
 }
 
@@ -178,6 +181,7 @@ impl HostLauncher for SystemLauncher {
         mode: StartMode,
         permissions: &[String],
         editor_socket: Option<&Path>,
+        command: Option<&str>,
     ) -> Result<Box<dyn ManagedHost>, String> {
         let gateway = gateway.ok_or_else(|| "gateway unavailable".to_owned())?;
         let host = match (mode, plugin_root) {
@@ -191,6 +195,7 @@ impl HostLauncher for SystemLauncher {
                 root,
                 permissions,
                 editor_socket,
+                command,
             ),
             (StartMode::Normal, None) => {
                 PluginSession::start(gateway, workspace, plugin_id, permissions, editor_socket)
@@ -269,6 +274,29 @@ impl PluginSupervisor {
                 plugin_root: Some(plugin_root),
                 mode: StartMode::Normal,
                 permissions: &[],
+                command: None,
+            },
+            Some(gateway),
+            workspace,
+        )
+    }
+
+    pub fn activate_command(
+        &mut self,
+        plugin_id: &str,
+        plugin_root: &Path,
+        command: &str,
+        gateway: &mut GatewayClient,
+        workspace: &Path,
+    ) -> Result<StartOutcome, String> {
+        self.start_at(
+            Instant::now(),
+            plugin_id,
+            StartRequest {
+                plugin_root: Some(plugin_root),
+                mode: StartMode::Normal,
+                permissions: &[],
+                command: Some(command),
             },
             Some(gateway),
             workspace,
@@ -290,6 +318,7 @@ impl PluginSupervisor {
                 plugin_root: None,
                 mode,
                 permissions,
+                command: None,
             },
             Some(gateway),
             workspace,
@@ -354,6 +383,7 @@ impl PluginSupervisor {
                 plugin_root: request.plugin_root.map(Path::to_path_buf),
                 mode: request.mode,
                 permissions: request.permissions.to_vec(),
+                command: request.command.map(str::to_owned),
                 workspace: workspace.to_path_buf(),
             });
             return Ok(StartOutcome::Queued);
@@ -376,6 +406,7 @@ impl PluginSupervisor {
             request.mode,
             request.permissions,
             editor_socket.as_deref(),
+            request.command,
         ) {
             Ok(host) => {
                 let entry = self
@@ -420,6 +451,7 @@ impl PluginSupervisor {
                 plugin_root: pending.plugin_root.as_deref(),
                 mode: pending.mode,
                 permissions: &pending.permissions,
+                command: pending.command.as_deref(),
             };
             let _ = self.start_at(
                 now,
@@ -847,6 +879,7 @@ mod tests {
             mode: StartMode,
             permissions: &[String],
             _editor_socket: Option<&Path>,
+            _command: Option<&str>,
         ) -> Result<Box<dyn ManagedHost>, String> {
             self.start_impl(
                 gateway,
@@ -872,6 +905,7 @@ mod tests {
             mode: StartMode,
             permissions: &[String],
             _editor_socket: Option<&Path>,
+            _command: Option<&str>,
         ) -> Result<Box<dyn ManagedHost>, String> {
             self.0.start_impl(
                 gateway,
@@ -909,6 +943,7 @@ mod tests {
                 plugin_root: Some(Path::new(".")),
                 mode: StartMode::Normal,
                 permissions: &[],
+                command: None,
             },
             None,
             Path::new("."),

@@ -4,24 +4,7 @@ use super::*;
 impl Model {
     #[cfg(target_os = "linux")]
     pub(crate) fn list_plugins(&mut self) {
-        if self.plugins.is_empty() {
-            self.status = "no plugins (set ANVIL_PLUGIN_DIR)".to_owned();
-        } else {
-            let plugins = self
-                .plugins
-                .iter()
-                .map(|plugin| {
-                    format!(
-                        "{} ({})",
-                        plugin.manifest.id,
-                        self.plugin_supervisor.state(&plugin.manifest.id).as_str()
-                    )
-                })
-                .collect::<Vec<_>>()
-                .join(", ");
-            self.status = format!("plugins: {plugins}");
-        }
-        self.dirty = true;
+        self.open_plugin_manager();
     }
 
     #[cfg(not(target_os = "linux"))]
@@ -35,7 +18,10 @@ impl Model {
         let candidates = self
             .plugins
             .iter()
-            .filter(|plugin| plugin_activation::matches(&plugin.manifest.activation_events, &event))
+            .filter(|plugin| {
+                plugin.enabled
+                    && plugin_activation::matches(&plugin.manifest.activation_events, &event)
+            })
             .cloned()
             .collect::<Vec<_>>();
         let Some(gateway) = self.gateway.as_mut() else {
@@ -73,6 +59,81 @@ impl Model {
                 }
             }
         }
+    }
+
+    #[cfg(target_os = "linux")]
+    pub(crate) fn run_plugin_command(&mut self, plugin_id: &str, command_id: &str) {
+        let Some(plugin) = self
+            .plugins
+            .iter()
+            .find(|plugin| plugin.manifest.id == plugin_id)
+            .cloned()
+        else {
+            self.status = format!("E: unknown plugin: {plugin_id}");
+            self.dirty = true;
+            return;
+        };
+        if !plugin.enabled {
+            self.status = format!("E: plugin {plugin_id} disabled; run :plugin-enable {plugin_id}");
+            self.dirty = true;
+            return;
+        }
+        if !plugin
+            .manifest
+            .commands
+            .iter()
+            .any(|command| command.id == command_id)
+        {
+            self.status = format!("E: plugin {plugin_id} does not declare {command_id}");
+            self.dirty = true;
+            return;
+        }
+        if !plugin_activation::matches(
+            &plugin.manifest.activation_events,
+            &ActivationEvent::Command(command_id.to_owned()),
+        ) {
+            self.status = format!("E: plugin {plugin_id} does not activate on {command_id}");
+            self.dirty = true;
+            return;
+        }
+        let Some(gateway) = self.gateway.as_mut() else {
+            self.status = "E: gateway unavailable".to_owned();
+            self.dirty = true;
+            return;
+        };
+        if matches!(
+            self.plugin_supervisor.state(plugin_id),
+            HostState::Queued
+                | HostState::Registering
+                | HostState::Starting
+                | HostState::Ready
+                | HostState::Draining
+        ) && let Err(error) = self.plugin_supervisor.stop(plugin_id, Some(gateway))
+        {
+            self.status = format!("E: plugin {plugin_id}: {error}");
+            self.dirty = true;
+            return;
+        }
+        match self.plugin_supervisor.activate_command(
+            plugin_id,
+            &plugin.root,
+            command_id,
+            gateway,
+            &self.workspace,
+        ) {
+            Ok(StartOutcome::Started) => {
+                self.status = format!("plugin {plugin_id} running {command_id}")
+            }
+            Ok(StartOutcome::Queued) => self.status = format!("plugin {plugin_id} command queued"),
+            Err(error) => self.status = format!("E: plugin {plugin_id}: {error}"),
+        }
+        self.dirty = true;
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    pub(crate) fn run_plugin_command(&mut self, _plugin_id: &str, _command_id: &str) {
+        self.status = "plugins are Linux-only".to_owned();
+        self.dirty = true;
     }
 
     #[cfg(not(target_os = "linux"))]
@@ -225,6 +286,34 @@ impl Model {
         self.dirty = true;
     }
 
+    #[cfg(target_os = "linux")]
+    pub(crate) fn set_managed_enabled(
+        &mut self,
+        plugin_id: &str,
+        enabled: bool,
+    ) -> Result<(), String> {
+        {
+            let gateway = self
+                .gateway
+                .as_mut()
+                .ok_or_else(|| "gateway unavailable".to_owned())?;
+            gateway
+                .call(
+                    "pkg.set_enabled",
+                    serde_json::json!({"plugin_id": plugin_id, "enabled": enabled}),
+                )
+                .map_err(|error| error.to_string())?;
+        }
+        if let Some(plugin) = self
+            .plugins
+            .iter_mut()
+            .find(|plugin| plugin.manifest.id == plugin_id)
+        {
+            plugin.enabled = enabled;
+        }
+        Ok(())
+    }
+
     #[cfg(not(target_os = "linux"))]
     pub(crate) fn stop_host(&mut self) {}
 
@@ -240,6 +329,13 @@ impl Model {
             self.dirty = true;
             return;
         };
+        if !plugin.enabled {
+            if let Err(error) = self.set_managed_enabled(plugin_id, true) {
+                self.status = format!("E: plugin {plugin_id}: {error}");
+                self.dirty = true;
+                return;
+            }
+        }
         let Some(gateway) = self.gateway.as_mut() else {
             self.status = "E: gateway unavailable".to_owned();
             self.dirty = true;

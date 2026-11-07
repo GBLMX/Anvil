@@ -1,0 +1,13 @@
+{
+  "id": "anvil.official.trim-whitespace",
+  "version": "0.1.0",
+  "api": "1.0",
+  "entry": "main.luau",
+  "activationEvents": ["onCommand:anvil.trim-trailing-whitespace"],
+  "commands": [
+    {
+      "id": "anvil.trim-trailing-whitespace",
+      "title": "Trim Trailing Whitespace"
+    }
+  ]
+}

@@ -296,8 +296,56 @@ fn command_palette_filters_and_executes_registry_commands() {
     assert!(model.command_palette.is_none());
     model.open_command_palette();
     assert_eq!(
-        model.selected_command_id().as_deref(),
+        model.selected_command().map(|(id, _)| id).as_deref(),
         Some("view.focus_editor")
+    );
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn command_palette_includes_plugin_commands() {
+    use anvil_plugin_host::manifest::{PluginCommand, PluginManifest};
+
+    let mut model = Model::new(EditorState::from_text("alpha"), None);
+    model
+        .plugins
+        .push(crate::plugin_discovery::PluginDescriptor {
+            root: std::path::PathBuf::from("/tmp/plugin"),
+            manifest: PluginManifest {
+                id: "demo".to_owned(),
+                version: "1.0.0".to_owned(),
+                entry: "main.luau".to_owned(),
+                api: "1.0".to_owned(),
+                activation_events: vec!["onCommand:demo.trim".to_owned()],
+                commands: vec![PluginCommand {
+                    id: "demo.trim".to_owned(),
+                    title: "Trim".to_owned(),
+                }],
+            },
+            enabled: true,
+            digest: None,
+            source: None,
+            previous_digest: None,
+        });
+    model.open_command_palette();
+    let item = model
+        .command_palette
+        .as_ref()
+        .expect("palette")
+        .items
+        .iter()
+        .find(|item| item.id == "demo.trim")
+        .expect("plugin command");
+    assert_eq!(item.plugin_id.as_deref(), Some("demo"));
+    model.welcome = false;
+    for character in "demo.trim".chars() {
+        handle_event(&mut model, key(KeyCode::Char(character)));
+    }
+    handle_event(&mut model, key(KeyCode::Enter));
+    assert!(
+        model.status.contains("gateway unavailable"),
+        "{}",
+        model.status
     );
 }
 
@@ -572,4 +620,47 @@ fn lsp_settings_cover_builtin_languages() {
         vec!["lsp", "stdio"]
     );
     assert!(lsp_settings(Path::new("README.txt")).is_none());
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn managed_state_errors_are_visible_and_fail_closed() {
+    let directory = tempfile::tempdir().expect("tempdir");
+    let local_plugins = directory.path().join("local");
+    std::fs::create_dir(&local_plugins).expect("local plugins");
+    // The test process is single-writer for this variable; discovery tests use
+    // explicit paths and do not read the ambient plugin root.
+    unsafe { std::env::set_var("ANVIL_PLUGIN_DIR", &local_plugins) };
+    let socket = directory.path().join("gateway.sock");
+    let listener = anvil_ipc::Listener::bind(&socket).expect("bind");
+    let server = std::thread::spawn(move || {
+        let mut connection = listener.accept().expect("accept");
+        let frame = connection.recv().expect("hello").expect("hello frame");
+        let request: serde_json::Value = serde_json::from_slice(&frame).expect("hello json");
+        let response = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": request["id"],
+            "result": {"session_id": "test"}
+        });
+        connection
+            .send(&serde_json::to_vec(&response).expect("hello response"))
+            .expect("send hello");
+        let frame = connection.recv().expect("request").expect("request frame");
+        let request: serde_json::Value = serde_json::from_slice(&frame).expect("request json");
+        assert_eq!(request["method"], "pkg.installed");
+        let response = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": request["id"],
+            "error": {"code": -32009, "message": "corrupt state"}
+        });
+        connection
+            .send(&serde_json::to_vec(&response).expect("error response"))
+            .expect("send error");
+    });
+    let client = anvil_ipc::GatewayClient::connect(&socket, &[7; 32]).expect("client");
+    let mut model = Model::with_gateway(client, directory.path().to_path_buf());
+    let error = model.load_plugins().expect_err("managed state error");
+    assert!(error.contains("corrupt state"), "{error}");
+    assert!(model.plugins.is_empty());
+    server.join().expect("server");
 }

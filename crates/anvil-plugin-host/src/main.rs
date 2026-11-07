@@ -37,6 +37,7 @@ mod linux {
         let mut editor_socket = None;
         let mut editor_timeout_ms = 2_000u64;
         let mut gateway_socket = None;
+        let mut activation_command = None;
         let mut args = std::env::args().skip(1);
         while let Some(arg) = args.next() {
             match arg.as_str() {
@@ -104,6 +105,12 @@ mod linux {
                         .parse()
                         .map_err(|_| io::Error::other("invalid --editor-timeout-ms"))?;
                 }
+                "--activation-command" => {
+                    activation_command =
+                        Some(args.next().ok_or_else(|| {
+                            io::Error::other("missing --activation-command value")
+                        })?);
+                }
                 other => return Err(io::Error::other(format!("unknown argument: {other}"))),
             }
         }
@@ -165,7 +172,7 @@ mod linux {
         if let Some(root) = plugin_root.as_deref() {
             let manifest = PluginManifest::load(root).map_err(io::Error::other)?;
             let entry = manifest.entry_path(root).map_err(io::Error::other)?;
-            runtime::run_file(&entry, editor_bridge.take())
+            runtime::run_file(&entry, editor_bridge.take(), activation_command.as_deref())
                 .map_err(|error| io::Error::other(error.to_string()))?;
         }
 

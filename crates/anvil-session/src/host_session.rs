@@ -69,6 +69,7 @@ impl HostSession {
             None,
             gateway_socket,
             editor_socket,
+            None,
         )
     }
 
@@ -78,6 +79,7 @@ impl HostSession {
         token: Token,
         gateway_socket: Option<&Path>,
         editor_socket: Option<&Path>,
+        command: Option<&str>,
     ) -> Result<Self, String> {
         let host = host_binary()?;
         let cgroup_root = Some(cgroup_root()?);
@@ -90,6 +92,7 @@ impl HostSession {
             Some(plugin_root),
             gateway_socket,
             editor_socket,
+            command,
         )
     }
 
@@ -110,6 +113,7 @@ impl HostSession {
             None,
             gateway_socket,
             editor_socket,
+            None,
         )
     }
 
@@ -130,6 +134,7 @@ impl HostSession {
             None,
             None,
             editor_socket,
+            None,
         )
     }
 
@@ -143,6 +148,7 @@ impl HostSession {
         plugin_root: Option<&Path>,
         gateway_socket: Option<&Path>,
         editor_socket: Option<&Path>,
+        command: Option<&str>,
     ) -> Result<Self, String> {
         let cgroup = match cgroup_root {
             Some(root) => {
@@ -191,6 +197,10 @@ impl HostSession {
         if let Some(editor_socket) = editor_socket {
             args.push("--editor-socket".to_owned());
             args.push(editor_socket.display().to_string());
+        }
+        if let Some(command) = command {
+            args.push("--activation-command".to_owned());
+            args.push(command.to_owned());
         }
         let process = match cgroup {
             Some(cgroup) => spawn_in_cgroup(host, &args, token, cgroup),

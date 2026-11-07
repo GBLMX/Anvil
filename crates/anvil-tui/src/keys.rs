@@ -299,6 +299,31 @@ fn handle_key(model: &mut Model, key: KeyPress) {
         }
         return;
     }
+    #[cfg(target_os = "linux")]
+    if model.plugin_manager.is_some() {
+        let confirming = model
+            .plugin_manager
+            .as_ref()
+            .is_some_and(|manager| manager.confirm_uninstall);
+        if confirming {
+            match key.code {
+                KeyCode::Char('y') => model.uninstall_selected_plugin(),
+                KeyCode::Char('n') | KeyCode::Esc => model.cancel_uninstall(),
+                _ => {}
+            }
+        } else {
+            match key.code {
+                KeyCode::Esc => model.close_plugin_manager(),
+                KeyCode::Up => model.move_plugin_manager(-1),
+                KeyCode::Down => model.move_plugin_manager(1),
+                KeyCode::Char(' ') => model.toggle_selected_plugin(),
+                KeyCode::Char('x') => model.request_uninstall(),
+                KeyCode::Char('r') => model.rollback_selected_plugin(),
+                _ => {}
+            }
+        }
+        return;
+    }
 
     if model.welcome {
         if key.code == KeyCode::Esc {
@@ -372,11 +397,15 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             KeyCode::Char('p') if key.ctrl() => model.move_command_palette(-1),
             KeyCode::Char('n') if key.ctrl() => model.move_command_palette(1),
             KeyCode::Enter => {
-                let id = model.selected_command_id();
+                let selected = model.selected_command();
                 model.close_command_palette();
-                if let Some(id) = id {
+                if let Some((id, plugin_id)) = selected {
                     model.remember_command(&id);
-                    execute_command_id(model, &id, key);
+                    if let Some(plugin_id) = plugin_id {
+                        model.run_plugin_command(&plugin_id, &id);
+                    } else {
+                        execute_command_id(model, &id, key);
+                    }
                 }
             }
             KeyCode::Backspace => {

@@ -81,7 +81,11 @@ pub(crate) fn smoke() -> Result<i32> {
 }
 
 /// Loads and executes one validated Luau entry inside the sandbox.
-pub(crate) fn run_file(path: &Path, editor: Option<EditorClient>) -> Result<()> {
+pub(crate) fn run_file(
+    path: &Path,
+    editor: Option<EditorClient>,
+    command: Option<&str>,
+) -> Result<()> {
     let source = std::fs::read_to_string(path)
         .map_err(|error| mlua::Error::RuntimeError(format!("read plugin: {error}")))?;
     let lua = Lua::new();
@@ -89,6 +93,7 @@ pub(crate) fn run_file(path: &Path, editor: Option<EditorClient>) -> Result<()> 
     lua.sandbox(true)?;
     install_print(&lua)?;
     install_editor(&lua, editor)?;
+    install_plugin(&lua, command)?;
     lua.load(source).exec()
 }
 
@@ -112,6 +117,12 @@ fn install_print(lua: &Lua) -> Result<()> {
     lua.globals().set("print", print)
 }
 
+fn install_plugin(lua: &Lua, command: Option<&str>) -> Result<()> {
+    let table = lua.create_table()?;
+    table.set("command", command.unwrap_or_default())?;
+    lua.globals().set("plugin", table)
+}
+
 fn install_editor(lua: &Lua, editor: Option<EditorClient>) -> Result<()> {
     let table = lua.create_table()?;
     if let Some(editor) = editor {
@@ -124,6 +135,18 @@ fn install_editor(lua: &Lua, editor: Option<EditorClient>) -> Result<()> {
                 let value = get_client
                     .borrow_mut()
                     .call("editor.get_view", json!({}))
+                    .map_err(mlua::Error::RuntimeError)?;
+                lua.to_value(&value)
+            })?,
+        )?;
+
+        let snapshot_client = Rc::clone(&editor);
+        table.set(
+            "get_snapshot",
+            lua.create_function(move |lua, ()| {
+                let value = snapshot_client
+                    .borrow_mut()
+                    .call("editor.get_snapshot", json!({}))
                     .map_err(mlua::Error::RuntimeError)?;
                 lua.to_value(&value)
             })?,
@@ -142,7 +165,7 @@ fn install_editor(lua: &Lua, editor: Option<EditorClient>) -> Result<()> {
             })?,
         )?;
     } else {
-        for method in ["get_view", "apply_edit"] {
+        for method in ["get_view", "get_snapshot", "apply_edit"] {
             table.set(
                 method,
                 lua.create_function(|_, ()| {
@@ -171,7 +194,7 @@ mod file_tests {
                 .as_nanos()
         ));
         std::fs::write(&path, "return 42").expect("write");
-        let result = run_file(&path, None);
+        let result = run_file(&path, None, None);
         let _ = std::fs::remove_file(path);
         result.expect("run plugin");
     }
@@ -261,7 +284,79 @@ mod tests {
         let fixture =
             Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/editor_bridge/main.luau");
         let client = EditorClient::connect(&socket).expect("connect editor");
-        run_file(&fixture, Some(client)).expect("run bridge plugin");
+        run_file(&fixture, Some(client), None).expect("run bridge plugin");
+        server.join().expect("server");
+        let _ = std::fs::remove_file(socket);
+    }
+
+    #[test]
+    fn official_trim_whitespace_plugin_applies_edits() {
+        use anvil_ipc::Listener;
+
+        let socket = std::env::temp_dir().join(format!(
+            "anvil-luau-trim-{}-{}.sock",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("time")
+                .as_nanos()
+        ));
+        let listener = Listener::bind(&socket).expect("listen");
+        let server = std::thread::spawn(move || {
+            let mut connection = listener.accept().expect("accept");
+            let frame = connection.recv().expect("read").expect("snapshot request");
+            let request: JsonValue = serde_json::from_slice(&frame).expect("snapshot json");
+            assert_eq!(request["method"], "editor.get_snapshot");
+            let response = json!({
+                "jsonrpc": "2.0",
+                "id": request["id"],
+                "result": {
+                    "buffer_id": 1,
+                    "revision": 7,
+                    "text": "a  \n\tb\t\nc"
+                }
+            });
+            connection
+                .send(
+                    serde_json::to_string(&response)
+                        .expect("snapshot response")
+                        .as_bytes(),
+                )
+                .expect("snapshot send");
+
+            let frame = connection.recv().expect("read").expect("edit request");
+            let request: JsonValue = serde_json::from_slice(&frame).expect("edit json");
+            assert_eq!(request["method"], "editor.apply_edit");
+            assert_eq!(request["params"]["buffer_id"], 1);
+            assert_eq!(request["params"]["base_revision"], 7);
+            let edits = request["params"]["edits"].as_array().expect("edits");
+            assert_eq!(edits.len(), 2);
+            assert_eq!(edits[0]["range"]["start"], 1);
+            assert_eq!(edits[0]["range"]["end"], 3);
+            assert_eq!(edits[1]["range"]["start"], 6);
+            assert_eq!(edits[1]["range"]["end"], 7);
+            let response = json!({
+                "jsonrpc": "2.0",
+                "id": request["id"],
+                "result": { "revision": 8, "applied_edits": 2 }
+            });
+            connection
+                .send(
+                    serde_json::to_string(&response)
+                        .expect("edit response")
+                        .as_bytes(),
+                )
+                .expect("edit send");
+        });
+        let plugin = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../plugins/official/trim-whitespace/main.luau");
+        let client = EditorClient::connect(&socket).expect("connect editor");
+        run_file(
+            &plugin,
+            Some(client),
+            Some("anvil.trim-trailing-whitespace"),
+        )
+        .expect("run official plugin");
         server.join().expect("server");
         let _ = std::fs::remove_file(socket);
     }

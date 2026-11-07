@@ -23,7 +23,7 @@ fn command_title(id: &str) -> String {
 
 impl Model {
     pub(crate) fn open_command_palette(&mut self) {
-        let items = command::COMMANDS
+        let mut items = command::COMMANDS
             .iter()
             .filter(|spec| crate::keymap::executable_command(spec.id.as_str()))
             .map(|spec| {
@@ -43,9 +43,31 @@ impl Model {
                         id,
                         contexts.join("+")
                     ),
+                    plugin_id: None,
                 }
             })
             .collect::<Vec<_>>();
+        #[cfg(target_os = "linux")]
+        for plugin in self.plugins.iter().filter(|plugin| plugin.enabled) {
+            for command in &plugin.manifest.commands {
+                if items.len() >= 512 {
+                    break;
+                }
+                if items.iter().any(|item| item.id == command.id) {
+                    continue;
+                }
+                items.push(CommandPaletteItem {
+                    id: command.id.clone(),
+                    label: format!(
+                        "{:<28} {:<36} [plugin {}]",
+                        command.title.escape_default(),
+                        command.id.escape_default(),
+                        plugin.manifest.id.escape_default()
+                    ),
+                    plugin_id: Some(plugin.manifest.id.clone()),
+                });
+            }
+        }
         let filtered = (0..items.len()).collect();
         self.command_palette = Some(CommandPaletteState {
             query: String::new(),
@@ -109,12 +131,12 @@ impl Model {
         self.dirty = true;
     }
 
-    pub(crate) fn selected_command_id(&self) -> Option<String> {
+    pub(crate) fn selected_command(&self) -> Option<(String, Option<String>)> {
         let palette = self.command_palette.as_ref()?;
         palette
             .items
             .get(*palette.filtered.get(palette.selected)?)
-            .map(|item| item.id.clone())
+            .map(|item| (item.id.clone(), item.plugin_id.clone()))
     }
 
     pub(crate) fn remember_command(&mut self, id: &str) {

@@ -769,6 +769,8 @@ pub fn view(model: &Model, frame: &mut Frame) {
         );
     }
     crate::pkg_install::render(model, frame, frame.area());
+    #[cfg(target_os = "linux")]
+    crate::plugin_manager::render(model, frame, frame.area());
 }
 
 fn render_welcome(frame: &mut Frame, area: Rect, model: &Model) {

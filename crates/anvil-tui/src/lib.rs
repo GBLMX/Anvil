@@ -60,6 +60,8 @@ mod pkg_install;
 mod plugin_activation;
 mod plugin_discovery;
 mod plugin_document;
+#[cfg(target_os = "linux")]
+mod plugin_manager;
 mod plugins;
 mod repeat;
 mod search;
@@ -230,6 +232,7 @@ struct PreviewState {
 struct CommandPaletteItem {
     id: String,
     label: String,
+    plugin_id: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -520,6 +523,12 @@ pub struct Model {
     /// Plugin host supervisor keyed by plugin id.
     #[cfg(target_os = "linux")]
     plugin_supervisor: PluginSupervisor,
+    #[cfg(target_os = "linux")]
+    plugin_manager: Option<plugin_manager::PluginManagerState>,
+    #[cfg(target_os = "linux")]
+    plugin_store_size: u64,
+    #[cfg(target_os = "linux")]
+    installer: Option<(GatewaySession, GatewayClient)>,
     pkg_install: Option<pkg_install::PkgInstallState>,
 }
 
@@ -627,6 +636,12 @@ impl Model {
             plugins: Vec::new(),
             #[cfg(target_os = "linux")]
             plugin_supervisor: PluginSupervisor::new(),
+            #[cfg(target_os = "linux")]
+            plugin_manager: None,
+            #[cfg(target_os = "linux")]
+            plugin_store_size: 0,
+            #[cfg(target_os = "linux")]
+            installer: None,
             pkg_install: None,
         }
     }
@@ -651,7 +666,38 @@ impl Model {
 
     #[cfg(target_os = "linux")]
     pub(crate) fn load_plugins(&mut self) -> Result<(), String> {
-        self.plugins = plugin_discovery::discover()?;
+        let mut plugins = plugin_discovery::discover()?;
+        let managed = if let Some(gateway) = self.gateway.as_mut() {
+            match gateway.call("pkg.installed", serde_json::json!({})) {
+                Ok(value) => {
+                    self.plugin_store_size = value
+                        .get("store_size")
+                        .and_then(|size| size.as_u64())
+                        .unwrap_or(0);
+                    plugin_discovery::discover_managed(&value)
+                }
+                Err(error) => Err(format!("pkg.installed: {error}")),
+            }
+        } else {
+            Ok(Vec::new())
+        };
+        let conflicts = match managed {
+            Ok(managed) => plugin_discovery::merge_managed(&mut plugins, managed),
+            Err(error) => {
+                self.plugins = plugins;
+                return Err(error);
+            }
+        };
+        self.plugins = plugins;
+        if let Some(manager) = self.plugin_manager.as_mut() {
+            manager.selected = manager.selected.min(self.plugins.len().saturating_sub(1));
+        }
+        if !conflicts.is_empty() {
+            return Err(format!(
+                "duplicate managed/local plugin ids: {}",
+                conflicts.join(", ")
+            ));
+        }
         Ok(())
     }
 

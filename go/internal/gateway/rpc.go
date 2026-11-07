@@ -155,6 +155,14 @@ func (s *Server) dispatch(ctx context.Context, req request, state *connectionSta
 		return s.packageInstall(req, state)
 	case "pkg.trust":
 		return s.packageTrust(req, state)
+	case "pkg.installed":
+		return s.packageInstalled(req, state)
+	case "pkg.set_enabled":
+		return s.packageSetEnabled(req, state)
+	case "pkg.uninstall":
+		return s.packageUninstall(req, state)
+	case "pkg.rollback":
+		return s.packageRollback(req, state)
 	case "lsp.start":
 		return s.lspStart(ctx, req, state)
 	case "lsp.send":
@@ -192,7 +200,7 @@ func (s *Server) hello(req request, state *connectionState) (interface{}, *rpcEr
 			return nil, &rpcError{Code: -32001, Message: "unauthorized"}
 		}
 		s.tokenUsed = true
-		state.isEditor = true
+		state.isEditor = s.cfg.Role == "editor"
 		s.tokenMu.Unlock()
 	} else if s.cfg.LSPTokenSHA256 != [32]byte{} && subtle.ConstantTimeCompare(hash[:], s.cfg.LSPTokenSHA256[:]) == 1 {
 		// The LSP token is session-bound and may be reused after a worker crash

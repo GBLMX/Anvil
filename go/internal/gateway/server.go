@@ -21,6 +21,7 @@ import (
 	"github.com/GBLMX/Anvil/go/internal/fetch"
 	"github.com/GBLMX/Anvil/go/internal/fsroot"
 	"github.com/GBLMX/Anvil/go/internal/lsp"
+	"github.com/GBLMX/Anvil/go/internal/pkg"
 	"golang.org/x/sys/unix"
 )
 
@@ -47,6 +48,7 @@ type Config struct {
 	SocketPath      string
 	Workspace       string
 	PluginID        string
+	Role            string
 	TokenSHA256     [32]byte
 	LSPTokenSHA256  [32]byte
 	Permissions     []string
@@ -56,7 +58,7 @@ type Config struct {
 	MaxOutput       int
 	Fetcher         *fetch.Client
 	PackageFetcher  *fetch.Client
-	PluginDir       string
+	Store           *pkg.Store
 	TrustStorePath  string
 	DownloadWorkers int
 	DownloadQueue   int
@@ -80,7 +82,7 @@ type Server struct {
 	pluginMu  sync.Mutex
 	plugins   map[string]pluginGrant
 	cgroup    string
-	downloads *downloadQueue
+	installer *installer
 }
 
 // Listen binds the gateway socket with mode 0600.
@@ -90,6 +92,12 @@ func Listen(cfg Config) (*Server, error) {
 	}
 	if cfg.PluginID == "" {
 		return nil, errors.New("gateway plugin id is required")
+	}
+	if cfg.Role == "" {
+		cfg.Role = "editor"
+	}
+	if cfg.Role != "editor" && cfg.Role != "installer" {
+		return nil, errors.New("gateway role must be editor or installer")
 	}
 	if cfg.ExecTimeout <= 0 {
 		cfg.ExecTimeout = 5 * time.Second
@@ -128,23 +136,12 @@ func Listen(cfg Config) (*Server, error) {
 		cgroupPath = path
 	}
 	return &Server{
-		cfg:      cfg,
-		listener: listener,
-		downloads: func() *downloadQueue {
-			if cfg.PackageFetcher == nil {
-				return nil
-			}
-			return newDownloadQueue(
-				context.Background(),
-				cfg.PackageFetcher,
-				cfg.TrustStorePath,
-				cfg.DownloadWorkers,
-				cfg.DownloadQueue,
-			)
-		}(),
-		root:    root,
-		plugins: map[string]pluginGrant{},
-		cgroup:  cgroupPath,
+		cfg:       cfg,
+		listener:  listener,
+		installer: newInstaller(cfg),
+		root:      root,
+		plugins:   map[string]pluginGrant{},
+		cgroup:    cgroupPath,
 	}, nil
 }
 
@@ -159,9 +156,7 @@ func (s *Server) Close() error {
 	if s.root != nil {
 		_ = s.root.Close()
 	}
-	if s.downloads != nil {
-		s.downloads.close()
-	}
+	s.installer.close()
 	if s.cgroup != "" {
 		_ = os.Remove(s.cgroup)
 	}

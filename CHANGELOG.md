@@ -18,6 +18,14 @@ post-`0.5.0` feature line.
 - Gateway package-download jobs with bounded concurrency, progress and failure
   notifications, capability review, trust-on-first-use key approval, and
   digest-pinned installation through `:pkg install <url>`.
+- Manifest-declared plugin commands in the command palette, with per-command
+  host activation and `plugin.command` exposed to Luau.
+- `editor.get_snapshot()` Luau binding and the first official plugin,
+  `plugins/official/trim-whitespace`.
+- Content-addressed plugin store with `state.json`, exclusive `state.lock`
+  serialization, `pkg.installed` discovery, and install-without-enable.
+- Installed-plugin manager overlay with enable/disable, confirmed uninstall,
+  rollback, and store-size display.
 
 ### Changed
 - Split TUI runtime/layout/plugin, renderer, LSP settings/responses, and tree

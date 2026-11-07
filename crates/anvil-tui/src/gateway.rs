@@ -91,6 +91,58 @@ impl GatewaySession {
         }
     }
 
+    /// Start the fetch-only installer role for one allowed host.
+    pub fn start_installer(workspace: &Path, host: &str) -> Result<(Self, GatewayClient), String> {
+        if host.is_empty() || host.chars().any(char::is_whitespace) {
+            return Err("installer host is required".to_owned());
+        }
+        let workspace = workspace
+            .canonicalize()
+            .map_err(|error| format!("workspace {}: {error}", workspace.display()))?;
+        let binary = gateway_binary();
+        let token = random_token()?;
+        let hash = hex(&Sha256::digest(token));
+        let socket = socket_path()?;
+        let gateway_stderr = env::var_os("ANVIL_GATEWAY_LOG")
+            .and_then(|path| File::create(path).ok())
+            .map(Stdio::from)
+            .unwrap_or_else(Stdio::null);
+        let mut command = Command::new(&binary);
+        command
+            .arg("-socket")
+            .arg(socket.to_string_lossy().as_ref())
+            .arg("-workspace")
+            .arg(workspace.to_string_lossy().as_ref())
+            .arg("-plugin-id")
+            .arg("anvil-installer")
+            .arg("-role")
+            .arg("installer")
+            .arg("-token-sha256")
+            .arg(&hash)
+            .arg("-allow-fetch")
+            .arg("-fetch-allow")
+            .arg(host)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(gateway_stderr);
+        let child = command
+            .spawn()
+            .map_err(|error| format!("start {}: {error}", binary.display()))?;
+        let mut session = Self {
+            child,
+            socket,
+            lsp_token: [0; 32],
+        };
+        let client = match session.connect(&token) {
+            Ok(client) => client,
+            Err(error) => {
+                session.stop();
+                return Err(error);
+            }
+        };
+        Ok((session, client))
+    }
+
     /// Open a fresh authenticated LSP connection.
     pub fn connect_lsp(&mut self) -> Result<GatewayClient, String> {
         let token = self.lsp_token;

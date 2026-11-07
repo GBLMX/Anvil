@@ -50,11 +50,16 @@ manifests are discovered from child directories of `ANVIL_PLUGIN_DIR`.
 `:pkg install <url>` downloads a signed package through the gateway, shows its
 declared capabilities, and installs only the reviewed SHA-256 digest. Downloads
 require `-allow-fetch` and an explicit `-fetch-allow` host.
+`plugins/official/trim-whitespace` is the first official Luau plugin. Point
+`ANVIL_PLUGIN_DIR` at `plugins/official`, open the command palette
+(`Space p`), and run `Trim Trailing Whitespace`.
 `onLanguage` and `onWorkspaceContains` events start matching sandboxed hosts
 with no grants. `onStartup` requires explicit opt-in via
 `ANVIL_PLUGIN_ALLOW_STARTUP=1`; workspace activation is disabled with
-`ANVIL_PLUGIN_DISABLE_WORKSPACE_ACTIVATION=1`. `onCommand` dispatch and the
-optional `LANDLOCK_SCOPE_SIGNAL` layer are still pending. This is not a VM or public plugin API.
+`ANVIL_PLUGIN_DISABLE_WORKSPACE_ACTIVATION=1`. Manifest-declared `onCommand`
+entries are dispatched from the command palette; `editor.register_command` is
+still pending. The optional `LANDLOCK_SCOPE_SIGNAL` layer is also pending.
+This is not a VM or public plugin API.
 
 Phase 0 still consists of the `anvil-api` contracts, `anvil-core` PieceTable,
 `anvil-editor` snapshots, `anvil-ipc` framing/JSON-RPC/Unix transport, and the

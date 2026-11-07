@@ -9,9 +9,9 @@ the plans linked below.
 | Area | Limitation | Tracking |
 |---|---|---|
 | Plugin sandbox | `LANDLOCK_SCOPE_SIGNAL` is not enabled; seccomp remains the primary signal control | [threat model T9/T10](threat-model.md), [Linux L1b](linux-platform-plan.md) |
-| Plugin API | v1 is frozen with complete DTOs and a production editor RPC proxy; `onCommand` dispatch remains separate | [0.6.0](0.6.x-plan.md), [ADR-0003](adr/0003-idl.md) |
-| Plugin commands | `onCommand` activation is parsed and matched but not dispatched until the command index and `0.5.x` command/notification surface are wired | [0.4.x](0.4.x-plan.md), [0.5.x](0.5.x-plan.md) |
-| Distribution | Signed local `.anvil-plugin` install exists; download manager, installed-plugin manager, index, and marketplace are still missing | [0.6.x](0.6.x-plan.md) |
+| Plugin API | v1 is frozen with complete DTOs and a production editor RPC proxy; manifest commands dispatch, while `editor.register_command` remains pending | [0.6.0](0.6.x-plan.md), [ADR-0003](adr/0003-idl.md) |
+| Plugin commands | Manifest `onCommand` events dispatch from the command palette; dynamic `editor.register_command` is still pending | [0.4.x](0.4.x-plan.md), [0.5.x](0.5.x-plan.md) |
+| Distribution | Signed install, bounded download queue, content-addressed store, `pkg.installed`, the enable/disable/uninstall/rollback manager, and a fetch-only installer gateway role exist; signed index, marketplace, and typed `GatewayClient::fetch` are still missing | [0.6.x](0.6.x-plan.md) |
 | Performance | Full gate suite has not been run on the reference machine | [performance](performance.md) |
 | Persistence | Session/tab/undo restore and crash recovery are not defined | [0.5.6](0.5.x-plan.md) |
 | Configuration | No unified config/theme/icon schema or hot-reload contract | [0.5.x](0.5.x-plan.md) |

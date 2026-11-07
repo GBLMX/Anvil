@@ -40,16 +40,21 @@ func main() {
 	installPlugin := flag.String("install-plugin", "", "verify and install one .anvil-plugin archive, then exit")
 	pluginSignature := flag.String("plugin-signature", "", "detached Ed25519 signature file")
 	pluginPublicKey := flag.String("plugin-public-key", "", "Ed25519 public key as hex or base64")
-	pluginInstallDir := flag.String("plugin-install-dir", "", "destination directory for -install-plugin")
-	pluginDir := flag.String("plugin-dir", os.Getenv("ANVIL_PLUGIN_DIR"), "installed plugin directory")
+	pluginStore := flag.String("plugin-store", "", "content-addressed plugin store root")
+	role := flag.String("role", "editor", "gateway role: editor or installer")
 	downloadWorkers := flag.Int("download-workers", 3, "maximum concurrent package downloads")
 	downloadQueue := flag.Int("download-queue", 16, "maximum queued package downloads")
 	pluginTrustStore := flag.String("plugin-trust-store", pkg.DefaultTrustStorePath(), "trusted Ed25519 key store")
 	flag.Parse()
 
+	store, storeErr := pkg.NewStore(*pluginStore)
+	if storeErr != nil {
+		fmt.Fprintf(os.Stderr, "anvil-gateway: %v\n", storeErr)
+		os.Exit(2)
+	}
 	if *installPlugin != "" {
-		if *pluginSignature == "" || *pluginPublicKey == "" || *pluginInstallDir == "" {
-			fmt.Fprintln(os.Stderr, "anvil-gateway: -install-plugin requires -plugin-signature, -plugin-public-key, and -plugin-install-dir")
+		if *pluginSignature == "" || *pluginPublicKey == "" {
+			fmt.Fprintln(os.Stderr, "anvil-gateway: -install-plugin requires -plugin-signature and -plugin-public-key")
 			os.Exit(2)
 		}
 		publicKey, err := pkg.DecodePublicKey(*pluginPublicKey)
@@ -57,12 +62,23 @@ func main() {
 			fmt.Fprintf(os.Stderr, "anvil-gateway: public key: %v\n", err)
 			os.Exit(2)
 		}
-		digest, err := pkg.Install(*installPlugin, *pluginSignature, publicKey, *pluginInstallDir)
+		if err := pkg.AddTrustedKey(*pluginTrustStore, "local-file", publicKey); err != nil {
+			fmt.Fprintf(os.Stderr, "anvil-gateway: trust plugin key: %v\n", err)
+			os.Exit(2)
+		}
+		installed, err := store.InstallPackage(
+			*installPlugin,
+			*pluginSignature,
+			publicKey,
+			"",
+			*pluginTrustStore,
+			"local-file",
+		)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "anvil-gateway: install plugin: %v\n", err)
 			os.Exit(2)
 		}
-		fmt.Printf("installed %s sha256=%x\n", *pluginInstallDir, digest)
+		fmt.Printf("installed %s digest=%s\n", installed.Root, installed.Digest)
 		return
 	}
 	if *socket == "" || *workspace == "" || *tokenHash == "" {
@@ -150,6 +166,7 @@ func main() {
 		SocketPath:      *socket,
 		Workspace:       workspacePath,
 		PluginID:        *pluginID,
+		Role:            *role,
 		TokenSHA256:     [32]byte(hash),
 		LSPTokenSHA256:  lspHash,
 		Permissions:     granted,
@@ -160,7 +177,7 @@ func main() {
 		Fetcher:         fetcher,
 		CgroupRoot:      *cgroupRoot,
 		PackageFetcher:  packageFetcher,
-		PluginDir:       *pluginDir,
+		Store:           store,
 		TrustStorePath:  *pluginTrustStore,
 		DownloadWorkers: *downloadWorkers,
 		DownloadQueue:   *downloadQueue,

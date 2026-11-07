@@ -28,6 +28,25 @@ type pkgTrustParams struct {
 	PublicKey string `json:"public_key"`
 }
 
+type pkgSetEnabledParams struct {
+	PluginID string `json:"plugin_id"`
+	Enabled  bool   `json:"enabled"`
+}
+
+type pkgPluginParams struct {
+	PluginID string `json:"plugin_id"`
+}
+
+func (s *Server) requireRole(state *connectionState, role string) *rpcError {
+	state.mu.Lock()
+	authorized := state.handshaken && s.cfg.Role == role
+	state.mu.Unlock()
+	if !authorized {
+		return &rpcError{Code: -32003, Message: role + " session required"}
+	}
+	return nil
+}
+
 func (state *connectionState) notify(method string, params any) {
 	body, err := json.Marshal(map[string]any{
 		"jsonrpc": "2.0",
@@ -52,11 +71,12 @@ func editorRequired(state *connectionState) *rpcError {
 }
 
 func (s *Server) packageDownload(req request, state *connectionState) (interface{}, *rpcError) {
-	if rpcErr := editorRequired(state); rpcErr != nil {
+	if rpcErr := s.requireRole(state, "installer"); rpcErr != nil {
 		return nil, rpcErr
 	}
-	if s.downloads == nil {
-		return nil, &rpcError{Code: -32008, Message: "package downloader unavailable"}
+	downloader, err := s.installer.packageDownloader()
+	if err != nil {
+		return nil, &rpcError{Code: -32008, Message: err.Error()}
 	}
 	var params pkgDownloadParams
 	if err := decodeParams(req.Params, &params); err != nil || params.URL == "" || params.SignatureURL == "" {
@@ -66,7 +86,7 @@ func (s *Server) packageDownload(req request, state *connectionState) (interface
 	notify := func(method string, value any) {
 		state.notify(method, value)
 	}
-	if err := s.downloads.submit(downloadJob{
+	if err := downloader.submit(downloadJob{
 		id:           jobID,
 		packageURL:   params.URL,
 		signatureURL: params.SignatureURL,
@@ -78,7 +98,7 @@ func (s *Server) packageDownload(req request, state *connectionState) (interface
 }
 
 func (s *Server) packageInstall(req request, state *connectionState) (interface{}, *rpcError) {
-	if rpcErr := editorRequired(state); rpcErr != nil {
+	if rpcErr := s.requireRole(state, "installer"); rpcErr != nil {
 		return nil, rpcErr
 	}
 	var params pkgInstallParams
@@ -98,28 +118,20 @@ func (s *Server) packageInstall(req request, state *connectionState) (interface{
 	if !strings.EqualFold(fmt.Sprintf("%x", actualDigest), params.Digest) {
 		return nil, &rpcError{Code: -32009, Message: "package digest does not match the reviewed archive"}
 	}
-	manifest, err := pkg.InspectArchive(params.PackagePath)
-	if err != nil {
-		return nil, &rpcError{Code: -32602, Message: err.Error()}
+	if s.cfg.Store == nil {
+		return nil, &rpcError{Code: -32008, Message: "plugin store is not configured"}
 	}
-	if !validPluginID(manifest.ID) {
-		return nil, &rpcError{Code: -32602, Message: "invalid plugin id"}
-	}
-	pluginDir := s.cfg.PluginDir
-	if pluginDir == "" {
-		return nil, &rpcError{Code: -32008, Message: "plugin directory is not configured"}
-	}
-	destination := filepath.Join(pluginDir, manifest.ID)
 	trustPath := s.cfg.TrustStorePath
 	if trustPath == "" {
 		trustPath = pkg.DefaultTrustStorePath()
 	}
-	digest, err := pkg.InstallTrusted(
+	installed, err := s.cfg.Store.InstallPackage(
 		params.PackagePath,
 		params.SignaturePath,
 		publicKey,
-		destination,
+		params.Digest,
 		trustPath,
+		"local-file",
 	)
 	if err != nil {
 		if errors.Is(err, pkg.ErrUntrustedKey) {
@@ -131,9 +143,9 @@ func (s *Server) packageInstall(req request, state *connectionState) (interface{
 		_ = os.RemoveAll(filepath.Dir(params.PackagePath))
 	}
 	return map[string]string{
-		"plugin_id": manifest.ID,
-		"path":      destination,
-		"digest":    fmt.Sprintf("%x", digest),
+		"plugin_id": installed.ID,
+		"path":      installed.Root,
+		"digest":    installed.Digest,
 	}, nil
 }
 
@@ -159,17 +171,72 @@ func (s *Server) packageTrust(req request, state *connectionState) (interface{},
 	return map[string]bool{"trusted": true}, nil
 }
 
-func validPluginID(id string) bool {
-	if id == "" || len(id) > 128 || id == "." || id == ".." {
-		return false
+func (s *Server) packageInstalled(_ request, state *connectionState) (interface{}, *rpcError) {
+	if rpcErr := editorRequired(state); rpcErr != nil {
+		return nil, rpcErr
 	}
-	for _, character := range id {
-		if !(character == '-' || character == '_' || character == '.' ||
-			character >= 'a' && character <= 'z' ||
-			character >= 'A' && character <= 'Z' ||
-			character >= '0' && character <= '9') {
-			return false
-		}
+	if s.cfg.Store == nil {
+		return nil, &rpcError{Code: -32008, Message: "plugin store is not configured"}
 	}
-	return true
+	plugins, err := s.cfg.Store.ListInstalled()
+	if err != nil {
+		return nil, &rpcError{Code: -32009, Message: err.Error()}
+	}
+	size, err := s.cfg.Store.StoreSize()
+	if err != nil {
+		return nil, &rpcError{Code: -32009, Message: err.Error()}
+	}
+	return map[string]interface{}{"plugins": plugins, "store_size": size}, nil
+}
+
+func (s *Server) packageSetEnabled(req request, state *connectionState) (interface{}, *rpcError) {
+	if rpcErr := editorRequired(state); rpcErr != nil {
+		return nil, rpcErr
+	}
+	if s.cfg.Store == nil {
+		return nil, &rpcError{Code: -32008, Message: "plugin store is not configured"}
+	}
+	var params pkgSetEnabledParams
+	if err := decodeParams(req.Params, &params); err != nil || params.PluginID == "" {
+		return nil, &rpcError{Code: -32602, Message: "plugin_id is required"}
+	}
+	if err := s.cfg.Store.SetEnabled(params.PluginID, params.Enabled); err != nil {
+		return nil, &rpcError{Code: -32009, Message: err.Error()}
+	}
+	return map[string]bool{"enabled": params.Enabled}, nil
+}
+
+func (s *Server) packageUninstall(req request, state *connectionState) (interface{}, *rpcError) {
+	if rpcErr := editorRequired(state); rpcErr != nil {
+		return nil, rpcErr
+	}
+	if s.cfg.Store == nil {
+		return nil, &rpcError{Code: -32008, Message: "plugin store is not configured"}
+	}
+	var params pkgPluginParams
+	if err := decodeParams(req.Params, &params); err != nil || params.PluginID == "" {
+		return nil, &rpcError{Code: -32602, Message: "plugin_id is required"}
+	}
+	if err := s.cfg.Store.Uninstall(params.PluginID); err != nil {
+		return nil, &rpcError{Code: -32009, Message: err.Error()}
+	}
+	return map[string]bool{"uninstalled": true}, nil
+}
+
+func (s *Server) packageRollback(req request, state *connectionState) (interface{}, *rpcError) {
+	if rpcErr := editorRequired(state); rpcErr != nil {
+		return nil, rpcErr
+	}
+	if s.cfg.Store == nil {
+		return nil, &rpcError{Code: -32008, Message: "plugin store is not configured"}
+	}
+	var params pkgPluginParams
+	if err := decodeParams(req.Params, &params); err != nil || params.PluginID == "" {
+		return nil, &rpcError{Code: -32602, Message: "plugin_id is required"}
+	}
+	digest, err := s.cfg.Store.Rollback(params.PluginID)
+	if err != nil {
+		return nil, &rpcError{Code: -32009, Message: err.Error()}
+	}
+	return map[string]string{"digest": digest}, nil
 }

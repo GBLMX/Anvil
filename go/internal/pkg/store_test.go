@@ -1,0 +1,422 @@
+package pkg
+
+import (
+	"crypto/ed25519"
+	"fmt"
+	"os"
+	"path/filepath"
+	"sync"
+	"testing"
+)
+
+func testDigest(seed byte) string {
+	value := make([]byte, 32)
+	for index := range value {
+		value[index] = seed
+	}
+	return fmt.Sprintf("%x", value)
+}
+
+func TestDefaultStoreRootFallback(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("XDG_DATA_HOME", "")
+	t.Setenv("HOME", root)
+	want := filepath.Join(root, ".local", "share", "anvil", "plugins")
+	got, err := DefaultStoreRoot()
+	if err != nil {
+		t.Fatalf("default root: %v", err)
+	}
+	if got != want {
+		t.Fatalf("DefaultStoreRoot() = %q, want %q", got, want)
+	}
+}
+
+func TestStoreStatePermissionsAndAtomicUpdate(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "plugins")
+	store, err := NewStore(root)
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	if info, err := os.Stat(root); err != nil || info.Mode().Perm() != 0o700 {
+		t.Fatalf("data root mode: %v %v", info, err)
+	}
+	if err := store.UpdateState(func(state *StoreState) error {
+		state.Plugins["demo"] = InstalledPlugin{
+			ActiveDigest: testDigest(1),
+			Source:       "local-file",
+			Versions: []InstalledVersion{{
+				Digest:  testDigest(1),
+				Version: "1.0.0",
+			}},
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("update state: %v", err)
+	}
+	for _, path := range []string{store.StatePath(), filepath.Join(root, "state.lock")} {
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatalf("stat %s: %v", path, err)
+		}
+		if info.Mode().Perm() != 0o600 {
+			t.Fatalf("%s mode = %o, want 600", path, info.Mode().Perm())
+		}
+	}
+	state, err := store.ReadState()
+	if err != nil {
+		t.Fatalf("read state: %v", err)
+	}
+	if state.Plugins["demo"].ActiveDigest != testDigest(1) {
+		t.Fatalf("active digest: %#v", state.Plugins["demo"])
+	}
+}
+
+func TestStoreConcurrentUpdatesDoNotLoseEntries(t *testing.T) {
+	store, err := NewStore(filepath.Join(t.TempDir(), "plugins"))
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	const workers = 16
+	var group sync.WaitGroup
+	for index := 0; index < workers; index++ {
+		group.Add(1)
+		go func(index int) {
+			defer group.Done()
+			id := fmt.Sprintf("plugin-%d", index)
+			err := store.UpdateState(func(state *StoreState) error {
+				state.Plugins[id] = InstalledPlugin{
+					ActiveDigest: testDigest(byte(index)),
+					Source:       "local-file",
+					Versions: []InstalledVersion{{
+						Digest:  testDigest(byte(index)),
+						Version: "1.0.0",
+					}},
+				}
+				return nil
+			})
+			if err != nil {
+				t.Errorf("update %d: %v", index, err)
+			}
+		}(index)
+	}
+	group.Wait()
+	state, err := store.ReadState()
+	if err != nil {
+		t.Fatalf("read state: %v", err)
+	}
+	if len(state.Plugins) != workers {
+		t.Fatalf("state has %d plugins, want %d", len(state.Plugins), workers)
+	}
+}
+
+func TestStoreRejectsCorruptState(t *testing.T) {
+	store, err := NewStore(filepath.Join(t.TempDir(), "plugins"))
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	if err := os.WriteFile(store.StatePath(), []byte("{"), 0o600); err != nil {
+		t.Fatalf("write corrupt state: %v", err)
+	}
+	if _, err := store.ReadState(); err == nil {
+		t.Fatal("corrupt state was accepted")
+	}
+}
+
+func TestStoreInstallPackageIsContentAddressedAndDisabled(t *testing.T) {
+	root := t.TempDir()
+	store, err := NewStore(filepath.Join(root, "plugins"))
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = filepath.WalkDir(store.Root, func(path string, entry os.DirEntry, walkErr error) error {
+			if walkErr == nil {
+				_ = os.Chmod(path, 0o700)
+			}
+			return nil
+		})
+		_ = os.RemoveAll(store.Root)
+	})
+	archive, signature, public := signedPackage(t, root, []entry{{
+		name: "plugin.json",
+		data: `{"id":"demo","version":"1.0.0","entry":"main.luau"}`,
+	}})
+	digest, err := DigestFile(archive)
+	if err != nil {
+		t.Fatalf("digest: %v", err)
+	}
+	digestHex := fmt.Sprintf("%x", digest)
+	trustPath := filepath.Join(root, "trust.json")
+	if err := AddTrustedKey(trustPath, "demo", public); err != nil {
+		t.Fatalf("trust key: %v", err)
+	}
+	installed, err := store.InstallPackage(
+		archive,
+		signature,
+		public,
+		digestHex,
+		trustPath,
+		"local-file",
+	)
+	if err != nil {
+		t.Fatalf("install package: %v", err)
+	}
+	if installed.Enabled {
+		t.Fatal("install enabled the plugin")
+	}
+	if _, err := os.Stat(filepath.Join(installed.Root, "plugin.json")); err != nil {
+		t.Fatalf("installed root: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(store.Root, "store", digestHex, "package.anvil-plugin")); err != nil {
+		t.Fatalf("stored archive: %v", err)
+	}
+	again, err := store.InstallPackage(
+		archive,
+		signature,
+		public,
+		digestHex,
+		trustPath,
+		"local-file",
+	)
+	if err != nil {
+		t.Fatalf("repeat install: %v", err)
+	}
+	if again.Digest != installed.Digest {
+		t.Fatalf("repeat digest: %s != %s", again.Digest, installed.Digest)
+	}
+	state, err := store.ReadState()
+	if err != nil {
+		t.Fatalf("read state: %v", err)
+	}
+	if len(state.Plugins["demo"].Versions) != 1 {
+		t.Fatalf("repeat install added a version: %#v", state.Plugins["demo"])
+	}
+}
+
+func TestStoreAddInstalledVersionRequiresStoreEntry(t *testing.T) {
+	store, err := NewStore(filepath.Join(t.TempDir(), "plugins"))
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	if err := store.AddInstalledVersion("demo", testDigest(1), "1.0.0", "", "local-file", nil); err == nil {
+		t.Fatal("installed version without store entry was accepted")
+	}
+	digest := testDigest(2)
+	entry, err := store.EntryPath(digest)
+	if err != nil {
+		t.Fatalf("entry path: %v", err)
+	}
+	if err := os.MkdirAll(entry, 0o700); err != nil {
+		t.Fatalf("store entry: %v", err)
+	}
+	if err := store.AddInstalledVersion("demo", digest, "1.0.0", "", "local-file", []string{"fs.read:**"}); err != nil {
+		t.Fatalf("add installed version: %v", err)
+	}
+	state, err := store.ReadState()
+	if err != nil {
+		t.Fatalf("read state: %v", err)
+	}
+	plugin := state.Plugins["demo"]
+	if plugin.Enabled {
+		t.Fatal("install enabled the plugin")
+	}
+	if plugin.ActiveDigest != digest || len(plugin.Versions) != 1 {
+		t.Fatalf("plugin state: %#v", plugin)
+	}
+}
+
+func TestStoreConcurrentInstallsPreserveState(t *testing.T) {
+	root := t.TempDir()
+	store, err := NewStore(filepath.Join(root, "plugins"))
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = filepath.WalkDir(store.Root, func(path string, entry os.DirEntry, walkErr error) error {
+			if walkErr == nil {
+				_ = os.Chmod(path, 0o700)
+			}
+			return nil
+		})
+	})
+	trustPath := filepath.Join(root, "trust.json")
+	type fixture struct {
+		archive, signature string
+		public             ed25519.PublicKey
+		digest             string
+	}
+	fixtures := make([]fixture, 4)
+	for index := range fixtures {
+		dir := filepath.Join(root, fmt.Sprintf("src-%d", index))
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			t.Fatalf("source dir: %v", err)
+		}
+		archive, signature, public := signedPackage(t, dir, []entry{{
+			name: "plugin.json",
+			data: fmt.Sprintf(`{"id":"demo-%d","version":"1.0.0","entry":"main.luau"}`, index),
+		}})
+		digest, err := DigestFile(archive)
+		if err != nil {
+			t.Fatalf("digest: %v", err)
+		}
+		if err := AddTrustedKey(trustPath, fmt.Sprintf("demo-%d", index), public); err != nil {
+			t.Fatalf("trust: %v", err)
+		}
+		fixtures[index] = fixture{archive, signature, public, fmt.Sprintf("%x", digest)}
+	}
+	var group sync.WaitGroup
+	for _, item := range fixtures {
+		group.Add(1)
+		go func(item fixture) {
+			defer group.Done()
+			if _, err := store.InstallPackage(item.archive, item.signature, item.public, item.digest, trustPath, "local-file"); err != nil {
+				t.Errorf("install: %v", err)
+			}
+		}(item)
+	}
+	group.Wait()
+	plugins, err := store.ListInstalled()
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(plugins) != len(fixtures) {
+		t.Fatalf("installed %d plugins, want %d", len(plugins), len(fixtures))
+	}
+}
+
+func TestPackageUninstallCleansStore(t *testing.T) {
+	store, err := NewStore(filepath.Join(t.TempDir(), "plugins"))
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	digest := testDigest(9)
+	entry, err := store.EntryPath(digest)
+	if err != nil {
+		t.Fatalf("entry: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(entry, "root"), 0o700); err != nil {
+		t.Fatalf("entry root: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(entry, "package.anvil-plugin"), []byte("package"), 0o600); err != nil {
+		t.Fatalf("entry file: %v", err)
+	}
+	if err := store.AddInstalledVersion("demo", digest, "1.0.0", "", "local-file", nil); err != nil {
+		t.Fatalf("add installed: %v", err)
+	}
+	if err := store.Uninstall("demo"); err != nil {
+		t.Fatalf("uninstall: %v", err)
+	}
+	if _, err := os.Stat(entry); !os.IsNotExist(err) {
+		t.Fatalf("store entry still exists: %v", err)
+	}
+	state, err := store.ReadState()
+	if err != nil {
+		t.Fatalf("state: %v", err)
+	}
+	if len(state.Plugins) != 0 {
+		t.Fatalf("state after uninstall: %#v", state.Plugins)
+	}
+}
+
+func TestStoreRollbackSwitchesToPreviousVersion(t *testing.T) {
+	store, err := NewStore(filepath.Join(t.TempDir(), "plugins"))
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	first, second := testDigest(10), testDigest(11)
+	for _, digest := range []string{first, second} {
+		entry, err := store.EntryPath(digest)
+		if err != nil {
+			t.Fatalf("entry: %v", err)
+		}
+		if err := os.MkdirAll(filepath.Join(entry, "root"), 0o700); err != nil {
+			t.Fatalf("entry root: %v", err)
+		}
+		if err := store.AddInstalledVersion("demo", digest, digest[:4], "", "local-file", nil); err != nil {
+			t.Fatalf("add installed: %v", err)
+		}
+	}
+	digest, err := store.Rollback("demo")
+	if err != nil {
+		t.Fatalf("rollback: %v", err)
+	}
+	if digest != first {
+		t.Fatalf("rollback digest = %s, want %s", digest, first)
+	}
+	state, err := store.ReadState()
+	if err != nil {
+		t.Fatalf("state: %v", err)
+	}
+	if state.Plugins["demo"].ActiveDigest != first {
+		t.Fatalf("active digest: %#v", state.Plugins["demo"])
+	}
+}
+
+func TestPackageLifecycleInstallEnableDisableRollbackUninstall(t *testing.T) {
+	root := t.TempDir()
+	store, err := NewStore(filepath.Join(root, "plugins"))
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = filepath.WalkDir(store.Root, func(path string, entry os.DirEntry, walkErr error) error {
+			if walkErr == nil {
+				_ = os.Chmod(path, 0o700)
+			}
+			return nil
+		})
+	})
+	trustPath := filepath.Join(root, "trust.json")
+	type installedVersion struct {
+		archive, signature string
+		public             ed25519.PublicKey
+		digest             string
+	}
+	var versions []installedVersion
+	for index, version := range []string{"1.0.0", "2.0.0"} {
+		dir := filepath.Join(root, fmt.Sprintf("version-%d", index))
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			t.Fatalf("version dir: %v", err)
+		}
+		archive, signature, public := signedPackage(t, dir, []entry{{
+			name: "plugin.json",
+			data: fmt.Sprintf(`{"id":"demo","version":"%s","entry":"main.luau"}`, version),
+		}})
+		digest, err := DigestFile(archive)
+		if err != nil {
+			t.Fatalf("digest: %v", err)
+		}
+		if err := AddTrustedKey(trustPath, "demo", public); err != nil {
+			t.Fatalf("trust: %v", err)
+		}
+		versions = append(versions, installedVersion{
+			archive: archive, signature: signature, public: public,
+			digest: fmt.Sprintf("%x", digest),
+		})
+	}
+	for _, version := range versions {
+		if _, err := store.InstallPackage(version.archive, version.signature, version.public, version.digest, trustPath, "local-file"); err != nil {
+			t.Fatalf("install: %v", err)
+		}
+	}
+	if err := store.SetEnabled("demo", true); err != nil {
+		t.Fatalf("enable: %v", err)
+	}
+	if err := store.SetEnabled("demo", false); err != nil {
+		t.Fatalf("disable: %v", err)
+	}
+	rolledBack, err := store.Rollback("demo")
+	if err != nil {
+		t.Fatalf("rollback: %v", err)
+	}
+	if rolledBack != versions[0].digest {
+		t.Fatalf("rollback digest = %s, want %s", rolledBack, versions[0].digest)
+	}
+	if err := store.Uninstall("demo"); err != nil {
+		t.Fatalf("uninstall: %v", err)
+	}
+	state, err := store.ReadState()
+	if err != nil || len(state.Plugins) != 0 {
+		t.Fatalf("state after lifecycle: %#v %v", state, err)
+	}
+}

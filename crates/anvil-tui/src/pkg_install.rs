@@ -10,6 +10,7 @@ use ratatui::{
 };
 use serde::Deserialize;
 
+use crate::gateway::GatewaySession;
 use crate::{Model, theme};
 
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -41,9 +42,21 @@ pub(crate) enum PkgInstallState {
 
 impl Model {
     pub(crate) fn start_pkg_install(&mut self, url: &str) {
-        let Some(gateway) = self.gateway.as_mut() else {
-            self.status = "E: pkg install requires gateway".to_owned();
+        let Some(host) = url_host(url) else {
+            self.status = "E: pkg install requires an https URL".to_owned();
             self.dirty = true;
+            return;
+        };
+        self.installer = None;
+        match GatewaySession::start_installer(&self.workspace, &host) {
+            Ok((session, client)) => self.installer = Some((session, client)),
+            Err(error) => {
+                self.status = format!("E: installer gateway: {error}");
+                self.dirty = true;
+                return;
+            }
+        }
+        let Some((_, gateway)) = self.installer.as_mut() else {
             return;
         };
         let signature_url = format!("{url}.sig");
@@ -70,7 +83,7 @@ impl Model {
     }
 
     pub(crate) fn poll_pkg_notifications(&mut self) {
-        let Some(gateway) = self.gateway.as_mut() else {
+        let Some((_, gateway)) = self.installer.as_mut() else {
             return;
         };
         let notifications = match gateway.poll_notifications() {
@@ -196,8 +209,8 @@ impl Model {
         else {
             return;
         };
-        let Some(gateway) = self.gateway.as_mut() else {
-            self.status = "E: pkg install requires gateway".to_owned();
+        let Some((_, gateway)) = self.installer.as_mut() else {
+            self.status = "E: pkg install requires installer gateway".to_owned();
             return;
         };
         match gateway.call(
@@ -216,16 +229,11 @@ impl Model {
                     .unwrap_or_default()
                     .to_owned();
                 self.pkg_install = None;
-                let installed = format!("plugin installed: {plugin_id}");
+                self.installer = None;
+                let installed =
+                    format!("plugin installed: {plugin_id}; run :plugin-enable {plugin_id}");
                 self.status = installed.clone();
-                let discovery = self.load_plugins().err();
-                if !plugin_id.is_empty() {
-                    self.enable_plugin(&plugin_id);
-                    if self.status != installed {
-                        self.status = format!("{installed}; {}", self.status);
-                    }
-                }
-                if let Some(error) = discovery {
+                if let Err(error) = self.load_plugins() {
                     self.status = format!("{installed}; discovery: {error}");
                 }
             }
@@ -283,6 +291,7 @@ impl Model {
             self.ui.progress.finish(progress);
         }
         self.pkg_install = None;
+        self.installer = None;
         self.dirty = true;
     }
 
@@ -308,8 +317,20 @@ impl Model {
             self.ui.progress.finish(progress);
         }
         self.pkg_install = None;
+        self.installer = None;
         self.status = format!("E: pkg: {message}");
         self.dirty = true;
+    }
+}
+
+fn url_host(url: &str) -> Option<String> {
+    let rest = url.strip_prefix("https://")?;
+    let authority = rest.split(['/', '?', '#']).next()?;
+    let host = authority.rsplit('@').next()?.split(':').next()?;
+    if host.is_empty() {
+        None
+    } else {
+        Some(host.to_ascii_lowercase())
     }
 }
 
@@ -498,5 +519,15 @@ mod tests {
         assert!(rendered.contains("demo 1.0.0"), "{rendered}");
         assert!(rendered.contains("fs.read:**"), "{rendered}");
         assert!(rendered.contains("[t] trust key"), "{rendered}");
+    }
+
+    #[test]
+    fn installer_url_host_requires_https() {
+        assert_eq!(
+            url_host("https://Example.COM:8443/plugin.anvil-plugin"),
+            Some("example.com".to_owned())
+        );
+        assert_eq!(url_host("http://example.com/plugin"), None);
+        assert_eq!(url_host("https:///plugin"), None);
     }
 }

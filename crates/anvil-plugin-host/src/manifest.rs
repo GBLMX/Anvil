@@ -167,4 +167,17 @@ mod tests {
     fn accepts_bounded_manifest() {
         assert!(manifest("run.luau").validate().is_ok());
     }
+
+    #[test]
+    fn official_trim_whitespace_manifest_is_valid() {
+        let root =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../plugins/official/trim-whitespace");
+        let manifest = PluginManifest::load(&root).expect("official plugin manifest");
+        assert_eq!(manifest.id, "anvil.official.trim-whitespace");
+        assert_eq!(
+            manifest.activation_events,
+            ["onCommand:anvil.trim-trailing-whitespace"]
+        );
+        assert_eq!(manifest.commands.len(), 1);
+    }
 }

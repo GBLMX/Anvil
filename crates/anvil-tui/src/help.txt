@@ -66,7 +66,7 @@ Normal mode
   :symbols             document symbols
   :problems           toggle the problems panel
   :plugin-start       start the debug plugin host
-  :plugin-list        list discovered plugins and their host state
+  :plugin-list        open installed-plugin manager (enable/uninstall/rollback)
   :plugin-oom         start host with a 300 MB allocation probe
   :plugin-exec        exercise sys.exec (returns unsupported)
   :plugin-stop        stop the plugin host

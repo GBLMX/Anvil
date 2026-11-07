@@ -29,6 +29,7 @@ impl PluginSession {
             permissions,
             editor_socket,
             None,
+            None,
             false,
         )
     }
@@ -47,6 +48,7 @@ impl PluginSession {
             permissions,
             editor_socket,
             None,
+            None,
             true,
         )
     }
@@ -58,6 +60,7 @@ impl PluginSession {
         plugin_root: &Path,
         permissions: &[String],
         editor_socket: Option<&Path>,
+        command: Option<&str>,
     ) -> Result<Self, String> {
         Self::start_mode(
             gateway,
@@ -66,10 +69,12 @@ impl PluginSession {
             permissions,
             editor_socket,
             Some(plugin_root),
+            command,
             false,
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn start_mode(
         gateway: &mut GatewayClient,
         workspace: &Path,
@@ -77,6 +82,7 @@ impl PluginSession {
         permissions: &[String],
         editor_socket: Option<&Path>,
         plugin_root: Option<&Path>,
+        command: Option<&str>,
         oom: bool,
     ) -> Result<Self, String> {
         let token = host_session::new_token();
@@ -99,6 +105,7 @@ impl PluginSession {
                 token,
                 Some(&gateway_socket),
                 editor_socket,
+                command,
             )
         } else {
             HostSession::start_with_token(workspace, token, Some(&gateway_socket), editor_socket)
