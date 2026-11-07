@@ -200,13 +200,30 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - name: Build release layout
+      - name: Generate test plugin key
+        run: openssl genpkey -algorithm ED25519 -out "$RUNNER_TEMP/plugin.pem"
+      - name: Build signed release layout
+        env:
+          ANVIL_PLUGIN_SIGNING_KEY: ${{ runner.temp }}/plugin.pem
         run: scripts/release-layout.sh "$RUNNER_TEMP/anvil-layout"
-      - name: Verify bundled plugin layout
+      - name: Verify release layout
         run: |
           test -x "$RUNNER_TEMP/anvil-layout/bin/anvil"
           test -x "$RUNNER_TEMP/anvil-layout/bin/anvil-gateway"
-          test -f "$RUNNER_TEMP/anvil-layout/share/anvil/plugins/trim-whitespace/plugin.json"
+          test -x "$RUNNER_TEMP/anvil-layout/install.sh"
+          test -f "$RUNNER_TEMP/anvil-layout/share/anvil/official/plugins/trim-whitespace/plugin.json"
+          test -f "$RUNNER_TEMP/anvil-layout/share/anvil/packages/official.pub"
+      - name: Install layout twice
+        env:
+          XDG_DATA_HOME: ${{ runner.temp }}/data
+        run: |
+          "$RUNNER_TEMP/anvil-layout/install.sh" "$RUNNER_TEMP/prefix"
+          "$RUNNER_TEMP/anvil-layout/install.sh" "$RUNNER_TEMP/prefix"
+      - name: Verify installed layout and bootstrap
+        run: |
+          test -x "$RUNNER_TEMP/prefix/bin/anvil"
+          test -f "$RUNNER_TEMP/prefix/share/anvil/official/plugins/trim-whitespace/plugin.json"
+          grep -q '"source": "official"' "$RUNNER_TEMP/data/anvil/plugins/state.json"
 
   official-plugin-package:
     runs-on: ubuntu-latest

@@ -7,7 +7,7 @@ go_toolchain="${GOTOOLCHAIN:-go1.26.10}"
 
 cd "$root"
 
-install -d "$out/bin" "$out/share/anvil/plugins"
+install -d "$out/bin" "$out/share/anvil/official/plugins"
 
 cargo build --release -p anvil-tui -p anvil-plugin-host
 GOTOOLCHAIN="$go_toolchain" go build -o "$out/bin/anvil-gateway" ./go/cmd/anvil-gateway
@@ -17,7 +17,8 @@ install -m 0755 \
   target/release/anvil \
   target/release/anvil-plugin-host \
   "$out/bin/"
-cp -R plugins/official/. "$out/share/anvil/plugins/"
+cp -R plugins/official/. "$out/share/anvil/official/plugins/"
+install -m 0755 scripts/install-layout.sh "$out/install.sh"
 
 if [[ -n "${ANVIL_PLUGIN_SIGNING_KEY:-}" ]]; then
   for plugin in "$root"/plugins/official/*; do

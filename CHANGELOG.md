@@ -15,10 +15,11 @@ post-`0.5.0` feature line.
 - Signed `.anvil-plugin` installs via `anvil-gateway -install-plugin`, with
   Ed25519 verification, SHA-256 pinning, bounded gzip/tar extraction, and
   `fsroot` path confinement.
-- Bundled official plugin discovery under `share/anvil/plugins`, with managed
-  packages taking precedence and release-layout assembly.
-- Idempotent `anvil-gateway -install-bundled` bootstrap for signed official
-  packages; upgrades preserve enable/disable state when permissions are stable.
+- Bundled official plugin discovery under `share/anvil/official/plugins`, with
+  managed packages taking precedence and release-layout assembly.
+- Shipped `install.sh` plus idempotent `anvil-gateway -install-bundled`
+  bootstrap for signed official packages; upgrades preserve enable/disable
+  state when permissions are stable.
 - Tag-driven release workflow with signed `SHA256SUMS`, SPDX SBOM, and GitHub
   build-provenance attestation.
 - Gateway package-download jobs with bounded concurrency, progress and failure

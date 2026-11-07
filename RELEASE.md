@@ -75,10 +75,9 @@ openssl pkeyutl -verify -pubin -inkey release.pub.pem \
 gh attestation verify anvil-<version>-linux-x86_64.tar.gz --repo GBLMX/Anvil
 ```
 
-The package public key is shipped as
-`share/anvil/packages/official.pub`; run
-`anvil-gateway -install-bundled share/anvil/packages` after installing or
-upgrading the layout.
+The tarball includes `install.sh`, which copies the layout and runs
+`anvil-gateway -install-bundled` when signed packages are present. The package
+public key is shipped as `share/anvil/packages/official.pub`.
 
 The standard edition and third-party distributions use the same kernel source
 boundary described in `docs/adr/0013-kernel-distribution-boundary.md`.

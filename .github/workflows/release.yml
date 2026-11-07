@@ -51,12 +51,15 @@ jobs:
           ANVIL_PLUGIN_SIGNING_KEY="$RUNNER_TEMP/plugin-signing.pem" \
             scripts/release-layout.sh "$RUNNER_TEMP/layout"
 
-      - name: Verify signed layout
+      - name: Verify shipped installer
+        env:
+          XDG_DATA_HOME: ${{ runner.temp }}/verify-data
         run: |
-          "$RUNNER_TEMP/layout/bin/anvil-gateway" \
-            -install-bundled "$RUNNER_TEMP/layout/share/anvil/packages" \
-            -plugin-store "$RUNNER_TEMP/verify-store" \
-            -plugin-trust-store "$RUNNER_TEMP/verify-trust.json"
+          test -x "$RUNNER_TEMP/layout/install.sh"
+          "$RUNNER_TEMP/layout/install.sh" "$RUNNER_TEMP/verify-prefix"
+          test -x "$RUNNER_TEMP/verify-prefix/bin/anvil"
+          grep -q '"source": "official"' \
+            "$RUNNER_TEMP/verify-data/anvil/plugins/state.json"
 
       - uses: anchore/sbom-action/download-syft@v0
       - name: Generate SBOM

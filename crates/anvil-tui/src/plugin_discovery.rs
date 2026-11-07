@@ -28,7 +28,8 @@ pub(crate) fn discover() -> Result<Vec<PluginDescriptor>, String> {
 /// Locate the release-provided plugin root.
 ///
 /// The environment override exists for tests and development. Release
-/// layouts keep official plugins in `../share/anvil/plugins` next to `bin/`;
+/// layouts keep official plugins in `../share/anvil/official/plugins` next to
+/// `bin/`; the old `../share/anvil/plugins` path remains a fallback, and
 /// portable layouts may put them in `plugins/` beside the executable.
 pub(crate) fn bundled_root() -> Option<PathBuf> {
     if let Some(root) = std::env::var_os("ANVIL_BUNDLED_PLUGIN_DIR")
@@ -38,9 +39,11 @@ pub(crate) fn bundled_root() -> Option<PathBuf> {
     }
     let executable = std::env::current_exe().ok()?;
     let directory = executable.parent()?;
-    let share = directory.join("../share/anvil/plugins");
-    if share.is_dir() {
-        return Some(share);
+    for relative in ["../share/anvil/official/plugins", "../share/anvil/plugins"] {
+        let share = directory.join(relative);
+        if share.is_dir() {
+            return Some(share);
+        }
     }
     let portable = directory.join("plugins");
     portable.is_dir().then_some(portable)

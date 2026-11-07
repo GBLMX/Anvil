@@ -49,15 +49,29 @@ scripts/release-layout.sh "$PWD/dist/anvil"
 The layout is:
 
 ```text
+install.sh
 bin/anvil
 bin/anvil-gateway
 bin/anvil-exec-runner
 bin/anvil-plugin-host
-share/anvil/plugins/trim-whitespace/
+share/anvil/official/plugins/trim-whitespace/
+share/anvil/packages/            # signed releases only
 ```
 
-`anvil` discovers `../share/anvil/plugins` relative to itself. A portable
-layout may instead place plugins in `bin/plugins/`.
+Install or upgrade a layout with:
+
+```bash
+./install.sh [prefix]
+```
+
+`prefix` defaults to `$HOME/.local`. The installer copies the binaries and
+official plugins, replaces the bundled package set, then runs
+`anvil-gateway -install-bundled` when signed packages are present. Re-running
+it upgrades in place and preserves enable/disable state for unchanged
+permissions.
+
+`anvil` discovers `../share/anvil/official/plugins` relative to itself. A
+portable layout may instead place plugins in `bin/plugins/`.
 
 ## Install for one user
 
@@ -71,12 +85,12 @@ install -m 0755 \
   "$HOME/.local/bin/"
 ```
 
-Official plugin sources ship under `share/anvil/plugins`. For a manual
+Official plugin sources ship under `share/anvil/official/plugins`. For a manual
 `~/.local/bin` install:
 
 ```bash
-install -d "$HOME/.local/share/anvil/plugins"
-cp -R plugins/official/. "$HOME/.local/share/anvil/plugins/"
+install -d "$HOME/.local/share/anvil/official/plugins"
+cp -R plugins/official/. "$HOME/.local/share/anvil/official/plugins/"
 ```
 
 If the release ships signed packages under `share/anvil/packages`, import them
