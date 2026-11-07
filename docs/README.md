@@ -91,6 +91,8 @@ Architecture decisions live in [`adr/`](adr/). Start with:
 - [0017 activation and lifecycle](adr/0017-plugin-activation-and-lifecycle.md)
 - [0018 workspace tree watch](adr/0018-workspace-tree-watch.md)
 - [0019 terminal keyboard enhancement](adr/0019-terminal-keyboard-enhancement.md)
+- [0020 content-addressed plugin store](adr/0020-content-addressed-plugin-store.md)
+- [0021 signed plugin index](adr/0021-signed-plugin-index.md)
 
 ## Benchmarks
 
