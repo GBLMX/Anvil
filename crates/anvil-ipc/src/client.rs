@@ -4,7 +4,7 @@
 //! implements the chunked file protocol from ADR-0011; it does not fall back to
 //! direct filesystem access.
 
-use std::collections::VecDeque;
+use std::collections::{BTreeMap, VecDeque};
 use std::path::Path;
 
 use base64::{Engine as _, engine::general_purpose};
@@ -48,7 +48,7 @@ impl std::fmt::Display for ClientError {
             Self::Rpc { code, message } => write!(formatter, "gateway error {code}: {message}"),
             Self::Protocol(message) => write!(formatter, "gateway protocol error: {message}"),
             Self::Poisoned => write!(formatter, "gateway protocol error: restart gateway and TUI"),
-            Self::Limit => write!(formatter, "file exceeds the requested limit"),
+            Self::Limit => write!(formatter, "response exceeds the requested limit"),
         }
     }
 }
@@ -87,6 +87,15 @@ pub struct ExecResult {
     pub exit_code: i64,
     pub timed_out: bool,
     pub output_truncated: bool,
+}
+
+/// Result of one `sys.fetch` invocation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FetchResult {
+    pub status: u16,
+    pub content_type: String,
+    pub body: String,
+    pub truncated: bool,
 }
 
 /// One entry returned by `sys.read_dir`.
@@ -402,6 +411,54 @@ impl GatewayClient {
                 .get("output_truncated")
                 .and_then(serde_json::Value::as_bool)
                 .ok_or(ClientError::Protocol("exec output_truncated"))?,
+        })
+    }
+
+    /// Perform one bounded, allowlisted HTTP fetch through the gateway.
+    pub fn fetch(
+        &mut self,
+        url: &str,
+        max_bytes: u64,
+        headers: &BTreeMap<String, String>,
+    ) -> Result<FetchResult, ClientError> {
+        if max_bytes == 0 || max_bytes > i64::MAX as u64 {
+            return Err(ClientError::Protocol("fetch max_bytes"));
+        }
+        let result = self.request(
+            "sys.fetch",
+            serde_json::json!({
+                "url": url,
+                "max_bytes": max_bytes,
+                "headers": headers,
+            }),
+        )?;
+        let status = result
+            .get("status")
+            .and_then(serde_json::Value::as_u64)
+            .and_then(|value| u16::try_from(value).ok())
+            .ok_or(ClientError::Protocol("fetch status"))?;
+        let content_type = result
+            .get("content_type")
+            .and_then(serde_json::Value::as_str)
+            .ok_or(ClientError::Protocol("fetch content_type"))?
+            .to_owned();
+        let body = result
+            .get("body")
+            .and_then(serde_json::Value::as_str)
+            .ok_or(ClientError::Protocol("fetch body"))?
+            .to_owned();
+        if body.len() as u64 > max_bytes {
+            return Err(ClientError::Limit);
+        }
+        let truncated = result
+            .get("truncated")
+            .and_then(serde_json::Value::as_bool)
+            .ok_or(ClientError::Protocol("fetch truncated"))?;
+        Ok(FetchResult {
+            status,
+            content_type,
+            body,
+            truncated,
         })
     }
 
@@ -995,6 +1052,82 @@ mod tests {
         assert_eq!(chunk.data, b"hi");
         assert_eq!(chunk.next_offset, 2);
         assert!(chunk.eof);
+        server.join().expect("server");
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn fetches_bounded_body_with_headers() {
+        let path = socket_path("fetch");
+        let listener = Listener::bind(&path).expect("bind");
+        let server = thread::spawn(move || {
+            let mut connection = listener.accept().expect("accept");
+            let hello = receive(&mut connection);
+            respond(
+                &mut connection,
+                hello.id.as_deref().expect("id"),
+                json!({"session_id": "test"}),
+            );
+            let fetch = receive(&mut connection);
+            assert_eq!(fetch.method, "sys.fetch");
+            assert_eq!(fetch.params["url"], "https://example.test/index");
+            assert_eq!(fetch.params["max_bytes"], 4);
+            assert_eq!(fetch.params["headers"]["accept"], "application/json");
+            respond(
+                &mut connection,
+                fetch.id.as_deref().expect("id"),
+                json!({
+                    "status": 200,
+                    "content_type": "application/json",
+                    "body": "abc",
+                    "truncated": false
+                }),
+            );
+        });
+
+        let mut client = GatewayClient::connect(&path, &[7; 32]).expect("connect");
+        let headers = BTreeMap::from([("accept".to_owned(), "application/json".to_owned())]);
+        let result = client
+            .fetch("https://example.test/index", 4, &headers)
+            .expect("fetch");
+        assert_eq!(result.status, 200);
+        assert_eq!(result.content_type, "application/json");
+        assert_eq!(result.body, "abc");
+        assert!(!result.truncated);
+        server.join().expect("server");
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn rejects_fetch_body_over_requested_limit() {
+        let path = socket_path("fetch-limit");
+        let listener = Listener::bind(&path).expect("bind");
+        let server = thread::spawn(move || {
+            let mut connection = listener.accept().expect("accept");
+            let hello = receive(&mut connection);
+            respond(
+                &mut connection,
+                hello.id.as_deref().expect("id"),
+                json!({"session_id": "test"}),
+            );
+            let fetch = receive(&mut connection);
+            respond(
+                &mut connection,
+                fetch.id.as_deref().expect("id"),
+                json!({
+                    "status": 200,
+                    "content_type": "text/plain",
+                    "body": "abc",
+                    "truncated": false
+                }),
+            );
+        });
+
+        let mut client = GatewayClient::connect(&path, &[7; 32]).expect("connect");
+        let error = client
+            .fetch("https://example.test/", 2, &BTreeMap::new())
+            .expect_err("limit");
+        assert!(matches!(error, ClientError::Limit));
         server.join().expect("server");
         let _ = fs::remove_file(path);
     }

@@ -262,6 +262,7 @@ func TestSysFetch(t *testing.T) {
 		SocketPath:  socket,
 		Workspace:   t.TempDir(),
 		PluginID:    "test-plugin",
+		Role:        "installer",
 		TokenSHA256: hash,
 		Permissions: []string{"sys.fetch"},
 		Fetcher:     fetcher,
@@ -293,6 +294,20 @@ func TestSysFetch(t *testing.T) {
 	result, ok := response.Result.(map[string]interface{})
 	if !ok || result["body"] != "fetched" || result["status"] != float64(200) {
 		t.Fatalf("result = %#v on port %s", response.Result, parsed.Port())
+	}
+}
+
+func TestSysFetchDeniedWithoutPermission(t *testing.T) {
+	socket := startGateway(t, []string{"fs.read:**"}, "")
+	conn := dialGateway(t, socket)
+	if response := sendRequest(t, conn, "hello-1", "session.hello", helloRequestParams(testToken)); response.Error != nil {
+		t.Fatalf("handshake error: %+v", response.Error)
+	}
+	response := sendRequest(t, conn, "fetch-1", "sys.fetch", map[string]interface{}{
+		"url": "https://example.test/",
+	})
+	if response.Error == nil || response.Error.Code != -32002 {
+		t.Fatalf("error = %+v", response.Error)
 	}
 }
 

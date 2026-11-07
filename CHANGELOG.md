@@ -18,6 +18,8 @@ post-`0.5.0` feature line.
 - Gateway package-download jobs with bounded concurrency, progress and failure
   notifications, capability review, trust-on-first-use key approval, and
   digest-pinned installation through `:pkg install <url>`.
+- Typed `GatewayClient::fetch` for bounded installer-role `sys.fetch`
+  requests, with response-status/body validation and a client-side body cap.
 - Manifest-declared plugin commands in the command palette, with per-command
   host activation and `plugin.command` exposed to Luau.
 - `editor.get_snapshot()` Luau binding and the first official plugin,
