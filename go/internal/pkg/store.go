@@ -241,11 +241,11 @@ func (s *Store) lockFile(name string) (*stateGuard, error) {
 		return nil, fmt.Errorf("open plugin lock %s: %w", name, err)
 	}
 	if err := file.Chmod(0o600); err != nil {
-		file.Close()
+		_ = file.Close()
 		return nil, fmt.Errorf("secure plugin lock %s: %w", name, err)
 	}
 	if err := unix.Flock(int(file.Fd()), unix.LOCK_EX); err != nil {
-		file.Close()
+		_ = file.Close()
 		return nil, fmt.Errorf("lock plugin %s: %w", name, err)
 	}
 	return &stateGuard{file: file}, nil
@@ -270,17 +270,17 @@ func (s *Store) saveState(state *StoreState) error {
 		return fmt.Errorf("create plugin state temp: %w", err)
 	}
 	tempPath := temp.Name()
-	defer os.Remove(tempPath)
+	defer func() { _ = os.Remove(tempPath) }()
 	if err := temp.Chmod(0o600); err != nil {
-		temp.Close()
+		_ = temp.Close()
 		return fmt.Errorf("secure plugin state temp: %w", err)
 	}
 	if _, err := temp.Write(data); err != nil {
-		temp.Close()
+		_ = temp.Close()
 		return fmt.Errorf("write plugin state temp: %w", err)
 	}
 	if err := temp.Sync(); err != nil {
-		temp.Close()
+		_ = temp.Close()
 		return fmt.Errorf("sync plugin state temp: %w", err)
 	}
 	if err := temp.Close(); err != nil {
@@ -664,10 +664,11 @@ func ValidPluginID(id string) bool {
 		return false
 	}
 	for _, character := range id {
-		if !(character == '-' || character == '_' || character == '.' ||
+		valid := character == '-' || character == '_' || character == '.' ||
 			character >= 'a' && character <= 'z' ||
 			character >= 'A' && character <= 'Z' ||
-			character >= '0' && character <= '9') {
+			character >= '0' && character <= '9'
+		if !valid {
 			return false
 		}
 	}

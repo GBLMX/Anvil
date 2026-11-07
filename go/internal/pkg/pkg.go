@@ -297,7 +297,7 @@ func extract(file *os.File, stage string) error {
 			if err := ensureDir(root, name); err != nil {
 				return err
 			}
-		case tar.TypeReg, tar.TypeRegA:
+		case tar.TypeReg, tar.TypeRegA: //nolint:staticcheck // legacy tar regular-file marker
 			if header.Size < 0 || header.Size > MaxFileBytes {
 				return fmt.Errorf("%w: %q exceeds per-file limit", ErrInvalidArchive, name)
 			}
@@ -399,7 +399,7 @@ func InspectArchive(path string) (ManifestInfo, error) {
 		if name != "plugin.json" {
 			continue
 		}
-		if header.Typeflag != tar.TypeReg && header.Typeflag != tar.TypeRegA {
+		if header.Typeflag != tar.TypeReg && header.Typeflag != tar.TypeRegA { //nolint:staticcheck // legacy tar regular-file marker
 			return ManifestInfo{}, fmt.Errorf("%w: plugin.json is not a regular file", ErrInvalidArchive)
 		}
 		if header.Size < 0 || header.Size > 1<<20 {

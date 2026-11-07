@@ -47,7 +47,7 @@ func archiveBytes(t *testing.T, entries []entry) []byte {
 		if err := tarWriter.WriteHeader(header); err != nil {
 			t.Fatalf("write header: %v", err)
 		}
-		if typ == tar.TypeReg || typ == tar.TypeRegA {
+		if typ == tar.TypeReg || typ == tar.TypeRegA { //nolint:staticcheck // legacy tar regular-file marker
 			if _, err := tarWriter.Write([]byte(item.data)); err != nil {
 				t.Fatalf("write body: %v", err)
 			}
