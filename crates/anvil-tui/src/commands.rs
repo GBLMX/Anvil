@@ -120,8 +120,18 @@ impl Model {
             ("pkg", argument) => {
                 if let Some(url) = argument.strip_prefix("install ") {
                     self.start_pkg_install(url.trim());
+                } else if let Some(rest) = argument.strip_prefix("install-file ") {
+                    let parts = rest.split_whitespace().collect::<Vec<_>>();
+                    if let [package, signature, public_key] = parts.as_slice() {
+                        self.start_pkg_install_file(package, signature, public_key);
+                    } else {
+                        self.status =
+                            "E: usage: :pkg install-file <package> <signature> <public-key>"
+                                .to_owned();
+                        self.dirty = true;
+                    }
                 } else {
-                    self.status = "E: usage: :pkg install <url>".to_owned();
+                    self.status = "E: usage: :pkg install <url> | :pkg install-file <package> <signature> <public-key>".to_owned();
                     self.dirty = true;
                 }
             }

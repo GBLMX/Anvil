@@ -96,6 +96,18 @@ impl GatewaySession {
         if host.is_empty() || host.chars().any(char::is_whitespace) {
             return Err("installer host is required".to_owned());
         }
+        Self::start_installer_mode(workspace, Some(host))
+    }
+
+    /// Start an installer role for local package files only.
+    pub fn start_local_installer(workspace: &Path) -> Result<(Self, GatewayClient), String> {
+        Self::start_installer_mode(workspace, None)
+    }
+
+    fn start_installer_mode(
+        workspace: &Path,
+        host: Option<&str>,
+    ) -> Result<(Self, GatewayClient), String> {
         let workspace = workspace
             .canonicalize()
             .map_err(|error| format!("workspace {}: {error}", workspace.display()))?;
@@ -118,10 +130,11 @@ impl GatewaySession {
             .arg("-role")
             .arg("installer")
             .arg("-token-sha256")
-            .arg(&hash)
-            .arg("-allow-fetch")
-            .arg("-fetch-allow")
-            .arg(host)
+            .arg(&hash);
+        if let Some(host) = host {
+            command.arg("-allow-fetch").arg("-fetch-allow").arg(host);
+        }
+        command
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(gateway_stderr);

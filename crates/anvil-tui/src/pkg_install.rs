@@ -82,6 +82,72 @@ impl Model {
         self.dirty = true;
     }
 
+    pub(crate) fn start_pkg_install_file(
+        &mut self,
+        package_path: &str,
+        signature_path: &str,
+        public_key: &str,
+    ) {
+        self.installer = None;
+        match GatewaySession::start_local_installer(&self.workspace) {
+            Ok((session, client)) => self.installer = Some((session, client)),
+            Err(error) => {
+                self.status = format!("E: installer gateway: {error}");
+                self.dirty = true;
+                return;
+            }
+        }
+        let Some((_, gateway)) = self.installer.as_mut() else {
+            return;
+        };
+        match gateway.call(
+            "pkg.inspect",
+            serde_json::json!({
+                "package_path": package_path,
+                "signature_path": signature_path,
+                "public_key": public_key,
+            }),
+        ) {
+            Ok(result) => {
+                let text = |name: &str| {
+                    result
+                        .get(name)
+                        .and_then(|value| value.as_str())
+                        .unwrap_or_default()
+                        .to_owned()
+                };
+                let Some(manifest) = result
+                    .get("manifest")
+                    .cloned()
+                    .and_then(|value| serde_json::from_value::<PkgManifest>(value).ok())
+                else {
+                    self.pkg_error_message("package manifest is malformed");
+                    return;
+                };
+                let digest = text("digest");
+                if digest.is_empty() || manifest.id.is_empty() || manifest.version.is_empty() {
+                    self.pkg_error_message("package inspection is incomplete");
+                    return;
+                }
+                self.pkg_install = Some(PkgInstallState::Review {
+                    package_path: package_path.to_owned(),
+                    signature_path: signature_path.to_owned(),
+                    public_key: text("public_key"),
+                    digest,
+                    manifest,
+                    trusted: result
+                        .get("trusted")
+                        .and_then(|value| value.as_bool())
+                        .unwrap_or(false),
+                    error: None,
+                });
+                self.status = "Pkg: review capabilities, Enter installs".to_owned();
+            }
+            Err(error) => self.pkg_error(error),
+        }
+        self.dirty = true;
+    }
+
     pub(crate) fn poll_pkg_notifications(&mut self) {
         let Some((_, gateway)) = self.installer.as_mut() else {
             return;

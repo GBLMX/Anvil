@@ -72,6 +72,7 @@ Normal mode
   :plugin-stop        stop the plugin host
   :plugin-enable <id> re-enable a disabled plugin and start it
   :pkg install <url>  download, review, and install a signed plugin package
+  :pkg install-file <package> <signature> <key>  review and install a local package
   :help               this page
 
 Insert mode

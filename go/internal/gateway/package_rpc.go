@@ -23,6 +23,12 @@ type pkgInstallParams struct {
 	Digest        string `json:"digest"`
 }
 
+type pkgInspectParams struct {
+	PackagePath   string `json:"package_path"`
+	SignaturePath string `json:"signature_path"`
+	PublicKey     string `json:"public_key"`
+}
+
 type pkgTrustParams struct {
 	Name      string `json:"name"`
 	PublicKey string `json:"public_key"`
@@ -146,6 +152,45 @@ func (s *Server) packageInstall(req request, state *connectionState) (interface{
 		"plugin_id": installed.ID,
 		"path":      installed.Root,
 		"digest":    installed.Digest,
+	}, nil
+}
+
+func (s *Server) packageInspect(req request, state *connectionState) (interface{}, *rpcError) {
+	if rpcErr := s.requireRole(state, "installer"); rpcErr != nil {
+		return nil, rpcErr
+	}
+	var params pkgInspectParams
+	if err := decodeParams(req.Params, &params); err != nil ||
+		params.PackagePath == "" || params.SignaturePath == "" || params.PublicKey == "" {
+		return nil, &rpcError{Code: -32602, Message: "package_path, signature_path, and public_key are required"}
+	}
+	publicKey, err := pkg.DecodePublicKey(params.PublicKey)
+	if err != nil {
+		return nil, &rpcError{Code: -32602, Message: err.Error()}
+	}
+	digest, err := pkg.VerifyFile(params.PackagePath, params.SignaturePath, publicKey)
+	if err != nil {
+		return nil, &rpcError{Code: -32009, Message: err.Error()}
+	}
+	manifest, err := pkg.InspectArchive(params.PackagePath)
+	if err != nil {
+		return nil, &rpcError{Code: -32009, Message: err.Error()}
+	}
+	trustPath := s.cfg.TrustStorePath
+	if trustPath == "" {
+		trustPath = pkg.DefaultTrustStorePath()
+	}
+	trusted := false
+	if store, loadErr := pkg.LoadTrustStore(trustPath); loadErr == nil {
+		trusted = store.Contains(publicKey)
+	}
+	return map[string]interface{}{
+		"package_path":   params.PackagePath,
+		"signature_path": params.SignaturePath,
+		"public_key":     params.PublicKey,
+		"manifest":       manifest,
+		"digest":         fmt.Sprintf("%x", digest),
+		"trusted":        trusted,
 	}, nil
 }
 

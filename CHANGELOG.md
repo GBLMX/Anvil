@@ -26,6 +26,8 @@ post-`0.5.0` feature line.
   serialization, `pkg.installed` discovery, and install-without-enable.
 - Installed-plugin manager overlay with enable/disable, confirmed uninstall,
   rollback, and store-size display.
+- `:pkg install-file` local signed-package inspection/install and a separate
+  fetch-only installer gateway role.
 
 ### Changed
 - Split TUI runtime/layout/plugin, renderer, LSP settings/responses, and tree

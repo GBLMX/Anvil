@@ -242,3 +242,43 @@ func TestPackageRoleBoundaries(t *testing.T) {
 		t.Fatalf("installer state RPC = %+v, want role rejection", rpcErr)
 	}
 }
+
+func TestPackageInspectReturnsManifestAndDigest(t *testing.T) {
+	root := t.TempDir()
+	packagePath, signaturePath, publicKey, digest := testPackage(t, root)
+	trustPath := filepath.Join(root, "trust.json")
+	decoded, err := pkg.DecodePublicKey(publicKey)
+	if err != nil {
+		t.Fatalf("decode key: %v", err)
+	}
+	if err := pkg.AddTrustedKey(trustPath, "demo", decoded); err != nil {
+		t.Fatalf("trust: %v", err)
+	}
+	server := &Server{cfg: Config{Role: "installer", TrustStorePath: trustPath}}
+	params, err := json.Marshal(pkgInspectParams{
+		PackagePath:   packagePath,
+		SignaturePath: signaturePath,
+		PublicKey:     publicKey,
+	})
+	if err != nil {
+		t.Fatalf("params: %v", err)
+	}
+	result, rpcErr := server.packageInspect(
+		request{Params: params},
+		&connectionState{handshaken: true},
+	)
+	if rpcErr != nil {
+		t.Fatalf("inspect: %+v", rpcErr)
+	}
+	response, ok := result.(map[string]interface{})
+	if !ok {
+		t.Fatalf("inspect result: %#v", result)
+	}
+	manifest, ok := response["manifest"].(pkg.ManifestInfo)
+	if !ok || manifest.ID != "demo" {
+		t.Fatalf("manifest: %#v", response["manifest"])
+	}
+	if response["digest"] != digest || response["trusted"] != true {
+		t.Fatalf("inspect metadata: %#v", response)
+	}
+}

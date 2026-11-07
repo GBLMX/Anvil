@@ -50,6 +50,8 @@ manifests are discovered from child directories of `ANVIL_PLUGIN_DIR`.
 `:pkg install <url>` downloads a signed package through the gateway, shows its
 declared capabilities, and installs only the reviewed SHA-256 digest. Downloads
 require `-allow-fetch` and an explicit `-fetch-allow` host.
+`:pkg install-file <package> <signature> <public-key>` reviews and installs a
+local signed package without network access.
 `plugins/official/trim-whitespace` is the first official Luau plugin. Point
 `ANVIL_PLUGIN_DIR` at `plugins/official`, open the command palette
 (`Space p`), and run `Trim Trailing Whitespace`.

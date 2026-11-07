@@ -151,6 +151,8 @@ func (s *Server) dispatch(ctx context.Context, req request, state *connectionSta
 		return s.fetch(ctx, req, state)
 	case "pkg.download":
 		return s.packageDownload(req, state)
+	case "pkg.inspect":
+		return s.packageInspect(req, state)
 	case "pkg.install":
 		return s.packageInstall(req, state)
 	case "pkg.trust":
