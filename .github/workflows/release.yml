@@ -1,0 +1,114 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      PLUGIN_SIGNING_KEY: ${{ secrets.ANVIL_PLUGIN_SIGNING_KEY }}
+      RELEASE_SIGNING_KEY: ${{ secrets.ANVIL_RELEASE_SIGNING_KEY }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install pinned Rust toolchain
+        run: rustup show
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Check tag and keys
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          cargo_version="$(python3 - <<'PY'
+          import tomllib
+          with open('Cargo.toml', 'rb') as file:
+              print(tomllib.load(file)['workspace']['package']['version'])
+          PY
+          )"
+          if [ "$version" != "$cargo_version" ]; then
+            echo "tag $GITHUB_REF_NAME does not match Cargo.toml $cargo_version" >&2
+            exit 1
+          fi
+          if [ -z "$PLUGIN_SIGNING_KEY" ] || [ -z "$RELEASE_SIGNING_KEY" ]; then
+            echo "ANVIL_PLUGIN_SIGNING_KEY and ANVIL_RELEASE_SIGNING_KEY are required" >&2
+            exit 1
+          fi
+          umask 077
+          printf '%s\n' "$PLUGIN_SIGNING_KEY" > "$RUNNER_TEMP/plugin-signing.pem"
+          printf '%s\n' "$RELEASE_SIGNING_KEY" > "$RUNNER_TEMP/release-signing.pem"
+
+      - name: Build signed layout
+        run: |
+          ANVIL_PLUGIN_SIGNING_KEY="$RUNNER_TEMP/plugin-signing.pem" \
+            scripts/release-layout.sh "$RUNNER_TEMP/layout"
+
+      - name: Verify signed layout
+        run: |
+          "$RUNNER_TEMP/layout/bin/anvil-gateway" \
+            -install-bundled "$RUNNER_TEMP/layout/share/anvil/packages" \
+            -plugin-store "$RUNNER_TEMP/verify-store" \
+            -plugin-trust-store "$RUNNER_TEMP/verify-trust.json"
+
+      - uses: anchore/sbom-action/download-syft@v0
+      - name: Generate SBOM
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          syft "$RUNNER_TEMP/layout" \
+            -o "spdx-json=$RUNNER_TEMP/anvil-$version.sbom.spdx.json"
+
+      - name: Package artifacts
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          tar \
+            --sort=name \
+            --mtime='@0' \
+            --owner=0 \
+            --group=0 \
+            --numeric-owner \
+            -czf "$RUNNER_TEMP/anvil-$version-linux-x86_64.tar.gz" \
+            -C "$RUNNER_TEMP/layout" .
+          openssl pkey \
+            -in "$RUNNER_TEMP/release-signing.pem" \
+            -pubout \
+            -out "$RUNNER_TEMP/release.pub.pem"
+          cd "$RUNNER_TEMP"
+          sha256sum \
+            "anvil-$version-linux-x86_64.tar.gz" \
+            "anvil-$version.sbom.spdx.json" \
+            release.pub.pem \
+            > SHA256SUMS
+          openssl pkeyutl \
+            -sign \
+            -inkey "$RUNNER_TEMP/release-signing.pem" \
+            -rawin \
+            -in SHA256SUMS \
+            -out SHA256SUMS.sig
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: ${{ runner.temp }}/anvil-*-linux-x86_64.tar.gz
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          gh release create "$GITHUB_REF_NAME" \
+            "$RUNNER_TEMP/anvil-$version-linux-x86_64.tar.gz" \
+            "$RUNNER_TEMP/anvil-$version.sbom.spdx.json" \
+            "$RUNNER_TEMP/SHA256SUMS" \
+            "$RUNNER_TEMP/SHA256SUMS.sig" \
+            "$RUNNER_TEMP/release.pub.pem" \
+            --verify-tag \
+            --generate-notes \
+            --title "Anvil $version"

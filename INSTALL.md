@@ -79,18 +79,16 @@ install -d "$HOME/.local/share/anvil/plugins"
 cp -R plugins/official/. "$HOME/.local/share/anvil/plugins/"
 ```
 
-If the release also ships signed packages under `share/anvil/packages`, import
-them into the managed store so they can be enabled, disabled, and updated:
+If the release ships signed packages under `share/anvil/packages`, import them
+into the managed store so they can be enabled, disabled, and updated:
 
 ```bash
-for package in "$HOME/.local/share/anvil/packages"/*.anvil-plugin; do
-  anvil-gateway \
-    -install-plugin "$package" \
-    -plugin-signature "$package.sig" \
-    -plugin-public-key "$(cat "$HOME/.local/share/anvil/packages/official.pub")" \
-    -plugin-source official
-done
+anvil-gateway -install-bundled "$HOME/.local/share/anvil/packages"
 ```
+
+The bootstrap is idempotent. Run it again after an Anvil upgrade to activate
+the bundled package versions; unchanged digests are no-ops and existing
+enable/disable state is preserved when permissions are unchanged.
 
 Bundled sources are a read-only fallback. A managed package with the same ID
 takes precedence.

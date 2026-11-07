@@ -17,8 +17,10 @@ post-`0.5.0` feature line.
   `fsroot` path confinement.
 - Bundled official plugin discovery under `share/anvil/plugins`, with managed
   packages taking precedence and release-layout assembly.
-- Official plugin packaging/signing and `-plugin-source official` bootstrap
-  into the managed store.
+- Idempotent `anvil-gateway -install-bundled` bootstrap for signed official
+  packages; upgrades preserve enable/disable state when permissions are stable.
+- Tag-driven release workflow with signed `SHA256SUMS`, SPDX SBOM, and GitHub
+  build-provenance attestation.
 - Gateway package-download jobs with bounded concurrency, progress and failure
   notifications, capability review, trust-on-first-use key approval, and
   digest-pinned installation through `:pkg install <url>`.

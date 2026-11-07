@@ -56,13 +56,29 @@ Also verify:
 
 ## Artifacts
 
-Release artifacts are not yet published automatically. Until signing and SBOM
-generation are implemented, a release must state that limitation rather than
-implying a supply-chain guarantee.
+Pushing a `vX.Y.Z` tag runs `.github/workflows/release.yml`. The workflow
+requires two repository secrets containing Ed25519 PEM private keys:
 
-`scripts/release-layout.sh` assembles the binaries plus official plugin sources.
-When `ANVIL_PLUGIN_SIGNING_KEY` is set, it also emits signed official packages
-under `share/anvil/packages` for first-install import into the managed store.
+- `ANVIL_PLUGIN_SIGNING_KEY` signs official plugin packages.
+- `ANVIL_RELEASE_SIGNING_KEY` signs `SHA256SUMS`.
+
+It builds `scripts/release-layout.sh`, generates an SPDX JSON SBOM with
+`syft`, creates a tarball, writes `SHA256SUMS`, and signs the exact checksum
+file. GitHub build-provenance attestation is attached to the release tarball.
+
+Verification:
+
+```bash
+sha256sum -c SHA256SUMS
+openssl pkeyutl -verify -pubin -inkey release.pub.pem \
+  -rawin -in SHA256SUMS -sigfile SHA256SUMS.sig
+gh attestation verify anvil-<version>-linux-x86_64.tar.gz --repo GBLMX/Anvil
+```
+
+The package public key is shipped as
+`share/anvil/packages/official.pub`; run
+`anvil-gateway -install-bundled share/anvil/packages` after installing or
+upgrading the layout.
 
 The standard edition and third-party distributions use the same kernel source
 boundary described in `docs/adr/0013-kernel-distribution-boundary.md`.

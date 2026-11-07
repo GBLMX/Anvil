@@ -225,16 +225,14 @@ jobs:
             plugins/official/trim-whitespace \
             "$RUNNER_TEMP/official.pem" \
             "$RUNNER_TEMP/packages"
-      - name: Install official package
+      - name: Install official packages twice
         run: |
-          package="$(find "$RUNNER_TEMP/packages" -name '*.anvil-plugin' -print -quit)"
-          "$RUNNER_TEMP/anvil-gateway" \
-            -install-plugin "$package" \
-            -plugin-signature "$package.sig" \
-            -plugin-public-key "$(cat "$RUNNER_TEMP/packages/official.pub")" \
-            -plugin-store "$RUNNER_TEMP/store" \
-            -plugin-trust-store "$RUNNER_TEMP/trust.json" \
-            -plugin-source official
+          for _ in 1 2; do
+            "$RUNNER_TEMP/anvil-gateway" \
+              -install-bundled "$RUNNER_TEMP/packages" \
+              -plugin-store "$RUNNER_TEMP/store" \
+              -plugin-trust-store "$RUNNER_TEMP/trust.json"
+          done
       - name: Verify official source
         run: |
           grep -q '"source": "official"' "$RUNNER_TEMP/store/state.json"

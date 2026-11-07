@@ -38,6 +38,7 @@ func main() {
 	fetchMax := flag.Int64("fetch-max", fetch.DefaultMaxBody, "maximum fetch body bytes")
 	fetchTimeout := flag.Duration("fetch-timeout", 10*time.Second, "fetch timeout")
 	installPlugin := flag.String("install-plugin", "", "verify and install one .anvil-plugin archive, then exit")
+	installBundled := flag.String("install-bundled", "", "install official packages from a directory, then exit")
 	pluginSignature := flag.String("plugin-signature", "", "detached Ed25519 signature file")
 	pluginPublicKey := flag.String("plugin-public-key", "", "Ed25519 public key as hex or base64")
 	pluginStore := flag.String("plugin-store", "", "content-addressed plugin store root")
@@ -52,6 +53,17 @@ func main() {
 	if storeErr != nil {
 		fmt.Fprintf(os.Stderr, "anvil-gateway: %v\n", storeErr)
 		os.Exit(2)
+	}
+	if *installBundled != "" {
+		if *installPlugin != "" {
+			fmt.Fprintln(os.Stderr, "anvil-gateway: -install-plugin and -install-bundled are mutually exclusive")
+			os.Exit(2)
+		}
+		if err := installBundledPackages(store, *installBundled, *pluginTrustStore); err != nil {
+			fmt.Fprintf(os.Stderr, "anvil-gateway: install bundled plugins: %v\n", err)
+			os.Exit(1)
+		}
+		return
 	}
 	if *installPlugin != "" {
 		if *pluginSignature == "" || *pluginPublicKey == "" {
@@ -199,6 +211,52 @@ func main() {
 		fmt.Fprintf(os.Stderr, "anvil-gateway: %v\n", err)
 		os.Exit(2)
 	}
+}
+
+func installBundledPackages(store *pkg.Store, directory, trustPath string) error {
+	keyData, err := os.ReadFile(filepath.Join(directory, "official.pub"))
+	if err != nil {
+		return fmt.Errorf("read official public key: %w", err)
+	}
+	publicKey, err := pkg.DecodePublicKey(string(keyData))
+	if err != nil {
+		return fmt.Errorf("decode official public key: %w", err)
+	}
+	if err := pkg.AddTrustedKey(trustPath, "official", publicKey); err != nil {
+		return fmt.Errorf("trust official key: %w", err)
+	}
+	entries, err := os.ReadDir(directory)
+	if err != nil {
+		return fmt.Errorf("read package directory: %w", err)
+	}
+	installed := 0
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".anvil-plugin") {
+			continue
+		}
+		archivePath := filepath.Join(directory, entry.Name())
+		signaturePath := archivePath + ".sig"
+		if _, err := os.Stat(signaturePath); err != nil {
+			return fmt.Errorf("signature for %s: %w", entry.Name(), err)
+		}
+		result, err := store.InstallPackage(
+			archivePath,
+			signaturePath,
+			publicKey,
+			"",
+			trustPath,
+			"official",
+		)
+		if err != nil {
+			return fmt.Errorf("install %s: %w", entry.Name(), err)
+		}
+		fmt.Printf("installed %s version=%s digest=%s\n", result.ID, result.Version, result.Digest)
+		installed++
+	}
+	if installed == 0 {
+		return fmt.Errorf("no .anvil-plugin packages in %s", directory)
+	}
+	return nil
 }
 
 func splitPermissions(value string) []string {
