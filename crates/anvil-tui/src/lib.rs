@@ -278,6 +278,9 @@ enum LspRequestKind {
     Definition,
     References,
     DocumentHighlight,
+    CallHierarchyPrepare(CallHierarchyDirection),
+    CallHierarchyIncoming,
+    CallHierarchyOutgoing,
     Hover,
     Rename,
     CodeAction,
@@ -340,6 +343,27 @@ struct DocumentHighlightItem {
 struct DocumentHighlightState {
     revision: u64,
     items: Vec<DocumentHighlightItem>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CallHierarchyDirection {
+    Incoming,
+    Outgoing,
+}
+
+#[derive(Debug, Clone)]
+struct CallHierarchyItem {
+    name: String,
+    path: PathBuf,
+    line: usize,
+    character: usize,
+}
+
+#[derive(Debug, Clone)]
+struct CallHierarchyState {
+    direction: CallHierarchyDirection,
+    items: Vec<CallHierarchyItem>,
+    selected: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -509,6 +533,7 @@ pub struct Model {
     document_symbols: Option<SymbolState>,
     references: Option<ReferenceState>,
     document_highlights: Option<DocumentHighlightState>,
+    call_hierarchy: Option<CallHierarchyState>,
     signature_help: Option<SignatureHelpState>,
     workspace_symbols: Option<WorkspaceSymbolState>,
     inlay_hints: Vec<InlayHint>,
@@ -641,6 +666,7 @@ impl Model {
             document_symbols: None,
             references: None,
             document_highlights: None,
+            call_hierarchy: None,
             signature_help: None,
             workspace_symbols: None,
             inlay_hints: Vec::new(),
@@ -892,6 +918,7 @@ impl Model {
         self.document_symbols = None;
         self.references = None;
         self.document_highlights = None;
+        self.call_hierarchy = None;
     }
 
     fn active_lsp_worker(&self) -> Option<&LspWorker> {
@@ -1208,6 +1235,7 @@ impl Model {
             || self.workspace_symbols.is_some()
             || self.document_symbols.is_some()
             || self.references.is_some()
+            || self.call_hierarchy.is_some()
             || self.code_actions.is_some()
             || self.completion.is_some()
             || self.hover.is_some()

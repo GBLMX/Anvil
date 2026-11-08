@@ -1,6 +1,7 @@
 //! Main editor frame and overlays.
 
 use super::*;
+use crate::CallHierarchyDirection;
 pub fn view(model: &Model, frame: &mut Frame) {
     let area = frame.area();
     let editor_view: EditorView = model.editor.snapshot().view();
@@ -660,6 +661,32 @@ pub fn view(model: &Model, frame: &mut Frame) {
             Paragraph::new(lines)
                 .style(theme::panel())
                 .block(panel_block("References")),
+            popup,
+        );
+    }
+    if let Some(calls) = &model.call_hierarchy {
+        let popup = crate::render::document_symbols_rect(area, calls.items.len());
+        frame.render_widget(Clear, popup);
+        let visible = popup.height.saturating_sub(2) as usize;
+        let start = calls.selected.saturating_sub(visible.saturating_sub(1));
+        let mut lines = Vec::new();
+        for (row, item) in calls.items.iter().skip(start).take(visible).enumerate() {
+            let text = format!("{}  {}:{}", item.name, item.path.display(), item.line + 1);
+            let style = if start + row == calls.selected {
+                theme::selected()
+            } else {
+                theme::panel()
+            };
+            lines.push(Line::styled(text, style));
+        }
+        let title = match calls.direction {
+            CallHierarchyDirection::Incoming => "Incoming Calls",
+            CallHierarchyDirection::Outgoing => "Outgoing Calls",
+        };
+        frame.render_widget(
+            Paragraph::new(lines)
+                .style(theme::panel())
+                .block(panel_block(title)),
             popup,
         );
     }

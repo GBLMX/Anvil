@@ -682,6 +682,8 @@ pub(crate) enum PendingCommand {
     Definition,
     References,
     DocumentHighlight,
+    IncomingCalls,
+    OutgoingCalls,
     Diagnostic(bool),
     Count {
         pending: char,
@@ -715,6 +717,8 @@ impl PendingCommand {
             Definition => Some(command::DEFINITION),
             References => Some(command::REFERENCES),
             DocumentHighlight => Some(command::DOCUMENT_HIGHLIGHT),
+            IncomingCalls => Some(command::INCOMING_CALLS),
+            OutgoingCalls => Some(command::OUTGOING_CALLS),
             Diagnostic(true) => Some(command::DIAGNOSTICS_NEXT),
             Diagnostic(false) => Some(command::DIAGNOSTICS_PREVIOUS),
             SplitVertical => Some(command::SPLIT_VERTICAL),
@@ -829,6 +833,8 @@ impl PendingCommand {
                 | Self::StartRename
                 | Self::References
                 | Self::DocumentHighlight
+                | Self::IncomingCalls
+                | Self::OutgoingCalls
                 | Self::CodeActions
                 | Self::DocumentSymbols
                 | Self::WorkspaceSymbols
@@ -848,6 +854,8 @@ impl PendingCommand {
             "lsp.definition" => Self::Definition,
             "lsp.references" => Self::References,
             "lsp.document_highlight" => Self::DocumentHighlight,
+            "lsp.incoming_calls" => Self::IncomingCalls,
+            "lsp.outgoing_calls" => Self::OutgoingCalls,
             "diagnostics.next" => Self::Diagnostic(true),
             "diagnostics.previous" => Self::Diagnostic(false),
             "view.split_vertical" => Self::SplitVertical,
@@ -945,6 +953,8 @@ pub(crate) fn pending_action(
             KeyCode::Char('d') => Some(PendingCommand::Definition),
             KeyCode::Char('r') => Some(PendingCommand::References),
             KeyCode::Char('h') => Some(PendingCommand::DocumentHighlight),
+            KeyCode::Char('i') => Some(PendingCommand::IncomingCalls),
+            KeyCode::Char('o') => Some(PendingCommand::OutgoingCalls),
             _ => None,
         };
     }
@@ -1064,6 +1074,14 @@ mod tests {
         assert_eq!(
             pending_action('g', key(KeyCode::Char('h'), KeyModifiers::NONE), false),
             Some(PendingCommand::DocumentHighlight)
+        );
+        assert_eq!(
+            pending_action('g', key(KeyCode::Char('i'), KeyModifiers::NONE), false),
+            Some(PendingCommand::IncomingCalls)
+        );
+        assert_eq!(
+            pending_action('g', key(KeyCode::Char('o'), KeyModifiers::NONE), false),
+            Some(PendingCommand::OutgoingCalls)
         );
     }
 

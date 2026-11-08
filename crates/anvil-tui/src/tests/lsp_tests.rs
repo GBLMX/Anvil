@@ -81,8 +81,23 @@ fn switching_buffers_clears_references() {
         }
     }]));
     assert!(model.references.is_some());
+    model.apply_call_hierarchy_calls_response(
+        &serde_json::json!([{
+            "from": {
+                "name": "second",
+                "uri": lsp_worker::file_uri(&second),
+                "selectionRange": {
+                    "start": {"line": 0, "character": 3},
+                    "end": {"line": 0, "character": 9}
+                }
+            }
+        }]),
+        crate::CallHierarchyDirection::Incoming,
+    );
+    assert!(model.call_hierarchy.is_some());
     model.switch_buffer(-1);
     assert!(model.references.is_none());
+    assert!(model.call_hierarchy.is_none());
 }
 
 #[test]
@@ -126,6 +141,148 @@ fn document_highlights_render_writes_underlined() {
             .add_modifier
             .contains(ratatui::style::Modifier::UNDERLINED)
     );
+}
+
+#[test]
+fn incoming_calls_populate_and_jump() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let main = dir.path().join("main.rs");
+    let caller = dir.path().join("caller.rs");
+    fs::write(&main, "fn main() {}\n").expect("main");
+    fs::write(&caller, "fn caller() {}\n").expect("caller");
+    let mut model = Model::open(&main).expect("open");
+    let caller_uri = lsp_worker::file_uri(&caller);
+    model.apply_call_hierarchy_calls_response(
+        &serde_json::json!([{
+            "from": {
+                "name": "caller",
+                "uri": caller_uri,
+                "selectionRange": {
+                    "start": {"line": 0, "character": 3},
+                    "end": {"line": 0, "character": 9}
+                }
+            }
+        }]),
+        crate::CallHierarchyDirection::Incoming,
+    );
+    let calls = model.call_hierarchy.as_ref().expect("calls");
+    assert_eq!(calls.items.len(), 1);
+    assert_eq!(calls.items[0].name, "caller");
+    model.apply_call_hierarchy();
+    assert_eq!(
+        model.path.as_deref(),
+        Some(caller.canonicalize().expect("canonical").as_path())
+    );
+    assert_eq!(model.cursor, model.offset_at_utf16(0, 3));
+    assert!(model.call_hierarchy.is_none());
+}
+
+#[test]
+fn outgoing_calls_parse_to_item() {
+    let mut model = Model::new(EditorState::from_text("caller"), None);
+    let target = std::path::Path::new("/tmp/outgoing.rs");
+    model.apply_call_hierarchy_calls_response(
+        &serde_json::json!([{
+            "to": {
+                "name": "callee",
+                "uri": lsp_worker::file_uri(target),
+                "selectionRange": {
+                    "start": {"line": 0, "character": 3},
+                    "end": {"line": 0, "character": 9}
+                }
+            }
+        }]),
+        crate::CallHierarchyDirection::Outgoing,
+    );
+    let calls = model.call_hierarchy.as_ref().expect("calls");
+    assert_eq!(calls.direction, crate::CallHierarchyDirection::Outgoing);
+    assert_eq!(calls.items[0].name, "callee");
+}
+
+#[test]
+#[ignore = "requires rust-analyzer and ANVIL_GATEWAY"]
+fn call_hierarchy_round_trip_through_gateway() {
+    use std::time::{Duration, Instant};
+
+    let dir = tempfile::tempdir().expect("tempdir");
+    let workspace = dir.path().canonicalize().expect("canonical");
+    let source = workspace.join("src");
+    fs::create_dir(&source).expect("src");
+    fs::write(
+        workspace.join("Cargo.toml"),
+        "[package]\nname = \"call-smoke\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+    )
+    .expect("manifest");
+    let main = source.join("main.rs");
+    fs::write(
+        &main,
+        "fn callee() {}\nfn caller() { callee(); }\nfn main() { caller(); }\n",
+    )
+    .expect("main");
+    let (session, gateway, lsp_client) =
+        crate::gateway::GatewaySession::start(&workspace).expect("gateway");
+    let mut model = Model::with_gateway(gateway, workspace);
+    model.lsp_client = Some(lsp_client);
+    model.open_path(&main).expect("open");
+    std::thread::sleep(Duration::from_secs(3));
+
+    let wait = |model: &mut Model, direction: crate::CallHierarchyDirection, expected: &str| {
+        let deadline = Instant::now() + Duration::from_secs(20);
+        loop {
+            model.poll_lsp();
+            if let Some(calls) = &model.call_hierarchy {
+                if calls.direction == direction
+                    && calls.items.iter().any(|item| item.name == expected)
+                {
+                    return;
+                }
+            }
+            assert!(
+                Instant::now() < deadline,
+                "no {direction:?} call to {expected}; status={}; pending={:?}; notifications={:?}",
+                model.status,
+                model.pending_lsp,
+                model.ui.notifications
+            );
+            std::thread::sleep(Duration::from_millis(50));
+        }
+    };
+
+    model.cursor = model.offset_at_utf16(1, 15);
+    model.request_call_hierarchy(crate::CallHierarchyDirection::Incoming);
+    wait(
+        &mut model,
+        crate::CallHierarchyDirection::Incoming,
+        "caller",
+    );
+
+    model.cursor = model.offset_at_utf16(1, 3);
+    model.request_call_hierarchy(crate::CallHierarchyDirection::Outgoing);
+    wait(
+        &mut model,
+        crate::CallHierarchyDirection::Outgoing,
+        "callee",
+    );
+    drop(session);
+}
+
+#[test]
+fn gi_and_go_dispatch_call_hierarchy_requests() {
+    use crossterm::event::Event;
+
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("main.rs");
+    fs::write(&path, "fn main() {}\n").expect("main");
+    let mut model = Model::open(&path).expect("open");
+    let press = |model: &mut Model, code| {
+        model.dispatch(Event::Key(KeyEvent::new(code, KeyModifiers::NONE)));
+    };
+    press(&mut model, KeyCode::Char('g'));
+    press(&mut model, KeyCode::Char('i'));
+    assert_eq!(model.status, "E: lsp is not running");
+    press(&mut model, KeyCode::Char('g'));
+    press(&mut model, KeyCode::Char('o'));
+    assert_eq!(model.status, "E: lsp is not running");
 }
 
 #[test]

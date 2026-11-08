@@ -104,6 +104,9 @@ impl LspWorker {
                                 "isPreferredSupport": true,
                                 "disabledSupport": true,
                                 "dataSupport": true
+                            },
+                            "callHierarchy": {
+                                "dynamicRegistration": false
                             }
                         },
                         "workspace": {"workspaceFolders": true},

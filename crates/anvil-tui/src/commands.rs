@@ -240,6 +240,12 @@ impl Model {
                 Effect::LspDefinition => self.request_definition(),
                 Effect::LspReferences => self.request_references(),
                 Effect::LspDocumentHighlights => self.request_document_highlights(),
+                Effect::LspIncomingCalls => {
+                    self.request_call_hierarchy(CallHierarchyDirection::Incoming);
+                }
+                Effect::LspOutgoingCalls => {
+                    self.request_call_hierarchy(CallHierarchyDirection::Outgoing);
+                }
                 Effect::LspHover => self.request_hover(),
                 Effect::LspCodeActions => self.request_code_actions(),
                 Effect::LspDocumentSymbols => self.request_document_symbols(),

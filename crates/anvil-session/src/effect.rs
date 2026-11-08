@@ -25,6 +25,10 @@ pub enum Effect {
     LspReferences,
     /// Request document highlights at the cursor.
     LspDocumentHighlights,
+    /// Request incoming calls for the symbol at the cursor.
+    LspIncomingCalls,
+    /// Request outgoing calls for the symbol at the cursor.
+    LspOutgoingCalls,
     /// Request hover.
     LspHover,
     /// Request code actions.

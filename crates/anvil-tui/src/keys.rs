@@ -133,6 +133,8 @@ fn execute_pending_command(
         PendingCommand::DocumentHighlight => {
             model.queue_effect(Effect::LspDocumentHighlights);
         }
+        PendingCommand::IncomingCalls => model.queue_effect(Effect::LspIncomingCalls),
+        PendingCommand::OutgoingCalls => model.queue_effect(Effect::LspOutgoingCalls),
         PendingCommand::Diagnostic(forward) => model.jump_diagnostic(forward),
         PendingCommand::Count { pending, digit } => {
             model.push_count(digit);
@@ -527,6 +529,33 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             }
             _ => {
                 model.cancel_workspace_symbols();
+                false
+            }
+        };
+        if consumed {
+            return;
+        }
+    }
+    if model.call_hierarchy.is_some() {
+        let consumed = match key.code {
+            KeyCode::Esc => {
+                model.cancel_call_hierarchy();
+                true
+            }
+            KeyCode::Up | KeyCode::Char('k') => {
+                model.move_call_hierarchy(-1);
+                true
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                model.move_call_hierarchy(1);
+                true
+            }
+            KeyCode::Enter => {
+                model.apply_call_hierarchy();
+                true
+            }
+            _ => {
+                model.cancel_call_hierarchy();
                 false
             }
         };

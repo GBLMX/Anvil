@@ -1,9 +1,9 @@
 //! LSP request state, completion, definition, and hover UI behavior.
 
 use super::{
-    CodeActionItem, CodeActionState, CompletionItem, CompletionState, LspRequestKind, Model,
-    ReferenceItem, ReferenceState, SignatureHelpState, SignatureItem, SymbolItem, SymbolState,
-    WorkspaceEdit, WorkspaceSymbolItem, WorkspaceSymbolState,
+    CallHierarchyDirection, CodeActionItem, CodeActionState, CompletionItem, CompletionState,
+    LspRequestKind, Model, ReferenceItem, ReferenceState, SignatureHelpState, SignatureItem,
+    SymbolItem, SymbolState, WorkspaceEdit, WorkspaceSymbolItem, WorkspaceSymbolState,
 };
 use crate::{lsp, lsp_worker};
 use anvil_core::TextBuffer;
@@ -176,6 +176,9 @@ impl Model {
                 | LspRequestKind::Formatting
                 | LspRequestKind::SignatureHelp
                 | LspRequestKind::DocumentHighlight
+                | LspRequestKind::CallHierarchyPrepare(_)
+                | LspRequestKind::CallHierarchyIncoming
+                | LspRequestKind::CallHierarchyOutgoing
         ) {
             self.pending_edit_revision
                 .insert(id, self.editor.revision());
@@ -271,6 +274,7 @@ impl Model {
         self.workspace_symbols = None;
         self.references = None;
         self.document_highlights = None;
+        self.call_hierarchy = None;
         self.inlay_hints.clear();
         self.inlay_pending = None;
         self.inlay_checked = None;
@@ -454,7 +458,72 @@ impl Model {
     pub(crate) fn cancel_document_highlights(&mut self) {
         self.pending_lsp
             .retain(|_, kind| *kind != LspRequestKind::DocumentHighlight);
+        self.prune_edit_requests();
         self.document_highlights = None;
+        self.dirty = true;
+    }
+
+    pub(crate) fn request_call_hierarchy(&mut self, direction: CallHierarchyDirection) {
+        self.cancel_completion();
+        self.cancel_code_actions();
+        self.cancel_document_highlights();
+        self.cancel_call_hierarchy();
+        self.hover = None;
+        self.ui.diagnostic_peek = None;
+        let Some(uri) = self.path.as_ref().map(|path| lsp_worker::file_uri(path)) else {
+            return;
+        };
+        let Some((line, character)) = self.lsp_position() else {
+            return;
+        };
+        let params = serde_json::json!({
+            "textDocument": {"uri": uri},
+            "position": {"line": line, "character": character}
+        });
+        if self.send_lsp_request(
+            LspRequestKind::CallHierarchyPrepare(direction),
+            "textDocument/prepareCallHierarchy",
+            params,
+        ) {
+            self.status = "call hierarchy".to_owned();
+        }
+        self.dirty = true;
+    }
+
+    fn request_call_hierarchy_calls(
+        &mut self,
+        item: serde_json::Value,
+        direction: CallHierarchyDirection,
+    ) {
+        let (kind, method, label) = match direction {
+            CallHierarchyDirection::Incoming => (
+                LspRequestKind::CallHierarchyIncoming,
+                "callHierarchy/incomingCalls",
+                "incoming calls",
+            ),
+            CallHierarchyDirection::Outgoing => (
+                LspRequestKind::CallHierarchyOutgoing,
+                "callHierarchy/outgoingCalls",
+                "outgoing calls",
+            ),
+        };
+        if self.send_lsp_request(kind, method, serde_json::json!({ "item": item })) {
+            self.status = label.to_owned();
+        }
+        self.dirty = true;
+    }
+
+    pub(crate) fn cancel_call_hierarchy(&mut self) {
+        self.pending_lsp.retain(|_, kind| {
+            !matches!(
+                kind,
+                LspRequestKind::CallHierarchyPrepare(_)
+                    | LspRequestKind::CallHierarchyIncoming
+                    | LspRequestKind::CallHierarchyOutgoing
+            )
+        });
+        self.prune_edit_requests();
+        self.call_hierarchy = None;
         self.dirty = true;
     }
 
@@ -793,6 +862,39 @@ impl Model {
             reference.path.display(),
             reference.line + 1
         );
+        self.dirty = true;
+    }
+
+    pub(crate) fn move_call_hierarchy(&mut self, delta: isize) {
+        if let Some(calls) = self.call_hierarchy.as_mut() {
+            calls.selected = calls
+                .selected
+                .saturating_add_signed(delta)
+                .min(calls.items.len().saturating_sub(1));
+            self.dirty = true;
+        }
+    }
+
+    pub(crate) fn apply_call_hierarchy(&mut self) {
+        let Some(calls) = self.call_hierarchy.take() else {
+            return;
+        };
+        let Some(item) = calls.items.get(calls.selected).cloned() else {
+            return;
+        };
+        if self.path.as_ref() != Some(&item.path)
+            && let Err(error) = self.open_path(&item.path)
+        {
+            self.status = format!("E: {error}");
+            self.dirty = true;
+            return;
+        }
+        self.cursor = self.offset_at_utf16(item.line, item.character);
+        let direction = match calls.direction {
+            CallHierarchyDirection::Incoming => "incoming",
+            CallHierarchyDirection::Outgoing => "outgoing",
+        };
+        self.status = format!("{direction} call {}:{}", item.name, item.line + 1);
         self.dirty = true;
     }
 

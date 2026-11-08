@@ -13,6 +13,8 @@ post-`0.5.0` feature line.
 - LSP references panel on `gr`, with bounded sorted locations and cross-file
   jump-to-reference.
 - LSP document highlights on `gh`, with stale-revision and buffer guards.
+- LSP incoming/outgoing call panels on `gi`/`go`, with sorted bounded results
+  and cross-file jumps.
 - Luau `editor.get_view()` / `editor.apply_edit()` bridge over the host editor
   UDS, including a cursor-printing fixture.
 - Signed `.anvil-plugin` installs via `anvil-gateway -install-plugin`, with

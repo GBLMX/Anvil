@@ -1,7 +1,10 @@
 //! LSP response handling and DTO application.
 
 use super::*;
-use crate::{DocumentHighlightItem, DocumentHighlightState};
+use crate::{
+    CallHierarchyDirection, CallHierarchyItem, CallHierarchyState, DocumentHighlightItem,
+    DocumentHighlightState,
+};
 
 impl Model {
     fn apply_document_symbols_response(&mut self, result: &serde_json::Value) {
@@ -103,6 +106,9 @@ impl Model {
                 | LspRequestKind::Formatting
                 | LspRequestKind::SignatureHelp
                 | LspRequestKind::DocumentHighlight
+                | LspRequestKind::CallHierarchyPrepare(_)
+                | LspRequestKind::CallHierarchyIncoming
+                | LspRequestKind::CallHierarchyOutgoing
         ) && edit_revision.is_some_and(|revision| revision != self.editor.revision())
         {
             self.status = "lsp: stale edit response ignored".to_owned();
@@ -116,6 +122,9 @@ impl Model {
                 | LspRequestKind::Formatting
                 | LspRequestKind::SignatureHelp
                 | LspRequestKind::DocumentHighlight
+                | LspRequestKind::CallHierarchyPrepare(_)
+                | LspRequestKind::CallHierarchyIncoming
+                | LspRequestKind::CallHierarchyOutgoing
         ) && edit_path
             .as_ref()
             .is_some_and(|path| self.path.as_ref() != Some(path))
@@ -129,6 +138,15 @@ impl Model {
             LspRequestKind::Definition => self.apply_definition_response(&result),
             LspRequestKind::References => self.apply_references_response(&result),
             LspRequestKind::DocumentHighlight => self.apply_document_highlights_response(&result),
+            LspRequestKind::CallHierarchyPrepare(direction) => {
+                self.apply_call_hierarchy_prepare_response(&result, direction);
+            }
+            LspRequestKind::CallHierarchyIncoming => {
+                self.apply_call_hierarchy_calls_response(&result, CallHierarchyDirection::Incoming);
+            }
+            LspRequestKind::CallHierarchyOutgoing => {
+                self.apply_call_hierarchy_calls_response(&result, CallHierarchyDirection::Outgoing);
+            }
             LspRequestKind::Hover => self.apply_hover_response(&result),
             LspRequestKind::Rename => {
                 if result.is_null() {
@@ -389,6 +407,73 @@ impl Model {
         }
     }
 
+    fn apply_call_hierarchy_prepare_response(
+        &mut self,
+        result: &serde_json::Value,
+        direction: CallHierarchyDirection,
+    ) {
+        let Some(item) = result.as_array().and_then(|items| items.first()).cloned() else {
+            self.status = "lsp: no call hierarchy item".to_owned();
+            return;
+        };
+        self.request_call_hierarchy_calls(item, direction);
+    }
+
+    pub(crate) fn apply_call_hierarchy_calls_response(
+        &mut self,
+        result: &serde_json::Value,
+        direction: CallHierarchyDirection,
+    ) {
+        let Some(calls) = result.as_array() else {
+            self.status = "lsp: no calls".to_owned();
+            self.call_hierarchy = None;
+            return;
+        };
+        let nested = match direction {
+            CallHierarchyDirection::Incoming => "from",
+            CallHierarchyDirection::Outgoing => "to",
+        };
+        let mut items = Vec::new();
+        for call in calls {
+            if items.len() >= 4096 {
+                break;
+            }
+            let Some(item) = call.get(nested) else {
+                continue;
+            };
+            let Some(item) = call_hierarchy_item_from_lsp(item) else {
+                continue;
+            };
+            items.push(item);
+        }
+        items.sort_by(|left, right| {
+            left.path
+                .cmp(&right.path)
+                .then(left.line.cmp(&right.line))
+                .then(left.character.cmp(&right.character))
+                .then(left.name.cmp(&right.name))
+        });
+        items.dedup_by(|left, right| {
+            left.path == right.path && left.line == right.line && left.character == right.character
+        });
+        if items.is_empty() {
+            self.status = "lsp: no calls".to_owned();
+            self.call_hierarchy = None;
+        } else {
+            let count = items.len();
+            let label = match direction {
+                CallHierarchyDirection::Incoming => "incoming",
+                CallHierarchyDirection::Outgoing => "outgoing",
+            };
+            self.status = format!("{label} calls: {count}");
+            self.call_hierarchy = Some(CallHierarchyState {
+                direction,
+                items,
+                selected: 0,
+            });
+        }
+    }
+
     fn apply_hover_response(&mut self, result: &serde_json::Value) {
         let Some(contents) = result.get("contents") else {
             self.status = "lsp: no hover".to_owned();
@@ -402,4 +487,24 @@ impl Model {
             self.status = "hover".to_owned();
         }
     }
+}
+
+fn call_hierarchy_item_from_lsp(item: &serde_json::Value) -> Option<CallHierarchyItem> {
+    let name = item.get("name")?.as_str()?.to_owned();
+    let uri = item.get("uri")?.as_str()?;
+    let path = lsp::uri_to_path(uri)?;
+    let range = item.get("selectionRange").or_else(|| item.get("range"))?;
+    let start = range.get("start")?;
+    Some(CallHierarchyItem {
+        name,
+        path,
+        line: start
+            .get("line")
+            .and_then(serde_json::Value::as_u64)
+            .unwrap_or(0) as usize,
+        character: start
+            .get("character")
+            .and_then(serde_json::Value::as_u64)
+            .unwrap_or(0) as usize,
+    })
 }
