@@ -385,6 +385,7 @@ fn cancelling_completion_drops_pending_response() {
         items: vec![CompletionItem {
             label: "item".to_owned(),
             insert: "item".to_owned(),
+            snippet: None,
             detail: String::new(),
             replace: None,
             documentation: None,
@@ -416,6 +417,7 @@ fn completion_resolve_updates_selected_item() {
         items: vec![CompletionItem {
             label: "item".to_owned(),
             insert: "item".to_owned(),
+            snippet: None,
             detail: String::new(),
             replace: None,
             documentation: None,
@@ -454,6 +456,7 @@ fn completion_documentation_is_rendered() {
         items: vec![CompletionItem {
             label: "item".to_owned(),
             insert: "item".to_owned(),
+            snippet: None,
             detail: "detail".to_owned(),
             replace: None,
             documentation: Some("resolved docs".to_owned()),
@@ -475,6 +478,43 @@ fn completion_documentation_is_rendered() {
         .map(|cell| cell.symbol())
         .collect::<String>();
     assert!(rendered.contains("resolved docs"));
+}
+
+#[test]
+fn applying_snippet_selects_and_navigates_stops() {
+    let mut model = Model::new(EditorState::from_text(""), None);
+    let snippet = crate::snippet::parse("fn ${1:name}(${2:args}) $0").expect("snippet");
+    model.completion = Some(CompletionState {
+        id: 9,
+        items: vec![CompletionItem {
+            label: "fn".to_owned(),
+            insert: snippet.text.clone(),
+            snippet: Some(snippet),
+            detail: String::new(),
+            replace: None,
+            documentation: None,
+            raw: serde_json::Value::Null,
+            resolved: true,
+        }],
+        filtered: vec![0],
+        query: String::new(),
+        selected: 0,
+    });
+    model.apply_completion();
+    assert_eq!(
+        model
+            .editor
+            .text()
+            .slice(0..model.editor.text().len_bytes()),
+        "fn name(args) "
+    );
+    assert_eq!(model.editor.selection_bytes(), vec![(3, 7)]);
+    assert!(model.next_snippet_stop());
+    assert_eq!(model.editor.selection_bytes(), vec![(8, 12)]);
+    assert!(model.next_snippet_stop());
+    assert_eq!(model.editor.selection_bytes(), vec![(14, 14)]);
+    assert!(model.next_snippet_stop());
+    assert!(model.snippet.is_none());
 }
 
 #[test]

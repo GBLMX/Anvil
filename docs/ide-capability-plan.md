@@ -23,7 +23,7 @@ Tokio runtime, no in-process plugin UI, and no embedded WebView.
 
 | Area | Current | Required |
 |---|---|---|
-| Completion | label/insert/detail popup, `completionItem/resolve` docs | snippets, placeholders, ranking |
+| Completion | label/insert/detail popup, resolve docs, snippet placeholders | snippet mirrors, ranking |
 | Navigation | definition, hover, symbols, references, highlights, incoming/outgoing calls | — |
 | Structure | diagnostics, code actions, format, rename, folding ranges | semantic tokens, code lens, workspace edits |
 | Search | literal `/`, `n`/`N` | `0.5.8` owns search/replace UI; post-0.5 extends multi-file/project search only if measured |

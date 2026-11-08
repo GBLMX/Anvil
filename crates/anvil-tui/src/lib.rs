@@ -87,6 +87,8 @@ mod theme_config;
 use settings::Settings;
 mod settings_ui;
 use settings_ui::SettingsOverlayState;
+mod snippet;
+use snippet::{Snippet, SnippetSession};
 use workspace_edit::WorkspaceEdit;
 mod workspace_edit;
 pub(crate) use keys::handle_event;
@@ -265,6 +267,7 @@ impl SelectionItem for CommandPaletteItem {
 struct CompletionItem {
     label: String,
     insert: String,
+    snippet: Option<Snippet>,
     detail: String,
     replace: Option<(usize, usize, usize, usize)>,
     documentation: Option<String>,
@@ -546,6 +549,7 @@ pub struct Model {
     next_lsp_request: u64,
     completion: Option<CompletionState>,
     completion_resolve: Option<(u64, usize)>,
+    snippet: Option<SnippetSession>,
     hover: Option<String>,
     code_actions: Option<CodeActionState>,
     document_symbols: Option<SymbolState>,
@@ -686,6 +690,7 @@ impl Model {
             next_lsp_request: 2,
             completion: None,
             completion_resolve: None,
+            snippet: None,
             hover: None,
             code_actions: None,
             document_symbols: None,

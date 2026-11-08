@@ -205,6 +205,16 @@ impl Model {
                     .or_else(|| item.get("insertText").and_then(serde_json::Value::as_str))
                     .unwrap_or(&label)
                     .to_owned();
+                let snippet = (item
+                    .get("insertTextFormat")
+                    .and_then(serde_json::Value::as_u64)
+                    == Some(2))
+                .then(|| crate::snippet::parse(&insert).ok())
+                .flatten();
+                let insert = snippet
+                    .as_ref()
+                    .map(|snippet| snippet.text.clone())
+                    .unwrap_or_else(|| expand_snippet(&insert));
                 let detail = item
                     .get("detail")
                     .and_then(serde_json::Value::as_str)
@@ -229,7 +239,8 @@ impl Model {
                     });
                 Some(CompletionItem {
                     label,
-                    insert: expand_snippet(&insert),
+                    insert,
+                    snippet,
                     detail,
                     replace,
                     documentation,

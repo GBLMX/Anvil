@@ -3,7 +3,8 @@
 use super::{
     CallHierarchyDirection, CodeActionItem, CodeActionState, CompletionItem, CompletionState,
     LspRequestKind, Model, ReferenceItem, ReferenceState, SignatureHelpState, SignatureItem,
-    SymbolItem, SymbolState, WorkspaceEdit, WorkspaceSymbolItem, WorkspaceSymbolState,
+    Snippet, SnippetSession, SymbolItem, SymbolState, WorkspaceEdit, WorkspaceSymbolItem,
+    WorkspaceSymbolState,
 };
 use crate::{lsp, lsp_worker};
 use anvil_core::TextBuffer;
@@ -1045,8 +1046,12 @@ impl Model {
         else {
             return;
         };
+        let label = item.label.clone();
         let insert = item.insert.clone();
-        if let Some((start_line, start_char, end_line, end_char)) = item.replace {
+        let replace = item.replace;
+        let mut snippet = item.snippet.clone();
+        self.snippet = None;
+        if let Some((start_line, start_char, end_line, end_char)) = replace {
             let start = self.offset_at_utf16(start_line, start_char);
             let end = self.offset_at_utf16(end_line, end_char).max(start);
             self.editor.set_selection_bytes(start, end);
@@ -1054,10 +1059,76 @@ impl Model {
             self.editor.insert(start, &insert);
             self.cursor = start + insert.len();
             self.modified = true;
+            if let Some(snippet) = snippet.take() {
+                self.start_snippet(&snippet, start);
+            }
         } else {
+            let selections = self.editor.selection_bytes();
+            if selections.len() != 1 {
+                snippet = None;
+            }
+            let start = selections
+                .first()
+                .map(|(anchor, head)| (*anchor).min(*head))
+                .unwrap_or(self.cursor);
             self.insert_text(&insert);
+            if let Some(snippet) = snippet {
+                self.start_snippet(&snippet, start);
+            }
         }
-        self.status = format!("completed {}", item.label);
+        self.status = format!("completed {label}");
+        self.dirty = true;
+    }
+
+    fn start_snippet(&mut self, snippet: &Snippet, base: usize) {
+        self.snippet = SnippetSession::new(snippet.offset_stops(base));
+        self.goto_snippet_stop();
+    }
+
+    fn goto_snippet_stop(&mut self) {
+        let Some((start, end)) = self.snippet.as_ref().and_then(SnippetSession::current) else {
+            self.snippet = None;
+            return;
+        };
+        self.editor.set_selection_bytes(start, end);
+        self.cursor = start;
+        self.dirty = true;
+    }
+
+    pub(crate) fn next_snippet_stop(&mut self) -> bool {
+        let Some(mut session) = self.snippet.take() else {
+            return false;
+        };
+        if let Some((start, end)) = session.next() {
+            self.snippet = Some(session);
+            self.editor.set_selection_bytes(start, end);
+            self.cursor = start;
+            self.dirty = true;
+            return true;
+        }
+        let end = session.current().map(|(_, end)| end).unwrap_or(self.cursor);
+        self.cursor = end;
+        self.editor.set_selection_bytes(end, end);
+        self.dirty = true;
+        true
+    }
+
+    pub(crate) fn previous_snippet_stop(&mut self) -> bool {
+        let Some(mut session) = self.snippet.take() else {
+            return false;
+        };
+        let moved = session.previous();
+        self.snippet = Some(session);
+        if let Some((start, end)) = moved {
+            self.editor.set_selection_bytes(start, end);
+            self.cursor = start;
+            self.dirty = true;
+        }
+        true
+    }
+
+    pub(crate) fn cancel_snippet(&mut self) {
+        self.snippet = None;
         self.dirty = true;
     }
 

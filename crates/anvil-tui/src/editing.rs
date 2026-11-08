@@ -842,6 +842,18 @@ impl Model {
             return;
         }
         let selections = self.editor.selection_bytes();
+        if self.snippet.is_some() {
+            if selections.len() > 1 {
+                self.snippet = None;
+            } else if let Some((anchor, head)) = selections.first().copied() {
+                let start = anchor.min(head);
+                let end = anchor.max(head);
+                if let Some(snippet) = self.snippet.as_mut() {
+                    snippet.adjust_delete(start, end);
+                    snippet.adjust_insert(start, text.len());
+                }
+            }
+        }
         if selections.len() > 1 || selections.iter().any(|(anchor, head)| anchor != head) {
             if self.editor.insert_at_selections(text) {
                 self.sync_cursor_from_selection();
@@ -1103,6 +1115,9 @@ impl Model {
         if start == self.cursor {
             return;
         }
+        if let Some(snippet) = self.snippet.as_mut() {
+            snippet.adjust_delete(start, self.cursor);
+        }
         self.editor.set_selection_bytes(start, self.cursor);
         self.editor.delete(start..self.cursor);
         self.cursor = start;
@@ -1124,6 +1139,9 @@ impl Model {
         if end == self.cursor {
             return;
         }
+        if let Some(snippet) = self.snippet.as_mut() {
+            snippet.adjust_delete(self.cursor, end);
+        }
         self.editor.set_selection_bytes(self.cursor, end);
         self.editor.delete(self.cursor..end);
         self.modified = true;
@@ -1134,6 +1152,17 @@ impl Model {
         let selections = self.editor.selection_bytes();
         if selections.len() == 1 && selections[0].0 == selections[0].1 {
             return false;
+        }
+        if self.snippet.is_some() {
+            if selections.len() > 1 {
+                self.snippet = None;
+            } else if let Some((anchor, head)) = selections.first().copied() {
+                let start = anchor.min(head);
+                let end = anchor.max(head);
+                if let Some(snippet) = self.snippet.as_mut() {
+                    snippet.adjust_delete(start, end);
+                }
+            }
         }
         let mut edits = Vec::new();
         for (anchor, head) in selections {

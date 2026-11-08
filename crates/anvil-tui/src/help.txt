@@ -89,7 +89,7 @@ Insert mode
   Ctrl+Space          LSP completion popup
   . / :               auto-trigger completion in insert mode
   Enter               newline
-  Tab                 insert four spaces
+  Tab / Shift-Tab     next / previous snippet placeholder or indent
   Backspace / Delete  delete grapheme
   arrows / Home / End move
 

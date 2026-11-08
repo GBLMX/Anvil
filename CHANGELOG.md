@@ -17,6 +17,8 @@ post-`0.5.0` feature line.
   and cross-file jumps.
 - LSP folding ranges with `za`/`zM`/`zR`, folded-line rendering, and gutter markers.
 - LSP `completionItem/resolve` documentation for the selected completion item.
+- LSP snippet completions with numbered placeholders and `Tab`/`Shift-Tab`
+  navigation.
 - Typed settings registry for `editor.scroll_margin`, `search.case_sensitive`,
   and `lsp.inlay_hints`, with env overrides and validation errors.
 - `:settings` overlay with live preview, changed markers, reset, and atomic save.

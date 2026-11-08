@@ -24,7 +24,8 @@ Trusted language servers (rust-analyzer, gopls, pyright/pylsp,
 typescript-language-server/vtsls, clangd, jdtls, lua-language-server,
 vscode-json-language-server, yaml-language-server, bash-language-server,
 marksman, taplo, vscode-html-language-server, vscode-css-language-server, zls)
-run without the plugin sandbox; diagnostics, completion with resolved documentation (`Ctrl+Space`),
+run without the plugin sandbox; diagnostics, completion with resolved
+documentation and snippets (`Ctrl+Space`),
 definition (`gd`), references (`gr`), document highlights (`gh`),
 incoming/outgoing calls (`gi`/`go`), folding ranges (`za`/`zM`/`zR`),
 hover (`K`), rename (`Space r`), code actions/quick fixes (`Space a`),

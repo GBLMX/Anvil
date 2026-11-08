@@ -1037,12 +1037,20 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             KeyCode::Esc => {
                 model.cancel_completion();
                 model.cancel_signature_help();
+                model.cancel_snippet();
                 model.finish_insert_session();
                 model.ui.input_mode = InputMode::Normal;
                 model.dirty = true;
             }
             KeyCode::Enter => model.insert_text("\n"),
-            KeyCode::Tab => model.insert_text("    "),
+            KeyCode::Tab => {
+                if !model.next_snippet_stop() {
+                    model.insert_text("    ");
+                }
+            }
+            KeyCode::BackTab => {
+                model.previous_snippet_stop();
+            }
             KeyCode::Backspace => model.backspace(),
             KeyCode::Delete => model.delete_forward(),
             KeyCode::Left => model.move_char(-1),

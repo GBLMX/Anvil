@@ -113,6 +113,7 @@ impl LspWorker {
                             },
                             "completion": {
                                 "completionItem": {
+                                    "snippetSupport": true,
                                     "documentationFormat": ["markdown", "plaintext"],
                                     "resolveSupport": {
                                         "properties": ["documentation", "detail"]
