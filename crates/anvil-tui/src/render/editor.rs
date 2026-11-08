@@ -844,11 +844,21 @@ pub fn view(model: &Model, frame: &mut Frame) {
         );
     }
     if let Some(completion) = &model.completion {
+        let documentation = completion
+            .filtered
+            .get(completion.selected)
+            .and_then(|index| completion.items.get(*index))
+            .and_then(|item| item.documentation.as_deref())
+            .and_then(|text| text.lines().next())
+            .map(str::trim)
+            .filter(|text| !text.is_empty())
+            .map(str::to_owned);
+        let extra = u16::from(documentation.is_some());
         let width = (area.width * 2 / 5)
             .max(36)
             .min(area.width.saturating_sub(2));
-        let height = (completion.filtered.len() as u16 + 2)
-            .min(14)
+        let height = (completion.filtered.len() as u16 + 2 + extra)
+            .min(15)
             .min(area.height.saturating_sub(2));
         let popup = Rect {
             x: area.x + (area.width.saturating_sub(width)) / 2,
@@ -861,7 +871,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
         for (row, index) in completion
             .filtered
             .iter()
-            .take(height.saturating_sub(2) as usize)
+            .take(height.saturating_sub(2 + extra) as usize)
             .enumerate()
         {
             let item = &completion.items[*index];
@@ -876,6 +886,12 @@ pub fn view(model: &Model, frame: &mut Frame) {
                 theme::panel()
             };
             lines.push(Line::styled(text, style));
+        }
+        if let Some(documentation) = documentation {
+            lines.push(Line::styled(
+                format!("  {documentation}"),
+                theme::panel().fg(theme::muted()),
+            ));
         }
         frame.render_widget(
             Paragraph::new(lines)

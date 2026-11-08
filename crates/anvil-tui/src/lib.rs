@@ -267,6 +267,9 @@ struct CompletionItem {
     insert: String,
     detail: String,
     replace: Option<(usize, usize, usize, usize)>,
+    documentation: Option<String>,
+    raw: serde_json::Value,
+    resolved: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -281,6 +284,7 @@ struct CompletionState {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum LspRequestKind {
     Completion,
+    CompletionResolve,
     Definition,
     References,
     DocumentHighlight,
@@ -541,6 +545,7 @@ pub struct Model {
     pending_edit_path: HashMap<u64, PathBuf>,
     next_lsp_request: u64,
     completion: Option<CompletionState>,
+    completion_resolve: Option<(u64, usize)>,
     hover: Option<String>,
     code_actions: Option<CodeActionState>,
     document_symbols: Option<SymbolState>,
@@ -680,6 +685,7 @@ impl Model {
             pending_edit_path: HashMap::new(),
             next_lsp_request: 2,
             completion: None,
+            completion_resolve: None,
             hover: None,
             code_actions: None,
             document_symbols: None,

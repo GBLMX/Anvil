@@ -327,10 +327,14 @@ impl Model {
     }
 
     pub(crate) fn cancel_completion(&mut self) {
-        self.pending_lsp
-            .retain(|_, kind| *kind != LspRequestKind::Completion);
+        self.pending_lsp.retain(|_, kind| {
+            !matches!(
+                kind,
+                LspRequestKind::Completion | LspRequestKind::CompletionResolve
+            )
+        });
         self.completion = None;
-        self.dirty = true;
+        self.completion_resolve = None;
     }
 
     pub(crate) fn cancel_code_actions(&mut self) {
@@ -376,6 +380,34 @@ impl Model {
             self.status = "completion".to_owned();
         }
         self.dirty = true;
+    }
+
+    pub(crate) fn request_completion_resolve(&mut self) {
+        let Some(completion) = self.completion.as_ref() else {
+            return;
+        };
+        let Some(index) = completion.filtered.get(completion.selected).copied() else {
+            return;
+        };
+        let Some(item) = completion.items.get(index) else {
+            return;
+        };
+        if item.resolved
+            || self
+                .completion_resolve
+                .is_some_and(|(_, pending)| pending == index)
+        {
+            return;
+        }
+        let raw = item.raw.clone();
+        let id = self.next_lsp_request;
+        if self.send_lsp_request(
+            LspRequestKind::CompletionResolve,
+            "completionItem/resolve",
+            raw,
+        ) {
+            self.completion_resolve = Some((id, index));
+        }
     }
 
     pub(crate) fn request_definition(&mut self) {
@@ -1037,6 +1069,7 @@ impl Model {
                 .min(completion.filtered.len().saturating_sub(1));
             self.dirty = true;
         }
+        self.request_completion_resolve();
     }
 
     pub(crate) fn filter_completion(&mut self) {
@@ -1054,5 +1087,6 @@ impl Model {
                 .min(completion.filtered.len().saturating_sub(1));
             self.dirty = true;
         }
+        self.request_completion_resolve();
     }
 }

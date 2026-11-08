@@ -110,6 +110,14 @@ impl LspWorker {
                             },
                             "foldingRange": {
                                 "dynamicRegistration": false
+                            },
+                            "completion": {
+                                "completionItem": {
+                                    "documentationFormat": ["markdown", "plaintext"],
+                                    "resolveSupport": {
+                                        "properties": ["documentation", "detail"]
+                                    }
+                                }
                             }
                         },
                         "workspace": {"workspaceFolders": true},

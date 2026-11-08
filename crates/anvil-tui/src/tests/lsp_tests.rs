@@ -312,6 +312,53 @@ fn folding_round_trip_through_gateway() {
 }
 
 #[test]
+#[ignore = "requires rust-analyzer and ANVIL_GATEWAY"]
+fn completion_resolve_round_trip_through_gateway() {
+    use std::time::{Duration, Instant};
+
+    let dir = tempfile::tempdir().expect("tempdir");
+    let workspace = dir.path().canonicalize().expect("canonical");
+    let source = workspace.join("src");
+    fs::create_dir(&source).expect("src");
+    fs::write(
+        workspace.join("Cargo.toml"),
+        "[package]\nname = \"completion-smoke\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+    )
+    .expect("manifest");
+    let main = source.join("main.rs");
+    fs::write(&main, "fn main() {\n    let value = 1;\n    val\n}\n").expect("main");
+    let (session, gateway, lsp_client) =
+        crate::gateway::GatewaySession::start(&workspace).expect("gateway");
+    let mut model = Model::with_gateway(gateway, workspace);
+    model.lsp_client = Some(lsp_client);
+    model.open_path(&main).expect("open");
+    std::thread::sleep(Duration::from_secs(3));
+    model.cursor = model.offset_at_utf16(2, 7);
+    model.request_completion();
+
+    let deadline = Instant::now() + Duration::from_secs(20);
+    loop {
+        model.poll_lsp();
+        let resolved = model
+            .completion
+            .as_ref()
+            .and_then(|completion| completion.filtered.get(completion.selected))
+            .and_then(|index| model.completion.as_ref()?.items.get(*index))
+            .is_some_and(|item| item.resolved);
+        if resolved {
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "completion resolve did not finish; status={}",
+            model.status
+        );
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    drop(session);
+}
+
+#[test]
 fn gi_and_go_dispatch_call_hierarchy_requests() {
     use crossterm::event::Event;
 
@@ -340,6 +387,9 @@ fn cancelling_completion_drops_pending_response() {
             insert: "item".to_owned(),
             detail: String::new(),
             replace: None,
+            documentation: None,
+            raw: serde_json::Value::Null,
+            resolved: false,
         }],
         filtered: vec![0],
         query: String::new(),
@@ -356,6 +406,75 @@ fn cancelling_completion_drops_pending_response() {
     assert!(!model.pending_lsp.contains_key(&10));
     model.handle_lsp_response(10, serde_json::json!({"items": []}), None);
     assert!(model.completion.is_none());
+}
+
+#[test]
+fn completion_resolve_updates_selected_item() {
+    let mut model = Model::new(EditorState::from_text("x"), None);
+    model.completion = Some(CompletionState {
+        id: 9,
+        items: vec![CompletionItem {
+            label: "item".to_owned(),
+            insert: "item".to_owned(),
+            detail: String::new(),
+            replace: None,
+            documentation: None,
+            raw: serde_json::json!({"label": "item"}),
+            resolved: false,
+        }],
+        filtered: vec![0],
+        query: String::new(),
+        selected: 0,
+    });
+    model
+        .pending_lsp
+        .insert(7, LspRequestKind::CompletionResolve);
+    model.completion_resolve = Some((7, 0));
+    model.handle_lsp_response(
+        7,
+        serde_json::json!({
+            "label": "item",
+            "detail": "resolved detail",
+            "documentation": {"kind": "markdown", "value": "resolved docs"}
+        }),
+        None,
+    );
+    let item = &model.completion.as_ref().expect("completion").items[0];
+    assert_eq!(item.detail, "resolved detail");
+    assert_eq!(item.documentation.as_deref(), Some("resolved docs"));
+    assert!(item.resolved);
+    assert!(model.completion_resolve.is_none());
+}
+
+#[test]
+fn completion_documentation_is_rendered() {
+    let mut model = Model::new(EditorState::from_text("x"), None);
+    model.completion = Some(CompletionState {
+        id: 9,
+        items: vec![CompletionItem {
+            label: "item".to_owned(),
+            insert: "item".to_owned(),
+            detail: "detail".to_owned(),
+            replace: None,
+            documentation: Some("resolved docs".to_owned()),
+            raw: serde_json::json!({"label": "item"}),
+            resolved: true,
+        }],
+        filtered: vec![0],
+        query: String::new(),
+        selected: 0,
+    });
+    let backend = TestBackend::new(80, 20);
+    let mut terminal = Terminal::new(backend).expect("terminal");
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+    let rendered = terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect::<String>();
+    assert!(rendered.contains("resolved docs"));
 }
 
 #[test]

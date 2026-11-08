@@ -95,6 +95,9 @@ impl Model {
         let edit_revision = self.pending_edit_revision.remove(&id);
         let edit_path = self.pending_edit_path.remove(&id);
         if let Some(error) = error {
+            if kind == LspRequestKind::CompletionResolve {
+                self.completion_resolve = None;
+            }
             self.status = format!("E: lsp {kind:?}: {error}");
             self.dirty = true;
             return;
@@ -137,6 +140,9 @@ impl Model {
         }
         match kind {
             LspRequestKind::Completion => self.apply_completion_response(id, &result),
+            LspRequestKind::CompletionResolve => {
+                self.apply_completion_resolve_response(id, &result);
+            }
             LspRequestKind::Definition => self.apply_definition_response(&result),
             LspRequestKind::References => self.apply_references_response(&result),
             LspRequestKind::DocumentHighlight => self.apply_document_highlights_response(&result),
@@ -204,6 +210,10 @@ impl Model {
                     .and_then(serde_json::Value::as_str)
                     .unwrap_or_default()
                     .to_owned();
+                let documentation = item
+                    .get("documentation")
+                    .map(hover_text)
+                    .filter(|text| !text.is_empty());
                 let replace = item
                     .get("textEdit")
                     .and_then(|edit| edit.get("range"))
@@ -222,6 +232,9 @@ impl Model {
                     insert: expand_snippet(&insert),
                     detail,
                     replace,
+                    documentation,
+                    raw: item.clone(),
+                    resolved: false,
                 })
             })
             .take(200)
@@ -239,7 +252,34 @@ impl Model {
                 selected: 0,
             });
             self.status = "completion".to_owned();
+            self.request_completion_resolve();
         }
+    }
+
+    fn apply_completion_resolve_response(&mut self, id: u64, result: &serde_json::Value) {
+        let Some((pending, index)) = self.completion_resolve else {
+            return;
+        };
+        if pending != id {
+            return;
+        }
+        self.completion_resolve = None;
+        let Some(completion) = self.completion.as_mut() else {
+            return;
+        };
+        let Some(item) = completion.items.get_mut(index) else {
+            return;
+        };
+        if let Some(documentation) = result.get("documentation") {
+            let text = hover_text(documentation);
+            item.documentation = (!text.is_empty()).then_some(text);
+        }
+        if let Some(detail) = result.get("detail").and_then(serde_json::Value::as_str) {
+            item.detail = detail.to_owned();
+        }
+        item.raw = result.clone();
+        item.resolved = true;
+        self.dirty = true;
     }
 
     pub(crate) fn apply_definition_response(&mut self, result: &serde_json::Value) {
