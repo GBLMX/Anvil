@@ -21,6 +21,71 @@ fn definition_response_moves_cursor() {
 }
 
 #[test]
+fn references_populate_and_jump_to_selection() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let main = dir.path().join("main.rs");
+    let other = dir.path().join("other.rs");
+    fs::write(&main, "fn main() {}\n").expect("main");
+    fs::write(&other, "fn target() {}\n").expect("other");
+    let mut model = Model::open(&main).expect("open");
+    let main_uri = lsp_worker::file_uri(&main);
+    let other_uri = lsp_worker::file_uri(&other);
+    model.apply_references_response(&serde_json::json!([
+        {
+            "uri": other_uri,
+            "range": {
+                "start": {"line": 0, "character": 3},
+                "end": {"line": 0, "character": 9}
+            }
+        },
+        {
+            "uri": main_uri,
+            "range": {
+                "start": {"line": 0, "character": 3},
+                "end": {"line": 0, "character": 7}
+            }
+        }
+    ]));
+    let references = model.references.as_ref().expect("references");
+    assert_eq!(references.items.len(), 2);
+    assert_eq!(references.items[0].path, main.canonicalize().expect("main"));
+    assert_eq!(
+        references.items[1].path,
+        other.canonicalize().expect("other")
+    );
+    model.move_reference(1);
+    model.apply_reference();
+    assert_eq!(
+        model.path.as_deref(),
+        Some(other.canonicalize().expect("other").as_path())
+    );
+    assert_eq!(model.cursor, model.offset_at_utf16(0, 3));
+    assert!(model.references.is_none());
+}
+
+#[test]
+fn switching_buffers_clears_references() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let first = dir.path().join("first.rs");
+    let second = dir.path().join("second.rs");
+    fs::write(&first, "fn first() {}\n").expect("first");
+    fs::write(&second, "fn second() {}\n").expect("second");
+    let mut model = Model::open(&first).expect("open");
+    model.open_path(&second).expect("second open");
+    let uri = lsp_worker::file_uri(&second);
+    model.apply_references_response(&serde_json::json!([{
+        "uri": uri,
+        "range": {
+            "start": {"line": 0, "character": 3},
+            "end": {"line": 0, "character": 9}
+        }
+    }]));
+    assert!(model.references.is_some());
+    model.switch_buffer(-1);
+    assert!(model.references.is_none());
+}
+
+#[test]
 fn cancelling_completion_drops_pending_response() {
     let mut model = Model::new(EditorState::from_text("x"), None);
     model.completion = Some(CompletionState {

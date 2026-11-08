@@ -124,6 +124,7 @@ impl Model {
         match kind {
             LspRequestKind::Completion => self.apply_completion_response(id, &result),
             LspRequestKind::Definition => self.apply_definition_response(&result),
+            LspRequestKind::References => self.apply_references_response(&result),
             LspRequestKind::Hover => self.apply_hover_response(&result),
             LspRequestKind::Rename => {
                 if result.is_null() {
@@ -255,6 +256,68 @@ impl Model {
         }
         self.cursor = self.offset_at_utf16(line, character);
         self.status = format!("definition {}", path.display());
+    }
+
+    pub(crate) fn apply_references_response(&mut self, result: &serde_json::Value) {
+        let Some(items) = result.as_array() else {
+            self.status = "lsp: no references".to_owned();
+            self.references = None;
+            return;
+        };
+        let mut references = Vec::new();
+        for item in items {
+            if references.len() >= 4096 {
+                break;
+            }
+            let Some(uri) = item
+                .get("uri")
+                .or_else(|| item.get("targetUri"))
+                .and_then(serde_json::Value::as_str)
+            else {
+                continue;
+            };
+            let Some(path) = lsp::uri_to_path(uri) else {
+                continue;
+            };
+            let range = item
+                .get("range")
+                .or_else(|| item.get("targetSelectionRange"))
+                .or_else(|| item.get("targetRange"));
+            let Some(start) = range
+                .and_then(|range| range.get("start"))
+                .and_then(serde_json::Value::as_object)
+            else {
+                continue;
+            };
+            references.push(ReferenceItem {
+                path,
+                line: start
+                    .get("line")
+                    .and_then(serde_json::Value::as_u64)
+                    .unwrap_or(0) as usize,
+                character: start
+                    .get("character")
+                    .and_then(serde_json::Value::as_u64)
+                    .unwrap_or(0) as usize,
+            });
+        }
+        references.sort_by(|left, right| {
+            left.path
+                .cmp(&right.path)
+                .then(left.line.cmp(&right.line))
+                .then(left.character.cmp(&right.character))
+        });
+        if references.is_empty() {
+            self.status = "lsp: no references".to_owned();
+            self.references = None;
+        } else {
+            let count = references.len();
+            self.references = Some(ReferenceState {
+                items: references,
+                selected: 0,
+            });
+            self.status = format!("references: {count}");
+        }
     }
 
     fn apply_hover_response(&mut self, result: &serde_json::Value) {

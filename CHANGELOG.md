@@ -10,6 +10,8 @@ post-`0.5.0` feature line.
 ### Added
 - Markdown (`marksman`), TOML (`taplo`), HTML, CSS/SCSS/Less, and Zig
   (`zls`) language-server discovery.
+- LSP references panel on `gr`, with bounded sorted locations and cross-file
+  jump-to-reference.
 - Luau `editor.get_view()` / `editor.apply_edit()` bridge over the host editor
   UDS, including a cursor-printing fixture.
 - Signed `.anvil-plugin` installs via `anvil-gateway -install-plugin`, with

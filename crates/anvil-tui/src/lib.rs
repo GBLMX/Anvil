@@ -276,6 +276,7 @@ struct CompletionState {
 enum LspRequestKind {
     Completion,
     Definition,
+    References,
     Hover,
     Rename,
     CodeAction,
@@ -311,6 +312,19 @@ struct SymbolItem {
 #[derive(Debug, Clone)]
 struct SymbolState {
     items: Vec<SymbolItem>,
+    selected: usize,
+}
+
+#[derive(Debug, Clone)]
+struct ReferenceItem {
+    path: PathBuf,
+    line: usize,
+    character: usize,
+}
+
+#[derive(Debug, Clone)]
+struct ReferenceState {
+    items: Vec<ReferenceItem>,
     selected: usize,
 }
 
@@ -479,6 +493,7 @@ pub struct Model {
     hover: Option<String>,
     code_actions: Option<CodeActionState>,
     document_symbols: Option<SymbolState>,
+    references: Option<ReferenceState>,
     signature_help: Option<SignatureHelpState>,
     workspace_symbols: Option<WorkspaceSymbolState>,
     inlay_hints: Vec<InlayHint>,
@@ -609,6 +624,7 @@ impl Model {
             hover: None,
             code_actions: None,
             document_symbols: None,
+            references: None,
             signature_help: None,
             workspace_symbols: None,
             inlay_hints: Vec::new(),
@@ -858,6 +874,7 @@ impl Model {
         self.ui.diagnostic_peek = None;
         self.code_actions = None;
         self.document_symbols = None;
+        self.references = None;
     }
 
     fn active_lsp_worker(&self) -> Option<&LspWorker> {
@@ -1173,6 +1190,7 @@ impl Model {
             || self.fuzzy.is_some()
             || self.workspace_symbols.is_some()
             || self.document_symbols.is_some()
+            || self.references.is_some()
             || self.code_actions.is_some()
             || self.completion.is_some()
             || self.hover.is_some()

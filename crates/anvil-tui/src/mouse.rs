@@ -271,6 +271,7 @@ fn overlay_open(model: &Model) -> bool {
         || model.fuzzy.is_some()
         || model.code_actions.is_some()
         || model.document_symbols.is_some()
+        || model.references.is_some()
         || model.completion.is_some()
 }
 
@@ -295,6 +296,9 @@ fn close_outside_overlay(model: &mut Model) {
     }
     if model.document_symbols.is_some() {
         model.cancel_document_symbols();
+    }
+    if model.references.is_some() {
+        model.cancel_references();
     }
     if model.completion.is_some() {
         model.cancel_completion();
@@ -353,6 +357,10 @@ fn inside_overlay(model: &Model, col: u16, row: u16, area: Rect) -> bool {
     }
     if let Some(symbols) = &model.document_symbols {
         let popup = crate::render::document_symbols_rect(area, symbols.items.len());
+        return crate::render::rect_contains(popup, col, row);
+    }
+    if let Some(references) = &model.references {
+        let popup = crate::render::document_symbols_rect(area, references.items.len());
         return crate::render::rect_contains(popup, col, row);
     }
     if let Some(completion) = &model.completion {

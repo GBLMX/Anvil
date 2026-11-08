@@ -628,6 +628,41 @@ pub fn view(model: &Model, frame: &mut Frame) {
             popup,
         );
     }
+    if let Some(references) = &model.references {
+        let popup = crate::render::document_symbols_rect(area, references.items.len());
+        frame.render_widget(Clear, popup);
+        let visible = popup.height.saturating_sub(2) as usize;
+        let start = references
+            .selected
+            .saturating_sub(visible.saturating_sub(1));
+        let mut lines = Vec::new();
+        for (row, item) in references
+            .items
+            .iter()
+            .skip(start)
+            .take(visible)
+            .enumerate()
+        {
+            let text = format!(
+                "{}:{}:{}",
+                item.path.display(),
+                item.line + 1,
+                item.character + 1
+            );
+            let style = if start + row == references.selected {
+                theme::selected()
+            } else {
+                theme::panel()
+            };
+            lines.push(Line::styled(text, style));
+        }
+        frame.render_widget(
+            Paragraph::new(lines)
+                .style(theme::panel())
+                .block(panel_block("References")),
+            popup,
+        );
+    }
     if let Some(symbols) = &model.document_symbols {
         let width = (area.width * 3 / 5)
             .max(36)

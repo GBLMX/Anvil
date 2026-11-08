@@ -31,6 +31,7 @@ Normal mode
                       selected file previews beside the list when wide and
                       below it when narrow; icons mark file types
   gd                  go to definition
+  gr                  list references and jump on Enter
   ]d / [d             next / previous diagnostic
   K                   hover documentation
   i a A o O           insert before / after / line end / below / above

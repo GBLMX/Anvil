@@ -129,6 +129,7 @@ fn execute_pending_command(
         }
         PendingCommand::ChangeInnerQuote(quote) => model.change_inner_quote(quote),
         PendingCommand::Definition => model.queue_effect(Effect::LspDefinition),
+        PendingCommand::References => model.queue_effect(Effect::LspReferences),
         PendingCommand::Diagnostic(forward) => model.jump_diagnostic(forward),
         PendingCommand::Count { pending, digit } => {
             model.push_count(digit);
@@ -523,6 +524,33 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             }
             _ => {
                 model.cancel_workspace_symbols();
+                false
+            }
+        };
+        if consumed {
+            return;
+        }
+    }
+    if model.references.is_some() {
+        let consumed = match key.code {
+            KeyCode::Esc => {
+                model.cancel_references();
+                true
+            }
+            KeyCode::Up | KeyCode::Char('k') => {
+                model.move_reference(-1);
+                true
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                model.move_reference(1);
+                true
+            }
+            KeyCode::Enter => {
+                model.apply_reference();
+                true
+            }
+            _ => {
+                model.cancel_references();
                 false
             }
         };

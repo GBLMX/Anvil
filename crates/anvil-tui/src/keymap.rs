@@ -680,6 +680,7 @@ pub(crate) enum PendingCommand {
     ChangeInnerWord,
     ChangeInnerQuote(char),
     Definition,
+    References,
     Diagnostic(bool),
     Count {
         pending: char,
@@ -711,6 +712,7 @@ impl PendingCommand {
             ChangeInnerWord => Some(command::CHANGE_INNER_WORD),
             ChangeInnerQuote(_) => Some(command::CHANGE_INNER_QUOTE),
             Definition => Some(command::DEFINITION),
+            References => Some(command::REFERENCES),
             Diagnostic(true) => Some(command::DIAGNOSTICS_NEXT),
             Diagnostic(false) => Some(command::DIAGNOSTICS_PREVIOUS),
             SplitVertical => Some(command::SPLIT_VERTICAL),
@@ -823,6 +825,7 @@ impl PendingCommand {
                 | Self::OpenTree
                 | Self::StartFuzzy
                 | Self::StartRename
+                | Self::References
                 | Self::CodeActions
                 | Self::DocumentSymbols
                 | Self::WorkspaceSymbols
@@ -840,6 +843,7 @@ impl PendingCommand {
             "editor.change_inner_word" => Self::ChangeInnerWord,
             "editor.change_inner_quote" => Self::ChangeInnerQuote('"'),
             "lsp.definition" => Self::Definition,
+            "lsp.references" => Self::References,
             "diagnostics.next" => Self::Diagnostic(true),
             "diagnostics.previous" => Self::Diagnostic(false),
             "view.split_vertical" => Self::SplitVertical,
@@ -933,7 +937,11 @@ pub(crate) fn pending_action(
         return Some(PendingCommand::ObjectPending);
     }
     if pending == 'g' {
-        return (key.code == KeyCode::Char('d')).then_some(PendingCommand::Definition);
+        return match key.code {
+            KeyCode::Char('d') => Some(PendingCommand::Definition),
+            KeyCode::Char('r') => Some(PendingCommand::References),
+            _ => None,
+        };
     }
     if pending == ']' || pending == '[' {
         return (key.code == KeyCode::Char('d'))
@@ -1035,6 +1043,18 @@ mod tests {
                 operator: 'c',
                 around: false,
             })
+        );
+    }
+
+    #[test]
+    fn pending_g_resolves_definition_and_references() {
+        assert_eq!(
+            pending_action('g', key(KeyCode::Char('d'), KeyModifiers::NONE), false),
+            Some(PendingCommand::Definition)
+        );
+        assert_eq!(
+            pending_action('g', key(KeyCode::Char('r'), KeyModifiers::NONE), false),
+            Some(PendingCommand::References)
         );
     }
 

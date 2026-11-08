@@ -2,8 +2,8 @@
 
 use super::{
     CodeActionItem, CodeActionState, CompletionItem, CompletionState, LspRequestKind, Model,
-    SignatureHelpState, SignatureItem, SymbolItem, SymbolState, WorkspaceEdit, WorkspaceSymbolItem,
-    WorkspaceSymbolState,
+    ReferenceItem, ReferenceState, SignatureHelpState, SignatureItem, SymbolItem, SymbolState,
+    WorkspaceEdit, WorkspaceSymbolItem, WorkspaceSymbolState,
 };
 use crate::{lsp, lsp_worker};
 use anvil_core::TextBuffer;
@@ -268,6 +268,7 @@ impl Model {
         self.pending_edit_path.clear();
         self.signature_help = None;
         self.workspace_symbols = None;
+        self.references = None;
         self.inlay_hints.clear();
         self.inlay_pending = None;
         self.inlay_checked = None;
@@ -393,6 +394,35 @@ impl Model {
         self.dirty = true;
     }
 
+    pub(crate) fn request_references(&mut self) {
+        self.cancel_completion();
+        self.cancel_code_actions();
+        self.cancel_document_symbols();
+        self.cancel_workspace_symbols();
+        self.cancel_references();
+        self.hover = None;
+        self.ui.diagnostic_peek = None;
+        let Some(uri) = self.path.as_ref().map(|path| lsp_worker::file_uri(path)) else {
+            return;
+        };
+        let Some((line, character)) = self.lsp_position() else {
+            return;
+        };
+        let params = serde_json::json!({
+            "textDocument": {"uri": uri},
+            "position": {"line": line, "character": character},
+            "context": {"includeDeclaration": true}
+        });
+        if self.send_lsp_request(
+            LspRequestKind::References,
+            "textDocument/references",
+            params,
+        ) {
+            self.status = "references".to_owned();
+        }
+        self.dirty = true;
+    }
+
     pub(crate) fn request_hover(&mut self) {
         self.cancel_completion();
         self.ui.diagnostic_peek = None;
@@ -496,6 +526,13 @@ impl Model {
         ) {
             self.status = "code actions".to_owned();
         }
+        self.dirty = true;
+    }
+
+    pub(crate) fn cancel_references(&mut self) {
+        self.pending_lsp
+            .retain(|_, kind| *kind != LspRequestKind::References);
+        self.references = None;
         self.dirty = true;
     }
 
@@ -688,6 +725,39 @@ impl Model {
         };
         self.cursor = self.offset_at_utf16(symbol.line, symbol.character);
         self.status = format!("symbol {}", symbol.name);
+        self.dirty = true;
+    }
+
+    pub(crate) fn move_reference(&mut self, delta: isize) {
+        if let Some(references) = self.references.as_mut() {
+            references.selected = references
+                .selected
+                .saturating_add_signed(delta)
+                .min(references.items.len().saturating_sub(1));
+            self.dirty = true;
+        }
+    }
+
+    pub(crate) fn apply_reference(&mut self) {
+        let Some(references) = self.references.take() else {
+            return;
+        };
+        let Some(reference) = references.items.get(references.selected).cloned() else {
+            return;
+        };
+        if self.path.as_ref() != Some(&reference.path)
+            && let Err(error) = self.open_path(&reference.path)
+        {
+            self.status = format!("E: {error}");
+            self.dirty = true;
+            return;
+        }
+        self.cursor = self.offset_at_utf16(reference.line, reference.character);
+        self.status = format!(
+            "reference {}:{}",
+            reference.path.display(),
+            reference.line + 1
+        );
         self.dirty = true;
     }
 
