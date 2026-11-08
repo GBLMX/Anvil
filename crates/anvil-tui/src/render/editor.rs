@@ -690,6 +690,36 @@ pub fn view(model: &Model, frame: &mut Frame) {
             popup,
         );
     }
+    if let Some(overlay) = &model.settings_overlay {
+        let popup =
+            crate::render::document_symbols_rect(area, crate::settings_ui::SETTINGS_ROWS + 1);
+        frame.render_widget(Clear, popup);
+        let mut lines = Vec::new();
+        for row in 0..crate::settings_ui::SETTINGS_ROWS {
+            let marker = if overlay.changed(row) { "*" } else { " " };
+            let text = format!(
+                "{marker} {:<24} {}",
+                crate::settings_ui::SettingsOverlayState::label(row),
+                crate::settings_ui::SettingsOverlayState::value(&overlay.draft, row)
+            );
+            let style = if row == overlay.selected {
+                theme::selected()
+            } else {
+                theme::panel()
+            };
+            lines.push(Line::styled(text, style));
+        }
+        lines.push(Line::styled(
+            "Enter toggle · ←/→ adjust · r reset · s save · Esc cancel",
+            theme::panel().fg(theme::muted()),
+        ));
+        frame.render_widget(
+            Paragraph::new(lines)
+                .style(theme::panel())
+                .block(panel_block("Settings")),
+            popup,
+        );
+    }
     if let Some(symbols) = &model.document_symbols {
         let width = (area.width * 3 / 5)
             .max(36)

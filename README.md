@@ -66,7 +66,9 @@ inlay_hints = true
 
 `ANVIL_EDITOR_SCROLL_MARGIN`, `ANVIL_SEARCH_CASE_SENSITIVE`, and
 `ANVIL_LSP_INLAY_HINTS` override the file for the current process.
-Settings are read at startup; edit the file and restart Anvil to apply changes.
+`:settings` opens the minimal overlay: `j`/`k` select, `h`/`l` or `Enter`
+adjust, `r` resets the row, `s` saves, and `Esc` cancels.
+External file edits are read at startup; restart Anvil to apply them.
 
 At the `:` prompt, `Tab` completes Ex command names, `:theme` /
 `:theme-auto` arguments, and `:plugin-enable` IDs; `Up`/`Down` selects a

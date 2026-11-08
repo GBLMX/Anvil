@@ -117,6 +117,7 @@ impl Model {
             ("q", "") => self.request_quit(),
             ("q!", "") => self.force_quit(),
             ("help", "") => self.show_help(),
+            ("settings", "") => self.open_settings(),
             ("theme", argument) => {
                 if argument.is_empty() {
                     self.status = format!(

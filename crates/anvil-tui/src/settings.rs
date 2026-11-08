@@ -68,6 +68,59 @@ pub(crate) fn load_file_from_path(path: &Path) -> Result<Settings, String> {
     parse(&text)
 }
 
+pub(crate) fn save(settings: Settings) -> Result<PathBuf, String> {
+    let path = path()?;
+    save_to_path(&path, settings)?;
+    Ok(path)
+}
+
+pub(crate) fn save_to_path(path: &Path, settings: Settings) -> Result<(), String> {
+    let mut document = if path.exists() {
+        let metadata = fs::metadata(path)
+            .map_err(|error| format!("cannot read {}: {error}", path.display()))?;
+        if metadata.len() > MAX_BYTES {
+            return Err(format!("{} exceeds {} bytes", path.display(), MAX_BYTES));
+        }
+        let text = fs::read_to_string(path)
+            .map_err(|error| format!("cannot read {}: {error}", path.display()))?;
+        let _ = parse(&text)?;
+        text.parse::<toml_edit::DocumentMut>()
+            .map_err(|error| format!("invalid settings TOML: {error}"))?
+    } else {
+        toml_edit::DocumentMut::new()
+    };
+    let editor = table_mut(&mut document, "editor")?;
+    editor["scroll_margin"] = toml_edit::value(settings.editor.scroll_margin as i64);
+    let search = table_mut(&mut document, "search")?;
+    search["case_sensitive"] = toml_edit::value(settings.search.case_sensitive);
+    let lsp = table_mut(&mut document, "lsp")?;
+    lsp["inlay_hints"] = toml_edit::value(settings.lsp.inlay_hints);
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|error| format!("cannot create {}: {error}", parent.display()))?;
+    }
+    let temporary = path.with_extension(format!("toml.tmp-{}", std::process::id()));
+    fs::write(&temporary, document.to_string())
+        .map_err(|error| format!("cannot write {}: {error}", temporary.display()))?;
+    if let Err(error) = fs::rename(&temporary, path) {
+        let _ = fs::remove_file(&temporary);
+        return Err(format!("cannot replace {}: {error}", path.display()));
+    }
+    Ok(())
+}
+
+fn table_mut<'a>(
+    document: &'a mut toml_edit::DocumentMut,
+    key: &str,
+) -> Result<&'a mut toml_edit::Table, String> {
+    if !document.contains_key(key) {
+        document.insert(key, toml_edit::Item::Table(toml_edit::Table::new()));
+    }
+    document[key]
+        .as_table_mut()
+        .ok_or_else(|| format!("[{key}] must be a table"))
+}
+
 pub(crate) fn parse(text: &str) -> Result<Settings, String> {
     let document = text
         .parse::<toml_edit::DocumentMut>()
@@ -233,6 +286,30 @@ mod tests {
         assert_eq!(settings.editor.scroll_margin, 2);
         assert!(settings.search.case_sensitive);
         assert!(!settings.lsp.inlay_hints);
+        let _ = fs::remove_dir_all(&directory);
+    }
+
+    #[test]
+    fn save_preserves_theme_and_writes_domains() {
+        let directory =
+            std::env::temp_dir().join(format!("anvil-settings-save-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&directory);
+        fs::create_dir_all(&directory).expect("directory");
+        let path = directory.join("settings.toml");
+        fs::write(
+            &path,
+            "[theme]\nmode = \"fixed\"\nname = \"nord\"\n[editor]\nscroll_margin = 1\n",
+        )
+        .expect("write");
+        let mut settings = Settings::default();
+        settings.editor.scroll_margin = 5;
+        settings.search.case_sensitive = true;
+        settings.lsp.inlay_hints = false;
+        save_to_path(&path, settings).expect("save");
+        let text = fs::read_to_string(&path).expect("read");
+        assert!(text.contains("[theme]"));
+        assert!(text.contains("name = \"nord\""));
+        assert_eq!(load_file_from_path(&path).expect("load"), settings);
         let _ = fs::remove_dir_all(&directory);
     }
 

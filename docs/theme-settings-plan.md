@@ -249,8 +249,8 @@ Status: done. Six built-ins land: `anvil-dark`, `one-dark`, `gruvbox-dark`,
 
 ### 6.4 Settings overlay gate
 
-Status: the typed registry and three independent domains landed; the overlay
-remains gated.
+Status: the typed registry, three domains, and minimal `:settings` overlay
+landed; hot reload remains gated.
 
 Proceed only if accepted by the review gate:
 

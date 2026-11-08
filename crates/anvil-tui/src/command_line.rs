@@ -11,6 +11,7 @@ const COMMANDS: &[&str] = &[
     "q!",
     "e",
     "help",
+    "settings",
     "theme",
     "theme-auto",
     "theme-save",
@@ -242,6 +243,10 @@ mod tests {
         assert_eq!(
             labels(&completion),
             vec!["theme", "theme-auto", "theme-save"]
+        );
+        assert_eq!(
+            labels(&CommandCompletion::new("set", &[])),
+            vec!["settings"]
         );
     }
 

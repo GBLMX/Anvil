@@ -83,6 +83,8 @@ mod settings;
 mod theme;
 mod theme_config;
 use settings::Settings;
+mod settings_ui;
+use settings_ui::SettingsOverlayState;
 use workspace_edit::WorkspaceEdit;
 mod workspace_edit;
 pub(crate) use keys::handle_event;
@@ -563,6 +565,7 @@ pub struct Model {
     command_completion: Option<CommandCompletion>,
     persist_theme: bool,
     settings: Settings,
+    settings_overlay: Option<SettingsOverlayState>,
     command_palette_recents: Vec<String>,
     /// Gateway client used for file I/O when present.
     gateway: Option<GatewayClient>,
@@ -694,6 +697,7 @@ impl Model {
             command_completion: None,
             persist_theme: !cfg!(test),
             settings: Settings::default(),
+            settings_overlay: None,
             command_palette_recents: Vec::new(),
             gateway: None,
             gateway_session: None,
@@ -1240,6 +1244,7 @@ impl Model {
             || self.document_symbols.is_some()
             || self.references.is_some()
             || self.call_hierarchy.is_some()
+            || self.settings_overlay.is_some()
             || self.code_actions.is_some()
             || self.completion.is_some()
             || self.hover.is_some()

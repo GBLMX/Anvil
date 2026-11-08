@@ -273,6 +273,7 @@ fn overlay_open(model: &Model) -> bool {
         || model.document_symbols.is_some()
         || model.references.is_some()
         || model.call_hierarchy.is_some()
+        || model.settings_overlay.is_some()
         || model.completion.is_some()
 }
 
@@ -303,6 +304,9 @@ fn close_outside_overlay(model: &mut Model) {
     }
     if model.call_hierarchy.is_some() {
         model.cancel_call_hierarchy();
+    }
+    if model.settings_overlay.is_some() {
+        model.cancel_settings();
     }
     if model.completion.is_some() {
         model.cancel_completion();
@@ -369,6 +373,11 @@ fn inside_overlay(model: &Model, col: u16, row: u16, area: Rect) -> bool {
     }
     if let Some(calls) = &model.call_hierarchy {
         let popup = crate::render::document_symbols_rect(area, calls.items.len());
+        return crate::render::rect_contains(popup, col, row);
+    }
+    if model.settings_overlay.is_some() {
+        let popup =
+            crate::render::document_symbols_rect(area, crate::settings_ui::SETTINGS_ROWS + 1);
         return crate::render::rect_contains(popup, col, row);
     }
     if let Some(completion) = &model.completion {

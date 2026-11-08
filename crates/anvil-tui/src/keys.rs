@@ -536,6 +536,19 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             return;
         }
     }
+    if model.settings_overlay.is_some() {
+        match key.code {
+            KeyCode::Esc => model.cancel_settings(),
+            KeyCode::Up | KeyCode::Char('k') => model.move_settings(-1),
+            KeyCode::Down | KeyCode::Char('j') => model.move_settings(1),
+            KeyCode::Left | KeyCode::Char('h') => model.adjust_settings(-1),
+            KeyCode::Right | KeyCode::Char('l') | KeyCode::Enter => model.adjust_settings(1),
+            KeyCode::Char('r') => model.reset_settings_row(),
+            KeyCode::Char('s') => model.save_settings(),
+            _ => {}
+        }
+        return;
+    }
     if model.call_hierarchy.is_some() {
         let consumed = match key.code {
             KeyCode::Esc => {
