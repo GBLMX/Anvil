@@ -34,6 +34,7 @@ Normal mode
   gr                  list references and jump on Enter
   gh                  highlight symbol uses in the current buffer
   gi / go             list incoming / outgoing calls
+  za / zM / zR        toggle / close all / open all folds
   ]d / [d             next / previous diagnostic
   K                   hover documentation
   i a A o O           insert before / after / line end / below / above

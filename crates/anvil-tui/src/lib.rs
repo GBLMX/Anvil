@@ -5,7 +5,7 @@
 
 use std::{
     cell::RefCell,
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     fs,
     io::{self, Stdout},
     path::{Path, PathBuf},
@@ -48,6 +48,8 @@ mod editing;
 mod file_io;
 mod file_tree_ui;
 mod file_worker;
+mod folding;
+use folding::{FoldAction, FoldRange};
 mod gateway;
 mod git_gutter;
 mod icon_theme;
@@ -285,6 +287,7 @@ enum LspRequestKind {
     CallHierarchyPrepare(CallHierarchyDirection),
     CallHierarchyIncoming,
     CallHierarchyOutgoing,
+    FoldingRange,
     Hover,
     Rename,
     CodeAction,
@@ -526,6 +529,12 @@ pub struct Model {
     git_checked: Option<(PathBuf, u64)>,
     /// Debounce deadline for the next git diff request.
     git_due: Option<Instant>,
+    /// LSP folding ranges for the active buffer.
+    folds: Vec<FoldRange>,
+    /// Start lines of closed folds.
+    folded: HashSet<usize>,
+    fold_revision: Option<u64>,
+    pending_fold_action: Option<FoldAction>,
     /// LSP requests waiting for responses.
     pending_lsp: HashMap<u64, LspRequestKind>,
     pending_edit_revision: HashMap<u64, u64>,
@@ -662,6 +671,10 @@ impl Model {
             git_pending: None,
             git_checked: None,
             git_due: None,
+            folds: Vec::new(),
+            folded: HashSet::new(),
+            fold_revision: None,
+            pending_fold_action: None,
             pending_lsp: HashMap::new(),
             pending_edit_revision: HashMap::new(),
             pending_edit_path: HashMap::new(),
@@ -954,6 +967,9 @@ impl Model {
         let desired = (settings.tool.clone(), settings.language_id.clone());
         if !self.lsp_workers.contains_key(&desired) {
             self.start_lsp();
+            if self.active_lsp_worker().is_some() {
+                self.request_folding_ranges(None);
+            }
             return;
         }
         if self.lsp_config.as_ref() != Some(&desired) {
@@ -961,8 +977,12 @@ impl Model {
             self.clear_lsp_ui();
         }
         let text = self.editor.text().slice(0..self.editor.text().len_bytes());
+        let has_worker = self.active_lsp_worker().is_some();
         if let Some(worker) = self.active_lsp_worker() {
             let _ = worker.sync(&path, text);
+        }
+        if has_worker {
+            self.request_folding_ranges(None);
         }
     }
 

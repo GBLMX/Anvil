@@ -255,9 +255,7 @@ fn editor_position_at(
     let inner = editor_area(model, width, height)?;
     let (side, pane_x, pane_width) = pane_at(model, inner, col);
     let gutter = model.gutter_width().min(pane_width);
-    let line = model
-        .scroll
-        .saturating_add(row.saturating_sub(inner.y) as usize);
+    let line = model.line_at_visible_row(row.saturating_sub(inner.y) as usize);
     let column = col
         .saturating_sub(pane_x.saturating_add(gutter))
         .saturating_add(model.hscroll as u16) as usize;

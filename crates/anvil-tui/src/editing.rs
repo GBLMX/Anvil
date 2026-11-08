@@ -589,7 +589,16 @@ impl Model {
             .editor
             .scroll_margin
             .min(height.saturating_sub(1) / 2);
-        if line < self.scroll.saturating_add(margin) {
+        if self.has_closed_folds() {
+            if self.is_line_hidden(line) {
+                self.open_fold_containing(line);
+            }
+            let visible = self.visible_line_numbers(self.scroll, height);
+            if !visible.contains(&line) {
+                self.scroll = line;
+                self.normalize_scroll();
+            }
+        } else if line < self.scroll.saturating_add(margin) {
             self.scroll = line.saturating_sub(margin);
         } else if line + margin >= self.scroll.saturating_add(height) {
             self.scroll = line + margin + 1 - height;

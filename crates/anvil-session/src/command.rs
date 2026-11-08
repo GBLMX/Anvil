@@ -74,6 +74,9 @@ pub const FOCUS_LEFT: CommandId = CommandId::new("view.focus_left");
 pub const FOCUS_EDITOR: CommandId = CommandId::new("view.focus_editor");
 pub const FOCUS_RIGHT: CommandId = CommandId::new("view.focus_right");
 pub const CLOSE_SPLIT: CommandId = CommandId::new("view.close_split");
+pub const TOGGLE_FOLD: CommandId = CommandId::new("view.toggle_fold");
+pub const CLOSE_ALL_FOLDS: CommandId = CommandId::new("view.close_all_folds");
+pub const OPEN_ALL_FOLDS: CommandId = CommandId::new("view.open_all_folds");
 pub const TREE_OPEN: CommandId = CommandId::new("tree.open");
 pub const FUZZY: CommandId = CommandId::new("picker.fuzzy");
 pub const COMMAND_PALETTE: CommandId = CommandId::new("command_palette.open");
@@ -140,6 +143,9 @@ pub const COMMANDS: &[CommandSpec] = &[
     spec(FOCUS_RIGHT, PENDING),
     spec(FOCUS_EDITOR, PENDING),
     spec(CLOSE_SPLIT, PENDING),
+    spec(TOGGLE_FOLD, PENDING),
+    spec(CLOSE_ALL_FOLDS, PENDING),
+    spec(OPEN_ALL_FOLDS, PENDING),
     spec(TREE_OPEN, PENDING),
     spec(FUZZY, PENDING),
     spec(COMMAND_PALETTE, PENDING),

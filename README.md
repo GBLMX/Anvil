@@ -26,7 +26,7 @@ vscode-json-language-server, yaml-language-server, bash-language-server,
 marksman, taplo, vscode-html-language-server, vscode-css-language-server, zls)
 run without the plugin sandbox; diagnostics, completion (`Ctrl+Space`),
 definition (`gd`), references (`gr`), document highlights (`gh`),
-incoming/outgoing calls (`gi`/`go`),
+incoming/outgoing calls (`gi`/`go`), folding ranges (`za`/`zM`/`zR`),
 hover (`K`), rename (`Space r`), code actions/quick fixes (`Space a`),
 formatting (`Space F`), document symbols (`Space s`), signature help, and
 workspace symbols (`Space S`) use canonicalized LSP UTF-16 positions. Rename, code-action, and formatting edits go through a shared

@@ -107,6 +107,9 @@ impl LspWorker {
                             },
                             "callHierarchy": {
                                 "dynamicRegistration": false
+                            },
+                            "foldingRange": {
+                                "dynamicRegistration": false
                             }
                         },
                         "workspace": {"workspaceFolders": true},

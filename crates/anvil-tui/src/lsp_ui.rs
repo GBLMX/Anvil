@@ -179,6 +179,7 @@ impl Model {
                 | LspRequestKind::CallHierarchyPrepare(_)
                 | LspRequestKind::CallHierarchyIncoming
                 | LspRequestKind::CallHierarchyOutgoing
+                | LspRequestKind::FoldingRange
         ) {
             self.pending_edit_revision
                 .insert(id, self.editor.revision());
@@ -275,6 +276,7 @@ impl Model {
         self.references = None;
         self.document_highlights = None;
         self.call_hierarchy = None;
+        self.clear_folds();
         self.inlay_hints.clear();
         self.inlay_pending = None;
         self.inlay_checked = None;
@@ -317,7 +319,7 @@ impl Model {
         self.dirty = true;
     }
 
-    fn prune_edit_requests(&mut self) {
+    pub(crate) fn prune_edit_requests(&mut self) {
         let pending: Vec<u64> = self.pending_lsp.keys().copied().collect();
         self.pending_edit_revision
             .retain(|id, _| pending.contains(id));

@@ -15,6 +15,7 @@ post-`0.5.0` feature line.
 - LSP document highlights on `gh`, with stale-revision and buffer guards.
 - LSP incoming/outgoing call panels on `gi`/`go`, with sorted bounded results
   and cross-file jumps.
+- LSP folding ranges with `za`/`zM`/`zR`, folded-line rendering, and gutter markers.
 - Typed settings registry for `editor.scroll_margin`, `search.case_sensitive`,
   and `lsp.inlay_hints`, with env overrides and validation errors.
 - `:settings` overlay with live preview, changed markers, reset, and atomic save.

@@ -59,17 +59,19 @@ impl Model {
     }
 
     pub(crate) fn visible_gutter(&self, height: u16) -> Vec<Line<'static>> {
-        let index = self.editor.index();
-        let end = (self.scroll + usize::from(height)).min(index.len_lines());
+        let visible = self.visible_line_numbers(self.scroll, usize::from(height));
         let current = self.current_line();
         let digits = self.gutter_digits();
-        let mut lines = Vec::with_capacity(end.saturating_sub(self.scroll));
-        for line_number in self.scroll..end {
+        let mut lines = Vec::with_capacity(visible.len());
+        for line_number in visible {
             let display = match current {
                 Some(current) if current != line_number => current.abs_diff(line_number),
                 _ => line_number + 1,
             };
-            let marker = self.git_marker(line_number).unwrap_or(' ');
+            let marker = self
+                .fold_marker(line_number)
+                .or_else(|| self.git_marker(line_number))
+                .unwrap_or(' ');
             let number = format!("{display:>digits$} ");
             let mut style = Style::default().fg(theme::muted());
             if Some(line_number) == current {
@@ -79,6 +81,7 @@ impl Model {
                 '+' => Style::default().fg(theme::success()),
                 '-' => Style::default().fg(theme::error()),
                 '~' => Style::default().fg(theme::warning()),
+                '▸' | '▾' => Style::default().fg(theme::accent()),
                 _ => Style::default(),
             };
             lines.push(Line::from(vec![
@@ -95,15 +98,14 @@ impl Model {
     pub(crate) fn visible_lines(&self, height: u16, width: u16) -> Vec<Line<'_>> {
         let index = self.editor.index();
         let text = self.editor.text();
-        let total = index.len_lines();
-        let end = (self.scroll + usize::from(height)).min(total);
+        let visible = self.visible_line_numbers(self.scroll, usize::from(height));
         let current = self.current_line();
 
         let diagnostic_lines = self.diagnostic_lines();
         let hscroll = self.hscroll;
         let visible_width = usize::from(width);
-        let mut lines = Vec::with_capacity(end.saturating_sub(self.scroll));
-        for line_number in self.scroll..end {
+        let mut lines = Vec::with_capacity(visible.len());
+        for line_number in visible {
             let Some(start) = index.line_to_offset(line_number) else {
                 break;
             };

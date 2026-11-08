@@ -5,7 +5,7 @@ fn idle_events_do_not_request_a_redraw() {
     model.dirty = false;
     handle_event(&mut model, Event::FocusGained);
     assert!(!model.dirty);
-    handle_event(&mut model, key(KeyCode::Char('z')));
+    handle_event(&mut model, key(KeyCode::F(1)));
     assert!(!model.dirty);
     handle_event(&mut model, key(KeyCode::Char('j')));
     assert!(model.dirty);

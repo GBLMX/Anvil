@@ -135,6 +135,9 @@ fn execute_pending_command(
         }
         PendingCommand::IncomingCalls => model.queue_effect(Effect::LspIncomingCalls),
         PendingCommand::OutgoingCalls => model.queue_effect(Effect::LspOutgoingCalls),
+        PendingCommand::ToggleFold => model.toggle_fold_at_cursor(),
+        PendingCommand::CloseAllFolds => model.close_all_folds(),
+        PendingCommand::OpenAllFolds => model.open_all_folds(),
         PendingCommand::Diagnostic(forward) => model.jump_diagnostic(forward),
         PendingCommand::Count { pending, digit } => {
             model.push_count(digit);

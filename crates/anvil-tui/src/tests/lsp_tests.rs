@@ -267,6 +267,51 @@ fn call_hierarchy_round_trip_through_gateway() {
 }
 
 #[test]
+#[ignore = "requires rust-analyzer and ANVIL_GATEWAY"]
+fn folding_round_trip_through_gateway() {
+    use std::time::{Duration, Instant};
+
+    let dir = tempfile::tempdir().expect("tempdir");
+    let workspace = dir.path().canonicalize().expect("canonical");
+    let source = workspace.join("src");
+    fs::create_dir(&source).expect("src");
+    fs::write(
+        workspace.join("Cargo.toml"),
+        "[package]\nname = \"fold-smoke\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+    )
+    .expect("manifest");
+    let main = source.join("main.rs");
+    fs::write(
+        &main,
+        "fn outer() {\n    if true {\n        let x = 1;\n        println!(\"{x}\");\n    }\n}\nfn main() { outer(); }\n",
+    )
+    .expect("main");
+    let (session, gateway, lsp_client) =
+        crate::gateway::GatewaySession::start(&workspace).expect("gateway");
+    let mut model = Model::with_gateway(gateway, workspace);
+    model.lsp_client = Some(lsp_client);
+    model.open_path(&main).expect("open");
+    std::thread::sleep(Duration::from_secs(3));
+    model.request_folding_ranges(None);
+    let deadline = Instant::now() + Duration::from_secs(20);
+    loop {
+        model.poll_lsp();
+        if !model.folds.is_empty() {
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "no folding ranges; status={}",
+            model.status
+        );
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    model.close_all_folds();
+    assert!(model.has_closed_folds());
+    drop(session);
+}
+
+#[test]
 fn gi_and_go_dispatch_call_hierarchy_requests() {
     use crossterm::event::Event;
 

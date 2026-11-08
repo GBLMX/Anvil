@@ -133,6 +133,7 @@ pub(crate) fn normal_action(key: KeyPress, count: usize) -> Option<NormalCommand
         KeyCode::Esc => Some(NormalCommand::CollapseSelections),
         KeyCode::Char(' ') if text_input => Some(NormalCommand::Pending(' ')),
         KeyCode::Char('g') if text_input => Some(NormalCommand::Pending('g')),
+        KeyCode::Char('z') if text_input => Some(NormalCommand::Pending('z')),
         KeyCode::Char(']') if text_input => Some(NormalCommand::Pending(']')),
         KeyCode::Char('[') if text_input => Some(NormalCommand::Pending('[')),
         KeyCode::Char('K') if text_input => Some(NormalCommand::Hover),
@@ -684,6 +685,9 @@ pub(crate) enum PendingCommand {
     DocumentHighlight,
     IncomingCalls,
     OutgoingCalls,
+    ToggleFold,
+    CloseAllFolds,
+    OpenAllFolds,
     Diagnostic(bool),
     Count {
         pending: char,
@@ -719,6 +723,9 @@ impl PendingCommand {
             DocumentHighlight => Some(command::DOCUMENT_HIGHLIGHT),
             IncomingCalls => Some(command::INCOMING_CALLS),
             OutgoingCalls => Some(command::OUTGOING_CALLS),
+            ToggleFold => Some(command::TOGGLE_FOLD),
+            CloseAllFolds => Some(command::CLOSE_ALL_FOLDS),
+            OpenAllFolds => Some(command::OPEN_ALL_FOLDS),
             Diagnostic(true) => Some(command::DIAGNOSTICS_NEXT),
             Diagnostic(false) => Some(command::DIAGNOSTICS_PREVIOUS),
             SplitVertical => Some(command::SPLIT_VERTICAL),
@@ -835,6 +842,9 @@ impl PendingCommand {
                 | Self::DocumentHighlight
                 | Self::IncomingCalls
                 | Self::OutgoingCalls
+                | Self::ToggleFold
+                | Self::CloseAllFolds
+                | Self::OpenAllFolds
                 | Self::CodeActions
                 | Self::DocumentSymbols
                 | Self::WorkspaceSymbols
@@ -856,6 +866,9 @@ impl PendingCommand {
             "lsp.document_highlight" => Self::DocumentHighlight,
             "lsp.incoming_calls" => Self::IncomingCalls,
             "lsp.outgoing_calls" => Self::OutgoingCalls,
+            "view.toggle_fold" => Self::ToggleFold,
+            "view.close_all_folds" => Self::CloseAllFolds,
+            "view.open_all_folds" => Self::OpenAllFolds,
             "diagnostics.next" => Self::Diagnostic(true),
             "diagnostics.previous" => Self::Diagnostic(false),
             "view.split_vertical" => Self::SplitVertical,
@@ -955,6 +968,14 @@ pub(crate) fn pending_action(
             KeyCode::Char('h') => Some(PendingCommand::DocumentHighlight),
             KeyCode::Char('i') => Some(PendingCommand::IncomingCalls),
             KeyCode::Char('o') => Some(PendingCommand::OutgoingCalls),
+            _ => None,
+        };
+    }
+    if pending == 'z' {
+        return match key.code {
+            KeyCode::Char('a') => Some(PendingCommand::ToggleFold),
+            KeyCode::Char('M') => Some(PendingCommand::CloseAllFolds),
+            KeyCode::Char('R') => Some(PendingCommand::OpenAllFolds),
             _ => None,
         };
     }
@@ -1082,6 +1103,18 @@ mod tests {
         assert_eq!(
             pending_action('g', key(KeyCode::Char('o'), KeyModifiers::NONE), false),
             Some(PendingCommand::OutgoingCalls)
+        );
+        assert_eq!(
+            pending_action('z', key(KeyCode::Char('a'), KeyModifiers::NONE), false),
+            Some(PendingCommand::ToggleFold)
+        );
+        assert_eq!(
+            pending_action('z', key(KeyCode::Char('M'), KeyModifiers::NONE), false),
+            Some(PendingCommand::CloseAllFolds)
+        );
+        assert_eq!(
+            pending_action('z', key(KeyCode::Char('R'), KeyModifiers::NONE), false),
+            Some(PendingCommand::OpenAllFolds)
         );
     }
 
