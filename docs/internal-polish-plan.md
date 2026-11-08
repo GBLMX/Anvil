@@ -43,6 +43,10 @@ These are the only internal-polish priorities until the phase exit gate.
 
 ### 3.1 Settings
 
+Status: first typed registry slice landed for `editor.scroll_margin`,
+`search.case_sensitive`, and `lsp.inlay_hints`, with env overrides and
+validation errors. The overlay remains gated.
+
 - Add a typed settings registry with explicit domains, defaults, path, and
   precedence.
 - Extend `settings.toml` beyond `[theme]`.

@@ -566,6 +566,26 @@ fn help_is_read_only_and_returns_to_the_previous_buffer() {
 }
 
 #[test]
+fn scroll_margin_setting_changes_viewport_scroll() {
+    let text = (0..20)
+        .map(|line| line.to_string())
+        .collect::<Vec<_>>()
+        .join("\n");
+    let mut model = Model::new(EditorState::from_text(&text), None);
+    model.cursor = model.offset_at_utf16(10, 0);
+
+    model.ensure_cursor_visible(5, 80);
+    assert_eq!(model.scroll, 8);
+
+    let mut settings = crate::settings::Settings::default();
+    settings.editor.scroll_margin = 0;
+    model.apply_settings(settings);
+    model.scroll = 0;
+    model.ensure_cursor_visible(5, 80);
+    assert_eq!(model.scroll, 6);
+}
+
+#[test]
 fn help_refuses_writes() {
     let mut model = Model::new(EditorState::from_text("data"), None);
     handle_event(&mut model, key(KeyCode::Char(':')));

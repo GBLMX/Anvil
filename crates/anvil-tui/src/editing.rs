@@ -584,7 +584,11 @@ impl Model {
         };
         let line = position.line;
         let height = usize::from(height.max(1));
-        let margin = 3.min(height.saturating_sub(1) / 2);
+        let margin = self
+            .settings
+            .editor
+            .scroll_margin
+            .min(height.saturating_sub(1) / 2);
         if line < self.scroll.saturating_add(margin) {
             self.scroll = line.saturating_sub(margin);
         } else if line + margin >= self.scroll.saturating_add(height) {

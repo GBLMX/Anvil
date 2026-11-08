@@ -4,15 +4,13 @@
 //! without changing the path or the atomic write.
 
 use crate::Model;
+use crate::settings;
 use crate::theme::{self, Choice};
 use serde::Deserialize;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-const MAX_BYTES: u64 = 64 * 1024;
-
 #[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
 struct SettingsFile {
     #[serde(default)]
     theme: Option<ThemeFile>,
@@ -32,7 +30,7 @@ struct ThemeFile {
 }
 
 pub(crate) fn load() -> Result<(), String> {
-    let path = path()?;
+    let path = settings::path()?;
     load_from_path(&path)
 }
 
@@ -42,8 +40,12 @@ pub(crate) fn load_from_path(path: &Path) -> Result<(), String> {
     }
     let metadata =
         fs::metadata(path).map_err(|error| format!("cannot read {}: {error}", path.display()))?;
-    if metadata.len() > MAX_BYTES {
-        return Err(format!("{} exceeds {} bytes", path.display(), MAX_BYTES));
+    if metadata.len() > settings::MAX_BYTES {
+        return Err(format!(
+            "{} exceeds {} bytes",
+            path.display(),
+            settings::MAX_BYTES
+        ));
     }
     let text = fs::read_to_string(path)
         .map_err(|error| format!("cannot read {}: {error}", path.display()))?;
@@ -54,7 +56,7 @@ pub(crate) fn load_from_path(path: &Path) -> Result<(), String> {
 pub(crate) fn save() -> Result<PathBuf, String> {
     let choice = theme::runtime_choice()
         .ok_or_else(|| "no runtime theme to save; use :theme or :theme-auto first".to_owned())?;
-    let path = path()?;
+    let path = settings::path()?;
     save_to_path(&path, choice)?;
     Ok(path)
 }
@@ -82,24 +84,6 @@ pub(crate) fn save_to_path(path: &Path, choice: Choice) -> Result<(), String> {
         return Err(format!("cannot replace {}: {error}", path.display()));
     }
     Ok(())
-}
-
-fn path() -> Result<PathBuf, String> {
-    if let Some(explicit) = std::env::var_os("ANVIL_SETTINGS") {
-        let explicit = explicit.to_string_lossy();
-        if !explicit.trim().is_empty() {
-            return Ok(PathBuf::from(explicit.into_owned()));
-        }
-    }
-    if let Some(config) = std::env::var_os("XDG_CONFIG_HOME") {
-        let config = config.to_string_lossy();
-        if !config.trim().is_empty() {
-            return Ok(PathBuf::from(config.into_owned()).join("anvil/settings.toml"));
-        }
-    }
-    let home = std::env::var_os("HOME")
-        .ok_or_else(|| "cannot resolve settings path: HOME is unset".to_owned())?;
-    Ok(PathBuf::from(home).join(".config/anvil/settings.toml"))
 }
 
 fn parse(text: &str) -> Result<Choice, String> {
@@ -163,6 +147,11 @@ mod tests {
                 dark: "nord",
                 light: "solarized-light",
             }
+        );
+        assert_eq!(
+            parse("[theme]\nmode = \"fixed\"\nname = \"nord\"\n[editor]\nscroll_margin = 1\n")
+                .expect("other sections"),
+            Choice::Fixed("nord")
         );
     }
 

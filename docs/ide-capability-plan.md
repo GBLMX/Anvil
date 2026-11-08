@@ -30,7 +30,7 @@ Tokio runtime, no in-process plugin UI, and no embedded WebView.
 | Problems | status strings and popups | `0.5.7` owns the bounded problems panel; no post-0.5 duplicate |
 | Session | in-memory only | restore buffers/cursors/layout; crash backup; persistent undo |
 | Git | gutter marks | diff view, hunk staging, blame, conflict handling |
-| Settings | partial keymap config | merged settings, validation errors, theme roles |
+| Settings | typed editor/search/LSP registry, theme, keymap | settings overlay, changed markers, reset, hot reload |
 
 Acceptance: each item must have a deterministic test and an explicit
 read-only/large-file/stale-result failure behavior.

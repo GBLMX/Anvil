@@ -947,3 +947,15 @@ fn status_column_uses_grapheme_index() {
     assert!(rendered.contains("Col 3"));
     assert!(!rendered.contains("Col 26"));
 }
+
+#[test]
+fn disabled_inlay_hints_are_not_requested() {
+    let mut model = Model::new(EditorState::from_text("x"), Some(PathBuf::from("main.rs")));
+    let key = ("rust-analyzer".to_owned(), "rust".to_owned());
+    model.lsp_config = Some(key.clone());
+    model.inlay_support.insert(key, true);
+    model.settings.lsp.inlay_hints = false;
+    model.poll_inlay_hints(10);
+    assert!(model.inlay_pending.is_none());
+    assert!(model.inlay_hints.is_empty());
+}

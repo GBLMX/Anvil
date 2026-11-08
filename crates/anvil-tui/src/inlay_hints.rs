@@ -6,6 +6,12 @@ use crate::theme;
 
 impl Model {
     pub(crate) fn poll_inlay_hints(&mut self, height: u16) {
+        if !self.settings.lsp.inlay_hints {
+            self.inlay_hints.clear();
+            self.inlay_pending = None;
+            self.inlay_checked = None;
+            return;
+        }
         let Some(path) = self.path.clone() else {
             self.inlay_hints.clear();
             return;

@@ -18,6 +18,9 @@ Environment:
   ANVIL_THEME            Startup theme: anvil-dark, one-dark, gruvbox-dark,
                          nord, catppuccin-mocha, solarized-light
   ANVIL_SETTINGS         Explicit settings.toml path
+  ANVIL_EDITOR_SCROLL_MARGIN  Viewport scroll margin (0-16)
+  ANVIL_SEARCH_CASE_SENSITIVE Search default: true or false
+  ANVIL_LSP_INLAY_HINTS  Inlay hints: true or false
   ANVIL_BUNDLED_PLUGIN_DIR  Explicit bundled official plugin directory
   ANVIL_PLUGIN_DIR       Additional local plugin directory
 

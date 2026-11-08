@@ -55,6 +55,19 @@ pub fn run_with_workspace(path: Option<PathBuf>, workspace: PathBuf) -> io::Resu
         }
         model.dirty = true;
     }
+    match settings::load() {
+        Ok(settings) => model.apply_settings(settings),
+        Err(error) => {
+            let message = format!("E: settings: {error}");
+            if model.status.is_empty() {
+                model.status = message;
+            } else {
+                model.status.push_str(" | ");
+                model.status.push_str(&message);
+            }
+            model.dirty = true;
+        }
+    }
     if let Some(theme_name) = std::env::var_os("ANVIL_THEME") {
         let theme_name = theme_name.to_string_lossy();
         if let Err(error) = theme::set_startup_theme(&theme_name) {

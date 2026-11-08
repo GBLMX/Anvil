@@ -79,8 +79,10 @@ mod keymap;
 mod keys;
 mod lsp_worker;
 mod render;
+mod settings;
 mod theme;
 mod theme_config;
+use settings::Settings;
 use workspace_edit::WorkspaceEdit;
 mod workspace_edit;
 pub(crate) use keys::handle_event;
@@ -560,6 +562,7 @@ pub struct Model {
     command_palette: Option<CommandPaletteState>,
     command_completion: Option<CommandCompletion>,
     persist_theme: bool,
+    settings: Settings,
     command_palette_recents: Vec<String>,
     /// Gateway client used for file I/O when present.
     gateway: Option<GatewayClient>,
@@ -690,6 +693,7 @@ impl Model {
             command_palette: None,
             command_completion: None,
             persist_theme: !cfg!(test),
+            settings: Settings::default(),
             command_palette_recents: Vec::new(),
             gateway: None,
             gateway_session: None,

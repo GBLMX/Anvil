@@ -51,6 +51,23 @@ Built-in semantic themes are `anvil-dark`, `one-dark`, `gruvbox-dark`,
 `ANVIL_THEME` selects the startup theme.
 The command palette (`Space p`) lists themes and previews them while arrowing.
 
+The same file owns typed editor/search/LSP settings:
+
+```toml
+[editor]
+scroll_margin = 3
+
+[search]
+case_sensitive = false
+
+[lsp]
+inlay_hints = true
+```
+
+`ANVIL_EDITOR_SCROLL_MARGIN`, `ANVIL_SEARCH_CASE_SENSITIVE`, and
+`ANVIL_LSP_INLAY_HINTS` override the file for the current process.
+Settings are read at startup; edit the file and restart Anvil to apply changes.
+
 At the `:` prompt, `Tab` completes Ex command names, `:theme` /
 `:theme-auto` arguments, and `:plugin-enable` IDs; `Up`/`Down` selects a
 candidate and `Enter` accepts it. `Esc` closes the completion list first.
