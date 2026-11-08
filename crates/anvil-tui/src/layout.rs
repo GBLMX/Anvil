@@ -21,6 +21,27 @@ impl Model {
             .position(self.editor.text(), self.cursor)
             .map(|position| position.line)
     }
+    pub(crate) fn document_highlight_ranges(
+        &self,
+        line_start: usize,
+        line_end: usize,
+    ) -> Vec<(usize, usize, u8)> {
+        let Some(highlights) = &self.document_highlights else {
+            return Vec::new();
+        };
+        if highlights.revision != self.editor.revision() {
+            return Vec::new();
+        }
+        highlights
+            .items
+            .iter()
+            .filter_map(|highlight| {
+                let start = highlight.start.max(line_start);
+                let end = highlight.end.min(line_end);
+                (end > start).then_some((start, end, highlight.kind))
+            })
+            .collect()
+    }
 
     pub(crate) fn line_in_code_block(&self, line_number: usize) -> bool {
         let Some(start) = self.editor.index().line_to_offset(line_number) else {
@@ -100,11 +121,15 @@ impl Model {
                 .filter(|range| range.start < render_end && range.end > render_start)
                 .map(|range| (range.start.max(render_start), range.end.min(render_end)))
                 .collect();
+            let document_highlight_ranges = self.document_highlight_ranges(start, line.end);
             let syntax_guard = self.syntax.borrow();
             let highlights = syntax_guard.highlights();
             for chunk in text.chunks(render_start..render_end) {
                 push_syntax_spans(&mut spans, chunk, base, highlights);
                 base += chunk.len();
+            }
+            if !document_highlight_ranges.is_empty() {
+                apply_document_highlights(&mut spans, render_start, &document_highlight_ranges);
             }
             if !search_ranges.is_empty() {
                 apply_search_highlights(&mut spans, render_start, &search_ranges, self.cursor);

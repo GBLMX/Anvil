@@ -23,6 +23,8 @@ pub enum Effect {
     LspDefinition,
     /// Request references at the cursor.
     LspReferences,
+    /// Request document highlights at the cursor.
+    LspDocumentHighlights,
     /// Request hover.
     LspHover,
     /// Request code actions.

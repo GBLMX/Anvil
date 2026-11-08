@@ -681,6 +681,7 @@ pub(crate) enum PendingCommand {
     ChangeInnerQuote(char),
     Definition,
     References,
+    DocumentHighlight,
     Diagnostic(bool),
     Count {
         pending: char,
@@ -713,6 +714,7 @@ impl PendingCommand {
             ChangeInnerQuote(_) => Some(command::CHANGE_INNER_QUOTE),
             Definition => Some(command::DEFINITION),
             References => Some(command::REFERENCES),
+            DocumentHighlight => Some(command::DOCUMENT_HIGHLIGHT),
             Diagnostic(true) => Some(command::DIAGNOSTICS_NEXT),
             Diagnostic(false) => Some(command::DIAGNOSTICS_PREVIOUS),
             SplitVertical => Some(command::SPLIT_VERTICAL),
@@ -826,6 +828,7 @@ impl PendingCommand {
                 | Self::StartFuzzy
                 | Self::StartRename
                 | Self::References
+                | Self::DocumentHighlight
                 | Self::CodeActions
                 | Self::DocumentSymbols
                 | Self::WorkspaceSymbols
@@ -844,6 +847,7 @@ impl PendingCommand {
             "editor.change_inner_quote" => Self::ChangeInnerQuote('"'),
             "lsp.definition" => Self::Definition,
             "lsp.references" => Self::References,
+            "lsp.document_highlight" => Self::DocumentHighlight,
             "diagnostics.next" => Self::Diagnostic(true),
             "diagnostics.previous" => Self::Diagnostic(false),
             "view.split_vertical" => Self::SplitVertical,
@@ -940,6 +944,7 @@ pub(crate) fn pending_action(
         return match key.code {
             KeyCode::Char('d') => Some(PendingCommand::Definition),
             KeyCode::Char('r') => Some(PendingCommand::References),
+            KeyCode::Char('h') => Some(PendingCommand::DocumentHighlight),
             _ => None,
         };
     }
@@ -1047,7 +1052,7 @@ mod tests {
     }
 
     #[test]
-    fn pending_g_resolves_definition_and_references() {
+    fn pending_g_resolves_navigation_commands() {
         assert_eq!(
             pending_action('g', key(KeyCode::Char('d'), KeyModifiers::NONE), false),
             Some(PendingCommand::Definition)
@@ -1055,6 +1060,10 @@ mod tests {
         assert_eq!(
             pending_action('g', key(KeyCode::Char('r'), KeyModifiers::NONE), false),
             Some(PendingCommand::References)
+        );
+        assert_eq!(
+            pending_action('g', key(KeyCode::Char('h'), KeyModifiers::NONE), false),
+            Some(PendingCommand::DocumentHighlight)
         );
     }
 

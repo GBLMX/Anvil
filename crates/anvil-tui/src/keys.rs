@@ -130,6 +130,9 @@ fn execute_pending_command(
         PendingCommand::ChangeInnerQuote(quote) => model.change_inner_quote(quote),
         PendingCommand::Definition => model.queue_effect(Effect::LspDefinition),
         PendingCommand::References => model.queue_effect(Effect::LspReferences),
+        PendingCommand::DocumentHighlight => {
+            model.queue_effect(Effect::LspDocumentHighlights);
+        }
         PendingCommand::Diagnostic(forward) => model.jump_diagnostic(forward),
         PendingCommand::Count { pending, digit } => {
             model.push_count(digit);
@@ -585,6 +588,10 @@ fn handle_key(model: &mut Model, key: KeyPress) {
         if consumed {
             return;
         }
+    }
+    if model.document_highlights.is_some() && key.code == KeyCode::Esc {
+        model.cancel_document_highlights();
+        return;
     }
 
     if model.code_actions.is_some() {

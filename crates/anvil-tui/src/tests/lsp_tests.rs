@@ -86,6 +86,49 @@ fn switching_buffers_clears_references() {
 }
 
 #[test]
+fn document_highlights_ignore_stale_revisions() {
+    let mut model = Model::new(EditorState::from_text("foo foo"), None);
+    model.apply_document_highlights_response(&serde_json::json!([
+        {
+            "range": {
+                "start": {"line": 0, "character": 0},
+                "end": {"line": 0, "character": 3}
+            },
+            "kind": 2
+        },
+        {
+            "range": {
+                "start": {"line": 0, "character": 4},
+                "end": {"line": 0, "character": 7}
+            },
+            "kind": 3
+        }
+    ]));
+    let highlights = model.document_highlights.as_ref().expect("highlights");
+    assert_eq!(highlights.items.len(), 2);
+    assert_eq!(highlights.items[1].kind, 3);
+    assert_eq!(model.document_highlight_ranges(0, 7).len(), 2);
+    model.insert_text("x");
+    assert!(model.document_highlight_ranges(0, 8).is_empty());
+}
+
+#[test]
+fn document_highlights_render_writes_underlined() {
+    let mut spans = vec![ratatui::text::Span::raw("foo foo")];
+    apply_document_highlights(&mut spans, 0, &[(0, 3, 2), (4, 7, 3)]);
+    assert_eq!(spans.len(), 3);
+    assert_eq!(spans[0].content.as_ref(), "foo");
+    assert_eq!(spans[0].style.bg, Some(crate::theme::selection()));
+    assert_eq!(spans[2].content.as_ref(), "foo");
+    assert!(
+        spans[2]
+            .style
+            .add_modifier
+            .contains(ratatui::style::Modifier::UNDERLINED)
+    );
+}
+
+#[test]
 fn cancelling_completion_drops_pending_response() {
     let mut model = Model::new(EditorState::from_text("x"), None);
     model.completion = Some(CompletionState {

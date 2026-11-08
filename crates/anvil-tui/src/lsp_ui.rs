@@ -175,6 +175,7 @@ impl Model {
                 | LspRequestKind::CodeAction
                 | LspRequestKind::Formatting
                 | LspRequestKind::SignatureHelp
+                | LspRequestKind::DocumentHighlight
         ) {
             self.pending_edit_revision
                 .insert(id, self.editor.revision());
@@ -269,6 +270,7 @@ impl Model {
         self.signature_help = None;
         self.workspace_symbols = None;
         self.references = None;
+        self.document_highlights = None;
         self.inlay_hints.clear();
         self.inlay_pending = None;
         self.inlay_checked = None;
@@ -420,6 +422,39 @@ impl Model {
         ) {
             self.status = "references".to_owned();
         }
+        self.dirty = true;
+    }
+
+    pub(crate) fn request_document_highlights(&mut self) {
+        self.cancel_completion();
+        self.cancel_code_actions();
+        self.cancel_document_highlights();
+        self.hover = None;
+        self.ui.diagnostic_peek = None;
+        let Some(uri) = self.path.as_ref().map(|path| lsp_worker::file_uri(path)) else {
+            return;
+        };
+        let Some((line, character)) = self.lsp_position() else {
+            return;
+        };
+        let params = serde_json::json!({
+            "textDocument": {"uri": uri},
+            "position": {"line": line, "character": character}
+        });
+        if self.send_lsp_request(
+            LspRequestKind::DocumentHighlight,
+            "textDocument/documentHighlight",
+            params,
+        ) {
+            self.status = "highlights".to_owned();
+        }
+        self.dirty = true;
+    }
+
+    pub(crate) fn cancel_document_highlights(&mut self) {
+        self.pending_lsp
+            .retain(|_, kind| *kind != LspRequestKind::DocumentHighlight);
+        self.document_highlights = None;
         self.dirty = true;
     }
 

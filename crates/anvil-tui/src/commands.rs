@@ -239,6 +239,7 @@ impl Model {
                 Effect::LspSignatureHelp(trigger) => self.request_signature_help(trigger),
                 Effect::LspDefinition => self.request_definition(),
                 Effect::LspReferences => self.request_references(),
+                Effect::LspDocumentHighlights => self.request_document_highlights(),
                 Effect::LspHover => self.request_hover(),
                 Effect::LspCodeActions => self.request_code_actions(),
                 Effect::LspDocumentSymbols => self.request_document_symbols(),

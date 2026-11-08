@@ -86,8 +86,8 @@ mod workspace_edit;
 pub(crate) use keys::handle_event;
 pub use render::view;
 use render::{
-    apply_diagnostic_underlines, apply_search_highlights, display_column, expand_tabs,
-    push_syntax_spans, utf16_to_byte,
+    apply_diagnostic_underlines, apply_document_highlights, apply_search_highlights,
+    display_column, expand_tabs, push_syntax_spans, utf16_to_byte,
 };
 mod layout;
 mod syntax;
@@ -277,6 +277,7 @@ enum LspRequestKind {
     Completion,
     Definition,
     References,
+    DocumentHighlight,
     Hover,
     Rename,
     CodeAction,
@@ -326,6 +327,19 @@ struct ReferenceItem {
 struct ReferenceState {
     items: Vec<ReferenceItem>,
     selected: usize,
+}
+
+#[derive(Debug, Clone)]
+struct DocumentHighlightItem {
+    start: usize,
+    end: usize,
+    kind: u8,
+}
+
+#[derive(Debug, Clone)]
+struct DocumentHighlightState {
+    revision: u64,
+    items: Vec<DocumentHighlightItem>,
 }
 
 #[derive(Debug, Clone)]
@@ -494,6 +508,7 @@ pub struct Model {
     code_actions: Option<CodeActionState>,
     document_symbols: Option<SymbolState>,
     references: Option<ReferenceState>,
+    document_highlights: Option<DocumentHighlightState>,
     signature_help: Option<SignatureHelpState>,
     workspace_symbols: Option<WorkspaceSymbolState>,
     inlay_hints: Vec<InlayHint>,
@@ -625,6 +640,7 @@ impl Model {
             code_actions: None,
             document_symbols: None,
             references: None,
+            document_highlights: None,
             signature_help: None,
             workspace_symbols: None,
             inlay_hints: Vec::new(),
@@ -875,6 +891,7 @@ impl Model {
         self.code_actions = None;
         self.document_symbols = None;
         self.references = None;
+        self.document_highlights = None;
     }
 
     fn active_lsp_worker(&self) -> Option<&LspWorker> {

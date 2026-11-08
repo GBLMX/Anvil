@@ -483,6 +483,50 @@ pub(crate) fn apply_search_highlights<'a>(
     ranges: &[(usize, usize)],
     active_start: usize,
 ) {
+    apply_overlay_ranges(
+        spans,
+        line_start,
+        ranges,
+        |range| range,
+        |range| {
+            if range.0 == active_start {
+                theme::search_active()
+            } else {
+                theme::search_match()
+            }
+        },
+    );
+}
+
+/// Applies document-highlight backgrounds without replacing syntax colors.
+pub(crate) fn apply_document_highlights<'a>(
+    spans: &mut Vec<Span<'a>>,
+    line_start: usize,
+    ranges: &[(usize, usize, u8)],
+) {
+    apply_overlay_ranges(
+        spans,
+        line_start,
+        ranges,
+        |range| (range.0, range.1),
+        |range| {
+            let overlay = theme::search_match();
+            if range.2 == 3 {
+                overlay.add_modifier(Modifier::UNDERLINED)
+            } else {
+                overlay
+            }
+        },
+    );
+}
+
+fn apply_overlay_ranges<'a, R: Copy>(
+    spans: &mut Vec<Span<'a>>,
+    line_start: usize,
+    ranges: &[R],
+    bounds: impl Fn(R) -> (usize, usize),
+    style: impl Fn(R) -> Style,
+) {
     if ranges.is_empty() {
         return;
     }
@@ -494,32 +538,31 @@ pub(crate) fn apply_search_highlights<'a>(
         let span_end = offset + content.len();
         offset = span_end;
         let mut cursor = span_start;
-        for &(start, end) in ranges {
+        for &range in ranges {
+            let (start, end) = bounds(range);
             if end <= span_start {
                 continue;
             }
             if start >= span_end {
                 break;
             }
-            let match_start = start.max(span_start);
-            let match_end = end.min(span_end);
-            if match_start > cursor {
+            let overlay_start = start.max(span_start).max(cursor);
+            let overlay_end = end.min(span_end);
+            if overlay_end <= overlay_start {
+                continue;
+            }
+            if overlay_start > cursor {
                 let from = cursor - span_start;
-                let to = match_start - span_start;
+                let to = overlay_start - span_start;
                 result.push(Span::styled(content[from..to].to_owned(), span.style));
             }
-            let overlay = if start == active_start {
-                theme::search_active()
-            } else {
-                theme::search_match()
-            };
-            let from = match_start - span_start;
-            let to = match_end - span_start;
+            let from = overlay_start - span_start;
+            let to = overlay_end - span_start;
             result.push(Span::styled(
                 content[from..to].to_owned(),
-                span.style.patch(overlay),
+                span.style.patch(style(range)),
             ));
-            cursor = match_end;
+            cursor = overlay_end;
         }
         if cursor < span_end {
             let from = cursor - span_start;

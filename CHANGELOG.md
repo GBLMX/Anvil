@@ -12,6 +12,7 @@ post-`0.5.0` feature line.
   (`zls`) language-server discovery.
 - LSP references panel on `gr`, with bounded sorted locations and cross-file
   jump-to-reference.
+- LSP document highlights on `gh`, with stale-revision and buffer guards.
 - Luau `editor.get_view()` / `editor.apply_edit()` bridge over the host editor
   UDS, including a cursor-printing fixture.
 - Signed `.anvil-plugin` installs via `anvil-gateway -install-plugin`, with

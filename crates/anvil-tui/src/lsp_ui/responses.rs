@@ -1,6 +1,7 @@
 //! LSP response handling and DTO application.
 
 use super::*;
+use crate::{DocumentHighlightItem, DocumentHighlightState};
 
 impl Model {
     fn apply_document_symbols_response(&mut self, result: &serde_json::Value) {
@@ -101,6 +102,7 @@ impl Model {
                 | LspRequestKind::CodeAction
                 | LspRequestKind::Formatting
                 | LspRequestKind::SignatureHelp
+                | LspRequestKind::DocumentHighlight
         ) && edit_revision.is_some_and(|revision| revision != self.editor.revision())
         {
             self.status = "lsp: stale edit response ignored".to_owned();
@@ -113,6 +115,7 @@ impl Model {
                 | LspRequestKind::CodeAction
                 | LspRequestKind::Formatting
                 | LspRequestKind::SignatureHelp
+                | LspRequestKind::DocumentHighlight
         ) && edit_path
             .as_ref()
             .is_some_and(|path| self.path.as_ref() != Some(path))
@@ -125,6 +128,7 @@ impl Model {
             LspRequestKind::Completion => self.apply_completion_response(id, &result),
             LspRequestKind::Definition => self.apply_definition_response(&result),
             LspRequestKind::References => self.apply_references_response(&result),
+            LspRequestKind::DocumentHighlight => self.apply_document_highlights_response(&result),
             LspRequestKind::Hover => self.apply_hover_response(&result),
             LspRequestKind::Rename => {
                 if result.is_null() {
@@ -317,6 +321,71 @@ impl Model {
                 selected: 0,
             });
             self.status = format!("references: {count}");
+        }
+    }
+
+    pub(crate) fn apply_document_highlights_response(&mut self, result: &serde_json::Value) {
+        let Some(items) = result.as_array() else {
+            self.status = "lsp: no highlights".to_owned();
+            self.document_highlights = None;
+            return;
+        };
+        let mut highlights = Vec::new();
+        for item in items {
+            if highlights.len() >= 4096 {
+                break;
+            }
+            let Some(range) = item.get("range") else {
+                continue;
+            };
+            let Some(start) = range.get("start") else {
+                continue;
+            };
+            let Some(end) = range.get("end") else {
+                continue;
+            };
+            let start_line = start
+                .get("line")
+                .and_then(serde_json::Value::as_u64)
+                .unwrap_or(0) as usize;
+            let start_character = start
+                .get("character")
+                .and_then(serde_json::Value::as_u64)
+                .unwrap_or(0) as usize;
+            let end_line = end
+                .get("line")
+                .and_then(serde_json::Value::as_u64)
+                .unwrap_or(0) as usize;
+            let end_character = end
+                .get("character")
+                .and_then(serde_json::Value::as_u64)
+                .unwrap_or(0) as usize;
+            let start = self.offset_at_utf16(start_line, start_character);
+            let end = self.offset_at_utf16(end_line, end_character);
+            if end <= start {
+                continue;
+            }
+            highlights.push(DocumentHighlightItem {
+                start,
+                end,
+                kind: item
+                    .get("kind")
+                    .and_then(serde_json::Value::as_u64)
+                    .unwrap_or(1) as u8,
+            });
+        }
+        highlights.sort_by_key(|highlight| (highlight.start, highlight.end));
+        highlights.dedup_by_key(|highlight| (highlight.start, highlight.end));
+        if highlights.is_empty() {
+            self.status = "lsp: no highlights".to_owned();
+            self.document_highlights = None;
+        } else {
+            let count = highlights.len();
+            self.status = format!("highlights: {count}");
+            self.document_highlights = Some(DocumentHighlightState {
+                revision: self.editor.revision(),
+                items: highlights,
+            });
         }
     }
 

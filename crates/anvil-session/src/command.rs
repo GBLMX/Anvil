@@ -64,6 +64,7 @@ pub const CHANGE_INNER_WORD: CommandId = CommandId::new("editor.change_inner_wor
 pub const CHANGE_INNER_QUOTE: CommandId = CommandId::new("editor.change_inner_quote");
 pub const DEFINITION: CommandId = CommandId::new("lsp.definition");
 pub const REFERENCES: CommandId = CommandId::new("lsp.references");
+pub const DOCUMENT_HIGHLIGHT: CommandId = CommandId::new("lsp.document_highlight");
 pub const DIAGNOSTICS_NEXT: CommandId = CommandId::new("diagnostics.next");
 pub const DIAGNOSTICS_PREVIOUS: CommandId = CommandId::new("diagnostics.previous");
 pub const SPLIT_VERTICAL: CommandId = CommandId::new("view.split_vertical");
@@ -127,6 +128,7 @@ pub const COMMANDS: &[CommandSpec] = &[
     spec(CHANGE_INNER_QUOTE, PENDING),
     spec(DEFINITION, PENDING),
     spec(REFERENCES, PENDING),
+    spec(DOCUMENT_HIGHLIGHT, PENDING),
     spec(DIAGNOSTICS_NEXT, PENDING),
     spec(DIAGNOSTICS_PREVIOUS, PENDING),
     spec(SPLIT_VERTICAL, PENDING),
