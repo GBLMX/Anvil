@@ -90,12 +90,13 @@ use settings_ui::SettingsOverlayState;
 mod snippet;
 use snippet::{Snippet, SnippetSession};
 use workspace_edit::WorkspaceEdit;
+mod semantic_tokens;
 mod workspace_edit;
 pub(crate) use keys::handle_event;
 pub use render::view;
 use render::{
     apply_diagnostic_underlines, apply_document_highlights, apply_search_highlights,
-    display_column, expand_tabs, push_syntax_spans, utf16_to_byte,
+    apply_semantic_tokens, display_column, expand_tabs, push_syntax_spans, utf16_to_byte,
 };
 mod layout;
 mod syntax;
@@ -285,9 +286,17 @@ struct CompletionState {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct SemanticToken {
+    start: usize,
+    end: usize,
+    type_index: usize,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum LspRequestKind {
     Completion,
     CompletionResolve,
+    SemanticTokens,
     Definition,
     References,
     DocumentHighlight,
@@ -550,6 +559,9 @@ pub struct Model {
     completion: Option<CompletionState>,
     completion_resolve: Option<(u64, usize)>,
     snippet: Option<SnippetSession>,
+    semantic_legend: Vec<String>,
+    semantic_tokens: Vec<SemanticToken>,
+    semantic_revision: Option<u64>,
     hover: Option<String>,
     code_actions: Option<CodeActionState>,
     document_symbols: Option<SymbolState>,
@@ -691,6 +703,9 @@ impl Model {
             completion: None,
             completion_resolve: None,
             snippet: None,
+            semantic_legend: Vec::new(),
+            semantic_tokens: Vec::new(),
+            semantic_revision: None,
             hover: None,
             code_actions: None,
             document_symbols: None,
@@ -951,6 +966,7 @@ impl Model {
         self.references = None;
         self.document_highlights = None;
         self.call_hierarchy = None;
+        self.semantic_legend.clear();
     }
 
     fn active_lsp_worker(&self) -> Option<&LspWorker> {
@@ -993,6 +1009,7 @@ impl Model {
             let _ = worker.sync(&path, text);
         }
         if has_worker {
+            self.request_semantic_tokens();
             self.request_folding_ranges(None);
         }
     }
@@ -1072,12 +1089,19 @@ impl Model {
     fn handle_lsp_event(&mut self, key: &(String, String), event: LspEvent) {
         let active = self.lsp_config.as_ref() == Some(key);
         match event {
-            LspEvent::Capabilities { inlay_hints } => {
+            LspEvent::Capabilities {
+                inlay_hints,
+                semantic_token_types,
+            } => {
                 self.inlay_support.insert(key.clone(), inlay_hints);
                 if active {
                     self.inlay_hints.clear();
                     self.inlay_pending = None;
                     self.inlay_checked = None;
+                    self.semantic_legend = semantic_token_types;
+                    self.semantic_tokens.clear();
+                    self.semantic_revision = None;
+                    self.request_semantic_tokens();
                 }
             }
             LspEvent::Diagnostics(path, diagnostics) => {
@@ -1087,6 +1111,12 @@ impl Model {
                     self.diagnostics.values().map(Vec::len).sum::<usize>()
                 );
                 self.rebuild_problems();
+                if active
+                    && !self.semantic_legend.is_empty()
+                    && self.semantic_revision != Some(self.editor.revision())
+                {
+                    self.request_semantic_tokens();
+                }
             }
             LspEvent::Crashed(error) => {
                 self.lsp_workers.remove(key);

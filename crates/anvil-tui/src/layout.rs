@@ -124,11 +124,15 @@ impl Model {
                 .map(|range| (range.start.max(render_start), range.end.min(render_end)))
                 .collect();
             let document_highlight_ranges = self.document_highlight_ranges(start, line.end);
+            let semantic_ranges = self.semantic_ranges(start, line.end);
             let syntax_guard = self.syntax.borrow();
             let highlights = syntax_guard.highlights();
             for chunk in text.chunks(render_start..render_end) {
                 push_syntax_spans(&mut spans, chunk, base, highlights);
                 base += chunk.len();
+            }
+            if !semantic_ranges.is_empty() {
+                apply_semantic_tokens(&mut spans, render_start, &semantic_ranges);
             }
             if !document_highlight_ranges.is_empty() {
                 apply_document_highlights(&mut spans, render_start, &document_highlight_ranges);

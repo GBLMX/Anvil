@@ -181,6 +181,7 @@ impl Model {
                 | LspRequestKind::CallHierarchyIncoming
                 | LspRequestKind::CallHierarchyOutgoing
                 | LspRequestKind::FoldingRange
+                | LspRequestKind::SemanticTokens
         ) {
             self.pending_edit_revision
                 .insert(id, self.editor.revision());
@@ -278,6 +279,7 @@ impl Model {
         self.document_highlights = None;
         self.call_hierarchy = None;
         self.clear_folds();
+        self.clear_semantic_tokens();
         self.inlay_hints.clear();
         self.inlay_pending = None;
         self.inlay_checked = None;

@@ -359,6 +359,48 @@ fn completion_resolve_round_trip_through_gateway() {
 }
 
 #[test]
+#[ignore = "requires rust-analyzer and ANVIL_GATEWAY"]
+fn semantic_tokens_round_trip_through_gateway() {
+    use std::time::{Duration, Instant};
+
+    let dir = tempfile::tempdir().expect("tempdir");
+    let workspace = dir.path().canonicalize().expect("canonical");
+    let source = workspace.join("src");
+    fs::create_dir(&source).expect("src");
+    fs::write(
+        workspace.join("Cargo.toml"),
+        "[package]\nname = \"semantic-smoke\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+    )
+    .expect("manifest");
+    let main = source.join("main.rs");
+    fs::write(&main, "fn main() {\n    let value = 1;\n}\n").expect("main");
+    let (session, gateway, lsp_client) =
+        crate::gateway::GatewaySession::start(&workspace).expect("gateway");
+    let mut model = Model::with_gateway(gateway, workspace);
+    model.lsp_client = Some(lsp_client);
+    model.open_path(&main).expect("open");
+    std::thread::sleep(Duration::from_secs(3));
+    model.poll_lsp();
+    assert!(!model.semantic_legend.is_empty());
+    model.request_semantic_tokens();
+    let deadline = Instant::now() + Duration::from_secs(20);
+    loop {
+        model.poll_lsp();
+        if !model.semantic_tokens.is_empty() {
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "no semantic tokens; status={}",
+            model.status
+        );
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    assert!(!model.semantic_ranges(0, 40).is_empty());
+    drop(session);
+}
+
+#[test]
 fn gi_and_go_dispatch_call_hierarchy_requests() {
     use crossterm::event::Event;
 

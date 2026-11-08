@@ -19,6 +19,7 @@ pub enum LspEvent {
     },
     Capabilities {
         inlay_hints: bool,
+        semantic_token_types: Vec<String>,
     },
     Crashed(String),
     StartupError(String),
@@ -119,6 +120,14 @@ impl LspWorker {
                                         "properties": ["documentation", "detail"]
                                     }
                                 }
+                            },
+                            "semanticTokens": {
+                                "dynamicRegistration": false,
+                                "requests": {"full": true},
+                                "tokenTypes": [],
+                                "tokenModifiers": [],
+                                "formats": ["relative"],
+                                "multilineTokenSupport": false
                             }
                         },
                         "workspace": {"workspaceFolders": true},
@@ -133,14 +142,17 @@ impl LspWorker {
                 let _ = sender.send(LspEvent::Crashed(error));
                 return;
             }
-            let inlay_hints = match wait_initialize(&mut client) {
-                Ok(inlay_hints) => inlay_hints,
+            let (inlay_hints, semantic_token_types) = match wait_initialize(&mut client) {
+                Ok(capabilities) => capabilities,
                 Err(error) => {
                     let _ = sender.send(LspEvent::StartupError(error));
                     return;
                 }
             };
-            let _ = sender.send(LspEvent::Capabilities { inlay_hints });
+            let _ = sender.send(LspEvent::Capabilities {
+                inlay_hints,
+                semantic_token_types,
+            });
             let initialized = serde_json::json!({
                 "jsonrpc": "2.0",
                 "method": "initialized",
@@ -414,7 +426,7 @@ fn send(client: &mut GatewayClient, message: &serde_json::Value) -> Result<(), S
     client.lsp_send(&body).map_err(|error| error.to_string())
 }
 
-fn wait_initialize(client: &mut GatewayClient) -> Result<bool, String> {
+fn wait_initialize(client: &mut GatewayClient) -> Result<(bool, Vec<String>), String> {
     loop {
         let Some(message) = client
             .recv_notification()
@@ -442,14 +454,28 @@ fn wait_initialize(client: &mut GatewayClient) -> Result<bool, String> {
             {
                 return Err(format!("initialize failed: {error}"));
             }
-            let provider = data
+            let capabilities = data
                 .get("result")
-                .and_then(|result| result.get("capabilities"))
-                .and_then(|capabilities| capabilities.get("inlayHintProvider"));
+                .and_then(|result| result.get("capabilities"));
+            let provider =
+                capabilities.and_then(|capabilities| capabilities.get("inlayHintProvider"));
             let inlay_hints = provider
                 .and_then(Value::as_bool)
                 .unwrap_or_else(|| provider.is_some());
-            return Ok(inlay_hints);
+            let semantic_token_types = capabilities
+                .and_then(|capabilities| {
+                    capabilities.pointer("/semanticTokensProvider/legend/tokenTypes")
+                })
+                .and_then(Value::as_array)
+                .map(|types| {
+                    types
+                        .iter()
+                        .filter_map(Value::as_str)
+                        .map(str::to_owned)
+                        .collect()
+                })
+                .unwrap_or_default();
+            return Ok((inlay_hints, semantic_token_types));
         }
     }
 }

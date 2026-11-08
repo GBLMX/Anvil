@@ -16,6 +16,7 @@ post-`0.5.0` feature line.
 - LSP incoming/outgoing call panels on `gi`/`go`, with sorted bounded results
   and cross-file jumps.
 - LSP folding ranges with `za`/`zM`/`zR`, folded-line rendering, and gutter markers.
+- LSP semantic token colors with server legend mapping.
 - LSP `completionItem/resolve` documentation for the selected completion item.
 - LSP snippet completions with numbered placeholders and `Tab`/`Shift-Tab`
   navigation.

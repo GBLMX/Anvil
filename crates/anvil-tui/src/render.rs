@@ -520,6 +520,21 @@ pub(crate) fn apply_document_highlights<'a>(
     );
 }
 
+/// Applies semantic-token foregrounds over syntax spans.
+pub(crate) fn apply_semantic_tokens<'a>(
+    spans: &mut Vec<Span<'a>>,
+    line_start: usize,
+    ranges: &[(usize, usize, Style)],
+) {
+    apply_overlay_ranges(
+        spans,
+        line_start,
+        ranges,
+        |range| (range.0, range.1),
+        |range| range.2,
+    );
+}
+
 fn apply_overlay_ranges<'a, R: Copy>(
     spans: &mut Vec<Span<'a>>,
     line_start: usize,

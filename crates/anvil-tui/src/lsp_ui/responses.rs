@@ -113,6 +113,7 @@ impl Model {
                 | LspRequestKind::CallHierarchyIncoming
                 | LspRequestKind::CallHierarchyOutgoing
                 | LspRequestKind::FoldingRange
+                | LspRequestKind::SemanticTokens
         ) && edit_revision.is_some_and(|revision| revision != self.editor.revision())
         {
             self.status = "lsp: stale edit response ignored".to_owned();
@@ -130,6 +131,7 @@ impl Model {
                 | LspRequestKind::CallHierarchyIncoming
                 | LspRequestKind::CallHierarchyOutgoing
                 | LspRequestKind::FoldingRange
+                | LspRequestKind::SemanticTokens
         ) && edit_path
             .as_ref()
             .is_some_and(|path| self.path.as_ref() != Some(path))
@@ -156,6 +158,7 @@ impl Model {
                 self.apply_call_hierarchy_calls_response(&result, CallHierarchyDirection::Outgoing);
             }
             LspRequestKind::FoldingRange => self.apply_folding_response(&result),
+            LspRequestKind::SemanticTokens => self.apply_semantic_tokens_response(&result),
             LspRequestKind::Hover => self.apply_hover_response(&result),
             LspRequestKind::Rename => {
                 if result.is_null() {
