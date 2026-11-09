@@ -69,13 +69,18 @@ Difficulty: L–XL. Main risk is data loss and schema migration.
 ### 3.3 LSP depth
 
 - Completion snippet mirrors and ranking.
-- Code lens where the server supports it.
+- Code lens where the server supports it, rendered as standard virtual rows
+  above source lines.
 - References, document highlights, folding ranges, and semantic tokens are
   landed.
 - Multi-file workspace edits with stale-revision rejection are landed.
 
+Code lens is not an inline suffix or popup-only list. Viewport, gutter, cursor
+placement, mouse hit-testing, folding, and horizontal scroll must consume the
+same source-line-to-display-row map.
+
 Difficulty: M–L. Completion mirrors/ranking are medium; code lens is
-medium-to-large because standard inline rendering needs a display map.
+medium-to-large because above-line rendering requires that display map.
 
 ### 3.4 Git
 
@@ -141,7 +146,7 @@ These remain documented, but they do not block internal polish.
 ## 6. Suggested internal order
 
 1. LSP completion snippet mirrors and ranking.
-2. LSP code lens.
+2. LSP code lens with above-line virtual rows.
 3. Session restore and crash backup.
 4. Persistent undo decision and implementation.
 5. Git diff/hunk/blame/conflict.

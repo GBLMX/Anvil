@@ -25,7 +25,7 @@ Tokio runtime, no in-process plugin UI, and no embedded WebView.
 |---|---|---|
 | Completion | label/insert/detail popup, resolve docs, snippet placeholders | snippet mirrors, ranking |
 | Navigation | definition, hover, symbols, references, highlights, incoming/outgoing calls | — |
-| Structure | diagnostics, code actions, format, rename, folding ranges, semantic tokens | code lens |
+| Structure | diagnostics, code actions, format, rename, folding ranges, semantic tokens | code lens with above-line virtual rows |
 | Search | literal `/`, `n`/`N` | `0.5.8` owns search/replace UI; post-0.5 extends multi-file/project search only if measured |
 | Problems | status strings and popups | `0.5.7` owns the bounded problems panel; no post-0.5 duplicate |
 | Session | in-memory only | restore buffers/cursors/layout; crash backup; persistent undo |
@@ -71,7 +71,8 @@ Not required for v1.
 
 1. Finish `0.5.3`–`0.5.9`: palette/which-key, preview/icons, status/tabs,
    notifications/problems, search/replace, mouse/accessibility.
-2. Remaining LSP depth: completion snippet mirrors/ranking, then code lens.
+2. Remaining LSP depth: completion snippet mirrors/ranking, then code lens
+   with above-line virtual rows.
 3. Session restore, crash backup, persistent undo.
 4. Git diff/hunk/blame/conflict.
 5. Settings and remaining theme/keymap boundaries.
