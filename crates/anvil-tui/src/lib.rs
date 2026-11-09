@@ -555,6 +555,9 @@ pub struct Model {
     pending_lsp: HashMap<u64, LspRequestKind>,
     pending_edit_revision: HashMap<u64, u64>,
     pending_edit_path: HashMap<u64, PathBuf>,
+    pending_edit_snapshot: HashMap<u64, HashMap<PathBuf, u64>>,
+    /// Last LSP document version sent for each path.
+    lsp_versions: HashMap<PathBuf, u64>,
     next_lsp_request: u64,
     completion: Option<CompletionState>,
     completion_resolve: Option<(u64, usize)>,
@@ -699,6 +702,8 @@ impl Model {
             pending_lsp: HashMap::new(),
             pending_edit_revision: HashMap::new(),
             pending_edit_path: HashMap::new(),
+            pending_edit_snapshot: HashMap::new(),
+            lsp_versions: HashMap::new(),
             next_lsp_request: 2,
             completion: None,
             completion_resolve: None,
@@ -1004,10 +1009,7 @@ impl Model {
             self.clear_lsp_ui();
         }
         let text = self.editor.text().slice(0..self.editor.text().len_bytes());
-        let has_worker = self.active_lsp_worker().is_some();
-        if let Some(worker) = self.active_lsp_worker() {
-            let _ = worker.sync(&path, text);
-        }
+        let has_worker = self.sync_lsp_document(&path, text).is_ok();
         if has_worker {
             self.request_semantic_tokens();
             self.request_folding_ranges(None);
@@ -1030,9 +1032,7 @@ impl Model {
             self.lsp_config = Some(desired.clone());
             self.clear_lsp_ui();
             let text = self.editor.text().slice(0..self.editor.text().len_bytes());
-            if let Some(worker) = self.lsp_workers.get(&desired) {
-                let _ = worker.sync(&path, text);
-            }
+            let _ = self.sync_lsp_document(&path, text);
             self.status = "lsp already running".to_owned();
             self.dirty = true;
             return;
@@ -1058,10 +1058,11 @@ impl Model {
                 .collect(),
             initialization_options: settings.initialization_options,
         };
-        match LspWorker::start(client, config, self.workspace.clone(), path, text) {
+        match LspWorker::start(client, config, self.workspace.clone(), path.clone(), text) {
             Ok(worker) => {
-                self.lsp_workers.insert(desired.clone(), worker);
                 self.lsp_config = Some(desired.clone());
+                self.lsp_workers.insert(desired.clone(), worker);
+                self.lsp_versions.insert(path.clone(), 1);
                 self.lsp_retries.entry(desired).or_insert(0);
                 self.clear_lsp_ui();
                 self.status = if settings.label == "jdtls" {

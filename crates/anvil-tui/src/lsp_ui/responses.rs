@@ -5,6 +5,8 @@ use crate::{
     CallHierarchyDirection, CallHierarchyItem, CallHierarchyState, DocumentHighlightItem,
     DocumentHighlightState,
 };
+use std::collections::HashMap;
+use std::path::PathBuf;
 
 impl Model {
     fn apply_document_symbols_response(&mut self, result: &serde_json::Value) {
@@ -70,14 +72,22 @@ impl Model {
         self.status = "signature".to_owned();
     }
 
-    fn apply_formatting_response(&mut self, result: &serde_json::Value, path: &Path) {
+    fn apply_formatting_response(
+        &mut self,
+        result: &serde_json::Value,
+        path: &Path,
+        base: Option<HashMap<PathBuf, u64>>,
+    ) {
         if result.is_null() || result.as_array().is_some_and(Vec::is_empty) {
             self.status = "lsp: no formatting changes".to_owned();
             return;
         }
         let uri = lsp_worker::file_uri(path);
         let changes = serde_json::json!({"changes": {uri: result.clone()}});
-        match WorkspaceEdit::from_lsp(&changes).and_then(|edit| edit.apply(self)) {
+        match WorkspaceEdit::from_lsp(&changes)
+            .map(|edit| edit.with_base_revisions(base))
+            .and_then(|edit| edit.apply(self))
+        {
             Ok(()) => self.status = "formatted".to_owned(),
             Err(error) => self.status = format!("E: format: {error}"),
         }
@@ -94,6 +104,7 @@ impl Model {
         };
         let edit_revision = self.pending_edit_revision.remove(&id);
         let edit_path = self.pending_edit_path.remove(&id);
+        let edit_snapshot = self.pending_edit_snapshot.remove(&id);
         if let Some(error) = error {
             if kind == LspRequestKind::CompletionResolve {
                 self.completion_resolve = None;
@@ -164,13 +175,16 @@ impl Model {
                 if result.is_null() {
                     self.status = "lsp: no rename".to_owned();
                 } else {
-                    match WorkspaceEdit::from_lsp(&result).and_then(|edit| edit.apply(self)) {
+                    match WorkspaceEdit::from_lsp(&result)
+                        .map(|edit| edit.with_base_revisions(edit_snapshot))
+                        .and_then(|edit| edit.apply(self))
+                    {
                         Ok(()) => self.status = "renamed".to_owned(),
                         Err(error) => self.status = format!("E: rename: {error}"),
                     }
                 }
             }
-            LspRequestKind::CodeAction => self.apply_code_action_response(&result),
+            LspRequestKind::CodeAction => self.apply_code_action_response(&result, edit_snapshot),
             LspRequestKind::SignatureHelp => self.apply_signature_help_response(&result),
             LspRequestKind::WorkspaceSymbol => {
                 self.apply_workspace_symbols_response(&result);
@@ -181,7 +195,7 @@ impl Model {
                     self.status = "lsp: no formatting path".to_owned();
                     return;
                 };
-                self.apply_formatting_response(&result, &path);
+                self.apply_formatting_response(&result, &path, edit_snapshot);
             }
             LspRequestKind::DocumentSymbol => self.apply_document_symbols_response(&result),
         }

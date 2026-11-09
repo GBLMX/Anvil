@@ -9,7 +9,8 @@ use super::{
 use crate::{lsp, lsp_worker};
 use anvil_core::TextBuffer;
 use anvil_session::ui::InputMode;
-use std::path::Path;
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 
 mod responses;
 mod settings;
@@ -155,16 +156,23 @@ impl Model {
         };
         let id = self.next_lsp_request;
         self.next_lsp_request += 1;
+        if self.active_lsp_worker().is_none() {
+            self.status = "E: lsp is not running".to_owned();
+            self.dirty = true;
+            return false;
+        }
+        let text = self.editor.text().slice(0..self.editor.text().len_bytes());
+        if let Err(error) = self.sync_lsp_document(&path, text) {
+            self.status = format!("E: lsp request: {error}");
+            self.dirty = true;
+            return false;
+        }
         let Some(worker) = self.active_lsp_worker() else {
             self.status = "E: lsp is not running".to_owned();
             self.dirty = true;
             return false;
         };
-        let text = self.editor.text().slice(0..self.editor.text().len_bytes());
-        if let Err(error) = worker
-            .sync(&path, text)
-            .and_then(|()| worker.request(id, method, params))
-        {
+        if let Err(error) = worker.request(id, method, params) {
             self.status = format!("E: lsp request: {error}");
             self.dirty = true;
             return false;
@@ -186,8 +194,49 @@ impl Model {
             self.pending_edit_revision
                 .insert(id, self.editor.revision());
             self.pending_edit_path.insert(id, path);
+            self.pending_edit_snapshot
+                .insert(id, self.buffer_revisions());
         }
         true
+    }
+
+    pub(crate) fn sync_lsp_document(&mut self, path: &Path, text: String) -> Result<(), String> {
+        let Some(worker) = self.active_lsp_worker() else {
+            return Err("lsp is not running".to_owned());
+        };
+        worker.sync(path, text)?;
+        self.record_lsp_version(path);
+        Ok(())
+    }
+
+    fn record_lsp_version(&mut self, path: &Path) {
+        if let Some(version) = self.lsp_versions.get_mut(path) {
+            *version += 1;
+        } else {
+            self.lsp_versions.insert(path.to_path_buf(), 1);
+        }
+    }
+
+    pub(crate) fn buffer_revisions(&self) -> HashMap<PathBuf, u64> {
+        let mut revisions = HashMap::new();
+        if let Some(path) = &self.path {
+            revisions.insert(path.clone(), self.editor.revision());
+        }
+        for buffer in &self.buffers {
+            if let Some(path) = &buffer.path {
+                revisions
+                    .entry(path.clone())
+                    .or_insert_with(|| buffer.editor.revision());
+            }
+        }
+        if let Some(pane) = &self.split
+            && let Some(path) = &pane.buffer.path
+        {
+            revisions
+                .entry(path.clone())
+                .or_insert_with(|| pane.buffer.editor.revision());
+        }
+        revisions
     }
 
     pub(crate) fn jump_diagnostic(&mut self, forward: bool) {
@@ -262,10 +311,15 @@ impl Model {
     }
 
     pub(crate) fn notify_lsp_save(&mut self, path: &std::path::Path, text: &str) {
-        if let Some(key) = Self::lsp_key(path)
+        let sent = if let Some(key) = Self::lsp_key(path)
             && let Some(worker) = self.lsp_workers.get(&key)
         {
-            let _ = worker.save(path, text.to_owned());
+            worker.save(path, text.to_owned()).is_ok()
+        } else {
+            false
+        };
+        if sent {
+            self.record_lsp_version(path);
         }
     }
 
@@ -273,6 +327,7 @@ impl Model {
         self.pending_lsp.clear();
         self.pending_edit_revision.clear();
         self.pending_edit_path.clear();
+        self.pending_edit_snapshot.clear();
         self.signature_help = None;
         self.workspace_symbols = None;
         self.references = None;
@@ -327,6 +382,8 @@ impl Model {
         self.pending_edit_revision
             .retain(|id, _| pending.contains(id));
         self.pending_edit_path.retain(|id, _| pending.contains(id));
+        self.pending_edit_snapshot
+            .retain(|id, _| pending.contains(id));
     }
 
     pub(crate) fn cancel_completion(&mut self) {
@@ -992,7 +1049,11 @@ impl Model {
         self.dirty = true;
     }
 
-    fn apply_code_action_response(&mut self, result: &serde_json::Value) {
+    fn apply_code_action_response(
+        &mut self,
+        result: &serde_json::Value,
+        base: Option<HashMap<PathBuf, u64>>,
+    ) {
         if result.is_null() {
             self.status = "lsp: no code actions".to_owned();
             self.code_actions = None;
@@ -1012,7 +1073,9 @@ impl Model {
                     .and_then(serde_json::Value::as_str)
                     .map(ToOwned::to_owned);
                 let edit = match item.get("edit") {
-                    Some(edit) => match WorkspaceEdit::from_lsp(edit) {
+                    Some(edit) => match WorkspaceEdit::from_lsp(edit)
+                        .map(|edit| edit.with_base_revisions(base.clone()))
+                    {
                         Ok(edit) => Some(edit),
                         Err(error) => {
                             disabled = Some(format!("invalid edit: {error}"));

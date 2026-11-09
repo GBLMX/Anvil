@@ -31,9 +31,12 @@ incoming/outgoing calls (`gi`/`go`), folding ranges (`za`/`zM`/`zR`),
 semantic token colors,
 hover (`K`), rename (`Space r`), code actions/quick fixes (`Space a`),
 formatting (`Space F`), document symbols (`Space s`), signature help, and
-workspace symbols (`Space S`) use canonicalized LSP UTF-16 positions. Rename, code-action, and formatting edits go through a shared
-`WorkspaceEdit` engine; unopened files become background buffers, and `:wa`
-saves every modified buffer without silently writing files during an edit.
+workspace symbols (`Space S`) use canonicalized LSP UTF-16 positions. Rename,
+code-action, and formatting edits go through a shared `WorkspaceEdit` engine
+that checks document versions and request-time buffer revisions, applies
+`documentChanges` create/rename/delete operations, keeps unopened files as
+background buffers, and does not write files during an edit; `:wa` saves every
+modified buffer.
 Supported files start their language server automatically; each
 `(tool, language_id)` keeps its own worker while the session is open.
 Language servers are not bundled; install them on `PATH`.

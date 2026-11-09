@@ -72,8 +72,8 @@ Difficulty: L–XL. Main risk is data loss and schema migration.
 - References and document highlights.
 - Folding ranges.
 - Semantic tokens with theme-token mapping.
-- Code lens and call hierarchy where the server supports them.
-- Complete multi-file workspace edits with stale-revision rejection.
+- Code lens where the server supports it.
+- Multi-file workspace edits with stale-revision rejection are landed.
 
 Difficulty: M–XL. References/snippets/folding are medium; semantic tokens and
 multi-file edits are large.

@@ -1205,3 +1205,73 @@ fn disabled_inlay_hints_are_not_requested() {
     assert!(model.inlay_pending.is_none());
     assert!(model.inlay_hints.is_empty());
 }
+
+#[test]
+fn rename_response_rejects_a_stale_inactive_buffer_snapshot() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let first = dir.path().join("first.rs");
+    let second = dir.path().join("second.rs");
+    fs::write(&first, "first").expect("first");
+    fs::write(&second, "second").expect("second");
+    let mut model = Model::open(&first).expect("open first");
+    model.open_path(&second).expect("open second");
+    let second_path = model.path.clone().expect("second path");
+    model.switch_buffer(-1);
+    let mut base = HashMap::new();
+    let second_buffer = model
+        .buffers
+        .iter_mut()
+        .find(|buffer| buffer.path.as_ref() == Some(&second_path))
+        .expect("second buffer");
+    base.insert(second_path.clone(), second_buffer.editor.revision());
+    second_buffer.editor.insert(0, "stale");
+    model.pending_edit_snapshot.insert(17, base);
+    model.pending_lsp.insert(17, LspRequestKind::Rename);
+    let first_uri = lsp_worker::file_uri(&first);
+    model.handle_lsp_response(
+        17,
+        serde_json::json!({
+            "changes": {
+                first_uri: [{
+                    "range": {
+                        "start": {"line": 0, "character": 0},
+                        "end": {"line": 0, "character": 0}
+                    },
+                    "newText": "X"
+                }]
+            }
+        }),
+        None,
+    );
+    assert_eq!(model.editor.text().slice(0..5), "first");
+    assert!(model.status.contains("stale"));
+}
+
+#[test]
+fn rename_response_rejects_a_stale_document_version() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let file = dir.path().join("versioned.rs");
+    fs::write(&file, "abc").expect("file");
+    let mut model = Model::open(&file).expect("open");
+    let path = model.path.clone().expect("path");
+    model.lsp_versions.insert(path.clone(), 3);
+    model.pending_lsp.insert(18, LspRequestKind::Rename);
+    model.handle_lsp_response(
+        18,
+        serde_json::json!({
+            "documentChanges": [{
+                "textDocument": {"uri": lsp_worker::file_uri(&path), "version": 2},
+                "edits": [{
+                    "range": {
+                        "start": {"line": 0, "character": 0},
+                        "end": {"line": 0, "character": 3}
+                    },
+                    "newText": "changed"
+                }]
+            }]
+        }),
+        None,
+    );
+    assert_eq!(model.editor.text().slice(0..3), "abc");
+    assert!(model.status.contains("stale"));
+}
