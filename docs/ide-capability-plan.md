@@ -87,5 +87,7 @@ Not required for v1.
 - Read-only buffers never mutate on search/replace or LSP edits.
 - Large-file and binary preview paths stay bounded.
 - Session restore must never silently discard unsaved/modified buffers.
+- Code lens rows are capped per source line and viewport, truncate with a
+  visible marker, and never render on folded or hidden lines.
 - Every P0 item needs tests for failure, cancellation, and narrow terminal
   layouts where applicable.

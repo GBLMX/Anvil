@@ -79,6 +79,18 @@ Code lens is not an inline suffix or popup-only list. Viewport, gutter, cursor
 placement, mouse hit-testing, folding, and horizontal scroll must consume the
 same source-line-to-display-row map.
 
+Bounds are mandatory before implementation:
+
+- `MAX_CODE_LENS = 2048` parsed lenses per document.
+- `MAX_CODE_LENS_PER_LINE = 3` visible rows per source line, including the
+  `… +N lenses` truncation row.
+- `MAX_CODE_LENS_ROWS_PER_VIEWPORT = 32`, including any truncation row, and
+  never more than half the editor viewport height; overflow uses one visible
+  `… +N lenses` row.
+- Folded or hidden source lines never contribute lens rows.
+- Truncation is visible in the lens area, not silent; stale or malformed lens
+  responses are ignored.
+
 Difficulty: M–L. Completion mirrors/ranking are medium; code lens is
 medium-to-large because above-line rendering requires that display map.
 
