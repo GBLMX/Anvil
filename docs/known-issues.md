@@ -1,8 +1,8 @@
 # Known Issues and Resolved Bugs
 
-Status: BUG-001 through BUG-009 are resolved. This file is the regression
-ledger plus current cross-cutting limitations; active implementation work is in
-the plans linked below.
+Status: BUG-001 through BUG-009 are resolved; BUG-010 is open. This file is
+the regression ledger plus current cross-cutting limitations; active
+implementation work is in the plans linked below.
 
 ## Current limitations
 
@@ -17,6 +17,69 @@ the plans linked below.
 | Configuration | No unified config/theme/icon schema or hot-reload contract | [0.5.x](0.5.x-plan.md) |
 | LSP | Language servers are not bundled or lifecycle-managed | [INSTALL](../INSTALL.md) |
 | Release | Signing, SBOM, and provenance are still pending | [0.6.1](0.6.x-plan.md), [RELEASE](../RELEASE.md) |
+| Syntax highlighting | Background tabs can lose cached spans after idle; open-buffer cache ownership and refresh are under review | [BUG-010](#bug-010-background-tabs-lose-syntax-highlighting-after-idle) |
+
+## Active bugs
+
+### BUG-010: Background tabs lose syntax highlighting after idle
+
+- Area: TUI buffer switching and Tree-sitter syntax cache
+- Priority: High
+- Status: Open; recorded 2026-11-09.
+- Reproduction:
+  1. Open five or six source files in separate tabs.
+  2. Leave most tabs in the background for several minutes.
+  3. Switch back through the tabs.
+- Actual: a background tab can return as plain text with no syntax colors.
+- Expected: every open buffer restores its last highlights immediately; no
+  blank/plain-text frame while a background parse is pending.
+- Current evidence:
+  - `SyntaxCacheStore` is keyed by `PathBuf`, not by buffer identity, with
+    `CACHE_LIMIT = 32` (`crates/anvil-tui/src/syntax.rs`). Five or six tabs are
+    below that limit, so LRU capacity alone does not explain the reported loss;
+    another invalidation/race path must be tested.
+  - `Buffer` stores editor/cursor/search state but no syntax spans
+    (`crates/anvil-tui/src/lib.rs`, `Buffer`). `load_buffer` only calls
+    `switch_path` (`crates/anvil-tui/src/buffer.rs`).
+  - `SyntaxState` keeps one active `cache` plus the path-keyed store; parse
+    results are applied only when `result.path` still matches the active path
+    (`crates/anvil-tui/src/syntax.rs`). A parse that finishes after a switch is
+    discarded, leaving the stored entry possibly pre-parse.
+  - `poll_syntax` runs only for the active buffer, and there is no background
+    syntax refresh queue for inactive tabs.
+  - External reload/save invalidation removes the active path cache
+    (`invalidate`); this can discard a background tab's last known spans.
+- Proposed fix:
+  1. Decide cache ownership explicitly: per-buffer `SyntaxCache` state, or a
+     path-keyed store with a buffer identity plus “never evict open buffers”
+     policy. Do not rely on a global 32-entry LRU for open tabs.
+  2. Retain the last good spans for every open buffer; an inactive tab must not
+     lose them merely because it is not active or because a new parse is
+     pending.
+  3. On `load_buffer`, reuse the retained spans; if missing or stale, request a
+     parse immediately and keep the previous spans (or a neutral placeholder)
+     until the worker returns. No blank/plain-text flash.
+  4. For external-file or configuration changes, mark inactive buffers stale
+     and either queue a bounded background refresh or refresh lazily on
+     activation while retaining old spans. The memory/queue bound must be
+     explicit.
+- Acceptance:
+  - Open 5–6 source files, leave them backgrounded for five minutes, then
+    switch repeatedly; every tab restores highlights without a plain-text
+    flash.
+  - A parse that completes after a buffer switch is applied to that buffer, not
+    discarded and not applied to the wrong buffer/path.
+  - Reopening/activating a buffer with no cache triggers a parse request; the
+    frame is not blank while it runs.
+  - External reload and save invalidation do not leave an open tab permanently
+    unhighlighted.
+  - Tests cover LRU pressure, switch-before-parse-result, stale-cache
+    invalidation, and retained-span rendering.
+- Verification:
+  - Add a regression test that fills more than `CACHE_LIMIT` background entries
+    while open buffers must retain their spans.
+  - Add a switch/parse race test with a controllable worker response.
+  - Run the full TUI test suite and a real multi-tab TUI smoke.
 
 ## Resolved bug ledger
 

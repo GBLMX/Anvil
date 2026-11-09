@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import fcntl
 import os
 import pty
@@ -90,10 +91,8 @@ def run(binary: Path, workspace: Path, timeout: float) -> int:
             )
         return process.returncode
     finally:
-        try:
+        with contextlib.suppress(OSError):
             os.close(master)
-        except OSError:
-            pass
 
 
 def main() -> int:
