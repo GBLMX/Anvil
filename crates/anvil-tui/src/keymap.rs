@@ -46,6 +46,7 @@ pub(crate) enum NormalCommand {
     MoveWords(WordMotion),
     MoveChars(isize),
     MoveLine(isize),
+    MoveFileEnd,
 }
 
 impl NormalCommand {
@@ -85,6 +86,7 @@ impl NormalCommand {
             MoveLine(1) => Some(command::CURSOR_DOWN),
             MoveLine(-1) => Some(command::CURSOR_UP),
             MoveLine(_) => None,
+            MoveFileEnd => Some(command::CURSOR_FILE_END),
             Pending(_) | RegisterWait | Count(_) => None,
         }
     }
@@ -122,6 +124,7 @@ impl NormalCommand {
             "cursor.right" => Self::MoveChars(1),
             "cursor.down" => Self::MoveLine(1),
             "cursor.up" => Self::MoveLine(-1),
+            "cursor.file_end" => Self::MoveFileEnd,
             _ => return None,
         })
     }
@@ -147,6 +150,7 @@ pub(crate) fn normal_action(key: KeyPress, count: usize) -> Option<NormalCommand
             Some(NormalCommand::ExtendLine(true))
         }
         KeyCode::Char('C') if text_input => Some(NormalCommand::ExtendLine(false)),
+        KeyCode::Char('G') if text_input => Some(NormalCommand::MoveFileEnd),
         KeyCode::Char('i') if text_input => Some(NormalCommand::InsertHere),
         KeyCode::Char(':') if text_input => Some(NormalCommand::CommandLine),
         KeyCode::Char('/') if text_input => Some(NormalCommand::Search),
@@ -1052,6 +1056,14 @@ mod tests {
         assert_eq!(
             normal_action(key(KeyCode::Char('0'), KeyModifiers::NONE), 2),
             Some(NormalCommand::Count('0'))
+        );
+    }
+
+    #[test]
+    fn shift_g_resolves_to_file_end() {
+        assert_eq!(
+            normal_action(key(KeyCode::Char('G'), KeyModifiers::SHIFT), 0),
+            Some(NormalCommand::MoveFileEnd)
         );
     }
 

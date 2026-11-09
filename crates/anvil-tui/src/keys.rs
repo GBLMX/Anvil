@@ -268,6 +268,7 @@ fn execute_normal_command(model: &mut Model, command: NormalCommand) {
         NormalCommand::MoveWords(motion) => model.move_words(motion),
         NormalCommand::MoveChars(delta) => model.move_chars(delta),
         NormalCommand::MoveLine(delta) => model.move_lines(delta),
+        NormalCommand::MoveFileEnd => model.move_file_end(),
     }
 }
 

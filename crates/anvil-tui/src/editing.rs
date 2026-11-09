@@ -531,6 +531,31 @@ impl Model {
         self.dirty = true;
     }
 
+    pub(crate) fn move_file_end(&mut self) {
+        let count = self.count;
+        let _ = self.take_count();
+        let mut last_line = self.editor.index().len_lines().saturating_sub(1);
+        let text_len = self.editor.text().len_bytes();
+        if last_line > 0 && text_len > 0 && self.editor.text().slice(text_len - 1..text_len) == "\n"
+        {
+            last_line -= 1;
+        }
+        let line = if count == 0 {
+            last_line
+        } else {
+            (count - 1).min(last_line)
+        };
+        let Some(offset) =
+            self.editor
+                .index()
+                .offset_at_display_column(self.editor.text(), line, 0)
+        else {
+            return;
+        };
+        self.set_caret(offset);
+        self.dirty = true;
+    }
+
     pub(crate) fn move_chars(&mut self, delta: isize) {
         let count = self.take_count();
         for _ in 0..count {

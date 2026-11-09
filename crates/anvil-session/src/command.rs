@@ -59,6 +59,7 @@ pub const CURSOR_LEFT: CommandId = CommandId::new("cursor.left");
 pub const CURSOR_RIGHT: CommandId = CommandId::new("cursor.right");
 pub const CURSOR_DOWN: CommandId = CommandId::new("cursor.down");
 pub const CURSOR_UP: CommandId = CommandId::new("cursor.up");
+pub const CURSOR_FILE_END: CommandId = CommandId::new("cursor.file_end");
 
 pub const CHANGE_INNER_WORD: CommandId = CommandId::new("editor.change_inner_word");
 pub const CHANGE_INNER_QUOTE: CommandId = CommandId::new("editor.change_inner_quote");
@@ -129,6 +130,7 @@ pub const COMMANDS: &[CommandSpec] = &[
     spec(CURSOR_RIGHT, NORMAL),
     spec(CURSOR_DOWN, NORMAL),
     spec(CURSOR_UP, NORMAL),
+    spec(CURSOR_FILE_END, NORMAL),
     spec(CHANGE_INNER_WORD, PENDING),
     spec(CHANGE_INNER_QUOTE, PENDING),
     spec(DEFINITION, PENDING),

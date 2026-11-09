@@ -14,7 +14,8 @@ includes insert
 mode (`i`/`a`/`A`/`o`/`O`), multi-cursor selection (`s`/`Alt-s`/`C`),
 `:w`/`:wa`/`:wq`/`:w file`/`:q!`, an unsaved-change guard, undo/redo,
 `x`/`dd`/`yy`/`p`, `w`/`b`/`e` word motions with
-`dw`/`db`/`de`/`yw`/`yb`/`ye`, literal `:s`/`:%s` substitution, `/` search
+`dw`/`db`/`de`/`yw`/`yb`/`ye`, `G` to the last line, literal `:s`/`:%s`
+substitution, `/` search
 with `n`/`N`, multi-buffer switching, vertical splits with independent pane cursors,
 horizontal scrolling, and dirty-only redraws, insert-mode Tab indentation, a workspace file tree, and a fuzzy file
 finder. Rust, TOML, Go, Bash, Python, YAML, JSON/JSONC, Markdown, Makefile,

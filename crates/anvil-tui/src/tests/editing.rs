@@ -328,6 +328,27 @@ fn dd_deletes_current_line_and_keeps_line_start() {
 }
 
 #[test]
+fn shift_g_moves_to_last_line_and_honors_count() {
+    let mut model = Model::new(EditorState::from_text("alpha\nbeta\ngamma"), None);
+    handle_event(&mut model, shift(KeyCode::Char('G')));
+    assert_eq!(model.cursor, 11);
+
+    handle_event(&mut model, key(KeyCode::Char('2')));
+    handle_event(&mut model, shift(KeyCode::Char('G')));
+    assert_eq!(model.cursor, 6);
+
+    handle_event(&mut model, shift(KeyCode::Char('G')));
+    assert_eq!(model.cursor, 11);
+}
+
+#[test]
+fn shift_g_ignores_trailing_newline() {
+    let mut model = Model::new(EditorState::from_text("alpha\nbeta\ngamma\n"), None);
+    handle_event(&mut model, shift(KeyCode::Char('G')));
+    assert_eq!(model.cursor, 11);
+}
+
+#[test]
 fn yy_and_p_use_the_unnamed_register() {
     let mut model = Model::new(EditorState::from_text("a\nb"), None);
     model.move_line(1);

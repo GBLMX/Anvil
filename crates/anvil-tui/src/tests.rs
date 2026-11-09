@@ -17,6 +17,10 @@ fn key(code: KeyCode) -> Event {
     Event::Key(KeyEvent::new(code, KeyModifiers::NONE))
 }
 
+fn shift(code: KeyCode) -> Event {
+    Event::Key(KeyEvent::new(code, KeyModifiers::SHIFT))
+}
+
 fn ctrl(code: KeyCode) -> Event {
     Event::Key(KeyEvent::new(code, KeyModifiers::CONTROL))
 }
