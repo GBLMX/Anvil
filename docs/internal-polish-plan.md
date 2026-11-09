@@ -68,15 +68,14 @@ Difficulty: L–XL. Main risk is data loss and schema migration.
 
 ### 3.3 LSP depth
 
-- `completionItem/resolve`, snippets, placeholders, documentation, ranking.
-- References and document highlights.
-- Folding ranges.
-- Semantic tokens with theme-token mapping.
+- Completion snippet mirrors and ranking.
 - Code lens where the server supports it.
+- References, document highlights, folding ranges, and semantic tokens are
+  landed.
 - Multi-file workspace edits with stale-revision rejection are landed.
 
-Difficulty: M–XL. References/snippets/folding are medium; semantic tokens and
-multi-file edits are large.
+Difficulty: M–L. Completion mirrors/ranking are medium; code lens is
+medium-to-large because standard inline rendering needs a display map.
 
 ### 3.4 Git
 
@@ -141,12 +140,12 @@ These remain documented, but they do not block internal polish.
 
 ## 6. Suggested internal order
 
-1. Settings registry and references/document highlights.
-2. Auto-save, swap, and folding ranges.
+1. LSP completion snippet mirrors and ranking.
+2. LSP code lens.
 3. Session restore and crash backup.
 4. Persistent undo decision and implementation.
-5. Semantic tokens and complete workspace edits.
-6. Git diff/hunk/blame/conflict.
+5. Git diff/hunk/blame/conflict.
+6. Auto-save, swap, and external-conflict resolution.
 7. P1 adapters only after P0 dogfood.
 
 ## 7. Exit gates

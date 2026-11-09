@@ -46,10 +46,9 @@ Version is frozen at **0.6.0** for long-term internal feature polish.
 
 ## Next (internal polish)
 
-1. Settings registry and overlay foundations.
-2. Session restore, crash backup, and persistent undo decision.
-3. LSP depth: completion resolve/snippets, references, folding, semantic
-   tokens, and code lens.
+1. LSP completion snippet mirrors and ranking.
+2. LSP code lens.
+3. Session restore, crash backup, and persistent undo decision.
 4. Git diff/hunk/blame/conflict surfaces.
 5. Auto-save, swap files, and external-conflict resolution.
 6. Multi-file/project search and replace.
