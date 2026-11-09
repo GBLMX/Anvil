@@ -424,23 +424,44 @@ fn uri_path(uri: &str) -> Result<PathBuf, String> {
     lsp::uri_to_path(uri).ok_or_else(|| format!("invalid workspace URI: {uri}"))
 }
 
-fn path_exists(model: &mut Model, path: &Path) -> Result<bool, String> {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PathKind {
+    Missing,
+    File,
+    Directory,
+    Other,
+}
+
+fn path_kind(model: &mut Model, path: &Path) -> Result<PathKind, String> {
     if !model.require_gateway {
-        return Ok(path.exists());
+        return match std::fs::symlink_metadata(path) {
+            Ok(metadata) if metadata.is_dir() => Ok(PathKind::Directory),
+            Ok(metadata) if metadata.is_file() => Ok(PathKind::File),
+            Ok(_) => Ok(PathKind::Other),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(PathKind::Missing),
+            Err(error) => Err(error.to_string()),
+        };
     }
     let relative = model.relative_path(path)?;
     let gateway = model
         .gateway
         .as_mut()
         .ok_or_else(|| "gateway unavailable".to_owned())?;
-    Ok(gateway.file_size(&relative).is_ok())
+    if gateway.read_dir(&relative).is_ok() {
+        return Ok(PathKind::Directory);
+    }
+    if gateway.file_size(&relative).is_ok() {
+        return Ok(PathKind::File);
+    }
+    Ok(PathKind::Missing)
+}
+
+fn path_exists(model: &mut Model, path: &Path) -> Result<bool, String> {
+    Ok(path_kind(model, path)? != PathKind::Missing)
 }
 
 fn is_directory(model: &mut Model, path: &Path) -> bool {
-    if model.require_gateway {
-        return false;
-    }
-    path.is_dir()
+    matches!(path_kind(model, path), Ok(PathKind::Directory))
 }
 
 fn virtual_exists(
@@ -909,5 +930,72 @@ mod tests {
         .expect("parse");
         assert!(workspace_edit.apply(&mut model).is_err());
         assert!(path.exists());
+    }
+
+    #[test]
+    #[ignore = "requires anvil-gateway"]
+    fn applies_directory_resources_through_gateway() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let workspace = dir.path().canonicalize().expect("canonical");
+        let old = workspace.join("old");
+        let renamed = workspace.join("renamed");
+        let created = workspace.join("created.txt");
+        let moved = workspace.join("moved.txt");
+        fs::create_dir(&old).expect("old dir");
+        fs::write(old.join("file.txt"), "content").expect("nested file");
+        let (session, gateway, _lsp) =
+            crate::gateway::GatewaySession::start(&workspace).expect("gateway");
+        let mut model = Model::with_gateway(gateway, workspace.clone());
+        model.require_gateway = true;
+
+        let create = WorkspaceEdit::from_lsp(&serde_json::json!({
+            "documentChanges": [{"kind": "create", "uri": uri(&created)}]
+        }))
+        .expect("parse create");
+        create.apply(&mut model).expect("create file");
+        assert!(created.exists());
+
+        let file_rename = WorkspaceEdit::from_lsp(&serde_json::json!({
+            "documentChanges": [{
+                "kind": "rename",
+                "oldUri": uri(&created),
+                "newUri": uri(&moved)
+            }]
+        }))
+        .expect("parse file rename");
+        file_rename.apply(&mut model).expect("rename file");
+        assert!(!created.exists());
+        assert!(moved.exists());
+
+        let file_delete = WorkspaceEdit::from_lsp(&serde_json::json!({
+            "documentChanges": [{"kind": "delete", "uri": uri(&moved)}]
+        }))
+        .expect("parse file delete");
+        file_delete.apply(&mut model).expect("delete file");
+        assert!(!moved.exists());
+
+        let rename = WorkspaceEdit::from_lsp(&serde_json::json!({
+            "documentChanges": [{
+                "kind": "rename",
+                "oldUri": uri(&old),
+                "newUri": uri(&renamed)
+            }]
+        }))
+        .expect("parse rename");
+        rename.apply(&mut model).expect("rename directory");
+        assert!(!old.exists());
+        assert!(renamed.join("file.txt").exists());
+
+        let delete = WorkspaceEdit::from_lsp(&serde_json::json!({
+            "documentChanges": [{
+                "kind": "delete",
+                "uri": uri(&renamed),
+                "options": {"recursive": true}
+            }]
+        }))
+        .expect("parse delete");
+        delete.apply(&mut model).expect("delete directory");
+        assert!(!renamed.exists());
+        drop(session);
     }
 }
