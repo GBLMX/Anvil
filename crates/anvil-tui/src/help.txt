@@ -75,6 +75,7 @@ Normal mode
   :cq                 quit with exit status 1
   :tree               toggle the workspace file tree
   :reconnect          restart the gateway and re-handshake
+  :git-blame          show blame for the current file
   :lsp-start          ensure the detected language server is active
   :lsp-stop           stop the active language server
   :format              format the current document

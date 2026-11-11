@@ -113,6 +113,9 @@ impl Model {
                 FileEvent::GitApplied { generation, result } => {
                     self.handle_git_applied(generation, result)
                 }
+                FileEvent::GitBlameText { generation, result } => {
+                    self.handle_git_blame_text(generation, result)
+                }
                 FileEvent::Transferred {
                     from,
                     to,

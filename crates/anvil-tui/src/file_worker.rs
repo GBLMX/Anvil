@@ -52,6 +52,8 @@ pub enum FileRequest {
         reverse: bool,
         generation: u64,
     },
+    /// Read a bounded blame view for one workspace-relative file.
+    GitBlameText { relative: String, generation: u64 },
     /// Move or copy one workspace entry.
     Transfer {
         from: PathBuf,
@@ -101,6 +103,11 @@ pub enum FileEvent {
     GitApplied {
         generation: u64,
         result: Result<(), String>,
+    },
+    /// Bounded blame text and whether it was truncated.
+    GitBlameText {
+        generation: u64,
+        result: Result<(String, bool), String>,
     },
     /// A move or copy completed.
     Transferred {
@@ -264,6 +271,13 @@ impl FileWorker {
                             } => FileEvent::GitApplied {
                                 generation,
                                 result: apply_git_hunk(&mut client, &patch, reverse),
+                            },
+                            FileRequest::GitBlameText {
+                                relative,
+                                generation,
+                            } => FileEvent::GitBlameText {
+                                generation,
+                                result: git_blame_text(&mut client, &relative),
                             },
                             FileRequest::Transfer { from, to, copy } => {
                                 let result = if copy {
@@ -654,6 +668,42 @@ fn git_diff_text(
     }
     if text.is_empty() {
         text.push_str("no changes relative to HEAD\n");
+    }
+    Ok((text, truncated))
+}
+
+fn git_blame_text(client: &mut GatewayClient, relative: &str) -> Result<(String, bool), String> {
+    let result = client
+        .exec(
+            &git_tool(),
+            &[
+                "--no-pager".to_owned(),
+                "blame".to_owned(),
+                "--date=short".to_owned(),
+                "--".to_owned(),
+                relative.to_owned(),
+            ],
+            5000,
+        )
+        .map_err(|error| error.to_string())?;
+    if result.timed_out {
+        return Err("git blame timed out".to_owned());
+    }
+    if result.exit_code != 0 {
+        return Err(result.stderr);
+    }
+    let mut text = result.stdout;
+    let mut truncated = result.output_truncated;
+    if text.len() > MAX_GIT_DIFF_BYTES {
+        let mut end = MAX_GIT_DIFF_BYTES;
+        while !text.is_char_boundary(end) {
+            end -= 1;
+        }
+        text.truncate(end);
+        truncated = true;
+    }
+    if text.is_empty() {
+        text.push_str("no blame data\n");
     }
     Ok((text, truncated))
 }

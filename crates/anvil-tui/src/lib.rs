@@ -568,6 +568,10 @@ pub struct Model {
     git_apply_generation: u64,
     /// Pending hunk-apply generation, if a request is in flight.
     git_apply_pending: Option<u64>,
+    /// Latest requested Git blame generation.
+    git_blame_generation: u64,
+    /// Pending Git blame generation, if a request is in flight.
+    git_blame_pending: Option<u64>,
     /// LSP folding ranges for the active buffer.
     folds: Vec<FoldRange>,
     /// Start lines of closed folds.
@@ -739,6 +743,8 @@ impl Model {
             git_diff_view: None,
             git_apply_generation: 0,
             git_apply_pending: None,
+            git_blame_generation: 0,
+            git_blame_pending: None,
             folds: Vec::new(),
             folded: HashSet::new(),
             fold_revision: None,
@@ -1018,6 +1024,7 @@ impl Model {
         self.git_diff_view = None;
         self.git_diff_pending = None;
         self.git_apply_pending = None;
+        self.git_blame_pending = None;
         let syntax = saved.syntax.clone();
         self.editor = saved.editor;
         self.path = saved.path;

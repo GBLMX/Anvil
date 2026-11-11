@@ -277,6 +277,76 @@ impl Model {
     }
 }
 
+impl Model {
+    pub(crate) fn request_git_blame(&mut self) {
+        if self.help_back.is_some() {
+            self.status = "already viewing a read-only view".to_owned();
+            self.dirty = true;
+            return;
+        }
+        let Some(path) = self.path.clone() else {
+            self.status = "E: no file name".to_owned();
+            self.dirty = true;
+            return;
+        };
+        let relative = match self.relative_path(&path) {
+            Ok(relative) => relative,
+            Err(error) => {
+                self.status = format!("E: {error}");
+                self.dirty = true;
+                return;
+            }
+        };
+        let Some(worker) = self.file_worker.as_ref() else {
+            self.status = "E: file worker unavailable".to_owned();
+            self.dirty = true;
+            return;
+        };
+        self.git_blame_generation = self.git_blame_generation.wrapping_add(1);
+        let generation = self.git_blame_generation;
+        if let Err(error) = worker.request(FileRequest::GitBlameText {
+            relative,
+            generation,
+        }) {
+            self.status = format!("E: git blame: {error}");
+            self.dirty = true;
+            return;
+        }
+        self.git_blame_pending = Some(generation);
+        self.status = "loading git blame...".to_owned();
+        self.dirty = true;
+    }
+
+    pub(crate) fn handle_git_blame_text(
+        &mut self,
+        generation: u64,
+        result: Result<(String, bool), String>,
+    ) {
+        if self.git_blame_pending != Some(generation) {
+            return;
+        }
+        self.git_blame_pending = None;
+        match result {
+            Ok((text, truncated)) => {
+                let title = if truncated {
+                    "Git blame (truncated): :q returns"
+                } else {
+                    "Git blame: :q returns"
+                };
+                let body = if truncated {
+                    format!("Git blame (truncated)\n\n{text}")
+                } else {
+                    format!("Git blame\n\n{text}")
+                };
+                self.show_read_only(&body, title, "Git blame");
+            }
+            Err(error) => {
+                self.status = format!("E: git blame: {error}");
+                self.dirty = true;
+            }
+        }
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;

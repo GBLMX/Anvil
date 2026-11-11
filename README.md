@@ -17,7 +17,7 @@ mode (`i`/`a`/`A`/`o`/`O`), multi-cursor selection (`s`/`Alt-s`/`C`),
 `dw`/`db`/`de`/`yw`/`yb`/`ye`, `G` to the last line, literal `:s`/`:%s`
 substitution, `/` search
 with `n`/`N`, multi-buffer switching, vertical splits with independent pane cursors,
-read-only `:git-diff` views with hunk staging, workspace session restore,
+read-only `:git-diff` views with hunk staging and `:git-blame`, workspace session restore,
 dirty-buffer swap conflict commands, and a fresh
 undo stack after restore, horizontal scrolling, and dirty-only redraws,
 insert-mode Tab indentation, a workspace file tree, and a fuzzy file

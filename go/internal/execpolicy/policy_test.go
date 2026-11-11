@@ -89,3 +89,17 @@ func TestRejectsUnknownTool(t *testing.T) {
 		t.Fatalf("got %v", err)
 	}
 }
+
+func TestValidatesGitBlame(t *testing.T) {
+	if err := Validate("/usr/bin/git", []string{"--no-pager", "blame", "--date=short", "--", "src/main.go"}); err != nil {
+		t.Fatalf("git blame: %v", err)
+	}
+	for _, args := range [][]string{
+		{"--no-pager", "blame", "../secret"},
+		{"--no-pager", "blame", "--date=short", "--", "/etc/passwd"},
+	} {
+		if err := Validate("/usr/bin/git", args); !errors.Is(err, ErrInvalidArgs) {
+			t.Fatalf("git blame %v: got %v", args, err)
+		}
+	}
+}

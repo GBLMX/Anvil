@@ -55,6 +55,9 @@ post-`0.5.0` feature line.
   split ratio, and open split panes with focus; dirty buffers use atomic 0600
   swap files with mtime conflict detection, periodic snapshots, and preserved
   conflict swaps until resolved.
+- `:git-blame` opens a bounded read-only blame view. Index-mutating
+  `git apply --cached` is restricted to the editor connection; plugin
+  connections are denied even with `sys.exec`.
 - Restored buffers start with a fresh undo stack; offset-based edit records are
   not serialized, while exact buffer or swap text is preserved.
 - External-file swap conflicts are resolved explicitly with

@@ -134,6 +134,9 @@ func validateGit(args []string) error {
 	if len(args) > 1 && args[1] == "apply" {
 		return validateGitApply(args)
 	}
+	if len(args) > 1 && args[1] == "blame" {
+		return validateGitBlame(args)
+	}
 	if len(args) == 10 && args[1] == "diff" && args[2] == "--cached" {
 		normalized := make([]string, 0, len(args)-1)
 		normalized = append(normalized, args[:2]...)
@@ -162,6 +165,19 @@ func validateGitApply(args []string) error {
 		args[2] != "--cached" || args[3] != "--whitespace=nowarn" ||
 		args[len(args)-2] != "--" || args[len(args)-1] != ".anvil-tmp/git-hunk.patch" {
 		return fmt.Errorf("%w: unsupported git apply", ErrInvalidArgs)
+	}
+	return nil
+}
+
+func validateGitBlame(args []string) error {
+	if len(args) != 5 || args[0] != "--no-pager" || args[1] != "blame" ||
+		args[2] != "--date=short" || args[3] != "--" {
+		return fmt.Errorf("%w: unsupported git blame", ErrInvalidArgs)
+	}
+	path := filepath.Clean(args[4])
+	if path == "" || path == "." || path == ".." || filepath.IsAbs(path) ||
+		strings.HasPrefix(path, ".."+string(filepath.Separator)) {
+		return fmt.Errorf("%w: invalid git path", ErrInvalidArgs)
 	}
 	return nil
 }
