@@ -2,258 +2,365 @@
 
 Status: 1a (`--editor`, `:cq`, sticky save failure), 1b (`anvil -`, stdin,
 `/dev/tty`, `--read-only`), 2 (single-instance control and `anvil-ctl`), and
-3 (stdin Locations panel) implemented. This plan covers Unix editor
-integration: `$EDITOR`, stdin pipelines, diagnostic-aware pipe mode, and
-single-instance remote control. It is separate from
-[small-features-plan.md](small-features-plan.md); these changes cross the CLI,
-terminal, workspace boundary, and IPC layers, so they are not small keymap
-additions.
+3 (stdin Locations panel) are implemented. The control plane is at protocol
+version 2, with a real-TUI CLI smoke harness.
 
-Verdict: the three issues are directionally correct, but the acceptance
-criteria need sharper contracts. In particular, `$EDITOR` cancellation is not
-the same as `:q!`, the existing gateway socket is not an editor control socket,
-and a pipe cannot be consumed while crossterm still reads terminal input from
-stdin.
+The remaining work is not another transport. It is contract hardening followed
+by a thin MCP adapter over the existing control socket. MCP must not read or
+write workspace files directly.
 
-## 1. Current facts
+## 1. Current contract
 
-- `anvil` currently accepts one optional `FILE`, `-w/--workspace`, `--`, help,
-  and version. There is no `--read-only`, `-`, stdin mode, or remote mode.
-- `Model::open_path` rejects files outside the workspace with
-  `path is outside workspace`.
-- `:wq` exits 0 on a successful save. `:q!` also exits 0. There is no `:cq`
-  or other explicit nonzero editor exit.
-- `:w` with no filename reports `E: no file name`; `:w path` already performs
-  save-as.
-- The only current read-only surface is the embedded help page
-  (`help_back`); there is no per-buffer read-only flag.
-- The terminal loop uses crossterm on stdin. If stdin is a pipe, normal event
-  reading no longer has a terminal input source.
-- `GatewaySession` creates a random per-session socket under the temp directory
-  such as `/tmp/anvil-tui-<pid>-<random>.sock`. It is a gateway handshake
-  channel, not a stable editor-control endpoint.
-- `anvil-ipc` already provides bounded, framed UDS transport and can be reused
-  for a new control protocol.
-- There is no compiler-log parser, location model, or clickable location panel.
+### 1.1 Editor CLI
 
-## 2. Issue 1: `$EDITOR` and stdin
+- `anvil [OPTIONS] [FILE|-]`
+- `--editor` treats the positional path as the file to edit and permits that
+  exact outside-workspace temporary path.
+- `anvil -`, or non-terminal stdin, creates a `[stdin]` buffer and reattaches
+  keyboard input to `/dev/tty`.
+- `--read-only` rejects buffer mutations.
+- `:cq` exits nonzero; a failed save in `--editor` mode stays sticky.
+- `:w path` is save-as. `:wq path` saves then quits.
+- stdin locations are a side list; `Alt-j` / `Alt-k` select and `Enter` opens.
+- `--editor` and stdin instances do not claim the control socket, so they can
+  run alongside the normal interactive instance.
 
-### 2.1 What already works
+### 1.2 Control socket
 
-- Anvil is a foreground TUI, so it already blocks the invoking process while it
-  is open.
-- A normal `:wq` save exits 0.
-- A startup error exits 1.
-- `git commit` normally passes `.git/COMMIT_EDITMSG`, which is inside the
-  repository workspace and already opens.
-- `:w path` already saves an unnamed buffer.
+```text
+$XDG_RUNTIME_DIR/anvil/control.sock
+$XDG_RUNTIME_DIR/anvil/control.lock
+```
 
-### 2.2 Blockers
+- Parent directory mode `0700`; socket and lock mode `0600`.
+- Same-UID peer verification via `SO_PEERCRED`.
+- Exclusive lock; a live socket is never unlinked.
+- Stale sockets are removed only after a liveness check fails.
+- One control socket per user runtime directory, one editor instance.
 
-1. **Exit code contract is incomplete.** `:q!` exits 0. Vim-style cancellation
-   with a nonzero status uses `:cq`, not `:q!`. Add `:cq` and define save
-   failure as nonzero. `:q!` stays 0 for intentional cancellation, but in
-   `--editor` mode a prior save failure remains sticky and makes the final
-   exit nonzero.
-2. **External temp files are rejected.** `crontab -e`, some `systemctl edit`
-   paths, and other tools use files outside the cwd workspace. Current
-   `open_path` rejects them.
-3. **stdin is not a file source.** The TUI reads events from stdin. A pipe
-   would be consumed by the editor loop or return EOF.
-4. **Read-only is help-only.** `--read-only` needs a per-buffer flag and
-   mutation guard.
-5. **Unnamed save is only a command hint.** `:w` already says “no file name”,
-   but `[stdin]`/`[Read-Only]` needs a visible status and a clear
-   `:w <path>` instruction.
+Wire methods, JSON-RPC over the existing bounded `anvil-ipc` framing:
 
-### 2.3 Proposed contract
+| Method | Params | Result |
+|---|---|---|
+| `control.status` | `{}` | version, workspace, file, dirty |
+| `control.open` | `path`, optional `line`, `column` | accepted status |
+| `control.save` | optional `path` | saved status |
+| `control.edit` | `mode` (`set`/`insert`), `text` | new revision/status |
+| `control.query` | `{}` | buffer, cursor, selection, tabs |
+| `control.exec` | `command` | editor status |
+| `control.quit` | optional `force` | accepted status |
+
+`control.exec` runs any Ex command Anvil supports through the editor state
+machine. It is not a remote shell: there is no `:!`, no process spawn, and no
+cross-user access. It can still reach package/plugin/theme commands, which is a
+policy gap described below.
+
+### 1.3 `anvil-ctl`
+
+```text
+anvil-ctl [--json] [--timeout-ms N] [--spawn] status
+anvil-ctl ... open <FILE> [+LINE[:COL]]
+anvil-ctl ... save [FILE]
+anvil-ctl ... edit set <TEXT>
+anvil-ctl ... edit insert <TEXT>
+anvil-ctl ... query
+anvil-ctl ... command <COMMAND>
+anvil-ctl ... exec <COMMAND>
+anvil-ctl ... quit [--force]
+```
+
+`--json` emits one object:
+
+```json
+{"ok":true,"command":"query","data":{}}
+{"ok":false,"error":{"exit_code":5,"kind":"rpc","message":"...","rpc_code":-32002}}
+```
 
 Exit codes:
 
 | Code | Meaning |
 |---|---|
-| 0 | successful `:wq`, clean `:q`, or intentional `:q!` with no prior save failure |
-| 1 | startup error, save failure, later quit after a save failure in `--editor` mode, or explicit `:cq` |
+| 0 | success |
+| 1 | local/internal error |
 | 2 | CLI usage error |
+| 3 | no running editor instance |
+| 4 | timeout |
+| 5 | editor RPC error |
 
-`$EDITOR` mode:
+Command arguments are validated before connecting, so a bad command never
+reports `no_instance` first. `--spawn` is opt-in and requires a terminal;
+headless callers receive a usage error instead of a background TUI.
 
-- Add `--editor` as an explicit mode that treats the single positional path as
-  the file to edit.
-- When `--editor` is used without `-w`, allow that exact canonical path even
-  when it is outside the current workspace. The workspace remains the cwd for
-  tree/fuzzy/LSP unless `-w` is supplied.
-- Do not silently widen the workspace to `/tmp` or `/`.
-- For temporary files, document `EDITOR='anvil --editor'`; if `$EDITOR` is just
-  `anvil`, keep the current workspace rule and fail with the explicit path
-  error rather than guessing.
-- `--editor` must not bypass file-type, size, UTF-8, or read-only checks.
+### 1.4 Verification surface
 
-stdin mode:
+`scripts/ctl-smoke.sh` drives a real TUI through `anvil-ctl` and asserts:
 
-- Accept `anvil -` explicitly and also detect non-terminal stdin.
-- Read stdin before entering the TUI, bounded by the existing open limit
-  (currently 64 MiB). Reject oversized or invalid UTF-8 input with a clear
-  status/error.
-- After reading, open `/dev/tty` for keyboard input and replace the event
-  source, or use an equivalent terminal-input abstraction. Do not read events
-  from the consumed pipe.
-- Require a terminal for stdout unless a future non-interactive output mode is
-  explicitly added.
-- Create an unnamed buffer with title `[stdin]`.
-- Default stdin buffer: editable, no path. `:w <path>` works; `:w` without a
-  path reports `E: no file name; use :w <path>`.
-- `--read-only` creates a read-only stdin buffer. `:w` and mutating commands
-  reject; decide explicitly whether `:w <path>` is allowed. Recommended:
-  allow `:w <path>` as the explicit copy-out path, reject same-buffer writes.
-- Show `[stdin]` and `[Read-Only]` in the buffer/status surface.
+- open, cursor placement, buffer text, revision;
+- `edit set`, undo, redo;
+- save and on-disk content;
+- `:git-diff`, `:git-hunk-next`, `:git-stage-hunk`, and the resulting Git index;
+- unsaved `quit` returns RPC exit 5;
+- `quit --force` succeeds;
+- session output exists.
 
-### 2.4 Tests
+Failure preserves the command transcript, stderr, gateway log, and captured
+terminal screen under `/tmp/anvil-ctl-smoke.*`.
 
-- PTY: `anvil --editor <temp-outside-workspace>`, edit, `:wq`, exit 0, content
-  persisted.
-- PTY: `:cq` exits 1 and does not claim success.
-- PTY: in `--editor` mode, a failed write sets a sticky failure; `:q!` does not
-  mask it and the process exits 1.
-- Pipe: `printf 'a\nb\n' | anvil -` with a PTY for stdout; buffer shows
-  `[stdin]`; `:w out.txt` writes.
-- Pipe with `--read-only`: edit commands reject, `:w out.txt` follows the
-  chosen contract.
-- Non-TTY stdout, unavailable `/dev/tty`, oversized stdin, invalid UTF-8, and
-  binary input all fail clearly without hanging.
-- `git commit` smoke with `EDITOR='anvil --editor'`.
+## 2. Known gaps
 
-## 3. Issue 2: single instance and `anvil-ctl`
+These are evidence-backed gaps between the current control plane and a safe MCP
+adapter.
 
-### 3.1 What can be reused
+### 2.1 Command policy is too broad
 
-- `anvil-ipc` framing, bounded frames, and UDS transport.
-- The editor event loop as the place where remote requests become model
-  actions.
-- Existing `open_path`, command execution, and status rendering.
+`control.exec` can run every editor Ex command, including:
 
-### 3.2 What cannot be reused directly
+- `:pkg install ...` / `:pkg install-file ...`
+- `:plugin-exec`, `:plugin-enable`, `:plugin-start`, `:plugin-stop`
+- `:theme`, `:theme-save`
 
-- The current gateway socket is random, per session, and authenticated for
-  gateway handshakes. It is not a stable editor control endpoint.
-- `anvil-session` owns host/plugin session state, not UI tabs and cursor
-  placement. The control server belongs in the TUI runtime or a small
-  `anvil-control` crate; it must not force UI dependencies into
-  `anvil-session`.
+Those are legitimate interactive commands, but they are not editor-navigation
+primitives. An MCP client should not be able to install packages or change
+persistent global configuration merely because it can edit a buffer.
 
-### 3.3 Proposed contract
+Decision needed: remote command capabilities. Recommended default:
 
-- New control protocol over UDS, reusing `anvil-ipc` framing.
-- Stable path: `$XDG_RUNTIME_DIR/anvil/control.sock`; fail clearly if the
-  runtime dir is unavailable. Parent directory mode `0700`, socket `0600`.
-- Verify peer UID with `SO_PEERCRED`; reject other users.
-- Use a lock file plus stale-socket cleanup; a connect failure must not unlink
-  a socket owned by a live process.
-- Methods:
-  - `ping`/`status`: version, workspace, active file, dirty state.
-  - `open {path, line?, column?}`: canonicalize, enforce the active workspace,
-    queue the open on the event loop, and jump to the clamped position.
-  - `exec {command}`: allowlist only internal editor commands; no `:!`, no
-    package install, no arbitrary shell. Start with `:format`, `:w`, `:wq`,
-    and `:q` only if their remote semantics are explicit.
-- Remote requests must never block rendering or file I/O; they enqueue work and
-  return an accepted/rejected response.
-- A second `anvil <file>` should open in the running instance by default only
-  when the target is inside that instance's workspace. Different workspaces
-  are rejected with a message, not silently switched.
-- `anvil-ctl open <file> +<line>[:<col>]`.
-- `anvil-ctl exec <command>`.
-- `anvil-ctl status`.
-- Ship `anvil-ctl` as a separate binary in the release layout and installer; it
-  must not require the TUI's full dependency graph.
-- `anvil-ctl` exits nonzero when no instance exists by default. Auto-spawn is
-  opt-in (`--spawn`) and must require a usable terminal; never spawn a TUI from
-  a headless pipe.
+- `read`: status, query, open;
+- `edit`: edit, save, buffer mutation, editor commands;
+- `git`: diff, hunk navigation, stage/unstage;
+- `admin`: package, plugin lifecycle, theme persistence, settings persistence.
 
-### 3.4 Tests
+MCP exposes only `read`, `edit`, and `git` by default. `admin` requires an
+explicit opt-in and must not be discoverable as a normal tool.
 
-- Same-UID client succeeds; different UID is rejected (where testable).
-- Socket 0600 and parent 0700.
-- Stale socket cleanup; live socket never removed.
-- Two concurrent starts acquire one instance and one control socket.
-- Remote open with line/column; folded line and out-of-range clamping.
-- Remote open outside workspace rejects.
-- `exec` allowlist rejects shell and package commands.
-- Remote request while a modal/dialog is open is queued or rejected
-  deterministically.
-- Server exit and client timeout return a clear nonzero status.
+### 2.2 Query returns the whole buffer
 
-## 4. Issue 3: diagnostic-aware pipe mode
+`control.query` returns buffer text up to `MAX_QUERY_TEXT` (256 KiB) in one
+response. That is acceptable for the CLI smoke test and normal source files,
+but it is a poor MCP contract:
 
-### 4.1 Contract
+- large buffers waste tokens and latency;
+- there is no way to request only the visible region or a line range;
+- the response does not expose a stable page cursor.
 
-- The raw stdin remains a text buffer. Parsed locations are a side list, not a
-  rewrite of the log text.
-- MVP UI: a bounded Locations panel below/above the log with keyboard selection
-  and Enter-to-open. Inline clickable text is a later optimization.
-- Mouse click on a visible location row follows the existing mouse hit-testing
-  rules.
-- Supported patterns initially:
-  - `path:line:column: message`
-  - `path:line: message` with column 1
-  - `--> path:line:column` (Rust style)
-  - `path(line,column): message` (clang/MSVC-like)
-- Strip ANSI CSI sequences before parsing. Do not strip ordinary brackets or
-  paths.
-- Resolve relative paths against the process cwd/workspace. Canonicalize before
-  opening.
-- Bound input and output:
-  - stdin cap: 256 MiB (the existing open limit);
-  - max parsed lines: 100,000;
-  - max locations: 10,000;
-  - max message display width per row, with truncation;
-  - no unbounded regex backtracking.
-- Existing files inside the workspace: open and clamp `line`/`column`.
-- Existing files outside the workspace: reject by default; future
-  `--allow-external` may open read-only.
-- Missing files: keep the log line as plain text; no error popup.
-- A malformed line is a normal log line, not a parser error.
+Add optional query bounds:
 
-### 4.2 Tests
+```json
+{"start_line":1,"end_line":200,"include_text":true}
+```
 
-- Parser unit tests for all supported formats, ANSI prefixes, spaces in paths,
-  relative paths, nonexistent paths, out-of-workspace paths, enormous lines,
-  and malformed input.
-- TUI test: pipe `src/main.rs:2:3: error`; Enter opens the file at the clamped
-  position.
-- Pipe with no locations: no panel, only `[stdin]`.
-- Duplicate locations are deduplicated or shown with a count; decide once.
-- Narrow-terminal rendering and mouse selection.
+The default stays compatible. The result must include total line count,
+returned range, and `text_truncated`.
 
-## 5. Order
+### 2.3 Editing is coarse
 
-1. `$EDITOR` exit-code contract and external-temp-file path.
-2. stdin read, `/dev/tty` input, unnamed buffer, `--read-only`.
-3. Diagnostic Locations panel on top of stdin mode.
-4. Single-instance control socket and `anvil-ctl`.
+`control.edit` supports only `set` (replace the whole buffer) and `insert` at
+the cursor. There is no surgical range replacement or deletion.
 
-Issue 2 can run in parallel with Issue 1 only if it has a separate owner and
-does not edit the terminal loop. Issue 3 depends on Issue 1b.
+Add a bounded, revision-guarded operation:
 
-## 6. Non-goals
+```json
+{
+  "mode": "replace",
+  "start": {"line": 12, "byte_column": 5},
+  "end": {"line": 12, "byte_column": 17},
+  "text": "new_name",
+  "expected_revision": 7
+}
+```
 
-- A general remote shell or arbitrary command execution.
+Rules:
+
+- one-based lines and byte columns within the line;
+- reject invalid UTF-8 boundaries;
+- reject stale `expected_revision`;
+- reject read-only buffers and help views;
+- apply as one editor transaction so undo is one step.
+
+Deletion is `replace` with empty text.
+
+### 2.4 Large payloads do not fit argv
+
+`anvil-ctl edit set <TEXT>` puts the payload in argv. The MCP adapter should use
+`anvil-control::Client` directly and send JSON over the socket, avoiding
+`ARG_MAX` and shell quoting. The CLI should still gain a stdin form for scripts:
+
+```text
+anvil-ctl edit set --stdin
+anvil-ctl edit insert --stdin
+```
+
+### 2.5 Protocol capabilities are not discoverable
+
+`PROTOCOL_VERSION` exists, but `control.status` does not return it, and there is
+no method/capability list. Add:
+
+```json
+{
+  "protocol_version": "2",
+  "capabilities": ["status", "open", "save", "edit.set", "edit.insert",
+                   "query", "exec", "quit"]
+}
+```
+
+This lets MCP fail clearly when an older editor is running instead of
+discovering missing methods through RPC errors.
+
+### 2.6 The smoke harness is not in CI
+
+`scripts/ctl-smoke.sh` is currently manual. It needs a Linux CI job that
+installs its runtime tools and runs it against the release or debug binary.
+Without that, the control contract can regress while unit tests stay green.
+
+Prerequisites to verify in CI: `tmux`, `python3`, `git`, a writable
+`XDG_RUNTIME_DIR`, and no pre-existing Anvil instance.
+
+## 3. Work plan
+
+### P0: contract hardening
+
+Do these before writing MCP.
+
+1. **Remote command policy**
+   - Define capability levels and a command allowlist.
+   - Reject `:pkg`, `:plugin-*`, `:theme*` from the default remote surface.
+   - Tests: admin commands return `POLICY_DENIED`; git/edit commands still work.
+   - Document that `command` is an editor command surface, not a shell.
+
+2. **Structured query bounds**
+   - Add `start_line`/`end_line`/`include_text` to `control.query`.
+   - Preserve the old response fields.
+   - Tests: out-of-range clamping, empty range, truncated text, invalid range.
+
+3. **Range replacement**
+   - Add `edit replace` with line/byte-column bounds and `expected_revision`.
+   - Tests: replace, delete, undo, stale revision, mid-codepoint rejection,
+     read-only rejection.
+
+4. **CLI stdin payloads**
+   - Add `--stdin` for `edit set` and `edit insert`.
+   - Tests: multiline text, empty text, invalid UTF-8, oversized payload.
+
+5. **Protocol discovery**
+   - Add `protocol_version` and `capabilities` to `control.status`.
+   - Bump `PROTOCOL_VERSION` if the wire shape changes.
+   - Update README and the CLI `status` tests.
+
+6. **CI smoke**
+   - Add a Linux job for `scripts/ctl-smoke.sh`.
+   - Keep failure artifacts available from CI.
+   - Do not make the job depend on a developer terminal or a real desktop.
+
+7. **Error and security regression tests**
+   - Usage error before connect: exit 2.
+   - Missing instance: exit 3.
+   - Timeout: exit 4.
+   - RPC error: exit 5.
+   - Socket/dir modes and peer mismatch behavior.
+   - Remote `open` outside workspace rejects.
+   - Remote save/open/edit rejects while a read-only view is active.
+
+### P1: thin MCP adapter
+
+Create one binary crate, `anvil-mcp`, with no TUI, session, gateway, or editor
+dependencies. It depends on `anvil-control` for the typed client and on JSON
+serialization only.
+
+Transport: MCP stdio, one request at a time. No network listener and no
+additional control protocol.
+
+Tools:
+
+| Tool | Backing call |
+|---|---|
+| `anvil_status` | `control.status` |
+| `anvil_open` | `control.open` |
+| `anvil_query` | bounded `control.query` |
+| `anvil_edit` | `control.edit` (`set`, `insert`, `replace`) |
+| `anvil_save` | `control.save` |
+| `anvil_command` | allowlisted `control.exec` |
+| `anvil_quit` | `control.quit` |
+
+Rules:
+
+- no direct filesystem reads or writes;
+- workspace path checks remain in the TUI actor;
+- all MCP results are structured JSON text, with `isError` on failure;
+- no `anvil_spawn`; if no instance exists, return the no-instance error;
+- no admin tools in the default tool list;
+- document that the MCP client runs with the user's authority.
+
+Acceptance:
+
+- an MCP client can initialize, list tools, open a file, query a range, edit,
+  save, run `:git-diff`, and quit;
+- an edit after a stale revision fails without changing the buffer;
+- no-instance, timeout, policy-denied, and RPC errors are distinguishable;
+- `scripts/ctl-smoke.sh` and an MCP transcript smoke both pass in CI.
+
+### P2: dogfood
+
+- Run the MCP adapter against a real external agent, not only a test client.
+- Record which tools the agent actually uses; remove unused tool surface.
+- Revisit multi-file replace only after measured demand.
+- Do not add session multiplexing, TCP, or cross-user control without a new
+  threat model.
+
+## 4. Order
+
+1. Remote command capability policy.
+2. Protocol discovery and structured query bounds.
+3. Range replacement and CLI stdin payloads.
+4. CI control-plane smoke.
+5. MCP adapter.
+6. External-agent dogfood.
+
+The order is intentional: MCP is a consumer of the control contract, not a
+reason to widen it. If the contract is still moving, MCP will encode the
+instability.
+
+## 5. Non-goals
+
+- A general remote shell or arbitrary process execution.
 - A second terminal input stack.
 - Remote control across users or machines.
 - Auto-spawning a TUI from a non-terminal process.
 - Editing files outside the workspace without an explicit flag and a documented
   trust decision.
+- Exposing package installation, plugin lifecycle, or persistent settings to
+  every control client.
 - Inline rich links in the raw log before the Locations panel exists.
 - Windows drive-letter parsing; Linux-first remains the contract.
 
-## 7. Acceptance corrections
+## 6. Verification
 
-These changes to the issue text are recommended:
+Every slice runs:
 
-- “Exit 1 on cancel” should be “`:cq` exits 1; `:q!` remains a successful
-  intentional exit unless a prior `--editor` save failure is sticky.”
-- “Reuse existing UDS” should be “reuse `anvil-ipc` framing; add a new editor
-  control socket.”
-- “stdin pipe” should explicitly include reopening `/dev/tty` for input.
-- “Clickable inline links” should start as a keyboard/mouse Locations panel.
-- “Auto-spawn” should be opt-in and terminal-only.
+```sh
+cargo test --workspace --no-fail-fast
+cargo clippy --workspace --all-targets -- -D warnings
+cargo fmt --all -- --check
+go test ./go/...
+go vet ./go/...
+scripts/ctl-smoke.sh
+```
+
+Changed control or MCP surfaces additionally require a real TUI smoke and, once
+the adapter exists, an MCP stdio transcript smoke. Changed distribution
+surfaces require the install-layout smoke.
+
+## 7. Design history
+
+The original plan treated the gateway socket as a reusable editor control
+endpoint, treated `$EDITOR` cancellation as synonymous with `:q!`, and assumed
+a pipe could be consumed while crossterm still read stdin. Those assumptions
+were wrong:
+
+- the gateway socket is per-session and authenticated for a different protocol;
+- `:cq` is the explicit nonzero editor exit;
+- stdin must be read before the TUI starts and keyboard input must be
+  reattached to `/dev/tty`.
+
+The implemented design keeps the gateway and control sockets separate, puts the
+control server in the TUI runtime, and routes every mutation through the actor.
+That separation is now a fixed boundary, not a future option.

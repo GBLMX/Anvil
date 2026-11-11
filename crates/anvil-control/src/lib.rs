@@ -492,7 +492,7 @@ impl Client {
         )
     }
 
-    /// Ask the running editor to execute an allowlisted command.
+    /// Execute an Ex command through the editor state machine.
     pub fn exec(&mut self, command: &str) -> Result<Value, Error> {
         self.request("control.exec", json!({"command": command}))
     }

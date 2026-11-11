@@ -156,6 +156,9 @@ Only start after P0 is complete and dogfooded:
 - terminal panel with explicit workspace/trust boundaries;
 - multi-root workspaces with per-root gateway and trust policy;
 - folding state persistence.
+- external control/MCP adapter over `anvil-control`; no second transport and no
+  direct workspace file access (see
+  [external-integration-plan.md](external-integration-plan.md)).
 
 Difficulty: L–XL. DAP, terminal, and multi-root are architecture-level work and
 must not be folded into `anvil-session`.
