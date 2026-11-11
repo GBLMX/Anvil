@@ -30,6 +30,8 @@ struct SessionBuffer {
     scroll: usize,
     hscroll: usize,
     modified: bool,
+    #[serde(default)]
+    conflict: bool,
     swap: Option<PathBuf>,
     source_mtime_ns: Option<u64>,
 }
@@ -46,6 +48,7 @@ pub(crate) fn restore(model: &mut Model, workspace: &Path) -> Result<bool, Strin
     if state.version != SESSION_VERSION || state.workspace != workspace {
         return Ok(false);
     }
+    model.conflict_swaps.clear();
     let mut buffers = Vec::new();
     let mut conflicts = 0;
     for (index, saved) in state.buffers.into_iter().enumerate() {
@@ -65,10 +68,12 @@ pub(crate) fn restore(model: &mut Model, workspace: &Path) -> Result<bool, Strin
             .source_mtime_ns
             .zip(path.as_deref().and_then(source_mtime_ns))
             .is_some_and(|(saved, current)| saved != current);
+        let mut conflict_swap = None;
         let (text, modified) = if saved.modified {
             if let Some(swap_text) = swap_text {
                 if changed {
                     conflicts += 1;
+                    conflict_swap = saved.swap.clone();
                     (disk_text.unwrap_or_default(), false)
                 } else {
                     (swap_text, true)
@@ -76,6 +81,12 @@ pub(crate) fn restore(model: &mut Model, workspace: &Path) -> Result<bool, Strin
             } else {
                 (disk_text.unwrap_or_default(), false)
             }
+        } else if saved.conflict {
+            if saved.swap.is_some() {
+                conflicts += 1;
+                conflict_swap = saved.swap.clone();
+            }
+            (disk_text.unwrap_or_default(), false)
         } else {
             (disk_text.unwrap_or_default(), false)
         };
@@ -95,6 +106,9 @@ pub(crate) fn restore(model: &mut Model, workspace: &Path) -> Result<bool, Strin
             search_query: String::new(),
             syntax: Default::default(),
         });
+        if let (Some(path), Some(swap)) = (path.as_ref(), conflict_swap) {
+            model.conflict_swaps.insert(path.clone(), swap);
+        }
         let _ = index;
     }
     if buffers.is_empty() {
@@ -133,6 +147,11 @@ pub(crate) fn save(model: &mut Model, workspace: &Path) -> Result<(), String> {
     let mut saved = Vec::with_capacity(buffers.len());
     let mut kept_swaps = Vec::new();
     for (index, buffer) in buffers.drain(..).enumerate() {
+        let conflict_swap = buffer
+            .path
+            .as_ref()
+            .and_then(|path| model.conflict_swaps.get(path))
+            .cloned();
         let swap = if buffer.modified {
             let path = swap_dir.join(format!("{index}.swap"));
             let text = buffer
@@ -143,7 +162,10 @@ pub(crate) fn save(model: &mut Model, workspace: &Path) -> Result<(), String> {
             kept_swaps.push(path.clone());
             Some(path)
         } else {
-            None
+            if let Some(path) = &conflict_swap {
+                kept_swaps.push(path.clone());
+            }
+            conflict_swap
         };
         saved.push(SessionBuffer {
             path: buffer.path.clone(),
@@ -151,6 +173,7 @@ pub(crate) fn save(model: &mut Model, workspace: &Path) -> Result<(), String> {
             scroll: buffer.scroll,
             hscroll: buffer.hscroll,
             modified: buffer.modified,
+            conflict: !buffer.modified && swap.is_some(),
             swap,
             source_mtime_ns: buffer.path.as_deref().and_then(source_mtime_ns),
         });
@@ -295,5 +318,18 @@ mod tests {
         assert!(restore(&mut conflicted, &workspace).expect("restore"));
         assert!(!conflicted.modified);
         assert!(conflicted.status.contains("conflict"));
+        let swap = conflicted
+            .conflict_swaps
+            .values()
+            .next()
+            .cloned()
+            .expect("conflict swap");
+        assert!(swap.exists());
+        save(&mut conflicted, &workspace).expect("save conflict");
+        assert!(swap.exists(), "save deleted the conflict swap");
+        let mut still_conflicted = Model::new(EditorState::from_text(""), None);
+        assert!(restore(&mut still_conflicted, &workspace).expect("restore"));
+        assert!(still_conflicted.status.contains("conflict"));
+        assert!(swap.exists());
     }
 }

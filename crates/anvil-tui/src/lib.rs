@@ -628,6 +628,8 @@ pub struct Model {
     diagnostic_count_shown: usize,
     diagnostic_count_pending: Option<(usize, Instant)>,
     diagnostic_path: Option<PathBuf>,
+    /// Dirty swap files that must survive a source conflict.
+    conflict_swaps: HashMap<PathBuf, PathBuf>,
     git_branch: Option<String>,
     git_branch_checked: bool,
     /// Workspace root used to resolve all file paths.
@@ -777,6 +779,7 @@ impl Model {
             diagnostic_count_shown: 0,
             diagnostic_count_pending: None,
             diagnostic_path: None,
+            conflict_swaps: HashMap::new(),
             git_branch: None,
             git_branch_checked: false,
             workspace: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
