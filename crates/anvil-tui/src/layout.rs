@@ -9,6 +9,7 @@ pub(crate) enum DisplayRow {
         line: usize,
         title: String,
         hidden: usize,
+        index: Option<usize>,
     },
 }
 
@@ -19,12 +20,24 @@ impl Model {
         }
         let total = self.editor.index().len_lines();
         let max_lens_rows = crate::code_lens::MAX_CODE_LENS_ROWS_PER_VIEWPORT.min(height / 2);
+        let visible_lines = self.visible_line_numbers(start, height);
+        let total_items = visible_lines
+            .iter()
+            .map(|line| self.code_lens_items_for_line(*line).len())
+            .sum::<usize>();
+        let global_hidden = total_items.saturating_sub(max_lens_rows);
+        let lens_limit = if global_hidden > 0 {
+            max_lens_rows.saturating_sub(1)
+        } else {
+            max_lens_rows
+        };
+        let mut shown_items = 0;
         let mut lens_rows = 0;
         let mut rows = Vec::with_capacity(height);
         let mut line = self.first_visible_line(start);
         while rows.len() < height && line < total {
-            let lenses = self.code_lens_for_line(line);
-            if !lenses.is_empty() && lens_rows < max_lens_rows {
+            let lenses = self.code_lens_items_for_line(line);
+            if !lenses.is_empty() && lens_rows < lens_limit {
                 let visible = lenses.len().min(crate::code_lens::MAX_CODE_LENS_PER_LINE);
                 let truncate = lenses.len() > visible;
                 let shown = if truncate {
@@ -32,22 +45,26 @@ impl Model {
                 } else {
                     visible
                 };
-                for lens in lenses.iter().take(shown) {
-                    if lens_rows >= max_lens_rows {
+                for (index, lens) in lenses.iter().take(shown) {
+                    if lens_rows >= lens_limit {
                         break;
                     }
                     rows.push(DisplayRow::CodeLens {
                         line,
                         title: lens.title.clone(),
                         hidden: 0,
+                        index: Some(*index),
                     });
                     lens_rows += 1;
+                    shown_items += 1;
                 }
-                if truncate && lens_rows < max_lens_rows && rows.len() < height {
+                if truncate && lens_rows < lens_limit && rows.len() < height {
+                    let hidden = lenses.len().saturating_sub(shown);
                     rows.push(DisplayRow::CodeLens {
                         line,
-                        title: format!("… +{} lenses", lenses.len().saturating_sub(shown)),
-                        hidden: lenses.len().saturating_sub(shown),
+                        title: format!("… +{hidden} lenses"),
+                        hidden,
+                        index: None,
                     });
                     lens_rows += 1;
                 }
@@ -58,7 +75,28 @@ impl Model {
             rows.push(DisplayRow::Source(line));
             line = self.next_visible_line(line);
         }
+        if global_hidden > 0 {
+            let hidden = total_items.saturating_sub(shown_items);
+            if rows.len() >= height {
+                rows.pop();
+            }
+            rows.push(DisplayRow::CodeLens {
+                line: line.saturating_sub(1),
+                title: format!("… +{hidden} lenses"),
+                hidden,
+                index: None,
+            });
+        }
         rows
+    }
+
+    pub(crate) fn code_lens_at_row(&self, offset: usize, height: usize) -> Option<usize> {
+        match self.visible_rows(self.scroll, height).get(offset) {
+            Some(DisplayRow::CodeLens {
+                index: Some(index), ..
+            }) => Some(*index),
+            _ => None,
+        }
     }
 
     pub(crate) fn row_of_source_line(&self, line: usize, height: usize) -> Option<usize> {

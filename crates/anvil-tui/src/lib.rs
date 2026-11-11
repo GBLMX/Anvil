@@ -319,6 +319,7 @@ enum LspRequestKind {
     SignatureHelp,
     WorkspaceSymbol,
     InlayHint,
+    ExecuteCommand,
     CodeLens,
 }
 

@@ -45,8 +45,8 @@ post-`0.5.0` feature line.
   mirrors, navigate each unique tabstop once, and apply typed insertions and
   deletions to all mirrors.
 - LSP code lens requests are bounded and rendered as virtual rows above source
-  lines, with a three-row-per-line cap and `… +N lenses` truncation; command
-  execution remains pending.
+  lines, with per-line and viewport truncation; clicking a lens sends
+  `workspace/executeCommand` and refreshes the lens set.
 - `WorkspaceEdit` now applies `documentChanges` create/rename/delete
   operations, checks per-document LSP versions and request-time buffer
   revisions before mutation, and refuses overwriting open buffers or deleting

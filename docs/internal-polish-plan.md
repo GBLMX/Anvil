@@ -69,15 +69,15 @@ Difficulty: L–XL. Main risk is data loss and schema migration.
 ### 3.3 LSP depth
 
 Status: completion ranking and snippet mirror grouping/editing landed; code
-lens request/parsing and virtual-row rendering landed, while command execution
-remains.
+lens request/parse, virtual-row rendering, and command execution landed.
 - Completion snippet mirrors: repeated tabstop indices survive parsing, group
   as mirrors, navigate as one unique stop, and receive typed insertions and
   deletions together.
 - `sortText`/`filterText`/`preselect` ranking landed.
 - Code lens: request/parse bounded to 2048 total and 3 visible rows per line;
-  rows participate in viewport, gutter, cursor, mouse, and folding mapping.
-  Command execution remains.
+  per-line and viewport truncation are visible; rows participate in viewport,
+  gutter, cursor, mouse, and folding mapping. Clicking executes
+  `workspace/executeCommand`.
 - References, document highlights, folding ranges, and semantic tokens are
   landed.
 - Multi-file workspace edits with stale-revision rejection are landed.

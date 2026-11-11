@@ -197,6 +197,10 @@ impl Model {
                 self.apply_workspace_symbols_response(&result);
             }
             LspRequestKind::InlayHint => self.apply_inlay_hints_response(id, &result),
+            LspRequestKind::ExecuteCommand => {
+                self.status = "code lens command executed".to_owned();
+                self.request_code_lens();
+            }
             LspRequestKind::Formatting => {
                 let Some(path) = edit_path.or_else(|| self.path.clone()) else {
                     self.status = "lsp: no formatting path".to_owned();

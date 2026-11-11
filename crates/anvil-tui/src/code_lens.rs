@@ -12,6 +12,8 @@ pub(crate) const MAX_CODE_LENS_ROWS_PER_VIEWPORT: usize = 32;
 pub(crate) struct CodeLensItem {
     pub(crate) line: usize,
     pub(crate) title: String,
+    pub(crate) command: Option<String>,
+    pub(crate) arguments: serde_json::Value,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -21,18 +23,43 @@ pub(crate) struct CodeLensState {
 }
 
 impl Model {
-    pub(crate) fn code_lens_for_line(&self, line: usize) -> Vec<&CodeLensItem> {
+    pub(crate) fn code_lens_items_for_line(&self, line: usize) -> Vec<(usize, &CodeLensItem)> {
         let Some(state) = &self.code_lens else {
             return Vec::new();
         };
-        if state.revision != self.editor.revision() {
-            return Vec::new();
-        }
         state
             .items
             .iter()
-            .filter(|item| item.line == line)
+            .enumerate()
+            .filter(|(_, item)| item.line == line)
             .collect()
+    }
+
+    pub(crate) fn execute_code_lens(&mut self, index: usize) {
+        let Some(lens) = self
+            .code_lens
+            .as_ref()
+            .and_then(|state| state.items.get(index))
+            .cloned()
+        else {
+            return;
+        };
+        let Some(command) = lens.command else {
+            self.status = "code lens has no command".to_owned();
+            self.dirty = true;
+            return;
+        };
+        let params = serde_json::json!({
+            "command": command,
+            "arguments": lens.arguments,
+        });
+        if self.send_lsp_request(
+            LspRequestKind::ExecuteCommand,
+            "workspace/executeCommand",
+            params,
+        ) {
+            self.status = format!("code lens: {command}");
+        }
     }
     pub(crate) fn request_code_lens(&mut self) {
         self.pending_lsp
@@ -83,9 +110,22 @@ impl Model {
             else {
                 continue;
             };
+            let command = item
+                .get("command")
+                .and_then(|command| command.get("command"))
+                .and_then(serde_json::Value::as_str)
+                .filter(|command| !command.is_empty())
+                .map(str::to_owned);
+            let arguments = item
+                .get("command")
+                .and_then(|command| command.get("arguments"))
+                .cloned()
+                .unwrap_or_else(|| serde_json::json!([]));
             lenses.push(CodeLensItem {
                 line,
                 title: title.to_owned(),
+                command,
+                arguments,
             });
         }
         lenses.sort_by_key(|lens| lens.line);
@@ -123,7 +163,7 @@ mod tests {
         model.handle_lsp_response(
             31,
             serde_json::json!([
-                {"range": {"start": {"line": 0, "character": 0}}, "command": {"title": "Run"}},
+                {"range": {"start": {"line": 0, "character": 0}}, "command": {"title": "Run", "command": "run", "arguments": [1]}},
                 {"range": {"start": {"line": 0, "character": 0}}, "command": {"title": "Test"}},
                 {"range": {"start": {"line": 0, "character": 0}}, "command": {"title": "Debug"}},
                 {"range": {"start": {"line": 0, "character": 0}}, "command": {"title": "Ignored"}},
@@ -134,6 +174,8 @@ mod tests {
         let state = model.code_lens.as_ref().expect("code lens");
         assert_eq!(state.items.len(), 4);
         assert_eq!(state.items[0].title, "Run");
+        assert_eq!(state.items[0].command.as_deref(), Some("run"));
+        assert_eq!(state.items[0].arguments, serde_json::json!([1]));
         assert_eq!(state.items[3].title, "Ignored");
         assert_eq!(
             lsp_worker::file_uri(std::path::Path::new("main.rs")),
@@ -154,6 +196,8 @@ mod tests {
             None,
         );
         assert_eq!(model.code_lens.as_ref().expect("lens").revision, 0);
+        model.insert_text("x");
+        assert_eq!(model.code_lens_items_for_line(0).len(), 1);
     }
 
     #[test]
@@ -167,6 +211,8 @@ mod tests {
                 .map(|index| CodeLensItem {
                     line: 0,
                     title: format!("Lens {index}"),
+                    command: None,
+                    arguments: serde_json::json!([]),
                 })
                 .collect(),
         });
@@ -188,6 +234,37 @@ mod tests {
     }
 
     #[test]
+    fn viewport_budget_emits_a_global_truncation_row() {
+        use crate::layout::DisplayRow;
+
+        let mut model = Model::new(
+            EditorState::from_text("a\nb\nc\nd\ne\nf\ng\nh\ni\nj\n"),
+            None,
+        );
+        model.code_lens = Some(CodeLensState {
+            revision: model.editor.revision(),
+            items: (0..30)
+                .map(|index| CodeLensItem {
+                    line: index / 3,
+                    title: format!("Lens {index}"),
+                    command: None,
+                    arguments: serde_json::json!([]),
+                })
+                .collect(),
+        });
+        let rows = model.visible_rows(0, 10);
+        assert!(rows.iter().any(|row| matches!(
+            row,
+            DisplayRow::CodeLens {
+                index: None,
+                title,
+                hidden,
+                ..
+            } if title.contains("lenses") && *hidden > 0
+        )));
+    }
+
+    #[test]
     fn code_lens_titles_render_above_source() {
         use ratatui::{Terminal, backend::TestBackend};
 
@@ -197,6 +274,8 @@ mod tests {
             items: vec![CodeLensItem {
                 line: 0,
                 title: "Run test".to_owned(),
+                command: None,
+                arguments: serde_json::json!([]),
             }],
         });
         let backend = TestBackend::new(80, 20);
@@ -213,5 +292,23 @@ mod tests {
             .collect::<String>();
         assert!(rendered.contains("Run test"), "{rendered}");
         assert!(rendered.contains("fn main"), "{rendered}");
+    }
+
+    #[test]
+    fn code_lens_rows_are_mouse_targets() {
+        let mut model = Model::new(EditorState::from_text("fn main() {}\n"), None);
+        model.code_lens = Some(CodeLensState {
+            revision: model.editor.revision(),
+            items: vec![CodeLensItem {
+                line: 0,
+                title: "Run test".to_owned(),
+                command: Some("run".to_owned()),
+                arguments: serde_json::json!([]),
+            }],
+        });
+        assert_eq!(
+            crate::mouse::hit_test(&model, 4, 1, 80, 20),
+            crate::mouse::Target::CodeLens(0)
+        );
     }
 }

@@ -30,6 +30,7 @@ pub(crate) enum Target {
     Tabs(usize),
     Location(usize),
     Tree(usize),
+    CodeLens(usize),
     SplitHandle,
     Editor {
         side: Side,
@@ -76,6 +77,9 @@ pub(crate) fn handle_mouse(model: &mut Model, mouse: MouseEvent, width: u16, hei
                 }
                 Target::Location(index) => {
                     model.select_stdin_location(index);
+                }
+                Target::CodeLens(index) => {
+                    model.execute_code_lens(index);
                 }
                 Target::Tabs(index) => {
                     if index < model.buffers.len() && index != model.active {
@@ -186,6 +190,14 @@ pub(crate) fn hit_test(model: &Model, col: u16, row: u16, width: u16, height: u1
         if index < model.stdin_locations.len() {
             return Target::Location(index);
         }
+    }
+    if row >= editor_inner.y
+        && let Some(index) = model.code_lens_at_row(
+            usize::from(row - editor_inner.y),
+            usize::from(editor_inner.height),
+        )
+    {
+        return Target::CodeLens(index);
     }
     if row == height.saturating_sub(1) {
         return Target::Status;
