@@ -21,7 +21,7 @@ Commands:
   save      Save the current buffer, optionally as FILE
   edit      Replace the buffer (`set`) or insert at the cursor (`insert`)
   query     Dump buffer, cursor, undo, and tab state
-  command   Execute an Ex command through the editor state machine
+  command   Execute an Ex command through the editor state machine (alias: exec)
   quit      Quit; --force discards unsaved changes
 
 Options:
@@ -241,7 +241,7 @@ fn parse_command(options: &Options) -> Result<CliCommand, CliError> {
             require_no_args(arguments)?;
             Ok(CliCommand::Query)
         }
-        "command" => {
+        "command" | "exec" => {
             if arguments.is_empty() {
                 return Err(CliError::usage("command requires a command"));
             }
