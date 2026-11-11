@@ -98,6 +98,9 @@ in the plans linked below.
     global cache beyond `CACHE_LIMIT`; both open buffers keep their spans.
   - `buffer_fallback_survives_global_lru_eviction` and
     `stale_fallback_keeps_spans_while_reparsing` pass.
+  - Real six-tab TUI smoke: six Rust buffers opened, left idle for 20 seconds,
+    then switched through three cycles; all six restored `fn` with the keyword
+    color and no plain-text frame.
 
 ## Resolved bug ledger
 
