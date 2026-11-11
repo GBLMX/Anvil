@@ -84,6 +84,8 @@ Normal mode
   :git-resolve-ours  replace and stage with index stage 2
   :git-resolve-theirs replace and stage with index stage 3
   :git-resolve-ours! / :git-resolve-theirs! discard modified buffer
+  :search-project Q   ripgrep the workspace; Alt-j/k selects, Enter opens
+  :search-cancel      clear project search results
   :lsp-start          ensure the detected language server is active
   :lsp-stop           stop the active language server
   :format              format the current document

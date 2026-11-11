@@ -94,6 +94,11 @@ impl Model {
                     self.status = "files ready".to_owned();
                 }
                 FileEvent::Files(Err(error)) => self.status = format!("E: files: {error}"),
+                FileEvent::ProjectSearch {
+                    query,
+                    generation,
+                    result,
+                } => self.handle_project_search(query, generation, result),
                 FileEvent::Preview {
                     path,
                     generation,

@@ -1010,7 +1010,8 @@ fn render_pipe_locations(model: &Model, frame: &mut Frame, area: Rect) {
         Paragraph::new(lines)
             .style(theme::panel())
             .block(panel_block(format!(
-                "Locations · {}",
+                "{} · {}",
+                model.location_title,
                 model.stdin_locations.len()
             ))),
         area,

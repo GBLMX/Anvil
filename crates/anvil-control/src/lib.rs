@@ -252,6 +252,14 @@ pub const COMMANDS: &[CommandSpec] = &[
         capability: Capability::Git,
     },
     CommandSpec {
+        name: "search-project",
+        capability: Capability::Read,
+    },
+    CommandSpec {
+        name: "search-cancel",
+        capability: Capability::Read,
+    },
+    CommandSpec {
         name: "git-resolve-ours",
         capability: Capability::Git,
     },

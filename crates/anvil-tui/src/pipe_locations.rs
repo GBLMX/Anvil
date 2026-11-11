@@ -174,6 +174,15 @@ impl Model {
         self.stdin_locations = parse(text);
         self.stdin_location_selected = (!self.stdin_locations.is_empty()).then_some(0);
         self.stdin_location_scroll = 0;
+        self.location_title = "Locations".to_owned();
+    }
+
+    pub(crate) fn set_project_search_results(&mut self, query: &str, locations: Vec<PipeLocation>) {
+        self.stdin_locations = locations;
+        self.stdin_location_selected = (!self.stdin_locations.is_empty()).then_some(0);
+        self.stdin_location_scroll = 0;
+        self.location_title = format!("Search: {query}");
+        self.dirty = true;
     }
 
     pub(crate) fn move_stdin_location(&mut self, delta: isize) {

@@ -9,6 +9,9 @@ use std::sync::mpsc::{self, Receiver, Sender};
 use std::time::{Duration, Instant};
 
 use anvil_ipc::{DirEntry, GatewayClient};
+use serde_json::Value;
+
+use crate::pipe_locations::PipeLocation;
 
 const FILE_LIMIT: usize = 5000;
 pub(crate) const MAX_TREE_WATCH_DIRS: usize = 256;
@@ -18,6 +21,7 @@ pub(crate) const PREVIEW_MAX_BYTES: usize = 64 * 1024;
 pub(crate) const PREVIEW_MAX_LINES: usize = 200;
 const PREVIEW_TIMEOUT: Duration = Duration::from_millis(500);
 const PREVIEW_CHUNK: usize = 16 * 1024;
+pub(crate) const MAX_PROJECT_RESULTS: usize = 500;
 
 /// Bounded text preview returned by the worker.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -56,6 +60,8 @@ pub enum FileRequest {
     List(PathBuf),
     /// Enumerate workspace files with `rg --files`, or a bounded fallback.
     Files { hidden: bool },
+    /// Run a bounded ripgrep project search.
+    ProjectSearch { query: String, generation: u64 },
     /// Read a bounded preview for one workspace-relative file.
     Preview { path: String, generation: u64 },
     /// Compare one workspace file with HEAD for gutter marks.
@@ -118,6 +124,12 @@ pub enum FileEvent {
     Listed(PathBuf, Result<Vec<DirEntry>, String>),
     /// Workspace-relative files in sorted order.
     Files(Result<Vec<String>, String>),
+    /// Bounded project search results.
+    ProjectSearch {
+        query: String,
+        generation: u64,
+        result: Result<(Vec<PipeLocation>, bool), String>,
+    },
     /// Bounded preview result for one workspace-relative file.
     Preview {
         path: String,
@@ -293,6 +305,13 @@ impl FileWorker {
                             ),
                             FileRequest::Files { hidden } => {
                                 FileEvent::Files(files(&mut client, &workspace, hidden))
+                            }
+                            FileRequest::ProjectSearch { query, generation } => {
+                                FileEvent::ProjectSearch {
+                                    result: project_search(&mut client, &query),
+                                    query,
+                                    generation,
+                                }
                             }
                             FileRequest::Preview { path, generation } => FileEvent::Preview {
                                 result: read_preview(&mut client, &path),
@@ -616,6 +635,70 @@ fn files(
     files.sort();
     files.dedup();
     Ok(files)
+}
+
+fn project_search(
+    client: &mut GatewayClient,
+    query: &str,
+) -> Result<(Vec<PipeLocation>, bool), String> {
+    let tool = rg_tool().ok_or_else(|| "rg is unavailable".to_owned())?;
+    let result = client
+        .exec(
+            &tool,
+            &[
+                "--json".to_owned(),
+                "--line-number".to_owned(),
+                "--smart-case".to_owned(),
+                "--".to_owned(),
+                query.to_owned(),
+            ],
+            5000,
+        )
+        .map_err(|error| error.to_string())?;
+    if result.timed_out {
+        return Err("project search timed out".to_owned());
+    }
+    if result.exit_code > 1 {
+        return Err(result.stderr);
+    }
+    let mut truncated = result.output_truncated;
+    let mut locations = Vec::new();
+    for line in result.stdout.lines() {
+        let Ok(event) = serde_json::from_str::<Value>(line) else {
+            continue;
+        };
+        if event.get("type").and_then(Value::as_str) != Some("match") {
+            continue;
+        }
+        let path = event["data"]["path"]["text"]
+            .as_str()
+            .unwrap_or_default()
+            .to_owned();
+        let line_number = event["data"]["line_number"].as_u64().unwrap_or(1) as usize;
+        let column = event["data"]["submatches"][0]["start"]
+            .as_u64()
+            .unwrap_or(0) as usize
+            + 1;
+        let message = event["data"]["lines"]["text"]
+            .as_str()
+            .unwrap_or_default()
+            .trim_end()
+            .to_owned();
+        if path.is_empty() {
+            continue;
+        }
+        if locations.len() >= MAX_PROJECT_RESULTS {
+            truncated = true;
+            break;
+        }
+        locations.push(PipeLocation {
+            path,
+            line: line_number,
+            column,
+            message,
+        });
+    }
+    Ok((locations, truncated))
 }
 
 fn rg_tool() -> Option<String> {

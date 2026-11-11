@@ -672,6 +672,12 @@ pub struct Model {
     /// File locations parsed from the stdin buffer.
     stdin_locations: Vec<pipe_locations::PipeLocation>,
     stdin_location_selected: Option<usize>,
+    /// Title for the generic location panel.
+    location_title: String,
+    /// Latest requested project-search generation.
+    project_search_generation: u64,
+    /// Pending project-search generation, if a request is in flight.
+    project_search_pending: Option<u64>,
     stdin_location_scroll: usize,
     /// Whether the process was started as an external editor.
     editor_mode: bool,
@@ -832,6 +838,9 @@ impl Model {
             stdin_locations: Vec::new(),
             stdin_location_selected: None,
             stdin_location_scroll: 0,
+            location_title: "Locations".to_owned(),
+            project_search_generation: 0,
+            project_search_pending: None,
             editor_mode: false,
             exit_code: 0,
             syntax: RefCell::new(SyntaxState::default()),

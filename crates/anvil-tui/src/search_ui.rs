@@ -1,6 +1,7 @@
 //! Model-side incremental search and replace transitions.
 
 use super::*;
+use crate::file_worker::FileRequest;
 use crate::search::{MAX_SEARCH_MATCHES, find_matches_limited};
 
 impl Model {
@@ -234,5 +235,108 @@ impl Model {
     pub(crate) fn toggle_search_case(&mut self) {
         self.search.options.case_sensitive = !self.search.options.case_sensitive;
         self.schedule_search();
+    }
+
+    pub(crate) fn request_project_search(&mut self, query: &str) {
+        let query = query.trim();
+        if query.is_empty() {
+            self.status = "E: project search requires a query".to_owned();
+            self.dirty = true;
+            return;
+        }
+        if !self.ensure_file_worker() {
+            self.status = "E: gateway unavailable".to_owned();
+            self.dirty = true;
+            return;
+        }
+        let Some(worker) = self.file_worker.as_ref() else {
+            self.status = "E: file worker unavailable".to_owned();
+            self.dirty = true;
+            return;
+        };
+        self.project_search_generation = self.project_search_generation.wrapping_add(1);
+        let generation = self.project_search_generation;
+        if let Err(error) = worker.request(FileRequest::ProjectSearch {
+            query: query.to_owned(),
+            generation,
+        }) {
+            self.status = format!("E: project search: {error}");
+            self.dirty = true;
+            return;
+        }
+        self.project_search_pending = Some(generation);
+        self.status = format!("searching project: {query}");
+        self.dirty = true;
+    }
+
+    pub(crate) fn handle_project_search(
+        &mut self,
+        query: String,
+        generation: u64,
+        result: Result<(Vec<crate::pipe_locations::PipeLocation>, bool), String>,
+    ) {
+        if self.project_search_pending != Some(generation) {
+            return;
+        }
+        self.project_search_pending = None;
+        match result {
+            Ok((locations, truncated)) => {
+                let count = locations.len();
+                self.set_project_search_results(&query, locations);
+                let suffix = if truncated { "+" } else { "" };
+                self.status = if count == 0 {
+                    format!("search: no matches for {query}")
+                } else {
+                    format!("search: {count}{suffix} matches for {query}")
+                };
+            }
+            Err(error) => {
+                self.status = format!("E: project search: {error}");
+            }
+        }
+        self.dirty = true;
+    }
+
+    pub(crate) fn cancel_project_search(&mut self) {
+        self.project_search_pending = None;
+        self.stdin_locations.clear();
+        self.stdin_location_selected = None;
+        self.stdin_location_scroll = 0;
+        self.location_title = "Locations".to_owned();
+        self.status = "search cancelled".to_owned();
+        self.dirty = true;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::pipe_locations::PipeLocation;
+    use anvil_editor::EditorState;
+
+    #[test]
+    fn project_search_requires_a_query() {
+        let mut model = Model::new(EditorState::from_text("x"), None);
+        model.execute_command("search-project");
+        assert_eq!(model.status, "E: project search requires a query");
+    }
+
+    #[test]
+    fn project_search_results_drive_the_location_panel() {
+        let mut model = Model::new(EditorState::from_text("x"), None);
+        model.set_project_search_results(
+            "needle",
+            vec![PipeLocation {
+                path: "src/main.rs".to_owned(),
+                line: 4,
+                column: 2,
+                message: "needle".to_owned(),
+            }],
+        );
+        assert_eq!(model.location_title, "Search: needle");
+        assert_eq!(model.stdin_locations.len(), 1);
+        model.cancel_project_search();
+        assert!(model.stdin_locations.is_empty());
+        assert_eq!(model.location_title, "Locations");
     }
 }

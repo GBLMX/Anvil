@@ -117,6 +117,8 @@ impl Model {
             ("git-conflict-base", "") => self.request_git_conflict_stage(1),
             ("git-conflict-ours", "") => self.request_git_conflict_stage(2),
             ("git-conflict-theirs", "") => self.request_git_conflict_stage(3),
+            ("search-project", query) => self.request_project_search(query),
+            ("search-cancel", "") => self.cancel_project_search(),
             ("git-resolve-ours", "") => self.resolve_git_conflict(2, false),
             ("git-resolve-ours!", "") => self.resolve_git_conflict(2, true),
             ("git-resolve-theirs", "") => self.resolve_git_conflict(3, false),
