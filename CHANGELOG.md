@@ -47,9 +47,10 @@ post-`0.5.0` feature line.
 - LSP code lens requests are bounded and rendered as virtual rows above source
   lines, with per-line and viewport truncation; clicking a lens sends
   `workspace/executeCommand` and refreshes the lens set.
-- workspace sessions restore buffers, cursors, active tab, tree visibility, and
-  split ratio; dirty buffers use atomic 0600 swap files with mtime conflict
-  detection, periodic snapshots, and preserved conflict swaps until resolved.
+- workspace sessions restore buffers, cursors, active tab, tree visibility,
+  split ratio, and open split panes with focus; dirty buffers use atomic 0600
+  swap files with mtime conflict detection, periodic snapshots, and preserved
+  conflict swaps until resolved.
 - `WorkspaceEdit` now applies `documentChanges` create/rename/delete
   operations, checks per-document LSP versions and request-time buffer
   revisions before mutation, and refuses overwriting open buffers or deleting

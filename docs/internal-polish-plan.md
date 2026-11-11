@@ -59,11 +59,11 @@ Difficulty: M. Main risk is scope creep; do not build a ten-tab settings clone.
 
 ### 3.2 Session safety
 
-Status: buffer/cursor/active-tab restore, tree/ratio layout state, and dirty
-buffer swap recovery landed. Conflict swaps are retained until resolved; open
-split panes and undo persistence remain.
-- Restore buffers, cursors, active tabs, tree visibility, and split ratio
-  landed; restoring open split panes remains.
+Status: buffer/cursor/active-tab restore, tree/ratio layout state, open split
+panes with focus, and dirty buffer swap recovery landed. Conflict swaps are
+retained until resolved; undo persistence remains.
+- Restore buffers, cursors, active tabs, tree visibility, split ratio, and open
+  split panes with focus.
 - Back up unsaved buffers and recover after a crash.
 - Persist undo history or explicitly reject it with a measured alternative.
 - Never silently discard dirty state.
