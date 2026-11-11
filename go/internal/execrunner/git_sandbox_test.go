@@ -156,3 +156,52 @@ func TestGitApplyUnderSandbox(t *testing.T) {
 		t.Fatalf("patch not staged:\n%s", cached)
 	}
 }
+
+func TestGitApplyRejectsInvalidPatch(t *testing.T) {
+	if _, err := os.Stat("/usr/bin/git"); err != nil {
+		t.Skip("git unavailable")
+	}
+	workspace := t.TempDir()
+	git := func(args ...string) string {
+		t.Helper()
+		cmd := exec.Command("/usr/bin/git", args...)
+		cmd.Dir = workspace
+		cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null")
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+		return string(out)
+	}
+	git("init", "-q")
+	if err := os.WriteFile(filepath.Join(workspace, "a.txt"), []byte("one\ntwo\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	git("-c", "user.name=Test", "-c", "user.email=t@example.com", "add", "a.txt")
+	git("-c", "user.name=Test", "-c", "user.email=t@example.com", "commit", "-qm", "init")
+	patch := "diff --git a/a.txt b/a.txt\n--- a/a.txt\n+++ b/a.txt\n@@ -1 +1 @@\n-missing\n+MISSING\n"
+	if err := os.MkdirAll(filepath.Join(workspace, ".anvil-tmp"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(workspace, ".anvil-tmp/git-hunk.patch"), []byte(patch), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command(os.Args[0], "-test.run=TestGitApplySandboxHelper", "-test.v")
+	cmd.Env = append(os.Environ(),
+		"ANVIL_GIT_APPLY_HELPER=1",
+		"ANVIL_GIT_SANDBOX_WORKSPACE="+workspace,
+	)
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("invalid patch unexpectedly applied:\n%s", out)
+	}
+	if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 2 {
+		t.Skipf("kernel sandbox unavailable: %s", out)
+	}
+	if cached := git("diff", "--cached", "--", "a.txt"); cached != "" {
+		t.Fatalf("invalid patch changed index:\n%s", cached)
+	}
+	if data, readErr := os.ReadFile(filepath.Join(workspace, "a.txt")); readErr != nil || string(data) != "one\ntwo\n" {
+		t.Fatalf("invalid patch changed working tree: %q %v", data, readErr)
+	}
+}
