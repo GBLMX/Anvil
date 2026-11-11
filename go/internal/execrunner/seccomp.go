@@ -46,6 +46,8 @@ var allowedSyscalls = []uint32{
 	unix.SYS_OPEN,
 	unix.SYS_OPENAT,
 	unix.SYS_GETCWD,
+	unix.SYS_CHDIR,
+	unix.SYS_FCHDIR,
 	unix.SYS_EXECVE,
 	unix.SYS_EXIT,
 	unix.SYS_EXIT_GROUP,
