@@ -25,6 +25,8 @@ struct SessionFile {
     split_ratio: u16,
     tree_visible: bool,
     show_hidden: bool,
+    #[serde(default)]
+    folded: Vec<usize>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -79,6 +81,7 @@ pub(crate) fn restore(model: &mut Model, workspace: &Path) -> Result<bool, Strin
     model.show_hidden = state.show_hidden;
     let index = model.active;
     model.load_buffer(index);
+    model.folded = state.folded.into_iter().collect();
     if let Some(saved_split) = state.split {
         let (buffer, conflict, conflicted) = restore_buffer(model, saved_split);
         if conflicted {
@@ -317,6 +320,7 @@ pub(crate) fn save(model: &mut Model, workspace: &Path) -> Result<(), String> {
         split_ratio: model.split_ratio,
         tree_visible: model.tree_visible,
         show_hidden: model.show_hidden,
+        folded: model.folded.iter().copied().collect(),
     };
     let data = serde_json::to_vec(&state).map_err(|error| error.to_string())?;
     write_atomic(&state_path, &data).map_err(|error| error.to_string())
@@ -403,6 +407,7 @@ mod tests {
         let mut model = Model::open(&first).expect("open a");
         model.open_path(&second).expect("open b");
         model.cursor = 3;
+        model.folded.insert(2);
         model.sync_active();
         save(&mut model, &workspace).expect("save");
         let mut restored = Model::new(EditorState::from_text(""), None);
@@ -410,6 +415,7 @@ mod tests {
         assert_eq!(restored.buffers.len(), 2);
         assert_eq!(restored.active, 1);
         assert_eq!(restored.cursor, 3);
+        assert!(restored.folded.contains(&2));
         let state = state_path(&workspace).expect("state");
         assert_eq!(
             fs::metadata(state).expect("state").permissions().mode() & 0o777,

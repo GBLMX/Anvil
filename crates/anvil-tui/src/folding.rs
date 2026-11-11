@@ -51,6 +51,7 @@ impl Model {
 
     pub(crate) fn apply_folding_response(&mut self, result: &serde_json::Value) {
         let action = self.pending_fold_action.take();
+        let previous_folded = std::mem::take(&mut self.folded);
         let Some(ranges) = result.as_array() else {
             self.folds.clear();
             self.folded.clear();
@@ -83,7 +84,10 @@ impl Model {
         folds.sort_by_key(|fold| (fold.start, fold.end));
         folds.dedup_by_key(|fold| (fold.start, fold.end));
         self.folds = folds;
-        self.folded.clear();
+        self.folded = previous_folded
+            .into_iter()
+            .filter(|start| self.folds.iter().any(|fold| fold.start == *start))
+            .collect();
         self.fold_revision = if self.folds.is_empty() {
             None
         } else {
