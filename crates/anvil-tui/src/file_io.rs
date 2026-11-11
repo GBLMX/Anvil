@@ -325,6 +325,9 @@ impl Model {
         let path = match self.absolute_path(&path) {
             Ok(path) => path,
             Err(error) => {
+                if self.editor_mode {
+                    self.exit_code = 1;
+                }
                 self.status = format!("E: {error}");
                 self.dirty = true;
                 return false;
@@ -334,6 +337,9 @@ impl Model {
         let display = path.display().to_string();
         match self.write_file(&path, &text) {
             Ok(()) => {
+                if self.editor_mode {
+                    self.exit_code = 0;
+                }
                 self.path = Some(path.clone());
                 self.modified = false;
                 self.missing = false;
@@ -347,6 +353,9 @@ impl Model {
                 true
             }
             Err(error) => {
+                if self.editor_mode {
+                    self.exit_code = 1;
+                }
                 self.status = format!("E: {error}");
                 self.dirty = true;
                 false
@@ -359,6 +368,9 @@ impl Model {
             return false;
         }
         let Some(path) = self.path.clone() else {
+            if self.editor_mode {
+                self.exit_code = 1;
+            }
             self.status = "E: no file name".to_owned();
             self.dirty = true;
             return false;

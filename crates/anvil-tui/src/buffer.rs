@@ -346,4 +346,17 @@ impl Model {
             self.quit = true;
         }
     }
+
+    pub(crate) fn set_editor_mode(&mut self, enabled: bool) {
+        self.editor_mode = enabled;
+    }
+
+    pub(crate) fn exit_code(&self) -> i32 {
+        self.exit_code
+    }
+
+    pub(crate) fn quit_with_code(&mut self, code: i32) {
+        self.exit_code = code;
+        self.quit = true;
+    }
 }

@@ -116,6 +116,7 @@ impl Model {
             ("bd!", index) => self.close_buffer_number(index, true),
             ("q", "") => self.request_quit(),
             ("q!", "") => self.force_quit(),
+            ("cq", "") => self.quit_with_code(1),
             ("help", "") => self.show_help(),
             ("settings", "") => self.open_settings(),
             ("theme", argument) => {

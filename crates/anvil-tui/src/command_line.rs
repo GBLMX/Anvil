@@ -9,6 +9,7 @@ const COMMANDS: &[&str] = &[
     "wq",
     "q",
     "q!",
+    "cq",
     "e",
     "help",
     "settings",

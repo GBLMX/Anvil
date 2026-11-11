@@ -8,6 +8,15 @@ pub fn run(path: Option<PathBuf>) -> io::Result<()> {
 
 /// Runs the minimal terminal loop with an explicit workspace.
 pub fn run_with_workspace(path: Option<PathBuf>, workspace: PathBuf) -> io::Result<()> {
+    run_with_workspace_status(path, workspace, false).map(|_| ())
+}
+
+/// Runs the terminal loop and returns the process exit code.
+pub fn run_with_workspace_status(
+    path: Option<PathBuf>,
+    workspace: PathBuf,
+    editor_mode: bool,
+) -> io::Result<i32> {
     let timing = std::env::var_os("ANVIL_OPEN_TIMING").is_some();
     let start = Instant::now();
     let workspace = workspace.canonicalize().map_err(|error| {
@@ -45,6 +54,7 @@ pub fn run_with_workspace(path: Option<PathBuf>, workspace: PathBuf) -> io::Resu
         }
     };
     model.gateway_session = session;
+    model.set_editor_mode(editor_mode);
     if let Err(error) = theme_config::load() {
         let message = format!("E: theme config: {error}");
         if model.status.is_empty() {
@@ -159,7 +169,7 @@ pub fn run_with_workspace(path: Option<PathBuf>, workspace: PathBuf) -> io::Resu
             handle_event(&mut model, event::read()?);
         }
         if model.quit {
-            return Ok(());
+            return Ok(model.exit_code());
         }
     }
 }

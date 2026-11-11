@@ -1,4 +1,9 @@
-use std::{env, ffi::OsString, path::PathBuf, process};
+use std::{
+    env,
+    ffi::OsString,
+    path::{Path, PathBuf},
+    process,
+};
 
 const USAGE: &str = "\
 anvil — a terminal editor with a selection-first Rust kernel
@@ -8,6 +13,8 @@ Usage:
 
 Options:
   -w, --workspace <DIR>  Workspace directory; --workspace=DIR is also accepted
+  --editor              External-editor mode; allows one explicit file outside
+                        the cwd by using its parent as the default workspace
   -h, --help             Show this help and exit
   -V, --version          Show the version and exit
   --                     Treat the next argument as FILE
@@ -37,6 +44,7 @@ enum Command {
     Run {
         workspace: PathBuf,
         path: Option<PathBuf>,
+        editor: bool,
     },
     Help,
     Version,
@@ -59,7 +67,17 @@ fn run() -> std::io::Result<()> {
             println!("anvil {}", env!("CARGO_PKG_VERSION"));
             Ok(())
         }
-        Ok(Command::Run { workspace, path }) => anvil_tui::run_with_workspace(path, workspace),
+        Ok(Command::Run {
+            workspace,
+            path,
+            editor,
+        }) => {
+            let code = anvil_tui::run_with_workspace_status(path, workspace, editor)?;
+            if code != 0 {
+                process::exit(code);
+            }
+            Ok(())
+        }
         Err(error) => {
             eprintln!("anvil: {error}");
             process::exit(2);
@@ -74,6 +92,7 @@ where
     let mut arguments = arguments.into_iter();
     let mut workspace = None;
     let mut path = None;
+    let mut editor = false;
 
     while let Some(argument) = arguments.next() {
         if argument == "--help" || argument == "-h" {
@@ -81,6 +100,10 @@ where
         }
         if argument == "--version" || argument == "-V" {
             return Ok(Command::Version);
+        }
+        if argument == "--editor" {
+            editor = true;
+            continue;
         }
         if argument == "--workspace" || argument == "-w" {
             let Some(value) = arguments.next() else {
@@ -117,9 +140,35 @@ where
 
     let workspace = match workspace {
         Some(workspace) => workspace,
+        None if editor => editor_workspace(path.as_deref())?,
         None => env::current_dir().map_err(|error| error.to_string())?,
     };
-    Ok(Command::Run { workspace, path })
+    Ok(Command::Run {
+        workspace,
+        path,
+        editor,
+    })
+}
+
+fn editor_workspace(path: Option<&Path>) -> Result<PathBuf, String> {
+    let cwd = env::current_dir().map_err(|error| error.to_string())?;
+    let Some(path) = path else {
+        return Ok(cwd);
+    };
+    let absolute = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        cwd.join(path)
+    };
+    let absolute = absolute.canonicalize().unwrap_or(absolute);
+    let parent = absolute.parent().unwrap_or(&cwd);
+    if parent.starts_with(&cwd) {
+        Ok(cwd)
+    } else {
+        Ok(parent
+            .canonicalize()
+            .unwrap_or_else(|_| parent.to_path_buf()))
+    }
 }
 
 #[cfg(test)]
@@ -138,6 +187,7 @@ mod tests {
             Command::Run {
                 workspace: PathBuf::from("/tmp/workspace"),
                 path: Some(PathBuf::from("src/main.rs")),
+                editor: false,
             }
         );
     }
@@ -150,6 +200,7 @@ mod tests {
             Command::Run {
                 workspace: PathBuf::from("/tmp/workspace"),
                 path: None,
+                editor: false,
             }
         );
     }
@@ -162,6 +213,23 @@ mod tests {
             Command::Run {
                 workspace: PathBuf::from("/tmp/workspace"),
                 path: Some(PathBuf::from("-notes")),
+                editor: false,
+            }
+        );
+    }
+
+    #[test]
+    fn editor_mode_uses_the_external_file_parent_as_workspace() {
+        let directory = tempfile::tempdir().expect("tempdir");
+        let file = directory.path().join("message.txt");
+        std::fs::write(&file, "text").expect("write");
+        let command = parse_args(args(&["--editor", file.to_str().expect("utf-8 path")])).unwrap();
+        assert_eq!(
+            command,
+            Command::Run {
+                workspace: directory.path().canonicalize().expect("canonical"),
+                path: Some(file),
+                editor: true,
             }
         );
     }

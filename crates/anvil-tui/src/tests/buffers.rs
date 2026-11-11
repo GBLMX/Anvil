@@ -159,6 +159,31 @@ fn save_then_buffer_switch_round_trip_keeps_the_buffer_clean() {
 }
 
 #[test]
+fn cq_exits_with_status_one() {
+    let mut model = Model::new(EditorState::from_text("x"), None);
+    command(&mut model, "cq");
+    assert!(model.quit);
+    assert_eq!(model.exit_code(), 1);
+}
+
+#[test]
+fn editor_mode_keeps_save_failure_sticky_for_q_bang() {
+    let directory = tempfile::tempdir().expect("tempdir");
+    let mut model = Model::new(
+        EditorState::from_text("dirty"),
+        Some(directory.path().to_path_buf()),
+    );
+    model.set_editor_mode(true);
+    model.modified = true;
+    assert!(!model.save());
+    assert_eq!(model.exit_code(), 1);
+
+    model.force_quit();
+    assert!(model.quit);
+    assert_eq!(model.exit_code(), 1);
+}
+
+#[test]
 fn mouse_tab_switch_preserves_the_active_buffer() {
     let dir = tempfile::tempdir().expect("tempdir");
     let first = dir.path().join("first.txt");

@@ -25,6 +25,8 @@ post-`0.5.0` feature line.
   Delete, mid-string editing, paste insertion, and a physical terminal cursor.
 - Shell highlighting for `.zsh`/`.brush` through the Bash grammar and `.fish`
   through `tree-sitter-fish`.
+- `--editor` external-editor mode with a workspace outside the cwd, `:cq`
+  exit status 1, and sticky save failures that survive `:q!`.
 - `WorkspaceEdit` now applies `documentChanges` create/rename/delete
   operations, checks per-document LSP versions and request-time buffer
   revisions before mutation, and refuses overwriting open buffers or deleting

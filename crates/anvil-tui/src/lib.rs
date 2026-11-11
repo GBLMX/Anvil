@@ -115,7 +115,7 @@ use lsp_worker::{LspEvent, LspWorker};
 #[cfg(target_os = "linux")]
 use plugin_activation::ActivationEvent;
 use syntax::SyntaxState;
-pub use terminal::{run, run_with_workspace};
+pub use terminal::{run, run_with_workspace, run_with_workspace_status};
 
 const MAX_OPEN_BYTES: usize = 256 * 1024 * 1024;
 const EFFECT_QUEUE_CAPACITY: usize = 32;
@@ -623,6 +623,10 @@ pub struct Model {
     workspace: PathBuf,
     /// Reject file operations instead of falling back when the gateway is absent.
     require_gateway: bool,
+    /// Whether the process was started as an external editor.
+    editor_mode: bool,
+    /// Process exit code accumulated by editor-mode failures or `:cq`.
+    exit_code: i32,
     /// Tree-sitter highlights cached by editor revision and path.
     syntax: RefCell<SyntaxState>,
     /// Discovered local plugins.
@@ -757,6 +761,8 @@ impl Model {
             git_branch_checked: false,
             workspace: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
             require_gateway: false,
+            editor_mode: false,
+            exit_code: 0,
             syntax: RefCell::new(SyntaxState::default()),
             #[cfg(target_os = "linux")]
             plugins: Vec::new(),

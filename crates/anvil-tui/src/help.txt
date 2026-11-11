@@ -63,6 +63,7 @@ Normal mode
   :bd [n] / :bd!      close current or indexed buffer; ! discards
   :q                  quit, or close help
   :q!                 force quit, or close help
+  :cq                 quit with exit status 1
   :tree               toggle the workspace file tree
   :reconnect          restart the gateway and re-handshake
   :lsp-start          ensure the detected language server is active

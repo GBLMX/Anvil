@@ -121,14 +121,17 @@ crossterm's keyboard-enhancement query and the OSC 11 background query.
 anvil [OPTIONS] [FILE]
 
   -w, --workspace <DIR>  Workspace directory; --workspace=DIR is also accepted
+  --editor              External-editor mode; allows one explicit file outside
+                        the cwd by using its parent as the default workspace
   -h, --help             Show help and exit
   -V, --version          Show the version and exit
   --                     Treat the next argument as FILE
 ```
 
-`FILE` must be inside the selected workspace. Use `--` before a file name that
-starts with a dash. Launching without `FILE` shows the start dashboard; the first
-key dismisses it.
+`FILE` must be inside the selected workspace. `--editor` is intended for
+`$EDITOR`-style invocations; `:cq` exits 1 and a failed save keeps the final
+exit status nonzero. Use `--` before a file name that starts with a dash.
+Launching without `FILE` shows the start dashboard; the first key dismisses it.
 
 Quick open: `Space f` filters workspace files and previews the selected file
 through the gateway. Wide terminals show the preview beside the list; narrow
