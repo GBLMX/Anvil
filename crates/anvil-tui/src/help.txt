@@ -65,6 +65,8 @@ Normal mode
   :bd [n] / :bd!      close current or indexed buffer; ! discards
   :q                  quit, or close help
   :q!                 force quit, or close help
+  :conflict-recover   load the conflicted swap into this buffer
+  :conflict-discard   discard the swap and keep the current buffer
   :cq                 quit with exit status 1
   :tree               toggle the workspace file tree
   :reconnect          restart the gateway and re-handshake

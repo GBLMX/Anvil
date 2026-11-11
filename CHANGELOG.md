@@ -51,6 +51,9 @@ post-`0.5.0` feature line.
   split ratio, and open split panes with focus; dirty buffers use atomic 0600
   swap files with mtime conflict detection, periodic snapshots, and preserved
   conflict swaps until resolved.
+- External-file swap conflicts are resolved explicitly with
+  `:conflict-recover` or `:conflict-discard`; saving an unmodified conflicted
+  buffer is refused so disk changes are not overwritten silently.
 - `WorkspaceEdit` now applies `documentChanges` create/rename/delete
   operations, checks per-document LSP versions and request-time buffer
   revisions before mutation, and refuses overwriting open buffers or deleting

@@ -97,6 +97,8 @@ impl Model {
         let argument = parts.next().unwrap_or_default().trim();
         match (name, argument) {
             ("w", "") => self.queue_effect(Effect::Save),
+            ("conflict-recover", "") => self.recover_conflict(),
+            ("conflict-discard", "") => self.discard_conflict(),
             ("w", path) => self.queue_effect(Effect::SaveAs(path.into())),
             ("wa", "") => self.queue_effect(Effect::SaveAll),
             ("e", path) => self.queue_effect(Effect::Open(path.into())),

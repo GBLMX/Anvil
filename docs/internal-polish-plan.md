@@ -118,6 +118,9 @@ surfaces.
 
 ### 3.5 File lifecycle
 
+Status: swap/crash recovery landed. External-change conflicts preserve the
+swap and expose `:conflict-recover` / `:conflict-discard`; saving an
+unmodified conflicted buffer is refused until resolved.
 - Auto-save with an explicit policy.
 - Swap files and crash recovery integration.
 - External-change conflict resolution.

@@ -150,6 +150,69 @@ fn restore_buffer(model: &mut Model, saved: SessionBuffer) -> (Buffer, Option<Pa
     (buffer, conflict_swap, conflicted)
 }
 
+impl Model {
+    pub(crate) fn clear_conflict(&mut self, path: &Path) {
+        if let Some(swap) = self.conflict_swaps.remove(path) {
+            let _ = fs::remove_file(swap);
+        }
+    }
+
+    pub(crate) fn recover_conflict(&mut self) {
+        if self.reject_read_only() {
+            return;
+        }
+        let Some(path) = self.path.clone() else {
+            self.status = "E: no file name".to_owned();
+            self.dirty = true;
+            return;
+        };
+        let Some(swap) = self.conflict_swaps.get(&path).cloned() else {
+            self.status = "no swap conflict for this buffer".to_owned();
+            self.dirty = true;
+            return;
+        };
+        let text = match fs::read_to_string(&swap) {
+            Ok(text) => text,
+            Err(error) => {
+                self.status = format!("E: conflict swap: {error}");
+                self.dirty = true;
+                return;
+            }
+        };
+        self.editor = EditorState::from_text(&text).into();
+        self.cursor = 0;
+        self.scroll = 0;
+        self.hscroll = 0;
+        self.editor.set_selection_bytes(0, 0);
+        self.modified = true;
+        self.missing = false;
+        self.conflict_swaps.remove(&path);
+        self.syntax
+            .borrow_mut()
+            .switch_path(self.path.as_deref(), false);
+        self.sync_lsp_active();
+        self.sync_watch_paths();
+        self.status = "conflict recovered from swap; buffer modified".to_owned();
+        self.dirty = true;
+    }
+
+    pub(crate) fn discard_conflict(&mut self) {
+        let Some(path) = self.path.clone() else {
+            self.status = "E: no file name".to_owned();
+            self.dirty = true;
+            return;
+        };
+        if !self.conflict_swaps.contains_key(&path) {
+            self.status = "no swap conflict for this buffer".to_owned();
+            self.dirty = true;
+            return;
+        }
+        self.clear_conflict(&path);
+        self.status = "conflict discarded; current buffer kept".to_owned();
+        self.dirty = true;
+    }
+}
+
 pub(crate) fn save(model: &mut Model, workspace: &Path) -> Result<(), String> {
     model.sync_active();
     let state_path = state_path(workspace)?;
@@ -415,5 +478,49 @@ mod tests {
         assert_eq!(restored.editor.text().slice(0..5), "dirty");
         assert_eq!(restored.path.as_deref(), Some(right.as_path()));
         assert_eq!(split.buffer.path.as_deref(), Some(left.as_path()));
+    }
+    #[test]
+    fn resolves_conflict_by_recovering_or_discarding_swap() {
+        let dir = state_root();
+        let _guard = ENV_LOCK.lock().expect("env lock");
+        let workspace = dir.path().join("workspace");
+        fs::create_dir_all(&workspace).expect("workspace");
+        let path = workspace.join("a.rs");
+        fs::write(&path, "clean\n").expect("file");
+        unsafe { std::env::set_var("XDG_STATE_HOME", dir.path().join("state")) };
+
+        let mut model = Model::open(&path).expect("open");
+        model.insert_text("dirty");
+        save(&mut model, &workspace).expect("save");
+        fs::write(&path, "changed on disk\n").expect("changed");
+
+        let mut recovered = Model::new(EditorState::from_text(""), None);
+        assert!(restore(&mut recovered, &workspace).expect("restore"));
+        assert!(!recovered.save());
+        assert_eq!(
+            fs::read_to_string(&path).expect("disk"),
+            "changed on disk\n"
+        );
+        recovered.execute_command("conflict-recover");
+        assert!(recovered.modified);
+        assert_eq!(recovered.editor.text().slice(0..5), "dirty");
+        assert!(recovered.conflict_swaps.is_empty());
+        assert!(recovered.save());
+        assert_eq!(fs::read_to_string(&path).expect("disk"), "dirtyclean\n");
+
+        fs::write(&path, "changed again\n").expect("changed again");
+        let mut discarded = Model::new(EditorState::from_text(""), None);
+        assert!(restore(&mut discarded, &workspace).expect("restore"));
+        let swap = discarded
+            .conflict_swaps
+            .values()
+            .next()
+            .cloned()
+            .expect("conflict swap");
+        discarded.execute_command("conflict-discard");
+        assert!(!discarded.modified);
+        assert!(discarded.conflict_swaps.is_empty());
+        assert!(!swap.exists());
+        assert_eq!(fs::read_to_string(&path).expect("disk"), "changed again\n");
     }
 }

@@ -335,6 +335,18 @@ impl Model {
                 return false;
             }
         };
+        let conflict_path = if self.conflict_swaps.contains_key(&path) {
+            Some(path.clone())
+        } else {
+            self.path
+                .clone()
+                .filter(|current| self.conflict_swaps.contains_key(current))
+        };
+        if conflict_path.is_some() && !self.modified {
+            self.status = "E: swap conflict; :conflict-recover or :conflict-discard".to_owned();
+            self.dirty = true;
+            return false;
+        }
         let text = self.editor.text().slice(0..self.editor.text().len_bytes());
         let display = path.display().to_string();
         match self.write_file(&path, &text) {
@@ -343,6 +355,9 @@ impl Model {
                     self.exit_code = 0;
                 }
                 self.path = Some(path.clone());
+                if let Some(conflict) = conflict_path {
+                    self.clear_conflict(&conflict);
+                }
                 self.stdin_buffer = false;
                 self.modified = false;
                 self.missing = false;
@@ -414,6 +429,7 @@ impl Model {
                         buffer.modified = false;
                         buffer.missing = false;
                     }
+                    self.clear_conflict(&path);
                 }
                 Err(error) => {
                     self.status = format!("E: {}: {error}", path.display());
