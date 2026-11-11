@@ -9,9 +9,18 @@ pub fn view(model: &Model, frame: &mut Frame) {
     let title = if model.help_back.is_some() {
         "[help]".to_owned()
     } else {
-        let name = model.breadcrumb_text(usize::from(area.width).saturating_sub(6));
+        let name = if model.stdin_buffer {
+            "[stdin]".to_owned()
+        } else {
+            model.breadcrumb_text(usize::from(area.width).saturating_sub(6))
+        };
         let name = if model.modified {
             format!("[+] {name}")
+        } else {
+            name
+        };
+        let name = if model.read_only {
+            format!("{name} [RO]")
         } else {
             name
         };

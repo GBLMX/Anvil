@@ -1,10 +1,13 @@
 # External Integration Plan
 
-Status: proposed. This plan covers Unix editor integration: `$EDITOR`, stdin
-pipelines, diagnostic-aware pipe mode, and single-instance remote control. It
-is separate from [small-features-plan.md](small-features-plan.md); these changes
-cross the CLI, terminal, workspace boundary, and IPC layers, so they are not
-small keymap additions.
+Status: 1a (`--editor`, `:cq`, sticky save failure) and 1b (`anvil -`,
+stdin, `/dev/tty`, `--read-only`) implemented. This plan covers Unix editor
+integration: `$EDITOR`, stdin pipelines, diagnostic-aware pipe mode, and
+single-instance remote control. Diagnostic locations and single-instance
+control remain pending. It is separate from
+[small-features-plan.md](small-features-plan.md); these changes cross the CLI,
+terminal, workspace boundary, and IPC layers, so they are not small keymap
+additions.
 
 Verdict: the three issues are directionally correct, but the acceptance
 criteria need sharper contracts. In particular, `$EDITOR` cancellation is not

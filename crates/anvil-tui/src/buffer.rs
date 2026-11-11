@@ -98,6 +98,9 @@ impl Model {
     }
 
     pub(crate) fn buffer_name(&self, index: usize) -> String {
+        if index == self.active && self.stdin_buffer {
+            return "[stdin]".to_owned();
+        }
         self.buffers
             .get(index)
             .and_then(|buffer| buffer.path.as_ref())
@@ -358,5 +361,11 @@ impl Model {
     pub(crate) fn quit_with_code(&mut self, code: i32) {
         self.exit_code = code;
         self.quit = true;
+    }
+
+    pub(crate) fn set_stdin_buffer(&mut self, read_only: bool) {
+        self.stdin_buffer = true;
+        self.read_only = read_only;
+        self.welcome = false;
     }
 }

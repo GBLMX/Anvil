@@ -184,6 +184,15 @@ fn editor_mode_keeps_save_failure_sticky_for_q_bang() {
 }
 
 #[test]
+fn stdin_read_only_buffer_rejects_mutation() {
+    let mut model = Model::new(EditorState::from_text("log"), None);
+    model.set_stdin_buffer(true);
+    assert_eq!(model.buffer_name(0), "[stdin]");
+    model.insert_text("x");
+    assert_eq!(model.editor.text().slice(0..3), "log");
+    assert!(model.status.contains("read-only"));
+}
+#[test]
 fn mouse_tab_switch_preserves_the_active_buffer() {
     let dir = tempfile::tempdir().expect("tempdir");
     let first = dir.path().join("first.txt");

@@ -115,7 +115,7 @@ use lsp_worker::{LspEvent, LspWorker};
 #[cfg(target_os = "linux")]
 use plugin_activation::ActivationEvent;
 use syntax::SyntaxState;
-pub use terminal::{run, run_with_workspace, run_with_workspace_status};
+pub use terminal::{run, run_with_input, run_with_workspace, run_with_workspace_status};
 
 const MAX_OPEN_BYTES: usize = 256 * 1024 * 1024;
 const EFFECT_QUEUE_CAPACITY: usize = 32;
@@ -623,6 +623,10 @@ pub struct Model {
     workspace: PathBuf,
     /// Reject file operations instead of falling back when the gateway is absent.
     require_gateway: bool,
+    /// The active buffer was loaded from stdin and has no file path.
+    stdin_buffer: bool,
+    /// Reject mutating commands for a read-only input buffer.
+    read_only: bool,
     /// Whether the process was started as an external editor.
     editor_mode: bool,
     /// Process exit code accumulated by editor-mode failures or `:cq`.
@@ -761,6 +765,8 @@ impl Model {
             git_branch_checked: false,
             workspace: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
             require_gateway: false,
+            stdin_buffer: false,
+            read_only: false,
             editor_mode: false,
             exit_code: 0,
             syntax: RefCell::new(SyntaxState::default()),
@@ -891,7 +897,11 @@ impl Model {
     /// Moves to the end of the cursor line.
     /// Keeps the cursor inside the viewport.
     fn reject_read_only(&mut self) -> bool {
-        if self.help_back.is_some() {
+        if self.read_only {
+            self.status = "E: read-only buffer".to_owned();
+            self.dirty = true;
+            true
+        } else if self.help_back.is_some() {
             self.status = "E: help is read-only".to_owned();
             self.dirty = true;
             true

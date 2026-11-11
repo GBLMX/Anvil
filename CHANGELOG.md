@@ -27,6 +27,9 @@ post-`0.5.0` feature line.
   through `tree-sitter-fish`.
 - `--editor` external-editor mode with a workspace outside the cwd, `:cq`
   exit status 1, and sticky save failures that survive `:q!`.
+- stdin pipeline mode (`git diff | anvil` / `anvil -`), `/dev/tty`
+  reattachment for keyboard input, `[stdin]` unnamed buffers, and
+  `--read-only`.
 - `WorkspaceEdit` now applies `documentChanges` create/rename/delete
   operations, checks per-document LSP versions and request-time buffer
   revisions before mutation, and refuses overwriting open buffers or deleting

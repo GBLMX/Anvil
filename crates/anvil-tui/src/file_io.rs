@@ -61,6 +61,8 @@ impl Model {
             eprintln!("open_path read={read_done:?} index={:?}", start.elapsed());
         }
         self.welcome = false;
+        self.stdin_buffer = false;
+        self.read_only = false;
         self.welcome_back = false;
         self.sync_lsp_active();
         self.sync_watch_paths();
@@ -341,6 +343,7 @@ impl Model {
                     self.exit_code = 0;
                 }
                 self.path = Some(path.clone());
+                self.stdin_buffer = false;
                 self.modified = false;
                 self.missing = false;
                 self.git_checked = None;

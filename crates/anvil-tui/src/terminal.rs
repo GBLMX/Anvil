@@ -1,6 +1,7 @@
 //! Terminal lifecycle and the main event loop.
 
 use super::*;
+use std::io::{IsTerminal, Read};
 /// Runs the minimal terminal loop in the current directory workspace.
 pub fn run(path: Option<PathBuf>) -> io::Result<()> {
     run_with_workspace(path, std::env::current_dir()?)
@@ -17,6 +18,30 @@ pub fn run_with_workspace_status(
     workspace: PathBuf,
     editor_mode: bool,
 ) -> io::Result<i32> {
+    run_with_input(path, workspace, editor_mode, false, false)
+}
+
+/// Runs the terminal loop with optional stdin input and read-only mode.
+pub fn run_with_input(
+    path: Option<PathBuf>,
+    workspace: PathBuf,
+    editor_mode: bool,
+    read_stdin: bool,
+    read_only: bool,
+) -> io::Result<i32> {
+    let stdin_text = if read_stdin || !io::stdin().is_terminal() {
+        if !io::stdout().is_terminal() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "stdin mode requires a terminal stdout",
+            ));
+        }
+        let text = read_stdin_bounded()?;
+        reopen_tty_stdin()?;
+        Some(text)
+    } else {
+        None
+    };
     let timing = std::env::var_os("ANVIL_OPEN_TIMING").is_some();
     let start = Instant::now();
     let workspace = workspace.canonicalize().map_err(|error| {
@@ -36,7 +61,8 @@ pub fn run_with_workspace_status(
         Ok((session, client, lsp_client)) => {
             let mut model = Model::with_gateway(client, workspace.clone());
             model.lsp_client = Some(lsp_client);
-            if let Some(path) = path
+            if stdin_text.is_none()
+                && let Some(path) = path
                 && let Err(error) = model.open_path(path)
             {
                 model.status = format!("E: {error}");
@@ -55,6 +81,24 @@ pub fn run_with_workspace_status(
     };
     model.gateway_session = session;
     model.set_editor_mode(editor_mode);
+
+    if let Some(text) = stdin_text {
+        model.editor = EditorState::from_text(&text).into();
+        model.path = None;
+        model.cursor = 0;
+        model.scroll = 0;
+        model.hscroll = 0;
+        model.modified = false;
+        model.missing = false;
+        model.set_stdin_buffer(read_only);
+        model.syntax.borrow_mut().switch_path(None, false);
+        model.status = if read_only {
+            "[stdin] read-only".to_owned()
+        } else {
+            "[stdin]".to_owned()
+        };
+        model.dirty = true;
+    }
     if let Err(error) = theme_config::load() {
         let message = format!("E: theme config: {error}");
         if model.status.is_empty() {
@@ -172,6 +216,44 @@ pub fn run_with_workspace_status(
             return Ok(model.exit_code());
         }
     }
+}
+
+fn read_stdin_bounded() -> io::Result<String> {
+    let mut data = Vec::new();
+    io::stdin()
+        .take(MAX_OPEN_BYTES as u64 + 1)
+        .read_to_end(&mut data)?;
+    if data.len() > MAX_OPEN_BYTES {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("stdin exceeds {MAX_OPEN_BYTES} bytes"),
+        ));
+    }
+    String::from_utf8(data)
+        .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "stdin is not valid UTF-8"))
+}
+
+#[cfg(unix)]
+fn reopen_tty_stdin() -> io::Result<()> {
+    use std::os::fd::AsRawFd;
+
+    let tty = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open("/dev/tty")?;
+    let result = unsafe { nix::libc::dup2(tty.as_raw_fd(), 0) };
+    if result < 0 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn reopen_tty_stdin() -> io::Result<()> {
+    Err(io::Error::new(
+        io::ErrorKind::Unsupported,
+        "stdin mode requires /dev/tty",
+    ))
 }
 
 #[cfg(target_os = "linux")]

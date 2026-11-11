@@ -9,12 +9,13 @@ const USAGE: &str = "\
 anvil — a terminal editor with a selection-first Rust kernel
 
 Usage:
-  anvil [OPTIONS] [FILE]
+  anvil [OPTIONS] [FILE|-]
 
 Options:
   -w, --workspace <DIR>  Workspace directory; --workspace=DIR is also accepted
   --editor              External-editor mode; allows one explicit file outside
                         the cwd by using its parent as the default workspace
+  --read-only           Reject mutating commands
   -h, --help             Show this help and exit
   -V, --version          Show the version and exit
   --                     Treat the next argument as FILE
@@ -45,6 +46,8 @@ enum Command {
         workspace: PathBuf,
         path: Option<PathBuf>,
         editor: bool,
+        stdin: bool,
+        read_only: bool,
     },
     Help,
     Version,
@@ -71,8 +74,10 @@ fn run() -> std::io::Result<()> {
             workspace,
             path,
             editor,
+            stdin,
+            read_only,
         }) => {
-            let code = anvil_tui::run_with_workspace_status(path, workspace, editor)?;
+            let code = anvil_tui::run_with_input(path, workspace, editor, stdin, read_only)?;
             if code != 0 {
                 process::exit(code);
             }
@@ -93,6 +98,8 @@ where
     let mut workspace = None;
     let mut path = None;
     let mut editor = false;
+    let mut stdin = false;
+    let mut read_only = false;
 
     while let Some(argument) = arguments.next() {
         if argument == "--help" || argument == "-h" {
@@ -103,6 +110,14 @@ where
         }
         if argument == "--editor" {
             editor = true;
+            continue;
+        }
+        if argument == "--read-only" {
+            read_only = true;
+            continue;
+        }
+        if argument == "-" {
+            stdin = true;
             continue;
         }
         if argument == "--workspace" || argument == "-w" {
@@ -138,6 +153,12 @@ where
         path = Some(PathBuf::from(argument));
     }
 
+    if stdin && path.is_some() {
+        return Err("stdin and FILE are mutually exclusive".to_owned());
+    }
+    if editor && stdin {
+        return Err("--editor cannot be combined with stdin".to_owned());
+    }
     let workspace = match workspace {
         Some(workspace) => workspace,
         None if editor => editor_workspace(path.as_deref())?,
@@ -147,6 +168,8 @@ where
         workspace,
         path,
         editor,
+        stdin,
+        read_only,
     })
 }
 
@@ -188,6 +211,8 @@ mod tests {
                 workspace: PathBuf::from("/tmp/workspace"),
                 path: Some(PathBuf::from("src/main.rs")),
                 editor: false,
+                stdin: false,
+                read_only: false,
             }
         );
     }
@@ -201,6 +226,8 @@ mod tests {
                 workspace: PathBuf::from("/tmp/workspace"),
                 path: None,
                 editor: false,
+                stdin: false,
+                read_only: false,
             }
         );
     }
@@ -214,7 +241,42 @@ mod tests {
                 workspace: PathBuf::from("/tmp/workspace"),
                 path: Some(PathBuf::from("-notes")),
                 editor: false,
+                stdin: false,
+                read_only: false,
             }
+        );
+    }
+
+    #[test]
+    fn parses_stdin_and_read_only() {
+        let command = parse_args(args(&["-", "--read-only"])).unwrap();
+        let Command::Run {
+            path,
+            editor,
+            stdin,
+            read_only,
+            ..
+        } = command
+        else {
+            panic!("expected run command");
+        };
+        assert_eq!(path, None);
+        assert!(!editor);
+        assert!(stdin);
+        assert!(read_only);
+    }
+
+    #[test]
+    fn rejects_stdin_with_a_file_or_editor_mode() {
+        assert!(
+            parse_args(args(&["-", "file.rs"]))
+                .unwrap_err()
+                .contains("mutually exclusive")
+        );
+        assert!(
+            parse_args(args(&["--editor", "-"]))
+                .unwrap_err()
+                .contains("cannot be combined")
         );
     }
 
@@ -230,6 +292,8 @@ mod tests {
                 workspace: directory.path().canonicalize().expect("canonical"),
                 path: Some(file),
                 editor: true,
+                stdin: false,
+                read_only: false,
             }
         );
     }
