@@ -44,6 +44,8 @@ post-`0.5.0` feature line.
 - snippet parsing preserves repeated tabstop indices; sessions group them as
   mirrors, navigate each unique tabstop once, and apply typed insertions and
   deletions to all mirrors.
+- LSP code lens requests are parsed with `MAX_CODE_LENS` and
+  `MAX_CODE_LENS_PER_LINE` bounds; virtual-row rendering remains pending.
 - `WorkspaceEdit` now applies `documentChanges` create/rename/delete
   operations, checks per-document LSP versions and request-time buffer
   revisions before mutation, and refuses overwriting open buffers or deleting

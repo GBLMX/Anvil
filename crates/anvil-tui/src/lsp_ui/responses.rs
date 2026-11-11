@@ -106,6 +106,11 @@ impl Model {
         let edit_path = self.pending_edit_path.remove(&id);
         let edit_snapshot = self.pending_edit_snapshot.remove(&id);
         if let Some(error) = error {
+            if kind == LspRequestKind::CodeLens {
+                self.code_lens = None;
+                self.dirty = true;
+                return;
+            }
             if kind == LspRequestKind::CompletionResolve {
                 self.completion_resolve = None;
             }
@@ -143,6 +148,7 @@ impl Model {
                 | LspRequestKind::CallHierarchyOutgoing
                 | LspRequestKind::FoldingRange
                 | LspRequestKind::SemanticTokens
+                | LspRequestKind::CodeLens
         ) && edit_path
             .as_ref()
             .is_some_and(|path| self.path.as_ref() != Some(path))
@@ -170,6 +176,7 @@ impl Model {
             }
             LspRequestKind::FoldingRange => self.apply_folding_response(&result),
             LspRequestKind::SemanticTokens => self.apply_semantic_tokens_response(&result),
+            LspRequestKind::CodeLens => self.apply_code_lens_response(&result, edit_revision),
             LspRequestKind::Hover => self.apply_hover_response(&result),
             LspRequestKind::Rename => {
                 if result.is_null() {

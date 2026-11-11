@@ -190,6 +190,7 @@ impl Model {
                 | LspRequestKind::CallHierarchyOutgoing
                 | LspRequestKind::FoldingRange
                 | LspRequestKind::SemanticTokens
+                | LspRequestKind::CodeLens
         ) {
             self.pending_edit_revision
                 .insert(id, self.editor.revision());

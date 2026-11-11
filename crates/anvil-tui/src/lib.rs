@@ -54,6 +54,7 @@ mod gateway;
 mod git_gutter;
 mod icon_theme;
 use command_line::CommandCompletion;
+mod code_lens;
 mod inlay_hints;
 pub mod lsp;
 mod lsp_ui;
@@ -318,6 +319,7 @@ enum LspRequestKind {
     SignatureHelp,
     WorkspaceSymbol,
     InlayHint,
+    CodeLens,
 }
 
 #[derive(Debug, Clone)]
@@ -567,6 +569,7 @@ pub struct Model {
     next_lsp_request: u64,
     completion: Option<CompletionState>,
     completion_resolve: Option<(u64, usize)>,
+    code_lens: Option<code_lens::CodeLensState>,
     snippet: Option<SnippetSession>,
     semantic_legend: Vec<String>,
     semantic_tokens: Vec<SemanticToken>,
@@ -724,6 +727,7 @@ impl Model {
             lsp_versions: HashMap::new(),
             next_lsp_request: 2,
             completion: None,
+            code_lens: None,
             completion_resolve: None,
             snippet: None,
             semantic_legend: Vec::new(),
@@ -999,6 +1003,7 @@ impl Model {
         self.hover = None;
         self.ui.diagnostic_peek = None;
         self.code_actions = None;
+        self.code_lens = None;
         self.document_symbols = None;
         self.references = None;
         self.document_highlights = None;
@@ -1033,6 +1038,7 @@ impl Model {
             self.start_lsp();
             if self.active_lsp_worker().is_some() {
                 self.request_folding_ranges(None);
+                self.request_code_lens();
             }
             return;
         }
@@ -1045,6 +1051,7 @@ impl Model {
         if has_worker {
             self.request_semantic_tokens();
             self.request_folding_ranges(None);
+            self.request_code_lens();
         }
     }
 
