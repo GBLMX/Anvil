@@ -431,6 +431,11 @@ mod tests {
         let mut restored = Model::new(EditorState::from_text(""), None);
         assert!(restore(&mut restored, &workspace).expect("restore"));
         assert!(restored.modified);
+        assert_eq!(
+            restored.editor.undo_depth(),
+            0,
+            "restore must start a fresh undo stack"
+        );
         assert_eq!(restored.editor.text().slice(0..5), "dirty");
 
         fs::write(&path, "changed on disk\n").expect("changed");

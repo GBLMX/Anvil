@@ -61,11 +61,14 @@ Difficulty: M. Main risk is scope creep; do not build a ten-tab settings clone.
 
 Status: buffer/cursor/active-tab restore, tree/ratio layout state, open split
 panes with focus, and dirty buffer swap recovery landed. Conflict swaps are
-retained until resolved; undo persistence remains.
+retained until resolved. Persistent undo history is explicitly rejected for
+this phase.
 - Restore buffers, cursors, active tabs, tree visibility, split ratio, and open
   split panes with focus.
-- Back up unsaved buffers and recover after a crash.
-- Persist undo history or explicitly reject it with a measured alternative.
+- Persistent undo history is rejected: offset-based edit records are valid only
+  against one exact text state. Restore keeps the exact buffer or swap text and
+  starts a fresh undo stack; a second validated replay format and unbounded
+  session JSON are not justified.
 - Never silently discard dirty state.
 
 Difficulty: L–XL. Main risk is data loss and schema migration.
@@ -174,7 +177,7 @@ These remain documented, but they do not block internal polish.
 1. LSP completion snippet mirrors and ranking.
 2. LSP code lens with above-line virtual rows.
 3. Session restore and crash backup.
-4. Persistent undo decision and implementation.
+4. Persistent undo decision: fresh stack after restore.
 5. Git diff/hunk/blame/conflict.
 6. Auto-save, swap, and external-conflict resolution.
 7. P1 adapters only after P0 dogfood.
