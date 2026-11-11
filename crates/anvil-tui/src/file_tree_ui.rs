@@ -116,6 +116,12 @@ impl Model {
                 FileEvent::GitBlameText { generation, result } => {
                     self.handle_git_blame_text(generation, result)
                 }
+                FileEvent::GitConflictStageText {
+                    relative,
+                    stage,
+                    generation,
+                    result,
+                } => self.handle_git_conflict_stage(relative, stage, generation, result),
                 FileEvent::GitConflictsText { generation, result } => {
                     self.handle_git_conflicts_text(generation, result)
                 }

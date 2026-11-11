@@ -403,6 +403,86 @@ impl Model {
     }
 }
 
+impl Model {
+    pub(crate) fn request_git_conflict_stage(&mut self, stage: u8) {
+        if self.help_back.is_some() {
+            self.status = "already viewing a read-only view".to_owned();
+            self.dirty = true;
+            return;
+        }
+        let Some(path) = self.path.clone() else {
+            self.status = "E: no file name".to_owned();
+            self.dirty = true;
+            return;
+        };
+        let relative = match self.relative_path(&path) {
+            Ok(relative) => relative,
+            Err(error) => {
+                self.status = format!("E: {error}");
+                self.dirty = true;
+                return;
+            }
+        };
+        let Some(worker) = self.file_worker.as_ref() else {
+            self.status = "E: file worker unavailable".to_owned();
+            self.dirty = true;
+            return;
+        };
+        self.git_stage_generation = self.git_stage_generation.wrapping_add(1);
+        let generation = self.git_stage_generation;
+        if let Err(error) = worker.request(FileRequest::GitConflictStageText {
+            relative,
+            stage,
+            generation,
+        }) {
+            self.status = format!("E: git conflict stage: {error}");
+            self.dirty = true;
+            return;
+        }
+        self.git_stage_pending = Some(generation);
+        self.status = "loading conflict stage...".to_owned();
+        self.dirty = true;
+    }
+
+    pub(crate) fn handle_git_conflict_stage(
+        &mut self,
+        relative: String,
+        stage: u8,
+        generation: u64,
+        result: Result<(String, bool), String>,
+    ) {
+        if self.git_stage_pending != Some(generation) {
+            return;
+        }
+        self.git_stage_pending = None;
+        let name = match stage {
+            1 => "base",
+            2 => "ours",
+            3 => "theirs",
+            _ => "unknown",
+        };
+        match result {
+            Ok((text, truncated)) => {
+                let title = if truncated {
+                    format!("Git conflict {name} (truncated): :q returns")
+                } else {
+                    format!("Git conflict {name}: :q returns")
+                };
+                let body = if truncated {
+                    format!("Git conflict {name}: {relative} (truncated)\n\n{text}")
+                } else {
+                    format!("Git conflict {name}: {relative}\n\n{text}")
+                };
+                self.show_read_only(&body, &title, &format!("Git conflict {name}"));
+            }
+            Err(error) => {
+                self.status = format!("E: git conflict stage {name}: {error}");
+                self.dirty = true;
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

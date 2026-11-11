@@ -60,6 +60,9 @@ post-`0.5.0` feature line.
   connections are denied even with `sys.exec`.
 - `:git-conflicts` lists unmerged paths from the index; conflict resolution
   operations remain separate.
+- `:git-conflict-base`, `:git-conflict-ours`, and `:git-conflict-theirs`
+  preview index stages with fixed `git show` arguments; missing stages fail
+  visibly instead of falling back to working-tree markers.
 - Restored buffers start with a fresh undo stack; offset-based edit records are
   not serialized, while exact buffer or swap text is preserved.
 - External-file swap conflicts are resolved explicitly with

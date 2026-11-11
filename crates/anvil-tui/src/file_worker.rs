@@ -54,6 +54,12 @@ pub enum FileRequest {
     },
     /// List unmerged paths in the index.
     GitConflictsText { generation: u64 },
+    /// Read one index stage for a conflicted workspace file.
+    GitConflictStageText {
+        relative: String,
+        stage: u8,
+        generation: u64,
+    },
     /// Read a bounded blame view for one workspace-relative file.
     GitBlameText { relative: String, generation: u64 },
     /// Move or copy one workspace entry.
@@ -113,6 +119,13 @@ pub enum FileEvent {
     },
     /// Bounded unmerged-path list.
     GitConflictsText {
+        generation: u64,
+        result: Result<(String, bool), String>,
+    },
+    /// Bounded index-stage text for a conflicted file.
+    GitConflictStageText {
+        relative: String,
+        stage: u8,
         generation: u64,
         result: Result<(String, bool), String>,
     },
@@ -312,6 +325,19 @@ impl FileWorker {
                                     from,
                                     to,
                                     copy,
+                                    result,
+                                }
+                            }
+                            FileRequest::GitConflictStageText {
+                                relative,
+                                stage,
+                                generation,
+                            } => {
+                                let result = git_conflict_stage_text(&mut client, &relative, stage);
+                                FileEvent::GitConflictStageText {
+                                    relative,
+                                    stage,
+                                    generation,
                                     result,
                                 }
                             }
@@ -752,6 +778,44 @@ fn git_conflicts_text(client: &mut GatewayClient) -> Result<(String, bool), Stri
     }
     if text.is_empty() {
         text.push_str("no conflicts\n");
+    }
+    Ok((text, truncated))
+}
+
+fn git_conflict_stage_text(
+    client: &mut GatewayClient,
+    relative: &str,
+    stage: u8,
+) -> Result<(String, bool), String> {
+    if !(1..=3).contains(&stage) {
+        return Err("invalid conflict stage".to_owned());
+    }
+    let spec = format!(":{stage}:{relative}");
+    let result = client
+        .exec(
+            &git_tool(),
+            &["--no-pager".to_owned(), "show".to_owned(), spec],
+            5000,
+        )
+        .map_err(|error| error.to_string())?;
+    if result.timed_out {
+        return Err("git show timed out".to_owned());
+    }
+    if result.exit_code != 0 {
+        return Err(result.stderr);
+    }
+    let mut text = result.stdout;
+    let mut truncated = result.output_truncated;
+    if text.len() > MAX_GIT_DIFF_BYTES {
+        let mut end = MAX_GIT_DIFF_BYTES;
+        while !text.is_char_boundary(end) {
+            end -= 1;
+        }
+        text.truncate(end);
+        truncated = true;
+    }
+    if text.is_empty() {
+        text.push_str("stage is empty\n");
     }
     Ok((text, truncated))
 }

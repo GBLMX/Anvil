@@ -77,6 +77,9 @@ Normal mode
   :reconnect          restart the gateway and re-handshake
   :git-blame          show blame for the current file
   :git-conflicts      list unmerged paths
+  :git-conflict-base   preview index stage 1 (base)
+  :git-conflict-ours   preview index stage 2 (ours)
+  :git-conflict-theirs preview index stage 3 (theirs)
   :lsp-start          ensure the detected language server is active
   :lsp-stop           stop the active language server
   :format              format the current document

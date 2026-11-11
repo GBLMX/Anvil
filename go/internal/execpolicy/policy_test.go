@@ -112,3 +112,16 @@ func TestValidatesGitConflicts(t *testing.T) {
 		t.Fatalf("unexpected conflict filter: %v", err)
 	}
 }
+
+func TestValidatesGitShowStages(t *testing.T) {
+	for _, spec := range []string{":1:src/main.go", ":2:src/main.go", ":3:src/main.go"} {
+		if err := Validate("/usr/bin/git", []string{"--no-pager", "show", spec}); err != nil {
+			t.Fatalf("git show %s: %v", spec, err)
+		}
+	}
+	for _, spec := range []string{":4:src/main.go", ":2:../secret", ":2:/etc/passwd", ":2:"} {
+		if err := Validate("/usr/bin/git", []string{"--no-pager", "show", spec}); !errors.Is(err, ErrInvalidArgs) {
+			t.Fatalf("git show %s: got %v", spec, err)
+		}
+	}
+}

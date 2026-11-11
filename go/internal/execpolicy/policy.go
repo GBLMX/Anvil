@@ -141,6 +141,9 @@ func validateGit(args []string) error {
 	if len(args) > 1 && args[1] == "blame" {
 		return validateGitBlame(args)
 	}
+	if len(args) > 1 && args[1] == "show" {
+		return validateGitShow(args)
+	}
 	if len(args) == 10 && args[1] == "diff" && args[2] == "--cached" {
 		normalized := make([]string, 0, len(args)-1)
 		normalized = append(normalized, args[:2]...)
@@ -181,6 +184,26 @@ func validateGitBlame(args []string) error {
 	path := filepath.Clean(args[4])
 	if path == "" || path == "." || path == ".." || filepath.IsAbs(path) ||
 		strings.HasPrefix(path, ".."+string(filepath.Separator)) {
+		return fmt.Errorf("%w: invalid git path", ErrInvalidArgs)
+	}
+	return nil
+}
+
+func validateGitShow(args []string) error {
+	if len(args) != 3 || args[0] != "--no-pager" || args[1] != "show" {
+		return fmt.Errorf("%w: unsupported git show", ErrInvalidArgs)
+	}
+	spec := args[2]
+	var path string
+	switch {
+	case strings.HasPrefix(spec, ":1:"), strings.HasPrefix(spec, ":2:"), strings.HasPrefix(spec, ":3:"):
+		path = spec[3:]
+	default:
+		return fmt.Errorf("%w: invalid conflict stage", ErrInvalidArgs)
+	}
+	clean := filepath.Clean(path)
+	if clean == "" || clean == "." || clean == ".." || filepath.IsAbs(clean) ||
+		strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
 		return fmt.Errorf("%w: invalid git path", ErrInvalidArgs)
 	}
 	return nil

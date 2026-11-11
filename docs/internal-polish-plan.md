@@ -111,8 +111,8 @@ medium-to-large because above-line rendering requires that display map.
 ### 3.4 Git
 
 Status: read-only `:git-diff` and `:git-diff --staged`, gutter marks, hunk
-navigation, single-hunk stage/unstage, `:git-blame`, and `:git-conflicts`
-listing landed. Conflict resolution operations remain.
+navigation, single-hunk stage/unstage, `:git-blame`, `:git-conflicts`, and
+read-only base/ours/theirs previews landed. Conflict resolution operations remain.
 - Keep gutter marks as a derived view, not the only Git surface.
 
 Difficulty: XL. Git index mutations and conflict resolution are data-loss
