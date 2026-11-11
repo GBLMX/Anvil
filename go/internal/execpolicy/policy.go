@@ -131,6 +131,15 @@ func validateFd(args []string) error {
 }
 
 func validateGit(args []string) error {
+	if len(args) > 1 && args[1] == "apply" {
+		return validateGitApply(args)
+	}
+	if len(args) == 10 && args[1] == "diff" && args[2] == "--cached" {
+		normalized := make([]string, 0, len(args)-1)
+		normalized = append(normalized, args[:2]...)
+		normalized = append(normalized, args[3:]...)
+		args = normalized
+	}
 	if len(args) != 9 || args[0] != "--no-pager" || args[1] != "diff" ||
 		args[2] != "--no-ext-diff" || args[3] != "--no-textconv" ||
 		args[4] != "--no-color" ||
@@ -142,6 +151,17 @@ func validateGit(args []string) error {
 	if path == "" || path == "." || path == ".." || filepath.IsAbs(path) ||
 		strings.HasPrefix(path, ".."+string(filepath.Separator)) {
 		return fmt.Errorf("%w: invalid git path", ErrInvalidArgs)
+	}
+	return nil
+}
+
+func validateGitApply(args []string) error {
+	reverse := len(args) == 7 && args[4] == "-R"
+	if (!reverse && len(args) != 6) || (reverse && len(args) != 7) ||
+		args[0] != "--no-pager" || args[1] != "apply" ||
+		args[2] != "--cached" || args[3] != "--whitespace=nowarn" ||
+		args[len(args)-2] != "--" || args[len(args)-1] != ".anvil-tmp/git-hunk.patch" {
+		return fmt.Errorf("%w: unsupported git apply", ErrInvalidArgs)
 	}
 	return nil
 }

@@ -562,6 +562,12 @@ pub struct Model {
     git_diff_generation: u64,
     /// Pending Git diff generation, if a request is in flight.
     git_diff_pending: Option<u64>,
+    /// Parsed hunks for the active Git diff view.
+    git_diff_view: Option<git_diff::GitDiffView>,
+    /// Latest requested hunk-apply generation.
+    git_apply_generation: u64,
+    /// Pending hunk-apply generation, if a request is in flight.
+    git_apply_pending: Option<u64>,
     /// LSP folding ranges for the active buffer.
     folds: Vec<FoldRange>,
     /// Start lines of closed folds.
@@ -730,6 +736,9 @@ impl Model {
             git_due: None,
             git_diff_generation: 0,
             git_diff_pending: None,
+            git_diff_view: None,
+            git_apply_generation: 0,
+            git_apply_pending: None,
             folds: Vec::new(),
             folded: HashSet::new(),
             fold_revision: None,
@@ -982,6 +991,22 @@ impl Model {
         true
     }
 
+    fn replace_read_only(&mut self, text: &str, status: &str, title: &str) {
+        if self.help_back.is_none() {
+            self.show_read_only(text, status, title);
+            return;
+        }
+        self.editor = EditorState::from_text(text).into();
+        self.syntax.borrow_mut().switch_path(None, true);
+        self.cursor = 0;
+        self.scroll = 0;
+        self.hscroll = 0;
+        self.modified = false;
+        self.read_only_title = Some(title.to_owned());
+        self.status = status.to_owned();
+        self.dirty = true;
+    }
+
     fn close_help(&mut self) -> bool {
         let Some(saved) = self.help_back.take() else {
             return false;
@@ -990,6 +1015,9 @@ impl Model {
             .read_only_title
             .take()
             .unwrap_or_else(|| "help".to_owned());
+        self.git_diff_view = None;
+        self.git_diff_pending = None;
+        self.git_apply_pending = None;
         let syntax = saved.syntax.clone();
         self.editor = saved.editor;
         self.path = saved.path;

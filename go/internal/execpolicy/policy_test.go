@@ -45,6 +45,13 @@ func TestValidatesGitDiff(t *testing.T) {
 	if err := Validate("/usr/bin/git", args); err != nil {
 		t.Fatalf("git full diff: %v", err)
 	}
+	staged := []string{"--no-pager", "diff", "--cached", "--no-ext-diff", "--no-textconv", "--no-color", "--unified=3", "HEAD", "--", "src/main.go"}
+	if err := Validate("/usr/bin/git", staged); err != nil {
+		t.Fatalf("git staged diff: %v", err)
+	}
+	if staged[2] != "--cached" {
+		t.Fatalf("validator mutated staged args: %v", staged)
+	}
 	for _, bad := range [][]string{
 		{"diff"},
 		{"--no-pager", "show", "HEAD"},
@@ -53,6 +60,26 @@ func TestValidatesGitDiff(t *testing.T) {
 	} {
 		if err := Validate("/usr/bin/git", bad); !errors.Is(err, ErrInvalidArgs) {
 			t.Fatalf("git %v: got %v", bad, err)
+		}
+	}
+}
+
+func TestValidatesGitApply(t *testing.T) {
+	for _, args := range [][]string{
+		{"--no-pager", "apply", "--cached", "--whitespace=nowarn", "--", ".anvil-tmp/git-hunk.patch"},
+		{"--no-pager", "apply", "--cached", "--whitespace=nowarn", "-R", "--", ".anvil-tmp/git-hunk.patch"},
+	} {
+		if err := Validate("/usr/bin/git", args); err != nil {
+			t.Fatalf("git apply %v: %v", args, err)
+		}
+	}
+	for _, args := range [][]string{
+		{"--no-pager", "apply", "--cached", "--whitespace=nowarn", "--", "outside.patch"},
+		{"--no-pager", "apply", "--cached", "--whitespace=nowarn", "--", "../git-hunk.patch"},
+		{"--no-pager", "apply", "--cached", "--whitespace=nowarn", "-R", ".anvil-tmp/git-hunk.patch"},
+	} {
+		if err := Validate("/usr/bin/git", args); !errors.Is(err, ErrInvalidArgs) {
+			t.Fatalf("git apply %v: got %v", args, err)
 		}
 	}
 }

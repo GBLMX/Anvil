@@ -68,6 +68,10 @@ Normal mode
   :conflict-recover   load the conflicted swap into this buffer
   :conflict-discard   discard the swap and keep the current buffer
   :git-diff           show the current file diff against HEAD
+  :git-diff --staged  show the staged diff against HEAD
+  :git-hunk-next/prev jump between diff hunks
+  :git-stage-hunk     stage the hunk at the cursor
+  :git-unstage-hunk   unstage the hunk at the cursor
   :cq                 quit with exit status 1
   :tree               toggle the workspace file tree
   :reconnect          restart the gateway and re-handshake

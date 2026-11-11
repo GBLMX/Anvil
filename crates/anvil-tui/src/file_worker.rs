@@ -41,7 +41,17 @@ pub enum FileRequest {
         revision: u64,
     },
     /// Read a bounded unified diff for one workspace-relative file.
-    GitDiffText { relative: String, generation: u64 },
+    GitDiffText {
+        relative: String,
+        staged: bool,
+        generation: u64,
+    },
+    /// Apply one hunk patch to the index.
+    GitApplyHunk {
+        patch: String,
+        reverse: bool,
+        generation: u64,
+    },
     /// Move or copy one workspace entry.
     Transfer {
         from: PathBuf,
@@ -82,8 +92,15 @@ pub enum FileEvent {
     },
     /// Bounded unified diff text and whether it was truncated.
     GitDiffText {
+        relative: String,
+        staged: bool,
         generation: u64,
         result: Result<(String, bool), String>,
+    },
+    /// Result of applying one hunk patch to the index.
+    GitApplied {
+        generation: u64,
+        result: Result<(), String>,
     },
     /// A move or copy completed.
     Transferred {
@@ -229,10 +246,24 @@ impl FileWorker {
                             },
                             FileRequest::GitDiffText {
                                 relative,
+                                staged,
                                 generation,
-                            } => FileEvent::GitDiffText {
+                            } => {
+                                let result = git_diff_text(&mut client, &relative, staged);
+                                FileEvent::GitDiffText {
+                                    relative,
+                                    staged,
+                                    generation,
+                                    result,
+                                }
+                            }
+                            FileRequest::GitApplyHunk {
+                                patch,
+                                reverse,
                                 generation,
-                                result: git_diff_text(&mut client, &relative),
+                            } => FileEvent::GitApplied {
+                                generation,
+                                result: apply_git_hunk(&mut client, &patch, reverse),
                             },
                             FileRequest::Transfer { from, to, copy } => {
                                 let result = if copy {
@@ -584,23 +615,26 @@ fn git_diff(client: &mut GatewayClient, relative: &str) -> Result<Vec<(usize, ch
 
 const MAX_GIT_DIFF_BYTES: usize = 512 * 1024;
 
-fn git_diff_text(client: &mut GatewayClient, relative: &str) -> Result<(String, bool), String> {
+fn git_diff_text(
+    client: &mut GatewayClient,
+    relative: &str,
+    staged: bool,
+) -> Result<(String, bool), String> {
+    let mut args = vec!["--no-pager".to_owned(), "diff".to_owned()];
+    if staged {
+        args.push("--cached".to_owned());
+    }
+    args.extend([
+        "--no-ext-diff".to_owned(),
+        "--no-textconv".to_owned(),
+        "--no-color".to_owned(),
+        "--unified=3".to_owned(),
+        "HEAD".to_owned(),
+        "--".to_owned(),
+        relative.to_owned(),
+    ]);
     let result = client
-        .exec(
-            &git_tool(),
-            &[
-                "--no-pager".to_owned(),
-                "diff".to_owned(),
-                "--no-ext-diff".to_owned(),
-                "--no-textconv".to_owned(),
-                "--no-color".to_owned(),
-                "--unified=3".to_owned(),
-                "HEAD".to_owned(),
-                "--".to_owned(),
-                relative.to_owned(),
-            ],
-            5000,
-        )
+        .exec(&git_tool(), &args, 5000)
         .map_err(|error| error.to_string())?;
     if result.timed_out {
         return Err("git diff timed out".to_owned());
@@ -622,6 +656,36 @@ fn git_diff_text(client: &mut GatewayClient, relative: &str) -> Result<(String, 
         text.push_str("no changes relative to HEAD\n");
     }
     Ok((text, truncated))
+}
+
+const GIT_HUNK_PATCH: &str = ".anvil-tmp/git-hunk.patch";
+
+fn apply_git_hunk(client: &mut GatewayClient, patch: &str, reverse: bool) -> Result<(), String> {
+    client
+        .write_all(GIT_HUNK_PATCH, patch.as_bytes())
+        .map_err(|error| error.to_string())?;
+    let mut args = vec![
+        "--no-pager".to_owned(),
+        "apply".to_owned(),
+        "--cached".to_owned(),
+        "--whitespace=nowarn".to_owned(),
+    ];
+    if reverse {
+        args.push("-R".to_owned());
+    }
+    args.extend(["--".to_owned(), GIT_HUNK_PATCH.to_owned()]);
+    let result = client
+        .exec(&git_tool(), &args, 5000)
+        .map_err(|error| error.to_string());
+    let _ = client.remove(GIT_HUNK_PATCH);
+    let result = result?;
+    if result.timed_out {
+        return Err("git apply timed out".to_owned());
+    }
+    if result.exit_code != 0 {
+        return Err(result.stderr);
+    }
+    Ok(())
 }
 
 fn parse_git_diff(output: &str) -> Vec<(usize, char)> {

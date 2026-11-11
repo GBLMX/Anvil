@@ -110,13 +110,9 @@ medium-to-large because above-line rendering requires that display map.
 
 ### 3.4 Git
 
-Status: read-only `:git-diff` view and gutter marks landed. The sandbox now
-permits `chdir`, so Git works under the exec runner. Hunk staging, blame, and
-Git conflict handling remain.
-- Diff view.
-- Hunk staging and unstaging.
-- Blame.
-- Conflict handling.
+Status: read-only `:git-diff` and `:git-diff --staged`, gutter marks, hunk
+navigation, and single-hunk stage/unstage landed. Blame and Git conflict
+handling remain.
 - Keep gutter marks as a derived view, not the only Git surface.
 
 Difficulty: XL. Git index mutations and conflict resolution are data-loss
