@@ -506,6 +506,18 @@ mod tests {
             fs::read_to_string(&path).expect("disk"),
             "changed on disk\n"
         );
+        let swap = recovered
+            .conflict_swaps
+            .values()
+            .next()
+            .cloned()
+            .expect("conflict swap");
+        recovered.insert_text("edited");
+        let other = workspace.join("other.rs");
+        assert!(!recovered.save_to(other.clone()));
+        assert!(!other.exists());
+        assert!(!recovered.conflict_swaps.is_empty());
+        assert!(swap.exists());
         recovered.execute_command("conflict-recover");
         assert!(recovered.modified);
         assert_eq!(recovered.editor.text().slice(0..5), "dirty");

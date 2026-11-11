@@ -61,8 +61,8 @@ Difficulty: M. Main risk is scope creep; do not build a ten-tab settings clone.
 
 Status: buffer/cursor/active-tab restore, tree/ratio layout state, open split
 panes with focus, and dirty buffer swap recovery landed. Conflict swaps are
-retained until resolved. Persistent undo history is explicitly rejected for
-this phase.
+retained until resolved; save/save-as is blocked until resolution. Persistent
+undo history is explicitly rejected for this phase.
 - Restore buffers, cursors, active tabs, tree visibility, split ratio, and open
   split panes with focus.
 - Persistent undo history is rejected: offset-based edit records are valid only

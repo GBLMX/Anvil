@@ -55,7 +55,8 @@ post-`0.5.0` feature line.
   not serialized, while exact buffer or swap text is preserved.
 - External-file swap conflicts are resolved explicitly with
   `:conflict-recover` or `:conflict-discard`; saving an unmodified conflicted
-  buffer is refused so disk changes are not overwritten silently.
+  buffer, or saving it elsewhere, is refused until resolved so swaps are not
+  discarded silently.
 - `WorkspaceEdit` now applies `documentChanges` create/rename/delete
   operations, checks per-document LSP versions and request-time buffer
   revisions before mutation, and refuses overwriting open buffers or deleting

@@ -335,18 +335,35 @@ impl Model {
                 return false;
             }
         };
-        let conflict_path = if self.conflict_swaps.contains_key(&path) {
-            Some(path.clone())
-        } else {
-            self.path
-                .clone()
-                .filter(|current| self.conflict_swaps.contains_key(current))
-        };
-        if conflict_path.is_some() && !self.modified {
-            self.status = "E: swap conflict; :conflict-recover or :conflict-discard".to_owned();
+        let current_conflict = self
+            .path
+            .as_ref()
+            .filter(|current| self.conflict_swaps.contains_key(*current))
+            .cloned();
+        if let Some(conflict) = &current_conflict {
+            if path != *conflict {
+                self.status =
+                    "E: resolve the current swap conflict before saving elsewhere".to_owned();
+                self.dirty = true;
+                return false;
+            }
+            if !self.modified {
+                self.status = "E: swap conflict; :conflict-recover or :conflict-discard".to_owned();
+                self.dirty = true;
+                return false;
+            }
+        }
+        let target_conflict = self.conflict_swaps.contains_key(&path);
+        if target_conflict && current_conflict.is_none() {
+            self.status = "E: destination has an unresolved swap conflict".to_owned();
             self.dirty = true;
             return false;
         }
+        let conflict_path = if target_conflict {
+            Some(path.clone())
+        } else {
+            None
+        };
         let text = self.editor.text().slice(0..self.editor.text().len_bytes());
         let display = path.display().to_string();
         match self.write_file(&path, &text) {
