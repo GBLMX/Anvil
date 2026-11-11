@@ -1,7 +1,7 @@
 # Internal Polish Plan
 
-Status: active. Version is frozen at **0.6.0**. This is a long internal-polish
-phase, not a public release line.
+Status: active, P0 complete. Version is frozen at **0.6.0**. This is a long
+internal-polish phase, not a public release line.
 
 The project keeps landing code and docs, but does not bump the version, create
 release tags, publish GitHub releases, or open a marketplace during this phase.

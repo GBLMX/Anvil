@@ -52,7 +52,7 @@ Cross-cutting tracks that do not jump the queue:
 |---|---|---|
 | [0.4.x](0.4.x-plan.md) | plugin lifecycle, I/O, session/protocol | landed / rescoped |
 | [0.5.x](0.5.x-plan.md) | modal editing and modern TUI interaction | landed |
-| [Internal polish](internal-polish-plan.md) | P0/P1 feature polish under frozen `0.6.0` | active |
+| [Internal polish](internal-polish-plan.md) | P0/P1 feature polish under frozen `0.6.0` | P0 complete; P1 gated |
 | [Small features](small-features-plan.md) | Vim-like motions, operators, registers, visual/display polish | proposed |
 | [External integration](external-integration-plan.md) | `$EDITOR`, stdin, pipe locations, control socket, MCP adapter | 1a/1b/2/3, control v3, and MCP landed |
 | [IDE capabilities](ide-capability-plan.md) | LSP depth, search, sessions, Git, adapters | P0 mostly landed; P1 planned |
