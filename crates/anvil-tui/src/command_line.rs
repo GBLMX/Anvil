@@ -244,4 +244,17 @@ mod tests {
         let completion = CommandCompletion::new("w file", &[]);
         assert!(completion.is_empty());
     }
+
+    #[test]
+    fn completion_covers_every_manifest_command() {
+        let completion = CommandCompletion::new("", &[]);
+        let labels = labels(&completion);
+        for command in anvil_control::COMMANDS {
+            assert!(
+                labels.contains(&command.name),
+                "completion missing {}",
+                command.name
+            );
+        }
+    }
 }

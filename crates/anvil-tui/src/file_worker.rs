@@ -60,6 +60,12 @@ pub enum FileRequest {
         stage: u8,
         generation: u64,
     },
+    /// Resolve a conflicted file to one index stage and stage it.
+    GitResolveConflict {
+        relative: String,
+        stage: u8,
+        generation: u64,
+    },
     /// Read a bounded blame view for one workspace-relative file.
     GitBlameText { relative: String, generation: u64 },
     /// Move or copy one workspace entry.
@@ -128,6 +134,13 @@ pub enum FileEvent {
         stage: u8,
         generation: u64,
         result: Result<(String, bool), String>,
+    },
+    /// Result of resolving and staging one conflicted file.
+    GitResolveConflict {
+        relative: String,
+        stage: u8,
+        generation: u64,
+        result: Result<(), String>,
     },
     /// A move or copy completed.
     Transferred {
@@ -335,6 +348,19 @@ impl FileWorker {
                             } => {
                                 let result = git_conflict_stage_text(&mut client, &relative, stage);
                                 FileEvent::GitConflictStageText {
+                                    relative,
+                                    stage,
+                                    generation,
+                                    result,
+                                }
+                            }
+                            FileRequest::GitResolveConflict {
+                                relative,
+                                stage,
+                                generation,
+                            } => {
+                                let result = resolve_git_conflict(&mut client, &relative, stage);
+                                FileEvent::GitResolveConflict {
                                     relative,
                                     stage,
                                     generation,
@@ -818,6 +844,55 @@ fn git_conflict_stage_text(
         text.push_str("stage is empty\n");
     }
     Ok((text, truncated))
+}
+
+fn resolve_git_conflict(
+    client: &mut GatewayClient,
+    relative: &str,
+    stage: u8,
+) -> Result<(), String> {
+    if !(2..=3).contains(&stage) {
+        return Err("conflict resolution requires stage 2 or 3".to_owned());
+    }
+    let spec = format!(":{stage}:{relative}");
+    let show = client
+        .exec(
+            &git_tool(),
+            &["--no-pager".to_owned(), "show".to_owned(), spec],
+            5000,
+        )
+        .map_err(|error| error.to_string())?;
+    if show.timed_out {
+        return Err("git show timed out".to_owned());
+    }
+    if show.exit_code != 0 {
+        return Err(show.stderr);
+    }
+    if show.output_truncated {
+        return Err("conflict stage is too large to resolve automatically".to_owned());
+    }
+    client
+        .write_all(relative, show.stdout.as_bytes())
+        .map_err(|error| error.to_string())?;
+    let add = client
+        .exec(
+            &git_tool(),
+            &[
+                "--no-pager".to_owned(),
+                "add".to_owned(),
+                "--".to_owned(),
+                relative.to_owned(),
+            ],
+            5000,
+        )
+        .map_err(|error| error.to_string())?;
+    if add.timed_out {
+        return Err("git add timed out".to_owned());
+    }
+    if add.exit_code != 0 {
+        return Err(add.stderr);
+    }
+    Ok(())
 }
 
 const GIT_HUNK_PATCH: &str = ".anvil-tmp/git-hunk.patch";

@@ -251,6 +251,22 @@ pub const COMMANDS: &[CommandSpec] = &[
         name: "git-conflict-theirs",
         capability: Capability::Git,
     },
+    CommandSpec {
+        name: "git-resolve-ours",
+        capability: Capability::Git,
+    },
+    CommandSpec {
+        name: "git-resolve-ours!",
+        capability: Capability::Git,
+    },
+    CommandSpec {
+        name: "git-resolve-theirs",
+        capability: Capability::Git,
+    },
+    CommandSpec {
+        name: "git-resolve-theirs!",
+        capability: Capability::Git,
+    },
 ];
 
 /// Look up an exact command name.
@@ -1102,5 +1118,22 @@ mod tests {
         assert_eq!(command_capability("git-diff"), Some(Capability::Git));
         assert_eq!(capability_for_command("%s/a/b/"), Some(Capability::Edit));
         assert!(!Capability::Admin.is_remote_allowed());
+    }
+
+    #[test]
+    fn remote_policy_matches_every_manifest_capability() {
+        for command in COMMANDS {
+            let result = validate_remote_command(command.name);
+            if command.capability.is_remote_allowed() {
+                assert!(result.is_ok(), "{} should be allowed", command.name);
+            } else {
+                assert_eq!(
+                    result,
+                    Err(CommandPolicyError::Admin),
+                    "{} should require admin",
+                    command.name
+                );
+            }
+        }
     }
 }

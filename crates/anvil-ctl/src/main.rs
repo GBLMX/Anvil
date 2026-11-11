@@ -585,6 +585,8 @@ mod tests {
         assert!(parse_command(&options(&["bogus"])).is_err());
         assert!(parse_command(&options(&["open"])).is_err());
         assert!(parse_command(&options(&["edit", "replace", "x"])).is_err());
+        assert!(parse_command(&options(&["command", ":pkg", "install"])).is_err());
+        assert!(parse_command(&options(&["command", ":git-diff"])).is_ok());
         assert!(matches!(
             parse_command(&options(&["edit", "set", "--stdin"])).unwrap(),
             CliCommand::Edit {

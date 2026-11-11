@@ -1,8 +1,8 @@
 # IDE Capability Plan
 
-Status: planned for work after the `0.5.x` slices. Search/replace, problems,
-quick-open preview, and icon themes are owned by `0.5.4`/`0.5.7`/`0.5.8`; this
-plan does not re-schedule them.
+Status: P0 mostly landed; P1 is planned. Search/replace, problems, quick-open
+preview, and icon themes are owned by `0.5.4`/`0.5.7`/`0.5.8`; this plan does
+not re-schedule them.
 
 Scope: editor-level capabilities that make Anvil usable for daily software work
 without turning the kernel into a full IDE. Anvil remains Linux-first, with no
@@ -23,17 +23,17 @@ Tokio runtime, no in-process plugin UI, and no embedded WebView.
 
 | Area | Current | Required |
 |---|---|---|
-| Completion | label/insert/detail popup, resolve docs, snippet placeholders | snippet mirrors, ranking |
-| Navigation | definition, hover, symbols, references, highlights, incoming/outgoing calls | — |
-| Structure | diagnostics, code actions, format, rename, folding ranges, semantic tokens | code lens with above-line virtual rows |
-| Search | literal `/`, `n`/`N` | `0.5.8` owns search/replace UI; post-0.5 extends multi-file/project search only if measured |
-| Problems | status strings and popups | `0.5.7` owns the bounded problems panel; no post-0.5 duplicate |
-| Session | in-memory only | restore buffers/cursors/layout; crash backup; persistent undo |
-| Git | gutter marks | diff view, hunk staging, blame, conflict handling |
-| Settings | typed editor/search/LSP registry, theme, keymap | settings overlay, changed markers, reset, hot reload |
+| Completion | snippet mirrors, ranking, resolve docs, placeholders landed | — |
+| Navigation | definition, hover, symbols, references, highlights, incoming/outgoing calls landed | — |
+| Structure | diagnostics, code actions, format, rename, folding ranges, semantic tokens, code lens landed | — |
+| Search | literal `/`, `n`/`N`, search/replace UI landed | multi-file/project search only if measured |
+| Problems | bounded panel and jumps landed | — |
+| Session | buffer/cursor/layout restore and crash backup landed | — |
+| Git | diff, hunk staging, blame, conflict previews landed | conflict resolution operations |
+| Settings | typed registry and overlay landed | validation, reset, changed markers, hot-reload boundary |
 
-Acceptance: each item must have a deterministic test and an explicit
-read-only/large-file/stale-result failure behavior.
+Remaining P0: project search, Git conflict resolution, and settings validation/
+reset/hot-reload boundary. Each item needs a deterministic failure test.
 
 ## 3. P1: IDE-like capability
 
@@ -43,7 +43,7 @@ read-only/large-file/stale-result failure behavior.
 - Terminal panel with explicit workspace and trust boundaries.
 - Multi-root workspaces with per-root gateway/trust policy.
 - Code folding with session persistence.
-- Auto-save, swap files, and external-change conflict resolution.
+- Auto-save policy remains; swap files and external-conflict recovery landed.
 
 These are separate adapters, not `anvil-session` monoliths. Quick-open preview
 and icon theme are not repeated here; they are `0.5.4`.

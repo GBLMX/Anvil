@@ -1,9 +1,10 @@
 # High-Frequency Command Architecture Plan
 
 Status: partially implemented. Stable command IDs, a read-only metadata
-registry, and TOML keymap overrides for normal and operator-pending bindings
-exist. There is still no keymap trie, effect queue, Lua/Luau keymap host, or
-command capability matrix.
+registry, TOML keymap overrides, and the shared `anvil-control` command
+manifest/capability policy exist. `commands.rs` still dispatches with string
+matching; there is no keymap trie, effect queue, Lua/Luau keymap host, or
+execution path fully driven by the registry.
 
 ## Goal
 
@@ -110,6 +111,13 @@ Rules:
   or keymap state; they are not command implementations.
 - The `Space` menu is generated from the registry/trie, not a second hardcoded
   list.
+
+Decision (2026-11-11): do not add a trie now. The current normal/context maps
+are `HashMap<KeyChord, _>`, so a single keystroke is already a hash lookup;
+pending prefixes use bounded maps. A trie is only justified if a measured
+configuration reaches a scale where prefix enumeration dominates, or if the
+command-registry migration needs one shared immutable prefix map. Do not build
+it speculatively.
 
 ## 3. Lua/Luau configuration
 

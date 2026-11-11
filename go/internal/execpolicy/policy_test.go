@@ -125,3 +125,17 @@ func TestValidatesGitShowStages(t *testing.T) {
 		}
 	}
 }
+
+func TestValidatesGitConflictResolution(t *testing.T) {
+	if err := Validate("/usr/bin/git", []string{"--no-pager", "add", "--", "src/main.go"}); err != nil {
+		t.Fatalf("git add: %v", err)
+	}
+	for _, args := range [][]string{
+		{"--no-pager", "add", "--", "../secret"},
+		{"--no-pager", "add", "--", "/etc/passwd"},
+	} {
+		if err := Validate("/usr/bin/git", args); !errors.Is(err, ErrInvalidArgs) {
+			t.Fatalf("git %v: got %v", args, err)
+		}
+	}
+}

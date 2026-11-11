@@ -81,6 +81,9 @@ Normal mode
   :git-conflict-base   preview index stage 1 (base)
   :git-conflict-ours   preview index stage 2 (ours)
   :git-conflict-theirs preview index stage 3 (theirs)
+  :git-resolve-ours  replace and stage with index stage 2
+  :git-resolve-theirs replace and stage with index stage 3
+  :git-resolve-ours! / :git-resolve-theirs! discard modified buffer
   :lsp-start          ensure the detected language server is active
   :lsp-stop           stop the active language server
   :format              format the current document

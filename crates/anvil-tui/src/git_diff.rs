@@ -355,6 +355,11 @@ impl Model {
             self.dirty = true;
             return;
         }
+        if !self.ensure_file_worker() {
+            self.status = "E: gateway unavailable".to_owned();
+            self.dirty = true;
+            return;
+        }
         let Some(worker) = self.file_worker.as_ref() else {
             self.status = "E: file worker unavailable".to_owned();
             self.dirty = true;
@@ -423,6 +428,11 @@ impl Model {
                 return;
             }
         };
+        if !self.ensure_file_worker() {
+            self.status = "E: gateway unavailable".to_owned();
+            self.dirty = true;
+            return;
+        }
         let Some(worker) = self.file_worker.as_ref() else {
             self.status = "E: file worker unavailable".to_owned();
             self.dirty = true;
@@ -481,6 +491,92 @@ impl Model {
             }
         }
     }
+
+    pub(crate) fn resolve_git_conflict(&mut self, stage: u8, force: bool) {
+        if self.help_back.is_some() {
+            self.status = "E: close the read-only view first".to_owned();
+            self.dirty = true;
+            return;
+        }
+        let Some(path) = self.path.clone() else {
+            self.status = "E: no file name".to_owned();
+            self.dirty = true;
+            return;
+        };
+        if self.modified && !force {
+            self.status = "E: buffer is modified; save/discard or use the ! form".to_owned();
+            self.dirty = true;
+            return;
+        }
+        if self.git_resolve_pending.is_some() {
+            self.status = "E: conflict resolution already in progress".to_owned();
+            self.dirty = true;
+            return;
+        }
+        let relative = match self.relative_path(&path) {
+            Ok(relative) => relative,
+            Err(error) => {
+                self.status = format!("E: {error}");
+                self.dirty = true;
+                return;
+            }
+        };
+        if !self.ensure_file_worker() {
+            self.status = "E: gateway unavailable".to_owned();
+            self.dirty = true;
+            return;
+        }
+        let Some(worker) = self.file_worker.as_ref() else {
+            self.status = "E: file worker unavailable".to_owned();
+            self.dirty = true;
+            return;
+        };
+        self.git_resolve_generation = self.git_resolve_generation.wrapping_add(1);
+        let generation = self.git_resolve_generation;
+        if let Err(error) = worker.request(FileRequest::GitResolveConflict {
+            relative,
+            stage,
+            generation,
+        }) {
+            self.status = format!("E: git resolve: {error}");
+            self.dirty = true;
+            return;
+        }
+        self.git_resolve_pending = Some(generation);
+        self.status = "resolving conflict...".to_owned();
+        self.dirty = true;
+    }
+
+    pub(crate) fn handle_git_resolved(
+        &mut self,
+        relative: String,
+        stage: u8,
+        generation: u64,
+        result: Result<(), String>,
+    ) {
+        if self.git_resolve_pending != Some(generation) {
+            return;
+        }
+        self.git_resolve_pending = None;
+        match result {
+            Ok(()) => {
+                let path = self.workspace.join(&relative);
+                match self.reload_external(&path) {
+                    Ok(()) => {
+                        let name = if stage == 2 { "ours" } else { "theirs" };
+                        self.status = format!("resolved {relative} using {name}");
+                    }
+                    Err(error) => {
+                        self.status = format!("E: conflict resolved, reload failed: {error}");
+                    }
+                }
+            }
+            Err(error) => {
+                self.status = format!("E: git resolve: {error}");
+            }
+        }
+        self.dirty = true;
+    }
 }
 
 #[cfg(test)]
@@ -522,5 +618,14 @@ index 1111111..2222222 100644
             false,
         );
         assert!(view.hunks.is_empty());
+    }
+
+    #[test]
+    fn recognizes_conflict_resolution_commands() {
+        let mut model = Model::new(EditorState::from_text("x"), None);
+        model.execute_command("git-resolve-ours");
+        assert_eq!(model.status, "E: no file name");
+        model.execute_command("git-resolve-theirs!");
+        assert_eq!(model.status, "E: no file name");
     }
 }

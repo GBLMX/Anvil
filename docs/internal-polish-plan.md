@@ -47,13 +47,13 @@ Status: typed registry and minimal `:settings` overlay landed for
 `editor.scroll_margin`, `search.case_sensitive`, and `lsp.inlay_hints`.
 External-file hot reload remains out of scope.
 
-- Add a typed settings registry with explicit domains, defaults, path, and
-  precedence.
-- Extend `settings.toml` beyond `[theme]`.
-- Add a built-in Settings overlay only after at least three independent domains
-  exist.
-- Add validation errors, changed markers, reset, and a documented hot-reload
-  boundary.
+Implemented: typed registry, `:settings` overlay, changed markers, per-row
+reset, and save/cancel validation.
+
+Remaining boundary:
+- external-file hot reload is not supported; settings load at startup and
+  `:settings` saves through the same validated registry;
+- no new domains without a concrete consumer.
 
 Difficulty: M. Main risk is scope creep; do not build a ten-tab settings clone.
 
@@ -63,13 +63,14 @@ Status: buffer/cursor/active-tab restore, tree/ratio layout state, open split
 panes with focus, and dirty buffer swap recovery landed. Conflict swaps are
 retained until resolved; save/save-as is blocked until resolution. Persistent
 undo history is explicitly rejected for this phase.
-- Restore buffers, cursors, active tabs, tree visibility, split ratio, and open
-  split panes with focus.
-- Persistent undo history is rejected: offset-based edit records are valid only
-  against one exact text state. Restore keeps the exact buffer or swap text and
-  starts a fresh undo stack; a second validated replay format and unbounded
-  session JSON are not justified.
-- Never silently discard dirty state.
+Landed:
+- restore buffers, cursors, active tabs, tree visibility, split ratio, and open
+  split panes with focus;
+- preserve dirty swaps and refuse to silently discard dirty state.
+
+Rejected for this phase: persistent undo history. Offset-based edit records are
+valid only against one exact text state; restore keeps the exact buffer or swap
+text and starts a fresh undo stack.
 
 Difficulty: L–XL. Main risk is data loss and schema migration.
 
@@ -77,17 +78,21 @@ Difficulty: L–XL. Main risk is data loss and schema migration.
 
 Status: completion ranking and snippet mirror grouping/editing landed; code
 lens request/parse, virtual-row rendering, and command execution landed.
-- Completion snippet mirrors: repeated tabstop indices survive parsing, group
-  as mirrors, navigate as one unique stop, and receive typed insertions and
-  deletions together.
-- `sortText`/`filterText`/`preselect` ranking landed.
-- Code lens: request/parse bounded to 2048 total and 3 visible rows per line;
-  per-line and viewport truncation are visible; rows participate in viewport,
-  gutter, cursor, mouse, and folding mapping. Clicking executes
-  `workspace/executeCommand`.
-- References, document highlights, folding ranges, and semantic tokens are
-  landed.
-- Multi-file workspace edits with stale-revision rejection are landed.
+Landed:
+- completion snippet mirrors and `sortText`/`filterText`/`preselect` ranking;
+- code lens request/parse, virtual-row rendering, and command execution;
+- references, document highlights, folding ranges, and semantic tokens;
+- multi-file workspace edits with stale-revision rejection.
+
+Implemented bounds:
+
+- `MAX_CODE_LENS = 2048` parsed lenses per document.
+- `MAX_CODE_LENS_PER_LINE = 3` visible rows per source line, including the
+  `… +N lenses` truncation row.
+- `MAX_CODE_LENS_ROWS_PER_VIEWPORT = 32`, including any truncation row, and
+  never more than half the editor viewport height.
+- Folded or hidden source lines never contribute lens rows.
+- Truncation is visible; stale or malformed lens responses are ignored.
 
 Code lens is not an inline suffix or popup-only list. Viewport, gutter, cursor
 placement, mouse hit-testing, folding, and horizontal scroll must consume the
@@ -123,26 +128,44 @@ surfaces.
 Status: swap/crash recovery landed. External-change conflicts preserve the
 swap and expose `:conflict-recover` / `:conflict-discard`; saving an
 unmodified conflicted buffer is refused until resolved.
-- Auto-save with an explicit policy.
-- Swap files and crash recovery integration.
-- External-change conflict resolution.
-- Large/binary/read-only safe behavior.
+Remaining:
+- auto-save with an explicit policy;
+- large/binary/read-only safe behavior.
+
+Landed: swap files, crash recovery, and external-change conflict recovery.
+
+Auto-save policy:
+
+- Default: `off`.
+- First supported mode: `on_focus_change` only (buffer switch, split focus
+  change, or leaving the TUI). Do not add an idle-delay mode until the
+  focus-change path is dogfooded.
+- Never auto-save unnamed/stdin buffers, read-only buffers, help views, missing
+  files, or buffers with an unresolved external-change conflict.
+- A failed auto-save keeps the buffer dirty, reports `E: auto-save: ...`, and
+  does not retry in a loop. The next focus change, edit, or explicit `:w` may
+  retry; a failure never discards text or marks the buffer clean.
+- Auto-save uses the existing atomic save path, so atomic replacement semantics
+  and the owner/ACL/xattr caveat are unchanged.
+- Do not auto-save while a modal or blocking prompt owns the event loop.
 
 Difficulty: M–L. Main risk is write races and incorrect merge resolution.
 
 ### 3.6 Search
 
-- Multi-file/project search with cancellation, result caps, and stale-result
-  handling.
-- Replace across files as one reviewable transaction.
+Status: not started. Remaining:
+- multi-file/project search with cancellation, result caps, and stale-result
+  handling;
+- replace across files as one reviewable transaction.
 
 Difficulty: M. Reuse the gateway/tree layers; do not add a second index until
 measurements justify it.
 
 ### 3.7 LSP lifecycle
 
-- Server discovery, version reporting, restart/backoff, and visible failure.
-- Optional bundled servers remain a separate distribution decision.
+Status: not started. Remaining:
+- server discovery, version reporting, restart/backoff, and visible failure;
+- optional bundled servers remain a separate distribution decision.
 
 Difficulty: M. Main risk is hidden fallback behavior.
 
@@ -176,12 +199,12 @@ These remain documented, but they do not block internal polish.
 
 ## 6. Suggested internal order
 
-1. LSP completion snippet mirrors and ranking.
-2. LSP code lens with above-line virtual rows.
-3. Session restore and crash backup.
-4. Persistent undo decision: fresh stack after restore.
-5. Git diff/hunk/blame/conflict.
-6. Auto-save, swap, and external-conflict resolution.
+1. Settings validation/reset/hot-reload boundary.
+2. Git conflict resolution operations.
+3. Auto-save and large/binary/read-only file safety.
+4. Multi-file search and transactional replace.
+5. LSP lifecycle discovery/restart/backoff.
+6. Command registry/effect-queue completion.
 7. P1 adapters only after P0 dogfood.
 
 ## 7. Exit gates

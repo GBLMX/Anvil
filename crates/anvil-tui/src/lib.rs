@@ -580,6 +580,10 @@ pub struct Model {
     git_stage_generation: u64,
     /// Pending conflict-stage generation, if a request is in flight.
     git_stage_pending: Option<u64>,
+    /// Latest requested conflict-resolution generation.
+    git_resolve_generation: u64,
+    /// Pending conflict-resolution generation, if a request is in flight.
+    git_resolve_pending: Option<u64>,
     /// LSP folding ranges for the active buffer.
     folds: Vec<FoldRange>,
     /// Start lines of closed folds.
@@ -757,6 +761,8 @@ impl Model {
             git_conflicts_pending: None,
             git_stage_generation: 0,
             git_stage_pending: None,
+            git_resolve_generation: 0,
+            git_resolve_pending: None,
             folds: Vec::new(),
             folded: HashSet::new(),
             fold_revision: None,
@@ -1048,6 +1054,7 @@ impl Model {
         self.git_blame_pending = None;
         self.git_conflicts_pending = None;
         self.git_stage_pending = None;
+        self.git_resolve_pending = None;
         let syntax = saved.syntax.clone();
         self.editor = saved.editor;
         self.path = saved.path;
