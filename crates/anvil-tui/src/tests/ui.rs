@@ -407,6 +407,24 @@ fn read_only_mode_renders_in_the_title() {
 }
 
 #[test]
+fn pipe_locations_render_a_bounded_panel() {
+    let mut model = Model::new(EditorState::from_text("log"), None);
+    model.welcome = false;
+    model.set_pipe_locations("src/main.rs:2:3: error");
+    let backend = TestBackend::new(80, 20);
+    let mut terminal = Terminal::new(backend).expect("terminal");
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+    let rendered = terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect::<String>();
+    assert!(rendered.contains("Locations · 1"), "{rendered}");
+    assert!(rendered.contains("src/main.rs:2:3 error"), "{rendered}");
+}
+#[test]
 fn command_line_renders_physical_cursor_at_the_edit_position() {
     let mut model = Model::new(EditorState::from_text("x"), None);
     model.welcome = false;

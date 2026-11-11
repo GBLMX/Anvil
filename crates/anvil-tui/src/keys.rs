@@ -269,6 +269,9 @@ fn execute_normal_command(model: &mut Model, command: NormalCommand) {
         NormalCommand::MoveChars(delta) => model.move_chars(delta),
         NormalCommand::MoveLine(delta) => model.move_lines(delta),
         NormalCommand::MoveFileEnd => model.move_file_end(),
+        NormalCommand::LocationNext => model.move_stdin_location(1),
+        NormalCommand::LocationPrevious => model.move_stdin_location(-1),
+        NormalCommand::OpenLocation => model.open_stdin_location(),
     }
 }
 

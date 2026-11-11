@@ -30,6 +30,9 @@ post-`0.5.0` feature line.
 - stdin pipeline mode (`git diff | anvil` / `anvil -`), `/dev/tty`
   reattachment for keyboard input, `[stdin]` unnamed buffers, and
   `--read-only`.
+- stdin location parsing for `path:line:column`, `--> path:line:column`, and
+  `path(line,column)` diagnostics, with a bounded Locations panel, keyboard
+  selection, mouse rows, and workspace-checked open.
 - `WorkspaceEdit` now applies `documentChanges` create/rename/delete
   operations, checks per-document LSP versions and request-time buffer
   revisions before mutation, and refuses overwriting open buffers or deleting

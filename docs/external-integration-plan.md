@@ -1,10 +1,10 @@
 # External Integration Plan
 
-Status: 1a (`--editor`, `:cq`, sticky save failure) and 1b (`anvil -`,
-stdin, `/dev/tty`, `--read-only`) implemented. This plan covers Unix editor
-integration: `$EDITOR`, stdin pipelines, diagnostic-aware pipe mode, and
-single-instance remote control. Diagnostic locations and single-instance
-control remain pending. It is separate from
+Status: 1a (`--editor`, `:cq`, sticky save failure), 1b (`anvil -`, stdin,
+`/dev/tty`, `--read-only`), and 3 (stdin Locations panel) implemented. This
+plan covers Unix editor integration: `$EDITOR`, stdin pipelines,
+diagnostic-aware pipe mode, and single-instance remote control.
+Single-instance control remains pending. It is separate from
 [small-features-plan.md](small-features-plan.md); these changes cross the CLI,
 terminal, workspace boundary, and IPC layers, so they are not small keymap
 additions.
@@ -203,7 +203,7 @@ stdin mode:
 - Resolve relative paths against the process cwd/workspace. Canonicalize before
   opening.
 - Bound input and output:
-  - stdin cap: 64 MiB;
+  - stdin cap: 256 MiB (the existing open limit);
   - max parsed lines: 100,000;
   - max locations: 10,000;
   - max message display width per row, with truncation;

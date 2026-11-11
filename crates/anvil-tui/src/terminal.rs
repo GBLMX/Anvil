@@ -91,6 +91,7 @@ pub fn run_with_input(
         model.modified = false;
         model.missing = false;
         model.set_stdin_buffer(read_only);
+        model.set_pipe_locations(&text);
         model.syntax.borrow_mut().switch_path(None, false);
         model.status = if read_only {
             "[stdin] read-only".to_owned()

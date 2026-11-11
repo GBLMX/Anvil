@@ -28,6 +28,7 @@ pub(crate) enum Side {
 pub(crate) enum Target {
     Outside,
     Tabs(usize),
+    Location(usize),
     Tree(usize),
     SplitHandle,
     Editor {
@@ -72,6 +73,9 @@ pub(crate) fn handle_mouse(model: &mut Model, mouse: MouseEvent, width: u16, hei
                         model.tree_selected = Some(index);
                     }
                     model.dirty = true;
+                }
+                Target::Location(index) => {
+                    model.select_stdin_location(index);
                 }
                 Target::Tabs(index) => {
                     if index < model.buffers.len() && index != model.active {
@@ -170,6 +174,18 @@ pub(crate) fn hit_test(model: &Model, col: u16, row: u16, width: u16, height: u1
         }
         editor_inner.x = editor_inner.x.saturating_add(sidebar);
         editor_inner.width = editor_inner.width.saturating_sub(sidebar);
+    }
+    if let Some(panel) = crate::pipe_locations::panel_rect(model, editor_inner)
+        && row > panel.y
+        && row + 1 < panel.bottom()
+        && col >= panel.x
+        && col < panel.right()
+    {
+        let index = model.stdin_location_scroll
+            + usize::from(row.saturating_sub(panel.y).saturating_sub(1));
+        if index < model.stdin_locations.len() {
+            return Target::Location(index);
+        }
     }
     if row == height.saturating_sub(1) {
         return Target::Status;

@@ -36,6 +36,8 @@ Normal mode
   gi / go             list incoming / outgoing calls
   za / zM / zR        toggle / close all / open all folds
   ]d / [d             next / previous diagnostic
+  Alt-j / Alt-k      next / previous parsed stdin location
+  Enter              open selected stdin location
   K                   hover documentation
   i a A o O           insert before / after / line end / below / above
   x                   delete character

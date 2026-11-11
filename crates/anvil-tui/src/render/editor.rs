@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::CallHierarchyDirection;
-use unicode_width::UnicodeWidthStr;
+use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 pub fn view(model: &Model, frame: &mut Frame) {
     let area = frame.area();
     let editor_view: EditorView = model.editor.snapshot().view();
@@ -215,6 +215,10 @@ pub fn view(model: &Model, frame: &mut Frame) {
             ..inner
         };
     }
+    let locations_area = crate::pipe_locations::panel_rect(model, content);
+    if let Some(area) = locations_area {
+        content.height = area.y.saturating_sub(content.y);
+    }
     let gutter_width = model.gutter_width().min(content.width);
     let gutter_area = Rect {
         width: gutter_width,
@@ -226,14 +230,17 @@ pub fn view(model: &Model, frame: &mut Frame) {
         ..content
     };
     frame.render_widget(
-        Paragraph::new(model.visible_gutter(inner.height)).style(theme::text()),
+        Paragraph::new(model.visible_gutter(content.height)).style(theme::text()),
         gutter_area,
     );
-    let mut lines = model.visible_lines(inner.height, text_area.width);
+    let mut lines = model.visible_lines(content.height, text_area.width);
     apply_code_block_background(model, &mut lines, text_area.width);
     frame.render_widget(Paragraph::new(lines).style(theme::text()), text_area);
+    if let Some(area) = locations_area {
+        render_pipe_locations(model, frame, area);
+    }
     let visible_end =
-        (model.scroll + usize::from(inner.height)).min(model.editor.index().len_lines());
+        (model.scroll + usize::from(content.height)).min(model.editor.index().len_lines());
     for line_number in model.scroll..visible_end {
         let Some(start) = model.editor.index().line_to_offset(line_number) else {
             continue;
@@ -262,7 +269,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
                 continue;
             }
             let x = text_area.x + (column - model.hscroll) as u16;
-            let y = inner.y + (line_number - model.scroll) as u16;
+            let y = content.y + (line_number - model.scroll) as u16;
             if x < text_area.right() && y < text_area.bottom() {
                 frame.render_widget(
                     Paragraph::new("│").style(style),
@@ -323,8 +330,8 @@ pub fn view(model: &Model, frame: &mut Frame) {
             .position(model.editor.text(), model.cursor)
     {
         let x = text_area.x + position.display_column.saturating_sub(model.hscroll) as u16;
-        let y = inner.y + position.line.saturating_sub(model.scroll) as u16;
-        if x < inner.right() && y < inner.bottom() {
+        let y = content.y + position.line.saturating_sub(model.scroll) as u16;
+        if x < content.right() && y < content.bottom() {
             frame.set_cursor_position((x, y));
         }
     }
@@ -335,7 +342,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
             continue;
         }
         let x = text_area.x + (column - model.hscroll) as u16;
-        let y = inner.y + (line - model.scroll) as u16;
+        let y = content.y + (line - model.scroll) as u16;
         if x < text_area.right() && y < text_area.bottom() {
             frame.render_widget(
                 Paragraph::new("│").style(
@@ -961,6 +968,59 @@ pub fn view(model: &Model, frame: &mut Frame) {
     crate::pkg_install::render(model, frame, frame.area());
     #[cfg(target_os = "linux")]
     crate::plugin_manager::render(model, frame, frame.area());
+}
+
+fn render_pipe_locations(model: &Model, frame: &mut Frame, area: Rect) {
+    let rows = usize::from(area.height.saturating_sub(2));
+    let start = model
+        .stdin_location_scroll
+        .min(model.stdin_locations.len().saturating_sub(rows.max(1)));
+    let lines = model
+        .stdin_locations
+        .iter()
+        .enumerate()
+        .skip(start)
+        .take(rows)
+        .map(|(index, location)| {
+            let text = truncate_width(
+                &format!(
+                    "{}:{}:{} {}",
+                    location.path, location.line, location.column, location.message
+                ),
+                area.width.saturating_sub(3),
+            );
+            let style = if model.stdin_location_selected == Some(index) {
+                theme::selected()
+            } else {
+                theme::panel()
+            };
+            Line::styled(format!(" {text}"), style)
+        })
+        .collect::<Vec<_>>();
+    frame.render_widget(
+        Paragraph::new(lines)
+            .style(theme::panel())
+            .block(panel_block(format!(
+                "Locations · {}",
+                model.stdin_locations.len()
+            ))),
+        area,
+    );
+}
+
+fn truncate_width(text: &str, max: u16) -> String {
+    let max = usize::from(max);
+    let mut output = String::new();
+    let mut width = 0;
+    for character in text.chars() {
+        let character_width = UnicodeWidthChar::width(character).unwrap_or(0);
+        if width + character_width > max {
+            break;
+        }
+        width += character_width;
+        output.push(character);
+    }
+    output
 }
 
 fn render_welcome(frame: &mut Frame, area: Rect, model: &Model) {

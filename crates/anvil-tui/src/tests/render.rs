@@ -265,6 +265,24 @@ fn mouse_hit_boundary(
 }
 
 #[test]
+fn location_panel_rows_are_mouse_targets() {
+    let mut model = Model::new(EditorState::from_text("log"), None);
+    model.welcome = false;
+    model.set_pipe_locations("src/a.rs:1:1: first\nsrc/b.rs:2:2: second");
+    let content = ratatui::layout::Rect {
+        x: 1,
+        y: 1,
+        width: 78,
+        height: 18,
+    };
+    let panel = crate::pipe_locations::panel_rect(&model, content).expect("panel");
+    assert_eq!(
+        mouse_hit_boundary(&model, panel.x + 1, panel.y + 2, 80, 20),
+        crate::mouse::Target::Location(1)
+    );
+}
+
+#[test]
 fn tree_visible_drag_keeps_editor_origin() {
     let mut model = Model::new(EditorState::from_text("abc\ndef"), None);
     model.viewport_width = 80;

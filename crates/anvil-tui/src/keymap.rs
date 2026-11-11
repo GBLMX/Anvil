@@ -47,6 +47,9 @@ pub(crate) enum NormalCommand {
     MoveChars(isize),
     MoveLine(isize),
     MoveFileEnd,
+    LocationNext,
+    LocationPrevious,
+    OpenLocation,
 }
 
 impl NormalCommand {
@@ -87,7 +90,8 @@ impl NormalCommand {
             MoveLine(-1) => Some(command::CURSOR_UP),
             MoveLine(_) => None,
             MoveFileEnd => Some(command::CURSOR_FILE_END),
-            Pending(_) | RegisterWait | Count(_) => None,
+            Pending(_) | RegisterWait | Count(_) | LocationNext | LocationPrevious
+            | OpenLocation => None,
         }
     }
 
@@ -181,10 +185,17 @@ pub(crate) fn normal_action(key: KeyPress, count: usize) -> Option<NormalCommand
         KeyCode::Char('e') if text_input => Some(NormalCommand::MoveWords(WordMotion::End)),
         KeyCode::Char('h') | KeyCode::Left => Some(NormalCommand::MoveChars(-1)),
         KeyCode::Char('l') | KeyCode::Right => Some(NormalCommand::MoveChars(1)),
-        KeyCode::Char('j') | KeyCode::Down => Some(NormalCommand::MoveLine(1)),
-        KeyCode::Char('k') | KeyCode::Up => Some(NormalCommand::MoveLine(-1)),
+        KeyCode::Char('j') | KeyCode::Down if !key.alt() => Some(NormalCommand::MoveLine(1)),
+        KeyCode::Char('k') | KeyCode::Up if !key.alt() => Some(NormalCommand::MoveLine(-1)),
         KeyCode::Home => Some(NormalCommand::MoveHome),
         KeyCode::End => Some(NormalCommand::MoveEnd),
+        KeyCode::Enter => Some(NormalCommand::OpenLocation),
+        KeyCode::Char(_) if key.alt() && key.command_char() == Some('j') => {
+            Some(NormalCommand::LocationNext)
+        }
+        KeyCode::Char(_) if key.alt() && key.command_char() == Some('k') => {
+            Some(NormalCommand::LocationPrevious)
+        }
         _ => None,
     }
 }
@@ -1044,6 +1055,22 @@ mod tests {
         assert_eq!(
             normal_action(key(KeyCode::Char('s'), KeyModifiers::ALT), 0),
             Some(NormalCommand::SplitSelection)
+        );
+    }
+
+    #[test]
+    fn location_bindings_use_enter_and_alt_j_k() {
+        assert_eq!(
+            normal_action(key(KeyCode::Enter, KeyModifiers::NONE), 0),
+            Some(NormalCommand::OpenLocation)
+        );
+        assert_eq!(
+            normal_action(key(KeyCode::Char('j'), KeyModifiers::ALT), 0),
+            Some(NormalCommand::LocationNext)
+        );
+        assert_eq!(
+            normal_action(key(KeyCode::Char('k'), KeyModifiers::ALT), 0),
+            Some(NormalCommand::LocationPrevious)
         );
     }
 

@@ -60,6 +60,7 @@ mod lsp_ui;
 mod modal;
 mod mouse;
 mod overlays;
+mod pipe_locations;
 mod selection_table;
 mod theme_picker;
 use selection_table::{SelectionItem, SelectionTable};
@@ -627,6 +628,10 @@ pub struct Model {
     stdin_buffer: bool,
     /// Reject mutating commands for a read-only input buffer.
     read_only: bool,
+    /// File locations parsed from the stdin buffer.
+    stdin_locations: Vec<pipe_locations::PipeLocation>,
+    stdin_location_selected: Option<usize>,
+    stdin_location_scroll: usize,
     /// Whether the process was started as an external editor.
     editor_mode: bool,
     /// Process exit code accumulated by editor-mode failures or `:cq`.
@@ -767,6 +772,9 @@ impl Model {
             require_gateway: false,
             stdin_buffer: false,
             read_only: false,
+            stdin_locations: Vec::new(),
+            stdin_location_selected: None,
+            stdin_location_scroll: 0,
             editor_mode: false,
             exit_code: 0,
             syntax: RefCell::new(SyntaxState::default()),

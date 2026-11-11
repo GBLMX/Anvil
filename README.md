@@ -137,6 +137,11 @@ exit status nonzero. `anvil -`, or any non-terminal stdin such as
 that starts with a dash. Launching without `FILE` shows the start dashboard;
 the first key dismisses it.
 
+Stdin text containing `path:line:column: message`, `--> path:line:column`, or
+`path(line,column): message` shows a bounded Locations panel. `Alt-j` /
+`Alt-k` selects a row and `Enter` opens it; locations outside the workspace
+are rejected.
+
 Quick open: `Space f` filters workspace files and previews the selected file
 through the gateway. Wide terminals show the preview beside the list; narrow
 terminals stack it below.
