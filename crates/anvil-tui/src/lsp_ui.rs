@@ -1155,8 +1155,16 @@ impl Model {
             self.snippet = None;
             return;
         };
+        let mirrors = self
+            .snippet
+            .as_ref()
+            .map(|session| session.mirrors().count())
+            .unwrap_or(0);
         self.editor.set_selection_bytes(start, end);
         self.cursor = start;
+        if mirrors > 1 {
+            self.status = format!("snippet stop ({mirrors} mirrors)");
+        }
         self.dirty = true;
     }
 

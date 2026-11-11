@@ -15,30 +15,67 @@ pub(crate) struct Snippet {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct SnippetSession {
-    stops: Vec<(usize, usize)>,
+    stops: Vec<SnippetStop>,
+    groups: Vec<usize>,
     current: usize,
 }
 
 impl Snippet {
-    pub(crate) fn offset_stops(&self, base: usize) -> Vec<(usize, usize)> {
+    pub(crate) fn offset_stops(&self, base: usize) -> Vec<SnippetStop> {
         self.stops
             .iter()
-            .map(|stop| (base + stop.start, base + stop.end))
+            .map(|stop| SnippetStop {
+                index: stop.index,
+                start: base + stop.start,
+                end: base + stop.end,
+            })
             .collect()
     }
 }
 
 impl SnippetSession {
-    pub(crate) fn new(stops: Vec<(usize, usize)>) -> Option<Self> {
-        (!stops.is_empty()).then_some(Self { stops, current: 0 })
+    pub(crate) fn new(mut stops: Vec<SnippetStop>) -> Option<Self> {
+        if stops.is_empty() {
+            return None;
+        }
+        stops.sort_by_key(|stop| (stop.index == 0, stop.index));
+        let mut groups = Vec::new();
+        for (position, stop) in stops.iter().enumerate() {
+            if position == 0 || stop.index != stops[position - 1].index {
+                groups.push(position);
+            }
+        }
+        Some(Self {
+            stops,
+            groups,
+            current: 0,
+        })
+    }
+
+    fn current_group(&self) -> &[SnippetStop] {
+        let start = self.groups[self.current];
+        let end = self
+            .groups
+            .get(self.current + 1)
+            .copied()
+            .unwrap_or(self.stops.len());
+        &self.stops[start..end]
     }
 
     pub(crate) fn current(&self) -> Option<(usize, usize)> {
-        self.stops.get(self.current).copied()
+        self.current_group()
+            .first()
+            .map(|stop| (stop.start, stop.end))
+    }
+
+    pub(crate) fn mirrors(&self) -> impl Iterator<Item = (usize, usize)> + '_ {
+        self.current_group()
+            .iter()
+            .map(|stop| (stop.start, stop.end))
     }
 
     pub(crate) fn next(&mut self) -> Option<(usize, usize)> {
-        if self.current + 1 >= self.stops.len() {
+        if self.current + 1 >= self.groups.len() {
             return None;
         }
         self.current += 1;
@@ -54,28 +91,28 @@ impl SnippetSession {
     }
 
     pub(crate) fn adjust_insert(&mut self, at: usize, length: usize) {
-        for (start, end) in &mut self.stops {
-            if *start >= at {
-                *start = start.saturating_add(length);
-                *end = end.saturating_add(length);
-            } else if *end >= at {
-                *end = end.saturating_add(length);
+        for stop in &mut self.stops {
+            if stop.start >= at {
+                stop.start = stop.start.saturating_add(length);
+                stop.end = stop.end.saturating_add(length);
+            } else if stop.end >= at {
+                stop.end = stop.end.saturating_add(length);
             }
         }
     }
 
     pub(crate) fn adjust_delete(&mut self, start: usize, end: usize) {
         let length = end.saturating_sub(start);
-        for (stop_start, stop_end) in &mut self.stops {
-            if *stop_end <= start {
+        for stop in &mut self.stops {
+            if stop.end <= start {
                 continue;
             }
-            if *stop_start >= end {
-                *stop_start = stop_start.saturating_sub(length);
-                *stop_end = stop_end.saturating_sub(length);
+            if stop.start >= end {
+                stop.start = stop.start.saturating_sub(length);
+                stop.end = stop.end.saturating_sub(length);
             } else {
-                *stop_start = (*stop_start).min(start);
-                *stop_end = (*stop_end).min(start);
+                stop.start = stop.start.min(start);
+                stop.end = stop.end.min(start);
             }
         }
     }
@@ -159,7 +196,6 @@ pub(crate) fn parse(text: &str) -> Result<Snippet, String> {
         });
     }
     stops.sort_by_key(|stop| (stop.index == 0, stop.index));
-    stops.dedup_by_key(|stop| stop.index);
     Ok(Snippet {
         text: output,
         stops,
@@ -225,8 +261,66 @@ mod tests {
     }
 
     #[test]
+    fn parses_repeated_tabstops_as_mirrors() {
+        let snippet = parse("${1:name} + ${1:name}").expect("snippet");
+        assert_eq!(snippet.text, "name + name");
+        assert_eq!(
+            snippet.stops.iter().filter(|stop| stop.index == 1).count(),
+            2
+        );
+    }
+
+    #[test]
+    fn session_groups_mirrors_and_skips_them_when_navigating() {
+        let mut session = SnippetSession::new(vec![
+            SnippetStop {
+                index: 1,
+                start: 3,
+                end: 7,
+            },
+            SnippetStop {
+                index: 1,
+                start: 10,
+                end: 14,
+            },
+            SnippetStop {
+                index: 2,
+                start: 20,
+                end: 21,
+            },
+        ])
+        .expect("session");
+        assert_eq!(session.current(), Some((3, 7)));
+        assert_eq!(
+            session.mirrors().collect::<Vec<_>>(),
+            vec![(3, 7), (10, 14)]
+        );
+        assert_eq!(session.next(), Some((20, 21)));
+        assert_eq!(session.next(), None);
+        assert_eq!(session.previous(), Some((3, 7)));
+        session.adjust_insert(3, 1);
+        assert_eq!(session.current(), Some((4, 8)));
+        assert_eq!(
+            session.mirrors().collect::<Vec<_>>(),
+            vec![(4, 8), (11, 15)]
+        );
+    }
+
+    #[test]
     fn session_navigates_and_tracks_insertions() {
-        let mut session = SnippetSession::new(vec![(3, 4), (8, 10)]).expect("session");
+        let mut session = SnippetSession::new(vec![
+            SnippetStop {
+                index: 1,
+                start: 3,
+                end: 4,
+            },
+            SnippetStop {
+                index: 2,
+                start: 8,
+                end: 10,
+            },
+        ])
+        .expect("session");
         assert_eq!(session.current(), Some((3, 4)));
         assert_eq!(session.next(), Some((8, 10)));
         assert_eq!(session.next(), None);
