@@ -128,6 +128,10 @@ Reference: [OWASP SSRF Prevention Cheat Sheet](https://cheatsheetseries.owasp.or
   `anvil-exec-runner`, which applies Landlock (workspace + system runtime
   read-only), seccomp (no network/ptrace/privilege changes), and
   `no_new_privs` before `execveat`.
+- `git apply --cached` is restricted to the main editor connection. Plugin
+  connections are rejected even with `sys.exec`; the patch path is fixed to
+  `.anvil-tmp/git-hunk.patch`. This keeps hunk staging TUI-only rather than
+  exposing index mutation to plugin `sys.exec` grants.
 - Landlock must deny a symlink swapped after gateway validation; `openat2` is
   only defense in depth because the child reopens paths itself.
 - A symlink-race test must prove that a workspace link pointing outside cannot

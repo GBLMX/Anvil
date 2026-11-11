@@ -84,6 +84,9 @@ func (s *Server) exec(parent context.Context, req request, state *connectionStat
 	if err := decodeParams(req.Params, &params); err != nil {
 		return nil, &rpcError{Code: -32602, Message: "invalid params"}
 	}
+	if len(params.Args) > 1 && params.Args[1] == "apply" && state.pluginID != "" {
+		return nil, &rpcError{Code: -32002, Message: "policy denied"}
+	}
 	if err := execpolicy.Validate(params.Tool, params.Args); err != nil {
 		return nil, &rpcError{Code: -32002, Message: "policy denied"}
 	}
