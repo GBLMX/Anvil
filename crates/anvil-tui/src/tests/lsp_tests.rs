@@ -602,6 +602,12 @@ fn mirrored_snippet_edits_apply_to_all_tabstops() {
     model.insert_text("y");
     assert_eq!(model.editor.text().slice(0..7), "xy + xy");
     assert_eq!(model.editor.selection_bytes(), vec![(2, 2), (7, 7)]);
+    model.backspace();
+    assert_eq!(model.editor.text().slice(0..5), "x + x");
+    assert_eq!(model.editor.selection_bytes(), vec![(1, 1), (5, 5)]);
+    model.backspace();
+    assert_eq!(model.editor.text().slice(0..3), " + ");
+    assert_eq!(model.editor.selection_bytes(), vec![(0, 0), (3, 3)]);
 }
 
 #[test]

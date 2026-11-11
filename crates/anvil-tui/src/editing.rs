@@ -1201,10 +1201,16 @@ impl Model {
         if selections.len() == 1 && selections[0].0 == selections[0].1 {
             return false;
         }
+        let mirror_delete = self
+            .snippet
+            .as_ref()
+            .is_some_and(|snippet| snippet.matches_ranges(&selections));
         if self.snippet.is_some() {
-            if selections.len() > 1 {
+            if selections.len() > 1 && !mirror_delete {
                 self.snippet = None;
-            } else if let Some((anchor, head)) = selections.first().copied() {
+            } else if selections.len() == 1
+                && let Some((anchor, head)) = selections.first().copied()
+            {
                 let start = anchor.min(head);
                 let end = anchor.max(head);
                 if let Some(snippet) = self.snippet.as_mut() {
@@ -1212,6 +1218,7 @@ impl Model {
                 }
             }
         }
+        let old_selections = selections.clone();
         let mut edits = Vec::new();
         for (anchor, head) in selections {
             let start = anchor.min(head);
@@ -1236,7 +1243,22 @@ impl Model {
         if edits.is_empty() || !self.editor.apply_transaction(edits) {
             return false;
         }
-        self.sync_cursor_from_selection();
+        if mirror_delete {
+            let carets = self
+                .editor
+                .selection_bytes()
+                .iter()
+                .map(|(start, _)| *start)
+                .collect::<Vec<_>>();
+            if let Some(snippet) = self.snippet.as_mut() {
+                snippet.replace_current_with_carets(&old_selections, &carets);
+            }
+            self.editor
+                .set_selections_bytes(carets.iter().map(|caret| (*caret, *caret)).collect());
+            self.cursor = carets.first().copied().unwrap_or(self.cursor);
+        } else {
+            self.sync_cursor_from_selection();
+        }
         self.modified = true;
         self.dirty = true;
         true
