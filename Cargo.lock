@@ -98,6 +98,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "anvil-mcp"
+version = "0.6.0"
+dependencies = [
+ "anvil-control",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "anvil-plugin-host"
 version = "0.6.0"
 dependencies = [

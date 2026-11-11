@@ -154,8 +154,8 @@ are rejected.
 anvil-ctl status
 anvil-ctl --json open src/main.rs +12:3
 anvil-ctl --json edit set $'alpha\nbeta\n'
-anvil-ctl --json save
-anvil-ctl --json query
+printf 'alpha\nbeta\n' | anvil-ctl --json edit set --stdin
+anvil-ctl --json query 1:200
 anvil-ctl --json command ':git-diff'
 anvil-ctl --json quit --force
 ```
@@ -165,14 +165,22 @@ anvil-ctl --json quit --force
 usage, 3 no instance, 4 timeout, 5 editor RPC error. `open`, `save`, `edit`,
 `query`, `command`, and `quit` all pass through the control socket into the
 TUI actor; they do not edit files directly. `query` reports buffer text,
-cursor, selection, revision, undo depth/bytes, tabs, and active buffer.
-`command` executes Ex commands through the same editor state machine.
+cursor, selection, revision, undo depth/bytes, tabs, and active buffer, and
+accepts a bounded `START[:END]` line range. `command` executes allowlisted Ex
+commands through the same editor state machine; admin commands such as `:pkg`
+and `:plugin-*` are denied on the remote surface.
 
-`open` is workspace-relative. `--spawn` starts Anvil only when a terminal is
-attached. `--editor` and stdin instances do not claim the control socket, so
-they can run alongside a normal interactive instance. `scripts/ctl-smoke.sh`
-drives a real TUI through this CLI and asserts files, buffer state, undo, Git
-index state, and session output.
+The control protocol is version 3 (`protocol_version` and `capabilities` are
+returned by `status`). `open` is workspace-relative. `--spawn` starts Anvil
+only when a terminal is attached. `--editor` and stdin instances do not claim
+the control socket, so they can run alongside a normal interactive instance.
+`scripts/ctl-smoke.sh` drives a real TUI through this CLI and asserts files,
+buffer state, undo, Git index state, and session output.
+
+`anvil-mcp` is a thin stdio MCP adapter over `anvil-control`. It exposes
+`anvil_status`, `anvil_open`, `anvil_query`, `anvil_edit`, `anvil_save`,
+`anvil_command`, and `anvil_quit`; it never reads or writes workspace files
+directly. `scripts/mcp-smoke.sh` starts the adapter against a real TUI.
 
 Quick open: `Space f` filters workspace files and previews the selected file
 through the gateway. Wide terminals show the preview beside the list; narrow

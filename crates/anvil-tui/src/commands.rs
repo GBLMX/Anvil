@@ -92,6 +92,11 @@ impl Model {
             self.substitute(false, rest);
             return;
         }
+        if anvil_control::capability_for_command(command).is_none() {
+            self.status = format!("E: unknown command: {command}");
+            self.dirty = true;
+            return;
+        }
         let mut parts = command.splitn(2, char::is_whitespace);
         let name = parts.next().unwrap_or_default();
         let argument = parts.next().unwrap_or_default().trim();

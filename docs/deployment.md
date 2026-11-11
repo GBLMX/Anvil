@@ -92,6 +92,8 @@ The official-only release layout is:
 
 ```text
 bin/anvil
+bin/anvil-ctl
+bin/anvil-mcp
 bin/anvil-gateway
 bin/anvil-exec-runner
 bin/anvil-plugin-host

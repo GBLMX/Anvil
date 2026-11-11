@@ -1,13 +1,12 @@
 # External Integration Plan
 
-Status: 1a (`--editor`, `:cq`, sticky save failure), 1b (`anvil -`, stdin,
-`/dev/tty`, `--read-only`), 2 (single-instance control and `anvil-ctl`), and
-3 (stdin Locations panel) are implemented. The control plane is at protocol
-version 2, with a real-TUI CLI smoke harness.
+Status: 1a, 1b, 2, 3, the protocol v3 control plane, and the thin MCP adapter
+are implemented. Real-TUI CLI and MCP smoke tests pass, and Codex successfully
+called `anvil_status` and `anvil_query` through the adapter.
 
-The remaining work is not another transport. It is contract hardening followed
-by a thin MCP adapter over the existing control socket. MCP must not read or
-write workspace files directly.
+The remaining work is dependency cleanup and dogfood-driven tool removal. The
+sections below preserve the gap analysis that drove the implementation; items
+marked resolved are no longer blockers.
 
 ## 1. Current contract
 
@@ -63,9 +62,9 @@ no cross-user access.
 anvil-ctl [--json] [--timeout-ms N] [--spawn] status
 anvil-ctl ... open <FILE> [+LINE[:COL]]
 anvil-ctl ... save [FILE]
-anvil-ctl ... edit set <TEXT>
-anvil-ctl ... edit insert <TEXT>
-anvil-ctl ... query
+anvil-ctl ... edit set <TEXT|--stdin>
+anvil-ctl ... edit insert <TEXT|--stdin>
+anvil-ctl ... query [START[:END]]
 anvil-ctl ... command <COMMAND>
 anvil-ctl ... exec <COMMAND>
 anvil-ctl ... quit [--force]
@@ -108,12 +107,12 @@ headless callers receive a usage error instead of a background TUI.
 Failure preserves the command transcript, stderr, gateway log, and captured
 terminal screen under `/tmp/anvil-ctl-smoke.*`.
 
-## 2. Known gaps
+## 2. Resolved gaps and remaining work
 
-These are evidence-backed gaps between the current control plane and a safe MCP
-adapter.
+These gaps drove the implementation. Resolved items remain here as design
+history; the remaining work is at the end of this section.
 
-### 2.1 Command policy is too broad
+### 2.1 Resolved: command policy
 
 `control.exec` can run every editor Ex command, including:
 
@@ -125,103 +124,52 @@ Those are legitimate interactive commands, but they are not editor-navigation
 primitives. An MCP client should not be able to install packages or change
 persistent global configuration merely because it can edit a buffer.
 
-Decision needed: remote command capabilities. Recommended default:
+Implemented: commands carry `Capability::{Read, Edit, Git, Admin}` and the
+default remote surface denies admin commands. The same
+`validate_remote_command` policy is used by the TUI, `anvil-ctl`, and MCP.
 
-- `read`: status, query, open;
-- `edit`: edit, save, buffer mutation, editor commands;
-- `git`: diff, hunk navigation, stage/unstage;
-- `admin`: package, plugin lifecycle, theme persistence, settings persistence.
+### 2.2 Resolved: bounded query
 
-MCP exposes only `read`, `edit`, and `git` by default. `admin` requires an
-explicit opt-in and must not be discoverable as a normal tool.
+`control.query` accepts `start_line`, `end_line`, and `include_text`. The
+result reports `line_count`, the returned range, and `text_truncated`; text is
+still capped at `MAX_QUERY_TEXT` (256 KiB).
 
-### 2.2 Query returns the whole buffer
+### 2.3 Resolved: range replacement
 
-`control.query` returns buffer text up to `MAX_QUERY_TEXT` (256 KiB) in one
-response. That is acceptable for the CLI smoke test and normal source files,
-but it is a poor MCP contract:
+`control.edit` supports `set`, `insert`, and `replace`. `replace` takes
+one-based line/byte-column bounds, requires `expected_revision`, rejects
+invalid UTF-8 boundaries, and applies as one undo transaction. Deletion is
+`replace` with empty text.
 
-- large buffers waste tokens and latency;
-- there is no way to request only the visible region or a line range;
-- the response does not expose a stable page cursor.
 
-Add optional query bounds:
+### 2.4 Resolved: stdin payloads
 
-```json
-{"start_line":1,"end_line":200,"include_text":true}
-```
+MCP sends edit text as JSON over the socket. `anvil-ctl edit set --stdin` and
+`anvil-ctl edit insert --stdin` avoid argv limits for scripts.
 
-The default stays compatible. The result must include total line count,
-returned range, and `text_truncated`.
+### 2.5 Resolved: protocol discovery
 
-### 2.3 Editing is coarse
-
-`control.edit` supports only `set` (replace the whole buffer) and `insert` at
-the cursor. There is no surgical range replacement or deletion.
-
-Add a bounded, revision-guarded operation:
+`control.status` returns protocol version 3 and the capability list:
 
 ```json
 {
-  "mode": "replace",
-  "start": {"line": 12, "byte_column": 5},
-  "end": {"line": 12, "byte_column": 17},
-  "text": "new_name",
-  "expected_revision": 7
+  "protocol_version": "3",
+  "capabilities": ["status", "open", "save", "edit", "query", "exec", "quit"]
 }
 ```
 
-Rules:
+### 2.6 Resolved: smoke harness in CI
 
-- one-based lines and byte columns within the line;
-- reject invalid UTF-8 boundaries;
-- reject stale `expected_revision`;
-- reject read-only buffers and help views;
-- apply as one editor transaction so undo is one step.
-
-Deletion is `replace` with empty text.
-
-### 2.4 Large payloads do not fit argv
-
-`anvil-ctl edit set <TEXT>` puts the payload in argv. The MCP adapter should use
-`anvil-control::Client` directly and send JSON over the socket, avoiding
-`ARG_MAX` and shell quoting. The CLI should still gain a stdin form for scripts:
-
-```text
-anvil-ctl edit set --stdin
-anvil-ctl edit insert --stdin
-```
-
-### 2.5 Protocol capabilities are not discoverable
-
-`PROTOCOL_VERSION` exists, but `control.status` does not return it, and there is
-no method/capability list. Add:
-
-```json
-{
-  "protocol_version": "2",
-  "capabilities": ["status", "open", "save", "edit.set", "edit.insert",
-                   "query", "exec", "quit"]
-}
-```
-
-This lets MCP fail clearly when an older editor is running instead of
-discovering missing methods through RPC errors.
-
-### 2.6 The smoke harness is not in CI
-
-`scripts/ctl-smoke.sh` is currently manual. It needs a Linux CI job that
-installs its runtime tools and runs it against the release or debug binary.
-Without that, the control contract can regress while unit tests stay green.
-
-Prerequisites to verify in CI: `tmux`, `python3`, `git`, a writable
-`XDG_RUNTIME_DIR`, and no pre-existing Anvil instance.
+`scripts/ctl-smoke.sh` and `scripts/mcp-smoke.sh` run in the Linux
+`control-smoke` CI job against the real TUI and the real gateway.
+The remaining work is dependency cleanup (`anvil-api` schema features) and
+dogfood-driven MCP tool removal. Both are P2 and not blockers.
 
 ## 3. Work plan
 
-### P0: contract hardening
+### P0: completed contract hardening
 
-Do these before writing MCP.
+All P0 items landed and are covered by unit tests plus `ctl-smoke`.
 
 1. **Shared command manifest**
    - Put `CommandSpec`, `Capability`, and `EditMode` in `anvil-control`, not
@@ -275,9 +223,9 @@ Do these before writing MCP.
    - Remote `open` outside workspace rejects.
    - Remote save/open/edit rejects while a read-only view is active.
 
-### P1: thin MCP adapter
+### P1: implemented MCP adapter
 
-Create one binary crate, `anvil-mcp`, with no TUI, session, gateway, or editor
+`anvil-mcp` is a stdio binary with no TUI, session, gateway, or editor
 dependencies. It depends on `anvil-control` for the typed client and on JSON
 serialization only.
 
@@ -317,11 +265,13 @@ Acceptance:
 - no-instance, timeout, policy-denied, and RPC errors are distinguishable;
 - `scripts/ctl-smoke.sh` and an MCP transcript smoke both pass in CI.
 
-### P2: dogfood
+### P2: dogfood status
 
-- Run the MCP adapter against a real external agent, not only a test client.
-- Record which tools the agent actually uses; remove unused tool surface.
-- Revisit multi-file replace only after measured demand.
+- Completed: Codex called `anvil_status` and `anvil_query` through the adapter
+  against a real TUI.
+- All seven tools are exercised by `scripts/mcp-smoke.sh`; none are removed yet
+  because one dogfood turn is not enough evidence.
+- Multi-file replace stays deferred until measured demand.
 - Do not add session multiplexing, TCP, or cross-user control without a new
   threat model.
 

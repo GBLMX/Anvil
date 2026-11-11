@@ -146,6 +146,39 @@ jobs:
         with:
           command: check
 
+  control-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install pinned Rust toolchain
+        run: rustup show
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Install tmux
+        run: sudo apt-get update && sudo apt-get install -y tmux
+      - name: Build Rust control plane
+        run: cargo build --release -p anvil-tui -p anvil-ctl -p anvil-mcp
+      - name: Build Go gateway
+        run: |
+          go build -o target/release/anvil-gateway ./go/cmd/anvil-gateway
+          go build -o target/release/anvil-exec-runner ./go/cmd/anvil-exec-runner
+      - name: Run real-TUI control smoke
+        env:
+          ANVIL_BIN: ${{ github.workspace }}/target/release/anvil
+          ANVIL_CTL: ${{ github.workspace }}/target/release/anvil-ctl
+          ANVIL_GATEWAY: ${{ github.workspace }}/target/release/anvil-gateway
+        run: scripts/ctl-smoke.sh
+      - name: Run MCP stdio smoke
+        env:
+          ANVIL_BIN: ${{ github.workspace }}/target/release/anvil
+          ANVIL_CTL: ${{ github.workspace }}/target/release/anvil-ctl
+          ANVIL_MCP: ${{ github.workspace }}/target/release/anvil-mcp
+          ANVIL_GATEWAY: ${{ github.workspace }}/target/release/anvil-gateway
+        run: scripts/mcp-smoke.sh
+
   go:
     runs-on: ubuntu-latest
     steps:

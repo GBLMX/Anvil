@@ -3,42 +3,6 @@
 use super::*;
 use crate::selection_table::{SelectionItem, SelectionTable};
 
-const COMMANDS: &[&str] = &[
-    "w",
-    "wa",
-    "wq",
-    "q",
-    "q!",
-    "cq",
-    "e",
-    "help",
-    "settings",
-    "theme",
-    "theme-auto",
-    "theme-save",
-    "pkg",
-    "reconnect",
-    "lsp-start",
-    "lsp-stop",
-    "tree",
-    "format",
-    "symbols",
-    "problems",
-    "replace",
-    "replace-all",
-    "bn",
-    "bp",
-    "new",
-    "bd",
-    "bd!",
-    "plugin-start",
-    "plugin-list",
-    "plugin-oom",
-    "plugin-exec",
-    "plugin-stop",
-    "plugin-enable",
-];
-
 #[derive(Clone, Debug)]
 pub(crate) struct CompletionItem {
     pub(crate) label: String,
@@ -75,11 +39,11 @@ impl CommandCompletion {
         } else {
             (
                 buffer.to_owned(),
-                COMMANDS
+                anvil_control::COMMANDS
                     .iter()
-                    .map(|name| CompletionItem {
-                        label: (*name).to_owned(),
-                        insert: format!("{name} "),
+                    .map(|command| CompletionItem {
+                        label: command.name.to_owned(),
+                        insert: format!("{} ", command.name),
                     })
                     .collect(),
             )

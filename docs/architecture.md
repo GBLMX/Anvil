@@ -1,34 +1,42 @@
 # Anvil Architecture
 
-Status: current as of 2026-11-07. `0.4.7c-b` cgroup-before-exec limits,
-host supervision, idle reclaim, and seccomp closure are landed. `0.4.9`
-session extraction and `0.5.x` interaction/UI are landed. The official-only
-plugin distribution path is landed: signed layout, installer, bundled
-fallback, and managed store. Marketplace/index work remains planned. See
+Status: current as of 2026-11-11. The editor control plane (`anvil-control`,
+`anvil-ctl`, protocol v3) and the thin `anvil-mcp` stdio adapter are implemented.
+`0.4.7c-b` cgroup-before-exec limits, host supervision, idle reclaim, and
+seccomp closure are landed. `0.4.9` session extraction and `0.5.x`
+interaction/UI are landed. The official-only plugin distribution path is
+landed: signed layout, installer, bundled fallback, and managed store.
+Marketplace/index work remains planned. See
 [visual current/future maps](architecture-visual.md).
 
 ## 1. Process model
 
 ```text
-┌──────────────────────────────────────────────┐
-│ Editor (Rust, trusted)                       │
-│ input · view · rendering                      │
-│ anvil-session: documents · commands · plugins │
-└───────┬──────────────────────────────┬────────┘
-        │ editor API UDS               │ control UDS
-        │ (per plugin host)            │ (grants, health)
-┌───────▼───────────────┐              │
-│ Plugin host (host A)  │              │
-│ Luau + sandbox        │              │
-└───────┬───────────────┘              │
-        │ sys.* UDS + token            │
-┌───────▼──────────────────────────────▼────────┐
-│ Gateway (Go, trusted, per session)            │
-│ policy · openat2 · fetch · exec · process     │
-└───────────────────────┬───────────────────────┘
+┌────────────────────────────────────────────────────┐
+│ Editor (Rust, trusted)                             │
+│ input · view · rendering                           │
+│ anvil-session: documents · commands · plugins      │
+│ anvil-control: control.sock, protocol v3           │
+└───┬──────────────────┬──────────────────┬──────────┘
+    │ editor API UDS   │ gateway UDS      │ control.sock
+    │ (plugin host)    │ (file/LSP/git)   │ control.*
+┌───▼──────────────┐   │          ┌───────▼──────────┐
+│ Plugin host      │   │          │ anvil-ctl/MCP    │
+│ Luau + sandbox   │   │          │ same UID only    │
+└───┬──────────────┘   │          └──────────────────┘
+    │ sys.* UDS + token│
+┌───▼──────────────────▼────────────────────────────┐
+│ Gateway (Go, trusted, per session)                │
+│ policy · openat2 · fetch · exec · process         │
+└───────────────────────┬───────────────────────────┘
                         │
                 files / network / child processes
 ```
+
+`anvil-control` is a separate editor-owned socket, not the gateway control
+channel. It accepts same-UID local clients (`anvil-ctl` and `anvil-mcp`) and
+routes every request through the editor actor. It never writes workspace files
+directly.
 
 `sys.exec` adds one hop: the gateway invokes `anvil-exec-runner`, which applies
 Landlock/seccomp and then executes the tool. The gateway never execs a tool
@@ -139,8 +147,12 @@ event notifications are defined by
 | Endpoint | Client | Server | Purpose |
 |---|---|---|---|
 | `editor.sock` | plugin host | editor | `editor.*`, `ui.*`, `event.*` |
-| `gateway.sock` | plugin host | gateway | `sys.*` |
-| `control.sock` | editor | gateway | grants, health, shutdown |
+| `gateway.sock` | editor, plugin host | gateway | editor file/LSP/git, `sys.*`, `plugin.register` |
+| `control.sock` | `anvil-ctl`, MCP adapter | editor | `control.*` |
+
+The control socket is not a gateway grant channel. Plugin grants register over
+the per-session gateway socket; `control.sock` belongs to the editor runtime and
+is stable across sessions under `$XDG_RUNTIME_DIR/anvil/`.
 
 `SO_PEERCRED` identifies the peer process. The capability token identifies the
 plugin. Neither is sufficient alone.
@@ -161,6 +173,31 @@ plugin --sys.exec--------------> gateway -> exec-runner -> tool
 
 The gateway never proxies editor state. The editor never performs ambient
 filesystem/network I/O on behalf of a plugin.
+
+### Editor control plane
+
+- `anvil-control` owns the stable `control.sock` server/client, protocol v3,
+  typed request and response DTOs, and the shared command manifest.
+- Methods: `control.status`, `control.open`, `control.save`, `control.edit`,
+  `control.query`, `control.exec`, `control.quit`.
+- Every request is enqueued on the TUI actor and answered with a bounded
+  response. The client never mutates editor state directly.
+- Commands carry a capability: `read`, `edit`, `git`, or `admin`. Admin
+  commands (`:pkg`, plugin lifecycle, theme/settings persistence) are denied on
+  the default remote surface.
+- Path-bearing Ex forms (`:e <path>`, `:w <path>`, `:wq <path>`) are rejected
+  through `control.exec`; clients use `control.open` / `control.save`, which
+  enforce the workspace boundary.
+- `control.query` accepts line bounds and caps text at 256 KiB.
+  `control.edit` supports `set`, `insert`, and revision-guarded `replace`.
+- `anvil-ctl` is the CLI adapter: one JSON object, stable exit codes, bounded
+  `query` ranges, and `edit --stdin` for large payloads.
+- `anvil-mcp` is implemented as a thin stdio adapter over `anvil-control`.
+  Tools are filtered by capability and derived from the same command manifest
+  as the TUI and CLI. It does not depend on `anvil-tui`.
+
+`scripts/ctl-smoke.sh` exercises the real TUI through the CLI, including file
+save, undo/redo, Git hunk staging, session output, and forced quit.
 
 ## 4. Editor and text model
 
@@ -219,9 +256,13 @@ crates/
   anvil-api/           public Rust types, schema, generated stubs
   anvil-core/          text model, commands, snapshots
   anvil-editor/        selection-first editor state and snapshots
+  anvil-session/       documents, effects, keymap, plugin lifecycle
   anvil-ipc/           UDS transport, JSON-RPC framing
+  anvil-control/       editor control socket, protocol v3, command manifest
+  anvil-ctl/           CLI adapter over the control socket
   anvil-plugin-host/   Luau host + sandbox (QuickJS planned)
   anvil-tui/           terminal frontend
+  anvil-mcp/           stdio MCP adapter over anvil-control
 go/
   cmd/anvil-gateway/   gateway entry point
   cmd/anvil-exec-runner/
@@ -278,6 +319,11 @@ Installation and verification steps are in [INSTALL.md](../INSTALL.md) and
 | Cancelled request | I/O and process tree killed; no success response |
 | Stale token | Request rejected; plugin host restarted |
 | Exec runner missing | `sys.exec` disabled; no unsandboxed fallback |
+| Control socket unavailable | CLI returns exit 3; MCP returns a no-instance error |
+| Control request timeout | CLI exits 4; MCP returns a timeout error |
+| Control peer UID mismatch | Request rejected before parsing |
+| Remote admin command | `POLICY_DENIED`; buffer unchanged |
+| Stale edit revision | `CONFLICT`; buffer unchanged |
 
 ## 8. Deliberate exclusions
 

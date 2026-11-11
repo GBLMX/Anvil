@@ -23,15 +23,386 @@ use std::{
 };
 
 /// Protocol version reported by the control server.
-pub const PROTOCOL_VERSION: &str = "2";
+pub const PROTOCOL_VERSION: &str = "3";
+
+/// Control methods advertised by this protocol version.
+pub const CAPABILITIES: &[&str] = &["status", "open", "save", "edit", "query", "exec", "quit"];
+
+/// Coarse authority required by an editor command.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Capability {
+    Read,
+    Edit,
+    Git,
+    Admin,
+}
+
+impl Capability {
+    /// Whether the default remote surface may expose this capability.
+    pub fn is_remote_allowed(self) -> bool {
+        !matches!(self, Self::Admin)
+    }
+}
+
+/// Buffer mutation mode exposed by `control.edit`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EditMode {
+    Set,
+    Insert,
+    Replace,
+}
+
+/// One editor command and the authority it requires.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CommandSpec {
+    pub name: &'static str,
+    pub capability: Capability,
+}
+
+/// Shared command manifest for execution, completion, CLI checks, and MCP.
+pub const COMMANDS: &[CommandSpec] = &[
+    CommandSpec {
+        name: "w",
+        capability: Capability::Edit,
+    },
+    CommandSpec {
+        name: "wa",
+        capability: Capability::Edit,
+    },
+    CommandSpec {
+        name: "wq",
+        capability: Capability::Edit,
+    },
+    CommandSpec {
+        name: "q",
+        capability: Capability::Edit,
+    },
+    CommandSpec {
+        name: "q!",
+        capability: Capability::Edit,
+    },
+    CommandSpec {
+        name: "cq",
+        capability: Capability::Edit,
+    },
+    CommandSpec {
+        name: "e",
+        capability: Capability::Edit,
+    },
+    CommandSpec {
+        name: "help",
+        capability: Capability::Read,
+    },
+    CommandSpec {
+        name: "settings",
+        capability: Capability::Admin,
+    },
+    CommandSpec {
+        name: "theme",
+        capability: Capability::Admin,
+    },
+    CommandSpec {
+        name: "theme-auto",
+        capability: Capability::Admin,
+    },
+    CommandSpec {
+        name: "theme-save",
+        capability: Capability::Admin,
+    },
+    CommandSpec {
+        name: "pkg",
+        capability: Capability::Admin,
+    },
+    CommandSpec {
+        name: "reconnect",
+        capability: Capability::Admin,
+    },
+    CommandSpec {
+        name: "lsp-start",
+        capability: Capability::Admin,
+    },
+    CommandSpec {
+        name: "lsp-stop",
+        capability: Capability::Admin,
+    },
+    CommandSpec {
+        name: "tree",
+        capability: Capability::Read,
+    },
+    CommandSpec {
+        name: "format",
+        capability: Capability::Edit,
+    },
+    CommandSpec {
+        name: "symbols",
+        capability: Capability::Read,
+    },
+    CommandSpec {
+        name: "problems",
+        capability: Capability::Read,
+    },
+    CommandSpec {
+        name: "replace",
+        capability: Capability::Edit,
+    },
+    CommandSpec {
+        name: "replace-all",
+        capability: Capability::Edit,
+    },
+    CommandSpec {
+        name: "bn",
+        capability: Capability::Edit,
+    },
+    CommandSpec {
+        name: "bp",
+        capability: Capability::Edit,
+    },
+    CommandSpec {
+        name: "new",
+        capability: Capability::Edit,
+    },
+    CommandSpec {
+        name: "bd",
+        capability: Capability::Edit,
+    },
+    CommandSpec {
+        name: "bd!",
+        capability: Capability::Edit,
+    },
+    CommandSpec {
+        name: "plugin-start",
+        capability: Capability::Admin,
+    },
+    CommandSpec {
+        name: "plugin-list",
+        capability: Capability::Read,
+    },
+    CommandSpec {
+        name: "plugin-oom",
+        capability: Capability::Admin,
+    },
+    CommandSpec {
+        name: "plugin-exec",
+        capability: Capability::Admin,
+    },
+    CommandSpec {
+        name: "plugin-stop",
+        capability: Capability::Admin,
+    },
+    CommandSpec {
+        name: "plugin-enable",
+        capability: Capability::Admin,
+    },
+    CommandSpec {
+        name: "conflict-recover",
+        capability: Capability::Edit,
+    },
+    CommandSpec {
+        name: "conflict-discard",
+        capability: Capability::Edit,
+    },
+    CommandSpec {
+        name: "git-diff",
+        capability: Capability::Git,
+    },
+    CommandSpec {
+        name: "git-hunk-next",
+        capability: Capability::Git,
+    },
+    CommandSpec {
+        name: "git-hunk-prev",
+        capability: Capability::Git,
+    },
+    CommandSpec {
+        name: "git-stage-hunk",
+        capability: Capability::Git,
+    },
+    CommandSpec {
+        name: "git-unstage-hunk",
+        capability: Capability::Git,
+    },
+    CommandSpec {
+        name: "git-blame",
+        capability: Capability::Git,
+    },
+    CommandSpec {
+        name: "undo",
+        capability: Capability::Edit,
+    },
+    CommandSpec {
+        name: "redo",
+        capability: Capability::Edit,
+    },
+    CommandSpec {
+        name: "git-conflicts",
+        capability: Capability::Git,
+    },
+    CommandSpec {
+        name: "git-conflict-base",
+        capability: Capability::Git,
+    },
+    CommandSpec {
+        name: "git-conflict-ours",
+        capability: Capability::Git,
+    },
+    CommandSpec {
+        name: "git-conflict-theirs",
+        capability: Capability::Git,
+    },
+];
+
+/// Look up an exact command name.
+pub fn command_capability(name: &str) -> Option<Capability> {
+    COMMANDS
+        .iter()
+        .find(|command| command.name == name)
+        .map(|command| command.capability)
+}
+
+/// Look up the capability required by a command line.
+pub fn capability_for_command(command: &str) -> Option<Capability> {
+    let name = command
+        .trim()
+        .trim_start_matches(':')
+        .split_whitespace()
+        .next()?;
+    if name.starts_with("s/") || name.starts_with("%s/") {
+        Some(Capability::Edit)
+    } else {
+        command_capability(name)
+    }
+}
+
+/// Why a command is not accepted on the default remote surface.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CommandPolicyError {
+    Empty,
+    Unknown,
+    Admin,
+    PathArgument,
+}
+
+impl std::fmt::Display for CommandPolicyError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Empty => write!(formatter, "command is empty"),
+            Self::Unknown => write!(formatter, "command is not available remotely"),
+            Self::Admin => write!(formatter, "command requires admin capability"),
+            Self::PathArgument => {
+                write!(formatter, "use control.open or control.save for file paths")
+            }
+        }
+    }
+}
+
+/// Validate a command against the shared capability and path policy.
+pub fn validate_remote_command(command: &str) -> Result<(), CommandPolicyError> {
+    let command = command.trim().trim_start_matches(':').trim();
+    if command.is_empty() {
+        return Err(CommandPolicyError::Empty);
+    }
+    let name = command.split_whitespace().next().unwrap_or_default();
+    let has_argument = command.split_whitespace().nth(1).is_some();
+    if matches!(name, "e" | "w" | "wq") && has_argument {
+        return Err(CommandPolicyError::PathArgument);
+    }
+    match capability_for_command(command) {
+        None => Err(CommandPolicyError::Unknown),
+        Some(capability) if !capability.is_remote_allowed() => Err(CommandPolicyError::Admin),
+        Some(_) => Ok(()),
+    }
+}
+
+/// A one-based line and byte column inside that line.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TextPoint {
+    pub line: usize,
+    pub byte_column: usize,
+}
+
+/// Half-open range used by `EditMode::Replace`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EditRange {
+    pub start: TextPoint,
+    pub end: TextPoint,
+}
+
+/// Bounded query request.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct QueryOptions {
+    pub start_line: Option<usize>,
+    pub end_line: Option<usize>,
+    pub include_text: bool,
+}
+
+impl Default for QueryOptions {
+    fn default() -> Self {
+        Self {
+            start_line: None,
+            end_line: None,
+            include_text: true,
+        }
+    }
+}
 
 /// Control response with the editor status.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Status {
     pub version: String,
+    pub protocol_version: String,
     pub workspace: PathBuf,
     pub file: Option<PathBuf>,
     pub dirty: bool,
+    #[serde(default)]
+    pub capabilities: Vec<String>,
+}
+
+/// One open buffer in a query result.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BufferInfo {
+    pub path: Option<PathBuf>,
+    pub modified: bool,
+    pub active: bool,
+}
+
+/// Bounded buffer state returned by `control.query`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct QueryResult {
+    pub version: String,
+    pub workspace: PathBuf,
+    pub path: Option<PathBuf>,
+    pub modified: bool,
+    pub read_only: bool,
+    pub cursor: usize,
+    pub revision: u64,
+    pub line_count: usize,
+    pub undo_depth: usize,
+    pub undo_bytes: usize,
+    pub selection: Vec<(usize, usize)>,
+    pub text: String,
+    pub text_truncated: bool,
+    pub start_line: usize,
+    pub end_line: usize,
+    pub active: usize,
+    pub buffers: Vec<BufferInfo>,
+}
+
+/// Result of `control.edit`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EditResult {
+    pub accepted: bool,
+    pub revision: u64,
+    pub modified: bool,
+    pub cursor: usize,
+}
+
+/// Result of `control.exec`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExecResult {
+    pub accepted: bool,
+    pub status: String,
 }
 
 /// A typed editor action requested by a control client.
@@ -50,10 +421,12 @@ pub enum ControlRequest {
         path: Option<PathBuf>,
     },
     Edit {
-        mode: String,
+        mode: EditMode,
         text: String,
+        range: Option<EditRange>,
+        expected_revision: Option<u64>,
     },
-    Query,
+    Query(QueryOptions),
     Quit {
         force: bool,
     },
@@ -368,22 +741,62 @@ fn parse_control(request: &Request) -> Result<ControlRequest, RpcError> {
             Ok(ControlRequest::Save { path })
         }
         "control.edit" => {
-            let mode = request
-                .params
-                .get("mode")
-                .and_then(Value::as_str)
-                .ok_or_else(|| RpcError::new(codes::INVALID_PARAMS, "mode is required"))?;
+            let mode = match request.params.get("mode").and_then(Value::as_str) {
+                Some("set") => EditMode::Set,
+                Some("insert") => EditMode::Insert,
+                Some("replace") => EditMode::Replace,
+                Some(_) => {
+                    return Err(RpcError::new(
+                        codes::INVALID_PARAMS,
+                        "mode must be set, insert, or replace",
+                    ));
+                }
+                None => {
+                    return Err(RpcError::new(codes::INVALID_PARAMS, "mode is required"));
+                }
+            };
             let text = request
                 .params
                 .get("text")
                 .and_then(Value::as_str)
                 .ok_or_else(|| RpcError::new(codes::INVALID_PARAMS, "text is required"))?;
+            let range = request
+                .params
+                .get("range")
+                .filter(|value| !value.is_null())
+                .map(|value| serde_json::from_value(value.clone()))
+                .transpose()
+                .map_err(|error| {
+                    RpcError::new(codes::INVALID_PARAMS, format!("invalid range: {error}"))
+                })?;
+            let expected_revision = request
+                .params
+                .get("expected_revision")
+                .and_then(Value::as_u64);
             Ok(ControlRequest::Edit {
-                mode: mode.to_owned(),
+                mode,
                 text: text.to_owned(),
+                range,
+                expected_revision,
             })
         }
-        "control.query" => Ok(ControlRequest::Query),
+        "control.query" => Ok(ControlRequest::Query(QueryOptions {
+            start_line: request
+                .params
+                .get("start_line")
+                .and_then(Value::as_u64)
+                .map(|value| value as usize),
+            end_line: request
+                .params
+                .get("end_line")
+                .and_then(Value::as_u64)
+                .map(|value| value as usize),
+            include_text: request
+                .params
+                .get("include_text")
+                .and_then(Value::as_bool)
+                .unwrap_or(true),
+        })),
         "control.quit" => {
             let force = request
                 .params
@@ -493,8 +906,9 @@ impl Client {
     }
 
     /// Execute an Ex command through the editor state machine.
-    pub fn exec(&mut self, command: &str) -> Result<Value, Error> {
-        self.request("control.exec", json!({"command": command}))
+    pub fn exec(&mut self, command: &str) -> Result<ExecResult, Error> {
+        let value = self.request("control.exec", json!({"command": command}))?;
+        Ok(serde_json::from_value(value)?)
     }
 
     /// Save the current buffer, optionally as a path.
@@ -505,14 +919,40 @@ impl Client {
         )
     }
 
-    /// Edit the active buffer with `set` or `insert`.
-    pub fn edit(&mut self, mode: &str, text: &str) -> Result<Value, Error> {
-        self.request("control.edit", json!({"mode": mode, "text": text}))
+    /// Replace the whole buffer or insert at the cursor.
+    pub fn edit(&mut self, mode: EditMode, text: &str) -> Result<EditResult, Error> {
+        let value = self.request("control.edit", json!({"mode": mode, "text": text}))?;
+        Ok(serde_json::from_value(value)?)
     }
 
-    /// Query the active buffer state.
-    pub fn query(&mut self) -> Result<Value, Error> {
-        self.request("control.query", json!({}))
+    /// Replace a bounded range after checking `expected_revision`.
+    pub fn replace(
+        &mut self,
+        range: EditRange,
+        text: &str,
+        expected_revision: u64,
+    ) -> Result<EditResult, Error> {
+        let value = self.request(
+            "control.edit",
+            json!({
+                "mode": EditMode::Replace,
+                "range": range,
+                "text": text,
+                "expected_revision": expected_revision,
+            }),
+        )?;
+        Ok(serde_json::from_value(value)?)
+    }
+
+    /// Query the active buffer with default bounds.
+    pub fn query(&mut self) -> Result<QueryResult, Error> {
+        self.query_with(QueryOptions::default())
+    }
+
+    /// Query the active buffer with explicit bounds.
+    pub fn query_with(&mut self, options: QueryOptions) -> Result<QueryResult, Error> {
+        let value = self.request("control.query", json!(options))?;
+        Ok(serde_json::from_value(value)?)
     }
 
     /// Ask the editor to quit.
@@ -637,7 +1077,7 @@ mod tests {
         };
         assert!(matches!(
             parse_control(&edit).unwrap(),
-            ControlRequest::Edit { mode, text } if mode == "set" && text == "hello"
+            ControlRequest::Edit { mode: EditMode::Set, text, .. } if text == "hello"
         ));
         let quit = Request {
             jsonrpc: JSONRPC_VERSION.to_owned(),
@@ -650,5 +1090,17 @@ mod tests {
             parse_control(&quit).unwrap(),
             ControlRequest::Quit { force: true }
         ));
+    }
+
+    #[test]
+    fn command_manifest_is_unique_and_classified() {
+        let mut names = std::collections::HashSet::new();
+        for command in COMMANDS {
+            assert!(names.insert(command.name), "duplicate {}", command.name);
+        }
+        assert_eq!(command_capability("pkg"), Some(Capability::Admin));
+        assert_eq!(command_capability("git-diff"), Some(Capability::Git));
+        assert_eq!(capability_for_command("%s/a/b/"), Some(Capability::Edit));
+        assert!(!Capability::Admin.is_remote_allowed());
     }
 }

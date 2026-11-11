@@ -1,25 +1,45 @@
 //! Remote control request handling for the TUI event loop.
 
 use super::*;
-use anvil_control::{ControlReply, ControlRequest, RpcError};
+use anvil_control::{
+    BufferInfo, CAPABILITIES, CommandPolicyError, ControlReply, ControlRequest, EditMode,
+    EditRange, EditResult, ExecResult, PROTOCOL_VERSION, QueryOptions, QueryResult, RpcError,
+    Status, TextPoint, validate_remote_command,
+};
 use anvil_ipc::codes;
-use serde_json::{Value, json};
+use serde::Serialize;
+use serde_json::json;
 use std::path::Path;
 
 const MAX_QUERY_TEXT: usize = 256 * 1024;
 
+fn reply<T: Serialize>(value: T) -> ControlReply {
+    serde_json::to_value(value)
+        .map_err(|error| RpcError::new(codes::INTERNAL_ERROR, error.to_string()))
+}
+
 impl Model {
     pub(crate) fn handle_control(&mut self, request: ControlRequest) -> ControlReply {
         match request {
-            ControlRequest::Status => Ok(json!({
-                "version": env!("CARGO_PKG_VERSION"),
-                "workspace": self.workspace,
-                "file": self.path,
-                "dirty": self.modified,
-            })),
+            ControlRequest::Status => reply(Status {
+                version: env!("CARGO_PKG_VERSION").to_owned(),
+                protocol_version: PROTOCOL_VERSION.to_owned(),
+                workspace: self.workspace.clone(),
+                file: self.path.clone(),
+                dirty: self.modified,
+                capabilities: CAPABILITIES
+                    .iter()
+                    .map(|capability| (*capability).to_owned())
+                    .collect(),
+            }),
             ControlRequest::Save { path } => self.remote_save(path.as_deref()),
-            ControlRequest::Edit { mode, text } => self.remote_edit(&mode, &text),
-            ControlRequest::Query => Ok(self.remote_query()),
+            ControlRequest::Edit {
+                mode,
+                text,
+                range,
+                expected_revision,
+            } => self.remote_edit(mode, &text, range, expected_revision),
+            ControlRequest::Query(options) => reply(self.remote_query(options)),
             ControlRequest::Quit { force } => self.remote_quit(force),
             ControlRequest::Open { path, line, column } => self.remote_open(&path, line, column),
             ControlRequest::Exec { command } => self.remote_exec(&command),
@@ -82,14 +102,23 @@ impl Model {
             ));
         }
         let command = command.trim().trim_start_matches(':').trim();
-        if command.is_empty() {
-            return Err(RpcError::new(codes::INVALID_PARAMS, "command is empty"));
+        match validate_remote_command(command) {
+            Ok(()) => {}
+            Err(CommandPolicyError::Empty) => {
+                return Err(RpcError::new(codes::INVALID_PARAMS, "command is empty"));
+            }
+            Err(error) => {
+                return Err(RpcError::new(codes::POLICY_DENIED, error.to_string()));
+            }
         }
         self.execute_command(command);
         if self.status.starts_with("E:") {
             return Err(RpcError::new(codes::POLICY_DENIED, self.status.clone()));
         }
-        Ok(json!({"accepted": true, "status": self.status}))
+        reply(ExecResult {
+            accepted: true,
+            status: self.status.clone(),
+        })
     }
 
     fn remote_save(&mut self, path: Option<&Path>) -> ControlReply {
@@ -130,7 +159,13 @@ impl Model {
         }))
     }
 
-    fn remote_edit(&mut self, mode: &str, text: &str) -> ControlReply {
+    fn remote_edit(
+        &mut self,
+        mode: EditMode,
+        text: &str,
+        range: Option<EditRange>,
+        expected_revision: Option<u64>,
+    ) -> ControlReply {
         if !self.remote_ready() {
             return Err(RpcError::new(
                 codes::UNAVAILABLE,
@@ -141,7 +176,13 @@ impl Model {
             return Err(RpcError::new(codes::POLICY_DENIED, "buffer is read-only"));
         }
         match mode {
-            "set" => {
+            EditMode::Set => {
+                if range.is_some() || expected_revision.is_some() {
+                    return Err(RpcError::new(
+                        codes::INVALID_PARAMS,
+                        "set does not accept a range or revision",
+                    ));
+                }
                 let end = self.editor.text().len_bytes();
                 let changed = self
                     .editor
@@ -162,36 +203,144 @@ impl Model {
                 self.sync_lsp_active();
                 self.status = "remote edit: set".to_owned();
             }
-            "insert" => {
+            EditMode::Insert => {
+                if range.is_some() || expected_revision.is_some() {
+                    return Err(RpcError::new(
+                        codes::INVALID_PARAMS,
+                        "insert does not accept a range or revision",
+                    ));
+                }
                 if text.is_empty() {
                     return Err(RpcError::new(codes::INVALID_PARAMS, "text is empty"));
                 }
                 self.insert_text(text);
                 self.status = "remote edit: insert".to_owned();
             }
-            _ => {
-                return Err(RpcError::new(
-                    codes::INVALID_PARAMS,
-                    "mode must be set or insert",
-                ));
+            EditMode::Replace => {
+                let Some(range) = range else {
+                    return Err(RpcError::new(
+                        codes::INVALID_PARAMS,
+                        "replace requires a range",
+                    ));
+                };
+                let Some(expected_revision) = expected_revision else {
+                    return Err(RpcError::new(
+                        codes::INVALID_PARAMS,
+                        "replace requires expected_revision",
+                    ));
+                };
+                if expected_revision != self.editor.revision() {
+                    return Err(RpcError::new(
+                        codes::CONFLICT,
+                        format!(
+                            "revision changed: expected {expected_revision}, current {}",
+                            self.editor.revision()
+                        ),
+                    ));
+                }
+                let start = self.offset_for_point(range.start)?;
+                let end = self.offset_for_point(range.end)?;
+                if start > end {
+                    return Err(RpcError::new(
+                        codes::INVALID_PARAMS,
+                        "range start is after end",
+                    ));
+                }
+                let changed = self
+                    .editor
+                    .apply_transaction(vec![(start..end, text.to_owned())]);
+                self.editor.set_selection_bytes(start, start);
+                self.cursor = start;
+                if changed {
+                    self.modified = true;
+                }
+                self.missing = false;
+                self.syntax
+                    .borrow_mut()
+                    .switch_path(self.path.as_deref(), false);
+                self.git_checked = None;
+                self.git_due = Some(Instant::now());
+                self.sync_lsp_active();
+                self.status = "remote edit: replace".to_owned();
             }
         }
         self.dirty = true;
-        Ok(json!({
-            "accepted": true,
-            "revision": self.editor.revision(),
-            "modified": self.modified,
-            "cursor": self.cursor,
-        }))
+        reply(EditResult {
+            accepted: true,
+            revision: self.editor.revision(),
+            modified: self.modified,
+            cursor: self.cursor,
+        })
     }
 
-    fn remote_query(&mut self) -> Value {
+    fn offset_for_point(&self, point: TextPoint) -> Result<usize, RpcError> {
+        if point.line == 0 || point.byte_column == 0 {
+            return Err(RpcError::new(
+                codes::INVALID_PARAMS,
+                "line and byte_column must be one-based",
+            ));
+        }
+        let index = self.editor.index();
+        let Some(line_start) = index.line_to_offset(point.line - 1) else {
+            return Err(RpcError::new(
+                codes::INVALID_PARAMS,
+                format!("line {} is out of range", point.line),
+            ));
+        };
+        let line_end = index
+            .line_to_offset(point.line)
+            .unwrap_or_else(|| self.editor.text().len_bytes());
+        let max_column = line_end.saturating_sub(line_start) + 1;
+        if point.byte_column > max_column {
+            return Err(RpcError::new(
+                codes::INVALID_PARAMS,
+                format!("byte_column {} is past the line end", point.byte_column),
+            ));
+        }
+        let offset = line_start + point.byte_column - 1;
+        if offset > self.editor.text().len_bytes()
+            || !self.editor.text().slice(0..offset).is_char_boundary(offset)
+        {
+            return Err(RpcError::new(
+                codes::INVALID_PARAMS,
+                "byte_column is not on a UTF-8 boundary",
+            ));
+        }
+        Ok(offset)
+    }
+
+    fn remote_query(&mut self, options: QueryOptions) -> QueryResult {
         if self.help_back.is_none() {
             self.sync_active();
         }
         let full = self.editor.text().slice(0..self.editor.text().len_bytes());
-        let truncated = full.len() > MAX_QUERY_TEXT;
-        let mut text = full;
+        let line_count = self.editor.index().len_lines();
+        let start_line = options
+            .start_line
+            .unwrap_or(1)
+            .max(1)
+            .min(line_count.max(1));
+        let end_line = options
+            .end_line
+            .unwrap_or(line_count.max(1))
+            .max(start_line)
+            .min(line_count.max(1));
+        let start_offset = self
+            .editor
+            .index()
+            .line_to_offset(start_line.saturating_sub(1))
+            .unwrap_or(0);
+        let end_offset = self
+            .editor
+            .index()
+            .line_to_offset(end_line)
+            .unwrap_or(full.len());
+        let mut text = if options.include_text {
+            full[start_offset.min(full.len())..end_offset.min(full.len())].to_owned()
+        } else {
+            String::new()
+        };
+        let truncated = text.len() > MAX_QUERY_TEXT;
         if truncated {
             let mut end = MAX_QUERY_TEXT;
             while !text.is_char_boundary(end) {
@@ -203,38 +352,38 @@ impl Model {
             .buffers
             .iter()
             .enumerate()
-            .map(|(index, buffer)| {
-                json!({
-                    "path": buffer.path,
-                    "modified": buffer.modified,
-                    "active": index == self.active,
-                })
+            .map(|(index, buffer)| BufferInfo {
+                path: buffer.path.clone(),
+                modified: buffer.modified,
+                active: index == self.active,
             })
-            .collect::<Vec<Value>>();
+            .collect::<Vec<_>>();
         if buffers.is_empty() {
-            buffers.push(json!({
-                "path": self.path,
-                "modified": self.modified,
-                "active": true,
-            }));
+            buffers.push(BufferInfo {
+                path: self.path.clone(),
+                modified: self.modified,
+                active: true,
+            });
         }
-        json!({
-            "version": env!("CARGO_PKG_VERSION"),
-            "workspace": self.workspace,
-            "path": self.path,
-            "modified": self.modified,
-            "read_only": self.read_only || self.help_back.is_some(),
-            "cursor": self.cursor,
-            "revision": self.editor.revision(),
-            "line_count": self.editor.index().len_lines(),
-            "undo_depth": self.editor.undo_depth(),
-            "undo_bytes": self.editor.undo_bytes(),
-            "selection": self.editor.selection_bytes(),
-            "text": text,
-            "text_truncated": truncated,
-            "active": self.active,
-            "buffers": buffers,
-        })
+        QueryResult {
+            version: env!("CARGO_PKG_VERSION").to_owned(),
+            workspace: self.workspace.clone(),
+            path: self.path.clone(),
+            modified: self.modified,
+            read_only: self.read_only || self.help_back.is_some(),
+            cursor: self.cursor,
+            revision: self.editor.revision(),
+            line_count,
+            undo_depth: self.editor.undo_depth(),
+            undo_bytes: self.editor.undo_bytes(),
+            selection: self.editor.selection_bytes(),
+            text,
+            text_truncated: truncated,
+            start_line,
+            end_line,
+            active: self.active,
+            buffers,
+        }
     }
 
     fn remote_quit(&mut self, force: bool) -> ControlReply {
@@ -325,5 +474,89 @@ mod tests {
             command: "q".to_owned(),
         });
         assert_eq!(reply.unwrap_err().code, codes::UNAVAILABLE);
+    }
+
+    #[test]
+    fn reports_protocol_capabilities() {
+        let mut model = Model::new(EditorState::from_text("log"), None);
+        let status = model
+            .handle_control(ControlRequest::Status)
+            .expect("status");
+        assert_eq!(status["protocol_version"], "3");
+        assert!(
+            status["capabilities"]
+                .as_array()
+                .is_some_and(|items| items.iter().any(|item| item == "query"))
+        );
+    }
+
+    #[test]
+    fn query_is_bounded_by_line_range() {
+        let mut model = Model::new(EditorState::from_text("one\ntwo\nthree\n"), None);
+        let value = model
+            .handle_control(ControlRequest::Query(QueryOptions {
+                start_line: Some(2),
+                end_line: Some(2),
+                include_text: true,
+            }))
+            .expect("query");
+        let result: QueryResult = serde_json::from_value(value).expect("typed query");
+        assert_eq!(result.start_line, 2);
+        assert_eq!(result.end_line, 2);
+        assert_eq!(result.text, "two\n");
+        assert!(!result.text_truncated);
+    }
+
+    #[test]
+    fn replace_is_revision_guarded() {
+        let mut model = Model::new(EditorState::from_text("alpha beta"), None);
+        let revision = model.editor.revision();
+        let range = EditRange {
+            start: TextPoint {
+                line: 1,
+                byte_column: 7,
+            },
+            end: TextPoint {
+                line: 1,
+                byte_column: 11,
+            },
+        };
+        let value = model
+            .handle_control(ControlRequest::Edit {
+                mode: EditMode::Replace,
+                text: "gamma".to_owned(),
+                range: Some(range),
+                expected_revision: Some(revision),
+            })
+            .expect("replace");
+        let result: EditResult = serde_json::from_value(value).expect("typed edit");
+        assert_eq!(
+            model
+                .editor
+                .text()
+                .slice(0..model.editor.text().len_bytes()),
+            "alpha gamma"
+        );
+        let stale = model.handle_control(ControlRequest::Edit {
+            mode: EditMode::Replace,
+            text: "x".to_owned(),
+            range: Some(range),
+            expected_revision: Some(revision),
+        });
+        assert_eq!(stale.unwrap_err().code, codes::CONFLICT);
+        assert_eq!(result.revision, model.editor.revision());
+    }
+
+    #[test]
+    fn denies_admin_and_path_commands() {
+        let mut model = Model::new(EditorState::from_text("log"), None);
+        let admin = model.handle_control(ControlRequest::Exec {
+            command: "pkg install https://example.invalid/x".to_owned(),
+        });
+        assert_eq!(admin.unwrap_err().code, codes::POLICY_DENIED);
+        let path = model.handle_control(ControlRequest::Exec {
+            command: "w ../outside".to_owned(),
+        });
+        assert_eq!(path.unwrap_err().code, codes::POLICY_DENIED);
     }
 }

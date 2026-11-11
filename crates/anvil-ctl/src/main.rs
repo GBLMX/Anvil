@@ -1,4 +1,6 @@
-use anvil_control::{Client, Error as ControlError};
+use anvil_control::{
+    Client, EditMode, Error as ControlError, QueryOptions, validate_remote_command,
+};
 use serde_json::{Value, json};
 use std::{path::PathBuf, process, time::Duration};
 
@@ -9,9 +11,9 @@ Usage:
   anvil-ctl [OPTIONS] status
   anvil-ctl [OPTIONS] open <FILE> [+LINE[:COLUMN]]
   anvil-ctl [OPTIONS] save [FILE]
-  anvil-ctl [OPTIONS] edit set <TEXT>
-  anvil-ctl [OPTIONS] edit insert <TEXT>
-  anvil-ctl [OPTIONS] query
+  anvil-ctl [OPTIONS] edit set <TEXT|--stdin>
+  anvil-ctl [OPTIONS] edit insert <TEXT|--stdin>
+  anvil-ctl [OPTIONS] query [START[:END]]
   anvil-ctl [OPTIONS] command <COMMAND>
   anvil-ctl [OPTIONS] quit [--force]
 
@@ -19,8 +21,8 @@ Commands:
   status    Print the running editor status
   open      Open a workspace file at a 1-based line and column
   save      Save the current buffer, optionally as FILE
-  edit      Replace the buffer (`set`) or insert at the cursor (`insert`)
-  query     Dump buffer, cursor, undo, and tab state
+  edit      Replace (`set`) or insert (`insert`); --stdin reads the payload
+  query     Dump bounded buffer state; default is the whole buffer
   command   Execute an Ex command through the editor state machine (alias: exec)
   quit      Quit; --force discards unsaved changes
 
@@ -116,6 +118,10 @@ fn main() {
     }
 }
 
+enum EditText {
+    Inline(String),
+    Stdin,
+}
 enum CliCommand {
     Status,
     Open {
@@ -127,10 +133,10 @@ enum CliCommand {
         path: Option<PathBuf>,
     },
     Edit {
-        mode: String,
-        text: String,
+        mode: EditMode,
+        text: EditText,
     },
-    Query,
+    Query(QueryOptions),
     Command(String),
     Quit {
         force: bool,
@@ -144,7 +150,7 @@ impl CliCommand {
             Self::Open { .. } => "open",
             Self::Save { .. } => "save",
             Self::Edit { .. } => "edit",
-            Self::Query => "query",
+            Self::Query(_) => "query",
             Self::Command(_) => "command",
             Self::Quit { .. } => "quit",
         }
@@ -223,29 +229,33 @@ fn parse_command(options: &Options) -> Result<CliCommand, CliError> {
             let Some(mode) = arguments.first() else {
                 return Err(CliError::usage("edit requires set or insert"));
             };
-            if !matches!(mode.as_str(), "set" | "insert") {
-                return Err(CliError::usage("edit mode must be set or insert"));
-            }
+            let mode = match mode.as_str() {
+                "set" => EditMode::Set,
+                "insert" => EditMode::Insert,
+                _ => return Err(CliError::usage("edit mode must be set or insert")),
+            };
             let Some(text) = arguments.get(1) else {
-                return Err(CliError::usage("edit requires text"));
+                return Err(CliError::usage("edit requires text or --stdin"));
             };
             if arguments.len() > 2 {
                 return Err(CliError::usage("edit takes mode and text"));
             }
-            Ok(CliCommand::Edit {
-                mode: mode.clone(),
-                text: text.clone(),
-            })
+            let text = if text == "--stdin" {
+                EditText::Stdin
+            } else {
+                EditText::Inline(text.clone())
+            };
+            Ok(CliCommand::Edit { mode, text })
         }
-        "query" => {
-            require_no_args(arguments)?;
-            Ok(CliCommand::Query)
-        }
+        "query" => Ok(CliCommand::Query(parse_query_options(arguments)?)),
         "command" | "exec" => {
             if arguments.is_empty() {
                 return Err(CliError::usage("command requires a command"));
             }
-            Ok(CliCommand::Command(arguments.join(" ")))
+            let command = arguments.join(" ");
+            validate_remote_command(&command)
+                .map_err(|error| CliError::usage(error.to_string()))?;
+            Ok(CliCommand::Command(command))
         }
         "quit" => {
             let force = match arguments {
@@ -302,15 +312,29 @@ fn execute(options: Options, command: CliCommand) -> Result<(), (Options, CliErr
         CliCommand::Save { path } => client
             .save(path.as_deref())
             .map_err(|error| (clone_options(&options), map_error(error)))?,
-        CliCommand::Edit { mode, text } => client
-            .edit(&mode, &text)
-            .map_err(|error| (clone_options(&options), map_error(error)))?,
-        CliCommand::Query => client
-            .query()
-            .map_err(|error| (clone_options(&options), map_error(error)))?,
-        CliCommand::Command(command) => client
-            .exec(&command)
-            .map_err(|error| (clone_options(&options), map_error(error)))?,
+        CliCommand::Edit { mode, text } => {
+            let text = match text {
+                EditText::Inline(text) => text,
+                EditText::Stdin => {
+                    read_stdin_text().map_err(|error| (clone_options(&options), error))?
+                }
+            };
+            json!(
+                client
+                    .edit(mode, &text)
+                    .map_err(|error| (clone_options(&options), map_error(error)))?
+            )
+        }
+        CliCommand::Query(query) => json!(
+            client
+                .query_with(query)
+                .map_err(|error| (clone_options(&options), map_error(error)))?
+        ),
+        CliCommand::Command(command) => json!(
+            client
+                .exec(&command)
+                .map_err(|error| (clone_options(&options), map_error(error)))?
+        ),
         CliCommand::Quit { force } => client
             .quit(force)
             .map_err(|error| (clone_options(&options), map_error(error)))?,
@@ -429,6 +453,53 @@ fn parse_location(value: &str) -> Result<(usize, usize), CliError> {
     Ok((line, column))
 }
 
+fn parse_query_options(arguments: &[String]) -> Result<QueryOptions, CliError> {
+    let [range] = arguments else {
+        if arguments.is_empty() {
+            return Ok(QueryOptions::default());
+        }
+        return Err(CliError::usage("query takes at most one range"));
+    };
+    let (start, end) = range.split_once(':').unwrap_or((range, ""));
+    let start = parse_line_number(start)?;
+    let end = if end.is_empty() {
+        None
+    } else {
+        Some(parse_line_number(end)?)
+    };
+    if end.is_some_and(|end| end < start) {
+        return Err(CliError::usage("query end must not precede start"));
+    }
+    Ok(QueryOptions {
+        start_line: Some(start),
+        end_line: end,
+        include_text: true,
+    })
+}
+
+fn parse_line_number(value: &str) -> Result<usize, CliError> {
+    let line = value
+        .parse::<usize>()
+        .map_err(|_| CliError::usage(format!("invalid line: {value}")))?;
+    if line == 0 {
+        return Err(CliError::usage("line must be 1-based"));
+    }
+    Ok(line)
+}
+
+fn read_stdin_text() -> Result<String, CliError> {
+    use std::io::Read;
+
+    let mut text = String::new();
+    std::io::stdin()
+        .read_to_string(&mut text)
+        .map_err(|error| CliError::local(format!("stdin: {error}")))?;
+    if text.len() > 4 * 1024 * 1024 {
+        return Err(CliError::usage("stdin edit exceeds 4 MiB"));
+    }
+    Ok(text)
+}
+
 fn spawn_anvil() -> Result<(), CliError> {
     use std::io::IsTerminal;
 
@@ -515,8 +586,46 @@ mod tests {
         assert!(parse_command(&options(&["open"])).is_err());
         assert!(parse_command(&options(&["edit", "replace", "x"])).is_err());
         assert!(matches!(
+            parse_command(&options(&["edit", "set", "--stdin"])).unwrap(),
+            CliCommand::Edit {
+                mode: EditMode::Set,
+                text: EditText::Stdin,
+            }
+        ));
+        assert!(matches!(
             parse_command(&options(&["quit", "--force"])).unwrap(),
             CliCommand::Quit { force: true }
         ));
+    }
+
+    #[test]
+    fn parses_bounded_query() {
+        assert!(matches!(
+            parse_command(&options(&["query", "2:3"])).unwrap(),
+            CliCommand::Query(QueryOptions {
+                start_line: Some(2),
+                end_line: Some(3),
+                include_text: true,
+            })
+        ));
+        assert!(parse_command(&options(&["query", "0:1"])).is_err());
+        assert!(parse_command(&options(&["query", "3:2"])).is_err());
+    }
+
+    #[test]
+    fn maps_control_errors_to_exit_codes() {
+        assert_eq!(map_error(ControlError::Timeout).code, 4);
+        assert_eq!(
+            map_error(ControlError::Rpc {
+                code: -32002,
+                message: "denied".to_owned(),
+            })
+            .code,
+            5
+        );
+        assert_eq!(
+            map_error(ControlError::RuntimeDir("missing".to_owned())).code,
+            3
+        );
     }
 }

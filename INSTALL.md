@@ -6,6 +6,7 @@ tools into the same directory:
 ```text
 anvil
 anvil-ctl
+anvil-mcp
 anvil-gateway
 anvil-exec-runner
 anvil-plugin-host
@@ -34,7 +35,7 @@ Language servers are not bundled. Install the servers you want on `PATH`:
 From the repository root:
 
 ```bash
-cargo build --release -p anvil-tui -p anvil-ctl -p anvil-plugin-host
+cargo build --release -p anvil-tui -p anvil-ctl -p anvil-mcp -p anvil-plugin-host
 GOTOOLCHAIN=go1.26.10 go build -o target/release/anvil-gateway ./go/cmd/anvil-gateway
 GOTOOLCHAIN=go1.26.10 go build -o target/release/anvil-exec-runner ./go/cmd/anvil-exec-runner
 ```
@@ -53,6 +54,7 @@ The layout is:
 install.sh
 bin/anvil
 bin/anvil-ctl
+bin/anvil-mcp
 bin/anvil-gateway
 bin/anvil-exec-runner
 bin/anvil-plugin-host
@@ -82,6 +84,7 @@ install -d "$HOME/.local/bin"
 install -m 0755 \
   target/release/anvil \
   target/release/anvil-ctl \
+  target/release/anvil-mcp \
   target/release/anvil-gateway \
   target/release/anvil-exec-runner \
   target/release/anvil-plugin-host \
@@ -173,6 +176,7 @@ same user as the editor.
 ```bash
 rm "$HOME/.local/bin/anvil" \
    "$HOME/.local/bin/anvil-ctl" \
+   "$HOME/.local/bin/anvil-mcp" \
    "$HOME/.local/bin/anvil-gateway" \
    "$HOME/.local/bin/anvil-exec-runner" \
    "$HOME/.local/bin/anvil-plugin-host"

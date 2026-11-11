@@ -16,7 +16,7 @@ else
   prefix="${1:-"$HOME/.local"}"
 fi
 
-for binary in anvil anvil-ctl anvil-gateway anvil-exec-runner anvil-plugin-host; do
+for binary in anvil anvil-ctl anvil-mcp anvil-gateway anvil-exec-runner anvil-plugin-host; do
   [[ -x "$layout/bin/$binary" ]] || {
     echo "layout is missing bin/$binary" >&2
     exit 2
@@ -36,6 +36,7 @@ install -d "$prefix/bin" "$prefix/share/anvil/official"
 install -m 0755 \
   "$layout/bin/anvil" \
   "$layout/bin/anvil-ctl" \
+  "$layout/bin/anvil-mcp" \
   "$layout/bin/anvil-gateway" \
   "$layout/bin/anvil-exec-runner" \
   "$layout/bin/anvil-plugin-host" \
