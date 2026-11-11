@@ -52,6 +52,8 @@ pub enum FileRequest {
         reverse: bool,
         generation: u64,
     },
+    /// List unmerged paths in the index.
+    GitConflictsText { generation: u64 },
     /// Read a bounded blame view for one workspace-relative file.
     GitBlameText { relative: String, generation: u64 },
     /// Move or copy one workspace entry.
@@ -106,6 +108,11 @@ pub enum FileEvent {
     },
     /// Bounded blame text and whether it was truncated.
     GitBlameText {
+        generation: u64,
+        result: Result<(String, bool), String>,
+    },
+    /// Bounded unmerged-path list.
+    GitConflictsText {
         generation: u64,
         result: Result<(String, bool), String>,
     },
@@ -279,6 +286,12 @@ impl FileWorker {
                                 generation,
                                 result: git_blame_text(&mut client, &relative),
                             },
+                            FileRequest::GitConflictsText { generation } => {
+                                FileEvent::GitConflictsText {
+                                    generation,
+                                    result: git_conflicts_text(&mut client),
+                                }
+                            }
                             FileRequest::Transfer { from, to, copy } => {
                                 let result = if copy {
                                     client
@@ -704,6 +717,41 @@ fn git_blame_text(client: &mut GatewayClient, relative: &str) -> Result<(String,
     }
     if text.is_empty() {
         text.push_str("no blame data\n");
+    }
+    Ok((text, truncated))
+}
+
+fn git_conflicts_text(client: &mut GatewayClient) -> Result<(String, bool), String> {
+    let result = client
+        .exec(
+            &git_tool(),
+            &[
+                "--no-pager".to_owned(),
+                "diff".to_owned(),
+                "--name-status".to_owned(),
+                "--diff-filter=U".to_owned(),
+            ],
+            3000,
+        )
+        .map_err(|error| error.to_string())?;
+    if result.timed_out {
+        return Err("git conflicts timed out".to_owned());
+    }
+    if result.exit_code != 0 {
+        return Err(result.stderr);
+    }
+    let mut text = result.stdout;
+    let mut truncated = result.output_truncated;
+    if text.len() > MAX_GIT_DIFF_BYTES {
+        let mut end = MAX_GIT_DIFF_BYTES;
+        while !text.is_char_boundary(end) {
+            end -= 1;
+        }
+        text.truncate(end);
+        truncated = true;
+    }
+    if text.is_empty() {
+        text.push_str("no conflicts\n");
     }
     Ok((text, truncated))
 }

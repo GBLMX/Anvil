@@ -106,6 +106,7 @@ impl Model {
             ("git-stage-hunk", "") => self.apply_current_hunk(false),
             ("git-unstage-hunk", "") => self.apply_current_hunk(true),
             ("git-blame", "") => self.request_git_blame(),
+            ("git-conflicts", "") => self.request_git_conflicts(),
             ("w", path) => self.queue_effect(Effect::SaveAs(path.into())),
             ("wa", "") => self.queue_effect(Effect::SaveAll),
             ("e", path) => self.queue_effect(Effect::Open(path.into())),

@@ -58,6 +58,8 @@ post-`0.5.0` feature line.
 - `:git-blame` opens a bounded read-only blame view. Index-mutating
   `git apply --cached` is restricted to the editor connection; plugin
   connections are denied even with `sys.exec`.
+- `:git-conflicts` lists unmerged paths from the index; conflict resolution
+  operations remain separate.
 - Restored buffers start with a fresh undo stack; offset-based edit records are
   not serialized, while exact buffer or swap text is preserved.
 - External-file swap conflicts are resolved explicitly with

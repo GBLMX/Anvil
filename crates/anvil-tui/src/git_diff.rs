@@ -347,6 +347,62 @@ impl Model {
         }
     }
 }
+
+impl Model {
+    pub(crate) fn request_git_conflicts(&mut self) {
+        if self.help_back.is_some() {
+            self.status = "already viewing a read-only view".to_owned();
+            self.dirty = true;
+            return;
+        }
+        let Some(worker) = self.file_worker.as_ref() else {
+            self.status = "E: file worker unavailable".to_owned();
+            self.dirty = true;
+            return;
+        };
+        self.git_conflicts_generation = self.git_conflicts_generation.wrapping_add(1);
+        let generation = self.git_conflicts_generation;
+        if let Err(error) = worker.request(FileRequest::GitConflictsText { generation }) {
+            self.status = format!("E: git conflicts: {error}");
+            self.dirty = true;
+            return;
+        }
+        self.git_conflicts_pending = Some(generation);
+        self.status = "loading git conflicts...".to_owned();
+        self.dirty = true;
+    }
+
+    pub(crate) fn handle_git_conflicts_text(
+        &mut self,
+        generation: u64,
+        result: Result<(String, bool), String>,
+    ) {
+        if self.git_conflicts_pending != Some(generation) {
+            return;
+        }
+        self.git_conflicts_pending = None;
+        match result {
+            Ok((text, truncated)) => {
+                let title = if truncated {
+                    "Git conflicts (truncated): :q returns"
+                } else {
+                    "Git conflicts: :q returns"
+                };
+                let body = if truncated {
+                    format!("Git conflicts (truncated)\n\n{text}")
+                } else {
+                    format!("Git conflicts\n\n{text}")
+                };
+                self.show_read_only(&body, title, "Git conflicts");
+            }
+            Err(error) => {
+                self.status = format!("E: git conflicts: {error}");
+                self.dirty = true;
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

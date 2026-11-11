@@ -116,6 +116,9 @@ impl Model {
                 FileEvent::GitBlameText { generation, result } => {
                     self.handle_git_blame_text(generation, result)
                 }
+                FileEvent::GitConflictsText { generation, result } => {
+                    self.handle_git_conflicts_text(generation, result)
+                }
                 FileEvent::Transferred {
                     from,
                     to,

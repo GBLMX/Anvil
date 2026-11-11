@@ -572,6 +572,10 @@ pub struct Model {
     git_blame_generation: u64,
     /// Pending Git blame generation, if a request is in flight.
     git_blame_pending: Option<u64>,
+    /// Latest requested Git conflict-list generation.
+    git_conflicts_generation: u64,
+    /// Pending Git conflict-list generation, if a request is in flight.
+    git_conflicts_pending: Option<u64>,
     /// LSP folding ranges for the active buffer.
     folds: Vec<FoldRange>,
     /// Start lines of closed folds.
@@ -745,6 +749,8 @@ impl Model {
             git_apply_pending: None,
             git_blame_generation: 0,
             git_blame_pending: None,
+            git_conflicts_generation: 0,
+            git_conflicts_pending: None,
             folds: Vec::new(),
             folded: HashSet::new(),
             fold_revision: None,
@@ -957,6 +963,13 @@ impl Model {
         }
     }
 
+    fn clear_git_gutter(&mut self) {
+        self.git_marks.clear();
+        self.git_pending = None;
+        self.git_checked = None;
+        self.git_due = None;
+    }
+
     fn show_help(&mut self) {
         self.show_read_only(HELP_TEXT, "Help: :q returns", "help");
     }
@@ -983,6 +996,7 @@ impl Model {
         };
         self.read_only_title = Some(title.to_owned());
         self.help_back = Some(saved);
+        self.clear_git_gutter();
         self.syntax.borrow_mut().switch_path(None, true);
         self.cursor = 0;
         self.scroll = 0;
@@ -1002,6 +1016,7 @@ impl Model {
             self.show_read_only(text, status, title);
             return;
         }
+        self.clear_git_gutter();
         self.editor = EditorState::from_text(text).into();
         self.syntax.borrow_mut().switch_path(None, true);
         self.cursor = 0;
@@ -1025,6 +1040,7 @@ impl Model {
         self.git_diff_pending = None;
         self.git_apply_pending = None;
         self.git_blame_pending = None;
+        self.git_conflicts_pending = None;
         let syntax = saved.syntax.clone();
         self.editor = saved.editor;
         self.path = saved.path;

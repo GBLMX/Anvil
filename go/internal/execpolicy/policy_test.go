@@ -103,3 +103,12 @@ func TestValidatesGitBlame(t *testing.T) {
 		}
 	}
 }
+
+func TestValidatesGitConflicts(t *testing.T) {
+	if err := Validate("/usr/bin/git", []string{"--no-pager", "diff", "--name-status", "--diff-filter=U"}); err != nil {
+		t.Fatalf("git conflicts: %v", err)
+	}
+	if err := Validate("/usr/bin/git", []string{"--no-pager", "diff", "--name-status", "--diff-filter=M"}); !errors.Is(err, ErrInvalidArgs) {
+		t.Fatalf("unexpected conflict filter: %v", err)
+	}
+}

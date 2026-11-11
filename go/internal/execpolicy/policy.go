@@ -131,6 +131,10 @@ func validateFd(args []string) error {
 }
 
 func validateGit(args []string) error {
+	if len(args) == 4 && args[0] == "--no-pager" && args[1] == "diff" &&
+		args[2] == "--name-status" && args[3] == "--diff-filter=U" {
+		return nil
+	}
 	if len(args) > 1 && args[1] == "apply" {
 		return validateGitApply(args)
 	}
