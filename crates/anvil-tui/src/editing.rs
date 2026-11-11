@@ -614,6 +614,9 @@ impl Model {
             .editor
             .scroll_margin
             .min(height.saturating_sub(1) / 2);
+        if self.code_lens.is_some() && self.row_of_source_line(line, height).is_none() {
+            self.scroll = line;
+        }
         if self.has_closed_folds() {
             if self.is_line_hidden(line) {
                 self.open_fold_containing(line);

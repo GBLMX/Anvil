@@ -1,6 +1,72 @@
 //! Viewport, gutter, and visible-line layout.
 
 use super::*;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum DisplayRow {
+    Source(usize),
+    CodeLens {
+        line: usize,
+        title: String,
+        hidden: usize,
+    },
+}
+
+impl Model {
+    pub(crate) fn visible_rows(&self, start: usize, height: usize) -> Vec<DisplayRow> {
+        if height == 0 {
+            return Vec::new();
+        }
+        let total = self.editor.index().len_lines();
+        let max_lens_rows = crate::code_lens::MAX_CODE_LENS_ROWS_PER_VIEWPORT.min(height / 2);
+        let mut lens_rows = 0;
+        let mut rows = Vec::with_capacity(height);
+        let mut line = self.first_visible_line(start);
+        while rows.len() < height && line < total {
+            let lenses = self.code_lens_for_line(line);
+            if !lenses.is_empty() && lens_rows < max_lens_rows {
+                let visible = lenses.len().min(crate::code_lens::MAX_CODE_LENS_PER_LINE);
+                let truncate = lenses.len() > visible;
+                let shown = if truncate {
+                    visible.saturating_sub(1)
+                } else {
+                    visible
+                };
+                for lens in lenses.iter().take(shown) {
+                    if lens_rows >= max_lens_rows {
+                        break;
+                    }
+                    rows.push(DisplayRow::CodeLens {
+                        line,
+                        title: lens.title.clone(),
+                        hidden: 0,
+                    });
+                    lens_rows += 1;
+                }
+                if truncate && lens_rows < max_lens_rows && rows.len() < height {
+                    rows.push(DisplayRow::CodeLens {
+                        line,
+                        title: format!("… +{} lenses", lenses.len().saturating_sub(shown)),
+                        hidden: lenses.len().saturating_sub(shown),
+                    });
+                    lens_rows += 1;
+                }
+            }
+            if rows.len() >= height {
+                break;
+            }
+            rows.push(DisplayRow::Source(line));
+            line = self.next_visible_line(line);
+        }
+        rows
+    }
+
+    pub(crate) fn row_of_source_line(&self, line: usize, height: usize) -> Option<usize> {
+        self.visible_rows(self.scroll, height)
+            .iter()
+            .position(|row| matches!(row, DisplayRow::Source(source) if *source == line))
+    }
+}
 impl Model {
     pub(crate) fn gutter_digits(&self) -> usize {
         self.editor
@@ -59,11 +125,15 @@ impl Model {
     }
 
     pub(crate) fn visible_gutter(&self, height: u16) -> Vec<Line<'static>> {
-        let visible = self.visible_line_numbers(self.scroll, usize::from(height));
+        let visible = self.visible_rows(self.scroll, usize::from(height));
         let current = self.current_line();
         let digits = self.gutter_digits();
         let mut lines = Vec::with_capacity(visible.len());
-        for line_number in visible {
+        for row in visible {
+            let DisplayRow::Source(line_number) = row else {
+                lines.push(Line::raw(" ".repeat(digits + 1)));
+                continue;
+            };
             let display = match current {
                 Some(current) if current != line_number => current.abs_diff(line_number),
                 _ => line_number + 1,
@@ -98,14 +168,26 @@ impl Model {
     pub(crate) fn visible_lines(&self, height: u16, width: u16) -> Vec<Line<'_>> {
         let index = self.editor.index();
         let text = self.editor.text();
-        let visible = self.visible_line_numbers(self.scroll, usize::from(height));
+        let visible = self.visible_rows(self.scroll, usize::from(height));
         let current = self.current_line();
 
         let diagnostic_lines = self.diagnostic_lines();
         let hscroll = self.hscroll;
         let visible_width = usize::from(width);
         let mut lines = Vec::with_capacity(visible.len());
-        for line_number in visible {
+        for row in visible {
+            let line_number = match row {
+                DisplayRow::Source(line) => line,
+                DisplayRow::CodeLens { title, hidden, .. } => {
+                    let style = if hidden > 0 {
+                        Style::default().fg(theme::muted())
+                    } else {
+                        Style::default().fg(theme::accent())
+                    };
+                    lines.push(Line::styled(format!(" {title}"), style));
+                    continue;
+                }
+            };
             let Some(start) = index.line_to_offset(line_number) else {
                 break;
             };

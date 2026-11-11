@@ -1,6 +1,7 @@
 //! LSP folding ranges, folded-line visibility, and fold commands.
 
 use super::*;
+use crate::layout::DisplayRow;
 use crate::lsp_worker;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -191,20 +192,12 @@ impl Model {
         lines
     }
 
-    pub(crate) fn line_at_visible_row(&self, offset: usize) -> usize {
-        let total = self.editor.index().len_lines();
-        if total == 0 {
-            return 0;
+    pub(crate) fn line_at_visible_row(&self, offset: usize, height: usize) -> usize {
+        let rows = self.visible_rows(self.scroll, height);
+        match rows.get(offset) {
+            Some(DisplayRow::Source(line) | DisplayRow::CodeLens { line, .. }) => *line,
+            None => self.editor.index().len_lines().saturating_sub(1),
         }
-        let mut line = self.first_visible_line(self.scroll);
-        for _ in 0..offset {
-            let next = self.next_visible_line(line);
-            if next >= total {
-                break;
-            }
-            line = next;
-        }
-        line
     }
 
     pub(crate) fn normalize_scroll(&mut self) {
@@ -230,7 +223,7 @@ impl Model {
         }
     }
 
-    fn first_visible_line(&self, mut line: usize) -> usize {
+    pub(crate) fn first_visible_line(&self, mut line: usize) -> usize {
         let total = self.editor.index().len_lines();
         line = line.min(total.saturating_sub(1));
         while self.is_line_hidden(line) {
@@ -264,7 +257,7 @@ impl Model {
         })
     }
 
-    fn next_visible_line(&self, line: usize) -> usize {
+    pub(crate) fn next_visible_line(&self, line: usize) -> usize {
         if self.folds_fresh()
             && let Some(fold) = self
                 .folds

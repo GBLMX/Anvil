@@ -268,8 +268,12 @@ pub fn view(model: &Model, frame: &mut Frame) {
             if column >= columns || column < model.hscroll {
                 continue;
             }
+            let Some(row) = model.row_of_source_line(line_number, usize::from(content.height))
+            else {
+                continue;
+            };
             let x = text_area.x + (column - model.hscroll) as u16;
-            let y = content.y + (line_number - model.scroll) as u16;
+            let y = content.y + row as u16;
             if x < text_area.right() && y < text_area.bottom() {
                 frame.render_widget(
                     Paragraph::new("│").style(style),
@@ -330,9 +334,11 @@ pub fn view(model: &Model, frame: &mut Frame) {
             .position(model.editor.text(), model.cursor)
     {
         let x = text_area.x + position.display_column.saturating_sub(model.hscroll) as u16;
-        let y = content.y + position.line.saturating_sub(model.scroll) as u16;
-        if x < content.right() && y < content.bottom() {
-            frame.set_cursor_position((x, y));
+        if let Some(row) = model.row_of_source_line(position.line, usize::from(content.height)) {
+            let y = content.y + row as u16;
+            if x < content.right() && y < content.bottom() {
+                frame.set_cursor_position((x, y));
+            }
         }
     }
     for selection in editor_view.selections.iter().skip(1) {
@@ -342,7 +348,10 @@ pub fn view(model: &Model, frame: &mut Frame) {
             continue;
         }
         let x = text_area.x + (column - model.hscroll) as u16;
-        let y = content.y + (line - model.scroll) as u16;
+        let Some(row) = model.row_of_source_line(line, usize::from(content.height)) else {
+            continue;
+        };
+        let y = content.y + row as u16;
         if x < text_area.right() && y < text_area.bottom() {
             frame.render_widget(
                 Paragraph::new("│").style(
