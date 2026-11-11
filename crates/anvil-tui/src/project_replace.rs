@@ -135,11 +135,27 @@ impl Model {
         match result {
             Ok(()) => {
                 if let Some(plan) = self.project_replace_plan.take() {
-                    for file in &plan.files {
-                        let path = self.workspace.join(&file.relative);
-                        let _ = self.reload_external(&path);
+                    if self.any_modified() {
+                        self.status =
+                            "replace applied; modified buffers were not reloaded (save may overwrite)"
+                                .to_owned();
+                    } else {
+                        let mut reload_errors = Vec::new();
+                        for file in &plan.files {
+                            let path = self.workspace.join(&file.relative);
+                            if let Err(error) = self.reload_external(&path) {
+                                reload_errors.push(format!("{}: {error}", file.relative));
+                            }
+                        }
+                        self.status = if reload_errors.is_empty() {
+                            format!("replaced {} files", plan.files.len())
+                        } else {
+                            format!(
+                                "replace applied; reload failed for: {}",
+                                reload_errors.join(", ")
+                            )
+                        };
                     }
-                    self.status = format!("replaced {} files", plan.files.len());
                 }
                 self.stdin_locations.clear();
                 self.stdin_location_selected = None;
@@ -214,5 +230,43 @@ mod tests {
             "new\n"
         );
         assert!(model.project_replace_plan.is_none());
+    }
+
+    #[test]
+    fn missing_file_reports_reload_failure() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let workspace = dir.path().join("workspace");
+        std::fs::create_dir_all(&workspace).expect("mkdir");
+        let path = workspace.join("a.txt");
+        let mut model = Model::new(EditorState::from_text("x"), Some(path));
+        model.workspace = workspace;
+        model.project_replace_plan = Some(plan());
+        model.project_replace_pending = Some(5);
+        model.handle_project_replace_applied(5, Ok(()));
+        assert!(model.status.contains("reload failed"));
+        assert!(!model.status.contains("replaced 1 files"));
+    }
+
+    #[test]
+    fn modified_buffer_skips_reload_after_apply() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let workspace = dir.path().join("workspace");
+        std::fs::create_dir_all(&workspace).expect("mkdir");
+        let path = workspace.join("a.txt");
+        std::fs::write(&path, "new\n").expect("write");
+        let mut model = Model::new(EditorState::from_text("old\n"), Some(path));
+        model.workspace = workspace;
+        model.modified = true;
+        model.project_replace_plan = Some(plan());
+        model.project_replace_pending = Some(6);
+        model.handle_project_replace_applied(6, Ok(()));
+        assert_eq!(
+            model
+                .editor
+                .text()
+                .slice(0..model.editor.text().len_bytes()),
+            "old\n"
+        );
+        assert!(model.status.contains("modified buffers"));
     }
 }
