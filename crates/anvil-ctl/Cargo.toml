@@ -1,0 +1,11 @@
+[package]
+name = "anvil-ctl"
+description = "Command-line control client for a running Anvil instance"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+anvil-control = { path = "../anvil-control", version = "0.6.0" }

@@ -142,6 +142,22 @@ Stdin text containing `path:line:column: message`, `--> path:line:column`, or
 `Alt-k` selects a row and `Enter` opens it; locations outside the workspace
 are rejected.
 
+## Control
+
+`anvil-ctl` controls the running instance through
+`$XDG_RUNTIME_DIR/anvil/control.sock`:
+
+```text
+anvil-ctl status
+anvil-ctl open src/main.rs +12:3
+anvil-ctl exec format
+```
+
+`open` is workspace-relative; `exec` accepts only `format`, `w`, `wq`, and
+`q`. A second `anvil FILE` inside the active workspace forwards to the running
+editor and exits; a different workspace is rejected. `--spawn` starts Anvil
+only when a terminal is attached.
+
 Quick open: `Space f` filters workspace files and previews the selected file
 through the gateway. Wide terminals show the preview beside the list; narrow
 terminals stack it below.

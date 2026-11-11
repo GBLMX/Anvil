@@ -77,6 +77,9 @@ fn run() -> std::io::Result<()> {
             stdin,
             read_only,
         }) => {
+            if !stdin && !editor && forward_to_running(&workspace, path.as_deref(), read_only)? {
+                return Ok(());
+            }
             let code = anvil_tui::run_with_input(path, workspace, editor, stdin, read_only)?;
             if code != 0 {
                 process::exit(code);
@@ -88,6 +91,70 @@ fn run() -> std::io::Result<()> {
             process::exit(2);
         }
     }
+}
+
+fn forward_to_running(
+    workspace: &Path,
+    path: Option<&Path>,
+    read_only: bool,
+) -> std::io::Result<bool> {
+    let mut client = match anvil_control::Client::connect() {
+        Ok(client) => client,
+        Err(_) => return Ok(false),
+    };
+    let status = match client.status() {
+        Ok(status) => status,
+        Err(_) => return Ok(false),
+    };
+    let workspace = workspace
+        .canonicalize()
+        .unwrap_or_else(|_| workspace.to_path_buf());
+    let running = status
+        .workspace
+        .canonicalize()
+        .unwrap_or_else(|_| status.workspace.clone());
+    if running != workspace {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::AlreadyExists,
+            format!(
+                "another Anvil instance is running for {}; use anvil-ctl",
+                running.display()
+            ),
+        ));
+    }
+    if read_only {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::AlreadyExists,
+            "a writable Anvil instance is already running",
+        ));
+    }
+    let Some(path) = path else {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::AlreadyExists,
+            "another Anvil instance is already running",
+        ));
+    };
+    let absolute = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        workspace.join(path)
+    };
+    let absolute = absolute.canonicalize().map_err(|error| {
+        std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            format!("{}: {error}", path.display()),
+        )
+    })?;
+    if !absolute.starts_with(&workspace) {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            format!("path is outside workspace: {}", path.display()),
+        ));
+    }
+    client
+        .open(&absolute, 1, 1)
+        .map_err(|error| std::io::Error::other(error.to_string()))?;
+    Ok(true)
 }
 
 fn parse_args<I>(arguments: I) -> Result<Command, String>

@@ -49,6 +49,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "anvil-control"
+version = "0.6.0"
+dependencies = [
+ "anvil-ipc",
+ "rustix",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
 name = "anvil-core"
 version = "0.6.0"
 dependencies = [
@@ -57,6 +68,13 @@ dependencies = [
  "ropey",
  "unicode-segmentation",
  "unicode-width",
+]
+
+[[package]]
+name = "anvil-ctl"
+version = "0.6.0"
+dependencies = [
+ "anvil-control",
 ]
 
 [[package]]
@@ -112,6 +130,7 @@ name = "anvil-tui"
 version = "0.6.0"
 dependencies = [
  "anvil-api",
+ "anvil-control",
  "anvil-core",
  "anvil-editor",
  "anvil-ipc",

@@ -61,6 +61,7 @@ mod modal;
 mod mouse;
 mod overlays;
 mod pipe_locations;
+mod remote;
 mod selection_table;
 mod theme_picker;
 use selection_table::{SelectionItem, SelectionTable};

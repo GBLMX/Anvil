@@ -1,10 +1,10 @@
 # External Integration Plan
 
 Status: 1a (`--editor`, `:cq`, sticky save failure), 1b (`anvil -`, stdin,
-`/dev/tty`, `--read-only`), and 3 (stdin Locations panel) implemented. This
-plan covers Unix editor integration: `$EDITOR`, stdin pipelines,
-diagnostic-aware pipe mode, and single-instance remote control.
-Single-instance control remains pending. It is separate from
+`/dev/tty`, `--read-only`), 2 (single-instance control and `anvil-ctl`), and
+3 (stdin Locations panel) implemented. This plan covers Unix editor
+integration: `$EDITOR`, stdin pipelines, diagnostic-aware pipe mode, and
+single-instance remote control. It is separate from
 [small-features-plan.md](small-features-plan.md); these changes cross the CLI,
 terminal, workspace boundary, and IPC layers, so they are not small keymap
 additions.

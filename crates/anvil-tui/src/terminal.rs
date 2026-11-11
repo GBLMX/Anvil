@@ -167,6 +167,26 @@ pub fn run_with_input(
     model.activate_workspace_plugins();
     #[cfg(target_os = "linux")]
     model.activate_current_language();
+    let control = match anvil_control::ControlServer::start() {
+        Ok(server) => Some(server),
+        Err(anvil_control::Error::AlreadyRunning) => {
+            return Err(io::Error::new(
+                io::ErrorKind::AlreadyExists,
+                "another Anvil instance is already running",
+            ));
+        }
+        Err(error) => {
+            let message = format!("E: control: {error}");
+            if model.status.is_empty() {
+                model.status = message;
+            } else {
+                model.status.push_str(" | ");
+                model.status.push_str(&message);
+            }
+            model.dirty = true;
+            None
+        }
+    };
     let model_ready = start.elapsed();
     let mut terminal = TerminalSession::start()?;
     let terminal_ready = start.elapsed();
@@ -204,6 +224,12 @@ pub fn run_with_input(
         model.poll_syntax();
         model.poll_lsp();
         model.poll_file_worker();
+        if let Some(control) = &control {
+            while let Ok(call) = control.try_recv() {
+                let reply = model.handle_control(call.request);
+                let _ = call.reply.send(reply);
+            }
+        }
         if model.busy.is_some() {
             model.spinner = model.spinner.wrapping_add(1);
             model.dirty = true;

@@ -1,10 +1,11 @@
 # Installing Anvil
 
-Anvil is currently built from source. Install the editor and its three sibling
+Anvil is currently built from source. Install the editor and its sibling
 tools into the same directory:
 
 ```text
 anvil
+anvil-ctl
 anvil-gateway
 anvil-exec-runner
 anvil-plugin-host
@@ -33,7 +34,7 @@ Language servers are not bundled. Install the servers you want on `PATH`:
 From the repository root:
 
 ```bash
-cargo build --release -p anvil-tui -p anvil-plugin-host
+cargo build --release -p anvil-tui -p anvil-ctl -p anvil-plugin-host
 GOTOOLCHAIN=go1.26.10 go build -o target/release/anvil-gateway ./go/cmd/anvil-gateway
 GOTOOLCHAIN=go1.26.10 go build -o target/release/anvil-exec-runner ./go/cmd/anvil-exec-runner
 ```
@@ -51,6 +52,7 @@ The layout is:
 ```text
 install.sh
 bin/anvil
+bin/anvil-ctl
 bin/anvil-gateway
 bin/anvil-exec-runner
 bin/anvil-plugin-host
@@ -79,6 +81,7 @@ portable layout may instead place plugins in `bin/plugins/`.
 install -d "$HOME/.local/bin"
 install -m 0755 \
   target/release/anvil \
+  target/release/anvil-ctl \
   target/release/anvil-gateway \
   target/release/anvil-exec-runner \
   target/release/anvil-plugin-host \
@@ -138,7 +141,7 @@ Confirm:
   refreshes the tree after the debounce interval.
 
 If opening or saving reports that the gateway is unavailable, check that all
-four binaries are in the same directory and that the gateway starts with the
+five binaries are in the same directory and that the gateway starts with the
 same user as the editor.
 
 ## Runtime boundaries
@@ -169,6 +172,7 @@ same user as the editor.
 
 ```bash
 rm "$HOME/.local/bin/anvil" \
+   "$HOME/.local/bin/anvil-ctl" \
    "$HOME/.local/bin/anvil-gateway" \
    "$HOME/.local/bin/anvil-exec-runner" \
    "$HOME/.local/bin/anvil-plugin-host"

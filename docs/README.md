@@ -54,7 +54,7 @@ Cross-cutting tracks that do not jump the queue:
 | [0.5.x](0.5.x-plan.md) | modal editing and modern TUI interaction | landed |
 | [Internal polish](internal-polish-plan.md) | P0/P1 feature polish under frozen `0.6.0` | active |
 | [Small features](small-features-plan.md) | Vim-like motions, operators, registers, visual/display polish | proposed |
-| [External integration](external-integration-plan.md) | `$EDITOR`, stdin, pipe locations, single-instance control | proposed |
+| [External integration](external-integration-plan.md) | `$EDITOR`, stdin, pipe locations, single-instance control | 1a/1b/2/3 landed |
 | [IDE capabilities](ide-capability-plan.md) | LSP depth, search, sessions, Git, adapters | planned after 0.5 |
 | [0.6.x](0.6.x-plan.md) | signed packages, download manager, marketplace | 0.6.0–0.6.3 and official-only release landed; marketplace planned |
 | [0.7.x](0.7.x-plan.md) | official optional Rust modules (source-level, trusted) | planned |
