@@ -260,6 +260,18 @@ pub const COMMANDS: &[CommandSpec] = &[
         capability: Capability::Read,
     },
     CommandSpec {
+        name: "replace-project",
+        capability: Capability::Admin,
+    },
+    CommandSpec {
+        name: "replace-project-apply",
+        capability: Capability::Admin,
+    },
+    CommandSpec {
+        name: "replace-project-cancel",
+        capability: Capability::Admin,
+    },
+    CommandSpec {
         name: "git-resolve-ours",
         capability: Capability::Git,
     },

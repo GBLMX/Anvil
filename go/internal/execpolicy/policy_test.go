@@ -9,6 +9,9 @@ func TestValidateAllowedArgs(t *testing.T) {
 	if err := Validate("/usr/bin/rg", []string{"pattern", "src", "-n", "--json", "--glob", "*.go"}); err != nil {
 		t.Fatalf("rg: %v", err)
 	}
+	if err := Validate("/usr/bin/rg", []string{"--files-with-matches", "--fixed-strings", "--", "old"}); err != nil {
+		t.Fatalf("rg files-with-matches: %v", err)
+	}
 	if err := Validate("/usr/bin/fd", []string{"pattern", "src", "--type", "f", "--max-depth", "3"}); err != nil {
 		t.Fatalf("fd: %v", err)
 	}

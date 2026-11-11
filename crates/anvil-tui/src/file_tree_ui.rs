@@ -99,6 +99,12 @@ impl Model {
                     generation,
                     result,
                 } => self.handle_project_search(query, generation, result),
+                FileEvent::ProjectReplacePreview { generation, result } => {
+                    self.handle_project_replace_preview(generation, result)
+                }
+                FileEvent::ProjectReplaceApplied { generation, result } => {
+                    self.handle_project_replace_applied(generation, result)
+                }
                 FileEvent::Preview {
                     path,
                     generation,

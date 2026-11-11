@@ -20,6 +20,7 @@ pub enum LspEvent {
     Capabilities {
         inlay_hints: bool,
         semantic_token_types: Vec<String>,
+        server_info: Option<String>,
     },
     Crashed(String),
     StartupError(String),
@@ -142,16 +143,18 @@ impl LspWorker {
                 let _ = sender.send(LspEvent::Crashed(error));
                 return;
             }
-            let (inlay_hints, semantic_token_types) = match wait_initialize(&mut client) {
-                Ok(capabilities) => capabilities,
-                Err(error) => {
-                    let _ = sender.send(LspEvent::StartupError(error));
-                    return;
-                }
-            };
+            let (inlay_hints, semantic_token_types, server_info) =
+                match wait_initialize(&mut client) {
+                    Ok(capabilities) => capabilities,
+                    Err(error) => {
+                        let _ = sender.send(LspEvent::StartupError(error));
+                        return;
+                    }
+                };
             let _ = sender.send(LspEvent::Capabilities {
                 inlay_hints,
                 semantic_token_types,
+                server_info,
             });
             let initialized = serde_json::json!({
                 "jsonrpc": "2.0",
@@ -426,7 +429,9 @@ fn send(client: &mut GatewayClient, message: &serde_json::Value) -> Result<(), S
     client.lsp_send(&body).map_err(|error| error.to_string())
 }
 
-fn wait_initialize(client: &mut GatewayClient) -> Result<(bool, Vec<String>), String> {
+fn wait_initialize(
+    client: &mut GatewayClient,
+) -> Result<(bool, Vec<String>, Option<String>), String> {
     loop {
         let Some(message) = client
             .recv_notification()
@@ -475,7 +480,18 @@ fn wait_initialize(client: &mut GatewayClient) -> Result<(bool, Vec<String>), St
                         .collect()
                 })
                 .unwrap_or_default();
-            return Ok((inlay_hints, semantic_token_types));
+            let server_info = data.pointer("/result/serverInfo").map(|info| {
+                let name = info
+                    .get("name")
+                    .and_then(Value::as_str)
+                    .unwrap_or("language server");
+                let version = info
+                    .get("version")
+                    .and_then(Value::as_str)
+                    .unwrap_or("unknown");
+                format!("{name} {version}")
+            });
+            return Ok((inlay_hints, semantic_token_types, server_info));
         }
     }
 }

@@ -177,12 +177,16 @@ impl Model {
         self.location_title = "Locations".to_owned();
     }
 
-    pub(crate) fn set_project_search_results(&mut self, query: &str, locations: Vec<PipeLocation>) {
+    pub(crate) fn set_location_results(&mut self, title: String, locations: Vec<PipeLocation>) {
         self.stdin_locations = locations;
         self.stdin_location_selected = (!self.stdin_locations.is_empty()).then_some(0);
         self.stdin_location_scroll = 0;
-        self.location_title = format!("Search: {query}");
+        self.location_title = title;
         self.dirty = true;
+    }
+
+    pub(crate) fn set_project_search_results(&mut self, query: &str, locations: Vec<PipeLocation>) {
+        self.set_location_results(format!("Search: {query}"), locations);
     }
 
     pub(crate) fn move_stdin_location(&mut self, delta: isize) {

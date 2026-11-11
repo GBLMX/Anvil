@@ -12,6 +12,7 @@ use anvil_ipc::{DirEntry, GatewayClient};
 use serde_json::Value;
 
 use crate::pipe_locations::PipeLocation;
+use sha2::{Digest, Sha256};
 
 const FILE_LIMIT: usize = 5000;
 pub(crate) const MAX_TREE_WATCH_DIRS: usize = 256;
@@ -22,6 +23,9 @@ pub(crate) const PREVIEW_MAX_LINES: usize = 200;
 const PREVIEW_TIMEOUT: Duration = Duration::from_millis(500);
 const PREVIEW_CHUNK: usize = 16 * 1024;
 pub(crate) const MAX_PROJECT_RESULTS: usize = 500;
+const MAX_REPLACE_FILES: usize = 100;
+const MAX_REPLACE_FILE_BYTES: usize = 4 * 1024 * 1024;
+const MAX_REPLACE_BYTES: usize = 16 * 1024 * 1024;
 
 /// Bounded text preview returned by the worker.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -52,6 +56,22 @@ impl ResolveConflictError {
             working_written: true,
         }
     }
+}
+
+/// One file in a project replace preview.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ProjectReplaceFile {
+    pub(crate) relative: String,
+    pub(crate) matches: usize,
+    pub(crate) hash: [u8; 32],
+}
+
+/// A reviewable project replace plan.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ProjectReplacePlan {
+    pub(crate) old: String,
+    pub(crate) new: String,
+    pub(crate) files: Vec<ProjectReplaceFile>,
 }
 
 /// A background file-tree request.
@@ -116,6 +136,17 @@ pub enum FileRequest {
     },
     /// Watch open buffers for external metadata changes.
     Watch(Vec<PathBuf>),
+    /// Build a project replace preview.
+    ProjectReplacePreview {
+        old: String,
+        new: String,
+        generation: u64,
+    },
+    /// Apply a reviewed project replace plan.
+    ProjectReplaceApply {
+        plan: ProjectReplacePlan,
+        generation: u64,
+    },
 }
 
 /// A background file-tree result.
@@ -177,6 +208,16 @@ pub enum FileEvent {
         stage: u8,
         generation: u64,
         result: Result<(), ResolveConflictError>,
+    },
+    /// Project replace preview result.
+    ProjectReplacePreview {
+        generation: u64,
+        result: Result<ProjectReplacePlan, String>,
+    },
+    /// Project replace apply result.
+    ProjectReplaceApplied {
+        generation: u64,
+        result: Result<(), String>,
     },
     /// A move or copy completed.
     Transferred {
@@ -310,6 +351,20 @@ impl FileWorker {
                                 FileEvent::ProjectSearch {
                                     result: project_search(&mut client, &query),
                                     query,
+                                    generation,
+                                }
+                            }
+                            FileRequest::ProjectReplacePreview {
+                                old,
+                                new,
+                                generation,
+                            } => FileEvent::ProjectReplacePreview {
+                                result: project_replace_preview(&mut client, &old, &new),
+                                generation,
+                            },
+                            FileRequest::ProjectReplaceApply { plan, generation } => {
+                                FileEvent::ProjectReplaceApplied {
+                                    result: apply_project_replace(&mut client, &plan),
                                     generation,
                                 }
                             }
@@ -699,6 +754,122 @@ fn project_search(
         });
     }
     Ok((locations, truncated))
+}
+
+fn project_replace_preview(
+    client: &mut GatewayClient,
+    old: &str,
+    new: &str,
+) -> Result<ProjectReplacePlan, String> {
+    if old.is_empty() {
+        return Err("replace search text is empty".to_owned());
+    }
+    if old == new {
+        return Err("replacement is identical to search text".to_owned());
+    }
+    let tool = rg_tool().ok_or_else(|| "rg is unavailable".to_owned())?;
+    let result = client
+        .exec(
+            &tool,
+            &[
+                "--files-with-matches".to_owned(),
+                "--fixed-strings".to_owned(),
+                "--".to_owned(),
+                old.to_owned(),
+            ],
+            5000,
+        )
+        .map_err(|error| error.to_string())?;
+    if result.timed_out {
+        return Err("replace preview timed out".to_owned());
+    }
+    if result.exit_code > 1 {
+        return Err(result.stderr);
+    }
+    if result.output_truncated {
+        return Err("too many files for project replace".to_owned());
+    }
+    let mut files = Vec::new();
+    let mut total = 0usize;
+    for (index, relative) in result.stdout.lines().enumerate() {
+        let relative = relative.trim();
+        if relative.is_empty() {
+            continue;
+        }
+        if index >= MAX_REPLACE_FILES {
+            return Err(format!(
+                "project replace is limited to {MAX_REPLACE_FILES} files"
+            ));
+        }
+        let bytes = client
+            .read_all_binary(relative, MAX_REPLACE_FILE_BYTES)
+            .map_err(|error| format!("{relative}: {error}"))?;
+        total = total.saturating_add(bytes.len());
+        if total > MAX_REPLACE_BYTES {
+            return Err(format!(
+                "project replace is limited to {MAX_REPLACE_BYTES} bytes"
+            ));
+        }
+        let Ok(text) = std::str::from_utf8(&bytes) else {
+            continue;
+        };
+        let matches = text.matches(old).count();
+        if matches == 0 {
+            continue;
+        }
+        files.push(ProjectReplaceFile {
+            relative: relative.to_owned(),
+            matches,
+            hash: Sha256::digest(&bytes).into(),
+        });
+    }
+    Ok(ProjectReplacePlan {
+        old: old.to_owned(),
+        new: new.to_owned(),
+        files,
+    })
+}
+
+fn apply_project_replace(
+    client: &mut GatewayClient,
+    plan: &ProjectReplacePlan,
+) -> Result<(), String> {
+    let mut originals = Vec::with_capacity(plan.files.len());
+    let mut writes = Vec::with_capacity(plan.files.len());
+    for file in &plan.files {
+        let bytes = client
+            .read_all_binary(&file.relative, MAX_REPLACE_FILE_BYTES)
+            .map_err(|error| format!("{}: {error}", file.relative))?;
+        let hash: [u8; 32] = Sha256::digest(&bytes).into();
+        if hash != file.hash {
+            return Err(format!(
+                "{} changed since the preview; rerun the preview",
+                file.relative
+            ));
+        }
+        let text = std::str::from_utf8(&bytes)
+            .map_err(|_| format!("{} is not valid UTF-8", file.relative))?;
+        let replaced = text.replace(&plan.old, &plan.new);
+        originals.push((file.relative.clone(), bytes));
+        writes.push((file.relative.clone(), replaced.into_bytes()));
+    }
+    for (index, (relative, data)) in writes.iter().enumerate() {
+        if let Err(error) = client.write_all(relative, data) {
+            let mut rollback_error = None;
+            for (original_path, original) in originals.iter().take(index + 1) {
+                if let Err(rollback) = client.write_all(original_path, original) {
+                    rollback_error = Some(format!("{original_path}: {rollback}"));
+                }
+            }
+            return Err(match rollback_error {
+                Some(rollback) => {
+                    format!("{relative}: {error}; rollback failed: {rollback}")
+                }
+                None => format!("{relative}: {error}; rollback complete"),
+            });
+        }
+    }
+    Ok(())
 }
 
 fn rg_tool() -> Option<String> {

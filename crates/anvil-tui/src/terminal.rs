@@ -244,6 +244,7 @@ pub fn run_with_input(
         model.poll_pkg_notifications();
         model.poll_syntax();
         model.poll_lsp();
+        model.poll_lsp_retry();
         model.poll_file_worker();
         if let Some(control) = &control {
             while let Ok(call) = control.try_recv() {

@@ -63,6 +63,7 @@ func validateRg(args []string) error {
 	}
 	allowedFlags := map[string]bool{
 		"-n": true, "--line-number": true, "--json": true,
+		"-l": true, "--files-with-matches": true,
 		"-i": true, "--ignore-case": true, "-F": true, "--fixed-strings": true,
 		"-S": true, "--smart-case": true, "--files": true, "--hidden": true,
 	}

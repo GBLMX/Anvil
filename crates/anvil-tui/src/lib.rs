@@ -75,6 +75,7 @@ mod plugin_document;
 #[cfg(target_os = "linux")]
 mod plugin_manager;
 mod plugins;
+mod project_replace;
 mod repeat;
 mod search;
 mod search_ui;
@@ -652,6 +653,8 @@ pub struct Model {
     lsp_config: Option<(String, String)>,
     /// Automatic restart counts per language server.
     lsp_retries: HashMap<(String, String), u8>,
+    /// Pending language-server restart after crash backoff.
+    lsp_retry: Option<((String, String), Instant)>,
     /// Diagnostics keyed by workspace path.
     diagnostics: HashMap<PathBuf, Vec<lsp::Diagnostic>>,
     diagnostic_count_shown: usize,
@@ -678,6 +681,12 @@ pub struct Model {
     project_search_generation: u64,
     /// Pending project-search generation, if a request is in flight.
     project_search_pending: Option<u64>,
+    /// Pending reviewed project replace plan.
+    project_replace_plan: Option<file_worker::ProjectReplacePlan>,
+    /// Latest requested project-replace generation.
+    project_replace_generation: u64,
+    /// Pending project-replace generation, if a request is in flight.
+    project_replace_pending: Option<u64>,
     stdin_location_scroll: usize,
     /// Whether the process was started as an external editor.
     editor_mode: bool,
@@ -824,6 +833,7 @@ impl Model {
             lsp_workers: HashMap::new(),
             lsp_config: None,
             lsp_retries: HashMap::new(),
+            lsp_retry: None,
             diagnostics: HashMap::new(),
             diagnostic_count_shown: 0,
             diagnostic_count_pending: None,
@@ -841,6 +851,9 @@ impl Model {
             location_title: "Locations".to_owned(),
             project_search_generation: 0,
             project_search_pending: None,
+            project_replace_plan: None,
+            project_replace_generation: 0,
+            project_replace_pending: None,
             editor_mode: false,
             exit_code: 0,
             syntax: RefCell::new(SyntaxState::default()),
@@ -1231,9 +1244,15 @@ impl Model {
             LspEvent::Capabilities {
                 inlay_hints,
                 semantic_token_types,
+                server_info,
             } => {
+                self.lsp_retries.remove(key);
+                self.lsp_retry = None;
                 self.inlay_support.insert(key.clone(), inlay_hints);
                 if active {
+                    if let Some(info) = server_info {
+                        self.status = format!("lsp: {info}");
+                    }
                     self.inlay_hints.clear();
                     self.inlay_pending = None;
                     self.inlay_checked = None;
@@ -1268,8 +1287,13 @@ impl Model {
                         *retries
                     };
                     if retries <= 3 {
-                        self.status = format!("lsp crashed, restarting ({retries}/3)");
-                        self.start_lsp();
+                        let delay_ms = 250u64 << (retries.saturating_sub(1).min(3));
+                        self.lsp_retry = Some((
+                            key.clone(),
+                            Instant::now() + Duration::from_millis(delay_ms),
+                        ));
+                        self.status =
+                            format!("lsp crashed; restarting in {delay_ms}ms ({retries}/3)");
                     } else {
                         self.status = format!("E: lsp crashed: {error}");
                         self.notify(
@@ -1326,6 +1350,19 @@ impl Model {
             for event in events {
                 self.handle_lsp_event(&key, event);
             }
+        }
+    }
+
+    pub(crate) fn poll_lsp_retry(&mut self) {
+        let Some((key, deadline)) = self.lsp_retry.clone() else {
+            return;
+        };
+        if Instant::now() < deadline {
+            return;
+        }
+        self.lsp_retry = None;
+        if !self.lsp_workers.contains_key(&key) {
+            self.start_lsp();
         }
     }
 
