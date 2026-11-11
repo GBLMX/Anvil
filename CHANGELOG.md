@@ -39,6 +39,8 @@ post-`0.5.0` feature line.
 - buffers now retain their own syntax spans, so switching back after global
   cache eviction or a stale parse keeps the last highlights instead of showing
   plain text (`BUG-010`).
+- LSP completions honor `sortText`, `filterText`, and `preselect`; the preset
+  item is selected initially and filtering uses server-provided filter text.
 - `WorkspaceEdit` now applies `documentChanges` create/rename/delete
   operations, checks per-document LSP versions and request-time buffer
   revisions before mutation, and refuses overwriting open buffers or deleting

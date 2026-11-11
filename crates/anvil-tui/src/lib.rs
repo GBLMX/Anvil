@@ -270,6 +270,9 @@ impl SelectionItem for CommandPaletteItem {
 #[derive(Debug, Clone)]
 struct CompletionItem {
     label: String,
+    filter_text: String,
+    sort_text: String,
+    preselect: bool,
     insert: String,
     snippet: Option<Snippet>,
     detail: String,

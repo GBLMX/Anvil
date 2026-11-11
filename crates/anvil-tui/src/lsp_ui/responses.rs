@@ -211,10 +211,25 @@ impl Model {
             self.status = "E: lsp: invalid completion response".to_owned();
             return;
         };
-        let items: Vec<CompletionItem> = items
+        let mut items: Vec<CompletionItem> = items
             .iter()
+            .take(2000)
             .filter_map(|item| {
                 let label = item.get("label")?.as_str()?.to_owned();
+                let filter_text = item
+                    .get("filterText")
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or(&label)
+                    .to_owned();
+                let sort_text = item
+                    .get("sortText")
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or(&label)
+                    .to_owned();
+                let preselect = item
+                    .get("preselect")
+                    .and_then(serde_json::Value::as_bool)
+                    .unwrap_or(false);
                 let insert = item
                     .get("textEdit")
                     .and_then(|edit| edit.get("newText"))
@@ -256,6 +271,9 @@ impl Model {
                     });
                 Some(CompletionItem {
                     label,
+                    filter_text,
+                    sort_text,
+                    preselect,
                     insert,
                     snippet,
                     detail,
@@ -265,19 +283,25 @@ impl Model {
                     resolved: false,
                 })
             })
-            .take(200)
             .collect();
+        items.sort_by(|left, right| {
+            left.sort_text
+                .cmp(&right.sort_text)
+                .then_with(|| left.label.cmp(&right.label))
+        });
+        items.truncate(200);
         if items.is_empty() {
             self.status = "lsp: no completions".to_owned();
             self.completion = None;
         } else {
             let filtered = (0..items.len()).collect();
+            let selected = items.iter().position(|item| item.preselect).unwrap_or(0);
             self.completion = Some(CompletionState {
                 id,
                 items,
                 filtered,
                 query: String::new(),
-                selected: 0,
+                selected,
             });
             self.status = "completion".to_owned();
             self.request_completion_resolve();

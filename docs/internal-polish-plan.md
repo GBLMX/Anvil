@@ -68,7 +68,11 @@ Difficulty: L–XL. Main risk is data loss and schema migration.
 
 ### 3.3 LSP depth
 
-- Completion snippet mirrors and ranking.
+Status: completion `sortText`, `filterText`, and `preselect` ranking landed;
+snippet mirrors and code lens remain.
+
+- Completion snippet mirrors; `sortText`/`filterText`/`preselect` ranking
+  landed.
 - Code lens where the server supports it, rendered as standard virtual rows
   above source lines.
 - References, document highlights, folding ranges, and semantic tokens are

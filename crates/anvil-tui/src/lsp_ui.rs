@@ -1215,12 +1215,19 @@ impl Model {
                 .items
                 .iter()
                 .enumerate()
-                .filter(|(_, item)| item.label.to_lowercase().contains(&query))
+                .filter(|(_, item)| item.filter_text.to_lowercase().contains(&query))
                 .map(|(index, _)| index)
                 .collect();
-            completion.selected = completion
-                .selected
-                .min(completion.filtered.len().saturating_sub(1));
+            let preferred = if query.is_empty() {
+                completion
+                    .filtered
+                    .iter()
+                    .position(|index| completion.items[*index].preselect)
+                    .unwrap_or(0)
+            } else {
+                0
+            };
+            completion.selected = preferred.min(completion.filtered.len().saturating_sub(1));
             self.dirty = true;
         }
         self.request_completion_resolve();

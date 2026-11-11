@@ -426,6 +426,9 @@ fn cancelling_completion_drops_pending_response() {
         id: 9,
         items: vec![CompletionItem {
             label: "item".to_owned(),
+            filter_text: "item".to_owned(),
+            sort_text: "item".to_owned(),
+            preselect: false,
             insert: "item".to_owned(),
             snippet: None,
             detail: String::new(),
@@ -458,6 +461,9 @@ fn completion_resolve_updates_selected_item() {
         id: 9,
         items: vec![CompletionItem {
             label: "item".to_owned(),
+            filter_text: "item".to_owned(),
+            sort_text: "item".to_owned(),
+            preselect: false,
             insert: "item".to_owned(),
             snippet: None,
             detail: String::new(),
@@ -497,6 +503,9 @@ fn completion_documentation_is_rendered() {
         id: 9,
         items: vec![CompletionItem {
             label: "item".to_owned(),
+            filter_text: "item".to_owned(),
+            sort_text: "item".to_owned(),
+            preselect: false,
             insert: "item".to_owned(),
             snippet: None,
             detail: "detail".to_owned(),
@@ -530,6 +539,9 @@ fn applying_snippet_selects_and_navigates_stops() {
         id: 9,
         items: vec![CompletionItem {
             label: "fn".to_owned(),
+            filter_text: "fn".to_owned(),
+            sort_text: "fn".to_owned(),
+            preselect: false,
             insert: snippet.text.clone(),
             snippet: Some(snippet),
             detail: String::new(),
@@ -1274,4 +1286,35 @@ fn rename_response_rejects_a_stale_document_version() {
     );
     assert_eq!(model.editor.text().slice(0..3), "abc");
     assert!(model.status.contains("stale"));
+}
+
+#[test]
+fn completion_uses_sort_text_preselect_and_filter_text() {
+    let mut model = Model::new(EditorState::from_text("x"), None);
+    model.pending_lsp.insert(21, LspRequestKind::Completion);
+    model.handle_lsp_response(
+        21,
+        serde_json::json!({"items": [
+            {"label": "zebra", "sortText": "2", "filterText": "zzz"},
+            {"label": "alpha", "sortText": "1", "filterText": "alphabet", "preselect": true},
+            {"label": "second", "sortText": "10", "filterText": "second"}
+        ]}),
+        None,
+    );
+    let completion = model.completion.as_ref().expect("completion");
+    assert_eq!(
+        completion
+            .items
+            .iter()
+            .map(|item| item.label.as_str())
+            .collect::<Vec<_>>(),
+        vec!["alpha", "second", "zebra"]
+    );
+    assert_eq!(completion.selected, 0);
+
+    model.completion.as_mut().expect("completion").query = "bet".to_owned();
+    model.filter_completion();
+    let completion = model.completion.as_ref().expect("completion");
+    assert_eq!(completion.filtered.len(), 1);
+    assert_eq!(completion.items[completion.filtered[0]].label, "alpha");
 }
