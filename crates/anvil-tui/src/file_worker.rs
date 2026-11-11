@@ -26,6 +26,30 @@ pub(crate) struct PreviewData {
     pub(crate) truncated: bool,
 }
 
+/// Failure while resolving a conflict, including whether the working file was
+/// already replaced.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ResolveConflictError {
+    pub(crate) message: String,
+    pub(crate) working_written: bool,
+}
+
+impl ResolveConflictError {
+    fn before_write(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+            working_written: false,
+        }
+    }
+
+    fn after_write(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+            working_written: true,
+        }
+    }
+}
+
 /// A background file-tree request.
 pub enum FileRequest {
     /// List one directory.
@@ -140,7 +164,7 @@ pub enum FileEvent {
         relative: String,
         stage: u8,
         generation: u64,
-        result: Result<(), String>,
+        result: Result<(), ResolveConflictError>,
     },
     /// A move or copy completed.
     Transferred {
@@ -850,9 +874,11 @@ fn resolve_git_conflict(
     client: &mut GatewayClient,
     relative: &str,
     stage: u8,
-) -> Result<(), String> {
+) -> Result<(), ResolveConflictError> {
     if !(2..=3).contains(&stage) {
-        return Err("conflict resolution requires stage 2 or 3".to_owned());
+        return Err(ResolveConflictError::before_write(
+            "conflict resolution requires stage 2 or 3",
+        ));
     }
     let spec = format!(":{stage}:{relative}");
     let show = client
@@ -861,19 +887,21 @@ fn resolve_git_conflict(
             &["--no-pager".to_owned(), "show".to_owned(), spec],
             5000,
         )
-        .map_err(|error| error.to_string())?;
+        .map_err(|error| ResolveConflictError::before_write(error.to_string()))?;
     if show.timed_out {
-        return Err("git show timed out".to_owned());
+        return Err(ResolveConflictError::before_write("git show timed out"));
     }
     if show.exit_code != 0 {
-        return Err(show.stderr);
+        return Err(ResolveConflictError::before_write(show.stderr));
     }
     if show.output_truncated {
-        return Err("conflict stage is too large to resolve automatically".to_owned());
+        return Err(ResolveConflictError::before_write(
+            "conflict stage is too large to resolve automatically",
+        ));
     }
     client
         .write_all(relative, show.stdout.as_bytes())
-        .map_err(|error| error.to_string())?;
+        .map_err(|error| ResolveConflictError::after_write(error.to_string()))?;
     let add = client
         .exec(
             &git_tool(),
@@ -885,12 +913,12 @@ fn resolve_git_conflict(
             ],
             5000,
         )
-        .map_err(|error| error.to_string())?;
+        .map_err(|error| ResolveConflictError::after_write(error.to_string()))?;
     if add.timed_out {
-        return Err("git add timed out".to_owned());
+        return Err(ResolveConflictError::after_write("git add timed out"));
     }
     if add.exit_code != 0 {
-        return Err(add.stderr);
+        return Err(ResolveConflictError::after_write(add.stderr));
     }
     Ok(())
 }

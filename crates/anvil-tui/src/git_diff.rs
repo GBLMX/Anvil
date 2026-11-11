@@ -552,7 +552,7 @@ impl Model {
         relative: String,
         stage: u8,
         generation: u64,
-        result: Result<(), String>,
+        result: Result<(), crate::file_worker::ResolveConflictError>,
     ) {
         if self.git_resolve_pending != Some(generation) {
             return;
@@ -572,7 +572,22 @@ impl Model {
                 }
             }
             Err(error) => {
-                self.status = format!("E: git resolve: {error}");
+                if error.working_written {
+                    let path = self.workspace.join(&relative);
+                    let reload = self.reload_external(&path);
+                    self.status = match reload {
+                        Ok(()) => format!(
+                            "E: git resolve: {} (working tree updated; index not staged)",
+                            error.message
+                        ),
+                        Err(reload_error) => format!(
+                            "E: git resolve: {} (working tree updated; reload failed: {reload_error})",
+                            error.message
+                        ),
+                    };
+                } else {
+                    self.status = format!("E: git resolve: {}", error.message);
+                }
             }
         }
         self.dirty = true;
@@ -627,5 +642,37 @@ index 1111111..2222222 100644
         assert_eq!(model.status, "E: no file name");
         model.execute_command("git-resolve-theirs!");
         assert_eq!(model.status, "E: no file name");
+    }
+
+    #[test]
+    fn reloads_working_file_when_staging_fails() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let workspace = dir.path().join("workspace");
+        std::fs::create_dir_all(&workspace).expect("mkdir");
+        let path = workspace.join("a.txt");
+        std::fs::write(&path, "ours\n").expect("write");
+        let mut model = Model::new(
+            EditorState::from_text("<<<<<<< HEAD\nours\n=======\ntheirs\n>>>>>>> side\n"),
+            Some(path),
+        );
+        model.workspace = workspace;
+        model.git_resolve_pending = Some(7);
+        model.handle_git_resolved(
+            "a.txt".to_owned(),
+            2,
+            7,
+            Err(crate::file_worker::ResolveConflictError {
+                message: "git add failed".to_owned(),
+                working_written: true,
+            }),
+        );
+        assert_eq!(
+            model
+                .editor
+                .text()
+                .slice(0..model.editor.text().len_bytes()),
+            "ours\n"
+        );
+        assert!(model.status.contains("working tree updated"));
     }
 }
