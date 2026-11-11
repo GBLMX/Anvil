@@ -152,15 +152,27 @@ are rejected.
 
 ```text
 anvil-ctl status
-anvil-ctl open src/main.rs +12:3
-anvil-ctl exec format
+anvil-ctl --json open src/main.rs +12:3
+anvil-ctl --json edit set $'alpha\nbeta\n'
+anvil-ctl --json save
+anvil-ctl --json query
+anvil-ctl --json command ':git-diff'
+anvil-ctl --json quit --force
 ```
 
-`open` is workspace-relative; `exec` accepts only `format`, `w`, `wq`, and
-`q`. A second `anvil FILE` inside the active workspace forwards to the running
-editor and exits; a different workspace is rejected. `--spawn` starts Anvil
-only when a terminal is attached. `--editor` and stdin instances do not claim
-the control socket, so they can run alongside a normal interactive instance.
+`--json` emits one machine-readable object; failures include `ok: false`,
+`exit_code`, `kind`, `message`, and `rpc_code`. Exit codes: 0 success, 2
+usage, 3 no instance, 4 timeout, 5 editor RPC error. `open`, `save`, `edit`,
+`query`, `command`, and `quit` all pass through the control socket into the
+TUI actor; they do not edit files directly. `query` reports buffer text,
+cursor, selection, revision, undo depth/bytes, tabs, and active buffer.
+`command` executes Ex commands through the same editor state machine.
+
+`open` is workspace-relative. `--spawn` starts Anvil only when a terminal is
+attached. `--editor` and stdin instances do not claim the control socket, so
+they can run alongside a normal interactive instance. `scripts/ctl-smoke.sh`
+drives a real TUI through this CLI and asserts files, buffer state, undo, Git
+index state, and session output.
 
 Quick open: `Space f` filters workspace files and previews the selected file
 through the gateway. Wide terminals show the preview beside the list; narrow

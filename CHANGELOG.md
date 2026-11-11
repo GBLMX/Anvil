@@ -8,6 +8,12 @@ post-`0.5.0` feature line.
 
 ## [Unreleased]
 ### Added
+- `anvil-ctl` is a JSON-capable control plane for a running TUI: `open`,
+  `save`, `edit set|insert`, `query`, arbitrary Ex `command`, and `quit`,
+  with stable exit codes, timeouts, and structured errors. The control protocol
+  is version 2.
+- `scripts/ctl-smoke.sh` drives a real TUI through `anvil-ctl` and asserts
+  file, buffer, undo, Git index, and session state.
 - Markdown (`marksman`), TOML (`taplo`), HTML, CSS/SCSS/Less, and Zig
   (`zls`) language-server discovery.
 - LSP references panel on `gr`, with bounded sorted locations and cross-file

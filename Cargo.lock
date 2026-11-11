@@ -75,6 +75,7 @@ name = "anvil-ctl"
 version = "0.6.0"
 dependencies = [
  "anvil-control",
+ "serde_json",
 ]
 
 [[package]]

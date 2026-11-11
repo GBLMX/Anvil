@@ -23,7 +23,7 @@ use std::{
 };
 
 /// Protocol version reported by the control server.
-pub const PROTOCOL_VERSION: &str = "1";
+pub const PROTOCOL_VERSION: &str = "2";
 
 /// Control response with the editor status.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -45,6 +45,17 @@ pub enum ControlRequest {
     },
     Exec {
         command: String,
+    },
+    Save {
+        path: Option<PathBuf>,
+    },
+    Edit {
+        mode: String,
+        text: String,
+    },
+    Query,
+    Quit {
+        force: bool,
     },
 }
 
@@ -348,6 +359,39 @@ fn parse_control(request: &Request) -> Result<ControlRequest, RpcError> {
                 command: command.to_owned(),
             })
         }
+        "control.save" => {
+            let path = request
+                .params
+                .get("path")
+                .and_then(Value::as_str)
+                .map(PathBuf::from);
+            Ok(ControlRequest::Save { path })
+        }
+        "control.edit" => {
+            let mode = request
+                .params
+                .get("mode")
+                .and_then(Value::as_str)
+                .ok_or_else(|| RpcError::new(codes::INVALID_PARAMS, "mode is required"))?;
+            let text = request
+                .params
+                .get("text")
+                .and_then(Value::as_str)
+                .ok_or_else(|| RpcError::new(codes::INVALID_PARAMS, "text is required"))?;
+            Ok(ControlRequest::Edit {
+                mode: mode.to_owned(),
+                text: text.to_owned(),
+            })
+        }
+        "control.query" => Ok(ControlRequest::Query),
+        "control.quit" => {
+            let force = request
+                .params
+                .get("force")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+            Ok(ControlRequest::Quit { force })
+        }
         _ => Err(RpcError::new(
             codes::METHOD_NOT_FOUND,
             "unknown control method",
@@ -453,6 +497,34 @@ impl Client {
         self.request("control.exec", json!({"command": command}))
     }
 
+    /// Save the current buffer, optionally as a path.
+    pub fn save(&mut self, path: Option<&Path>) -> Result<Value, Error> {
+        self.request(
+            "control.save",
+            json!({"path": path.map(|path| path.to_string_lossy())}),
+        )
+    }
+
+    /// Edit the active buffer with `set` or `insert`.
+    pub fn edit(&mut self, mode: &str, text: &str) -> Result<Value, Error> {
+        self.request("control.edit", json!({"mode": mode, "text": text}))
+    }
+
+    /// Query the active buffer state.
+    pub fn query(&mut self) -> Result<Value, Error> {
+        self.request("control.query", json!({}))
+    }
+
+    /// Ask the editor to quit.
+    pub fn quit(&mut self, force: bool) -> Result<Value, Error> {
+        self.request("control.quit", json!({"force": force}))
+    }
+
+    /// Connect with an explicit timeout.
+    pub fn connect_with_timeout(timeout: Duration) -> Result<Self, Error> {
+        Self::connect_at(&socket_path()?, timeout)
+    }
+
     fn request(&mut self, method: &str, params: Value) -> Result<Value, Error> {
         let id = format!("ctl-{}", self.next_id);
         self.next_id = self.next_id.wrapping_add(1);
@@ -541,5 +613,42 @@ mod tests {
         let server = server_at(&socket).expect("stale socket cleanup");
         assert!(socket.exists());
         drop(server);
+    }
+
+    #[test]
+    fn parses_mutation_requests() {
+        let save = Request {
+            jsonrpc: JSONRPC_VERSION.to_owned(),
+            id: Some("1".to_owned()),
+            method: "control.save".to_owned(),
+            params: json!({"path": "a.txt"}),
+            meta: None,
+        };
+        assert!(matches!(
+            parse_control(&save).unwrap(),
+            ControlRequest::Save { path: Some(path) } if path == PathBuf::from("a.txt")
+        ));
+        let edit = Request {
+            jsonrpc: JSONRPC_VERSION.to_owned(),
+            id: Some("2".to_owned()),
+            method: "control.edit".to_owned(),
+            params: json!({"mode": "set", "text": "hello"}),
+            meta: None,
+        };
+        assert!(matches!(
+            parse_control(&edit).unwrap(),
+            ControlRequest::Edit { mode, text } if mode == "set" && text == "hello"
+        ));
+        let quit = Request {
+            jsonrpc: JSONRPC_VERSION.to_owned(),
+            id: Some("3".to_owned()),
+            method: "control.quit".to_owned(),
+            params: json!({"force": true}),
+            meta: None,
+        };
+        assert!(matches!(
+            parse_control(&quit).unwrap(),
+            ControlRequest::Quit { force: true }
+        ));
     }
 }

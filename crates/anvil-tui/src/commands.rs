@@ -106,6 +106,8 @@ impl Model {
             ("git-stage-hunk", "") => self.apply_current_hunk(false),
             ("git-unstage-hunk", "") => self.apply_current_hunk(true),
             ("git-blame", "") => self.request_git_blame(),
+            ("undo", "") => self.undo(),
+            ("redo", "") => self.redo(),
             ("git-conflicts", "") => self.request_git_conflicts(),
             ("git-conflict-base", "") => self.request_git_conflict_stage(1),
             ("git-conflict-ours", "") => self.request_git_conflict_stage(2),
