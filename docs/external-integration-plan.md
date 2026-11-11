@@ -223,8 +223,19 @@ Prerequisites to verify in CI: `tmux`, `python3`, `git`, a writable
 
 Do these before writing MCP.
 
-1. **Remote command policy**
-   - Define capability levels and a command allowlist.
+1. **Shared command manifest**
+   - Put `CommandSpec`, `Capability`, and `EditMode` in `anvil-control`, not
+     `anvil-tui`. `anvil-control` is already the non-UI external contract crate;
+     TUI, CLI, and MCP all depend on it.
+   - Do not put the manifest behind a TUI dependency. `anvil-mcp` must remain
+     `anvil-mcp -> anvil-control` only.
+   - Make `ControlRequest::Edit` carry `EditMode` instead of `String`.
+   - `commands.rs` executes the command, completion and help checks derive from
+     the manifest, `anvil-ctl` validates through it, and the MCP tool table is
+     derived from it. Do not maintain a fourth command list in MCP.
+   - If the manifest later outgrows `anvil-control`, move it to a small
+     `anvil-command` crate and re-export it from `anvil-control`; do not make
+     MCP depend on `anvil-tui`.
    - Reject `:pkg`, `:plugin-*`, `:theme*` from the default remote surface.
    - Treat package/plugin commands as process-spawning operations, not editor
      primitives; default-deny them for control and MCP clients.
@@ -284,6 +295,10 @@ Tools:
 | `anvil_save` | `control.save` |
 | `anvil_command` | allowlisted `control.exec` |
 | `anvil_quit` | `control.quit` |
+
+The tool table is generated from the `anvil-control` command manifest and
+filtered by capability. Rejecting an unsupported command must happen from the
+same manifest the TUI and `anvil-ctl` use.
 
 Rules:
 
