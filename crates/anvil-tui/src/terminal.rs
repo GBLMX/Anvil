@@ -43,6 +43,8 @@ pub fn run_with_input(
         None
     };
     let enable_control = control_enabled(editor_mode, stdin_text.is_some());
+    let session_enabled = !editor_mode && stdin_text.is_none();
+    let restore_session = session_enabled && path.is_none();
     let timing = std::env::var_os("ANVIL_OPEN_TIMING").is_some();
     let start = Instant::now();
     let workspace = workspace.canonicalize().map_err(|error| {
@@ -73,7 +75,7 @@ pub fn run_with_input(
         }
         Err(error) => {
             let mut model = Model::new(EditorState::from_text(""), None);
-            model.workspace = workspace;
+            model.workspace = workspace.clone();
             model.require_gateway = true;
             model.status = format!("E: gateway unavailable: {error}");
             model.dirty = true;
@@ -102,6 +104,16 @@ pub fn run_with_input(
         model.dirty = true;
     }
     model.set_read_only(read_only);
+    if restore_session && let Err(error) = session::restore(&mut model, &workspace) {
+        let message = format!("E: session: {error}");
+        if model.status.is_empty() {
+            model.status = message;
+        } else {
+            model.status.push_str(" | ");
+            model.status.push_str(&message);
+        }
+        model.dirty = true;
+    }
     if let Err(error) = theme_config::load() {
         let message = format!("E: theme config: {error}");
         if model.status.is_empty() {
@@ -196,6 +208,10 @@ pub fn run_with_input(
     let mut terminal = TerminalSession::start()?;
     let terminal_ready = start.elapsed();
     let mut first_draw = true;
+    let mut last_session_revision = model.editor.revision();
+    let mut last_session_active = model.active;
+    let mut session_saved_at = Instant::now();
+    let mut session_error_reported = false;
     let mut insert_cursor: Option<bool> = None;
     loop {
         let wants_bar = matches!(model.ui.input_mode, InputMode::Insert);
@@ -245,7 +261,31 @@ pub fn run_with_input(
         if event::poll(std::time::Duration::from_millis(50))? {
             handle_event(&mut model, event::read()?);
         }
+        if session_enabled
+            && (model.editor.revision() != last_session_revision
+                || model.active != last_session_active)
+            && session_saved_at.elapsed() >= std::time::Duration::from_secs(2)
+        {
+            match session::save(&mut model, &workspace) {
+                Ok(()) => {
+                    session_error_reported = false;
+                    last_session_revision = model.editor.revision();
+                    last_session_active = model.active;
+                    session_saved_at = Instant::now();
+                }
+                Err(error) => {
+                    if !session_error_reported {
+                        model.status = format!("E: session save: {error}");
+                        model.dirty = true;
+                        session_error_reported = true;
+                    }
+                }
+            }
+        }
         if model.quit {
+            if session_enabled {
+                let _ = session::save(&mut model, &workspace);
+            }
             return Ok(model.exit_code());
         }
     }

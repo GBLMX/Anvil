@@ -64,6 +64,7 @@ mod overlays;
 mod pipe_locations;
 mod remote;
 mod selection_table;
+mod session;
 mod theme_picker;
 use selection_table::{SelectionItem, SelectionTable};
 mod pkg_install;
