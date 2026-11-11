@@ -156,7 +156,8 @@ anvil-ctl exec format
 `open` is workspace-relative; `exec` accepts only `format`, `w`, `wq`, and
 `q`. A second `anvil FILE` inside the active workspace forwards to the running
 editor and exits; a different workspace is rejected. `--spawn` starts Anvil
-only when a terminal is attached.
+only when a terminal is attached. `--editor` and stdin instances do not claim
+the control socket, so they can run alongside a normal interactive instance.
 
 Quick open: `Space f` filters workspace files and previews the selected file
 through the gateway. Wide terminals show the preview beside the list; narrow

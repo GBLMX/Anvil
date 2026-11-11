@@ -42,6 +42,7 @@ pub fn run_with_input(
     } else {
         None
     };
+    let enable_control = control_enabled(editor_mode, stdin_text.is_some());
     let timing = std::env::var_os("ANVIL_OPEN_TIMING").is_some();
     let start = Instant::now();
     let workspace = workspace.canonicalize().map_err(|error| {
@@ -167,25 +168,29 @@ pub fn run_with_input(
     model.activate_workspace_plugins();
     #[cfg(target_os = "linux")]
     model.activate_current_language();
-    let control = match anvil_control::ControlServer::start() {
-        Ok(server) => Some(server),
-        Err(anvil_control::Error::AlreadyRunning) => {
-            return Err(io::Error::new(
-                io::ErrorKind::AlreadyExists,
-                "another Anvil instance is already running",
-            ));
-        }
-        Err(error) => {
-            let message = format!("E: control: {error}");
-            if model.status.is_empty() {
-                model.status = message;
-            } else {
-                model.status.push_str(" | ");
-                model.status.push_str(&message);
+    let control = if enable_control {
+        match anvil_control::ControlServer::start() {
+            Ok(server) => Some(server),
+            Err(anvil_control::Error::AlreadyRunning) => {
+                return Err(io::Error::new(
+                    io::ErrorKind::AlreadyExists,
+                    "another Anvil instance is already running",
+                ));
             }
-            model.dirty = true;
-            None
+            Err(error) => {
+                let message = format!("E: control: {error}");
+                if model.status.is_empty() {
+                    model.status = message;
+                } else {
+                    model.status.push_str(" | ");
+                    model.status.push_str(&message);
+                }
+                model.dirty = true;
+                None
+            }
         }
+    } else {
+        None
     };
     let model_ready = start.elapsed();
     let mut terminal = TerminalSession::start()?;
@@ -371,5 +376,22 @@ impl Drop for TerminalSession {
         );
         let _ = disable_raw_mode();
         let _ = self.terminal.show_cursor();
+    }
+}
+
+fn control_enabled(editor_mode: bool, stdin: bool) -> bool {
+    !editor_mode && !stdin
+}
+
+#[cfg(test)]
+mod tests {
+    use super::control_enabled;
+
+    #[test]
+    fn editor_and_stdin_modes_do_not_claim_the_control_socket() {
+        assert!(control_enabled(false, false));
+        assert!(!control_enabled(true, false));
+        assert!(!control_enabled(false, true));
+        assert!(!control_enabled(true, true));
     }
 }
