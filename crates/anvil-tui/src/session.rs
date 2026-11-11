@@ -53,6 +53,7 @@ pub(crate) fn restore(model: &mut Model, workspace: &Path) -> Result<bool, Strin
         return Ok(false);
     }
     model.conflict_swaps.clear();
+    model.stale_paths.clear();
     let mut buffers = Vec::new();
     let mut conflicts = 0;
     for saved in state.buffers {

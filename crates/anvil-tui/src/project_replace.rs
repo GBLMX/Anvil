@@ -136,14 +136,18 @@ impl Model {
             Ok(()) => {
                 if let Some(plan) = self.project_replace_plan.take() {
                     if self.any_modified() {
+                        for file in &plan.files {
+                            self.stale_paths.insert(self.workspace.join(&file.relative));
+                        }
                         self.status =
-                            "replace applied; modified buffers were not reloaded (save may overwrite)"
+                            "replace applied; modified buffers marked stale (reload before saving)"
                                 .to_owned();
                     } else {
                         let mut reload_errors = Vec::new();
                         for file in &plan.files {
                             let path = self.workspace.join(&file.relative);
                             if let Err(error) = self.reload_external(&path) {
+                                self.stale_paths.insert(path);
                                 reload_errors.push(format!("{}: {error}", file.relative));
                             }
                         }
@@ -245,6 +249,8 @@ mod tests {
         model.handle_project_replace_applied(5, Ok(()));
         assert!(model.status.contains("reload failed"));
         assert!(!model.status.contains("replaced 1 files"));
+        assert!(!model.save());
+        assert!(model.status.contains("reload before saving"));
     }
 
     #[test]
@@ -268,5 +274,7 @@ mod tests {
             "old\n"
         );
         assert!(model.status.contains("modified buffers"));
+        assert!(!model.save());
+        assert!(model.status.contains("reload before saving"));
     }
 }

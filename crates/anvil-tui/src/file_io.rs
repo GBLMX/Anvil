@@ -315,6 +315,7 @@ impl Model {
             pane.buffer.missing = false;
         }
         self.sync_active();
+        self.stale_paths.remove(path);
         self.status = format!("reloaded {}", path.display());
         self.dirty = true;
         Ok(())
@@ -335,6 +336,11 @@ impl Model {
                 return false;
             }
         };
+        if self.stale_paths.contains(&path) {
+            self.status = "E: file changed by project replace; reload before saving".to_owned();
+            self.dirty = true;
+            return false;
+        }
         let current_conflict = self
             .path
             .as_ref()
