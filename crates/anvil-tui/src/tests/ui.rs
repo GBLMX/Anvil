@@ -389,6 +389,24 @@ fn status_bar_renders_path_diagnostics_and_position() {
 }
 
 #[test]
+fn read_only_mode_renders_in_the_title() {
+    let mut model = Model::new(EditorState::from_text("x"), None);
+    model.welcome = false;
+    model.set_read_only(true);
+    let backend = TestBackend::new(80, 20);
+    let mut terminal = Terminal::new(backend).expect("terminal");
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+    let rendered = terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect::<String>();
+    assert!(rendered.contains("[RO]"), "{rendered}");
+}
+
+#[test]
 fn command_line_renders_physical_cursor_at_the_edit_position() {
     let mut model = Model::new(EditorState::from_text("x"), None);
     model.welcome = false;

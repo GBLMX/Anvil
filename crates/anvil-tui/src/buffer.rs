@@ -368,4 +368,8 @@ impl Model {
         self.read_only = read_only;
         self.welcome = false;
     }
+
+    pub(crate) fn set_read_only(&mut self, read_only: bool) {
+        self.read_only = read_only;
+    }
 }

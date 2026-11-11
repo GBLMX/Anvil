@@ -62,7 +62,6 @@ impl Model {
         }
         self.welcome = false;
         self.stdin_buffer = false;
-        self.read_only = false;
         self.welcome_back = false;
         self.sync_lsp_active();
         self.sync_watch_paths();

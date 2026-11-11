@@ -193,6 +193,26 @@ fn stdin_read_only_buffer_rejects_mutation() {
     assert!(model.status.contains("read-only"));
 }
 #[test]
+fn read_only_file_mode_rejects_mutation_and_survives_reopen() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let first = dir.path().join("first.txt");
+    let second = dir.path().join("second.txt");
+    fs::write(&first, "first").expect("write first");
+    fs::write(&second, "second").expect("write second");
+
+    let mut model = Model::open(&first).expect("open first");
+    model.set_read_only(true);
+    model.insert_text("X");
+    assert_eq!(model.editor.text().slice(0..5), "first");
+    assert!(model.status.contains("read-only"));
+
+    model.open_path(&second).expect("open second");
+    model.insert_text("Y");
+    assert_eq!(model.editor.text().slice(0..6), "second");
+    assert!(model.status.contains("read-only"));
+}
+
+#[test]
 fn mouse_tab_switch_preserves_the_active_buffer() {
     let dir = tempfile::tempdir().expect("tempdir");
     let first = dir.path().join("first.txt");

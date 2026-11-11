@@ -99,6 +99,7 @@ pub fn run_with_input(
         };
         model.dirty = true;
     }
+    model.set_read_only(read_only);
     if let Err(error) = theme_config::load() {
         let message = format!("E: theme config: {error}");
         if model.status.is_empty() {

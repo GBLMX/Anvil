@@ -281,6 +281,25 @@ mod tests {
     }
 
     #[test]
+    fn read_only_file_sets_the_flag_without_stdin() {
+        let command = parse_args(args(&["--read-only", "file.rs"])).unwrap();
+        let Command::Run {
+            path,
+            editor,
+            stdin,
+            read_only,
+            ..
+        } = command
+        else {
+            panic!("expected run command");
+        };
+        assert_eq!(path, Some(PathBuf::from("file.rs")));
+        assert!(!editor);
+        assert!(!stdin);
+        assert!(read_only);
+    }
+
+    #[test]
     fn editor_mode_uses_the_external_file_parent_as_workspace() {
         let directory = tempfile::tempdir().expect("tempdir");
         let file = directory.path().join("message.txt");
