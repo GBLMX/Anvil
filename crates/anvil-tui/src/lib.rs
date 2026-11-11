@@ -18,7 +18,7 @@ use anvil_ipc::GatewayClient;
 use anvil_session::DocumentSession;
 use anvil_session::effect::{Effect, EffectQueue};
 use anvil_session::keymap::KeymapContext;
-use anvil_session::ui::{InputMode, UiState};
+use anvil_session::ui::{InputBuffer, InputMode, UiState};
 use crossterm::{
     cursor::SetCursorStyle,
     event::{

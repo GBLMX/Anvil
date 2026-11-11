@@ -75,7 +75,7 @@ pub(crate) fn handle_mouse(model: &mut Model, mouse: MouseEvent, width: u16, hei
                 }
                 Target::Tabs(index) => {
                     if index < model.buffers.len() && index != model.active {
-                        model.load_buffer(index);
+                        model.switch_to_buffer(index);
                     }
                     model.focus_editor();
                 }

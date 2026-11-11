@@ -38,6 +38,7 @@ ratatui = "0.30"
 unicode-width = "0.2"
 regex = "1"
 unicode-segmentation = "1"
+tree-sitter-fish = "3.6.0"
 
 [target.'cfg(unix)'.dependencies]
 nix = { version = "0.31", features = ["poll"] }

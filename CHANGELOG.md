@@ -21,6 +21,10 @@ post-`0.5.0` feature line.
 - LSP snippet completions with numbered placeholders and `Tab`/`Shift-Tab`
   navigation.
 - `G` moves the cursor to the last line; `count G` jumps to that line.
+- Grapheme-aware command-line and search input with Left/Right/Home/End/
+  Delete, mid-string editing, paste insertion, and a physical terminal cursor.
+- Shell highlighting for `.zsh`/`.brush` through the Bash grammar and `.fish`
+  through `tree-sitter-fish`.
 - `WorkspaceEdit` now applies `documentChanges` create/rename/delete
   operations, checks per-document LSP versions and request-time buffer
   revisions before mutation, and refuses overwriting open buffers or deleting
@@ -74,6 +78,11 @@ post-`0.5.0` feature line.
   change.
 
 ### Fixed
+- Backspace after wide/emoji input no longer panics when stale Tree-sitter
+  highlight boundaries fall inside a UTF-8 character; span slices clamp to
+  grapheme boundaries.
+- Mouse tab switches now sync the current buffer before loading the target;
+  `:w` followed by a tab round-trip no longer restores a stale dirty snapshot.
 - `HostSession` now receives the editor RPC socket from the supervisor and
   passes `--editor-socket` to plugin hosts, so production `editor.*` calls
   reach the active buffer instead of returning `-32008`.

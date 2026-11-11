@@ -129,7 +129,7 @@ fn keymap_context_prefers_popup_then_command_line_then_tree() {
 
     model.fuzzy = None;
     model.ui.input_mode = InputMode::CommandLine {
-        buffer: String::new(),
+        buffer: InputBuffer::default(),
     };
     assert_eq!(
         model.active_keymap_contexts(),
@@ -253,14 +253,14 @@ a = "editor.undo"
     )
     .expect("context keymap");
     model.ui.input_mode = InputMode::CommandLine {
-        buffer: String::new(),
+        buffer: InputBuffer::default(),
     };
     handle_event(&mut model, ctrl(KeyCode::Char('x')));
     assert!(!model.ui.focus.tree);
     handle_event(&mut model, key(KeyCode::Char('a')));
     assert_eq!(
         match &model.ui.input_mode {
-            InputMode::CommandLine { buffer } => buffer.as_str(),
+            InputMode::CommandLine { buffer } => buffer.text(),
             _ => "",
         },
         "a"
@@ -369,7 +369,7 @@ fn search_and_rename_contexts_consume_explicit_bindings() {
     search.open_tree();
     search.keymap = keymap;
     search.ui.input_mode = InputMode::Search {
-        query: String::new(),
+        query: InputBuffer::default(),
     };
     handle_event(&mut search, ctrl(KeyCode::Char('x')));
     assert!(!search.ui.focus.tree);
@@ -654,7 +654,7 @@ fn command_line_tab_completes_and_enter_executes() {
     handle_event(&mut model, key(KeyCode::Tab));
     assert!(matches!(
         &model.ui.input_mode,
-        InputMode::CommandLine { buffer } if buffer == "theme "
+        InputMode::CommandLine { buffer } if buffer.text() == "theme "
     ));
     handle_event(&mut model, key(KeyCode::Enter));
     assert!(matches!(model.ui.input_mode, InputMode::Normal));
@@ -673,7 +673,51 @@ fn command_line_tab_opens_theme_argument_list() {
     assert!(model.command_completion.is_some());
     assert!(matches!(
         &model.ui.input_mode,
-        InputMode::CommandLine { buffer } if buffer == "theme "
+        InputMode::CommandLine { buffer } if buffer.text() == "theme "
+    ));
+}
+
+#[test]
+fn command_line_supports_mid_text_editing() {
+    let mut model = Model::new(EditorState::from_text("alpha"), None);
+    model.welcome = false;
+    handle_event(&mut model, key(KeyCode::Char(':')));
+    for character in "ab".chars() {
+        handle_event(&mut model, key(KeyCode::Char(character)));
+    }
+    handle_event(&mut model, key(KeyCode::Left));
+    handle_event(&mut model, key(KeyCode::Char('X')));
+    assert!(matches!(
+        &model.ui.input_mode,
+        InputMode::CommandLine { buffer } if buffer.text() == "aXb"
+    ));
+    handle_event(&mut model, key(KeyCode::Home));
+    handle_event(&mut model, key(KeyCode::Delete));
+    assert!(matches!(
+        &model.ui.input_mode,
+        InputMode::CommandLine { buffer } if buffer.text() == "Xb"
+    ));
+    handle_event(&mut model, key(KeyCode::End));
+    handle_event(&mut model, key(KeyCode::Backspace));
+    assert!(matches!(
+        &model.ui.input_mode,
+        InputMode::CommandLine { buffer } if buffer.text() == "X"
+    ));
+}
+
+#[test]
+fn search_mode_supports_mid_text_editing() {
+    let mut model = Model::new(EditorState::from_text("alpha beta"), None);
+    model.welcome = false;
+    handle_event(&mut model, key(KeyCode::Char('/')));
+    for character in "ab".chars() {
+        handle_event(&mut model, key(KeyCode::Char(character)));
+    }
+    handle_event(&mut model, key(KeyCode::Left));
+    handle_event(&mut model, key(KeyCode::Char('X')));
+    assert!(matches!(
+        &model.ui.input_mode,
+        InputMode::Search { query } if query.text() == "aXb"
     ));
 }
 
@@ -689,7 +733,7 @@ fn command_line_completes_theme_argument() {
     handle_event(&mut model, key(KeyCode::Tab));
     assert!(matches!(
         &model.ui.input_mode,
-        InputMode::CommandLine { buffer } if buffer == "theme solarized-light "
+        InputMode::CommandLine { buffer } if buffer.text() == "theme solarized-light "
     ));
     handle_event(&mut model, key(KeyCode::Enter));
     assert_eq!(theme::name(), "solarized-light");

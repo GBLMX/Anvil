@@ -387,3 +387,35 @@ fn status_bar_renders_path_diagnostics_and_position() {
     assert!(rendered.contains("diag 0"), "{rendered}");
     assert!(rendered.contains("Ln 1, Col 1"), "{rendered}");
 }
+
+#[test]
+fn command_line_renders_physical_cursor_at_the_edit_position() {
+    let mut model = Model::new(EditorState::from_text("x"), None);
+    model.welcome = false;
+    handle_event(&mut model, key(KeyCode::Char(':')));
+    handle_event(&mut model, key(KeyCode::Char('a')));
+    handle_event(&mut model, key(KeyCode::Char('b')));
+    handle_event(&mut model, key(KeyCode::Left));
+
+    let backend = TestBackend::new(80, 20);
+    let mut terminal = Terminal::new(backend).expect("terminal");
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+    let cursor = terminal.backend().cursor_position();
+    assert_eq!((cursor.x, cursor.y), (8, 19));
+}
+
+#[test]
+fn search_renders_physical_cursor_at_the_query_position() {
+    let mut model = Model::new(EditorState::from_text("alpha beta"), None);
+    model.welcome = false;
+    handle_event(&mut model, key(KeyCode::Char('/')));
+    handle_event(&mut model, key(KeyCode::Char('a')));
+    handle_event(&mut model, key(KeyCode::Char('b')));
+    handle_event(&mut model, key(KeyCode::Left));
+
+    let backend = TestBackend::new(80, 20);
+    let mut terminal = Terminal::new(backend).expect("terminal");
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+    let cursor = terminal.backend().cursor_position();
+    assert_eq!((cursor.x, cursor.y), (8, 19));
+}

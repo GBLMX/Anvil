@@ -18,7 +18,8 @@ mode (`i`/`a`/`A`/`o`/`O`), multi-cursor selection (`s`/`Alt-s`/`C`),
 substitution, `/` search
 with `n`/`N`, multi-buffer switching, vertical splits with independent pane cursors,
 horizontal scrolling, and dirty-only redraws, insert-mode Tab indentation, a workspace file tree, and a fuzzy file
-finder. Rust, TOML, Go, Bash, Python, YAML, JSON/JSONC, Markdown, Makefile,
+finder. Rust, TOML, Go, Bash/Zsh/Brush, Fish, Python, YAML, JSON/JSONC,
+Markdown, Makefile,
 and Dockerfile use Tree-sitter highlighting on a debounced background thread,
 capped at 256 KiB so large files keep plain-text latency.
 Trusted language servers (rust-analyzer, gopls, pyright/pylsp,

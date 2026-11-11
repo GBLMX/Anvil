@@ -94,6 +94,13 @@ static BASH: LazyLock<SyntaxLanguage> = LazyLock::new(|| {
         false,
     )
 });
+static FISH: LazyLock<SyntaxLanguage> = LazyLock::new(|| {
+    SyntaxLanguage::grammar(
+        tree_sitter_fish::language(),
+        tree_sitter_fish::HIGHLIGHTS_QUERY,
+        false,
+    )
+});
 static PYTHON: LazyLock<SyntaxLanguage> = LazyLock::new(|| {
     SyntaxLanguage::grammar(
         Language::new(tree_sitter_python::LANGUAGE),
@@ -698,7 +705,8 @@ fn language_for_tag(tag: &str) -> Option<&'static SyntaxLanguage> {
     match tag.to_ascii_lowercase().as_str() {
         "rust" | "rs" => Some(&*RUST),
         "go" | "golang" => Some(&*GO),
-        "bash" | "sh" | "shell" => Some(&*BASH),
+        "bash" | "sh" | "shell" | "zsh" | "brush" => Some(&*BASH),
+        "fish" => Some(&*FISH),
         "python" | "py" => Some(&*PYTHON),
         "toml" => Some(&*TOML),
         "yaml" | "yml" => Some(&*YAML),
@@ -835,7 +843,8 @@ fn language_for(path: &Path) -> Option<&'static SyntaxLanguage> {
         "rs" => Some(&*RUST),
         "json" | "jsonc" => Some(&*JSON),
         "go" => Some(&*GO),
-        "sh" | "bash" => Some(&*BASH),
+        "sh" | "bash" | "zsh" | "brush" => Some(&*BASH),
+        "fish" => Some(&*FISH),
         "py" => Some(&*PYTHON),
         "toml" => Some(&*TOML),
         "yml" | "yaml" => Some(&*YAML),
@@ -912,6 +921,9 @@ mod tests {
             "x.go",
             "x.sh",
             "x.bash",
+            "x.zsh",
+            "x.brush",
+            "x.fish",
             "x.py",
             "x.yml",
             "x.yaml",
@@ -934,6 +946,17 @@ mod tests {
             ("x.toml", "key = \"value\"\n", SyntaxClass::Property),
             ("x.go", "func main() {}\n", SyntaxClass::Keyword),
             ("x.sh", "if true; then echo hi; fi\n", SyntaxClass::Keyword),
+            ("x.zsh", "if true; then echo hi; fi\n", SyntaxClass::Keyword),
+            (
+                "x.brush",
+                "if true; then echo hi; fi\n",
+                SyntaxClass::Keyword,
+            ),
+            (
+                "x.fish",
+                "function greet\n    echo hi\nend\n",
+                SyntaxClass::Keyword,
+            ),
             ("x.py", "def f():\n    return 1\n", SyntaxClass::Keyword),
             ("x.yaml", "key: true\n", SyntaxClass::Property),
             ("Makefile", "all:\n\t@echo hi\n", SyntaxClass::Constant),
@@ -1043,6 +1066,25 @@ mod tests {
         state.switch_path(Some(Path::new("other.rs")), false);
         state.switch_path(Some(&path), false);
         assert_eq!(state.highlights().len(), 1);
+    }
+
+    #[test]
+    fn switching_back_after_a_discarded_result_reparses() {
+        let mut state = SyntaxState::default();
+        let document = text("fn main() {}");
+        std::thread::sleep(Duration::from_millis(60));
+        state.poll(&document, 0, Some(Path::new("a.rs")));
+        state.switch_path(Some(Path::new("b.rs")), false);
+        let _ = state.poll(&document, 0, Some(Path::new("b.rs")));
+        state.switch_path(Some(Path::new("a.rs")), false);
+        for _ in 0..100 {
+            state.poll(&document, 0, Some(Path::new("a.rs")));
+            if !state.highlights().is_empty() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(!state.highlights().is_empty());
     }
 
     #[test]

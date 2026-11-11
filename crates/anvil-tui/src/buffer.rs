@@ -25,8 +25,14 @@ impl Model {
         }
     }
 
+    pub(crate) fn switch_to_buffer(&mut self, index: usize) {
+        if self.help_back.is_none() {
+            self.sync_active();
+        }
+        self.load_buffer(index);
+    }
+
     pub(crate) fn load_buffer(&mut self, index: usize) {
-        self.cancel_completion();
         self.clear_lsp_requests();
         self.hover = None;
         self.ui.diagnostic_peek = None;

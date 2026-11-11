@@ -104,6 +104,7 @@ dependencies = [
  "nix 0.31.3",
  "serde_json",
  "sha2 0.11.1",
+ "unicode-segmentation",
 ]
 
 [[package]]
@@ -128,6 +129,7 @@ dependencies = [
  "tree-sitter",
  "tree-sitter-bash",
  "tree-sitter-dockerfile-updated",
+ "tree-sitter-fish",
  "tree-sitter-go",
  "tree-sitter-json",
  "tree-sitter-make",
@@ -2368,6 +2370,16 @@ name = "tree-sitter-dockerfile-updated"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5e61eb704364be179ab9be89e2891c8e77c0041eca5891a5c04164a21f6df7a0"
+dependencies = [
+ "cc",
+ "tree-sitter",
+]
+
+[[package]]
+name = "tree-sitter-fish"
+version = "3.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "014e3b299f251e9c2e372e3b5e1b0323ef21196e9aa2e90a5bc1f6130cbe8b18"
 dependencies = [
  "cc",
  "tree-sitter",

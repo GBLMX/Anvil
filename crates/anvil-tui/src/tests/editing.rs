@@ -328,6 +328,29 @@ fn dd_deletes_current_line_and_keeps_line_start() {
 }
 
 #[test]
+fn db_at_file_start_is_a_noop() {
+    let mut model = Model::new(EditorState::from_text("alpha beta"), None);
+    handle_event(&mut model, key(KeyCode::Char('d')));
+    handle_event(&mut model, key(KeyCode::Char('b')));
+    assert_eq!(model.cursor, 0);
+    assert_eq!(model.editor.text().slice(0..10), "alpha beta");
+}
+
+#[test]
+fn dd_on_last_line_without_newline_and_empty_file_does_not_panic() {
+    let mut model = Model::new(EditorState::from_text("a\nb"), None);
+    model.move_line(1);
+    handle_event(&mut model, key(KeyCode::Char('d')));
+    handle_event(&mut model, key(KeyCode::Char('d')));
+    assert_eq!(model.editor.text().slice(0..2), "a\n");
+
+    let mut empty = Model::new(EditorState::from_text(""), None);
+    handle_event(&mut empty, key(KeyCode::Char('d')));
+    handle_event(&mut empty, key(KeyCode::Char('d')));
+    assert_eq!(empty.editor.text().len_bytes(), 0);
+}
+
+#[test]
 fn shift_g_moves_to_last_line_and_honors_count() {
     let mut model = Model::new(EditorState::from_text("alpha\nbeta\ngamma"), None);
     handle_event(&mut model, shift(KeyCode::Char('G')));

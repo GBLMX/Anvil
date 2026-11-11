@@ -163,7 +163,7 @@ impl Model {
             .collect::<Vec<_>>();
         #[cfg(not(target_os = "linux"))]
         let plugin_ids: Vec<&str> = Vec::new();
-        let completion = CommandCompletion::new(buffer, &plugin_ids);
+        let completion = CommandCompletion::new(buffer.text(), &plugin_ids);
         self.command_completion = (!completion.is_empty()).then_some(completion);
     }
 
@@ -207,7 +207,7 @@ impl Model {
 
     fn set_command_line(&mut self, command: &str) {
         self.ui.input_mode = InputMode::CommandLine {
-            buffer: command.to_owned(),
+            buffer: InputBuffer::new(command),
         };
         self.dirty = true;
     }

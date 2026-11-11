@@ -25,7 +25,8 @@ implementation work is in the plans linked below.
 
 - Area: TUI buffer switching and Tree-sitter syntax cache
 - Priority: High
-- Status: Open; recorded 2026-11-09.
+- Status: Open; recorded 2026-11-09. Not reproduced by the switch-before-result
+  or six-buffer regression tests on 2026-11-11.
 - Reproduction:
   1. Open five or six source files in separate tabs.
   2. Leave most tabs in the background for several minutes.
@@ -43,23 +44,35 @@ implementation work is in the plans linked below.
     `switch_path` (`crates/anvil-tui/src/buffer.rs`).
   - `SyntaxState` keeps one active `cache` plus the path-keyed store; parse
     results are applied only when `result.path` still matches the active path
-    (`crates/anvil-tui/src/syntax.rs`). A parse that finishes after a switch is
-    discarded, leaving the stored entry possibly pre-parse.
+    (`crates/anvil-tui/src/syntax.rs`). A discarded result alone is not enough
+    to explain permanent loss: the next active `poll` re-requests after
+    `DEBOUNCE` unless `cache.matches(revision, path)` already returns true.
+  - Hypothesis checked 2026-11-11: a switch-before-parse-result test
+    (`switching_back_after_a_discarded_result_reparses`) currently passes, so a
+    discarded parse result does not by itself cause permanent loss. The empty
+    revision-0 cache path may still exist through `switch_path(..., false)`,
+    but it is not reproduced by the current test.
   - `poll_syntax` runs only for the active buffer, and there is no background
     syntax refresh queue for inactive tabs.
-  - External reload/save invalidation removes the active path cache
-    (`invalidate`); this can discard a background tab's last known spans.
+  - `reload_external` calls `invalidate()` only when the reloaded path is the
+    active path. It updates background buffer text without invalidating that
+    buffer's syntax cache; save does not invalidate syntax at all. This is not
+    a confirmed loss path and may instead leave stale spans, so it must not be
+    cited as the cause without a repro.
 - Proposed fix:
-  1. Decide cache ownership explicitly: per-buffer `SyntaxCache` state, or a
-     path-keyed store with a buffer identity plus “never evict open buffers”
-     policy. Do not rely on a global 32-entry LRU for open tabs.
-  2. Retain the last good spans for every open buffer; an inactive tab must not
+  1. First add a deterministic switch-before-parse-result test. If the cache
+     reparses correctly after switching back, do not change cache ownership;
+     investigate long-idle/LRU behavior instead.
+  2. Only if the test reproduces permanent loss, decide ownership: per-buffer
+     `SyntaxCache` state, or a path-keyed store with buffer identity plus a
+     “never evict open buffers” policy.
+  3. Retain the last good spans for every open buffer; an inactive tab must not
      lose them merely because it is not active or because a new parse is
      pending.
-  3. On `load_buffer`, reuse the retained spans; if missing or stale, request a
+  4. On `load_buffer`, reuse the retained spans; if missing or stale, request a
      parse immediately and keep the previous spans (or a neutral placeholder)
      until the worker returns. No blank/plain-text flash.
-  4. For external-file or configuration changes, mark inactive buffers stale
+  5. For external-file or configuration changes, mark inactive buffers stale
      and either queue a bounded background refresh or refresh lazily on
      activation while retaining old spans. The memory/queue bound must be
      explicit.
@@ -71,11 +84,15 @@ implementation work is in the plans linked below.
     discarded and not applied to the wrong buffer/path.
   - Reopening/activating a buffer with no cache triggers a parse request; the
     frame is not blank while it runs.
-  - External reload and save invalidation do not leave an open tab permanently
-    unhighlighted.
+  - External reload of a background buffer must not leave it permanently
+  unhighlighted or silently stale; saving one buffer must not clear another
+  buffer's spans.
   - Tests cover LRU pressure, switch-before-parse-result, stale-cache
     invalidation, and retained-span rendering.
 - Verification:
+  - `switching_back_after_a_discarded_result_reparses` passes.
+  - `six_buffers_restore_cached_syntax_while_switching` passes with six Rust
+    buffers; each buffer restores cached spans immediately on switch.
   - Add a regression test that fills more than `CACHE_LIMIT` background entries
     while open buffers must retain their spans.
   - Add a switch/parse race test with a controllable worker response.

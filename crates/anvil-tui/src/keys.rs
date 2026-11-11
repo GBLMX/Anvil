@@ -34,10 +34,10 @@ pub(crate) fn handle_event(model: &mut Model, event: Event) {
             if let InputMode::Insert = model.ui.input_mode {
                 model.insert_text(&text);
             } else if let InputMode::CommandLine { buffer } = &mut model.ui.input_mode {
-                buffer.push_str(&text.replace('\n', " "));
+                buffer.insert_str(&text.replace('\n', " "));
                 model.dirty = true;
             } else if let InputMode::Search { query } = &mut model.ui.input_mode {
-                query.push_str(&text.replace('\n', " "));
+                query.insert_str(&text.replace('\n', " "));
                 model.dirty = true;
             } else if let InputMode::Rename { name } = &mut model.ui.input_mode {
                 name.push_str(&text.replace('\n', " "));
@@ -233,7 +233,7 @@ fn execute_normal_command(model: &mut Model, command: NormalCommand) {
         NormalCommand::InsertHere => model.insert_here(),
         NormalCommand::CommandLine => {
             model.ui.input_mode = InputMode::CommandLine {
-                buffer: String::new(),
+                buffer: InputBuffer::default(),
             };
             model.command_completion = None;
             model.dirty = true;
@@ -990,19 +990,44 @@ fn handle_key(model: &mut Model, key: KeyPress) {
                 if model.command_completion.is_some() {
                     model.complete_command_line();
                 } else {
-                    let command = std::mem::take(buffer);
+                    let command = buffer.take();
                     model.ui.input_mode = InputMode::Normal;
                     model.execute_command(command.trim());
                 }
             }
+            KeyCode::Left => {
+                buffer.move_left();
+                model.command_completion = None;
+                model.dirty = true;
+            }
+            KeyCode::Right => {
+                buffer.move_right();
+                model.command_completion = None;
+                model.dirty = true;
+            }
+            KeyCode::Home => {
+                buffer.move_home();
+                model.command_completion = None;
+                model.dirty = true;
+            }
+            KeyCode::End => {
+                buffer.move_end();
+                model.command_completion = None;
+                model.dirty = true;
+            }
             KeyCode::Backspace => {
                 model.command_completion = None;
-                buffer.pop();
+                buffer.backspace();
+                model.dirty = true;
+            }
+            KeyCode::Delete => {
+                model.command_completion = None;
+                buffer.delete();
                 model.dirty = true;
             }
             KeyCode::Char(character) if text_input => {
                 model.command_completion = None;
-                buffer.push(character);
+                buffer.insert(character);
                 model.dirty = true;
             }
             _ => {}
@@ -1020,15 +1045,35 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             match key.code {
                 KeyCode::Esc => model.cancel_search(),
                 KeyCode::Enter => {
-                    let query = std::mem::take(query);
+                    let query = query.take();
                     model.commit_search(query);
                 }
+                KeyCode::Left => {
+                    query.move_left();
+                    model.dirty = true;
+                }
+                KeyCode::Right => {
+                    query.move_right();
+                    model.dirty = true;
+                }
+                KeyCode::Home => {
+                    query.move_home();
+                    model.dirty = true;
+                }
+                KeyCode::End => {
+                    query.move_end();
+                    model.dirty = true;
+                }
                 KeyCode::Backspace => {
-                    query.pop();
+                    query.backspace();
+                    model.schedule_search();
+                }
+                KeyCode::Delete => {
+                    query.delete();
                     model.schedule_search();
                 }
                 KeyCode::Char(character) if text_input => {
-                    query.push(character);
+                    query.insert(character);
                     model.schedule_search();
                 }
                 _ => {}

@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::CallHierarchyDirection;
+use unicode_width::UnicodeWidthStr;
 pub fn view(model: &Model, frame: &mut Frame) {
     let area = frame.area();
     let editor_view: EditorView = model.editor.snapshot().view();
@@ -28,8 +29,12 @@ pub fn view(model: &Model, frame: &mut Frame) {
     };
     let (mode_text, mode_color, status) = match &model.ui.input_mode {
         InputMode::Rename { name } => (" REN ", theme::magenta(), format!("rename> {name}")),
-        InputMode::CommandLine { buffer } => (" CMD ", theme::warning(), format!(":{buffer}")),
-        InputMode::Search { query } => (" SRC ", theme::warning(), model.search_status(query)),
+        InputMode::CommandLine { buffer } => {
+            (" CMD ", theme::warning(), format!(":{}", buffer.text()))
+        }
+        InputMode::Search { query } => {
+            (" SRC ", theme::warning(), model.search_status(query.text()))
+        }
         InputMode::Insert => (" INS ", theme::success(), String::new()),
         InputMode::Create { name, kind, .. } => (
             if matches!(kind, CreateKind::Directory) {
@@ -81,6 +86,22 @@ pub fn view(model: &Model, frame: &mut Frame) {
     } else {
         status
     };
+
+    let status_cursor = match &model.ui.input_mode {
+        InputMode::CommandLine { buffer } => Some((1, buffer.cursor(), buffer.text())),
+        InputMode::Search { query } => Some((1, query.cursor(), query.text())),
+        _ => None,
+    }
+    .map(|(prefix, cursor, text)| {
+        let before = text.get(..cursor).unwrap_or(text);
+        let x = area
+            .x
+            .saturating_add(1)
+            .saturating_add(UnicodeWidthStr::width(mode_text) as u16)
+            .saturating_add(prefix)
+            .saturating_add(UnicodeWidthStr::width(before) as u16);
+        (x, area.y.saturating_add(area.height.saturating_sub(1)))
+    });
     let mode = Span::styled(mode_text, theme::mode_badge(mode_color));
     let block = panel_block(title)
         .title_style(theme::title())
@@ -89,6 +110,12 @@ pub fn view(model: &Model, frame: &mut Frame) {
             Span::styled(status, theme::status()),
         ]));
     frame.render_widget(block, area);
+    if let Some((x, y)) = status_cursor
+        && x < area.right()
+        && y < area.bottom()
+    {
+        frame.set_cursor_position((x, y));
+    }
     let mut inner = Rect {
         x: area.x + 1,
         y: area.y + 1,
@@ -280,10 +307,11 @@ pub fn view(model: &Model, frame: &mut Frame) {
             );
         }
     }
-    if let Some(position) = model
-        .editor
-        .index()
-        .position(model.editor.text(), model.cursor)
+    if status_cursor.is_none()
+        && let Some(position) = model
+            .editor
+            .index()
+            .position(model.editor.text(), model.cursor)
     {
         let x = text_area.x + position.display_column.saturating_sub(model.hscroll) as u16;
         let y = inner.y + position.line.saturating_sub(model.scroll) as u16;

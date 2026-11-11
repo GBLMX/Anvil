@@ -452,8 +452,13 @@ pub(crate) fn push_syntax_spans<'a>(
         if highlight.class == SyntaxClass::CodeBlock {
             continue;
         }
-        let start = highlight.start.max(base).max(cursor);
-        let end = highlight.end.min(chunk_end);
+        let start = base
+            + next_char_boundary(
+                chunk,
+                highlight.start.max(base).max(cursor).saturating_sub(base),
+            );
+        let end =
+            base + previous_char_boundary(chunk, highlight.end.min(chunk_end).saturating_sub(base));
         if end <= start {
             continue;
         }
@@ -474,6 +479,22 @@ pub(crate) fn push_syntax_spans<'a>(
     if chunk.is_empty() {
         spans.push(Span::raw(""));
     }
+}
+
+fn next_char_boundary(text: &str, mut local: usize) -> usize {
+    local = local.min(text.len());
+    while local < text.len() && !text.is_char_boundary(local) {
+        local += 1;
+    }
+    local
+}
+
+fn previous_char_boundary(text: &str, mut local: usize) -> usize {
+    local = local.min(text.len());
+    while local > 0 && !text.is_char_boundary(local) {
+        local -= 1;
+    }
+    local
 }
 
 /// Applies search backgrounds without replacing existing syntax foregrounds.

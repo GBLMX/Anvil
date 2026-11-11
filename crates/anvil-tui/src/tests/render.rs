@@ -492,3 +492,23 @@ fn inlay_hints_follow_horizontal_window() {
     assert!(rendered.contains(":visible"));
     assert!(!rendered.contains(":hidden"));
 }
+
+#[test]
+fn stale_syntax_boundaries_are_clamped_to_char_boundaries() {
+    let mut spans = Vec::new();
+    crate::render::push_syntax_spans(
+        &mut spans,
+        "👩",
+        0,
+        &[crate::syntax::Highlight {
+            start: 2,
+            end: 4,
+            class: crate::syntax::SyntaxClass::Keyword,
+        }],
+    );
+    let rendered = spans
+        .iter()
+        .map(|span| span.content.as_ref())
+        .collect::<String>();
+    assert_eq!(rendered, "👩");
+}

@@ -9,7 +9,7 @@ impl Model {
             .begin(self.cursor, self.editor.selection_bytes());
         self.search_query.clear();
         self.ui.input_mode = InputMode::Search {
-            query: String::new(),
+            query: InputBuffer::default(),
         };
         self.dirty = true;
     }
@@ -24,7 +24,7 @@ impl Model {
             return;
         }
         let query = match &self.ui.input_mode {
-            InputMode::Search { query } => query.clone(),
+            InputMode::Search { query } => query.text().to_owned(),
             _ => self.search_query.clone(),
         };
         self.apply_search_query(&query, false);
@@ -216,7 +216,7 @@ impl Model {
 
     fn replace_query(&self) -> String {
         match &self.ui.input_mode {
-            InputMode::Search { query } => query.clone(),
+            InputMode::Search { query } => query.text().to_owned(),
             _ => self.search_query.clone(),
         }
     }

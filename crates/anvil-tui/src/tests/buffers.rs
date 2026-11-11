@@ -1,4 +1,5 @@
 use super::*;
+use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 #[test]
 fn multi_buffer_switch_preserves_per_buffer_state() {
     let dir = tempfile::tempdir().expect("tempdir");
@@ -54,6 +55,158 @@ fn switching_buffers_preserves_visual_selection() {
     assert!(model.visual_anchor.is_none());
     command(&mut model, "bp");
     assert_eq!(model.visual_anchor, Some(0));
+}
+
+#[test]
+fn multi_buffer_w_saves_the_active_buffer() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let first = dir.path().join("first.txt");
+    let second = dir.path().join("second.txt");
+    fs::write(&first, "first").expect("write first");
+    fs::write(&second, "second").expect("write second");
+
+    let mut model = Model::open(&first).expect("open first");
+    model.open_path(&second).expect("open second");
+    handle_event(&mut model, key(KeyCode::Char('i')));
+    type_text(&mut model, "X");
+    handle_event(&mut model, key(KeyCode::Esc));
+    command(&mut model, "w");
+
+    assert_eq!(fs::read_to_string(&second).expect("read second"), "Xsecond");
+    assert_eq!(fs::read_to_string(&first).expect("read first"), "first");
+    assert!(!model.modified);
+}
+
+#[test]
+fn six_buffers_restore_cached_syntax_while_switching() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let mut model: Option<Model> = None;
+    for index in 0..6 {
+        let path = dir.path().join(format!("{index}.rs"));
+        fs::write(&path, format!("fn function_{index}() {{}}\n")).expect("write");
+        match model.as_mut() {
+            Some(model) => model.open_path(&path).expect("open"),
+            None => model = Some(Model::open(&path).expect("open first")),
+        }
+        let model = model.as_mut().expect("model");
+        for _ in 0..200 {
+            model.poll_syntax();
+            if !model.syntax.borrow().highlights().is_empty() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        assert!(
+            !model.syntax.borrow().highlights().is_empty(),
+            "syntax did not load for {index}.rs"
+        );
+    }
+
+    let mut model = model.expect("model");
+    assert_eq!(model.buffers.len(), 6);
+    for index in 0..6 {
+        model.switch_to_buffer(index);
+        assert!(
+            !model.syntax.borrow().highlights().is_empty(),
+            "buffer {index} lost cached syntax"
+        );
+    }
+}
+
+#[test]
+fn load_buffer_syncs_the_current_buffer_before_switching() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let first = dir.path().join("first.txt");
+    let second = dir.path().join("second.txt");
+    fs::write(&first, "first").expect("write first");
+    fs::write(&second, "second").expect("write second");
+
+    let mut model = Model::open(&first).expect("open first");
+    model.open_path(&second).expect("open second");
+    model.switch_to_buffer(0);
+    handle_event(&mut model, key(KeyCode::Char('i')));
+    type_text(&mut model, "X");
+    handle_event(&mut model, key(KeyCode::Esc));
+    assert!(model.modified);
+
+    model.switch_to_buffer(1);
+    model.switch_to_buffer(0);
+    assert_eq!(model.editor.text().slice(0..6), "Xfirst");
+    assert!(model.modified);
+}
+
+#[test]
+fn save_then_buffer_switch_round_trip_keeps_the_buffer_clean() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let first = dir.path().join("first.txt");
+    let second = dir.path().join("second.txt");
+    fs::write(&first, "first").expect("write first");
+    fs::write(&second, "second").expect("write second");
+
+    let mut model = Model::open(&first).expect("open first");
+    model.open_path(&second).expect("open second");
+    model.switch_to_buffer(0);
+    handle_event(&mut model, key(KeyCode::Char('i')));
+    type_text(&mut model, "X");
+    handle_event(&mut model, key(KeyCode::Esc));
+    command(&mut model, "w");
+    assert!(!model.modified);
+
+    model.switch_to_buffer(1);
+    model.switch_to_buffer(0);
+    assert!(!model.modified);
+    assert_eq!(model.editor.text().slice(0..6), "Xfirst");
+}
+
+#[test]
+fn mouse_tab_switch_preserves_the_active_buffer() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let first = dir.path().join("first.txt");
+    let second = dir.path().join("second.txt");
+    fs::write(&first, "first").expect("write first");
+    fs::write(&second, "second").expect("write second");
+
+    let mut model = Model::open(&first).expect("open first");
+    model.open_path(&second).expect("open second");
+    model.switch_to_buffer(0);
+    handle_event(&mut model, key(KeyCode::Char('i')));
+    type_text(&mut model, "X");
+    handle_event(&mut model, key(KeyCode::Esc));
+
+    let click = |column| MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column,
+        row: 1,
+        modifiers: crossterm::event::KeyModifiers::NONE,
+    };
+    assert!(crate::mouse::handle_mouse(&mut model, click(13), 80, 24));
+    assert_eq!(model.active, 1);
+    assert!(crate::mouse::handle_mouse(&mut model, click(2), 80, 24));
+    assert_eq!(model.active, 0);
+    assert_eq!(model.editor.text().slice(0..6), "Xfirst");
+    assert!(model.modified);
+}
+
+#[test]
+fn closing_active_middle_buffer_keeps_the_following_buffer() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let first = dir.path().join("first.txt");
+    let second = dir.path().join("second.txt");
+    let third = dir.path().join("third.txt");
+    fs::write(&first, "first").expect("write first");
+    fs::write(&second, "second").expect("write second");
+    fs::write(&third, "third").expect("write third");
+
+    let mut model = Model::open(&first).expect("open first");
+    model.open_path(&second).expect("open second");
+    model.open_path(&third).expect("open third");
+    model.switch_to_buffer(1);
+    model.close_buffer(1, false);
+
+    assert_eq!(model.buffers.len(), 2);
+    assert_eq!(model.active, 1);
+    assert_eq!(model.editor.text().slice(0..5), "third");
+    assert_eq!(model.buffers[1].editor.text().slice(0..5), "third");
 }
 
 #[test]
@@ -539,7 +692,7 @@ fn command_line_paste_does_not_embed_newlines() {
     handle_event(&mut model, key(KeyCode::Char(':')));
     handle_event(&mut model, Event::Paste("w\r\nq".to_owned()));
     match &model.ui.input_mode {
-        InputMode::CommandLine { buffer } => assert_eq!(buffer, "w q"),
+        InputMode::CommandLine { buffer } => assert_eq!(buffer.text(), "w q"),
         other => panic!("unexpected mode: {other:?}"),
     }
 }
