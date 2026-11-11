@@ -74,6 +74,64 @@ impl SnippetSession {
             .map(|stop| (stop.start, stop.end))
     }
 
+    pub(crate) fn mirror_ranges(&self) -> Vec<(usize, usize)> {
+        self.mirrors().collect()
+    }
+
+    pub(crate) fn matches_ranges(&self, ranges: &[(usize, usize)]) -> bool {
+        let mut expected = self.mirror_ranges();
+        expected.sort_unstable();
+        let mut actual = ranges
+            .iter()
+            .map(|(anchor, head)| ((*anchor).min(*head), (*anchor).max(*head)))
+            .collect::<Vec<_>>();
+        actual.sort_unstable();
+        expected == actual
+    }
+
+    pub(crate) fn replace_current_with_carets(&mut self, old: &[(usize, usize)], carets: &[usize]) {
+        let start = self.groups[self.current];
+        let end = self
+            .groups
+            .get(self.current + 1)
+            .copied()
+            .unwrap_or(self.stops.len());
+        if old.len() != carets.len() || old.len() != end - start {
+            return;
+        }
+        let mut replacements = old
+            .iter()
+            .zip(carets)
+            .enumerate()
+            .map(|(offset, ((old_start, old_end), caret))| {
+                (*old_start, *old_end, *caret, start + offset)
+            })
+            .collect::<Vec<_>>();
+        replacements.sort_by(|left, right| right.0.cmp(&left.0));
+        for (_, old_end, caret, index) in replacements {
+            let delta = i128::try_from(caret).unwrap_or(i128::MAX)
+                - i128::try_from(old_end).unwrap_or(i128::MAX);
+            for (position, stop) in self.stops.iter_mut().enumerate() {
+                if position >= start && position < end {
+                    continue;
+                }
+                if stop.start >= old_end {
+                    stop.start = Self::shift_offset(stop.start, delta);
+                    stop.end = Self::shift_offset(stop.end, delta);
+                }
+            }
+            self.stops[index].start = caret;
+            self.stops[index].end = caret;
+        }
+    }
+
+    fn shift_offset(offset: usize, delta: i128) -> usize {
+        if delta >= 0 {
+            offset.saturating_add(usize::try_from(delta).unwrap_or(usize::MAX))
+        } else {
+            offset.saturating_sub(usize::try_from(-delta).unwrap_or(usize::MAX))
+        }
+    }
     pub(crate) fn next(&mut self) -> Option<(usize, usize)> {
         if self.current + 1 >= self.groups.len() {
             return None;

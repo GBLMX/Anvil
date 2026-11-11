@@ -68,11 +68,13 @@ Difficulty: L–XL. Main risk is data loss and schema migration.
 
 ### 3.3 LSP depth
 
-Status: completion `sortText`/`filterText`/`preselect` ranking and indexed
-snippet mirror grouping landed; linked mirror editing and code lens remain.
+Status: completion `sortText`/`filterText`/`preselect` ranking, indexed
+snippet mirror grouping, and linked mirror insertion landed; linked deletion
+and code lens remain.
 
 - Completion snippet mirrors: repeated tabstop indices survive parsing, group
-  as mirrors, and navigate as one unique stop. Linked text edits remain.
+  as mirrors, navigate as one unique stop, and receive typed insertions
+  together. Linked deletion remains.
 - `sortText`/`filterText`/`preselect` ranking landed.
 - Code lens where the server supports it, rendered as standard virtual rows
   above source lines.

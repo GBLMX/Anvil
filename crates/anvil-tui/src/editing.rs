@@ -867,10 +867,16 @@ impl Model {
             return;
         }
         let selections = self.editor.selection_bytes();
+        let mirror_edit = self
+            .snippet
+            .as_ref()
+            .is_some_and(|snippet| snippet.matches_ranges(&selections));
         if self.snippet.is_some() {
-            if selections.len() > 1 {
+            if selections.len() > 1 && !mirror_edit {
                 self.snippet = None;
-            } else if let Some((anchor, head)) = selections.first().copied() {
+            } else if selections.len() == 1
+                && let Some((anchor, head)) = selections.first().copied()
+            {
                 let start = anchor.min(head);
                 let end = anchor.max(head);
                 if let Some(snippet) = self.snippet.as_mut() {
@@ -879,9 +885,26 @@ impl Model {
                 }
             }
         }
+        let old_selections = selections.clone();
         if selections.len() > 1 || selections.iter().any(|(anchor, head)| anchor != head) {
             if self.editor.insert_at_selections(text) {
-                self.sync_cursor_from_selection();
+                if mirror_edit {
+                    let carets = self
+                        .editor
+                        .selection_bytes()
+                        .iter()
+                        .map(|(start, _)| start.saturating_add(text.len()))
+                        .collect::<Vec<_>>();
+                    if let Some(snippet) = self.snippet.as_mut() {
+                        snippet.replace_current_with_carets(&old_selections, &carets);
+                    }
+                    self.editor.set_selections_bytes(
+                        carets.iter().map(|caret| (*caret, *caret)).collect(),
+                    );
+                    self.cursor = carets.first().copied().unwrap_or(self.cursor);
+                } else {
+                    self.sync_cursor_from_selection();
+                }
                 self.modified = true;
                 self.capture_insert(text);
             }

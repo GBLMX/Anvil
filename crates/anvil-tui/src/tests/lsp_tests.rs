@@ -572,6 +572,39 @@ fn applying_snippet_selects_and_navigates_stops() {
 }
 
 #[test]
+fn mirrored_snippet_edits_apply_to_all_tabstops() {
+    let mut model = Model::new(EditorState::from_text(""), None);
+    let snippet = crate::snippet::parse("${1:name} + ${1:name}").expect("snippet");
+    model.completion = Some(CompletionState {
+        id: 9,
+        items: vec![CompletionItem {
+            label: "mirror".to_owned(),
+            filter_text: "mirror".to_owned(),
+            sort_text: "mirror".to_owned(),
+            preselect: false,
+            insert: snippet.text.clone(),
+            snippet: Some(snippet),
+            detail: String::new(),
+            replace: None,
+            documentation: None,
+            raw: serde_json::Value::Null,
+            resolved: true,
+        }],
+        filtered: vec![0],
+        query: String::new(),
+        selected: 0,
+    });
+    model.apply_completion();
+    assert_eq!(model.editor.selection_bytes(), vec![(0, 4), (7, 11)]);
+    model.insert_text("x");
+    assert_eq!(model.editor.text().slice(0..5), "x + x");
+    assert_eq!(model.editor.selection_bytes(), vec![(1, 1), (5, 5)]);
+    model.insert_text("y");
+    assert_eq!(model.editor.text().slice(0..7), "xy + xy");
+    assert_eq!(model.editor.selection_bytes(), vec![(2, 2), (7, 7)]);
+}
+
+#[test]
 fn rename_response_applies_workspace_edit() {
     let dir = tempfile::tempdir().expect("tempdir");
     let file = dir.path().join("rename.rs");

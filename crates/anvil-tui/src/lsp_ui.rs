@@ -1151,16 +1151,17 @@ impl Model {
     }
 
     fn goto_snippet_stop(&mut self) {
-        let Some((start, end)) = self.snippet.as_ref().and_then(SnippetSession::current) else {
+        let ranges = self
+            .snippet
+            .as_ref()
+            .map(SnippetSession::mirror_ranges)
+            .unwrap_or_default();
+        let Some((start, _)) = ranges.first().copied() else {
             self.snippet = None;
             return;
         };
-        let mirrors = self
-            .snippet
-            .as_ref()
-            .map(|session| session.mirrors().count())
-            .unwrap_or(0);
-        self.editor.set_selection_bytes(start, end);
+        let mirrors = ranges.len();
+        self.editor.set_selections_bytes(ranges);
         self.cursor = start;
         if mirrors > 1 {
             self.status = format!("snippet stop ({mirrors} mirrors)");
@@ -1168,15 +1169,22 @@ impl Model {
         self.dirty = true;
     }
 
+    fn select_snippet_groups(&mut self, ranges: Vec<(usize, usize)>) {
+        if let Some((start, _)) = ranges.first().copied() {
+            self.editor.set_selections_bytes(ranges);
+            self.cursor = start;
+            self.dirty = true;
+        }
+    }
+
     pub(crate) fn next_snippet_stop(&mut self) -> bool {
         let Some(mut session) = self.snippet.take() else {
             return false;
         };
-        if let Some((start, end)) = session.next() {
+        if session.next().is_some() {
+            let ranges = session.mirror_ranges();
             self.snippet = Some(session);
-            self.editor.set_selection_bytes(start, end);
-            self.cursor = start;
-            self.dirty = true;
+            self.select_snippet_groups(ranges);
             return true;
         }
         let end = session.current().map(|(_, end)| end).unwrap_or(self.cursor);
@@ -1191,11 +1199,12 @@ impl Model {
             return false;
         };
         let moved = session.previous();
-        self.snippet = Some(session);
-        if let Some((start, end)) = moved {
-            self.editor.set_selection_bytes(start, end);
-            self.cursor = start;
-            self.dirty = true;
+        if moved.is_some() {
+            let ranges = session.mirror_ranges();
+            self.snippet = Some(session);
+            self.select_snippet_groups(ranges);
+        } else {
+            self.snippet = Some(session);
         }
         true
     }

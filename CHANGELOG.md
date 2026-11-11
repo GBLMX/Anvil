@@ -42,7 +42,8 @@ post-`0.5.0` feature line.
 - LSP completions honor `sortText`, `filterText`, and `preselect`; the preset
   item is selected initially and filtering uses server-provided filter text.
 - snippet parsing preserves repeated tabstop indices; sessions group them as
-  mirrors and navigate each unique tabstop once.
+  mirrors, navigate each unique tabstop once, and apply typed insertions to all
+  mirrors.
 - `WorkspaceEdit` now applies `documentChanges` create/rename/delete
   operations, checks per-document LSP versions and request-time buffer
   revisions before mutation, and refuses overwriting open buffers or deleting
