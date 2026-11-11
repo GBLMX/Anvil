@@ -51,9 +51,11 @@ Wire methods, JSON-RPC over the existing bounded `anvil-ipc` framing:
 | `control.quit` | optional `force` | accepted status |
 
 `control.exec` runs any Ex command Anvil supports through the editor state
-machine. It is not a remote shell: there is no `:!`, no process spawn, and no
-cross-user access. It can still reach package/plugin/theme commands, which is a
-policy gap described below.
+machine. It is not a general remote shell: there is no `:!` and no arbitrary
+command syntax. It still reaches commands that spawn helper processes, notably
+`:pkg install` (`GatewaySession::start_installer`) and `:plugin-exec` (plugin
+host); those are part of the P0 capability policy gap described below. There is
+no cross-user access.
 
 ### 1.3 `anvil-ctl`
 
@@ -224,6 +226,8 @@ Do these before writing MCP.
 1. **Remote command policy**
    - Define capability levels and a command allowlist.
    - Reject `:pkg`, `:plugin-*`, `:theme*` from the default remote surface.
+   - Treat package/plugin commands as process-spawning operations, not editor
+     primitives; default-deny them for control and MCP clients.
    - Tests: admin commands return `POLICY_DENIED`; git/edit commands still work.
    - Document that `command` is an editor command surface, not a shell.
 
