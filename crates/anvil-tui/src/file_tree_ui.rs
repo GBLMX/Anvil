@@ -104,6 +104,9 @@ impl Model {
                     revision,
                     result,
                 } => self.handle_git_diff(path, revision, result),
+                FileEvent::GitDiffText { generation, result } => {
+                    self.handle_git_diff_text(generation, result)
+                }
                 FileEvent::Transferred {
                     from,
                     to,

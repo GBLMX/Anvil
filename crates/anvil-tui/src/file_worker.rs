@@ -40,6 +40,8 @@ pub enum FileRequest {
         relative: String,
         revision: u64,
     },
+    /// Read a bounded unified diff for one workspace-relative file.
+    GitDiffText { relative: String, generation: u64 },
     /// Move or copy one workspace entry.
     Transfer {
         from: PathBuf,
@@ -77,6 +79,11 @@ pub enum FileEvent {
         path: PathBuf,
         revision: u64,
         result: Result<Vec<(usize, char)>, String>,
+    },
+    /// Bounded unified diff text and whether it was truncated.
+    GitDiffText {
+        generation: u64,
+        result: Result<(String, bool), String>,
     },
     /// A move or copy completed.
     Transferred {
@@ -219,6 +226,13 @@ impl FileWorker {
                                 path,
                                 revision,
                                 result: git_diff(&mut client, &relative),
+                            },
+                            FileRequest::GitDiffText {
+                                relative,
+                                generation,
+                            } => FileEvent::GitDiffText {
+                                generation,
+                                result: git_diff_text(&mut client, &relative),
                             },
                             FileRequest::Transfer { from, to, copy } => {
                                 let result = if copy {
@@ -566,6 +580,48 @@ fn git_diff(client: &mut GatewayClient, relative: &str) -> Result<Vec<(usize, ch
         return Err(result.stderr);
     }
     Ok(parse_git_diff(&result.stdout))
+}
+
+const MAX_GIT_DIFF_BYTES: usize = 512 * 1024;
+
+fn git_diff_text(client: &mut GatewayClient, relative: &str) -> Result<(String, bool), String> {
+    let result = client
+        .exec(
+            &git_tool(),
+            &[
+                "--no-pager".to_owned(),
+                "diff".to_owned(),
+                "--no-ext-diff".to_owned(),
+                "--no-textconv".to_owned(),
+                "--no-color".to_owned(),
+                "--unified=3".to_owned(),
+                "HEAD".to_owned(),
+                "--".to_owned(),
+                relative.to_owned(),
+            ],
+            5000,
+        )
+        .map_err(|error| error.to_string())?;
+    if result.timed_out {
+        return Err("git diff timed out".to_owned());
+    }
+    if result.exit_code != 0 {
+        return Err(result.stderr);
+    }
+    let mut text = result.stdout;
+    let mut truncated = result.output_truncated;
+    if text.len() > MAX_GIT_DIFF_BYTES {
+        let mut end = MAX_GIT_DIFF_BYTES;
+        while !text.is_char_boundary(end) {
+            end -= 1;
+        }
+        text.truncate(end);
+        truncated = true;
+    }
+    if text.is_empty() {
+        text.push_str("no changes relative to HEAD\n");
+    }
+    Ok((text, truncated))
 }
 
 fn parse_git_diff(output: &str) -> Vec<(usize, char)> {

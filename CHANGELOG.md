@@ -47,6 +47,8 @@ post-`0.5.0` feature line.
 - LSP code lens requests are bounded and rendered as virtual rows above source
   lines, with per-line and viewport truncation; clicking a lens sends
   `workspace/executeCommand` and refreshes the lens set.
+- `:git-diff` opens a bounded read-only unified diff against HEAD; the exec
+  sandbox now permits `chdir`, which Git requires during work-tree setup.
 - workspace sessions restore buffers, cursors, active tab, tree visibility,
   split ratio, and open split panes with focus; dirty buffers use atomic 0600
   swap files with mtime conflict detection, periodic snapshots, and preserved

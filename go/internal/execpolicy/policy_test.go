@@ -41,10 +41,15 @@ func TestValidatesGitDiff(t *testing.T) {
 	if err := Validate("/usr/bin/git", args); err != nil {
 		t.Fatalf("git: %v", err)
 	}
+	args[5] = "--unified=3"
+	if err := Validate("/usr/bin/git", args); err != nil {
+		t.Fatalf("git full diff: %v", err)
+	}
 	for _, bad := range [][]string{
 		{"diff"},
 		{"--no-pager", "show", "HEAD"},
 		{"--no-pager", "diff", "HEAD", "--", "../secret"},
+		{"--no-pager", "diff", "--no-ext-diff", "--no-textconv", "--no-color", "--unified=1", "HEAD", "--", "src/main.go"},
 	} {
 		if err := Validate("/usr/bin/git", bad); !errors.Is(err, ErrInvalidArgs) {
 			t.Fatalf("git %v: got %v", bad, err)

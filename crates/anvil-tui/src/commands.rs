@@ -99,6 +99,7 @@ impl Model {
             ("w", "") => self.queue_effect(Effect::Save),
             ("conflict-recover", "") => self.recover_conflict(),
             ("conflict-discard", "") => self.discard_conflict(),
+            ("git-diff", "") => self.request_git_diff(),
             ("w", path) => self.queue_effect(Effect::SaveAs(path.into())),
             ("wa", "") => self.queue_effect(Effect::SaveAll),
             ("e", path) => self.queue_effect(Effect::Open(path.into())),

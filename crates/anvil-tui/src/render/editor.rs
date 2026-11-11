@@ -7,7 +7,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
     let area = frame.area();
     let editor_view: EditorView = model.editor.snapshot().view();
     let title = if model.help_back.is_some() {
-        "[help]".to_owned()
+        format!("[{}]", model.read_only_title.as_deref().unwrap_or("help"))
     } else {
         let name = if model.stdin_buffer {
             "[stdin]".to_owned()

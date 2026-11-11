@@ -137,7 +137,8 @@ fn buffer_bar_line(model: &Model, width: u16) -> Line<'static> {
         .collect();
     let mut active = model.active.min(tabs.len().saturating_sub(1));
     if model.help_back.is_some() {
-        tabs.push((" [help] RO ".to_owned(), theme::selected()));
+        let name = model.read_only_title.as_deref().unwrap_or("help");
+        tabs.push((format!(" [{name}] RO "), theme::selected()));
         active = tabs.len() - 1;
     }
     if tabs.is_empty() {

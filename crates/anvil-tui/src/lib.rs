@@ -51,6 +51,7 @@ mod file_worker;
 mod folding;
 use folding::{FoldAction, FoldRange};
 mod gateway;
+mod git_diff;
 mod git_gutter;
 mod icon_theme;
 use command_line::CommandCompletion;
@@ -541,6 +542,8 @@ pub struct Model {
     welcome_back: bool,
     /// Buffer replaced by the read-only help page.
     help_back: Option<Buffer>,
+    /// Short title for the current read-only view.
+    read_only_title: Option<String>,
     /// All open buffers, including the active one after the first switch.
     buffers: Vec<Buffer>,
     /// Active buffer index.
@@ -555,6 +558,10 @@ pub struct Model {
     git_checked: Option<(PathBuf, u64)>,
     /// Debounce deadline for the next git diff request.
     git_due: Option<Instant>,
+    /// Latest requested read-only Git diff generation.
+    git_diff_generation: u64,
+    /// Pending Git diff generation, if a request is in flight.
+    git_diff_pending: Option<u64>,
     /// LSP folding ranges for the active buffer.
     folds: Vec<FoldRange>,
     /// Start lines of closed folds.
@@ -713,6 +720,7 @@ impl Model {
             search_query: String::new(),
             search: search::SearchState::default(),
             help_back: None,
+            read_only_title: None,
             buffers: Vec::new(),
             active: 0,
             file_worker: None,
@@ -720,6 +728,8 @@ impl Model {
             git_pending: None,
             git_checked: None,
             git_due: None,
+            git_diff_generation: 0,
+            git_diff_pending: None,
             folds: Vec::new(),
             folded: HashSet::new(),
             fold_revision: None,
@@ -924,7 +934,7 @@ impl Model {
             self.dirty = true;
             true
         } else if self.help_back.is_some() {
-            self.status = "E: help is read-only".to_owned();
+            self.status = "E: read-only view".to_owned();
             self.dirty = true;
             true
         } else {
@@ -933,12 +943,16 @@ impl Model {
     }
 
     fn show_help(&mut self) {
+        self.show_read_only(HELP_TEXT, "Help: :q returns", "help");
+    }
+
+    fn show_read_only(&mut self, text: &str, status: &str, title: &str) -> bool {
         if self.help_back.is_some() {
-            self.status = "Already viewing help".to_owned();
+            self.status = "already viewing a read-only view".to_owned();
             self.dirty = true;
-            return;
+            return false;
         }
-        let editor = std::mem::replace(&mut self.editor, EditorState::from_text(HELP_TEXT).into());
+        let editor = std::mem::replace(&mut self.editor, EditorState::from_text(text).into());
         let saved = Buffer {
             editor,
             path: self.path.take(),
@@ -952,6 +966,7 @@ impl Model {
             search_query: std::mem::take(&mut self.search_query),
             syntax: self.syntax.borrow().active_cache(),
         };
+        self.read_only_title = Some(title.to_owned());
         self.help_back = Some(saved);
         self.syntax.borrow_mut().switch_path(None, true);
         self.cursor = 0;
@@ -962,14 +977,19 @@ impl Model {
         self.welcome = false;
         self.ui.input_mode = InputMode::Normal;
         self.pending = None;
-        self.status = "Help: :q returns".to_owned();
+        self.status = status.to_owned();
         self.dirty = true;
+        true
     }
 
     fn close_help(&mut self) -> bool {
         let Some(saved) = self.help_back.take() else {
             return false;
         };
+        let title = self
+            .read_only_title
+            .take()
+            .unwrap_or_else(|| "help".to_owned());
         let syntax = saved.syntax.clone();
         self.editor = saved.editor;
         self.path = saved.path;
@@ -984,7 +1004,7 @@ impl Model {
         self.ui.input_mode = InputMode::Normal;
         self.welcome = std::mem::take(&mut self.welcome_back);
         self.pending = None;
-        self.status = "Returned from help".to_owned();
+        self.status = format!("Returned from {title}");
         self.dirty = true;
         true
     }

@@ -133,7 +133,9 @@ func validateFd(args []string) error {
 func validateGit(args []string) error {
 	if len(args) != 9 || args[0] != "--no-pager" || args[1] != "diff" ||
 		args[2] != "--no-ext-diff" || args[3] != "--no-textconv" ||
-		args[4] != "--no-color" || args[5] != "--unified=0" || args[6] != "HEAD" || args[7] != "--" {
+		args[4] != "--no-color" ||
+		(args[5] != "--unified=0" && args[5] != "--unified=3") ||
+		args[6] != "HEAD" || args[7] != "--" {
 		return fmt.Errorf("%w: unsupported git command", ErrInvalidArgs)
 	}
 	path := filepath.Clean(args[8])
