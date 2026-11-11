@@ -37,10 +37,18 @@ pub(crate) fn parse(text: &str) -> Vec<PipeLocation> {
 
 fn parse_line(line: &str) -> Option<PipeLocation> {
     let line = line.trim_start();
-    if let Some(rest) = line.strip_prefix("-->") {
-        return parse_colon(rest.trim_start());
-    }
-    parse_parenthesized(line).or_else(|| parse_colon(line))
+    let parsed = if let Some(rest) = line.strip_prefix("-->") {
+        parse_colon(rest.trim_start())
+    } else {
+        parse_colon(line).or_else(|| parse_parenthesized(line))
+    };
+    parsed.filter(|location| plausible_path(&location.path))
+}
+
+fn plausible_path(path: &str) -> bool {
+    !(path.as_bytes().first().is_some_and(u8::is_ascii_digit)
+        && !path.contains('/')
+        && !path.contains('.'))
 }
 
 fn parse_colon(line: &str) -> Option<PipeLocation> {
@@ -315,6 +323,31 @@ mod tests {
                 column: 1,
                 message: "first".to_owned(),
             }]
+        );
+    }
+
+    #[test]
+    fn colon_form_wins_over_parenthesized_text_in_the_message() {
+        let parsed = parse("foo.rs:2:3: error: expected (1,2): value");
+        assert_eq!(
+            parsed,
+            vec![PipeLocation {
+                path: "foo.rs".to_owned(),
+                line: 2,
+                column: 3,
+                message: "error: expected (1,2): value".to_owned(),
+            }]
+        );
+    }
+
+    #[test]
+    fn timestamped_log_lines_are_not_locations() {
+        assert!(parse("2026-11-11T18:08:59 INFO startup").is_empty());
+        assert!(parse("18:08:59 INFO startup").is_empty());
+        assert_eq!(
+            parse("src/2026.rs:1:2: error").len(),
+            1,
+            "numeric file names with a path separator stay valid"
         );
     }
 
