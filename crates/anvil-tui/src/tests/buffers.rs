@@ -114,6 +114,42 @@ fn six_buffers_restore_cached_syntax_while_switching() {
 }
 
 #[test]
+fn open_buffer_spans_survive_global_cache_pressure() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let first = dir.path().join("first.rs");
+    let second = dir.path().join("second.rs");
+    fs::write(&first, "fn first() {}\n").expect("write first");
+    fs::write(&second, "fn second() {}\n").expect("write second");
+
+    let mut model = Model::open(&first).expect("open first");
+    wait_for_syntax(&mut model);
+    model.open_path(&second).expect("open second");
+    wait_for_syntax(&mut model);
+
+    model.syntax.borrow_mut().fill_cache_for_test();
+    model.switch_to_buffer(0);
+    assert!(
+        !model.syntax.borrow().highlights().is_empty(),
+        "first buffer lost spans under cache pressure"
+    );
+    model.switch_to_buffer(1);
+    assert!(
+        !model.syntax.borrow().highlights().is_empty(),
+        "second buffer lost spans under cache pressure"
+    );
+}
+
+fn wait_for_syntax(model: &mut Model) {
+    for _ in 0..200 {
+        model.poll_syntax();
+        if !model.syntax.borrow().highlights().is_empty() {
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    panic!("syntax did not load");
+}
+#[test]
 fn load_buffer_syncs_the_current_buffer_before_switching() {
     let dir = tempfile::tempdir().expect("tempdir");
     let first = dir.path().join("first.txt");

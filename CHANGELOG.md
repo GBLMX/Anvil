@@ -36,6 +36,9 @@ post-`0.5.0` feature line.
 - stable single-instance control socket (`$XDG_RUNTIME_DIR/anvil/control.sock`)
   with peer-UID checks, a held lock file, stale-socket cleanup, allowlisted
   remote commands, and the separate `anvil-ctl` binary.
+- buffers now retain their own syntax spans, so switching back after global
+  cache eviction or a stale parse keeps the last highlights instead of showing
+  plain text (`BUG-010`).
 - `WorkspaceEdit` now applies `documentChanges` create/rename/delete
   operations, checks per-document LSP versions and request-time buffer
   revisions before mutation, and refuses overwriting open buffers or deleting

@@ -15,6 +15,7 @@ impl Model {
             visual_line: self.visual_line,
             modified: self.modified,
             search_query: self.search_query.clone(),
+            syntax: self.syntax.borrow().active_cache(),
         }
     }
 
@@ -41,6 +42,7 @@ impl Model {
         let Some(buffer) = self.buffers.get(index).cloned() else {
             return;
         };
+        let syntax = buffer.syntax.clone();
         self.missing = buffer.missing;
         self.visual_anchor = buffer.visual_anchor;
         self.visual_line = buffer.visual_line;
@@ -56,7 +58,7 @@ impl Model {
         self.welcome_back = false;
         self.syntax
             .borrow_mut()
-            .switch_path(self.path.as_deref(), false);
+            .switch_path_with(self.path.as_deref(), false, Some(syntax));
         self.active = index;
         self.ui.input_mode = InputMode::Normal;
         self.pending = None;
@@ -89,6 +91,7 @@ impl Model {
             hscroll: 0,
             modified: false,
             search_query: String::new(),
+            syntax: Default::default(),
         });
         let index = self.buffers.len() - 1;
         self.load_buffer(index);
@@ -284,6 +287,7 @@ impl Model {
             hscroll: 0,
             modified: false,
             search_query: String::new(),
+            syntax: Default::default(),
         });
         let index = self.buffers.len() - 1;
         self.load_buffer(index);

@@ -176,7 +176,7 @@ pub struct Scope {
     pub label: String,
 }
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct SyntaxCache {
     revision: u64,
     path: Option<PathBuf>,
@@ -364,6 +364,19 @@ impl SyntaxState {
     }
 
     pub fn switch_path(&mut self, path: Option<&Path>, revalidate: bool) {
+        self.switch_path_with(path, revalidate, None);
+    }
+
+    pub fn active_cache(&self) -> SyntaxCache {
+        self.cache.clone()
+    }
+
+    pub fn switch_path_with(
+        &mut self,
+        path: Option<&Path>,
+        revalidate: bool,
+        fallback: Option<SyntaxCache>,
+    ) {
         self.epoch = self.epoch.wrapping_add(1);
         self.in_flight = false;
         if self.cache.path.as_deref() == path {
@@ -373,8 +386,10 @@ impl SyntaxState {
             return;
         }
         let previous = std::mem::take(&mut self.cache);
-        let target = path.and_then(|path| self.cached.take(path));
-        let had_cache = target.is_some();
+        let target = path.and_then(|path| self.cached.take(path)).or_else(|| {
+            fallback.filter(|cache| cache.path.is_some() && cache.path.as_deref() == path)
+        });
+        let had_cache = target.as_ref().is_some_and(|cache| cache.path.is_some());
         let mut next = target.unwrap_or_default();
         if previous.path.is_some() {
             self.remember(previous);
@@ -388,6 +403,18 @@ impl SyntaxState {
 
     fn remember(&mut self, cache: SyntaxCache) {
         self.cached.insert(cache);
+    }
+
+    #[cfg(test)]
+    pub(crate) fn fill_cache_for_test(&mut self) {
+        for index in 0..CACHE_LIMIT + 4 {
+            self.remember(SyntaxCache {
+                revision: 0,
+                path: Some(PathBuf::from(format!("pressure-{index}.rs"))),
+                highlights: Vec::new(),
+                scopes: Vec::new(),
+            });
+        }
     }
 
     /// Returns true when the cache changed and the caller should redraw.
@@ -1085,6 +1112,55 @@ mod tests {
             std::thread::sleep(Duration::from_millis(10));
         }
         assert!(!state.highlights().is_empty());
+    }
+
+    #[test]
+    fn buffer_fallback_survives_global_lru_eviction() {
+        let mut state = SyntaxState::default();
+        let keep = SyntaxCache {
+            revision: 7,
+            path: Some(PathBuf::from("open.rs")),
+            highlights: vec![Highlight {
+                start: 0,
+                end: 2,
+                class: SyntaxClass::Keyword,
+            }],
+            scopes: Vec::new(),
+        };
+        for index in 0..CACHE_LIMIT {
+            state.remember(SyntaxCache {
+                revision: 0,
+                path: Some(PathBuf::from(format!("evicted-{index}.rs"))),
+                highlights: Vec::new(),
+                scopes: Vec::new(),
+            });
+        }
+        state.switch_path_with(Some(Path::new("open.rs")), false, Some(keep));
+        assert_eq!(state.highlights().len(), 1);
+        assert_eq!(state.cache.path.as_deref(), Some(Path::new("open.rs")));
+    }
+
+    #[test]
+    fn stale_fallback_keeps_spans_while_reparsing() {
+        let mut state = SyntaxState::default();
+        let path = Path::new("stale.rs");
+        state.switch_path_with(
+            Some(path),
+            false,
+            Some(SyntaxCache {
+                revision: 1,
+                path: Some(path.to_path_buf()),
+                highlights: vec![Highlight {
+                    start: 0,
+                    end: 2,
+                    class: SyntaxClass::Keyword,
+                }],
+                scopes: Vec::new(),
+            }),
+        );
+        assert_eq!(state.highlights().len(), 1);
+        let _ = state.poll(&text("fn main() {}"), 2, Some(path));
+        assert_eq!(state.highlights().len(), 1);
     }
 
     #[test]

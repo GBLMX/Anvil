@@ -1,8 +1,8 @@
 # Known Issues and Resolved Bugs
 
-Status: BUG-001 through BUG-009 are resolved; BUG-010 is open. This file is
-the regression ledger plus current cross-cutting limitations; active
-implementation work is in the plans linked below.
+Status: BUG-001 through BUG-010 are resolved. This file is the regression
+ledger plus current cross-cutting limitations; active implementation work is
+in the plans linked below.
 
 ## Current limitations
 
@@ -17,16 +17,17 @@ implementation work is in the plans linked below.
 | Configuration | No unified config/theme/icon schema or hot-reload contract | [0.5.x](0.5.x-plan.md) |
 | LSP | Language servers are not bundled or lifecycle-managed | [INSTALL](../INSTALL.md) |
 | Release | Signing, SBOM, and provenance are still pending | [0.6.1](0.6.x-plan.md), [RELEASE](../RELEASE.md) |
-| Syntax highlighting | Background tabs can lose cached spans after idle; open-buffer cache ownership and refresh are under review | [BUG-010](#bug-010-background-tabs-lose-syntax-highlighting-after-idle) |
 
-## Active bugs
+
+## Recently fixed bug
 
 ### BUG-010: Background tabs lose syntax highlighting after idle
 
 - Area: TUI buffer switching and Tree-sitter syntax cache
 - Priority: High
-- Status: Open; recorded 2026-11-09. Not reproduced by the switch-before-result
-  or six-buffer regression tests on 2026-11-11.
+- Status: Fixed 2026-11-11. `Buffer` now retains its own `SyntaxCache`, and
+  `load_buffer` restores it even when the global path cache has been evicted.
+  Deterministic cache-pressure and stale-fallback tests replace the long wait.
 - Reproduction:
   1. Open five or six source files in separate tabs.
   2. Leave most tabs in the background for several minutes.
@@ -93,10 +94,10 @@ implementation work is in the plans linked below.
   - `switching_back_after_a_discarded_result_reparses` passes.
   - `six_buffers_restore_cached_syntax_while_switching` passes with six Rust
     buffers; each buffer restores cached spans immediately on switch.
-  - Add a regression test that fills more than `CACHE_LIMIT` background entries
-    while open buffers must retain their spans.
-  - Add a switch/parse race test with a controllable worker response.
-  - Run the full TUI test suite and a real multi-tab TUI smoke.
+  - `open_buffer_spans_survive_global_cache_pressure` passes after filling the
+    global cache beyond `CACHE_LIMIT`; both open buffers keep their spans.
+  - `buffer_fallback_survives_global_lru_eviction` and
+    `stale_fallback_keeps_spans_while_reparsing` pass.
 
 ## Resolved bug ledger
 

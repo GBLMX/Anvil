@@ -42,6 +42,7 @@ impl Model {
                 modified: false,
                 missing: false,
                 search_query: String::new(),
+                syntax: Default::default(),
             });
             let index = self.buffers.len() - 1;
             self.load_buffer(index);

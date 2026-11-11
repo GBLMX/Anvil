@@ -598,6 +598,7 @@ fn commit_states(model: &mut Model, prepared: HashMap<PathBuf, EditorState>) {
                 hscroll: 0,
                 modified: true,
                 search_query: String::new(),
+                syntax: Default::default(),
             });
         }
     }

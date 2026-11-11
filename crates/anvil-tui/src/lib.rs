@@ -136,6 +136,7 @@ struct Buffer {
     visual_anchor: Option<usize>,
     visual_line: bool,
     search_query: String,
+    syntax: crate::syntax::SyntaxCache,
 }
 
 struct Pane {
@@ -937,8 +938,10 @@ impl Model {
             modified: self.modified,
             missing: self.missing,
             search_query: std::mem::take(&mut self.search_query),
+            syntax: self.syntax.borrow().active_cache(),
         };
         self.help_back = Some(saved);
+        self.syntax.borrow_mut().switch_path(None, true);
         self.cursor = 0;
         self.scroll = 0;
         self.hscroll = 0;
@@ -955,6 +958,7 @@ impl Model {
         let Some(saved) = self.help_back.take() else {
             return false;
         };
+        let syntax = saved.syntax.clone();
         self.editor = saved.editor;
         self.path = saved.path;
         self.cursor = saved.cursor;
@@ -964,7 +968,7 @@ impl Model {
         self.search_query = saved.search_query;
         self.syntax
             .borrow_mut()
-            .switch_path(self.path.as_deref(), false);
+            .switch_path_with(self.path.as_deref(), false, Some(syntax));
         self.ui.input_mode = InputMode::Normal;
         self.welcome = std::mem::take(&mut self.welcome_back);
         self.pending = None;
