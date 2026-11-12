@@ -8,6 +8,8 @@ post-`0.5.0` feature line.
 
 ## [Unreleased]
 ### Added
+- `Alt-1` through `Alt-9` switch directly to the matching open buffer while
+  leaving bare digits available as count prefixes.
 - Started the ADR-0024 state refactor: command palette, settings, theme
   browser, fuzzy, preview, debug panel, test explorer, command completion, and
   command-palette recents, and the pipe-location panel now live under

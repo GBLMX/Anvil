@@ -37,6 +37,35 @@ fn multi_buffer_switch_preserves_per_buffer_state() {
 }
 
 #[test]
+fn alt_digits_select_buffers_and_clear_count() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let first = dir.path().join("first.txt");
+    let second = dir.path().join("second.txt");
+    let third = dir.path().join("third.txt");
+    for path in [&first, &second, &third] {
+        fs::write(path, "text").expect("write buffer");
+    }
+
+    let mut model = Model::open(&first).expect("open first");
+    model.open_path(&second).expect("open second");
+    model.open_path(&third).expect("open third");
+    assert_eq!(model.session.path.as_ref(), Some(&third));
+
+    handle_event(&mut model, alt(KeyCode::Char('2')));
+    assert_eq!(model.session.path.as_ref(), Some(&second));
+    assert_eq!(model.input.count, 0);
+
+    handle_event(&mut model, key(KeyCode::Char('2')));
+    assert_eq!(model.input.count, 2);
+    handle_event(&mut model, alt(KeyCode::Char('3')));
+    assert_eq!(model.session.path.as_ref(), Some(&third));
+    assert_eq!(model.input.count, 0);
+
+    handle_event(&mut model, alt(KeyCode::Char('9')));
+    assert_eq!(model.status.text, "E: no buffer 9");
+}
+
+#[test]
 fn switching_buffers_preserves_visual_selection() {
     let dir = tempfile::tempdir().expect("tempdir");
     let first = dir.path().join("first.txt");

@@ -33,6 +33,28 @@ impl Model {
         self.load_buffer(index);
     }
 
+    pub(crate) fn select_buffer(&mut self, index: usize) {
+        if self.pager.back.is_some() {
+            let _ = self.close_help();
+        }
+        let len = self.buffers.entries.len();
+        if index >= len {
+            self.status.text = format!("E: no buffer {}", index + 1);
+            self.file.dirty = true;
+            return;
+        }
+        if index != self.buffers.active {
+            if !self.auto_save_before_focus_change() {
+                return;
+            }
+            self.sync_active();
+            self.load_buffer(index);
+        }
+        let name = self.buffer_name(index);
+        self.status.text = format!("buffer {}/{}: {name}", index + 1, len);
+        self.file.dirty = true;
+    }
+
     pub(crate) fn load_buffer(&mut self, index: usize) {
         self.clear_lsp_requests();
         self.overlays.lsp_results.hover = None;

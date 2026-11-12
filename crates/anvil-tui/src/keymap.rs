@@ -45,6 +45,7 @@ pub(crate) enum NormalCommand {
     JumpBack,
     JumpForward,
     Count(char),
+    SelectBuffer(usize),
     MoveHome,
     MoveEnd,
     MoveWords(WordMotion),
@@ -98,8 +99,8 @@ impl NormalCommand {
             MoveLine(-1) => Some(command::CURSOR_UP),
             MoveLine(_) => None,
             MoveFileEnd => Some(command::CURSOR_FILE_END),
-            Pending(_) | RegisterWait | Count(_) | LocationNext | LocationPrevious
-            | OpenLocation => None,
+            Pending(_) | RegisterWait | Count(_) | SelectBuffer(_) | LocationNext
+            | LocationPrevious | OpenLocation => None,
         }
     }
 
@@ -195,6 +196,10 @@ pub(crate) fn normal_action(key: KeyPress, count: usize) -> Option<NormalCommand
         KeyCode::Char('u') if text_input => Some(NormalCommand::Undo),
         KeyCode::Char('r') if key.ctrl() => Some(NormalCommand::Redo),
         KeyCode::Char('.') if text_input => Some(NormalCommand::RepeatChange),
+        KeyCode::Char(character) if key.alt() && character.is_ascii_digit() => {
+            let digit = character as u8 - b'0';
+            (digit > 0).then_some(NormalCommand::SelectBuffer((digit - 1) as usize))
+        }
         KeyCode::Char('0') if text_input && count == 0 => Some(NormalCommand::MoveHome),
         KeyCode::Char(character) if text_input && character.is_ascii_digit() => {
             Some(NormalCommand::Count(character))

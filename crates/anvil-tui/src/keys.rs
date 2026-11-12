@@ -308,6 +308,10 @@ fn execute_normal_command(model: &mut Model, command: NormalCommand) {
         NormalCommand::JumpBack => model.jump_back(),
         NormalCommand::JumpForward => model.jump_forward(),
         NormalCommand::Count(character) => model.push_count(character),
+        NormalCommand::SelectBuffer(index) => {
+            let _ = model.take_count();
+            model.select_buffer(index);
+        }
         NormalCommand::MoveHome => model.move_home(),
         NormalCommand::MoveEnd => model.move_end(),
         NormalCommand::MoveWords(motion) => model.move_words(motion),
