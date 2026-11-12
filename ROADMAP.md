@@ -46,11 +46,12 @@ Version is frozen at **0.6.0** for long-term internal feature polish.
 
 ## Remaining internal polish
 
-P0/P1 items are complete; the remaining follow-ups are:
+P0/P1 items are complete. Cross-root file tree/search UX is landed, including
+root labels, secondary-root refresh, untrusted roots, and root-removal cleanup.
+The remaining follow-ups are:
 
-1. Cross-root file tree and search UX.
-2. Auto-save policy; swap files and external-conflict recovery already landed.
-3. Persistent undo decision; rejected for the current phase.
+1. Auto-save policy; swap files and external-conflict recovery already landed.
+2. Persistent undo decision; rejected for the current phase.
 
 Completion snippet mirrors/ranking and code lens are landed; see
 [docs/internal-polish-plan.md](docs/internal-polish-plan.md).

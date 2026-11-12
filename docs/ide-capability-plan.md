@@ -54,8 +54,9 @@ remains the P1 follow-up tracked in
   Admin-gated `:terminal*` controls, interactive bottom panel with key/paste
   routing, and process-group cleanup landed.
 - Multi-root workspaces with per-root gateway/trust policy: routing/trust core,
-  trust-gated per-root gateways, `:workspace-*` commands, and owning-root
-  open/save routing landed. Cross-root tree/search UX remains a follow-up.
+  trust-gated per-root gateways, `:workspace-*` commands, owning-root
+  open/save routing, cross-root tree/search UX, root labels, and root-removal
+  cleanup landed.
 - Code folding with session persistence.
 - Auto-save policy remains; swap files and external-conflict recovery landed.
 The LSP surface, missing goto variants, language allowlist, large-file
