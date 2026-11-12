@@ -8,9 +8,9 @@ impl Model {
             editor: self.editor.clone(),
             path: self.path.clone(),
             cursor: self.cursor,
-            scroll: self.scroll,
+            scroll: self.view.scroll,
             missing: self.missing,
-            hscroll: self.hscroll,
+            hscroll: self.view.hscroll,
             visual_anchor: self.visual_anchor,
             visual_line: self.visual_line,
             modified: self.modified,
@@ -49,8 +49,8 @@ impl Model {
         self.editor = buffer.editor;
         self.path = buffer.path;
         self.cursor = buffer.cursor;
-        self.scroll = buffer.scroll;
-        self.hscroll = buffer.hscroll;
+        self.view.scroll = buffer.scroll;
+        self.view.hscroll = buffer.hscroll;
         self.modified = buffer.modified;
         self.search_query = buffer.search_query;
         self.search.reset_for_buffer();
@@ -227,8 +227,8 @@ impl Model {
         self.editor = EditorState::from_text("").into();
         self.path = None;
         self.cursor = 0;
-        self.scroll = 0;
-        self.hscroll = 0;
+        self.view.scroll = 0;
+        self.view.hscroll = 0;
         self.modified = false;
         self.missing = false;
         self.visual_anchor = None;

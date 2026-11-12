@@ -337,8 +337,8 @@ pub fn view(model: &Model, frame: &mut Frame) {
         render_pipe_locations(model, frame, area);
     }
     let visible_end =
-        (model.scroll + usize::from(content.height)).min(model.editor.index().len_lines());
-    for line_number in model.scroll..visible_end {
+        (model.view.scroll + usize::from(content.height)).min(model.editor.index().len_lines());
+    for line_number in model.view.scroll..visible_end {
         let Some(start) = model.editor.index().line_to_offset(line_number) else {
             continue;
         };
@@ -362,14 +362,14 @@ pub fn view(model: &Model, frame: &mut Frame) {
         };
         for level in 1..=columns / 4 {
             let column = level * 4;
-            if column >= columns || column < model.hscroll {
+            if column >= columns || column < model.view.hscroll {
                 continue;
             }
             let Some(row) = model.row_of_source_line(line_number, usize::from(content.height))
             else {
                 continue;
             };
-            let x = text_area.x + (column - model.hscroll) as u16;
+            let x = text_area.x + (column - model.view.hscroll) as u16;
             let y = content.y + row as u16;
             if x < text_area.right() && y < text_area.bottom() {
                 frame.render_widget(
@@ -438,7 +438,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
         ) {
             let base = model
                 .position_at_visible_row(row)
-                .map_or(model.hscroll, |(_, base)| base);
+                .map_or(model.view.hscroll, |(_, base)| base);
             let x = text_area.x + position.display_column.saturating_sub(base) as u16;
             let y = content.y + row as u16;
             if x < content.right() && y < content.bottom() {
@@ -449,10 +449,10 @@ pub fn view(model: &Model, frame: &mut Frame) {
     for selection in editor_view.selections.iter().skip(1) {
         let line = selection.head.line as usize;
         let column = selection.head.display_column as usize;
-        if line < model.scroll || column < model.hscroll {
+        if line < model.view.scroll || column < model.view.hscroll {
             continue;
         }
-        let x = text_area.x + (column - model.hscroll) as u16;
+        let x = text_area.x + (column - model.view.hscroll) as u16;
         let Some(row) = model.row_of_position(line, column, usize::from(content.height)) else {
             continue;
         };
@@ -474,7 +474,10 @@ pub fn view(model: &Model, frame: &mut Frame) {
         }
     }
     if let Some(split) = &model.buffers.split {
-        let half = content.width.saturating_mul(model.split_ratio.min(100)) / 100;
+        let half = content
+            .width
+            .saturating_mul(model.view.split_ratio.min(100))
+            / 100;
         let split_area = if model.ui.focus.split {
             Rect {
                 width: half,
@@ -771,7 +774,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
             .unwrap_or(0);
         let cursor_y = area
             .y
-            .saturating_add(cursor_line.saturating_sub(model.scroll as u16))
+            .saturating_add(cursor_line.saturating_sub(model.view.scroll as u16))
             .min(area.y + area.height.saturating_sub(1));
         if let Some(popup) = diagnostic_peek_rect(area, cursor_y, width, height) {
             frame.render_widget(Clear, popup);

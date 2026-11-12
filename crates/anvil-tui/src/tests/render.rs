@@ -39,7 +39,7 @@ fn markdown_fenced_code_renders_a_full_width_background() {
 fn fenced_code_background_reaches_right_edge_when_hscrolled() {
     let mut model = Model::new(EditorState::from_text("```rust\nfn main() {}\n```\n"), None);
     model.path = Some(PathBuf::from("x.md"));
-    model.hscroll = 1;
+    model.view.hscroll = 1;
     for _ in 0..100 {
         model.poll_syntax();
         if model
@@ -164,8 +164,8 @@ fn switching_theme_repaints_backgrounds() {
 #[test]
 fn mouse_hit_test_boundaries_and_cjk_snap() {
     let mut model = Model::new(EditorState::from_text("你好"), None);
-    model.viewport_width = 20;
-    model.viewport_height = 8;
+    model.view.viewport_width = 20;
+    model.view.viewport_height = 8;
     let _ = mouse_hit_boundary(&model, 0, 0, 20, 8);
     let _ = mouse_hit_boundary(&model, 19, 7, 20, 8);
     let _ = mouse_hit_boundary(&model, 20, 8, 20, 8);
@@ -183,8 +183,8 @@ fn mouse_hit_test_boundaries_and_cjk_snap() {
 #[test]
 fn dragging_outside_then_keyboard_resets_pointer() {
     let mut model = Model::new(EditorState::from_text("abc"), None);
-    model.viewport_width = 20;
-    model.viewport_height = 8;
+    model.view.viewport_width = 20;
+    model.view.viewport_height = 8;
     let down = crossterm::event::MouseEvent {
         kind: crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left),
         column: 5,
@@ -200,11 +200,11 @@ fn dragging_outside_then_keyboard_resets_pointer() {
     handle_event(&mut model, Event::Mouse(down));
     handle_event(&mut model, Event::Mouse(drag));
     assert!(matches!(
-        model.pointer,
+        model.view.pointer,
         crate::mouse::PointerState::Dragging(_)
     ));
     handle_event(&mut model, key(KeyCode::Char('j')));
-    assert_eq!(model.pointer, crate::mouse::PointerState::Idle);
+    assert_eq!(model.view.pointer, crate::mouse::PointerState::Idle);
 }
 
 #[test]
@@ -213,8 +213,8 @@ fn clicking_outside_peek_restores_focus() {
         EditorState::from_text("one"),
         Some(PathBuf::from("diag.rs")),
     );
-    model.viewport_width = 40;
-    model.viewport_height = 12;
+    model.view.viewport_width = 40;
+    model.view.viewport_height = 12;
     model
         .language
         .diagnostics
@@ -236,8 +236,8 @@ fn clicking_outside_peek_restores_focus() {
 #[test]
 fn dragging_split_handle_updates_ratio() {
     let mut model = Model::new(EditorState::from_text("abc"), None);
-    model.viewport_width = 40;
-    model.viewport_height = 12;
+    model.view.viewport_width = 40;
+    model.view.viewport_height = 12;
     model.split_vertical();
     let down = crossterm::event::MouseEvent {
         kind: crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left),
@@ -253,7 +253,7 @@ fn dragging_split_handle_updates_ratio() {
     };
     handle_event(&mut model, Event::Mouse(down));
     handle_event(&mut model, Event::Mouse(drag));
-    assert!(model.split_ratio > 50);
+    assert!(model.view.split_ratio > 50);
 }
 
 fn mouse_hit_boundary(
@@ -287,8 +287,8 @@ fn location_panel_rows_are_mouse_targets() {
 #[test]
 fn tree_visible_drag_keeps_editor_origin() {
     let mut model = Model::new(EditorState::from_text("abc\ndef"), None);
-    model.viewport_width = 80;
-    model.viewport_height = 12;
+    model.view.viewport_width = 80;
+    model.view.viewport_height = 12;
     model.tree.visible = true;
     let press = crossterm::event::MouseEvent {
         kind: crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left),
@@ -311,8 +311,8 @@ fn tree_visible_drag_keeps_editor_origin() {
 #[test]
 fn tree_visible_split_resize_uses_editor_width() {
     let mut model = Model::new(EditorState::from_text("abc"), None);
-    model.viewport_width = 80;
-    model.viewport_height = 12;
+    model.view.viewport_width = 80;
+    model.view.viewport_height = 12;
     model.tree.visible = true;
     model.split_vertical();
     let press = crossterm::event::MouseEvent {
@@ -329,7 +329,7 @@ fn tree_visible_split_resize_uses_editor_width() {
     };
     handle_event(&mut model, Event::Mouse(press));
     handle_event(&mut model, Event::Mouse(drag));
-    assert_eq!(model.split_ratio, 58);
+    assert_eq!(model.view.split_ratio, 58);
 }
 
 #[test]
@@ -432,7 +432,7 @@ fn long_line_cursor_at_end_render_stays_bounded() {
     let text = "x".repeat(megabytes * 1024 * 1024);
     let mut model = Model::new(EditorState::from_text(&text), None);
     model.cursor = text.len();
-    model.hscroll = text.len().saturating_sub(100);
+    model.view.hscroll = text.len().saturating_sub(100);
     let mut terminal = Terminal::new(TestBackend::new(120, 40)).expect("terminal");
     let start = std::time::Instant::now();
     terminal.draw(|frame| view(&model, frame)).expect("draw");
@@ -453,7 +453,7 @@ fn diagnostics_follow_horizontal_window() {
         EditorState::from_text("abcdefghij"),
         Some(PathBuf::from("diag.rs")),
     );
-    model.hscroll = 5;
+    model.view.hscroll = 5;
     model.language.diagnostics.by_path.insert(
         PathBuf::from("diag.rs"),
         vec![lsp::Diagnostic {
@@ -488,7 +488,7 @@ fn diagnostics_follow_horizontal_window() {
 #[test]
 fn inlay_hints_follow_horizontal_window() {
     let mut model = Model::new(EditorState::from_text("abcdefghij"), None);
-    model.hscroll = 5;
+    model.view.hscroll = 5;
     model.overlays.lsp_results.inlay_hints = vec![
         InlayHint {
             line: 0,
@@ -548,16 +548,16 @@ fn wheel_scrolls_the_pane_under_the_pointer() {
         modifiers: crossterm::event::KeyModifiers::NONE,
     };
     assert!(crate::mouse::handle_mouse(&mut model, scroll(60), 80, 24));
-    assert_eq!(model.scroll, 0);
+    assert_eq!(model.view.scroll, 0);
     assert_eq!(
         model.buffers.split.as_ref().expect("split").buffer.scroll,
         1
     );
 
     model.focus_split(true);
-    assert_eq!(model.scroll, 1);
+    assert_eq!(model.view.scroll, 1);
     assert!(crate::mouse::handle_mouse(&mut model, scroll(5), 80, 24));
-    assert_eq!(model.scroll, 1);
+    assert_eq!(model.view.scroll, 1);
     assert_eq!(
         model.buffers.split.as_ref().expect("split").buffer.scroll,
         1

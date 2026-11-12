@@ -790,9 +790,9 @@ fn fuzzy_preview_lines(model: &Model) -> Vec<Line<'static>> {
 }
 pub(crate) fn apply_code_block_background(model: &Model, lines: &mut [Line<'_>], width: u16) {
     let current = model.current_line();
-    let target = usize::from(width).saturating_add(model.hscroll);
+    let target = usize::from(width).saturating_add(model.view.hscroll);
     for (offset, line) in lines.iter_mut().enumerate() {
-        let line_number = model.scroll + offset;
+        let line_number = model.view.scroll + offset;
         if !model.line_in_code_block(line_number) {
             continue;
         }

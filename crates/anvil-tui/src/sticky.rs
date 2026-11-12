@@ -79,7 +79,7 @@ pub(crate) fn render(model: &Model, frame: &mut Frame, area: Rect) {
     if area.height == 0 {
         return;
     }
-    let Some(symbol) = model.sticky_context(model.scroll) else {
+    let Some(symbol) = model.sticky_context(model.view.scroll) else {
         return;
     };
     let indent = "  ".repeat(symbol.depth.min(STICKY_MAX_DEPTH));
@@ -151,7 +151,7 @@ mod tests {
         let mut model = Model::new(EditorState::from_text("a\nb\nc\nd\ne"), Some(path.clone()));
         model.overlays.lsp_results.sticky_symbols_path = Some(path);
         model.overlays.lsp_results.sticky_symbols = vec![symbol("fn run", 1, 1)];
-        model.scroll = 2;
+        model.view.scroll = 2;
         let backend = ratatui::backend::TestBackend::new(40, 6);
         let mut terminal = ratatui::Terminal::new(backend).expect("terminal");
         terminal

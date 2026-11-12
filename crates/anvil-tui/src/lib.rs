@@ -439,6 +439,36 @@ struct ProjectState {
     replace_pending: Option<u64>,
 }
 
+pub struct ViewState {
+    /// First visible line, independent of the cursor.
+    pub scroll: usize,
+    /// First visible display column.
+    pub hscroll: usize,
+    viewport_height: u16,
+    viewport_width: u16,
+    split_ratio: u16,
+    pointer: mouse::PointerState,
+    /// Text-area width used by the soft-wrap projection.
+    wrap_width: usize,
+    /// Wrapped segment offset within the first visible source line.
+    scroll_subrow: usize,
+}
+
+impl Default for ViewState {
+    fn default() -> Self {
+        Self {
+            scroll: 0,
+            hscroll: 0,
+            viewport_height: 24,
+            viewport_width: 80,
+            split_ratio: 50,
+            pointer: mouse::PointerState::Idle,
+            wrap_width: 80,
+            scroll_subrow: 0,
+        }
+    }
+}
+
 #[derive(Default)]
 struct AppearanceState {
     /// Project-local icon overrides from `.anvil.toml`.
@@ -792,10 +822,8 @@ pub struct Model {
     /// Whether the visual adapter selects whole lines.
     visual_line: bool,
     modal_layer: Option<ModalLayer>,
-    /// First visible line, independent of the cursor.
-    pub scroll: usize,
-    /// First visible display column.
-    pub hscroll: usize,
+    /// Viewport, scrolling, wrap, pointer, and split ratio.
+    pub view: ViewState,
     /// Input state.
     pub ui: UiState,
     /// Last successful semantic change for `.`.
@@ -821,10 +849,6 @@ pub struct Model {
     busy_progress: Option<u64>,
     /// Spinner frame for the busy label.
     spinner: usize,
-    viewport_height: u16,
-    viewport_width: u16,
-    split_ratio: u16,
-    pointer: mouse::PointerState,
     /// Pending normal-mode operator (`d` or `y`).
     pending: Option<char>,
     /// Deadline for a pending Space leader.
@@ -870,10 +894,6 @@ pub struct Model {
     settings: Settings,
     /// Icon and theme persistence state.
     appearance: AppearanceState,
-    /// Text-area width used by the soft-wrap projection.
-    wrap_width: usize,
-    /// Wrapped segment offset within the first visible source line.
-    scroll_subrow: usize,
     /// Dirty swap files that must survive a source conflict.
     conflict_swaps: HashMap<PathBuf, PathBuf>,
     /// Paths changed by a multi-file replace whose buffer reload failed.
@@ -927,8 +947,7 @@ impl Model {
             visual_anchor: None,
             visual_line: false,
             modal_layer: None,
-            scroll: 0,
-            hscroll: 0,
+            view: ViewState::default(),
             ui: UiState::default(),
             last_change: None,
             insert_session: None,
@@ -942,10 +961,6 @@ impl Model {
             busy: None,
             busy_progress: None,
             spinner: 0,
-            viewport_height: 24,
-            viewport_width: 80,
-            split_ratio: 50,
-            pointer: mouse::PointerState::Idle,
             pending: None,
             leader_deadline: None,
             count: 0,
@@ -979,8 +994,6 @@ impl Model {
                 persist_theme: !cfg!(test),
                 ..Default::default()
             },
-            wrap_width: 80,
-            scroll_subrow: 0,
             conflict_swaps: HashMap::new(),
             stale_paths: HashSet::new(),
             stdin_buffer: false,
@@ -1195,8 +1208,8 @@ impl Model {
             editor,
             path: self.path.take(),
             cursor: self.cursor,
-            scroll: self.scroll,
-            hscroll: self.hscroll,
+            scroll: self.view.scroll,
+            hscroll: self.view.hscroll,
             visual_anchor: self.visual_anchor,
             visual_line: self.visual_line,
             modified: self.modified,
@@ -1209,8 +1222,8 @@ impl Model {
         self.clear_git_gutter();
         self.syntax.borrow_mut().switch_path(None, true);
         self.cursor = 0;
-        self.scroll = 0;
-        self.hscroll = 0;
+        self.view.scroll = 0;
+        self.view.hscroll = 0;
         self.modified = false;
         self.welcome_back = self.welcome;
         self.welcome = false;
@@ -1230,8 +1243,8 @@ impl Model {
         self.editor = EditorState::from_text(text).into();
         self.syntax.borrow_mut().switch_path(None, true);
         self.cursor = 0;
-        self.scroll = 0;
-        self.hscroll = 0;
+        self.view.scroll = 0;
+        self.view.hscroll = 0;
         self.modified = false;
         self.buffers.read_only_title = Some(title.to_owned());
         self.status = status.to_owned();
@@ -1258,8 +1271,8 @@ impl Model {
         self.editor = saved.editor;
         self.path = saved.path;
         self.cursor = saved.cursor;
-        self.scroll = saved.scroll;
-        self.hscroll = saved.hscroll;
+        self.view.scroll = saved.scroll;
+        self.view.hscroll = saved.hscroll;
         self.modified = saved.modified;
         self.search_query = saved.search_query;
         self.syntax

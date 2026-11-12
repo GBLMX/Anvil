@@ -22,14 +22,19 @@ pub(crate) fn handle_event(model: &mut Model, event: Event) {
     };
     match event {
         Event::Key(key) if is_action_key(&key) => {
-            if matches!(model.pointer, mouse::PointerState::Dragging(_)) {
-                model.pointer = mouse::PointerState::Idle;
+            if matches!(model.view.pointer, mouse::PointerState::Dragging(_)) {
+                model.view.pointer = mouse::PointerState::Idle;
             }
             model.syntax.borrow_mut().note_activity();
             handle_key(model, KeyPress::from_key(key));
         }
         Event::Mouse(mouse) => {
-            mouse::handle_mouse(model, mouse, model.viewport_width, model.viewport_height);
+            mouse::handle_mouse(
+                model,
+                mouse,
+                model.view.viewport_width,
+                model.view.viewport_height,
+            );
         }
         Event::Paste(text) => {
             #[cfg(unix)]

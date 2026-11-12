@@ -189,8 +189,8 @@ impl Model {
                     .apply_transaction(vec![(0..end, text.to_owned())]);
                 self.editor.set_selection_bytes(0, 0);
                 self.cursor = 0;
-                self.scroll = 0;
-                self.hscroll = 0;
+                self.view.scroll = 0;
+                self.view.hscroll = 0;
                 if changed {
                     self.modified = true;
                 }

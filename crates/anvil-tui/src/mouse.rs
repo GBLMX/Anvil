@@ -72,7 +72,7 @@ pub(crate) fn handle_mouse(model: &mut Model, mouse: MouseEvent, width: u16, hei
                     let offset = offset_for_position(model, line, column);
                     model.cursor = offset;
                     model.editor.set_selection_bytes(offset, offset);
-                    model.pointer = PointerState::Pressed(DragKind::Editor { anchor: offset });
+                    model.view.pointer = PointerState::Pressed(DragKind::Editor { anchor: offset });
                     model.dirty = true;
                 }
                 Target::Tree(index) => {
@@ -96,7 +96,7 @@ pub(crate) fn handle_mouse(model: &mut Model, mouse: MouseEvent, width: u16, hei
                     model.focus_editor();
                 }
                 Target::SplitHandle => {
-                    model.pointer = PointerState::Pressed(DragKind::Split);
+                    model.view.pointer = PointerState::Pressed(DragKind::Split);
                     model.dirty = true;
                 }
                 Target::Breadcrumb(crate::breadcrumbs::BreadcrumbTarget::Path) => {
@@ -115,15 +115,15 @@ pub(crate) fn handle_mouse(model: &mut Model, mouse: MouseEvent, width: u16, hei
                     }
                 }
                 Target::Status | Target::Outside => {
-                    model.pointer = PointerState::Idle;
+                    model.view.pointer = PointerState::Idle;
                 }
             }
             true
         }
         MouseEventKind::Drag(MouseButton::Left) => {
-            match model.pointer {
+            match model.view.pointer {
                 PointerState::Pressed(kind) | PointerState::Dragging(kind) => {
-                    model.pointer = PointerState::Dragging(kind);
+                    model.view.pointer = PointerState::Dragging(kind);
                     match kind {
                         DragKind::Editor { anchor } => {
                             edge_scroll(model, mouse.row, height);
@@ -137,7 +137,7 @@ pub(crate) fn handle_mouse(model: &mut Model, mouse: MouseEvent, width: u16, hei
                         }
                         DragKind::Split => {
                             if let Some(inner) = editor_area(model, width, height) {
-                                model.split_ratio = split_ratio_at(inner, mouse.column);
+                                model.view.split_ratio = split_ratio_at(inner, mouse.column);
                             }
                         }
                     }
@@ -148,7 +148,7 @@ pub(crate) fn handle_mouse(model: &mut Model, mouse: MouseEvent, width: u16, hei
             true
         }
         MouseEventKind::Up(MouseButton::Left) => {
-            model.pointer = PointerState::Idle;
+            model.view.pointer = PointerState::Idle;
             true
         }
         MouseEventKind::ScrollUp | MouseEventKind::ScrollDown => {
@@ -179,7 +179,8 @@ pub(crate) fn handle_mouse(model: &mut Model, mouse: MouseEvent, width: u16, hei
                             .saturating_add_signed(delta as isize * 3);
                     }
                 } else {
-                    model.hscroll = model.hscroll.saturating_add_signed(delta as isize * 3);
+                    model.view.hscroll =
+                        model.view.hscroll.saturating_add_signed(delta as isize * 3);
                 }
             } else if split_target {
                 model.scroll_split_rows(delta as isize);
@@ -187,7 +188,8 @@ pub(crate) fn handle_mouse(model: &mut Model, mouse: MouseEvent, width: u16, hei
                 let text_width = pane_width.saturating_sub(model.gutter_width());
                 model.scroll_display_rows_in_pane(delta as isize, text_width);
             } else {
-                model.scroll = model
+                model.view.scroll = model
+                    .view
                     .scroll
                     .saturating_add_signed(delta as isize)
                     .min(model.editor.index().len_lines().saturating_sub(1));
@@ -259,14 +261,14 @@ pub(crate) fn hit_test(model: &Model, col: u16, row: u16, width: u16, height: u1
     if row == height.saturating_sub(1) {
         return Target::Status;
     }
-    let split_x = split_x(editor_inner, model.split_ratio);
+    let split_x = split_x(editor_inner, model.view.split_ratio);
     if model.buffers.split.is_some() && col.abs_diff(split_x) <= 1 {
         return Target::SplitHandle;
     }
     let (side, line, column) = editor_position_at(model, col, row, width, height).unwrap_or((
         Side::Left,
-        model.scroll,
-        model.hscroll,
+        model.view.scroll,
+        model.view.hscroll,
     ));
     Target::Editor { side, line, column }
 }
@@ -326,7 +328,7 @@ fn split_x(inner: Rect, ratio: u16) -> u16 {
 }
 
 fn pane_at(model: &Model, inner: Rect, col: u16) -> (Side, u16, u16) {
-    let split_x = split_x(inner, model.split_ratio);
+    let split_x = split_x(inner, model.view.split_ratio);
     if model.buffers.split.is_some() {
         if col < split_x {
             (Side::Left, inner.x, split_x.saturating_sub(inner.x))
@@ -422,7 +424,7 @@ fn inside_overlay(model: &Model, col: u16, row: u16, area: Rect) -> bool {
             .unwrap_or(0);
         let cursor_y = area
             .y
-            .saturating_add(cursor_line.saturating_sub(model.scroll as u16))
+            .saturating_add(cursor_line.saturating_sub(model.view.scroll as u16))
             .min(area.y + area.height.saturating_sub(1));
         let width = (area.width * 2 / 3)
             .max(30)
@@ -505,9 +507,10 @@ fn focus_editor_side(model: &mut Model, side: Side) {
 
 fn edge_scroll(model: &mut Model, row: u16, height: u16) {
     if row <= 1 {
-        model.scroll = model.scroll.saturating_sub(1);
+        model.view.scroll = model.view.scroll.saturating_sub(1);
     } else if row + 2 >= height {
-        model.scroll = model
+        model.view.scroll = model
+            .view
             .scroll
             .saturating_add(1)
             .min(model.editor.index().len_lines().saturating_sub(1));

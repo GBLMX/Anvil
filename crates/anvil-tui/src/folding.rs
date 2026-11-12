@@ -223,10 +223,10 @@ impl Model {
 
     pub(crate) fn normalize_scroll(&mut self) {
         let total = self.editor.index().len_lines();
-        self.scroll = self
-            .first_visible_line(self.scroll)
+        self.view.scroll = self
+            .first_visible_line(self.view.scroll)
             .min(total.saturating_sub(1));
-        self.scroll_subrow = 0;
+        self.view.scroll_subrow = 0;
     }
 
     pub(crate) fn open_fold_containing(&mut self, line: usize) {
@@ -338,9 +338,9 @@ mod tests {
             })
             .collect();
         assert_eq!(texts[2], "5");
-        model.scroll = 2;
+        model.view.scroll = 2;
         model.normalize_scroll();
-        assert_eq!(model.scroll, 5);
+        assert_eq!(model.view.scroll, 5);
         model.toggle_fold_line(2);
         assert!(!model.is_line_hidden(2));
     }

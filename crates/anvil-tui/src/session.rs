@@ -78,7 +78,7 @@ pub(crate) fn restore(model: &mut Model, workspace: &Path) -> Result<bool, Strin
     model.buffers.active = state
         .active
         .min(model.buffers.entries.len().saturating_sub(1));
-    model.split_ratio = state.split_ratio.min(100);
+    model.view.split_ratio = state.split_ratio.min(100);
     model.tree.visible = state.tree_visible;
     model.tree.show_hidden = state.show_hidden;
     let index = model.buffers.active;
@@ -187,8 +187,8 @@ impl Model {
         };
         self.editor = EditorState::from_text(&text).into();
         self.cursor = 0;
-        self.scroll = 0;
-        self.hscroll = 0;
+        self.view.scroll = 0;
+        self.view.hscroll = 0;
         self.editor.set_selection_bytes(0, 0);
         self.modified = true;
         self.missing = false;
@@ -319,7 +319,7 @@ pub(crate) fn save(model: &mut Model, workspace: &Path) -> Result<(), String> {
         buffers: saved,
         split,
         split_focus: model.ui.focus.split,
-        split_ratio: model.split_ratio,
+        split_ratio: model.view.split_ratio,
         tree_visible: model.tree.visible,
         show_hidden: model.tree.show_hidden,
         folded: model.overlays.lsp_results.folded.iter().copied().collect(),

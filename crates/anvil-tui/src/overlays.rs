@@ -127,7 +127,7 @@ impl Model {
     }
 
     pub(crate) fn scroll_diagnostic_peek(&mut self, delta: isize) {
-        let visible = usize::from(self.viewport_height.saturating_sub(4)).clamp(1, 10);
+        let visible = usize::from(self.view.viewport_height.saturating_sub(4)).clamp(1, 10);
         if let Some(peek) = self.ui.diagnostic_peek.as_mut() {
             peek.scroll = peek
                 .scroll

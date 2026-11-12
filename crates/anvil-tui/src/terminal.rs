@@ -95,8 +95,8 @@ pub fn run_with_input(
         model.editor = EditorState::from_text(&text).into();
         model.path = None;
         model.cursor = 0;
-        model.scroll = 0;
-        model.hscroll = 0;
+        model.view.scroll = 0;
+        model.view.hscroll = 0;
         model.modified = false;
         model.missing = false;
         model.set_stdin_buffer(read_only);
@@ -237,8 +237,8 @@ pub fn run_with_input(
             insert_cursor = Some(wants_bar);
         }
         let size = terminal.terminal.size()?;
-        model.viewport_height = size.height;
-        model.viewport_width = size.width;
+        model.view.viewport_height = size.height;
+        model.view.viewport_width = size.width;
         #[cfg(unix)]
         model.resize_terminal();
         model.ensure_cursor_visible(size.height.saturating_sub(2), size.width.saturating_sub(2));

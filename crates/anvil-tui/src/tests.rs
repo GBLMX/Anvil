@@ -201,17 +201,17 @@ fn split_panes_keep_independent_cursors() {
     assert!(model.ui.focus.split);
     assert_eq!(model.cursor, 1);
     model.cursor = 5;
-    model.scroll = 2;
-    model.hscroll = 3;
+    model.view.scroll = 2;
+    model.view.hscroll = 3;
     model.focus_split(false);
     assert!(!model.ui.focus.split);
     assert_eq!(model.cursor, 1);
-    assert_eq!(model.scroll, 0);
-    assert_eq!(model.hscroll, 0);
+    assert_eq!(model.view.scroll, 0);
+    assert_eq!(model.view.hscroll, 0);
     model.focus_split(true);
     assert_eq!(model.cursor, 5);
-    assert_eq!(model.scroll, 2);
-    assert_eq!(model.hscroll, 3);
+    assert_eq!(model.view.scroll, 2);
+    assert_eq!(model.view.hscroll, 3);
 }
 
 #[test]
@@ -405,10 +405,10 @@ fn cursor_and_viewport_are_independent() {
     let mut model = Model::new(EditorState::from_text("a\nb\nc\nd"), None);
     model.move_line(3);
     model.ensure_cursor_visible(2, 80);
-    assert_eq!(model.scroll, 2);
+    assert_eq!(model.view.scroll, 2);
     model.move_line(-1);
     model.ensure_cursor_visible(2, 80);
-    assert_eq!(model.scroll, 2);
+    assert_eq!(model.view.scroll, 2);
 }
 
 #[test]
@@ -416,10 +416,10 @@ fn horizontal_scroll_follows_the_cursor() {
     let mut model = Model::new(EditorState::from_text("0123456789"), None);
     model.cursor = 8;
     model.ensure_cursor_visible(1, 4);
-    assert_eq!(model.hscroll, 5);
+    assert_eq!(model.view.hscroll, 5);
     model.cursor = 0;
     model.ensure_cursor_visible(1, 4);
-    assert_eq!(model.hscroll, 0);
+    assert_eq!(model.view.hscroll, 0);
 }
 
 #[test]
@@ -427,7 +427,7 @@ fn horizontal_scroll_uses_display_cells() {
     let mut model = Model::new(EditorState::from_text("中中中中中"), None);
     model.cursor = model.editor.text().len_bytes();
     model.ensure_cursor_visible(1, 3);
-    assert_eq!(model.hscroll, 8);
+    assert_eq!(model.view.hscroll, 8);
 }
 
 #[test]

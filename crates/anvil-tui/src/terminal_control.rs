@@ -30,8 +30,8 @@ impl Model {
         match PtySession::spawn(
             &program,
             &self.workspace.path,
-            self.viewport_width.max(20),
-            self.viewport_height.max(5),
+            self.view.viewport_width.max(20),
+            self.view.viewport_height.max(5),
         ) {
             Ok(session) => {
                 self.status = format!("terminal: {} pid {}", session.shell(), session.pid());
@@ -111,7 +111,10 @@ impl Model {
 
     pub(crate) fn resize_terminal(&self) {
         if let Some(terminal) = self.runtime.terminal.as_ref() {
-            let _ = terminal.resize(self.viewport_width.max(20), self.viewport_height.max(5));
+            let _ = terminal.resize(
+                self.view.viewport_width.max(20),
+                self.view.viewport_height.max(5),
+            );
         }
     }
 }

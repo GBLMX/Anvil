@@ -129,8 +129,8 @@ impl Model {
         self.editor = buffer.editor;
         self.path = buffer.path;
         self.cursor = buffer.cursor;
-        self.scroll = buffer.scroll;
-        self.hscroll = buffer.hscroll;
+        self.view.scroll = buffer.scroll;
+        self.view.hscroll = buffer.hscroll;
         self.modified = buffer.modified;
         self.missing = buffer.missing;
         self.visual_anchor = buffer.visual_anchor;

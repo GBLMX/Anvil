@@ -589,8 +589,8 @@ fn help_is_read_only_and_returns_to_the_previous_buffer() {
         Some(original_path.clone()),
     );
     model.cursor = 3;
-    model.scroll = 1;
-    model.hscroll = 2;
+    model.view.scroll = 1;
+    model.view.hscroll = 2;
     model.modified = true;
 
     handle_event(&mut model, key(KeyCode::Char(':')));
@@ -613,8 +613,8 @@ fn help_is_read_only_and_returns_to_the_previous_buffer() {
     assert_eq!(model.editor.text().slice(0..8), "original");
     assert_eq!(model.path, Some(original_path));
     assert_eq!(model.cursor, 3);
-    assert_eq!(model.scroll, 1);
-    assert_eq!(model.hscroll, 2);
+    assert_eq!(model.view.scroll, 1);
+    assert_eq!(model.view.hscroll, 2);
     assert!(model.modified);
 }
 
@@ -628,14 +628,14 @@ fn scroll_margin_setting_changes_viewport_scroll() {
     model.cursor = model.offset_at_utf16(10, 0);
 
     model.ensure_cursor_visible(5, 80);
-    assert_eq!(model.scroll, 8);
+    assert_eq!(model.view.scroll, 8);
 
     let mut settings = crate::settings::Settings::default();
     settings.editor.scroll_margin = 0;
     model.apply_settings(settings);
-    model.scroll = 0;
+    model.view.scroll = 0;
     model.ensure_cursor_visible(5, 80);
-    assert_eq!(model.scroll, 6);
+    assert_eq!(model.view.scroll, 6);
 }
 
 #[test]
@@ -829,11 +829,11 @@ fn config_reload_applies_loaded_settings_and_keymap() {
 fn soft_wrap_preserves_scroll_margin() {
     let mut model = Model::new(EditorState::from_text("0\n1\n2\n3\n4\n5\n6\n7\n8\n9"), None);
     model.settings.editor.soft_wrap = true;
-    model.scroll = 0;
+    model.view.scroll = 0;
     model.cursor = model.offset_at_utf16(1, 0);
     model.editor.set_selection_bytes(model.cursor, model.cursor);
     model.ensure_cursor_visible(5, 80);
-    assert_eq!(model.scroll, 0);
+    assert_eq!(model.view.scroll, 0);
 }
 
 #[test]

@@ -1301,7 +1301,7 @@ fn diagnostic_peek_avoids_cursor_and_scrolls_long_messages() {
         .diagnostics
         .by_path
         .insert(PathBuf::from("diag.rs"), vec![diagnostic(0, 0, &message)]);
-    model.viewport_height = 10;
+    model.view.viewport_height = 10;
     model.jump_diagnostic(true);
     model.scroll_diagnostic_peek(5);
     assert!(model.ui.diagnostic_peek.as_ref().expect("peek").scroll > 0);

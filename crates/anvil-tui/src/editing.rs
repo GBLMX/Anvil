@@ -471,7 +471,7 @@ impl Model {
             return;
         };
         let line = position.line;
-        let previous_scroll = self.scroll;
+        let previous_scroll = self.view.scroll;
         let height = usize::from(height.max(1));
         let margin = self
             .settings
@@ -481,34 +481,34 @@ impl Model {
         if self.overlays.lsp_results.code_lens.is_some()
             && self.row_of_source_line(line, height).is_none()
         {
-            self.scroll = line;
-            self.scroll_subrow = 0;
+            self.view.scroll = line;
+            self.view.scroll_subrow = 0;
         }
         if self.has_closed_folds() {
             if self.is_line_hidden(line) {
                 self.open_fold_containing(line);
             }
-            let visible = self.visible_line_numbers(self.scroll, height);
+            let visible = self.visible_line_numbers(self.view.scroll, height);
             if !visible.contains(&line) {
-                self.scroll = line;
-                self.scroll_subrow = 0;
+                self.view.scroll = line;
+                self.view.scroll_subrow = 0;
                 self.normalize_scroll();
             }
-        } else if line < self.scroll.saturating_add(margin) {
-            self.scroll = line.saturating_sub(margin);
-        } else if line + margin >= self.scroll.saturating_add(height) {
-            self.scroll = line + margin + 1 - height;
+        } else if line < self.view.scroll.saturating_add(margin) {
+            self.view.scroll = line.saturating_sub(margin);
+        } else if line + margin >= self.view.scroll.saturating_add(height) {
+            self.view.scroll = line + margin + 1 - height;
         }
         let column = position.display_column;
         if self.settings.editor.soft_wrap {
-            self.wrap_width = self.wrap_text_width(width);
+            self.view.wrap_width = self.wrap_text_width(width);
             if self.row_of_position(line, column, height).is_none() {
-                self.scroll = line;
-                self.scroll_subrow = 0;
-            } else if previous_scroll != self.scroll {
-                self.scroll_subrow = 0;
+                self.view.scroll = line;
+                self.view.scroll_subrow = 0;
+            } else if previous_scroll != self.view.scroll {
+                self.view.scroll_subrow = 0;
             }
-            let segments = self.wrap_segments(line, self.wrap_width);
+            let segments = self.wrap_segments(line, self.view.wrap_width);
             let line_end = self
                 .editor
                 .index()
@@ -531,19 +531,19 @@ impl Model {
                     segment = index;
                 }
             }
-            if segment < self.scroll_subrow {
-                self.scroll_subrow = segment;
-            } else if segment >= self.scroll_subrow.saturating_add(height) {
-                self.scroll_subrow = segment + 1 - height;
+            if segment < self.view.scroll_subrow {
+                self.view.scroll_subrow = segment;
+            } else if segment >= self.view.scroll_subrow.saturating_add(height) {
+                self.view.scroll_subrow = segment + 1 - height;
             }
-            self.hscroll = 0;
+            self.view.hscroll = 0;
             return;
         }
         let width = usize::from(width.max(1));
-        if column < self.hscroll {
-            self.hscroll = column;
-        } else if column >= self.hscroll.saturating_add(width) {
-            self.hscroll = column + 1 - width;
+        if column < self.view.hscroll {
+            self.view.hscroll = column;
+        } else if column >= self.view.hscroll.saturating_add(width) {
+            self.view.hscroll = column + 1 - width;
         }
     }
 

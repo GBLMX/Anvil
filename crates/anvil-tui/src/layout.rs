@@ -80,7 +80,7 @@ impl Model {
             width = width.saturating_sub(sidebar);
         }
         if self.buffers.split.is_some() {
-            let split = width.saturating_mul(self.split_ratio.min(100)) / 100;
+            let split = width.saturating_mul(self.view.split_ratio.min(100)) / 100;
             width = if self.ui.focus.split {
                 split
             } else {
@@ -93,27 +93,29 @@ impl Model {
     #[cfg(test)]
     pub(crate) fn scroll_display_rows(&mut self, delta: isize, width: u16) {
         if !self.settings.editor.soft_wrap {
-            self.scroll = self
+            self.view.scroll = self
+                .view
                 .scroll
                 .saturating_add_signed(delta)
                 .min(self.editor.index().len_lines().saturating_sub(1));
-            self.scroll_subrow = 0;
+            self.view.scroll_subrow = 0;
             return;
         }
-        self.wrap_width = self.wrap_text_width(width);
+        self.view.wrap_width = self.wrap_text_width(width);
         self.scroll_wrapped_rows(delta);
     }
 
     pub(crate) fn scroll_display_rows_in_pane(&mut self, delta: isize, text_width: u16) {
         if !self.settings.editor.soft_wrap {
-            self.scroll = self
+            self.view.scroll = self
+                .view
                 .scroll
                 .saturating_add_signed(delta)
                 .min(self.editor.index().len_lines().saturating_sub(1));
-            self.scroll_subrow = 0;
+            self.view.scroll_subrow = 0;
             return;
         }
-        self.wrap_width = usize::from(text_width).max(1);
+        self.view.wrap_width = usize::from(text_width).max(1);
         self.scroll_wrapped_rows(delta);
     }
 
@@ -122,47 +124,47 @@ impl Model {
         if total == 0 {
             return;
         }
-        self.scroll = self.scroll.min(total.saturating_sub(1));
+        self.view.scroll = self.view.scroll.min(total.saturating_sub(1));
         let mut remaining = delta.unsigned_abs();
         if delta > 0 {
             while remaining > 0 {
                 let segments = self
-                    .wrap_segments(self.scroll, self.wrap_width)
+                    .wrap_segments(self.view.scroll, self.view.wrap_width)
                     .len()
                     .max(1);
-                let available = segments.saturating_sub(self.scroll_subrow);
+                let available = segments.saturating_sub(self.view.scroll_subrow);
                 if remaining < available {
-                    self.scroll_subrow += remaining;
+                    self.view.scroll_subrow += remaining;
                     break;
                 }
                 remaining -= available;
-                let next = self.next_visible_line(self.scroll);
+                let next = self.next_visible_line(self.view.scroll);
                 if next >= total {
-                    self.scroll = total - 1;
-                    self.scroll_subrow = segments.saturating_sub(1);
+                    self.view.scroll = total - 1;
+                    self.view.scroll_subrow = segments.saturating_sub(1);
                     break;
                 }
-                self.scroll = next;
-                self.scroll_subrow = 0;
+                self.view.scroll = next;
+                self.view.scroll_subrow = 0;
             }
         } else {
             while remaining > 0 {
-                if self.scroll_subrow > 0 {
-                    let take = remaining.min(self.scroll_subrow);
-                    self.scroll_subrow -= take;
+                if self.view.scroll_subrow > 0 {
+                    let take = remaining.min(self.view.scroll_subrow);
+                    self.view.scroll_subrow -= take;
                     remaining -= take;
                     continue;
                 }
-                if self.scroll == 0 {
+                if self.view.scroll == 0 {
                     break;
                 }
-                let previous = self.first_visible_line(self.scroll.saturating_sub(1));
-                if previous == self.scroll {
+                let previous = self.first_visible_line(self.view.scroll.saturating_sub(1));
+                if previous == self.view.scroll {
                     break;
                 }
-                self.scroll = previous;
-                self.scroll_subrow = self
-                    .wrap_segments(previous, self.wrap_width)
+                self.view.scroll = previous;
+                self.view.scroll_subrow = self
+                    .wrap_segments(previous, self.view.wrap_width)
                     .len()
                     .saturating_sub(1);
                 remaining -= 1;
@@ -228,10 +230,12 @@ impl Model {
             if rows.len() >= height {
                 break;
             }
-            if self.settings.editor.soft_wrap && self.wrap_width > 0 {
-                let segments = self.wrap_segments(line, self.wrap_width);
-                let first_segment = if line == self.scroll {
-                    self.scroll_subrow.min(segments.len().saturating_sub(1))
+            if self.settings.editor.soft_wrap && self.view.wrap_width > 0 {
+                let segments = self.wrap_segments(line, self.view.wrap_width);
+                let first_segment = if line == self.view.scroll {
+                    self.view
+                        .scroll_subrow
+                        .min(segments.len().saturating_sub(1))
                 } else {
                     0
                 };
@@ -270,7 +274,7 @@ impl Model {
     }
 
     pub(crate) fn code_lens_at_row(&self, offset: usize, height: usize) -> Option<usize> {
-        match self.visible_rows(self.scroll, height).get(offset) {
+        match self.visible_rows(self.view.scroll, height).get(offset) {
             Some(DisplayRow::CodeLens {
                 index: Some(index), ..
             }) => Some(*index),
@@ -280,9 +284,9 @@ impl Model {
 
     pub(crate) fn position_at_visible_row(&self, row: usize) -> Option<(usize, usize)> {
         let text = self.editor.text();
-        let rows = self.visible_rows(self.scroll, row.saturating_add(1));
+        let rows = self.visible_rows(self.view.scroll, row.saturating_add(1));
         match rows.get(row) {
-            Some(DisplayRow::Source(line)) => Some((*line, self.hscroll)),
+            Some(DisplayRow::Source(line)) => Some((*line, self.view.hscroll)),
             Some(DisplayRow::Wrapped { line, start, .. }) => {
                 let base = self
                     .editor
@@ -308,7 +312,7 @@ impl Model {
             .line_to_offset(line)
             .and_then(|offset| self.editor.index().offset_to_line(offset))
             .map_or(0, |range| range.end);
-        self.visible_rows(self.scroll, height)
+        self.visible_rows(self.view.scroll, height)
             .iter()
             .enumerate()
             .find_map(|(row, candidate)| match candidate {
@@ -338,7 +342,7 @@ impl Model {
     }
 
     pub(crate) fn row_of_source_line(&self, line: usize, height: usize) -> Option<usize> {
-        self.visible_rows(self.scroll, height)
+        self.visible_rows(self.view.scroll, height)
             .iter()
             .position(|row| {
                 matches!(
@@ -413,7 +417,7 @@ impl Model {
     }
 
     pub(crate) fn visible_gutter(&self, height: u16) -> Vec<Line<'static>> {
-        let visible = self.visible_rows(self.scroll, usize::from(height));
+        let visible = self.visible_rows(self.view.scroll, usize::from(height));
         let current = self.current_line();
         let digits = self.gutter_digits();
         let mut lines = Vec::with_capacity(visible.len());
@@ -470,7 +474,7 @@ impl Model {
     pub(crate) fn visible_lines(&self, height: u16, width: u16) -> Vec<Line<'_>> {
         let index = self.editor.index();
         let text = self.editor.text();
-        let visible = self.visible_rows(self.scroll, usize::from(height));
+        let visible = self.visible_rows(self.view.scroll, usize::from(height));
         let current = self.current_line();
 
         let diagnostic_lines = self.diagnostic_lines();
@@ -478,7 +482,7 @@ impl Model {
         let hscroll = if self.settings.editor.soft_wrap {
             0
         } else {
-            self.hscroll
+            self.view.hscroll
         };
         let visible_width = usize::from(width);
         let mut lines = Vec::with_capacity(visible.len());
@@ -673,7 +677,7 @@ impl Model {
     ) -> (usize, usize, usize) {
         let index = self.editor.index();
         let text = self.editor.text();
-        let hscroll = self.hscroll;
+        let hscroll = self.view.hscroll;
         let Some(start_offset) = index.offset_at_display_column(text, line_number, hscroll) else {
             return (start, end, 0);
         };
@@ -712,7 +716,7 @@ mod tests {
     fn soft_wrap_projects_sources_into_multiple_rows() {
         let mut model = Model::new(EditorState::from_text("abcdefghij\nnext"), None);
         model.settings.editor.soft_wrap = true;
-        model.wrap_width = 4;
+        model.view.wrap_width = 4;
 
         let rows = model.visible_rows(0, 10);
         let wrapped = rows
@@ -743,11 +747,15 @@ mod tests {
     fn soft_wrap_cursor_scroll_tracks_segment() {
         let mut model = Model::new(EditorState::from_text("abcdefghij"), None);
         model.settings.editor.soft_wrap = true;
-        model.wrap_width = 4;
+        model.view.wrap_width = 4;
         model.cursor = 9;
         model.editor.set_selection_bytes(9, 9);
         model.ensure_cursor_visible(2, 5);
-        assert!(model.scroll_subrow > 0, "subrow={}", model.scroll_subrow);
+        assert!(
+            model.view.scroll_subrow > 0,
+            "subrow={}",
+            model.view.scroll_subrow
+        );
     }
 
     #[test]
@@ -762,7 +770,7 @@ mod tests {
             usize::from(100 - sidebar) - gutter
         );
         model.split_vertical();
-        model.split_ratio = 50;
+        model.view.split_ratio = 50;
         let editor_width = 100 - sidebar;
         let half = editor_width / 2;
         model.ui.focus.split = false;
@@ -780,14 +788,14 @@ mod tests {
         model.settings.editor.soft_wrap = true;
         let width = model.gutter_width() + 2;
         model.scroll_display_rows(1, width);
-        assert_eq!(model.scroll, 0);
-        assert_eq!(model.scroll_subrow, 1);
+        assert_eq!(model.view.scroll, 0);
+        assert_eq!(model.view.scroll_subrow, 1);
         model.scroll_display_rows(4, width);
-        assert_eq!(model.scroll, 1);
-        assert_eq!(model.scroll_subrow, 0);
+        assert_eq!(model.view.scroll, 1);
+        assert_eq!(model.view.scroll_subrow, 0);
         model.scroll_display_rows(-1, width);
-        assert_eq!(model.scroll, 0);
-        assert_eq!(model.scroll_subrow, 4);
+        assert_eq!(model.view.scroll, 0);
+        assert_eq!(model.view.scroll_subrow, 4);
     }
 
     #[test]
@@ -892,7 +900,7 @@ mod pane_scroll_tests {
         let mut model = Model::new(EditorState::from_text("abcdefghij"), None);
         model.settings.editor.soft_wrap = true;
         model.scroll_display_rows_in_pane(1, 4);
-        assert_eq!(model.wrap_width, 4);
-        assert_eq!(model.scroll_subrow, 1);
+        assert_eq!(model.view.wrap_width, 4);
+        assert_eq!(model.view.scroll_subrow, 1);
     }
 }

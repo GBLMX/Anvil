@@ -273,13 +273,15 @@ Phase 1 started on 2026-11-12:
   read-only help-page buffer/title.
 - `Model.appearance` owns icon overrides, ASCII fallback mode, icon mtime
   checks, and theme persistence.
+- `Model.view` owns scroll position, viewport dimensions, split ratio, pointer
+  state, and soft-wrap projection state.
 - `Model.language` owns `DapState`, `DiagnosticsState`, `LspTransportState`,
   and `LspRequestsState`. Transport keeps clients, workers, config, retries,
   and retry deadlines; requests keep pending maps, document versions, request
   ids, and format-on-save coordination.
 - Existing behavior is unchanged; tests access the composed state explicitly.
-- `Model` now has 69 top-level fields. Remaining UI, input, and session page
-  state moves in later behavior-preserving slices.
+- `Model` now has 62 top-level fields. Remaining input and session page state
+  moves in later behavior-preserving slices.
 
 
 ## Acceptance

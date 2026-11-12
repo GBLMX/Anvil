@@ -67,8 +67,8 @@ impl Model {
             self.editor = EditorState::from_text(&text).into();
             self.path = Some(absolute);
             self.cursor = 0;
-            self.scroll = 0;
-            self.hscroll = 0;
+            self.view.scroll = 0;
+            self.view.hscroll = 0;
             self.modified = false;
             self.missing = false;
             self.syntax

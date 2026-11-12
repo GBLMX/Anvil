@@ -30,7 +30,7 @@ impl Model {
             return;
         }
         let revision = self.editor.revision();
-        let start = self.scroll;
+        let start = self.view.scroll;
         let end = visible_end_line(start, usize::from(height), self.editor.index().len_lines());
         let signature = (path.clone(), revision, start, end);
         if let Some(pending) = &self.overlays.lsp_results.inlay_pending {
