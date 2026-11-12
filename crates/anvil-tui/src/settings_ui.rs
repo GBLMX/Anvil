@@ -3,7 +3,7 @@
 use super::*;
 use crate::settings::{self, Settings};
 
-pub(crate) const SETTINGS_ROWS: usize = 6;
+pub(crate) const SETTINGS_ROWS: usize = 8;
 
 #[derive(Debug, Clone)]
 pub(crate) struct SettingsOverlayState {
@@ -20,7 +20,9 @@ impl SettingsOverlayState {
             2 => "lsp.inlay_hints",
             3 => "editor.auto_save",
             4 => "editor.soft_wrap",
-            _ => "editor.format_on_save",
+            5 => "editor.format_on_save",
+            6 => "ui.reduced_motion",
+            _ => "ui.high_contrast",
         }
     }
 
@@ -31,7 +33,9 @@ impl SettingsOverlayState {
             2 => settings.lsp.inlay_hints.to_string(),
             3 => settings.editor.auto_save.to_string(),
             4 => settings.editor.soft_wrap.to_string(),
-            _ => settings.editor.format_on_save.to_string(),
+            5 => settings.editor.format_on_save.to_string(),
+            6 => settings.ui.reduced_motion.to_string(),
+            _ => settings.ui.high_contrast.to_string(),
         }
     }
 
@@ -89,7 +93,9 @@ impl Model {
             2 => draft.lsp.inlay_hints = !draft.lsp.inlay_hints,
             3 => draft.editor.auto_save = !draft.editor.auto_save,
             4 => draft.editor.soft_wrap = !draft.editor.soft_wrap,
-            _ => draft.editor.format_on_save = !draft.editor.format_on_save,
+            5 => draft.editor.format_on_save = !draft.editor.format_on_save,
+            6 => draft.ui.reduced_motion = !draft.ui.reduced_motion,
+            _ => draft.ui.high_contrast = !draft.ui.high_contrast,
         }
         overlay.draft = draft;
         self.apply_settings(draft);
@@ -107,7 +113,9 @@ impl Model {
             2 => overlay.draft.lsp.inlay_hints = defaults.lsp.inlay_hints,
             3 => overlay.draft.editor.auto_save = defaults.editor.auto_save,
             4 => overlay.draft.editor.soft_wrap = defaults.editor.soft_wrap,
-            _ => overlay.draft.editor.format_on_save = defaults.editor.format_on_save,
+            5 => overlay.draft.editor.format_on_save = defaults.editor.format_on_save,
+            6 => overlay.draft.ui.reduced_motion = defaults.ui.reduced_motion,
+            _ => overlay.draft.ui.high_contrast = defaults.ui.high_contrast,
         }
         self.apply_settings(overlay.draft);
         self.settings_overlay = Some(overlay);
@@ -165,6 +173,16 @@ mod tests {
         assert!(model.settings.editor.format_on_save);
         model.reset_settings_row();
         assert!(!model.settings.editor.format_on_save);
+        model.move_settings(1);
+        model.adjust_settings(1);
+        assert!(model.settings.ui.reduced_motion);
+        model.reset_settings_row();
+        assert!(!model.settings.ui.reduced_motion);
+        model.move_settings(1);
+        model.adjust_settings(1);
+        assert!(model.settings.ui.high_contrast);
+        model.reset_settings_row();
+        assert!(!model.settings.ui.high_contrast);
         model.cancel_settings();
         assert!(model.settings_overlay.is_none());
         assert_eq!(model.settings, Settings::default());
