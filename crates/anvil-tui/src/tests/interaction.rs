@@ -30,6 +30,16 @@ fn space_leader_expires_without_consuming_next_key() {
 }
 
 #[test]
+fn repeated_space_keeps_leader_pending() {
+    let mut model = Model::new(EditorState::from_text("alpha\nbeta"), None);
+    model.start_page.welcome = false;
+    handle_event(&mut model, key(KeyCode::Char(' ')));
+    handle_event(&mut model, key(KeyCode::Char(' ')));
+    assert_eq!(model.input.pending, Some(' '));
+    assert!(model.input.leader_deadline.is_some());
+}
+
+#[test]
 fn popup_consumes_j_before_editor_motion() {
     let mut model = Model::new(EditorState::from_text("alpha\nbeta"), None);
     model.start_page.welcome = false;

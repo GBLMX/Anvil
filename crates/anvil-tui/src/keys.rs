@@ -774,6 +774,10 @@ fn handle_key(model: &mut Model, key: KeyPress) {
         let object_pending = model.input.object_pending;
         model.input.object_pending = false;
         let command = resolve_pending(pending, key, object_pending, &model.config.keymap);
+        if command.is_none() && pending == ' ' && key.code == KeyCode::Char(' ') && text_input {
+            model.begin_pending(' ');
+            return;
+        }
         if command.is_none() && !object_pending && !matches!(pending, 'g' | ']' | '[') {
             let _ = model.take_count();
         }
