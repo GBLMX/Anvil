@@ -255,6 +255,7 @@ fn tree_shows_modified_and_diagnostic_markers() {
     model
         .diagnostics
         .insert(path.clone(), vec![diagnostic(0, 0, "broken")]);
+    model.git_status.insert(path.clone(), 'M');
 
     let backend = TestBackend::new(80, 12);
     let mut terminal = Terminal::new(backend).expect("terminal");
@@ -266,8 +267,8 @@ fn tree_shows_modified_and_diagnostic_markers() {
         .iter()
         .map(|cell| cell.symbol())
         .collect::<String>();
-    assert!(rendered.contains("main.rs *"), "{rendered}");
-    assert!(rendered.contains("main.rs * !"), "{rendered}");
+    assert!(rendered.contains("main.rs * M"), "{rendered}");
+    assert!(rendered.contains("main.rs * M !"), "{rendered}");
 }
 
 #[test]

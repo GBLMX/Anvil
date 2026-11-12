@@ -570,6 +570,12 @@ pub struct Model {
     root_file_workers: BTreeMap<PathBuf, FileWorker>,
     /// Git gutter marks keyed by zero-based line.
     git_marks: HashMap<usize, char>,
+    /// Workspace git status keyed by absolute path.
+    git_status: HashMap<PathBuf, char>,
+    /// Latest requested tree git-status generation.
+    git_status_generation: u64,
+    /// Pending tree git-status generation.
+    git_status_pending: Option<u64>,
     /// Requested git diff path and revision.
     git_pending: Option<(PathBuf, u64)>,
     /// Last requested git diff path and revision.
@@ -814,6 +820,9 @@ impl Model {
             file_worker: None,
             root_file_workers: BTreeMap::new(),
             git_marks: HashMap::new(),
+            git_status: HashMap::new(),
+            git_status_generation: 0,
+            git_status_pending: None,
             git_pending: None,
             git_checked: None,
             git_due: None,

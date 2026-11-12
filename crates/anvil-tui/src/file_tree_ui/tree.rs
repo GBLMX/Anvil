@@ -48,6 +48,7 @@ impl Model {
         }
         self.tree_visible = true;
         self.ui.focus.tree = true;
+        self.request_git_status();
         if self.tree_selected.is_none() {
             self.tree_selected = (!self.tree.is_empty()).then_some(0);
         }

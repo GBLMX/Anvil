@@ -3,7 +3,7 @@
 //! The UI thread never performs a gateway directory read. One worker owns a
 //! dedicated authenticated connection; requests and results use mpsc.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::time::{Duration, Instant};
@@ -84,6 +84,8 @@ pub enum FileRequest {
     ProjectSearch { query: String, generation: u64 },
     /// Read a bounded preview for one workspace-relative file.
     Preview { path: String, generation: u64 },
+    /// Read workspace git status for tree decorations.
+    GitStatus { generation: u64 },
     /// Compare one workspace file with HEAD for gutter marks.
     GitDiff {
         path: PathBuf,
@@ -245,6 +247,11 @@ pub enum FileEvent {
         generation: u64,
         listings: Vec<(PathBuf, Result<Vec<DirEntry>, String>)>,
     },
+    /// Workspace git status keyed by absolute path.
+    GitStatus {
+        generation: u64,
+        result: Result<HashMap<PathBuf, char>, String>,
+    },
 }
 
 /// Owns the background worker and its channels.
@@ -375,6 +382,10 @@ impl FileWorker {
                             FileRequest::Preview { path, generation } => FileEvent::Preview {
                                 result: read_preview(&mut client, &path),
                                 path,
+                                generation,
+                            },
+                            FileRequest::GitStatus { generation } => FileEvent::GitStatus {
+                                result: git_status(&mut client, &workspace),
                                 generation,
                             },
                             FileRequest::GitDiff {
@@ -941,6 +952,66 @@ fn collect_fallback(
     Ok(())
 }
 
+fn git_status(
+    client: &mut GatewayClient,
+    workspace: &Path,
+) -> Result<HashMap<PathBuf, char>, String> {
+    let result = client
+        .exec(
+            &git_tool(),
+            &[
+                "--no-pager".to_owned(),
+                "status".to_owned(),
+                "--porcelain=v1".to_owned(),
+                "--relative".to_owned(),
+                "-z".to_owned(),
+            ],
+            3000,
+        )
+        .map_err(|error| error.to_string())?;
+    if result.timed_out {
+        return Err("git status timed out".to_owned());
+    }
+    if result.exit_code > 1 {
+        return Err(result.stderr);
+    }
+    Ok(parse_git_status(&result.stdout, workspace))
+}
+
+fn parse_git_status(output: &str, workspace: &Path) -> HashMap<PathBuf, char> {
+    let mut statuses = HashMap::new();
+    let mut entries = output
+        .split('\0')
+        .filter(|entry| !entry.is_empty())
+        .peekable();
+    while let Some(entry) = entries.next() {
+        if entry.len() < 3 {
+            continue;
+        }
+        let code = &entry[..2];
+        let path = &entry[3..];
+        if path.is_empty() {
+            continue;
+        }
+        let marker = if code.contains('?') || code.contains('A') {
+            'A'
+        } else if code.contains('D') {
+            'D'
+        } else if code.contains('R') {
+            'R'
+        } else if code.contains('C') {
+            'C'
+        } else {
+            'M'
+        };
+        statuses.insert(workspace.join(path), marker);
+        if code.contains('R') || code.contains('C') {
+            let _ = entries.next();
+        }
+    }
+    statuses
+}
+
 fn git_tool() -> String {
     std::env::var_os("ANVIL_GIT")
         .map(|path| path.to_string_lossy().into_owned())
@@ -1265,8 +1336,10 @@ fn parse_git_diff(output: &str) -> Vec<(usize, char)> {
 mod tests {
     use super::{
         FileEvent, FileRequest, FileWorker, PREVIEW_MAX_LINES, decode_preview, parse_git_diff,
+        parse_git_status,
     };
     use anvil_ipc::GatewayClient;
+    use std::path::Path;
 
     #[test]
     fn parses_git_hunks_into_line_marks() {
@@ -1438,6 +1511,16 @@ mod tests {
         assert!(paths.contains(&workspace.join("b")));
         drop(worker);
         server.join().expect("server");
+    }
+
+    #[test]
+    fn parses_git_status_porcelain() {
+        let workspace = Path::new("/ws");
+        let statuses =
+            parse_git_status(" M src/main.rs\0?? new.rs\0R  new.rs\0old.rs\0", workspace);
+        assert_eq!(statuses.get(&workspace.join("src/main.rs")), Some(&'M'));
+        assert_eq!(statuses.get(&workspace.join("new.rs")), Some(&'R'));
+        assert!(!statuses.contains_key(&workspace.join("old.rs")));
     }
 
     #[test]

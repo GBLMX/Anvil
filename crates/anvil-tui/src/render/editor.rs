@@ -211,6 +211,19 @@ pub fn view(model: &Model, frame: &mut Frame) {
                     style.fg(theme::warning()).add_modifier(Modifier::BOLD),
                 ));
             }
+            if let Some(marker) = model.git_status.get(&entry.path) {
+                let color = match marker {
+                    'A' => theme::success(),
+                    'D' => theme::error(),
+                    'R' | 'C' => theme::accent(),
+                    '?' => theme::warning(),
+                    _ => theme::warning(),
+                };
+                spans.push(Span::styled(
+                    format!(" {marker}"),
+                    style.fg(color).add_modifier(Modifier::BOLD),
+                ));
+            }
             if let Some(diagnostics) = model.diagnostics.get(&entry.path)
                 && !diagnostics.is_empty()
             {

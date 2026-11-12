@@ -185,6 +185,40 @@ impl Model {
         self.sync_tree_watches();
     }
 
+    pub(crate) fn request_git_status(&mut self) {
+        let Some(worker) = self.file_worker.as_ref() else {
+            return;
+        };
+        self.git_status_generation = self.git_status_generation.wrapping_add(1);
+        let generation = self.git_status_generation;
+        if worker
+            .request(FileRequest::GitStatus { generation })
+            .is_ok()
+        {
+            self.git_status_pending = Some(generation);
+        }
+    }
+
+    fn handle_git_status(
+        &mut self,
+        generation: u64,
+        result: Result<std::collections::HashMap<PathBuf, char>, String>,
+    ) {
+        if self.git_status_pending != Some(generation) {
+            return;
+        }
+        self.git_status_pending = None;
+        match result {
+            Ok(statuses) => {
+                self.git_status = statuses;
+            }
+            Err(error) => {
+                self.status = format!("E: git status: {error}");
+                self.dirty = true;
+            }
+        }
+    }
+
     pub(crate) fn poll_file_worker(&mut self) {
         let events = self
             .file_worker
@@ -302,6 +336,9 @@ impl Model {
                     generation,
                     listings,
                 } => self.apply_tree_snapshot(generation, listings),
+                FileEvent::GitStatus { generation, result } => {
+                    self.handle_git_status(generation, result);
+                }
             }
             self.dirty = true;
         }
@@ -750,6 +787,7 @@ impl Model {
         self.tree_visible = true;
         self.ui.focus.tree = true;
         self.request_tree_refresh(select);
+        self.request_git_status();
         self.dirty = true;
     }
 
