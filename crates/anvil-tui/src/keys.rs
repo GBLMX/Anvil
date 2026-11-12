@@ -24,6 +24,11 @@ pub(crate) fn handle_event(model: &mut Model, event: Event) {
             mouse::handle_mouse(model, mouse, model.viewport_width, model.viewport_height);
         }
         Event::Paste(text) => {
+            #[cfg(unix)]
+            if model.terminal_panel {
+                model.send_terminal_text(&text);
+                return;
+            }
             model.syntax.borrow_mut().note_activity();
             model.pending = None;
             let (text, truncated) = normalize_paste(&text);
@@ -801,6 +806,10 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             }
             _ => {}
         }
+    }
+    #[cfg(unix)]
+    if model.send_terminal_key(key.event()) {
+        return;
     }
     if model.keymap_context() == KeymapContext::FileTree {
         if let Some(action) = model

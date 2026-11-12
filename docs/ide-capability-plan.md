@@ -1,7 +1,7 @@
 # IDE Capability Plan
 
 Status: P0 mostly landed; P1 is in progress. Task runner, test failure explorer,
-DAP client, PTY terminal core, and folding persistence landed. Search/replace,
+DAP client, PTY terminal panel, and folding persistence landed. Search/replace,
 problems, quick-open preview, and icon themes are owned by
 `0.5.4`/`0.5.7`/`0.5.8`; this plan does not re-schedule them.
 
@@ -44,9 +44,9 @@ reset/hot-reload boundary. Each item needs a deterministic failure test.
   runner and opens located failures in a selectable overlay.
 - Debug Adapter Protocol client in a separate process: `dap::DapClient` owns
   framed stdio, initialize/launch/breakpoints/stepping, responses, and events.
-- Terminal panel with explicit workspace and trust boundaries: PTY core,
-  Admin-gated `:terminal*` controls, and captured-output view landed; the
-  interactive panel/renderer remains pending.
+- Terminal panel with explicit workspace and trust boundaries: PTY session,
+  Admin-gated `:terminal*` controls, interactive bottom panel with key/paste
+  routing, and process-group cleanup landed.
 - Multi-root workspaces with per-root gateway/trust policy.
 - Code folding with session persistence.
 - Auto-save policy remains; swap files and external-conflict recovery landed.

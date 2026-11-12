@@ -726,6 +726,8 @@ pub struct Model {
     terminal: Option<pty_terminal::PtySession>,
     #[cfg(unix)]
     terminal_output: Vec<u8>,
+    #[cfg(unix)]
+    terminal_panel: bool,
 }
 
 impl Model {
@@ -897,6 +899,8 @@ impl Model {
             terminal: None,
             #[cfg(unix)]
             terminal_output: Vec::new(),
+            #[cfg(unix)]
+            terminal_panel: false,
         }
     }
 

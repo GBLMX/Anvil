@@ -574,6 +574,8 @@ pub fn view(model: &Model, frame: &mut Frame) {
             popup,
         );
     }
+    #[cfg(unix)]
+    crate::terminal_control::render_panel(model, frame, area);
     if model.ui.problems.visible {
         let width = (area.width * 3 / 4)
             .max(30)
