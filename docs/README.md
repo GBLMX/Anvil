@@ -56,7 +56,7 @@ Cross-cutting tracks that do not jump the queue:
 | [Small features](small-features-plan.md) | Vim-like motions, operators, registers, visual/display polish | proposed |
 | [External integration](external-integration-plan.md) | `$EDITOR`, stdin, pipe locations, control socket, MCP adapter | 1a/1b/2/3, control v3, and MCP landed |
 | [IDE capabilities](ide-capability-plan.md) | LSP depth, search, sessions, Git, adapters | P0 mostly landed; P1 planned |
-| [0.6.x](0.6.x-plan.md) | signed packages, download manager, marketplace | 0.6.0–0.6.3 and official-only release landed; marketplace planned |
+| [0.6.x](0.6.x-plan.md) | signed packages, download manager, marketplace | 0.6.0–0.6.3, official-only release, and signed index/revocation verifier landed; marketplace planned |
 | [0.7.x](0.7.x-plan.md) | official optional Rust modules (source-level, trusted) | planned |
 | [Linux platform](linux-platform-plan.md) | seccomp/cgroup, atomic install, watcher measurements | planned |
 | [Command architecture](command-architecture-plan.md) | command registry, keymap trie, effects | partially implemented |
