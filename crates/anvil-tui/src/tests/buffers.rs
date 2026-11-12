@@ -1337,3 +1337,19 @@ fn focus_lost_auto_saves_while_search_is_active() {
     assert_eq!(fs::read_to_string(&path).expect("content"), "Xa");
     assert!(!model.modified);
 }
+
+#[test]
+fn switching_to_the_same_buffer_does_not_auto_save() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("main.rs");
+    fs::write(&path, "a").expect("write");
+    let mut model = Model::open(&path).expect("open");
+    model.settings.editor.auto_save = true;
+    model.insert_text("X");
+
+    model.switch_buffer(1);
+
+    assert_eq!(fs::read_to_string(&path).expect("content"), "a");
+    assert!(model.modified);
+    assert!(model.status.contains("only one buffer"));
+}

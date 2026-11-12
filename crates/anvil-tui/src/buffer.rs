@@ -329,10 +329,6 @@ impl Model {
             self.dirty = true;
             return;
         }
-        if !self.auto_save_before_focus_change() {
-            return;
-        }
-        self.sync_active();
         let len = self.buffers.len();
         let target = (self.active as isize + delta).rem_euclid(len as isize) as usize;
         if target == self.active {
@@ -340,6 +336,10 @@ impl Model {
             self.dirty = true;
             return;
         }
+        if !self.auto_save_before_focus_change() {
+            return;
+        }
+        self.sync_active();
         self.load_buffer(target);
         let name = self
             .path
