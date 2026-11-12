@@ -287,6 +287,8 @@ post-`0.5.0` feature line.
   keymap context resolution moved into `keymap.rs`; TUI state types moved into
   `state.rs`. `lib.rs` is now 219 lines.
 - Keymap tests moved into `keymap/tests.rs`; `keymap.rs` is now 1,182 lines.
+- Editing operations split into `editing/objects.rs`, `editing/motions.rs`,
+  `editing/selection.rs`, and `editing/input.rs`; `editing.rs` is now 62 lines.
 
 ### Fixed
 - The file tree now opens the command line on `:`, so commands such as
