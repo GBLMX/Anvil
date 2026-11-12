@@ -349,6 +349,10 @@ struct LspState {
     pending_edit_snapshot: HashMap<u64, HashMap<PathBuf, u64>>,
     versions: HashMap<PathBuf, u64>,
     next_request: u64,
+}
+
+#[derive(Default)]
+struct LspResultsState {
     completion: Option<CompletionState>,
     completion_resolve: Option<(u64, usize)>,
 }
@@ -374,6 +378,7 @@ struct OverlayState {
     command_completion: Option<CommandCompletion>,
     command_palette_recents: Vec<String>,
     location: LocationPanelState,
+    lsp_results: LspResultsState,
 }
 
 #[derive(Debug, Clone)]
@@ -1313,7 +1318,7 @@ impl Model {
 
     fn clear_lsp_ui(&mut self) {
         self.clear_lsp_requests();
-        self.language.lsp.completion = None;
+        self.overlays.lsp_results.completion = None;
         self.hover = None;
         self.ui.diagnostic_peek = None;
         self.code_actions = None;
@@ -1717,7 +1722,7 @@ impl Model {
             || self.call_hierarchy.is_some()
             || self.overlays.settings_overlay.is_some()
             || self.code_actions.is_some()
-            || self.language.lsp.completion.is_some()
+            || self.overlays.lsp_results.completion.is_some()
             || self.hover.is_some()
             || self.ui.diagnostic_peek.is_some()
             || self.ui.problems.visible

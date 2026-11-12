@@ -147,7 +147,7 @@ impl Model {
                 return;
             }
             if kind == LspRequestKind::CompletionResolve {
-                self.language.lsp.completion_resolve = None;
+                self.overlays.lsp_results.completion_resolve = None;
             }
             if kind == LspRequestKind::StickySymbols {
                 self.sticky_pending = false;
@@ -356,11 +356,11 @@ impl Model {
         items.truncate(200);
         if items.is_empty() {
             self.status = "lsp: no completions".to_owned();
-            self.language.lsp.completion = None;
+            self.overlays.lsp_results.completion = None;
         } else {
             let filtered = (0..items.len()).collect();
             let selected = items.iter().position(|item| item.preselect).unwrap_or(0);
-            self.language.lsp.completion = Some(CompletionState {
+            self.overlays.lsp_results.completion = Some(CompletionState {
                 id,
                 items,
                 filtered,
@@ -373,14 +373,14 @@ impl Model {
     }
 
     fn apply_completion_resolve_response(&mut self, id: u64, result: &serde_json::Value) {
-        let Some((pending, index)) = self.language.lsp.completion_resolve else {
+        let Some((pending, index)) = self.overlays.lsp_results.completion_resolve else {
             return;
         };
         if pending != id {
             return;
         }
-        self.language.lsp.completion_resolve = None;
-        let Some(completion) = self.language.lsp.completion.as_mut() else {
+        self.overlays.lsp_results.completion_resolve = None;
+        let Some(completion) = self.overlays.lsp_results.completion.as_mut() else {
             return;
         };
         let Some(item) = completion.items.get_mut(index) else {

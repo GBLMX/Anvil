@@ -409,8 +409,8 @@ impl Model {
                 LspRequestKind::Completion | LspRequestKind::CompletionResolve
             )
         });
-        self.language.lsp.completion = None;
-        self.language.lsp.completion_resolve = None;
+        self.overlays.lsp_results.completion = None;
+        self.overlays.lsp_results.completion_resolve = None;
     }
 
     pub(crate) fn cancel_code_actions(&mut self) {
@@ -459,7 +459,7 @@ impl Model {
     }
 
     pub(crate) fn request_completion_resolve(&mut self) {
-        let Some(completion) = self.language.lsp.completion.as_ref() else {
+        let Some(completion) = self.overlays.lsp_results.completion.as_ref() else {
             return;
         };
         let Some(index) = completion.filtered.get(completion.selected).copied() else {
@@ -470,8 +470,8 @@ impl Model {
         };
         if item.resolved
             || self
-                .language
-                .lsp
+                .overlays
+                .lsp_results
                 .completion_resolve
                 .is_some_and(|(_, pending)| pending == index)
         {
@@ -484,7 +484,7 @@ impl Model {
             "completionItem/resolve",
             raw,
         ) {
-            self.language.lsp.completion_resolve = Some((id, index));
+            self.overlays.lsp_results.completion_resolve = Some((id, index));
         }
     }
 
@@ -1150,7 +1150,7 @@ impl Model {
     }
 
     pub(crate) fn apply_completion(&mut self) {
-        let Some(completion) = self.language.lsp.completion.take() else {
+        let Some(completion) = self.overlays.lsp_results.completion.take() else {
             return;
         };
         let Some(item) = completion
@@ -1264,7 +1264,7 @@ impl Model {
     }
 
     pub(crate) fn move_completion(&mut self, delta: isize) {
-        if let Some(completion) = self.language.lsp.completion.as_mut() {
+        if let Some(completion) = self.overlays.lsp_results.completion.as_mut() {
             completion.selected = completion
                 .selected
                 .saturating_add_signed(delta)
@@ -1275,7 +1275,7 @@ impl Model {
     }
 
     pub(crate) fn filter_completion(&mut self) {
-        if let Some(completion) = self.language.lsp.completion.as_mut() {
+        if let Some(completion) = self.overlays.lsp_results.completion.as_mut() {
             let query = completion.query.to_lowercase();
             completion.filtered = completion
                 .items

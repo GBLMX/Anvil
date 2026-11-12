@@ -1126,7 +1126,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
             popup,
         );
     }
-    if let Some(completion) = &model.language.lsp.completion {
+    if let Some(completion) = &model.overlays.lsp_results.completion {
         let documentation = completion
             .filtered
             .get(completion.selected)
