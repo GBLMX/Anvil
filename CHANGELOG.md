@@ -286,6 +286,7 @@ post-`0.5.0` feature line.
   lifecycle, polling, and diagnostic helpers moved into `lsp_runtime.rs`;
   keymap context resolution moved into `keymap.rs`; TUI state types moved into
   `state.rs`. `lib.rs` is now 219 lines.
+- Keymap tests moved into `keymap/tests.rs`; `keymap.rs` is now 1,182 lines.
 
 ### Fixed
 - The file tree now opens the command line on `:`, so commands such as
