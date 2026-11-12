@@ -262,6 +262,18 @@ pub(crate) fn resolve_normal(
     })
 }
 
+pub(crate) fn resolve_context_binding(
+    contexts: &[KeymapContext],
+    key: KeyPress,
+    config: &KeymapConfig,
+) -> Option<(KeymapContext, ContextAction)> {
+    contexts.iter().rev().find_map(|context| {
+        config
+            .resolve_context_exact(*context, key)
+            .map(|action| (*context, action))
+    })
+}
+
 #[cfg(test)]
 pub(crate) fn resolve_normal_in_context(
     context: KeymapContext,

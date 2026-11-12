@@ -531,3 +531,27 @@ fn pending_actions_include_text_object_extenders() {
         "{around:?}"
     );
 }
+
+#[test]
+fn ordered_context_resolution_prefers_the_most_specific_context() {
+    let config = KeymapConfig::from_toml(
+        r#"
+[keymap.contexts.global]
+x = "view.focus_right"
+[keymap.contexts.popup]
+x = "view.focus_editor"
+"#,
+    )
+    .expect("context keymap");
+    let resolved = resolve_context_binding(
+        &[KeymapContext::Global, KeymapContext::Popup],
+        key(KeyCode::Char('x'), KeyModifiers::NONE),
+        &config,
+    )
+    .expect("binding");
+    assert_eq!(resolved.0, KeymapContext::Popup);
+    assert!(matches!(
+        resolved.1,
+        ContextAction::Pending(PendingCommand::FocusEditor)
+    ));
+}

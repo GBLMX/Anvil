@@ -2,8 +2,8 @@
 
 use crate::input::{KeyPress, is_action_key};
 use crate::keymap::{
-    ContextAction, NormalCommand, PendingCommand, macro_key, macro_step, resolve_normal,
-    resolve_pending,
+    ContextAction, NormalCommand, PendingCommand, macro_key, macro_step, resolve_context_binding,
+    resolve_normal, resolve_pending,
 };
 use anvil_session::command::{CommandContext, is_registered};
 use anvil_session::ui::CreateKind;
@@ -341,7 +341,7 @@ fn execute_context_action(model: &mut Model, action: ContextAction, key: KeyPres
 }
 
 fn dispatch_context_binding(model: &mut Model, context: KeymapContext, key: KeyPress) -> bool {
-    if let Some(action) = model.config.keymap.resolve_context_exact(context, key) {
+    if let Some((_, action)) = resolve_context_binding(&[context], key, &model.config.keymap) {
         execute_context_action(model, action, key);
         true
     } else {
