@@ -28,6 +28,8 @@ their decision sections.
 | [0019](0019-terminal-keyboard-enhancement.md) | Terminal keyboard enhancement | Accepted |
 | [0020](0020-content-addressed-plugin-store.md) | Content-addressed plugin store | Accepted |
 | [0021](0021-signed-plugin-index.md) | Signed plugin index, revocations, anti-rollback | Accepted; verifier/cache partial |
+| [0022](0022-core-editing-completion.md) | Core editing completion and semantic ownership | Proposed |
+| [0023](0023-internal-capability-closure.md) | Internal capability closure before public distribution | Proposed |
 
 ## Numbering Rule
 
