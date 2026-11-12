@@ -14,6 +14,8 @@ post-`0.5.0` feature line.
   into `anvil-editor::EditorState`.
 - Macro storage moved into `anvil-editor::EditorState` as frontend-neutral
   `MacroStep` entries; the TUI key adapter still performs recording/replay.
+  BackTab round-trips; unrepresentable recorded steps report an error instead
+  of being silently dropped.
 - Quick-open now enumerates trusted secondary workspace roots through their
   owning `FileWorker`, labels them as `<root-name>/<relative>`, and routes
   preview reads through the same root.

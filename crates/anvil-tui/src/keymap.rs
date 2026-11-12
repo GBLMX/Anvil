@@ -344,6 +344,7 @@ impl KeyChord {
             KeyCode::Char(character) => character.to_string(),
             KeyCode::Esc => "esc".to_owned(),
             KeyCode::Tab => "tab".to_owned(),
+            KeyCode::BackTab => "backtab".to_owned(),
             KeyCode::Enter => "enter".to_owned(),
             KeyCode::Backspace => "backspace".to_owned(),
             KeyCode::Delete => "delete".to_owned(),
@@ -383,6 +384,7 @@ pub(crate) fn parse_key_name(name: &str) -> Result<KeyCode, String> {
         "space" => KeyCode::Char(' '),
         "esc" | "escape" => KeyCode::Esc,
         "tab" => KeyCode::Tab,
+        "backtab" => KeyCode::BackTab,
         "enter" | "return" => KeyCode::Enter,
         "backspace" => KeyCode::Backspace,
         "delete" | "del" => KeyCode::Delete,
@@ -1332,6 +1334,45 @@ mod tests {
         let chord = KeyChord::from_key(key(KeyCode::Char('i'), KeyModifiers::NONE));
         let mut config = KeymapConfig::default();
         assert!(!config.bind_pending('c', chord, PendingCommand::ObjectPending));
+    }
+
+    #[test]
+    fn macro_key_labels_round_trip_special_keys() {
+        use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+        let codes = [
+            KeyCode::Char('a'),
+            KeyCode::Char(' '),
+            KeyCode::Esc,
+            KeyCode::Tab,
+            KeyCode::BackTab,
+            KeyCode::Enter,
+            KeyCode::Backspace,
+            KeyCode::Delete,
+            KeyCode::Insert,
+            KeyCode::Left,
+            KeyCode::Right,
+            KeyCode::Up,
+            KeyCode::Down,
+            KeyCode::Home,
+            KeyCode::End,
+            KeyCode::PageUp,
+            KeyCode::PageDown,
+            KeyCode::F(1),
+        ];
+        for code in codes {
+            let key = KeyEvent::new(code, KeyModifiers::NONE);
+            let step = macro_step(key);
+            let round_trip = macro_key(&step).expect("macro key");
+            assert_eq!(round_trip.code, code);
+        }
+        let shifted = KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT);
+        let step = macro_step(shifted);
+        assert!(step.shift);
+        assert_eq!(
+            macro_key(&step).expect("shifted backtab").code,
+            KeyCode::BackTab
+        );
     }
 
     #[test]

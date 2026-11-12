@@ -402,9 +402,12 @@ fn handle_key(model: &mut Model, key: KeyPress) {
                     model.last_macro = Some(register);
                     model.replaying = true;
                     for step in steps {
-                        if let Some(key) = macro_key(&step) {
-                            handle_key(model, KeyPress::from_key(key));
-                        }
+                        let Some(key) = macro_key(&step) else {
+                            model.status = format!("E: macro step unavailable: {}", step.key);
+                            model.dirty = true;
+                            break;
+                        };
+                        handle_key(model, KeyPress::from_key(key));
                     }
                     model.replaying = false;
                 }

@@ -107,6 +107,21 @@ fn named_register_yank_and_put() {
 }
 
 #[test]
+fn unknown_macro_steps_surface_an_error() {
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.editor.set_macro(
+        'a',
+        vec![anvil_editor::MacroStep {
+            key: "media-play".to_owned(),
+            shift: false,
+        }],
+    );
+    handle_event(&mut model, key(KeyCode::Char('@')));
+    handle_event(&mut model, key(KeyCode::Char('a')));
+    assert!(model.status.contains("macro step unavailable"));
+}
+
+#[test]
 fn macro_records_and_replays() {
     let mut model = Model::new(EditorState::from_text(""), None);
     for code in [
