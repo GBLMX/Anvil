@@ -659,6 +659,8 @@ pub struct Model {
     settings: Settings,
     /// Project-local icon overrides from `.anvil.toml`.
     icons: icon_theme::IconTheme,
+    /// Whether the icon renderer uses ASCII fallbacks.
+    ascii_icons: bool,
     settings_overlay: Option<SettingsOverlayState>,
     command_palette_recents: Vec<String>,
     /// Gateway client used for file I/O when present.
@@ -877,6 +879,7 @@ impl Model {
             persist_theme: !cfg!(test),
             settings: Settings::default(),
             icons: icon_theme::IconTheme::default(),
+            ascii_icons: icon_theme::ascii_mode(),
             settings_overlay: None,
             command_palette_recents: Vec::new(),
             gateway: None,

@@ -232,7 +232,36 @@ fn tree_renders_file_and_folder_icons() {
         .iter()
         .map(|cell| cell.symbol())
         .collect::<String>();
-    assert!(rendered.contains(icon_theme::nerd_glyph(icon_theme::IconKind::Rust)));
+    let expected = if model.ascii_icons {
+        icon_theme::ascii_glyph(icon_theme::IconKind::Rust)
+    } else {
+        icon_theme::nerd_glyph(icon_theme::IconKind::Rust)
+    };
+    assert!(rendered.contains(expected), "{rendered}");
+    assert!(rendered.contains("main.rs"), "{rendered}");
+}
+
+#[test]
+fn tree_renders_ascii_icon_fallback() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    fs::write(dir.path().join("main.rs"), "").expect("file");
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.workspace = dir.path().to_path_buf();
+    model.ascii_icons = true;
+    model.welcome = false;
+    model.open_tree();
+
+    let backend = TestBackend::new(80, 12);
+    let mut terminal = Terminal::new(backend).expect("terminal");
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+    let rendered = terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect::<String>();
+    assert!(rendered.contains("[rs]"), "{rendered}");
     assert!(rendered.contains("main.rs"), "{rendered}");
 }
 

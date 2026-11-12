@@ -160,7 +160,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
             .tree_selected
             .unwrap_or(0)
             .saturating_sub(visible_height.saturating_sub(1));
-        let ascii_icons = icon_theme::ascii_mode();
+        let ascii_icons = model.ascii_icons;
         for (index, entry) in model
             .tree
             .iter()
@@ -496,7 +496,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
         };
         let mut lines = Vec::new();
         let visible = list_area.height.saturating_sub(3) as usize;
-        let ascii_icons = icon_theme::ascii_mode();
+        let ascii_icons = model.ascii_icons;
         let start = fuzzy.selected.saturating_sub(visible.saturating_sub(1));
         for (row, index) in fuzzy.filtered.iter().skip(start).take(visible).enumerate() {
             let name = model.fuzzy_display_path(&fuzzy.entries[*index]);
