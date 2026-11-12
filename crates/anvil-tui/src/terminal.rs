@@ -115,6 +115,16 @@ pub fn run_with_input(
         }
         model.dirty = true;
     }
+    if let Err(error) = theme::load_custom_themes() {
+        let message = format!("E: themes: {error}");
+        if model.status.is_empty() {
+            model.status = message;
+        } else {
+            model.status.push_str(" | ");
+            model.status.push_str(&message);
+        }
+        model.dirty = true;
+    }
     if let Err(error) = theme_config::load() {
         let message = format!("E: theme config: {error}");
         if model.status.is_empty() {
@@ -227,6 +237,14 @@ pub fn run_with_input(
         model.resize_terminal();
         model.ensure_cursor_visible(size.height.saturating_sub(2), size.width.saturating_sub(2));
         model.tick_status();
+        match theme::reload_custom_if_changed() {
+            Ok(true) => model.dirty = true,
+            Ok(false) => {}
+            Err(error) => {
+                model.status = format!("E: theme reload: {error}");
+                model.dirty = true;
+            }
+        }
         model.tick_search();
         if model.dirty {
             terminal.terminal.draw(|frame| view(&model, frame))?;

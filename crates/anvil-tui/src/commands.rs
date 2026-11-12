@@ -159,7 +159,7 @@ impl Model {
             ("help", "") => self.show_help(),
             ("settings", "") => self.open_settings(),
             ("theme", argument) => {
-                if argument.is_empty() {
+                if argument.is_empty() || argument == "list" {
                     self.status = format!(
                         "theme: {} ({:?}); available: {}",
                         theme::name(),

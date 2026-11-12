@@ -8,6 +8,11 @@ post-`0.5.0` feature line.
 
 ## [Unreleased]
 ### Added
+- Custom themes load from `$XDG_CONFIG_HOME/anvil/themes/*.toml`
+  (`ANVIL_THEMES` override). Theme files support hex, named ANSI, and
+  `color0`..`color15` colors; missing or invalid files keep the previous theme
+  and report an error. Active custom themes reload on a one-second mtime poll
+  and redraw the UI. `:theme list` lists built-in and custom themes.
 - File tree and fuzzy-open icons use native Nerd Font glyphs with an ASCII
   fallback (`ANVIL_ASCII_MODE=1`) and width-aware padding. Project
   `.anvil.toml` `[ui.icons]` entries can override individual glyphs.
