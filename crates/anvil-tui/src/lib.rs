@@ -1560,6 +1560,25 @@ impl Model {
             .unwrap_or_default()
     }
 
+    fn inline_diagnostic(&self, line_number: usize) -> Option<(String, u32)> {
+        let path = self.path.as_ref()?;
+        let diagnostic = self
+            .diagnostics
+            .get(path)?
+            .iter()
+            .filter(|diagnostic| {
+                diagnostic.range.start.line as usize <= line_number
+                    && diagnostic.range.end.line as usize >= line_number
+            })
+            .min_by_key(|diagnostic| diagnostic.severity.unwrap_or(99))?;
+        let message = diagnostic
+            .message
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ");
+        (!message.is_empty()).then_some((message, diagnostic.severity.unwrap_or(3)))
+    }
+
     fn diagnostic_ranges(
         &self,
         line_number: usize,

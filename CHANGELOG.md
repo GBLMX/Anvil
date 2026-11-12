@@ -8,6 +8,9 @@ post-`0.5.0` feature line.
 
 ## [Unreleased]
 ### Added
+- Inline diagnostics append the highest-severity message to the end of the
+  affected source line, only when horizontal space remains and not for
+  horizontally scrolled rows.
 - `:debug` opens a background-refreshed debug panel for threads, stack frames,
   scopes/variables, and watch expressions; queries never block the editor.
 - Debug commands are registered in the shared command manifest, including

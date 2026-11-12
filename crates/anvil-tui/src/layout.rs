@@ -615,6 +615,29 @@ impl Model {
                         .add_modifier(Modifier::UNDERLINED),
                 );
             }
+            if last_segment
+                && hscroll == 0
+                && let Some((message, severity)) = self.inline_diagnostic(line_number)
+            {
+                let used = rendered
+                    .spans
+                    .iter()
+                    .map(|span| UnicodeWidthStr::width(span.content.as_ref()))
+                    .sum::<usize>();
+                let available = visible_width.saturating_sub(used);
+                if available >= 4 {
+                    let message =
+                        crate::status_line::middle_ellipsis(&format!("  {message}"), available);
+                    let color = match severity {
+                        1 => theme::error(),
+                        2 => theme::warning(),
+                        _ => theme::accent(),
+                    };
+                    rendered
+                        .spans
+                        .push(Span::styled(message, Style::default().fg(color)));
+                }
+            }
             lines.push(rendered);
         }
         if lines.is_empty() {
@@ -774,5 +797,70 @@ mod tests {
                 .iter()
                 .any(|row| matches!(row, DisplayRow::Wrapped { .. }))
         );
+    }
+}
+
+#[cfg(test)]
+mod inline_diagnostic_tests {
+    use super::*;
+    use crate::lsp::{Diagnostic, Position, Range};
+
+    #[test]
+    fn appends_highest_severity_diagnostic_to_the_line_end() {
+        let directory = tempfile::tempdir().expect("tempdir");
+        let path = directory.path().join("main.rs");
+        let mut model = Model::new(EditorState::from_text("let x"), Some(path.clone()));
+        model.diagnostics.insert(
+            path,
+            vec![
+                Diagnostic {
+                    range: Range {
+                        start: Position {
+                            line: 0,
+                            character: 0,
+                        },
+                        end: Position {
+                            line: 0,
+                            character: 3,
+                        },
+                    },
+                    severity: Some(2),
+                    message: "unused variable".to_owned(),
+                    source: None,
+                    extra: serde_json::Map::new(),
+                },
+                Diagnostic {
+                    range: Range {
+                        start: Position {
+                            line: 0,
+                            character: 4,
+                        },
+                        end: Position {
+                            line: 0,
+                            character: 5,
+                        },
+                    },
+                    severity: Some(1),
+                    message: "cannot find value `x`".to_owned(),
+                    source: None,
+                    extra: serde_json::Map::new(),
+                },
+            ],
+        );
+        let rendered = model
+            .visible_lines(1, 80)
+            .into_iter()
+            .map(|line| {
+                line.spans
+                    .into_iter()
+                    .map(|span| span.content.into_owned())
+                    .collect::<String>()
+            })
+            .collect::<String>();
+        assert!(
+            rendered.starts_with("let x  cannot find value `x`"),
+            "{rendered}"
+        );
+        assert!(!rendered.contains("unused variable"), "{rendered}");
     }
 }
