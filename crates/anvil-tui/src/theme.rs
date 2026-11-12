@@ -352,6 +352,8 @@ struct CustomTheme {
 
 thread_local! {
     static ACTIVE: Cell<&'static Theme> = const { Cell::new(&Theme::ANVIL_DARK) };
+    static BASE_ACTIVE: Cell<&'static Theme> = const { Cell::new(&Theme::ANVIL_DARK) };
+    static HIGH_CONTRAST: Cell<bool> = const { Cell::new(false) };
     static CHOICE: RefCell<Choice> = const { RefCell::new(Choice::Fixed("anvil-dark")) };
     static AUTO: Cell<(&'static str, &'static str)> =
         const { Cell::new(("anvil-dark", "solarized-light")) };
@@ -755,19 +757,46 @@ pub(crate) fn canonical(name: &str) -> Result<&'static str, String> {
 }
 
 pub(crate) fn init_color_support() {
-    if !truecolor_supported() {
-        let theme = active();
-        activate(Box::leak(Box::new(quantize_theme(theme))));
-    }
+    refresh_active();
+}
+
+pub(crate) fn set_high_contrast(enabled: bool) {
+    HIGH_CONTRAST.with(|value| value.set(enabled));
+    refresh_active();
 }
 
 fn activate(theme: &'static Theme) {
-    let theme = if truecolor_supported() {
-        theme
-    } else {
-        Box::leak(Box::new(quantize_theme(theme)))
-    };
+    BASE_ACTIVE.with(|active| active.set(theme));
+    refresh_active();
+}
+
+fn refresh_active() {
+    let mut theme = BASE_ACTIVE.with(Cell::get);
+    if HIGH_CONTRAST.with(Cell::get) {
+        theme = Box::leak(Box::new(high_contrast_theme(theme)));
+    }
+    if !truecolor_supported() {
+        theme = Box::leak(Box::new(quantize_theme(theme)));
+    }
     ACTIVE.with(|active| active.set(theme));
+}
+
+fn high_contrast_theme(theme: &Theme) -> Theme {
+    let mut theme = *theme;
+    let light = matches!(theme.bg, Color::Rgb(red, green, blue) if u16::from(red) + u16::from(green) + u16::from(blue) > 384);
+    if light {
+        theme.text = Color::Rgb(0, 0, 0);
+        theme.muted = Color::Rgb(30, 30, 30);
+        theme.dim = Color::Rgb(45, 45, 45);
+        theme.border = Color::Rgb(50, 50, 50);
+    } else {
+        theme.text = Color::Rgb(255, 255, 255);
+        theme.muted = Color::Rgb(220, 220, 220);
+        theme.dim = Color::Rgb(195, 195, 195);
+        theme.border = Color::Rgb(150, 150, 150);
+    }
+    theme.selection = Color::Rgb(0, 70, 160);
+    theme
 }
 
 fn quantize_theme(theme: &Theme) -> Theme {
@@ -1179,6 +1208,14 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn high_contrast_theme_uses_readable_text() {
+        let theme = high_contrast_theme(&Theme::ANVIL_DARK);
+        assert_eq!(theme.text, Color::Rgb(255, 255, 255));
+        assert!(contrast(theme.text, theme.bg) >= 7.0);
+        assert!(contrast(theme.muted, theme.bg) >= 4.5);
     }
 
     #[test]

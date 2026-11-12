@@ -14,6 +14,8 @@ const ENV_SOFT_WRAP: &str = "ANVIL_EDITOR_SOFT_WRAP";
 const ENV_FORMAT_ON_SAVE: &str = "ANVIL_EDITOR_FORMAT_ON_SAVE";
 const ENV_SEARCH_CASE_SENSITIVE: &str = "ANVIL_SEARCH_CASE_SENSITIVE";
 const ENV_INLAY_HINTS: &str = "ANVIL_LSP_INLAY_HINTS";
+const ENV_REDUCED_MOTION: &str = "ANVIL_REDUCED_MOTION";
+const ENV_HIGH_CONTRAST: &str = "ANVIL_HIGH_CONTRAST";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct EditorSettings {
@@ -34,10 +36,17 @@ pub(crate) struct LspSettings {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct UiSettings {
+    pub(crate) reduced_motion: bool,
+    pub(crate) high_contrast: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Settings {
     pub(crate) editor: EditorSettings,
     pub(crate) search: SearchSettings,
     pub(crate) lsp: LspSettings,
+    pub(crate) ui: UiSettings,
 }
 
 impl Default for Settings {
@@ -53,6 +62,10 @@ impl Default for Settings {
                 case_sensitive: false,
             },
             lsp: LspSettings { inlay_hints: true },
+            ui: UiSettings {
+                reduced_motion: false,
+                high_contrast: false,
+            },
         }
     }
 }
@@ -107,6 +120,9 @@ pub(crate) fn save_to_path(path: &Path, settings: Settings) -> Result<(), String
     search["case_sensitive"] = toml_edit::value(settings.search.case_sensitive);
     let lsp = table_mut(&mut document, "lsp")?;
     lsp["inlay_hints"] = toml_edit::value(settings.lsp.inlay_hints);
+    let ui = table_mut(&mut document, "ui")?;
+    ui["reduced_motion"] = toml_edit::value(settings.ui.reduced_motion);
+    ui["high_contrast"] = toml_edit::value(settings.ui.high_contrast);
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)
             .map_err(|error| format!("cannot create {}: {error}", parent.display()))?;
@@ -138,7 +154,7 @@ pub(crate) fn parse(text: &str) -> Result<Settings, String> {
         .parse::<toml_edit::DocumentMut>()
         .map_err(|error| format!("invalid settings TOML: {error}"))?;
     for (key, _) in document.iter() {
-        if !matches!(key, "theme" | "editor" | "search" | "lsp") {
+        if !matches!(key, "theme" | "editor" | "search" | "lsp" | "ui") {
             return Err(format!("unknown settings section [{key}]"));
         }
     }
@@ -167,6 +183,12 @@ pub(crate) fn parse(text: &str) -> Result<Settings, String> {
     }
     if let Some(inlay_hints) = file.lsp.inlay_hints {
         settings.lsp.inlay_hints = inlay_hints;
+    }
+    if let Some(reduced_motion) = file.ui.reduced_motion {
+        settings.ui.reduced_motion = reduced_motion;
+    }
+    if let Some(high_contrast) = file.ui.high_contrast {
+        settings.ui.high_contrast = high_contrast;
     }
     Ok(settings)
 }
@@ -200,6 +222,12 @@ fn apply_env(
     }
     if let Some(value) = get(ENV_INLAY_HINTS) {
         settings.lsp.inlay_hints = parse_bool(ENV_INLAY_HINTS, &value)?;
+    }
+    if let Some(value) = get(ENV_REDUCED_MOTION) {
+        settings.ui.reduced_motion = parse_bool(ENV_REDUCED_MOTION, &value)?;
+    }
+    if let Some(value) = get(ENV_HIGH_CONTRAST) {
+        settings.ui.high_contrast = parse_bool(ENV_HIGH_CONTRAST, &value)?;
     }
     Ok(settings)
 }
@@ -236,6 +264,7 @@ struct SettingsFile {
     editor: EditorFile,
     search: SearchFile,
     lsp: LspFile,
+    ui: UiFile,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -259,6 +288,13 @@ struct LspFile {
     inlay_hints: Option<bool>,
 }
 
+#[derive(Debug, Default, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+struct UiFile {
+    reduced_motion: Option<bool>,
+    high_contrast: Option<bool>,
+}
+
 impl crate::Model {
     pub(crate) fn apply_settings(&mut self, settings: Settings) {
         self.settings = settings;
@@ -266,6 +302,7 @@ impl crate::Model {
         self.inlay_hints.clear();
         self.inlay_pending = None;
         self.inlay_checked = None;
+        crate::theme::set_high_contrast(settings.ui.high_contrast);
         self.dirty = true;
     }
 }
@@ -289,6 +326,10 @@ mod tests {
                     case_sensitive: false,
                 },
                 lsp: LspSettings { inlay_hints: true },
+                ui: UiSettings {
+                    reduced_motion: false,
+                    high_contrast: false,
+                },
             }
         );
     }
@@ -405,5 +446,23 @@ mod tests {
         model.apply_settings(settings);
         assert!(model.search.options.case_sensitive);
         assert!(!model.settings.lsp.inlay_hints);
+    }
+}
+
+#[cfg(test)]
+mod accessibility_tests {
+    use super::*;
+
+    #[test]
+    fn parses_and_overrides_ui_accessibility_settings() {
+        let settings = parse("[ui]\nreduced_motion = true\nhigh_contrast = true\n").expect("parse");
+        assert!(settings.ui.reduced_motion);
+        assert!(settings.ui.high_contrast);
+        let settings = apply_env(settings, |name| {
+            (name == ENV_REDUCED_MOTION).then(|| "false".to_owned())
+        })
+        .expect("env");
+        assert!(!settings.ui.reduced_motion);
+        assert!(settings.ui.high_contrast);
     }
 }

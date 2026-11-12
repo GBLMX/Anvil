@@ -717,3 +717,22 @@ fn recent_files_and_workspaces_are_bounded_and_deduplicated() {
         model.recent_files.len()
     );
 }
+
+#[test]
+fn reduced_motion_uses_a_static_busy_glyph() {
+    let mut model = Model::new(EditorState::from_text("alpha"), None);
+    model.settings.ui.reduced_motion = true;
+    model.busy = Some("indexing".to_owned());
+    let backend = TestBackend::new(80, 8);
+    let mut terminal = Terminal::new(backend).expect("terminal");
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+    let rendered = terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect::<String>();
+    assert!(rendered.contains("· indexing"), "{rendered}");
+    assert!(!rendered.contains('⠋'), "{rendered}");
+}

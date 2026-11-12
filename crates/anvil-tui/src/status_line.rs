@@ -37,7 +37,7 @@ impl Model {
                     self.diagnostic_count_shown = actual;
                 }
                 self.dirty = true;
-            } else {
+            } else if !self.settings.ui.reduced_motion {
                 self.spinner = self.spinner.wrapping_add(1);
                 self.dirty = true;
             }
@@ -62,6 +62,14 @@ impl Model {
             .unwrap_or(path)
             .display()
             .to_string()
+    }
+
+    pub(crate) fn spinner_glyph(&self) -> &'static str {
+        if self.settings.ui.reduced_motion {
+            "·"
+        } else {
+            crate::render::SPINNER[self.spinner % crate::render::SPINNER.len()]
+        }
     }
 
     pub(crate) fn breadcrumb_text(&self, width: usize) -> String {
@@ -97,7 +105,7 @@ impl Model {
         let diagnostics = if self.diagnostic_count_pending.is_some() {
             format!(
                 "diag [{} {}]",
-                crate::render::SPINNER[self.spinner % crate::render::SPINNER.len()],
+                self.spinner_glyph(),
                 self.diagnostic_count_shown
             )
         } else {

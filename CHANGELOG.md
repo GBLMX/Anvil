@@ -8,6 +8,10 @@ post-`0.5.0` feature line.
 
 ## [Unreleased]
 ### Added
+- Accessibility settings add `[ui] reduced_motion` and `high_contrast` (env
+  `ANVIL_REDUCED_MOTION`/`ANVIL_HIGH_CONTRAST`); reduced motion freezes the
+  spinner, high contrast lifts text/muted/border contrast without changing the
+  selected palette.
 - Startup detects truecolor from `COLORTERM`/`TERM` (override with
   `ANVIL_TRUECOLOR=0|1`); built-in themes are quantized to ANSI-256 when the
   terminal does not advertise direct color.
