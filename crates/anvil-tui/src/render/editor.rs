@@ -22,7 +22,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
         } else {
             name
         };
-        let name = if model.read_only {
+        let name = if model.file.read_only {
             format!("{name} [RO]")
         } else {
             name

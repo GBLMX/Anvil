@@ -288,8 +288,8 @@ Phase 1 started on 2026-11-12:
 - `Model.status` owns status text, the busy label, progress, and spinner.
 - `Model.config` owns settings, in-memory keymap overrides, and typed command
   effects.
-- `Model.file` owns quit/modified/missing/dirty flags, stdin-buffer mode, and
-  the process exit code.
+- `Model.file` owns quit/modified/missing/dirty flags, stdin-buffer and
+  external-editor modes, read-only input mode, and the process exit code.
 - `Model.start_page` owns the start dashboard visibility and the state needed
   to return to it after the help page.
 - `Model.syntax_cache` owns tree-sitter highlight and bracket caches keyed by
@@ -299,8 +299,8 @@ Phase 1 started on 2026-11-12:
   and retry deadlines; requests keep pending maps, document versions, request
   ids, and format-on-save coordination.
 - Existing behavior is unchanged; tests access the composed state explicitly.
-- `Model` now has 24 top-level fields. Remaining mode and settings-adjacent
-  fields move in later behavior-preserving slices.
+- `Model` now has 22 top-level fields. Remaining settings-adjacent fields move
+  in later behavior-preserving slices.
 
 
 ## Acceptance

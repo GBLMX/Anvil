@@ -6,7 +6,7 @@ use crossterm::event::{KeyCode, KeyModifiers};
 
 impl Model {
     pub(crate) fn start_terminal(&mut self, shell: &str) {
-        if self.read_only {
+        if self.file.read_only {
             self.status.text = "E: terminal is unavailable in read-only mode".to_owned();
             self.file.dirty = true;
             return;

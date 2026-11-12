@@ -564,6 +564,10 @@ pub struct FileState {
     pub dirty: bool,
     /// The active buffer was loaded from stdin and has no file path.
     stdin_buffer: bool,
+    /// Reject mutating commands for a read-only input buffer.
+    read_only: bool,
+    /// Whether the process was started as an external editor.
+    editor_mode: bool,
     /// Process exit code accumulated by editor-mode failures or `:cq`.
     exit_code: i32,
 }
@@ -989,13 +993,8 @@ pub struct Model {
     overlays: OverlayState,
     /// Icon and theme persistence state.
     appearance: AppearanceState,
-    /// Reject mutating commands for a read-only input buffer.
-    read_only: bool,
-    /// File locations parsed from the stdin buffer.
     /// Project search and replace runtime state.
     project: ProjectState,
-    /// Whether the process was started as an external editor.
-    editor_mode: bool,
     /// Tree-sitter and bracket caches.
     syntax_cache: SyntaxCacheState,
     /// Plugin discovery, host, manager, installer, and package install state.
@@ -1056,9 +1055,7 @@ impl Model {
                 persist_theme: !cfg!(test),
                 ..Default::default()
             },
-            read_only: false,
             project: ProjectState::default(),
-            editor_mode: false,
             syntax_cache: SyntaxCacheState {
                 highlights: RefCell::new(SyntaxState::default()),
                 bracket: RefCell::new(bracket::BracketCache::default()),
@@ -1226,7 +1223,7 @@ impl Model {
     /// Moves to the end of the cursor line.
     /// Keeps the cursor inside the viewport.
     fn reject_read_only(&mut self) -> bool {
-        if self.read_only {
+        if self.file.read_only {
             self.status.text = "E: read-only buffer".to_owned();
             self.file.dirty = true;
             true

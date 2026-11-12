@@ -404,7 +404,7 @@ impl Model {
     }
 
     pub(crate) fn set_editor_mode(&mut self, enabled: bool) {
-        self.editor_mode = enabled;
+        self.file.editor_mode = enabled;
     }
 
     pub(crate) fn exit_code(&self) -> i32 {
@@ -418,11 +418,11 @@ impl Model {
 
     pub(crate) fn set_stdin_buffer(&mut self, read_only: bool) {
         self.file.stdin_buffer = true;
-        self.read_only = read_only;
+        self.file.read_only = read_only;
         self.start_page.welcome = false;
     }
 
     pub(crate) fn set_read_only(&mut self, read_only: bool) {
-        self.read_only = read_only;
+        self.file.read_only = read_only;
     }
 }

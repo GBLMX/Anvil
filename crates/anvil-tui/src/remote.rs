@@ -182,7 +182,7 @@ impl Model {
                 "editor is busy; finish the current prompt first",
             ));
         }
-        if self.read_only || self.buffers.help_back.is_some() {
+        if self.file.read_only || self.buffers.help_back.is_some() {
             return Err(RpcError::new(codes::POLICY_DENIED, "buffer is read-only"));
         }
         match mode {
@@ -396,7 +396,7 @@ impl Model {
             workspace: self.workspace.path.clone(),
             path: self.session.path.clone(),
             modified: self.file.modified,
-            read_only: self.read_only || self.buffers.help_back.is_some(),
+            read_only: self.file.read_only || self.buffers.help_back.is_some(),
             cursor: self.session.cursor,
             revision: self.session.editor.revision(),
             line_count,

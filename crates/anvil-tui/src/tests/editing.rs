@@ -737,7 +737,7 @@ fn comment_toggle_refuses_read_only_and_unknown_files() {
         EditorState::from_text("one\n"),
         Some(PathBuf::from("test.rs")),
     );
-    model.read_only = true;
+    model.file.read_only = true;
     handle_event(&mut model, ctrl(KeyCode::Char('/')));
     assert!(model.status.text.contains("read-only"));
     assert_eq!(model.session.editor.text().slice(0..4), "one\n");

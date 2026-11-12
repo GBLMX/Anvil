@@ -407,7 +407,7 @@ impl Model {
         let path = match self.absolute_path(&path) {
             Ok(path) => path,
             Err(error) => {
-                if self.editor_mode {
+                if self.file.editor_mode {
                     self.file.exit_code = 1;
                 }
                 self.status.text = format!("E: {error}");
@@ -460,7 +460,7 @@ impl Model {
         let display = path.display().to_string();
         match self.write_file(&path, &text) {
             Ok(()) => {
-                if self.editor_mode {
+                if self.file.editor_mode {
                     self.file.exit_code = 0;
                 }
                 self.session.path = Some(path.clone());
@@ -481,7 +481,7 @@ impl Model {
                 true
             }
             Err(error) => {
-                if self.editor_mode {
+                if self.file.editor_mode {
                     self.file.exit_code = 1;
                 }
                 self.status.text = format!("E: {error}");
@@ -500,7 +500,7 @@ impl Model {
         if !self.config.settings.editor.auto_save
             || !self.file.modified
             || self.session.path.is_none()
-            || self.read_only
+            || self.file.read_only
             || self.file.stdin_buffer
             || self.file.missing
             || self.buffers.help_back.is_some()
@@ -537,7 +537,7 @@ impl Model {
             return false;
         }
         let Some(path) = self.session.path.clone() else {
-            if self.editor_mode {
+            if self.file.editor_mode {
                 self.file.exit_code = 1;
             }
             self.status.text = "E: no file name".to_owned();
