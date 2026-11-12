@@ -267,6 +267,7 @@ fn execute_normal_command(model: &mut Model, command: NormalCommand) {
             let _ = model.take_count();
             model.repeat_last_change(count);
         }
+        NormalCommand::ToggleComment => model.toggle_comment(),
         NormalCommand::Count(character) => model.push_count(character),
         NormalCommand::MoveHome => model.move_home(),
         NormalCommand::MoveEnd => model.move_end(),

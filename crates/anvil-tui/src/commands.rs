@@ -121,6 +121,7 @@ impl Model {
             ("git-blame", "") => self.request_git_blame(),
             ("undo", "") => self.undo(),
             ("redo", "") => self.redo(),
+            ("comment", "") => self.toggle_comment(),
             ("git-conflicts", "") => self.request_git_conflicts(),
             ("git-conflict-base", "") => self.request_git_conflict_stage(1),
             ("git-conflict-ours", "") => self.request_git_conflict_stage(2),

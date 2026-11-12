@@ -40,6 +40,7 @@ pub(crate) enum NormalCommand {
     Undo,
     Redo,
     RepeatChange,
+    ToggleComment,
     Count(char),
     MoveHome,
     MoveEnd,
@@ -78,6 +79,7 @@ impl NormalCommand {
             Undo => Some(command::UNDO),
             Redo => Some(command::REDO),
             RepeatChange => Some(command::REPEAT_CHANGE),
+            ToggleComment => Some(command::TOGGLE_COMMENT),
             MoveHome => Some(command::LINE_START),
             MoveEnd => Some(command::LINE_END),
             MoveWords(WordMotion::NextStart) => Some(command::WORD_NEXT),
@@ -119,6 +121,7 @@ impl NormalCommand {
             "editor.undo" => Self::Undo,
             "editor.redo" => Self::Redo,
             "editor.repeat_change" => Self::RepeatChange,
+            "editor.toggle_comment" => Self::ToggleComment,
             "cursor.line_start" => Self::MoveHome,
             "cursor.line_end" => Self::MoveEnd,
             "cursor.word_next" => Self::MoveWords(WordMotion::NextStart),
@@ -157,6 +160,7 @@ pub(crate) fn normal_action(key: KeyPress, count: usize) -> Option<NormalCommand
         KeyCode::Char('G') if text_input => Some(NormalCommand::MoveFileEnd),
         KeyCode::Char('i') if text_input => Some(NormalCommand::InsertHere),
         KeyCode::Char(':') if text_input => Some(NormalCommand::CommandLine),
+        KeyCode::Char('/') | KeyCode::Char('_') if key.ctrl() => Some(NormalCommand::ToggleComment),
         KeyCode::Char('/') if text_input => Some(NormalCommand::Search),
         KeyCode::Char('a') if text_input => Some(NormalCommand::Append),
         KeyCode::Char('A') if text_input => Some(NormalCommand::AppendLineEnd),
@@ -1055,6 +1059,14 @@ mod tests {
         assert_eq!(
             normal_action(key(KeyCode::Char('s'), KeyModifiers::ALT), 0),
             Some(NormalCommand::SplitSelection)
+        );
+    }
+
+    #[test]
+    fn ctrl_slash_toggles_comments() {
+        assert_eq!(
+            normal_action(key(KeyCode::Char('/'), KeyModifiers::CONTROL), 0),
+            Some(NormalCommand::ToggleComment)
         );
     }
 

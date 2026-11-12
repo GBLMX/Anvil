@@ -236,6 +236,10 @@ pub const COMMANDS: &[CommandSpec] = &[
         capability: Capability::Edit,
     },
     CommandSpec {
+        name: "comment",
+        capability: Capability::Edit,
+    },
+    CommandSpec {
         name: "git-conflicts",
         capability: Capability::Git,
     },

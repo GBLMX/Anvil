@@ -862,6 +862,83 @@ impl Model {
         self.exit_visual();
     }
 
+    pub(crate) fn toggle_comment(&mut self) {
+        if self.reject_read_only() {
+            return;
+        }
+        let Some(path) = self.path.as_deref() else {
+            self.status = "E: comment: unnamed buffer".to_owned();
+            self.dirty = true;
+            return;
+        };
+        let Some(style) = comment::comment_style(path) else {
+            self.status = "E: comment: unsupported file type".to_owned();
+            self.dirty = true;
+            return;
+        };
+        let lines = self.selected_line_ranges();
+        if lines.is_empty() {
+            self.status = "E: comment: no lines".to_owned();
+            self.dirty = true;
+            return;
+        }
+        if lines.len() > comment::MAX_COMMENT_LINES {
+            self.status = "E: comment: too many lines".to_owned();
+            self.dirty = true;
+            return;
+        }
+        let text = self.editor.text().slice(0..self.editor.text().len_bytes());
+        let Some(edits) = comment::toggle_edits(&text, &lines, style.line) else {
+            self.status = "E: comment: no changes".to_owned();
+            self.dirty = true;
+            return;
+        };
+        let count = lines.len();
+        if !self.editor.apply_transaction(edits) {
+            self.status = "E: comment: edit failed".to_owned();
+            self.dirty = true;
+            return;
+        }
+        self.sync_cursor_from_selection();
+        self.modified = true;
+        self.dirty = true;
+        self.status = format!("toggled comment on {count} line(s)");
+    }
+
+    fn selected_line_ranges(&self) -> Vec<std::ops::Range<usize>> {
+        let mut ranges = Vec::new();
+        for (anchor, head) in self.editor.selection_bytes() {
+            let start = anchor.min(head);
+            let end = anchor.max(head);
+            let Some(first) = self.editor.line_range_at(start) else {
+                continue;
+            };
+            let last_offset = if end > start {
+                self.editor.previous_grapheme_boundary(end).unwrap_or(end)
+            } else {
+                end
+            };
+            let Some(last) = self.editor.line_range_at(last_offset) else {
+                continue;
+            };
+            let mut at = first.start;
+            loop {
+                let Some(range) = self.editor.line_range_at(at) else {
+                    break;
+                };
+                let done = range.end >= last.end || range.end == at;
+                ranges.push(range.clone());
+                if done || ranges.len() > comment::MAX_COMMENT_LINES {
+                    break;
+                }
+                at = range.end;
+            }
+        }
+        ranges.sort_by_key(|range| range.start);
+        ranges.dedup_by_key(|range| range.start);
+        ranges
+    }
+
     pub(crate) fn insert_text(&mut self, text: &str) {
         if text.is_empty() {
             return;

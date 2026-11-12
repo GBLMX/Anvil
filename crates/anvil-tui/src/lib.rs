@@ -44,6 +44,7 @@ mod clipboard;
 mod command_line;
 mod command_palette;
 mod commands;
+mod comment;
 mod editing;
 mod file_io;
 mod file_tree_ui;

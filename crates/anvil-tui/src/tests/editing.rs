@@ -671,3 +671,60 @@ fn visual_operations_refuse_writes_to_help_buffer() {
         assert_eq!(model.editor.text().slice(0..HELP_TEXT.len()), HELP_TEXT);
     }
 }
+
+#[test]
+fn ctrl_slash_toggles_comments_and_undoes_once() {
+    let mut model = Model::new(
+        EditorState::from_text("one\n  two\n"),
+        Some(PathBuf::from("test.rs")),
+    );
+    assert!(model.editor.set_selection_bytes(0, 10));
+    handle_event(&mut model, ctrl(KeyCode::Char('/')));
+    assert_eq!(model.editor.text().slice(0..16), "// one\n  // two\n");
+    assert!(model.modified);
+    assert!(model.status.contains("2 line"));
+
+    handle_event(&mut model, ctrl(KeyCode::Char('/')));
+    assert_eq!(model.editor.text().slice(0..10), "one\n  two\n");
+
+    handle_event(&mut model, ctrl(KeyCode::Char('/')));
+    assert_eq!(model.editor.text().slice(0..16), "// one\n  // two\n");
+
+    handle_event(&mut model, key(KeyCode::Char('u')));
+    assert_eq!(model.editor.text().slice(0..10), "one\n  two\n");
+}
+
+#[test]
+fn comment_toggle_refuses_read_only_and_unknown_files() {
+    let mut model = Model::new(
+        EditorState::from_text("one\n"),
+        Some(PathBuf::from("test.rs")),
+    );
+    model.read_only = true;
+    handle_event(&mut model, ctrl(KeyCode::Char('/')));
+    assert!(model.status.contains("read-only"));
+    assert_eq!(model.editor.text().slice(0..4), "one\n");
+
+    let mut unknown = Model::new(
+        EditorState::from_text("one\n"),
+        Some(PathBuf::from("test.unknown")),
+    );
+    handle_event(&mut unknown, ctrl(KeyCode::Char('/')));
+    assert!(unknown.status.contains("unsupported"));
+    assert_eq!(unknown.editor.text().slice(0..4), "one\n");
+}
+
+#[test]
+fn ex_comment_toggles_the_current_line() {
+    let mut model = Model::new(
+        EditorState::from_text("one\n"),
+        Some(PathBuf::from("test.py")),
+    );
+    handle_event(&mut model, key(KeyCode::Char(':')));
+    type_text(&mut model, "comment");
+    handle_event(&mut model, key(KeyCode::Enter));
+    let len = model.editor.text().len_bytes();
+    let text = model.editor.text().slice(0..len);
+    assert_eq!(text, "# one\n", "status={}", model.status);
+    assert!(model.modified);
+}

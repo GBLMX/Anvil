@@ -121,6 +121,7 @@ editor.delete_forward
 editor.put
 editor.undo
 editor.redo
+editor.toggle_comment
 cursor.line_start
 cursor.line_end
 cursor.word_next

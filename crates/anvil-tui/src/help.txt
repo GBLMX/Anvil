@@ -47,9 +47,11 @@ Normal mode
   yw / yb / ye        yank word forward / back / end
   p                   put unnamed register
   u / Ctrl+r          undo / redo
+  Ctrl+/              toggle line comments
   /pattern            incremental search; Enter accepts, Esc restores cursor
   :undo / :redo       undo / redo via Ex command
   n / N               next / previous match
+  :comment            toggle line comments via Ex command
   Ctrl-r / Ctrl-w / Ctrl-c  regex / whole-word / case toggles in search
   :replace text       replace current match
   :replace-all text   replace all matches atomically

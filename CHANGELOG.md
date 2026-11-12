@@ -8,6 +8,10 @@ post-`0.5.0` feature line.
 
 ## [Unreleased]
 ### Added
+- `Ctrl+/` and `:comment` toggle line comments for the selected lines in
+  Rust, Go, shell, Python, TOML, YAML, JSONC, Makefile, Dockerfile, and
+  `go.mod` files. The operation is one undo transaction and refuses
+  read-only buffers.
 - `anvil-ctl` is a JSON-capable control plane for a running TUI: `open`,
   `save`, `edit set|insert`, bounded `query`, allowlisted Ex `command`, and
   `quit`, with stable exit codes, timeouts, and typed errors. The control
