@@ -718,7 +718,7 @@ pub(crate) fn reload_custom_if_changed() -> Result<bool, String> {
                 .map(|theme| theme.theme)
         })
     {
-        ACTIVE.with(|active| active.set(theme));
+        activate(theme);
         CHOICE.with(|current| *current.borrow_mut() = Choice::Fixed(theme.name));
     }
     Ok(true)
@@ -752,6 +752,76 @@ fn resolve(name: &str) -> Result<&'static Theme, String> {
 
 pub(crate) fn canonical(name: &str) -> Result<&'static str, String> {
     resolve(name).map(|theme| theme.name)
+}
+
+pub(crate) fn init_color_support() {
+    if !truecolor_supported() {
+        let theme = active();
+        activate(Box::leak(Box::new(quantize_theme(theme))));
+    }
+}
+
+fn activate(theme: &'static Theme) {
+    let theme = if truecolor_supported() {
+        theme
+    } else {
+        Box::leak(Box::new(quantize_theme(theme)))
+    };
+    ACTIVE.with(|active| active.set(theme));
+}
+
+fn quantize_theme(theme: &Theme) -> Theme {
+    let mut theme = *theme;
+    for color in [
+        &mut theme.bg,
+        &mut theme.surface,
+        &mut theme.surface_alt,
+        &mut theme.code_block_bg,
+        &mut theme.border,
+        &mut theme.text,
+        &mut theme.muted,
+        &mut theme.dim,
+        &mut theme.accent,
+        &mut theme.selection,
+        &mut theme.success,
+        &mut theme.warning,
+        &mut theme.error,
+        &mut theme.magenta,
+        &mut theme.white,
+        &mut theme.syntax_keyword,
+        &mut theme.syntax_string,
+        &mut theme.syntax_comment,
+        &mut theme.syntax_number,
+        &mut theme.syntax_function,
+        &mut theme.syntax_type,
+        &mut theme.syntax_property,
+        &mut theme.syntax_constant,
+        &mut theme.syntax_heading,
+        &mut theme.syntax_link,
+        &mut theme.syntax_code,
+        &mut theme.syntax_emphasis,
+        &mut theme.syntax_list,
+        &mut theme.syntax_quote,
+        &mut theme.syntax_table,
+    ] {
+        *color = quantize_color(*color);
+    }
+    for style in theme.status_modes.iter_mut().flatten() {
+        if let Some(color) = style.fg {
+            style.fg = Some(quantize_color(color));
+        }
+        if let Some(color) = style.bg {
+            style.bg = Some(quantize_color(color));
+        }
+    }
+    theme
+}
+
+fn quantize_color(color: Color) -> Color {
+    match color {
+        Color::Rgb(red, green, blue) => Color::Indexed(nearest_ansi_256(red, green, blue)),
+        other => other,
+    }
 }
 
 pub(crate) fn set_background_is_light(value: Option<bool>) {
@@ -793,7 +863,7 @@ pub(crate) fn apply_choice(choice: Choice, runtime: bool) -> Result<(), String> 
     if matches!(choice, Choice::Auto { .. }) {
         AUTO.with(|auto| auto.set((dark.name, light.name)));
     }
-    ACTIVE.with(|active| active.set(selected));
+    activate(selected);
     CHOICE.with(|current| *current.borrow_mut() = choice);
     if runtime {
         RUNTIME.with(|current| *current.borrow_mut() = Some(choice));
@@ -1109,6 +1179,14 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn quantizes_builtin_rgb_colors_for_ansi_terminals() {
+        let theme = quantize_theme(&Theme::ANVIL_DARK);
+        assert!(matches!(theme.bg, Color::Indexed(_)));
+        assert!(matches!(theme.text, Color::Indexed(_)));
+        assert!(matches!(theme.accent, Color::Indexed(_)));
     }
 
     #[test]

@@ -59,6 +59,7 @@ pub fn run_with_input(
             format!("workspace is not a directory: {}", workspace.display()),
         ));
     }
+    theme::init_color_support();
     theme::set_background_is_light(terminal_background::query_is_light());
     let (mut model, session) = match GatewaySession::start(&workspace) {
         Ok((session, client, lsp_client)) => {

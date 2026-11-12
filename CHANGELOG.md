@@ -8,6 +8,9 @@ post-`0.5.0` feature line.
 
 ## [Unreleased]
 ### Added
+- Startup detects truecolor from `COLORTERM`/`TERM` (override with
+  `ANVIL_TRUECOLOR=0|1`); built-in themes are quantized to ANSI-256 when the
+  terminal does not advertise direct color.
 - Recent workspaces and files persist in `$XDG_STATE_HOME/anvil/recent.json`;
   `:recent-files` opens the fuzzy picker over recent files and
   `:recent-workspaces` lists recent workspaces.
