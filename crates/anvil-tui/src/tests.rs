@@ -8,6 +8,7 @@ use ratatui::{Terminal, backend::TestBackend};
 
 mod buffers;
 mod editing;
+mod gateway_multi_root;
 mod interaction;
 mod lsp_tests;
 mod render;
