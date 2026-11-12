@@ -482,6 +482,7 @@ impl Model {
             "hidden files hidden".to_owned()
         };
         self.sync_tree_watches();
+        self.request_git_status();
         self.dirty = true;
     }
 
@@ -773,6 +774,7 @@ impl Model {
             self.tree_refresh_queued = true;
         }
         self.sync_tree_watches();
+        self.request_git_status();
         self.finish_tree_refresh();
     }
 
