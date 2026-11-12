@@ -14,7 +14,11 @@ post-`0.5.0` feature line.
 - Project search fans out to every trusted root, waits for all answers, merges
   absolute paths with a global cap, deduplicates results, ignores stale
   generations after cancel, and opens secondary-root locations through the
-  owning root. File tree and mutation routing remain primary-root-only.
+  owning root.
+- The file tree shows secondary workspace roots as top-level nodes, expands
+  them through the owning worker or local fallback, splits tree watches across
+  roots, and preserves secondary subtrees across primary refreshes. Mutation
+  routing remains primary-root-only.
 - `Ctrl+/` and `:comment` toggle line comments for the selected lines in
   Rust, Go, shell, Python, TOML, YAML, JSONC, Makefile, Dockerfile, and
   `go.mod` files. The operation is one undo transaction and refuses

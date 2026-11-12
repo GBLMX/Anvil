@@ -16,6 +16,13 @@ impl Model {
                 if let Some(worker) = self.file_worker.as_ref() {
                     let _ = worker.request(FileRequest::List(workspace));
                 }
+                self.ensure_root_tree_nodes();
+                let roots = self.root_file_workers.keys().cloned().collect::<Vec<_>>();
+                for root in roots {
+                    if let Some(worker) = self.root_file_workers.get(&root) {
+                        let _ = worker.request(FileRequest::List(root));
+                    }
+                }
                 self.status = "loading file tree".to_owned();
             } else {
                 match self.tree_entries(&workspace) {
@@ -34,7 +41,10 @@ impl Model {
                     }
                     Err(error) => self.status = format!("E: tree: {error}"),
                 }
+                self.ensure_root_tree_nodes();
             }
+        } else {
+            self.ensure_root_tree_nodes();
         }
         self.tree_visible = true;
         self.ui.focus.tree = true;
@@ -85,30 +95,42 @@ impl Model {
             {
                 self.tree.remove(index + 1);
             }
-        } else if self.file_worker.is_some() || self.ensure_file_worker() {
-            self.tree[index].expanded = true;
-            if let Some(worker) = self.file_worker.as_ref() {
-                let _ = worker.request(FileRequest::List(entry.path));
-            }
-            self.status = "loading directory".to_owned();
         } else {
-            match self.tree_entries(&entry.path) {
-                Ok(children) => {
-                    self.tree[index].expanded = true;
-                    let children: Vec<TreeEntry> = children
-                        .into_iter()
-                        .filter(|child| self.tree_entry_visible(&child.name, child.is_dir))
-                        .map(|child| TreeEntry {
-                            path: entry.path.join(child.name),
-                            depth: entry.depth + 1,
-                            is_dir: child.is_dir,
-                            ino: child.ino,
-                            expanded: false,
-                        })
-                        .collect();
-                    self.tree.splice(index + 1..index + 1, children);
+            let owned = self.workspace_roots.owning_root(&entry.path);
+            if let Some(root) = owned
+                && !root.trusted
+            {
+                self.status = format!("E: untrusted workspace root: {}", root.path.display());
+                self.dirty = true;
+                return;
+            }
+            let has_worker =
+                self.ensure_file_worker() && self.file_worker_for_path(&entry.path).is_some();
+            if has_worker {
+                self.tree[index].expanded = true;
+                if let Some(worker) = self.file_worker_for_path(&entry.path) {
+                    let _ = worker.request(FileRequest::List(entry.path));
                 }
-                Err(error) => self.status = format!("E: tree: {error}"),
+                self.status = "loading directory".to_owned();
+            } else {
+                match self.tree_entries(&entry.path) {
+                    Ok(children) => {
+                        self.tree[index].expanded = true;
+                        let children: Vec<TreeEntry> = children
+                            .into_iter()
+                            .filter(|child| self.tree_entry_visible(&child.name, child.is_dir))
+                            .map(|child| TreeEntry {
+                                path: entry.path.join(child.name),
+                                depth: entry.depth + 1,
+                                is_dir: child.is_dir,
+                                ino: child.ino,
+                                expanded: false,
+                            })
+                            .collect();
+                        self.tree.splice(index + 1..index + 1, children);
+                    }
+                    Err(error) => self.status = format!("E: tree: {error}"),
+                }
             }
         }
         self.sync_tree_watches();

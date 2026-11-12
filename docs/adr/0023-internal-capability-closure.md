@@ -223,7 +223,9 @@ acceptable; an invisible one is not.
 - Multi-root: trusted-root `FileWorker`s are polled; quick-open enumerates,
   labels, and previews files from every trusted root; project search fans out,
   merges/deduplicates absolute results, and opens secondary-root locations.
-  File tree and mutation fan-out remain primary-root-only.
+  The file tree renders secondary root nodes, expands through owning workers,
+  splits watches by root, and preserves secondary subtrees across primary
+  refreshes. Mutation fan-out remains primary-root-only.
 - File lifecycle: auto-save and atomic `:config-reload` are implemented.
   External settings file watching remains explicit; persistent undo is still
   rejected for this phase.

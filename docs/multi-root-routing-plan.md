@@ -1,9 +1,10 @@
 # Multi-Root File Tree and Search Routing Plan
 
-Status: phase 1 plus quick-open and project-search fan-out landed. Trust, root
-registration, per-root gateway lifecycle, open/save routing, trusted-root
-quick-open enumeration/preview, and project-search merge/cancel are
-implemented. File tree and mutation routing still assume one primary workspace.
+Status: phase 1 plus quick-open, project-search, and file-tree root nodes
+landed. Trust, root registration, per-root gateway lifecycle, open/save
+routing, trusted-root quick-open enumeration/preview, project-search
+merge/cancel, and secondary-root tree list/expand/watch are implemented.
+Mutation routing still assumes one primary workspace.
 
 ## 1. Scope
 
@@ -35,7 +36,9 @@ Out of scope for this plan:
   into quick-open as absolute paths.
 - `FileEvent::ProjectSearch` is merged under a shared generation; secondary
   paths are converted to absolute paths before insertion.
-- `Model.tree` is a flat list of primary-root children.
+- `Model.tree` keeps primary children at depth 0 and appends secondary root
+  nodes with children at depth 1. Primary refreshes preserve secondary
+  subtrees.
 - `FuzzyState.entries` mixes primary-relative and secondary-root absolute
   paths. Project-search results are stored separately with a global cap.
 
@@ -114,6 +117,9 @@ fn poll_file_workers(&mut self) {
 matter.
 
 ## 6. File Tree
+
+Status: landed for root nodes, list/expand, and watch routing. Mutations remain
+pending.
 
 Current model:
 
