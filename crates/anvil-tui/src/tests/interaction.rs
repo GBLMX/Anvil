@@ -66,6 +66,26 @@ fn popup_consumes_j_before_editor_motion() {
 }
 
 #[test]
+fn lsp_list_unknown_key_cancels_and_passes_through() {
+    let mut model = Model::new(EditorState::from_text("alpha\n"), None);
+    model.start_page.welcome = false;
+    model.overlays.lsp_results.document_symbols = Some(SymbolState {
+        items: vec![SymbolItem {
+            name: "alpha".to_owned(),
+            detail: None,
+            line: 0,
+            character: 0,
+            depth: 0,
+        }],
+        selected: 0,
+    });
+
+    handle_event(&mut model, key(KeyCode::Char('i')));
+    assert!(model.overlays.lsp_results.document_symbols.is_none());
+    assert!(matches!(model.ui.input_mode, InputMode::Insert));
+}
+
+#[test]
 fn pending_space_renders_keymap_continuations() {
     let mut model = Model::new(EditorState::from_text("alpha"), None);
     model.start_page.welcome = false;

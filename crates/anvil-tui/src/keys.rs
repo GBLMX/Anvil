@@ -543,6 +543,83 @@ fn execute_command_palette_action(model: &mut Model, action: PickerAction, key: 
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum LspListKind {
+    CallHierarchy,
+    References,
+    DocumentSymbols,
+    CodeActions,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum LspListAction {
+    Previous,
+    Next,
+    Accept,
+    Cancel,
+    CancelAndPassThrough,
+}
+
+fn active_lsp_list(model: &Model) -> Option<LspListKind> {
+    if model.overlays.lsp_results.call_hierarchy.is_some() {
+        Some(LspListKind::CallHierarchy)
+    } else if model.overlays.lsp_results.references.is_some() {
+        Some(LspListKind::References)
+    } else if model.overlays.lsp_results.document_symbols.is_some() {
+        Some(LspListKind::DocumentSymbols)
+    } else if model.overlays.lsp_results.code_actions.is_some() {
+        Some(LspListKind::CodeActions)
+    } else {
+        None
+    }
+}
+
+fn lsp_list_action(key: KeyPress, vi_keys: bool) -> LspListAction {
+    match key.code {
+        KeyCode::Esc => LspListAction::Cancel,
+        KeyCode::Up => LspListAction::Previous,
+        KeyCode::Down => LspListAction::Next,
+        KeyCode::Enter => LspListAction::Accept,
+        KeyCode::Char('k') if vi_keys => LspListAction::Previous,
+        KeyCode::Char('j') if vi_keys => LspListAction::Next,
+        _ => LspListAction::CancelAndPassThrough,
+    }
+}
+
+fn execute_lsp_list_action(model: &mut Model, kind: LspListKind, action: LspListAction) -> bool {
+    match (kind, action) {
+        (LspListKind::CallHierarchy, LspListAction::Previous) => model.move_call_hierarchy(-1),
+        (LspListKind::CallHierarchy, LspListAction::Next) => model.move_call_hierarchy(1),
+        (LspListKind::CallHierarchy, LspListAction::Accept) => model.apply_call_hierarchy(),
+        (
+            LspListKind::CallHierarchy,
+            LspListAction::Cancel | LspListAction::CancelAndPassThrough,
+        ) => {
+            model.cancel_call_hierarchy();
+        }
+        (LspListKind::References, LspListAction::Previous) => model.move_reference(-1),
+        (LspListKind::References, LspListAction::Next) => model.move_reference(1),
+        (LspListKind::References, LspListAction::Accept) => model.apply_reference(),
+        (LspListKind::References, LspListAction::Cancel | LspListAction::CancelAndPassThrough) => {
+            model.cancel_references();
+        }
+        (LspListKind::DocumentSymbols, LspListAction::Previous) => model.move_document_symbol(-1),
+        (LspListKind::DocumentSymbols, LspListAction::Next) => model.move_document_symbol(1),
+        (LspListKind::DocumentSymbols, LspListAction::Accept) => model.apply_document_symbol(),
+        (
+            LspListKind::DocumentSymbols,
+            LspListAction::Cancel | LspListAction::CancelAndPassThrough,
+        ) => model.cancel_document_symbols(),
+        (LspListKind::CodeActions, LspListAction::Previous) => model.move_code_action(-1),
+        (LspListKind::CodeActions, LspListAction::Next) => model.move_code_action(1),
+        (LspListKind::CodeActions, LspListAction::Accept) => model.apply_code_action(),
+        (LspListKind::CodeActions, LspListAction::Cancel | LspListAction::CancelAndPassThrough) => {
+            model.cancel_code_actions();
+        }
+    }
+    !matches!(action, LspListAction::CancelAndPassThrough)
+}
+
 fn execute_command_id(model: &mut Model, id: &str, key: KeyPress) -> bool {
     if let Some(command) = NormalCommand::from_id(id) {
         execute_normal_command(model, command);
@@ -776,119 +853,15 @@ fn handle_key(model: &mut Model, key: KeyPress) {
         }
         return;
     }
-    if model.overlays.lsp_results.call_hierarchy.is_some() {
-        let consumed = match key.code {
-            KeyCode::Esc => {
-                model.cancel_call_hierarchy();
-                true
-            }
-            KeyCode::Up | KeyCode::Char('k') => {
-                model.move_call_hierarchy(-1);
-                true
-            }
-            KeyCode::Down | KeyCode::Char('j') => {
-                model.move_call_hierarchy(1);
-                true
-            }
-            KeyCode::Enter => {
-                model.apply_call_hierarchy();
-                true
-            }
-            _ => {
-                model.cancel_call_hierarchy();
-                false
-            }
-        };
-        if consumed {
-            return;
-        }
-    }
-    if model.overlays.lsp_results.references.is_some() {
-        let consumed = match key.code {
-            KeyCode::Esc => {
-                model.cancel_references();
-                true
-            }
-            KeyCode::Up | KeyCode::Char('k') => {
-                model.move_reference(-1);
-                true
-            }
-            KeyCode::Down | KeyCode::Char('j') => {
-                model.move_reference(1);
-                true
-            }
-            KeyCode::Enter => {
-                model.apply_reference();
-                true
-            }
-            _ => {
-                model.cancel_references();
-                false
-            }
-        };
-        if consumed {
-            return;
-        }
-    }
-
-    if model.overlays.lsp_results.document_symbols.is_some() {
-        let consumed = match key.code {
-            KeyCode::Esc => {
-                model.cancel_document_symbols();
-                true
-            }
-            KeyCode::Up | KeyCode::Char('k') => {
-                model.move_document_symbol(-1);
-                true
-            }
-            KeyCode::Down | KeyCode::Char('j') => {
-                model.move_document_symbol(1);
-                true
-            }
-            KeyCode::Enter => {
-                model.apply_document_symbol();
-                true
-            }
-            _ => {
-                model.cancel_document_symbols();
-                false
-            }
-        };
-        if consumed {
+    if let Some(kind) = active_lsp_list(model) {
+        let action = lsp_list_action(key, kind != LspListKind::CodeActions);
+        if execute_lsp_list_action(model, kind, action) {
             return;
         }
     }
     if model.overlays.lsp_results.document_highlights.is_some() && key.code == KeyCode::Esc {
         model.cancel_document_highlights();
         return;
-    }
-
-    if model.overlays.lsp_results.code_actions.is_some() {
-        let consumed = match key.code {
-            KeyCode::Esc => {
-                model.cancel_code_actions();
-                true
-            }
-            KeyCode::Up => {
-                model.move_code_action(-1);
-                true
-            }
-            KeyCode::Down => {
-                model.move_code_action(1);
-                true
-            }
-            KeyCode::Enter => {
-                model.apply_code_action();
-                true
-            }
-            _ => {
-                model.cancel_code_actions();
-                false
-            }
-        };
-        if consumed {
-            return;
-        }
     }
 
     if model.overlays.lsp_results.completion.is_some() {
