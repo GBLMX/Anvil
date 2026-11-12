@@ -1,8 +1,8 @@
 # IDE Capability Plan
 
 Status: P0 mostly landed; P1 is in progress. Task runner, test failure explorer,
-and folding persistence landed. Search/replace, problems, quick-open preview,
-and icon themes are owned
+DAP client, and folding persistence landed. Search/replace, problems,
+quick-open preview, and icon themes are owned
 by `0.5.4`/`0.5.7`/`0.5.8`; this plan does not re-schedule them.
 
 Scope: editor-level capabilities that make Anvil usable for daily software work
@@ -42,7 +42,8 @@ reset/hot-reload boundary. Each item needs a deterministic failure test.
   `:task-output`, with background timeout and problems-panel integration.
 - Test explorer with jump-to-failure: `:tests <command>` runs through the task
   runner and opens located failures in a selectable overlay.
-- Debug Adapter Protocol client in a separate process.
+- Debug Adapter Protocol client in a separate process: `dap::DapClient` owns
+  framed stdio, initialize/launch/breakpoints/stepping, responses, and events.
 - Terminal panel with explicit workspace and trust boundaries.
 - Multi-root workspaces with per-root gateway/trust policy.
 - Code folding with session persistence.

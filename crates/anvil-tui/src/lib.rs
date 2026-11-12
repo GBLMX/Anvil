@@ -56,6 +56,7 @@ mod git_gutter;
 mod icon_theme;
 use command_line::CommandCompletion;
 mod code_lens;
+pub mod dap;
 mod inlay_hints;
 pub mod lsp;
 mod lsp_ui;
