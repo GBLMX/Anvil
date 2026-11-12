@@ -232,6 +232,97 @@ impl EditorState {
         self.registers.get(&register).map(String::as_str)
     }
 
+    /// Inner word text object at `cursor`.
+    pub fn inner_word_object(&self, cursor: usize) -> Option<Range<usize>> {
+        let line = self.line_range_at(cursor)?;
+        let text = self.text.slice(line.start..line.end);
+        let local = cursor.saturating_sub(line.start).min(text.len());
+        let class_of = |character: char| {
+            if character.is_whitespace() {
+                0
+            } else if character.is_alphanumeric() || character == '_' {
+                1
+            } else {
+                2
+            }
+        };
+        let current = text[local..]
+            .chars()
+            .next()
+            .map(class_of)
+            .filter(|class| *class != 0)
+            .or_else(|| text[..local].chars().next_back().map(class_of))?;
+        let mut start = local;
+        for (index, character) in text[..local].char_indices().rev() {
+            if class_of(character) != current {
+                break;
+            }
+            start = index;
+        }
+        let mut end = local;
+        for (index, character) in text[local..].char_indices() {
+            if class_of(character) != current {
+                break;
+            }
+            end = local + index + character.len_utf8();
+        }
+        (start < end).then_some(line.start + start..line.start + end)
+    }
+
+    /// Inner quote text object at `cursor`.
+    pub fn inner_quote_object(&self, cursor: usize, quote: char) -> Option<Range<usize>> {
+        let line = self.line_range_at(cursor)?;
+        let text = self.text.slice(line.start..line.end);
+        let local = cursor.saturating_sub(line.start).min(text.len());
+        let left = text[..local].rfind(quote)?;
+        let right = text[local..].find(quote)? + local;
+        (left + quote.len_utf8() <= right)
+            .then_some(line.start + left + quote.len_utf8()..line.start + right)
+    }
+
+    /// Around quote text object at `cursor`.
+    pub fn around_quote_object(&self, cursor: usize, quote: char) -> Option<Range<usize>> {
+        let inner = self.inner_quote_object(cursor, quote)?;
+        let start = inner.start.checked_sub(quote.len_utf8())?;
+        let end = inner.end.checked_add(quote.len_utf8())?;
+        (end <= self.text.len_bytes()
+            && self.text.slice(start..inner.start) == quote.to_string()
+            && self.text.slice(inner.end..end) == quote.to_string())
+        .then_some(start..end)
+    }
+
+    /// Bracket text object at `cursor`; `around` includes delimiters.
+    pub fn bracket_object(&self, cursor: usize, open: char, around: bool) -> Option<Range<usize>> {
+        let close = match open {
+            '(' => ')',
+            '[' => ']',
+            '{' => '}',
+            '<' => '>',
+            _ => return None,
+        };
+        let line = self.line_range_at(cursor)?;
+        let text = self.text.slice(line.start..line.end);
+        let local = cursor.saturating_sub(line.start).min(text.len());
+        let mut stack = Vec::new();
+        for (index, character) in text.char_indices() {
+            if character == open {
+                stack.push(index);
+            } else if character == close
+                && let Some(start) = stack.pop()
+                && start <= local
+                && local <= index
+            {
+                let (start, end) = if around {
+                    (start, index + close.len_utf8())
+                } else {
+                    (start + open.len_utf8(), index)
+                };
+                return (start < end).then_some(line.start + start..line.start + end);
+            }
+        }
+        None
+    }
+
     /// Inserts the unnamed register at `at`, returning the inserted range.
     pub fn put(&mut self, at: usize) -> Option<Range<usize>> {
         if self.yank.is_empty() || at > self.text.len_bytes() || !self.text.is_char_boundary(at) {
@@ -834,6 +925,16 @@ mod tests {
         assert_eq!(state.line_range_at(0), Some(0..2));
         assert_eq!(state.line_range_at(2), Some(2..4));
         assert_eq!(state.line_range_at(4), Some(4..5));
+    }
+
+    #[test]
+    fn text_objects_are_owned_by_editor_state() {
+        let state = EditorState::from_text("alpha beta_1 (xy)\n\"quoted\"");
+        assert_eq!(state.inner_word_object(2), Some(0..5));
+        assert_eq!(state.bracket_object(14, '(', false), Some(14..16));
+        assert_eq!(state.bracket_object(14, '(', true), Some(13..17));
+        assert_eq!(state.inner_quote_object(20, '"'), Some(19..25));
+        assert_eq!(state.around_quote_object(20, '"'), Some(18..26));
     }
 
     #[test]

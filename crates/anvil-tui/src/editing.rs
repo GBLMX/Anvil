@@ -85,91 +85,19 @@ impl Model {
     }
 
     pub(crate) fn inner_word_range(&self) -> Option<std::ops::Range<usize>> {
-        let line = self.editor.line_range_at(self.cursor)?;
-        let text = self.editor.text().slice(line.start..line.end);
-        let local = self.cursor.saturating_sub(line.start).min(text.len());
-        let class_of = |character: char| {
-            if character.is_whitespace() {
-                0
-            } else if character.is_alphanumeric() || character == '_' {
-                1
-            } else {
-                2
-            }
-        };
-        let current = text[local..]
-            .chars()
-            .next()
-            .map(class_of)
-            .filter(|class| *class != 0)
-            .or_else(|| text[..local].chars().next_back().map(class_of))?;
-        let mut start = local;
-        for (index, character) in text[..local].char_indices().rev() {
-            if class_of(character) != current {
-                break;
-            }
-            start = index;
-        }
-        let mut end = local;
-        for (index, character) in text[local..].char_indices() {
-            if class_of(character) != current {
-                break;
-            }
-            end = local + index + character.len_utf8();
-        }
-        (start < end).then_some(line.start + start..line.start + end)
+        self.editor.inner_word_object(self.cursor)
     }
 
     pub(crate) fn inner_quote_range(&self, quote: char) -> Option<std::ops::Range<usize>> {
-        let line = self.editor.line_range_at(self.cursor)?;
-        let text = self.editor.text().slice(line.start..line.end);
-        let local = self.cursor.saturating_sub(line.start).min(text.len());
-        let left = text[..local].rfind(quote)?;
-        let right = text[local..].find(quote)? + local;
-        (left + quote.len_utf8() <= right)
-            .then_some(line.start + left + quote.len_utf8()..line.start + right)
+        self.editor.inner_quote_object(self.cursor, quote)
     }
 
     pub(crate) fn around_quote_range(&self, quote: char) -> Option<std::ops::Range<usize>> {
-        let inner = self.inner_quote_range(quote)?;
-        let text = self.editor.text();
-        let start = inner.start.checked_sub(quote.len_utf8())?;
-        let end = inner.end.checked_add(quote.len_utf8())?;
-        (end <= text.len_bytes()
-            && text.slice(start..inner.start) == quote.to_string()
-            && text.slice(inner.end..end) == quote.to_string())
-        .then_some(start..end)
+        self.editor.around_quote_object(self.cursor, quote)
     }
 
     pub(crate) fn bracket_range(&self, open: char, around: bool) -> Option<std::ops::Range<usize>> {
-        let close = match open {
-            '(' => ')',
-            '[' => ']',
-            '{' => '}',
-            '<' => '>',
-            _ => return None,
-        };
-        let line = self.editor.line_range_at(self.cursor)?;
-        let text = self.editor.text().slice(line.start..line.end);
-        let local = self.cursor.saturating_sub(line.start).min(text.len());
-        let mut stack = Vec::new();
-        for (index, character) in text.char_indices() {
-            if character == open {
-                stack.push(index);
-            } else if character == close
-                && let Some(start) = stack.pop()
-                && start <= local
-                && local <= index
-            {
-                let (start, end) = if around {
-                    (start, index + close.len_utf8())
-                } else {
-                    (start + open.len_utf8(), index)
-                };
-                return (start < end).then_some(line.start + start..line.start + end);
-            }
-        }
-        None
+        self.editor.bracket_object(self.cursor, open, around)
     }
 
     pub(crate) fn around_word_range(&self) -> Option<std::ops::Range<usize>> {
