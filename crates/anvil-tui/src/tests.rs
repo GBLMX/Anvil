@@ -104,25 +104,28 @@ fn split_panes_hold_different_buffers() {
     model.open_path(&right).expect("open right");
     assert_eq!(
         model
+            .session
             .editor
             .text()
-            .slice(0..model.editor.text().len_bytes()),
+            .slice(0..model.session.editor.text().len_bytes()),
         "right text"
     );
     model.focus_split(false);
     assert_eq!(
         model
+            .session
             .editor
             .text()
-            .slice(0..model.editor.text().len_bytes()),
+            .slice(0..model.session.editor.text().len_bytes()),
         "left text"
     );
     model.focus_split(true);
     assert_eq!(
         model
+            .session
             .editor
             .text()
-            .slice(0..model.editor.text().len_bytes()),
+            .slice(0..model.session.editor.text().len_bytes()),
         "right text"
     );
 }
@@ -168,12 +171,12 @@ fn closing_focused_split_restores_left_pane() {
     let mut model = Model::new(EditorState::from_text("left\nright"), None);
     model.split_vertical();
     model.focus_split(true);
-    model.cursor = 5;
+    model.session.cursor = 5;
     model.close_split();
     assert!(model.buffers.split.is_none());
     assert!(!model.ui.focus.split);
-    assert_eq!(model.cursor, 0);
-    assert_eq!(model.editor.text().slice(0..4), "left");
+    assert_eq!(model.session.cursor, 0);
+    assert_eq!(model.session.editor.text().slice(0..4), "left");
 }
 
 #[test]
@@ -193,23 +196,23 @@ fn ctrl_w_v_opens_split_and_ctrl_w_h_l_switches_focus() {
 #[test]
 fn split_panes_keep_independent_cursors() {
     let mut model = Model::new(EditorState::from_text("one\ntwo\nthree"), None);
-    model.cursor = 1;
+    model.session.cursor = 1;
     model.split_vertical();
     assert!(model.buffers.split.is_some());
     assert!(!model.ui.focus.split);
     model.focus_split(true);
     assert!(model.ui.focus.split);
-    assert_eq!(model.cursor, 1);
-    model.cursor = 5;
+    assert_eq!(model.session.cursor, 1);
+    model.session.cursor = 5;
     model.view.scroll = 2;
     model.view.hscroll = 3;
     model.focus_split(false);
     assert!(!model.ui.focus.split);
-    assert_eq!(model.cursor, 1);
+    assert_eq!(model.session.cursor, 1);
     assert_eq!(model.view.scroll, 0);
     assert_eq!(model.view.hscroll, 0);
     model.focus_split(true);
-    assert_eq!(model.cursor, 5);
+    assert_eq!(model.session.cursor, 5);
     assert_eq!(model.view.scroll, 2);
     assert_eq!(model.view.hscroll, 3);
 }
@@ -222,21 +225,24 @@ fn select_word_occurrences_replaces_all_as_one_undo() {
         Some(PathBuf::from("multi.txt")),
     );
     model.select_word_occurrences();
-    assert_eq!(model.editor.selection_bytes().len(), 100);
+    assert_eq!(model.session.editor.selection_bytes().len(), 100);
     model.insert_text("bar");
-    assert_eq!(model.editor.text().slice(0..400), "bar\n".repeat(100));
-    assert_eq!(model.editor.undo_depth(), 1);
+    assert_eq!(
+        model.session.editor.text().slice(0..400),
+        "bar\n".repeat(100)
+    );
+    assert_eq!(model.session.editor.undo_depth(), 1);
     model.undo();
-    assert_eq!(model.editor.text().slice(0..400), original);
-    assert_eq!(model.editor.selection_bytes().len(), 100);
+    assert_eq!(model.session.editor.text().slice(0..400), original);
+    assert_eq!(model.session.editor.selection_bytes().len(), 100);
 }
 
 #[test]
 fn split_selection_lines_creates_one_caret_per_line() {
     let mut model = Model::new(EditorState::from_text("one\ntwo\nthree"), None);
-    assert!(model.editor.set_selection_bytes(0, 7));
+    assert!(model.session.editor.set_selection_bytes(0, 7));
     model.split_selection_lines();
-    assert_eq!(model.editor.selection_bytes().len(), 2);
+    assert_eq!(model.session.editor.selection_bytes().len(), 2);
 }
 
 #[test]
@@ -244,12 +250,18 @@ fn add_cursor_after_motion_uses_the_moved_caret() {
     let mut model = Model::new(EditorState::from_text("alpha\nbeta\ngamma"), None);
     handle_event(&mut model, key(KeyCode::Char('j')));
     handle_event(&mut model, key(KeyCode::Char('C')));
-    assert_eq!(model.editor.selection_bytes(), vec![(6, 6), (11, 11)]);
+    assert_eq!(
+        model.session.editor.selection_bytes(),
+        vec![(6, 6), (11, 11)]
+    );
 
     handle_event(&mut model, key(KeyCode::Char('i')));
     type_text(&mut model, "X");
-    let len = model.editor.text().len_bytes();
-    assert_eq!(model.editor.text().slice(0..len), "alpha\nXbeta\nXgamma");
+    let len = model.session.editor.text().len_bytes();
+    assert_eq!(
+        model.session.editor.text().slice(0..len),
+        "alpha\nXbeta\nXgamma"
+    );
 }
 
 #[test]
@@ -257,22 +269,25 @@ fn escape_merges_cursors_only_in_normal_mode() {
     let mut model = Model::new(EditorState::from_text("alpha\nbeta\ngamma"), None);
     handle_event(&mut model, key(KeyCode::Char('j')));
     handle_event(&mut model, key(KeyCode::Char('C')));
-    assert_eq!(model.editor.selection_bytes().len(), 2);
+    assert_eq!(model.session.editor.selection_bytes().len(), 2);
 
     handle_event(&mut model, key(KeyCode::Esc));
-    assert_eq!(model.editor.selection_bytes(), vec![(6, 6)]);
+    assert_eq!(model.session.editor.selection_bytes(), vec![(6, 6)]);
 
     handle_event(&mut model, key(KeyCode::Char('C')));
     handle_event(&mut model, key(KeyCode::Char('i')));
     handle_event(&mut model, key(KeyCode::Esc));
-    assert_eq!(model.editor.selection_bytes().len(), 2);
+    assert_eq!(model.session.editor.selection_bytes().len(), 2);
     assert!(matches!(model.ui.input_mode, InputMode::Normal));
 
     handle_event(&mut model, key(KeyCode::Esc));
-    assert_eq!(model.editor.selection_bytes(), vec![(6, 6)]);
-    assert_eq!(model.cursor, 6);
-    let len = model.editor.text().len_bytes();
-    assert_eq!(model.editor.text().slice(0..len), "alpha\nbeta\ngamma");
+    assert_eq!(model.session.editor.selection_bytes(), vec![(6, 6)]);
+    assert_eq!(model.session.cursor, 6);
+    let len = model.session.editor.text().len_bytes();
+    assert_eq!(
+        model.session.editor.text().slice(0..len),
+        "alpha\nbeta\ngamma"
+    );
 }
 
 #[test]
@@ -281,7 +296,7 @@ fn alt_c_adds_a_cursor_above_for_both_keycodes() {
         let mut model = Model::new(EditorState::from_text("alpha\nbeta\ngamma"), None);
         handle_event(&mut model, key(KeyCode::Char('j')));
         handle_event(&mut model, alt(code));
-        assert_eq!(model.editor.selection_bytes(), vec![(0, 0), (6, 6)]);
+        assert_eq!(model.session.editor.selection_bytes(), vec![(0, 0), (6, 6)]);
     }
 }
 
@@ -289,9 +304,9 @@ fn alt_c_adds_a_cursor_above_for_both_keycodes() {
 fn alt_s_is_case_insensitive() {
     for code in [KeyCode::Char('s'), KeyCode::Char('S')] {
         let mut model = Model::new(EditorState::from_text("one\ntwo\nthree"), None);
-        assert!(model.editor.set_selection_bytes(0, 7));
+        assert!(model.session.editor.set_selection_bytes(0, 7));
         handle_event(&mut model, alt(code));
-        assert_eq!(model.editor.selection_bytes().len(), 2);
+        assert_eq!(model.session.editor.selection_bytes().len(), 2);
     }
 }
 
@@ -300,7 +315,7 @@ fn pending_commands_ignore_alt_modifiers() {
     let mut model = Model::new(EditorState::from_text("one two"), None);
     handle_event(&mut model, key(KeyCode::Char('d')));
     handle_event(&mut model, alt(KeyCode::Char('w')));
-    assert_eq!(model.editor.text().slice(0..7), "one two");
+    assert_eq!(model.session.editor.text().slice(0..7), "one two");
     assert!(model.input.pending.is_none());
 }
 
@@ -309,7 +324,7 @@ fn insert_ignores_alt_modified_characters() {
     let mut model = Model::new(EditorState::from_text("abc"), None);
     handle_event(&mut model, key(KeyCode::Char('i')));
     handle_event(&mut model, alt(KeyCode::Char('j')));
-    assert_eq!(model.editor.text().slice(0..3), "abc");
+    assert_eq!(model.session.editor.text().slice(0..3), "abc");
     assert!(matches!(model.ui.input_mode, InputMode::Insert));
 }
 
@@ -326,14 +341,14 @@ fn normal_mode_ignores_alt_commands() {
 fn repeated_key_events_still_dispatch() {
     let mut model = Model::new(EditorState::from_text("abc"), None);
     handle_event(&mut model, repeat(KeyCode::Char('l')));
-    assert_eq!(model.cursor, 1);
+    assert_eq!(model.session.cursor, 1);
 }
 
 #[test]
 fn released_key_events_are_ignored() {
     let mut model = Model::new(EditorState::from_text("abc"), None);
     handle_event(&mut model, release(KeyCode::Char('l')));
-    assert_eq!(model.cursor, 0);
+    assert_eq!(model.session.cursor, 0);
 }
 
 #[test]
@@ -341,7 +356,7 @@ fn normal_tab_does_not_insert_text() {
     let mut model = Model::new(EditorState::from_text("a"), None);
     handle_event(&mut model, key(KeyCode::Tab));
     handle_event(&mut model, key(KeyCode::BackTab));
-    assert_eq!(model.editor.text().slice(0..1), "a");
+    assert_eq!(model.session.editor.text().slice(0..1), "a");
     assert!(!model.modified);
 }
 
@@ -350,7 +365,7 @@ fn insert_tab_adds_four_spaces() {
     let mut model = Model::new(EditorState::from_text("a"), None);
     handle_event(&mut model, key(KeyCode::Char('a')));
     handle_event(&mut model, key(KeyCode::Tab));
-    assert_eq!(model.editor.text().slice(0..5), "a    ");
+    assert_eq!(model.session.editor.text().slice(0..5), "a    ");
 }
 
 #[test]
@@ -379,7 +394,7 @@ fn insert_mode_modifies_piece_table() {
     handle_event(&mut model, key(KeyCode::Char('i')));
     handle_event(&mut model, key(KeyCode::Char('b')));
     handle_event(&mut model, key(KeyCode::Esc));
-    assert_eq!(model.editor.text().slice(0..3), "bac");
+    assert_eq!(model.session.editor.text().slice(0..3), "bac");
     assert!(model.modified);
     assert_eq!(model.ui.input_mode, InputMode::Normal);
 }
@@ -414,10 +429,10 @@ fn cursor_and_viewport_are_independent() {
 #[test]
 fn horizontal_scroll_follows_the_cursor() {
     let mut model = Model::new(EditorState::from_text("0123456789"), None);
-    model.cursor = 8;
+    model.session.cursor = 8;
     model.ensure_cursor_visible(1, 4);
     assert_eq!(model.view.hscroll, 5);
-    model.cursor = 0;
+    model.session.cursor = 0;
     model.ensure_cursor_visible(1, 4);
     assert_eq!(model.view.hscroll, 0);
 }
@@ -425,7 +440,7 @@ fn horizontal_scroll_follows_the_cursor() {
 #[test]
 fn horizontal_scroll_uses_display_cells() {
     let mut model = Model::new(EditorState::from_text("中中中中中"), None);
-    model.cursor = model.editor.text().len_bytes();
+    model.session.cursor = model.session.editor.text().len_bytes();
     model.ensure_cursor_visible(1, 3);
     assert_eq!(model.view.hscroll, 8);
 }
@@ -540,14 +555,14 @@ fn navigation_preserves_modified_buffer() {
     assert!(model.modified);
     model.open_path(&second).expect("second open");
     assert_eq!(
-        model.path.as_deref(),
+        model.session.path.as_deref(),
         Some(second.canonicalize().expect("canonical").as_path())
     );
-    assert_eq!(model.editor.text().slice(0..6), "second");
+    assert_eq!(model.session.editor.text().slice(0..6), "second");
     assert_eq!(model.buffers.entries.len(), 2);
     assert!(model.buffers.entries[0].modified);
     assert_eq!(model.buffers.entries[0].editor.text().slice(0..6), "Xfirst");
     model.switch_buffer(-1);
-    assert_eq!(model.editor.text().slice(0..6), "Xfirst");
+    assert_eq!(model.session.editor.text().slice(0..6), "Xfirst");
     assert!(model.modified);
 }

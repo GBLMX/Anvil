@@ -503,6 +503,19 @@ impl Default for PluginState {
     }
 }
 
+pub struct EditorSessionState {
+    /// Editor state and its shared text/index.
+    pub editor: DocumentSession,
+    /// Optional source path.
+    pub path: Option<PathBuf>,
+    /// Cursor byte offset.
+    pub cursor: usize,
+    /// Bounded back/forward navigation history.
+    jump_list: jump::JumpList,
+    /// Bounded back/forward edit-position history.
+    change_list: jump::JumpList,
+}
+
 #[derive(Default)]
 struct EditSessionState {
     /// Anchor for the selection-first visual adapter.
@@ -898,16 +911,8 @@ enum ModalLayer {
 }
 
 pub struct Model {
-    /// Editor state and its shared text/index.
-    pub editor: DocumentSession,
-    /// Optional source path.
-    pub path: Option<PathBuf>,
-    /// Cursor byte offset.
-    pub cursor: usize,
-    /// Bounded back/forward navigation history.
-    jump_list: jump::JumpList,
-    /// Bounded back/forward edit-position history.
-    change_list: jump::JumpList,
+    /// Editor document, source path, cursor, and navigation history.
+    pub session: EditorSessionState,
     /// Visual selection, modal layer, and insert-session state.
     edit: EditSessionState,
     /// Viewport, scrolling, wrap, pointer, and split ratio.
@@ -984,13 +989,15 @@ impl Model {
         let workspace = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
         let workspace_roots = workspace_roots::WorkspaceRoots::new(&workspace).unwrap_or_default();
         Self {
-            editor: DocumentSession::from(editor),
-            path,
+            session: EditorSessionState {
+                editor: DocumentSession::from(editor),
+                path,
+                cursor: 0,
+                jump_list: jump::JumpList::default(),
+                change_list: jump::JumpList::default(),
+            },
             welcome,
             welcome_back: false,
-            cursor: 0,
-            jump_list: jump::JumpList::default(),
-            change_list: jump::JumpList::default(),
             edit: EditSessionState::default(),
             view: ViewState::default(),
             ui: UiState::default(),
@@ -1225,11 +1232,14 @@ impl Model {
             self.dirty = true;
             return false;
         }
-        let editor = std::mem::replace(&mut self.editor, EditorState::from_text(text).into());
+        let editor = std::mem::replace(
+            &mut self.session.editor,
+            EditorState::from_text(text).into(),
+        );
         let saved = Buffer {
             editor,
-            path: self.path.take(),
-            cursor: self.cursor,
+            path: self.session.path.take(),
+            cursor: self.session.cursor,
             scroll: self.view.scroll,
             hscroll: self.view.hscroll,
             visual_anchor: self.edit.visual_anchor,
@@ -1243,7 +1253,7 @@ impl Model {
         self.buffers.help_back = Some(saved);
         self.clear_git_gutter();
         self.syntax.borrow_mut().switch_path(None, true);
-        self.cursor = 0;
+        self.session.cursor = 0;
         self.view.scroll = 0;
         self.view.hscroll = 0;
         self.modified = false;
@@ -1262,9 +1272,9 @@ impl Model {
             return;
         }
         self.clear_git_gutter();
-        self.editor = EditorState::from_text(text).into();
+        self.session.editor = EditorState::from_text(text).into();
         self.syntax.borrow_mut().switch_path(None, true);
-        self.cursor = 0;
+        self.session.cursor = 0;
         self.view.scroll = 0;
         self.view.hscroll = 0;
         self.modified = false;
@@ -1290,16 +1300,18 @@ impl Model {
         self.git.stage_pending = None;
         self.git.resolve_pending = None;
         let syntax = saved.syntax.clone();
-        self.editor = saved.editor;
-        self.path = saved.path;
-        self.cursor = saved.cursor;
+        self.session.editor = saved.editor;
+        self.session.path = saved.path;
+        self.session.cursor = saved.cursor;
         self.view.scroll = saved.scroll;
         self.view.hscroll = saved.hscroll;
         self.modified = saved.modified;
         self.search.query = saved.search_query;
-        self.syntax
-            .borrow_mut()
-            .switch_path_with(self.path.as_deref(), false, Some(syntax));
+        self.syntax.borrow_mut().switch_path_with(
+            self.session.path.as_deref(),
+            false,
+            Some(syntax),
+        );
         self.ui.input_mode = InputMode::Normal;
         self.welcome = std::mem::take(&mut self.welcome_back);
         self.input.pending = None;
@@ -1309,9 +1321,9 @@ impl Model {
     }
 
     pub fn poll_syntax(&mut self) {
-        let text = self.editor.text();
-        let revision = self.editor.revision();
-        let path = self.path.clone();
+        let text = self.session.editor.text();
+        let revision = self.session.editor.revision();
+        let path = self.session.path.clone();
         if self
             .syntax
             .borrow_mut()
@@ -1348,7 +1360,7 @@ impl Model {
     }
 
     pub(crate) fn sync_lsp_active(&mut self) {
-        let Some(path) = self.path.clone() else {
+        let Some(path) = self.session.path.clone() else {
             self.language.lsp.config = None;
             self.clear_lsp_ui();
             return;
@@ -1372,7 +1384,11 @@ impl Model {
             self.language.lsp.config = Some(desired.clone());
             self.clear_lsp_ui();
         }
-        let text = self.editor.text().slice(0..self.editor.text().len_bytes());
+        let text = self
+            .session
+            .editor
+            .text()
+            .slice(0..self.session.editor.text().len_bytes());
         let has_worker = self.sync_lsp_document(&path, text).is_ok();
         if has_worker {
             self.request_semantic_tokens();
@@ -1382,7 +1398,7 @@ impl Model {
     }
 
     fn start_lsp(&mut self) {
-        let Some(path) = self.path.clone() else {
+        let Some(path) = self.session.path.clone() else {
             self.status.text = "E: lsp requires an open file".to_owned();
             self.dirty = true;
             return;
@@ -1396,7 +1412,11 @@ impl Model {
         if self.language.lsp.workers.contains_key(&desired) {
             self.language.lsp.config = Some(desired.clone());
             self.clear_lsp_ui();
-            let text = self.editor.text().slice(0..self.editor.text().len_bytes());
+            let text = self
+                .session
+                .editor
+                .text()
+                .slice(0..self.session.editor.text().len_bytes());
             let _ = self.sync_lsp_document(&path, text);
             self.status.text = "lsp already running".to_owned();
             self.dirty = true;
@@ -1412,7 +1432,11 @@ impl Model {
             self.dirty = true;
             return;
         };
-        let text = self.editor.text().slice(0..self.editor.text().len_bytes());
+        let text = self
+            .session
+            .editor
+            .text()
+            .slice(0..self.session.editor.text().len_bytes());
         let config = LspConfig {
             tool: settings.tool,
             args: settings.args,
@@ -1500,7 +1524,8 @@ impl Model {
                 self.rebuild_problems();
                 if active
                     && !self.overlays.lsp_results.semantic_legend.is_empty()
-                    && self.overlays.lsp_results.semantic_revision != Some(self.editor.revision())
+                    && self.overlays.lsp_results.semantic_revision
+                        != Some(self.session.editor.revision())
                 {
                     self.request_semantic_tokens();
                 }
@@ -1598,7 +1623,7 @@ impl Model {
     }
 
     fn diagnostic_lines(&self) -> Vec<usize> {
-        let Some(path) = &self.path else {
+        let Some(path) = &self.session.path else {
             return Vec::new();
         };
         self.language
@@ -1615,7 +1640,7 @@ impl Model {
     }
 
     fn inline_diagnostic(&self, line_number: usize) -> Option<(String, u32)> {
-        let path = self.path.as_ref()?;
+        let path = self.session.path.as_ref()?;
         let diagnostic = self
             .language
             .diagnostics
@@ -1641,13 +1666,13 @@ impl Model {
         line_start: usize,
         line_end: usize,
     ) -> Vec<(usize, usize)> {
-        let Some(path) = &self.path else {
+        let Some(path) = &self.session.path else {
             return Vec::new();
         };
         let Some(diagnostics) = self.language.diagnostics.by_path.get(path) else {
             return Vec::new();
         };
-        let line = self.editor.text().slice(line_start..line_end);
+        let line = self.session.editor.text().slice(line_start..line_end);
         diagnostics
             .iter()
             .filter_map(|diagnostic| {

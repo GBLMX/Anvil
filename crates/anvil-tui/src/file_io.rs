@@ -10,10 +10,10 @@ impl Model {
         let start = Instant::now();
         let absolute = self.absolute_path(path.as_ref())?;
         let recent_path = absolute.clone();
-        if self.path.as_ref() == Some(&absolute) {
+        if self.session.path.as_ref() == Some(&absolute) {
             return Ok(());
         }
-        if self.path.is_none() && self.modified {
+        if self.session.path.is_none() && self.modified {
             self.status.text =
                 "E: save or discard the unnamed buffer before opening another file".to_owned();
             self.dirty = true;
@@ -34,7 +34,7 @@ impl Model {
             .iter()
             .position(|buffer| buffer.path.as_ref() == Some(&absolute))
         {
-            if self.path.is_some() {
+            if self.session.path.is_some() {
                 self.sync_active();
             }
             self.load_buffer(index);
@@ -43,7 +43,7 @@ impl Model {
         }
         let text = self.read_file(&absolute)?;
         let read_done = start.elapsed();
-        if self.path.is_some() {
+        if self.session.path.is_some() {
             self.sync_active();
             if self.buffers.entries.is_empty() {
                 self.buffers.entries.push(self.snapshot());
@@ -65,16 +65,16 @@ impl Model {
             let index = self.buffers.entries.len() - 1;
             self.load_buffer(index);
         } else {
-            self.editor = EditorState::from_text(&text).into();
-            self.path = Some(absolute);
-            self.cursor = 0;
+            self.session.editor = EditorState::from_text(&text).into();
+            self.session.path = Some(absolute);
+            self.session.cursor = 0;
             self.view.scroll = 0;
             self.view.hscroll = 0;
             self.modified = false;
             self.missing = false;
             self.syntax
                 .borrow_mut()
-                .switch_path(self.path.as_deref(), true);
+                .switch_path(self.session.path.as_deref(), true);
         }
         if timing {
             eprintln!("open_path read={read_done:?} index={:?}", start.elapsed());
@@ -293,7 +293,7 @@ impl Model {
             return;
         }
         let mut paths = Vec::new();
-        if let Some(path) = &self.path {
+        if let Some(path) = &self.session.path {
             paths.push(path.clone());
         }
         for buffer in &self.buffers.entries {
@@ -314,7 +314,7 @@ impl Model {
     }
 
     pub(crate) fn handle_external_change(&mut self, path: PathBuf) {
-        let modified = if self.path.as_ref() == Some(&path) {
+        let modified = if self.session.path.as_ref() == Some(&path) {
             self.modified
         } else {
             self.buffers
@@ -340,7 +340,7 @@ impl Model {
     }
     pub(crate) fn mark_missing(&mut self, path: &Path) {
         let affected = |candidate: &Path| candidate == path || candidate.starts_with(path);
-        if self.path.as_deref().is_some_and(affected) {
+        if self.session.path.as_deref().is_some_and(affected) {
             self.missing = true;
         }
         for buffer in &mut self.buffers.entries {
@@ -364,10 +364,10 @@ impl Model {
                 return Err(error);
             }
         };
-        let cursor = self.cursor.min(text.len());
-        if self.path.as_deref() == Some(path) {
-            self.editor = EditorState::from_text(&text).into();
-            self.cursor = cursor;
+        let cursor = self.session.cursor.min(text.len());
+        if self.session.path.as_deref() == Some(path) {
+            self.session.editor = EditorState::from_text(&text).into();
+            self.session.cursor = cursor;
             self.modified = false;
             self.missing = false;
             self.syntax.borrow_mut().invalidate();
@@ -421,6 +421,7 @@ impl Model {
             return false;
         }
         let current_conflict = self
+            .session
             .path
             .as_ref()
             .filter(|current| self.conflict_swaps.contains_key(*current))
@@ -450,14 +451,18 @@ impl Model {
         } else {
             None
         };
-        let text = self.editor.text().slice(0..self.editor.text().len_bytes());
+        let text = self
+            .session
+            .editor
+            .text()
+            .slice(0..self.session.editor.text().len_bytes());
         let display = path.display().to_string();
         match self.write_file(&path, &text) {
             Ok(()) => {
                 if self.editor_mode {
                     self.exit_code = 0;
                 }
-                self.path = Some(path.clone());
+                self.session.path = Some(path.clone());
                 if let Some(conflict) = conflict_path {
                     self.clear_conflict(&conflict);
                 }
@@ -493,7 +498,7 @@ impl Model {
     pub(crate) fn auto_save_before_focus_change(&mut self) -> bool {
         if !self.settings.editor.auto_save
             || !self.modified
-            || self.path.is_none()
+            || self.session.path.is_none()
             || self.read_only
             || self.stdin_buffer
             || self.missing
@@ -511,7 +516,7 @@ impl Model {
         {
             return true;
         }
-        if let Some(path) = self.path.as_ref()
+        if let Some(path) = self.session.path.as_ref()
             && self.conflict_swaps.contains_key(path)
         {
             return true;
@@ -530,7 +535,7 @@ impl Model {
         if self.reject_read_only() {
             return false;
         }
-        let Some(path) = self.path.clone() else {
+        let Some(path) = self.session.path.clone() else {
             if self.editor_mode {
                 self.exit_code = 1;
             }
@@ -546,7 +551,7 @@ impl Model {
             return false;
         }
         self.sync_active();
-        let active_path = self.path.clone();
+        let active_path = self.session.path.clone();
         let mut failed = false;
         if self.modified && !self.save() {
             failed = true;

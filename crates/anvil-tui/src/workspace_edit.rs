@@ -93,8 +93,8 @@ impl WorkspaceEdit {
 
     fn check_revisions(&self, model: &Model) -> Result<(), String> {
         for (path, expected) in &self.base_revisions {
-            let current = if model.path.as_ref() == Some(path) {
-                Some(model.editor.revision())
+            let current = if model.session.path.as_ref() == Some(path) {
+                Some(model.session.editor.revision())
             } else {
                 model
                     .buffers
@@ -478,8 +478,8 @@ fn virtual_exists(
 }
 
 fn load_state(model: &mut Model, path: &Path) -> Result<Option<EditorState>, String> {
-    if model.path.as_deref() == Some(path) {
-        return Ok(Some(model.editor.clone().into_inner()));
+    if model.session.path.as_deref() == Some(path) {
+        return Ok(Some(model.session.editor.clone().into_inner()));
     }
     if let Some(buffer) = model
         .buffers
@@ -568,9 +568,12 @@ fn offset_at_utf16(editor: &EditorState, line: u32, character: u32) -> Option<us
 
 fn commit_states(model: &mut Model, prepared: HashMap<PathBuf, EditorState>) {
     for (path, state) in prepared {
-        if model.path.as_ref() == Some(&path) {
-            model.editor = state.into();
-            model.cursor = model.cursor.min(model.editor.text().len_bytes());
+        if model.session.path.as_ref() == Some(&path) {
+            model.session.editor = state.into();
+            model.session.cursor = model
+                .session
+                .cursor
+                .min(model.session.editor.text().len_bytes());
             model.modified = true;
             model.syntax.borrow_mut().invalidate();
             if let Some(buffer) = model
@@ -579,8 +582,8 @@ fn commit_states(model: &mut Model, prepared: HashMap<PathBuf, EditorState>) {
                 .iter_mut()
                 .find(|buffer| buffer.path.as_ref() == Some(&path))
             {
-                buffer.editor = model.editor.clone();
-                buffer.cursor = model.cursor;
+                buffer.editor = model.session.editor.clone();
+                buffer.cursor = model.session.cursor;
                 buffer.modified = true;
             }
         } else if let Some(buffer) = model
@@ -621,7 +624,7 @@ fn remap_path(path: &Path, from: &Path, to: &Path) -> PathBuf {
 }
 
 fn path_is_open(model: &Model, path: &Path) -> bool {
-    model.path.as_deref() == Some(path)
+    model.session.path.as_deref() == Some(path)
         || model
             .buffers
             .entries
@@ -636,7 +639,7 @@ fn path_is_open(model: &Model, path: &Path) -> bool {
 
 fn path_is_modified(model: &Model, path: &Path) -> bool {
     let affected = |candidate: &Path| candidate == path || candidate.starts_with(path);
-    let active = model.path.as_deref().is_some_and(affected) && model.modified;
+    let active = model.session.path.as_deref().is_some_and(affected) && model.modified;
     let buffer = model
         .buffers
         .entries
@@ -650,7 +653,7 @@ fn path_is_modified(model: &Model, path: &Path) -> bool {
 
 impl Model {
     fn retarget_path(&mut self, from: &Path, to: &Path) {
-        if let Some(path) = self.path.as_mut() {
+        if let Some(path) = self.session.path.as_mut() {
             *path = remap_path(path, from, to);
         }
         for buffer in &mut self.buffers.entries {
@@ -682,7 +685,7 @@ impl Model {
         self.clear_lsp_ui();
         self.syntax
             .borrow_mut()
-            .switch_path(self.path.as_deref(), true);
+            .switch_path(self.session.path.as_deref(), true);
         self.tree.stale = true;
         self.sync_watch_paths();
         self.dirty = true;
@@ -760,7 +763,7 @@ mod tests {
         }))
         .expect("parse");
         workspace_edit.apply(&mut model).expect("apply");
-        assert_eq!(model.editor.text().slice(0..4), "Xone");
+        assert_eq!(model.session.editor.text().slice(0..4), "Xone");
         let second_buffer = model
             .buffers
             .entries
@@ -791,7 +794,7 @@ mod tests {
         }))
         .expect("parse");
         workspace_edit.apply(&mut model).expect("apply");
-        assert_eq!(model.editor.text().slice(0..6), "Xfirst");
+        assert_eq!(model.session.editor.text().slice(0..6), "Xfirst");
         assert_eq!(
             model.buffers.entries[model.buffers.active]
                 .editor
@@ -843,14 +846,14 @@ mod tests {
         }))
         .expect("parse");
         assert!(workspace_edit.apply(&mut model).is_err());
-        assert_eq!(model.editor.text().slice(0..3), "abc");
+        assert_eq!(model.session.editor.text().slice(0..3), "abc");
     }
 
     #[test]
     fn rejects_stale_lsp_document_version() {
         let dir = tempfile::tempdir().expect("tempdir");
         let mut model = open(&dir);
-        let path = model.path.clone().expect("path");
+        let path = model.session.path.clone().expect("path");
         model.language.lsp_requests.versions.insert(path.clone(), 3);
         let workspace_edit = WorkspaceEdit::from_lsp(&serde_json::json!({
             "documentChanges": [{
@@ -863,14 +866,14 @@ mod tests {
         }))
         .expect("parse");
         assert!(workspace_edit.apply(&mut model).is_err());
-        assert_eq!(model.editor.text().slice(0..3), "abc");
+        assert_eq!(model.session.editor.text().slice(0..3), "abc");
     }
 
     #[test]
     fn applies_current_lsp_document_version() {
         let dir = tempfile::tempdir().expect("tempdir");
         let mut model = open(&dir);
-        let path = model.path.clone().expect("path");
+        let path = model.session.path.clone().expect("path");
         model.language.lsp_requests.versions.insert(path.clone(), 2);
         let workspace_edit = WorkspaceEdit::from_lsp(&serde_json::json!({
             "documentChanges": [{
@@ -883,16 +886,16 @@ mod tests {
         }))
         .expect("parse");
         workspace_edit.apply(&mut model).expect("apply");
-        assert_eq!(model.editor.text().slice(0..4), "Xabc");
+        assert_eq!(model.session.editor.text().slice(0..4), "Xabc");
     }
 
     #[test]
     fn rejects_stale_buffer_snapshot_before_any_change() {
         let dir = tempfile::tempdir().expect("tempdir");
         let mut model = open(&dir);
-        let path = model.path.clone().expect("path");
+        let path = model.session.path.clone().expect("path");
         let mut base = HashMap::new();
-        base.insert(path.clone(), model.editor.revision());
+        base.insert(path.clone(), model.session.editor.revision());
         let workspace_edit = WorkspaceEdit::from_lsp(&serde_json::json!({
             "changes": {
                 uri(&path): [{
@@ -903,9 +906,9 @@ mod tests {
         }))
         .expect("parse")
         .with_base_revisions(Some(base));
-        model.editor.insert(0, "stale");
+        model.session.editor.insert(0, "stale");
         assert!(workspace_edit.apply(&mut model).is_err());
-        assert_eq!(model.editor.text().slice(0..8), "staleabc");
+        assert_eq!(model.session.editor.text().slice(0..8), "staleabc");
     }
 
     #[test]
@@ -931,15 +934,15 @@ mod tests {
         assert!(renamed.exists());
         assert!(created.exists());
         assert!(!doomed.exists());
-        assert_eq!(model.path.as_deref(), Some(renamed.as_path()));
+        assert_eq!(model.session.path.as_deref(), Some(renamed.as_path()));
     }
 
     #[test]
     fn refuses_to_delete_a_modified_buffer() {
         let dir = tempfile::tempdir().expect("tempdir");
         let mut model = open(&dir);
-        let path = model.path.clone().expect("path");
-        model.editor.insert(0, "x");
+        let path = model.session.path.clone().expect("path");
+        model.session.editor.insert(0, "x");
         model.modified = true;
         let workspace_edit = WorkspaceEdit::from_lsp(&serde_json::json!({
             "documentChanges": [{"kind": "delete", "uri": uri(&path)}]

@@ -31,8 +31,8 @@ impl Model {
             .as_array()
             .map(|items| symbols_from_lsp(items))
             .unwrap_or_default();
-        self.overlays.lsp_results.sticky_symbols_path = self.path.clone();
-        self.overlays.lsp_results.sticky_symbols_revision = Some(self.editor.revision());
+        self.overlays.lsp_results.sticky_symbols_path = self.session.path.clone();
+        self.overlays.lsp_results.sticky_symbols_revision = Some(self.session.editor.revision());
         self.overlays.lsp_results.sticky_symbols = items;
         self.dirty = true;
     }
@@ -172,7 +172,7 @@ impl Model {
                 | LspRequestKind::FoldingRange
                 | LspRequestKind::SemanticTokens
                 | LspRequestKind::StickySymbols
-        ) && edit_revision.is_some_and(|revision| revision != self.editor.revision())
+        ) && edit_revision.is_some_and(|revision| revision != self.session.editor.revision())
         {
             if kind == LspRequestKind::StickySymbols {
                 self.overlays.lsp_results.sticky_pending = false;
@@ -198,7 +198,7 @@ impl Model {
                 | LspRequestKind::StickySymbols
         ) && edit_path
             .as_ref()
-            .is_some_and(|path| self.path.as_ref() != Some(path))
+            .is_some_and(|path| self.session.path.as_ref() != Some(path))
         {
             if kind == LspRequestKind::StickySymbols {
                 self.overlays.lsp_results.sticky_pending = false;
@@ -253,7 +253,7 @@ impl Model {
                 self.request_code_lens();
             }
             LspRequestKind::Formatting => {
-                let Some(path) = edit_path.or_else(|| self.path.clone()) else {
+                let Some(path) = edit_path.or_else(|| self.session.path.clone()) else {
                     self.status.text = "lsp: no formatting path".to_owned();
                     return;
                 };
@@ -430,13 +430,13 @@ impl Model {
             .and_then(serde_json::Value::as_u64)
             .unwrap_or(0) as usize;
         self.record_jump();
-        if self.path.as_ref() != Some(&path) {
+        if self.session.path.as_ref() != Some(&path) {
             if let Err(error) = self.open_path(&path) {
                 self.status.text = format!("E: {error}");
                 return;
             }
         }
-        self.cursor = self.offset_at_utf16(line, character);
+        self.session.cursor = self.offset_at_utf16(line, character);
         self.status.text = format!("definition {}", path.display());
     }
 
@@ -561,7 +561,7 @@ impl Model {
             let count = highlights.len();
             self.status.text = format!("highlights: {count}");
             self.overlays.lsp_results.document_highlights = Some(DocumentHighlightState {
-                revision: self.editor.revision(),
+                revision: self.session.editor.revision(),
                 items: highlights,
             });
         }

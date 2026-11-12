@@ -5,7 +5,7 @@ use crate::CallHierarchyDirection;
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 pub fn view(model: &Model, frame: &mut Frame) {
     let area = frame.area();
-    let editor_view: EditorView = model.editor.snapshot().view();
+    let editor_view: EditorView = model.session.editor.snapshot().view();
     let title = if model.buffers.help_back.is_some() {
         format!(
             "[{}]",
@@ -223,7 +223,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
                 Span::raw(icon_padding),
                 Span::styled(name, style),
             ];
-            let modified = model.path.as_ref() == Some(&entry.path) && model.modified
+            let modified = model.session.path.as_ref() == Some(&entry.path) && model.modified
                 || model
                     .buffers
                     .entries
@@ -336,17 +336,17 @@ pub fn view(model: &Model, frame: &mut Frame) {
     if let Some(area) = locations_area {
         render_pipe_locations(model, frame, area);
     }
-    let visible_end =
-        (model.view.scroll + usize::from(content.height)).min(model.editor.index().len_lines());
+    let visible_end = (model.view.scroll + usize::from(content.height))
+        .min(model.session.editor.index().len_lines());
     for line_number in model.view.scroll..visible_end {
-        let Some(start) = model.editor.index().line_to_offset(line_number) else {
+        let Some(start) = model.session.editor.index().line_to_offset(line_number) else {
             continue;
         };
-        let Some(line) = model.editor.index().offset_to_line(start) else {
+        let Some(line) = model.session.editor.index().offset_to_line(start) else {
             continue;
         };
         let mut columns = 0;
-        'indent: for chunk in model.editor.text().chunks(start..line.end) {
+        'indent: for chunk in model.session.editor.text().chunks(start..line.end) {
             for character in chunk.chars() {
                 match character {
                     ' ' => columns += 1,
@@ -427,9 +427,10 @@ pub fn view(model: &Model, frame: &mut Frame) {
     crate::sticky::render(model, frame, text_area);
     if status_cursor.is_none()
         && let Some(position) = model
+            .session
             .editor
             .index()
-            .position(model.editor.text(), model.cursor)
+            .position(model.session.editor.text(), model.session.cursor)
     {
         if let Some(row) = model.row_of_position(
             position.line,
@@ -767,9 +768,10 @@ pub fn view(model: &Model, frame: &mut Frame) {
             .min(12)
             .min(area.height.saturating_sub(2));
         let cursor_line = model
+            .session
             .editor
             .index()
-            .position(model.editor.text(), model.cursor)
+            .position(model.session.editor.text(), model.session.cursor)
             .map(|position| position.line as u16)
             .unwrap_or(0);
         let cursor_y = area

@@ -14,10 +14,16 @@ use crossterm::event::{Event, KeyCode};
 
 pub(crate) fn handle_event(model: &mut Model, event: Event) {
     let edit_before = match &event {
-        Event::Key(key) if is_action_key(key) => {
-            Some((model.path.clone(), model.cursor, model.editor.revision()))
-        }
-        Event::Paste(_) => Some((model.path.clone(), model.cursor, model.editor.revision())),
+        Event::Key(key) if is_action_key(key) => Some((
+            model.session.path.clone(),
+            model.session.cursor,
+            model.session.editor.revision(),
+        )),
+        Event::Paste(_) => Some((
+            model.session.path.clone(),
+            model.session.cursor,
+            model.session.editor.revision(),
+        )),
         _ => None,
     };
     match event {
@@ -71,10 +77,15 @@ pub(crate) fn handle_event(model: &mut Model, event: Event) {
     }
     model.drain_effects();
     if let Some((path, cursor, revision)) = edit_before
-        && model.editor.revision() != revision
-        && model.path == path
+        && model.session.editor.revision() != revision
+        && model.session.path == path
     {
-        model.record_change(path, cursor, model.path.clone(), model.cursor);
+        model.record_change(
+            path,
+            cursor,
+            model.session.path.clone(),
+            model.session.cursor,
+        );
     }
 }
 
@@ -408,7 +419,11 @@ fn handle_key(model: &mut Model, key: KeyPress) {
                     _ => None,
                 };
                 if let Some(register) = register
-                    && let Some(steps) = model.editor.macro_steps(register).map(<[_]>::to_vec)
+                    && let Some(steps) = model
+                        .session
+                        .editor
+                        .macro_steps(register)
+                        .map(<[_]>::to_vec)
                 {
                     model.input.last_macro = Some(register);
                     model.input.replaying = true;
@@ -435,7 +450,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
                 .into_iter()
                 .map(macro_step)
                 .collect();
-            model.editor.set_macro(register, steps);
+            model.session.editor.set_macro(register, steps);
             model.dirty = true;
             return;
         }

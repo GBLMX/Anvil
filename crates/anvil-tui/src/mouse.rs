@@ -70,8 +70,8 @@ pub(crate) fn handle_mouse(model: &mut Model, mouse: MouseEvent, width: u16, hei
                 Target::Editor { side, line, column } => {
                     focus_editor_side(model, side);
                     let offset = offset_for_position(model, line, column);
-                    model.cursor = offset;
-                    model.editor.set_selection_bytes(offset, offset);
+                    model.session.cursor = offset;
+                    model.session.editor.set_selection_bytes(offset, offset);
                     model.view.pointer = PointerState::Pressed(DragKind::Editor { anchor: offset });
                     model.dirty = true;
                 }
@@ -131,8 +131,8 @@ pub(crate) fn handle_mouse(model: &mut Model, mouse: MouseEvent, width: u16, hei
                                 editor_position_at(model, mouse.column, mouse.row, width, height)
                             {
                                 let head = offset_for_position(model, line, column);
-                                model.editor.set_selection_bytes(anchor, head);
-                                model.cursor = head;
+                                model.session.editor.set_selection_bytes(anchor, head);
+                                model.session.cursor = head;
                             }
                         }
                         DragKind::Split => {
@@ -192,7 +192,7 @@ pub(crate) fn handle_mouse(model: &mut Model, mouse: MouseEvent, width: u16, hei
                     .view
                     .scroll
                     .saturating_add_signed(delta as isize)
-                    .min(model.editor.index().len_lines().saturating_sub(1));
+                    .min(model.session.editor.index().len_lines().saturating_sub(1));
                 model.ensure_cursor_visible(height.saturating_sub(2), width.saturating_sub(2));
             }
             model.dirty = true;
@@ -417,9 +417,10 @@ fn close_outside_overlay(model: &mut Model) {
 fn inside_overlay(model: &Model, col: u16, row: u16, area: Rect) -> bool {
     if let Some(peek) = &model.ui.diagnostic_peek {
         let cursor_line = model
+            .session
             .editor
             .index()
-            .position(model.editor.text(), model.cursor)
+            .position(model.session.editor.text(), model.session.cursor)
             .map(|position| position.line as u16)
             .unwrap_or(0);
         let cursor_y = area
@@ -513,20 +514,24 @@ fn edge_scroll(model: &mut Model, row: u16, height: u16) {
             .view
             .scroll
             .saturating_add(1)
-            .min(model.editor.index().len_lines().saturating_sub(1));
+            .min(model.session.editor.index().len_lines().saturating_sub(1));
     }
 }
 
 fn offset_for_position(model: &Model, line: usize, column: usize) -> usize {
     let Some(line_range) = model
+        .session
         .editor
         .index()
         .line_to_offset(line)
-        .and_then(|offset| model.editor.line_range_at(offset))
+        .and_then(|offset| model.session.editor.line_range_at(offset))
     else {
-        return model.cursor.min(model.editor.text().len_bytes());
+        return model
+            .session
+            .cursor
+            .min(model.session.editor.text().len_bytes());
     };
-    let text = model.editor.text().slice(line_range.clone());
+    let text = model.session.editor.text().slice(line_range.clone());
     let mut display = 0;
     for (offset, character) in text.char_indices() {
         let width = if character == '\t' {

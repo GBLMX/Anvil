@@ -6,7 +6,7 @@ use crate::file_worker::FileRequest;
 impl Model {
     pub(crate) fn poll_git(&mut self) {
         if let Some(pending) = &self.git.diff_request
-            && self.path.as_ref() != Some(&pending.0)
+            && self.session.path.as_ref() != Some(&pending.0)
         {
             self.git.diff_request = None;
             self.git.diff_due = Some(Instant::now());
@@ -18,10 +18,10 @@ impl Model {
             }
             return;
         }
-        let Some(path) = self.path.clone() else {
+        let Some(path) = self.session.path.clone() else {
             return;
         };
-        let revision = self.editor.revision();
+        let revision = self.session.editor.revision();
         if self.git.diff_checked.as_ref() == Some(&(path.clone(), revision)) {
             return;
         }
@@ -63,7 +63,7 @@ impl Model {
         revision: u64,
         result: Result<Vec<(usize, char)>, String>,
     ) {
-        if self.path.as_ref() != Some(&path) || self.editor.revision() != revision {
+        if self.session.path.as_ref() != Some(&path) || self.session.editor.revision() != revision {
             self.git.diff_request = None;
             self.git.marks.clear();
             self.git.diff_due = Some(Instant::now());

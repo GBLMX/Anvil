@@ -20,8 +20,8 @@ impl Model {
             self.git.branch = detect_git_branch(&self.workspace.path);
             self.dirty = true;
         }
-        if self.language.diagnostics.path != self.path {
-            self.language.diagnostics.path = self.path.clone();
+        if self.language.diagnostics.path != self.session.path {
+            self.language.diagnostics.path = self.session.path.clone();
             self.language.diagnostics.count_shown = self.diagnostic_count_now();
             self.language.diagnostics.count_pending = None;
             self.dirty = true;
@@ -48,14 +48,15 @@ impl Model {
     }
 
     fn diagnostic_count_now(&self) -> usize {
-        self.path
+        self.session
+            .path
             .as_ref()
             .and_then(|path| self.language.diagnostics.by_path.get(path))
             .map_or(0, Vec::len)
     }
 
     fn relative_path_text(&self) -> String {
-        let Some(path) = self.path.as_ref() else {
+        let Some(path) = self.session.path.as_ref() else {
             return "[no file]".to_owned();
         };
         path.strip_prefix(&self.workspace.path)
@@ -74,10 +75,10 @@ impl Model {
 
     pub(crate) fn breadcrumb_text(&self, width: usize) -> String {
         let path = self.relative_path_text();
-        let symbol = self.path.as_ref().and_then(|path| {
+        let symbol = self.session.path.as_ref().and_then(|path| {
             self.syntax
                 .borrow()
-                .scope_label(Some(path.as_path()), self.cursor)
+                .scope_label(Some(path.as_path()), self.session.cursor)
                 .map(str::to_owned)
         });
         breadcrumb_with_symbol(&path, symbol.as_deref(), width)
@@ -115,20 +116,22 @@ impl Model {
         if let Some((tool, _)) = &self.language.lsp.config {
             segments.push(format!("lsp {tool}"));
         } else if self
+            .session
             .path
             .as_ref()
             .is_some_and(|path| lsp_settings(path).is_some())
         {
             segments.push("lsp pending".to_owned());
         }
-        let selections = self.editor.selection_bytes().len();
+        let selections = self.session.editor.selection_bytes().len();
         if selections > 1 {
             segments.push(format!("sel {selections}"));
         }
         if let Some(position) = self
+            .session
             .editor
             .index()
-            .position(self.editor.text(), self.cursor)
+            .position(self.session.editor.text(), self.session.cursor)
         {
             segments.push(format!(
                 "Ln {}, Col {}",
@@ -310,7 +313,7 @@ mod tests {
     #[test]
     fn diagnostics_use_hysteresis() {
         let mut model = Model::new(EditorState::from_text(""), None);
-        model.path = Some(PathBuf::from("/ws/src/main.rs"));
+        model.session.path = Some(PathBuf::from("/ws/src/main.rs"));
         model.language.diagnostics.by_path.insert(
             PathBuf::from("/ws/src/main.rs"),
             vec![lsp::Diagnostic {
@@ -330,7 +333,7 @@ mod tests {
                 extra: Default::default(),
             }],
         );
-        model.language.diagnostics.path = model.path.clone();
+        model.language.diagnostics.path = model.session.path.clone();
         model.tick_status();
         assert_eq!(model.language.diagnostics.count_shown, 0);
         assert!(model.language.diagnostics.count_pending.is_some());
@@ -347,7 +350,7 @@ mod tests {
     #[test]
     fn status_segments_fit_small_widths() {
         let mut model = Model::new(EditorState::from_text("alpha"), None);
-        model.path = Some(PathBuf::from("/ws/src/company/project/Button.tsx"));
+        model.session.path = Some(PathBuf::from("/ws/src/company/project/Button.tsx"));
         model.workspace.path = PathBuf::from("/ws");
         model.status.text = "saved".to_owned();
         for width in [1, 12, 40, 200] {
@@ -359,7 +362,7 @@ mod tests {
     #[test]
     fn pending_diagnostics_keep_the_stable_count() {
         let mut model = Model::new(EditorState::from_text("alpha"), None);
-        model.path = Some(PathBuf::from("/ws/src/main.rs"));
+        model.session.path = Some(PathBuf::from("/ws/src/main.rs"));
         model.workspace.path = PathBuf::from("/ws");
         model.language.diagnostics.count_shown = 2;
         model.language.diagnostics.count_pending = Some((5, Instant::now()));
@@ -372,7 +375,7 @@ mod tests {
     fn breadcrumbs_fall_back_to_the_relative_path() {
         let mut model = Model::new(EditorState::from_text(""), None);
         model.workspace.path = PathBuf::from("/ws");
-        model.path = Some(PathBuf::from("/ws/src/main.rs"));
+        model.session.path = Some(PathBuf::from("/ws/src/main.rs"));
         assert_eq!(model.breadcrumb_text(80), "src/main.rs");
     }
 

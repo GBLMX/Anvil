@@ -65,7 +65,7 @@ impl Model {
         let Some(entry) = self.current_jump_entry() else {
             return;
         };
-        self.jump_list.record(entry);
+        self.session.jump_list.record(entry);
     }
 
     pub(crate) fn jump_back(&mut self) {
@@ -77,16 +77,16 @@ impl Model {
     }
 
     fn jump_history(&mut self, forward: bool) {
-        if self.path.is_none() && self.modified {
+        if self.session.path.is_none() && self.modified {
             self.status.text = "E: save or discard the unnamed buffer before jumping".to_owned();
             self.dirty = true;
             return;
         }
         let current = self.current_jump_entry();
         let target = if forward {
-            self.jump_list.take_forward()
+            self.session.jump_list.take_forward()
         } else {
-            self.jump_list.take_back()
+            self.session.jump_list.take_back()
         };
         let Some(target) = target else {
             self.status.text = if forward {
@@ -99,32 +99,32 @@ impl Model {
         };
         if !self.jump_to(&target) {
             if forward {
-                self.jump_list.push_forward(target);
+                self.session.jump_list.push_forward(target);
             } else {
-                self.jump_list.push_back(target);
+                self.session.jump_list.push_back(target);
             }
             return;
         }
         if let Some(current) = current {
             if forward {
-                self.jump_list.push_back(current);
+                self.session.jump_list.push_back(current);
             } else {
-                self.jump_list.push_forward(current);
+                self.session.jump_list.push_forward(current);
             }
         }
         self.status.text = format!(
             "{} [{}|{}]",
             if forward { "jump forward" } else { "jump back" },
-            self.jump_list.back_len(),
-            self.jump_list.forward_len()
+            self.session.jump_list.back_len(),
+            self.session.jump_list.forward_len()
         );
         self.dirty = true;
     }
 
     fn current_jump_entry(&self) -> Option<JumpEntry> {
         Some(JumpEntry {
-            path: self.path.clone()?,
-            cursor: self.cursor,
+            path: self.session.path.clone()?,
+            cursor: self.session.cursor,
         })
     }
 
@@ -132,16 +132,18 @@ impl Model {
         if self.buffers.help_back.is_some() {
             self.close_help();
         }
-        if self.path.as_ref() != Some(&entry.path)
+        if self.session.path.as_ref() != Some(&entry.path)
             && let Err(error) = self.open_path(&entry.path)
         {
             self.status.text = format!("E: {error}");
             self.dirty = true;
             return false;
         }
-        let length = self.editor.text().len_bytes();
-        self.cursor = entry.cursor.min(length);
-        self.editor.set_selection_bytes(self.cursor, self.cursor);
+        let length = self.session.editor.text().len_bytes();
+        self.session.cursor = entry.cursor.min(length);
+        self.session
+            .editor
+            .set_selection_bytes(self.session.cursor, self.session.cursor);
         self.dirty = true;
         true
     }
@@ -154,13 +156,13 @@ impl Model {
         after_cursor: usize,
     ) {
         if let Some(path) = before_path {
-            self.change_list.record(JumpEntry {
+            self.session.change_list.record(JumpEntry {
                 path,
                 cursor: before_cursor,
             });
         }
         if let Some(path) = after_path {
-            self.change_list.record(JumpEntry {
+            self.session.change_list.record(JumpEntry {
                 path,
                 cursor: after_cursor,
             });
@@ -176,16 +178,16 @@ impl Model {
     }
 
     fn change_history(&mut self, forward: bool) {
-        if self.path.is_none() && self.modified {
+        if self.session.path.is_none() && self.modified {
             self.status.text = "E: save or discard the unnamed buffer before jumping".to_owned();
             self.dirty = true;
             return;
         }
         let current = self.current_jump_entry();
         let target = if forward {
-            self.change_list.take_forward()
+            self.session.change_list.take_forward()
         } else {
-            self.change_list.take_back()
+            self.session.change_list.take_back()
         };
         let Some(mut target) = target else {
             self.status.text = if forward {
@@ -198,9 +200,9 @@ impl Model {
         };
         if current.as_ref() == Some(&target) {
             let Some(next) = (if forward {
-                self.change_list.take_forward()
+                self.session.change_list.take_forward()
             } else {
-                self.change_list.take_back()
+                self.session.change_list.take_back()
             }) else {
                 self.status.text = if forward {
                     "no next change".to_owned()
@@ -214,17 +216,17 @@ impl Model {
         }
         if !self.jump_to(&target) {
             if forward {
-                self.change_list.push_forward(target);
+                self.session.change_list.push_forward(target);
             } else {
-                self.change_list.push_back(target);
+                self.session.change_list.push_back(target);
             }
             return;
         }
         if let Some(current) = current {
             if forward {
-                self.change_list.push_back(current);
+                self.session.change_list.push_back(current);
             } else {
-                self.change_list.push_forward(current);
+                self.session.change_list.push_forward(current);
             }
         }
         self.status.text = format!(
@@ -234,8 +236,8 @@ impl Model {
             } else {
                 "previous change"
             },
-            self.change_list.back_len(),
-            self.change_list.forward_len()
+            self.session.change_list.back_len(),
+            self.session.change_list.forward_len()
         );
         self.dirty = true;
     }

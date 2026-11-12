@@ -12,7 +12,7 @@ impl Model {
             self.overlays.lsp_results.inlay_checked = None;
             return;
         }
-        let Some(path) = self.path.clone() else {
+        let Some(path) = self.session.path.clone() else {
             self.overlays.lsp_results.inlay_hints.clear();
             return;
         };
@@ -29,9 +29,13 @@ impl Model {
             self.overlays.lsp_results.inlay_pending = None;
             return;
         }
-        let revision = self.editor.revision();
+        let revision = self.session.editor.revision();
         let start = self.view.scroll;
-        let end = visible_end_line(start, usize::from(height), self.editor.index().len_lines());
+        let end = visible_end_line(
+            start,
+            usize::from(height),
+            self.session.editor.index().len_lines(),
+        );
         let signature = (path.clone(), revision, start, end);
         if let Some(pending) = &self.overlays.lsp_results.inlay_pending {
             if (pending.1.clone(), pending.2, pending.3, pending.4) != signature {
@@ -75,7 +79,7 @@ impl Model {
         let Some((_, path, revision, _, _)) = self.overlays.lsp_results.inlay_pending.take() else {
             return;
         };
-        if self.path.as_ref() != Some(&path) || self.editor.revision() != revision {
+        if self.session.path.as_ref() != Some(&path) || self.session.editor.revision() != revision {
             self.overlays.lsp_results.inlay_hints.clear();
             self.dirty = true;
             return;

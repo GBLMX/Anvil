@@ -25,7 +25,7 @@ impl Model {
                 version: env!("CARGO_PKG_VERSION").to_owned(),
                 protocol_version: PROTOCOL_VERSION.to_owned(),
                 workspace: self.workspace.path.clone(),
-                file: self.path.clone(),
+                file: self.session.path.clone(),
                 dirty: self.modified,
                 capabilities: CAPABILITIES
                     .iter()
@@ -74,7 +74,7 @@ impl Model {
                 format!("file not found: {}", path.display()),
             ));
         }
-        if self.path.as_deref() != Some(absolute.as_path())
+        if self.session.path.as_deref() != Some(absolute.as_path())
             && let Err(error) = self.open_path(&absolute)
         {
             return Err(RpcError::new(codes::INTERNAL_ERROR, error));
@@ -82,11 +82,15 @@ impl Model {
         let line = line
             .max(1)
             .saturating_sub(1)
-            .min(self.editor.index().len_lines().saturating_sub(1));
-        self.cursor = self.offset_at_utf16(line, column.saturating_sub(1));
+            .min(self.session.editor.index().len_lines().saturating_sub(1));
+        self.session.cursor = self.offset_at_utf16(line, column.saturating_sub(1));
         self.status.text = format!(
             "remote open {}:{}:{}",
-            self.path.as_deref().unwrap_or(absolute.as_path()).display(),
+            self.session
+                .path
+                .as_deref()
+                .unwrap_or(absolute.as_path())
+                .display(),
             line + 1,
             column.max(1)
         );
@@ -160,7 +164,7 @@ impl Model {
         }
         Ok(json!({
             "accepted": true,
-            "path": self.path,
+            "path": self.session.path,
             "status": self.status.text,
         }))
     }
@@ -189,12 +193,13 @@ impl Model {
                         "set does not accept a range or revision",
                     ));
                 }
-                let end = self.editor.text().len_bytes();
+                let end = self.session.editor.text().len_bytes();
                 let changed = self
+                    .session
                     .editor
                     .apply_transaction(vec![(0..end, text.to_owned())]);
-                self.editor.set_selection_bytes(0, 0);
-                self.cursor = 0;
+                self.session.editor.set_selection_bytes(0, 0);
+                self.session.cursor = 0;
                 self.view.scroll = 0;
                 self.view.hscroll = 0;
                 if changed {
@@ -203,7 +208,7 @@ impl Model {
                 self.missing = false;
                 self.syntax
                     .borrow_mut()
-                    .switch_path(self.path.as_deref(), false);
+                    .switch_path(self.session.path.as_deref(), false);
                 self.git.diff_checked = None;
                 self.git.diff_due = Some(Instant::now());
                 self.sync_lsp_active();
@@ -235,12 +240,12 @@ impl Model {
                         "replace requires expected_revision",
                     ));
                 };
-                if expected_revision != self.editor.revision() {
+                if expected_revision != self.session.editor.revision() {
                     return Err(RpcError::new(
                         codes::CONFLICT,
                         format!(
                             "revision changed: expected {expected_revision}, current {}",
-                            self.editor.revision()
+                            self.session.editor.revision()
                         ),
                     ));
                 }
@@ -253,17 +258,18 @@ impl Model {
                     ));
                 }
                 let changed = self
+                    .session
                     .editor
                     .apply_transaction(vec![(start..end, text.to_owned())]);
-                self.editor.set_selection_bytes(start, start);
-                self.cursor = start;
+                self.session.editor.set_selection_bytes(start, start);
+                self.session.cursor = start;
                 if changed {
                     self.modified = true;
                 }
                 self.missing = false;
                 self.syntax
                     .borrow_mut()
-                    .switch_path(self.path.as_deref(), false);
+                    .switch_path(self.session.path.as_deref(), false);
                 self.git.diff_checked = None;
                 self.git.diff_due = Some(Instant::now());
                 self.sync_lsp_active();
@@ -273,9 +279,9 @@ impl Model {
         self.dirty = true;
         reply(EditResult {
             accepted: true,
-            revision: self.editor.revision(),
+            revision: self.session.editor.revision(),
             modified: self.modified,
-            cursor: self.cursor,
+            cursor: self.session.cursor,
         })
     }
 
@@ -286,7 +292,7 @@ impl Model {
                 "line and byte_column must be one-based",
             ));
         }
-        let index = self.editor.index();
+        let index = self.session.editor.index();
         let Some(line_start) = index.line_to_offset(point.line - 1) else {
             return Err(RpcError::new(
                 codes::INVALID_PARAMS,
@@ -295,7 +301,7 @@ impl Model {
         };
         let line_end = index
             .line_to_offset(point.line)
-            .unwrap_or_else(|| self.editor.text().len_bytes());
+            .unwrap_or_else(|| self.session.editor.text().len_bytes());
         let max_column = line_end.saturating_sub(line_start) + 1;
         if point.byte_column > max_column {
             return Err(RpcError::new(
@@ -304,8 +310,13 @@ impl Model {
             ));
         }
         let offset = line_start + point.byte_column - 1;
-        if offset > self.editor.text().len_bytes()
-            || !self.editor.text().slice(0..offset).is_char_boundary(offset)
+        if offset > self.session.editor.text().len_bytes()
+            || !self
+                .session
+                .editor
+                .text()
+                .slice(0..offset)
+                .is_char_boundary(offset)
         {
             return Err(RpcError::new(
                 codes::INVALID_PARAMS,
@@ -319,8 +330,12 @@ impl Model {
         if self.buffers.help_back.is_none() {
             self.sync_active();
         }
-        let full = self.editor.text().slice(0..self.editor.text().len_bytes());
-        let line_count = self.editor.index().len_lines();
+        let full = self
+            .session
+            .editor
+            .text()
+            .slice(0..self.session.editor.text().len_bytes());
+        let line_count = self.session.editor.index().len_lines();
         let start_line = options
             .start_line
             .unwrap_or(1)
@@ -332,11 +347,13 @@ impl Model {
             .max(start_line)
             .min(line_count.max(1));
         let start_offset = self
+            .session
             .editor
             .index()
             .line_to_offset(start_line.saturating_sub(1))
             .unwrap_or(0);
         let end_offset = self
+            .session
             .editor
             .index()
             .line_to_offset(end_line)
@@ -367,7 +384,7 @@ impl Model {
             .collect::<Vec<_>>();
         if buffers.is_empty() {
             buffers.push(BufferInfo {
-                path: self.path.clone(),
+                path: self.session.path.clone(),
                 modified: self.modified,
                 active: true,
             });
@@ -375,15 +392,15 @@ impl Model {
         QueryResult {
             version: env!("CARGO_PKG_VERSION").to_owned(),
             workspace: self.workspace.path.clone(),
-            path: self.path.clone(),
+            path: self.session.path.clone(),
             modified: self.modified,
             read_only: self.read_only || self.buffers.help_back.is_some(),
-            cursor: self.cursor,
-            revision: self.editor.revision(),
+            cursor: self.session.cursor,
+            revision: self.session.editor.revision(),
             line_count,
-            undo_depth: self.editor.undo_depth(),
-            undo_bytes: self.editor.undo_bytes(),
-            selection: self.editor.selection_bytes(),
+            undo_depth: self.session.editor.undo_depth(),
+            undo_bytes: self.session.editor.undo_bytes(),
+            selection: self.session.editor.selection_bytes(),
             text,
             text_truncated: truncated,
             start_line,
@@ -438,10 +455,13 @@ mod tests {
         });
         assert!(reply.is_ok());
         assert_eq!(
-            model.path.as_deref(),
+            model.session.path.as_deref(),
             Some(file.canonicalize().expect("canonical").as_path())
         );
-        assert_eq!(model.cursor, model.editor.text().len_bytes());
+        assert_eq!(
+            model.session.cursor,
+            model.session.editor.text().len_bytes()
+        );
 
         let status = model
             .handle_control(ControlRequest::Status)
@@ -517,7 +537,7 @@ mod tests {
     #[test]
     fn replace_is_revision_guarded() {
         let mut model = Model::new(EditorState::from_text("alpha beta"), None);
-        let revision = model.editor.revision();
+        let revision = model.session.editor.revision();
         let range = EditRange {
             start: TextPoint {
                 line: 1,
@@ -539,9 +559,10 @@ mod tests {
         let result: EditResult = serde_json::from_value(value).expect("typed edit");
         assert_eq!(
             model
+                .session
                 .editor
                 .text()
-                .slice(0..model.editor.text().len_bytes()),
+                .slice(0..model.session.editor.text().len_bytes()),
             "alpha gamma"
         );
         let stale = model.handle_control(ControlRequest::Edit {
@@ -551,7 +572,7 @@ mod tests {
             expected_revision: Some(revision),
         });
         assert_eq!(stale.unwrap_err().code, codes::CONFLICT);
-        assert_eq!(result.revision, model.editor.revision());
+        assert_eq!(result.revision, model.session.editor.revision());
     }
 
     #[test]

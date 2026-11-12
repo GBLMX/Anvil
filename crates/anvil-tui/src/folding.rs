@@ -22,7 +22,7 @@ impl Model {
             .pending
             .retain(|_, kind| *kind != LspRequestKind::FoldingRange);
         self.prune_edit_requests();
-        let Some(path) = self.path.clone() else {
+        let Some(path) = self.session.path.clone() else {
             return;
         };
         let params = serde_json::json!({
@@ -100,7 +100,7 @@ impl Model {
         self.overlays.lsp_results.fold_revision = if self.overlays.lsp_results.folds.is_empty() {
             None
         } else {
-            Some(self.editor.revision())
+            Some(self.session.editor.revision())
         };
         match action {
             Some(FoldAction::Toggle(line)) => self.toggle_fold_line(line),
@@ -191,7 +191,7 @@ impl Model {
     }
 
     pub(crate) fn folds_fresh(&self) -> bool {
-        self.overlays.lsp_results.fold_revision == Some(self.editor.revision())
+        self.overlays.lsp_results.fold_revision == Some(self.session.editor.revision())
     }
 
     pub(crate) fn is_line_hidden(&self, line: usize) -> bool {
@@ -211,7 +211,7 @@ impl Model {
         if height == 0 {
             return Vec::new();
         }
-        let total = self.editor.index().len_lines();
+        let total = self.session.editor.index().len_lines();
         let mut line = self.first_visible_line(start);
         let mut lines = Vec::with_capacity(height.min(total));
         while lines.len() < height && line < total {
@@ -222,7 +222,7 @@ impl Model {
     }
 
     pub(crate) fn normalize_scroll(&mut self) {
-        let total = self.editor.index().len_lines();
+        let total = self.session.editor.index().len_lines();
         self.view.scroll = self
             .first_visible_line(self.view.scroll)
             .min(total.saturating_sub(1));
@@ -241,12 +241,12 @@ impl Model {
             && self.is_line_hidden(line)
             && let Some(start) = self.fold_start_containing(line)
         {
-            self.cursor = self.offset_at_utf16(start, 0);
+            self.session.cursor = self.offset_at_utf16(start, 0);
         }
     }
 
     pub(crate) fn first_visible_line(&self, mut line: usize) -> usize {
-        let total = self.editor.index().len_lines();
+        let total = self.session.editor.index().len_lines();
         line = line.min(total.saturating_sub(1));
         while self.is_line_hidden(line) {
             let Some(fold) = self
@@ -314,7 +314,7 @@ mod tests {
             FoldRange { start: 1, end: 4 },
             FoldRange { start: 6, end: 9 },
         ];
-        model.overlays.lsp_results.fold_revision = Some(model.editor.revision());
+        model.overlays.lsp_results.fold_revision = Some(model.session.editor.revision());
         model
     }
 

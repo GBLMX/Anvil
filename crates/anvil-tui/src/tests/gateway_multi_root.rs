@@ -79,7 +79,7 @@ fn secondary_root_tree_lists_and_opens_through_owning_gateway() {
     model
         .open_path(secondary_root.join("lib.rs"))
         .expect("open secondary file");
-    assert_eq!(model.editor.text().slice(0..9), "secondary");
+    assert_eq!(model.session.editor.text().slice(0..9), "secondary");
 
     std::fs::write(primary_root.join("main.rs"), "needle primary").expect("primary needle");
     std::fs::write(secondary_root.join("lib.rs"), "needle secondary").expect("secondary needle");

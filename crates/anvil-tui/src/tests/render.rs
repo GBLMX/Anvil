@@ -2,7 +2,7 @@ use super::*;
 #[test]
 fn markdown_fenced_code_renders_a_full_width_background() {
     let mut model = Model::new(EditorState::from_text("```rust\nfn main() {}\n```\n"), None);
-    model.path = Some(PathBuf::from("x.md"));
+    model.session.path = Some(PathBuf::from("x.md"));
     for _ in 0..100 {
         model.poll_syntax();
         if model
@@ -38,7 +38,7 @@ fn markdown_fenced_code_renders_a_full_width_background() {
 #[test]
 fn fenced_code_background_reaches_right_edge_when_hscrolled() {
     let mut model = Model::new(EditorState::from_text("```rust\nfn main() {}\n```\n"), None);
-    model.path = Some(PathBuf::from("x.md"));
+    model.session.path = Some(PathBuf::from("x.md"));
     model.view.hscroll = 1;
     for _ in 0..100 {
         model.poll_syntax();
@@ -61,8 +61,8 @@ fn fenced_code_background_reaches_right_edge_when_hscrolled() {
 #[test]
 fn cursorline_overlays_fenced_code_background() {
     let mut model = Model::new(EditorState::from_text("```rust\nfn main() {}\n```\n"), None);
-    model.path = Some(PathBuf::from("x.md"));
-    model.cursor = "```rust\n".len();
+    model.session.path = Some(PathBuf::from("x.md"));
+    model.session.cursor = "```rust\n".len();
     for _ in 0..100 {
         model.poll_syntax();
         if model
@@ -91,7 +91,7 @@ fn cursorline_overlays_fenced_code_background() {
 #[test]
 fn inline_code_gets_a_background_span() {
     let mut model = Model::new(EditorState::from_text("before `code` after"), None);
-    model.path = Some(PathBuf::from("x.md"));
+    model.session.path = Some(PathBuf::from("x.md"));
     for _ in 0..100 {
         model.poll_syntax();
         if !model.syntax.borrow().highlights().is_empty() {
@@ -114,10 +114,10 @@ fn inline_code_gets_a_background_span() {
 #[test]
 fn search_background_overlays_fenced_code_background() {
     let mut model = Model::new(EditorState::from_text("```rust\nfn main() {}\n```\n"), None);
-    model.path = Some(PathBuf::from("x.md"));
-    model.cursor = 0;
+    model.session.path = Some(PathBuf::from("x.md"));
+    model.session.cursor = 0;
     model.commit_search("fn".to_owned());
-    model.cursor = 10;
+    model.session.cursor = 10;
     for _ in 0..100 {
         model.poll_syntax();
         if model
@@ -177,7 +177,7 @@ fn mouse_hit_test_boundaries_and_cjk_snap() {
         modifiers: crossterm::event::KeyModifiers::NONE,
     };
     handle_event(&mut model, Event::Mouse(press));
-    assert_eq!(model.cursor, 3);
+    assert_eq!(model.session.cursor, 3);
 }
 
 #[test]
@@ -303,9 +303,9 @@ fn tree_visible_drag_keeps_editor_origin() {
         modifiers: crossterm::event::KeyModifiers::NONE,
     };
     handle_event(&mut model, Event::Mouse(press));
-    let cursor = model.cursor;
+    let cursor = model.session.cursor;
     handle_event(&mut model, Event::Mouse(drag));
-    assert_eq!(model.cursor, cursor);
+    assert_eq!(model.session.cursor, cursor);
 }
 
 #[test]
@@ -409,17 +409,24 @@ fn dense_substitution_is_rejected() {
     let mut model = Model::new(EditorState::from_text(&text), None);
     model.execute_command("%s/a/b/g");
     assert!(model.status.text.contains("too many matches"));
-    assert_eq!(model.editor.text().len_bytes(), text.len());
+    assert_eq!(model.session.editor.text().len_bytes(), text.len());
 }
 
 #[test]
 fn line_substitution_ignores_dense_prefix() {
     let text = "a\n".repeat(10_050);
     let mut model = Model::new(EditorState::from_text(&text), None);
-    model.cursor = text.len() - 2;
+    model.session.cursor = text.len() - 2;
     model.execute_command("s/a/b/");
     assert!(model.status.text.contains("1 replacements"));
-    assert_eq!(model.editor.text().slice(text.len() - 2..text.len()), "b\n");
+    assert_eq!(
+        model
+            .session
+            .editor
+            .text()
+            .slice(text.len() - 2..text.len()),
+        "b\n"
+    );
 }
 
 #[test]
@@ -431,7 +438,7 @@ fn long_line_cursor_at_end_render_stays_bounded() {
         .unwrap_or(100);
     let text = "x".repeat(megabytes * 1024 * 1024);
     let mut model = Model::new(EditorState::from_text(&text), None);
-    model.cursor = text.len();
+    model.session.cursor = text.len();
     model.view.hscroll = text.len().saturating_sub(100);
     let mut terminal = Terminal::new(TestBackend::new(120, 40)).expect("terminal");
     let start = std::time::Instant::now();

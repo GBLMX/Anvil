@@ -26,7 +26,7 @@ fn space_leader_expires_without_consuming_next_key() {
     model.expire_leader();
     assert_eq!(model.input.pending, None);
     handle_event(&mut model, key(KeyCode::Char('j')));
-    assert_eq!(model.cursor, 6);
+    assert_eq!(model.session.cursor, 6);
 }
 
 #[test]
@@ -53,7 +53,7 @@ fn popup_consumes_j_before_editor_motion() {
         selected: 0,
     });
     handle_event(&mut model, key(KeyCode::Char('j')));
-    assert_eq!(model.cursor, 0);
+    assert_eq!(model.session.cursor, 0);
     assert_eq!(
         model
             .overlays
@@ -230,7 +230,7 @@ j = "editor.undo"
     )
     .expect("global keymap");
     handle_event(&mut model, key(KeyCode::Char('j')));
-    assert_eq!(model.cursor, 0);
+    assert_eq!(model.session.cursor, 0);
     assert_eq!(
         model
             .overlays
@@ -974,8 +974,8 @@ fn fuzzy_opens_absolute_secondary_root_file() {
 
     model.fuzzy_open();
 
-    assert_eq!(model.path.as_ref(), Some(&file));
-    assert_eq!(model.editor.text().slice(0..15), "pub fn lib() {}");
+    assert_eq!(model.session.path.as_ref(), Some(&file));
+    assert_eq!(model.session.editor.text().slice(0..15), "pub fn lib() {}");
 }
 
 #[test]

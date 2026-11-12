@@ -13,7 +13,7 @@ impl Model {
             .pending
             .retain(|_, kind| *kind != LspRequestKind::SemanticTokens);
         self.prune_edit_requests();
-        let Some(path) = self.path.clone() else {
+        let Some(path) = self.session.path.clone() else {
             return;
         };
         let params = serde_json::json!({
@@ -79,7 +79,7 @@ impl Model {
             if self.overlays.lsp_results.semantic_tokens.is_empty() {
                 None
             } else {
-                Some(self.editor.revision())
+                Some(self.session.editor.revision())
             };
         self.status.text = format!(
             "semantic tokens: {}",
@@ -102,7 +102,7 @@ impl Model {
         line_start: usize,
         line_end: usize,
     ) -> Vec<(usize, usize, Style)> {
-        if self.overlays.lsp_results.semantic_revision != Some(self.editor.revision()) {
+        if self.overlays.lsp_results.semantic_revision != Some(self.session.editor.revision()) {
             return Vec::new();
         }
         self.overlays

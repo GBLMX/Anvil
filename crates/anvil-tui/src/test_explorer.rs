@@ -66,14 +66,15 @@ impl Model {
             self.dirty = true;
             return;
         };
-        if self.path.as_deref() != Some(problem.path.as_path())
+        if self.session.path.as_deref() != Some(problem.path.as_path())
             && let Err(error) = self.open_path(&problem.path)
         {
             self.status.text = format!("E: {error}");
             self.dirty = true;
             return;
         }
-        self.cursor = self.offset_at_utf16(problem.line as usize, problem.character as usize);
+        self.session.cursor =
+            self.offset_at_utf16(problem.line as usize, problem.character as usize);
         self.ui.focus.tree = false;
         self.ui.focus.split = false;
         self.overlays.test_explorer = None;

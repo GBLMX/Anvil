@@ -7,14 +7,18 @@ impl Model {
         let count = self.take_count();
         for _ in 0..count {
             let target = match motion {
-                WordMotion::NextStart => next_word_start(self.editor.text(), self.cursor),
-                WordMotion::PreviousStart => previous_word_start(self.editor.text(), self.cursor),
-                WordMotion::End => end_word(self.editor.text(), self.cursor),
+                WordMotion::NextStart => {
+                    next_word_start(self.session.editor.text(), self.session.cursor)
+                }
+                WordMotion::PreviousStart => {
+                    previous_word_start(self.session.editor.text(), self.session.cursor)
+                }
+                WordMotion::End => end_word(self.session.editor.text(), self.session.cursor),
             };
-            if target == self.cursor {
+            if target == self.session.cursor {
                 break;
             }
-            self.cursor = target;
+            self.session.cursor = target;
             self.dirty = true;
         }
     }
@@ -30,13 +34,15 @@ impl Model {
         let Some(range) = self.word_range(motion) else {
             return;
         };
-        let deleted = self.editor.text().slice(range.clone());
-        self.editor.set_selection_bytes(range.start, range.end);
-        self.editor.delete(range.clone());
+        let deleted = self.session.editor.text().slice(range.clone());
+        self.session
+            .editor
+            .set_selection_bytes(range.start, range.end);
+        self.session.editor.delete(range.clone());
         if let Some(register) = self.input.register.take() {
             self.record_register_text(register, &deleted);
         }
-        self.cursor = range.start;
+        self.session.cursor = range.start;
         self.modified = true;
         self.begin_insert(InsertOrigin::ChangeWord(motion));
         self.dirty = true;
@@ -51,13 +57,15 @@ impl Model {
             self.dirty = true;
             return;
         };
-        let deleted = self.editor.text().slice(range.clone());
-        self.editor.set_selection_bytes(range.start, range.end);
-        self.editor.delete(range.clone());
+        let deleted = self.session.editor.text().slice(range.clone());
+        self.session
+            .editor
+            .set_selection_bytes(range.start, range.end);
+        self.session.editor.delete(range.clone());
         if let Some(register) = self.input.register.take() {
             self.record_register_text(register, &deleted);
         }
-        self.cursor = range.start;
+        self.session.cursor = range.start;
         self.modified = true;
         self.begin_insert(InsertOrigin::ChangeInnerWord);
         self.dirty = true;
@@ -72,38 +80,46 @@ impl Model {
             self.dirty = true;
             return;
         };
-        let deleted = self.editor.text().slice(range.clone());
-        self.editor.set_selection_bytes(range.start, range.end);
-        self.editor.delete(range.clone());
+        let deleted = self.session.editor.text().slice(range.clone());
+        self.session
+            .editor
+            .set_selection_bytes(range.start, range.end);
+        self.session.editor.delete(range.clone());
         if let Some(register) = self.input.register.take() {
             self.record_register_text(register, &deleted);
         }
-        self.cursor = range.start;
+        self.session.cursor = range.start;
         self.modified = true;
         self.begin_insert(InsertOrigin::ChangeInnerQuote(quote));
         self.dirty = true;
     }
 
     pub(crate) fn inner_word_range(&self) -> Option<std::ops::Range<usize>> {
-        self.editor.inner_word_object(self.cursor)
+        self.session.editor.inner_word_object(self.session.cursor)
     }
 
     pub(crate) fn inner_quote_range(&self, quote: char) -> Option<std::ops::Range<usize>> {
-        self.editor.inner_quote_object(self.cursor, quote)
+        self.session
+            .editor
+            .inner_quote_object(self.session.cursor, quote)
     }
 
     pub(crate) fn around_quote_range(&self, quote: char) -> Option<std::ops::Range<usize>> {
-        self.editor.around_quote_object(self.cursor, quote)
+        self.session
+            .editor
+            .around_quote_object(self.session.cursor, quote)
     }
 
     pub(crate) fn bracket_range(&self, open: char, around: bool) -> Option<std::ops::Range<usize>> {
-        self.editor.bracket_object(self.cursor, open, around)
+        self.session
+            .editor
+            .bracket_object(self.session.cursor, open, around)
     }
 
     pub(crate) fn around_word_range(&self) -> Option<std::ops::Range<usize>> {
         let inner = self.inner_word_range()?;
-        let line = self.editor.line_range_at(inner.start)?;
-        let text = self.editor.text().slice(line.start..line.end);
+        let line = self.session.editor.line_range_at(inner.start)?;
+        let text = self.session.editor.text().slice(line.start..line.end);
         let mut start = inner.start - line.start;
         let mut end = inner.end - line.start;
         while let Some(character) = text[end..].chars().next() {
@@ -125,12 +141,12 @@ impl Model {
     }
 
     fn word_object_range(&mut self, around: bool, count: usize) -> Option<std::ops::Range<usize>> {
-        let saved = self.cursor;
+        let saved = self.session.cursor;
         let mut cursor = saved;
         let mut selected: Option<std::ops::Range<usize>> = None;
         for iteration in 0..count.max(1) {
             if iteration > 0 {
-                let text = self.editor.text();
+                let text = self.session.editor.text();
                 while let Some(character) = text.slice(cursor..text.len_bytes()).chars().next() {
                     if !character.is_whitespace() {
                         break;
@@ -138,7 +154,7 @@ impl Model {
                     cursor += character.len_utf8();
                 }
             }
-            self.cursor = cursor;
+            self.session.cursor = cursor;
             let Some(next) = (if around {
                 self.around_word_range()
             } else {
@@ -153,7 +169,7 @@ impl Model {
                 selected = Some(next);
             }
         }
-        self.cursor = saved;
+        self.session.cursor = saved;
         selected
     }
 
@@ -165,18 +181,22 @@ impl Model {
     ) {
         match operator {
             'y' => {
-                let cursor = self.cursor;
-                self.editor.set_selection_bytes(range.start, range.end);
-                if self.editor.yank(range) {
+                let cursor = self.session.cursor;
+                self.session
+                    .editor
+                    .set_selection_bytes(range.start, range.end);
+                if self.session.editor.yank(range) {
                     self.record_register();
                 }
-                let _ = self.editor.set_selection_bytes(cursor, cursor);
+                let _ = self.session.editor.set_selection_bytes(cursor, cursor);
             }
             'c' => {
-                let deleted = self.editor.text().slice(range.clone());
-                self.editor.set_selection_bytes(range.start, range.end);
-                self.editor.delete(range.clone());
-                self.cursor = range.start;
+                let deleted = self.session.editor.text().slice(range.clone());
+                self.session
+                    .editor
+                    .set_selection_bytes(range.start, range.end);
+                self.session.editor.delete(range.clone());
+                self.session.cursor = range.start;
                 if let Some(register) = self.input.register.take() {
                     self.record_register_text(register, &deleted);
                 }
@@ -184,10 +204,12 @@ impl Model {
                 self.begin_insert(change_origin);
             }
             'd' => {
-                let deleted = self.editor.text().slice(range.clone());
-                self.editor.set_selection_bytes(range.start, range.end);
-                self.editor.delete(range.clone());
-                self.cursor = range.start;
+                let deleted = self.session.editor.text().slice(range.clone());
+                self.session
+                    .editor
+                    .set_selection_bytes(range.start, range.end);
+                self.session.editor.delete(range.clone());
+                self.session.cursor = range.start;
                 if let Some(register) = self.input.register.take() {
                     self.record_register_text(register, &deleted);
                 }
@@ -246,7 +268,9 @@ impl Model {
     }
 
     pub(crate) fn paragraph_range(&self, around: bool) -> Option<std::ops::Range<usize>> {
-        self.editor.paragraph_object(self.cursor, around)
+        self.session
+            .editor
+            .paragraph_object(self.session.cursor, around)
     }
 
     fn paragraph_object_range(
@@ -254,12 +278,12 @@ impl Model {
         around: bool,
         count: usize,
     ) -> Option<std::ops::Range<usize>> {
-        let saved = self.cursor;
+        let saved = self.session.cursor;
         let mut cursor = saved;
         let mut selected: Option<std::ops::Range<usize>> = None;
         for iteration in 0..count.max(1) {
             if iteration > 0 {
-                let text = self.editor.text();
+                let text = self.session.editor.text();
                 while let Some(character) = text.slice(cursor..text.len_bytes()).chars().next() {
                     if !character.is_whitespace() {
                         break;
@@ -267,7 +291,7 @@ impl Model {
                     cursor += character.len_utf8();
                 }
             }
-            self.cursor = cursor;
+            self.session.cursor = cursor;
             let Some(next) = self.paragraph_range(around) else {
                 break;
             };
@@ -278,7 +302,7 @@ impl Model {
                 selected = Some(next);
             }
         }
-        self.cursor = saved;
+        self.session.cursor = saved;
         selected
     }
 
@@ -292,17 +316,23 @@ impl Model {
     }
 
     pub(crate) fn word_range(&self, motion: WordMotion) -> Option<std::ops::Range<usize>> {
-        let text = self.editor.text();
+        let text = self.session.editor.text();
         let (start, end) = match motion {
-            WordMotion::NextStart => (self.cursor, next_word_start(text, self.cursor)),
-            WordMotion::PreviousStart => (previous_word_start(text, self.cursor), self.cursor),
-            WordMotion::End => (self.cursor, self.word_end_exclusive()),
+            WordMotion::NextStart => (
+                self.session.cursor,
+                next_word_start(text, self.session.cursor),
+            ),
+            WordMotion::PreviousStart => (
+                previous_word_start(text, self.session.cursor),
+                self.session.cursor,
+            ),
+            WordMotion::End => (self.session.cursor, self.word_end_exclusive()),
         };
         (start < end).then_some(start..end)
     }
 
     pub(crate) fn tag_range(&self, around: bool) -> Option<std::ops::Range<usize>> {
-        self.editor.tag_object(self.cursor, around)
+        self.session.editor.tag_object(self.session.cursor, around)
     }
 
     pub(crate) fn apply_tag_operator(&mut self, operator: char, around: bool) {
@@ -315,9 +345,10 @@ impl Model {
     }
 
     pub(crate) fn word_end_exclusive(&self) -> usize {
-        let text = self.editor.text();
-        let end = end_word(text, self.cursor);
-        self.editor
+        let text = self.session.editor.text();
+        let end = end_word(text, self.session.cursor);
+        self.session
+            .editor
             .next_grapheme_boundary(end)
             .filter(|next| *next > end)
             .unwrap_or(end)
@@ -330,10 +361,12 @@ impl Model {
             let Some(range) = self.word_range(motion) else {
                 break;
             };
-            deleted.push_str(&self.editor.text().slice(range.clone()));
-            self.editor.set_selection_bytes(range.start, range.end);
-            self.editor.delete(range.clone());
-            self.cursor = range.start;
+            deleted.push_str(&self.session.editor.text().slice(range.clone()));
+            self.session
+                .editor
+                .set_selection_bytes(range.start, range.end);
+            self.session.editor.delete(range.clone());
+            self.session.cursor = range.start;
             self.modified = true;
         }
         if !deleted.is_empty() {
@@ -355,12 +388,14 @@ impl Model {
         let Some(range) = self.word_range(motion) else {
             return;
         };
-        let cursor = self.cursor;
-        self.editor.set_selection_bytes(range.start, range.end);
-        if self.editor.yank(range) {
+        let cursor = self.session.cursor;
+        self.session
+            .editor
+            .set_selection_bytes(range.start, range.end);
+        if self.session.editor.yank(range) {
             self.record_register();
         }
-        let _ = self.editor.set_selection_bytes(cursor, cursor);
+        let _ = self.session.editor.set_selection_bytes(cursor, cursor);
         self.dirty = true;
     }
 
@@ -373,9 +408,10 @@ impl Model {
 
     pub(crate) fn move_line(&mut self, delta: isize) {
         let Some(position) = self
+            .session
             .editor
             .index()
-            .position(self.editor.text(), self.cursor)
+            .position(self.session.editor.text(), self.session.cursor)
         else {
             return;
         };
@@ -383,8 +419,8 @@ impl Model {
         if target < 0 {
             return;
         }
-        let Some(offset) = self.editor.index().offset_at_display_column(
-            self.editor.text(),
+        let Some(offset) = self.session.editor.index().offset_at_display_column(
+            self.session.editor.text(),
             target as usize,
             position.display_column,
         ) else {
@@ -397,9 +433,11 @@ impl Model {
     pub(crate) fn move_file_end(&mut self) {
         let count = self.input.count;
         let _ = self.take_count();
-        let mut last_line = self.editor.index().len_lines().saturating_sub(1);
-        let text_len = self.editor.text().len_bytes();
-        if last_line > 0 && text_len > 0 && self.editor.text().slice(text_len - 1..text_len) == "\n"
+        let mut last_line = self.session.editor.index().len_lines().saturating_sub(1);
+        let text_len = self.session.editor.text().len_bytes();
+        if last_line > 0
+            && text_len > 0
+            && self.session.editor.text().slice(text_len - 1..text_len) == "\n"
         {
             last_line -= 1;
         }
@@ -408,11 +446,11 @@ impl Model {
         } else {
             (count - 1).min(last_line)
         };
-        let Some(offset) =
-            self.editor
-                .index()
-                .offset_at_display_column(self.editor.text(), line, 0)
-        else {
+        let Some(offset) = self.session.editor.index().offset_at_display_column(
+            self.session.editor.text(),
+            line,
+            0,
+        ) else {
             return;
         };
         self.set_caret(offset);
@@ -428,9 +466,13 @@ impl Model {
 
     pub(crate) fn move_char(&mut self, delta: isize) {
         let next = if delta < 0 {
-            self.editor.previous_grapheme_boundary(self.cursor)
+            self.session
+                .editor
+                .previous_grapheme_boundary(self.session.cursor)
         } else {
-            self.editor.next_grapheme_boundary(self.cursor)
+            self.session
+                .editor
+                .next_grapheme_boundary(self.session.cursor)
         };
         if let Some(offset) = next {
             self.set_caret(offset);
@@ -439,14 +481,24 @@ impl Model {
     }
 
     pub(crate) fn move_home(&mut self) {
-        if let Some(line) = self.editor.index().offset_to_line(self.cursor) {
+        if let Some(line) = self
+            .session
+            .editor
+            .index()
+            .offset_to_line(self.session.cursor)
+        {
             self.set_caret(line.start);
             self.dirty = true;
         }
     }
 
     pub(crate) fn move_end(&mut self) {
-        if let Some(line) = self.editor.index().offset_to_line(self.cursor) {
+        if let Some(line) = self
+            .session
+            .editor
+            .index()
+            .offset_to_line(self.session.cursor)
+        {
             self.set_caret(line.end);
             self.dirty = true;
         }
@@ -456,17 +508,18 @@ impl Model {
         if let Some(session) = self.edit.insert_session.as_mut() {
             session.valid = false;
         }
-        self.cursor = offset;
-        if self.editor.selection_bytes().len() <= 1 {
-            self.editor.set_selection_bytes(offset, offset);
+        self.session.cursor = offset;
+        if self.session.editor.selection_bytes().len() <= 1 {
+            self.session.editor.set_selection_bytes(offset, offset);
         }
     }
 
     pub(crate) fn ensure_cursor_visible(&mut self, height: u16, width: u16) {
         let Some(position) = self
+            .session
             .editor
             .index()
-            .position(self.editor.text(), self.cursor)
+            .position(self.session.editor.text(), self.session.cursor)
         else {
             return;
         };
@@ -510,22 +563,25 @@ impl Model {
             }
             let segments = self.wrap_segments(line, self.view.wrap_width);
             let line_end = self
+                .session
                 .editor
                 .index()
                 .line_to_offset(line)
-                .and_then(|offset| self.editor.index().offset_to_line(offset))
+                .and_then(|offset| self.session.editor.index().offset_to_line(offset))
                 .map_or(0, |range| range.end);
             let mut segment = 0usize;
             for (index, (start, end, _)) in segments.iter().enumerate() {
                 let start_column = self
+                    .session
                     .editor
                     .index()
-                    .position(self.editor.text(), *start)
+                    .position(self.session.editor.text(), *start)
                     .map_or(0, |position| position.display_column);
                 let end_column = self
+                    .session
                     .editor
                     .index()
-                    .position(self.editor.text(), *end)
+                    .position(self.session.editor.text(), *end)
                     .map_or(start_column, |position| position.display_column);
                 if column >= start_column && (column < end_column || *end >= line_end) {
                     segment = index;
@@ -562,8 +618,12 @@ impl Model {
     }
 
     pub(crate) fn select_word_occurrences(&mut self) {
-        let text = self.editor.text().slice(0..self.editor.text().len_bytes());
-        let cursor = self.cursor.min(text.len());
+        let text = self
+            .session
+            .editor
+            .text()
+            .slice(0..self.session.editor.text().len_bytes());
+        let cursor = self.session.cursor.min(text.len());
         let Some((start, end)) = word_bounds(&text, cursor) else {
             self.status.text = "E: no word under cursor".to_owned();
             self.dirty = true;
@@ -587,57 +647,64 @@ impl Model {
                 selections.push((offset, match_end));
             }
         }
-        if selections.is_empty() || !self.editor.set_selections_bytes(selections) {
+        if selections.is_empty() || !self.session.editor.set_selections_bytes(selections) {
             return;
         }
-        self.cursor = self
+        self.session.cursor = self
+            .session
             .editor
             .selection_bytes()
             .first()
             .map(|(start, _)| *start)
             .unwrap_or(cursor);
         self.begin_insert(InsertOrigin::InsertHere);
-        self.status.text = format!("{} selections", self.editor.selection_bytes().len());
+        self.status.text = format!("{} selections", self.session.editor.selection_bytes().len());
         self.dirty = true;
     }
 
     pub(crate) fn split_selection_lines(&mut self) {
-        let selections = self.editor.selection_bytes();
+        let selections = self.session.editor.selection_bytes();
         let mut carets = Vec::new();
         for (anchor, head) in selections {
             let start = anchor.min(head);
             let end = anchor.max(head);
-            let Some(first_line) = self.editor.index().offset_to_line(start) else {
+            let Some(first_line) = self.session.editor.index().offset_to_line(start) else {
                 continue;
             };
-            let Some(last_line) = self.editor.index().offset_to_line(end) else {
+            let Some(last_line) = self.session.editor.index().offset_to_line(end) else {
                 continue;
             };
             for line in first_line.line..=last_line.line {
-                if let Some(offset) = self.editor.index().line_to_offset(line) {
+                if let Some(offset) = self.session.editor.index().line_to_offset(line) {
                     carets.push((offset, offset));
                 }
             }
         }
         carets.sort_unstable();
         carets.dedup();
-        if carets.len() < 2 || !self.editor.set_selections_bytes(carets) {
+        if carets.len() < 2 || !self.session.editor.set_selections_bytes(carets) {
             self.status.text = "E: no lines to split".to_owned();
             self.dirty = true;
             return;
         }
-        self.cursor = self
+        self.session.cursor = self
+            .session
             .editor
             .selection_bytes()
             .first()
             .map(|(start, _)| *start)
-            .unwrap_or(self.cursor);
-        self.status.text = format!("{} cursors", self.editor.selection_bytes().len());
+            .unwrap_or(self.session.cursor);
+        self.status.text = format!("{} cursors", self.session.editor.selection_bytes().len());
         self.dirty = true;
     }
 
     pub(crate) fn extend_line_cursor(&mut self, up: bool) {
-        let Some(line) = self.editor.index().offset_to_line(self.cursor) else {
+        let Some(line) = self
+            .session
+            .editor
+            .index()
+            .offset_to_line(self.session.cursor)
+        else {
             return;
         };
         let target_line = if up {
@@ -646,46 +713,48 @@ impl Model {
             Some(line.line + 1)
         };
         let Some(target_line) =
-            target_line.and_then(|line| self.editor.index().line_to_offset(line))
+            target_line.and_then(|line| self.session.editor.index().line_to_offset(line))
         else {
             return;
         };
-        let Some(target) = self.editor.index().offset_to_line(target_line) else {
+        let Some(target) = self.session.editor.index().offset_to_line(target_line) else {
             return;
         };
-        let column = self.cursor.saturating_sub(line.start);
+        let column = self.session.cursor.saturating_sub(line.start);
         let target_offset = target.start + column.min(target.end.saturating_sub(target.start));
-        let mut selections = self.editor.selection_bytes();
+        let mut selections = self.session.editor.selection_bytes();
         if selections.len() == 1
             && selections[0].0 == selections[0].1
-            && selections[0].0 != self.cursor
+            && selections[0].0 != self.session.cursor
         {
-            selections[0] = (self.cursor, self.cursor);
+            selections[0] = (self.session.cursor, self.session.cursor);
         }
         selections.push((target_offset, target_offset));
         selections.sort_unstable();
         selections.dedup();
-        if !self.editor.set_selections_bytes(selections) {
+        if !self.session.editor.set_selections_bytes(selections) {
             return;
         }
-        self.cursor = target_offset;
-        self.status.text = format!("{} cursors", self.editor.selection_bytes().len());
+        self.session.cursor = target_offset;
+        self.status.text = format!("{} cursors", self.session.editor.selection_bytes().len());
         self.dirty = true;
     }
 
     pub(crate) fn collapse_selections(&mut self) {
-        let selections = self.editor.selection_bytes();
+        let selections = self.session.editor.selection_bytes();
         if selections.len() <= 1 && selections.iter().all(|(anchor, head)| anchor == head) {
             return;
         }
         self.sync_cursor_from_selection();
-        self.editor.set_selection_bytes(self.cursor, self.cursor);
+        self.session
+            .editor
+            .set_selection_bytes(self.session.cursor, self.session.cursor);
         self.status.text = "cursors merged".to_owned();
         self.dirty = true;
     }
 
     pub(crate) fn begin_visual(&mut self, line: bool) {
-        self.edit.visual_anchor = Some(self.cursor);
+        self.edit.visual_anchor = Some(self.session.cursor);
         self.edit.visual_line = line;
         self.sync_visual_selection();
         self.dirty = true;
@@ -693,7 +762,9 @@ impl Model {
 
     pub(crate) fn exit_visual(&mut self) {
         self.edit.visual_anchor = None;
-        self.editor.set_selection_bytes(self.cursor, self.cursor);
+        self.session
+            .editor
+            .set_selection_bytes(self.session.cursor, self.session.cursor);
         self.dirty = true;
     }
 
@@ -702,41 +773,50 @@ impl Model {
             return;
         };
         let (start, end) = if self.edit.visual_line {
-            let Some(anchor_line) = self.editor.index().offset_to_line(anchor) else {
+            let Some(anchor_line) = self.session.editor.index().offset_to_line(anchor) else {
                 return;
             };
-            let Some(cursor_line) = self.editor.index().offset_to_line(self.cursor) else {
+            let Some(cursor_line) = self
+                .session
+                .editor
+                .index()
+                .offset_to_line(self.session.cursor)
+            else {
                 return;
             };
             let start_line = anchor_line.line.min(cursor_line.line);
             let end_line = anchor_line.line.max(cursor_line.line);
-            let Some(start) = self.editor.index().line_to_offset(start_line) else {
+            let Some(start) = self.session.editor.index().line_to_offset(start_line) else {
                 return;
             };
-            let Some(last) = self.editor.index().line_to_offset(end_line) else {
+            let Some(last) = self.session.editor.index().line_to_offset(end_line) else {
                 return;
             };
-            let Some(last) = self.editor.line_range_at(last) else {
+            let Some(last) = self.session.editor.line_range_at(last) else {
                 return;
             };
             (start, last.end)
         } else {
-            let start = anchor.min(self.cursor);
-            let last = anchor.max(self.cursor);
-            let end = self.editor.next_grapheme_boundary(last).unwrap_or(last);
+            let start = anchor.min(self.session.cursor);
+            let last = anchor.max(self.session.cursor);
+            let end = self
+                .session
+                .editor
+                .next_grapheme_boundary(last)
+                .unwrap_or(last);
             (start, end)
         };
         if start < end {
-            self.editor.set_selection_bytes(start, end);
+            self.session.editor.set_selection_bytes(start, end);
         }
     }
 
     pub(crate) fn yank_visual(&mut self) {
-        let Some((anchor, head)) = self.editor.selection_bytes().first().copied() else {
+        let Some((anchor, head)) = self.session.editor.selection_bytes().first().copied() else {
             return;
         };
         let range = anchor.min(head)..anchor.max(head);
-        if range.start < range.end && self.editor.yank(range) {
+        if range.start < range.end && self.session.editor.yank(range) {
             self.record_register();
         }
         self.exit_visual();
@@ -747,16 +827,21 @@ impl Model {
             self.exit_visual();
             return;
         }
-        let selections = self.editor.selection_bytes();
+        let selections = self.session.editor.selection_bytes();
         let deleted = selections
             .first()
             .copied()
-            .map(|(anchor, head)| self.editor.text().slice(anchor.min(head)..anchor.max(head)))
+            .map(|(anchor, head)| {
+                self.session
+                    .editor
+                    .text()
+                    .slice(anchor.min(head)..anchor.max(head))
+            })
             .unwrap_or_default();
         if let Some((anchor, head)) = selections.first().copied() {
             let range = anchor.min(head)..anchor.max(head);
             if range.start < range.end {
-                let _ = self.editor.yank(range);
+                let _ = self.session.editor.yank(range);
             }
         }
         if let Some(register) = self.input.register.take() {
@@ -773,7 +858,7 @@ impl Model {
         if self.reject_read_only() {
             return;
         }
-        let Some(path) = self.path.as_deref() else {
+        let Some(path) = self.session.path.as_deref() else {
             self.status.text = "E: comment: unnamed buffer".to_owned();
             self.dirty = true;
             return;
@@ -794,14 +879,18 @@ impl Model {
             self.dirty = true;
             return;
         }
-        let text = self.editor.text().slice(0..self.editor.text().len_bytes());
+        let text = self
+            .session
+            .editor
+            .text()
+            .slice(0..self.session.editor.text().len_bytes());
         let Some(edits) = comment::toggle_edits(&text, &lines, style.line) else {
             self.status.text = "E: comment: no changes".to_owned();
             self.dirty = true;
             return;
         };
         let count = lines.len();
-        if !self.editor.apply_transaction(edits) {
+        if !self.session.editor.apply_transaction(edits) {
             self.status.text = "E: comment: edit failed".to_owned();
             self.dirty = true;
             return;
@@ -814,27 +903,30 @@ impl Model {
 
     fn selected_line_ranges(&self) -> Vec<std::ops::Range<usize>> {
         let mut ranges = Vec::new();
-        if self.editor.text().len_bytes() == 0 {
+        if self.session.editor.text().len_bytes() == 0 {
             ranges.push(0..0);
             return ranges;
         }
-        for (anchor, head) in self.editor.selection_bytes() {
+        for (anchor, head) in self.session.editor.selection_bytes() {
             let start = anchor.min(head);
             let end = anchor.max(head);
-            let Some(first) = self.editor.line_range_at(start) else {
+            let Some(first) = self.session.editor.line_range_at(start) else {
                 continue;
             };
             let last_offset = if end > start {
-                self.editor.previous_grapheme_boundary(end).unwrap_or(end)
+                self.session
+                    .editor
+                    .previous_grapheme_boundary(end)
+                    .unwrap_or(end)
             } else {
                 end
             };
-            let Some(last) = self.editor.line_range_at(last_offset) else {
+            let Some(last) = self.session.editor.line_range_at(last_offset) else {
                 continue;
             };
             let mut at = first.start;
             loop {
-                let Some(range) = self.editor.line_range_at(at) else {
+                let Some(range) = self.session.editor.line_range_at(at) else {
                     break;
                 };
                 let done = range.end >= last.end || range.end == at;
@@ -854,7 +946,7 @@ impl Model {
         if self.reject_read_only() {
             return;
         }
-        let selections = self.editor.selection_bytes();
+        let selections = self.session.editor.selection_bytes();
         if selections.len() != 1 {
             self.insert_text(&character.to_string());
             return;
@@ -868,11 +960,12 @@ impl Model {
             }
             return;
         }
-        let text = self.editor.text();
+        let text = self.session.editor.text();
         let next = self
+            .session
             .editor
-            .next_grapheme_boundary(self.cursor)
-            .and_then(|end| text.slice(self.cursor..end).chars().next());
+            .next_grapheme_boundary(self.session.cursor)
+            .and_then(|end| text.slice(self.session.cursor..end).chars().next());
         if let Some(close) = closing_pair(character)
             && let Some(next) = next
             && next == close
@@ -895,7 +988,7 @@ impl Model {
         if self.reject_read_only() {
             return;
         }
-        let selections = self.editor.selection_bytes();
+        let selections = self.session.editor.selection_bytes();
         let mirror_edit = self
             .overlays
             .lsp_results
@@ -918,9 +1011,10 @@ impl Model {
         }
         let old_selections = selections.clone();
         if selections.len() > 1 || selections.iter().any(|(anchor, head)| anchor != head) {
-            if self.editor.insert_at_selections(text) {
+            if self.session.editor.insert_at_selections(text) {
                 if mirror_edit {
                     let carets = self
+                        .session
                         .editor
                         .selection_bytes()
                         .iter()
@@ -929,10 +1023,10 @@ impl Model {
                     if let Some(snippet) = self.overlays.lsp_results.snippet.as_mut() {
                         snippet.replace_current_with_carets(&old_selections, &carets);
                     }
-                    self.editor.set_selections_bytes(
+                    self.session.editor.set_selections_bytes(
                         carets.iter().map(|caret| (*caret, *caret)).collect(),
                     );
-                    self.cursor = carets.first().copied().unwrap_or(self.cursor);
+                    self.session.cursor = carets.first().copied().unwrap_or(self.session.cursor);
                 } else {
                     self.sync_cursor_from_selection();
                 }
@@ -943,9 +1037,11 @@ impl Model {
             self.dirty = true;
             return;
         }
-        self.editor.set_selection_bytes(self.cursor, self.cursor);
-        self.editor.insert(self.cursor, text);
-        self.cursor += text.len();
+        self.session
+            .editor
+            .set_selection_bytes(self.session.cursor, self.session.cursor);
+        self.session.editor.insert(self.session.cursor, text);
+        self.session.cursor += text.len();
         self.modified = true;
         self.capture_insert(text);
         self.maybe_request_signature_help(text);
@@ -963,20 +1059,21 @@ impl Model {
     }
 
     pub(crate) fn sync_cursor_from_selection(&mut self) {
-        self.cursor = self
+        self.session.cursor = self
+            .session
             .editor
             .selection_bytes()
             .first()
             .map(|(_, head)| *head)
             .unwrap_or(0)
-            .min(self.editor.text().len_bytes());
+            .min(self.session.editor.text().len_bytes());
     }
 
     pub(crate) fn undo(&mut self) {
         if self.reject_read_only() {
             return;
         }
-        if self.editor.undo() {
+        if self.session.editor.undo() {
             self.sync_cursor_from_selection();
             self.modified = true;
         } else {
@@ -989,7 +1086,7 @@ impl Model {
         if self.reject_read_only() {
             return;
         }
-        if self.editor.redo() {
+        if self.session.editor.redo() {
             self.sync_cursor_from_selection();
             self.modified = true;
         } else {
@@ -1003,29 +1100,31 @@ impl Model {
             return;
         }
         let Some(position) = self
+            .session
             .editor
             .index()
-            .position(self.editor.text(), self.cursor)
+            .position(self.session.editor.text(), self.session.cursor)
         else {
             return;
         };
-        let Some(start) = self.editor.index().line_to_offset(position.line) else {
+        let Some(start) = self.session.editor.index().line_to_offset(position.line) else {
             return;
         };
         let Some(last_start) = self
+            .session
             .editor
             .index()
             .line_to_offset(position.line.saturating_add(count.saturating_sub(1)))
         else {
             return;
         };
-        let Some(last) = self.editor.line_range_at(last_start) else {
+        let Some(last) = self.session.editor.line_range_at(last_start) else {
             return;
         };
-        let deleted = self.editor.text().slice(start..last.end);
-        self.editor.set_selection_bytes(start, last.end);
-        self.editor.delete(start..last.end);
-        self.cursor = start;
+        let deleted = self.session.editor.text().slice(start..last.end);
+        self.session.editor.set_selection_bytes(start, last.end);
+        self.session.editor.delete(start..last.end);
+        self.session.cursor = start;
         self.edit.last_change = Some(LastChange::DeleteLines { count });
         if let Some(register) = self.input.register.take() {
             self.record_register_text(register, &deleted);
@@ -1036,26 +1135,28 @@ impl Model {
 
     pub(crate) fn yank_lines(&mut self, count: usize) {
         let Some(position) = self
+            .session
             .editor
             .index()
-            .position(self.editor.text(), self.cursor)
+            .position(self.session.editor.text(), self.session.cursor)
         else {
             return;
         };
-        let Some(start) = self.editor.index().line_to_offset(position.line) else {
+        let Some(start) = self.session.editor.index().line_to_offset(position.line) else {
             return;
         };
         let Some(last_start) = self
+            .session
             .editor
             .index()
             .line_to_offset(position.line.saturating_add(count.saturating_sub(1)))
         else {
             return;
         };
-        let Some(last) = self.editor.line_range_at(last_start) else {
+        let Some(last) = self.session.editor.line_range_at(last_start) else {
             return;
         };
-        if self.editor.yank(start..last.end.max(start)) {
+        if self.session.editor.yank(start..last.end.max(start)) {
             self.record_register();
             self.status.text = format!("{count} lines yanked");
         }
@@ -1066,7 +1167,7 @@ impl Model {
         let Some(register) = self.input.register.take() else {
             return;
         };
-        let text = self.editor.yank_text().to_owned();
+        let text = self.session.editor.yank_text().to_owned();
         self.record_register_text(register, &text);
     }
 
@@ -1080,7 +1181,7 @@ impl Model {
                 }
             }
             _ => {
-                self.editor.set_register(register, text);
+                self.session.editor.set_register(register, text);
             }
         }
     }
@@ -1103,21 +1204,28 @@ impl Model {
                     }
                 }
             } else {
-                let Some(text) = self.editor.register_text(register).map(str::to_owned) else {
+                let Some(text) = self
+                    .session
+                    .editor
+                    .register_text(register)
+                    .map(str::to_owned)
+                else {
                     self.status.text = "E: register empty".to_owned();
                     self.dirty = true;
                     return;
                 };
                 text
             };
-            self.editor.set_selection_bytes(self.cursor, self.cursor);
-            self.editor.insert(self.cursor, &text);
-            self.cursor += text.len();
+            self.session
+                .editor
+                .set_selection_bytes(self.session.cursor, self.session.cursor);
+            self.session.editor.insert(self.session.cursor, &text);
+            self.session.cursor += text.len();
             self.modified = true;
             self.dirty = true;
             return;
         }
-        if self.editor.put(self.cursor).is_some() {
+        if self.session.editor.put(self.session.cursor).is_some() {
             self.sync_cursor_from_selection();
             self.modified = true;
         } else {
@@ -1130,8 +1238,12 @@ impl Model {
         if self.reject_read_only() {
             return;
         }
-        if let Some(line) = self.editor.index().offset_to_line(self.cursor)
-            && self.cursor < line.end
+        if let Some(line) = self
+            .session
+            .editor
+            .index()
+            .offset_to_line(self.session.cursor)
+            && self.session.cursor < line.end
         {
             self.move_char(1);
         }
@@ -1143,8 +1255,13 @@ impl Model {
         if self.reject_read_only() {
             return;
         }
-        if let Some(line) = self.editor.index().offset_to_line(self.cursor) {
-            self.cursor = line.end;
+        if let Some(line) = self
+            .session
+            .editor
+            .index()
+            .offset_to_line(self.session.cursor)
+        {
+            self.session.cursor = line.end;
         }
         self.begin_insert(InsertOrigin::AppendLineEnd);
         self.dirty = true;
@@ -1154,8 +1271,13 @@ impl Model {
         if self.reject_read_only() {
             return;
         }
-        if let Some(line) = self.editor.index().offset_to_line(self.cursor) {
-            self.cursor = line.end;
+        if let Some(line) = self
+            .session
+            .editor
+            .index()
+            .offset_to_line(self.session.cursor)
+        {
+            self.session.cursor = line.end;
         }
         self.insert_text("\n");
         self.begin_insert(InsertOrigin::OpenBelow);
@@ -1166,13 +1288,14 @@ impl Model {
             return;
         }
         let start = self
+            .session
             .editor
             .index()
-            .offset_to_line(self.cursor)
+            .offset_to_line(self.session.cursor)
             .map_or(0, |line| line.start);
-        self.cursor = start;
+        self.session.cursor = start;
         self.insert_text("\n");
-        self.cursor = start;
+        self.session.cursor = start;
         self.begin_insert(InsertOrigin::OpenAbove);
     }
 
@@ -1180,31 +1303,37 @@ impl Model {
         if self.reject_read_only() {
             return;
         }
-        let selections = self.editor.selection_bytes();
+        let selections = self.session.editor.selection_bytes();
         if selections.len() == 1 {
             let (anchor, head) = selections[0];
-            if anchor == head && self.cursor > 0 {
-                let text = self.editor.text();
-                if let Some(previous) = self.editor.previous_grapheme_boundary(self.cursor) {
+            if anchor == head && self.session.cursor > 0 {
+                let text = self.session.editor.text();
+                if let Some(previous) = self
+                    .session
+                    .editor
+                    .previous_grapheme_boundary(self.session.cursor)
+                {
                     let opening = text
-                        .slice(previous..self.cursor)
+                        .slice(previous..self.session.cursor)
                         .chars()
                         .next()
                         .and_then(matching_close);
                     let next = self
+                        .session
                         .editor
-                        .next_grapheme_boundary(self.cursor)
-                        .and_then(|end| text.slice(self.cursor..end).chars().next());
+                        .next_grapheme_boundary(self.session.cursor)
+                        .and_then(|end| text.slice(self.session.cursor..end).chars().next());
                     if let (Some(close), Some(next)) = (opening, next)
                         && next == close
                     {
                         let end = self
+                            .session
                             .editor
-                            .next_grapheme_boundary(self.cursor)
-                            .unwrap_or(self.cursor);
-                        self.editor.set_selection_bytes(previous, end);
-                        self.editor.delete(previous..end);
-                        self.cursor = previous;
+                            .next_grapheme_boundary(self.session.cursor)
+                            .unwrap_or(self.session.cursor);
+                        self.session.editor.set_selection_bytes(previous, end);
+                        self.session.editor.delete(previous..end);
+                        self.session.cursor = previous;
                         self.modified = true;
                         self.dirty = true;
                         return;
@@ -1214,24 +1343,30 @@ impl Model {
         }
         self.cancel_signature_help();
         let at_insert_end = self.edit.insert_session.as_ref().is_some_and(|session| {
-            session.valid && self.cursor == session.start + session.text.len()
+            session.valid && self.session.cursor == session.start + session.text.len()
         });
         if self.delete_selections(false) {
             self.trim_insert_session(false);
             return;
         }
-        let Some(start) = self.editor.previous_grapheme_boundary(self.cursor) else {
+        let Some(start) = self
+            .session
+            .editor
+            .previous_grapheme_boundary(self.session.cursor)
+        else {
             return;
         };
-        if start == self.cursor {
+        if start == self.session.cursor {
             return;
         }
         if let Some(snippet) = self.overlays.lsp_results.snippet.as_mut() {
-            snippet.adjust_delete(start, self.cursor);
+            snippet.adjust_delete(start, self.session.cursor);
         }
-        self.editor.set_selection_bytes(start, self.cursor);
-        self.editor.delete(start..self.cursor);
-        self.cursor = start;
+        self.session
+            .editor
+            .set_selection_bytes(start, self.session.cursor);
+        self.session.editor.delete(start..self.session.cursor);
+        self.session.cursor = start;
         self.modified = true;
         self.trim_insert_session(at_insert_end);
     }
@@ -1244,23 +1379,29 @@ impl Model {
         if self.delete_selections(true) {
             return;
         }
-        let Some(end) = self.editor.next_grapheme_boundary(self.cursor) else {
+        let Some(end) = self
+            .session
+            .editor
+            .next_grapheme_boundary(self.session.cursor)
+        else {
             return;
         };
-        if end == self.cursor {
+        if end == self.session.cursor {
             return;
         }
         if let Some(snippet) = self.overlays.lsp_results.snippet.as_mut() {
-            snippet.adjust_delete(self.cursor, end);
+            snippet.adjust_delete(self.session.cursor, end);
         }
-        self.editor.set_selection_bytes(self.cursor, end);
-        self.editor.delete(self.cursor..end);
+        self.session
+            .editor
+            .set_selection_bytes(self.session.cursor, end);
+        self.session.editor.delete(self.session.cursor..end);
         self.modified = true;
         self.dirty = true;
     }
 
     fn delete_selections(&mut self, forward: bool) -> bool {
-        let selections = self.editor.selection_bytes();
+        let selections = self.session.editor.selection_bytes();
         if selections.len() == 1 && selections[0].0 == selections[0].1 {
             return false;
         }
@@ -1290,9 +1431,9 @@ impl Model {
             let end = anchor.max(head);
             if start == end {
                 let target = if forward {
-                    self.editor.next_grapheme_boundary(start)
+                    self.session.editor.next_grapheme_boundary(start)
                 } else {
-                    self.editor.previous_grapheme_boundary(start)
+                    self.session.editor.previous_grapheme_boundary(start)
                 };
                 let Some(target) = target else {
                     continue;
@@ -1305,11 +1446,12 @@ impl Model {
                 edits.push((start..end, String::new()));
             }
         }
-        if edits.is_empty() || !self.editor.apply_transaction(edits) {
+        if edits.is_empty() || !self.session.editor.apply_transaction(edits) {
             return false;
         }
         if mirror_delete {
             let carets = self
+                .session
                 .editor
                 .selection_bytes()
                 .iter()
@@ -1318,9 +1460,10 @@ impl Model {
             if let Some(snippet) = self.overlays.lsp_results.snippet.as_mut() {
                 snippet.replace_current_with_carets(&old_selections, &carets);
             }
-            self.editor
+            self.session
+                .editor
                 .set_selections_bytes(carets.iter().map(|caret| (*caret, *caret)).collect());
-            self.cursor = carets.first().copied().unwrap_or(self.cursor);
+            self.session.cursor = carets.first().copied().unwrap_or(self.session.cursor);
         } else {
             self.sync_cursor_from_selection();
         }

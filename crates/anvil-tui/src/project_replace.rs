@@ -232,9 +232,10 @@ mod tests {
         model.handle_project_replace_applied(4, Ok(()));
         assert_eq!(
             model
+                .session
                 .editor
                 .text()
-                .slice(0..model.editor.text().len_bytes()),
+                .slice(0..model.session.editor.text().len_bytes()),
             "new\n"
         );
         assert!(model.project.replace_plan.is_none());
@@ -272,9 +273,10 @@ mod tests {
         model.handle_project_replace_applied(6, Ok(()));
         assert_eq!(
             model
+                .session
                 .editor
                 .text()
-                .slice(0..model.editor.text().len_bytes()),
+                .slice(0..model.session.editor.text().len_bytes()),
             "old\n"
         );
         assert!(model.status.text.contains("modified buffers"));

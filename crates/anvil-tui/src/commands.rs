@@ -25,16 +25,21 @@ impl Model {
             return;
         }
         let range = if whole {
-            0..self.editor.text().len_bytes()
+            0..self.session.editor.text().len_bytes()
         } else {
-            let Some(line) = self.editor.index().offset_to_line(self.cursor) else {
+            let Some(line) = self
+                .session
+                .editor
+                .index()
+                .offset_to_line(self.session.cursor)
+            else {
                 self.status.text = "E: no line".to_owned();
                 self.dirty = true;
                 return;
             };
             line.start..line.end
         };
-        let search_text = self.editor.text().slice(range.clone());
+        let search_text = self.session.editor.text().slice(range.clone());
         let (matches, truncated) = match crate::search::find_matches_limited(
             &search_text,
             old,
@@ -71,13 +76,15 @@ impl Model {
             .into_iter()
             .map(|range| (range, new.to_owned()))
             .collect();
-        if !self.editor.apply_transaction(edits) {
+        if !self.session.editor.apply_transaction(edits) {
             self.status.text = "E: substitution failed".to_owned();
             self.dirty = true;
             return;
         }
-        self.cursor = first.min(self.editor.text().len_bytes());
-        self.editor.set_selection_bytes(self.cursor, self.cursor);
+        self.session.cursor = first.min(self.session.editor.text().len_bytes());
+        self.session
+            .editor
+            .set_selection_bytes(self.session.cursor, self.session.cursor);
         self.modified = true;
         self.dirty = true;
         self.status.text = format!("{count} replacements applied");

@@ -24,13 +24,13 @@ pub(crate) enum DisplayRow {
 
 impl Model {
     pub(crate) fn wrap_segments(&self, line: usize, width: usize) -> Vec<(usize, usize, bool)> {
-        let Some(start) = self.editor.index().line_to_offset(line) else {
+        let Some(start) = self.session.editor.index().line_to_offset(line) else {
             return Vec::new();
         };
-        let Some(range) = self.editor.index().offset_to_line(start) else {
+        let Some(range) = self.session.editor.index().offset_to_line(start) else {
             return Vec::new();
         };
-        let text = self.editor.text().slice(start..range.end);
+        let text = self.session.editor.text().slice(start..range.end);
         let line_start = start;
         let width = width.max(1);
         let mut segments = Vec::new();
@@ -97,7 +97,7 @@ impl Model {
                 .view
                 .scroll
                 .saturating_add_signed(delta)
-                .min(self.editor.index().len_lines().saturating_sub(1));
+                .min(self.session.editor.index().len_lines().saturating_sub(1));
             self.view.scroll_subrow = 0;
             return;
         }
@@ -111,7 +111,7 @@ impl Model {
                 .view
                 .scroll
                 .saturating_add_signed(delta)
-                .min(self.editor.index().len_lines().saturating_sub(1));
+                .min(self.session.editor.index().len_lines().saturating_sub(1));
             self.view.scroll_subrow = 0;
             return;
         }
@@ -120,7 +120,7 @@ impl Model {
     }
 
     fn scroll_wrapped_rows(&mut self, delta: isize) {
-        let total = self.editor.index().len_lines();
+        let total = self.session.editor.index().len_lines();
         if total == 0 {
             return;
         }
@@ -176,7 +176,7 @@ impl Model {
         if height == 0 {
             return Vec::new();
         }
-        let total = self.editor.index().len_lines();
+        let total = self.session.editor.index().len_lines();
         let max_lens_rows = crate::code_lens::MAX_CODE_LENS_ROWS_PER_VIEWPORT.min(height / 2);
         let visible_lines = self.visible_line_numbers(start, height);
         let total_items = visible_lines
@@ -283,12 +283,13 @@ impl Model {
     }
 
     pub(crate) fn position_at_visible_row(&self, row: usize) -> Option<(usize, usize)> {
-        let text = self.editor.text();
+        let text = self.session.editor.text();
         let rows = self.visible_rows(self.view.scroll, row.saturating_add(1));
         match rows.get(row) {
             Some(DisplayRow::Source(line)) => Some((*line, self.view.hscroll)),
             Some(DisplayRow::Wrapped { line, start, .. }) => {
                 let base = self
+                    .session
                     .editor
                     .index()
                     .position(text, *start)
@@ -305,12 +306,13 @@ impl Model {
         display_column: usize,
         height: usize,
     ) -> Option<usize> {
-        let text = self.editor.text();
+        let text = self.session.editor.text();
         let line_end = self
+            .session
             .editor
             .index()
             .line_to_offset(line)
-            .and_then(|offset| self.editor.index().offset_to_line(offset))
+            .and_then(|offset| self.session.editor.index().offset_to_line(offset))
             .map_or(0, |range| range.end);
         self.visible_rows(self.view.scroll, height)
             .iter()
@@ -324,11 +326,13 @@ impl Model {
                     ..
                 } if *wrapped == line => {
                     let start_column = self
+                        .session
                         .editor
                         .index()
                         .position(text, *start)
                         .map_or(0, |position| position.display_column);
                     let end_column = self
+                        .session
                         .editor
                         .index()
                         .position(text, *end)
@@ -361,7 +365,8 @@ impl Model {
 }
 impl Model {
     pub(crate) fn gutter_digits(&self) -> usize {
-        self.editor
+        self.session
+            .editor
             .index()
             .len_lines()
             .max(1)
@@ -374,9 +379,10 @@ impl Model {
         (self.gutter_digits() + 2) as u16
     }
     pub(crate) fn current_line(&self) -> Option<usize> {
-        self.editor
+        self.session
+            .editor
             .index()
-            .position(self.editor.text(), self.cursor)
+            .position(self.session.editor.text(), self.session.cursor)
             .map(|position| position.line)
     }
     pub(crate) fn document_highlight_ranges(
@@ -387,7 +393,7 @@ impl Model {
         let Some(highlights) = &self.overlays.lsp_results.document_highlights else {
             return Vec::new();
         };
-        if highlights.revision != self.editor.revision() {
+        if highlights.revision != self.session.editor.revision() {
             return Vec::new();
         }
         highlights
@@ -402,10 +408,10 @@ impl Model {
     }
 
     pub(crate) fn line_in_code_block(&self, line_number: usize) -> bool {
-        let Some(start) = self.editor.index().line_to_offset(line_number) else {
+        let Some(start) = self.session.editor.index().line_to_offset(line_number) else {
             return false;
         };
-        let Some(line) = self.editor.index().offset_to_line(start) else {
+        let Some(line) = self.session.editor.index().offset_to_line(start) else {
             return false;
         };
         let line_end = line.end.max(start + 1);
@@ -437,6 +443,7 @@ impl Model {
                 _ => line_number + 1,
             };
             let marker = if self
+                .session
                 .path
                 .as_ref()
                 .is_some_and(|path| self.breakpoint_marker(path, line_number))
@@ -472,8 +479,8 @@ impl Model {
     }
 
     pub(crate) fn visible_lines(&self, height: u16, width: u16) -> Vec<Line<'_>> {
-        let index = self.editor.index();
-        let text = self.editor.text();
+        let index = self.session.editor.index();
+        let text = self.session.editor.text();
         let visible = self.visible_rows(self.view.scroll, usize::from(height));
         let current = self.current_line();
 
@@ -595,7 +602,12 @@ impl Model {
                 apply_bracket_highlights(&mut spans, render_start, &bracket_ranges);
             }
             if !search_ranges.is_empty() {
-                apply_search_highlights(&mut spans, render_start, &search_ranges, self.cursor);
+                apply_search_highlights(
+                    &mut spans,
+                    render_start,
+                    &search_ranges,
+                    self.session.cursor,
+                );
             }
             if spans.is_empty() {
                 spans.push(Span::raw(""));
@@ -676,8 +688,8 @@ impl Model {
         end: usize,
         width: usize,
     ) -> (usize, usize, usize) {
-        let index = self.editor.index();
-        let text = self.editor.text();
+        let index = self.session.editor.index();
+        let text = self.session.editor.text();
         let hscroll = self.view.hscroll;
         let Some(start_offset) = index.offset_at_display_column(text, line_number, hscroll) else {
             return (start, end, 0);
@@ -749,8 +761,8 @@ mod tests {
         let mut model = Model::new(EditorState::from_text("abcdefghij"), None);
         model.settings.editor.soft_wrap = true;
         model.view.wrap_width = 4;
-        model.cursor = 9;
-        model.editor.set_selection_bytes(9, 9);
+        model.session.cursor = 9;
+        model.session.editor.set_selection_bytes(9, 9);
         model.ensure_cursor_visible(2, 5);
         assert!(
             model.view.scroll_subrow > 0,

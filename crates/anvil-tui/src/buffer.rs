@@ -5,9 +5,9 @@ use super::*;
 impl Model {
     pub(crate) fn snapshot(&self) -> Buffer {
         Buffer {
-            editor: self.editor.clone(),
-            path: self.path.clone(),
-            cursor: self.cursor,
+            editor: self.session.editor.clone(),
+            path: self.session.path.clone(),
+            cursor: self.session.cursor,
             scroll: self.view.scroll,
             missing: self.missing,
             hscroll: self.view.hscroll,
@@ -46,9 +46,9 @@ impl Model {
         self.missing = buffer.missing;
         self.edit.visual_anchor = buffer.visual_anchor;
         self.edit.visual_line = buffer.visual_line;
-        self.editor = buffer.editor;
-        self.path = buffer.path;
-        self.cursor = buffer.cursor;
+        self.session.editor = buffer.editor;
+        self.session.path = buffer.path;
+        self.session.cursor = buffer.cursor;
         self.view.scroll = buffer.scroll;
         self.view.hscroll = buffer.hscroll;
         self.modified = buffer.modified;
@@ -56,9 +56,11 @@ impl Model {
         self.search.state.reset_for_buffer();
         self.welcome = false;
         self.welcome_back = false;
-        self.syntax
-            .borrow_mut()
-            .switch_path_with(self.path.as_deref(), false, Some(syntax));
+        self.syntax.borrow_mut().switch_path_with(
+            self.session.path.as_deref(),
+            false,
+            Some(syntax),
+        );
         self.buffers.active = index;
         self.ui.input_mode = InputMode::Normal;
         self.input.pending = None;
@@ -225,9 +227,9 @@ impl Model {
     }
 
     fn reset_empty_buffer(&mut self) {
-        self.editor = EditorState::from_text("").into();
-        self.path = None;
-        self.cursor = 0;
+        self.session.editor = EditorState::from_text("").into();
+        self.session.path = None;
+        self.session.cursor = 0;
         self.view.scroll = 0;
         self.view.hscroll = 0;
         self.modified = false;
@@ -265,12 +267,12 @@ impl Model {
                 return;
             }
         };
-        if self.path.as_ref() == Some(&path) {
+        if self.session.path.as_ref() == Some(&path) {
             self.status.text = format!("Already editing {}", path.display());
             self.dirty = true;
             return;
         }
-        if self.path.is_none() && self.modified {
+        if self.session.path.is_none() && self.modified {
             self.status.text =
                 "E: save or discard the unnamed buffer before opening another file".to_owned();
             self.dirty = true;
@@ -354,6 +356,7 @@ impl Model {
         self.sync_active();
         self.load_buffer(target);
         let name = self
+            .session
             .path
             .as_ref()
             .map(|path| path.display().to_string())

@@ -15,14 +15,15 @@ const STICKY_MAX_DEPTH: usize = 8;
 
 impl Model {
     pub(crate) fn poll_sticky_symbols(&mut self) {
-        let Some(path) = self.path.clone() else {
+        let Some(path) = self.session.path.clone() else {
             return;
         };
         if self.overlays.lsp_results.sticky_pending {
             return;
         }
         if self.overlays.lsp_results.sticky_symbols_path.as_ref() == Some(&path)
-            && self.overlays.lsp_results.sticky_symbols_revision == Some(self.editor.revision())
+            && self.overlays.lsp_results.sticky_symbols_revision
+                == Some(self.session.editor.revision())
         {
             return;
         }
@@ -49,7 +50,7 @@ impl Model {
     }
 
     pub(crate) fn sticky_context(&self, top_line: usize) -> Option<&SymbolItem> {
-        if self.overlays.lsp_results.sticky_symbols_path.as_ref() != self.path.as_ref() {
+        if self.overlays.lsp_results.sticky_symbols_path.as_ref() != self.session.path.as_ref() {
             return None;
         }
         let mut active = None;
@@ -64,7 +65,7 @@ impl Model {
                 .iter()
                 .skip(index + 1)
                 .find(|next| next.depth <= symbol.depth)
-                .map_or_else(|| self.editor.index().len_lines(), |next| next.line);
+                .map_or_else(|| self.session.editor.index().len_lines(), |next| next.line);
             if top_line < end
                 && active.is_none_or(|current: &SymbolItem| symbol.depth >= current.depth)
             {

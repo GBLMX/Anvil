@@ -7,7 +7,7 @@ impl Model {
         self.edit.insert_session = Some(InsertSession {
             origin,
             text: String::new(),
-            start: self.cursor,
+            start: self.session.cursor,
             valid: true,
         });
         self.ui.input_mode = InputMode::Insert;
@@ -146,8 +146,12 @@ impl Model {
             }
             LastChange::Append { text } => {
                 for _ in 0..count.max(1) {
-                    if let Some(line) = self.editor.index().offset_to_line(self.cursor)
-                        && self.cursor < line.end
+                    if let Some(line) = self
+                        .session
+                        .editor
+                        .index()
+                        .offset_to_line(self.session.cursor)
+                        && self.session.cursor < line.end
                     {
                         self.move_char(1);
                     }
@@ -156,46 +160,63 @@ impl Model {
             }
             LastChange::AppendLineEnd { text } => {
                 for _ in 0..count.max(1) {
-                    if let Some(line) = self.editor.index().offset_to_line(self.cursor) {
-                        self.cursor = line.end;
+                    if let Some(line) = self
+                        .session
+                        .editor
+                        .index()
+                        .offset_to_line(self.session.cursor)
+                    {
+                        self.session.cursor = line.end;
                     }
                     self.insert_now(&text);
                 }
             }
             LastChange::OpenBelow { text } => {
-                if let Some(line) = self.editor.index().offset_to_line(self.cursor) {
-                    self.cursor = line.end;
+                if let Some(line) = self
+                    .session
+                    .editor
+                    .index()
+                    .offset_to_line(self.session.cursor)
+                {
+                    self.session.cursor = line.end;
                 }
                 self.insert_now(&format!("\n{text}"));
             }
             LastChange::OpenAbove { text } => {
                 let start = self
+                    .session
                     .editor
                     .index()
-                    .offset_to_line(self.cursor)
+                    .offset_to_line(self.session.cursor)
                     .map_or(0, |line| line.start);
-                self.cursor = start;
+                self.session.cursor = start;
                 self.insert_now(&format!("{text}\n"));
             }
         }
     }
 
     fn replace_now(&mut self, range: std::ops::Range<usize>, text: &str) {
-        self.editor.set_selection_bytes(range.start, range.end);
-        self.editor.delete(range.clone());
+        self.session
+            .editor
+            .set_selection_bytes(range.start, range.end);
+        self.session.editor.delete(range.clone());
         if !text.is_empty() {
-            self.editor.insert(range.start, text);
+            self.session.editor.insert(range.start, text);
         }
-        self.cursor = range.start + text.len();
-        self.editor.set_selection_bytes(self.cursor, self.cursor);
+        self.session.cursor = range.start + text.len();
+        self.session
+            .editor
+            .set_selection_bytes(self.session.cursor, self.session.cursor);
         self.modified = true;
         self.dirty = true;
     }
 
     fn insert_now(&mut self, text: &str) {
-        self.editor.set_selection_bytes(self.cursor, self.cursor);
-        self.editor.insert(self.cursor, text);
-        self.cursor += text.len();
+        self.session
+            .editor
+            .set_selection_bytes(self.session.cursor, self.session.cursor);
+        self.session.editor.insert(self.session.cursor, text);
+        self.session.cursor += text.len();
         self.modified = true;
         self.dirty = true;
     }

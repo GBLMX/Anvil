@@ -14,10 +14,10 @@ fn definition_response_moves_cursor() {
         }
     }]));
     assert_eq!(
-        model.path.as_deref(),
+        model.session.path.as_deref(),
         Some(path.canonicalize().expect("canonical").as_path())
     );
-    assert_eq!(model.cursor, model.offset_at_utf16(1, 3));
+    assert_eq!(model.session.cursor, model.offset_at_utf16(1, 3));
 }
 
 #[test]
@@ -61,10 +61,10 @@ fn references_populate_and_jump_to_selection() {
     model.move_reference(1);
     model.apply_reference();
     assert_eq!(
-        model.path.as_deref(),
+        model.session.path.as_deref(),
         Some(other.canonicalize().expect("other").as_path())
     );
-    assert_eq!(model.cursor, model.offset_at_utf16(0, 3));
+    assert_eq!(model.session.cursor, model.offset_at_utf16(0, 3));
     assert!(model.overlays.lsp_results.references.is_none());
 }
 
@@ -185,10 +185,10 @@ fn incoming_calls_populate_and_jump() {
     assert_eq!(calls.items[0].name, "caller");
     model.apply_call_hierarchy();
     assert_eq!(
-        model.path.as_deref(),
+        model.session.path.as_deref(),
         Some(caller.canonicalize().expect("canonical").as_path())
     );
-    assert_eq!(model.cursor, model.offset_at_utf16(0, 3));
+    assert_eq!(model.session.cursor, model.offset_at_utf16(0, 3));
     assert!(model.overlays.lsp_results.call_hierarchy.is_none());
 }
 
@@ -268,7 +268,7 @@ fn call_hierarchy_round_trip_through_gateway() {
         }
     };
 
-    model.cursor = model.offset_at_utf16(1, 15);
+    model.session.cursor = model.offset_at_utf16(1, 15);
     model.request_call_hierarchy(crate::CallHierarchyDirection::Incoming);
     wait(
         &mut model,
@@ -276,7 +276,7 @@ fn call_hierarchy_round_trip_through_gateway() {
         "caller",
     );
 
-    model.cursor = model.offset_at_utf16(1, 3);
+    model.session.cursor = model.offset_at_utf16(1, 3);
     model.request_call_hierarchy(crate::CallHierarchyDirection::Outgoing);
     wait(
         &mut model,
@@ -353,7 +353,7 @@ fn completion_resolve_round_trip_through_gateway() {
     model.language.lsp.client = Some(lsp_client);
     model.open_path(&main).expect("open");
     std::thread::sleep(Duration::from_secs(3));
-    model.cursor = model.offset_at_utf16(2, 7);
+    model.session.cursor = model.offset_at_utf16(2, 7);
     model.request_completion();
 
     let deadline = Instant::now() + Duration::from_secs(20);
@@ -603,16 +603,17 @@ fn applying_snippet_selects_and_navigates_stops() {
     model.apply_completion();
     assert_eq!(
         model
+            .session
             .editor
             .text()
-            .slice(0..model.editor.text().len_bytes()),
+            .slice(0..model.session.editor.text().len_bytes()),
         "fn name(args) "
     );
-    assert_eq!(model.editor.selection_bytes(), vec![(3, 7)]);
+    assert_eq!(model.session.editor.selection_bytes(), vec![(3, 7)]);
     assert!(model.next_snippet_stop());
-    assert_eq!(model.editor.selection_bytes(), vec![(8, 12)]);
+    assert_eq!(model.session.editor.selection_bytes(), vec![(8, 12)]);
     assert!(model.next_snippet_stop());
-    assert_eq!(model.editor.selection_bytes(), vec![(14, 14)]);
+    assert_eq!(model.session.editor.selection_bytes(), vec![(14, 14)]);
     assert!(model.next_snippet_stop());
     assert!(model.overlays.lsp_results.snippet.is_none());
 }
@@ -641,19 +642,22 @@ fn mirrored_snippet_edits_apply_to_all_tabstops() {
         selected: 0,
     });
     model.apply_completion();
-    assert_eq!(model.editor.selection_bytes(), vec![(0, 4), (7, 11)]);
+    assert_eq!(
+        model.session.editor.selection_bytes(),
+        vec![(0, 4), (7, 11)]
+    );
     model.insert_text("x");
-    assert_eq!(model.editor.text().slice(0..5), "x + x");
-    assert_eq!(model.editor.selection_bytes(), vec![(1, 1), (5, 5)]);
+    assert_eq!(model.session.editor.text().slice(0..5), "x + x");
+    assert_eq!(model.session.editor.selection_bytes(), vec![(1, 1), (5, 5)]);
     model.insert_text("y");
-    assert_eq!(model.editor.text().slice(0..7), "xy + xy");
-    assert_eq!(model.editor.selection_bytes(), vec![(2, 2), (7, 7)]);
+    assert_eq!(model.session.editor.text().slice(0..7), "xy + xy");
+    assert_eq!(model.session.editor.selection_bytes(), vec![(2, 2), (7, 7)]);
     model.backspace();
-    assert_eq!(model.editor.text().slice(0..5), "x + x");
-    assert_eq!(model.editor.selection_bytes(), vec![(1, 1), (5, 5)]);
+    assert_eq!(model.session.editor.text().slice(0..5), "x + x");
+    assert_eq!(model.session.editor.selection_bytes(), vec![(1, 1), (5, 5)]);
     model.backspace();
-    assert_eq!(model.editor.text().slice(0..3), " + ");
-    assert_eq!(model.editor.selection_bytes(), vec![(0, 0), (3, 3)]);
+    assert_eq!(model.session.editor.text().slice(0..3), " + ");
+    assert_eq!(model.session.editor.selection_bytes(), vec![(0, 0), (3, 3)]);
 }
 
 #[test]
@@ -680,7 +684,7 @@ fn rename_response_applies_workspace_edit() {
         }),
         None,
     );
-    assert_eq!(model.editor.text().slice(0..3), "bar");
+    assert_eq!(model.session.editor.text().slice(0..3), "bar");
     assert!(model.modified);
 }
 
@@ -713,7 +717,7 @@ fn code_action_response_applies_workspace_edit() {
     );
     assert!(model.overlays.lsp_results.code_actions.is_some());
     model.apply_code_action();
-    assert_eq!(model.editor.text().slice(0..4), "good");
+    assert_eq!(model.session.editor.text().slice(0..4), "good");
     assert!(model.overlays.lsp_results.code_actions.is_none());
 }
 
@@ -778,9 +782,10 @@ fn gopls_code_action_response_applies_organize_imports() {
     model.apply_code_action();
     assert!(
         !model
+            .session
             .editor
             .text()
-            .slice(0..model.editor.text().len_bytes())
+            .slice(0..model.session.editor.text().len_bytes())
             .contains("fmt")
     );
     assert!(model.modified);
@@ -850,7 +855,7 @@ fn document_symbols_populate_and_jump_to_selection() {
     assert_eq!(symbols.items[1].depth, 1);
     assert_eq!(symbols.items[2].line, 3);
     model.apply_document_symbol();
-    assert_eq!(model.cursor, 3);
+    assert_eq!(model.session.cursor, 3);
     assert!(model.status.text.contains("alpha"));
 }
 
@@ -916,7 +921,7 @@ fn formatting_response_applies_edits_without_writing() {
         }]),
         None,
     );
-    assert_eq!(model.editor.text().slice(0..2), "//");
+    assert_eq!(model.session.editor.text().slice(0..2), "//");
     assert_eq!(fs::read_to_string(&file).expect("disk"), "fn main(){}");
     assert!(model.save_all());
     assert_eq!(fs::read_to_string(&file).expect("saved"), "//fn main(){}");
@@ -929,7 +934,7 @@ fn formatting_response_for_inactive_path_is_ignored() {
     let second = dir.path().join("second.rs");
     fs::write(&first, "fn first(){}").expect("first");
     let mut model = Model::open(&first).expect("open");
-    let first_path = model.path.clone().expect("first path");
+    let first_path = model.session.path.clone().expect("first path");
     model
         .language
         .lsp_requests
@@ -955,7 +960,7 @@ fn formatting_response_for_inactive_path_is_ignored() {
         }]),
         None,
     );
-    assert_eq!(model.editor.text().slice(0..9), "fn first(");
+    assert_eq!(model.session.editor.text().slice(0..9), "fn first(");
     assert!(model.status.text.contains("inactive"));
 }
 
@@ -1019,7 +1024,7 @@ fn workspace_symbols_response_filters_and_jumps() {
         2
     );
     model.apply_workspace_symbol();
-    assert_eq!(model.cursor, 3);
+    assert_eq!(model.session.cursor, 3);
     assert!(model.status.text.contains("alpha"));
 }
 
@@ -1071,8 +1076,8 @@ fn stale_formatting_response_is_ignored() {
         .language
         .lsp_requests
         .pending_edit_revision
-        .insert(15, model.editor.revision());
-    model.editor.insert(0, "x");
+        .insert(15, model.session.editor.revision());
+    model.session.editor.insert(0, "x");
     model.handle_lsp_response(
         15,
         serde_json::json!([{
@@ -1084,7 +1089,7 @@ fn stale_formatting_response_is_ignored() {
         }]),
         None,
     );
-    assert_eq!(model.editor.text().slice(0..3), "xfn");
+    assert_eq!(model.session.editor.text().slice(0..3), "xfn");
     assert!(model.status.text.contains("stale"));
 }
 
@@ -1095,7 +1100,7 @@ fn rename_response_for_inactive_path_is_ignored() {
     let second = dir.path().join("second.rs");
     fs::write(&first, "fn first(){}").expect("first");
     let mut model = Model::open(&first).expect("open");
-    let first_path = model.path.clone().expect("first path");
+    let first_path = model.session.path.clone().expect("first path");
     let uri = lsp_worker::file_uri(&first_path);
     model
         .language
@@ -1106,7 +1111,7 @@ fn rename_response_for_inactive_path_is_ignored() {
         .language
         .lsp_requests
         .pending_edit_revision
-        .insert(16, model.editor.revision());
+        .insert(16, model.session.editor.revision());
     model
         .language
         .lsp_requests
@@ -1128,7 +1133,7 @@ fn rename_response_for_inactive_path_is_ignored() {
         }),
         None,
     );
-    assert_eq!(model.editor.text().slice(0..9), "fn first(");
+    assert_eq!(model.session.editor.text().slice(0..9), "fn first(");
     assert!(model.status.text.contains("inactive"));
 }
 
@@ -1192,7 +1197,7 @@ fn diagnostic_jump_cycles_between_lines() {
         ],
     );
     model.jump_diagnostic(true);
-    assert_eq!(model.cursor, model.offset_at_utf16(2, 0));
+    assert_eq!(model.session.cursor, model.offset_at_utf16(2, 0));
     assert!(
         model
             .ui
@@ -1201,7 +1206,7 @@ fn diagnostic_jump_cycles_between_lines() {
             .is_some_and(|peek| peek.diagnostics[0].message.contains("second"))
     );
     model.jump_diagnostic(false);
-    assert_eq!(model.cursor, 0);
+    assert_eq!(model.session.cursor, 0);
     assert!(
         model
             .ui
@@ -1210,7 +1215,7 @@ fn diagnostic_jump_cycles_between_lines() {
             .is_some_and(|peek| peek.diagnostics[0].message.contains("first"))
     );
     model.jump_diagnostic(false);
-    assert_eq!(model.cursor, model.offset_at_utf16(2, 0));
+    assert_eq!(model.session.cursor, model.offset_at_utf16(2, 0));
 }
 
 #[test]
@@ -1271,7 +1276,7 @@ fn diagnostic_peek_clears_on_revision_change() {
         .insert(PathBuf::from("diag.rs"), vec![diagnostic(0, 0, "first")]);
     model.jump_diagnostic(true);
     assert!(model.ui.diagnostic_peek.is_some());
-    model.editor.insert(0, "x");
+    model.session.editor.insert(0, "x");
     model.tick_status();
     assert!(model.ui.diagnostic_peek.is_none());
 }
@@ -1322,7 +1327,7 @@ fn problems_panel_jumps_to_selected_problem() {
     model.ui.problems.visible = true;
     model.ui.focus.tree = true;
     model.jump_problem();
-    assert_eq!(model.cursor, model.offset_at_utf16(1, 1));
+    assert_eq!(model.session.cursor, model.offset_at_utf16(1, 1));
     assert!(!model.ui.focus.tree);
     assert!(!model.ui.problems.visible);
 }
@@ -1367,7 +1372,7 @@ fn diagnostics_underline_matching_line() {
 #[test]
 fn status_column_uses_grapheme_index() {
     let mut model = Model::new(EditorState::from_text("a👨‍👩‍👧‍👦b"), None);
-    model.cursor = "a👨‍👩‍👧‍👦".len();
+    model.session.cursor = "a👨‍👩‍👧‍👦".len();
     let backend = TestBackend::new(80, 8);
     let mut terminal = Terminal::new(backend).expect("terminal");
     terminal.draw(|frame| view(&model, frame)).expect("draw");
@@ -1403,7 +1408,7 @@ fn rename_response_rejects_a_stale_inactive_buffer_snapshot() {
     fs::write(&second, "second").expect("second");
     let mut model = Model::open(&first).expect("open first");
     model.open_path(&second).expect("open second");
-    let second_path = model.path.clone().expect("second path");
+    let second_path = model.session.path.clone().expect("second path");
     model.switch_buffer(-1);
     let mut base = HashMap::new();
     let second_buffer = model
@@ -1440,7 +1445,7 @@ fn rename_response_rejects_a_stale_inactive_buffer_snapshot() {
         }),
         None,
     );
-    assert_eq!(model.editor.text().slice(0..5), "first");
+    assert_eq!(model.session.editor.text().slice(0..5), "first");
     assert!(model.status.text.contains("stale"));
 }
 
@@ -1450,7 +1455,7 @@ fn rename_response_rejects_a_stale_document_version() {
     let file = dir.path().join("versioned.rs");
     fs::write(&file, "abc").expect("file");
     let mut model = Model::open(&file).expect("open");
-    let path = model.path.clone().expect("path");
+    let path = model.session.path.clone().expect("path");
     model.language.lsp_requests.versions.insert(path.clone(), 3);
     model
         .language
@@ -1473,7 +1478,7 @@ fn rename_response_rejects_a_stale_document_version() {
         }),
         None,
     );
-    assert_eq!(model.editor.text().slice(0..3), "abc");
+    assert_eq!(model.session.editor.text().slice(0..3), "abc");
     assert!(model.status.text.contains("stale"));
 }
 
@@ -1547,16 +1552,16 @@ fn definition_jump_back_and_forward_round_trip() {
             "end": {"line": 0, "character": 9}
         }
     }]));
-    assert_eq!(model.path.as_deref(), Some(other.as_path()));
-    let target_cursor = model.cursor;
+    assert_eq!(model.session.path.as_deref(), Some(other.as_path()));
+    let target_cursor = model.session.cursor;
 
     model.jump_back();
-    assert_eq!(model.path.as_deref(), Some(main.as_path()));
-    assert_eq!(model.cursor, 0);
+    assert_eq!(model.session.path.as_deref(), Some(main.as_path()));
+    assert_eq!(model.session.cursor, 0);
 
     model.jump_forward();
-    assert_eq!(model.path.as_deref(), Some(other.as_path()));
-    assert_eq!(model.cursor, target_cursor);
+    assert_eq!(model.session.path.as_deref(), Some(other.as_path()));
+    assert_eq!(model.session.cursor, target_cursor);
 }
 
 #[test]
@@ -1588,16 +1593,16 @@ fn jump_back_from_help_returns_to_history_target() {
         }
     }]));
     assert_eq!(
-        model.path.as_deref(),
+        model.session.path.as_deref(),
         Some(other.canonicalize().expect("other").as_path())
     );
 
     model.show_help();
-    assert!(model.path.is_none());
+    assert!(model.session.path.is_none());
 
     model.jump_back();
-    assert_eq!(model.path.as_deref(), Some(main.as_path()));
-    assert_eq!(model.cursor, 0);
+    assert_eq!(model.session.path.as_deref(), Some(main.as_path()));
+    assert_eq!(model.session.cursor, 0);
 }
 
 #[test]
@@ -1617,22 +1622,24 @@ fn jump_back_refuses_to_discard_a_dirty_unnamed_buffer() {
             "end": {"line": 0, "character": 9}
         }
     }]));
-    model.path = None;
+    model.session.path = None;
     model.modified = true;
     let before = model
+        .session
         .editor
         .text()
-        .slice(0..model.editor.text().len_bytes());
+        .slice(0..model.session.editor.text().len_bytes());
 
     model.jump_back();
 
-    assert!(model.path.is_none());
+    assert!(model.session.path.is_none());
     assert!(model.modified);
     assert_eq!(
         model
+            .session
             .editor
             .text()
-            .slice(0..model.editor.text().len_bytes()),
+            .slice(0..model.session.editor.text().len_bytes()),
         before
     );
     assert!(model.status.text.contains("save or discard"));

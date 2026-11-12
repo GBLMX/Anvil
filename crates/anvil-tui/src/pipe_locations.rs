@@ -275,7 +275,7 @@ impl Model {
             return;
         }
         self.record_jump();
-        if self.path.as_deref() != Some(path.as_path())
+        if self.session.path.as_deref() != Some(path.as_path())
             && let Err(error) = self.open_path(&path)
         {
             self.status.text = format!("E: {error}");
@@ -285,8 +285,8 @@ impl Model {
         let line = location
             .line
             .saturating_sub(1)
-            .min(self.editor.index().len_lines().saturating_sub(1));
-        self.cursor = self.offset_at_utf16(line, location.column.saturating_sub(1));
+            .min(self.session.editor.index().len_lines().saturating_sub(1));
+        self.session.cursor = self.offset_at_utf16(line, location.column.saturating_sub(1));
         self.status.text = format!(
             "location {}:{}:{}",
             location.path, location.line, location.column
@@ -425,10 +425,13 @@ mod tests {
         model.set_pipe_locations("src/main.rs:99:99: error");
         model.open_stdin_location();
         assert_eq!(
-            model.path.as_deref(),
+            model.session.path.as_deref(),
             Some(source.canonicalize().expect("canonical").as_path())
         );
-        assert_eq!(model.cursor, model.editor.text().len_bytes());
+        assert_eq!(
+            model.session.cursor,
+            model.session.editor.text().len_bytes()
+        );
         assert!(model.status.text.starts_with("location src/main.rs:99:99"));
     }
 
@@ -445,7 +448,7 @@ mod tests {
         model.workspace.path = workspace.canonicalize().expect("canonical");
         model.set_pipe_locations("../outside.rs:1:1: error");
         model.open_stdin_location();
-        assert!(model.path.is_none());
+        assert!(model.session.path.is_none());
         assert!(model.status.text.contains("outside workspace"));
     }
 
@@ -465,7 +468,7 @@ mod tests {
         let location = format!("{}:1:8: needle", source.display());
         model.set_pipe_locations(&location);
         model.open_stdin_location();
-        assert_eq!(model.path.as_deref(), Some(source.as_path()));
+        assert_eq!(model.session.path.as_deref(), Some(source.as_path()));
         assert!(model.status.text.starts_with("location"));
     }
 }

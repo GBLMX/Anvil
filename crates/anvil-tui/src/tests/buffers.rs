@@ -9,30 +9,30 @@ fn multi_buffer_switch_preserves_per_buffer_state() {
     fs::write(&second, "second").expect("write second");
 
     let mut model = Model::open(&first).expect("open first");
-    model.cursor = 2;
+    model.session.cursor = 2;
     handle_event(&mut model, key(KeyCode::Char(':')));
     type_text(&mut model, &format!("e {}", second.display()));
     handle_event(&mut model, key(KeyCode::Enter));
-    assert_eq!(model.path.as_ref(), Some(&second));
-    assert_eq!(model.editor.text().slice(0..6), "second");
+    assert_eq!(model.session.path.as_ref(), Some(&second));
+    assert_eq!(model.session.editor.text().slice(0..6), "second");
 
-    model.cursor = 1;
+    model.session.cursor = 1;
     handle_event(&mut model, key(KeyCode::Char(':')));
     type_text(&mut model, "bn");
     handle_event(&mut model, key(KeyCode::Enter));
-    assert_eq!(model.path.as_ref(), Some(&first));
-    assert_eq!(model.cursor, 2);
+    assert_eq!(model.session.path.as_ref(), Some(&first));
+    assert_eq!(model.session.cursor, 2);
 
     handle_event(&mut model, key(KeyCode::Char(':')));
     type_text(&mut model, "bn");
     handle_event(&mut model, key(KeyCode::Enter));
-    assert_eq!(model.path.as_ref(), Some(&second));
-    assert_eq!(model.cursor, 1);
+    assert_eq!(model.session.path.as_ref(), Some(&second));
+    assert_eq!(model.session.cursor, 1);
 
     handle_event(&mut model, key(KeyCode::Char(':')));
     type_text(&mut model, &format!("e {}", first.display()));
     handle_event(&mut model, key(KeyCode::Enter));
-    assert_eq!(model.path.as_ref(), Some(&first));
+    assert_eq!(model.session.path.as_ref(), Some(&first));
     assert_eq!(model.buffers.entries.len(), 2);
 }
 
@@ -167,7 +167,7 @@ fn load_buffer_syncs_the_current_buffer_before_switching() {
 
     model.switch_to_buffer(1);
     model.switch_to_buffer(0);
-    assert_eq!(model.editor.text().slice(0..6), "Xfirst");
+    assert_eq!(model.session.editor.text().slice(0..6), "Xfirst");
     assert!(model.modified);
 }
 
@@ -191,7 +191,7 @@ fn save_then_buffer_switch_round_trip_keeps_the_buffer_clean() {
     model.switch_to_buffer(1);
     model.switch_to_buffer(0);
     assert!(!model.modified);
-    assert_eq!(model.editor.text().slice(0..6), "Xfirst");
+    assert_eq!(model.session.editor.text().slice(0..6), "Xfirst");
 }
 
 #[test]
@@ -225,7 +225,7 @@ fn stdin_read_only_buffer_rejects_mutation() {
     model.set_stdin_buffer(true);
     assert_eq!(model.buffer_name(0), "[stdin]");
     model.insert_text("x");
-    assert_eq!(model.editor.text().slice(0..3), "log");
+    assert_eq!(model.session.editor.text().slice(0..3), "log");
     assert!(model.status.text.contains("read-only"));
 }
 #[test]
@@ -239,12 +239,12 @@ fn read_only_file_mode_rejects_mutation_and_survives_reopen() {
     let mut model = Model::open(&first).expect("open first");
     model.set_read_only(true);
     model.insert_text("X");
-    assert_eq!(model.editor.text().slice(0..5), "first");
+    assert_eq!(model.session.editor.text().slice(0..5), "first");
     assert!(model.status.text.contains("read-only"));
 
     model.open_path(&second).expect("open second");
     model.insert_text("Y");
-    assert_eq!(model.editor.text().slice(0..6), "second");
+    assert_eq!(model.session.editor.text().slice(0..6), "second");
     assert!(model.status.text.contains("read-only"));
 }
 
@@ -273,7 +273,7 @@ fn mouse_tab_switch_preserves_the_active_buffer() {
     assert_eq!(model.buffers.active, 1);
     assert!(crate::mouse::handle_mouse(&mut model, click(2), 80, 24));
     assert_eq!(model.buffers.active, 0);
-    assert_eq!(model.editor.text().slice(0..6), "Xfirst");
+    assert_eq!(model.session.editor.text().slice(0..6), "Xfirst");
     assert!(model.modified);
 }
 
@@ -295,7 +295,7 @@ fn closing_active_middle_buffer_keeps_the_following_buffer() {
 
     assert_eq!(model.buffers.entries.len(), 2);
     assert_eq!(model.buffers.active, 1);
-    assert_eq!(model.editor.text().slice(0..5), "third");
+    assert_eq!(model.session.editor.text().slice(0..5), "third");
     assert_eq!(model.buffers.entries[1].editor.text().slice(0..5), "third");
 }
 
@@ -309,7 +309,7 @@ fn buffer_commands_require_a_second_buffer() {
     handle_event(&mut model, key(KeyCode::Char(':')));
     type_text(&mut model, "bn");
     handle_event(&mut model, key(KeyCode::Enter));
-    assert_eq!(model.path.as_ref(), Some(&path));
+    assert_eq!(model.session.path.as_ref(), Some(&path));
     assert_eq!(model.status.text, "E: only one buffer");
 }
 
@@ -321,10 +321,10 @@ fn new_and_close_buffer_lifecycle() {
     let mut model = Model::open(&path).expect("open");
 
     command(&mut model, "new");
-    assert_eq!(model.path, None);
+    assert_eq!(model.session.path, None);
     assert_eq!(model.buffers.entries.len(), 2);
     assert_eq!(model.buffers.active, 1);
-    assert_eq!(model.editor.text().len_bytes(), 0);
+    assert_eq!(model.session.editor.text().len_bytes(), 0);
 
     handle_event(&mut model, key(KeyCode::Char('i')));
     type_text(&mut model, "X");
@@ -335,17 +335,17 @@ fn new_and_close_buffer_lifecycle() {
         InputMode::ConfirmClose { index: 1 }
     ));
     handle_event(&mut model, key(KeyCode::Char('c')));
-    assert_eq!(model.path, None);
+    assert_eq!(model.session.path, None);
 
     command(&mut model, "bd");
     handle_event(&mut model, key(KeyCode::Char('n')));
-    assert_eq!(model.path.as_ref(), Some(&path));
+    assert_eq!(model.session.path.as_ref(), Some(&path));
     assert_eq!(model.buffers.entries.len(), 1);
 
     command(&mut model, "bd");
-    assert_eq!(model.path, None);
+    assert_eq!(model.session.path, None);
     assert!(model.buffers.entries.is_empty());
-    assert_eq!(model.editor.text().len_bytes(), 0);
+    assert_eq!(model.session.editor.text().len_bytes(), 0);
 }
 
 #[test]
@@ -360,7 +360,7 @@ fn closing_modified_buffer_can_save_or_discard() {
     command(&mut model, "bd");
     handle_event(&mut model, key(KeyCode::Char('y')));
     assert_eq!(fs::read_to_string(&path).expect("read"), "Xfile");
-    assert_eq!(model.path, None);
+    assert_eq!(model.session.path, None);
     assert!(model.buffers.entries.is_empty());
 
     fs::write(&path, "file").expect("rewrite");
@@ -371,14 +371,14 @@ fn closing_modified_buffer_can_save_or_discard() {
     command(&mut model, "bd");
     handle_event(&mut model, key(KeyCode::Char('n')));
     assert_eq!(fs::read_to_string(&path).expect("read"), "file");
-    assert_eq!(model.path, None);
+    assert_eq!(model.session.path, None);
 }
 
 #[test]
 fn failed_save_keeps_close_confirmation_open() {
     let dir = tempfile::tempdir().expect("tempdir");
     let mut model = Model::new(EditorState::from_text("dirty"), None);
-    model.path = Some(dir.path().to_path_buf());
+    model.session.path = Some(dir.path().to_path_buf());
     model.modified = true;
     model.ui.input_mode = InputMode::ConfirmClose { index: 0 };
     model.queue_effect(Effect::SaveBuffer {
@@ -405,7 +405,7 @@ fn close_indexed_buffer_keeps_active_buffer() {
     model.open_path(&second).expect("open second");
 
     command(&mut model, "bd 1");
-    assert_eq!(model.path.as_ref(), Some(&second));
+    assert_eq!(model.session.path.as_ref(), Some(&second));
     assert_eq!(model.buffers.entries.len(), 1);
     assert_eq!(model.buffers.entries[0].path.as_ref(), Some(&second));
 }
@@ -422,7 +422,7 @@ fn closing_buffer_clears_matching_split() {
     command(&mut model, "bd");
     assert!(model.buffers.split.is_none());
     assert!(!model.ui.focus.split);
-    assert_eq!(model.path, None);
+    assert_eq!(model.session.path, None);
 }
 
 #[test]
@@ -446,7 +446,7 @@ fn closing_buffer_refuses_to_drop_dirty_split() {
             .is_some_and(|pane| pane.buffer.modified)
     );
     assert!(model.status.text.contains("split pane has unsaved changes"));
-    assert_eq!(model.path.as_ref(), Some(&path));
+    assert_eq!(model.session.path.as_ref(), Some(&path));
 }
 
 #[test]
@@ -533,7 +533,7 @@ fn external_clean_change_reloads() {
     fs::write(&path, "disk").expect("external write");
 
     model.handle_external_change(path.clone());
-    assert_eq!(model.editor.text().slice(0..4), "disk");
+    assert_eq!(model.session.editor.text().slice(0..4), "disk");
     assert!(!model.modified);
     assert!(model.status.text.contains("reloaded"));
 }
@@ -555,11 +555,11 @@ fn external_dirty_change_requires_confirmation() {
         InputMode::ConfirmReload { .. }
     ));
     handle_event(&mut model, key(KeyCode::Char('n')));
-    assert_eq!(model.editor.text().slice(0..4), "Xold");
+    assert_eq!(model.session.editor.text().slice(0..4), "Xold");
 
     model.handle_external_change(path);
     handle_event(&mut model, key(KeyCode::Char('y')));
-    assert_eq!(model.editor.text().slice(0..4), "disk");
+    assert_eq!(model.session.editor.text().slice(0..4), "disk");
     assert!(!model.modified);
 }
 
@@ -578,7 +578,7 @@ fn quit_guard_checks_inactive_buffers() {
     handle_event(&mut model, key(KeyCode::Char(':')));
     type_text(&mut model, &format!("e {}", second.display()));
     handle_event(&mut model, key(KeyCode::Enter));
-    assert_eq!(model.path.as_ref(), Some(&second));
+    assert_eq!(model.session.path.as_ref(), Some(&second));
 
     for code in [KeyCode::Char(':'), KeyCode::Char('q'), KeyCode::Enter] {
         handle_event(&mut model, key(code));
@@ -599,7 +599,7 @@ fn gateway_required_refuses_file_operations_without_client() {
     let mut model = Model::new(EditorState::from_text("data"), None);
     model.workspace.require_gateway = true;
     model.workspace.path = directory.path().to_path_buf();
-    model.path = Some(path);
+    model.session.path = Some(path);
     assert!(!model.save());
     assert!(model.status.text.contains("gateway unavailable"));
 
@@ -634,9 +634,9 @@ fn dot_repeats_word_delete() {
     let mut model = Model::new(EditorState::from_text("one two three"), None);
     handle_event(&mut model, key(KeyCode::Char('d')));
     handle_event(&mut model, key(KeyCode::Char('w')));
-    assert_eq!(model.editor.text().slice(0..9), "two three");
+    assert_eq!(model.session.editor.text().slice(0..9), "two three");
     handle_event(&mut model, key(KeyCode::Char('.')));
-    assert_eq!(model.editor.text().slice(0..5), "three");
+    assert_eq!(model.session.editor.text().slice(0..5), "three");
 }
 
 #[test]
@@ -645,10 +645,10 @@ fn dot_count_overrides_recorded_delete_count() {
     handle_event(&mut model, key(KeyCode::Char('2')));
     handle_event(&mut model, key(KeyCode::Char('d')));
     handle_event(&mut model, key(KeyCode::Char('w')));
-    assert_eq!(model.editor.text().slice(0..5), "three");
+    assert_eq!(model.session.editor.text().slice(0..5), "three");
     handle_event(&mut model, key(KeyCode::Char('3')));
     handle_event(&mut model, key(KeyCode::Char('.')));
-    assert_eq!(model.editor.text().len_bytes(), 0);
+    assert_eq!(model.session.editor.text().len_bytes(), 0);
 }
 
 #[test]
@@ -658,7 +658,7 @@ fn dot_repeats_append_line_end_insert() {
     type_text(&mut model, "foo");
     handle_event(&mut model, key(KeyCode::Esc));
     handle_event(&mut model, key(KeyCode::Char('.')));
-    assert_eq!(model.editor.text().slice(0..7), "xfoofoo");
+    assert_eq!(model.session.editor.text().slice(0..7), "xfoofoo");
 }
 
 #[test]
@@ -669,10 +669,10 @@ fn dot_repeats_inner_word_change() {
     handle_event(&mut model, key(KeyCode::Char('w')));
     type_text(&mut model, "X");
     handle_event(&mut model, key(KeyCode::Esc));
-    assert_eq!(model.editor.text().slice(0..5), "X two");
+    assert_eq!(model.session.editor.text().slice(0..5), "X two");
     handle_event(&mut model, key(KeyCode::Char('w')));
     handle_event(&mut model, key(KeyCode::Char('.')));
-    assert_eq!(model.editor.text().slice(0..3), "X X");
+    assert_eq!(model.session.editor.text().slice(0..3), "X X");
 }
 
 #[test]
@@ -681,7 +681,7 @@ fn failed_delete_preserves_previous_last_change() {
     handle_event(&mut model, key(KeyCode::Char('d')));
     handle_event(&mut model, key(KeyCode::Char('w')));
     let previous = model.edit.last_change.clone();
-    assert_eq!(model.editor.text().len_bytes(), 0);
+    assert_eq!(model.session.editor.text().len_bytes(), 0);
     handle_event(&mut model, key(KeyCode::Char('d')));
     handle_event(&mut model, key(KeyCode::Char('w')));
     assert_eq!(model.edit.last_change, previous);
@@ -695,7 +695,7 @@ fn empty_insert_does_not_replace_last_change() {
     handle_event(&mut model, key(KeyCode::Char('i')));
     handle_event(&mut model, key(KeyCode::Esc));
     handle_event(&mut model, key(KeyCode::Char('.')));
-    assert_eq!(model.editor.text().slice(0..5), "three");
+    assert_eq!(model.session.editor.text().slice(0..5), "three");
 }
 
 #[test]
@@ -706,7 +706,7 @@ fn backspace_updates_insert_session_text() {
     handle_event(&mut model, key(KeyCode::Backspace));
     handle_event(&mut model, key(KeyCode::Esc));
     handle_event(&mut model, key(KeyCode::Char('.')));
-    assert_eq!(model.editor.text().slice(0..4), "abab");
+    assert_eq!(model.session.editor.text().slice(0..4), "abab");
 }
 
 #[test]
@@ -715,26 +715,27 @@ fn backspace_at_document_start_and_line_boundaries_is_safe() {
     for _ in 0..2000 {
         empty.backspace();
     }
-    assert_eq!(empty.editor.text().len_bytes(), 0);
+    assert_eq!(empty.session.editor.text().len_bytes(), 0);
 
     let mut lines = Model::new(EditorState::from_text("a\nb\nc"), None);
     for _ in 0..2 {
         let newline = lines
+            .session
             .editor
             .text()
-            .slice(0..lines.editor.text().len_bytes())
+            .slice(0..lines.session.editor.text().len_bytes())
             .find('\n');
         let Some(newline) = newline else {
             break;
         };
-        lines.cursor = newline + 1;
+        lines.session.cursor = newline + 1;
         lines.backspace();
     }
-    assert_eq!(lines.editor.text().slice(0..3), "abc");
+    assert_eq!(lines.session.editor.text().slice(0..3), "abc");
     for _ in 0..2000 {
         lines.backspace();
     }
-    assert_eq!(lines.cursor, 0);
+    assert_eq!(lines.session.cursor, 0);
 }
 
 #[test]
@@ -742,10 +743,10 @@ fn bracketed_multiline_paste_preserves_lines_and_undoes_once() {
     let mut model = Model::new(EditorState::from_text(""), None);
     handle_event(&mut model, key(KeyCode::Char('i')));
     handle_event(&mut model, Event::Paste("one\ntwo\n".to_owned()));
-    assert_eq!(model.editor.text().slice(0..8), "one\ntwo\n");
+    assert_eq!(model.session.editor.text().slice(0..8), "one\ntwo\n");
     handle_event(&mut model, key(KeyCode::Esc));
     handle_event(&mut model, key(KeyCode::Char('u')));
-    assert_eq!(model.editor.text().len_bytes(), 0);
+    assert_eq!(model.session.editor.text().len_bytes(), 0);
 }
 
 #[test]
@@ -754,17 +755,19 @@ fn wide_characters_use_display_columns() {
     handle_event(&mut model, key(KeyCode::Char('i')));
     type_text(&mut model, "你好");
     let position = model
+        .session
         .editor
         .index()
-        .position(model.editor.text(), model.cursor)
+        .position(model.session.editor.text(), model.session.cursor)
         .expect("position");
     assert_eq!(position.display_column, 4);
     model.backspace();
-    assert_eq!(model.editor.text().slice(0..3), "你");
+    assert_eq!(model.session.editor.text().slice(0..3), "你");
     let position = model
+        .session
         .editor
         .index()
-        .position(model.editor.text(), model.cursor)
+        .position(model.session.editor.text(), model.session.cursor)
         .expect("position");
     assert_eq!(position.display_column, 2);
 }
@@ -774,7 +777,7 @@ fn paste_normalizes_crlf_and_cr() {
     let mut model = Model::new(EditorState::from_text(""), None);
     handle_event(&mut model, key(KeyCode::Char('i')));
     handle_event(&mut model, Event::Paste("a\r\nb\rc".to_owned()));
-    assert_eq!(model.editor.text().slice(0..5), "a\nb\nc");
+    assert_eq!(model.session.editor.text().slice(0..5), "a\nb\nc");
 }
 
 #[test]
@@ -803,7 +806,7 @@ fn paste_drops_control_characters() {
     let mut model = Model::new(EditorState::from_text(""), None);
     handle_event(&mut model, key(KeyCode::Char('i')));
     handle_event(&mut model, Event::Paste("a\u{7}b\u{1b}c".to_owned()));
-    assert_eq!(model.editor.text().slice(0..3), "abc");
+    assert_eq!(model.session.editor.text().slice(0..3), "abc");
 }
 
 #[test]
@@ -812,13 +815,13 @@ fn delete_inner_and_around_word() {
     handle_event(&mut inner, key(KeyCode::Char('d')));
     handle_event(&mut inner, key(KeyCode::Char('i')));
     handle_event(&mut inner, key(KeyCode::Char('w')));
-    assert_eq!(inner.editor.text().slice(0..4), " two");
+    assert_eq!(inner.session.editor.text().slice(0..4), " two");
 
     let mut around = Model::new(EditorState::from_text("one two"), None);
     handle_event(&mut around, key(KeyCode::Char('d')));
     handle_event(&mut around, key(KeyCode::Char('a')));
     handle_event(&mut around, key(KeyCode::Char('w')));
-    assert_eq!(around.editor.text().slice(0..3), "two");
+    assert_eq!(around.session.editor.text().slice(0..3), "two");
 }
 
 #[test]
@@ -829,7 +832,7 @@ fn change_inner_and_around_word() {
     handle_event(&mut inner, key(KeyCode::Char('w')));
     type_text(&mut inner, "X");
     handle_event(&mut inner, key(KeyCode::Esc));
-    assert_eq!(inner.editor.text().slice(0..5), "X two");
+    assert_eq!(inner.session.editor.text().slice(0..5), "X two");
 
     let mut around = Model::new(EditorState::from_text("one two"), None);
     handle_event(&mut around, key(KeyCode::Char('c')));
@@ -837,123 +840,123 @@ fn change_inner_and_around_word() {
     handle_event(&mut around, key(KeyCode::Char('w')));
     type_text(&mut around, "X");
     handle_event(&mut around, key(KeyCode::Esc));
-    assert_eq!(around.editor.text().slice(0..4), "Xtwo");
+    assert_eq!(around.session.editor.text().slice(0..4), "Xtwo");
 }
 
 #[test]
 fn delete_inner_quote_does_not_change() {
     let mut model = Model::new(EditorState::from_text("say \"hello\" now"), None);
-    model.cursor = 6;
+    model.session.cursor = 6;
     for key_code in [KeyCode::Char('d'), KeyCode::Char('i'), KeyCode::Char('"')] {
         handle_event(&mut model, key(key_code));
     }
-    assert_eq!(model.editor.text().slice(0..10), "say \"\" now");
+    assert_eq!(model.session.editor.text().slice(0..10), "say \"\" now");
 }
 
 #[test]
 fn delete_around_quote_removes_delimiters() {
     let mut model = Model::new(EditorState::from_text("say \"hello\" now"), None);
-    model.cursor = 6;
+    model.session.cursor = 6;
     for key_code in [KeyCode::Char('d'), KeyCode::Char('a'), KeyCode::Char('"')] {
         handle_event(&mut model, key(key_code));
     }
-    assert_eq!(model.editor.text().slice(0..8), "say  now");
+    assert_eq!(model.session.editor.text().slice(0..8), "say  now");
 }
 
 #[test]
 fn change_around_quote_repeats_with_quotes() {
     let mut model = Model::new(EditorState::from_text("say \"hello\" now"), None);
-    model.cursor = 6;
+    model.session.cursor = 6;
     for key_code in [KeyCode::Char('c'), KeyCode::Char('a'), KeyCode::Char('"')] {
         handle_event(&mut model, key(key_code));
     }
     type_text(&mut model, "X");
     handle_event(&mut model, key(KeyCode::Esc));
-    assert_eq!(model.editor.text().slice(0..9), "say X now");
+    assert_eq!(model.session.editor.text().slice(0..9), "say X now");
 }
 
 #[test]
 fn bracket_text_objects_support_delete_change_and_around() {
     let mut inner = Model::new(EditorState::from_text("call(foo, bar)"), None);
-    inner.cursor = 6;
+    inner.session.cursor = 6;
     for key_code in [KeyCode::Char('d'), KeyCode::Char('i'), KeyCode::Char('(')] {
         handle_event(&mut inner, key(key_code));
     }
-    assert_eq!(inner.editor.text().slice(0..6), "call()");
+    assert_eq!(inner.session.editor.text().slice(0..6), "call()");
 
     let mut around = Model::new(EditorState::from_text("call(foo, bar)"), None);
-    around.cursor = 6;
+    around.session.cursor = 6;
     for key_code in [KeyCode::Char('d'), KeyCode::Char('a'), KeyCode::Char('(')] {
         handle_event(&mut around, key(key_code));
     }
-    assert_eq!(around.editor.text().slice(0..4), "call");
+    assert_eq!(around.session.editor.text().slice(0..4), "call");
 
     let mut change = Model::new(EditorState::from_text("call(foo, bar)"), None);
-    change.cursor = 6;
+    change.session.cursor = 6;
     for key_code in [KeyCode::Char('c'), KeyCode::Char('i'), KeyCode::Char('(')] {
         handle_event(&mut change, key(key_code));
     }
     type_text(&mut change, "X");
     handle_event(&mut change, key(KeyCode::Esc));
-    assert_eq!(change.editor.text().slice(0..7), "call(X)");
+    assert_eq!(change.session.editor.text().slice(0..7), "call(X)");
 }
 
 #[test]
 fn paragraph_text_objects_delete_and_change() {
     let mut inner = Model::new(EditorState::from_text("a\nb\n\nc\nd"), None);
-    inner.cursor = 1;
+    inner.session.cursor = 1;
     for key_code in [KeyCode::Char('d'), KeyCode::Char('i'), KeyCode::Char('p')] {
         handle_event(&mut inner, key(key_code));
     }
-    assert_eq!(inner.editor.text().slice(0..3), "\nc\n");
+    assert_eq!(inner.session.editor.text().slice(0..3), "\nc\n");
 
     let mut around = Model::new(EditorState::from_text("a\nb\n\nc\nd"), None);
-    around.cursor = 1;
+    around.session.cursor = 1;
     for key_code in [KeyCode::Char('d'), KeyCode::Char('a'), KeyCode::Char('p')] {
         handle_event(&mut around, key(key_code));
     }
-    assert_eq!(around.editor.text().slice(0..3), "c\nd");
+    assert_eq!(around.session.editor.text().slice(0..3), "c\nd");
 
     let mut change = Model::new(EditorState::from_text("a\nb\n\nc\nd"), None);
-    change.cursor = 1;
+    change.session.cursor = 1;
     for key_code in [KeyCode::Char('c'), KeyCode::Char('i'), KeyCode::Char('p')] {
         handle_event(&mut change, key(key_code));
     }
     type_text(&mut change, "X");
     handle_event(&mut change, key(KeyCode::Esc));
-    assert_eq!(change.editor.text().slice(0..3), "X\nc");
+    assert_eq!(change.session.editor.text().slice(0..3), "X\nc");
 }
 
 #[test]
 fn tag_text_objects_delete_change_and_around() {
     let mut inner = Model::new(EditorState::from_text("<p>hi</p>"), None);
-    inner.cursor = 4;
+    inner.session.cursor = 4;
     for key_code in [KeyCode::Char('d'), KeyCode::Char('i'), KeyCode::Char('t')] {
         handle_event(&mut inner, key(key_code));
     }
-    assert_eq!(inner.editor.text().len_bytes(), 7);
+    assert_eq!(inner.session.editor.text().len_bytes(), 7);
 
     let mut around = Model::new(EditorState::from_text("<p>hi</p>"), None);
-    around.cursor = 4;
+    around.session.cursor = 4;
     for key_code in [KeyCode::Char('d'), KeyCode::Char('a'), KeyCode::Char('t')] {
         handle_event(&mut around, key(key_code));
     }
-    assert_eq!(around.editor.text().len_bytes(), 0);
+    assert_eq!(around.session.editor.text().len_bytes(), 0);
 
     let mut change = Model::new(EditorState::from_text("<p>hi</p>"), None);
-    change.cursor = 4;
+    change.session.cursor = 4;
     for key_code in [KeyCode::Char('c'), KeyCode::Char('i'), KeyCode::Char('t')] {
         handle_event(&mut change, key(key_code));
     }
     type_text(&mut change, "X");
     handle_event(&mut change, key(KeyCode::Esc));
-    assert_eq!(change.editor.text().slice(0..3), "<p>");
+    assert_eq!(change.session.editor.text().slice(0..3), "<p>");
 }
 
 #[test]
 fn word_text_objects_honor_counts() {
     let mut model = Model::new(EditorState::from_text("one two three"), None);
-    model.cursor = 0;
+    model.session.cursor = 0;
     for key_code in [
         KeyCode::Char('2'),
         KeyCode::Char('d'),
@@ -962,13 +965,13 @@ fn word_text_objects_honor_counts() {
     ] {
         handle_event(&mut model, key(key_code));
     }
-    assert_eq!(model.editor.text().slice(0..6), " three");
+    assert_eq!(model.session.editor.text().slice(0..6), " three");
 }
 
 #[test]
 fn paragraph_text_objects_honor_counts() {
     let mut model = Model::new(EditorState::from_text("a\nb\n\nc\nd"), None);
-    model.cursor = 0;
+    model.session.cursor = 0;
     for key_code in [
         KeyCode::Char('2'),
         KeyCode::Char('d'),
@@ -977,31 +980,31 @@ fn paragraph_text_objects_honor_counts() {
     ] {
         handle_event(&mut model, key(key_code));
     }
-    assert_eq!(model.editor.text().len_bytes(), 0);
+    assert_eq!(model.session.editor.text().len_bytes(), 0);
 }
 
 #[test]
 fn visual_adapter_maps_character_and_line_selection() {
     let mut character = Model::new(EditorState::from_text("abc\ndef"), None);
-    character.cursor = 0;
+    character.session.cursor = 0;
     handle_event(&mut character, key(KeyCode::Char('v')));
     handle_event(&mut character, key(KeyCode::Right));
     handle_event(&mut character, key(KeyCode::Char('d')));
-    assert_eq!(character.editor.text().slice(0..4), "c\nde");
+    assert_eq!(character.session.editor.text().slice(0..4), "c\nde");
 
     let mut line = Model::new(EditorState::from_text("abc\ndef"), None);
-    line.cursor = 0;
+    line.session.cursor = 0;
     handle_event(&mut line, key(KeyCode::Char('V')));
     handle_event(&mut line, key(KeyCode::Down));
     handle_event(&mut line, key(KeyCode::Char('d')));
-    assert_eq!(line.editor.text().len_bytes(), 0);
+    assert_eq!(line.session.editor.text().len_bytes(), 0);
 }
 
 #[test]
 fn visual_surround_uses_operation_scoped_modal_layer() {
     let mut model = Model::new(EditorState::from_text("word"), None);
     model.welcome = false;
-    model.cursor = 0;
+    model.session.cursor = 0;
     for key_code in [
         KeyCode::Char('v'),
         KeyCode::Right,
@@ -1010,7 +1013,7 @@ fn visual_surround_uses_operation_scoped_modal_layer() {
     ] {
         handle_event(&mut model, key(key_code));
     }
-    assert_eq!(model.editor.text().slice(0..6), "(wo)rd");
+    assert_eq!(model.session.editor.text().slice(0..6), "(wo)rd");
     assert!(model.edit.modal_layer.is_none());
     assert!(model.edit.visual_anchor.is_none());
 }
@@ -1018,54 +1021,54 @@ fn visual_surround_uses_operation_scoped_modal_layer() {
 #[test]
 fn visual_delete_keeps_register_and_undo() {
     let mut model = Model::new(EditorState::from_text("abc"), None);
-    model.cursor = 0;
+    model.session.cursor = 0;
     for key_code in [KeyCode::Char('v'), KeyCode::Right, KeyCode::Char('d')] {
         handle_event(&mut model, key(key_code));
     }
-    assert_eq!(model.editor.text().slice(0..1), "c");
+    assert_eq!(model.session.editor.text().slice(0..1), "c");
     handle_event(&mut model, key(KeyCode::Char('p')));
-    assert_eq!(model.editor.text().slice(0..3), "abc");
+    assert_eq!(model.session.editor.text().slice(0..3), "abc");
 }
 
 #[test]
 fn visual_delete_undoes_and_handles_reversal_and_empty_buffer() {
     let mut reversed = Model::new(EditorState::from_text("abc"), None);
-    reversed.cursor = 2;
+    reversed.session.cursor = 2;
     for key_code in [KeyCode::Char('v'), KeyCode::Left, KeyCode::Char('d')] {
         handle_event(&mut reversed, key(key_code));
     }
-    assert_eq!(reversed.editor.text().slice(0..1), "a");
+    assert_eq!(reversed.session.editor.text().slice(0..1), "a");
     handle_event(&mut reversed, key(KeyCode::Char('u')));
-    assert_eq!(reversed.editor.text().slice(0..3), "abc");
+    assert_eq!(reversed.session.editor.text().slice(0..3), "abc");
 
     let mut empty = Model::new(EditorState::from_text(""), None);
     for key_code in [KeyCode::Char('v'), KeyCode::Char('d')] {
         handle_event(&mut empty, key(key_code));
     }
-    assert_eq!(empty.editor.text().len_bytes(), 0);
+    assert_eq!(empty.session.editor.text().len_bytes(), 0);
 }
 
 #[test]
 fn unknown_object_failure_preserves_text() {
     let mut model = Model::new(EditorState::from_text("abc"), None);
-    model.cursor = 0;
+    model.session.cursor = 0;
     for key_code in [KeyCode::Char('d'), KeyCode::Char('i'), KeyCode::Char('"')] {
         handle_event(&mut model, key(key_code));
     }
-    assert_eq!(model.editor.text().slice(0..3), "abc");
+    assert_eq!(model.session.editor.text().slice(0..3), "abc");
     assert!(model.status.text.starts_with("E:"));
 }
 
 #[test]
 fn visual_delete_applies_to_multiple_selections_in_one_undo() {
     let mut model = Model::new(EditorState::from_text("foo foo"), None);
-    model.cursor = 0;
+    model.session.cursor = 0;
     model.select_word_occurrences();
     model.delete_visual();
     model.ui.input_mode = InputMode::Normal;
-    assert_eq!(model.editor.text().slice(0..1), " ");
+    assert_eq!(model.session.editor.text().slice(0..1), " ");
     handle_event(&mut model, key(KeyCode::Char('u')));
-    assert_eq!(model.editor.text().len_bytes(), 7);
+    assert_eq!(model.session.editor.text().len_bytes(), 7);
 }
 
 #[test]
@@ -1100,7 +1103,7 @@ fn failed_auto_save_aborts_the_focus_change() {
     model.switch_buffer(-1);
     model.settings.editor.auto_save = true;
     model.insert_text("X");
-    model.path = Some(dir.path().to_path_buf());
+    model.session.path = Some(dir.path().to_path_buf());
 
     model.switch_buffer(1);
 
@@ -1164,7 +1167,7 @@ fn opening_another_file_auto_saves_the_active_buffer() {
 
     assert_eq!(fs::read_to_string(&first).expect("first content"), "Xa");
     assert_eq!(
-        model.path.as_deref(),
+        model.session.path.as_deref(),
         Some(second.canonicalize().expect("second").as_path())
     );
 }
@@ -1179,8 +1182,8 @@ fn opening_another_file_refuses_a_dirty_unnamed_buffer() {
 
     assert!(model.open_path(&path).is_err());
 
-    assert!(model.path.is_none());
-    assert_eq!(model.editor.text().slice(0..5), "draft");
+    assert!(model.session.path.is_none());
+    assert_eq!(model.session.editor.text().slice(0..5), "draft");
     assert!(model.status.text.contains("save or discard"));
 }
 
@@ -1214,7 +1217,7 @@ fn ex_open_auto_saves_before_switching() {
 
     assert_eq!(fs::read_to_string(&first).expect("first content"), "Xa");
     assert_eq!(
-        model.path.as_deref(),
+        model.session.path.as_deref(),
         Some(second.canonicalize().expect("second").as_path())
     );
 }
@@ -1230,7 +1233,7 @@ fn new_buffer_auto_saves_before_switching() {
 
     model.new_buffer();
 
-    assert!(model.path.is_none());
+    assert!(model.session.path.is_none());
     assert_eq!(fs::read_to_string(&path).expect("content"), "Xa");
 }
 
@@ -1263,7 +1266,7 @@ fn closing_the_active_buffer_auto_saves_first() {
     model.close_buffer(0, false);
 
     assert!(model.buffers.entries.is_empty());
-    assert!(model.path.is_none());
+    assert!(model.session.path.is_none());
     assert_eq!(fs::read_to_string(&path).expect("content"), "Xa");
 }
 
@@ -1390,8 +1393,11 @@ fn toggles_breakpoint_gutter_marker() {
     let path = dir.path().join("main.rs");
     fs::write(&path, "one\ntwo\n").expect("write");
     let mut model = Model::open(&path).expect("open");
-    model.cursor = model.offset_at_utf16(1, 0);
-    model.editor.set_selection_bytes(model.cursor, model.cursor);
+    model.session.cursor = model.offset_at_utf16(1, 0);
+    model
+        .session
+        .editor
+        .set_selection_bytes(model.session.cursor, model.session.cursor);
     model.toggle_breakpoint();
     assert!(model.breakpoint_marker(&path, 1));
     let gutter = model

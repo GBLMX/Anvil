@@ -71,7 +71,7 @@ impl Model {
             self.dirty = true;
             return;
         }
-        let Some(path) = self.path.clone() else {
+        let Some(path) = self.session.path.clone() else {
             self.status.text = "E: no file name".to_owned();
             self.dirty = true;
             return;
@@ -166,9 +166,10 @@ impl Model {
             return;
         }
         let current = self
+            .session
             .editor
             .index()
-            .offset_to_line(self.cursor)
+            .offset_to_line(self.session.cursor)
             .map(|line| line.line)
             .unwrap_or(0);
         let index = if forward {
@@ -187,9 +188,9 @@ impl Model {
             return;
         };
         let line = view.hunks[index].line;
-        if let Some(offset) = self.editor.index().line_to_offset(line) {
-            self.cursor = offset;
-            self.editor.set_selection_bytes(offset, offset);
+        if let Some(offset) = self.session.editor.index().line_to_offset(line) {
+            self.session.cursor = offset;
+            self.session.editor.set_selection_bytes(offset, offset);
             self.status.text = format!("git hunk {}/{}", index + 1, view.hunks.len());
             self.dirty = true;
         }
@@ -221,9 +222,10 @@ impl Model {
             return;
         }
         let current = self
+            .session
             .editor
             .index()
-            .offset_to_line(self.cursor)
+            .offset_to_line(self.session.cursor)
             .map(|line| line.line)
             .unwrap_or(0);
         let Some(index) = view.hunks.iter().rposition(|hunk| hunk.line <= current) else {
@@ -286,7 +288,7 @@ impl Model {
             self.dirty = true;
             return;
         }
-        let Some(path) = self.path.clone() else {
+        let Some(path) = self.session.path.clone() else {
             self.status.text = "E: no file name".to_owned();
             self.dirty = true;
             return;
@@ -417,7 +419,7 @@ impl Model {
             self.dirty = true;
             return;
         }
-        let Some(path) = self.path.clone() else {
+        let Some(path) = self.session.path.clone() else {
             self.status.text = "E: no file name".to_owned();
             self.dirty = true;
             return;
@@ -500,7 +502,7 @@ impl Model {
             self.dirty = true;
             return;
         }
-        let Some(path) = self.path.clone() else {
+        let Some(path) = self.session.path.clone() else {
             self.status.text = "E: no file name".to_owned();
             self.dirty = true;
             return;
@@ -670,9 +672,10 @@ index 1111111..2222222 100644
         );
         assert_eq!(
             model
+                .session
                 .editor
                 .text()
-                .slice(0..model.editor.text().len_bytes()),
+                .slice(0..model.session.editor.text().len_bytes()),
             "ours\n"
         );
         assert!(model.status.text.contains("working tree updated"));

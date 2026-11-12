@@ -69,7 +69,7 @@ impl Model {
     }
 
     pub(crate) fn toggle_breakpoint(&mut self) {
-        let Some(path) = self.path.clone() else {
+        let Some(path) = self.session.path.clone() else {
             self.status.text = "E: breakpoint requires a file".to_owned();
             self.dirty = true;
             return;

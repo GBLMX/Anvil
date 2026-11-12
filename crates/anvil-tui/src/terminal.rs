@@ -92,9 +92,9 @@ pub fn run_with_input(
     }
 
     if let Some(text) = stdin_text {
-        model.editor = EditorState::from_text(&text).into();
-        model.path = None;
-        model.cursor = 0;
+        model.session.editor = EditorState::from_text(&text).into();
+        model.session.path = None;
+        model.session.cursor = 0;
         model.view.scroll = 0;
         model.view.hscroll = 0;
         model.modified = false;
@@ -225,7 +225,7 @@ pub fn run_with_input(
     let mut terminal = TerminalSession::start()?;
     let terminal_ready = start.elapsed();
     let mut first_draw = true;
-    let mut last_session_revision = model.editor.revision();
+    let mut last_session_revision = model.session.editor.revision();
     let mut last_session_active = model.buffers.active;
     let mut session_saved_at = Instant::now();
     let mut session_error_reported = false;
@@ -297,14 +297,14 @@ pub fn run_with_input(
             handle_event(&mut model, event::read()?);
         }
         if session_enabled
-            && (model.editor.revision() != last_session_revision
+            && (model.session.editor.revision() != last_session_revision
                 || model.buffers.active != last_session_active)
             && session_saved_at.elapsed() >= std::time::Duration::from_secs(2)
         {
             match session::save(&mut model, &workspace) {
                 Ok(()) => {
                     session_error_reported = false;
-                    last_session_revision = model.editor.revision();
+                    last_session_revision = model.session.editor.revision();
                     last_session_active = model.buffers.active;
                     session_saved_at = Instant::now();
                 }

@@ -192,7 +192,7 @@ impl Model {
 
     #[cfg(target_os = "linux")]
     pub(crate) fn activate_current_language(&mut self) {
-        let Some(path) = self.path.as_ref() else {
+        let Some(path) = self.session.path.as_ref() else {
             return;
         };
         let Some(settings) = lsp_settings(path) else {

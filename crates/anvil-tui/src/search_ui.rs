@@ -8,7 +8,7 @@ impl Model {
     pub(crate) fn begin_search(&mut self) {
         self.search
             .state
-            .begin(self.cursor, self.editor.selection_bytes());
+            .begin(self.session.cursor, self.session.editor.selection_bytes());
         self.search.query.clear();
         self.ui.input_mode = InputMode::Search {
             query: InputBuffer::default(),
@@ -42,8 +42,8 @@ impl Model {
 
     pub(crate) fn cancel_search(&mut self) {
         if let Some((cursor, selections)) = self.search.state.restore_origin() {
-            self.cursor = cursor;
-            self.editor.set_selections_bytes(selections);
+            self.session.cursor = cursor;
+            self.session.editor.set_selections_bytes(selections);
         }
         self.search.query.clear();
         self.ui.input_mode = InputMode::Normal;
@@ -59,23 +59,27 @@ impl Model {
             self.search.state.truncated = false;
             return true;
         }
-        let text = self.editor.text().slice(0..self.editor.text().len_bytes());
+        let text = self
+            .session
+            .editor
+            .text()
+            .slice(0..self.session.editor.text().len_bytes());
         match find_matches_limited(&text, query, self.search.state.options, MAX_SEARCH_MATCHES) {
             Ok((matches, truncated)) => {
-                let cursor = self.cursor;
+                let cursor = self.session.cursor;
                 let current = matches
                     .iter()
                     .position(|range| range.start <= cursor && cursor < range.end)
                     .or_else(|| matches.iter().position(|range| range.start >= cursor))
                     .unwrap_or(0);
                 if let Some(range) = matches.get(current) {
-                    self.cursor = range.start;
+                    self.session.cursor = range.start;
                 }
                 let selections = matches
                     .iter()
                     .map(|range| (range.start, range.end))
                     .collect();
-                self.editor.set_selections_bytes(selections);
+                self.session.editor.set_selections_bytes(selections);
                 self.search.state.matches = matches;
                 self.search.state.current = current;
                 self.search.state.error = None;
@@ -116,7 +120,7 @@ impl Model {
         } else {
             (self.search.state.current + len - 1) % len
         };
-        self.cursor = self.search.state.matches[self.search.state.current].start;
+        self.session.cursor = self.search.state.matches[self.search.state.current].start;
         self.status.text = self.search_status(&self.search.query);
         self.dirty = true;
     }
@@ -168,6 +172,7 @@ impl Model {
             return false;
         };
         if !self
+            .session
             .editor
             .apply_transaction(vec![(range, replacement.to_owned())])
         {
@@ -206,7 +211,7 @@ impl Model {
             .cloned()
             .map(|range| (range, replacement.to_owned()))
             .collect();
-        if !self.editor.apply_transaction(edits) {
+        if !self.session.editor.apply_transaction(edits) {
             self.status.text = "E: replacement failed".to_owned();
             self.dirty = true;
             return false;

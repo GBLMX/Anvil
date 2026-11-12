@@ -362,7 +362,8 @@ impl Model {
     }
 
     fn path_is_open(&self, path: &Path) -> bool {
-        self.path
+        self.session
+            .path
             .as_ref()
             .is_some_and(|open| open == path || open.starts_with(path))
             || self.buffers.entries.iter().any(|buffer| {
@@ -389,7 +390,7 @@ impl Model {
                 path.to_path_buf()
             }
         };
-        if let Some(path) = self.path.as_mut() {
+        if let Some(path) = self.session.path.as_mut() {
             *path = remap(path);
         }
         for buffer in &mut self.buffers.entries {

@@ -27,7 +27,7 @@ impl Model {
             self.exit_visual();
             return;
         }
-        let selections = self.editor.selection_bytes();
+        let selections = self.session.editor.selection_bytes();
         let mut edits = Vec::new();
         for (anchor, head) in selections {
             let start = anchor.min(head);
@@ -38,7 +38,7 @@ impl Model {
             edits.push((end..end, close.to_string()));
             edits.push((start..start, open.to_string()));
         }
-        if edits.is_empty() || !self.editor.apply_transaction(edits) {
+        if edits.is_empty() || !self.session.editor.apply_transaction(edits) {
             self.cancel_modal_layer();
             return;
         }

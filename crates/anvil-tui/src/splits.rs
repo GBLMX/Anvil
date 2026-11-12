@@ -126,9 +126,9 @@ impl Model {
                         .position(|candidate| candidate.path.is_none())
                 }),
         };
-        self.editor = buffer.editor;
-        self.path = buffer.path;
-        self.cursor = buffer.cursor;
+        self.session.editor = buffer.editor;
+        self.session.path = buffer.path;
+        self.session.cursor = buffer.cursor;
         self.view.scroll = buffer.scroll;
         self.view.hscroll = buffer.hscroll;
         self.modified = buffer.modified;
@@ -144,7 +144,7 @@ impl Model {
         self.input.pending = None;
         self.syntax
             .borrow_mut()
-            .switch_path(self.path.as_deref(), false);
+            .switch_path(self.session.path.as_deref(), false);
         self.sync_lsp_active();
         self.dirty = true;
     }

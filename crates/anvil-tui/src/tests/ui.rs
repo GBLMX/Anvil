@@ -34,7 +34,7 @@ fn dashboard_survives_help_round_trip() {
 
     assert!(model.buffers.help_back.is_none());
     assert!(model.welcome);
-    assert_eq!(model.editor.text().slice(0..0), "");
+    assert_eq!(model.session.editor.text().slice(0..0), "");
 }
 
 #[test]
@@ -140,13 +140,13 @@ fn tree_creates_and_renames_files_and_directories() {
     model.finish_tree_create(workspace.clone(), "new.txt".to_owned(), CreateKind::File);
     let file = workspace.join("new.txt");
     assert!(file.exists());
-    assert_eq!(model.path.as_deref(), Some(file.as_path()));
+    assert_eq!(model.session.path.as_deref(), Some(file.as_path()));
 
     model.finish_tree_rename(file.clone(), "renamed.txt".to_owned());
     let renamed = workspace.join("renamed.txt");
     assert!(renamed.exists());
     assert!(!file.exists());
-    assert_eq!(model.path.as_deref(), Some(renamed.as_path()));
+    assert_eq!(model.session.path.as_deref(), Some(renamed.as_path()));
 
     model.finish_tree_create(
         workspace.clone(),
@@ -173,7 +173,7 @@ fn tree_moves_copies_and_recursively_deletes() {
     let moved = workspace.join("dest/file.txt");
     assert!(!source.exists());
     assert!(moved.exists());
-    assert_eq!(model.path.as_deref(), Some(moved.as_path()));
+    assert_eq!(model.session.path.as_deref(), Some(moved.as_path()));
 
     model.finish_tree_transfer(moved.clone(), true, "src".to_owned());
     assert!(workspace.join("src/file.txt").exists());
@@ -460,7 +460,7 @@ fn status_bar_renders_path_diagnostics_and_position() {
     let mut model = Model::new(EditorState::from_text("x"), None);
     model.welcome = false;
     model.workspace.path = PathBuf::from("/ws");
-    model.path = Some(PathBuf::from(
+    model.session.path = Some(PathBuf::from(
         "/ws/src/company/project/module/very/long/path/Button.tsx",
     ));
 
@@ -802,7 +802,7 @@ fn welcome_recent_rows_are_clickable() {
     };
     assert!(crate::mouse::handle_mouse(&mut model, click, 80, 30));
     assert!(!model.welcome);
-    assert_eq!(model.path.as_deref(), Some(path.as_path()));
+    assert_eq!(model.session.path.as_deref(), Some(path.as_path()));
 }
 
 #[test]

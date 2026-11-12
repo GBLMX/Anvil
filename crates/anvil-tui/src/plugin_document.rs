@@ -10,14 +10,14 @@ use crate::Model;
 impl Model {
     /// Current active-buffer snapshot for a plugin API call.
     pub fn plugin_snapshot(&self) -> DocumentSnapshot {
-        Session::snapshot(&self.editor, self.plugin_buffer_id())
+        Session::snapshot(&self.session.editor, self.plugin_buffer_id())
     }
 
     /// Applies one plugin transaction against the active buffer.
     pub fn apply_plugin_edit(&mut self, request: ApplyEditRequest) -> Result<u64, String> {
         let buffer_id = self.plugin_buffer_id();
         let count = request.edits.len();
-        match Session::new(&mut self.editor, buffer_id).apply(request) {
+        match Session::new(&mut self.session.editor, buffer_id).apply(request) {
             Ok(revision) => {
                 self.sync_cursor_from_selection();
                 self.modified = true;
@@ -46,12 +46,12 @@ impl Model {
         params: serde_json::Value,
     ) -> Result<serde_json::Value, (i32, String)> {
         match method {
-            "editor.get_view" => Ok(serde_json::json!(self.editor.snapshot().view())),
+            "editor.get_view" => Ok(serde_json::json!(self.session.editor.snapshot().view())),
             "editor.get_snapshot" => Ok(serde_json::json!(self.plugin_snapshot())),
             "editor.set_mode" => {
                 let request: SetModeRequest =
                     serde_json::from_value(params).map_err(|error| (-32602, error.to_string()))?;
-                self.editor.set_interaction_mode(request.mode);
+                self.session.editor.set_interaction_mode(request.mode);
                 self.dirty = true;
                 Ok(serde_json::json!(SetModeResponse { mode: request.mode }))
             }
@@ -98,7 +98,7 @@ mod tests {
                 }],
             })
             .expect("apply");
-        assert_eq!(model.editor.text().slice(0..3), "aXd");
+        assert_eq!(model.session.editor.text().slice(0..3), "aXd");
         assert_eq!(revision, snapshot.revision + 1);
         assert_eq!(model.plugin_snapshot().revision, revision);
     }
@@ -116,7 +116,7 @@ mod tests {
             }],
         };
         assert!(model.apply_plugin_edit(request).is_err());
-        assert_eq!(model.editor.text().slice(0..4), "abcd");
+        assert_eq!(model.session.editor.text().slice(0..4), "abcd");
         assert!(model.status.text.contains("stale revision"));
     }
 

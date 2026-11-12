@@ -223,9 +223,9 @@ fn floor_char_boundary(text: &str, offset: usize) -> usize {
 
 impl Model {
     pub(crate) fn bracket_pair(&self) -> Option<(usize, usize)> {
-        let revision = self.editor.revision();
-        let path = self.path.as_deref();
-        let cursor = self.cursor;
+        let revision = self.session.editor.revision();
+        let path = self.session.path.as_deref();
+        let cursor = self.session.cursor;
         if self
             .bracket_cache
             .borrow()
@@ -239,16 +239,20 @@ impl Model {
                 .set_none(revision, path, cursor);
             return None;
         }
-        let text = self.editor.text().slice(0..self.editor.text().len_bytes());
+        let text = self
+            .session
+            .editor
+            .text()
+            .slice(0..self.session.editor.text().len_bytes());
         self.bracket_cache
             .borrow_mut()
             .pair(&text, revision, path, cursor)
     }
 
     fn cursor_is_on_bracket(&self) -> bool {
-        let text = self.editor.text();
+        let text = self.session.editor.text();
         let length = text.len_bytes();
-        let cursor = self.cursor;
+        let cursor = self.session.cursor;
         if text
             .slice(cursor..cursor.saturating_add(4).min(length))
             .chars()
@@ -257,7 +261,7 @@ impl Model {
         {
             return true;
         }
-        let Some(previous) = self.editor.previous_grapheme_boundary(cursor) else {
+        let Some(previous) = self.session.editor.previous_grapheme_boundary(cursor) else {
             return false;
         };
         text.slice(previous..cursor)
@@ -273,8 +277,14 @@ impl Model {
             return;
         };
         self.record_jump();
-        self.cursor = if self.cursor <= open { close } else { open };
-        self.editor.set_selection_bytes(self.cursor, self.cursor);
+        self.session.cursor = if self.session.cursor <= open {
+            close
+        } else {
+            open
+        };
+        self.session
+            .editor
+            .set_selection_bytes(self.session.cursor, self.session.cursor);
         self.status.text = "matched bracket".to_owned();
         self.dirty = true;
     }

@@ -69,7 +69,7 @@ impl Model {
             .pending
             .retain(|_, kind| *kind != LspRequestKind::CodeLens);
         self.overlays.lsp_results.code_lens = None;
-        let Some(uri) = self.path.as_ref().map(|path| lsp_uri(path)) else {
+        let Some(uri) = self.session.path.as_ref().map(|path| lsp_uri(path)) else {
             return;
         };
         if self.send_lsp_request(
@@ -133,7 +133,7 @@ impl Model {
             });
         }
         lenses.sort_by_key(|lens| lens.line);
-        let revision = revision.unwrap_or_else(|| self.editor.revision());
+        let revision = revision.unwrap_or_else(|| self.session.editor.revision());
         self.overlays.lsp_results.code_lens = Some(CodeLensState {
             revision,
             items: lenses.clone(),
@@ -162,7 +162,7 @@ mod tests {
     #[test]
     fn parses_bounded_code_lenses_and_ignores_missing_commands() {
         let mut model = Model::new(EditorState::from_text("fn main() {}"), None);
-        model.path = Some(PathBuf::from("main.rs"));
+        model.session.path = Some(PathBuf::from("main.rs"));
         model
             .language
             .lsp_requests
@@ -199,7 +199,7 @@ mod tests {
     #[test]
     fn stale_response_uses_explicit_revision() {
         let mut model = Model::new(EditorState::from_text("fn main() {}"), None);
-        model.path = Some(PathBuf::from("main.rs"));
+        model.session.path = Some(PathBuf::from("main.rs"));
         model
             .language
             .lsp_requests
@@ -232,7 +232,7 @@ mod tests {
 
         let mut model = Model::new(EditorState::from_text("a\nb\nc\n"), None);
         model.overlays.lsp_results.code_lens = Some(CodeLensState {
-            revision: model.editor.revision(),
+            revision: model.session.editor.revision(),
             items: (0..5)
                 .map(|index| CodeLensItem {
                     line: 0,
@@ -268,7 +268,7 @@ mod tests {
             None,
         );
         model.overlays.lsp_results.code_lens = Some(CodeLensState {
-            revision: model.editor.revision(),
+            revision: model.session.editor.revision(),
             items: (0..30)
                 .map(|index| CodeLensItem {
                     line: index / 3,
@@ -296,7 +296,7 @@ mod tests {
 
         let mut model = Model::new(EditorState::from_text("fn main() {}\n"), None);
         model.overlays.lsp_results.code_lens = Some(CodeLensState {
-            revision: model.editor.revision(),
+            revision: model.session.editor.revision(),
             items: vec![CodeLensItem {
                 line: 0,
                 title: "Run test".to_owned(),
@@ -324,7 +324,7 @@ mod tests {
     fn code_lens_rows_are_mouse_targets() {
         let mut model = Model::new(EditorState::from_text("fn main() {}\n"), None);
         model.overlays.lsp_results.code_lens = Some(CodeLensState {
-            revision: model.editor.revision(),
+            revision: model.session.editor.revision(),
             items: vec![CodeLensItem {
                 line: 0,
                 title: "Run test".to_owned(),

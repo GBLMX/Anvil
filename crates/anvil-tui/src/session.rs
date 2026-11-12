@@ -167,7 +167,7 @@ impl Model {
         if self.reject_read_only() {
             return;
         }
-        let Some(path) = self.path.clone() else {
+        let Some(path) = self.session.path.clone() else {
             self.status.text = "E: no file name".to_owned();
             self.dirty = true;
             return;
@@ -185,17 +185,17 @@ impl Model {
                 return;
             }
         };
-        self.editor = EditorState::from_text(&text).into();
-        self.cursor = 0;
+        self.session.editor = EditorState::from_text(&text).into();
+        self.session.cursor = 0;
         self.view.scroll = 0;
         self.view.hscroll = 0;
-        self.editor.set_selection_bytes(0, 0);
+        self.session.editor.set_selection_bytes(0, 0);
         self.modified = true;
         self.missing = false;
         self.conflict_swaps.remove(&path);
         self.syntax
             .borrow_mut()
-            .switch_path(self.path.as_deref(), false);
+            .switch_path(self.session.path.as_deref(), false);
         self.sync_lsp_active();
         self.sync_watch_paths();
         self.status.text = "conflict recovered from swap; buffer modified".to_owned();
@@ -203,7 +203,7 @@ impl Model {
     }
 
     pub(crate) fn discard_conflict(&mut self) {
-        let Some(path) = self.path.clone() else {
+        let Some(path) = self.session.path.clone() else {
             self.status.text = "E: no file name".to_owned();
             self.dirty = true;
             return;
@@ -408,7 +408,7 @@ mod tests {
         unsafe { std::env::set_var("XDG_STATE_HOME", dir.path().join("state")) };
         let mut model = Model::open(&first).expect("open a");
         model.open_path(&second).expect("open b");
-        model.cursor = 3;
+        model.session.cursor = 3;
         model.overlays.lsp_results.folded.insert(2);
         model.sync_active();
         save(&mut model, &workspace).expect("save");
@@ -416,7 +416,7 @@ mod tests {
         assert!(restore(&mut restored, &workspace).expect("restore"));
         assert_eq!(restored.buffers.entries.len(), 2);
         assert_eq!(restored.buffers.active, 1);
-        assert_eq!(restored.cursor, 3);
+        assert_eq!(restored.session.cursor, 3);
         assert!(restored.overlays.lsp_results.folded.contains(&2));
         let state = state_path(&workspace).expect("state");
         assert_eq!(
@@ -441,11 +441,11 @@ mod tests {
         assert!(restore(&mut restored, &workspace).expect("restore"));
         assert!(restored.modified);
         assert_eq!(
-            restored.editor.undo_depth(),
+            restored.session.editor.undo_depth(),
             0,
             "restore must start a fresh undo stack"
         );
-        assert_eq!(restored.editor.text().slice(0..5), "dirty");
+        assert_eq!(restored.session.editor.text().slice(0..5), "dirty");
 
         fs::write(&path, "changed on disk\n").expect("changed");
         let mut conflicted = Model::new(EditorState::from_text(""), None);
@@ -489,8 +489,8 @@ mod tests {
         let split = restored.buffers.split.as_ref().expect("split restored");
         assert!(restored.ui.focus.split);
         assert!(restored.modified);
-        assert_eq!(restored.editor.text().slice(0..5), "dirty");
-        assert_eq!(restored.path.as_deref(), Some(right.as_path()));
+        assert_eq!(restored.session.editor.text().slice(0..5), "dirty");
+        assert_eq!(restored.session.path.as_deref(), Some(right.as_path()));
         assert_eq!(split.buffer.path.as_deref(), Some(left.as_path()));
     }
     #[test]
@@ -529,7 +529,7 @@ mod tests {
         assert!(swap.exists());
         recovered.execute_command("conflict-recover");
         assert!(recovered.modified);
-        assert_eq!(recovered.editor.text().slice(0..5), "dirty");
+        assert_eq!(recovered.session.editor.text().slice(0..5), "dirty");
         assert!(recovered.conflict_swaps.is_empty());
         assert!(recovered.save());
         assert_eq!(fs::read_to_string(&path).expect("disk"), "dirtyclean\n");

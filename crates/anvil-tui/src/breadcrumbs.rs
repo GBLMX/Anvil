@@ -11,7 +11,10 @@ use ratatui::{
 use unicode_width::UnicodeWidthStr;
 
 pub(crate) fn visible(model: &Model, inner: Rect) -> bool {
-    model.path.is_some() && model.buffers.help_back.is_none() && !model.welcome && inner.height > 2
+    model.session.path.is_some()
+        && model.buffers.help_back.is_none()
+        && !model.welcome
+        && inner.height > 2
 }
 
 pub(crate) fn render(model: &Model, frame: &mut Frame, area: Rect) {
@@ -58,7 +61,7 @@ pub(crate) enum BreadcrumbTarget {
 
 impl Model {
     pub(crate) fn reveal_breadcrumb_path(&mut self) {
-        let Some(path) = self.path.clone() else {
+        let Some(path) = self.session.path.clone() else {
             return;
         };
         if !self.tree.visible {

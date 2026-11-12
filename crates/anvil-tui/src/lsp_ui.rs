@@ -112,16 +112,17 @@ fn collect_symbols(items: &[serde_json::Value], depth: usize, symbols: &mut Vec<
 
 impl Model {
     pub(crate) fn offset_at_utf16(&self, line: usize, character: usize) -> usize {
-        let Some(start) = self.editor.index().line_to_offset(line) else {
-            return self.editor.text().len_bytes();
+        let Some(start) = self.session.editor.index().line_to_offset(line) else {
+            return self.session.editor.text().len_bytes();
         };
         let end = self
+            .session
             .editor
             .index()
             .offset_to_line(start)
             .map(|position| position.end)
             .unwrap_or(start);
-        let text = self.editor.text().slice(start..end);
+        let text = self.session.editor.text().slice(start..end);
         let mut units = 0;
         for (offset, codepoint) in text.char_indices() {
             if units >= character {
@@ -134,11 +135,16 @@ impl Model {
 
     fn lsp_position(&self) -> Option<(u64, u64)> {
         let position = self
+            .session
             .editor
             .index()
-            .position(self.editor.text(), self.cursor)?;
-        let line_start = self.editor.index().line_to_offset(position.line)?;
-        let prefix = self.editor.text().slice(line_start..self.cursor);
+            .position(self.session.editor.text(), self.session.cursor)?;
+        let line_start = self.session.editor.index().line_to_offset(position.line)?;
+        let prefix = self
+            .session
+            .editor
+            .text()
+            .slice(line_start..self.session.cursor);
         let character = prefix.chars().map(char::len_utf16).sum::<usize>();
         Some((position.line as u64, character as u64))
     }
@@ -149,7 +155,7 @@ impl Model {
         method: &str,
         params: serde_json::Value,
     ) -> bool {
-        let Some(path) = self.path.clone() else {
+        let Some(path) = self.session.path.clone() else {
             self.status.text = "E: lsp requires an open file".to_owned();
             self.dirty = true;
             return false;
@@ -161,7 +167,11 @@ impl Model {
             self.dirty = true;
             return false;
         }
-        let text = self.editor.text().slice(0..self.editor.text().len_bytes());
+        let text = self
+            .session
+            .editor
+            .text()
+            .slice(0..self.session.editor.text().len_bytes());
         if let Err(error) = self.sync_lsp_document(&path, text) {
             self.status.text = format!("E: lsp request: {error}");
             self.dirty = true;
@@ -196,7 +206,7 @@ impl Model {
             self.language
                 .lsp_requests
                 .pending_edit_revision
-                .insert(id, self.editor.revision());
+                .insert(id, self.session.editor.revision());
             self.language
                 .lsp_requests
                 .pending_edit_path
@@ -231,8 +241,8 @@ impl Model {
 
     pub(crate) fn buffer_revisions(&self) -> HashMap<PathBuf, u64> {
         let mut revisions = HashMap::new();
-        if let Some(path) = &self.path {
-            revisions.insert(path.clone(), self.editor.revision());
+        if let Some(path) = &self.session.path {
+            revisions.insert(path.clone(), self.session.editor.revision());
         }
         for buffer in &self.buffers.entries {
             if let Some(path) = &buffer.path {
@@ -255,7 +265,7 @@ impl Model {
         self.cancel_completion();
         self.cancel_code_actions();
         self.overlays.lsp_results.hover = None;
-        let Some(path) = self.path.clone() else {
+        let Some(path) = self.session.path.clone() else {
             self.status.text = "E: no file".to_owned();
             self.dirty = true;
             return;
@@ -271,9 +281,10 @@ impl Model {
             return;
         }
         let current = self
+            .session
             .editor
             .index()
-            .position(self.editor.text(), self.cursor)
+            .position(self.session.editor.text(), self.session.cursor)
             .map(|position| position.line)
             .unwrap_or(0);
         let primary: Vec<&crate::lsp::Diagnostic> = if diagnostics
@@ -313,7 +324,7 @@ impl Model {
             return;
         };
         self.record_jump();
-        self.cursor = self.offset_at_utf16(line, character);
+        self.session.cursor = self.offset_at_utf16(line, character);
         self.open_diagnostic_peek(path, line as u32, character as u32);
         let index = positions
             .iter()
@@ -371,7 +382,12 @@ impl Model {
         self.cancel_signature_help();
         self.overlays.lsp_results.hover = None;
         self.ui.diagnostic_peek = None;
-        let Some(uri) = self.path.as_ref().map(|path| lsp_worker::file_uri(path)) else {
+        let Some(uri) = self
+            .session
+            .path
+            .as_ref()
+            .map(|path| lsp_worker::file_uri(path))
+        else {
             return;
         };
         let Some((line, character)) = self.lsp_position() else {
@@ -443,7 +459,12 @@ impl Model {
         self.overlays.lsp_results.hover = None;
         self.ui.diagnostic_peek = None;
         self.cancel_code_actions();
-        let Some(uri) = self.path.as_ref().map(|path| lsp_worker::file_uri(path)) else {
+        let Some(uri) = self
+            .session
+            .path
+            .as_ref()
+            .map(|path| lsp_worker::file_uri(path))
+        else {
             return;
         };
         let Some((line, character)) = self.lsp_position() else {
@@ -498,7 +519,12 @@ impl Model {
         self.cancel_completion();
         self.ui.diagnostic_peek = None;
         self.cancel_code_actions();
-        let Some(uri) = self.path.as_ref().map(|path| lsp_worker::file_uri(path)) else {
+        let Some(uri) = self
+            .session
+            .path
+            .as_ref()
+            .map(|path| lsp_worker::file_uri(path))
+        else {
             return;
         };
         let Some((line, character)) = self.lsp_position() else {
@@ -526,7 +552,12 @@ impl Model {
         self.cancel_references();
         self.overlays.lsp_results.hover = None;
         self.ui.diagnostic_peek = None;
-        let Some(uri) = self.path.as_ref().map(|path| lsp_worker::file_uri(path)) else {
+        let Some(uri) = self
+            .session
+            .path
+            .as_ref()
+            .map(|path| lsp_worker::file_uri(path))
+        else {
             return;
         };
         let Some((line, character)) = self.lsp_position() else {
@@ -553,7 +584,12 @@ impl Model {
         self.cancel_document_highlights();
         self.overlays.lsp_results.hover = None;
         self.ui.diagnostic_peek = None;
-        let Some(uri) = self.path.as_ref().map(|path| lsp_worker::file_uri(path)) else {
+        let Some(uri) = self
+            .session
+            .path
+            .as_ref()
+            .map(|path| lsp_worker::file_uri(path))
+        else {
             return;
         };
         let Some((line, character)) = self.lsp_position() else {
@@ -590,7 +626,12 @@ impl Model {
         self.cancel_call_hierarchy();
         self.overlays.lsp_results.hover = None;
         self.ui.diagnostic_peek = None;
-        let Some(uri) = self.path.as_ref().map(|path| lsp_worker::file_uri(path)) else {
+        let Some(uri) = self
+            .session
+            .path
+            .as_ref()
+            .map(|path| lsp_worker::file_uri(path))
+        else {
             return;
         };
         let Some((line, character)) = self.lsp_position() else {
@@ -651,7 +692,12 @@ impl Model {
         self.cancel_completion();
         self.ui.diagnostic_peek = None;
         self.cancel_code_actions();
-        let Some(uri) = self.path.as_ref().map(|path| lsp_worker::file_uri(path)) else {
+        let Some(uri) = self
+            .session
+            .path
+            .as_ref()
+            .map(|path| lsp_worker::file_uri(path))
+        else {
             return;
         };
         let Some((line, character)) = self.lsp_position() else {
@@ -685,7 +731,12 @@ impl Model {
             self.dirty = true;
             return;
         }
-        let Some(uri) = self.path.as_ref().map(|path| lsp_worker::file_uri(path)) else {
+        let Some(uri) = self
+            .session
+            .path
+            .as_ref()
+            .map(|path| lsp_worker::file_uri(path))
+        else {
             return;
         };
         let Some((line, character)) = self.lsp_position() else {
@@ -707,7 +758,7 @@ impl Model {
         self.cancel_code_actions();
         self.overlays.lsp_results.hover = None;
         self.ui.diagnostic_peek = None;
-        let Some(path) = self.path.clone() else {
+        let Some(path) = self.session.path.clone() else {
             return;
         };
         let uri = lsp_worker::file_uri(&path);
@@ -715,17 +766,19 @@ impl Model {
             return;
         };
         let line_start = self
+            .session
             .editor
             .index()
             .line_to_offset(line as usize)
             .unwrap_or(0);
         let line_end = self
+            .session
             .editor
             .index()
             .offset_to_line(line_start)
             .map(|position| position.end)
             .unwrap_or(line_start);
-        let line_text = self.editor.text().slice(line_start..line_end);
+        let line_text = self.session.editor.text().slice(line_start..line_end);
         let line_units = line_text.chars().map(char::len_utf16).sum::<usize>();
         let diagnostics = self
             .language
@@ -790,7 +843,7 @@ impl Model {
         self.cancel_workspace_symbols();
         self.overlays.lsp_results.hover = None;
         self.ui.diagnostic_peek = None;
-        let Some(path) = self.path.as_ref() else {
+        let Some(path) = self.session.path.as_ref() else {
             return;
         };
         let params = serde_json::json!({"query": ""});
@@ -845,14 +898,14 @@ impl Model {
             return;
         };
         self.record_jump();
-        if self.path.as_ref() != Some(&symbol.path)
+        if self.session.path.as_ref() != Some(&symbol.path)
             && let Err(error) = self.open_path(&symbol.path)
         {
             self.status.text = format!("E: {error}");
             self.dirty = true;
             return;
         }
-        self.cursor = self.offset_at_utf16(symbol.line, symbol.character);
+        self.session.cursor = self.offset_at_utf16(symbol.line, symbol.character);
         self.status.text = format!("symbol {}", symbol.name);
         self.dirty = true;
     }
@@ -925,7 +978,12 @@ impl Model {
         self.cancel_document_symbols();
         self.overlays.lsp_results.hover = None;
         self.ui.diagnostic_peek = None;
-        let Some(uri) = self.path.as_ref().map(|path| lsp_worker::file_uri(path)) else {
+        let Some(uri) = self
+            .session
+            .path
+            .as_ref()
+            .map(|path| lsp_worker::file_uri(path))
+        else {
             return;
         };
         let params = serde_json::json!({"textDocument": {"uri": uri}});
@@ -957,7 +1015,7 @@ impl Model {
             return;
         };
         self.record_jump();
-        self.cursor = self.offset_at_utf16(symbol.line, symbol.character);
+        self.session.cursor = self.offset_at_utf16(symbol.line, symbol.character);
         self.status.text = format!("symbol {}", symbol.name);
         self.dirty = true;
     }
@@ -980,14 +1038,14 @@ impl Model {
             return;
         };
         self.record_jump();
-        if self.path.as_ref() != Some(&reference.path)
+        if self.session.path.as_ref() != Some(&reference.path)
             && let Err(error) = self.open_path(&reference.path)
         {
             self.status.text = format!("E: {error}");
             self.dirty = true;
             return;
         }
-        self.cursor = self.offset_at_utf16(reference.line, reference.character);
+        self.session.cursor = self.offset_at_utf16(reference.line, reference.character);
         self.status.text = format!(
             "reference {}:{}",
             reference.path.display(),
@@ -1014,14 +1072,14 @@ impl Model {
             return;
         };
         self.record_jump();
-        if self.path.as_ref() != Some(&item.path)
+        if self.session.path.as_ref() != Some(&item.path)
             && let Err(error) = self.open_path(&item.path)
         {
             self.status.text = format!("E: {error}");
             self.dirty = true;
             return;
         }
-        self.cursor = self.offset_at_utf16(item.line, item.character);
+        self.session.cursor = self.offset_at_utf16(item.line, item.character);
         let direction = match calls.direction {
             CallHierarchyDirection::Incoming => "incoming",
             CallHierarchyDirection::Outgoing => "outgoing",
@@ -1041,7 +1099,7 @@ impl Model {
         self.prune_edit_requests();
         self.overlays.lsp_results.hover = None;
         self.ui.diagnostic_peek = None;
-        let Some(path) = self.path.clone() else {
+        let Some(path) = self.session.path.clone() else {
             return false;
         };
         let uri = lsp_worker::file_uri(&path);
@@ -1174,23 +1232,23 @@ impl Model {
         if let Some((start_line, start_char, end_line, end_char)) = replace {
             let start = self.offset_at_utf16(start_line, start_char);
             let end = self.offset_at_utf16(end_line, end_char).max(start);
-            self.editor.set_selection_bytes(start, end);
-            self.editor.delete(start..end);
-            self.editor.insert(start, &insert);
-            self.cursor = start + insert.len();
+            self.session.editor.set_selection_bytes(start, end);
+            self.session.editor.delete(start..end);
+            self.session.editor.insert(start, &insert);
+            self.session.cursor = start + insert.len();
             self.modified = true;
             if let Some(snippet) = snippet.take() {
                 self.start_snippet(&snippet, start);
             }
         } else {
-            let selections = self.editor.selection_bytes();
+            let selections = self.session.editor.selection_bytes();
             if selections.len() != 1 {
                 snippet = None;
             }
             let start = selections
                 .first()
                 .map(|(anchor, head)| (*anchor).min(*head))
-                .unwrap_or(self.cursor);
+                .unwrap_or(self.session.cursor);
             self.insert_text(&insert);
             if let Some(snippet) = snippet {
                 self.start_snippet(&snippet, start);
@@ -1218,8 +1276,8 @@ impl Model {
             return;
         };
         let mirrors = ranges.len();
-        self.editor.set_selections_bytes(ranges);
-        self.cursor = start;
+        self.session.editor.set_selections_bytes(ranges);
+        self.session.cursor = start;
         if mirrors > 1 {
             self.status.text = format!("snippet stop ({mirrors} mirrors)");
         }
@@ -1228,8 +1286,8 @@ impl Model {
 
     fn select_snippet_groups(&mut self, ranges: Vec<(usize, usize)>) {
         if let Some((start, _)) = ranges.first().copied() {
-            self.editor.set_selections_bytes(ranges);
-            self.cursor = start;
+            self.session.editor.set_selections_bytes(ranges);
+            self.session.cursor = start;
             self.dirty = true;
         }
     }
@@ -1244,9 +1302,12 @@ impl Model {
             self.select_snippet_groups(ranges);
             return true;
         }
-        let end = session.current().map(|(_, end)| end).unwrap_or(self.cursor);
-        self.cursor = end;
-        self.editor.set_selection_bytes(end, end);
+        let end = session
+            .current()
+            .map(|(_, end)| end)
+            .unwrap_or(self.session.cursor);
+        self.session.cursor = end;
+        self.session.editor.set_selection_bytes(end, end);
         self.dirty = true;
         true
     }

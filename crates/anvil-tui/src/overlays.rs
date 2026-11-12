@@ -62,14 +62,15 @@ impl Model {
             self.dirty = true;
             return;
         };
-        if self.path.as_deref() != Some(problem.path.as_path())
+        if self.session.path.as_deref() != Some(problem.path.as_path())
             && let Err(error) = self.open_path(&problem.path)
         {
             self.status.text = format!("E: {error}");
             self.dirty = true;
             return;
         }
-        self.cursor = self.offset_at_utf16(problem.line as usize, problem.character as usize);
+        self.session.cursor =
+            self.offset_at_utf16(problem.line as usize, problem.character as usize);
         self.ui.focus.tree = false;
         self.ui.focus.split = false;
         self.ui.problems.visible = false;
@@ -106,7 +107,7 @@ impl Model {
             .sum();
         self.ui.diagnostic_peek = Some(DiagnosticPeek {
             path,
-            revision: self.editor.revision(),
+            revision: self.session.editor.revision(),
             line,
             character,
             focus: self.ui.focus,
@@ -139,8 +140,8 @@ impl Model {
 
     pub(crate) fn prune_diagnostic_peek(&mut self) {
         let stale = self.ui.diagnostic_peek.as_ref().is_some_and(|peek| {
-            self.path.as_deref() != Some(peek.path.as_path())
-                || peek.revision != self.editor.revision()
+            self.session.path.as_deref() != Some(peek.path.as_path())
+                || peek.revision != self.session.editor.revision()
         });
         if stale {
             self.ui.diagnostic_peek = None;
