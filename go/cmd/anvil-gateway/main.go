@@ -54,6 +54,12 @@ func main() {
 		fmt.Fprintf(os.Stderr, "anvil-gateway: %v\n", storeErr)
 		os.Exit(2)
 	}
+	if disabled, err := store.DisablePersistedRevoked(); err != nil {
+		fmt.Fprintf(os.Stderr, "anvil-gateway: apply revocations: %v\n", err)
+		os.Exit(2)
+	} else if len(disabled) > 0 {
+		log.Printf("gateway: disabled revoked plugins: %s", strings.Join(disabled, ","))
+	}
 	if *installBundled != "" {
 		if *installPlugin != "" {
 			fmt.Fprintln(os.Stderr, "anvil-gateway: -install-plugin and -install-bundled are mutually exclusive")

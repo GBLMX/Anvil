@@ -649,3 +649,36 @@ func TestStorePersistsRevocationsForUninstalledPackages(t *testing.T) {
 		t.Fatal("revoked package must not be installable")
 	}
 }
+
+func TestStoreSweepsPersistedRevocations(t *testing.T) {
+	store, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	digest := testDigest(7)
+	if err := store.UpdateState(func(state *StoreState) error {
+		state.Plugins["demo"] = InstalledPlugin{
+			ActiveDigest: digest,
+			Enabled:      true,
+			Versions:     []InstalledVersion{{Digest: digest, Version: "1.0.0"}},
+		}
+		state.RevokedPackages = map[string]string{digest: "demo"}
+		return nil
+	}); err != nil {
+		t.Fatalf("update state: %v", err)
+	}
+	disabled, err := store.DisablePersistedRevoked()
+	if err != nil {
+		t.Fatalf("sweep revocations: %v", err)
+	}
+	if len(disabled) != 1 || disabled[0] != "demo" {
+		t.Fatalf("unexpected disabled plugins: %v", disabled)
+	}
+	state, err := store.ReadState()
+	if err != nil {
+		t.Fatalf("read state: %v", err)
+	}
+	if state.Plugins["demo"].Enabled {
+		t.Fatal("persisted revoked plugin must be disabled")
+	}
+}

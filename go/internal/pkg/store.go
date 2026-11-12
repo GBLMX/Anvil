@@ -762,3 +762,44 @@ func revokedOwner(state *StoreState, digest string) (string, bool) {
 	}
 	return "", false
 }
+
+type storedRevocations struct {
+	digests map[string]string
+}
+
+func (stored storedRevocations) PackageRevoked(digest, pluginID string) bool {
+	for revoked, owner := range stored.digests {
+		if strings.EqualFold(revoked, digest) && owner == pluginID {
+			return true
+		}
+	}
+	return false
+}
+
+func (stored storedRevocations) PackageDigests() map[string]string {
+	digests := make(map[string]string, len(stored.digests))
+	for digest, pluginID := range stored.digests {
+		digests[digest] = pluginID
+	}
+	return digests
+}
+
+// DisablePersistedRevoked applies the accepted revocation set stored in
+// state.json. It is a no-op when no enabled plugin is revoked.
+func (s *Store) DisablePersistedRevoked() ([]string, error) {
+	state, err := s.ReadState()
+	if err != nil {
+		return nil, err
+	}
+	needsSweep := false
+	for id, plugin := range state.Plugins {
+		if plugin.Enabled && (storedRevocations{state.RevokedPackages}).PackageRevoked(plugin.ActiveDigest, id) {
+			needsSweep = true
+			break
+		}
+	}
+	if !needsSweep {
+		return nil, nil
+	}
+	return s.DisableRevokedPackages(storedRevocations{state.RevokedPackages})
+}
