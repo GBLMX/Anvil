@@ -284,8 +284,8 @@ post-`0.5.0` feature line.
 - Model construction, config reload, plugin/keymap loading, dispatch, count,
   leader, read-only guard, and syntax polling moved into `model.rs`; LSP worker
   lifecycle, polling, and diagnostic helpers moved into `lsp_runtime.rs`;
-  keymap context resolution moved into `keymap.rs`. `lib.rs` is now 1,008
-  lines.
+  keymap context resolution moved into `keymap.rs`; TUI state types moved into
+  `state.rs`. `lib.rs` is now 219 lines.
 
 ### Fixed
 - The file tree now opens the command line on `:`, so commands such as
