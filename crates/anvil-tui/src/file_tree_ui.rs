@@ -688,7 +688,7 @@ impl Model {
             .collect()
     }
 
-    fn sync_tree_watches(&mut self) {
+    pub(crate) fn sync_tree_watches(&mut self) {
         let workspace = self.workspace.path.clone();
         let mut directories: BTreeMap<PathBuf, Vec<PathBuf>> = BTreeMap::new();
         directories

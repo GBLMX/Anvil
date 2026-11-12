@@ -90,10 +90,40 @@ impl Model {
             Ok(()) => {
                 self.stop_root_file_worker(&canonical);
                 self.workspace.root_gateways.remove(&canonical);
+                self.tree
+                    .entries
+                    .retain(|entry| !entry.path.starts_with(&canonical));
+                self.tree.pending_select = None;
+                if self
+                    .tree
+                    .selected
+                    .is_some_and(|selected| selected >= self.tree.entries.len())
+                {
+                    self.tree.selected = self.tree.entries.len().checked_sub(1);
+                }
+                if self
+                    .overlays
+                    .preview
+                    .path
+                    .as_deref()
+                    .is_some_and(|path| Path::new(path).starts_with(&canonical))
+                {
+                    self.clear_preview();
+                }
+                if let Some(fuzzy) = self.overlays.fuzzy.as_mut() {
+                    fuzzy
+                        .entries
+                        .retain(|entry| !Path::new(entry).starts_with(&canonical));
+                }
+                self.fuzzy_refresh();
+                self.git
+                    .status
+                    .retain(|path, _| !path.starts_with(&canonical));
                 self.status.text = format!("workspace root removed: {}", canonical.display());
             }
             Err(error) => self.status.text = format!("E: {error}"),
         }
+        self.sync_tree_watches();
         self.file.dirty = true;
     }
 
@@ -155,5 +185,67 @@ mod trust_tests {
             .find(|root| root.path == canonical)
             .unwrap();
         assert!(!added.trusted);
+    }
+
+    #[test]
+    fn removing_root_drops_tree_fuzzy_and_preview_state() {
+        let secondary = tempfile::tempdir().expect("secondary");
+        let secondary = secondary.path().canonicalize().expect("canonical");
+        let mut model = Model::new(EditorState::from_text(""), None);
+        model
+            .workspace
+            .roots
+            .add(&secondary, true)
+            .expect("add root");
+        let kept = model.workspace.path.join("keep.rs");
+        let dropped = secondary.join("drop.rs");
+        model.tree.entries = vec![
+            TreeEntry {
+                path: kept.clone(),
+                depth: 0,
+                is_dir: false,
+                ino: 0,
+                expanded: false,
+            },
+            TreeEntry {
+                path: dropped.clone(),
+                depth: 0,
+                is_dir: false,
+                ino: 0,
+                expanded: false,
+            },
+        ];
+        model.tree.selected = Some(1);
+        model.overlays.fuzzy = Some(FuzzyState {
+            generation: 1,
+            query: String::new(),
+            entries: vec![dropped.to_string_lossy().into_owned()],
+            filtered: vec![0],
+            selected: 0,
+        });
+        model.overlays.preview.path = Some(dropped.to_string_lossy().into_owned());
+        model.git.status.insert(dropped.clone(), 'M');
+
+        model.remove_workspace_root(secondary.to_str().expect("utf8"));
+
+        assert!(
+            !model
+                .workspace
+                .roots
+                .list()
+                .iter()
+                .any(|root| root.path == secondary)
+        );
+        assert!(model.tree.entries.iter().all(|entry| entry.path == kept));
+        assert_eq!(model.tree.selected, Some(0));
+        assert!(
+            model
+                .overlays
+                .fuzzy
+                .as_ref()
+                .is_none_or(|fuzzy| fuzzy.entries.is_empty())
+        );
+        assert!(model.overlays.preview.path.is_none());
+        assert!(model.git.status.is_empty());
     }
 }
