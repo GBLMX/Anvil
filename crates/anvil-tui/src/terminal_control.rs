@@ -144,7 +144,9 @@ impl Model {
             return false;
         }
         if key.code == KeyCode::Char('t') && key.modifiers.contains(KeyModifiers::CONTROL) {
-            self.toggle_terminal_panel();
+            if toggles_terminal_panel(key) {
+                self.toggle_terminal_panel();
+            }
             return true;
         }
         if let Some(bytes) = terminal_key_bytes(key) {
@@ -152,6 +154,10 @@ impl Model {
         }
         true
     }
+}
+
+fn toggles_terminal_panel(key: KeyEvent) -> bool {
+    key.kind == crossterm::event::KeyEventKind::Press
 }
 
 fn terminal_key_bytes(key: KeyEvent) -> Option<Vec<u8>> {
@@ -252,6 +258,18 @@ mod tests {
         assert_eq!(panel_height(40), 13);
         assert_eq!(terminal_panel_size(120, 40), (118, 11));
         assert_eq!(terminal_panel_size(10, 5), (20, 5));
+    }
+
+    #[test]
+    fn terminal_toggle_ignores_repeat_events() {
+        let press = KeyEvent::new(KeyCode::Char('t'), KeyModifiers::CONTROL);
+        let repeat = KeyEvent::new_with_kind(
+            KeyCode::Char('t'),
+            KeyModifiers::CONTROL,
+            crossterm::event::KeyEventKind::Repeat,
+        );
+        assert!(toggles_terminal_panel(press));
+        assert!(!toggles_terminal_panel(repeat));
     }
 
     #[test]

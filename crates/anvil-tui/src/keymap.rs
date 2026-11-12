@@ -346,6 +346,8 @@ pub(crate) enum PendingCommand {
     YankLines,
     DeleteWords(WordMotion),
     YankWords(WordMotion),
+    FileStart,
+    CenterCursor,
 }
 
 impl PendingCommand {
@@ -397,7 +399,9 @@ impl PendingCommand {
             | OperatorParagraph { .. }
             | OperatorTag { .. }
             | Count { .. }
-            | BufferPicker => None,
+            | BufferPicker
+            | FileStart
+            | CenterCursor => None,
         }
     }
 
@@ -459,6 +463,8 @@ impl PendingCommand {
                 format!("{} {} tag", operator_name(operator), around(is_around))
             }
             Self::Count { .. } => "count".to_owned(),
+            Self::FileStart => "file start".to_owned(),
+            Self::CenterCursor => "center cursor".to_owned(),
             _ => "command".to_owned(),
         }
     }
@@ -613,6 +619,7 @@ pub(crate) fn pending_action(
             KeyCode::Char('o') => Some(PendingCommand::OutgoingCalls),
             KeyCode::Char(';') => Some(PendingCommand::ChangeBack),
             KeyCode::Char(',') => Some(PendingCommand::ChangeForward),
+            KeyCode::Char('g') => Some(PendingCommand::FileStart),
             _ => None,
         };
     }
@@ -621,6 +628,7 @@ pub(crate) fn pending_action(
             KeyCode::Char('a') => Some(PendingCommand::ToggleFold),
             KeyCode::Char('M') => Some(PendingCommand::CloseAllFolds),
             KeyCode::Char('R') => Some(PendingCommand::OpenAllFolds),
+            KeyCode::Char('z') => Some(PendingCommand::CenterCursor),
             _ => None,
         };
     }

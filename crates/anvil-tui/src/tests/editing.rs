@@ -945,3 +945,38 @@ fn za_zm_zr_fold_keys_work_through_dispatch() {
     handle_event(&mut model, key(KeyCode::Char('R')));
     assert!(model.overlays.lsp_results.folded.is_empty());
 }
+
+#[test]
+fn gg_and_zz_keys_are_real_commands() {
+    let text = (0..40)
+        .map(|line| format!("line {line}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let mut model = Model::new(EditorState::from_text(&text), None);
+    model.start_page.welcome = false;
+    model.session.cursor = text.len();
+    model.view.viewport_height = 11;
+
+    handle_event(&mut model, key(KeyCode::Char('g')));
+    handle_event(&mut model, key(KeyCode::Char('g')));
+    assert_eq!(model.session.cursor, 0);
+
+    model.session.cursor = model
+        .session
+        .editor
+        .index()
+        .line_to_offset(20)
+        .expect("line 20");
+    handle_event(&mut model, key(KeyCode::Char('z')));
+    handle_event(&mut model, key(KeyCode::Char('z')));
+    assert_eq!(model.view.scroll, 16);
+}
+
+#[test]
+fn repeated_missing_prefix_keeps_pending() {
+    let mut model = Model::new(EditorState::from_text("alpha"), None);
+    model.start_page.welcome = false;
+    handle_event(&mut model, key(KeyCode::Char('c')));
+    handle_event(&mut model, key(KeyCode::Char('c')));
+    assert_eq!(model.input.pending, Some('c'));
+}

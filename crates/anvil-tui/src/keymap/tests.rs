@@ -149,6 +149,14 @@ fn pending_g_resolves_navigation_commands() {
         Some(PendingCommand::ChangeForward)
     );
     assert_eq!(
+        pending_action('g', key(KeyCode::Char('g'), KeyModifiers::NONE), false),
+        Some(PendingCommand::FileStart)
+    );
+    assert_eq!(
+        pending_action('z', key(KeyCode::Char('z'), KeyModifiers::NONE), false),
+        Some(PendingCommand::CenterCursor)
+    );
+    assert_eq!(
         pending_action('z', key(KeyCode::Char('a'), KeyModifiers::NONE), false),
         Some(PendingCommand::ToggleFold)
     );

@@ -179,6 +179,14 @@ fn execute_pending_command(
         PendingCommand::ToggleFold => model.toggle_fold_at_cursor(),
         PendingCommand::CloseAllFolds => model.close_all_folds(),
         PendingCommand::OpenAllFolds => model.open_all_folds(),
+        PendingCommand::FileStart => {
+            let _ = model.take_count();
+            model.move_file_start();
+        }
+        PendingCommand::CenterCursor => {
+            let _ = model.take_count();
+            model.center_cursor();
+        }
         PendingCommand::Diagnostic(forward) => model.jump_diagnostic(forward),
         PendingCommand::Count { pending, digit } => {
             model.push_count(digit);
@@ -774,8 +782,9 @@ fn handle_key(model: &mut Model, key: KeyPress) {
         let object_pending = model.input.object_pending;
         model.input.object_pending = false;
         let command = resolve_pending(pending, key, object_pending, &model.config.keymap);
-        if command.is_none() && pending == ' ' && key.code == KeyCode::Char(' ') && text_input {
-            model.begin_pending(' ');
+        if command.is_none() && !object_pending && key.code == KeyCode::Char(pending) && text_input
+        {
+            model.begin_pending(pending);
             return;
         }
         if command.is_none() && !object_pending && !matches!(pending, 'g' | ']' | '[') {

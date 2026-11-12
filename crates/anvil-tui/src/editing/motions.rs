@@ -82,6 +82,37 @@ impl Model {
         }
     }
 
+    pub(crate) fn move_file_start(&mut self) {
+        let Some(offset) =
+            self.session
+                .editor
+                .index()
+                .offset_at_display_column(self.session.editor.text(), 0, 0)
+        else {
+            return;
+        };
+        self.set_caret(offset);
+        self.view.scroll = 0;
+        self.view.scroll_subrow = 0;
+        self.file.dirty = true;
+    }
+
+    pub(crate) fn center_cursor(&mut self) {
+        let Some(position) = self
+            .session
+            .editor
+            .index()
+            .position(self.session.editor.text(), self.session.cursor)
+        else {
+            return;
+        };
+        let height = usize::from(self.view.viewport_height.saturating_sub(2)).max(1);
+        self.view.scroll = position.line.saturating_sub(height / 2);
+        self.view.scroll_subrow = 0;
+        self.normalize_scroll();
+        self.file.dirty = true;
+    }
+
     pub(crate) fn move_home(&mut self) {
         if let Some(line) = self
             .session
