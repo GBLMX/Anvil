@@ -99,6 +99,7 @@ Normal mode
   :lsp-start          ensure the detected language server is active
   :lsp-stop           stop the active language server
   :format              format the current document
+  :breakpoint          toggle a breakpoint on the current line
   :symbols             document symbols
   :problems           toggle the problems panel
   :task <command>      run a bounded background shell task in the workspace
