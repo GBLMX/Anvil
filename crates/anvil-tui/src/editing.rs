@@ -47,7 +47,7 @@ impl Model {
             return;
         }
         let Some(range) = self.inner_word_range() else {
-            self.status = "E: no word".to_owned();
+            self.status.text = "E: no word".to_owned();
             self.dirty = true;
             return;
         };
@@ -68,7 +68,7 @@ impl Model {
             return;
         }
         let Some(range) = self.inner_quote_range(quote) else {
-            self.status = "E: no quote pair".to_owned();
+            self.status.text = "E: no quote pair".to_owned();
             self.dirty = true;
             return;
         };
@@ -201,7 +201,7 @@ impl Model {
     pub(crate) fn apply_word_operator(&mut self, operator: char, around: bool, count: usize) {
         let range = self.word_object_range(around, count);
         let Some(range) = range else {
-            self.status = "E: no word object".to_owned();
+            self.status.text = "E: no word object".to_owned();
             self.dirty = true;
             return;
         };
@@ -220,7 +220,7 @@ impl Model {
             self.inner_quote_range(quote)
         };
         let Some(range) = range else {
-            self.status = "E: no quote object".to_owned();
+            self.status.text = "E: no quote object".to_owned();
             self.dirty = true;
             return;
         };
@@ -234,7 +234,7 @@ impl Model {
 
     pub(crate) fn apply_bracket_operator(&mut self, operator: char, open: char, around: bool) {
         let Some(range) = self.bracket_range(open, around) else {
-            self.status = "E: no bracket object".to_owned();
+            self.status.text = "E: no bracket object".to_owned();
             self.dirty = true;
             return;
         };
@@ -284,7 +284,7 @@ impl Model {
 
     pub(crate) fn apply_paragraph_operator(&mut self, operator: char, around: bool, count: usize) {
         let Some(range) = self.paragraph_object_range(around, count) else {
-            self.status = "E: no paragraph object".to_owned();
+            self.status.text = "E: no paragraph object".to_owned();
             self.dirty = true;
             return;
         };
@@ -307,7 +307,7 @@ impl Model {
 
     pub(crate) fn apply_tag_operator(&mut self, operator: char, around: bool) {
         let Some(range) = self.tag_range(around) else {
-            self.status = "E: no tag object".to_owned();
+            self.status.text = "E: no tag object".to_owned();
             self.dirty = true;
             return;
         };
@@ -565,7 +565,7 @@ impl Model {
         let text = self.editor.text().slice(0..self.editor.text().len_bytes());
         let cursor = self.cursor.min(text.len());
         let Some((start, end)) = word_bounds(&text, cursor) else {
-            self.status = "E: no word under cursor".to_owned();
+            self.status.text = "E: no word under cursor".to_owned();
             self.dirty = true;
             return;
         };
@@ -597,7 +597,7 @@ impl Model {
             .map(|(start, _)| *start)
             .unwrap_or(cursor);
         self.begin_insert(InsertOrigin::InsertHere);
-        self.status = format!("{} selections", self.editor.selection_bytes().len());
+        self.status.text = format!("{} selections", self.editor.selection_bytes().len());
         self.dirty = true;
     }
 
@@ -622,7 +622,7 @@ impl Model {
         carets.sort_unstable();
         carets.dedup();
         if carets.len() < 2 || !self.editor.set_selections_bytes(carets) {
-            self.status = "E: no lines to split".to_owned();
+            self.status.text = "E: no lines to split".to_owned();
             self.dirty = true;
             return;
         }
@@ -632,7 +632,7 @@ impl Model {
             .first()
             .map(|(start, _)| *start)
             .unwrap_or(self.cursor);
-        self.status = format!("{} cursors", self.editor.selection_bytes().len());
+        self.status.text = format!("{} cursors", self.editor.selection_bytes().len());
         self.dirty = true;
     }
 
@@ -669,7 +669,7 @@ impl Model {
             return;
         }
         self.cursor = target_offset;
-        self.status = format!("{} cursors", self.editor.selection_bytes().len());
+        self.status.text = format!("{} cursors", self.editor.selection_bytes().len());
         self.dirty = true;
     }
 
@@ -680,7 +680,7 @@ impl Model {
         }
         self.sync_cursor_from_selection();
         self.editor.set_selection_bytes(self.cursor, self.cursor);
-        self.status = "cursors merged".to_owned();
+        self.status.text = "cursors merged".to_owned();
         self.dirty = true;
     }
 
@@ -774,42 +774,42 @@ impl Model {
             return;
         }
         let Some(path) = self.path.as_deref() else {
-            self.status = "E: comment: unnamed buffer".to_owned();
+            self.status.text = "E: comment: unnamed buffer".to_owned();
             self.dirty = true;
             return;
         };
         let Some(style) = comment::comment_style(path) else {
-            self.status = "E: comment: unsupported file type".to_owned();
+            self.status.text = "E: comment: unsupported file type".to_owned();
             self.dirty = true;
             return;
         };
         let lines = self.selected_line_ranges();
         if lines.is_empty() {
-            self.status = "E: comment: no lines".to_owned();
+            self.status.text = "E: comment: no lines".to_owned();
             self.dirty = true;
             return;
         }
         if lines.len() > comment::MAX_COMMENT_LINES {
-            self.status = "E: comment: too many lines".to_owned();
+            self.status.text = "E: comment: too many lines".to_owned();
             self.dirty = true;
             return;
         }
         let text = self.editor.text().slice(0..self.editor.text().len_bytes());
         let Some(edits) = comment::toggle_edits(&text, &lines, style.line) else {
-            self.status = "E: comment: no changes".to_owned();
+            self.status.text = "E: comment: no changes".to_owned();
             self.dirty = true;
             return;
         };
         let count = lines.len();
         if !self.editor.apply_transaction(edits) {
-            self.status = "E: comment: edit failed".to_owned();
+            self.status.text = "E: comment: edit failed".to_owned();
             self.dirty = true;
             return;
         }
         self.sync_cursor_from_selection();
         self.modified = true;
         self.dirty = true;
-        self.status = format!("toggled comment on {count} line(s)");
+        self.status.text = format!("toggled comment on {count} line(s)");
     }
 
     fn selected_line_ranges(&self) -> Vec<std::ops::Range<usize>> {
@@ -980,7 +980,7 @@ impl Model {
             self.sync_cursor_from_selection();
             self.modified = true;
         } else {
-            self.status = "Already at oldest change".to_owned();
+            self.status.text = "Already at oldest change".to_owned();
         }
         self.dirty = true;
     }
@@ -993,7 +993,7 @@ impl Model {
             self.sync_cursor_from_selection();
             self.modified = true;
         } else {
-            self.status = "Already at newest change".to_owned();
+            self.status.text = "Already at newest change".to_owned();
         }
         self.dirty = true;
     }
@@ -1057,7 +1057,7 @@ impl Model {
         };
         if self.editor.yank(start..last.end.max(start)) {
             self.record_register();
-            self.status = format!("{count} lines yanked");
+            self.status.text = format!("{count} lines yanked");
         }
         self.dirty = true;
     }
@@ -1075,7 +1075,7 @@ impl Model {
             '_' => {}
             '+' => {
                 if let Err(error) = clipboard::copy(text) {
-                    self.status = format!("E: {error}");
+                    self.status.text = format!("E: {error}");
                     self.dirty = true;
                 }
             }
@@ -1097,14 +1097,14 @@ impl Model {
                 match clipboard::paste() {
                     Ok(text) => text,
                     Err(error) => {
-                        self.status = format!("E: {error}");
+                        self.status.text = format!("E: {error}");
                         self.dirty = true;
                         return;
                     }
                 }
             } else {
                 let Some(text) = self.editor.register_text(register).map(str::to_owned) else {
-                    self.status = "E: register empty".to_owned();
+                    self.status.text = "E: register empty".to_owned();
                     self.dirty = true;
                     return;
                 };
@@ -1121,7 +1121,7 @@ impl Model {
             self.sync_cursor_from_selection();
             self.modified = true;
         } else {
-            self.status = "E: register empty".to_owned();
+            self.status.text = "E: register empty".to_owned();
         }
         self.dirty = true;
     }

@@ -5,18 +5,18 @@ use super::*;
 impl Model {
     pub(crate) fn begin_surround(&mut self) {
         if self.edit.visual_anchor.is_none() {
-            self.status = "E: surround needs a visual selection".to_owned();
+            self.status.text = "E: surround needs a visual selection".to_owned();
             self.dirty = true;
             return;
         }
         self.edit.modal_layer = Some(ModalLayer::Surround);
-        self.status = "surround: ( [ { < \" ' ` ; Esc cancels".to_owned();
+        self.status.text = "surround: ( [ { < \" ' ` ; Esc cancels".to_owned();
         self.dirty = true;
     }
 
     pub(crate) fn cancel_modal_layer(&mut self) {
         if self.edit.modal_layer.take().is_some() {
-            self.status = "surround cancelled".to_owned();
+            self.status.text = "surround cancelled".to_owned();
             self.dirty = true;
         }
     }
@@ -46,7 +46,7 @@ impl Model {
         self.sync_cursor_from_selection();
         self.modified = true;
         self.exit_visual();
-        self.status = format!("surrounded with {open}{close}");
+        self.status.text = format!("surrounded with {open}{close}");
         self.dirty = true;
     }
 }

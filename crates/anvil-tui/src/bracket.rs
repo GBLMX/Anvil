@@ -268,14 +268,14 @@ impl Model {
 
     pub(crate) fn match_bracket(&mut self) {
         let Some((open, close)) = self.bracket_pair() else {
-            self.status = "no matching bracket".to_owned();
+            self.status.text = "no matching bracket".to_owned();
             self.dirty = true;
             return;
         };
         self.record_jump();
         self.cursor = if self.cursor <= open { close } else { open };
         self.editor.set_selection_bytes(self.cursor, self.cursor);
-        self.status = "matched bracket".to_owned();
+        self.status.text = "matched bracket".to_owned();
         self.dirty = true;
     }
 }

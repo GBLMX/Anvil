@@ -13,7 +13,7 @@ fn wait_until(model: &mut Model, mut predicate: impl FnMut(&Model) -> bool) {
     }
     panic!(
         "timeout waiting for multi-root tree; status={}",
-        model.status
+        model.status.text
     );
 }
 
@@ -87,7 +87,11 @@ fn secondary_root_tree_lists_and_opens_through_owning_gateway() {
     wait_until(&mut model, |model| {
         model.project.search_pending.is_none() && model.overlays.location.stdin_locations.len() == 2
     });
-    assert!(model.status.contains("2 matches"), "{}", model.status);
+    assert!(
+        model.status.text.contains("2 matches"),
+        "{}",
+        model.status.text
+    );
     assert!(
         model
             .overlays

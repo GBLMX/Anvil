@@ -248,7 +248,7 @@ impl Model {
             {
                 Ok(path) => path,
                 Err(error) => {
-                    self.status = format!("E: {error}");
+                    self.status.text = format!("E: {error}");
                     self.dirty = true;
                     return;
                 }
@@ -257,20 +257,20 @@ impl Model {
             let path = match self.absolute_path(Path::new(&location.path)) {
                 Ok(path) => path,
                 Err(error) => {
-                    self.status = format!("E: {error}");
+                    self.status.text = format!("E: {error}");
                     self.dirty = true;
                     return;
                 }
             };
             if !path.starts_with(&self.workspace.path) {
-                self.status = format!("E: location outside workspace: {}", location.path);
+                self.status.text = format!("E: location outside workspace: {}", location.path);
                 self.dirty = true;
                 return;
             }
             path
         };
         if !path.is_file() {
-            self.status = format!("E: location not found: {}", location.path);
+            self.status.text = format!("E: location not found: {}", location.path);
             self.dirty = true;
             return;
         }
@@ -278,7 +278,7 @@ impl Model {
         if self.path.as_deref() != Some(path.as_path())
             && let Err(error) = self.open_path(&path)
         {
-            self.status = format!("E: {error}");
+            self.status.text = format!("E: {error}");
             self.dirty = true;
             return;
         }
@@ -287,7 +287,7 @@ impl Model {
             .saturating_sub(1)
             .min(self.editor.index().len_lines().saturating_sub(1));
         self.cursor = self.offset_at_utf16(line, location.column.saturating_sub(1));
-        self.status = format!(
+        self.status.text = format!(
             "location {}:{}:{}",
             location.path, location.line, location.column
         );
@@ -429,7 +429,7 @@ mod tests {
             Some(source.canonicalize().expect("canonical").as_path())
         );
         assert_eq!(model.cursor, model.editor.text().len_bytes());
-        assert!(model.status.starts_with("location src/main.rs:99:99"));
+        assert!(model.status.text.starts_with("location src/main.rs:99:99"));
     }
 
     #[test]
@@ -446,7 +446,7 @@ mod tests {
         model.set_pipe_locations("../outside.rs:1:1: error");
         model.open_stdin_location();
         assert!(model.path.is_none());
-        assert!(model.status.contains("outside workspace"));
+        assert!(model.status.text.contains("outside workspace"));
     }
 
     #[test]
@@ -466,6 +466,6 @@ mod tests {
         model.set_pipe_locations(&location);
         model.open_stdin_location();
         assert_eq!(model.path.as_deref(), Some(source.as_path()));
-        assert!(model.status.starts_with("location"));
+        assert!(model.status.text.starts_with("location"));
     }
 }

@@ -45,7 +45,7 @@ pub(crate) enum PkgInstallState {
 impl Model {
     pub(crate) fn start_pkg_install(&mut self, url: &str) {
         let Some(host) = url_host(url) else {
-            self.status = "E: pkg install requires an https URL".to_owned();
+            self.status.text = "E: pkg install requires an https URL".to_owned();
             self.dirty = true;
             return;
         };
@@ -53,7 +53,7 @@ impl Model {
         match GatewaySession::start_installer(&self.workspace.path, &host) {
             Ok((session, client)) => self.plugins.installer = Some((session, client)),
             Err(error) => {
-                self.status = format!("E: installer gateway: {error}");
+                self.status.text = format!("E: installer gateway: {error}");
                 self.dirty = true;
                 return;
             }
@@ -68,7 +68,7 @@ impl Model {
         ) {
             Ok(result) => {
                 let Some(job_id) = result.get("job_id").and_then(|value| value.as_str()) else {
-                    self.status = "E: pkg download: missing job id".to_owned();
+                    self.status.text = "E: pkg download: missing job id".to_owned();
                     self.dirty = true;
                     return;
                 };
@@ -77,7 +77,7 @@ impl Model {
                     job_id: job_id.to_owned(),
                     progress,
                 });
-                self.status = format!("pkg download queued: {url}");
+                self.status.text = format!("pkg download queued: {url}");
             }
             Err(error) => self.pkg_error(error),
         }
@@ -94,7 +94,7 @@ impl Model {
         match GatewaySession::start_local_installer(&self.workspace.path) {
             Ok((session, client)) => self.plugins.installer = Some((session, client)),
             Err(error) => {
-                self.status = format!("E: installer gateway: {error}");
+                self.status.text = format!("E: installer gateway: {error}");
                 self.dirty = true;
                 return;
             }
@@ -143,7 +143,7 @@ impl Model {
                         .unwrap_or(false),
                     error: None,
                 });
-                self.status = "Pkg: review capabilities, Enter installs".to_owned();
+                self.status.text = "Pkg: review capabilities, Enter installs".to_owned();
             }
             Err(error) => self.pkg_error(error),
         }
@@ -226,7 +226,7 @@ impl Model {
             .and_then(|value| serde_json::from_value::<PkgManifest>(value).ok())
         else {
             self.plugins.pkg_install = None;
-            self.status = "E: package manifest is malformed".to_owned();
+            self.status.text = "E: package manifest is malformed".to_owned();
             self.dirty = true;
             return;
         };
@@ -236,20 +236,20 @@ impl Model {
             .unwrap_or(false);
         if public_key.is_empty() {
             self.plugins.pkg_install = None;
-            self.status = "E: package signature has no public key".to_owned();
+            self.status.text = "E: package signature has no public key".to_owned();
             self.dirty = true;
             return;
         }
         let digest = text("digest");
         if manifest.id.is_empty() || manifest.version.is_empty() {
             self.plugins.pkg_install = None;
-            self.status = "E: package manifest has no id or version".to_owned();
+            self.status.text = "E: package manifest has no id or version".to_owned();
             self.dirty = true;
             return;
         }
         if digest.is_empty() {
             self.plugins.pkg_install = None;
-            self.status = "E: package download has no digest".to_owned();
+            self.status.text = "E: package download has no digest".to_owned();
             self.dirty = true;
             return;
         }
@@ -262,7 +262,7 @@ impl Model {
             error: None,
             digest,
         });
-        self.status = "Pkg: review capabilities, Enter installs".to_owned();
+        self.status.text = "Pkg: review capabilities, Enter installs".to_owned();
         self.dirty = true;
     }
 
@@ -294,18 +294,18 @@ impl Model {
             )
         {
             let Some(gateway) = self.workspace.gateway.as_mut() else {
-                self.status = "E: gateway unavailable".to_owned();
+                self.status.text = "E: gateway unavailable".to_owned();
                 self.dirty = true;
                 return;
             };
             if let Err(error) = self.plugins.supervisor.stop(&manifest.id, Some(gateway)) {
-                self.status = format!("E: stop plugin {}: {error}", manifest.id);
+                self.status.text = format!("E: stop plugin {}: {error}", manifest.id);
                 self.dirty = true;
                 return;
             }
         }
         let Some((_, gateway)) = self.plugins.installer.as_mut() else {
-            self.status = "E: pkg install requires installer gateway".to_owned();
+            self.status.text = "E: pkg install requires installer gateway".to_owned();
             return;
         };
         match gateway.call(
@@ -327,9 +327,9 @@ impl Model {
                 self.plugins.installer = None;
                 let installed =
                     format!("plugin installed: {plugin_id}; run :plugin-enable {plugin_id}");
-                self.status = installed.clone();
+                self.status.text = installed.clone();
                 if let Err(error) = self.load_plugins() {
-                    self.status = format!("{installed}; discovery: {error}");
+                    self.status.text = format!("{installed}; discovery: {error}");
                 }
             }
             Err(ClientError::Rpc {
@@ -342,7 +342,7 @@ impl Model {
                     *trusted = false;
                     *error = Some(message.clone());
                 }
-                self.status = "E: untrusted signing key; press t to trust".to_owned();
+                self.status.text = "E: untrusted signing key; press t to trust".to_owned();
             }
             Err(error) => self.pkg_error(error),
         }
@@ -359,7 +359,7 @@ impl Model {
             return;
         };
         let Some(gateway) = self.workspace.gateway.as_mut() else {
-            self.status = "E: pkg trust requires gateway".to_owned();
+            self.status.text = "E: pkg trust requires gateway".to_owned();
             return;
         };
         match gateway.call(
@@ -373,7 +373,7 @@ impl Model {
                     *trusted = true;
                     *error = None;
                 }
-                self.status = "signing key trusted; press Enter to install".to_owned();
+                self.status.text = "signing key trusted; press Enter to install".to_owned();
             }
             Err(error) => self.pkg_error(error),
         }
@@ -413,7 +413,7 @@ impl Model {
         }
         self.plugins.pkg_install = None;
         self.plugins.installer = None;
-        self.status = format!("E: pkg: {message}");
+        self.status.text = format!("E: pkg: {message}");
         self.dirty = true;
     }
 }
@@ -564,6 +564,7 @@ mod tests {
         assert!(
             model
                 .status
+                .text
                 .starts_with("E: package download has no digest")
         );
     }
@@ -578,7 +579,7 @@ mod tests {
         ));
         model.pkg_failed(&serde_json::json!({"job_id": "job", "message": "boom"}));
         assert!(model.plugins.pkg_install.is_none());
-        assert!(model.status.contains("boom"));
+        assert!(model.status.text.contains("boom"));
     }
 
     #[test]

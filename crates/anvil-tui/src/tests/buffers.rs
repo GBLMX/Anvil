@@ -226,7 +226,7 @@ fn stdin_read_only_buffer_rejects_mutation() {
     assert_eq!(model.buffer_name(0), "[stdin]");
     model.insert_text("x");
     assert_eq!(model.editor.text().slice(0..3), "log");
-    assert!(model.status.contains("read-only"));
+    assert!(model.status.text.contains("read-only"));
 }
 #[test]
 fn read_only_file_mode_rejects_mutation_and_survives_reopen() {
@@ -240,12 +240,12 @@ fn read_only_file_mode_rejects_mutation_and_survives_reopen() {
     model.set_read_only(true);
     model.insert_text("X");
     assert_eq!(model.editor.text().slice(0..5), "first");
-    assert!(model.status.contains("read-only"));
+    assert!(model.status.text.contains("read-only"));
 
     model.open_path(&second).expect("open second");
     model.insert_text("Y");
     assert_eq!(model.editor.text().slice(0..6), "second");
-    assert!(model.status.contains("read-only"));
+    assert!(model.status.text.contains("read-only"));
 }
 
 #[test]
@@ -310,7 +310,7 @@ fn buffer_commands_require_a_second_buffer() {
     type_text(&mut model, "bn");
     handle_event(&mut model, key(KeyCode::Enter));
     assert_eq!(model.path.as_ref(), Some(&path));
-    assert_eq!(model.status, "E: only one buffer");
+    assert_eq!(model.status.text, "E: only one buffer");
 }
 
 #[test]
@@ -391,7 +391,7 @@ fn failed_save_keeps_close_confirmation_open() {
         model.ui.input_mode,
         InputMode::ConfirmClose { index: 0 }
     ));
-    assert!(model.status.starts_with("E:"), "{}", model.status);
+    assert!(model.status.text.starts_with("E:"), "{}", model.status.text);
 }
 
 #[test]
@@ -445,7 +445,7 @@ fn closing_buffer_refuses_to_drop_dirty_split() {
             .as_ref()
             .is_some_and(|pane| pane.buffer.modified)
     );
-    assert!(model.status.contains("split pane has unsaved changes"));
+    assert!(model.status.text.contains("split pane has unsaved changes"));
     assert_eq!(model.path.as_ref(), Some(&path));
 }
 
@@ -535,7 +535,7 @@ fn external_clean_change_reloads() {
     model.handle_external_change(path.clone());
     assert_eq!(model.editor.text().slice(0..4), "disk");
     assert!(!model.modified);
-    assert!(model.status.contains("reloaded"));
+    assert!(model.status.text.contains("reloaded"));
 }
 
 #[test]
@@ -584,7 +584,7 @@ fn quit_guard_checks_inactive_buffers() {
         handle_event(&mut model, key(code));
     }
     assert!(!model.quit);
-    assert!(model.status.contains("No write since last change"));
+    assert!(model.status.text.contains("No write since last change"));
 
     handle_event(&mut model, key(KeyCode::Char(':')));
     type_text(&mut model, "q!");
@@ -601,12 +601,12 @@ fn gateway_required_refuses_file_operations_without_client() {
     model.workspace.path = directory.path().to_path_buf();
     model.path = Some(path);
     assert!(!model.save());
-    assert!(model.status.contains("gateway unavailable"));
+    assert!(model.status.text.contains("gateway unavailable"));
 
     handle_event(&mut model, key(KeyCode::Char(':')));
     type_text(&mut model, "e other.txt");
     handle_event(&mut model, key(KeyCode::Enter));
-    assert!(model.status.contains("gateway unavailable"));
+    assert!(model.status.text.contains("gateway unavailable"));
 }
 
 #[test]
@@ -623,9 +623,9 @@ fn gateway_refuses_paths_outside_workspace() {
     );
     handle_event(&mut model, key(KeyCode::Enter));
     assert!(
-        model.status.contains("outside workspace"),
+        model.status.text.contains("outside workspace"),
         "{}",
-        model.status
+        model.status.text
     );
 }
 
@@ -1053,7 +1053,7 @@ fn unknown_object_failure_preserves_text() {
         handle_event(&mut model, key(key_code));
     }
     assert_eq!(model.editor.text().slice(0..3), "abc");
-    assert!(model.status.starts_with("E:"));
+    assert!(model.status.text.starts_with("E:"));
 }
 
 #[test]
@@ -1106,7 +1106,7 @@ fn failed_auto_save_aborts_the_focus_change() {
 
     assert_eq!(model.buffers.active, 0);
     assert!(model.modified);
-    assert!(model.status.contains("E:"));
+    assert!(model.status.text.contains("E:"));
 }
 
 #[test]
@@ -1181,7 +1181,7 @@ fn opening_another_file_refuses_a_dirty_unnamed_buffer() {
 
     assert!(model.path.is_none());
     assert_eq!(model.editor.text().slice(0..5), "draft");
-    assert!(model.status.contains("save or discard"));
+    assert!(model.status.text.contains("save or discard"));
 }
 
 #[test]
@@ -1352,7 +1352,7 @@ fn switching_to_the_same_buffer_does_not_auto_save() {
 
     assert_eq!(fs::read_to_string(&path).expect("content"), "a");
     assert!(model.modified);
-    assert!(model.status.contains("only one buffer"));
+    assert!(model.status.text.contains("only one buffer"));
 }
 
 #[test]
@@ -1368,7 +1368,7 @@ fn ex_opening_the_current_file_does_not_auto_save() {
 
     assert_eq!(fs::read_to_string(&path).expect("content"), "a");
     assert!(model.modified);
-    assert!(model.status.contains("Already editing"));
+    assert!(model.status.text.contains("Already editing"));
 }
 
 #[test]

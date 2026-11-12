@@ -67,19 +67,19 @@ impl Model {
                 self.request_diff(relative, staged);
                 return;
             }
-            self.status = "already viewing a read-only view".to_owned();
+            self.status.text = "already viewing a read-only view".to_owned();
             self.dirty = true;
             return;
         }
         let Some(path) = self.path.clone() else {
-            self.status = "E: no file name".to_owned();
+            self.status.text = "E: no file name".to_owned();
             self.dirty = true;
             return;
         };
         let relative = match self.relative_path(&path) {
             Ok(relative) => relative,
             Err(error) => {
-                self.status = format!("E: {error}");
+                self.status.text = format!("E: {error}");
                 self.dirty = true;
                 return;
             }
@@ -89,7 +89,7 @@ impl Model {
 
     fn request_diff(&mut self, relative: String, staged: bool) {
         let Some(worker) = self.workspace.file_worker.as_ref() else {
-            self.status = "E: file worker unavailable".to_owned();
+            self.status.text = "E: file worker unavailable".to_owned();
             self.dirty = true;
             return;
         };
@@ -100,12 +100,12 @@ impl Model {
             staged,
             generation,
         }) {
-            self.status = format!("E: git diff: {error}");
+            self.status.text = format!("E: git diff: {error}");
             self.dirty = true;
             return;
         }
         self.git.diff_pending = Some(generation);
-        self.status = if staged {
+        self.status.text = if staged {
             "loading staged git diff...".to_owned()
         } else {
             "loading git diff...".to_owned()
@@ -148,7 +148,7 @@ impl Model {
                 self.replace_read_only(&body, title, "Git diff");
             }
             Err(error) => {
-                self.status = format!("E: git diff: {error}");
+                self.status.text = format!("E: git diff: {error}");
                 self.dirty = true;
             }
         }
@@ -156,12 +156,12 @@ impl Model {
 
     pub(crate) fn move_git_hunk(&mut self, forward: bool) {
         let Some(view) = self.git.diff_view.as_ref() else {
-            self.status = "E: not viewing a git diff".to_owned();
+            self.status.text = "E: not viewing a git diff".to_owned();
             self.dirty = true;
             return;
         };
         if view.hunks.is_empty() {
-            self.status = "E: diff has no hunks".to_owned();
+            self.status.text = "E: diff has no hunks".to_owned();
             self.dirty = true;
             return;
         }
@@ -177,7 +177,7 @@ impl Model {
             view.hunks.iter().rposition(|hunk| hunk.line < current)
         };
         let Some(index) = index else {
-            self.status = if forward {
+            self.status.text = if forward {
                 "last git hunk"
             } else {
                 "first git hunk"
@@ -190,24 +190,24 @@ impl Model {
         if let Some(offset) = self.editor.index().line_to_offset(line) {
             self.cursor = offset;
             self.editor.set_selection_bytes(offset, offset);
-            self.status = format!("git hunk {}/{}", index + 1, view.hunks.len());
+            self.status.text = format!("git hunk {}/{}", index + 1, view.hunks.len());
             self.dirty = true;
         }
     }
 
     pub(crate) fn apply_current_hunk(&mut self, unstage: bool) {
         let Some(view) = self.git.diff_view.as_ref() else {
-            self.status = "E: not viewing a git diff".to_owned();
+            self.status.text = "E: not viewing a git diff".to_owned();
             self.dirty = true;
             return;
         };
         if view.truncated {
-            self.status = "E: diff is truncated; hunk staging disabled".to_owned();
+            self.status.text = "E: diff is truncated; hunk staging disabled".to_owned();
             self.dirty = true;
             return;
         }
         if unstage != view.staged {
-            self.status = if unstage {
+            self.status.text = if unstage {
                 "E: open :git-diff --staged to unstage".to_owned()
             } else {
                 "E: open :git-diff to stage".to_owned()
@@ -216,7 +216,7 @@ impl Model {
             return;
         }
         if view.hunks.is_empty() {
-            self.status = "E: diff has no hunks".to_owned();
+            self.status.text = "E: diff has no hunks".to_owned();
             self.dirty = true;
             return;
         }
@@ -227,13 +227,13 @@ impl Model {
             .map(|line| line.line)
             .unwrap_or(0);
         let Some(index) = view.hunks.iter().rposition(|hunk| hunk.line <= current) else {
-            self.status = "E: cursor is before the first hunk".to_owned();
+            self.status.text = "E: cursor is before the first hunk".to_owned();
             self.dirty = true;
             return;
         };
         let patch = view.hunks[index].patch.clone();
         let Some(worker) = self.workspace.file_worker.as_ref() else {
-            self.status = "E: file worker unavailable".to_owned();
+            self.status.text = "E: file worker unavailable".to_owned();
             self.dirty = true;
             return;
         };
@@ -244,12 +244,12 @@ impl Model {
             reverse: unstage,
             generation,
         }) {
-            self.status = format!("E: git apply: {error}");
+            self.status.text = format!("E: git apply: {error}");
             self.dirty = true;
             return;
         }
         self.git.apply_pending = Some(generation);
-        self.status = if unstage {
+        self.status.text = if unstage {
             "unstaging hunk...".to_owned()
         } else {
             "staging hunk...".to_owned()
@@ -264,7 +264,7 @@ impl Model {
         self.git.apply_pending = None;
         match result {
             Ok(()) => {
-                self.status = "git hunk applied".to_owned();
+                self.status.text = "git hunk applied".to_owned();
                 if let Some(view) = self.git.diff_view.as_ref() {
                     let relative = view.relative.clone();
                     let staged = view.staged;
@@ -272,7 +272,7 @@ impl Model {
                 }
             }
             Err(error) => {
-                self.status = format!("E: git apply: {error}");
+                self.status.text = format!("E: git apply: {error}");
                 self.dirty = true;
             }
         }
@@ -282,25 +282,25 @@ impl Model {
 impl Model {
     pub(crate) fn request_git_blame(&mut self) {
         if self.buffers.help_back.is_some() {
-            self.status = "already viewing a read-only view".to_owned();
+            self.status.text = "already viewing a read-only view".to_owned();
             self.dirty = true;
             return;
         }
         let Some(path) = self.path.clone() else {
-            self.status = "E: no file name".to_owned();
+            self.status.text = "E: no file name".to_owned();
             self.dirty = true;
             return;
         };
         let relative = match self.relative_path(&path) {
             Ok(relative) => relative,
             Err(error) => {
-                self.status = format!("E: {error}");
+                self.status.text = format!("E: {error}");
                 self.dirty = true;
                 return;
             }
         };
         let Some(worker) = self.workspace.file_worker.as_ref() else {
-            self.status = "E: file worker unavailable".to_owned();
+            self.status.text = "E: file worker unavailable".to_owned();
             self.dirty = true;
             return;
         };
@@ -310,12 +310,12 @@ impl Model {
             relative,
             generation,
         }) {
-            self.status = format!("E: git blame: {error}");
+            self.status.text = format!("E: git blame: {error}");
             self.dirty = true;
             return;
         }
         self.git.blame_pending = Some(generation);
-        self.status = "loading git blame...".to_owned();
+        self.status.text = "loading git blame...".to_owned();
         self.dirty = true;
     }
 
@@ -343,7 +343,7 @@ impl Model {
                 self.show_read_only(&body, title, "Git blame");
             }
             Err(error) => {
-                self.status = format!("E: git blame: {error}");
+                self.status.text = format!("E: git blame: {error}");
                 self.dirty = true;
             }
         }
@@ -353,29 +353,29 @@ impl Model {
 impl Model {
     pub(crate) fn request_git_conflicts(&mut self) {
         if self.buffers.help_back.is_some() {
-            self.status = "already viewing a read-only view".to_owned();
+            self.status.text = "already viewing a read-only view".to_owned();
             self.dirty = true;
             return;
         }
         if !self.ensure_file_worker() {
-            self.status = "E: gateway unavailable".to_owned();
+            self.status.text = "E: gateway unavailable".to_owned();
             self.dirty = true;
             return;
         }
         let Some(worker) = self.workspace.file_worker.as_ref() else {
-            self.status = "E: file worker unavailable".to_owned();
+            self.status.text = "E: file worker unavailable".to_owned();
             self.dirty = true;
             return;
         };
         self.git.conflicts_generation = self.git.conflicts_generation.wrapping_add(1);
         let generation = self.git.conflicts_generation;
         if let Err(error) = worker.request(FileRequest::GitConflictsText { generation }) {
-            self.status = format!("E: git conflicts: {error}");
+            self.status.text = format!("E: git conflicts: {error}");
             self.dirty = true;
             return;
         }
         self.git.conflicts_pending = Some(generation);
-        self.status = "loading git conflicts...".to_owned();
+        self.status.text = "loading git conflicts...".to_owned();
         self.dirty = true;
     }
 
@@ -403,7 +403,7 @@ impl Model {
                 self.show_read_only(&body, title, "Git conflicts");
             }
             Err(error) => {
-                self.status = format!("E: git conflicts: {error}");
+                self.status.text = format!("E: git conflicts: {error}");
                 self.dirty = true;
             }
         }
@@ -413,30 +413,30 @@ impl Model {
 impl Model {
     pub(crate) fn request_git_conflict_stage(&mut self, stage: u8) {
         if self.buffers.help_back.is_some() {
-            self.status = "already viewing a read-only view".to_owned();
+            self.status.text = "already viewing a read-only view".to_owned();
             self.dirty = true;
             return;
         }
         let Some(path) = self.path.clone() else {
-            self.status = "E: no file name".to_owned();
+            self.status.text = "E: no file name".to_owned();
             self.dirty = true;
             return;
         };
         let relative = match self.relative_path(&path) {
             Ok(relative) => relative,
             Err(error) => {
-                self.status = format!("E: {error}");
+                self.status.text = format!("E: {error}");
                 self.dirty = true;
                 return;
             }
         };
         if !self.ensure_file_worker() {
-            self.status = "E: gateway unavailable".to_owned();
+            self.status.text = "E: gateway unavailable".to_owned();
             self.dirty = true;
             return;
         }
         let Some(worker) = self.workspace.file_worker.as_ref() else {
-            self.status = "E: file worker unavailable".to_owned();
+            self.status.text = "E: file worker unavailable".to_owned();
             self.dirty = true;
             return;
         };
@@ -447,12 +447,12 @@ impl Model {
             stage,
             generation,
         }) {
-            self.status = format!("E: git conflict stage: {error}");
+            self.status.text = format!("E: git conflict stage: {error}");
             self.dirty = true;
             return;
         }
         self.git.stage_pending = Some(generation);
-        self.status = "loading conflict stage...".to_owned();
+        self.status.text = "loading conflict stage...".to_owned();
         self.dirty = true;
     }
 
@@ -488,7 +488,7 @@ impl Model {
                 self.show_read_only(&body, &title, &format!("Git conflict {name}"));
             }
             Err(error) => {
-                self.status = format!("E: git conflict stage {name}: {error}");
+                self.status.text = format!("E: git conflict stage {name}: {error}");
                 self.dirty = true;
             }
         }
@@ -496,40 +496,40 @@ impl Model {
 
     pub(crate) fn resolve_git_conflict(&mut self, stage: u8, force: bool) {
         if self.buffers.help_back.is_some() {
-            self.status = "E: close the read-only view first".to_owned();
+            self.status.text = "E: close the read-only view first".to_owned();
             self.dirty = true;
             return;
         }
         let Some(path) = self.path.clone() else {
-            self.status = "E: no file name".to_owned();
+            self.status.text = "E: no file name".to_owned();
             self.dirty = true;
             return;
         };
         if self.modified && !force {
-            self.status = "E: buffer is modified; save/discard or use the ! form".to_owned();
+            self.status.text = "E: buffer is modified; save/discard or use the ! form".to_owned();
             self.dirty = true;
             return;
         }
         if self.git.resolve_pending.is_some() {
-            self.status = "E: conflict resolution already in progress".to_owned();
+            self.status.text = "E: conflict resolution already in progress".to_owned();
             self.dirty = true;
             return;
         }
         let relative = match self.relative_path(&path) {
             Ok(relative) => relative,
             Err(error) => {
-                self.status = format!("E: {error}");
+                self.status.text = format!("E: {error}");
                 self.dirty = true;
                 return;
             }
         };
         if !self.ensure_file_worker() {
-            self.status = "E: gateway unavailable".to_owned();
+            self.status.text = "E: gateway unavailable".to_owned();
             self.dirty = true;
             return;
         }
         let Some(worker) = self.workspace.file_worker.as_ref() else {
-            self.status = "E: file worker unavailable".to_owned();
+            self.status.text = "E: file worker unavailable".to_owned();
             self.dirty = true;
             return;
         };
@@ -540,12 +540,12 @@ impl Model {
             stage,
             generation,
         }) {
-            self.status = format!("E: git resolve: {error}");
+            self.status.text = format!("E: git resolve: {error}");
             self.dirty = true;
             return;
         }
         self.git.resolve_pending = Some(generation);
-        self.status = "resolving conflict...".to_owned();
+        self.status.text = "resolving conflict...".to_owned();
         self.dirty = true;
     }
 
@@ -566,10 +566,10 @@ impl Model {
                 match self.reload_external(&path) {
                     Ok(()) => {
                         let name = if stage == 2 { "ours" } else { "theirs" };
-                        self.status = format!("resolved {relative} using {name}");
+                        self.status.text = format!("resolved {relative} using {name}");
                     }
                     Err(error) => {
-                        self.status = format!("E: conflict resolved, reload failed: {error}");
+                        self.status.text = format!("E: conflict resolved, reload failed: {error}");
                     }
                 }
             }
@@ -577,7 +577,7 @@ impl Model {
                 if error.working_written {
                     let path = self.workspace.path.join(&relative);
                     let reload = self.reload_external(&path);
-                    self.status = match reload {
+                    self.status.text = match reload {
                         Ok(()) => format!(
                             "E: git resolve: {} (working tree updated; index not staged)",
                             error.message
@@ -588,7 +588,7 @@ impl Model {
                         ),
                     };
                 } else {
-                    self.status = format!("E: git resolve: {}", error.message);
+                    self.status.text = format!("E: git resolve: {}", error.message);
                 }
             }
         }
@@ -641,9 +641,9 @@ index 1111111..2222222 100644
     fn recognizes_conflict_resolution_commands() {
         let mut model = Model::new(EditorState::from_text("x"), None);
         model.execute_command("git-resolve-ours");
-        assert_eq!(model.status, "E: no file name");
+        assert_eq!(model.status.text, "E: no file name");
         model.execute_command("git-resolve-theirs!");
-        assert_eq!(model.status, "E: no file name");
+        assert_eq!(model.status.text, "E: no file name");
     }
 
     #[test]
@@ -675,6 +675,6 @@ index 1111111..2222222 100644
                 .slice(0..model.editor.text().len_bytes()),
             "ours\n"
         );
-        assert!(model.status.contains("working tree updated"));
+        assert!(model.status.text.contains("working tree updated"));
     }
 }

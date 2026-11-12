@@ -47,7 +47,7 @@ impl Model {
             return;
         };
         let Some(command) = lens.command else {
-            self.status = "code lens has no command".to_owned();
+            self.status.text = "code lens has no command".to_owned();
             self.dirty = true;
             return;
         };
@@ -60,7 +60,7 @@ impl Model {
             "workspace/executeCommand",
             params,
         ) {
-            self.status = format!("code lens: {command}");
+            self.status.text = format!("code lens: {command}");
         }
     }
     pub(crate) fn request_code_lens(&mut self) {
@@ -88,7 +88,7 @@ impl Model {
     ) {
         let Some(items) = result.as_array() else {
             self.overlays.lsp_results.code_lens = None;
-            self.status = "lsp: invalid code lens response".to_owned();
+            self.status.text = "lsp: invalid code lens response".to_owned();
             self.dirty = true;
             return;
         };
@@ -138,7 +138,7 @@ impl Model {
             revision,
             items: lenses.clone(),
         });
-        self.status = format!("code lens: {}", lenses.len());
+        self.status.text = format!("code lens: {}", lenses.len());
         self.notify(
             NotificationSeverity::Info,
             "lsp",

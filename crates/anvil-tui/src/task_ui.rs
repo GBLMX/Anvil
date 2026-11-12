@@ -16,7 +16,7 @@ impl Model {
     fn start_task_mode(&mut self, command: &str, tests: bool) {
         let command = command.trim();
         if command.is_empty() {
-            self.status = if tests {
+            self.status.text = if tests {
                 "E: usage: :tests <command>".to_owned()
             } else {
                 "E: usage: :task <command>".to_owned()
@@ -28,7 +28,7 @@ impl Model {
             return;
         }
         if self.runtime.task_worker.is_some() {
-            self.status = "E: task already running".to_owned();
+            self.status.text = "E: task already running".to_owned();
             self.dirty = true;
             return;
         }
@@ -41,7 +41,7 @@ impl Model {
             command.to_owned(),
             self.workspace.path.clone(),
         ));
-        self.status = if tests {
+        self.status.text = if tests {
             format!("tests: running {command}")
         } else {
             format!("task: running {command}")
@@ -102,13 +102,13 @@ impl Model {
         if result.truncated {
             status.push_str("; output truncated");
         }
-        self.status = status;
+        self.status.text = status;
         self.dirty = true;
     }
 
     pub(crate) fn show_task_output(&mut self) {
         let Some(output) = self.runtime.task_output.clone() else {
-            self.status = "no task output".to_owned();
+            self.status.text = "no task output".to_owned();
             self.dirty = true;
             return;
         };

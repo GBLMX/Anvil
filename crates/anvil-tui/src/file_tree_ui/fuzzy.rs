@@ -72,7 +72,7 @@ impl Model {
                 message: Some("preview unavailable: gateway".to_owned()),
                 ..PreviewState::default()
             };
-            self.status = "E: preview: gateway unavailable".to_owned();
+            self.status.text = "E: preview: gateway unavailable".to_owned();
             self.dirty = true;
             return;
         }
@@ -100,7 +100,7 @@ impl Model {
         if !matches!(request, Some(Ok(()))) {
             self.overlays.preview.loading = false;
             self.overlays.preview.message = Some("preview worker stopped".to_owned());
-            self.status = "E: preview: worker stopped".to_owned();
+            self.status.text = "E: preview: worker stopped".to_owned();
         }
         self.dirty = true;
     }
@@ -119,8 +119,8 @@ impl Model {
         self.overlays.preview.loading = false;
         match result {
             Ok(preview) => {
-                if self.status.starts_with("E: preview:") {
-                    self.status = "preview ready".to_owned();
+                if self.status.text.starts_with("E: preview:") {
+                    self.status.text = "preview ready".to_owned();
                 }
                 self.overlays.preview.lines = preview.lines;
                 self.overlays.preview.truncated = preview.truncated;
@@ -130,7 +130,7 @@ impl Model {
                 self.overlays.preview.lines.clear();
                 self.overlays.preview.truncated = false;
                 self.overlays.preview.message = Some(error.clone());
-                self.status = format!("E: preview: {error}");
+                self.status.text = format!("E: preview: {error}");
             }
         }
         self.dirty = true;
@@ -167,13 +167,13 @@ impl Model {
                 filtered: Vec::new(),
                 selected: 0,
             });
-            self.status = "loading files".to_owned();
+            self.status.text = "loading files".to_owned();
             self.dirty = true;
             return;
         }
         let mut entries = Vec::new();
         if let Err(error) = self.collect_files(&workspace, "", &mut entries) {
-            self.status = format!("E: files: {error}");
+            self.status.text = format!("E: files: {error}");
             self.dirty = true;
             return;
         }
@@ -220,14 +220,14 @@ impl Model {
                     fuzzy.entries.dedup();
                 }
                 Err(error) => {
-                    self.status = format!("E: files: {error}");
+                    self.status.text = format!("E: files: {error}");
                     self.dirty = true;
                     return;
                 }
             }
         }
         self.fuzzy_refresh();
-        self.status = "files ready".to_owned();
+        self.status.text = "files ready".to_owned();
     }
 
     pub(crate) fn fuzzy_refresh(&mut self) {
@@ -285,7 +285,7 @@ impl Model {
         self.record_jump();
         match self.open_path(&path) {
             Ok(()) => {}
-            Err(error) => self.status = format!("E: {error}"),
+            Err(error) => self.status.text = format!("E: {error}"),
         }
         self.dirty = true;
     }

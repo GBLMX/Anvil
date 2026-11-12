@@ -172,14 +172,14 @@ impl Model {
             original: self.settings,
             draft: self.settings,
         });
-        self.status = "settings".to_owned();
+        self.status.text = "settings".to_owned();
         self.dirty = true;
     }
 
     pub(crate) fn cancel_settings(&mut self) {
         if let Some(overlay) = self.overlays.settings_overlay.take() {
             self.apply_settings(overlay.original);
-            self.status = "settings cancelled".to_owned();
+            self.status.text = "settings cancelled".to_owned();
             self.dirty = true;
         }
     }
@@ -248,11 +248,11 @@ impl Model {
                 self.apply_settings(overlay.draft);
                 overlay.original = overlay.draft;
                 self.overlays.settings_overlay = Some(overlay);
-                self.status = format!("settings saved: {}", path.display());
+                self.status.text = format!("settings saved: {}", path.display());
             }
             Err(error) => {
                 self.overlays.settings_overlay = Some(overlay);
-                self.status = format!("E: settings: {error}");
+                self.status.text = format!("E: settings: {error}");
             }
         }
         self.dirty = true;

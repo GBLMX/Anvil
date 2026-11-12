@@ -46,7 +46,7 @@ pub(crate) fn handle_event(model: &mut Model, event: Event) {
             model.input.pending = None;
             let (text, truncated) = normalize_paste(&text);
             if truncated {
-                model.status = "E: paste truncated".to_owned();
+                model.status.text = "E: paste truncated".to_owned();
                 model.dirty = true;
             }
             if let InputMode::Insert = model.ui.input_mode {
@@ -414,7 +414,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
                     model.input.replaying = true;
                     for step in steps {
                         let Some(key) = macro_key(&step) else {
-                            model.status = format!("E: macro step unavailable: {}", step.key);
+                            model.status.text = format!("E: macro step unavailable: {}", step.key);
                             model.dirty = true;
                             break;
                         };
@@ -506,7 +506,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
         model.input.leader_deadline = None;
         model.dirty = true;
         if key.ctrl() || key.alt() || key.super_key() {
-            model.status = "E: modifier not valid in pending command".to_owned();
+            model.status.text = "E: modifier not valid in pending command".to_owned();
             return;
         }
         let object_pending = model.input.object_pending;
@@ -958,7 +958,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
         InputMode::Rename { name } => match key.code {
             KeyCode::Esc => {
                 model.ui.input_mode = InputMode::Normal;
-                model.status = "rename cancelled".to_owned();
+                model.status.text = "rename cancelled".to_owned();
                 model.dirty = true;
             }
             KeyCode::Enter => {
@@ -1037,7 +1037,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             KeyCode::Esc => {
                 model.ui.input_mode = InputMode::Normal;
                 model.ui.focus.tree = model.tree.visible;
-                model.status = "transfer cancelled".to_owned();
+                model.status.text = "transfer cancelled".to_owned();
                 model.dirty = true;
             }
             KeyCode::Enter => {
@@ -1073,7 +1073,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             }
             KeyCode::Esc | KeyCode::Char('c') | KeyCode::Char('C') => {
                 model.ui.input_mode = InputMode::Normal;
-                model.status = "close cancelled".to_owned();
+                model.status.text = "close cancelled".to_owned();
                 model.dirty = true;
             }
             _ => {}
@@ -1086,7 +1086,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             }
             KeyCode::Esc | KeyCode::Char('n') | KeyCode::Char('N') => {
                 model.ui.input_mode = InputMode::Normal;
-                model.status = "kept local buffer".to_owned();
+                model.status.text = "kept local buffer".to_owned();
                 model.dirty = true;
             }
             _ => {}
@@ -1100,7 +1100,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             KeyCode::Esc | KeyCode::Char('n') | KeyCode::Char('N') => {
                 model.ui.input_mode = InputMode::Normal;
                 model.ui.focus.tree = model.tree.visible;
-                model.status = "delete cancelled".to_owned();
+                model.status.text = "delete cancelled".to_owned();
                 model.dirty = true;
             }
             _ => {}
@@ -1309,7 +1309,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
                 }
             }
             if key.ctrl() && key.code == KeyCode::Char('v') {
-                model.status = "E: block selection is not supported".to_owned();
+                model.status.text = "E: block selection is not supported".to_owned();
                 model.dirty = true;
                 return;
             }

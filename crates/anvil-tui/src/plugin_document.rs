@@ -22,11 +22,11 @@ impl Model {
                 self.sync_cursor_from_selection();
                 self.modified = true;
                 self.dirty = true;
-                self.status = format!("plugin apply_edit: {count} edits, revision {revision}");
+                self.status.text = format!("plugin apply_edit: {count} edits, revision {revision}");
                 Ok(revision)
             }
             Err(error) => {
-                self.status = format!("E: plugin apply_edit: {error}");
+                self.status.text = format!("E: plugin apply_edit: {error}");
                 self.dirty = true;
                 Err(error.to_string())
             }
@@ -117,7 +117,7 @@ mod tests {
         };
         assert!(model.apply_plugin_edit(request).is_err());
         assert_eq!(model.editor.text().slice(0..4), "abcd");
-        assert!(model.status.contains("stale revision"));
+        assert!(model.status.text.contains("stale revision"));
     }
 
     #[test]
@@ -130,7 +130,7 @@ mod tests {
             edits: Vec::new(),
         };
         assert!(model.apply_plugin_edit(request).is_err());
-        assert!(model.status.contains("buffer mismatch"));
+        assert!(model.status.text.contains("buffer mismatch"));
     }
 
     #[test]

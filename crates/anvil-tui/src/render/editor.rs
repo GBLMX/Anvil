@@ -97,7 +97,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
             model.status_text(usize::from(area.width).saturating_sub(7)),
         ),
     };
-    let status = if let Some(busy) = &model.busy {
+    let status = if let Some(busy) = &model.status.busy {
         format!("{} {busy}…", model.spinner_glyph())
     } else {
         status

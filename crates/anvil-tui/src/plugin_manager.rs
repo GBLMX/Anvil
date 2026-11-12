@@ -21,7 +21,7 @@ pub(crate) struct PluginManagerState {
 impl Model {
     pub(crate) fn open_plugin_manager(&mut self) {
         if self.plugins.entries.is_empty() {
-            self.status = "no plugins (set ANVIL_PLUGIN_DIR or install a package)".to_owned();
+            self.status.text = "no plugins (set ANVIL_PLUGIN_DIR or install a package)".to_owned();
             self.dirty = true;
             return;
         }
@@ -63,7 +63,7 @@ impl Model {
             } else {
                 "local plugin"
             };
-            self.status = format!("E: plugin {} is a {kind}", plugin.manifest.id);
+            self.status.text = format!("E: plugin {} is a {kind}", plugin.manifest.id);
             self.dirty = true;
             return;
         }
@@ -79,19 +79,19 @@ impl Model {
             );
             if active {
                 let Some(gateway) = self.workspace.gateway.as_mut() else {
-                    self.status = "E: gateway unavailable".to_owned();
+                    self.status.text = "E: gateway unavailable".to_owned();
                     self.dirty = true;
                     return;
                 };
                 if let Err(error) = self.plugins.supervisor.stop(&plugin_id, Some(gateway)) {
-                    self.status = format!("E: stop plugin {plugin_id}: {error}");
+                    self.status.text = format!("E: stop plugin {plugin_id}: {error}");
                     self.dirty = true;
                     return;
                 }
             }
             match self.set_managed_enabled(&plugin_id, false) {
-                Ok(()) => self.status = format!("plugin {plugin_id} disabled"),
-                Err(error) => self.status = format!("E: plugin {plugin_id}: {error}"),
+                Ok(()) => self.status.text = format!("plugin {plugin_id} disabled"),
+                Err(error) => self.status.text = format!("E: plugin {plugin_id}: {error}"),
             }
         } else {
             self.enable_plugin(&plugin_id);
@@ -104,7 +104,7 @@ impl Model {
             return;
         };
         manager.confirm_uninstall = true;
-        self.status = "uninstall plugin? [y/N]".to_owned();
+        self.status.text = "uninstall plugin? [y/N]".to_owned();
         self.dirty = true;
     }
 
@@ -112,7 +112,7 @@ impl Model {
         if let Some(manager) = self.plugins.manager.as_mut() {
             manager.confirm_uninstall = false;
         }
-        self.status.clear();
+        self.status.text.clear();
         self.dirty = true;
     }
 
@@ -127,7 +127,7 @@ impl Model {
             return;
         };
         if plugin.digest.is_none() {
-            self.status = "E: local plugins are not uninstalled here".to_owned();
+            self.status.text = "E: local plugins are not uninstalled here".to_owned();
             self.dirty = true;
             return;
         }
@@ -140,7 +140,7 @@ impl Model {
                 | HostState::Ready
                 | HostState::Draining
         ) {
-            self.status = format!("E: disable plugin {plugin_id} before uninstall");
+            self.status.text = format!("E: disable plugin {plugin_id} before uninstall");
             self.dirty = true;
             return;
         }
@@ -157,7 +157,7 @@ impl Model {
             });
         match result {
             Ok(()) => {
-                self.status = format!("plugin {plugin_id} uninstalled");
+                self.status.text = format!("plugin {plugin_id} uninstalled");
                 let _ = self.load_plugins();
                 if self.plugins.entries.is_empty() {
                     self.plugins.manager = None;
@@ -171,7 +171,7 @@ impl Model {
                     manager.confirm_uninstall = false;
                 }
             }
-            Err(error) => self.status = format!("E: uninstall {plugin_id}: {error}"),
+            Err(error) => self.status.text = format!("E: uninstall {plugin_id}: {error}"),
         }
         self.dirty = true;
     }
@@ -181,7 +181,7 @@ impl Model {
             return;
         };
         if plugin.previous_digest.is_none() {
-            self.status = "E: no previous version to roll back to".to_owned();
+            self.status.text = "E: no previous version to roll back to".to_owned();
             self.dirty = true;
             return;
         }
@@ -195,18 +195,18 @@ impl Model {
                 | HostState::Draining
         ) {
             let Some(gateway) = self.workspace.gateway.as_mut() else {
-                self.status = "E: gateway unavailable".to_owned();
+                self.status.text = "E: gateway unavailable".to_owned();
                 self.dirty = true;
                 return;
             };
             if let Err(error) = self.plugins.supervisor.stop(&plugin_id, Some(gateway)) {
-                self.status = format!("E: stop plugin {plugin_id}: {error}");
+                self.status.text = format!("E: stop plugin {plugin_id}: {error}");
                 self.dirty = true;
                 return;
             }
         }
         if let Err(error) = self.set_managed_enabled(&plugin_id, false) {
-            self.status = format!("E: plugin {plugin_id}: {error}");
+            self.status.text = format!("E: plugin {plugin_id}: {error}");
             self.dirty = true;
             return;
         }
@@ -223,10 +223,10 @@ impl Model {
             });
         match result {
             Ok(()) => {
-                self.status = format!("plugin {plugin_id} rolled back; enable to start");
+                self.status.text = format!("plugin {plugin_id} rolled back; enable to start");
                 let _ = self.load_plugins();
             }
-            Err(error) => self.status = format!("E: rollback {plugin_id}: {error}"),
+            Err(error) => self.status.text = format!("E: rollback {plugin_id}: {error}"),
         }
         self.dirty = true;
     }

@@ -11,17 +11,17 @@ use std::path::PathBuf;
 impl Model {
     fn apply_document_symbols_response(&mut self, result: &serde_json::Value) {
         let Some(items) = result.as_array() else {
-            self.status = "lsp: no document symbols".to_owned();
+            self.status.text = "lsp: no document symbols".to_owned();
             self.overlays.lsp_results.document_symbols = None;
             return;
         };
         let items = symbols_from_lsp(items);
         if items.is_empty() {
-            self.status = "lsp: no document symbols".to_owned();
+            self.status.text = "lsp: no document symbols".to_owned();
             self.overlays.lsp_results.document_symbols = None;
         } else {
             self.overlays.lsp_results.document_symbols = Some(SymbolState { items, selected: 0 });
-            self.status = "document symbols".to_owned();
+            self.status.text = "document symbols".to_owned();
         }
     }
 
@@ -42,7 +42,7 @@ impl Model {
             .get("signatures")
             .and_then(serde_json::Value::as_array)
         else {
-            self.status = "lsp: no signature".to_owned();
+            self.status.text = "lsp: no signature".to_owned();
             self.overlays.lsp_results.signature_help = None;
             return;
         };
@@ -64,7 +64,7 @@ impl Model {
             })
             .collect();
         if signatures.is_empty() {
-            self.status = "lsp: no signature".to_owned();
+            self.status.text = "lsp: no signature".to_owned();
             self.overlays.lsp_results.signature_help = None;
             return;
         }
@@ -81,7 +81,7 @@ impl Model {
             active_parameter,
             signatures,
         });
-        self.status = "signature".to_owned();
+        self.status.text = "signature".to_owned();
     }
 
     fn apply_formatting_response(
@@ -91,7 +91,7 @@ impl Model {
         base: Option<HashMap<PathBuf, u64>>,
     ) {
         if result.is_null() || result.as_array().is_some_and(Vec::is_empty) {
-            self.status = "lsp: no formatting changes".to_owned();
+            self.status.text = "lsp: no formatting changes".to_owned();
             return;
         }
         let uri = lsp_worker::file_uri(path);
@@ -100,8 +100,8 @@ impl Model {
             .map(|edit| edit.with_base_revisions(base))
             .and_then(|edit| edit.apply(self))
         {
-            Ok(()) => self.status = "formatted".to_owned(),
-            Err(error) => self.status = format!("E: format: {error}"),
+            Ok(()) => self.status.text = "formatted".to_owned(),
+            Err(error) => self.status.text = format!("E: format: {error}"),
         }
     }
 
@@ -123,7 +123,7 @@ impl Model {
         let saved = self.save();
         self.language.lsp_requests.suppress_format_on_save = false;
         if saved {
-            self.status = "formatted and saved".to_owned();
+            self.status.text = "formatted and saved".to_owned();
             self.dirty = true;
         }
     }
@@ -155,7 +155,7 @@ impl Model {
                 return;
             }
             self.clear_format_on_save(kind);
-            self.status = format!("E: lsp {kind:?}: {error}");
+            self.status.text = format!("E: lsp {kind:?}: {error}");
             self.dirty = true;
             return;
         }
@@ -178,7 +178,7 @@ impl Model {
                 self.overlays.lsp_results.sticky_pending = false;
             }
             self.clear_format_on_save(kind);
-            self.status = "lsp: stale edit response ignored".to_owned();
+            self.status.text = "lsp: stale edit response ignored".to_owned();
             self.dirty = true;
             return;
         }
@@ -204,7 +204,7 @@ impl Model {
                 self.overlays.lsp_results.sticky_pending = false;
             }
             self.clear_format_on_save(kind);
-            self.status = "lsp: edit response for inactive buffer".to_owned();
+            self.status.text = "lsp: edit response for inactive buffer".to_owned();
             self.dirty = true;
             return;
         }
@@ -231,14 +231,14 @@ impl Model {
             LspRequestKind::Hover => self.apply_hover_response(&result),
             LspRequestKind::Rename => {
                 if result.is_null() {
-                    self.status = "lsp: no rename".to_owned();
+                    self.status.text = "lsp: no rename".to_owned();
                 } else {
                     match WorkspaceEdit::from_lsp(&result)
                         .map(|edit| edit.with_base_revisions(edit_snapshot))
                         .and_then(|edit| edit.apply(self))
                     {
-                        Ok(()) => self.status = "renamed".to_owned(),
-                        Err(error) => self.status = format!("E: rename: {error}"),
+                        Ok(()) => self.status.text = "renamed".to_owned(),
+                        Err(error) => self.status.text = format!("E: rename: {error}"),
                     }
                 }
             }
@@ -249,12 +249,12 @@ impl Model {
             }
             LspRequestKind::InlayHint => self.apply_inlay_hints_response(id, &result),
             LspRequestKind::ExecuteCommand => {
-                self.status = "code lens command executed".to_owned();
+                self.status.text = "code lens command executed".to_owned();
                 self.request_code_lens();
             }
             LspRequestKind::Formatting => {
                 let Some(path) = edit_path.or_else(|| self.path.clone()) else {
-                    self.status = "lsp: no formatting path".to_owned();
+                    self.status.text = "lsp: no formatting path".to_owned();
                     return;
                 };
                 self.apply_formatting_response(&result, &path, edit_snapshot);
@@ -272,7 +272,7 @@ impl Model {
             .and_then(serde_json::Value::as_array)
             .or_else(|| result.as_array());
         let Some(items) = items else {
-            self.status = "E: lsp: invalid completion response".to_owned();
+            self.status.text = "E: lsp: invalid completion response".to_owned();
             return;
         };
         let mut items: Vec<CompletionItem> = items
@@ -355,7 +355,7 @@ impl Model {
         });
         items.truncate(200);
         if items.is_empty() {
-            self.status = "lsp: no completions".to_owned();
+            self.status.text = "lsp: no completions".to_owned();
             self.overlays.lsp_results.completion = None;
         } else {
             let filtered = (0..items.len()).collect();
@@ -367,7 +367,7 @@ impl Model {
                 query: String::new(),
                 selected,
             });
-            self.status = "completion".to_owned();
+            self.status.text = "completion".to_owned();
             self.request_completion_resolve();
         }
     }
@@ -408,11 +408,11 @@ impl Model {
             .or_else(|| location.get("targetUri"))
             .and_then(serde_json::Value::as_str)
         else {
-            self.status = "lsp: no definition".to_owned();
+            self.status.text = "lsp: no definition".to_owned();
             return;
         };
         let Some(path) = lsp::uri_to_path(uri) else {
-            self.status = "E: lsp: invalid definition URI".to_owned();
+            self.status.text = "E: lsp: invalid definition URI".to_owned();
             return;
         };
         let range = location
@@ -432,17 +432,17 @@ impl Model {
         self.record_jump();
         if self.path.as_ref() != Some(&path) {
             if let Err(error) = self.open_path(&path) {
-                self.status = format!("E: {error}");
+                self.status.text = format!("E: {error}");
                 return;
             }
         }
         self.cursor = self.offset_at_utf16(line, character);
-        self.status = format!("definition {}", path.display());
+        self.status.text = format!("definition {}", path.display());
     }
 
     pub(crate) fn apply_references_response(&mut self, result: &serde_json::Value) {
         let Some(items) = result.as_array() else {
-            self.status = "lsp: no references".to_owned();
+            self.status.text = "lsp: no references".to_owned();
             self.overlays.lsp_results.references = None;
             return;
         };
@@ -490,7 +490,7 @@ impl Model {
                 .then(left.character.cmp(&right.character))
         });
         if references.is_empty() {
-            self.status = "lsp: no references".to_owned();
+            self.status.text = "lsp: no references".to_owned();
             self.overlays.lsp_results.references = None;
         } else {
             let count = references.len();
@@ -498,13 +498,13 @@ impl Model {
                 items: references,
                 selected: 0,
             });
-            self.status = format!("references: {count}");
+            self.status.text = format!("references: {count}");
         }
     }
 
     pub(crate) fn apply_document_highlights_response(&mut self, result: &serde_json::Value) {
         let Some(items) = result.as_array() else {
-            self.status = "lsp: no highlights".to_owned();
+            self.status.text = "lsp: no highlights".to_owned();
             self.overlays.lsp_results.document_highlights = None;
             return;
         };
@@ -555,11 +555,11 @@ impl Model {
         highlights.sort_by_key(|highlight| (highlight.start, highlight.end));
         highlights.dedup_by_key(|highlight| (highlight.start, highlight.end));
         if highlights.is_empty() {
-            self.status = "lsp: no highlights".to_owned();
+            self.status.text = "lsp: no highlights".to_owned();
             self.overlays.lsp_results.document_highlights = None;
         } else {
             let count = highlights.len();
-            self.status = format!("highlights: {count}");
+            self.status.text = format!("highlights: {count}");
             self.overlays.lsp_results.document_highlights = Some(DocumentHighlightState {
                 revision: self.editor.revision(),
                 items: highlights,
@@ -573,7 +573,7 @@ impl Model {
         direction: CallHierarchyDirection,
     ) {
         let Some(item) = result.as_array().and_then(|items| items.first()).cloned() else {
-            self.status = "lsp: no call hierarchy item".to_owned();
+            self.status.text = "lsp: no call hierarchy item".to_owned();
             return;
         };
         self.request_call_hierarchy_calls(item, direction);
@@ -585,7 +585,7 @@ impl Model {
         direction: CallHierarchyDirection,
     ) {
         let Some(calls) = result.as_array() else {
-            self.status = "lsp: no calls".to_owned();
+            self.status.text = "lsp: no calls".to_owned();
             self.overlays.lsp_results.call_hierarchy = None;
             return;
         };
@@ -617,7 +617,7 @@ impl Model {
             left.path == right.path && left.line == right.line && left.character == right.character
         });
         if items.is_empty() {
-            self.status = "lsp: no calls".to_owned();
+            self.status.text = "lsp: no calls".to_owned();
             self.overlays.lsp_results.call_hierarchy = None;
         } else {
             let count = items.len();
@@ -625,7 +625,7 @@ impl Model {
                 CallHierarchyDirection::Incoming => "incoming",
                 CallHierarchyDirection::Outgoing => "outgoing",
             };
-            self.status = format!("{label} calls: {count}");
+            self.status.text = format!("{label} calls: {count}");
             self.overlays.lsp_results.call_hierarchy = Some(CallHierarchyState {
                 direction,
                 items,
@@ -636,15 +636,15 @@ impl Model {
 
     fn apply_hover_response(&mut self, result: &serde_json::Value) {
         let Some(contents) = result.get("contents") else {
-            self.status = "lsp: no hover".to_owned();
+            self.status.text = "lsp: no hover".to_owned();
             return;
         };
         let text = hover_text(contents);
         if text.is_empty() {
-            self.status = "lsp: no hover".to_owned();
+            self.status.text = "lsp: no hover".to_owned();
         } else {
             self.overlays.lsp_results.hover = Some(text);
-            self.status = "hover".to_owned();
+            self.status.text = "hover".to_owned();
         }
     }
 }

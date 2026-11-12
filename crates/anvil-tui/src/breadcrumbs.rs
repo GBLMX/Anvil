@@ -77,7 +77,7 @@ impl Model {
         } else {
             self.tree.pending_select = Some(path);
         }
-        self.status = "breadcrumb path".to_owned();
+        self.status.text = "breadcrumb path".to_owned();
         self.dirty = true;
     }
 

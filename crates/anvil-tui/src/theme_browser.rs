@@ -23,7 +23,7 @@ impl Model {
             original: theme::choice(),
             selected,
         });
-        self.status = "themes · Enter apply · Esc cancel".to_owned();
+        self.status.text = "themes · Enter apply · Esc cancel".to_owned();
         self.dirty = true;
     }
 
@@ -53,7 +53,7 @@ impl Model {
         let Some(name) = names.get(browser.selected) else {
             return;
         };
-        self.status = match theme::set_theme(name) {
+        self.status.text = match theme::set_theme(name) {
             Ok(()) => {
                 let status = format!("theme: {}", theme::name());
                 self.persist_theme_status(status)
@@ -68,7 +68,7 @@ impl Model {
             return;
         };
         let _ = theme::apply_choice(browser.original, false);
-        self.status = "theme preview cancelled".to_owned();
+        self.status.text = "theme preview cancelled".to_owned();
         self.dirty = true;
     }
 }

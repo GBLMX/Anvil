@@ -6,21 +6,21 @@ impl Model {
     pub(crate) fn add_workspace_root(&mut self, path: &str) {
         let path = path.trim();
         if path.is_empty() {
-            self.status = "E: usage: :workspace-add <absolute-path>".to_owned();
+            self.status.text = "E: usage: :workspace-add <absolute-path>".to_owned();
             self.dirty = true;
             return;
         }
         let Ok(canonical) = Path::new(path).canonicalize() else {
-            self.status = format!("E: workspace root not found: {path}");
+            self.status.text = format!("E: workspace root not found: {path}");
             self.dirty = true;
             return;
         };
         if let Err(error) = self.workspace.roots.add(&canonical, false) {
-            self.status = format!("E: {error}");
+            self.status.text = format!("E: {error}");
             self.dirty = true;
             return;
         }
-        self.status = format!(
+        self.status.text = format!(
             "workspace root added (untrusted, no gateway): {}",
             canonical.display()
         );
@@ -30,12 +30,12 @@ impl Model {
     pub(crate) fn trust_workspace_root(&mut self, path: &str, trusted: bool) {
         let path = path.trim();
         if path.is_empty() {
-            self.status = "E: usage: :workspace-trust <absolute-path>".to_owned();
+            self.status.text = "E: usage: :workspace-trust <absolute-path>".to_owned();
             self.dirty = true;
             return;
         }
         let Ok(canonical) = Path::new(path).canonicalize() else {
-            self.status = format!("E: workspace root not found: {path}");
+            self.status.text = format!("E: workspace root not found: {path}");
             self.dirty = true;
             return;
         };
@@ -44,15 +44,15 @@ impl Model {
             self.workspace.root_gateways.remove(&canonical);
             match self.workspace.roots.set_trusted(&canonical, false) {
                 Ok(()) => {
-                    self.status = format!(
+                    self.status.text = format!(
                         "workspace root {}: untrusted (gateway stopped)",
                         canonical.display()
                     );
                 }
-                Err(error) => self.status = format!("E: {error}"),
+                Err(error) => self.status.text = format!("E: {error}"),
             }
         } else if self.workspace.root_gateways.contains_key(&canonical) {
-            self.status = format!("workspace root {}: already trusted", canonical.display());
+            self.status.text = format!("workspace root {}: already trusted", canonical.display());
         } else {
             match GatewaySession::start(&canonical) {
                 Ok((session, gateway, _lsp)) => {
@@ -61,13 +61,13 @@ impl Model {
                         .root_gateways
                         .insert(canonical.clone(), (session, gateway));
                     self.ensure_root_file_workers();
-                    self.status = format!(
+                    self.status.text = format!(
                         "workspace root {}: trusted, gateway started",
                         canonical.display()
                     );
                 }
                 Err(error) => {
-                    self.status = format!("E: start root gateway: {error}");
+                    self.status.text = format!("E: start root gateway: {error}");
                 }
             }
         }
@@ -77,12 +77,12 @@ impl Model {
     pub(crate) fn remove_workspace_root(&mut self, path: &str) {
         let path = path.trim();
         if path.is_empty() {
-            self.status = "E: usage: :workspace-remove <absolute-path>".to_owned();
+            self.status.text = "E: usage: :workspace-remove <absolute-path>".to_owned();
             self.dirty = true;
             return;
         }
         let Ok(canonical) = Path::new(path).canonicalize() else {
-            self.status = format!("E: workspace root not found: {path}");
+            self.status.text = format!("E: workspace root not found: {path}");
             self.dirty = true;
             return;
         };
@@ -90,9 +90,9 @@ impl Model {
             Ok(()) => {
                 self.stop_root_file_worker(&canonical);
                 self.workspace.root_gateways.remove(&canonical);
-                self.status = format!("workspace root removed: {}", canonical.display());
+                self.status.text = format!("workspace root removed: {}", canonical.display());
             }
-            Err(error) => self.status = format!("E: {error}"),
+            Err(error) => self.status.text = format!("E: {error}"),
         }
         self.dirty = true;
     }
@@ -100,9 +100,9 @@ impl Model {
     pub(crate) fn list_workspace_roots(&mut self) {
         let roots = self.workspace.roots.list();
         if roots.is_empty() {
-            self.status = "no workspace roots".to_owned();
+            self.status.text = "no workspace roots".to_owned();
         } else {
-            self.status = roots
+            self.status.text = roots
                 .iter()
                 .map(|root| {
                     format!(
@@ -113,7 +113,7 @@ impl Model {
                 })
                 .collect::<Vec<_>>()
                 .join("; ");
-            self.status.push_str(&format!(
+            self.status.text.push_str(&format!(
                 "; gateways: {}",
                 self.workspace.root_gateways.len()
             ));

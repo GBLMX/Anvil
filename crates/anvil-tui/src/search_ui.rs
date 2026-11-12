@@ -81,14 +81,14 @@ impl Model {
                 self.search.state.error = None;
                 self.search.state.truncated = truncated;
                 if committed {
-                    self.status = self.search_status(query);
+                    self.status.text = self.search_status(query);
                 }
                 self.dirty = true;
                 true
             }
             Err(error) => {
                 self.search.state.error = Some(error.clone());
-                self.status = format!("E: {error}");
+                self.status.text = format!("E: {error}");
                 self.dirty = true;
                 false
             }
@@ -97,7 +97,7 @@ impl Model {
 
     pub(crate) fn search_next(&mut self, forward: bool) {
         if self.search.query.is_empty() {
-            self.status = "E: no previous search".to_owned();
+            self.status.text = "E: no previous search".to_owned();
             self.dirty = true;
             return;
         }
@@ -105,7 +105,7 @@ impl Model {
             return;
         }
         if self.search.state.matches.is_empty() {
-            self.status = "E: pattern not found".to_owned();
+            self.status.text = "E: pattern not found".to_owned();
             self.dirty = true;
             return;
         }
@@ -117,7 +117,7 @@ impl Model {
             (self.search.state.current + len - 1) % len
         };
         self.cursor = self.search.state.matches[self.search.state.current].start;
-        self.status = self.search_status(&self.search.query);
+        self.status.text = self.search_status(&self.search.query);
         self.dirty = true;
     }
 
@@ -158,12 +158,12 @@ impl Model {
         }
         let query = self.replace_query();
         if query.is_empty() || !self.apply_search_query(&query, false) {
-            self.status = "E: no active search".to_owned();
+            self.status.text = "E: no active search".to_owned();
             self.dirty = true;
             return false;
         }
         let Some(range) = self.search.state.selected().cloned() else {
-            self.status = "E: pattern not found".to_owned();
+            self.status.text = "E: pattern not found".to_owned();
             self.dirty = true;
             return false;
         };
@@ -171,13 +171,13 @@ impl Model {
             .editor
             .apply_transaction(vec![(range, replacement.to_owned())])
         {
-            self.status = "E: replacement failed".to_owned();
+            self.status.text = "E: replacement failed".to_owned();
             self.dirty = true;
             return false;
         }
         self.modified = true;
         self.apply_search_query(&query, false);
-        self.status = "replacement applied".to_owned();
+        self.status.text = "replacement applied".to_owned();
         self.dirty = true;
         true
     }
@@ -188,12 +188,12 @@ impl Model {
         }
         let query = self.replace_query();
         if query.is_empty() || !self.apply_search_query(&query, false) {
-            self.status = "E: no active search".to_owned();
+            self.status.text = "E: no active search".to_owned();
             self.dirty = true;
             return false;
         }
         if self.search.state.matches.is_empty() {
-            self.status = "E: pattern not found".to_owned();
+            self.status.text = "E: pattern not found".to_owned();
             self.dirty = true;
             return false;
         }
@@ -207,13 +207,13 @@ impl Model {
             .map(|range| (range, replacement.to_owned()))
             .collect();
         if !self.editor.apply_transaction(edits) {
-            self.status = "E: replacement failed".to_owned();
+            self.status.text = "E: replacement failed".to_owned();
             self.dirty = true;
             return false;
         }
         self.modified = true;
         self.apply_search_query(&query, false);
-        self.status = format!("{count} replacements applied");
+        self.status.text = format!("{count} replacements applied");
         self.dirty = true;
         true
     }
@@ -243,17 +243,17 @@ impl Model {
     pub(crate) fn request_project_search(&mut self, query: &str) {
         let query = query.trim();
         if query.is_empty() {
-            self.status = "E: project search requires a query".to_owned();
+            self.status.text = "E: project search requires a query".to_owned();
             self.dirty = true;
             return;
         }
         if !self.ensure_file_worker() {
-            self.status = "E: gateway unavailable".to_owned();
+            self.status.text = "E: gateway unavailable".to_owned();
             self.dirty = true;
             return;
         }
         if self.workspace.file_worker.is_none() {
-            self.status = "E: file worker unavailable".to_owned();
+            self.status.text = "E: file worker unavailable".to_owned();
             self.dirty = true;
             return;
         }
@@ -281,7 +281,7 @@ impl Model {
             }
         }
         if expected == 0 {
-            self.status = format!(
+            self.status.text = format!(
                 "E: project search: {}",
                 error.unwrap_or_else(|| "no workers".to_owned())
             );
@@ -294,7 +294,7 @@ impl Model {
         self.project.search_results.clear();
         self.project.search_truncated = false;
         self.project.search_error = error;
-        self.status = format!("searching project: {query} ({expected} roots)");
+        self.status.text = format!("searching project: {query} ({expected} roots)");
         self.dirty = true;
     }
 
@@ -327,7 +327,7 @@ impl Model {
             }
         }
         if self.project.search_received < self.project.search_expected {
-            self.status = format!(
+            self.status.text = format!(
                 "searching project: {query} ({}/{})",
                 self.project.search_received, self.project.search_expected
             );
@@ -359,7 +359,7 @@ impl Model {
         } else {
             ""
         };
-        self.status = match self.project.search_error.take() {
+        self.status.text = match self.project.search_error.take() {
             Some(error) => {
                 if count == 0 {
                     format!("E: project search: {error}")
@@ -384,7 +384,7 @@ impl Model {
         self.overlays.location.stdin_location_selected = None;
         self.overlays.location.stdin_location_scroll = 0;
         self.overlays.location.location_title = "Locations".to_owned();
-        self.status = "search cancelled".to_owned();
+        self.status.text = "search cancelled".to_owned();
         self.dirty = true;
     }
 }
@@ -399,7 +399,7 @@ mod tests {
     fn project_search_requires_a_query() {
         let mut model = Model::new(EditorState::from_text("x"), None);
         model.execute_command("search-project");
-        assert_eq!(model.status, "E: project search requires a query");
+        assert_eq!(model.status.text, "E: project search requires a query");
     }
 
     #[test]
@@ -477,7 +477,7 @@ mod tests {
                 .iter()
                 .any(|entry| { entry.path == root.join("src/lib.rs").to_string_lossy() })
         );
-        assert!(model.status.contains("2 matches"));
+        assert!(model.status.text.contains("2 matches"));
     }
 
     #[test]
@@ -520,7 +520,7 @@ mod tests {
             model.overlays.location.stdin_locations.len(),
             MAX_PROJECT_RESULTS
         );
-        assert!(model.status.contains('+'));
+        assert!(model.status.text.contains('+'));
     }
 
     #[test]

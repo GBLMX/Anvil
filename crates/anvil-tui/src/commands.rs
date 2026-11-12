@@ -9,18 +9,18 @@ impl Model {
         }
         let mut parts = spec.splitn(3, '/');
         let (Some(old), Some(new)) = (parts.next(), parts.next()) else {
-            self.status = "E: usage: :s/old/new/[g]".to_owned();
+            self.status.text = "E: usage: :s/old/new/[g]".to_owned();
             self.dirty = true;
             return;
         };
         let flags = parts.next().unwrap_or_default();
         if old.is_empty() {
-            self.status = "E: empty search pattern".to_owned();
+            self.status.text = "E: empty search pattern".to_owned();
             self.dirty = true;
             return;
         }
         if !flags.is_empty() && flags != "g" {
-            self.status = format!("E: unknown substitute flags: {flags}");
+            self.status.text = format!("E: unknown substitute flags: {flags}");
             self.dirty = true;
             return;
         }
@@ -28,7 +28,7 @@ impl Model {
             0..self.editor.text().len_bytes()
         } else {
             let Some(line) = self.editor.index().offset_to_line(self.cursor) else {
-                self.status = "E: no line".to_owned();
+                self.status.text = "E: no line".to_owned();
                 self.dirty = true;
                 return;
             };
@@ -43,13 +43,13 @@ impl Model {
         ) {
             Ok(result) => result,
             Err(error) => {
-                self.status = format!("E: {error}");
+                self.status.text = format!("E: {error}");
                 self.dirty = true;
                 return;
             }
         };
         if truncated {
-            self.status = "E: too many matches; narrow the range".to_owned();
+            self.status.text = "E: too many matches; narrow the range".to_owned();
             self.dirty = true;
             return;
         }
@@ -61,7 +61,7 @@ impl Model {
             matches.truncate(1);
         }
         if matches.is_empty() {
-            self.status = "E: pattern not found".to_owned();
+            self.status.text = "E: pattern not found".to_owned();
             self.dirty = true;
             return;
         }
@@ -72,7 +72,7 @@ impl Model {
             .map(|range| (range, new.to_owned()))
             .collect();
         if !self.editor.apply_transaction(edits) {
-            self.status = "E: substitution failed".to_owned();
+            self.status.text = "E: substitution failed".to_owned();
             self.dirty = true;
             return;
         }
@@ -80,7 +80,7 @@ impl Model {
         self.editor.set_selection_bytes(self.cursor, self.cursor);
         self.modified = true;
         self.dirty = true;
-        self.status = format!("{count} replacements applied");
+        self.status.text = format!("{count} replacements applied");
     }
 
     pub(crate) fn execute_command(&mut self, command: &str) {
@@ -93,7 +93,7 @@ impl Model {
             return;
         }
         if anvil_control::capability_for_command(command).is_none() {
-            self.status = format!("E: unknown command: {command}");
+            self.status.text = format!("E: unknown command: {command}");
             self.dirty = true;
             return;
         }
@@ -161,7 +161,7 @@ impl Model {
             ("themes", "") => self.open_theme_browser(),
             ("theme", argument) => {
                 if argument.is_empty() || argument == "list" {
-                    self.status = format!(
+                    self.status.text = format!(
                         "theme: {} ({:?}); available: {}",
                         theme::name(),
                         theme::choice(),
@@ -171,9 +171,9 @@ impl Model {
                     match theme::set_theme(argument) {
                         Ok(()) => {
                             let status = format!("theme: {}", theme::name());
-                            self.status = self.persist_theme_status(status);
+                            self.status.text = self.persist_theme_status(status);
                         }
-                        Err(error) => self.status = format!("E: {error}"),
+                        Err(error) => self.status.text = format!("E: {error}"),
                     }
                 }
                 self.dirty = true;
@@ -186,7 +186,7 @@ impl Model {
                     if let [dark, light] = parts.as_slice() {
                         (*dark, *light)
                     } else {
-                        self.status = "E: usage: :theme-auto [dark] [light]".to_owned();
+                        self.status.text = "E: usage: :theme-auto [dark] [light]".to_owned();
                         self.dirty = true;
                         return;
                     }
@@ -198,14 +198,14 @@ impl Model {
                             theme::auto_mapping().0,
                             theme::auto_mapping().1
                         );
-                        self.status = self.persist_theme_status(status);
+                        self.status.text = self.persist_theme_status(status);
                     }
-                    Err(error) => self.status = format!("E: {error}"),
+                    Err(error) => self.status.text = format!("E: {error}"),
                 }
                 self.dirty = true;
             }
             ("theme-save", "") => {
-                self.status = match theme_config::save() {
+                self.status.text = match theme_config::save() {
                     Ok(path) => format!("theme saved: {}", path.display()),
                     Err(error) => format!("E: {error}"),
                 };
@@ -219,13 +219,13 @@ impl Model {
                     if let [package, signature, public_key] = parts.as_slice() {
                         self.start_pkg_install_file(package, signature, public_key);
                     } else {
-                        self.status =
+                        self.status.text =
                             "E: usage: :pkg install-file <package> <signature> <public-key>"
                                 .to_owned();
                         self.dirty = true;
                     }
                 } else {
-                    self.status = "E: usage: :pkg install <url> | :pkg install-file <package> <signature> <public-key>".to_owned();
+                    self.status.text = "E: usage: :pkg install <url> | :pkg install-file <package> <signature> <public-key>".to_owned();
                     self.dirty = true;
                 }
             }
@@ -238,7 +238,7 @@ impl Model {
             ("dap-attach", argument) => {
                 let parts = argument.split_whitespace().collect::<Vec<_>>();
                 let Some(program) = parts.first() else {
-                    self.status = "E: usage: :dap-attach <adapter> [args]".to_owned();
+                    self.status.text = "E: usage: :dap-attach <adapter> [args]".to_owned();
                     self.dirty = true;
                     return;
                 };
@@ -253,7 +253,7 @@ impl Model {
                 self.language.dap.client = None;
                 self.language.dap.attach = None;
                 self.language.dap.attach_started = None;
-                self.status = "debug adapter detached".to_owned();
+                self.status.text = "debug adapter detached".to_owned();
                 self.dirty = true;
             }
             ("debug", "") => self.toggle_debug_panel(),
@@ -286,7 +286,7 @@ impl Model {
             | ("terminal-send", _)
             | ("terminal-stop", "")
             | ("terminal-read", "") => {
-                self.status = "E: terminal is unsupported on this platform".to_owned();
+                self.status.text = "E: terminal is unsupported on this platform".to_owned();
                 self.dirty = true;
             }
             ("workspace-add", path) => self.add_workspace_root(path),
@@ -299,7 +299,7 @@ impl Model {
             ("wq", "") => self.queue_effect(Effect::SaveAndQuit),
             ("wq", path) => self.queue_effect(Effect::SaveAsAndQuit(path.into())),
             _ => {
-                self.status = format!("E: unknown command: {name}");
+                self.status.text = format!("E: unknown command: {name}");
                 self.dirty = true;
             }
         }
@@ -307,7 +307,7 @@ impl Model {
 
     pub(crate) fn queue_effect(&mut self, effect: Effect) {
         if self.effects.push(effect).is_err() {
-            self.status = "E: effect queue full".to_owned();
+            self.status.text = "E: effect queue full".to_owned();
             self.dirty = true;
         }
     }
@@ -382,7 +382,7 @@ impl Model {
                 }
                 Effect::Reload(path) => {
                     if let Err(error) = self.reload_external(&path) {
-                        self.status = format!("E: {error}");
+                        self.status.text = format!("E: {error}");
                         self.dirty = true;
                     }
                 }
@@ -401,7 +401,7 @@ impl Model {
 
     fn finish_save_quit(&mut self) {
         if self.any_modified() {
-            self.status = "E: other buffers have unsaved changes".to_owned();
+            self.status.text = "E: other buffers have unsaved changes".to_owned();
             self.dirty = true;
         } else {
             self.quit = true;
@@ -409,12 +409,12 @@ impl Model {
     }
     fn close_buffer_number(&mut self, argument: &str, force: bool) {
         let Ok(number) = argument.parse::<usize>() else {
-            self.status = "E: invalid buffer index".to_owned();
+            self.status.text = "E: invalid buffer index".to_owned();
             self.dirty = true;
             return;
         };
         if number == 0 {
-            self.status = "E: buffer indexes start at 1".to_owned();
+            self.status.text = "E: buffer indexes start at 1".to_owned();
             self.dirty = true;
             return;
         }

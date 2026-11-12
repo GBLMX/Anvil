@@ -150,30 +150,30 @@ impl Model {
         params: serde_json::Value,
     ) -> bool {
         let Some(path) = self.path.clone() else {
-            self.status = "E: lsp requires an open file".to_owned();
+            self.status.text = "E: lsp requires an open file".to_owned();
             self.dirty = true;
             return false;
         };
         let id = self.language.lsp_requests.next_request;
         self.language.lsp_requests.next_request += 1;
         if self.active_lsp_worker().is_none() {
-            self.status = "E: lsp is not running".to_owned();
+            self.status.text = "E: lsp is not running".to_owned();
             self.dirty = true;
             return false;
         }
         let text = self.editor.text().slice(0..self.editor.text().len_bytes());
         if let Err(error) = self.sync_lsp_document(&path, text) {
-            self.status = format!("E: lsp request: {error}");
+            self.status.text = format!("E: lsp request: {error}");
             self.dirty = true;
             return false;
         }
         let Some(worker) = self.active_lsp_worker() else {
-            self.status = "E: lsp is not running".to_owned();
+            self.status.text = "E: lsp is not running".to_owned();
             self.dirty = true;
             return false;
         };
         if let Err(error) = worker.request(id, method, params) {
-            self.status = format!("E: lsp request: {error}");
+            self.status.text = format!("E: lsp request: {error}");
             self.dirty = true;
             return false;
         }
@@ -256,17 +256,17 @@ impl Model {
         self.cancel_code_actions();
         self.overlays.lsp_results.hover = None;
         let Some(path) = self.path.clone() else {
-            self.status = "E: no file".to_owned();
+            self.status.text = "E: no file".to_owned();
             self.dirty = true;
             return;
         };
         let Some(diagnostics) = self.language.diagnostics.by_path.get(&path) else {
-            self.status = "no diagnostics".to_owned();
+            self.status.text = "no diagnostics".to_owned();
             self.dirty = true;
             return;
         };
         if diagnostics.is_empty() {
-            self.status = "no diagnostics".to_owned();
+            self.status.text = "no diagnostics".to_owned();
             self.dirty = true;
             return;
         }
@@ -319,7 +319,7 @@ impl Model {
             .iter()
             .position(|item| *item == (line, character))
             .unwrap_or(0);
-        self.status = format!("diagnostic {}/{}", index + 1, positions.len());
+        self.status.text = format!("diagnostic {}/{}", index + 1, positions.len());
         self.dirty = true;
     }
 
@@ -387,7 +387,7 @@ impl Model {
             "textDocument/signatureHelp",
             params,
         ) {
-            self.status = "signature".to_owned();
+            self.status.text = "signature".to_owned();
         }
         self.dirty = true;
     }
@@ -459,7 +459,7 @@ impl Model {
             "textDocument/completion",
             params,
         ) {
-            self.status = "completion".to_owned();
+            self.status.text = "completion".to_owned();
         }
         self.dirty = true;
     }
@@ -513,7 +513,7 @@ impl Model {
             "textDocument/definition",
             params,
         ) {
-            self.status = "definition".to_owned();
+            self.status.text = "definition".to_owned();
         }
         self.dirty = true;
     }
@@ -542,7 +542,7 @@ impl Model {
             "textDocument/references",
             params,
         ) {
-            self.status = "references".to_owned();
+            self.status.text = "references".to_owned();
         }
         self.dirty = true;
     }
@@ -568,7 +568,7 @@ impl Model {
             "textDocument/documentHighlight",
             params,
         ) {
-            self.status = "highlights".to_owned();
+            self.status.text = "highlights".to_owned();
         }
         self.dirty = true;
     }
@@ -605,7 +605,7 @@ impl Model {
             "textDocument/prepareCallHierarchy",
             params,
         ) {
-            self.status = "call hierarchy".to_owned();
+            self.status.text = "call hierarchy".to_owned();
         }
         self.dirty = true;
     }
@@ -628,7 +628,7 @@ impl Model {
             ),
         };
         if self.send_lsp_request(kind, method, serde_json::json!({ "item": item })) {
-            self.status = label.to_owned();
+            self.status.text = label.to_owned();
         }
         self.dirty = true;
     }
@@ -662,7 +662,7 @@ impl Model {
             "position": {"line": line, "character": character}
         });
         if self.send_lsp_request(LspRequestKind::Hover, "textDocument/hover", params) {
-            self.status = "hover".to_owned();
+            self.status.text = "hover".to_owned();
         }
         self.dirty = true;
     }
@@ -675,13 +675,13 @@ impl Model {
         self.ui.input_mode = InputMode::Rename {
             name: String::new(),
         };
-        self.status = "rename symbol".to_owned();
+        self.status.text = "rename symbol".to_owned();
         self.dirty = true;
     }
 
     pub(crate) fn request_rename(&mut self, new_name: &str) {
         if new_name.trim().is_empty() {
-            self.status = "E: empty rename".to_owned();
+            self.status.text = "E: empty rename".to_owned();
             self.dirty = true;
             return;
         }
@@ -697,7 +697,7 @@ impl Model {
             "newName": new_name
         });
         if self.send_lsp_request(LspRequestKind::Rename, "textDocument/rename", params) {
-            self.status = "renaming".to_owned();
+            self.status.text = "renaming".to_owned();
         }
         self.dirty = true;
     }
@@ -750,7 +750,7 @@ impl Model {
             "textDocument/codeAction",
             params,
         ) {
-            self.status = "code actions".to_owned();
+            self.status.text = "code actions".to_owned();
         }
         self.dirty = true;
     }
@@ -796,7 +796,7 @@ impl Model {
         let params = serde_json::json!({"query": ""});
         let _ = path;
         if self.send_lsp_request(LspRequestKind::WorkspaceSymbol, "workspace/symbol", params) {
-            self.status = "workspace symbols".to_owned();
+            self.status.text = "workspace symbols".to_owned();
         }
         self.dirty = true;
     }
@@ -848,18 +848,18 @@ impl Model {
         if self.path.as_ref() != Some(&symbol.path)
             && let Err(error) = self.open_path(&symbol.path)
         {
-            self.status = format!("E: {error}");
+            self.status.text = format!("E: {error}");
             self.dirty = true;
             return;
         }
         self.cursor = self.offset_at_utf16(symbol.line, symbol.character);
-        self.status = format!("symbol {}", symbol.name);
+        self.status.text = format!("symbol {}", symbol.name);
         self.dirty = true;
     }
 
     fn apply_workspace_symbols_response(&mut self, result: &serde_json::Value) {
         let Some(items) = result.as_array() else {
-            self.status = "lsp: no workspace symbols".to_owned();
+            self.status.text = "lsp: no workspace symbols".to_owned();
             self.overlays.lsp_results.workspace_symbols = None;
             return;
         };
@@ -906,7 +906,7 @@ impl Model {
             });
         }
         if parsed.is_empty() {
-            self.status = "lsp: no workspace symbols".to_owned();
+            self.status.text = "lsp: no workspace symbols".to_owned();
             self.overlays.lsp_results.workspace_symbols = None;
         } else {
             self.overlays.lsp_results.workspace_symbols = Some(WorkspaceSymbolState {
@@ -915,7 +915,7 @@ impl Model {
                 query: String::new(),
                 selected: 0,
             });
-            self.status = "workspace symbols".to_owned();
+            self.status.text = "workspace symbols".to_owned();
         }
     }
 
@@ -934,7 +934,7 @@ impl Model {
             "textDocument/documentSymbol",
             params,
         ) {
-            self.status = "document symbols".to_owned();
+            self.status.text = "document symbols".to_owned();
         }
         self.dirty = true;
     }
@@ -958,7 +958,7 @@ impl Model {
         };
         self.record_jump();
         self.cursor = self.offset_at_utf16(symbol.line, symbol.character);
-        self.status = format!("symbol {}", symbol.name);
+        self.status.text = format!("symbol {}", symbol.name);
         self.dirty = true;
     }
 
@@ -983,12 +983,12 @@ impl Model {
         if self.path.as_ref() != Some(&reference.path)
             && let Err(error) = self.open_path(&reference.path)
         {
-            self.status = format!("E: {error}");
+            self.status.text = format!("E: {error}");
             self.dirty = true;
             return;
         }
         self.cursor = self.offset_at_utf16(reference.line, reference.character);
-        self.status = format!(
+        self.status.text = format!(
             "reference {}:{}",
             reference.path.display(),
             reference.line + 1
@@ -1017,7 +1017,7 @@ impl Model {
         if self.path.as_ref() != Some(&item.path)
             && let Err(error) = self.open_path(&item.path)
         {
-            self.status = format!("E: {error}");
+            self.status.text = format!("E: {error}");
             self.dirty = true;
             return;
         }
@@ -1026,7 +1026,7 @@ impl Model {
             CallHierarchyDirection::Incoming => "incoming",
             CallHierarchyDirection::Outgoing => "outgoing",
         };
-        self.status = format!("{direction} call {}:{}", item.name, item.line + 1);
+        self.status.text = format!("{direction} call {}:{}", item.name, item.line + 1);
         self.dirty = true;
     }
 
@@ -1055,7 +1055,7 @@ impl Model {
             params,
         );
         if sent {
-            self.status = "formatting".to_owned();
+            self.status.text = "formatting".to_owned();
         }
         self.dirty = true;
         sent
@@ -1092,14 +1092,14 @@ impl Model {
             return;
         };
         if let Some(reason) = &item.disabled {
-            self.status = format!("E: {reason}");
+            self.status.text = format!("E: {reason}");
         } else if let Some(edit) = &item.edit {
             match edit.apply(self) {
-                Ok(()) => self.status = format!("applied {}", item.title),
-                Err(error) => self.status = format!("E: {error}"),
+                Ok(()) => self.status.text = format!("applied {}", item.title),
+                Err(error) => self.status.text = format!("E: {error}"),
             }
         } else {
-            self.status = "E: command code actions are not supported".to_owned();
+            self.status.text = "E: command code actions are not supported".to_owned();
         }
         self.dirty = true;
     }
@@ -1110,12 +1110,12 @@ impl Model {
         base: Option<HashMap<PathBuf, u64>>,
     ) {
         if result.is_null() {
-            self.status = "lsp: no code actions".to_owned();
+            self.status.text = "lsp: no code actions".to_owned();
             self.overlays.lsp_results.code_actions = None;
             return;
         }
         let Some(items) = result.as_array() else {
-            self.status = "E: lsp: invalid code action response".to_owned();
+            self.status.text = "E: lsp: invalid code action response".to_owned();
             return;
         };
         let items: Vec<CodeActionItem> = items
@@ -1147,11 +1147,11 @@ impl Model {
             })
             .collect();
         if items.is_empty() {
-            self.status = "lsp: no code actions".to_owned();
+            self.status.text = "lsp: no code actions".to_owned();
             self.overlays.lsp_results.code_actions = None;
         } else {
             self.overlays.lsp_results.code_actions = Some(CodeActionState { items, selected: 0 });
-            self.status = "code actions".to_owned();
+            self.status.text = "code actions".to_owned();
         }
     }
 
@@ -1196,7 +1196,7 @@ impl Model {
                 self.start_snippet(&snippet, start);
             }
         }
-        self.status = format!("completed {label}");
+        self.status.text = format!("completed {label}");
         self.dirty = true;
     }
 
@@ -1221,7 +1221,7 @@ impl Model {
         self.editor.set_selections_bytes(ranges);
         self.cursor = start;
         if mirrors > 1 {
-            self.status = format!("snippet stop ({mirrors} mirrors)");
+            self.status.text = format!("snippet stop ({mirrors} mirrors)");
         }
         self.dirty = true;
     }

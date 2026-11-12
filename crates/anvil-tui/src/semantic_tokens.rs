@@ -24,7 +24,7 @@ impl Model {
             "textDocument/semanticTokens/full",
             params,
         ) {
-            self.status = "semantic tokens".to_owned();
+            self.status.text = "semantic tokens".to_owned();
             self.dirty = true;
         }
     }
@@ -33,7 +33,7 @@ impl Model {
         let Some(data) = result.get("data").and_then(serde_json::Value::as_array) else {
             self.overlays.lsp_results.semantic_tokens.clear();
             self.overlays.lsp_results.semantic_revision = None;
-            self.status = "lsp: no semantic tokens".to_owned();
+            self.status.text = "lsp: no semantic tokens".to_owned();
             return;
         };
         let mut tokens = Vec::new();
@@ -81,7 +81,7 @@ impl Model {
             } else {
                 Some(self.editor.revision())
             };
-        self.status = format!(
+        self.status.text = format!(
             "semantic tokens: {}",
             self.overlays.lsp_results.semantic_tokens.len()
         );

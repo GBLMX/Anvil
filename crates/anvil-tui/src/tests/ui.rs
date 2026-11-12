@@ -64,8 +64,8 @@ fn renders_visible_lines() {
 #[test]
 fn busy_operation_renders_spinner() {
     let mut model = Model::new(EditorState::from_text("alpha"), None);
-    model.busy = Some("copying".to_owned());
-    model.spinner = 0;
+    model.status.busy = Some("copying".to_owned());
+    model.status.spinner = 0;
     let backend = TestBackend::new(80, 8);
     let mut terminal = Terminal::new(backend).expect("terminal");
     terminal.draw(|frame| view(&model, frame)).expect("draw");
@@ -180,16 +180,16 @@ fn tree_moves_copies_and_recursively_deletes() {
     assert!(moved.exists());
 
     model.finish_tree_transfer(moved.clone(), true, "../".to_owned());
-    assert!(model.status.contains("outside the workspace"));
+    assert!(model.status.text.contains("outside the workspace"));
 
     model.refresh_tree(Some(workspace.join("src")));
     model.begin_tree_transfer(true);
-    assert!(model.status.contains("files only"));
-    model.busy = Some("copying".to_owned());
+    assert!(model.status.text.contains("files only"));
+    model.status.busy = Some("copying".to_owned());
     model.finish_tree_transfer(moved.clone(), true, "src".to_owned());
-    assert!(model.status.contains("already in progress"));
+    assert!(model.status.text.contains("already in progress"));
     assert!(moved.exists());
-    model.busy = None;
+    model.status.busy = None;
 
     model.finish_tree_delete(workspace.join("src"));
     assert!(!workspace.join("src").exists());
@@ -209,7 +209,7 @@ fn tree_delete_requires_an_unopened_entry() {
 
     model.refresh_tree(Some(workspace.join("open.txt")));
     model.begin_tree_delete();
-    assert!(model.status.contains("close the open buffer"));
+    assert!(model.status.text.contains("close the open buffer"));
 
     model.refresh_tree(Some(workspace.join("closed.txt")));
     model.finish_tree_delete(workspace.join("closed.txt"));
@@ -737,7 +737,7 @@ fn recent_files_and_workspaces_are_bounded_and_deduplicated() {
 fn reduced_motion_uses_a_static_busy_glyph() {
     let mut model = Model::new(EditorState::from_text("alpha"), None);
     model.settings.ui.reduced_motion = true;
-    model.busy = Some("indexing".to_owned());
+    model.status.busy = Some("indexing".to_owned());
     let backend = TestBackend::new(80, 8);
     let mut terminal = Terminal::new(backend).expect("terminal");
     terminal.draw(|frame| view(&model, frame)).expect("draw");

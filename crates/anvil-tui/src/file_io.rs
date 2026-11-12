@@ -14,7 +14,7 @@ impl Model {
             return Ok(());
         }
         if self.path.is_none() && self.modified {
-            self.status =
+            self.status.text =
                 "E: save or discard the unnamed buffer before opening another file".to_owned();
             self.dirty = true;
             return Err("unnamed buffer is modified".to_owned());
@@ -22,6 +22,7 @@ impl Model {
         if !self.auto_save_before_focus_change() {
             let error = self
                 .status
+                .text
                 .strip_prefix("E: ")
                 .unwrap_or("auto-save failed")
                 .to_owned();
@@ -330,10 +331,10 @@ impl Model {
                 return;
             }
             self.ui.input_mode = InputMode::ConfirmReload { path: path.clone() };
-            self.status = format!("File changed on disk: {} [y/N]", path.display());
+            self.status.text = format!("File changed on disk: {} [y/N]", path.display());
             self.dirty = true;
         } else if let Err(error) = self.reload_external(&path) {
-            self.status = format!("E: {error}");
+            self.status.text = format!("E: {error}");
             self.dirty = true;
         }
     }
@@ -393,7 +394,7 @@ impl Model {
         }
         self.sync_active();
         self.stale_paths.remove(path);
-        self.status = format!("reloaded {}", path.display());
+        self.status.text = format!("reloaded {}", path.display());
         self.dirty = true;
         Ok(())
     }
@@ -408,13 +409,14 @@ impl Model {
                 if self.editor_mode {
                     self.exit_code = 1;
                 }
-                self.status = format!("E: {error}");
+                self.status.text = format!("E: {error}");
                 self.dirty = true;
                 return false;
             }
         };
         if self.stale_paths.contains(&path) {
-            self.status = "E: file changed by project replace; reload before saving".to_owned();
+            self.status.text =
+                "E: file changed by project replace; reload before saving".to_owned();
             self.dirty = true;
             return false;
         }
@@ -425,20 +427,21 @@ impl Model {
             .cloned();
         if let Some(conflict) = &current_conflict {
             if path != *conflict {
-                self.status =
+                self.status.text =
                     "E: resolve the current swap conflict before saving elsewhere".to_owned();
                 self.dirty = true;
                 return false;
             }
             if !self.modified {
-                self.status = "E: swap conflict; :conflict-recover or :conflict-discard".to_owned();
+                self.status.text =
+                    "E: swap conflict; :conflict-recover or :conflict-discard".to_owned();
                 self.dirty = true;
                 return false;
             }
         }
         let target_conflict = self.conflict_swaps.contains_key(&path);
         if target_conflict && current_conflict.is_none() {
-            self.status = "E: destination has an unresolved swap conflict".to_owned();
+            self.status.text = "E: destination has an unresolved swap conflict".to_owned();
             self.dirty = true;
             return false;
         }
@@ -466,7 +469,7 @@ impl Model {
                 self.sync_lsp_active();
                 self.notify_lsp_save(&path, &text);
                 self.sync_watch_paths();
-                self.status = format!("\"{display}\" written");
+                self.status.text = format!("\"{display}\" written");
                 self.request_format_after_save();
                 self.dirty = true;
                 true
@@ -475,7 +478,7 @@ impl Model {
                 if self.editor_mode {
                     self.exit_code = 1;
                 }
-                self.status = format!("E: {error}");
+                self.status.text = format!("E: {error}");
                 self.dirty = true;
                 false
             }
@@ -516,8 +519,8 @@ impl Model {
         if self.save() {
             true
         } else {
-            if let Some(error) = self.status.strip_prefix("E: ") {
-                self.status = format!("E: auto-save: {error}");
+            if let Some(error) = self.status.text.strip_prefix("E: ") {
+                self.status.text = format!("E: auto-save: {error}");
             }
             false
         }
@@ -531,7 +534,7 @@ impl Model {
             if self.editor_mode {
                 self.exit_code = 1;
             }
-            self.status = "E: no file name".to_owned();
+            self.status.text = "E: no file name".to_owned();
             self.dirty = true;
             return false;
         };
@@ -554,7 +557,7 @@ impl Model {
                 continue;
             }
             let Some(path) = &buffer.path else {
-                self.status = "E: modified buffer has no file name".to_owned();
+                self.status.text = "E: modified buffer has no file name".to_owned();
                 failed = true;
                 continue;
             };
@@ -574,14 +577,14 @@ impl Model {
                     self.clear_conflict(&path);
                 }
                 Err(error) => {
-                    self.status = format!("E: {}: {error}", path.display());
+                    self.status.text = format!("E: {}: {error}", path.display());
                     failed = true;
                 }
             }
         }
         self.sync_active();
         if !failed {
-            self.status = "all files written".to_owned();
+            self.status.text = "all files written".to_owned();
         }
         self.dirty = true;
         !failed

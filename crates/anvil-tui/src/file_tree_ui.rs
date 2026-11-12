@@ -131,7 +131,7 @@ impl Model {
         let entries = match result {
             Ok(entries) => entries,
             Err(error) => {
-                self.status = format!("E: tree: {error}");
+                self.status.text = format!("E: tree: {error}");
                 return;
             }
         };
@@ -193,7 +193,7 @@ impl Model {
             }
             self.tree.entries.splice(index + 1..end, children);
         }
-        self.status = "file tree ready".to_owned();
+        self.status.text = "file tree ready".to_owned();
         self.sync_tree_watches();
     }
 
@@ -223,7 +223,7 @@ impl Model {
         }
         if expected == 0 {
             if let Some(error) = error {
-                self.status = format!("E: git status: {error}");
+                self.status.text = format!("E: git status: {error}");
                 self.dirty = true;
             }
             return;
@@ -246,7 +246,7 @@ impl Model {
         match result {
             Ok(statuses) => self.git.status.extend(statuses),
             Err(error) => {
-                self.status = format!("E: git status: {error}");
+                self.status.text = format!("E: git status: {error}");
                 self.dirty = true;
             }
         }
@@ -325,13 +325,13 @@ impl Model {
                     copy,
                     result,
                 } => {
-                    self.busy = None;
+                    self.status.busy = None;
                     match result {
                         Ok(()) => {
                             if !copy {
                                 self.remap_open_path(&from, &to);
                             }
-                            self.status = if copy {
+                            self.status.text = if copy {
                                 format!("copied {}", to.display())
                             } else {
                                 format!("moved {}", to.display())
@@ -340,23 +340,23 @@ impl Model {
                             self.finish_busy_progress(None);
                         }
                         Err(error) => {
-                            self.status = format!("E: {error}");
+                            self.status.text = format!("E: {error}");
                             self.dirty = true;
                             self.finish_busy_progress(Some(&error));
                         }
                     }
                 }
                 FileEvent::Removed { path, result } => {
-                    self.busy = None;
+                    self.status.busy = None;
                     match result {
                         Ok(()) => {
                             self.mark_missing(&path);
-                            self.status = format!("deleted {}", path.display());
+                            self.status.text = format!("deleted {}", path.display());
                             self.refresh_tree(None);
                             self.finish_busy_progress(None);
                         }
                         Err(error) => {
-                            self.status = format!("E: {error}");
+                            self.status.text = format!("E: {error}");
                             self.dirty = true;
                             self.finish_busy_progress(Some(&error));
                         }
@@ -370,7 +370,7 @@ impl Model {
                 }
                 FileEvent::TreeWatchUnavailable(error) => {
                     self.tree.stale = true;
-                    self.status = format!("E: tree watcher: {error}");
+                    self.status.text = format!("E: tree watcher: {error}");
                 }
                 FileEvent::TreeSnapshot {
                     generation,
@@ -424,7 +424,7 @@ impl Model {
                     FileEvent::TreeChanged { .. } => self.refresh_root_tree(&root),
                     FileEvent::TreeWatchUnavailable(error) => {
                         self.tree.stale = true;
-                        self.status = format!("E: tree watcher: {error}");
+                        self.status.text = format!("E: tree watcher: {error}");
                     }
                     _ => {}
                 }
@@ -533,7 +533,7 @@ impl Model {
             }
             self.tree.selected = (!self.tree.entries.is_empty()).then_some(0);
         }
-        self.status = if self.tree.show_hidden {
+        self.status.text = if self.tree.show_hidden {
             "hidden files shown".to_owned()
         } else {
             "hidden files hidden".to_owned()
@@ -637,7 +637,7 @@ impl Model {
             }
         }
         if limited && !self.tree.watch_limited {
-            self.status =
+            self.status.text =
                 format!("tree watch limit reached ({MAX_TREE_WATCH_DIRS}); auto-refresh limited");
         }
         self.tree.watch_limited = limited;
@@ -811,13 +811,13 @@ impl Model {
         let listings: BTreeMap<_, _> = listings.into_iter().collect();
         match listings.get(&self.workspace.path) {
             None => {
-                self.status = "E: tree: missing root listing".to_owned();
+                self.status.text = "E: tree: missing root listing".to_owned();
                 self.tree.stale = true;
                 self.finish_tree_refresh();
                 return;
             }
             Some(Err(error)) => {
-                self.status = format!("E: tree: {error}");
+                self.status.text = format!("E: tree: {error}");
                 self.tree.stale = true;
                 self.finish_tree_refresh();
                 return;
@@ -869,8 +869,8 @@ impl Model {
     }
 
     fn tree_busy(&mut self) -> bool {
-        if self.busy.is_some() {
-            self.status = "E: file operation already in progress".to_owned();
+        if self.status.busy.is_some() {
+            self.status.text = "E: file operation already in progress".to_owned();
             self.dirty = true;
             true
         } else {
@@ -1006,7 +1006,7 @@ mod tests {
                 .iter()
                 .any(|entry| entry.path == root.join("secret.rs"))
         );
-        assert!(model.status.contains("untrusted workspace root"));
+        assert!(model.status.text.contains("untrusted workspace root"));
     }
 
     #[test]
@@ -1076,6 +1076,6 @@ mod tests {
             .collect();
         model.sync_tree_watches();
         assert!(model.tree.watch_limited);
-        assert!(model.status.contains("watch limit"));
+        assert!(model.status.text.contains("watch limit"));
     }
 }

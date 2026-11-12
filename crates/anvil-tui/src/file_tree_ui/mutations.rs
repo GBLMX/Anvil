@@ -29,7 +29,7 @@ impl Model {
             return;
         };
         let Some(name) = entry.path.file_name().and_then(|name| name.to_str()) else {
-            self.status = "E: invalid entry name".to_owned();
+            self.status.text = "E: invalid entry name".to_owned();
             self.dirty = true;
             return;
         };
@@ -52,7 +52,7 @@ impl Model {
             return;
         };
         if self.path_is_open(&entry.path) {
-            self.status = "E: close the open buffer before deleting".to_owned();
+            self.status.text = "E: close the open buffer before deleting".to_owned();
             self.dirty = true;
             return;
         }
@@ -74,7 +74,7 @@ impl Model {
             return;
         };
         if copy && entry.is_dir {
-            self.status = "E: copy supports files only".to_owned();
+            self.status.text = "E: copy supports files only".to_owned();
             self.dirty = true;
             return;
         }
@@ -104,7 +104,7 @@ impl Model {
                     path
                 }
                 _ => {
-                    self.status = "E: destination is outside the workspace".to_owned();
+                    self.status.text = "E: destination is outside the workspace".to_owned();
                     self.dirty = true;
                     return;
                 }
@@ -123,35 +123,35 @@ impl Model {
             .map(|root| root.path.clone())
             .unwrap_or_else(|| self.workspace.path.clone());
         if source_root != target_root {
-            self.status = "E: cannot transfer across workspace roots".to_owned();
+            self.status.text = "E: cannot transfer across workspace roots".to_owned();
             self.dirty = true;
             return;
         }
         if self.tree_entries(&target_directory).is_err() {
-            self.status = "E: destination directory does not exist".to_owned();
+            self.status.text = "E: destination directory does not exist".to_owned();
             self.dirty = true;
             return;
         }
         let Some(name) = path.file_name() else {
-            self.status = "E: invalid entry name".to_owned();
+            self.status.text = "E: invalid entry name".to_owned();
             self.dirty = true;
             return;
         };
         let target = target_directory.join(name);
         if target == path {
-            self.status = "E: source and destination are the same".to_owned();
+            self.status.text = "E: source and destination are the same".to_owned();
             self.dirty = true;
             return;
         }
         match self.tree_entry_exists(&target_directory, &name.to_string_lossy()) {
             Ok(true) => {
-                self.status = format!("E: already exists: {}", name.to_string_lossy());
+                self.status.text = format!("E: already exists: {}", name.to_string_lossy());
                 self.dirty = true;
                 return;
             }
             Ok(false) => {}
             Err(error) => {
-                self.status = format!("E: {error}");
+                self.status.text = format!("E: {error}");
                 self.dirty = true;
                 return;
             }
@@ -164,18 +164,18 @@ impl Model {
                 copy,
             }) {
                 Ok(()) => {
-                    self.busy = Some(label.to_owned());
-                    self.busy_progress = Some(self.ui.progress.start(
+                    self.status.busy = Some(label.to_owned());
+                    self.status.busy_progress = Some(self.ui.progress.start(
                         label,
                         name.to_string_lossy().into_owned(),
                         false,
                     ));
-                    self.status = format!("{label} {}…", name.to_string_lossy());
+                    self.status.text = format!("{label} {}…", name.to_string_lossy());
                     self.dirty = true;
                     return;
                 }
                 Err(error) => {
-                    self.status = format!("E: {error}");
+                    self.status.text = format!("E: {error}");
                     self.dirty = true;
                     return;
                 }
@@ -191,7 +191,7 @@ impl Model {
                 if !copy {
                     self.remap_open_path(&path, &target);
                 }
-                self.status = format!(
+                self.status.text = format!(
                     "{} {} to {}",
                     if copy { "copied" } else { "moved" },
                     name.to_string_lossy(),
@@ -206,7 +206,7 @@ impl Model {
                 }
             }
             Err(error) => {
-                self.status = format!("E: {error}");
+                self.status.text = format!("E: {error}");
                 self.dirty = true;
             }
         }
@@ -223,19 +223,19 @@ impl Model {
         }
         let name = name.trim().to_owned();
         if !Self::valid_tree_name(&name) {
-            self.status = "E: invalid entry name".to_owned();
+            self.status.text = "E: invalid entry name".to_owned();
             self.dirty = true;
             return;
         }
         match self.tree_entry_exists(&directory, &name) {
             Ok(true) => {
-                self.status = format!("E: already exists: {name}");
+                self.status.text = format!("E: already exists: {name}");
                 self.dirty = true;
                 return;
             }
             Ok(false) => {}
             Err(error) => {
-                self.status = format!("E: {error}");
+                self.status.text = format!("E: {error}");
                 self.dirty = true;
                 return;
             }
@@ -250,14 +250,14 @@ impl Model {
                 if matches!(kind, CreateKind::File)
                     && let Err(error) = self.open_path(&target)
                 {
-                    self.status = format!("E: {error}");
+                    self.status.text = format!("E: {error}");
                     self.dirty = true;
                     return;
                 }
                 self.refresh_tree(Some(target));
             }
             Err(error) => {
-                self.status = format!("E: {error}");
+                self.status.text = format!("E: {error}");
                 self.dirty = true;
             }
         }
@@ -270,12 +270,12 @@ impl Model {
         }
         let name = name.trim().to_owned();
         if !Self::valid_tree_name(&name) {
-            self.status = "E: invalid entry name".to_owned();
+            self.status.text = "E: invalid entry name".to_owned();
             self.dirty = true;
             return;
         }
         let Some(parent) = path.parent() else {
-            self.status = "E: invalid entry path".to_owned();
+            self.status.text = "E: invalid entry path".to_owned();
             self.dirty = true;
             return;
         };
@@ -286,13 +286,13 @@ impl Model {
         }
         match self.tree_entry_exists(parent, &name) {
             Ok(true) => {
-                self.status = format!("E: already exists: {name}");
+                self.status.text = format!("E: already exists: {name}");
                 self.dirty = true;
                 return;
             }
             Ok(false) => {}
             Err(error) => {
-                self.status = format!("E: {error}");
+                self.status.text = format!("E: {error}");
                 self.dirty = true;
                 return;
             }
@@ -306,7 +306,7 @@ impl Model {
                 }
             }
             Err(error) => {
-                self.status = format!("E: {error}");
+                self.status.text = format!("E: {error}");
                 self.dirty = true;
             }
         }
@@ -318,20 +318,20 @@ impl Model {
             return;
         }
         if self.path_is_open(&path) {
-            self.status = "E: close the open buffer before deleting".to_owned();
+            self.status.text = "E: close the open buffer before deleting".to_owned();
             self.dirty = true;
             return;
         }
         if let Some(worker) = self.file_worker_for_path(&path) {
             match worker.request(FileRequest::RemoveAll(path.clone())) {
                 Ok(()) => {
-                    self.busy = Some("deleting".to_owned());
-                    self.busy_progress = Some(self.ui.progress.start(
+                    self.status.busy = Some("deleting".to_owned());
+                    self.status.busy_progress = Some(self.ui.progress.start(
                         "deleting",
                         path.display().to_string(),
                         false,
                     ));
-                    self.status = format!(
+                    self.status.text = format!(
                         "deleting {}…",
                         path.file_name()
                             .map(|name| name.to_string_lossy())
@@ -341,7 +341,7 @@ impl Model {
                     return;
                 }
                 Err(error) => {
-                    self.status = format!("E: {error}");
+                    self.status.text = format!("E: {error}");
                     self.dirty = true;
                     return;
                 }
@@ -355,7 +355,7 @@ impl Model {
                 }
             }
             Err(error) => {
-                self.status = format!("E: {error}");
+                self.status.text = format!("E: {error}");
                 self.dirty = true;
             }
         }

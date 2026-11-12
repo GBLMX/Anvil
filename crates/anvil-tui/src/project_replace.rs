@@ -7,23 +7,23 @@ use crate::pipe_locations::PipeLocation;
 impl Model {
     pub(crate) fn preview_project_replace(&mut self, spec: &str) {
         let Some((old, new)) = spec.split_once('/') else {
-            self.status = "E: usage: :replace-project OLD/NEW/".to_owned();
+            self.status.text = "E: usage: :replace-project OLD/NEW/".to_owned();
             self.dirty = true;
             return;
         };
         let new = new.strip_suffix('/').unwrap_or(new);
         if old.is_empty() {
-            self.status = "E: replace search text is empty".to_owned();
+            self.status.text = "E: replace search text is empty".to_owned();
             self.dirty = true;
             return;
         }
         if !self.ensure_file_worker() {
-            self.status = "E: gateway unavailable".to_owned();
+            self.status.text = "E: gateway unavailable".to_owned();
             self.dirty = true;
             return;
         }
         let Some(worker) = self.workspace.file_worker.as_ref() else {
-            self.status = "E: file worker unavailable".to_owned();
+            self.status.text = "E: file worker unavailable".to_owned();
             self.dirty = true;
             return;
         };
@@ -34,12 +34,12 @@ impl Model {
             new: new.to_owned(),
             generation,
         }) {
-            self.status = format!("E: replace preview: {error}");
+            self.status.text = format!("E: replace preview: {error}");
             self.dirty = true;
             return;
         }
         self.project.replace_pending = Some(generation);
-        self.status = "building replace preview...".to_owned();
+        self.status.text = "building replace preview...".to_owned();
         self.dirty = true;
     }
 
@@ -59,7 +59,7 @@ impl Model {
                     self.overlays.location.stdin_locations.clear();
                     self.overlays.location.stdin_location_selected = None;
                     self.overlays.location.location_title = "Locations".to_owned();
-                    self.status = format!("replace: no matches for {}", plan.old);
+                    self.status.text = format!("replace: no matches for {}", plan.old);
                 } else {
                     let locations = plan
                         .files
@@ -77,13 +77,13 @@ impl Model {
                         locations,
                     );
                     self.project.replace_plan = Some(plan);
-                    self.status = format!(
+                    self.status.text = format!(
                         "replace preview: {count} files; apply with :replace-project-apply"
                     );
                 }
             }
             Err(error) => {
-                self.status = format!("E: replace preview: {error}");
+                self.status.text = format!("E: replace preview: {error}");
                 self.project.replace_plan = None;
             }
         }
@@ -92,34 +92,34 @@ impl Model {
 
     pub(crate) fn apply_project_replace(&mut self) {
         let Some(plan) = self.project.replace_plan.clone() else {
-            self.status = "E: no replace preview to apply".to_owned();
+            self.status.text = "E: no replace preview to apply".to_owned();
             self.dirty = true;
             return;
         };
         if self.any_modified() {
-            self.status = "E: save or discard modified buffers first".to_owned();
+            self.status.text = "E: save or discard modified buffers first".to_owned();
             self.dirty = true;
             return;
         }
         if !self.ensure_file_worker() {
-            self.status = "E: gateway unavailable".to_owned();
+            self.status.text = "E: gateway unavailable".to_owned();
             self.dirty = true;
             return;
         }
         let Some(worker) = self.workspace.file_worker.as_ref() else {
-            self.status = "E: file worker unavailable".to_owned();
+            self.status.text = "E: file worker unavailable".to_owned();
             self.dirty = true;
             return;
         };
         self.project.replace_generation = self.project.replace_generation.wrapping_add(1);
         let generation = self.project.replace_generation;
         if let Err(error) = worker.request(FileRequest::ProjectReplaceApply { plan, generation }) {
-            self.status = format!("E: replace apply: {error}");
+            self.status.text = format!("E: replace apply: {error}");
             self.dirty = true;
             return;
         }
         self.project.replace_pending = Some(generation);
-        self.status = "applying project replace...".to_owned();
+        self.status.text = "applying project replace...".to_owned();
         self.dirty = true;
     }
 
@@ -140,7 +140,7 @@ impl Model {
                             self.stale_paths
                                 .insert(self.workspace.path.join(&file.relative));
                         }
-                        self.status =
+                        self.status.text =
                             "replace applied; modified buffers marked stale (reload before saving)"
                                 .to_owned();
                     } else {
@@ -152,7 +152,7 @@ impl Model {
                                 reload_errors.push(format!("{}: {error}", file.relative));
                             }
                         }
-                        self.status = if reload_errors.is_empty() {
+                        self.status.text = if reload_errors.is_empty() {
                             format!("replaced {} files", plan.files.len())
                         } else {
                             format!(
@@ -167,7 +167,7 @@ impl Model {
                 self.overlays.location.location_title = "Locations".to_owned();
             }
             Err(error) => {
-                self.status = format!("E: replace apply: {error}");
+                self.status.text = format!("E: replace apply: {error}");
             }
         }
     }
@@ -179,7 +179,7 @@ impl Model {
         self.overlays.location.stdin_location_selected = None;
         self.overlays.location.stdin_location_scroll = 0;
         self.overlays.location.location_title = "Locations".to_owned();
-        self.status = "replace preview cancelled".to_owned();
+        self.status.text = "replace preview cancelled".to_owned();
         self.dirty = true;
     }
 }
@@ -251,10 +251,10 @@ mod tests {
         model.project.replace_plan = Some(plan());
         model.project.replace_pending = Some(5);
         model.handle_project_replace_applied(5, Ok(()));
-        assert!(model.status.contains("reload failed"));
-        assert!(!model.status.contains("replaced 1 files"));
+        assert!(model.status.text.contains("reload failed"));
+        assert!(!model.status.text.contains("replaced 1 files"));
         assert!(!model.save());
-        assert!(model.status.contains("reload before saving"));
+        assert!(model.status.text.contains("reload before saving"));
     }
 
     #[test]
@@ -277,8 +277,8 @@ mod tests {
                 .slice(0..model.editor.text().len_bytes()),
             "old\n"
         );
-        assert!(model.status.contains("modified buffers"));
+        assert!(model.status.text.contains("modified buffers"));
         assert!(!model.save());
-        assert!(model.status.contains("reload before saving"));
+        assert!(model.status.text.contains("reload before saving"));
     }
 }

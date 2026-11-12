@@ -96,7 +96,7 @@ pub(crate) fn restore(model: &mut Model, workspace: &Path) -> Result<bool, Strin
         model.ui.focus.split = state.split_focus;
     }
 
-    model.status = if conflicts == 0 {
+    model.status.text = if conflicts == 0 {
         "session restored".to_owned()
     } else {
         format!("session restored with {conflicts} swap conflict(s)")
@@ -168,19 +168,19 @@ impl Model {
             return;
         }
         let Some(path) = self.path.clone() else {
-            self.status = "E: no file name".to_owned();
+            self.status.text = "E: no file name".to_owned();
             self.dirty = true;
             return;
         };
         let Some(swap) = self.conflict_swaps.get(&path).cloned() else {
-            self.status = "no swap conflict for this buffer".to_owned();
+            self.status.text = "no swap conflict for this buffer".to_owned();
             self.dirty = true;
             return;
         };
         let text = match fs::read_to_string(&swap) {
             Ok(text) => text,
             Err(error) => {
-                self.status = format!("E: conflict swap: {error}");
+                self.status.text = format!("E: conflict swap: {error}");
                 self.dirty = true;
                 return;
             }
@@ -198,23 +198,23 @@ impl Model {
             .switch_path(self.path.as_deref(), false);
         self.sync_lsp_active();
         self.sync_watch_paths();
-        self.status = "conflict recovered from swap; buffer modified".to_owned();
+        self.status.text = "conflict recovered from swap; buffer modified".to_owned();
         self.dirty = true;
     }
 
     pub(crate) fn discard_conflict(&mut self) {
         let Some(path) = self.path.clone() else {
-            self.status = "E: no file name".to_owned();
+            self.status.text = "E: no file name".to_owned();
             self.dirty = true;
             return;
         };
         if !self.conflict_swaps.contains_key(&path) {
-            self.status = "no swap conflict for this buffer".to_owned();
+            self.status.text = "no swap conflict for this buffer".to_owned();
             self.dirty = true;
             return;
         }
         self.clear_conflict(&path);
-        self.status = "conflict discarded; current buffer kept".to_owned();
+        self.status.text = "conflict discarded; current buffer kept".to_owned();
         self.dirty = true;
     }
 }
@@ -451,7 +451,7 @@ mod tests {
         let mut conflicted = Model::new(EditorState::from_text(""), None);
         assert!(restore(&mut conflicted, &workspace).expect("restore"));
         assert!(!conflicted.modified);
-        assert!(conflicted.status.contains("conflict"));
+        assert!(conflicted.status.text.contains("conflict"));
         let swap = conflicted
             .conflict_swaps
             .values()
@@ -463,7 +463,7 @@ mod tests {
         assert!(swap.exists(), "save deleted the conflict swap");
         let mut still_conflicted = Model::new(EditorState::from_text(""), None);
         assert!(restore(&mut still_conflicted, &workspace).expect("restore"));
-        assert!(still_conflicted.status.contains("conflict"));
+        assert!(still_conflicted.status.text.contains("conflict"));
         assert!(swap.exists());
     }
     #[test]

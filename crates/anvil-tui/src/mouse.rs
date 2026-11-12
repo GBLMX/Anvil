@@ -109,7 +109,7 @@ pub(crate) fn handle_mouse(model: &mut Model, mouse: MouseEvent, width: u16, hei
                     if let Some(path) = model.openable_recent_files().get(index).cloned() {
                         model.welcome = false;
                         if let Err(error) = model.open_path(&path) {
-                            model.status = format!("E: {error}");
+                            model.status.text = format!("E: {error}");
                         }
                         model.dirty = true;
                     }

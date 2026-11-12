@@ -517,6 +517,17 @@ struct EditSessionState {
 }
 
 #[derive(Default)]
+pub struct StatusState {
+    /// Short status line.
+    text: String,
+    /// Background file operation label, if any.
+    busy: Option<String>,
+    busy_progress: Option<u64>,
+    /// Spinner frame for the busy label.
+    spinner: usize,
+}
+
+#[derive(Default)]
 struct InputState {
     /// Pending normal-mode operator (`d` or `y`).
     pending: Option<char>,
@@ -915,13 +926,8 @@ pub struct Model {
     pub missing: bool,
     /// Whether the next loop iteration should render.
     pub dirty: bool,
-    /// Short status line.
-    pub status: String,
-    /// Background file operation label, if any.
-    busy: Option<String>,
-    busy_progress: Option<u64>,
-    /// Spinner frame for the busy label.
-    spinner: usize,
+    /// Status text and background activity state.
+    pub status: StatusState,
     /// Operator, register, macro, and replay input state.
     input: InputState,
     /// Substring search query and state.
@@ -994,10 +1000,7 @@ impl Model {
             modified: false,
             missing: false,
             dirty: true,
-            status: String::new(),
-            busy: None,
-            busy_progress: None,
-            spinner: 0,
+            status: StatusState::default(),
             input: InputState::default(),
             search: SearchSession::default(),
             buffers: BufferState::default(),
@@ -1044,12 +1047,12 @@ impl Model {
         match loaded {
             Ok((settings, keymap, theme)) => {
                 if let Err(error) = self.apply_loaded_config(settings, keymap, theme) {
-                    self.status = format!("E: config-reload: {error}");
+                    self.status.text = format!("E: config-reload: {error}");
                     self.dirty = true;
                 }
             }
             Err(error) => {
-                self.status = format!("E: config-reload: {error}");
+                self.status.text = format!("E: config-reload: {error}");
                 self.dirty = true;
             }
         }
@@ -1066,7 +1069,7 @@ impl Model {
         }
         self.apply_settings(settings);
         self.keymap = keymap;
-        self.status = "configuration reloaded".to_owned();
+        self.status.text = "configuration reloaded".to_owned();
         self.dirty = true;
         Ok(())
     }
@@ -1193,11 +1196,11 @@ impl Model {
     /// Keeps the cursor inside the viewport.
     fn reject_read_only(&mut self) -> bool {
         if self.read_only {
-            self.status = "E: read-only buffer".to_owned();
+            self.status.text = "E: read-only buffer".to_owned();
             self.dirty = true;
             true
         } else if self.buffers.help_back.is_some() {
-            self.status = "E: read-only view".to_owned();
+            self.status.text = "E: read-only view".to_owned();
             self.dirty = true;
             true
         } else {
@@ -1218,7 +1221,7 @@ impl Model {
 
     fn show_read_only(&mut self, text: &str, status: &str, title: &str) -> bool {
         if self.buffers.help_back.is_some() {
-            self.status = "already viewing a read-only view".to_owned();
+            self.status.text = "already viewing a read-only view".to_owned();
             self.dirty = true;
             return false;
         }
@@ -1248,7 +1251,7 @@ impl Model {
         self.welcome = false;
         self.ui.input_mode = InputMode::Normal;
         self.input.pending = None;
-        self.status = status.to_owned();
+        self.status.text = status.to_owned();
         self.dirty = true;
         true
     }
@@ -1266,7 +1269,7 @@ impl Model {
         self.view.hscroll = 0;
         self.modified = false;
         self.buffers.read_only_title = Some(title.to_owned());
-        self.status = status.to_owned();
+        self.status.text = status.to_owned();
         self.dirty = true;
     }
 
@@ -1300,7 +1303,7 @@ impl Model {
         self.ui.input_mode = InputMode::Normal;
         self.welcome = std::mem::take(&mut self.welcome_back);
         self.input.pending = None;
-        self.status = format!("Returned from {title}");
+        self.status.text = format!("Returned from {title}");
         self.dirty = true;
         true
     }
@@ -1380,12 +1383,12 @@ impl Model {
 
     fn start_lsp(&mut self) {
         let Some(path) = self.path.clone() else {
-            self.status = "E: lsp requires an open file".to_owned();
+            self.status.text = "E: lsp requires an open file".to_owned();
             self.dirty = true;
             return;
         };
         let Some(settings) = lsp_settings(&path) else {
-            self.status = format!("E: no language server for {}", path.display());
+            self.status.text = format!("E: no language server for {}", path.display());
             self.dirty = true;
             return;
         };
@@ -1395,7 +1398,7 @@ impl Model {
             self.clear_lsp_ui();
             let text = self.editor.text().slice(0..self.editor.text().len_bytes());
             let _ = self.sync_lsp_document(&path, text);
-            self.status = "lsp already running".to_owned();
+            self.status.text = "lsp already running".to_owned();
             self.dirty = true;
             return;
         }
@@ -1405,7 +1408,7 @@ impl Model {
                 .as_mut()
                 .and_then(|session| session.connect_lsp().ok())
         }) else {
-            self.status = "E: lsp gateway connection unavailable".to_owned();
+            self.status.text = "E: lsp gateway connection unavailable".to_owned();
             self.dirty = true;
             return;
         };
@@ -1434,13 +1437,13 @@ impl Model {
                 self.language.lsp_requests.versions.insert(path.clone(), 1);
                 self.language.lsp.retries.entry(desired).or_insert(0);
                 self.clear_lsp_ui();
-                self.status = if settings.label == "jdtls" {
+                self.status.text = if settings.label == "jdtls" {
                     "jdtls starting (indexing workspace)".to_owned()
                 } else {
                     format!("{} starting", settings.label)
                 };
             }
-            Err(error) => self.status = format!("E: lsp start: {error}"),
+            Err(error) => self.status.text = format!("E: lsp start: {error}"),
         }
         self.dirty = true;
     }
@@ -1452,7 +1455,7 @@ impl Model {
             self.overlays.lsp_results.inlay_support.remove(&key);
         }
         self.clear_lsp_ui();
-        self.status = "lsp stopped".to_owned();
+        self.status.text = "lsp stopped".to_owned();
         self.dirty = true;
     }
 
@@ -1472,7 +1475,7 @@ impl Model {
                     .insert(key.clone(), inlay_hints);
                 if active {
                     if let Some(info) = server_info {
-                        self.status = format!("lsp: {info}");
+                        self.status.text = format!("lsp: {info}");
                     }
                     self.overlays.lsp_results.inlay_hints.clear();
                     self.overlays.lsp_results.inlay_pending = None;
@@ -1485,7 +1488,7 @@ impl Model {
             }
             LspEvent::Diagnostics(path, diagnostics) => {
                 self.language.diagnostics.by_path.insert(path, diagnostics);
-                self.status = format!(
+                self.status.text = format!(
                     "lsp diagnostics: {}",
                     self.language
                         .diagnostics
@@ -1518,10 +1521,10 @@ impl Model {
                             key.clone(),
                             Instant::now() + Duration::from_millis(delay_ms),
                         ));
-                        self.status =
+                        self.status.text =
                             format!("lsp crashed; restarting in {delay_ms}ms ({retries}/3)");
                     } else {
-                        self.status = format!("E: lsp crashed: {error}");
+                        self.status.text = format!("E: lsp crashed: {error}");
                         self.notify(
                             anvil_session::ui::NotificationSeverity::Error,
                             "lsp",
@@ -1538,7 +1541,7 @@ impl Model {
                 if active {
                     self.language.lsp.config = None;
                     self.clear_lsp_ui();
-                    self.status = format!("E: lsp startup failed: {error}");
+                    self.status.text = format!("E: lsp startup failed: {error}");
                     self.notify(
                         anvil_session::ui::NotificationSeverity::Error,
                         "lsp",
@@ -1548,7 +1551,7 @@ impl Model {
             }
             LspEvent::Error(error) => {
                 if active {
-                    self.status = format!("E: lsp: {error}");
+                    self.status.text = format!("E: lsp: {error}");
                     self.notify(
                         anvil_session::ui::NotificationSeverity::Error,
                         "lsp",
@@ -1558,7 +1561,7 @@ impl Model {
             }
             LspEvent::Log(line) => {
                 if active {
-                    self.status = format!("lsp: {line}");
+                    self.status.text = format!("lsp: {line}");
                 }
             }
         }
@@ -1676,7 +1679,7 @@ impl Model {
 
     fn reconnect_gateway(&mut self) {
         if !self.workspace.require_gateway {
-            self.status = "E: gateway is not required in this session".to_owned();
+            self.status.text = "E: gateway is not required in this session".to_owned();
             self.dirty = true;
             return;
         }
@@ -1693,10 +1696,10 @@ impl Model {
                 self.workspace.gateway_session = Some(session);
                 self.workspace.gateway = Some(client);
                 self.language.lsp.client = Some(lsp_client);
-                self.status = "gateway reconnected".to_owned();
+                self.status.text = "gateway reconnected".to_owned();
             }
             Err(error) => {
-                self.status = format!("E: reconnect failed: {error}");
+                self.status.text = format!("E: reconnect failed: {error}");
             }
         }
         self.dirty = true;

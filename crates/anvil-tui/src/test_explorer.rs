@@ -62,14 +62,14 @@ impl Model {
             .and_then(TestExplorerState::selected)
             .cloned()
         else {
-            self.status = "no test failures".to_owned();
+            self.status.text = "no test failures".to_owned();
             self.dirty = true;
             return;
         };
         if self.path.as_deref() != Some(problem.path.as_path())
             && let Err(error) = self.open_path(&problem.path)
         {
-            self.status = format!("E: {error}");
+            self.status.text = format!("E: {error}");
             self.dirty = true;
             return;
         }
@@ -78,7 +78,7 @@ impl Model {
         self.ui.focus.split = false;
         self.overlays.test_explorer = None;
         self.ui.diagnostic_peek = None;
-        self.status = format!(
+        self.status.text = format!(
             "{}:{}: {}",
             problem.path.display(),
             problem.line + 1,

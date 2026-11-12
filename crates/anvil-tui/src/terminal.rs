@@ -69,7 +69,7 @@ pub fn run_with_input(
                 && let Some(path) = path
                 && let Err(error) = model.open_path(path)
             {
-                model.status = format!("E: {error}");
+                model.status.text = format!("E: {error}");
                 model.dirty = true;
             }
             (model, Some(session))
@@ -79,7 +79,7 @@ pub fn run_with_input(
             model.workspace.path = workspace.clone();
             model.reload_icons();
             model.workspace.require_gateway = true;
-            model.status = format!("E: gateway unavailable: {error}");
+            model.status.text = format!("E: gateway unavailable: {error}");
             model.dirty = true;
             (model, None)
         }
@@ -102,7 +102,7 @@ pub fn run_with_input(
         model.set_stdin_buffer(read_only);
         model.set_pipe_locations(&text);
         model.syntax.borrow_mut().switch_path(None, false);
-        model.status = if read_only {
+        model.status.text = if read_only {
             "[stdin] read-only".to_owned()
         } else {
             "[stdin]".to_owned()
@@ -112,31 +112,31 @@ pub fn run_with_input(
     model.set_read_only(read_only);
     if restore_session && let Err(error) = session::restore(&mut model, &workspace) {
         let message = format!("E: session: {error}");
-        if model.status.is_empty() {
-            model.status = message;
+        if model.status.text.is_empty() {
+            model.status.text = message;
         } else {
-            model.status.push_str(" | ");
-            model.status.push_str(&message);
+            model.status.text.push_str(" | ");
+            model.status.text.push_str(&message);
         }
         model.dirty = true;
     }
     if let Err(error) = theme::load_custom_themes() {
         let message = format!("E: themes: {error}");
-        if model.status.is_empty() {
-            model.status = message;
+        if model.status.text.is_empty() {
+            model.status.text = message;
         } else {
-            model.status.push_str(" | ");
-            model.status.push_str(&message);
+            model.status.text.push_str(" | ");
+            model.status.text.push_str(&message);
         }
         model.dirty = true;
     }
     if let Err(error) = theme_config::load() {
         let message = format!("E: theme config: {error}");
-        if model.status.is_empty() {
-            model.status = message;
+        if model.status.text.is_empty() {
+            model.status.text = message;
         } else {
-            model.status.push_str(" | ");
-            model.status.push_str(&message);
+            model.status.text.push_str(" | ");
+            model.status.text.push_str(&message);
         }
         model.dirty = true;
     }
@@ -144,11 +144,11 @@ pub fn run_with_input(
         Ok(settings) => model.apply_settings(settings),
         Err(error) => {
             let message = format!("E: settings: {error}");
-            if model.status.is_empty() {
-                model.status = message;
+            if model.status.text.is_empty() {
+                model.status.text = message;
             } else {
-                model.status.push_str(" | ");
-                model.status.push_str(&message);
+                model.status.text.push_str(" | ");
+                model.status.text.push_str(&message);
             }
             model.dirty = true;
         }
@@ -157,11 +157,11 @@ pub fn run_with_input(
         let theme_name = theme_name.to_string_lossy();
         if let Err(error) = theme::set_startup_theme(&theme_name) {
             let message = format!("E: {error}");
-            if model.status.is_empty() {
-                model.status = message;
+            if model.status.text.is_empty() {
+                model.status.text = message;
             } else {
-                model.status.push_str(" | ");
-                model.status.push_str(&message);
+                model.status.text.push_str(" | ");
+                model.status.text.push_str(&message);
             }
             model.dirty = true;
         }
@@ -169,11 +169,11 @@ pub fn run_with_input(
     theme::set_high_contrast(model.settings.ui.high_contrast);
     if let Err(error) = model.load_keymap_config() {
         let message = format!("E: keymap config: {error}");
-        if model.status.is_empty() {
-            model.status = message;
+        if model.status.text.is_empty() {
+            model.status.text = message;
         } else {
-            model.status.push_str(" | ");
-            model.status.push_str(&message);
+            model.status.text.push_str(" | ");
+            model.status.text.push_str(&message);
         }
         model.dirty = true;
     }
@@ -181,11 +181,11 @@ pub fn run_with_input(
     #[cfg(target_os = "linux")]
     if let Err(error) = model.load_plugins() {
         let message = format!("E: plugins: {error}");
-        if model.status.is_empty() {
-            model.status = message;
+        if model.status.text.is_empty() {
+            model.status.text = message;
         } else {
-            model.status.push_str(" | ");
-            model.status.push_str(&message);
+            model.status.text.push_str(" | ");
+            model.status.text.push_str(&message);
         }
         model.dirty = true;
     }
@@ -208,11 +208,11 @@ pub fn run_with_input(
             }
             Err(error) => {
                 let message = format!("E: control: {error}");
-                if model.status.is_empty() {
-                    model.status = message;
+                if model.status.text.is_empty() {
+                    model.status.text = message;
                 } else {
-                    model.status.push_str(" | ");
-                    model.status.push_str(&message);
+                    model.status.text.push_str(" | ");
+                    model.status.text.push_str(&message);
                 }
                 model.dirty = true;
                 None
@@ -251,7 +251,7 @@ pub fn run_with_input(
             Ok(true) => model.dirty = true,
             Ok(false) => {}
             Err(error) => {
-                model.status = format!("E: theme reload: {error}");
+                model.status.text = format!("E: theme reload: {error}");
                 model.dirty = true;
             }
         }
@@ -286,8 +286,8 @@ pub fn run_with_input(
                 let _ = call.reply.send(reply);
             }
         }
-        if model.busy.is_some() && !model.settings.ui.reduced_motion {
-            model.spinner = model.spinner.wrapping_add(1);
+        if model.status.busy.is_some() && !model.settings.ui.reduced_motion {
+            model.status.spinner = model.status.spinner.wrapping_add(1);
             model.dirty = true;
         }
         model.poll_inlay_hints(size.height.saturating_sub(2));
@@ -310,7 +310,7 @@ pub fn run_with_input(
                 }
                 Err(error) => {
                     if !session_error_reported {
-                        model.status = format!("E: session save: {error}");
+                        model.status.text = format!("E: session save: {error}");
                         model.dirty = true;
                         session_error_reported = true;
                     }

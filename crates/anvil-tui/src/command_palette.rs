@@ -108,7 +108,7 @@ impl Model {
 
     pub(crate) fn commit_theme(&mut self, name: &str) {
         if let Some(palette) = self.overlays.command_palette.take() {
-            self.status = match palette.theme_picker.commit(name) {
+            self.status.text = match palette.theme_picker.commit(name) {
                 Ok(()) => {
                     let status = format!("theme: {}", theme::name());
                     self.persist_theme_status(status)

@@ -38,7 +38,7 @@ impl Model {
                 }
                 self.dirty = true;
             } else if !self.settings.ui.reduced_motion {
-                self.spinner = self.spinner.wrapping_add(1);
+                self.status.spinner = self.status.spinner.wrapping_add(1);
                 self.dirty = true;
             }
         } else if self.language.diagnostics.count_shown != actual {
@@ -68,7 +68,7 @@ impl Model {
         if self.settings.ui.reduced_motion {
             "·"
         } else {
-            crate::render::SPINNER[self.spinner % crate::render::SPINNER.len()]
+            crate::render::SPINNER[self.status.spinner % crate::render::SPINNER.len()]
         }
     }
 
@@ -89,8 +89,8 @@ impl Model {
             return "…".to_owned();
         }
         let mut segments = Vec::new();
-        if !self.status.is_empty() {
-            segments.push(self.status.clone());
+        if !self.status.text.is_empty() {
+            segments.push(self.status.text.clone());
         }
         segments.push(middle_ellipsis(
             &self.relative_path_text(),
@@ -349,7 +349,7 @@ mod tests {
         let mut model = Model::new(EditorState::from_text("alpha"), None);
         model.path = Some(PathBuf::from("/ws/src/company/project/Button.tsx"));
         model.workspace.path = PathBuf::from("/ws");
-        model.status = "saved".to_owned();
+        model.status.text = "saved".to_owned();
         for width in [1, 12, 40, 200] {
             let text = model.status_text(width);
             assert!(UnicodeWidthStr::width(text.as_str()) <= width);

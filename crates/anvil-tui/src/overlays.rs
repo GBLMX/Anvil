@@ -18,7 +18,7 @@ impl Model {
     }
 
     pub(crate) fn finish_busy_progress(&mut self, error: Option<&str>) {
-        if let Some(id) = self.busy_progress.take() {
+        if let Some(id) = self.status.busy_progress.take() {
             self.ui.progress.finish(id);
             if let Some(error) = error {
                 self.notify(NotificationSeverity::Error, "file", error);
@@ -51,21 +51,21 @@ impl Model {
         self.ui.problems.visible = !self.ui.problems.visible;
         if self.ui.problems.visible {
             self.rebuild_problems();
-            self.status = format!("problems: {}", self.ui.problems.items.len());
+            self.status.text = format!("problems: {}", self.ui.problems.items.len());
         }
         self.dirty = true;
     }
 
     pub(crate) fn jump_problem(&mut self) {
         let Some(problem) = self.ui.problems.selected().cloned() else {
-            self.status = "no problems".to_owned();
+            self.status.text = "no problems".to_owned();
             self.dirty = true;
             return;
         };
         if self.path.as_deref() != Some(problem.path.as_path())
             && let Err(error) = self.open_path(&problem.path)
         {
-            self.status = format!("E: {error}");
+            self.status.text = format!("E: {error}");
             self.dirty = true;
             return;
         }
@@ -74,7 +74,7 @@ impl Model {
         self.ui.focus.split = false;
         self.ui.problems.visible = false;
         self.ui.diagnostic_peek = None;
-        self.status = format!(
+        self.status.text = format!(
             "{}:{}: {}",
             problem.path.display(),
             problem.line + 1,

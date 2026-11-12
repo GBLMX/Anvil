@@ -98,7 +98,7 @@ impl Model {
         });
         let index = self.buffers.entries.len() - 1;
         self.load_buffer(index);
-        self.status = "new buffer".to_owned();
+        self.status.text = "new buffer".to_owned();
         self.sync_watch_paths();
         self.dirty = true;
     }
@@ -118,7 +118,7 @@ impl Model {
     pub(crate) fn save_buffer(&mut self, index: usize) -> bool {
         self.sync_active();
         if index >= self.buffers.entries.len() {
-            self.status = "E: invalid buffer index".to_owned();
+            self.status.text = "E: invalid buffer index".to_owned();
             self.dirty = true;
             return false;
         }
@@ -126,7 +126,7 @@ impl Model {
             return self.save();
         }
         let Some(path) = self.buffers.entries[index].path.clone() else {
-            self.status = "E: buffer has no file name".to_owned();
+            self.status.text = "E: buffer has no file name".to_owned();
             self.dirty = true;
             return false;
         };
@@ -141,12 +141,12 @@ impl Model {
                     buffer.modified = false;
                     buffer.missing = false;
                 }
-                self.status = format!("\"{display}\" written");
+                self.status.text = format!("\"{display}\" written");
                 self.dirty = true;
                 true
             }
             Err(error) => {
-                self.status = format!("E: {error}");
+                self.status.text = format!("E: {error}");
                 self.dirty = true;
                 false
             }
@@ -156,7 +156,7 @@ impl Model {
     pub(crate) fn close_buffer(&mut self, index: usize, force: bool) {
         self.ensure_current_buffer();
         if index >= self.buffers.entries.len() {
-            self.status = "E: invalid buffer index".to_owned();
+            self.status.text = "E: invalid buffer index".to_owned();
             self.dirty = true;
             return;
         }
@@ -169,7 +169,8 @@ impl Model {
             }
             if self.buffers.entries[index].modified {
                 self.ui.input_mode = InputMode::ConfirmClose { index };
-                self.status = format!("Save {} before closing? [Y/n/c]", self.buffer_name(index));
+                self.status.text =
+                    format!("Save {} before closing? [Y/n/c]", self.buffer_name(index));
                 self.dirty = true;
                 return;
             }
@@ -194,7 +195,7 @@ impl Model {
                 .as_ref()
                 .is_some_and(|pane| pane.buffer.modified)
         {
-            self.status = "E: split pane has unsaved changes".to_owned();
+            self.status.text = "E: split pane has unsaved changes".to_owned();
             self.dirty = true;
             return;
         }
@@ -205,7 +206,7 @@ impl Model {
         self.buffers.entries.remove(index);
         if self.buffers.entries.is_empty() {
             self.reset_empty_buffer();
-            self.status = "buffer closed".to_owned();
+            self.status.text = "buffer closed".to_owned();
             self.dirty = true;
             return;
         }
@@ -215,7 +216,7 @@ impl Model {
         } else if index < self.buffers.active {
             self.buffers.active -= 1;
         }
-        self.status = format!(
+        self.status.text = format!(
             "buffer {}/{} closed",
             index + 1,
             self.buffers.entries.len() + 1
@@ -249,7 +250,7 @@ impl Model {
 
     pub(crate) fn open_file(&mut self, path: &str) {
         if path.is_empty() {
-            self.status = "E: file name required".to_owned();
+            self.status.text = "E: file name required".to_owned();
             self.dirty = true;
             return;
         }
@@ -259,18 +260,18 @@ impl Model {
         let path = match self.absolute_path(Path::new(path)) {
             Ok(path) => path,
             Err(error) => {
-                self.status = format!("E: {error}");
+                self.status.text = format!("E: {error}");
                 self.dirty = true;
                 return;
             }
         };
         if self.path.as_ref() == Some(&path) {
-            self.status = format!("Already editing {}", path.display());
+            self.status.text = format!("Already editing {}", path.display());
             self.dirty = true;
             return;
         }
         if self.path.is_none() && self.modified {
-            self.status =
+            self.status.text =
                 "E: save or discard the unnamed buffer before opening another file".to_owned();
             self.dirty = true;
             return;
@@ -286,7 +287,7 @@ impl Model {
         {
             self.sync_active();
             self.load_buffer(index);
-            self.status = format!(
+            self.status.text = format!(
                 "buffer {}/{}: {}",
                 index + 1,
                 self.buffers.entries.len(),
@@ -298,7 +299,7 @@ impl Model {
         let text = match self.read_file(&path) {
             Ok(text) => text,
             Err(error) => {
-                self.status = format!("E: {error}");
+                self.status.text = format!("E: {error}");
                 self.dirty = true;
                 return;
             }
@@ -322,7 +323,7 @@ impl Model {
         });
         let index = self.buffers.entries.len() - 1;
         self.load_buffer(index);
-        self.status = format!(
+        self.status.text = format!(
             "buffer {}/{}: {}",
             index + 1,
             self.buffers.entries.len(),
@@ -336,14 +337,14 @@ impl Model {
             let _ = self.close_help();
         }
         if self.buffers.entries.is_empty() {
-            self.status = "E: only one buffer".to_owned();
+            self.status.text = "E: only one buffer".to_owned();
             self.dirty = true;
             return;
         }
         let len = self.buffers.entries.len();
         let target = (self.buffers.active as isize + delta).rem_euclid(len as isize) as usize;
         if target == self.buffers.active {
-            self.status = "E: only one buffer".to_owned();
+            self.status.text = "E: only one buffer".to_owned();
             self.dirty = true;
             return;
         }
@@ -357,7 +358,7 @@ impl Model {
             .as_ref()
             .map(|path| path.display().to_string())
             .unwrap_or_else(|| "[no file]".to_owned());
-        self.status = format!("buffer {}/{}: {name}", target + 1, len);
+        self.status.text = format!("buffer {}/{}: {name}", target + 1, len);
     }
 
     pub(crate) fn any_modified(&self) -> bool {
@@ -383,7 +384,7 @@ impl Model {
             return;
         }
         if self.any_modified() {
-            self.status = "No write since last change (:q! to override)".to_owned();
+            self.status.text = "No write since last change (:q! to override)".to_owned();
             self.dirty = true;
         } else {
             self.quit = true;

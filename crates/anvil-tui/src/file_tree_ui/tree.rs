@@ -28,7 +28,7 @@ impl Model {
                         let _ = worker.request(FileRequest::List(root));
                     }
                 }
-                self.status = "loading file tree".to_owned();
+                self.status.text = "loading file tree".to_owned();
             } else {
                 match self.tree_entries(&workspace) {
                     Ok(entries) => {
@@ -44,7 +44,7 @@ impl Model {
                             })
                             .collect();
                     }
-                    Err(error) => self.status = format!("E: tree: {error}"),
+                    Err(error) => self.status.text = format!("E: tree: {error}"),
                 }
                 self.ensure_root_tree_nodes();
             }
@@ -87,7 +87,7 @@ impl Model {
                     self.ui.focus.tree = false;
                     self.tree.visible = false;
                 }
-                Err(error) => self.status = format!("E: {error}"),
+                Err(error) => self.status.text = format!("E: {error}"),
             }
             self.dirty = true;
             return;
@@ -107,7 +107,7 @@ impl Model {
             if let Some(root) = owned
                 && !root.trusted
             {
-                self.status = format!("E: untrusted workspace root: {}", root.path.display());
+                self.status.text = format!("E: untrusted workspace root: {}", root.path.display());
                 self.dirty = true;
                 return;
             }
@@ -118,7 +118,7 @@ impl Model {
                 if let Some(worker) = self.file_worker_for_path(&entry.path) {
                     let _ = worker.request(FileRequest::List(entry.path));
                 }
-                self.status = "loading directory".to_owned();
+                self.status.text = "loading directory".to_owned();
             } else {
                 match self.tree_entries(&entry.path) {
                     Ok(children) => {
@@ -136,7 +136,7 @@ impl Model {
                             .collect();
                         self.tree.entries.splice(index + 1..index + 1, children);
                     }
-                    Err(error) => self.status = format!("E: tree: {error}"),
+                    Err(error) => self.status.text = format!("E: tree: {error}"),
                 }
             }
         }

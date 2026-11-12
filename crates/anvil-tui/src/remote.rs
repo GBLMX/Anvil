@@ -84,7 +84,7 @@ impl Model {
             .saturating_sub(1)
             .min(self.editor.index().len_lines().saturating_sub(1));
         self.cursor = self.offset_at_utf16(line, column.saturating_sub(1));
-        self.status = format!(
+        self.status.text = format!(
             "remote open {}:{}:{}",
             self.path.as_deref().unwrap_or(absolute.as_path()).display(),
             line + 1,
@@ -112,12 +112,15 @@ impl Model {
             }
         }
         self.execute_command(command);
-        if self.status.starts_with("E:") {
-            return Err(RpcError::new(codes::POLICY_DENIED, self.status.clone()));
+        if self.status.text.starts_with("E:") {
+            return Err(RpcError::new(
+                codes::POLICY_DENIED,
+                self.status.text.clone(),
+            ));
         }
         reply(ExecResult {
             accepted: true,
-            status: self.status.clone(),
+            status: self.status.text.clone(),
         })
     }
 
@@ -150,12 +153,15 @@ impl Model {
             None => self.save(),
         };
         if !saved {
-            return Err(RpcError::new(codes::INTERNAL_ERROR, self.status.clone()));
+            return Err(RpcError::new(
+                codes::INTERNAL_ERROR,
+                self.status.text.clone(),
+            ));
         }
         Ok(json!({
             "accepted": true,
             "path": self.path,
-            "status": self.status,
+            "status": self.status.text,
         }))
     }
 
@@ -201,7 +207,7 @@ impl Model {
                 self.git.diff_checked = None;
                 self.git.diff_due = Some(Instant::now());
                 self.sync_lsp_active();
-                self.status = "remote edit: set".to_owned();
+                self.status.text = "remote edit: set".to_owned();
             }
             EditMode::Insert => {
                 if range.is_some() || expected_revision.is_some() {
@@ -214,7 +220,7 @@ impl Model {
                     return Err(RpcError::new(codes::INVALID_PARAMS, "text is empty"));
                 }
                 self.insert_text(text);
-                self.status = "remote edit: insert".to_owned();
+                self.status.text = "remote edit: insert".to_owned();
             }
             EditMode::Replace => {
                 let Some(range) = range else {
@@ -261,7 +267,7 @@ impl Model {
                 self.git.diff_checked = None;
                 self.git.diff_due = Some(Instant::now());
                 self.sync_lsp_active();
-                self.status = "remote edit: replace".to_owned();
+                self.status.text = "remote edit: replace".to_owned();
             }
         }
         self.dirty = true;
@@ -408,7 +414,7 @@ impl Model {
             && self.edit.modal_layer.is_none()
             && self.ui.diagnostic_peek.is_none()
             && !self.ui.problems.visible
-            && self.busy.is_none()
+            && self.status.busy.is_none()
     }
 }
 

@@ -5,7 +5,7 @@ use super::*;
 impl Model {
     pub(crate) fn split_vertical(&mut self) {
         if self.buffers.split.is_some() {
-            self.status = "split already open".to_owned();
+            self.status.text = "split already open".to_owned();
             self.dirty = true;
             return;
         }
@@ -13,7 +13,7 @@ impl Model {
             buffer: self.snapshot(),
         });
         self.ui.focus.split = false;
-        self.status = "vertical split".to_owned();
+        self.status.text = "vertical split".to_owned();
         self.sync_watch_paths();
         self.dirty = true;
     }
@@ -40,7 +40,7 @@ impl Model {
             return;
         }
         if self.ui.focus.split && self.modified {
-            self.status = "No write since last change (:q! to override)".to_owned();
+            self.status.text = "No write since last change (:q! to override)".to_owned();
             self.dirty = true;
             return;
         }
@@ -52,7 +52,7 @@ impl Model {
         self.restore_buffer(other.buffer);
         self.ui.focus.split = right;
         self.sync_watch_paths();
-        self.status = if right { "right pane" } else { "left pane" }.to_owned();
+        self.status.text = if right { "right pane" } else { "left pane" }.to_owned();
         self.dirty = true;
     }
 
@@ -80,7 +80,7 @@ impl Model {
             return;
         }
         if self.ui.focus.split && self.modified {
-            self.status = "No write since last change (:q! to override)".to_owned();
+            self.status.text = "No write since last change (:q! to override)".to_owned();
             self.dirty = true;
             return;
         }
@@ -90,7 +90,7 @@ impl Model {
             .as_ref()
             .is_some_and(|pane| pane.buffer.modified)
         {
-            self.status = "No write since last change in split (:q! to override)".to_owned();
+            self.status.text = "No write since last change in split (:q! to override)".to_owned();
             self.dirty = true;
             return;
         }
@@ -101,7 +101,7 @@ impl Model {
             self.buffers.split = None;
         }
         self.ui.focus.split = false;
-        self.status = "split closed".to_owned();
+        self.status.text = "split closed".to_owned();
         self.sync_watch_paths();
         self.dirty = true;
     }

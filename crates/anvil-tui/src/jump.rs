@@ -78,7 +78,7 @@ impl Model {
 
     fn jump_history(&mut self, forward: bool) {
         if self.path.is_none() && self.modified {
-            self.status = "E: save or discard the unnamed buffer before jumping".to_owned();
+            self.status.text = "E: save or discard the unnamed buffer before jumping".to_owned();
             self.dirty = true;
             return;
         }
@@ -89,7 +89,7 @@ impl Model {
             self.jump_list.take_back()
         };
         let Some(target) = target else {
-            self.status = if forward {
+            self.status.text = if forward {
                 "no forward jump".to_owned()
             } else {
                 "no back jump".to_owned()
@@ -112,7 +112,7 @@ impl Model {
                 self.jump_list.push_forward(current);
             }
         }
-        self.status = format!(
+        self.status.text = format!(
             "{} [{}|{}]",
             if forward { "jump forward" } else { "jump back" },
             self.jump_list.back_len(),
@@ -135,7 +135,7 @@ impl Model {
         if self.path.as_ref() != Some(&entry.path)
             && let Err(error) = self.open_path(&entry.path)
         {
-            self.status = format!("E: {error}");
+            self.status.text = format!("E: {error}");
             self.dirty = true;
             return false;
         }
@@ -177,7 +177,7 @@ impl Model {
 
     fn change_history(&mut self, forward: bool) {
         if self.path.is_none() && self.modified {
-            self.status = "E: save or discard the unnamed buffer before jumping".to_owned();
+            self.status.text = "E: save or discard the unnamed buffer before jumping".to_owned();
             self.dirty = true;
             return;
         }
@@ -188,7 +188,7 @@ impl Model {
             self.change_list.take_back()
         };
         let Some(mut target) = target else {
-            self.status = if forward {
+            self.status.text = if forward {
                 "no next change".to_owned()
             } else {
                 "no previous change".to_owned()
@@ -202,7 +202,7 @@ impl Model {
             } else {
                 self.change_list.take_back()
             }) else {
-                self.status = if forward {
+                self.status.text = if forward {
                     "no next change".to_owned()
                 } else {
                     "no previous change".to_owned()
@@ -227,7 +227,7 @@ impl Model {
                 self.change_list.push_forward(current);
             }
         }
-        self.status = format!(
+        self.status.text = format!(
             "{} [{}|{}]",
             if forward {
                 "next change"

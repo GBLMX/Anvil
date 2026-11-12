@@ -260,7 +260,7 @@ fn call_hierarchy_round_trip_through_gateway() {
             assert!(
                 Instant::now() < deadline,
                 "no {direction:?} call to {expected}; status={}; pending={:?}; notifications={:?}",
-                model.status,
+                model.status.text,
                 model.language.lsp_requests.pending,
                 model.ui.notifications
             );
@@ -322,7 +322,7 @@ fn folding_round_trip_through_gateway() {
         assert!(
             Instant::now() < deadline,
             "no folding ranges; status={}",
-            model.status
+            model.status.text
         );
         std::thread::sleep(Duration::from_millis(50));
     }
@@ -381,7 +381,7 @@ fn completion_resolve_round_trip_through_gateway() {
         assert!(
             Instant::now() < deadline,
             "completion resolve did not finish; status={}",
-            model.status
+            model.status.text
         );
         std::thread::sleep(Duration::from_millis(50));
     }
@@ -422,7 +422,7 @@ fn semantic_tokens_round_trip_through_gateway() {
         assert!(
             Instant::now() < deadline,
             "no semantic tokens; status={}",
-            model.status
+            model.status.text
         );
         std::thread::sleep(Duration::from_millis(50));
     }
@@ -443,10 +443,10 @@ fn gi_and_go_dispatch_call_hierarchy_requests() {
     };
     press(&mut model, KeyCode::Char('g'));
     press(&mut model, KeyCode::Char('i'));
-    assert_eq!(model.status, "E: lsp is not running");
+    assert_eq!(model.status.text, "E: lsp is not running");
     press(&mut model, KeyCode::Char('g'));
     press(&mut model, KeyCode::Char('o'));
-    assert_eq!(model.status, "E: lsp is not running");
+    assert_eq!(model.status.text, "E: lsp is not running");
 }
 
 #[test]
@@ -851,7 +851,7 @@ fn document_symbols_populate_and_jump_to_selection() {
     assert_eq!(symbols.items[2].line, 3);
     model.apply_document_symbol();
     assert_eq!(model.cursor, 3);
-    assert!(model.status.contains("alpha"));
+    assert!(model.status.text.contains("alpha"));
 }
 
 #[test]
@@ -956,7 +956,7 @@ fn formatting_response_for_inactive_path_is_ignored() {
         None,
     );
     assert_eq!(model.editor.text().slice(0..9), "fn first(");
-    assert!(model.status.contains("inactive"));
+    assert!(model.status.text.contains("inactive"));
 }
 
 #[test]
@@ -1020,7 +1020,7 @@ fn workspace_symbols_response_filters_and_jumps() {
     );
     model.apply_workspace_symbol();
     assert_eq!(model.cursor, 3);
-    assert!(model.status.contains("alpha"));
+    assert!(model.status.text.contains("alpha"));
 }
 
 #[test]
@@ -1085,7 +1085,7 @@ fn stale_formatting_response_is_ignored() {
         None,
     );
     assert_eq!(model.editor.text().slice(0..3), "xfn");
-    assert!(model.status.contains("stale"));
+    assert!(model.status.text.contains("stale"));
 }
 
 #[test]
@@ -1129,7 +1129,7 @@ fn rename_response_for_inactive_path_is_ignored() {
         None,
     );
     assert_eq!(model.editor.text().slice(0..9), "fn first(");
-    assert!(model.status.contains("inactive"));
+    assert!(model.status.text.contains("inactive"));
 }
 
 #[test]
@@ -1441,7 +1441,7 @@ fn rename_response_rejects_a_stale_inactive_buffer_snapshot() {
         None,
     );
     assert_eq!(model.editor.text().slice(0..5), "first");
-    assert!(model.status.contains("stale"));
+    assert!(model.status.text.contains("stale"));
 }
 
 #[test]
@@ -1474,7 +1474,7 @@ fn rename_response_rejects_a_stale_document_version() {
         None,
     );
     assert_eq!(model.editor.text().slice(0..3), "abc");
-    assert!(model.status.contains("stale"));
+    assert!(model.status.text.contains("stale"));
 }
 
 #[test]
@@ -1566,7 +1566,7 @@ fn jump_back_without_history_reports_status() {
     fs::write(&path, "fn main() {}\n").expect("write");
     let mut model = Model::open(&path).expect("open");
     model.jump_back();
-    assert!(model.status.contains("no back jump"));
+    assert!(model.status.text.contains("no back jump"));
 }
 
 #[test]
@@ -1635,5 +1635,5 @@ fn jump_back_refuses_to_discard_a_dirty_unnamed_buffer() {
             .slice(0..model.editor.text().len_bytes()),
         before
     );
-    assert!(model.status.contains("save or discard"));
+    assert!(model.status.text.contains("save or discard"));
 }

@@ -86,7 +86,7 @@ impl Model {
 
     pub(crate) fn repeat_last_change(&mut self, count: usize) {
         let Some(last) = self.edit.last_change.clone() else {
-            self.status = "E: no previous change".to_owned();
+            self.status.text = "E: no previous change".to_owned();
             self.dirty = true;
             return;
         };

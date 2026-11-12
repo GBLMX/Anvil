@@ -43,7 +43,7 @@ fn quit_guard_requires_force_or_write() {
         handle_event(&mut model, key(code));
     }
     assert!(!model.quit);
-    assert!(model.status.contains("No write since last change"));
+    assert!(model.status.text.contains("No write since last change"));
 
     handle_event(&mut model, key(KeyCode::Char(':')));
     handle_event(&mut model, key(KeyCode::Char('q')));
@@ -118,7 +118,7 @@ fn unknown_macro_steps_surface_an_error() {
     );
     handle_event(&mut model, key(KeyCode::Char('@')));
     handle_event(&mut model, key(KeyCode::Char('a')));
-    assert!(model.status.contains("macro step unavailable"));
+    assert!(model.status.text.contains("macro step unavailable"));
 }
 
 #[test]
@@ -416,7 +416,7 @@ fn wq_without_a_path_does_not_quit() {
         handle_event(&mut model, key(code));
     }
     assert!(!model.quit);
-    assert_eq!(model.status, "E: no file name");
+    assert_eq!(model.status.text, "E: no file name");
 }
 
 #[test]
@@ -603,7 +603,7 @@ fn help_is_read_only_and_returns_to_the_previous_buffer() {
     handle_event(&mut model, key(KeyCode::Char('i')));
     type_text(&mut model, "Z");
     assert_eq!(model.ui.input_mode, InputMode::Normal);
-    assert!(model.status.contains("read-only"));
+    assert!(model.status.text.contains("read-only"));
     assert_eq!(model.editor.text().slice(0..HELP_TEXT.len()), HELP_TEXT);
 
     handle_event(&mut model, key(KeyCode::Char(':')));
@@ -649,7 +649,7 @@ fn help_refuses_writes() {
     type_text(&mut model, "w");
     handle_event(&mut model, key(KeyCode::Enter));
     assert!(model.buffers.help_back.is_some());
-    assert!(model.status.contains("read-only"));
+    assert!(model.status.text.contains("read-only"));
     assert_eq!(model.editor.text().slice(0..HELP_TEXT.len()), HELP_TEXT);
 }
 
@@ -674,7 +674,7 @@ fn visual_operations_refuse_writes_to_help_buffer() {
         for &key_code in keys {
             handle_event(&mut model, key(key_code));
         }
-        assert!(model.status.contains("read-only"));
+        assert!(model.status.text.contains("read-only"));
         assert!(model.edit.modal_layer.is_none());
         assert!(model.edit.visual_anchor.is_none());
         assert_eq!(model.editor.text().slice(0..HELP_TEXT.len()), HELP_TEXT);
@@ -691,7 +691,7 @@ fn ctrl_slash_toggles_comments_and_undoes_once() {
     handle_event(&mut model, ctrl(KeyCode::Char('/')));
     assert_eq!(model.editor.text().slice(0..16), "// one\n  // two\n");
     assert!(model.modified);
-    assert!(model.status.contains("2 line"));
+    assert!(model.status.text.contains("2 line"));
 
     handle_event(&mut model, ctrl(KeyCode::Char('/')));
     assert_eq!(model.editor.text().slice(0..10), "one\n  two\n");
@@ -711,7 +711,7 @@ fn comment_toggle_refuses_read_only_and_unknown_files() {
     );
     model.read_only = true;
     handle_event(&mut model, ctrl(KeyCode::Char('/')));
-    assert!(model.status.contains("read-only"));
+    assert!(model.status.text.contains("read-only"));
     assert_eq!(model.editor.text().slice(0..4), "one\n");
 
     let mut unknown = Model::new(
@@ -719,7 +719,7 @@ fn comment_toggle_refuses_read_only_and_unknown_files() {
         Some(PathBuf::from("test.unknown")),
     );
     handle_event(&mut unknown, ctrl(KeyCode::Char('/')));
-    assert!(unknown.status.contains("unsupported"));
+    assert!(unknown.status.text.contains("unsupported"));
     assert_eq!(unknown.editor.text().slice(0..4), "one\n");
 }
 
@@ -734,7 +734,7 @@ fn ex_comment_toggles_the_current_line() {
     handle_event(&mut model, key(KeyCode::Enter));
     let len = model.editor.text().len_bytes();
     let text = model.editor.text().slice(0..len);
-    assert_eq!(text, "# one\n", "status={}", model.status);
+    assert_eq!(text, "# one\n", "status={}", model.status.text);
     assert!(model.modified);
 }
 
@@ -822,7 +822,7 @@ fn config_reload_applies_loaded_settings_and_keymap() {
 
     assert!(model.settings.editor.auto_save);
     assert!(model.settings.search.case_sensitive);
-    assert_eq!(model.status, "configuration reloaded");
+    assert_eq!(model.status.text, "configuration reloaded");
 }
 
 #[test]
@@ -872,9 +872,9 @@ fn dap_attach_does_not_block_and_reports_failure() {
     let mut model = Model::new(EditorState::from_text(""), None);
     model.execute_command("dap-attach /definitely/not-a-real-adapter");
     assert!(
-        model.status.contains("dap") || model.status.contains("attach"),
+        model.status.text.contains("dap") || model.status.text.contains("attach"),
         "{}",
-        model.status
+        model.status.text
     );
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
     while model.language.dap.attach.is_some() && std::time::Instant::now() < deadline {
@@ -882,5 +882,5 @@ fn dap_attach_does_not_block_and_reports_failure() {
         std::thread::sleep(std::time::Duration::from_millis(10));
     }
     assert!(model.language.dap.attach.is_none());
-    assert!(model.status.contains("dap"), "{}", model.status);
+    assert!(model.status.text.contains("dap"), "{}", model.status.text);
 }

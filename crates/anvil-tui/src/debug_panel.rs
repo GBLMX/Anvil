@@ -121,19 +121,19 @@ impl Model {
     pub(crate) fn toggle_debug_panel(&mut self) {
         if self.overlays.debug_panel.is_some() {
             self.overlays.debug_panel = None;
-            self.status = "debug panel closed".to_owned();
+            self.status.text = "debug panel closed".to_owned();
             self.dirty = true;
             return;
         }
         self.overlays.debug_panel = Some(DebugPanelState::default());
-        self.status = "debug panel".to_owned();
+        self.status.text = "debug panel".to_owned();
         self.dirty = true;
         self.request_debug_refresh();
     }
 
     pub(crate) fn set_debug_panel(&mut self, name: &str) {
         let Some(panel) = self.overlays.debug_panel.as_mut() else {
-            self.status = "E: debug panel is closed; use :debug".to_owned();
+            self.status.text = "E: debug panel is closed; use :debug".to_owned();
             self.dirty = true;
             return;
         };
@@ -144,12 +144,12 @@ impl Model {
             "watch" => Some(DebugPanelKind::Watch),
             _ => None,
         }) else {
-            self.status = "E: usage: :debug-panel <threads|stack|variables|watch>".to_owned();
+            self.status.text = "E: usage: :debug-panel <threads|stack|variables|watch>".to_owned();
             self.dirty = true;
             return;
         };
         panel.kind = kind;
-        self.status = format!("debug panel: {}", kind.name());
+        self.status.text = format!("debug panel: {}", kind.name());
         self.dirty = true;
         self.request_debug_refresh();
     }
@@ -159,7 +159,7 @@ impl Model {
             return;
         };
         panel.kind = panel.kind.next();
-        self.status = format!("debug panel: {}", panel.kind.name());
+        self.status.text = format!("debug panel: {}", panel.kind.name());
         self.dirty = true;
     }
 
@@ -188,12 +188,12 @@ impl Model {
     pub(crate) fn add_debug_watch(&mut self, expression: &str) {
         let expression = expression.trim();
         if expression.is_empty() {
-            self.status = "E: usage: :debug-watch <expression>".to_owned();
+            self.status.text = "E: usage: :debug-watch <expression>".to_owned();
             self.dirty = true;
             return;
         }
         let Some(panel) = self.overlays.debug_panel.as_mut() else {
-            self.status = "E: debug panel is closed; use :debug".to_owned();
+            self.status.text = "E: debug panel is closed; use :debug".to_owned();
             self.dirty = true;
             return;
         };
@@ -208,7 +208,7 @@ impl Model {
             });
         }
         panel.kind = DebugPanelKind::Watch;
-        self.status = format!("watch: {expression}");
+        self.status.text = format!("watch: {expression}");
         self.dirty = true;
         self.request_debug_refresh();
     }
@@ -219,13 +219,13 @@ impl Model {
         };
         panel.watches.clear();
         panel.selected_watch = 0;
-        self.status = "watches cleared".to_owned();
+        self.status.text = "watches cleared".to_owned();
         self.dirty = true;
     }
 
     pub(crate) fn request_debug_refresh(&mut self) {
         let Some(client) = self.language.dap.client.take() else {
-            self.status = "E: no debug adapter; use :dap-attach".to_owned();
+            self.status.text = "E: no debug adapter; use :dap-attach".to_owned();
             self.dirty = true;
             return;
         };
@@ -258,7 +258,7 @@ impl Model {
         if let Some(panel) = self.overlays.debug_panel.as_mut() {
             panel.pending = true;
         }
-        self.status = "debug refresh…".to_owned();
+        self.status.text = "debug refresh…".to_owned();
         self.dirty = true;
     }
 
@@ -277,13 +277,13 @@ impl Model {
                             panel.apply(snapshot);
                             panel.pending = false;
                         }
-                        self.status = "debug state refreshed".to_owned();
+                        self.status.text = "debug state refreshed".to_owned();
                     }
                     Err(error) => {
                         if let Some(panel) = self.overlays.debug_panel.as_mut() {
                             panel.pending = false;
                         }
-                        self.status = format!("E: debug refresh: {error}");
+                        self.status.text = format!("E: debug refresh: {error}");
                     }
                 }
                 self.dirty = true;
@@ -294,7 +294,7 @@ impl Model {
                 if let Some(panel) = self.overlays.debug_panel.as_mut() {
                     panel.pending = false;
                 }
-                self.status = "E: debug refresh worker stopped".to_owned();
+                self.status.text = "E: debug refresh worker stopped".to_owned();
                 self.dirty = true;
             }
             Err(std::sync::mpsc::TryRecvError::Empty) => {
@@ -309,7 +309,7 @@ impl Model {
                     if let Some(panel) = self.overlays.debug_panel.as_mut() {
                         panel.pending = false;
                     }
-                    self.status = "E: debug refresh timed out".to_owned();
+                    self.status.text = "E: debug refresh timed out".to_owned();
                     self.dirty = true;
                 }
             }

@@ -351,9 +351,9 @@ fn command_palette_includes_plugin_commands() {
     }
     handle_event(&mut model, key(KeyCode::Enter));
     assert!(
-        model.status.contains("gateway unavailable"),
+        model.status.text.contains("gateway unavailable"),
         "{}",
-        model.status
+        model.status.text
     );
 }
 
@@ -568,7 +568,7 @@ fn preview_failure_keeps_the_list_usable() {
         model.overlays.preview.message.as_deref(),
         Some("gateway failed")
     );
-    assert!(model.status.contains("E: preview: gateway failed"));
+    assert!(model.status.text.contains("E: preview: gateway failed"));
 }
 
 #[test]
@@ -587,7 +587,12 @@ fn preview_without_worker_reports_gateway_unavailable() {
         model.overlays.preview.message.as_deref(),
         Some("preview unavailable: gateway")
     );
-    assert!(model.status.contains("E: preview: gateway unavailable"));
+    assert!(
+        model
+            .status
+            .text
+            .contains("E: preview: gateway unavailable")
+    );
 }
 
 #[test]
@@ -650,12 +655,12 @@ fn theme_command_switches_and_lists_builtins() {
     let mut model = Model::new(EditorState::from_text("alpha"), None);
     model.execute_command("theme one-dark");
     assert_eq!(theme::name(), "one-dark");
-    assert!(model.status.contains("one-dark"));
+    assert!(model.status.text.contains("one-dark"));
     model.execute_command("theme missing");
     assert_eq!(theme::name(), "one-dark");
-    assert!(model.status.starts_with("E:"));
+    assert!(model.status.text.starts_with("E:"));
     model.execute_command("theme");
-    assert!(model.status.contains("solarized-light"));
+    assert!(model.status.text.contains("solarized-light"));
     model.execute_command("theme anvil-dark");
     assert_eq!(theme::name(), "anvil-dark");
 }
@@ -679,7 +684,7 @@ fn command_line_tab_completes_and_enter_executes() {
     ));
     handle_event(&mut model, key(KeyCode::Enter));
     assert!(matches!(model.ui.input_mode, InputMode::Normal));
-    assert!(model.status.contains("available:"));
+    assert!(model.status.text.contains("available:"));
 }
 
 #[test]
@@ -800,21 +805,21 @@ fn theme_auto_and_save_persist_choice() {
     let mut model = Model::new(EditorState::from_text("alpha"), None);
     model.appearance.persist_theme = true;
     model.execute_command("theme nord");
-    assert!(model.status.contains("saved"));
+    assert!(model.status.text.contains("saved"));
     assert!(
         std::fs::read_to_string(&path)
             .expect("settings")
             .contains("name = \"nord\"")
     );
     model.execute_command("theme-auto nord solarized-light");
-    assert!(model.status.contains("auto"));
+    assert!(model.status.text.contains("auto"));
     let text = std::fs::read_to_string(&path).expect("settings");
     assert!(text.contains("mode = \"auto\""));
     assert!(text.contains("dark = \"nord\""));
     model.appearance.persist_theme = false;
     model.execute_command("theme one-dark");
     model.execute_command("theme-save");
-    assert!(model.status.contains("theme saved"));
+    assert!(model.status.text.contains("theme saved"));
     assert!(
         std::fs::read_to_string(&path)
             .expect("settings")

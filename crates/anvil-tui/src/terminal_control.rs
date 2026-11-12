@@ -7,13 +7,13 @@ use crossterm::event::{KeyCode, KeyModifiers};
 impl Model {
     pub(crate) fn start_terminal(&mut self, shell: &str) {
         if self.read_only {
-            self.status = "E: terminal is unavailable in read-only mode".to_owned();
+            self.status.text = "E: terminal is unavailable in read-only mode".to_owned();
             self.dirty = true;
             return;
         }
         if self.runtime.terminal.is_some() {
             self.runtime.terminal_panel = true;
-            self.status = "terminal: panel opened".to_owned();
+            self.status.text = "terminal: panel opened".to_owned();
             self.dirty = true;
             return;
         }
@@ -23,7 +23,7 @@ impl Model {
             shell.trim().to_owned()
         };
         if !Path::new(&program).is_absolute() {
-            self.status = "E: terminal shell must be an absolute path".to_owned();
+            self.status.text = "E: terminal shell must be an absolute path".to_owned();
             self.dirty = true;
             return;
         }
@@ -34,39 +34,39 @@ impl Model {
             self.view.viewport_height.max(5),
         ) {
             Ok(session) => {
-                self.status = format!("terminal: {} pid {}", session.shell(), session.pid());
+                self.status.text = format!("terminal: {} pid {}", session.shell(), session.pid());
                 self.runtime.terminal_output.clear();
                 self.runtime.terminal = Some(session);
                 self.runtime.terminal_panel = true;
             }
-            Err(error) => self.status = format!("E: terminal: {error}"),
+            Err(error) => self.status.text = format!("E: terminal: {error}"),
         }
         self.dirty = true;
     }
 
     pub(crate) fn stop_terminal(&mut self) {
         let Some(mut terminal) = self.runtime.terminal.take() else {
-            self.status = "no terminal".to_owned();
+            self.status.text = "no terminal".to_owned();
             self.dirty = true;
             return;
         };
         terminal.kill();
         self.runtime.terminal_panel = false;
-        self.status = "terminal stopped".to_owned();
+        self.status.text = "terminal stopped".to_owned();
         self.dirty = true;
     }
 
     pub(crate) fn send_terminal(&mut self, text: &str) {
         let Some(terminal) = self.runtime.terminal.as_mut() else {
-            self.status = "no terminal".to_owned();
+            self.status.text = "no terminal".to_owned();
             self.dirty = true;
             return;
         };
         match terminal.write_all(format!("{text}\n").as_bytes()) {
             Ok(()) => {
-                self.status = format!("terminal: sent {text}");
+                self.status.text = format!("terminal: sent {text}");
             }
-            Err(error) => self.status = format!("E: terminal write: {error}"),
+            Err(error) => self.status.text = format!("E: terminal write: {error}"),
         }
         self.dirty = true;
     }
@@ -87,21 +87,21 @@ impl Model {
             }
             Ok(_) => {}
             Err(error) => {
-                self.status = format!("E: terminal read: {error}");
+                self.status.text = format!("E: terminal read: {error}");
                 self.dirty = true;
             }
         }
         if let Some(status) = exited {
             self.runtime.terminal = None;
             self.runtime.terminal_panel = false;
-            self.status = format!("terminal exited: {status}");
+            self.status.text = format!("terminal exited: {status}");
             self.dirty = true;
         }
     }
 
     pub(crate) fn show_terminal_output(&mut self) {
         if self.runtime.terminal_output.is_empty() {
-            self.status = "no terminal output".to_owned();
+            self.status.text = "no terminal output".to_owned();
             self.dirty = true;
             return;
         }
@@ -122,7 +122,7 @@ impl Model {
 impl Model {
     pub(crate) fn toggle_terminal_panel(&mut self) {
         if self.runtime.terminal.is_none() {
-            self.status = "no terminal".to_owned();
+            self.status.text = "no terminal".to_owned();
             self.dirty = true;
             return;
         }
@@ -138,7 +138,7 @@ impl Model {
             return;
         };
         if let Err(error) = terminal.write_all(bytes) {
-            self.status = format!("E: terminal write: {error}");
+            self.status.text = format!("E: terminal write: {error}");
             self.dirty = true;
         }
     }

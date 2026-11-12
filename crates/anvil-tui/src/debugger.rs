@@ -19,7 +19,7 @@ impl Model {
         });
         self.language.dap.attach = Some(receiver);
         self.language.dap.attach_started = Some(Instant::now());
-        self.status = format!("attaching debug adapter: {display}");
+        self.status.text = format!("attaching debug adapter: {display}");
         self.dirty = true;
     }
 
@@ -32,19 +32,19 @@ impl Model {
                 self.language.dap.attach = None;
                 self.language.dap.attach_started = None;
                 self.attach_dap_client(client);
-                self.status = "debug adapter attached".to_owned();
+                self.status.text = "debug adapter attached".to_owned();
                 self.dirty = true;
             }
             Ok(Err(error)) => {
                 self.language.dap.attach = None;
                 self.language.dap.attach_started = None;
-                self.status = format!("E: dap initialize: {error}");
+                self.status.text = format!("E: dap initialize: {error}");
                 self.dirty = true;
             }
             Err(std::sync::mpsc::TryRecvError::Disconnected) => {
                 self.language.dap.attach = None;
                 self.language.dap.attach_started = None;
-                self.status = "E: dap attach worker stopped".to_owned();
+                self.status.text = "E: dap attach worker stopped".to_owned();
                 self.dirty = true;
             }
             Err(std::sync::mpsc::TryRecvError::Empty) => {
@@ -56,7 +56,7 @@ impl Model {
                 {
                     self.language.dap.attach = None;
                     self.language.dap.attach_started = None;
-                    self.status = "E: dap attach timed out (adapter may be hung)".to_owned();
+                    self.status.text = "E: dap attach timed out (adapter may be hung)".to_owned();
                     self.dirty = true;
                 }
             }
@@ -70,12 +70,12 @@ impl Model {
 
     pub(crate) fn toggle_breakpoint(&mut self) {
         let Some(path) = self.path.clone() else {
-            self.status = "E: breakpoint requires a file".to_owned();
+            self.status.text = "E: breakpoint requires a file".to_owned();
             self.dirty = true;
             return;
         };
         let Some(line) = self.current_line().map(|line| line as u32 + 1) else {
-            self.status = "E: breakpoint requires a line".to_owned();
+            self.status.text = "E: breakpoint requires a line".to_owned();
             self.dirty = true;
             return;
         };
@@ -93,7 +93,7 @@ impl Model {
             self.language.dap.breakpoints.remove(&path);
         }
         self.sync_breakpoints(&path);
-        self.status = if enabled {
+        self.status.text = if enabled {
             format!("breakpoint {}:{line}", path.display())
         } else {
             format!("breakpoint cleared {}:{line}", path.display())
@@ -121,7 +121,7 @@ impl Model {
             .map(|lines| lines.iter().copied().collect::<Vec<_>>())
             .unwrap_or_default();
         if let Err(error) = dap.set_breakpoints(path, &lines) {
-            self.status = format!("E: breakpoint sync: {error}");
+            self.status.text = format!("E: breakpoint sync: {error}");
             self.dirty = true;
         }
     }

@@ -9,7 +9,7 @@ impl Model {
 
     #[cfg(not(target_os = "linux"))]
     pub(crate) fn list_plugins(&mut self) {
-        self.status = "plugins are Linux-only".to_owned();
+        self.status.text = "plugins are Linux-only".to_owned();
         self.dirty = true;
     }
 
@@ -47,15 +47,15 @@ impl Model {
                 &self.workspace.path,
             ) {
                 Ok(StartOutcome::Started) => {
-                    self.status = format!("plugin {plugin_id} starting");
+                    self.status.text = format!("plugin {plugin_id} starting");
                     self.dirty = true;
                 }
                 Ok(StartOutcome::Queued) => {
-                    self.status = format!("plugin {plugin_id} queued");
+                    self.status.text = format!("plugin {plugin_id} queued");
                     self.dirty = true;
                 }
                 Err(error) => {
-                    self.status = format!("E: plugin {plugin_id}: {error}");
+                    self.status.text = format!("E: plugin {plugin_id}: {error}");
                     self.dirty = true;
                 }
             }
@@ -71,12 +71,13 @@ impl Model {
             .find(|plugin| plugin.manifest.id == plugin_id)
             .cloned()
         else {
-            self.status = format!("E: unknown plugin: {plugin_id}");
+            self.status.text = format!("E: unknown plugin: {plugin_id}");
             self.dirty = true;
             return;
         };
         if !plugin.enabled {
-            self.status = format!("E: plugin {plugin_id} disabled; run :plugin-enable {plugin_id}");
+            self.status.text =
+                format!("E: plugin {plugin_id} disabled; run :plugin-enable {plugin_id}");
             self.dirty = true;
             return;
         }
@@ -86,7 +87,7 @@ impl Model {
             .iter()
             .any(|command| command.id == command_id)
         {
-            self.status = format!("E: plugin {plugin_id} does not declare {command_id}");
+            self.status.text = format!("E: plugin {plugin_id} does not declare {command_id}");
             self.dirty = true;
             return;
         }
@@ -94,12 +95,12 @@ impl Model {
             &plugin.manifest.activation_events,
             &ActivationEvent::Command(command_id.to_owned()),
         ) {
-            self.status = format!("E: plugin {plugin_id} does not activate on {command_id}");
+            self.status.text = format!("E: plugin {plugin_id} does not activate on {command_id}");
             self.dirty = true;
             return;
         }
         let Some(gateway) = self.workspace.gateway.as_mut() else {
-            self.status = "E: gateway unavailable".to_owned();
+            self.status.text = "E: gateway unavailable".to_owned();
             self.dirty = true;
             return;
         };
@@ -112,7 +113,7 @@ impl Model {
                 | HostState::Draining
         ) && let Err(error) = self.plugins.supervisor.stop(plugin_id, Some(gateway))
         {
-            self.status = format!("E: plugin {plugin_id}: {error}");
+            self.status.text = format!("E: plugin {plugin_id}: {error}");
             self.dirty = true;
             return;
         }
@@ -124,17 +125,19 @@ impl Model {
             &self.workspace.path,
         ) {
             Ok(StartOutcome::Started) => {
-                self.status = format!("plugin {plugin_id} running {command_id}")
+                self.status.text = format!("plugin {plugin_id} running {command_id}")
             }
-            Ok(StartOutcome::Queued) => self.status = format!("plugin {plugin_id} command queued"),
-            Err(error) => self.status = format!("E: plugin {plugin_id}: {error}"),
+            Ok(StartOutcome::Queued) => {
+                self.status.text = format!("plugin {plugin_id} command queued")
+            }
+            Err(error) => self.status.text = format!("E: plugin {plugin_id}: {error}"),
         }
         self.dirty = true;
     }
 
     #[cfg(not(target_os = "linux"))]
     pub(crate) fn run_plugin_command(&mut self, _plugin_id: &str, _command_id: &str) {
-        self.status = "plugins are Linux-only".to_owned();
+        self.status.text = "plugins are Linux-only".to_owned();
         self.dirty = true;
     }
 
@@ -168,7 +171,7 @@ impl Model {
         let entries = match gateway.read_dir(".") {
             Ok(entries) => entries,
             Err(error) => {
-                self.status = format!("E: workspace activation: {error}");
+                self.status.text = format!("E: workspace activation: {error}");
                 self.dirty = true;
                 return;
             }
@@ -204,7 +207,7 @@ impl Model {
     #[cfg(target_os = "linux")]
     pub(crate) fn start_oom_host(&mut self) {
         let Some(gateway) = self.workspace.gateway.as_mut() else {
-            self.status = "E: gateway unavailable".to_owned();
+            self.status.text = "E: gateway unavailable".to_owned();
             self.dirty = true;
             return;
         };
@@ -219,23 +222,27 @@ impl Model {
             gateway,
             &self.workspace.path,
         ) {
-            Ok(StartOutcome::Started) => self.status = "plugin host OOM probe starting".to_owned(),
-            Ok(StartOutcome::Queued) => self.status = "plugin host OOM probe queued".to_owned(),
-            Err(error) => self.status = format!("E: {error}"),
+            Ok(StartOutcome::Started) => {
+                self.status.text = "plugin host OOM probe starting".to_owned()
+            }
+            Ok(StartOutcome::Queued) => {
+                self.status.text = "plugin host OOM probe queued".to_owned()
+            }
+            Err(error) => self.status.text = format!("E: {error}"),
         }
         self.dirty = true;
     }
 
     #[cfg(not(target_os = "linux"))]
     pub(crate) fn start_oom_host(&mut self) {
-        self.status = "E: plugin host is Linux-only".to_owned();
+        self.status.text = "E: plugin host is Linux-only".to_owned();
         self.dirty = true;
     }
 
     #[cfg(target_os = "linux")]
     pub(crate) fn start_host(&mut self) {
         let Some(gateway) = self.workspace.gateway.as_mut() else {
-            self.status = "E: gateway unavailable".to_owned();
+            self.status.text = "E: gateway unavailable".to_owned();
             self.dirty = true;
             return;
         };
@@ -250,25 +257,25 @@ impl Model {
             gateway,
             &self.workspace.path,
         ) {
-            Ok(StartOutcome::Started) => self.status = "plugin host starting".to_owned(),
-            Ok(StartOutcome::Queued) => self.status = "plugin host queued".to_owned(),
-            Err(error) => self.status = format!("E: {error}"),
+            Ok(StartOutcome::Started) => self.status.text = "plugin host starting".to_owned(),
+            Ok(StartOutcome::Queued) => self.status.text = "plugin host queued".to_owned(),
+            Err(error) => self.status.text = format!("E: {error}"),
         }
         self.dirty = true;
     }
 
     #[cfg(not(target_os = "linux"))]
     pub(crate) fn start_host(&mut self) {
-        self.status = "E: plugin host is Linux-only".to_owned();
+        self.status.text = "E: plugin host is Linux-only".to_owned();
         self.dirty = true;
     }
 
     #[cfg(target_os = "linux")]
     pub(crate) fn exec_host(&mut self) {
         match self.plugins.supervisor.exec(DEBUG_PLUGIN_ID) {
-            Ok(ExecOutcome::Sent) => self.status = "plugin host request sent".to_owned(),
-            Ok(ExecOutcome::Queued) => self.status = "plugin host request queued".to_owned(),
-            Err(error) => self.status = format!("E: {error}"),
+            Ok(ExecOutcome::Sent) => self.status.text = "plugin host request sent".to_owned(),
+            Ok(ExecOutcome::Queued) => self.status.text = "plugin host request queued".to_owned(),
+            Err(error) => self.status.text = format!("E: {error}"),
         }
         self.dirty = true;
     }
@@ -283,8 +290,8 @@ impl Model {
             .supervisor
             .stop(DEBUG_PLUGIN_ID, self.workspace.gateway.as_mut())
         {
-            Ok(()) => self.status = "plugin host stopped".to_owned(),
-            Err(error) => self.status = format!("E: {error}"),
+            Ok(()) => self.status.text = "plugin host stopped".to_owned(),
+            Err(error) => self.status.text = format!("E: {error}"),
         }
         self.dirty = true;
     }
@@ -331,24 +338,24 @@ impl Model {
             .find(|plugin| plugin.manifest.id == plugin_id)
             .cloned()
         else {
-            self.status = format!("E: unknown plugin: {plugin_id}");
+            self.status.text = format!("E: unknown plugin: {plugin_id}");
             self.dirty = true;
             return;
         };
         if !plugin.enabled {
             if let Err(error) = self.set_managed_enabled(plugin_id, true) {
-                self.status = format!("E: plugin {plugin_id}: {error}");
+                self.status.text = format!("E: plugin {plugin_id}: {error}");
                 self.dirty = true;
                 return;
             }
         }
         let Some(gateway) = self.workspace.gateway.as_mut() else {
-            self.status = "E: gateway unavailable".to_owned();
+            self.status.text = "E: gateway unavailable".to_owned();
             self.dirty = true;
             return;
         };
         if let Err(error) = self.plugins.supervisor.enable(plugin_id) {
-            self.status = format!("E: plugin {plugin_id}: {error}");
+            self.status.text = format!("E: plugin {plugin_id}: {error}");
             self.dirty = true;
             return;
         }
@@ -358,9 +365,9 @@ impl Model {
             gateway,
             &self.workspace.path,
         ) {
-            Ok(StartOutcome::Started) => self.status = format!("plugin {plugin_id} starting"),
-            Ok(StartOutcome::Queued) => self.status = format!("plugin {plugin_id} queued"),
-            Err(error) => self.status = format!("E: plugin {plugin_id}: {error}"),
+            Ok(StartOutcome::Started) => self.status.text = format!("plugin {plugin_id} starting"),
+            Ok(StartOutcome::Queued) => self.status.text = format!("plugin {plugin_id} queued"),
+            Err(error) => self.status.text = format!("E: plugin {plugin_id}: {error}"),
         }
         self.dirty = true;
     }
@@ -381,7 +388,7 @@ impl Model {
                     state,
                     detail,
                 } => {
-                    self.status = match state {
+                    self.status.text = match state {
                         HostState::Starting => format!("plugin {plugin_id} starting"),
                         HostState::Ready => format!("plugin {plugin_id} ready"),
                         HostState::Failed => format!(
@@ -401,7 +408,7 @@ impl Model {
                     self.dirty = true;
                 }
                 SupervisorEvent::Message { plugin_id, message } => {
-                    self.status = format!("plugin {plugin_id}: {message}");
+                    self.status.text = format!("plugin {plugin_id}: {message}");
                     self.dirty = true;
                 }
             }

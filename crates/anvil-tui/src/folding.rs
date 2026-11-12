@@ -34,7 +34,7 @@ impl Model {
             params,
         ) {
             self.overlays.lsp_results.pending_fold_action = action;
-            self.status = "folds".to_owned();
+            self.status.text = "folds".to_owned();
         } else {
             self.overlays.lsp_results.pending_fold_action = None;
         }
@@ -58,7 +58,7 @@ impl Model {
         let Some(ranges) = result.as_array() else {
             self.overlays.lsp_results.folds.clear();
             self.overlays.lsp_results.folded.clear();
-            self.status = "lsp: no folds".to_owned();
+            self.status.text = "lsp: no folds".to_owned();
             return;
         };
         let mut folds = Vec::new();
@@ -117,7 +117,7 @@ impl Model {
         }
         self.normalize_scroll();
         let count = self.overlays.lsp_results.folds.len();
-        self.status = if count == 0 {
+        self.status.text = if count == 0 {
             "lsp: no folds".to_owned()
         } else {
             format!("folds: {count}")
@@ -150,27 +150,27 @@ impl Model {
             .collect();
         self.move_cursor_out_of_hidden();
         self.normalize_scroll();
-        self.status = format!("folds closed: {}", self.overlays.lsp_results.folded.len());
+        self.status.text = format!("folds closed: {}", self.overlays.lsp_results.folded.len());
         self.dirty = true;
     }
 
     pub(crate) fn open_all_folds(&mut self) {
         self.overlays.lsp_results.folded.clear();
-        self.status = "folds opened".to_owned();
+        self.status.text = "folds opened".to_owned();
         self.dirty = true;
     }
 
     fn toggle_fold_line(&mut self, line: usize) {
         let Some(start) = self.fold_start_containing(line) else {
-            self.status = "no fold".to_owned();
+            self.status.text = "no fold".to_owned();
             self.dirty = true;
             return;
         };
         if !self.overlays.lsp_results.folded.insert(start) {
             self.overlays.lsp_results.folded.remove(&start);
-            self.status = "fold opened".to_owned();
+            self.status.text = "fold opened".to_owned();
         } else {
-            self.status = "fold closed".to_owned();
+            self.status.text = "fold closed".to_owned();
         }
         self.move_cursor_out_of_hidden();
         self.normalize_scroll();
@@ -368,8 +368,8 @@ mod tests {
         );
         model.toggle_fold_at_cursor();
         assert!(!model.folds_fresh());
-        assert_eq!(model.status, "E: lsp is not running");
-        assert!(!model.status.contains("no fold"));
+        assert_eq!(model.status.text, "E: lsp is not running");
+        assert!(!model.status.text.contains("no fold"));
     }
 
     #[test]
