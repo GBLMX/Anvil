@@ -152,6 +152,31 @@ pub(crate) fn matching_bracket(
 ) -> Option<(usize, usize)> {
     let (target, character) = bracket_at(text, cursor)?;
     let (open, close) = bracket_pair(character)?;
+    let line_start = text[..target].rfind('\n').map_or(0, |offset| offset + 1);
+    let context_start = if target <= MAX_BRACKET_SCAN_BYTES {
+        0
+    } else {
+        line_start
+    };
+    let context_lexer = Lexer::new(text, path);
+    let mut context_at = context_start;
+    let mut target_significant = None;
+    while context_at <= target {
+        let Some((next, _, significant)) = context_lexer.next(context_at) else {
+            break;
+        };
+        if context_at == target {
+            target_significant = Some(significant);
+            break;
+        }
+        if next > target {
+            break;
+        }
+        context_at = next.max(context_at + 1);
+    }
+    if target_significant != Some(true) {
+        return None;
+    }
     let open_at_target = character == open;
     let direction = if open_at_target {
         Direction::Forward
@@ -270,10 +295,14 @@ mod tests {
 
     #[test]
     fn ignores_brackets_in_strings_and_comments() {
-        let text = "\"(\" // )\n(foo)\n";
-        let pair = matching_bracket(text, 9, Some(Path::new("main.rs"))).expect("pair");
-        assert_eq!(pair, (9, 13));
+        let text = "\"(a)\" // (b)\n(c)\n";
         assert_eq!(matching_bracket(text, 1, Some(Path::new("main.rs"))), None);
+        assert_eq!(matching_bracket(text, 8, Some(Path::new("main.rs"))), None);
+        let pair = matching_bracket(text, 13, Some(Path::new("main.rs"))).expect("pair");
+        assert_eq!(pair, (13, 15));
+        let after_string =
+            matching_bracket("\"(a)\" (b)", 6, Some(Path::new("main.rs"))).expect("after string");
+        assert_eq!(after_string, (6, 8));
     }
 
     #[test]
