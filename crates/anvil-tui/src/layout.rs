@@ -47,7 +47,9 @@ impl Model {
                     return segments
                         .into_iter()
                         .enumerate()
-                        .map(|(index, (start, end))| (start, end, index + 1 == 256))
+                        .map(|(index, (start, end))| {
+                            (line_start + start, line_start + end, index + 1 == 256)
+                        })
                         .collect();
                 }
                 segments.push((segment_start, index));
@@ -618,6 +620,20 @@ mod tests {
         model.editor.set_selection_bytes(9, 9);
         model.ensure_cursor_visible(2, 5);
         assert!(model.scroll_subrow > 0, "subrow={}", model.scroll_subrow);
+    }
+
+    #[test]
+    fn wrap_segment_cap_keeps_absolute_offsets() {
+        let mut model = Model::new(
+            EditorState::from_text(&format!("first\n{}", "a".repeat(300))),
+            None,
+        );
+        model.settings.editor.soft_wrap = true;
+        let segments = model.wrap_segments(1, 1);
+        assert_eq!(segments.len(), 256);
+        assert_eq!(segments[0].0, 6);
+        assert_eq!(segments[255].0, 6 + 255);
+        assert!(segments[255].2);
     }
 
     #[test]
