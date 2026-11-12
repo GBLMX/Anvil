@@ -7,7 +7,7 @@ use anvil_api::EditorView;
 use anvil_session::ui::CreateKind;
 use ratatui::{
     Frame,
-    layout::{Alignment, Rect},
+    layout::Rect,
     style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, BorderType, Clear, Paragraph},

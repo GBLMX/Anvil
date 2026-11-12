@@ -404,7 +404,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
             frame.render_widget(
                 Paragraph::new(lines)
                     .style(theme::panel())
-                    .block(panel_block(title)),
+                    .block(panel_block(title.to_owned())),
                 popup,
             );
         }
@@ -836,7 +836,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
         frame.render_widget(
             Paragraph::new(lines)
                 .style(theme::panel())
-                .block(panel_block(title)),
+                .block(panel_block(title.to_owned())),
             popup,
         );
     }
@@ -1131,8 +1131,8 @@ fn truncate_width(text: &str, max: u16) -> String {
 }
 
 fn render_welcome(frame: &mut Frame, area: Rect, model: &Model) {
-    let width = area.width.saturating_sub(4).clamp(12, 72).min(area.width);
-    let height = area.height.saturating_sub(2).clamp(4, 26).min(area.height);
+    let width = area.width.saturating_sub(4).clamp(12, 92).min(area.width);
+    let height = area.height.saturating_sub(2).clamp(4, 28).min(area.height);
     let panel = Rect {
         x: area.x + area.width.saturating_sub(width) / 2,
         y: area.y + area.height.saturating_sub(height) / 2,
@@ -1140,75 +1140,161 @@ fn render_welcome(frame: &mut Frame, area: Rect, model: &Model) {
         height,
     };
     frame.render_widget(Clear, panel);
-    let muted = Style::default().fg(theme::muted()).bg(theme::surface());
-    let accent = Style::default().fg(theme::accent());
-    let mut lines = vec![
-        Line::from(vec![Span::styled(
-            "ANVIL",
-            Style::default()
-                .fg(theme::accent())
-                .bg(theme::surface())
-                .add_modifier(Modifier::BOLD),
-        )]),
-        Line::styled("selection-first terminal editor", muted),
-        Line::styled("", muted),
-        Line::from(vec![Span::styled("i", accent), Span::raw("      insert")]),
-        Line::from(vec![
-            Span::styled("Space f", accent),
-            Span::raw(" find file"),
-        ]),
-        Line::from(vec![
-            Span::styled("Space e", accent),
-            Span::raw(" file tree"),
-        ]),
-        Line::from(vec![
-            Span::styled("r", accent),
-            Span::raw("      recent files"),
-        ]),
-        Line::from(vec![Span::styled("?", accent), Span::raw("      help")]),
-        Line::from(vec![Span::styled(":q", accent), Span::raw("      quit")]),
-        Line::styled("", muted),
-        Line::styled("recent", muted),
-    ];
-    let recent = model.openable_recent_files();
-    if recent.is_empty() {
-        lines.push(Line::styled("  no recent files in this workspace", muted));
+    if width >= 68 && height >= 14 {
+        let gap = 2;
+        let left_width = ((width as usize * 2) / 5).clamp(26, 38) as u16;
+        let left = Rect {
+            width: left_width,
+            ..panel
+        };
+        let right = Rect {
+            x: panel.x + left_width + gap,
+            width: panel.width.saturating_sub(left_width + gap),
+            ..panel
+        };
+        render_welcome_actions(frame, left, model);
+        render_welcome_recent(frame, right, model);
     } else {
-        for path in recent.iter().take(4) {
+        let mut lines = welcome_actions(model, usize::from(width));
+        lines.push(Line::styled("", theme::panel()));
+        lines.extend(welcome_recent(
+            model,
+            usize::from(width.saturating_sub(2)),
+            5,
+        ));
+        render_welcome_panel(frame, panel, "Start", lines);
+    }
+}
+
+fn render_welcome_actions(frame: &mut Frame, area: Rect, model: &Model) {
+    let lines = welcome_actions(model, usize::from(area.width.saturating_sub(2)));
+    render_welcome_panel(frame, area, "Start", lines);
+}
+
+fn render_welcome_recent(frame: &mut Frame, area: Rect, model: &Model) {
+    let lines = welcome_recent(model, usize::from(area.width.saturating_sub(2)), 8);
+    render_welcome_panel(frame, area, "Recent", lines);
+}
+
+fn render_welcome_panel(frame: &mut Frame, area: Rect, title: &str, lines: Vec<Line<'_>>) {
+    frame.render_widget(
+        Paragraph::new(lines)
+            .style(theme::panel())
+            .block(panel_block(title.to_owned())),
+        area,
+    );
+}
+
+fn welcome_actions(model: &Model, width: usize) -> Vec<Line<'static>> {
+    let key = Style::default()
+        .fg(theme::accent())
+        .add_modifier(Modifier::BOLD);
+    let muted = theme::panel().fg(theme::muted());
+    let mut lines = vec![
+        Line::from(vec![
+            Span::styled(
+                "ANVIL",
+                Style::default()
+                    .fg(theme::accent())
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                format!("  {}", env!("CARGO_PKG_VERSION")),
+                theme::panel().fg(theme::dim()),
+            ),
+        ]),
+        Line::styled("selection-first terminal editor", muted),
+        Line::styled("", theme::panel()),
+        Line::from(vec![
+            Span::styled(format!(" {:<8}", "i"), key),
+            Span::raw("insert"),
+        ]),
+        Line::from(vec![
+            Span::styled(format!(" {:<8}", "Space f"), key),
+            Span::raw("find file"),
+        ]),
+        Line::from(vec![
+            Span::styled(format!(" {:<8}", "Space e"), key),
+            Span::raw("file tree"),
+        ]),
+        Line::from(vec![
+            Span::styled(format!(" {:<8}", "r"), key),
+            Span::raw("recent files"),
+        ]),
+        Line::from(vec![
+            Span::styled(format!(" {:<8}", "?"), key),
+            Span::raw("help"),
+        ]),
+        Line::from(vec![
+            Span::styled(format!(" {:<8}", ":q"), key),
+            Span::raw("quit"),
+        ]),
+        Line::styled("", theme::panel()),
+        Line::styled(
+            truncate_width(
+                &format!("workspace  {}", model.workspace.display()),
+                u16::try_from(width.saturating_sub(2)).unwrap_or(u16::MAX),
+            ),
+            muted,
+        ),
+    ];
+    lines.truncate(width.max(4));
+    lines
+}
+
+fn welcome_recent(model: &Model, width: usize, limit: usize) -> Vec<Line<'static>> {
+    let muted = theme::panel().fg(theme::muted());
+    let dim = theme::panel().fg(theme::dim());
+    let files = model.openable_recent_files();
+    let mut lines = vec![Line::styled("FILES", dim), Line::styled("", theme::panel())];
+    if files.is_empty() {
+        lines.push(Line::styled("no recent files in this workspace", muted));
+    } else {
+        for path in files.iter().take(limit) {
             let display = path
                 .strip_prefix(&model.workspace)
                 .unwrap_or(path)
                 .display()
                 .to_string();
             lines.push(Line::styled(
-                format!("  {}", truncate_width(&display, width.saturating_sub(4))),
+                format!(
+                    " {}",
+                    truncate_width(
+                        &display,
+                        u16::try_from(width.saturating_sub(1)).unwrap_or(u16::MAX)
+                    )
+                ),
                 muted,
             ));
         }
     }
-    lines.push(Line::styled("", muted));
-    lines.push(Line::styled(
-        format!(
-            "workspace  {}",
-            truncate_width(
-                &model.workspace.display().to_string(),
-                width.saturating_sub(13)
-            )
-        ),
-        muted,
-    ));
-    lines.push(Line::styled(
-        format!("version    {}", env!("CARGO_PKG_VERSION")),
-        muted,
-    ));
-    lines.truncate(usize::from(height.saturating_sub(2)));
-    frame.render_widget(
-        Paragraph::new(lines)
-            .style(theme::panel())
-            .alignment(Alignment::Center)
-            .block(panel_block(" start ")),
-        panel,
-    );
+    lines.push(Line::styled("", theme::panel()));
+    lines.push(Line::styled("WORKSPACES", dim));
+    lines.push(Line::styled("", theme::panel()));
+    let workspaces = model.recent_workspaces.iter().take(3).collect::<Vec<_>>();
+    if workspaces.is_empty() {
+        lines.push(Line::styled("no recent workspaces", muted));
+    } else {
+        for workspace in workspaces {
+            let name = workspace
+                .file_name()
+                .map(|name| name.to_string_lossy().into_owned())
+                .unwrap_or_else(|| workspace.display().to_string());
+            lines.push(Line::styled(
+                format!(
+                    " {}",
+                    truncate_width(
+                        &name,
+                        u16::try_from(width.saturating_sub(1)).unwrap_or(u16::MAX)
+                    )
+                ),
+                muted,
+            ));
+        }
+    }
+    lines.push(Line::styled("", theme::panel()));
+    lines.push(Line::styled("r open recent files", dim));
+    lines
 }
 
 fn tree_rollup_git(model: &Model, entries: &[TreeEntry], index: usize) -> Option<char> {
