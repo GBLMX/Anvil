@@ -8,6 +8,9 @@ post-`0.5.0` feature line.
 
 ## [Unreleased]
 ### Added
+- Theme files can style mode badges beyond normal: `mode_insert`,
+  `mode_command`, `mode_search`, `mode_rename`, `mode_create`, and
+  `mode_confirm` under `[status]`.
 - Breadcrumbs render as a clickable row: the path segment reveals the file in
   the workspace tree, and the symbol segment opens document symbols.
 - Sticky scroll shows the deepest enclosing LSP document symbol over the first

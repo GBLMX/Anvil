@@ -36,7 +36,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
     } else {
         title
     };
-    let (mode_text, mode_color, status) = match &model.ui.input_mode {
+    let (mode_text, _mode_color, status) = match &model.ui.input_mode {
         InputMode::Rename { name } => (" REN ", theme::magenta(), format!("rename> {name}")),
         InputMode::CommandLine { buffer } => {
             (" CMD ", theme::warning(), format!(":{}", buffer.text()))
@@ -111,10 +111,16 @@ pub fn view(model: &Model, frame: &mut Frame) {
             .saturating_add(UnicodeWidthStr::width(before) as u16);
         (x, area.y.saturating_add(area.height.saturating_sub(1)))
     });
-    let mode_style = if matches!(model.ui.input_mode, InputMode::Normal) {
-        theme::mode_normal_badge()
-    } else {
-        theme::mode_badge(mode_color)
+    let mode_style = match &model.ui.input_mode {
+        InputMode::Normal => theme::mode_normal_badge(),
+        InputMode::Insert => theme::mode_insert_badge(),
+        InputMode::CommandLine { .. } => theme::mode_command_badge(),
+        InputMode::Search { .. } => theme::mode_search_badge(),
+        InputMode::Rename { .. } | InputMode::RenameEntry { .. } => theme::mode_rename_badge(),
+        InputMode::Create { .. } | InputMode::TransferEntry { .. } => theme::mode_create_badge(),
+        InputMode::ConfirmClose { .. }
+        | InputMode::ConfirmReload { .. }
+        | InputMode::ConfirmDelete { .. } => theme::mode_confirm_badge(),
     };
     let mode = Span::styled(mode_text, mode_style);
     let block = panel_block(title)

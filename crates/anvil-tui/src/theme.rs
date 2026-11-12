@@ -44,7 +44,7 @@ pub(crate) struct Theme {
     pub(crate) syntax_quote: Color,
     pub(crate) syntax_table: Color,
     pub(crate) syntax_modifiers: [Modifier; 15],
-    pub(crate) status_normal: Option<Style>,
+    pub(crate) status_modes: [Option<Style>; 7],
 }
 
 impl Theme {
@@ -81,7 +81,7 @@ impl Theme {
         syntax_quote: Color::Rgb(139, 148, 158),
         syntax_table: Color::Rgb(255, 166, 87),
         syntax_modifiers: [Modifier::empty(); 15],
-        status_normal: None,
+        status_modes: [None; 7],
     };
 
     pub(crate) const ONE_DARK: Self = Self {
@@ -117,7 +117,7 @@ impl Theme {
         syntax_quote: Color::Rgb(143, 150, 163),
         syntax_table: Color::Rgb(209, 154, 102),
         syntax_modifiers: [Modifier::empty(); 15],
-        status_normal: None,
+        status_modes: [None; 7],
     };
 
     pub(crate) const SOLARIZED_LIGHT: Self = Self {
@@ -153,7 +153,7 @@ impl Theme {
         syntax_quote: Color::Rgb(82, 102, 109),
         syntax_table: Color::Rgb(168, 58, 18),
         syntax_modifiers: [Modifier::empty(); 15],
-        status_normal: None,
+        status_modes: [None; 7],
     };
 
     pub(crate) const GRUVBOX_DARK: Self = Self {
@@ -189,7 +189,7 @@ impl Theme {
         syntax_quote: Color::Rgb(189, 174, 147),
         syntax_table: Color::Rgb(254, 128, 25),
         syntax_modifiers: [Modifier::empty(); 15],
-        status_normal: None,
+        status_modes: [None; 7],
     };
 
     pub(crate) const NORD: Self = Self {
@@ -225,7 +225,7 @@ impl Theme {
         syntax_quote: Color::Rgb(184, 196, 214),
         syntax_table: Color::Rgb(255, 154, 168),
         syntax_modifiers: [Modifier::empty(); 15],
-        status_normal: None,
+        status_modes: [None; 7],
     };
 
     pub(crate) const CATPPUCCIN_MOCHA: Self = Self {
@@ -261,7 +261,7 @@ impl Theme {
         syntax_quote: Color::Rgb(147, 153, 178),
         syntax_table: Color::Rgb(250, 179, 135),
         syntax_modifiers: [Modifier::empty(); 15],
-        status_normal: None,
+        status_modes: [None; 7],
     };
 }
 
@@ -325,6 +325,12 @@ struct SyntaxSpec {
 #[allow(dead_code)]
 struct StatusSpec {
     mode_normal: Option<StyleSpec>,
+    mode_insert: Option<StyleSpec>,
+    mode_command: Option<StyleSpec>,
+    mode_search: Option<StyleSpec>,
+    mode_rename: Option<StyleSpec>,
+    mode_create: Option<StyleSpec>,
+    mode_confirm: Option<StyleSpec>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -499,22 +505,48 @@ fn parse_theme_file(path: &Path, source: &str) -> Result<Theme, String> {
         apply_color(&mut theme.syntax_table, style.fg.as_deref())?;
         theme.syntax_modifiers[14] = style_modifiers(style);
     }
-    if let Some(style) = &file.status.mode_normal {
-        let fg = match style.fg.as_deref() {
-            Some(value) => parse_color(value)?,
-            None => theme.text,
-        };
-        let bg = match style.bg.as_deref() {
-            Some(value) => parse_color(value)?,
-            None => theme.surface_alt,
-        };
-        theme.status_normal = Some(
-            Style::default()
-                .fg(fg)
-                .bg(bg)
-                .add_modifier(style_modifiers(style)),
-        );
-    }
+    apply_status_style(
+        &mut theme.status_modes[0],
+        file.status.mode_normal.as_ref(),
+        theme.text,
+        theme.surface_alt,
+    )?;
+    apply_status_style(
+        &mut theme.status_modes[1],
+        file.status.mode_insert.as_ref(),
+        theme.text,
+        theme.surface_alt,
+    )?;
+    apply_status_style(
+        &mut theme.status_modes[2],
+        file.status.mode_command.as_ref(),
+        theme.text,
+        theme.surface_alt,
+    )?;
+    apply_status_style(
+        &mut theme.status_modes[3],
+        file.status.mode_search.as_ref(),
+        theme.text,
+        theme.surface_alt,
+    )?;
+    apply_status_style(
+        &mut theme.status_modes[4],
+        file.status.mode_rename.as_ref(),
+        theme.text,
+        theme.surface_alt,
+    )?;
+    apply_status_style(
+        &mut theme.status_modes[5],
+        file.status.mode_create.as_ref(),
+        theme.text,
+        theme.surface_alt,
+    )?;
+    apply_status_style(
+        &mut theme.status_modes[6],
+        file.status.mode_confirm.as_ref(),
+        theme.text,
+        theme.surface_alt,
+    )?;
     Ok(theme)
 }
 
@@ -605,6 +637,32 @@ fn nearest_ansi_256(red: u8, green: u8, blue: u8) -> u8 {
     let g = to_cube(green);
     let b = to_cube(blue);
     16 + 36 * r + 6 * g + b
+}
+
+fn apply_status_style(
+    target: &mut Option<Style>,
+    style: Option<&StyleSpec>,
+    default_fg: Color,
+    default_bg: Color,
+) -> Result<(), String> {
+    let Some(style) = style else {
+        return Ok(());
+    };
+    let fg = match style.fg.as_deref() {
+        Some(value) => parse_color(value)?,
+        None => default_fg,
+    };
+    let bg = match style.bg.as_deref() {
+        Some(value) => parse_color(value)?,
+        None => default_bg,
+    };
+    *target = Some(
+        Style::default()
+            .fg(fg)
+            .bg(bg)
+            .add_modifier(style_modifiers(style)),
+    );
+    Ok(())
 }
 
 fn theme_signature(directory: &Path) -> Option<SystemTime> {
@@ -888,10 +946,41 @@ pub(crate) fn syntax_modifier(index: usize) -> Modifier {
         .unwrap_or_else(Modifier::empty)
 }
 
-pub(crate) fn mode_normal_badge() -> Style {
+fn status_badge(slot: usize, fallback: Color) -> Style {
     active()
-        .status_normal
-        .unwrap_or_else(|| mode_badge(accent()))
+        .status_modes
+        .get(slot)
+        .copied()
+        .flatten()
+        .unwrap_or_else(|| mode_badge(fallback))
+}
+
+pub(crate) fn mode_normal_badge() -> Style {
+    status_badge(0, accent())
+}
+
+pub(crate) fn mode_insert_badge() -> Style {
+    status_badge(1, success())
+}
+
+pub(crate) fn mode_command_badge() -> Style {
+    status_badge(2, warning())
+}
+
+pub(crate) fn mode_search_badge() -> Style {
+    status_badge(3, warning())
+}
+
+pub(crate) fn mode_rename_badge() -> Style {
+    status_badge(4, magenta())
+}
+
+pub(crate) fn mode_create_badge() -> Style {
+    status_badge(5, accent())
+}
+
+pub(crate) fn mode_confirm_badge() -> Style {
+    status_badge(6, warning())
 }
 
 pub(crate) fn text() -> Style {
@@ -1036,7 +1125,7 @@ mod tests {
         let directory = tempfile::tempdir().expect("tempdir");
         fs::write(
             directory.path().join("cyberpunk.toml"),
-            "[ui]\nbackground = \"#101010\"\nforeground = \"#eeeeee\"\nselection = \"color5\"\ncursorline = \"#202020\"\n[syntax]\nkeyword = { fg = \"#ff00aa\", bold = true }\n[status]\nmode_normal = { bg = \"#ff00aa\", fg = \"color0\" }\n",
+            "[ui]\nbackground = \"#101010\"\nforeground = \"#eeeeee\"\nselection = \"color5\"\ncursorline = \"#202020\"\n[syntax]\nkeyword = { fg = \"#ff00aa\", bold = true }\n[status]\nmode_normal = { bg = \"#ff00aa\", fg = \"color0\" }\nmode_insert = { bg = \"#00ff00\", fg = \"color0\" }\n",
         )
         .expect("write");
         load_custom_themes_from(directory.path()).expect("load");
@@ -1053,6 +1142,10 @@ mod tests {
         assert_eq!(
             mode_normal_badge().bg,
             Some(parse_color("#ff00aa").expect("hex"))
+        );
+        assert_eq!(
+            mode_insert_badge().bg,
+            Some(parse_color("#00ff00").expect("hex"))
         );
         set_startup_theme("anvil-dark").expect("reset");
     }
