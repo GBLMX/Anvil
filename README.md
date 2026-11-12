@@ -33,7 +33,7 @@ run without the plugin sandbox; diagnostics, completion with resolved
 documentation and snippets (`Ctrl+Space`),
 definition (`gd`), references (`gr`), document highlights (`gh`),
 incoming/outgoing calls (`gi`/`go`), folding ranges (`za`/`zM`/`zR`),
-semantic token colors,
+code lens, semantic token colors,
 hover (`K`), rename (`Space r`), code actions/quick fixes (`Space a`),
 formatting (`Space F`), document symbols (`Space s`), signature help, and
 workspace symbols (`Space S`) use canonicalized LSP UTF-16 positions. Rename,

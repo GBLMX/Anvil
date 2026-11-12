@@ -44,15 +44,16 @@ Version is frozen at **0.6.0** for long-term internal feature polish.
 - `0.5.0` session extraction is complete: command-visible effects route through
   `anvil-session`; the TUI is the input adapter and renderer.
 
-## Next (internal polish)
+## Remaining internal polish
 
-1. LSP completion snippet mirrors and ranking.
-2. LSP code lens, rendered as standard virtual rows above source lines.
-3. Session restore, crash backup, and persistent undo decision.
-4. Git diff/hunk/blame/conflict surfaces.
-5. Auto-save, swap files, and external-conflict resolution.
-6. Multi-file/project search and replace.
-7. P1 adapters: tasks, tests, DAP, terminal, multi-root, folding persistence.
+P0/P1 items are complete; the remaining follow-ups are:
+
+1. Cross-root file tree and search UX.
+2. Auto-save policy; swap files and external-conflict recovery already landed.
+3. Persistent undo decision; rejected for the current phase.
+
+Completion snippet mirrors/ranking and code lens are landed; see
+[docs/internal-polish-plan.md](docs/internal-polish-plan.md).
 
 Detailed difficulty and exit gates are in
 [docs/internal-polish-plan.md](docs/internal-polish-plan.md). Marketplace and

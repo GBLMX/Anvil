@@ -85,8 +85,8 @@ Not required for v1.
 
 1. Finish `0.5.3`–`0.5.9`: palette/which-key, preview/icons, status/tabs,
    notifications/problems, search/replace, mouse/accessibility.
-2. Remaining LSP depth: completion snippet mirrors/ranking, then code lens
-   with above-line virtual rows.
+2. LSP depth landed: completion snippet mirrors/ranking and code lens with
+   above-line virtual rows.
 3. Session restore, crash backup, persistent undo.
 4. Git diff/hunk/blame/conflict.
 5. Settings and remaining theme/keymap boundaries.
