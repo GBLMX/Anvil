@@ -29,14 +29,15 @@ Tokio runtime, no in-process plugin UI, and no embedded WebView.
 | Completion | snippet mirrors, ranking, resolve docs, placeholders landed | — |
 | Navigation | definition, hover, symbols, references, highlights, incoming/outgoing calls landed | — |
 | Structure | diagnostics, code actions, format, rename, folding ranges, semantic tokens, code lens landed | — |
-| Search | literal `/`, `n`/`N`, search/replace UI landed | multi-file/project search only if measured |
+| Search | literal `/`, `n`/`N`, search/replace, and bounded project search landed | — |
 | Problems | bounded panel and jumps landed | — |
 | Session | buffer/cursor/layout restore and crash backup landed | — |
-| Git | diff, hunk staging, blame, conflict previews landed | conflict resolution operations |
-| Settings | typed registry and overlay landed | validation, reset, changed markers, hot-reload boundary |
+| Git | diff, hunk staging, blame, conflict previews, and resolution operations landed | — |
+| Settings | typed registry, overlay, validation, reset, changed markers, and explicit `:config-reload` landed | file watching is out of scope |
 
-Remaining P0: project search, Git conflict resolution, and settings validation/
-reset/hot-reload boundary. Each item needs a deterministic failure test.
+Remaining P0: none for the internal-polish phase. Cross-root file tree/search
+remains the P1 follow-up tracked in
+[multi-root-routing-plan.md](multi-root-routing-plan.md).
 
 ## 3. P1: IDE-like capability
 

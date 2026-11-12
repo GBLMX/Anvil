@@ -11,12 +11,12 @@ in the plans linked below.
 | Plugin sandbox | `LANDLOCK_SCOPE_SIGNAL` is not enabled; seccomp remains the primary signal control | [threat model T9/T10](threat-model.md), [Linux L1b](linux-platform-plan.md) |
 | Plugin API | v1 is frozen with complete DTOs and a production editor RPC proxy; manifest commands dispatch, while `editor.register_command` remains pending | [0.6.0](0.6.x-plan.md), [ADR-0003](adr/0003-idl.md) |
 | Plugin commands | Manifest `onCommand` events dispatch from the command palette; dynamic `editor.register_command` is still pending | [0.4.x](0.4.x-plan.md), [0.5.x](0.5.x-plan.md) |
-| Distribution | Signed install, bounded download queue, content-addressed store, `pkg.installed`, the enable/disable/uninstall/rollback manager, typed installer `sys.fetch`, official-only release layout/installer, and signed release artifacts exist; signed index, anti-rollback runtime, and marketplace remain missing | [0.6.x](0.6.x-plan.md) |
+| Distribution | Signed install, bounded download queue, content-addressed store, `pkg.installed`, the enable/disable/uninstall/rollback manager, typed installer `sys.fetch`, official-only release layout/installer, signed index/revocation verifier-cache, anti-rollback state, and signed release artifacts exist; marketplace UI/indexed install/consent/provenance surfaces remain missing | [0.6.x](0.6.x-plan.md) |
 | Performance | Full gate suite has not been run on the reference machine | [performance](performance.md) |
-| Persistence | Session/tab/undo restore and crash recovery are not defined | [0.5.6](0.5.x-plan.md) |
-| Configuration | No unified config/theme/icon schema or hot-reload contract | [0.5.x](0.5.x-plan.md) |
-| LSP | Language servers are not bundled or lifecycle-managed | [INSTALL](../INSTALL.md) |
-| Release | Signing, SBOM, and provenance are still pending | [0.6.1](0.6.x-plan.md), [RELEASE](../RELEASE.md) |
+| Persistence | Session/tab restore, crash recovery, and dirty-swap recovery landed; persistent undo is deliberately rejected for this phase | [0.5.6](0.5.x-plan.md) |
+| Configuration | Settings/keymap/theme schemas and explicit `:config-reload` landed; file watching is not enabled | [0.5.x](0.5.x-plan.md) |
+| LSP | Language servers are not bundled; discovery, restart, and lifecycle are managed by the editor | [INSTALL](../INSTALL.md) |
+| Release | Signed release workflow, SHA256SUMS, SPDX SBOM, and provenance attestation landed; production signing keys remain external release secrets | [0.6.1](0.6.x-plan.md), [RELEASE](../RELEASE.md) |
 
 
 ## Recently fixed bug
