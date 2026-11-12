@@ -155,6 +155,7 @@ impl Model {
             }
             ("bn", "") => self.switch_buffer(1),
             ("bp", "") => self.switch_buffer(-1),
+            ("buffers", "") => self.open_buffer_picker(),
             ("new", "") => self.new_buffer(),
             ("bd", "") => self.close_buffer(self.buffers.active, false),
             ("bd!", "") => self.close_buffer(self.buffers.active, true),

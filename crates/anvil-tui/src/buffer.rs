@@ -55,6 +55,70 @@ impl Model {
         self.file.dirty = true;
     }
 
+    pub(crate) fn open_buffer_picker(&mut self) {
+        self.cancel_completion();
+        self.ensure_current_buffer();
+        let entries = (0..self.buffers.entries.len()).collect::<Vec<_>>();
+        let selected = entries
+            .iter()
+            .position(|index| *index == self.buffers.active)
+            .unwrap_or(0);
+        self.overlays.buffer_picker = Some(BufferPickerState {
+            query: String::new(),
+            filtered: entries.clone(),
+            entries,
+            selected,
+        });
+        self.status.text = "buffers".to_owned();
+        self.file.dirty = true;
+    }
+
+    pub(crate) fn refresh_buffer_picker(&mut self) {
+        let Some(picker) = self.overlays.buffer_picker.as_ref() else {
+            return;
+        };
+        let query = picker.query.to_lowercase();
+        let entries = picker.entries.clone();
+        let filtered = entries
+            .into_iter()
+            .filter(|index| self.buffer_name(*index).to_lowercase().contains(&query))
+            .collect::<Vec<_>>();
+        let Some(picker) = self.overlays.buffer_picker.as_mut() else {
+            return;
+        };
+        picker.filtered = filtered;
+        picker.selected = picker.selected.min(picker.filtered.len().saturating_sub(1));
+        self.file.dirty = true;
+    }
+
+    pub(crate) fn move_buffer_picker(&mut self, delta: isize) {
+        let Some(picker) = self.overlays.buffer_picker.as_mut() else {
+            return;
+        };
+        picker.selected = picker
+            .selected
+            .saturating_add_signed(delta)
+            .min(picker.filtered.len().saturating_sub(1));
+        self.file.dirty = true;
+    }
+
+    pub(crate) fn close_buffer_picker(&mut self) {
+        self.overlays.buffer_picker = None;
+        self.file.dirty = true;
+    }
+
+    pub(crate) fn apply_buffer_picker(&mut self) {
+        let Some(picker) = self.overlays.buffer_picker.take() else {
+            return;
+        };
+        let Some(index) = picker.filtered.get(picker.selected).copied() else {
+            self.status.text = "no matching buffer".to_owned();
+            self.file.dirty = true;
+            return;
+        };
+        self.select_buffer(index);
+    }
+
     pub(crate) fn load_buffer(&mut self, index: usize) {
         self.clear_lsp_requests();
         self.overlays.lsp_results.hover = None;

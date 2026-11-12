@@ -141,6 +141,10 @@ fn welcome_actions(model: &Model, width: usize) -> Vec<Line<'static>> {
             Span::raw("file tree"),
         ]),
         Line::from(vec![
+            Span::styled(format!(" {:<8}", "Space b"), key),
+            Span::raw("buffers"),
+        ]),
+        Line::from(vec![
             Span::styled(format!(" {:<8}", "r"), key),
             Span::raw("recent files"),
         ]),

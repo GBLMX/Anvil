@@ -138,6 +138,50 @@ fn alt_digits_select_buffers_and_clear_count() {
 }
 
 #[test]
+fn buffer_picker_filters_and_switches() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let first = dir.path().join("first.txt");
+    let second = dir.path().join("second.txt");
+    let third = dir.path().join("third.txt");
+    for path in [&first, &second, &third] {
+        fs::write(path, "text").expect("write buffer");
+    }
+    let mut model = Model::open(&first).expect("open first");
+    model.open_path(&second).expect("open second");
+    model.open_path(&third).expect("open third");
+    model.open_buffer_picker();
+    assert_eq!(
+        model
+            .overlays
+            .buffer_picker
+            .as_ref()
+            .expect("picker")
+            .filtered
+            .len(),
+        3
+    );
+
+    type_text(&mut model, "second");
+    let picker = model.overlays.buffer_picker.as_ref().expect("picker");
+    assert_eq!(picker.filtered.len(), 1);
+    handle_event(&mut model, key(KeyCode::Enter));
+    assert!(model.overlays.buffer_picker.is_none());
+    assert_eq!(model.session.path.as_ref(), Some(&second));
+}
+
+#[test]
+fn buffer_picker_opens_from_space_b_and_buffers_command() {
+    let mut model = Model::new(EditorState::from_text("x"), None);
+    handle_event(&mut model, key(KeyCode::Char(' ')));
+    handle_event(&mut model, key(KeyCode::Char('b')));
+    assert!(model.overlays.buffer_picker.is_some());
+    model.close_buffer_picker();
+
+    command(&mut model, "buffers");
+    assert!(model.overlays.buffer_picker.is_some());
+}
+
+#[test]
 fn switching_buffers_preserves_visual_selection() {
     let dir = tempfile::tempdir().expect("tempdir");
     let first = dir.path().join("first.txt");

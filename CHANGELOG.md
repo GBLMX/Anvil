@@ -10,6 +10,8 @@ post-`0.5.0` feature line.
 ### Added
 - `Alt-1` through `Alt-9` switch directly to the matching open buffer while
   leaving bare digits available as count prefixes.
+- `Space b` and `:buffers` open a filterable buffer picker; `Enter` switches
+  and background WorkspaceEdit buffers are excluded.
 - Foreground buffers are capped at `editor.max_buffers` (default 9, max 99);
   opening or creating one beyond the cap reports
   `E: buffer limit reached (N)` instead of evicting anything. WorkspaceEdit

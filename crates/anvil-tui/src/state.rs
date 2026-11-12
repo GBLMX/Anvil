@@ -117,6 +117,14 @@ pub(crate) struct FuzzyState {
     pub(crate) selected: usize,
 }
 
+#[derive(Debug, Clone)]
+pub(crate) struct BufferPickerState {
+    pub(crate) query: String,
+    pub(crate) entries: Vec<usize>,
+    pub(crate) filtered: Vec<usize>,
+    pub(crate) selected: usize,
+}
+
 #[derive(Debug, Clone, Default)]
 pub(crate) struct PreviewState {
     pub(crate) path: Option<String>,
@@ -605,6 +613,7 @@ pub(crate) struct OverlayState {
     pub(crate) theme_browser: Option<theme_browser::ThemeBrowser>,
     pub(crate) fuzzy: Option<FuzzyState>,
     pub(crate) fuzzy_generation: u64,
+    pub(crate) buffer_picker: Option<BufferPickerState>,
     pub(crate) preview: PreviewState,
     pub(crate) preview_generation: u64,
     pub(crate) debug_panel: Option<debug_panel::DebugPanelState>,

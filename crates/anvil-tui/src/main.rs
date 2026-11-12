@@ -37,6 +37,7 @@ Environment:
 Quick open:
   Space f                Fuzzy file finder; the selected file previews through
                          the gateway. Enter opens it.
+  Space b                Buffer picker; type to filter, Enter switches.
 
 FILE must be inside the selected workspace. Use -- before a file name that
 starts with a dash.
@@ -398,6 +399,7 @@ mod tests {
         assert!(USAGE.contains("previews"));
         assert!(USAGE.contains("ANVIL_GATEWAY"));
         assert!(USAGE.contains("ANVIL_EDITOR_MAX_BUFFERS"));
+        assert!(USAGE.contains("Space b"));
     }
 
     #[test]

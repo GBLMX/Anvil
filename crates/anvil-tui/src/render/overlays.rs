@@ -110,6 +110,55 @@ pub(crate) fn render_overlays(model: &Model, frame: &mut Frame, area: Rect) {
         );
     }
 
+    if let Some(picker) = &model.overlays.buffer_picker {
+        let popup = fuzzy_rect(area);
+        frame.render_widget(Clear, popup);
+        let visible = popup.height.saturating_sub(3) as usize;
+        let start = picker.selected.saturating_sub(visible.saturating_sub(1));
+        let mut lines = Vec::new();
+        for (row, index) in picker.filtered.iter().skip(start).take(visible).enumerate() {
+            let selected = start + row == picker.selected;
+            let style = if selected {
+                theme::selected()
+            } else {
+                theme::panel()
+            };
+            let active = *index == model.buffers.active;
+            let modified = model
+                .buffers
+                .entries
+                .get(*index)
+                .is_some_and(|buffer| buffer.modified);
+            let name = model.buffer_name(*index);
+            let line = format!(
+                "{}{} {:>2} {}{}",
+                if selected { "❯" } else { " " },
+                if active { "*" } else { " " },
+                index + 1,
+                if modified { "● " } else { "" },
+                name
+            );
+            lines.push(Line::styled(
+                truncate_width(&line, popup.width.saturating_sub(2)),
+                style,
+            ));
+        }
+        if picker.filtered.is_empty() {
+            lines.push(Line::styled("no matching buffers", theme::muted()));
+        }
+        lines.push(Line::styled(
+            format!("> {}", picker.query),
+            Style::default().fg(theme::accent()).bg(theme::surface()),
+        ));
+        frame.render_widget(
+            Paragraph::new(lines)
+                .style(theme::panel())
+                .block(crate::render::focused_panel_block(
+                    "Buffers · Enter switch · Esc close",
+                )),
+            popup,
+        );
+    }
     if let Some(fuzzy) = &model.overlays.fuzzy {
         let horizontal = area.width >= 80;
         let stacked = !horizontal && area.height >= 16;

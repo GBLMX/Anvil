@@ -322,6 +322,7 @@ pub(crate) enum PendingCommand {
     CloseSplit,
     OpenTree,
     StartFuzzy,
+    BufferPicker,
     CommandPalette,
     StartRename,
     CodeActions,
@@ -383,7 +384,8 @@ impl PendingCommand {
             | OperatorBracket { .. }
             | OperatorParagraph { .. }
             | OperatorTag { .. }
-            | Count { .. } => None,
+            | Count { .. }
+            | BufferPicker => None,
         }
     }
 
@@ -636,6 +638,7 @@ pub(crate) fn pending_action(
         (' ', KeyCode::Char('r')) => Some(PendingCommand::StartRename),
         (' ', KeyCode::Char('a')) => Some(PendingCommand::CodeActions),
         (' ', KeyCode::Char('s')) => Some(PendingCommand::DocumentSymbols),
+        (' ', KeyCode::Char('b')) => Some(PendingCommand::BufferPicker),
         (' ', KeyCode::Char('S')) => Some(PendingCommand::WorkspaceSymbols),
         (' ', KeyCode::Char('F')) => Some(PendingCommand::Formatting),
         ('c', KeyCode::Char('w')) => Some(PendingCommand::ChangeWord(WordMotion::NextStart)),

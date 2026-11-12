@@ -208,6 +208,10 @@ fn execute_pending_command(
             let _ = model.take_count();
             model.start_fuzzy();
         }
+        PendingCommand::BufferPicker => {
+            let _ = model.take_count();
+            model.open_buffer_picker();
+        }
         PendingCommand::CommandPalette => {
             let _ = model.take_count();
             model.open_command_palette();
@@ -537,6 +541,28 @@ fn handle_key(model: &mut Model, key: KeyPress) {
         }
         if let Some(command) = command {
             execute_pending_command(model, command, pending, key);
+        }
+        return;
+    }
+    if model.overlays.buffer_picker.is_some() {
+        match key.code {
+            KeyCode::Esc => model.close_buffer_picker(),
+            KeyCode::Enter => model.apply_buffer_picker(),
+            KeyCode::Up => model.move_buffer_picker(-1),
+            KeyCode::Down => model.move_buffer_picker(1),
+            KeyCode::Backspace => {
+                if let Some(picker) = model.overlays.buffer_picker.as_mut() {
+                    picker.query.pop();
+                }
+                model.refresh_buffer_picker();
+            }
+            KeyCode::Char(character) if text_input => {
+                if let Some(picker) = model.overlays.buffer_picker.as_mut() {
+                    picker.query.push(character);
+                }
+                model.refresh_buffer_picker();
+            }
+            _ => {}
         }
         return;
     }

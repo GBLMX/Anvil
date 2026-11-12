@@ -168,6 +168,10 @@ pub const COMMANDS: &[CommandSpec] = &[
         capability: Capability::Edit,
     },
     CommandSpec {
+        name: "buffers",
+        capability: Capability::Read,
+    },
+    CommandSpec {
         name: "new",
         capability: Capability::Edit,
     },
