@@ -77,11 +77,7 @@ impl Model {
     }
 
     fn jump_history(&mut self, forward: bool) {
-        let Some(current) = self.current_jump_entry() else {
-            self.status = "E: jump requires a named buffer".to_owned();
-            self.dirty = true;
-            return;
-        };
+        let current = self.current_jump_entry();
         let target = if forward {
             self.jump_list.take_forward()
         } else {
@@ -104,10 +100,12 @@ impl Model {
             }
             return;
         }
-        if forward {
-            self.jump_list.push_back(current);
-        } else {
-            self.jump_list.push_forward(current);
+        if let Some(current) = current {
+            if forward {
+                self.jump_list.push_back(current);
+            } else {
+                self.jump_list.push_forward(current);
+            }
         }
         self.status = format!(
             "{} [{}|{}]",
@@ -126,6 +124,9 @@ impl Model {
     }
 
     fn jump_to(&mut self, entry: &JumpEntry) -> bool {
+        if self.help_back.is_some() {
+            self.close_help();
+        }
         if self.path.as_ref() != Some(&entry.path)
             && let Err(error) = self.open_path(&entry.path)
         {

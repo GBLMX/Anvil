@@ -1398,3 +1398,34 @@ fn jump_back_without_history_reports_status() {
     model.jump_back();
     assert!(model.status.contains("no back jump"));
 }
+
+#[test]
+fn jump_back_from_help_returns_to_history_target() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let main = dir.path().join("main.rs");
+    let other = dir.path().join("other.rs");
+    fs::write(&main, "fn main() {}\n").expect("main");
+    fs::write(&other, "fn target() {}\n").expect("other");
+    let mut model = Model::open(&main).expect("open");
+    let main = main.canonicalize().expect("main");
+    let uri = lsp_worker::file_uri(&other);
+
+    model.apply_definition_response(&serde_json::json!([{
+        "targetUri": uri,
+        "targetSelectionRange": {
+            "start": {"line": 0, "character": 3},
+            "end": {"line": 0, "character": 9}
+        }
+    }]));
+    assert_eq!(
+        model.path.as_deref(),
+        Some(other.canonicalize().expect("other").as_path())
+    );
+
+    model.show_help();
+    assert!(model.path.is_none());
+
+    model.jump_back();
+    assert_eq!(model.path.as_deref(), Some(main.as_path()));
+    assert_eq!(model.cursor, 0);
+}
