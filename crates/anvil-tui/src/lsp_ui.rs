@@ -248,7 +248,7 @@ impl Model {
     pub(crate) fn jump_diagnostic(&mut self, forward: bool) {
         self.cancel_completion();
         self.cancel_code_actions();
-        self.hover = None;
+        self.overlays.lsp_results.hover = None;
         let Some(path) = self.path.clone() else {
             self.status = "E: no file".to_owned();
             self.dirty = true;
@@ -335,16 +335,16 @@ impl Model {
         self.language.lsp.pending_edit_revision.clear();
         self.language.lsp.pending_edit_path.clear();
         self.language.lsp.pending_edit_snapshot.clear();
-        self.signature_help = None;
-        self.workspace_symbols = None;
-        self.references = None;
-        self.document_highlights = None;
-        self.call_hierarchy = None;
+        self.overlays.lsp_results.signature_help = None;
+        self.overlays.lsp_results.workspace_symbols = None;
+        self.overlays.lsp_results.references = None;
+        self.overlays.lsp_results.document_highlights = None;
+        self.overlays.lsp_results.call_hierarchy = None;
         self.clear_folds();
         self.clear_semantic_tokens();
-        self.inlay_hints.clear();
-        self.inlay_pending = None;
-        self.inlay_checked = None;
+        self.overlays.lsp_results.inlay_hints.clear();
+        self.overlays.lsp_results.inlay_pending = None;
+        self.overlays.lsp_results.inlay_checked = None;
         self.dirty = true;
     }
 
@@ -353,7 +353,7 @@ impl Model {
             .lsp
             .pending
             .retain(|_, kind| *kind != LspRequestKind::SignatureHelp);
-        self.signature_help = None;
+        self.overlays.lsp_results.signature_help = None;
         self.prune_edit_requests();
         self.dirty = true;
     }
@@ -363,7 +363,7 @@ impl Model {
         self.cancel_code_actions();
         self.cancel_document_symbols();
         self.cancel_signature_help();
-        self.hover = None;
+        self.overlays.lsp_results.hover = None;
         self.ui.diagnostic_peek = None;
         let Some(uri) = self.path.as_ref().map(|path| lsp_worker::file_uri(path)) else {
             return;
@@ -421,8 +421,8 @@ impl Model {
             )
         });
         self.prune_edit_requests();
-        self.code_actions = None;
-        self.document_symbols = None;
+        self.overlays.lsp_results.code_actions = None;
+        self.overlays.lsp_results.document_symbols = None;
         self.dirty = true;
     }
 
@@ -434,7 +434,7 @@ impl Model {
 
     pub(crate) fn request_completion(&mut self) {
         self.cancel_completion();
-        self.hover = None;
+        self.overlays.lsp_results.hover = None;
         self.ui.diagnostic_peek = None;
         self.cancel_code_actions();
         let Some(uri) = self.path.as_ref().map(|path| lsp_worker::file_uri(path)) else {
@@ -518,7 +518,7 @@ impl Model {
         self.cancel_document_symbols();
         self.cancel_workspace_symbols();
         self.cancel_references();
-        self.hover = None;
+        self.overlays.lsp_results.hover = None;
         self.ui.diagnostic_peek = None;
         let Some(uri) = self.path.as_ref().map(|path| lsp_worker::file_uri(path)) else {
             return;
@@ -545,7 +545,7 @@ impl Model {
         self.cancel_completion();
         self.cancel_code_actions();
         self.cancel_document_highlights();
-        self.hover = None;
+        self.overlays.lsp_results.hover = None;
         self.ui.diagnostic_peek = None;
         let Some(uri) = self.path.as_ref().map(|path| lsp_worker::file_uri(path)) else {
             return;
@@ -573,7 +573,7 @@ impl Model {
             .pending
             .retain(|_, kind| *kind != LspRequestKind::DocumentHighlight);
         self.prune_edit_requests();
-        self.document_highlights = None;
+        self.overlays.lsp_results.document_highlights = None;
         self.dirty = true;
     }
 
@@ -582,7 +582,7 @@ impl Model {
         self.cancel_code_actions();
         self.cancel_document_highlights();
         self.cancel_call_hierarchy();
-        self.hover = None;
+        self.overlays.lsp_results.hover = None;
         self.ui.diagnostic_peek = None;
         let Some(uri) = self.path.as_ref().map(|path| lsp_worker::file_uri(path)) else {
             return;
@@ -637,7 +637,7 @@ impl Model {
             )
         });
         self.prune_edit_requests();
-        self.call_hierarchy = None;
+        self.overlays.lsp_results.call_hierarchy = None;
         self.dirty = true;
     }
 
@@ -664,7 +664,7 @@ impl Model {
     pub(crate) fn start_rename(&mut self) {
         self.cancel_completion();
         self.cancel_code_actions();
-        self.hover = None;
+        self.overlays.lsp_results.hover = None;
         self.ui.diagnostic_peek = None;
         self.ui.input_mode = InputMode::Rename {
             name: String::new(),
@@ -699,7 +699,7 @@ impl Model {
     pub(crate) fn request_code_actions(&mut self) {
         self.cancel_completion();
         self.cancel_code_actions();
-        self.hover = None;
+        self.overlays.lsp_results.hover = None;
         self.ui.diagnostic_peek = None;
         let Some(path) = self.path.clone() else {
             return;
@@ -754,7 +754,7 @@ impl Model {
             .lsp
             .pending
             .retain(|_, kind| *kind != LspRequestKind::References);
-        self.references = None;
+        self.overlays.lsp_results.references = None;
         self.dirty = true;
     }
 
@@ -763,7 +763,7 @@ impl Model {
             .lsp
             .pending
             .retain(|_, kind| *kind != LspRequestKind::DocumentSymbol);
-        self.document_symbols = None;
+        self.overlays.lsp_results.document_symbols = None;
         self.dirty = true;
     }
 
@@ -772,7 +772,7 @@ impl Model {
             .lsp
             .pending
             .retain(|_, kind| *kind != LspRequestKind::WorkspaceSymbol);
-        self.workspace_symbols = None;
+        self.overlays.lsp_results.workspace_symbols = None;
         self.prune_edit_requests();
         self.dirty = true;
     }
@@ -782,7 +782,7 @@ impl Model {
         self.cancel_code_actions();
         self.cancel_document_symbols();
         self.cancel_workspace_symbols();
-        self.hover = None;
+        self.overlays.lsp_results.hover = None;
         self.ui.diagnostic_peek = None;
         let Some(path) = self.path.as_ref() else {
             return;
@@ -796,7 +796,7 @@ impl Model {
     }
 
     pub(crate) fn move_workspace_symbol(&mut self, delta: isize) {
-        if let Some(symbols) = self.workspace_symbols.as_mut() {
+        if let Some(symbols) = self.overlays.lsp_results.workspace_symbols.as_mut() {
             symbols.selected = symbols
                 .selected
                 .saturating_add_signed(delta)
@@ -806,7 +806,7 @@ impl Model {
     }
 
     pub(crate) fn filter_workspace_symbols(&mut self) {
-        if let Some(symbols) = self.workspace_symbols.as_mut() {
+        if let Some(symbols) = self.overlays.lsp_results.workspace_symbols.as_mut() {
             let query = symbols.query.to_lowercase();
             symbols.filtered = symbols
                 .items
@@ -827,7 +827,7 @@ impl Model {
     }
 
     pub(crate) fn apply_workspace_symbol(&mut self) {
-        let Some(symbols) = self.workspace_symbols.take() else {
+        let Some(symbols) = self.overlays.lsp_results.workspace_symbols.take() else {
             return;
         };
         let Some(symbol) = symbols
@@ -854,7 +854,7 @@ impl Model {
     fn apply_workspace_symbols_response(&mut self, result: &serde_json::Value) {
         let Some(items) = result.as_array() else {
             self.status = "lsp: no workspace symbols".to_owned();
-            self.workspace_symbols = None;
+            self.overlays.lsp_results.workspace_symbols = None;
             return;
         };
         let mut parsed = Vec::new();
@@ -901,9 +901,9 @@ impl Model {
         }
         if parsed.is_empty() {
             self.status = "lsp: no workspace symbols".to_owned();
-            self.workspace_symbols = None;
+            self.overlays.lsp_results.workspace_symbols = None;
         } else {
-            self.workspace_symbols = Some(WorkspaceSymbolState {
+            self.overlays.lsp_results.workspace_symbols = Some(WorkspaceSymbolState {
                 filtered: (0..parsed.len()).collect(),
                 items: parsed,
                 query: String::new(),
@@ -917,7 +917,7 @@ impl Model {
         self.cancel_completion();
         self.cancel_code_actions();
         self.cancel_document_symbols();
-        self.hover = None;
+        self.overlays.lsp_results.hover = None;
         self.ui.diagnostic_peek = None;
         let Some(uri) = self.path.as_ref().map(|path| lsp_worker::file_uri(path)) else {
             return;
@@ -934,7 +934,7 @@ impl Model {
     }
 
     pub(crate) fn move_document_symbol(&mut self, delta: isize) {
-        if let Some(symbols) = self.document_symbols.as_mut() {
+        if let Some(symbols) = self.overlays.lsp_results.document_symbols.as_mut() {
             symbols.selected = symbols
                 .selected
                 .saturating_add_signed(delta)
@@ -944,7 +944,7 @@ impl Model {
     }
 
     pub(crate) fn apply_document_symbol(&mut self) {
-        let Some(symbols) = self.document_symbols.take() else {
+        let Some(symbols) = self.overlays.lsp_results.document_symbols.take() else {
             return;
         };
         let Some(symbol) = symbols.items.get(symbols.selected).cloned() else {
@@ -957,7 +957,7 @@ impl Model {
     }
 
     pub(crate) fn move_reference(&mut self, delta: isize) {
-        if let Some(references) = self.references.as_mut() {
+        if let Some(references) = self.overlays.lsp_results.references.as_mut() {
             references.selected = references
                 .selected
                 .saturating_add_signed(delta)
@@ -967,7 +967,7 @@ impl Model {
     }
 
     pub(crate) fn apply_reference(&mut self) {
-        let Some(references) = self.references.take() else {
+        let Some(references) = self.overlays.lsp_results.references.take() else {
             return;
         };
         let Some(reference) = references.items.get(references.selected).cloned() else {
@@ -991,7 +991,7 @@ impl Model {
     }
 
     pub(crate) fn move_call_hierarchy(&mut self, delta: isize) {
-        if let Some(calls) = self.call_hierarchy.as_mut() {
+        if let Some(calls) = self.overlays.lsp_results.call_hierarchy.as_mut() {
             calls.selected = calls
                 .selected
                 .saturating_add_signed(delta)
@@ -1001,7 +1001,7 @@ impl Model {
     }
 
     pub(crate) fn apply_call_hierarchy(&mut self) {
-        let Some(calls) = self.call_hierarchy.take() else {
+        let Some(calls) = self.overlays.lsp_results.call_hierarchy.take() else {
             return;
         };
         let Some(item) = calls.items.get(calls.selected).cloned() else {
@@ -1033,7 +1033,7 @@ impl Model {
             .pending
             .retain(|_, kind| *kind != LspRequestKind::Formatting);
         self.prune_edit_requests();
-        self.hover = None;
+        self.overlays.lsp_results.hover = None;
         self.ui.diagnostic_peek = None;
         let Some(path) = self.path.clone() else {
             return false;
@@ -1069,7 +1069,7 @@ impl Model {
     }
 
     pub(crate) fn move_code_action(&mut self, delta: isize) {
-        if let Some(actions) = self.code_actions.as_mut() {
+        if let Some(actions) = self.overlays.lsp_results.code_actions.as_mut() {
             actions.selected = actions
                 .selected
                 .saturating_add_signed(delta)
@@ -1079,7 +1079,7 @@ impl Model {
     }
 
     pub(crate) fn apply_code_action(&mut self) {
-        let Some(actions) = self.code_actions.take() else {
+        let Some(actions) = self.overlays.lsp_results.code_actions.take() else {
             return;
         };
         let Some(item) = actions.items.get(actions.selected) else {
@@ -1105,7 +1105,7 @@ impl Model {
     ) {
         if result.is_null() {
             self.status = "lsp: no code actions".to_owned();
-            self.code_actions = None;
+            self.overlays.lsp_results.code_actions = None;
             return;
         }
         let Some(items) = result.as_array() else {
@@ -1142,9 +1142,9 @@ impl Model {
             .collect();
         if items.is_empty() {
             self.status = "lsp: no code actions".to_owned();
-            self.code_actions = None;
+            self.overlays.lsp_results.code_actions = None;
         } else {
-            self.code_actions = Some(CodeActionState { items, selected: 0 });
+            self.overlays.lsp_results.code_actions = Some(CodeActionState { items, selected: 0 });
             self.status = "code actions".to_owned();
         }
     }
@@ -1164,7 +1164,7 @@ impl Model {
         let insert = item.insert.clone();
         let replace = item.replace;
         let mut snippet = item.snippet.clone();
-        self.snippet = None;
+        self.overlays.lsp_results.snippet = None;
         if let Some((start_line, start_char, end_line, end_char)) = replace {
             let start = self.offset_at_utf16(start_line, start_char);
             let end = self.offset_at_utf16(end_line, end_char).max(start);
@@ -1195,18 +1195,20 @@ impl Model {
     }
 
     fn start_snippet(&mut self, snippet: &Snippet, base: usize) {
-        self.snippet = SnippetSession::new(snippet.offset_stops(base));
+        self.overlays.lsp_results.snippet = SnippetSession::new(snippet.offset_stops(base));
         self.goto_snippet_stop();
     }
 
     fn goto_snippet_stop(&mut self) {
         let ranges = self
+            .overlays
+            .lsp_results
             .snippet
             .as_ref()
             .map(SnippetSession::mirror_ranges)
             .unwrap_or_default();
         let Some((start, _)) = ranges.first().copied() else {
-            self.snippet = None;
+            self.overlays.lsp_results.snippet = None;
             return;
         };
         let mirrors = ranges.len();
@@ -1227,12 +1229,12 @@ impl Model {
     }
 
     pub(crate) fn next_snippet_stop(&mut self) -> bool {
-        let Some(mut session) = self.snippet.take() else {
+        let Some(mut session) = self.overlays.lsp_results.snippet.take() else {
             return false;
         };
         if session.next().is_some() {
             let ranges = session.mirror_ranges();
-            self.snippet = Some(session);
+            self.overlays.lsp_results.snippet = Some(session);
             self.select_snippet_groups(ranges);
             return true;
         }
@@ -1244,22 +1246,22 @@ impl Model {
     }
 
     pub(crate) fn previous_snippet_stop(&mut self) -> bool {
-        let Some(mut session) = self.snippet.take() else {
+        let Some(mut session) = self.overlays.lsp_results.snippet.take() else {
             return false;
         };
         let moved = session.previous();
         if moved.is_some() {
             let ranges = session.mirror_ranges();
-            self.snippet = Some(session);
+            self.overlays.lsp_results.snippet = Some(session);
             self.select_snippet_groups(ranges);
         } else {
-            self.snippet = Some(session);
+            self.overlays.lsp_results.snippet = Some(session);
         }
         true
     }
 
     pub(crate) fn cancel_snippet(&mut self) {
-        self.snippet = None;
+        self.overlays.lsp_results.snippet = None;
         self.dirty = true;
     }
 

@@ -35,10 +35,10 @@ impl Model {
 
     pub(crate) fn load_buffer(&mut self, index: usize) {
         self.clear_lsp_requests();
-        self.hover = None;
+        self.overlays.lsp_results.hover = None;
         self.ui.diagnostic_peek = None;
-        self.code_actions = None;
-        self.document_symbols = None;
+        self.overlays.lsp_results.code_actions = None;
+        self.overlays.lsp_results.document_symbols = None;
         let Some(buffer) = self.buffers.get(index).cloned() else {
             return;
         };

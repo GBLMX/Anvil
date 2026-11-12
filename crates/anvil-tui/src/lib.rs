@@ -355,6 +355,23 @@ struct LspState {
 struct LspResultsState {
     completion: Option<CompletionState>,
     completion_resolve: Option<(u64, usize)>,
+    code_lens: Option<code_lens::CodeLensState>,
+    snippet: Option<SnippetSession>,
+    semantic_legend: Vec<String>,
+    semantic_tokens: Vec<SemanticToken>,
+    semantic_revision: Option<u64>,
+    hover: Option<String>,
+    code_actions: Option<CodeActionState>,
+    document_symbols: Option<SymbolState>,
+    references: Option<ReferenceState>,
+    document_highlights: Option<DocumentHighlightState>,
+    call_hierarchy: Option<CallHierarchyState>,
+    signature_help: Option<SignatureHelpState>,
+    workspace_symbols: Option<WorkspaceSymbolState>,
+    inlay_hints: Vec<InlayHint>,
+    inlay_pending: Option<(u64, PathBuf, u64, usize, usize)>,
+    inlay_checked: Option<(PathBuf, u64, usize, usize)>,
+    inlay_support: HashMap<(String, String), bool>,
 }
 
 #[derive(Default)]
@@ -729,23 +746,6 @@ pub struct Model {
     format_on_save_pending: bool,
     /// Suppress a second format request while saving formatted text.
     suppress_format_on_save: bool,
-    code_lens: Option<code_lens::CodeLensState>,
-    snippet: Option<SnippetSession>,
-    semantic_legend: Vec<String>,
-    semantic_tokens: Vec<SemanticToken>,
-    semantic_revision: Option<u64>,
-    hover: Option<String>,
-    code_actions: Option<CodeActionState>,
-    document_symbols: Option<SymbolState>,
-    references: Option<ReferenceState>,
-    document_highlights: Option<DocumentHighlightState>,
-    call_hierarchy: Option<CallHierarchyState>,
-    signature_help: Option<SignatureHelpState>,
-    workspace_symbols: Option<WorkspaceSymbolState>,
-    inlay_hints: Vec<InlayHint>,
-    inlay_pending: Option<(u64, PathBuf, u64, usize, usize)>,
-    inlay_checked: Option<(PathBuf, u64, usize, usize)>,
-    inlay_support: HashMap<(String, String), bool>,
     /// Secondary pane when a vertical split is open.
     split: Option<Pane>,
     /// Flattened workspace tree, when open.
@@ -945,23 +945,6 @@ impl Model {
             pending_fold_action: None,
             format_on_save_pending: false,
             suppress_format_on_save: false,
-            code_lens: None,
-            snippet: None,
-            semantic_legend: Vec::new(),
-            semantic_tokens: Vec::new(),
-            semantic_revision: None,
-            hover: None,
-            code_actions: None,
-            document_symbols: None,
-            references: None,
-            document_highlights: None,
-            call_hierarchy: None,
-            signature_help: None,
-            workspace_symbols: None,
-            inlay_hints: Vec::new(),
-            inlay_pending: None,
-            inlay_checked: None,
-            inlay_support: HashMap::new(),
             split: None,
             tree: Vec::new(),
             fuzzy_frecency: HashMap::new(),
@@ -1319,15 +1302,15 @@ impl Model {
     fn clear_lsp_ui(&mut self) {
         self.clear_lsp_requests();
         self.overlays.lsp_results.completion = None;
-        self.hover = None;
+        self.overlays.lsp_results.hover = None;
         self.ui.diagnostic_peek = None;
-        self.code_actions = None;
-        self.code_lens = None;
-        self.document_symbols = None;
-        self.references = None;
-        self.document_highlights = None;
-        self.call_hierarchy = None;
-        self.semantic_legend.clear();
+        self.overlays.lsp_results.code_actions = None;
+        self.overlays.lsp_results.code_lens = None;
+        self.overlays.lsp_results.document_symbols = None;
+        self.overlays.lsp_results.references = None;
+        self.overlays.lsp_results.document_highlights = None;
+        self.overlays.lsp_results.call_hierarchy = None;
+        self.overlays.lsp_results.semantic_legend.clear();
     }
 
     fn active_lsp_worker(&self) -> Option<&LspWorker> {
@@ -1440,7 +1423,7 @@ impl Model {
         if let Some(key) = self.language.lsp.config.take() {
             self.language.lsp.workers.remove(&key);
             self.language.lsp.retries.remove(&key);
-            self.inlay_support.remove(&key);
+            self.overlays.lsp_results.inlay_support.remove(&key);
         }
         self.clear_lsp_ui();
         self.status = "lsp stopped".to_owned();
@@ -1457,17 +1440,20 @@ impl Model {
             } => {
                 self.language.lsp.retries.remove(key);
                 self.language.lsp.retry = None;
-                self.inlay_support.insert(key.clone(), inlay_hints);
+                self.overlays
+                    .lsp_results
+                    .inlay_support
+                    .insert(key.clone(), inlay_hints);
                 if active {
                     if let Some(info) = server_info {
                         self.status = format!("lsp: {info}");
                     }
-                    self.inlay_hints.clear();
-                    self.inlay_pending = None;
-                    self.inlay_checked = None;
-                    self.semantic_legend = semantic_token_types;
-                    self.semantic_tokens.clear();
-                    self.semantic_revision = None;
+                    self.overlays.lsp_results.inlay_hints.clear();
+                    self.overlays.lsp_results.inlay_pending = None;
+                    self.overlays.lsp_results.inlay_checked = None;
+                    self.overlays.lsp_results.semantic_legend = semantic_token_types;
+                    self.overlays.lsp_results.semantic_tokens.clear();
+                    self.overlays.lsp_results.semantic_revision = None;
                     self.request_semantic_tokens();
                 }
             }
@@ -1484,8 +1470,8 @@ impl Model {
                 );
                 self.rebuild_problems();
                 if active
-                    && !self.semantic_legend.is_empty()
-                    && self.semantic_revision != Some(self.editor.revision())
+                    && !self.overlays.lsp_results.semantic_legend.is_empty()
+                    && self.overlays.lsp_results.semantic_revision != Some(self.editor.revision())
                 {
                     self.request_semantic_tokens();
                 }
@@ -1716,14 +1702,14 @@ impl Model {
         }
         let overlay = self.overlays.command_palette.is_some()
             || self.overlays.fuzzy.is_some()
-            || self.workspace_symbols.is_some()
-            || self.document_symbols.is_some()
-            || self.references.is_some()
-            || self.call_hierarchy.is_some()
+            || self.overlays.lsp_results.workspace_symbols.is_some()
+            || self.overlays.lsp_results.document_symbols.is_some()
+            || self.overlays.lsp_results.references.is_some()
+            || self.overlays.lsp_results.call_hierarchy.is_some()
             || self.overlays.settings_overlay.is_some()
-            || self.code_actions.is_some()
+            || self.overlays.lsp_results.code_actions.is_some()
             || self.overlays.lsp_results.completion.is_some()
-            || self.hover.is_some()
+            || self.overlays.lsp_results.hover.is_some()
             || self.ui.diagnostic_peek.is_some()
             || self.ui.problems.visible
             || self.help_back.is_some();

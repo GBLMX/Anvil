@@ -21,7 +21,7 @@ impl Model {
     }
 
     pub(crate) fn finish_insert_session(&mut self) {
-        self.snippet = None;
+        self.overlays.lsp_results.snippet = None;
         let Some(session) = self.insert_session.take() else {
             return;
         };

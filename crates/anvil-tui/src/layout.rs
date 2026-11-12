@@ -380,7 +380,7 @@ impl Model {
         line_start: usize,
         line_end: usize,
     ) -> Vec<(usize, usize, u8)> {
-        let Some(highlights) = &self.document_highlights else {
+        let Some(highlights) = &self.overlays.lsp_results.document_highlights else {
             return Vec::new();
         };
         if highlights.revision != self.editor.revision() {

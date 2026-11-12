@@ -775,7 +775,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
             );
         }
     }
-    if let Some(actions) = &model.code_actions {
+    if let Some(actions) = &model.overlays.lsp_results.code_actions {
         let width = (area.width * 3 / 5)
             .max(36)
             .min(area.width.saturating_sub(2));
@@ -817,7 +817,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
             popup,
         );
     }
-    if let Some(references) = &model.references {
+    if let Some(references) = &model.overlays.lsp_results.references {
         let popup = crate::render::document_symbols_rect(area, references.items.len());
         frame.render_widget(Clear, popup);
         let visible = popup.height.saturating_sub(2) as usize;
@@ -852,7 +852,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
             popup,
         );
     }
-    if let Some(calls) = &model.call_hierarchy {
+    if let Some(calls) = &model.overlays.lsp_results.call_hierarchy {
         let popup = crate::render::document_symbols_rect(area, calls.items.len());
         frame.render_widget(Clear, popup);
         let visible = popup.height.saturating_sub(2) as usize;
@@ -1003,7 +1003,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
             description,
         );
     }
-    if let Some(symbols) = &model.document_symbols {
+    if let Some(symbols) = &model.overlays.lsp_results.document_symbols {
         let width = (area.width * 3 / 5)
             .max(36)
             .min(area.width.saturating_sub(2));
@@ -1042,7 +1042,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
         );
     }
 
-    if let Some(signature) = &model.signature_help {
+    if let Some(signature) = &model.overlays.lsp_results.signature_help {
         let item = &signature.signatures[signature.active_signature];
         let width = (area.width * 3 / 5)
             .max(40)
@@ -1073,7 +1073,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
             popup,
         );
     }
-    if let Some(symbols) = &model.workspace_symbols {
+    if let Some(symbols) = &model.overlays.lsp_results.workspace_symbols {
         let width = (area.width * 3 / 5)
             .max(40)
             .min(area.width.saturating_sub(2));
@@ -1186,7 +1186,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
             popup,
         );
     }
-    if let Some(hover) = &model.hover {
+    if let Some(hover) = &model.overlays.lsp_results.hover {
         let width = (area.width * 3 / 5)
             .max(30)
             .min(area.width.saturating_sub(2));

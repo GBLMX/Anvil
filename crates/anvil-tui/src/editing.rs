@@ -478,7 +478,9 @@ impl Model {
             .editor
             .scroll_margin
             .min(height.saturating_sub(1) / 2);
-        if self.code_lens.is_some() && self.row_of_source_line(line, height).is_none() {
+        if self.overlays.lsp_results.code_lens.is_some()
+            && self.row_of_source_line(line, height).is_none()
+        {
             self.scroll = line;
             self.scroll_subrow = 0;
         }
@@ -895,18 +897,20 @@ impl Model {
         }
         let selections = self.editor.selection_bytes();
         let mirror_edit = self
+            .overlays
+            .lsp_results
             .snippet
             .as_ref()
             .is_some_and(|snippet| snippet.matches_ranges(&selections));
-        if self.snippet.is_some() {
+        if self.overlays.lsp_results.snippet.is_some() {
             if selections.len() > 1 && !mirror_edit {
-                self.snippet = None;
+                self.overlays.lsp_results.snippet = None;
             } else if selections.len() == 1
                 && let Some((anchor, head)) = selections.first().copied()
             {
                 let start = anchor.min(head);
                 let end = anchor.max(head);
-                if let Some(snippet) = self.snippet.as_mut() {
+                if let Some(snippet) = self.overlays.lsp_results.snippet.as_mut() {
                     snippet.adjust_delete(start, end);
                     snippet.adjust_insert(start, text.len());
                 }
@@ -922,7 +926,7 @@ impl Model {
                         .iter()
                         .map(|(start, _)| start.saturating_add(text.len()))
                         .collect::<Vec<_>>();
-                    if let Some(snippet) = self.snippet.as_mut() {
+                    if let Some(snippet) = self.overlays.lsp_results.snippet.as_mut() {
                         snippet.replace_current_with_carets(&old_selections, &carets);
                     }
                     self.editor.set_selections_bytes(
@@ -1222,7 +1226,7 @@ impl Model {
         if start == self.cursor {
             return;
         }
-        if let Some(snippet) = self.snippet.as_mut() {
+        if let Some(snippet) = self.overlays.lsp_results.snippet.as_mut() {
             snippet.adjust_delete(start, self.cursor);
         }
         self.editor.set_selection_bytes(start, self.cursor);
@@ -1246,7 +1250,7 @@ impl Model {
         if end == self.cursor {
             return;
         }
-        if let Some(snippet) = self.snippet.as_mut() {
+        if let Some(snippet) = self.overlays.lsp_results.snippet.as_mut() {
             snippet.adjust_delete(self.cursor, end);
         }
         self.editor.set_selection_bytes(self.cursor, end);
@@ -1261,18 +1265,20 @@ impl Model {
             return false;
         }
         let mirror_delete = self
+            .overlays
+            .lsp_results
             .snippet
             .as_ref()
             .is_some_and(|snippet| snippet.matches_ranges(&selections));
-        if self.snippet.is_some() {
+        if self.overlays.lsp_results.snippet.is_some() {
             if selections.len() > 1 && !mirror_delete {
-                self.snippet = None;
+                self.overlays.lsp_results.snippet = None;
             } else if selections.len() == 1
                 && let Some((anchor, head)) = selections.first().copied()
             {
                 let start = anchor.min(head);
                 let end = anchor.max(head);
-                if let Some(snippet) = self.snippet.as_mut() {
+                if let Some(snippet) = self.overlays.lsp_results.snippet.as_mut() {
                     snippet.adjust_delete(start, end);
                 }
             }
@@ -1309,7 +1315,7 @@ impl Model {
                 .iter()
                 .map(|(start, _)| *start)
                 .collect::<Vec<_>>();
-            if let Some(snippet) = self.snippet.as_mut() {
+            if let Some(snippet) = self.overlays.lsp_results.snippet.as_mut() {
                 snippet.replace_current_with_carets(&old_selections, &carets);
             }
             self.editor

@@ -363,10 +363,10 @@ fn overlay_open(model: &Model) -> bool {
         || model.ui.problems.visible
         || model.overlays.command_palette.is_some()
         || model.overlays.fuzzy.is_some()
-        || model.code_actions.is_some()
-        || model.document_symbols.is_some()
-        || model.references.is_some()
-        || model.call_hierarchy.is_some()
+        || model.overlays.lsp_results.code_actions.is_some()
+        || model.overlays.lsp_results.document_symbols.is_some()
+        || model.overlays.lsp_results.references.is_some()
+        || model.overlays.lsp_results.call_hierarchy.is_some()
         || model.overlays.settings_overlay.is_some()
         || model.overlays.theme_browser.is_some()
         || model.overlays.lsp_results.completion.is_some()
@@ -388,16 +388,16 @@ fn close_outside_overlay(model: &mut Model) {
         model.clear_preview();
         model.dirty = true;
     }
-    if model.code_actions.is_some() {
+    if model.overlays.lsp_results.code_actions.is_some() {
         model.cancel_code_actions();
     }
-    if model.document_symbols.is_some() {
+    if model.overlays.lsp_results.document_symbols.is_some() {
         model.cancel_document_symbols();
     }
-    if model.references.is_some() {
+    if model.overlays.lsp_results.references.is_some() {
         model.cancel_references();
     }
-    if model.call_hierarchy.is_some() {
+    if model.overlays.lsp_results.call_hierarchy.is_some() {
         model.cancel_call_hierarchy();
     }
     if model.overlays.settings_overlay.is_some() {
@@ -457,19 +457,19 @@ fn inside_overlay(model: &Model, col: u16, row: u16, area: Rect) -> bool {
     if model.overlays.fuzzy.is_some() {
         return crate::render::rect_contains(crate::render::fuzzy_rect(area), col, row);
     }
-    if let Some(actions) = &model.code_actions {
+    if let Some(actions) = &model.overlays.lsp_results.code_actions {
         let popup = crate::render::code_actions_rect(area, actions.items.len());
         return crate::render::rect_contains(popup, col, row);
     }
-    if let Some(symbols) = &model.document_symbols {
+    if let Some(symbols) = &model.overlays.lsp_results.document_symbols {
         let popup = crate::render::document_symbols_rect(area, symbols.items.len());
         return crate::render::rect_contains(popup, col, row);
     }
-    if let Some(references) = &model.references {
+    if let Some(references) = &model.overlays.lsp_results.references {
         let popup = crate::render::document_symbols_rect(area, references.items.len());
         return crate::render::rect_contains(popup, col, row);
     }
-    if let Some(calls) = &model.call_hierarchy {
+    if let Some(calls) = &model.overlays.lsp_results.call_hierarchy {
         let popup = crate::render::document_symbols_rect(area, calls.items.len());
         return crate::render::rect_contains(popup, col, row);
     }

@@ -33,7 +33,7 @@ fn space_leader_expires_without_consuming_next_key() {
 fn popup_consumes_j_before_editor_motion() {
     let mut model = Model::new(EditorState::from_text("alpha\nbeta"), None);
     model.welcome = false;
-    model.document_symbols = Some(SymbolState {
+    model.overlays.lsp_results.document_symbols = Some(SymbolState {
         items: vec![
             SymbolItem {
                 name: "alpha".to_owned(),
@@ -56,6 +56,8 @@ fn popup_consumes_j_before_editor_motion() {
     assert_eq!(model.cursor, 0);
     assert_eq!(
         model
+            .overlays
+            .lsp_results
             .document_symbols
             .as_ref()
             .map(|symbols| symbols.selected),
@@ -175,7 +177,7 @@ fn popup_context_bindings_dispatch_before_popup_keys() {
     let mut model = Model::new(EditorState::from_text("alpha"), None);
     model.welcome = false;
     model.open_tree();
-    model.document_symbols = Some(SymbolState {
+    model.overlays.lsp_results.document_symbols = Some(SymbolState {
         items: vec![SymbolItem {
             name: "alpha".to_owned(),
             detail: None,
@@ -194,14 +196,14 @@ x = "view.focus_editor"
     .expect("context keymap");
     handle_event(&mut model, key(KeyCode::Char('x')));
     assert!(!model.ui.focus.tree);
-    assert!(model.document_symbols.is_some());
+    assert!(model.overlays.lsp_results.document_symbols.is_some());
 }
 
 #[test]
 fn global_context_does_not_shadow_open_popup() {
     let mut model = Model::new(EditorState::from_text("alpha\nbeta"), None);
     model.welcome = false;
-    model.document_symbols = Some(SymbolState {
+    model.overlays.lsp_results.document_symbols = Some(SymbolState {
         items: vec![
             SymbolItem {
                 name: "alpha".to_owned(),
@@ -231,6 +233,8 @@ j = "editor.undo"
     assert_eq!(model.cursor, 0);
     assert_eq!(
         model
+            .overlays
+            .lsp_results
             .document_symbols
             .as_ref()
             .map(|symbols| symbols.selected),

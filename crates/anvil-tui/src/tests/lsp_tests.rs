@@ -46,7 +46,12 @@ fn references_populate_and_jump_to_selection() {
             }
         }
     ]));
-    let references = model.references.as_ref().expect("references");
+    let references = model
+        .overlays
+        .lsp_results
+        .references
+        .as_ref()
+        .expect("references");
     assert_eq!(references.items.len(), 2);
     assert_eq!(references.items[0].path, main.canonicalize().expect("main"));
     assert_eq!(
@@ -60,7 +65,7 @@ fn references_populate_and_jump_to_selection() {
         Some(other.canonicalize().expect("other").as_path())
     );
     assert_eq!(model.cursor, model.offset_at_utf16(0, 3));
-    assert!(model.references.is_none());
+    assert!(model.overlays.lsp_results.references.is_none());
 }
 
 #[test]
@@ -80,7 +85,7 @@ fn switching_buffers_clears_references() {
             "end": {"line": 0, "character": 9}
         }
     }]));
-    assert!(model.references.is_some());
+    assert!(model.overlays.lsp_results.references.is_some());
     model.apply_call_hierarchy_calls_response(
         &serde_json::json!([{
             "from": {
@@ -94,10 +99,10 @@ fn switching_buffers_clears_references() {
         }]),
         crate::CallHierarchyDirection::Incoming,
     );
-    assert!(model.call_hierarchy.is_some());
+    assert!(model.overlays.lsp_results.call_hierarchy.is_some());
     model.switch_buffer(-1);
-    assert!(model.references.is_none());
-    assert!(model.call_hierarchy.is_none());
+    assert!(model.overlays.lsp_results.references.is_none());
+    assert!(model.overlays.lsp_results.call_hierarchy.is_none());
 }
 
 #[test]
@@ -119,7 +124,12 @@ fn document_highlights_ignore_stale_revisions() {
             "kind": 3
         }
     ]));
-    let highlights = model.document_highlights.as_ref().expect("highlights");
+    let highlights = model
+        .overlays
+        .lsp_results
+        .document_highlights
+        .as_ref()
+        .expect("highlights");
     assert_eq!(highlights.items.len(), 2);
     assert_eq!(highlights.items[1].kind, 3);
     assert_eq!(model.document_highlight_ranges(0, 7).len(), 2);
@@ -165,7 +175,12 @@ fn incoming_calls_populate_and_jump() {
         }]),
         crate::CallHierarchyDirection::Incoming,
     );
-    let calls = model.call_hierarchy.as_ref().expect("calls");
+    let calls = model
+        .overlays
+        .lsp_results
+        .call_hierarchy
+        .as_ref()
+        .expect("calls");
     assert_eq!(calls.items.len(), 1);
     assert_eq!(calls.items[0].name, "caller");
     model.apply_call_hierarchy();
@@ -174,7 +189,7 @@ fn incoming_calls_populate_and_jump() {
         Some(caller.canonicalize().expect("canonical").as_path())
     );
     assert_eq!(model.cursor, model.offset_at_utf16(0, 3));
-    assert!(model.call_hierarchy.is_none());
+    assert!(model.overlays.lsp_results.call_hierarchy.is_none());
 }
 
 #[test]
@@ -194,7 +209,12 @@ fn outgoing_calls_parse_to_item() {
         }]),
         crate::CallHierarchyDirection::Outgoing,
     );
-    let calls = model.call_hierarchy.as_ref().expect("calls");
+    let calls = model
+        .overlays
+        .lsp_results
+        .call_hierarchy
+        .as_ref()
+        .expect("calls");
     assert_eq!(calls.direction, crate::CallHierarchyDirection::Outgoing);
     assert_eq!(calls.items[0].name, "callee");
 }
@@ -230,7 +250,7 @@ fn call_hierarchy_round_trip_through_gateway() {
         let deadline = Instant::now() + Duration::from_secs(20);
         loop {
             model.poll_lsp();
-            if let Some(calls) = &model.call_hierarchy {
+            if let Some(calls) = &model.overlays.lsp_results.call_hierarchy {
                 if calls.direction == direction
                     && calls.items.iter().any(|item| item.name == expected)
                 {
@@ -391,12 +411,12 @@ fn semantic_tokens_round_trip_through_gateway() {
     model.open_path(&main).expect("open");
     std::thread::sleep(Duration::from_secs(3));
     model.poll_lsp();
-    assert!(!model.semantic_legend.is_empty());
+    assert!(!model.overlays.lsp_results.semantic_legend.is_empty());
     model.request_semantic_tokens();
     let deadline = Instant::now() + Duration::from_secs(20);
     loop {
         model.poll_lsp();
-        if !model.semantic_tokens.is_empty() {
+        if !model.overlays.lsp_results.semantic_tokens.is_empty() {
             break;
         }
         assert!(
@@ -594,7 +614,7 @@ fn applying_snippet_selects_and_navigates_stops() {
     assert!(model.next_snippet_stop());
     assert_eq!(model.editor.selection_bytes(), vec![(14, 14)]);
     assert!(model.next_snippet_stop());
-    assert!(model.snippet.is_none());
+    assert!(model.overlays.lsp_results.snippet.is_none());
 }
 
 #[test]
@@ -687,10 +707,10 @@ fn code_action_response_applies_workspace_edit() {
         }]),
         None,
     );
-    assert!(model.code_actions.is_some());
+    assert!(model.overlays.lsp_results.code_actions.is_some());
     model.apply_code_action();
     assert_eq!(model.editor.text().slice(0..4), "good");
-    assert!(model.code_actions.is_none());
+    assert!(model.overlays.lsp_results.code_actions.is_none());
 }
 
 #[test]
@@ -704,7 +724,7 @@ fn cancelling_code_action_drops_pending_response() {
     model.cancel_code_actions();
     assert!(!model.language.lsp.pending.contains_key(&10));
     model.handle_lsp_response(10, serde_json::json!([{"title": "late"}]), None);
-    assert!(model.code_actions.is_none());
+    assert!(model.overlays.lsp_results.code_actions.is_none());
 }
 
 #[test]
@@ -743,7 +763,12 @@ fn gopls_code_action_response_applies_organize_imports() {
         ]),
         None,
     );
-    let actions = model.code_actions.as_ref().expect("actions");
+    let actions = model
+        .overlays
+        .lsp_results
+        .code_actions
+        .as_ref()
+        .expect("actions");
     assert_eq!(actions.items.len(), 2);
     assert!(actions.items[0].edit.is_some());
     model.apply_code_action();
@@ -811,7 +836,12 @@ fn document_symbols_populate_and_jump_to_selection() {
         ]),
         None,
     );
-    let symbols = model.document_symbols.as_ref().expect("symbols");
+    let symbols = model
+        .overlays
+        .lsp_results
+        .document_symbols
+        .as_ref()
+        .expect("symbols");
     assert_eq!(symbols.items.len(), 3);
     assert_eq!(symbols.items[1].depth, 1);
     assert_eq!(symbols.items[2].line, 3);
@@ -851,7 +881,12 @@ fn document_symbol_depth_is_bounded() {
         .pending
         .insert(14, LspRequestKind::DocumentSymbol);
     model.handle_lsp_response(14, serde_json::json!([value]), None);
-    let symbols = model.document_symbols.as_ref().expect("symbols");
+    let symbols = model
+        .overlays
+        .lsp_results
+        .document_symbols
+        .as_ref()
+        .expect("symbols");
     assert!(symbols.items.len() <= 65);
 }
 
@@ -956,11 +991,18 @@ fn workspace_symbols_response_filters_and_jumps() {
         ]),
         None,
     );
-    let symbols = model.workspace_symbols.as_ref().expect("symbols");
+    let symbols = model
+        .overlays
+        .lsp_results
+        .workspace_symbols
+        .as_ref()
+        .expect("symbols");
     assert_eq!(symbols.items.len(), 2);
     model.filter_workspace_symbols();
     assert_eq!(
         model
+            .overlays
+            .lsp_results
             .workspace_symbols
             .as_ref()
             .expect("symbols")
@@ -995,7 +1037,12 @@ fn signature_help_response_populates_active_signature() {
         }),
         None,
     );
-    let signature = model.signature_help.as_ref().expect("signature");
+    let signature = model
+        .overlays
+        .lsp_results
+        .signature_help
+        .as_ref()
+        .expect("signature");
     assert_eq!(signature.active_parameter, 1);
     assert_eq!(signature.signatures.len(), 1);
     assert_eq!(signature.signatures[0].label, "fn foo(a: i32, b: &str)");
@@ -1328,11 +1375,11 @@ fn disabled_inlay_hints_are_not_requested() {
     let mut model = Model::new(EditorState::from_text("x"), Some(PathBuf::from("main.rs")));
     let key = ("rust-analyzer".to_owned(), "rust".to_owned());
     model.language.lsp.config = Some(key.clone());
-    model.inlay_support.insert(key, true);
+    model.overlays.lsp_results.inlay_support.insert(key, true);
     model.settings.lsp.inlay_hints = false;
     model.poll_inlay_hints(10);
-    assert!(model.inlay_pending.is_none());
-    assert!(model.inlay_hints.is_empty());
+    assert!(model.overlays.lsp_results.inlay_pending.is_none());
+    assert!(model.overlays.lsp_results.inlay_hints.is_empty());
 }
 
 #[test]

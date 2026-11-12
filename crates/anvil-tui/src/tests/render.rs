@@ -489,7 +489,7 @@ fn diagnostics_follow_horizontal_window() {
 fn inlay_hints_follow_horizontal_window() {
     let mut model = Model::new(EditorState::from_text("abcdefghij"), None);
     model.hscroll = 5;
-    model.inlay_hints = vec![
+    model.overlays.lsp_results.inlay_hints = vec![
         InlayHint {
             line: 0,
             character: 7,

@@ -12,15 +12,15 @@ impl Model {
     fn apply_document_symbols_response(&mut self, result: &serde_json::Value) {
         let Some(items) = result.as_array() else {
             self.status = "lsp: no document symbols".to_owned();
-            self.document_symbols = None;
+            self.overlays.lsp_results.document_symbols = None;
             return;
         };
         let items = symbols_from_lsp(items);
         if items.is_empty() {
             self.status = "lsp: no document symbols".to_owned();
-            self.document_symbols = None;
+            self.overlays.lsp_results.document_symbols = None;
         } else {
-            self.document_symbols = Some(SymbolState { items, selected: 0 });
+            self.overlays.lsp_results.document_symbols = Some(SymbolState { items, selected: 0 });
             self.status = "document symbols".to_owned();
         }
     }
@@ -43,7 +43,7 @@ impl Model {
             .and_then(serde_json::Value::as_array)
         else {
             self.status = "lsp: no signature".to_owned();
-            self.signature_help = None;
+            self.overlays.lsp_results.signature_help = None;
             return;
         };
         let signatures: Vec<SignatureItem> = signatures
@@ -65,7 +65,7 @@ impl Model {
             .collect();
         if signatures.is_empty() {
             self.status = "lsp: no signature".to_owned();
-            self.signature_help = None;
+            self.overlays.lsp_results.signature_help = None;
             return;
         }
         let active_signature = result
@@ -76,7 +76,7 @@ impl Model {
             .get("activeParameter")
             .and_then(serde_json::Value::as_u64)
             .unwrap_or(0) as usize;
-        self.signature_help = Some(SignatureHelpState {
+        self.overlays.lsp_results.signature_help = Some(SignatureHelpState {
             active_signature: active_signature.min(signatures.len() - 1),
             active_parameter,
             signatures,
@@ -142,7 +142,7 @@ impl Model {
         let edit_snapshot = self.language.lsp.pending_edit_snapshot.remove(&id);
         if let Some(error) = error {
             if kind == LspRequestKind::CodeLens {
-                self.code_lens = None;
+                self.overlays.lsp_results.code_lens = None;
                 self.dirty = true;
                 return;
             }
@@ -443,7 +443,7 @@ impl Model {
     pub(crate) fn apply_references_response(&mut self, result: &serde_json::Value) {
         let Some(items) = result.as_array() else {
             self.status = "lsp: no references".to_owned();
-            self.references = None;
+            self.overlays.lsp_results.references = None;
             return;
         };
         let mut references = Vec::new();
@@ -491,10 +491,10 @@ impl Model {
         });
         if references.is_empty() {
             self.status = "lsp: no references".to_owned();
-            self.references = None;
+            self.overlays.lsp_results.references = None;
         } else {
             let count = references.len();
-            self.references = Some(ReferenceState {
+            self.overlays.lsp_results.references = Some(ReferenceState {
                 items: references,
                 selected: 0,
             });
@@ -505,7 +505,7 @@ impl Model {
     pub(crate) fn apply_document_highlights_response(&mut self, result: &serde_json::Value) {
         let Some(items) = result.as_array() else {
             self.status = "lsp: no highlights".to_owned();
-            self.document_highlights = None;
+            self.overlays.lsp_results.document_highlights = None;
             return;
         };
         let mut highlights = Vec::new();
@@ -556,11 +556,11 @@ impl Model {
         highlights.dedup_by_key(|highlight| (highlight.start, highlight.end));
         if highlights.is_empty() {
             self.status = "lsp: no highlights".to_owned();
-            self.document_highlights = None;
+            self.overlays.lsp_results.document_highlights = None;
         } else {
             let count = highlights.len();
             self.status = format!("highlights: {count}");
-            self.document_highlights = Some(DocumentHighlightState {
+            self.overlays.lsp_results.document_highlights = Some(DocumentHighlightState {
                 revision: self.editor.revision(),
                 items: highlights,
             });
@@ -586,7 +586,7 @@ impl Model {
     ) {
         let Some(calls) = result.as_array() else {
             self.status = "lsp: no calls".to_owned();
-            self.call_hierarchy = None;
+            self.overlays.lsp_results.call_hierarchy = None;
             return;
         };
         let nested = match direction {
@@ -618,7 +618,7 @@ impl Model {
         });
         if items.is_empty() {
             self.status = "lsp: no calls".to_owned();
-            self.call_hierarchy = None;
+            self.overlays.lsp_results.call_hierarchy = None;
         } else {
             let count = items.len();
             let label = match direction {
@@ -626,7 +626,7 @@ impl Model {
                 CallHierarchyDirection::Outgoing => "outgoing",
             };
             self.status = format!("{label} calls: {count}");
-            self.call_hierarchy = Some(CallHierarchyState {
+            self.overlays.lsp_results.call_hierarchy = Some(CallHierarchyState {
                 direction,
                 items,
                 selected: 0,
@@ -643,7 +643,7 @@ impl Model {
         if text.is_empty() {
             self.status = "lsp: no hover".to_owned();
         } else {
-            self.hover = Some(text);
+            self.overlays.lsp_results.hover = Some(text);
             self.status = "hover".to_owned();
         }
     }

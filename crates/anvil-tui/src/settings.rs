@@ -299,9 +299,9 @@ impl crate::Model {
     pub(crate) fn apply_settings(&mut self, settings: Settings) {
         self.settings = settings;
         self.search.options.case_sensitive = settings.search.case_sensitive;
-        self.inlay_hints.clear();
-        self.inlay_pending = None;
-        self.inlay_checked = None;
+        self.overlays.lsp_results.inlay_hints.clear();
+        self.overlays.lsp_results.inlay_pending = None;
+        self.overlays.lsp_results.inlay_checked = None;
         crate::theme::set_high_contrast(settings.ui.high_contrast);
         self.dirty = true;
     }

@@ -543,7 +543,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
         return;
     }
 
-    if model.workspace_symbols.is_some() {
+    if model.overlays.lsp_results.workspace_symbols.is_some() {
         let consumed = match key.code {
             KeyCode::Esc => {
                 model.cancel_workspace_symbols();
@@ -562,14 +562,14 @@ fn handle_key(model: &mut Model, key: KeyPress) {
                 true
             }
             KeyCode::Backspace => {
-                if let Some(symbols) = model.workspace_symbols.as_mut() {
+                if let Some(symbols) = model.overlays.lsp_results.workspace_symbols.as_mut() {
                     symbols.query.pop();
                 }
                 model.filter_workspace_symbols();
                 true
             }
             KeyCode::Char(character) if text_input => {
-                if let Some(symbols) = model.workspace_symbols.as_mut() {
+                if let Some(symbols) = model.overlays.lsp_results.workspace_symbols.as_mut() {
                     symbols.query.push(character);
                 }
                 model.filter_workspace_symbols();
@@ -601,7 +601,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
         }
         return;
     }
-    if model.call_hierarchy.is_some() {
+    if model.overlays.lsp_results.call_hierarchy.is_some() {
         let consumed = match key.code {
             KeyCode::Esc => {
                 model.cancel_call_hierarchy();
@@ -628,7 +628,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             return;
         }
     }
-    if model.references.is_some() {
+    if model.overlays.lsp_results.references.is_some() {
         let consumed = match key.code {
             KeyCode::Esc => {
                 model.cancel_references();
@@ -656,7 +656,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
         }
     }
 
-    if model.document_symbols.is_some() {
+    if model.overlays.lsp_results.document_symbols.is_some() {
         let consumed = match key.code {
             KeyCode::Esc => {
                 model.cancel_document_symbols();
@@ -683,12 +683,12 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             return;
         }
     }
-    if model.document_highlights.is_some() && key.code == KeyCode::Esc {
+    if model.overlays.lsp_results.document_highlights.is_some() && key.code == KeyCode::Esc {
         model.cancel_document_highlights();
         return;
     }
 
-    if model.code_actions.is_some() {
+    if model.overlays.lsp_results.code_actions.is_some() {
         let consumed = match key.code {
             KeyCode::Esc => {
                 model.cancel_code_actions();
@@ -760,8 +760,8 @@ fn handle_key(model: &mut Model, key: KeyPress) {
         }
     }
 
-    if model.hover.is_some() {
-        model.hover = None;
+    if model.overlays.lsp_results.hover.is_some() {
+        model.overlays.lsp_results.hover = None;
         model.dirty = true;
         if key.code == KeyCode::Esc {
             return;
