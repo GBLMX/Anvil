@@ -269,6 +269,8 @@ post-`0.5.0` feature line.
   navigation/mutations/fuzzy modules; split TUI tests by domain; split gateway
   handlers into `rpc.go`, `fs.go`, `lsp.go`, and `process.go`. No behavior
   change.
+- Start-dashboard rendering moved from `render/editor.rs` into
+  `render/welcome.rs`; `truncate_width` is shared from the render module.
 
 ### Fixed
 - The file tree now opens the command line on `:`, so commands such as

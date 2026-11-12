@@ -15,8 +15,10 @@ use ratatui::{
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 mod editor;
+mod welcome;
 pub use editor::view;
-pub(crate) use editor::welcome_recent_at;
+use welcome::render_welcome;
+pub(crate) use welcome::welcome_recent_at;
 
 pub(crate) const SPINNER: [&str; 8] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧"];
 
@@ -40,6 +42,21 @@ fn centered_rect(area: Rect, width: u16, height: u16) -> Rect {
         width,
         height,
     }
+}
+
+pub(crate) fn truncate_width(text: &str, max: u16) -> String {
+    let max = usize::from(max);
+    let mut output = String::new();
+    let mut width = 0;
+    for character in text.chars() {
+        let character_width = UnicodeWidthChar::width(character).unwrap_or(0);
+        if width + character_width > max {
+            break;
+        }
+        width += character_width;
+        output.push(character);
+    }
+    output
 }
 
 pub(crate) fn command_palette_rect(area: Rect) -> Rect {
