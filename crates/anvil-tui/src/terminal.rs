@@ -239,6 +239,7 @@ pub fn run_with_input(
         model.tick_status();
         model.poll_icons();
         model.poll_dap_attach();
+        model.poll_debug_request();
         match theme::reload_custom_if_changed() {
             Ok(true) => model.dirty = true,
             Ok(false) => {}

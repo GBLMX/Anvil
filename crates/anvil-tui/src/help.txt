@@ -102,6 +102,11 @@ Normal mode
   :breakpoint          toggle a breakpoint on the current line
   :dap-attach <cmd>    attach a DAP adapter and sync breakpoints
   :dap-detach          detach the DAP adapter
+  :debug               toggle the debug panel
+  :debug-refresh       refresh threads, stack, variables, and watches
+  :debug-panel <name>  show threads, stack, variables, or watch
+  :debug-watch <expr>  add a watch expression
+  :debug-watch-clear   clear watch expressions
   :symbols             document symbols
   :problems           toggle the problems panel
   :task <command>      run a bounded background shell task in the workspace

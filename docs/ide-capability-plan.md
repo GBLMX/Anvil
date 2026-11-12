@@ -47,6 +47,9 @@ remains the P1 follow-up tracked in
   runner and opens located failures in a selectable overlay.
 - Debug Adapter Protocol client in a separate process: `dap::DapClient` owns
   framed stdio, initialize/launch/breakpoints/stepping, responses, and events.
+  `:debug` renders background-refreshed threads, stack frames, scope variables,
+  and watch expressions; attach and refresh time out instead of blocking the
+  TUI.
 - Terminal panel with explicit workspace and trust boundaries: PTY session,
   Admin-gated `:terminal*` controls, interactive bottom panel with key/paste
   routing, and process-group cleanup landed.

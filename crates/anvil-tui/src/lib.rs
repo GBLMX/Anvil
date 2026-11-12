@@ -47,6 +47,7 @@ mod command_line;
 mod command_palette;
 mod commands;
 mod comment;
+mod debug_panel;
 mod debugger;
 mod editing;
 mod file_io;
@@ -580,6 +581,17 @@ pub struct Model {
     dap_attach: Option<mpsc::Receiver<Result<crate::dap::DapClient, String>>>,
     /// When the background DAP attach started.
     dap_attach_started: Option<Instant>,
+    /// Debug adapter panels.
+    debug_panel: Option<debug_panel::DebugPanelState>,
+    /// Background DAP debug-state request.
+    debug_request: Option<
+        mpsc::Receiver<(
+            crate::dap::DapClient,
+            Result<debug_panel::DebugSnapshot, String>,
+        )>,
+    >,
+    /// When the background debug refresh started.
+    debug_request_started: Option<Instant>,
     /// Workspace git status keyed by absolute path.
     git_status: HashMap<PathBuf, char>,
     /// Latest requested tree git-status generation.
@@ -850,6 +862,9 @@ impl Model {
             dap_client: None,
             dap_attach: None,
             dap_attach_started: None,
+            debug_panel: None,
+            debug_request: None,
+            debug_request_started: None,
             git_status: HashMap::new(),
             git_status_generation: 0,
             git_status_pending: None,

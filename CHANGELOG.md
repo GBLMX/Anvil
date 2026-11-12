@@ -8,6 +8,10 @@ post-`0.5.0` feature line.
 
 ## [Unreleased]
 ### Added
+- `:debug` opens a background-refreshed debug panel for threads, stack frames,
+  scopes/variables, and watch expressions; queries never block the editor.
+- Debug commands are registered in the shared command manifest, including
+  `:breakpoint`, `:dap-attach`, and `:dap-detach`.
 - Directory rows in the file tree roll up child git status and diagnostics,
   using the highest-priority marker/severity.
 - `:dap-attach <adapter> [args]` initializes an external DAP adapter on a

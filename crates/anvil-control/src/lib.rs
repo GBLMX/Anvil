@@ -296,6 +296,38 @@ pub const COMMANDS: &[CommandSpec] = &[
         capability: Capability::Git,
     },
     CommandSpec {
+        name: "breakpoint",
+        capability: Capability::Admin,
+    },
+    CommandSpec {
+        name: "dap-attach",
+        capability: Capability::Admin,
+    },
+    CommandSpec {
+        name: "dap-detach",
+        capability: Capability::Admin,
+    },
+    CommandSpec {
+        name: "debug",
+        capability: Capability::Read,
+    },
+    CommandSpec {
+        name: "debug-refresh",
+        capability: Capability::Read,
+    },
+    CommandSpec {
+        name: "debug-panel",
+        capability: Capability::Read,
+    },
+    CommandSpec {
+        name: "debug-watch",
+        capability: Capability::Admin,
+    },
+    CommandSpec {
+        name: "debug-watch-clear",
+        capability: Capability::Read,
+    },
+    CommandSpec {
         name: "task",
         capability: Capability::Admin,
     },

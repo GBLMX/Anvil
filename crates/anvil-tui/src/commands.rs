@@ -255,6 +255,11 @@ impl Model {
                 self.status = "debug adapter detached".to_owned();
                 self.dirty = true;
             }
+            ("debug", "") => self.toggle_debug_panel(),
+            ("debug-refresh", "") => self.request_debug_refresh(),
+            ("debug-panel", panel) => self.set_debug_panel(panel),
+            ("debug-watch", expression) => self.add_debug_watch(expression),
+            ("debug-watch-clear", "") => self.clear_debug_watches(),
             ("symbols", "") => self.queue_effect(Effect::LspDocumentSymbols),
             ("plugin-start", "") => self.queue_effect(Effect::PluginStart),
             ("plugin-list", "") => self.queue_effect(Effect::PluginList),

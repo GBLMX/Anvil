@@ -583,3 +583,85 @@ fn tree_rolls_up_child_git_and_diagnostics_to_directory() {
         .collect::<String>();
     assert!(rendered.contains("src M !"), "{rendered}");
 }
+
+#[test]
+fn debug_panel_renders_threads_stack_variables_and_watches() {
+    use crate::debug_panel::{
+        DebugFrame, DebugPanelKind, DebugPanelState, DebugThread, DebugVariable, DebugWatch,
+    };
+    let mut model = Model::new(EditorState::from_text("alpha"), None);
+    let mut panel = DebugPanelState {
+        threads: vec![DebugThread {
+            id: 1,
+            name: "main".to_owned(),
+        }],
+        frames: vec![DebugFrame {
+            id: 10,
+            name: "run".to_owned(),
+            path: Some(PathBuf::from("src/main.rs")),
+            line: 7,
+            column: 3,
+        }],
+        variables: vec![DebugVariable {
+            name: "x".to_owned(),
+            value: "42".to_owned(),
+            variables_reference: 0,
+        }],
+        watches: vec![DebugWatch {
+            expression: "count".to_owned(),
+            value: "3".to_owned(),
+        }],
+        ..DebugPanelState::default()
+    };
+    for (kind, expected) in [
+        (DebugPanelKind::Threads, "Debug · Threads"),
+        (DebugPanelKind::Stack, "Debug · Stack"),
+        (DebugPanelKind::Variables, "Debug · Variables"),
+        (DebugPanelKind::Watch, "Debug · Watch"),
+    ] {
+        panel.kind = kind;
+        model.debug_panel = Some(panel.clone());
+        let backend = TestBackend::new(80, 16);
+        let mut terminal = Terminal::new(backend).expect("terminal");
+        terminal.draw(|frame| view(&model, frame)).expect("draw");
+        let rendered = terminal
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .map(|cell| cell.symbol())
+            .collect::<String>();
+        assert!(rendered.contains(expected), "{kind:?}: {rendered}");
+        assert!(
+            rendered.contains("main")
+                || rendered.contains("run")
+                || rendered.contains("x = 42")
+                || rendered.contains("count = 3"),
+            "{kind:?}: {rendered}"
+        );
+    }
+}
+
+#[test]
+fn debug_panel_keys_cycle_and_close() {
+    let mut model = Model::new(EditorState::from_text("alpha"), None);
+    model.execute_command("debug");
+    assert!(model.debug_panel.is_some());
+    handle_event(&mut model, key(KeyCode::Tab));
+    assert_eq!(
+        model.debug_panel.as_ref().map(|panel| panel.kind),
+        Some(crate::debug_panel::DebugPanelKind::Stack)
+    );
+    handle_event(&mut model, key(KeyCode::Esc));
+    assert!(model.debug_panel.is_none());
+}
+
+#[test]
+fn debug_watch_command_adds_an_expression() {
+    let mut model = Model::new(EditorState::from_text("alpha"), None);
+    model.execute_command("debug");
+    model.execute_command("debug-watch count");
+    let panel = model.debug_panel.as_ref().expect("debug panel");
+    assert_eq!(panel.kind, crate::debug_panel::DebugPanelKind::Watch);
+    assert_eq!(panel.watches[0].expression, "count");
+}
