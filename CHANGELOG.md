@@ -278,7 +278,8 @@ post-`0.5.0` feature line.
 - Bounded preview read/decode moved into `file_worker/preview.rs`; Git
   status/diff/blame/conflict/hunk helpers moved into `file_worker/git.rs`;
   file enumeration, project search, and replace helpers moved into
-  `file_worker/search.rs`. `file_worker.rs` is now 934 lines.
+  `file_worker/search.rs`; request/event types moved into
+  `file_worker/protocol.rs`. `file_worker.rs` is now 717 lines.
 
 ### Fixed
 - The file tree now opens the command line on `:`, so commands such as
