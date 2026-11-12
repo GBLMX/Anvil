@@ -367,7 +367,8 @@ fn reopen_tty_stdin() -> io::Result<()> {
 #[cfg(target_os = "linux")]
 impl Drop for Model {
     fn drop(&mut self) {
-        self.plugin_supervisor
+        self.plugins
+            .supervisor
             .shutdown(self.workspace.gateway.as_mut());
     }
 }

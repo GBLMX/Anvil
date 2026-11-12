@@ -123,6 +123,7 @@ impl Model {
         #[cfg(target_os = "linux")]
         let plugin_ids = self
             .plugins
+            .entries
             .iter()
             .map(|plugin| plugin.manifest.id.as_str())
             .collect::<Vec<_>>();

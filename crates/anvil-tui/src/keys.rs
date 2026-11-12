@@ -338,7 +338,7 @@ fn execute_command_id(model: &mut Model, id: &str, key: KeyPress) -> bool {
 fn handle_key(model: &mut Model, key: KeyPress) {
     let control = key.ctrl();
     let text_input = key.text_input();
-    if model.pkg_install.is_some() {
+    if model.plugins.pkg_install.is_some() {
         match key.code {
             KeyCode::Esc => model.cancel_pkg_install(),
             KeyCode::Enter => model.confirm_pkg_install(),
@@ -348,9 +348,10 @@ fn handle_key(model: &mut Model, key: KeyPress) {
         return;
     }
     #[cfg(target_os = "linux")]
-    if model.plugin_manager.is_some() {
+    if model.plugins.manager.is_some() {
         let confirming = model
-            .plugin_manager
+            .plugins
+            .manager
             .as_ref()
             .is_some_and(|manager| manager.confirm_uninstall);
         if confirming {

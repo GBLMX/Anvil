@@ -314,6 +314,7 @@ fn command_palette_includes_plugin_commands() {
     let mut model = Model::new(EditorState::from_text("alpha"), None);
     model
         .plugins
+        .entries
         .push(crate::plugin_discovery::PluginDescriptor {
             root: std::path::PathBuf::from("/tmp/plugin"),
             manifest: PluginManifest {
@@ -897,7 +898,7 @@ fn managed_state_errors_are_visible_and_fail_closed() {
     let mut model = Model::with_gateway(client, directory.path().to_path_buf());
     let error = model.load_plugins().expect_err("managed state error");
     assert!(error.contains("corrupt state"), "{error}");
-    assert!(model.plugins.is_empty());
+    assert!(model.plugins.entries.is_empty());
     server.join().expect("server");
 }
 

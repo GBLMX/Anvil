@@ -20,25 +20,25 @@ pub(crate) struct PluginManagerState {
 
 impl Model {
     pub(crate) fn open_plugin_manager(&mut self) {
-        if self.plugins.is_empty() {
+        if self.plugins.entries.is_empty() {
             self.status = "no plugins (set ANVIL_PLUGIN_DIR or install a package)".to_owned();
             self.dirty = true;
             return;
         }
-        self.plugin_manager = Some(PluginManagerState::default());
+        self.plugins.manager = Some(PluginManagerState::default());
         self.dirty = true;
     }
 
     pub(crate) fn close_plugin_manager(&mut self) {
-        self.plugin_manager = None;
+        self.plugins.manager = None;
         self.dirty = true;
     }
 
     pub(crate) fn move_plugin_manager(&mut self, delta: isize) {
-        let Some(manager) = self.plugin_manager.as_mut() else {
+        let Some(manager) = self.plugins.manager.as_mut() else {
             return;
         };
-        let last = self.plugins.len().saturating_sub(1);
+        let last = self.plugins.entries.len().saturating_sub(1);
         manager.selected = if delta < 0 {
             manager.selected.saturating_sub(delta.unsigned_abs())
         } else {
@@ -49,8 +49,8 @@ impl Model {
     }
 
     fn selected_plugin(&self) -> Option<plugin_discovery::PluginDescriptor> {
-        let manager = self.plugin_manager.as_ref()?;
-        self.plugins.get(manager.selected).cloned()
+        let manager = self.plugins.manager.as_ref()?;
+        self.plugins.entries.get(manager.selected).cloned()
     }
 
     pub(crate) fn toggle_selected_plugin(&mut self) {
@@ -70,7 +70,7 @@ impl Model {
         let plugin_id = plugin.manifest.id.clone();
         if plugin.enabled {
             let active = matches!(
-                self.plugin_supervisor.state(&plugin_id),
+                self.plugins.supervisor.state(&plugin_id),
                 HostState::Queued
                     | HostState::Registering
                     | HostState::Starting
@@ -83,7 +83,7 @@ impl Model {
                     self.dirty = true;
                     return;
                 };
-                if let Err(error) = self.plugin_supervisor.stop(&plugin_id, Some(gateway)) {
+                if let Err(error) = self.plugins.supervisor.stop(&plugin_id, Some(gateway)) {
                     self.status = format!("E: stop plugin {plugin_id}: {error}");
                     self.dirty = true;
                     return;
@@ -100,7 +100,7 @@ impl Model {
     }
 
     pub(crate) fn request_uninstall(&mut self) {
-        let Some(manager) = self.plugin_manager.as_mut() else {
+        let Some(manager) = self.plugins.manager.as_mut() else {
             return;
         };
         manager.confirm_uninstall = true;
@@ -109,7 +109,7 @@ impl Model {
     }
 
     pub(crate) fn cancel_uninstall(&mut self) {
-        if let Some(manager) = self.plugin_manager.as_mut() {
+        if let Some(manager) = self.plugins.manager.as_mut() {
             manager.confirm_uninstall = false;
         }
         self.status.clear();
@@ -117,7 +117,7 @@ impl Model {
     }
 
     pub(crate) fn uninstall_selected_plugin(&mut self) {
-        let Some(manager) = self.plugin_manager.as_ref() else {
+        let Some(manager) = self.plugins.manager.as_ref() else {
             return;
         };
         if !manager.confirm_uninstall {
@@ -133,7 +133,7 @@ impl Model {
         }
         let plugin_id = plugin.manifest.id.clone();
         if matches!(
-            self.plugin_supervisor.state(&plugin_id),
+            self.plugins.supervisor.state(&plugin_id),
             HostState::Queued
                 | HostState::Registering
                 | HostState::Starting
@@ -159,13 +159,15 @@ impl Model {
             Ok(()) => {
                 self.status = format!("plugin {plugin_id} uninstalled");
                 let _ = self.load_plugins();
-                if self.plugins.is_empty() {
-                    self.plugin_manager = None;
+                if self.plugins.entries.is_empty() {
+                    self.plugins.manager = None;
                     self.dirty = true;
                     return;
                 }
-                if let Some(manager) = self.plugin_manager.as_mut() {
-                    manager.selected = manager.selected.min(self.plugins.len().saturating_sub(1));
+                if let Some(manager) = self.plugins.manager.as_mut() {
+                    manager.selected = manager
+                        .selected
+                        .min(self.plugins.entries.len().saturating_sub(1));
                     manager.confirm_uninstall = false;
                 }
             }
@@ -185,7 +187,7 @@ impl Model {
         }
         let plugin_id = plugin.manifest.id.clone();
         if matches!(
-            self.plugin_supervisor.state(&plugin_id),
+            self.plugins.supervisor.state(&plugin_id),
             HostState::Queued
                 | HostState::Registering
                 | HostState::Starting
@@ -197,7 +199,7 @@ impl Model {
                 self.dirty = true;
                 return;
             };
-            if let Err(error) = self.plugin_supervisor.stop(&plugin_id, Some(gateway)) {
+            if let Err(error) = self.plugins.supervisor.stop(&plugin_id, Some(gateway)) {
                 self.status = format!("E: stop plugin {plugin_id}: {error}");
                 self.dirty = true;
                 return;
@@ -231,13 +233,13 @@ impl Model {
 }
 
 pub(crate) fn render(model: &Model, frame: &mut Frame, area: Rect) {
-    let Some(manager) = &model.plugin_manager else {
+    let Some(manager) = &model.plugins.manager else {
         return;
     };
     let width = (area.width * 9 / 10)
         .max(60)
         .min(area.width.saturating_sub(2));
-    let height = (model.plugins.len() as u16 + 7)
+    let height = (model.plugins.entries.len() as u16 + 7)
         .max(10)
         .min(area.height.saturating_sub(2));
     let popup = Rect {
@@ -254,7 +256,7 @@ pub(crate) fn render(model: &Model, frame: &mut Frame, area: Rect) {
             .add_modifier(Modifier::BOLD),
     )])];
     let safe = |value: &str| value.escape_default().to_string();
-    for (index, plugin) in model.plugins.iter().enumerate() {
+    for (index, plugin) in model.plugins.entries.iter().enumerate() {
         let marker = if index == manager.selected { ">" } else { " " };
         let source = safe(plugin.source.as_deref().unwrap_or("Local"));
         let digest = plugin
@@ -291,7 +293,7 @@ pub(crate) fn render(model: &Model, frame: &mut Frame, area: Rect) {
     }
     lines.push(Line::from(format!(
         "Store: {}",
-        format_bytes(model.plugin_store_size)
+        format_bytes(model.plugins.store_size)
     )));
     frame.render_widget(
         Paragraph::new(lines)
@@ -324,23 +326,26 @@ mod tests {
 
     fn model() -> Model {
         let mut model = Model::new(crate::EditorState::from_text(""), None);
-        model.plugins.push(plugin_discovery::PluginDescriptor {
-            root: std::path::PathBuf::from("/store/root"),
-            manifest: PluginManifest {
-                id: "demo.plugin".to_owned(),
-                version: "1.2.3".to_owned(),
-                entry: "main.luau".to_owned(),
-                api: "1.0".to_owned(),
-                activation_events: Vec::new(),
-                commands: Vec::new(),
-            },
-            enabled: true,
-            digest: Some("0123456789abcdef".to_owned()),
-            source: Some("local-file".to_owned()),
-            previous_digest: None,
-        });
-        model.plugin_store_size = 2 * 1024 * 1024;
-        model.plugin_manager = Some(PluginManagerState::default());
+        model
+            .plugins
+            .entries
+            .push(plugin_discovery::PluginDescriptor {
+                root: std::path::PathBuf::from("/store/root"),
+                manifest: PluginManifest {
+                    id: "demo.plugin".to_owned(),
+                    version: "1.2.3".to_owned(),
+                    entry: "main.luau".to_owned(),
+                    api: "1.0".to_owned(),
+                    activation_events: Vec::new(),
+                    commands: Vec::new(),
+                },
+                enabled: true,
+                digest: Some("0123456789abcdef".to_owned()),
+                source: Some("local-file".to_owned()),
+                previous_digest: None,
+            });
+        model.plugins.store_size = 2 * 1024 * 1024;
+        model.plugins.manager = Some(PluginManagerState::default());
         model
     }
 
@@ -369,15 +374,15 @@ mod tests {
     fn uninstall_requires_confirmation() {
         let mut model = model();
         model.request_uninstall();
-        assert!(model.plugin_manager.expect("manager").confirm_uninstall);
+        assert!(model.plugins.manager.expect("manager").confirm_uninstall);
         model.cancel_uninstall();
-        assert!(!model.plugin_manager.expect("manager").confirm_uninstall);
+        assert!(!model.plugins.manager.expect("manager").confirm_uninstall);
     }
 
     #[test]
     fn manager_escapes_control_sequences() {
         let mut model = model();
-        model.plugins[0].manifest.version = "1.2.3\n\x1b[31m".to_owned();
+        model.plugins.entries[0].manifest.version = "1.2.3\n\x1b[31m".to_owned();
         let backend = TestBackend::new(120, 20);
         let mut terminal = Terminal::new(backend).expect("terminal");
         terminal

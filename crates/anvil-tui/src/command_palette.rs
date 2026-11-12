@@ -63,7 +63,7 @@ impl Model {
             });
         }
         #[cfg(target_os = "linux")]
-        for plugin in self.plugins.iter().filter(|plugin| plugin.enabled) {
+        for plugin in self.plugins.entries.iter().filter(|plugin| plugin.enabled) {
             for command in &plugin.manifest.commands {
                 if items.len() >= 512 {
                     break;

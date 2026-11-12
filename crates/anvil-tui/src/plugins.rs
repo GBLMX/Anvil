@@ -17,6 +17,7 @@ impl Model {
     pub(crate) fn activate_plugins(&mut self, event: ActivationEvent) {
         let candidates = self
             .plugins
+            .entries
             .iter()
             .filter(|plugin| {
                 plugin.enabled
@@ -30,7 +31,7 @@ impl Model {
         for plugin in candidates {
             let plugin_id = plugin.manifest.id.clone();
             if matches!(
-                self.plugin_supervisor.state(&plugin_id),
+                self.plugins.supervisor.state(&plugin_id),
                 HostState::Queued
                     | HostState::Registering
                     | HostState::Starting
@@ -39,7 +40,7 @@ impl Model {
             ) {
                 continue;
             }
-            match self.plugin_supervisor.activate(
+            match self.plugins.supervisor.activate(
                 &plugin_id,
                 &plugin.root,
                 gateway,
@@ -65,6 +66,7 @@ impl Model {
     pub(crate) fn run_plugin_command(&mut self, plugin_id: &str, command_id: &str) {
         let Some(plugin) = self
             .plugins
+            .entries
             .iter()
             .find(|plugin| plugin.manifest.id == plugin_id)
             .cloned()
@@ -102,19 +104,19 @@ impl Model {
             return;
         };
         if matches!(
-            self.plugin_supervisor.state(plugin_id),
+            self.plugins.supervisor.state(plugin_id),
             HostState::Queued
                 | HostState::Registering
                 | HostState::Starting
                 | HostState::Ready
                 | HostState::Draining
-        ) && let Err(error) = self.plugin_supervisor.stop(plugin_id, Some(gateway))
+        ) && let Err(error) = self.plugins.supervisor.stop(plugin_id, Some(gateway))
         {
             self.status = format!("E: plugin {plugin_id}: {error}");
             self.dirty = true;
             return;
         }
-        match self.plugin_supervisor.activate_command(
+        match self.plugins.supervisor.activate_command(
             plugin_id,
             &plugin.root,
             command_id,
@@ -145,7 +147,7 @@ impl Model {
             return;
         }
         let mut markers = Vec::new();
-        for plugin in &self.plugins {
+        for plugin in &self.plugins.entries {
             for value in &plugin.manifest.activation_events {
                 let Some(ActivationEvent::WorkspaceContains(marker)) =
                     plugin_activation::parse_event(value)
@@ -210,7 +212,7 @@ impl Model {
             .iter()
             .map(|permission| (*permission).to_owned())
             .collect::<Vec<_>>();
-        match self.plugin_supervisor.start_debug(
+        match self.plugins.supervisor.start_debug(
             DEBUG_PLUGIN_ID,
             StartMode::Oom,
             &permissions,
@@ -241,7 +243,7 @@ impl Model {
             .iter()
             .map(|permission| (*permission).to_owned())
             .collect::<Vec<_>>();
-        match self.plugin_supervisor.start_debug(
+        match self.plugins.supervisor.start_debug(
             DEBUG_PLUGIN_ID,
             StartMode::Normal,
             &permissions,
@@ -263,7 +265,7 @@ impl Model {
 
     #[cfg(target_os = "linux")]
     pub(crate) fn exec_host(&mut self) {
-        match self.plugin_supervisor.exec(DEBUG_PLUGIN_ID) {
+        match self.plugins.supervisor.exec(DEBUG_PLUGIN_ID) {
             Ok(ExecOutcome::Sent) => self.status = "plugin host request sent".to_owned(),
             Ok(ExecOutcome::Queued) => self.status = "plugin host request queued".to_owned(),
             Err(error) => self.status = format!("E: {error}"),
@@ -277,7 +279,8 @@ impl Model {
     #[cfg(target_os = "linux")]
     pub(crate) fn stop_host(&mut self) {
         match self
-            .plugin_supervisor
+            .plugins
+            .supervisor
             .stop(DEBUG_PLUGIN_ID, self.workspace.gateway.as_mut())
         {
             Ok(()) => self.status = "plugin host stopped".to_owned(),
@@ -307,6 +310,7 @@ impl Model {
         }
         if let Some(plugin) = self
             .plugins
+            .entries
             .iter_mut()
             .find(|plugin| plugin.manifest.id == plugin_id)
         {
@@ -322,6 +326,7 @@ impl Model {
     pub(crate) fn enable_plugin(&mut self, plugin_id: &str) {
         let Some(plugin) = self
             .plugins
+            .entries
             .iter()
             .find(|plugin| plugin.manifest.id == plugin_id)
             .cloned()
@@ -342,12 +347,12 @@ impl Model {
             self.dirty = true;
             return;
         };
-        if let Err(error) = self.plugin_supervisor.enable(plugin_id) {
+        if let Err(error) = self.plugins.supervisor.enable(plugin_id) {
             self.status = format!("E: plugin {plugin_id}: {error}");
             self.dirty = true;
             return;
         }
-        match self.plugin_supervisor.activate(
+        match self.plugins.supervisor.activate(
             plugin_id,
             &plugin.root,
             gateway,
@@ -365,7 +370,10 @@ impl Model {
 
     #[cfg(target_os = "linux")]
     pub(crate) fn poll_host(&mut self) {
-        let events = self.plugin_supervisor.poll(self.workspace.gateway.as_mut());
+        let events = self
+            .plugins
+            .supervisor
+            .poll(self.workspace.gateway.as_mut());
         for event in events {
             match event {
                 SupervisorEvent::State {

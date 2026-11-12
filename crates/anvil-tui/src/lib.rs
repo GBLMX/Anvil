@@ -469,6 +469,40 @@ impl Default for ViewState {
     }
 }
 
+struct PluginState {
+    /// Discovered local plugins.
+    #[cfg(target_os = "linux")]
+    entries: Vec<plugin_discovery::PluginDescriptor>,
+    /// Plugin host supervisor keyed by plugin id.
+    #[cfg(target_os = "linux")]
+    supervisor: PluginSupervisor,
+    #[cfg(target_os = "linux")]
+    manager: Option<plugin_manager::PluginManagerState>,
+    #[cfg(target_os = "linux")]
+    store_size: u64,
+    #[cfg(target_os = "linux")]
+    installer: Option<(GatewaySession, GatewayClient)>,
+    pkg_install: Option<pkg_install::PkgInstallState>,
+}
+
+impl Default for PluginState {
+    fn default() -> Self {
+        Self {
+            #[cfg(target_os = "linux")]
+            entries: Vec::new(),
+            #[cfg(target_os = "linux")]
+            supervisor: PluginSupervisor::new(),
+            #[cfg(target_os = "linux")]
+            manager: None,
+            #[cfg(target_os = "linux")]
+            store_size: 0,
+            #[cfg(target_os = "linux")]
+            installer: None,
+            pkg_install: None,
+        }
+    }
+}
+
 #[derive(Default)]
 struct AppearanceState {
     /// Project-local icon overrides from `.anvil.toml`.
@@ -913,19 +947,8 @@ pub struct Model {
     syntax: RefCell<SyntaxState>,
     /// Matching bracket cached by editor revision, path, and cursor.
     bracket_cache: RefCell<bracket::BracketCache>,
-    /// Discovered local plugins.
-    #[cfg(target_os = "linux")]
-    plugins: Vec<plugin_discovery::PluginDescriptor>,
-    /// Plugin host supervisor keyed by plugin id.
-    #[cfg(target_os = "linux")]
-    plugin_supervisor: PluginSupervisor,
-    #[cfg(target_os = "linux")]
-    plugin_manager: Option<plugin_manager::PluginManagerState>,
-    #[cfg(target_os = "linux")]
-    plugin_store_size: u64,
-    #[cfg(target_os = "linux")]
-    installer: Option<(GatewaySession, GatewayClient)>,
-    pkg_install: Option<pkg_install::PkgInstallState>,
+    /// Plugin discovery, host, manager, installer, and package install state.
+    plugins: PluginState,
     /// Task and terminal runtime workers.
     runtime: RuntimeState,
 }
@@ -1003,17 +1026,7 @@ impl Model {
             exit_code: 0,
             syntax: RefCell::new(SyntaxState::default()),
             bracket_cache: RefCell::new(bracket::BracketCache::default()),
-            #[cfg(target_os = "linux")]
-            plugins: Vec::new(),
-            #[cfg(target_os = "linux")]
-            plugin_supervisor: PluginSupervisor::new(),
-            #[cfg(target_os = "linux")]
-            plugin_manager: None,
-            #[cfg(target_os = "linux")]
-            plugin_store_size: 0,
-            #[cfg(target_os = "linux")]
-            installer: None,
-            pkg_install: None,
+            plugins: PluginState::default(),
             runtime: RuntimeState::default(),
         }
     }
@@ -1081,7 +1094,7 @@ impl Model {
         let managed = if let Some(gateway) = self.workspace.gateway.as_mut() {
             match gateway.call("pkg.installed", serde_json::json!({})) {
                 Ok(value) => {
-                    self.plugin_store_size = value
+                    self.plugins.store_size = value
                         .get("store_size")
                         .and_then(|size| size.as_u64())
                         .unwrap_or(0);
@@ -1095,14 +1108,16 @@ impl Model {
         let managed_conflicts = match managed {
             Ok(managed) => plugin_discovery::merge_managed(&mut plugins, managed),
             Err(error) => {
-                self.plugins = plugins;
+                self.plugins.entries = plugins;
                 return Err(error);
             }
         };
         conflicts.extend(managed_conflicts);
-        self.plugins = plugins;
-        if let Some(manager) = self.plugin_manager.as_mut() {
-            manager.selected = manager.selected.min(self.plugins.len().saturating_sub(1));
+        self.plugins.entries = plugins;
+        if let Some(manager) = self.plugins.manager.as_mut() {
+            manager.selected = manager
+                .selected
+                .min(self.plugins.entries.len().saturating_sub(1));
         }
         if !conflicts.is_empty() {
             return Err(format!("duplicate plugin ids: {}", conflicts.join(", ")));

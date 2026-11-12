@@ -34,7 +34,7 @@ impl Model {
     }
 
     pub(crate) fn poll_editor_requests(&mut self) {
-        while let Some(request) = self.plugin_supervisor.poll_editor_request() {
+        while let Some(request) = self.plugins.supervisor.poll_editor_request() {
             let result = self.handle_editor_request(&request.method, request.params);
             let _ = request.reply.send(result);
         }
@@ -136,9 +136,10 @@ mod tests {
     #[test]
     fn editor_service_round_trips_get_view() {
         let mut model = Model::new(EditorState::from_text("abcd"), None);
-        model.plugin_supervisor.ensure_editor_service();
+        model.plugins.supervisor.ensure_editor_service();
         let path = model
-            .plugin_supervisor
+            .plugins
+            .supervisor
             .editor_socket()
             .expect("editor socket")
             .to_path_buf();
