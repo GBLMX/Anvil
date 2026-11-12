@@ -145,7 +145,8 @@ pub(crate) fn render(model: &Model, frame: &mut Frame, area: Rect) {
                     Style::default()
                         .fg(theme::accent())
                         .add_modifier(Modifier::BOLD),
-                )),
+                ))
+                .border_style(theme::border(true)),
         ),
         popup,
     );

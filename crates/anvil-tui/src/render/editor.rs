@@ -511,7 +511,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
         frame.render_widget(
             Paragraph::new(lines)
                 .style(theme::panel())
-                .block(panel_block("Commands")),
+                .block(crate::render::focused_panel_block("Commands")),
             popup,
         );
     }
@@ -543,7 +543,9 @@ pub fn view(model: &Model, frame: &mut Frame) {
         frame.render_widget(
             Paragraph::new(lines)
                 .style(theme::panel())
-                .block(panel_block("Commands · Tab accept · Esc close")),
+                .block(crate::render::focused_panel_block(
+                    "Commands · Tab accept · Esc close",
+                )),
             popup,
         );
     }
@@ -595,7 +597,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
         frame.render_widget(
             Paragraph::new(lines)
                 .style(theme::panel())
-                .block(panel_block(if model.show_hidden {
+                .block(crate::render::focused_panel_block(if model.show_hidden {
                     "Files · hidden"
                 } else {
                     "Files"
@@ -699,7 +701,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
         frame.render_widget(
             Paragraph::new(lines)
                 .style(theme::panel())
-                .block(panel_block("Problems")),
+                .block(crate::render::focused_panel_block("Problems")),
             popup,
         );
     }
@@ -775,7 +777,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
         frame.render_widget(
             Paragraph::new(lines)
                 .style(theme::panel())
-                .block(panel_block("Code Actions")),
+                .block(crate::render::focused_panel_block("Code Actions")),
             popup,
         );
     }
@@ -810,7 +812,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
         frame.render_widget(
             Paragraph::new(lines)
                 .style(theme::panel())
-                .block(panel_block("References")),
+                .block(crate::render::focused_panel_block("References")),
             popup,
         );
     }
@@ -913,7 +915,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
         frame.render_widget(
             Paragraph::new(lines)
                 .style(theme::panel())
-                .block(panel_block("Document Symbols")),
+                .block(crate::render::focused_panel_block("Document Symbols")),
             popup,
         );
     }
@@ -945,7 +947,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
         frame.render_widget(
             Paragraph::new(lines)
                 .style(theme::panel())
-                .block(panel_block("Signature")),
+                .block(crate::render::focused_panel_block("Signature")),
             popup,
         );
     }
@@ -998,7 +1000,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
         frame.render_widget(
             Paragraph::new(lines)
                 .style(theme::panel())
-                .block(panel_block("Workspace Symbols")),
+                .block(crate::render::focused_panel_block("Workspace Symbols")),
             popup,
         );
     }
@@ -1055,7 +1057,10 @@ pub fn view(model: &Model, frame: &mut Frame) {
         frame.render_widget(
             Paragraph::new(lines)
                 .style(theme::panel())
-                .block(panel_block(format!("Completion #{}", completion.id))),
+                .block(crate::render::focused_panel_block(format!(
+                    "Completion #{}",
+                    completion.id
+                ))),
             popup,
         );
     }

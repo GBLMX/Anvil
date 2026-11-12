@@ -519,8 +519,8 @@ pub(crate) fn render(model: &Model, frame: &mut Frame, area: Rect) {
     let width = (area.width * 2 / 5)
         .max(34)
         .min(area.width.saturating_sub(2));
-    let height = (panel.selected_len() as u16 + 3)
-        .clamp(8, 18)
+    let height = (panel.selected_len() as u16 + 4)
+        .clamp(9, 19)
         .min(area.height.saturating_sub(2));
     let popup = Rect {
         x: area.x + area.width.saturating_sub(width + 1),

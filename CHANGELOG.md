@@ -8,6 +8,8 @@ post-`0.5.0` feature line.
 
 ## [Unreleased]
 ### Added
+- Interactive overlays now share the focused border style; the debug panel
+  carries its own key hints.
 - Modern built-in themes: `tokyonight`, `omp-kde`, and `helix-base16`, all
   held to the existing WCAG-AA contrast test.
 - Settings are grouped into Editor / Search / LSP / Accessibility, and active
