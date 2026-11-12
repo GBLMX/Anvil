@@ -33,7 +33,7 @@ pub(crate) fn handle_event(model: &mut Model, event: Event) {
         }
         Event::Paste(text) => {
             #[cfg(unix)]
-            if model.terminal_panel {
+            if model.runtime.terminal_panel {
                 model.send_terminal_text(&text);
                 return;
             }

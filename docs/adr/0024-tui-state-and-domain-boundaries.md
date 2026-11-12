@@ -265,12 +265,14 @@ Phase 1 started on 2026-11-12:
   persistence switch.
 - `Model.workspace` owns the root path, workspace roots, primary and per-root
   gateways, gateway requirement, and file workers.
+- `Model.runtime` owns task workers/results and terminal/PTY sessions and
+  output.
 - `Model.language` owns `DapState`, `DiagnosticsState`, `LspTransportState`,
   and `LspRequestsState`. Transport keeps clients, workers, config, retries,
   and retry deadlines; requests keep pending maps, document versions, request
   ids, and format-on-save coordination.
 - Existing behavior is unchanged; tests access the composed state explicitly.
-- `Model` now has 92 top-level fields. Remaining buffer, UI, and session page
+- `Model` now has 86 top-level fields. Remaining buffer, UI, and session page
   state moves in later behavior-preserving slices.
 
 

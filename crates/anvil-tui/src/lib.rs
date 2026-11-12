@@ -416,6 +416,20 @@ struct WorkspaceState {
 }
 
 #[derive(Default)]
+struct RuntimeState {
+    task_worker: Option<task_runner::TaskWorker>,
+    task_output: Option<String>,
+    task_problems: Vec<Problem>,
+    task_is_tests: bool,
+    #[cfg(unix)]
+    terminal: Option<pty_terminal::PtySession>,
+    #[cfg(unix)]
+    terminal_output: Vec<u8>,
+    #[cfg(unix)]
+    terminal_panel: bool,
+}
+
+#[derive(Default)]
 struct RecentState {
     /// Quick-open usage counts keyed by the entry string.
     frecency: HashMap<String, u32>,
@@ -873,16 +887,8 @@ pub struct Model {
     #[cfg(target_os = "linux")]
     installer: Option<(GatewaySession, GatewayClient)>,
     pkg_install: Option<pkg_install::PkgInstallState>,
-    task_worker: Option<task_runner::TaskWorker>,
-    task_output: Option<String>,
-    task_problems: Vec<Problem>,
-    task_is_tests: bool,
-    #[cfg(unix)]
-    terminal: Option<pty_terminal::PtySession>,
-    #[cfg(unix)]
-    terminal_output: Vec<u8>,
-    #[cfg(unix)]
-    terminal_panel: bool,
+    /// Task and terminal runtime workers.
+    runtime: RuntimeState,
 }
 
 impl Model {
@@ -989,16 +995,7 @@ impl Model {
             #[cfg(target_os = "linux")]
             installer: None,
             pkg_install: None,
-            task_worker: None,
-            task_output: None,
-            task_problems: Vec::new(),
-            task_is_tests: false,
-            #[cfg(unix)]
-            terminal: None,
-            #[cfg(unix)]
-            terminal_output: Vec::new(),
-            #[cfg(unix)]
-            terminal_panel: false,
+            runtime: RuntimeState::default(),
         }
     }
 

@@ -27,17 +27,17 @@ impl Model {
         if self.reject_read_only() {
             return;
         }
-        if self.task_worker.is_some() {
+        if self.runtime.task_worker.is_some() {
             self.status = "E: task already running".to_owned();
             self.dirty = true;
             return;
         }
-        self.task_problems.clear();
-        self.task_output = None;
-        self.task_is_tests = tests;
+        self.runtime.task_problems.clear();
+        self.runtime.task_output = None;
+        self.runtime.task_is_tests = tests;
         self.overlays.test_explorer = None;
         self.rebuild_problems();
-        self.task_worker = Some(TaskWorker::start(
+        self.runtime.task_worker = Some(TaskWorker::start(
             command.to_owned(),
             self.workspace.path.clone(),
         ));
@@ -50,15 +50,20 @@ impl Model {
     }
 
     pub(crate) fn poll_task(&mut self) {
-        let Some(event) = self.task_worker.as_ref().and_then(TaskWorker::try_recv) else {
+        let Some(event) = self
+            .runtime
+            .task_worker
+            .as_ref()
+            .and_then(TaskWorker::try_recv)
+        else {
             return;
         };
-        self.task_worker = None;
+        self.runtime.task_worker = None;
         let TaskEvent::Finished(result) = event;
-        let tests = self.task_is_tests;
-        self.task_is_tests = false;
-        self.task_output = Some(result.output.clone());
-        self.task_problems = result
+        let tests = self.runtime.task_is_tests;
+        self.runtime.task_is_tests = false;
+        self.runtime.task_output = Some(result.output.clone());
+        self.runtime.task_problems = result
             .problems
             .into_iter()
             .map(|problem| Problem {
@@ -74,10 +79,10 @@ impl Model {
         self.rebuild_problems();
         if tests {
             self.overlays.test_explorer = Some(crate::test_explorer::TestExplorerState::new(
-                self.task_problems.clone(),
+                self.runtime.task_problems.clone(),
             ));
             self.ui.problems.visible = false;
-        } else if !self.task_problems.is_empty() {
+        } else if !self.runtime.task_problems.is_empty() {
             self.ui.problems.visible = true;
             self.ui.problems.selected = 0;
         }
@@ -91,8 +96,8 @@ impl Model {
                 None => format!("E: {label} ended without status"),
             }
         };
-        if !self.task_problems.is_empty() {
-            status.push_str(&format!("; {} problems", self.task_problems.len()));
+        if !self.runtime.task_problems.is_empty() {
+            status.push_str(&format!("; {} problems", self.runtime.task_problems.len()));
         }
         if result.truncated {
             status.push_str("; output truncated");
@@ -102,7 +107,7 @@ impl Model {
     }
 
     pub(crate) fn show_task_output(&mut self) {
-        let Some(output) = self.task_output.clone() else {
+        let Some(output) = self.runtime.task_output.clone() else {
             self.status = "no task output".to_owned();
             self.dirty = true;
             return;

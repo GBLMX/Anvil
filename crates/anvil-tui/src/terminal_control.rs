@@ -11,8 +11,8 @@ impl Model {
             self.dirty = true;
             return;
         }
-        if self.terminal.is_some() {
-            self.terminal_panel = true;
+        if self.runtime.terminal.is_some() {
+            self.runtime.terminal_panel = true;
             self.status = "terminal: panel opened".to_owned();
             self.dirty = true;
             return;
@@ -35,9 +35,9 @@ impl Model {
         ) {
             Ok(session) => {
                 self.status = format!("terminal: {} pid {}", session.shell(), session.pid());
-                self.terminal_output.clear();
-                self.terminal = Some(session);
-                self.terminal_panel = true;
+                self.runtime.terminal_output.clear();
+                self.runtime.terminal = Some(session);
+                self.runtime.terminal_panel = true;
             }
             Err(error) => self.status = format!("E: terminal: {error}"),
         }
@@ -45,19 +45,19 @@ impl Model {
     }
 
     pub(crate) fn stop_terminal(&mut self) {
-        let Some(mut terminal) = self.terminal.take() else {
+        let Some(mut terminal) = self.runtime.terminal.take() else {
             self.status = "no terminal".to_owned();
             self.dirty = true;
             return;
         };
         terminal.kill();
-        self.terminal_panel = false;
+        self.runtime.terminal_panel = false;
         self.status = "terminal stopped".to_owned();
         self.dirty = true;
     }
 
     pub(crate) fn send_terminal(&mut self, text: &str) {
-        let Some(terminal) = self.terminal.as_mut() else {
+        let Some(terminal) = self.runtime.terminal.as_mut() else {
             self.status = "no terminal".to_owned();
             self.dirty = true;
             return;
@@ -72,16 +72,16 @@ impl Model {
     }
 
     pub(crate) fn poll_terminal(&mut self) {
-        let Some(terminal) = self.terminal.as_mut() else {
+        let Some(terminal) = self.runtime.terminal.as_mut() else {
             return;
         };
         let exited = terminal.try_wait().ok().flatten();
         match terminal.read_available() {
             Ok(bytes) if !bytes.is_empty() => {
-                self.terminal_output.extend_from_slice(&bytes);
-                if self.terminal_output.len() > MAX_TERMINAL_OUTPUT {
-                    let excess = self.terminal_output.len() - MAX_TERMINAL_OUTPUT;
-                    self.terminal_output.drain(..excess);
+                self.runtime.terminal_output.extend_from_slice(&bytes);
+                if self.runtime.terminal_output.len() > MAX_TERMINAL_OUTPUT {
+                    let excess = self.runtime.terminal_output.len() - MAX_TERMINAL_OUTPUT;
+                    self.runtime.terminal_output.drain(..excess);
                 }
                 self.dirty = true;
             }
@@ -92,25 +92,25 @@ impl Model {
             }
         }
         if let Some(status) = exited {
-            self.terminal = None;
-            self.terminal_panel = false;
+            self.runtime.terminal = None;
+            self.runtime.terminal_panel = false;
             self.status = format!("terminal exited: {status}");
             self.dirty = true;
         }
     }
 
     pub(crate) fn show_terminal_output(&mut self) {
-        if self.terminal_output.is_empty() {
+        if self.runtime.terminal_output.is_empty() {
             self.status = "no terminal output".to_owned();
             self.dirty = true;
             return;
         }
-        let output = crate::pty_terminal::sanitize_terminal_output(&self.terminal_output);
+        let output = crate::pty_terminal::sanitize_terminal_output(&self.runtime.terminal_output);
         self.show_read_only(&output, "terminal output: :q returns", "terminal");
     }
 
     pub(crate) fn resize_terminal(&self) {
-        if let Some(terminal) = self.terminal.as_ref() {
+        if let Some(terminal) = self.runtime.terminal.as_ref() {
             let _ = terminal.resize(self.viewport_width.max(20), self.viewport_height.max(5));
         }
     }
@@ -118,12 +118,12 @@ impl Model {
 
 impl Model {
     pub(crate) fn toggle_terminal_panel(&mut self) {
-        if self.terminal.is_none() {
+        if self.runtime.terminal.is_none() {
             self.status = "no terminal".to_owned();
             self.dirty = true;
             return;
         }
-        self.terminal_panel = !self.terminal_panel;
+        self.runtime.terminal_panel = !self.runtime.terminal_panel;
         self.dirty = true;
     }
     pub(crate) fn send_terminal_text(&mut self, text: &str) {
@@ -131,7 +131,7 @@ impl Model {
     }
 
     fn write_terminal_bytes(&mut self, bytes: &[u8]) {
-        let Some(terminal) = self.terminal.as_mut() else {
+        let Some(terminal) = self.runtime.terminal.as_mut() else {
             return;
         };
         if let Err(error) = terminal.write_all(bytes) {
@@ -141,7 +141,7 @@ impl Model {
     }
 
     pub(crate) fn send_terminal_key(&mut self, key: KeyEvent) -> bool {
-        if !self.terminal_panel {
+        if !self.runtime.terminal_panel {
             return false;
         }
         if key.code == KeyCode::Char('t') && key.modifiers.contains(KeyModifiers::CONTROL) {
@@ -197,7 +197,7 @@ fn terminal_key_bytes(key: KeyEvent) -> Option<Vec<u8>> {
 }
 
 pub(crate) fn render_panel(model: &Model, frame: &mut ratatui::Frame, area: ratatui::layout::Rect) {
-    if !model.terminal_panel {
+    if !model.runtime.terminal_panel {
         return;
     }
     let height = (area.height / 3).max(6).min(area.height.saturating_sub(2));
@@ -210,7 +210,7 @@ pub(crate) fn render_panel(model: &Model, frame: &mut ratatui::Frame, area: rata
         width: area.width,
         height,
     };
-    let text = crate::pty_terminal::sanitize_terminal_output(&model.terminal_output);
+    let text = crate::pty_terminal::sanitize_terminal_output(&model.runtime.terminal_output);
     let visible = height.saturating_sub(2) as usize;
     let mut lines: Vec<ratatui::text::Line<'static>> = text
         .lines()
