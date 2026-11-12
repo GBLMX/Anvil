@@ -160,6 +160,26 @@ fn buffer_picker_filters_and_switches() {
             .len(),
         3
     );
+    handle_event(&mut model, key(KeyCode::Up));
+    assert_eq!(
+        model
+            .overlays
+            .buffer_picker
+            .as_ref()
+            .expect("picker")
+            .selected,
+        1
+    );
+    handle_event(&mut model, key(KeyCode::Down));
+    assert_eq!(
+        model
+            .overlays
+            .buffer_picker
+            .as_ref()
+            .expect("picker")
+            .selected,
+        2
+    );
 
     type_text(&mut model, "second");
     let picker = model.overlays.buffer_picker.as_ref().expect("picker");

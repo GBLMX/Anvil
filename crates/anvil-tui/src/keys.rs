@@ -367,6 +367,48 @@ fn dispatch_specific_context_binding(model: &mut Model, key: KeyPress) -> bool {
     true
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum BufferPickerAction {
+    Next,
+    Previous,
+    Accept,
+    Cancel,
+    PopQuery,
+    AppendQuery(char),
+}
+
+fn buffer_picker_action(key: KeyPress, text_input: bool) -> Option<BufferPickerAction> {
+    match key.code {
+        KeyCode::Esc => Some(BufferPickerAction::Cancel),
+        KeyCode::Enter => Some(BufferPickerAction::Accept),
+        KeyCode::Up => Some(BufferPickerAction::Previous),
+        KeyCode::Down => Some(BufferPickerAction::Next),
+        KeyCode::Backspace => Some(BufferPickerAction::PopQuery),
+        KeyCode::Char(character) if text_input => Some(BufferPickerAction::AppendQuery(character)),
+        _ => None,
+    }
+}
+
+fn execute_buffer_picker_action(model: &mut Model, action: BufferPickerAction) {
+    match action {
+        BufferPickerAction::Next => model.move_buffer_picker(1),
+        BufferPickerAction::Previous => model.move_buffer_picker(-1),
+        BufferPickerAction::Accept => model.apply_buffer_picker(),
+        BufferPickerAction::Cancel => model.close_buffer_picker(),
+        BufferPickerAction::PopQuery => {
+            if let Some(picker) = model.overlays.buffer_picker.as_mut() {
+                picker.query.pop();
+            }
+            model.refresh_buffer_picker();
+        }
+        BufferPickerAction::AppendQuery(character) => {
+            if let Some(picker) = model.overlays.buffer_picker.as_mut() {
+                picker.query.push(character);
+            }
+            model.refresh_buffer_picker();
+        }
+    }
+}
 fn execute_command_id(model: &mut Model, id: &str, key: KeyPress) -> bool {
     if let Some(command) = NormalCommand::from_id(id) {
         execute_normal_command(model, command);
@@ -563,24 +605,8 @@ fn handle_key(model: &mut Model, key: KeyPress) {
         return;
     }
     if model.overlays.buffer_picker.is_some() {
-        match key.code {
-            KeyCode::Esc => model.close_buffer_picker(),
-            KeyCode::Enter => model.apply_buffer_picker(),
-            KeyCode::Up => model.move_buffer_picker(-1),
-            KeyCode::Down => model.move_buffer_picker(1),
-            KeyCode::Backspace => {
-                if let Some(picker) = model.overlays.buffer_picker.as_mut() {
-                    picker.query.pop();
-                }
-                model.refresh_buffer_picker();
-            }
-            KeyCode::Char(character) if text_input => {
-                if let Some(picker) = model.overlays.buffer_picker.as_mut() {
-                    picker.query.push(character);
-                }
-                model.refresh_buffer_picker();
-            }
-            _ => {}
+        if let Some(action) = buffer_picker_action(key, text_input) {
+            execute_buffer_picker_action(model, action);
         }
         return;
     }
