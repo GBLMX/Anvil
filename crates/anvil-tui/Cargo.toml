@@ -42,7 +42,7 @@ unicode-segmentation = "1"
 tree-sitter-fish = "3.6.0"
 
 [target.'cfg(unix)'.dependencies]
-nix = { version = "0.31", features = ["poll", "process", "signal"] }
+nix = { version = "0.31", features = ["poll", "process", "signal", "term"] }
 
 [[bin]]
 name = "anvil"

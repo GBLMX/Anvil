@@ -243,6 +243,22 @@ impl Model {
             ("task", command) => self.start_task(command),
             ("task-output", "") => self.show_task_output(),
             ("tests", command) => self.start_tests(command),
+            #[cfg(unix)]
+            ("terminal", shell) => self.start_terminal(shell),
+            #[cfg(unix)]
+            ("terminal-send", text) => self.send_terminal(text),
+            #[cfg(unix)]
+            ("terminal-stop", "") => self.stop_terminal(),
+            #[cfg(unix)]
+            ("terminal-read", "") => self.show_terminal_output(),
+            #[cfg(not(unix))]
+            ("terminal", _)
+            | ("terminal-send", _)
+            | ("terminal-stop", "")
+            | ("terminal-read", "") => {
+                self.status = "E: terminal is unsupported on this platform".to_owned();
+                self.dirty = true;
+            }
             ("wq", "") => self.queue_effect(Effect::SaveAndQuit),
             ("wq", path) => self.queue_effect(Effect::SaveAsAndQuit(path.into())),
             _ => {

@@ -222,6 +222,8 @@ pub fn run_with_input(
         let size = terminal.terminal.size()?;
         model.viewport_height = size.height;
         model.viewport_width = size.width;
+        #[cfg(unix)]
+        model.resize_terminal();
         model.ensure_cursor_visible(size.height.saturating_sub(2), size.width.saturating_sub(2));
         model.tick_status();
         model.tick_search();
@@ -247,6 +249,8 @@ pub fn run_with_input(
         model.poll_lsp_retry();
         model.poll_file_worker();
         model.poll_task();
+        #[cfg(unix)]
+        model.poll_terminal();
         if let Some(control) = &control {
             while let Ok(call) = control.try_recv() {
                 let reply = model.handle_control(call.request);

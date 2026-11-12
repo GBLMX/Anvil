@@ -299,6 +299,22 @@ pub const COMMANDS: &[CommandSpec] = &[
         name: "tests",
         capability: Capability::Admin,
     },
+    CommandSpec {
+        name: "terminal",
+        capability: Capability::Admin,
+    },
+    CommandSpec {
+        name: "terminal-send",
+        capability: Capability::Admin,
+    },
+    CommandSpec {
+        name: "terminal-stop",
+        capability: Capability::Admin,
+    },
+    CommandSpec {
+        name: "terminal-read",
+        capability: Capability::Read,
+    },
 ];
 
 /// Look up an exact command name.

@@ -97,6 +97,10 @@ Normal mode
   :task <command>      run a bounded background shell task in the workspace
   :task-output         show the last task output
   :tests <command>     run tests and open located failures
+  :terminal [shell]    start a PTY shell in the workspace (absolute shell path)
+  :terminal-send <text> send one line to the PTY shell
+  :terminal-read       show captured terminal output
+  :terminal-stop       stop the PTY shell
   :plugin-start       start the debug plugin host
   :plugin-list        open installed-plugin manager (enable/uninstall/rollback)
   :plugin-oom         start host with a 300 MB allocation probe

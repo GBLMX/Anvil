@@ -64,6 +64,8 @@ mod modal;
 mod mouse;
 mod overlays;
 mod pipe_locations;
+#[cfg(unix)]
+pub mod pty_terminal;
 mod remote;
 mod selection_table;
 mod session;
@@ -111,6 +113,8 @@ mod task_runner;
 mod task_ui;
 mod terminal;
 mod terminal_background;
+#[cfg(unix)]
+mod terminal_control;
 mod test_explorer;
 #[cfg(target_os = "linux")]
 use anvil_session::plugin_session::{DEBUG_PERMISSIONS, DEBUG_PLUGIN_ID};
@@ -718,6 +722,10 @@ pub struct Model {
     task_problems: Vec<Problem>,
     task_is_tests: bool,
     test_explorer: Option<test_explorer::TestExplorerState>,
+    #[cfg(unix)]
+    terminal: Option<pty_terminal::PtySession>,
+    #[cfg(unix)]
+    terminal_output: Vec<u8>,
 }
 
 impl Model {
@@ -885,6 +893,10 @@ impl Model {
             task_problems: Vec::new(),
             task_is_tests: false,
             test_explorer: None,
+            #[cfg(unix)]
+            terminal: None,
+            #[cfg(unix)]
+            terminal_output: Vec::new(),
         }
     }
 
