@@ -19,8 +19,13 @@ impl Model {
     }
 
     pub(crate) fn focus_editor(&mut self) {
+        if self.ui.focus.split {
+            self.focus_split(false);
+            if self.ui.focus.split {
+                return;
+            }
+        }
         self.ui.focus.tree = false;
-        self.ui.focus.split = false;
         self.dirty = true;
     }
 

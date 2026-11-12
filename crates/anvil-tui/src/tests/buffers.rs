@@ -1127,3 +1127,23 @@ fn split_focus_change_auto_saves_the_split_pane() {
     assert_eq!(fs::read_to_string(&path).expect("content"), "Xa");
     assert!(!model.modified);
 }
+
+#[test]
+fn focus_editor_auto_saves_a_dirty_split_pane() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("main.rs");
+    fs::write(&path, "a").expect("write");
+    let mut model = Model::open(&path).expect("open");
+    model.settings.editor.auto_save = true;
+
+    model.split_vertical();
+    model.focus_split(true);
+    model.insert_text("X");
+    assert!(model.modified);
+
+    model.focus_editor();
+
+    assert!(!model.ui.focus.split);
+    assert_eq!(fs::read_to_string(&path).expect("content"), "Xa");
+    assert!(!model.modified);
+}
