@@ -608,6 +608,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
             popup,
         );
     }
+    crate::test_explorer::render(model, frame, area);
     if let Some(peek) = &model.ui.diagnostic_peek {
         let width = (area.width * 2 / 3)
             .max(30)

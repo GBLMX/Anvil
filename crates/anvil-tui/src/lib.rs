@@ -110,6 +110,7 @@ mod task_runner;
 mod task_ui;
 mod terminal;
 mod terminal_background;
+mod test_explorer;
 #[cfg(target_os = "linux")]
 use anvil_session::plugin_session::{DEBUG_PERMISSIONS, DEBUG_PLUGIN_ID};
 #[cfg(target_os = "linux")]
@@ -714,6 +715,8 @@ pub struct Model {
     task_worker: Option<task_runner::TaskWorker>,
     task_output: Option<String>,
     task_problems: Vec<Problem>,
+    task_is_tests: bool,
+    test_explorer: Option<test_explorer::TestExplorerState>,
 }
 
 impl Model {
@@ -879,6 +882,8 @@ impl Model {
             task_worker: None,
             task_output: None,
             task_problems: Vec::new(),
+            task_is_tests: false,
+            test_explorer: None,
         }
     }
 

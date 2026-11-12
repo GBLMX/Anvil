@@ -242,6 +242,7 @@ impl Model {
             }
             ("task", command) => self.start_task(command),
             ("task-output", "") => self.show_task_output(),
+            ("tests", command) => self.start_tests(command),
             ("wq", "") => self.queue_effect(Effect::SaveAndQuit),
             ("wq", path) => self.queue_effect(Effect::SaveAsAndQuit(path.into())),
             _ => {

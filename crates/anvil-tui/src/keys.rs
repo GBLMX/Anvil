@@ -753,6 +753,31 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             _ => model.close_diagnostic_peek(),
         }
     }
+    if model.test_explorer.is_some() {
+        match key.code {
+            KeyCode::Esc => {
+                model.close_test_explorer();
+                return;
+            }
+            KeyCode::Up | KeyCode::Char('k') => {
+                model.move_test_explorer(-1);
+                return;
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                model.move_test_explorer(1);
+                return;
+            }
+            KeyCode::Enter => {
+                model.jump_test_failure();
+                return;
+            }
+            KeyCode::Char('o') => {
+                model.show_task_output();
+                return;
+            }
+            _ => {}
+        }
+    }
     if model.ui.problems.visible {
         match key.code {
             KeyCode::Esc => {

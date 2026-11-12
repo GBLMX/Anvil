@@ -6,9 +6,21 @@ use anvil_session::ui::Problem;
 
 impl Model {
     pub(crate) fn start_task(&mut self, command: &str) {
+        self.start_task_mode(command, false);
+    }
+
+    pub(crate) fn start_tests(&mut self, command: &str) {
+        self.start_task_mode(command, true);
+    }
+
+    fn start_task_mode(&mut self, command: &str, tests: bool) {
         let command = command.trim();
         if command.is_empty() {
-            self.status = "E: usage: :task <command>".to_owned();
+            self.status = if tests {
+                "E: usage: :tests <command>".to_owned()
+            } else {
+                "E: usage: :task <command>".to_owned()
+            };
             self.dirty = true;
             return;
         }
@@ -22,12 +34,18 @@ impl Model {
         }
         self.task_problems.clear();
         self.task_output = None;
+        self.task_is_tests = tests;
+        self.test_explorer = None;
         self.rebuild_problems();
         self.task_worker = Some(TaskWorker::start(
             command.to_owned(),
             self.workspace.clone(),
         ));
-        self.status = format!("task: running {command}");
+        self.status = if tests {
+            format!("tests: running {command}")
+        } else {
+            format!("task: running {command}")
+        };
         self.dirty = true;
     }
 
@@ -37,6 +55,8 @@ impl Model {
         };
         self.task_worker = None;
         let TaskEvent::Finished(result) = event;
+        let tests = self.task_is_tests;
+        self.task_is_tests = false;
         self.task_output = Some(result.output.clone());
         self.task_problems = result
             .problems
@@ -46,23 +66,29 @@ impl Model {
                 line: problem.line,
                 character: problem.character,
                 severity: None,
-                source: Some("task".to_owned()),
+                source: Some(if tests { "test" } else { "task" }.to_owned()),
                 code: None,
                 message: problem.message,
             })
             .collect();
         self.rebuild_problems();
-        if !self.task_problems.is_empty() {
+        if tests {
+            self.test_explorer = Some(crate::test_explorer::TestExplorerState::new(
+                self.task_problems.clone(),
+            ));
+            self.ui.problems.visible = false;
+        } else if !self.task_problems.is_empty() {
             self.ui.problems.visible = true;
             self.ui.problems.selected = 0;
         }
+        let label = if tests { "tests" } else { "task" };
         let mut status = if result.timed_out {
-            "E: task timed out".to_owned()
+            format!("E: {label} timed out")
         } else {
             match result.exit_code {
-                Some(0) => "task: ok".to_owned(),
-                Some(code) => format!("E: task exited {code}"),
-                None => "E: task ended without status".to_owned(),
+                Some(0) => format!("{label}: ok"),
+                Some(code) => format!("E: {label} exited {code}"),
+                None => format!("E: {label} ended without status"),
             }
         };
         if !self.task_problems.is_empty() {

@@ -96,6 +96,7 @@ Normal mode
   :problems           toggle the problems panel
   :task <command>      run a bounded background shell task in the workspace
   :task-output         show the last task output
+  :tests <command>     run tests and open located failures
   :plugin-start       start the debug plugin host
   :plugin-list        open installed-plugin manager (enable/uninstall/rollback)
   :plugin-oom         start host with a 300 MB allocation probe

@@ -295,6 +295,10 @@ pub const COMMANDS: &[CommandSpec] = &[
         name: "task-output",
         capability: Capability::Read,
     },
+    CommandSpec {
+        name: "tests",
+        capability: Capability::Admin,
+    },
 ];
 
 /// Look up an exact command name.
