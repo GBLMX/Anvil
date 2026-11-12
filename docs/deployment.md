@@ -100,11 +100,15 @@ bin/anvil-plugin-host
 install.sh
 share/anvil/official/plugins/
 share/anvil/packages/        # signed releases
+share/applications/com.github.GBLMX.Anvil.desktop
+share/icons/hicolor/scalable/apps/com.github.GBLMX.Anvil.svg
+share/icons/hicolor/256x256/apps/com.github.GBLMX.Anvil.png
 ```
 
-`install.sh [prefix]` copies the binaries and bundled sources, replaces the
-bundled package set, and runs `anvil-gateway -install-bundled` when signed
-packages are present. The bootstrap is idempotent; rerunning it after an
+`install.sh [prefix]` copies the binaries, bundled sources, desktop entry, and
+hicolor icons, replaces the bundled package set, and runs
+`anvil-gateway -install-bundled` when signed packages are present. The
+bootstrap is idempotent; rerunning it after an
 upgrade activates new package digests while preserving enable/disable state
 when permissions are unchanged.
 

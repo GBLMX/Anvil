@@ -20,6 +20,19 @@ install -m 0755 \
   target/release/anvil-plugin-host \
   "$out/bin/"
 cp -R plugins/official/. "$out/share/anvil/official/plugins/"
+install -d \
+  "$out/share/applications" \
+  "$out/share/icons/hicolor/scalable/apps" \
+  "$out/share/icons/hicolor/256x256/apps"
+install -m 0644 \
+  resources/desktop/com.github.GBLMX.Anvil.desktop \
+  "$out/share/applications/"
+install -m 0644 \
+  resources/icons/com.github.GBLMX.Anvil.svg \
+  "$out/share/icons/hicolor/scalable/apps/"
+install -m 0644 \
+  resources/icons/com.github.GBLMX.Anvil.png \
+  "$out/share/icons/hicolor/256x256/apps/"
 install -m 0755 scripts/install-layout.sh "$out/install.sh"
 
 if [[ -n "${ANVIL_PLUGIN_SIGNING_KEY:-}" ]]; then

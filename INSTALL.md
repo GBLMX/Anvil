@@ -60,6 +60,9 @@ bin/anvil-exec-runner
 bin/anvil-plugin-host
 share/anvil/official/plugins/trim-whitespace/
 share/anvil/packages/            # signed releases only
+share/applications/com.github.GBLMX.Anvil.desktop
+share/icons/hicolor/scalable/apps/com.github.GBLMX.Anvil.svg
+share/icons/hicolor/256x256/apps/com.github.GBLMX.Anvil.png
 ```
 
 Install or upgrade a layout with:
@@ -68,8 +71,8 @@ Install or upgrade a layout with:
 ./install.sh [prefix]
 ```
 
-`prefix` defaults to `$HOME/.local`. The installer copies the binaries and
-official plugins, replaces the bundled package set, then runs
+`prefix` defaults to `$HOME/.local`. The installer copies the binaries,
+desktop entry, and hicolor icons; replaces the bundled package set; then runs
 `anvil-gateway -install-bundled` when signed packages are present. Re-running
 it upgrades in place and preserves enable/disable state for unchanged
 permissions.

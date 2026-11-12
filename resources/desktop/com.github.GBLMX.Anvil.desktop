@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Anvil
+GenericName=Text Editor
+Comment=Terminal editor with a selection-first Rust kernel
+Exec=@BINDIR@/anvil %F
+TryExec=@BINDIR@/anvil
+Icon=com.github.GBLMX.Anvil
+Terminal=true
+Categories=Utility;TextEditor;
+Keywords=editor;text;terminal;rust;
+StartupNotify=false
