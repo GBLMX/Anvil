@@ -339,10 +339,11 @@ impl Model {
             self.file.dirty = true;
             return;
         }
-        if let Some(buffer) = self.buffers.background.remove(&path) {
+        if let Some(mut buffer) = self.buffers.background.remove(&path) {
             if self.session.path.is_some() {
                 self.ensure_current_buffer();
             }
+            buffer.syntax = Default::default();
             self.buffers.entries.push(buffer);
             let index = self.buffers.entries.len() - 1;
             self.load_buffer(index);

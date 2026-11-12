@@ -410,6 +410,7 @@ impl Model {
             .map(|(path, mut buffer)| {
                 let path = remap(&path);
                 buffer.path = Some(path.clone());
+                buffer.syntax = Default::default();
                 (path, buffer)
             })
             .collect();

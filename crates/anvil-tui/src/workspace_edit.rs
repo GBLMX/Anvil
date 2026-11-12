@@ -585,6 +585,7 @@ fn commit_states(model: &mut Model, prepared: HashMap<PathBuf, EditorState>) {
                 buffer.editor = model.session.editor.clone();
                 buffer.cursor = model.session.cursor;
                 buffer.modified = true;
+                buffer.syntax = Default::default();
             }
         } else if let Some(buffer) = model
             .buffers
@@ -594,9 +595,11 @@ fn commit_states(model: &mut Model, prepared: HashMap<PathBuf, EditorState>) {
         {
             buffer.editor = state.into();
             buffer.modified = true;
+            buffer.syntax = Default::default();
         } else if let Some(buffer) = model.buffers.background.get_mut(&path) {
             buffer.editor = state.into();
             buffer.modified = true;
+            buffer.syntax = Default::default();
         } else {
             model.buffers.background.insert(
                 path.clone(),
@@ -684,6 +687,7 @@ impl Model {
             .map(|(path, mut buffer)| {
                 let path = remap_path(&path, from, to);
                 buffer.path = Some(path.clone());
+                buffer.syntax = Default::default();
                 (path, buffer)
             })
             .collect();

@@ -262,6 +262,56 @@ fn wait_for_syntax(model: &mut Model) {
     }
     panic!("syntax did not load");
 }
+
+#[test]
+fn promoting_reloaded_background_rebuilds_syntax() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let first = dir.path().join("first.rs");
+    let second = dir.path().join("second.rs");
+    fs::write(&first, "fn first() {}\n").expect("first");
+    fs::write(&second, "fn old() {}\n").expect("second");
+    let mut model = Model::open(&first).expect("open");
+    let edit = crate::workspace_edit::WorkspaceEdit::from_lsp(&serde_json::json!({
+        "changes": {
+            crate::lsp_worker::file_uri(&second): [{
+                "range": {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 0}},
+                "newText": " "
+            }]
+        }
+    }))
+    .expect("parse");
+    edit.apply(&mut model).expect("apply");
+    assert!(model.save_all());
+    let path = second.canonicalize().expect("canonical");
+    fs::write(&second, "fn changed() {}\n").expect("external write");
+    model.handle_external_change(path.clone());
+    assert!(
+        model
+            .buffers
+            .background
+            .get(&path)
+            .expect("background")
+            .syntax
+            .highlights()
+            .is_empty()
+    );
+
+    model.open_path(&second).expect("promote");
+    assert!(
+        model
+            .syntax_cache
+            .highlights
+            .borrow()
+            .highlights()
+            .is_empty(),
+        "promotion reused the stale background syntax cache"
+    );
+    wait_for_syntax(&mut model);
+    assert_eq!(
+        model.session.editor.text().slice(0..16),
+        "fn changed() {}\n"
+    );
+}
 #[test]
 fn load_buffer_syncs_the_current_buffer_before_switching() {
     let dir = tempfile::tempdir().expect("tempdir");

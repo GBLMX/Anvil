@@ -44,10 +44,11 @@ impl Model {
             self.record_recent_file(&absolute);
             return Ok(());
         }
-        if let Some(buffer) = self.buffers.background.remove(&absolute) {
+        if let Some(mut buffer) = self.buffers.background.remove(&absolute) {
             if self.session.path.is_some() {
                 self.ensure_current_buffer();
             }
+            buffer.syntax = Default::default();
             self.buffers.entries.push(buffer);
             let index = self.buffers.entries.len() - 1;
             self.load_buffer(index);
@@ -414,12 +415,14 @@ impl Model {
         {
             buffer.editor = EditorState::from_text(&text).into();
             buffer.cursor = cursor.min(buffer.editor.text().len_bytes());
+            buffer.syntax = Default::default();
             buffer.modified = false;
             buffer.missing = false;
         }
         if let Some(buffer) = self.buffers.background.get_mut(path) {
             buffer.editor = EditorState::from_text(&text).into();
             buffer.cursor = cursor.min(buffer.editor.text().len_bytes());
+            buffer.syntax = Default::default();
             buffer.modified = false;
             buffer.missing = false;
         }
@@ -427,11 +430,13 @@ impl Model {
             && pane.buffer.path.as_deref() == Some(path)
         {
             pane.buffer.editor = EditorState::from_text(&text).into();
+            pane.buffer.syntax = Default::default();
             pane.buffer.cursor = cursor.min(pane.buffer.editor.text().len_bytes());
             pane.buffer.modified = false;
             pane.buffer.missing = false;
         }
         self.sync_active();
+        self.sync_watch_paths();
         self.workspace.stale_paths.remove(path);
         self.status.text = format!("reloaded {}", path.display());
         self.file.dirty = true;
