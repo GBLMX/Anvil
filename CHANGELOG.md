@@ -275,6 +275,8 @@ post-`0.5.0` feature line.
 - File-tree rendering and its Git/diagnostic rollups moved into
   `render/tree.rs`; completion/LSP/settings/tool overlays moved into
   `render/overlays.rs`. `render/editor.rs` is now 357 lines.
+- Bounded preview read/decode moved into `file_worker/preview.rs`;
+  `file_worker.rs` is now 1,593 lines.
 
 ### Fixed
 - The file tree now opens the command line on `:`, so commands such as
