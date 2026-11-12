@@ -99,6 +99,11 @@ func Listen(cfg Config) (*Server, error) {
 	if cfg.Role != "editor" && cfg.Role != "installer" {
 		return nil, errors.New("gateway role must be editor or installer")
 	}
+	if cfg.Store != nil {
+		if _, err := cfg.Store.DisablePersistedRevoked(); err != nil {
+			return nil, fmt.Errorf("apply persisted revocations: %w", err)
+		}
+	}
 	if cfg.ExecTimeout <= 0 {
 		cfg.ExecTimeout = 5 * time.Second
 	}

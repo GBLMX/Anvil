@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/GBLMX/Anvil/go/internal/fetch"
+	"github.com/GBLMX/Anvil/go/internal/pkg"
 )
 
 const testToken = "0123456789abcdef0123456789abcdef"
@@ -859,5 +860,46 @@ func TestLSPTokenCanReconnect(t *testing.T) {
 			t.Fatalf("lsp handshake %d: %+v", index, response.Error)
 		}
 		_ = conn.Close()
+	}
+}
+
+func TestListenSweepsPersistedRevocations(t *testing.T) {
+	store, err := pkg.NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	digest := strings.Repeat("ab", 32)
+	if err := store.UpdateState(func(state *pkg.StoreState) error {
+		state.Plugins["demo"] = pkg.InstalledPlugin{
+			ActiveDigest: digest,
+			Enabled:      true,
+			Versions: []pkg.InstalledVersion{{
+				Digest:  digest,
+				Version: "1.0.0",
+			}},
+		}
+		state.RevokedPackages = map[string]string{digest: "demo"}
+		return nil
+	}); err != nil {
+		t.Fatalf("update store: %v", err)
+	}
+	hash := sha256.Sum256([]byte(testToken))
+	server, err := Listen(Config{
+		SocketPath:  filepath.Join(t.TempDir(), "gateway.sock"),
+		Workspace:   t.TempDir(),
+		PluginID:    "test-plugin",
+		TokenSHA256: hash,
+		Store:       store,
+	})
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	defer server.Close()
+	state, err := store.ReadState()
+	if err != nil {
+		t.Fatalf("read store: %v", err)
+	}
+	if state.Plugins["demo"].Enabled {
+		t.Fatal("revoked plugin stayed enabled after gateway startup")
 	}
 }
