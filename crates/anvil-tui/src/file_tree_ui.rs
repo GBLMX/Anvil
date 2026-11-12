@@ -23,17 +23,44 @@ impl Model {
     }
 
     pub(crate) fn ensure_file_worker(&mut self) -> bool {
-        if self.file_worker.is_some() {
-            return true;
+        if self.file_worker.is_none() {
+            let Some(session) = self.gateway_session.as_mut() else {
+                return false;
+            };
+            let Ok(client) = session.connect_lsp() else {
+                return false;
+            };
+            self.file_worker = Some(FileWorker::start(client, self.workspace.clone()));
         }
-        let Some(session) = self.gateway_session.as_mut() else {
-            return false;
-        };
-        let Ok(client) = session.connect_lsp() else {
-            return false;
-        };
-        self.file_worker = Some(FileWorker::start(client, self.workspace.clone()));
+        self.ensure_root_file_workers();
         true
+    }
+
+    pub(crate) fn ensure_root_file_workers(&mut self) {
+        let roots = self
+            .workspace_roots
+            .list()
+            .iter()
+            .filter(|root| root.trusted && root.path != self.workspace)
+            .map(|root| root.path.clone())
+            .collect::<Vec<_>>();
+        for root in roots {
+            if self.root_file_workers.contains_key(&root) {
+                continue;
+            }
+            let worker = self
+                .root_gateways
+                .get_mut(&root)
+                .and_then(|(session, _)| session.connect_lsp().ok())
+                .map(|client| FileWorker::start(client, root.clone()));
+            if let Some(worker) = worker {
+                self.root_file_workers.insert(root, worker);
+            }
+        }
+    }
+
+    pub(crate) fn stop_root_file_worker(&mut self, root: &Path) {
+        self.root_file_workers.remove(root);
     }
 
     pub(crate) fn poll_file_worker(&mut self) {

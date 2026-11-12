@@ -5,7 +5,7 @@
 
 use std::{
     cell::RefCell,
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     fs,
     io::{self, Stdout},
     path::{Path, PathBuf},
@@ -561,6 +561,8 @@ pub struct Model {
     active: usize,
     /// Background directory and file enumerator.
     file_worker: Option<FileWorker>,
+    /// Background workers for trusted non-primary workspace roots.
+    root_file_workers: BTreeMap<PathBuf, FileWorker>,
     /// Git gutter marks keyed by zero-based line.
     git_marks: HashMap<usize, char>,
     /// Requested git diff path and revision.
@@ -788,6 +790,7 @@ impl Model {
             buffers: Vec::new(),
             active: 0,
             file_worker: None,
+            root_file_workers: BTreeMap::new(),
             git_marks: HashMap::new(),
             git_pending: None,
             git_checked: None,
@@ -975,6 +978,7 @@ impl Model {
         model.workspace_roots =
             workspace_roots::WorkspaceRoots::new(&model.workspace).unwrap_or_default();
         model.root_gateways.clear();
+        model.root_file_workers.clear();
         model.require_gateway = true;
         model
     }

@@ -40,6 +40,7 @@ impl Model {
             return;
         };
         if !trusted {
+            self.stop_root_file_worker(&canonical);
             self.root_gateways.remove(&canonical);
             match self.workspace_roots.set_trusted(&canonical, false) {
                 Ok(()) => {
@@ -58,6 +59,7 @@ impl Model {
                     self.workspace_roots.set_trusted(&canonical, true).ok();
                     self.root_gateways
                         .insert(canonical.clone(), (session, gateway));
+                    self.ensure_root_file_workers();
                     self.status = format!(
                         "workspace root {}: trusted, gateway started",
                         canonical.display()
@@ -85,6 +87,7 @@ impl Model {
         };
         match self.workspace_roots.remove(&canonical) {
             Ok(()) => {
+                self.stop_root_file_worker(&canonical);
                 self.root_gateways.remove(&canonical);
                 self.status = format!("workspace root removed: {}", canonical.display());
             }
@@ -140,6 +143,7 @@ mod trust_tests {
         model.add_workspace_root(canonical.to_str().expect("utf8"));
         assert_eq!(model.workspace_roots.list().len(), 2);
         assert!(model.root_gateways.is_empty());
+        assert!(model.root_file_workers.is_empty());
         let added = model
             .workspace_roots
             .list()
