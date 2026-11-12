@@ -76,6 +76,7 @@ pub fn run_with_input(
         Err(error) => {
             let mut model = Model::new(EditorState::from_text(""), None);
             model.workspace = workspace.clone();
+            model.icons = crate::icon_theme::IconTheme::load(&workspace);
             model.require_gateway = true;
             model.status = format!("E: gateway unavailable: {error}");
             model.dirty = true;

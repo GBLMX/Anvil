@@ -160,6 +160,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
             .tree_selected
             .unwrap_or(0)
             .saturating_sub(visible_height.saturating_sub(1));
+        let ascii_icons = icon_theme::ascii_mode();
         for (index, entry) in model
             .tree
             .iter()
@@ -170,14 +171,19 @@ pub fn view(model: &Model, frame: &mut Frame) {
             let name = entry
                 .path
                 .file_name()
-                .map(|name| name.to_string_lossy())
+                .map(|name| name.to_string_lossy().into_owned())
                 .unwrap_or_default();
-            let marker = if entry.is_dir {
-                if entry.expanded { "v " } else { "> " }
+            let icon = if entry.is_dir {
+                icon_theme::folder_icon(entry.expanded)
             } else {
-                "  "
+                icon_theme::icon_for(&name).unwrap_or_else(icon_theme::default_file_icon)
             };
-            let text = format!("{}{}{}", "  ".repeat(entry.depth), marker, name);
+            let glyph = model.icons.glyph(icon, ascii_icons);
+            let icon_padding = if UnicodeWidthStr::width(glyph) == 1 {
+                " "
+            } else {
+                ""
+            };
             let style = if model.tree_selected == Some(index) {
                 theme::selected()
             } else if entry.is_dir {
@@ -185,7 +191,12 @@ pub fn view(model: &Model, frame: &mut Frame) {
             } else {
                 theme::panel()
             };
-            lines.push(Line::styled(text, style));
+            lines.push(Line::from(vec![
+                Span::raw("  ".repeat(entry.depth)),
+                Span::styled(glyph, style.fg((icon.color)())),
+                Span::raw(icon_padding),
+                Span::styled(name, style),
+            ]));
         }
         if lines.is_empty() {
             lines.push(Line::styled("empty", theme::panel().fg(theme::muted())));
@@ -485,10 +496,13 @@ pub fn view(model: &Model, frame: &mut Frame) {
         };
         let mut lines = Vec::new();
         let visible = list_area.height.saturating_sub(3) as usize;
+        let ascii_icons = icon_theme::ascii_mode();
         let start = fuzzy.selected.saturating_sub(visible.saturating_sub(1));
         for (row, index) in fuzzy.filtered.iter().skip(start).take(visible).enumerate() {
             let name = model.fuzzy_display_path(&fuzzy.entries[*index]);
             lines.push(fuzzy_path_line(
+                &model.icons,
+                ascii_icons,
                 &name,
                 &fuzzy.query,
                 list_area.width.saturating_sub(2) as usize,

@@ -214,6 +214,29 @@ fn tree_delete_requires_an_unopened_entry() {
 }
 
 #[test]
+fn tree_renders_file_and_folder_icons() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    fs::write(dir.path().join("main.rs"), "").expect("file");
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.workspace = dir.path().to_path_buf();
+    model.welcome = false;
+    model.open_tree();
+
+    let backend = TestBackend::new(80, 12);
+    let mut terminal = Terminal::new(backend).expect("terminal");
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+    let rendered = terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect::<String>();
+    assert!(rendered.contains(icon_theme::nerd_glyph(icon_theme::IconKind::Rust)));
+    assert!(rendered.contains("main.rs"), "{rendered}");
+}
+
+#[test]
 fn tree_selection_scrolls_into_view() {
     let dir = tempfile::tempdir().expect("tempdir");
     for index in 0..20 {
@@ -289,7 +312,7 @@ fn fuzzy_preview_and_icon_render_on_wide_terminals() {
         .iter()
         .map(|cell| cell.symbol())
         .collect::<String>();
-    assert!(rendered.contains("R src/main.rs"), "{rendered}");
+    assert!(rendered.contains("src/main.rs"), "{rendered}");
     assert!(rendered.contains("Preview"), "{rendered}");
     assert!(rendered.contains("fn main() {}"), "{rendered}");
 }

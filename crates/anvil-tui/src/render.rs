@@ -695,14 +695,23 @@ fn fuzzy_match_ranges(path: &str, query: &str) -> Vec<(usize, usize)> {
     ranges
 }
 
-fn fuzzy_path_line(path: &str, query: &str, max_width: usize, selected: bool) -> Line<'static> {
+fn fuzzy_path_line(
+    icons: &icon_theme::IconTheme,
+    ascii: bool,
+    path: &str,
+    query: &str,
+    max_width: usize,
+    selected: bool,
+) -> Line<'static> {
     let base = if selected {
         theme::selected()
     } else {
         theme::panel()
     };
-    let icon = icon_theme::icon_for(path)
-        .and_then(|icon| icon_theme::icon_text(icon).map(|text| (text, (icon.color)())));
+    let icon = icon_theme::icon_for(path).unwrap_or_else(icon_theme::default_file_icon);
+    let icon = icons
+        .icon_text(icon, ascii)
+        .map(|text| (text, (icon.color)()));
     let icon_width = icon
         .as_ref()
         .map(|(text, _)| UnicodeWidthStr::width(text.as_str()))

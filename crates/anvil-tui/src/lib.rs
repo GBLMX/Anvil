@@ -657,6 +657,8 @@ pub struct Model {
     command_completion: Option<CommandCompletion>,
     persist_theme: bool,
     settings: Settings,
+    /// Project-local icon overrides from `.anvil.toml`.
+    icons: icon_theme::IconTheme,
     settings_overlay: Option<SettingsOverlayState>,
     command_palette_recents: Vec<String>,
     /// Gateway client used for file I/O when present.
@@ -874,6 +876,7 @@ impl Model {
             command_completion: None,
             persist_theme: !cfg!(test),
             settings: Settings::default(),
+            icons: icon_theme::IconTheme::default(),
             settings_overlay: None,
             command_palette_recents: Vec::new(),
             gateway: None,
@@ -1041,6 +1044,7 @@ impl Model {
             workspace_roots::WorkspaceRoots::new(&model.workspace).unwrap_or_default();
         model.root_gateways.clear();
         model.root_file_workers.clear();
+        model.icons = icon_theme::IconTheme::load(&model.workspace);
         model.require_gateway = true;
         model
     }
