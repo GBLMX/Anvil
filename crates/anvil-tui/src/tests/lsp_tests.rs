@@ -316,7 +316,7 @@ fn folding_round_trip_through_gateway() {
     let deadline = Instant::now() + Duration::from_secs(20);
     loop {
         model.poll_lsp();
-        if !model.folds.is_empty() {
+        if !model.overlays.lsp_results.folds.is_empty() {
             break;
         }
         assert!(

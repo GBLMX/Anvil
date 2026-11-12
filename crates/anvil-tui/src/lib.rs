@@ -349,6 +349,10 @@ struct LspState {
     pending_edit_snapshot: HashMap<u64, HashMap<PathBuf, u64>>,
     versions: HashMap<PathBuf, u64>,
     next_request: u64,
+    /// Whether a format-on-save request is in flight.
+    format_on_save_pending: bool,
+    /// Suppress a second format request while saving formatted text.
+    suppress_format_on_save: bool,
 }
 
 #[derive(Default)]
@@ -372,6 +376,21 @@ struct LspResultsState {
     inlay_pending: Option<(u64, PathBuf, u64, usize, usize)>,
     inlay_checked: Option<(PathBuf, u64, usize, usize)>,
     inlay_support: HashMap<(String, String), bool>,
+    /// Document symbols used for the sticky scroll header.
+    sticky_symbols: Vec<SymbolItem>,
+    /// Path and revision those symbols describe.
+    sticky_symbols_path: Option<PathBuf>,
+    sticky_symbols_revision: Option<u64>,
+    /// Whether a sticky-symbol request is in flight.
+    sticky_pending: bool,
+    /// Debounce for the next sticky-symbol request.
+    sticky_checked_at: Option<Instant>,
+    /// LSP folding ranges for the active buffer.
+    folds: Vec<FoldRange>,
+    /// Start lines of closed folds.
+    folded: HashSet<usize>,
+    fold_revision: Option<u64>,
+    pending_fold_action: Option<FoldAction>,
 }
 
 #[derive(Default)]
@@ -735,25 +754,6 @@ pub struct Model {
     language: LanguageState,
     /// Git workspace, request, and view state.
     git: GitState,
-    /// Document symbols used for the sticky scroll header.
-    sticky_symbols: Vec<SymbolItem>,
-    /// Path and revision those symbols describe.
-    sticky_symbols_path: Option<PathBuf>,
-    sticky_symbols_revision: Option<u64>,
-    /// Whether a sticky-symbol request is in flight.
-    sticky_pending: bool,
-    /// Debounce for the next sticky-symbol request.
-    sticky_checked_at: Option<Instant>,
-    /// LSP folding ranges for the active buffer.
-    folds: Vec<FoldRange>,
-    /// Start lines of closed folds.
-    folded: HashSet<usize>,
-    fold_revision: Option<u64>,
-    pending_fold_action: Option<FoldAction>,
-    /// Whether a format-on-save request is in flight.
-    format_on_save_pending: bool,
-    /// Suppress a second format request while saving formatted text.
-    suppress_format_on_save: bool,
     /// Secondary pane when a vertical split is open.
     split: Option<Pane>,
     /// Flattened workspace tree, when open.
@@ -919,17 +919,6 @@ impl Model {
             root_file_workers: BTreeMap::new(),
             language: LanguageState::default(),
             git: GitState::default(),
-            sticky_symbols: Vec::new(),
-            sticky_symbols_path: None,
-            sticky_symbols_revision: None,
-            sticky_pending: false,
-            sticky_checked_at: None,
-            folds: Vec::new(),
-            folded: HashSet::new(),
-            fold_revision: None,
-            pending_fold_action: None,
-            format_on_save_pending: false,
-            suppress_format_on_save: false,
             split: None,
             tree: Vec::new(),
             fuzzy_frecency: HashMap::new(),

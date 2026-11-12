@@ -18,15 +18,17 @@ impl Model {
         let Some(path) = self.path.clone() else {
             return;
         };
-        if self.sticky_pending {
+        if self.overlays.lsp_results.sticky_pending {
             return;
         }
-        if self.sticky_symbols_path.as_ref() == Some(&path)
-            && self.sticky_symbols_revision == Some(self.editor.revision())
+        if self.overlays.lsp_results.sticky_symbols_path.as_ref() == Some(&path)
+            && self.overlays.lsp_results.sticky_symbols_revision == Some(self.editor.revision())
         {
             return;
         }
         if self
+            .overlays
+            .lsp_results
             .sticky_checked_at
             .is_some_and(|checked| checked.elapsed() < STICKY_DEBOUNCE)
         {
@@ -35,11 +37,11 @@ impl Model {
         if self.language.lsp.config.is_none() {
             return;
         }
-        self.sticky_checked_at = Some(Instant::now());
+        self.overlays.lsp_results.sticky_checked_at = Some(Instant::now());
         let params = serde_json::json!({
             "textDocument": {"uri": crate::lsp_worker::file_uri(&path)},
         });
-        self.sticky_pending = self.send_lsp_request(
+        self.overlays.lsp_results.sticky_pending = self.send_lsp_request(
             LspRequestKind::StickySymbols,
             "textDocument/documentSymbol",
             params,
@@ -47,15 +49,17 @@ impl Model {
     }
 
     pub(crate) fn sticky_context(&self, top_line: usize) -> Option<&SymbolItem> {
-        if self.sticky_symbols_path.as_ref() != self.path.as_ref() {
+        if self.overlays.lsp_results.sticky_symbols_path.as_ref() != self.path.as_ref() {
             return None;
         }
         let mut active = None;
-        for (index, symbol) in self.sticky_symbols.iter().enumerate() {
+        for (index, symbol) in self.overlays.lsp_results.sticky_symbols.iter().enumerate() {
             if symbol.line >= top_line {
                 break;
             }
             let end = self
+                .overlays
+                .lsp_results
                 .sticky_symbols
                 .iter()
                 .skip(index + 1)
@@ -123,8 +127,8 @@ mod tests {
     fn picks_the_deepest_enclosing_symbol() {
         let path = PathBuf::from("main.rs");
         let mut model = Model::new(EditorState::from_text("a\nb\nc\nd\ne"), Some(path.clone()));
-        model.sticky_symbols_path = Some(path);
-        model.sticky_symbols = vec![
+        model.overlays.lsp_results.sticky_symbols_path = Some(path);
+        model.overlays.lsp_results.sticky_symbols = vec![
             symbol("impl Foo", 0, 0),
             symbol("fn run", 1, 1),
             symbol("if ready", 2, 2),
@@ -145,8 +149,8 @@ mod tests {
     fn renders_the_context_header_over_the_top_row() {
         let path = PathBuf::from("main.rs");
         let mut model = Model::new(EditorState::from_text("a\nb\nc\nd\ne"), Some(path.clone()));
-        model.sticky_symbols_path = Some(path);
-        model.sticky_symbols = vec![symbol("fn run", 1, 1)];
+        model.overlays.lsp_results.sticky_symbols_path = Some(path);
+        model.overlays.lsp_results.sticky_symbols = vec![symbol("fn run", 1, 1)];
         model.scroll = 2;
         let backend = ratatui::backend::TestBackend::new(40, 6);
         let mut terminal = ratatui::Terminal::new(backend).expect("terminal");
@@ -169,8 +173,8 @@ mod tests {
             EditorState::from_text("a\nb"),
             Some(PathBuf::from("one.rs")),
         );
-        model.sticky_symbols_path = Some(PathBuf::from("two.rs"));
-        model.sticky_symbols = vec![symbol("main", 0, 0)];
+        model.overlays.lsp_results.sticky_symbols_path = Some(PathBuf::from("two.rs"));
+        model.overlays.lsp_results.sticky_symbols = vec![symbol("main", 0, 0)];
         assert!(model.sticky_context(1).is_none());
     }
 }

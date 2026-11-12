@@ -26,14 +26,14 @@ impl Model {
     }
 
     fn apply_sticky_symbols_response(&mut self, result: &serde_json::Value) {
-        self.sticky_pending = false;
+        self.overlays.lsp_results.sticky_pending = false;
         let items = result
             .as_array()
             .map(|items| symbols_from_lsp(items))
             .unwrap_or_default();
-        self.sticky_symbols_path = self.path.clone();
-        self.sticky_symbols_revision = Some(self.editor.revision());
-        self.sticky_symbols = items;
+        self.overlays.lsp_results.sticky_symbols_path = self.path.clone();
+        self.overlays.lsp_results.sticky_symbols_revision = Some(self.editor.revision());
+        self.overlays.lsp_results.sticky_symbols = items;
         self.dirty = true;
     }
 
@@ -107,21 +107,21 @@ impl Model {
 
     fn clear_format_on_save(&mut self, kind: LspRequestKind) {
         if kind == LspRequestKind::Formatting {
-            self.format_on_save_pending = false;
+            self.language.lsp.format_on_save_pending = false;
         }
     }
 
     fn finish_format_on_save(&mut self) {
-        if !self.format_on_save_pending {
+        if !self.language.lsp.format_on_save_pending {
             return;
         }
-        self.format_on_save_pending = false;
+        self.language.lsp.format_on_save_pending = false;
         if !self.modified {
             return;
         }
-        self.suppress_format_on_save = true;
+        self.language.lsp.suppress_format_on_save = true;
         let saved = self.save();
-        self.suppress_format_on_save = false;
+        self.language.lsp.suppress_format_on_save = false;
         if saved {
             self.status = "formatted and saved".to_owned();
             self.dirty = true;
@@ -150,7 +150,7 @@ impl Model {
                 self.overlays.lsp_results.completion_resolve = None;
             }
             if kind == LspRequestKind::StickySymbols {
-                self.sticky_pending = false;
+                self.overlays.lsp_results.sticky_pending = false;
                 self.dirty = true;
                 return;
             }
@@ -175,7 +175,7 @@ impl Model {
         ) && edit_revision.is_some_and(|revision| revision != self.editor.revision())
         {
             if kind == LspRequestKind::StickySymbols {
-                self.sticky_pending = false;
+                self.overlays.lsp_results.sticky_pending = false;
             }
             self.clear_format_on_save(kind);
             self.status = "lsp: stale edit response ignored".to_owned();
@@ -201,7 +201,7 @@ impl Model {
             .is_some_and(|path| self.path.as_ref() != Some(path))
         {
             if kind == LspRequestKind::StickySymbols {
-                self.sticky_pending = false;
+                self.overlays.lsp_results.sticky_pending = false;
             }
             self.clear_format_on_save(kind);
             self.status = "lsp: edit response for inactive buffer".to_owned();

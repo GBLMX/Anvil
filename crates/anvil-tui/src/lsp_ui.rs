@@ -1057,14 +1057,14 @@ impl Model {
 
     pub(crate) fn request_format_after_save(&mut self) {
         if !self.settings.editor.format_on_save
-            || self.suppress_format_on_save
-            || self.format_on_save_pending
+            || self.language.lsp.suppress_format_on_save
+            || self.language.lsp.format_on_save_pending
             || self.active_lsp_worker().is_none()
         {
             return;
         }
         if self.request_formatting() {
-            self.format_on_save_pending = true;
+            self.language.lsp.format_on_save_pending = true;
         }
     }
 
