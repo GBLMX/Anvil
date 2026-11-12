@@ -1007,7 +1007,7 @@ fn diagnostic_jump_cycles_between_lines() {
         EditorState::from_text("one\ntwo\nthree"),
         Some(PathBuf::from("diag.rs")),
     );
-    model.diagnostics.insert(
+    model.language.diagnostics.insert(
         PathBuf::from("diag.rs"),
         vec![
             lsp::Diagnostic {
@@ -1099,7 +1099,7 @@ fn diagnostic_peek_merges_same_line_and_restores_focus() {
             }
         }]),
     );
-    model.diagnostics.insert(
+    model.language.diagnostics.insert(
         PathBuf::from("diag.rs"),
         vec![first, diagnostic(0, 2, "second")],
     );
@@ -1134,6 +1134,7 @@ fn diagnostic_peek_clears_on_revision_change() {
         Some(PathBuf::from("diag.rs")),
     );
     model
+        .language
         .diagnostics
         .insert(PathBuf::from("diag.rs"), vec![diagnostic(0, 0, "first")]);
     model.jump_diagnostic(true);
@@ -1164,6 +1165,7 @@ fn diagnostic_peek_avoids_cursor_and_scrolls_long_messages() {
         .collect::<Vec<_>>()
         .join("\n");
     model
+        .language
         .diagnostics
         .insert(PathBuf::from("diag.rs"), vec![diagnostic(0, 0, &message)]);
     model.viewport_height = 10;
@@ -1179,6 +1181,7 @@ fn problems_panel_jumps_to_selected_problem() {
         Some(PathBuf::from("diag.rs")),
     );
     model
+        .language
         .diagnostics
         .insert(PathBuf::from("diag.rs"), vec![diagnostic(1, 1, "problem")]);
     model.rebuild_problems();
@@ -1196,7 +1199,7 @@ fn diagnostics_underline_matching_line() {
         EditorState::from_text("first\nsecond"),
         Some(PathBuf::from("diag.rs")),
     );
-    model.diagnostics.insert(
+    model.language.diagnostics.insert(
         PathBuf::from("diag.rs"),
         vec![lsp::Diagnostic {
             range: lsp::Range {

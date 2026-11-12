@@ -326,6 +326,10 @@ struct LanguageState {
         )>,
     >,
     debug_request_started: Option<Instant>,
+    diagnostics: HashMap<PathBuf, Vec<lsp::Diagnostic>>,
+    diagnostic_count_shown: usize,
+    diagnostic_count_pending: Option<(usize, Instant)>,
+    diagnostic_path: Option<PathBuf>,
 }
 
 #[derive(Default)]
@@ -769,11 +773,6 @@ pub struct Model {
     lsp_retries: HashMap<(String, String), u8>,
     /// Pending language-server restart after crash backoff.
     lsp_retry: Option<((String, String), Instant)>,
-    /// Diagnostics keyed by workspace path.
-    diagnostics: HashMap<PathBuf, Vec<lsp::Diagnostic>>,
-    diagnostic_count_shown: usize,
-    diagnostic_count_pending: Option<(usize, Instant)>,
-    diagnostic_path: Option<PathBuf>,
     /// Dirty swap files that must survive a source conflict.
     conflict_swaps: HashMap<PathBuf, PathBuf>,
     /// Paths changed by a multi-file replace whose buffer reload failed.
@@ -989,10 +988,6 @@ impl Model {
             lsp_config: None,
             lsp_retries: HashMap::new(),
             lsp_retry: None,
-            diagnostics: HashMap::new(),
-            diagnostic_count_shown: 0,
-            diagnostic_count_pending: None,
-            diagnostic_path: None,
             conflict_swaps: HashMap::new(),
             stale_paths: HashSet::new(),
             git_branch: None,
@@ -1475,10 +1470,14 @@ impl Model {
                 }
             }
             LspEvent::Diagnostics(path, diagnostics) => {
-                self.diagnostics.insert(path, diagnostics);
+                self.language.diagnostics.insert(path, diagnostics);
                 self.status = format!(
                     "lsp diagnostics: {}",
-                    self.diagnostics.values().map(Vec::len).sum::<usize>()
+                    self.language
+                        .diagnostics
+                        .values()
+                        .map(Vec::len)
+                        .sum::<usize>()
                 );
                 self.rebuild_problems();
                 if active
@@ -1582,7 +1581,8 @@ impl Model {
         let Some(path) = &self.path else {
             return Vec::new();
         };
-        self.diagnostics
+        self.language
+            .diagnostics
             .get(path)
             .map(|diagnostics| {
                 diagnostics
@@ -1596,6 +1596,7 @@ impl Model {
     fn inline_diagnostic(&self, line_number: usize) -> Option<(String, u32)> {
         let path = self.path.as_ref()?;
         let diagnostic = self
+            .language
             .diagnostics
             .get(path)?
             .iter()
@@ -1621,7 +1622,7 @@ impl Model {
         let Some(path) = &self.path else {
             return Vec::new();
         };
-        let Some(diagnostics) = self.diagnostics.get(path) else {
+        let Some(diagnostics) = self.language.diagnostics.get(path) else {
             return Vec::new();
         };
         let line = self.editor.text().slice(line_start..line_end);

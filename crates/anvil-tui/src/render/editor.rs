@@ -249,12 +249,16 @@ pub fn view(model: &Model, frame: &mut Frame) {
             let diagnostic_severity = if entry.is_dir {
                 tree_rollup_diagnostic(model, &model.tree, index)
             } else {
-                model.diagnostics.get(&entry.path).and_then(|diagnostics| {
-                    diagnostics
-                        .iter()
-                        .filter_map(|diagnostic| diagnostic.severity)
-                        .min()
-                })
+                model
+                    .language
+                    .diagnostics
+                    .get(&entry.path)
+                    .and_then(|diagnostics| {
+                        diagnostics
+                            .iter()
+                            .filter_map(|diagnostic| diagnostic.severity)
+                            .min()
+                    })
             };
             if let Some(severity) = diagnostic_severity {
                 let color = match severity {
@@ -1517,7 +1521,7 @@ fn tree_rollup_diagnostic(model: &Model, entries: &[TreeEntry], index: usize) ->
         if child.depth <= depth {
             break;
         }
-        if let Some(diagnostics) = model.diagnostics.get(&child.path)
+        if let Some(diagnostics) = model.language.diagnostics.get(&child.path)
             && let Some(next) = diagnostics
                 .iter()
                 .filter_map(|diagnostic| diagnostic.severity)

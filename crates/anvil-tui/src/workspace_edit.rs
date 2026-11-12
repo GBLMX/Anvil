@@ -660,8 +660,8 @@ impl Model {
         {
             *path = remap_path(path, from, to);
         }
-        let diagnostics = std::mem::take(&mut self.diagnostics);
-        self.diagnostics = diagnostics
+        let diagnostics = std::mem::take(&mut self.language.diagnostics);
+        self.language.diagnostics = diagnostics
             .into_iter()
             .map(|(path, value)| (remap_path(&path, from, to), value))
             .collect();

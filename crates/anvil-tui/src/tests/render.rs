@@ -216,6 +216,7 @@ fn clicking_outside_peek_restores_focus() {
     model.viewport_width = 40;
     model.viewport_height = 12;
     model
+        .language
         .diagnostics
         .insert(PathBuf::from("diag.rs"), vec![diagnostic(0, 0, "problem")]);
     model.ui.focus.split = true;
@@ -452,7 +453,7 @@ fn diagnostics_follow_horizontal_window() {
         Some(PathBuf::from("diag.rs")),
     );
     model.hscroll = 5;
-    model.diagnostics.insert(
+    model.language.diagnostics.insert(
         PathBuf::from("diag.rs"),
         vec![lsp::Diagnostic {
             range: lsp::Range {

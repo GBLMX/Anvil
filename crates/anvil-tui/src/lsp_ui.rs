@@ -250,7 +250,7 @@ impl Model {
             self.dirty = true;
             return;
         };
-        let Some(diagnostics) = self.diagnostics.get(&path) else {
+        let Some(diagnostics) = self.language.diagnostics.get(&path) else {
             self.status = "no diagnostics".to_owned();
             self.dirty = true;
             return;
@@ -705,6 +705,7 @@ impl Model {
         let line_text = self.editor.text().slice(line_start..line_end);
         let line_units = line_text.chars().map(char::len_utf16).sum::<usize>();
         let diagnostics = self
+            .language
             .diagnostics
             .get(&path)
             .cloned()

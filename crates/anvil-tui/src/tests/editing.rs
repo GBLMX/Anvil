@@ -505,7 +505,7 @@ fn open_resolves_symlink_to_canonical_path() {
     std::os::unix::fs::symlink(&target, &link).expect("symlink");
     let mut model = Model::open(&link).expect("open");
     assert_eq!(model.path.as_deref(), Some(target.as_path()));
-    model.diagnostics.insert(
+    model.language.diagnostics.insert(
         model.path.clone().expect("path"),
         vec![lsp::Diagnostic {
             range: lsp::Range {
