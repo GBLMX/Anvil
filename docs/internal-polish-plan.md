@@ -52,8 +52,8 @@ Implemented: typed registry, `:settings` overlay, changed markers, per-row
 reset, and save/cancel validation.
 
 Remaining boundary:
-- external-file hot reload is not supported; settings load at startup and
-  `:settings` saves through the same validated registry;
+- `:config-reload` reloads settings, keymap, and theme atomically at runtime;
+  file watching is not supported;
 - no new domains without a concrete consumer.
 
 Difficulty: M. Main risk is scope creep; do not build a ten-tab settings clone.

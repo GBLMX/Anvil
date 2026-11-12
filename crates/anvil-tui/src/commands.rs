@@ -119,6 +119,7 @@ impl Model {
             ("git-stage-hunk", "") => self.apply_current_hunk(false),
             ("git-unstage-hunk", "") => self.apply_current_hunk(true),
             ("git-blame", "") => self.request_git_blame(),
+            ("config-reload", "") => self.reload_config(),
             ("undo", "") => self.undo(),
             ("redo", "") => self.redo(),
             ("comment", "") => self.toggle_comment(),

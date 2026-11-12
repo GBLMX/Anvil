@@ -82,7 +82,8 @@ for the current process.
 adjust, `r` resets the row, `s` saves, and `Esc` cancels.
 Auto-save is off by default; when enabled it writes the active named buffer
 on buffer switch, split focus changes, opening another file, and `:q`.
-External file edits are read at startup; restart Anvil to apply them.
+External file edits are read at startup; `:config-reload` applies settings,
+keymap, and theme changes without restarting. File watching is not enabled.
 
 At the `:` prompt, `Tab` completes Ex command names, `:theme` /
 `:theme-auto` arguments, and `:plugin-enable` IDs; `Up`/`Down` selects a

@@ -21,6 +21,9 @@ post-`0.5.0` feature line.
 - `%` jumps to the matching bracket with a bounded lexical scan; matching
   bracket pairs are emphasized in the editor. Strings and line/block comments
   are skipped.
+- `:config-reload` reloads settings, keymap, and theme atomically. Invalid
+  files keep the last good configuration; it does not restart LSP, plugins, or
+  gateways.
 - Opt-in `editor.auto_save` writes the active named buffer on buffer-switch,
   split-focus changes, opening another file, and `:q`. Failed saves keep the
   buffer dirty and abort the focus change. Configure via `settings.toml`,

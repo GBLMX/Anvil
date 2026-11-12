@@ -35,8 +35,19 @@ pub(crate) fn load() -> Result<(), String> {
 }
 
 pub(crate) fn load_from_path(path: &Path) -> Result<(), String> {
+    if let Some(choice) = read_choice_from_path(path)? {
+        theme::apply_choice(choice, false)?;
+    }
+    Ok(())
+}
+
+pub(crate) fn read_choice() -> Result<Option<Choice>, String> {
+    read_choice_from_path(&settings::path()?)
+}
+
+pub(crate) fn read_choice_from_path(path: &Path) -> Result<Option<Choice>, String> {
     if !path.exists() {
-        return Ok(());
+        return Ok(None);
     }
     let metadata =
         fs::metadata(path).map_err(|error| format!("cannot read {}: {error}", path.display()))?;
@@ -49,8 +60,7 @@ pub(crate) fn load_from_path(path: &Path) -> Result<(), String> {
     }
     let text = fs::read_to_string(path)
         .map_err(|error| format!("cannot read {}: {error}", path.display()))?;
-    let choice = parse(&text)?;
-    theme::apply_choice(choice, false)
+    parse(&text).map(Some)
 }
 
 pub(crate) fn save() -> Result<PathBuf, String> {

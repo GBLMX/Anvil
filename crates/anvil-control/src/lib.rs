@@ -120,6 +120,10 @@ pub const COMMANDS: &[CommandSpec] = &[
         capability: Capability::Admin,
     },
     CommandSpec {
+        name: "config-reload",
+        capability: Capability::Admin,
+    },
+    CommandSpec {
         name: "lsp-start",
         capability: Capability::Admin,
     },

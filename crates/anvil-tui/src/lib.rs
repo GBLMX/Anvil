@@ -928,6 +928,43 @@ impl Model {
         }
     }
 
+    pub(crate) fn reload_config(&mut self) {
+        let loaded = (|| -> Result<_, String> {
+            let settings = settings::load()?;
+            let keymap = keymap::KeymapConfig::load_default()?;
+            let theme = theme_config::read_choice()?;
+            Ok((settings, keymap, theme))
+        })();
+        match loaded {
+            Ok((settings, keymap, theme)) => {
+                if let Err(error) = self.apply_loaded_config(settings, keymap, theme) {
+                    self.status = format!("E: config-reload: {error}");
+                    self.dirty = true;
+                }
+            }
+            Err(error) => {
+                self.status = format!("E: config-reload: {error}");
+                self.dirty = true;
+            }
+        }
+    }
+
+    fn apply_loaded_config(
+        &mut self,
+        settings: settings::Settings,
+        keymap: keymap::KeymapConfig,
+        theme: Option<theme::Choice>,
+    ) -> Result<(), String> {
+        if let Some(choice) = theme {
+            theme::apply_choice(choice, false)?;
+        }
+        self.apply_settings(settings);
+        self.keymap = keymap;
+        self.status = "configuration reloaded".to_owned();
+        self.dirty = true;
+        Ok(())
+    }
+
     pub(crate) fn load_keymap_config_from(&mut self, path: &Path) -> Result<(), String> {
         let config = keymap::KeymapConfig::from_path(path)?;
         self.keymap = config;

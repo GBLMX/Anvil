@@ -798,3 +798,20 @@ fn percent_jumps_to_matching_bracket_and_back() {
     handle_event(&mut model, ctrl(KeyCode::Char('o')));
     assert_eq!(model.cursor, 0);
 }
+
+#[test]
+fn config_reload_applies_loaded_settings_and_keymap() {
+    let mut model = Model::new(EditorState::from_text("x"), None);
+    let mut settings = crate::settings::Settings::default();
+    settings.editor.auto_save = true;
+    settings.search.case_sensitive = true;
+    let keymap = crate::keymap::KeymapConfig::default();
+
+    model
+        .apply_loaded_config(settings, keymap, None)
+        .expect("reload");
+
+    assert!(model.settings.editor.auto_save);
+    assert!(model.settings.search.case_sensitive);
+    assert_eq!(model.status, "configuration reloaded");
+}

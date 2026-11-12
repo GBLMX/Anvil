@@ -459,6 +459,18 @@ impl KeymapConfig {
         Ok(config)
     }
 
+    pub(crate) fn load_default() -> Result<Self, String> {
+        if let Some(path) = KeyChord::default_path()
+            && path.exists()
+        {
+            return Self::from_path(&path);
+        }
+        if let Some(preset) = std::env::var_os("ANVIL_KEYMAP_PRESET") {
+            return Self::from_preset(&preset.to_string_lossy());
+        }
+        Ok(Self::default())
+    }
+
     pub(crate) fn from_preset(name: &str) -> Result<Self, String> {
         let normalized = name.trim().to_ascii_lowercase();
         let text = match normalized.as_str() {

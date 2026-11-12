@@ -82,6 +82,7 @@ Normal mode
   :cq                 quit with exit status 1
   :tree               toggle the workspace file tree
   :reconnect          restart the gateway and re-handshake
+  :config-reload      reload settings, keymap, and theme
   :git-blame          show blame for the current file
   :git-conflicts      list unmerged paths
   :git-conflict-base   preview index stage 1 (base)
