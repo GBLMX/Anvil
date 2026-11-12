@@ -49,8 +49,8 @@ reset/hot-reload boundary. Each item needs a deterministic failure test.
   Admin-gated `:terminal*` controls, interactive bottom panel with key/paste
   routing, and process-group cleanup landed.
 - Multi-root workspaces with per-root gateway/trust policy: routing/trust core,
-  trust-gated per-root gateways, and `:workspace-*` commands landed; file-tree
-  and search path routing across roots remains pending.
+  trust-gated per-root gateways, `:workspace-*` commands, and owning-root
+  open/save routing landed. Cross-root tree/search UX remains a follow-up.
 - Code folding with session persistence.
 - Auto-save policy remains; swap files and external-conflict recovery landed.
 
