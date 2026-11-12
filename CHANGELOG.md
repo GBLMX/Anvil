@@ -32,7 +32,8 @@ post-`0.5.0` feature line.
   poll and redraw the UI. `:theme list` lists built-in and custom themes.
 - File tree and fuzzy-open icons use native Nerd Font glyphs with an ASCII
   fallback (`ANVIL_ASCII_MODE=1`) and width-aware padding. Project
-  `.anvil.toml` `[ui.icons]` entries can override individual glyphs.
+  `.anvil.toml` `[ui.icons]` entries can override individual glyphs and reload
+  on a one-second mtime poll.
 - Named register storage moved from the TUI `Model` into `anvil-editor`.
   Frontends can read and write named registers through `EditorState`.
 - Word, quote, bracket, paragraph, and tag text-object range semantics moved

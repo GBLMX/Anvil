@@ -284,6 +284,16 @@ pub(crate) fn ascii_glyph(kind: IconKind) -> &'static str {
 }
 
 impl IconTheme {
+    pub(crate) fn config_path(workspace: &Path) -> std::path::PathBuf {
+        workspace.join(".anvil.toml")
+    }
+
+    pub(crate) fn config_mtime(workspace: &Path) -> Option<std::time::SystemTime> {
+        fs::metadata(Self::config_path(workspace))
+            .ok()
+            .and_then(|metadata| metadata.modified().ok())
+    }
+
     pub(crate) fn load(workspace: &Path) -> Self {
         let Ok(metadata) = fs::metadata(workspace.join(".anvil.toml")) else {
             return Self::default();
@@ -365,6 +375,31 @@ pub(crate) fn ascii_mode() -> bool {
     std::env::var_os("ANVIL_ASCII_MODE").is_some_and(|value| value == "1")
 }
 
+impl crate::Model {
+    pub(crate) fn reload_icons(&mut self) {
+        self.icons = IconTheme::load(&self.workspace);
+        self.icons_mtime = IconTheme::config_mtime(&self.workspace);
+        self.icons_checked_at = Some(std::time::Instant::now());
+    }
+
+    pub(crate) fn poll_icons(&mut self) {
+        let due = self
+            .icons_checked_at
+            .is_none_or(|last| last.elapsed() >= std::time::Duration::from_secs(1));
+        if !due {
+            return;
+        }
+        self.icons_checked_at = Some(std::time::Instant::now());
+        let modified = IconTheme::config_mtime(&self.workspace);
+        if modified == self.icons_mtime {
+            return;
+        }
+        self.icons = IconTheme::load(&self.workspace);
+        self.icons_mtime = modified;
+        self.dirty = true;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -411,6 +446,34 @@ mod tests {
             .icon_text(default_file_icon(), false)
             .expect("override width");
         assert_eq!(UnicodeWidthStr::width(wide.as_str()), 2);
+    }
+
+    #[test]
+    fn icon_overrides_hot_reload_from_workspace() {
+        let directory = tempfile::tempdir().expect("tempdir");
+        std::fs::write(
+            directory.path().join(".anvil.toml"),
+            "[ui.icons]\nrust = \"A\"\n",
+        )
+        .expect("write");
+        let mut model = crate::Model::new(crate::EditorState::from_text(""), None);
+        model.workspace = directory.path().to_path_buf();
+        model.reload_icons();
+        assert_eq!(
+            model.icons.glyph(icon_for("x.rs").expect("rust"), false),
+            "A"
+        );
+        std::fs::write(
+            directory.path().join(".anvil.toml"),
+            "[ui.icons]\nrust = \"B\"\n",
+        )
+        .expect("write");
+        model.icons_checked_at = None;
+        model.poll_icons();
+        assert_eq!(
+            model.icons.glyph(icon_for("x.rs").expect("rust"), false),
+            "B"
+        );
     }
 
     #[test]

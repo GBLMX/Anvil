@@ -9,7 +9,7 @@ use std::{
     fs,
     io::{self, Stdout},
     path::{Path, PathBuf},
-    time::{Duration, Instant},
+    time::{Duration, Instant, SystemTime},
 };
 
 use anvil_core::{TextBuffer, end_word, next_word_start, previous_word_start};
@@ -680,6 +680,10 @@ pub struct Model {
     icons: icon_theme::IconTheme,
     /// Whether the icon renderer uses ASCII fallbacks.
     ascii_icons: bool,
+    /// Last seen mtime for workspace icon overrides.
+    icons_mtime: Option<SystemTime>,
+    /// Next allowed mtime check for icon overrides.
+    icons_checked_at: Option<Instant>,
     /// Text-area width used by the soft-wrap projection.
     wrap_width: usize,
     /// Wrapped segment offset within the first visible source line.
@@ -912,6 +916,8 @@ impl Model {
             settings: Settings::default(),
             icons: icon_theme::IconTheme::default(),
             ascii_icons: icon_theme::ascii_mode(),
+            icons_mtime: None,
+            icons_checked_at: None,
             wrap_width: 80,
             scroll_subrow: 0,
             settings_overlay: None,
@@ -1081,7 +1087,7 @@ impl Model {
             workspace_roots::WorkspaceRoots::new(&model.workspace).unwrap_or_default();
         model.root_gateways.clear();
         model.root_file_workers.clear();
-        model.icons = icon_theme::IconTheme::load(&model.workspace);
+        model.reload_icons();
         model.require_gateway = true;
         model
     }
