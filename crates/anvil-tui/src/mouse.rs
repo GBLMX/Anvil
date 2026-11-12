@@ -141,13 +141,35 @@ pub(crate) fn handle_mouse(model: &mut Model, mouse: MouseEvent, width: u16, hei
             } else {
                 1
             };
+            let (side, pane_width) = editor_area(model, width, height)
+                .map(|inner| pane_at(model, inner, mouse.column))
+                .map(|(side, _, pane_width)| (side, pane_width))
+                .unwrap_or((Side::Left, width.saturating_sub(2)));
+            let active_side = if model.ui.focus.split {
+                Side::Right
+            } else {
+                Side::Left
+            };
+            let split_target = model.split.is_some() && side != active_side;
             if mouse
                 .modifiers
                 .contains(crossterm::event::KeyModifiers::SHIFT)
             {
-                model.hscroll = model.hscroll.saturating_add_signed(delta as isize * 3);
+                if split_target {
+                    if let Some(pane) = model.split.as_mut() {
+                        pane.buffer.hscroll = pane
+                            .buffer
+                            .hscroll
+                            .saturating_add_signed(delta as isize * 3);
+                    }
+                } else {
+                    model.hscroll = model.hscroll.saturating_add_signed(delta as isize * 3);
+                }
+            } else if split_target {
+                model.scroll_split_rows(delta as isize);
             } else if model.settings.editor.soft_wrap {
-                model.scroll_display_rows(delta as isize, width.saturating_sub(2));
+                let text_width = pane_width.saturating_sub(model.gutter_width());
+                model.scroll_display_rows_in_pane(delta as isize, text_width);
             } else {
                 model.scroll = model
                     .scroll

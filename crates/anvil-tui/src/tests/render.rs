@@ -531,3 +531,27 @@ fn stale_syntax_boundaries_are_clamped_to_char_boundaries() {
         .collect::<String>();
     assert_eq!(rendered, "👩");
 }
+
+#[test]
+fn wheel_scrolls_the_pane_under_the_pointer() {
+    let mut model = Model::new(
+        EditorState::from_text("0\n1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11"),
+        None,
+    );
+    model.split_vertical();
+    let scroll = |column| crossterm::event::MouseEvent {
+        kind: crossterm::event::MouseEventKind::ScrollDown,
+        column,
+        row: 6,
+        modifiers: crossterm::event::KeyModifiers::NONE,
+    };
+    assert!(crate::mouse::handle_mouse(&mut model, scroll(60), 80, 24));
+    assert_eq!(model.scroll, 0);
+    assert_eq!(model.split.as_ref().expect("split").buffer.scroll, 1);
+
+    model.focus_split(true);
+    assert_eq!(model.scroll, 1);
+    assert!(crate::mouse::handle_mouse(&mut model, scroll(5), 80, 24));
+    assert_eq!(model.scroll, 1);
+    assert_eq!(model.split.as_ref().expect("split").buffer.scroll, 1);
+}

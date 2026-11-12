@@ -90,6 +90,7 @@ impl Model {
         usize::from(width.saturating_sub(self.gutter_width()).max(1))
     }
 
+    #[cfg(test)]
     pub(crate) fn scroll_display_rows(&mut self, delta: isize, width: u16) {
         if !self.settings.editor.soft_wrap {
             self.scroll = self
@@ -100,6 +101,23 @@ impl Model {
             return;
         }
         self.wrap_width = self.wrap_text_width(width);
+        self.scroll_wrapped_rows(delta);
+    }
+
+    pub(crate) fn scroll_display_rows_in_pane(&mut self, delta: isize, text_width: u16) {
+        if !self.settings.editor.soft_wrap {
+            self.scroll = self
+                .scroll
+                .saturating_add_signed(delta)
+                .min(self.editor.index().len_lines().saturating_sub(1));
+            self.scroll_subrow = 0;
+            return;
+        }
+        self.wrap_width = usize::from(text_width).max(1);
+        self.scroll_wrapped_rows(delta);
+    }
+
+    fn scroll_wrapped_rows(&mut self, delta: isize) {
         let total = self.editor.index().len_lines();
         if total == 0 {
             return;
@@ -862,5 +880,19 @@ mod inline_diagnostic_tests {
             "{rendered}"
         );
         assert!(!rendered.contains("unused variable"), "{rendered}");
+    }
+}
+
+#[cfg(test)]
+mod pane_scroll_tests {
+    use super::*;
+
+    #[test]
+    fn pane_scroll_uses_the_explicit_text_width() {
+        let mut model = Model::new(EditorState::from_text("abcdefghij"), None);
+        model.settings.editor.soft_wrap = true;
+        model.scroll_display_rows_in_pane(1, 4);
+        assert_eq!(model.wrap_width, 4);
+        assert_eq!(model.scroll_subrow, 1);
     }
 }

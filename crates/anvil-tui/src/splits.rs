@@ -56,6 +56,22 @@ impl Model {
         self.dirty = true;
     }
 
+    pub(crate) fn scroll_split_rows(&mut self, delta: isize) {
+        let Some(pane) = self.split.as_mut() else {
+            return;
+        };
+        let total = pane.buffer.editor.index().len_lines();
+        if total == 0 {
+            return;
+        }
+        pane.buffer.scroll = pane
+            .buffer
+            .scroll
+            .saturating_add_signed(delta)
+            .min(total.saturating_sub(1));
+        self.dirty = true;
+    }
+
     pub(crate) fn close_split(&mut self) {
         if self.split.is_none() {
             return;

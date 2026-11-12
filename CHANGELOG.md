@@ -8,6 +8,8 @@ post-`0.5.0` feature line.
 
 ## [Unreleased]
 ### Added
+- Mouse-wheel scrolling now targets the split pane under the pointer and uses
+  that pane's text width when advancing soft-wrapped display rows.
 - Accessibility settings add `[ui] reduced_motion` and `high_contrast` (env
   `ANVIL_REDUCED_MOTION`/`ANVIL_HIGH_CONTRAST`); reduced motion freezes the
   spinner, high contrast lifts text/muted/border contrast without changing the
