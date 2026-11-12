@@ -324,7 +324,7 @@ fn tree_selection_scrolls_into_view() {
 fn fuzzy_selection_scrolls_into_view() {
     let mut model = Model::new(EditorState::from_text(""), None);
     model.welcome = false;
-    model.fuzzy = Some(FuzzyState {
+    model.overlays.fuzzy = Some(FuzzyState {
         generation: 0,
         query: String::new(),
         entries: (0..20).map(|index| format!("f{index:02}.txt")).collect(),
@@ -348,14 +348,14 @@ fn fuzzy_selection_scrolls_into_view() {
 fn fuzzy_preview_and_icon_render_on_wide_terminals() {
     let mut model = Model::new(EditorState::from_text(""), None);
     model.welcome = false;
-    model.fuzzy = Some(FuzzyState {
+    model.overlays.fuzzy = Some(FuzzyState {
         generation: 0,
         query: String::new(),
         entries: vec!["src/main.rs".to_owned()],
         filtered: vec![0],
         selected: 0,
     });
-    model.preview = PreviewState {
+    model.overlays.preview = PreviewState {
         path: Some("src/main.rs".to_owned()),
         lines: vec!["fn main() {}".to_owned()],
         ..PreviewState::default()
@@ -380,14 +380,14 @@ fn fuzzy_preview_and_icon_render_on_wide_terminals() {
 fn fuzzy_preview_stacks_below_list_on_narrow_terminals() {
     let mut model = Model::new(EditorState::from_text(""), None);
     model.welcome = false;
-    model.fuzzy = Some(FuzzyState {
+    model.overlays.fuzzy = Some(FuzzyState {
         generation: 0,
         query: String::new(),
         entries: vec!["src/main.rs".to_owned()],
         filtered: vec![0],
         selected: 0,
     });
-    model.preview = PreviewState {
+    model.overlays.preview = PreviewState {
         path: Some("src/main.rs".to_owned()),
         lines: vec!["fn main() {}".to_owned()],
         ..PreviewState::default()
@@ -718,7 +718,7 @@ fn recent_files_and_workspaces_are_bounded_and_deduplicated() {
     assert_eq!(model.recent_files.len(), 20);
     assert_eq!(model.recent_files[0], PathBuf::from("/outside/ignored.rs"));
     model.open_recent_files();
-    let entries = &model.fuzzy.as_ref().expect("fuzzy").entries;
+    let entries = &model.overlays.fuzzy.as_ref().expect("fuzzy").entries;
     assert_eq!(entries.len(), 19);
     assert!(entries.iter().all(|entry| !entry.starts_with('/')));
 }
@@ -767,7 +767,7 @@ fn welcome_shows_recent_files_and_r_opens_them() {
 
     handle_event(&mut model, key(KeyCode::Char('r')));
     assert!(!model.welcome);
-    assert!(model.fuzzy.is_some());
+    assert!(model.overlays.fuzzy.is_some());
 }
 
 #[test]

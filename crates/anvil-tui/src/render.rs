@@ -761,7 +761,7 @@ fn fuzzy_path_line(
 }
 
 fn fuzzy_preview_lines(model: &Model) -> Vec<Line<'static>> {
-    let preview = &model.preview;
+    let preview = &model.overlays.preview;
     if preview.loading {
         return vec![Line::styled(
             "loading preview…",

@@ -300,6 +300,10 @@ struct OverlayState {
     command_palette: Option<CommandPaletteState>,
     settings_overlay: Option<SettingsOverlayState>,
     theme_browser: Option<theme_browser::ThemeBrowser>,
+    fuzzy: Option<FuzzyState>,
+    fuzzy_generation: u64,
+    preview: PreviewState,
+    preview_generation: u64,
 }
 
 #[derive(Debug, Clone)]
@@ -715,10 +719,6 @@ pub struct Model {
     tree_refresh_queued: bool,
     tree_refresh_generation: u64,
     show_hidden: bool,
-    fuzzy: Option<FuzzyState>,
-    fuzzy_generation: u64,
-    preview: PreviewState,
-    preview_generation: u64,
     overlays: OverlayState,
     command_completion: Option<CommandCompletion>,
     persist_theme: bool,
@@ -966,10 +966,6 @@ impl Model {
             tree_refresh_queued: false,
             tree_refresh_generation: 0,
             show_hidden: false,
-            fuzzy: None,
-            fuzzy_generation: 0,
-            preview: PreviewState::default(),
-            preview_generation: 0,
             overlays: OverlayState::default(),
             command_completion: None,
             persist_theme: !cfg!(test),
@@ -1711,7 +1707,7 @@ impl Model {
             contexts.push(context);
         }
         let overlay = self.overlays.command_palette.is_some()
-            || self.fuzzy.is_some()
+            || self.overlays.fuzzy.is_some()
             || self.workspace_symbols.is_some()
             || self.document_symbols.is_some()
             || self.references.is_some()

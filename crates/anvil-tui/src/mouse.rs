@@ -362,7 +362,7 @@ fn overlay_open(model: &Model) -> bool {
     model.ui.diagnostic_peek.is_some()
         || model.ui.problems.visible
         || model.overlays.command_palette.is_some()
-        || model.fuzzy.is_some()
+        || model.overlays.fuzzy.is_some()
         || model.code_actions.is_some()
         || model.document_symbols.is_some()
         || model.references.is_some()
@@ -383,8 +383,8 @@ fn close_outside_overlay(model: &mut Model) {
     if model.overlays.command_palette.is_some() {
         model.close_command_palette();
     }
-    if model.fuzzy.is_some() {
-        model.fuzzy = None;
+    if model.overlays.fuzzy.is_some() {
+        model.overlays.fuzzy = None;
         model.clear_preview();
         model.dirty = true;
     }
@@ -454,7 +454,7 @@ fn inside_overlay(model: &Model, col: u16, row: u16, area: Rect) -> bool {
     if model.overlays.command_palette.is_some() {
         return crate::render::rect_contains(crate::render::command_palette_rect(area), col, row);
     }
-    if model.fuzzy.is_some() {
+    if model.overlays.fuzzy.is_some() {
         return crate::render::rect_contains(crate::render::fuzzy_rect(area), col, row);
     }
     if let Some(actions) = &model.code_actions {

@@ -488,7 +488,7 @@ impl Model {
             || self.help_back.is_some()
             || self.overlays.settings_overlay.is_some()
             || self.overlays.command_palette.is_some()
-            || self.fuzzy.is_some()
+            || self.overlays.fuzzy.is_some()
             || self.modal_layer.is_some()
             || matches!(
                 self.ui.input_mode,

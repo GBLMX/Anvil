@@ -112,7 +112,7 @@ fn keymap_context_prefers_popup_then_command_line_then_tree() {
         vec![KeymapContext::Global, KeymapContext::FileTree]
     );
 
-    model.fuzzy = Some(FuzzyState {
+    model.overlays.fuzzy = Some(FuzzyState {
         generation: 0,
         query: String::new(),
         entries: vec!["a".to_owned()],
@@ -128,7 +128,7 @@ fn keymap_context_prefers_popup_then_command_line_then_tree() {
         ]
     );
 
-    model.fuzzy = None;
+    model.overlays.fuzzy = None;
     model.ui.input_mode = InputMode::CommandLine {
         buffer: InputBuffer::default(),
     };
@@ -495,16 +495,19 @@ fn fuzzy_filters_workspace_files() {
     let mut model = Model::new(EditorState::from_text(""), None);
     model.workspace = dir.path().to_path_buf();
     model.start_fuzzy();
-    let fuzzy = model.fuzzy.as_mut().expect("fuzzy");
+    let fuzzy = model.overlays.fuzzy.as_mut().expect("fuzzy");
     fuzzy.query = "main".to_owned();
     model.fuzzy_refresh();
-    assert_eq!(model.fuzzy.as_ref().expect("fuzzy").filtered.len(), 1);
+    assert_eq!(
+        model.overlays.fuzzy.as_ref().expect("fuzzy").filtered.len(),
+        1
+    );
 }
 #[test]
 fn stale_preview_results_are_discarded() {
     let mut model = Model::new(EditorState::from_text(""), None);
-    model.preview_generation = 2;
-    model.preview = PreviewState {
+    model.overlays.preview_generation = 2;
+    model.overlays.preview = PreviewState {
         path: Some("src/main.rs".to_owned()),
         loading: true,
         ..PreviewState::default()
@@ -518,8 +521,8 @@ fn stale_preview_results_are_discarded() {
             truncated: false,
         }),
     );
-    assert!(model.preview.loading);
-    assert!(model.preview.lines.is_empty());
+    assert!(model.overlays.preview.loading);
+    assert!(model.overlays.preview.lines.is_empty());
 
     model.handle_preview(
         "src/main.rs".to_owned(),
@@ -529,16 +532,16 @@ fn stale_preview_results_are_discarded() {
             truncated: true,
         }),
     );
-    assert!(!model.preview.loading);
-    assert_eq!(model.preview.lines, ["fresh"]);
-    assert!(model.preview.truncated);
+    assert!(!model.overlays.preview.loading);
+    assert_eq!(model.overlays.preview.lines, ["fresh"]);
+    assert!(model.overlays.preview.truncated);
 }
 
 #[test]
 fn preview_failure_keeps_the_list_usable() {
     let mut model = Model::new(EditorState::from_text(""), None);
-    model.preview_generation = 1;
-    model.preview = PreviewState {
+    model.overlays.preview_generation = 1;
+    model.overlays.preview = PreviewState {
         path: Some("src/main.rs".to_owned()),
         loading: true,
         ..PreviewState::default()
@@ -548,15 +551,18 @@ fn preview_failure_keeps_the_list_usable() {
         1,
         Err("gateway failed".to_owned()),
     );
-    assert!(!model.preview.loading);
-    assert_eq!(model.preview.message.as_deref(), Some("gateway failed"));
+    assert!(!model.overlays.preview.loading);
+    assert_eq!(
+        model.overlays.preview.message.as_deref(),
+        Some("gateway failed")
+    );
     assert!(model.status.contains("E: preview: gateway failed"));
 }
 
 #[test]
 fn preview_without_worker_reports_gateway_unavailable() {
     let mut model = Model::new(EditorState::from_text(""), None);
-    model.fuzzy = Some(FuzzyState {
+    model.overlays.fuzzy = Some(FuzzyState {
         generation: 0,
         query: String::new(),
         entries: vec!["src/main.rs".to_owned()],
@@ -564,9 +570,9 @@ fn preview_without_worker_reports_gateway_unavailable() {
         selected: 0,
     });
     model.request_preview();
-    assert!(!model.preview.loading);
+    assert!(!model.overlays.preview.loading);
     assert_eq!(
-        model.preview.message.as_deref(),
+        model.overlays.preview.message.as_deref(),
         Some("preview unavailable: gateway")
     );
     assert!(model.status.contains("E: preview: gateway unavailable"));
@@ -888,7 +894,7 @@ fn managed_state_errors_are_visible_and_fail_closed() {
 fn fuzzy_merges_secondary_root_files() {
     let mut model = Model::new(EditorState::from_text(""), None);
     let root = PathBuf::from("/tmp/second-root");
-    model.fuzzy = Some(FuzzyState {
+    model.overlays.fuzzy = Some(FuzzyState {
         generation: 4,
         query: String::new(),
         entries: vec!["src/main.rs".to_owned()],
@@ -898,7 +904,7 @@ fn fuzzy_merges_secondary_root_files() {
 
     model.handle_fuzzy_files(Some(root.clone()), 4, Ok(vec!["src/lib.rs".to_owned()]));
 
-    let entries = &model.fuzzy.as_ref().expect("fuzzy").entries;
+    let entries = &model.overlays.fuzzy.as_ref().expect("fuzzy").entries;
     assert!(entries.iter().any(|entry| entry == "src/main.rs"));
     assert!(
         entries
@@ -910,7 +916,7 @@ fn fuzzy_merges_secondary_root_files() {
 #[test]
 fn stale_secondary_root_files_are_discarded() {
     let mut model = Model::new(EditorState::from_text(""), None);
-    model.fuzzy = Some(FuzzyState {
+    model.overlays.fuzzy = Some(FuzzyState {
         generation: 4,
         query: String::new(),
         entries: Vec::new(),
@@ -924,7 +930,15 @@ fn stale_secondary_root_files_are_discarded() {
         Ok(vec!["src/lib.rs".to_owned()]),
     );
 
-    assert!(model.fuzzy.as_ref().expect("fuzzy").entries.is_empty());
+    assert!(
+        model
+            .overlays
+            .fuzzy
+            .as_ref()
+            .expect("fuzzy")
+            .entries
+            .is_empty()
+    );
 }
 
 #[test]
@@ -933,7 +947,7 @@ fn fuzzy_opens_absolute_secondary_root_file() {
     let file = dir.path().join("lib.rs");
     fs::write(&file, "pub fn lib() {}").expect("file");
     let mut model = Model::new(EditorState::from_text(""), None);
-    model.fuzzy = Some(FuzzyState {
+    model.overlays.fuzzy = Some(FuzzyState {
         generation: 1,
         query: String::new(),
         entries: vec![file.to_string_lossy().into_owned()],
@@ -951,7 +965,7 @@ fn fuzzy_opens_absolute_secondary_root_file() {
 fn fuzzy_keeps_root_files_when_primary_result_arrives_later() {
     let mut model = Model::new(EditorState::from_text(""), None);
     let root = PathBuf::from("/tmp/second-root");
-    model.fuzzy = Some(FuzzyState {
+    model.overlays.fuzzy = Some(FuzzyState {
         generation: 4,
         query: String::new(),
         entries: Vec::new(),
@@ -962,7 +976,7 @@ fn fuzzy_keeps_root_files_when_primary_result_arrives_later() {
     model.handle_fuzzy_files(Some(root.clone()), 4, Ok(vec!["src/lib.rs".to_owned()]));
     model.handle_fuzzy_files(None, 4, Ok(vec!["src/main.rs".to_owned()]));
 
-    let entries = &model.fuzzy.as_ref().expect("fuzzy").entries;
+    let entries = &model.overlays.fuzzy.as_ref().expect("fuzzy").entries;
     assert!(entries.iter().any(|entry| entry == "src/main.rs"));
     assert!(
         entries
@@ -974,7 +988,7 @@ fn fuzzy_keeps_root_files_when_primary_result_arrives_later() {
 #[test]
 fn fuzzy_ranks_basename_then_frecency_then_short_paths() {
     let mut model = Model::new(EditorState::from_text(""), None);
-    model.fuzzy = Some(FuzzyState {
+    model.overlays.fuzzy = Some(FuzzyState {
         generation: 0,
         query: "main".to_owned(),
         entries: vec![
@@ -990,7 +1004,7 @@ fn fuzzy_ranks_basename_then_frecency_then_short_paths() {
         .fuzzy_frecency
         .insert("tests/main_test.rs".to_owned(), 5);
     model.fuzzy_refresh();
-    let fuzzy = model.fuzzy.as_ref().expect("fuzzy");
+    let fuzzy = model.overlays.fuzzy.as_ref().expect("fuzzy");
     let ranked = fuzzy
         .filtered
         .iter()
@@ -1013,7 +1027,7 @@ fn fuzzy_open_records_frecency() {
     fs::write(dir.path().join("main.rs"), "fn main() {}").expect("file");
     let mut model = Model::new(EditorState::from_text(""), None);
     model.workspace = dir.path().to_path_buf();
-    model.fuzzy = Some(FuzzyState {
+    model.overlays.fuzzy = Some(FuzzyState {
         generation: 0,
         query: String::new(),
         entries: vec!["main.rs".to_owned()],

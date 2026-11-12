@@ -580,7 +580,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
         );
     }
 
-    if let Some(fuzzy) = &model.fuzzy {
+    if let Some(fuzzy) = &model.overlays.fuzzy {
         let horizontal = area.width >= 80;
         let stacked = !horizontal && area.height >= 16;
         let popup = fuzzy_rect(area);

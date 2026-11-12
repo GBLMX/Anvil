@@ -133,7 +133,7 @@ impl Model {
             return;
         }
         self.clear_preview();
-        self.fuzzy_generation = self.fuzzy_generation.saturating_add(1);
+        self.overlays.fuzzy_generation = self.overlays.fuzzy_generation.saturating_add(1);
         let entries = files
             .iter()
             .map(|path| {
@@ -151,8 +151,8 @@ impl Model {
                 }
             })
             .collect::<Vec<_>>();
-        self.fuzzy = Some(FuzzyState {
-            generation: self.fuzzy_generation,
+        self.overlays.fuzzy = Some(FuzzyState {
+            generation: self.overlays.fuzzy_generation,
             query: String::new(),
             filtered: (0..entries.len()).collect(),
             entries,

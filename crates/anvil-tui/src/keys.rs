@@ -514,10 +514,10 @@ fn handle_key(model: &mut Model, key: KeyPress) {
         }
         return;
     }
-    if model.fuzzy.is_some() {
+    if model.overlays.fuzzy.is_some() {
         match key.code {
             KeyCode::Esc => {
-                model.fuzzy = None;
+                model.overlays.fuzzy = None;
                 model.clear_preview();
                 model.dirty = true;
             }
@@ -525,14 +525,14 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             KeyCode::Up => model.fuzzy_move(-1),
             KeyCode::Down => model.fuzzy_move(1),
             KeyCode::Backspace => {
-                if let Some(fuzzy) = model.fuzzy.as_mut() {
+                if let Some(fuzzy) = model.overlays.fuzzy.as_mut() {
                     fuzzy.query.pop();
                 }
                 model.fuzzy_refresh();
                 model.dirty = true;
             }
             KeyCode::Char(character) if text_input => {
-                if let Some(fuzzy) = model.fuzzy.as_mut() {
+                if let Some(fuzzy) = model.overlays.fuzzy.as_mut() {
                     fuzzy.query.push(character);
                 }
                 model.fuzzy_refresh();

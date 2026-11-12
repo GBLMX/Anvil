@@ -402,7 +402,7 @@ impl Model {
         // File/save/edit operations guard help_back separately.
         matches!(self.ui.input_mode, InputMode::Normal)
             && self.overlays.command_palette.is_none()
-            && self.fuzzy.is_none()
+            && self.overlays.fuzzy.is_none()
             && self.overlays.settings_overlay.is_none()
             && self.modal_layer.is_none()
             && self.ui.diagnostic_peek.is_none()

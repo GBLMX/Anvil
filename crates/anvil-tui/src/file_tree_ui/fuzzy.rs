@@ -4,8 +4,8 @@ use super::*;
 
 impl Model {
     pub(crate) fn clear_preview(&mut self) {
-        self.preview_generation = self.preview_generation.saturating_add(1);
-        self.preview = PreviewState::default();
+        self.overlays.preview_generation = self.overlays.preview_generation.saturating_add(1);
+        self.overlays.preview = PreviewState::default();
     }
 
     pub(crate) fn fuzzy_display_path(&self, entry: &str) -> String {
@@ -34,7 +34,7 @@ impl Model {
     }
 
     fn selected_fuzzy_path(&self) -> Option<String> {
-        let fuzzy = self.fuzzy.as_ref()?;
+        let fuzzy = self.overlays.fuzzy.as_ref()?;
         fuzzy
             .filtered
             .get(fuzzy.selected)
@@ -46,8 +46,8 @@ impl Model {
             self.clear_preview();
             return;
         };
-        if self.preview.path.as_deref() == Some(path.as_str())
-            && (self.preview.loading || self.preview.message.is_none())
+        if self.overlays.preview.path.as_deref() == Some(path.as_str())
+            && (self.overlays.preview.loading || self.overlays.preview.message.is_none())
         {
             return;
         }
@@ -64,8 +64,8 @@ impl Model {
             None => self.file_worker.is_some(),
         };
         if !has_worker {
-            self.preview_generation = self.preview_generation.saturating_add(1);
-            self.preview = PreviewState {
+            self.overlays.preview_generation = self.overlays.preview_generation.saturating_add(1);
+            self.overlays.preview = PreviewState {
                 path: Some(path),
                 message: Some("preview unavailable: gateway".to_owned()),
                 ..PreviewState::default()
@@ -74,9 +74,9 @@ impl Model {
             self.dirty = true;
             return;
         }
-        self.preview_generation = self.preview_generation.saturating_add(1);
-        let generation = self.preview_generation;
-        self.preview = PreviewState {
+        self.overlays.preview_generation = self.overlays.preview_generation.saturating_add(1);
+        let generation = self.overlays.preview_generation;
+        self.overlays.preview = PreviewState {
             path: Some(path),
             loading: true,
             ..PreviewState::default()
@@ -96,8 +96,8 @@ impl Model {
             }),
         };
         if !matches!(request, Some(Ok(()))) {
-            self.preview.loading = false;
-            self.preview.message = Some("preview worker stopped".to_owned());
+            self.overlays.preview.loading = false;
+            self.overlays.preview.message = Some("preview worker stopped".to_owned());
             self.status = "E: preview: worker stopped".to_owned();
         }
         self.dirty = true;
@@ -109,25 +109,25 @@ impl Model {
         generation: u64,
         result: Result<PreviewData, String>,
     ) {
-        if generation != self.preview_generation
-            || self.preview.path.as_deref() != Some(path.as_str())
+        if generation != self.overlays.preview_generation
+            || self.overlays.preview.path.as_deref() != Some(path.as_str())
         {
             return;
         }
-        self.preview.loading = false;
+        self.overlays.preview.loading = false;
         match result {
             Ok(preview) => {
                 if self.status.starts_with("E: preview:") {
                     self.status = "preview ready".to_owned();
                 }
-                self.preview.lines = preview.lines;
-                self.preview.truncated = preview.truncated;
-                self.preview.message = None;
+                self.overlays.preview.lines = preview.lines;
+                self.overlays.preview.truncated = preview.truncated;
+                self.overlays.preview.message = None;
             }
             Err(error) => {
-                self.preview.lines.clear();
-                self.preview.truncated = false;
-                self.preview.message = Some(error.clone());
+                self.overlays.preview.lines.clear();
+                self.overlays.preview.truncated = false;
+                self.overlays.preview.message = Some(error.clone());
                 self.status = format!("E: preview: {error}");
             }
         }
@@ -143,8 +143,8 @@ impl Model {
         self.document_symbols = None;
         self.clear_preview();
         let workspace = self.workspace.clone();
-        let generation = self.fuzzy_generation.saturating_add(1);
-        self.fuzzy_generation = generation;
+        let generation = self.overlays.fuzzy_generation.saturating_add(1);
+        self.overlays.fuzzy_generation = generation;
         if self.ensure_file_worker() {
             if let Some(worker) = self.file_worker.as_ref() {
                 let _ = worker.request(FileRequest::Files {
@@ -158,7 +158,7 @@ impl Model {
                     generation,
                 });
             }
-            self.fuzzy = Some(FuzzyState {
+            self.overlays.fuzzy = Some(FuzzyState {
                 generation,
                 query: String::new(),
                 entries: Vec::new(),
@@ -177,7 +177,7 @@ impl Model {
         }
         entries.sort();
         let filtered = (0..entries.len()).collect();
-        self.fuzzy = Some(FuzzyState {
+        self.overlays.fuzzy = Some(FuzzyState {
             generation,
             query: String::new(),
             entries,
@@ -195,7 +195,7 @@ impl Model {
         result: Result<Vec<String>, String>,
     ) {
         {
-            let Some(fuzzy) = self.fuzzy.as_mut() else {
+            let Some(fuzzy) = self.overlays.fuzzy.as_mut() else {
                 return;
             };
             if fuzzy.generation != generation {
@@ -229,7 +229,7 @@ impl Model {
     }
 
     pub(crate) fn fuzzy_refresh(&mut self) {
-        let Some(fuzzy) = self.fuzzy.as_mut() else {
+        let Some(fuzzy) = self.overlays.fuzzy.as_mut() else {
             return;
         };
         let query = fuzzy.query.to_lowercase();
@@ -252,7 +252,7 @@ impl Model {
     }
 
     pub(crate) fn fuzzy_move(&mut self, delta: isize) {
-        let Some(fuzzy) = self.fuzzy.as_mut() else {
+        let Some(fuzzy) = self.overlays.fuzzy.as_mut() else {
             return;
         };
         fuzzy.selected = fuzzy
@@ -264,7 +264,7 @@ impl Model {
     }
 
     pub(crate) fn fuzzy_open(&mut self) {
-        let Some(fuzzy) = self.fuzzy.take() else {
+        let Some(fuzzy) = self.overlays.fuzzy.take() else {
             return;
         };
         self.clear_preview();
