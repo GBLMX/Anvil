@@ -368,10 +368,18 @@ mod linux {
     const ACCESS_REFER: u64 = 1 << 13;
     const LANDLOCK_RULE_PATH_BENEATH: u32 = 1;
     const LANDLOCK_CREATE_RULESET_VERSION: u32 = 1;
+    const LANDLOCK_SCOPE_SIGNAL: u64 = 1 << 1;
 
     #[repr(C)]
     struct RulesetAttr {
         handled_access_fs: u64,
+    }
+
+    #[repr(C)]
+    struct RulesetAttrV6 {
+        handled_access_fs: u64,
+        handled_access_net: u64,
+        scoped: u64,
     }
 
     #[repr(C)]
@@ -418,16 +426,32 @@ mod linux {
         if abi >= 5 {
             handled |= 1 << 15;
         }
-        let attr = RulesetAttr {
-            handled_access_fs: handled,
-        };
-        let ruleset = unsafe {
-            libc::syscall(
-                libc::SYS_landlock_create_ruleset,
-                &attr,
-                std::mem::size_of::<RulesetAttr>(),
-                0u32,
-            )
+        let ruleset = if abi >= 6 {
+            let attr = RulesetAttrV6 {
+                handled_access_fs: handled,
+                handled_access_net: 0,
+                scoped: LANDLOCK_SCOPE_SIGNAL,
+            };
+            unsafe {
+                libc::syscall(
+                    libc::SYS_landlock_create_ruleset,
+                    &attr,
+                    std::mem::size_of::<RulesetAttrV6>(),
+                    0u32,
+                )
+            }
+        } else {
+            let attr = RulesetAttr {
+                handled_access_fs: handled,
+            };
+            unsafe {
+                libc::syscall(
+                    libc::SYS_landlock_create_ruleset,
+                    &attr,
+                    std::mem::size_of::<RulesetAttr>(),
+                    0u32,
+                )
+            }
         };
         if ruleset < 0 {
             return Err(io::Error::last_os_error());

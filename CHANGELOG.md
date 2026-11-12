@@ -21,6 +21,8 @@ post-`0.5.0` feature line.
 - `%` jumps to the matching bracket with a bounded lexical scan; matching
   bracket pairs are emphasized in the editor. Strings and line/block comments
   are skipped.
+- The plugin host enables `LANDLOCK_SCOPE_SIGNAL` when Landlock ABI >= 6;
+  seccomp remains the fallback signal control on older kernels.
 - `:config-reload` reloads settings, keymap, and theme atomically. Invalid
   files keep the last good configuration; it does not restart LSP, plugins, or
   gateways.

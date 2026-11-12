@@ -223,7 +223,8 @@ CVE-2026-72183; `LANDLOCK_SCOPE_SIGNAL` alone is not a sufficient boundary.
   `O_ASYNC`, and `FIOASYNC`.
 - The host has its own process group/session and `PDEATHSIG`; the supervisor
   uses pidfd for stop/wait.
-- `LANDLOCK_SCOPE_SIGNAL` is defense-in-depth only on patched kernels; seccomp
+- `LANDLOCK_SCOPE_SIGNAL` is enabled on Landlock ABI >= 6 as defense-in-depth;
+  seccomp
   remains authoritative.
 - Tests prove every attempted signal path returns `EPERM` and the supervisor
   remains alive.

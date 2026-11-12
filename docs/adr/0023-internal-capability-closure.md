@@ -26,8 +26,9 @@ Examples:
   and cache exist, but marketplace browse/detail, indexed install, consent,
   update, and revocation/provenance UI do not. Index-to-download integration is
   pending. Production signing keys are external.
-- **Plugin sandbox**: `LANDLOCK_SCOPE_SIGNAL` is not enabled; seccomp is the
-  only signal control. The threat model tracks this as T9/T10.
+- **Plugin sandbox**: `LANDLOCK_SCOPE_SIGNAL` is enabled on Landlock ABI >= 6;
+  older kernels still rely on seccomp as the primary signal control. The threat
+  model tracks this as T9/T10.
 - **Verification**: the full performance gate has not run on the reference
   machine, and release signing/provenance has not been exercised with
   production-like keys.
@@ -119,7 +120,7 @@ marketplace.
 
 ### 5. Make the security gap explicit
 
-`LANDLOCK_SCOPE_SIGNAL` is not enabled. The closure decision is:
+`LANDLOCK_SCOPE_SIGNAL` is enabled on Landlock ABI >= 6. The closure decision is:
 
 - enable it where the kernel supports it;
 - if the kernel lacks support, expose a visible degraded mode and keep the
