@@ -1,9 +1,9 @@
 # Multi-Root File Tree and Search Routing Plan
 
-Status: phase 1 plus quick-open enumeration and preview landed. Trust, root
-registration, per-root gateway lifecycle, open/save routing, and trusted-root
-quick-open fan-out are implemented. File tree, project search, and mutation
-routing still assume one primary workspace.
+Status: phase 1 plus quick-open and project-search fan-out landed. Trust, root
+registration, per-root gateway lifecycle, open/save routing, trusted-root
+quick-open enumeration/preview, and project-search merge/cancel are
+implemented. File tree and mutation routing still assume one primary workspace.
 
 ## 1. Scope
 
@@ -33,10 +33,11 @@ Out of scope for this plan:
 - `FileWorker` requests use workspace-relative paths.
 - `FileEvent::Files` is generation-scoped; root workers are polled and merged
   into quick-open as absolute paths.
-- `FileEvent::ProjectSearch` still returns primary-relative paths.
+- `FileEvent::ProjectSearch` is merged under a shared generation; secondary
+  paths are converted to absolute paths before insertion.
 - `Model.tree` is a flat list of primary-root children.
 - `FuzzyState.entries` mixes primary-relative and secondary-root absolute
-  paths; `ProjectSearchState` still assumes one relative namespace.
+  paths. Project-search results are stored separately with a global cap.
 
 ## 3. Decision: worker per trusted root
 
@@ -169,6 +170,11 @@ Acceptance:
 - opening a second-root file saves through its root
 
 ## 8. Project Search
+
+Status: landed. Search fans out to every trusted root, waits for every worker,
+merges/deduplicates absolute locations under the global cap, and ignores stale
+generations. Opening a secondary-root location resolves through
+`WorkspaceRoots` and the owning gateway.
 
 Changes:
 

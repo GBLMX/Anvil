@@ -120,7 +120,7 @@ impl Model {
                     query,
                     generation,
                     result,
-                } => self.handle_project_search(query, generation, result),
+                } => self.handle_project_search(None, query, generation, result),
                 FileEvent::ProjectReplacePreview { generation, result } => {
                     self.handle_project_replace_preview(generation, result)
                 }
@@ -243,6 +243,13 @@ impl Model {
                     } => {
                         let absolute = root.join(path).to_string_lossy().into_owned();
                         self.handle_preview(absolute, generation, result);
+                    }
+                    FileEvent::ProjectSearch {
+                        query,
+                        generation,
+                        result,
+                    } => {
+                        self.handle_project_search(Some(root.clone()), query, generation, result);
                     }
                     _ => {}
                 }

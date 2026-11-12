@@ -223,19 +223,34 @@ impl Model {
         else {
             return;
         };
-        let path = match self.absolute_path(Path::new(&location.path)) {
-            Ok(path) => path,
-            Err(error) => {
-                self.status = format!("E: {error}");
+        let path = if Path::new(&location.path).is_absolute() {
+            match self
+                .workspace_roots
+                .resolve(Path::new(&location.path), true)
+            {
+                Ok(path) => path,
+                Err(error) => {
+                    self.status = format!("E: {error}");
+                    self.dirty = true;
+                    return;
+                }
+            }
+        } else {
+            let path = match self.absolute_path(Path::new(&location.path)) {
+                Ok(path) => path,
+                Err(error) => {
+                    self.status = format!("E: {error}");
+                    self.dirty = true;
+                    return;
+                }
+            };
+            if !path.starts_with(&self.workspace) {
+                self.status = format!("E: location outside workspace: {}", location.path);
                 self.dirty = true;
                 return;
             }
+            path
         };
-        if !path.starts_with(&self.workspace) {
-            self.status = format!("E: location outside workspace: {}", location.path);
-            self.dirty = true;
-            return;
-        }
         if !path.is_file() {
             self.status = format!("E: location not found: {}", location.path);
             self.dirty = true;
@@ -414,5 +429,25 @@ mod tests {
         model.open_stdin_location();
         assert!(model.path.is_none());
         assert!(model.status.contains("outside workspace"));
+    }
+
+    #[test]
+    fn opens_locations_in_trusted_secondary_root() {
+        use anvil_editor::EditorState;
+
+        let dir = tempfile::tempdir().expect("tempdir");
+        let root = dir.path().join("root");
+        let source = root.join("src/lib.rs");
+        std::fs::create_dir_all(source.parent().expect("parent")).expect("mkdir");
+        std::fs::write(&source, "pub fn lib() {}\n").expect("write");
+        let root = root.canonicalize().expect("canonical");
+        let source = source.canonicalize().expect("canonical");
+        let mut model = Model::new(EditorState::from_text("log"), None);
+        model.workspace_roots.add(&root, true).expect("add root");
+        let location = format!("{}:1:8: needle", source.display());
+        model.set_pipe_locations(&location);
+        model.open_stdin_location();
+        assert_eq!(model.path.as_deref(), Some(source.as_path()));
+        assert!(model.status.starts_with("location"));
     }
 }

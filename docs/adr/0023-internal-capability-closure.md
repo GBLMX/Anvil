@@ -221,8 +221,9 @@ acceptable; an invisible one is not.
 ## Implementation status (2026-11-12)
 
 - Multi-root: trusted-root `FileWorker`s are polled; quick-open enumerates,
-  labels, and previews files from every trusted root. File tree, project
-  search, and mutation fan-out remain primary-root-only.
+  labels, and previews files from every trusted root; project search fans out,
+  merges/deduplicates absolute results, and opens secondary-root locations.
+  File tree and mutation fan-out remain primary-root-only.
 - File lifecycle: auto-save and atomic `:config-reload` are implemented.
   External settings file watching remains explicit; persistent undo is still
   rejected for this phase.

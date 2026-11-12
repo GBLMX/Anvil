@@ -1,7 +1,7 @@
 //! Model-side incremental search and replace transitions.
 
 use super::*;
-use crate::file_worker::FileRequest;
+use crate::file_worker::{FileRequest, MAX_PROJECT_RESULTS};
 use crate::search::{MAX_SEARCH_MATCHES, find_matches_limited};
 
 impl Model {
@@ -250,28 +250,55 @@ impl Model {
             self.dirty = true;
             return;
         }
-        let Some(worker) = self.file_worker.as_ref() else {
+        if self.file_worker.is_none() {
             self.status = "E: file worker unavailable".to_owned();
             self.dirty = true;
             return;
-        };
+        }
         self.project_search_generation = self.project_search_generation.wrapping_add(1);
         let generation = self.project_search_generation;
-        if let Err(error) = worker.request(FileRequest::ProjectSearch {
-            query: query.to_owned(),
-            generation,
-        }) {
-            self.status = format!("E: project search: {error}");
+        let mut expected = 0usize;
+        let mut error = None;
+        if let Some(worker) = self.file_worker.as_ref() {
+            if let Err(request_error) = worker.request(FileRequest::ProjectSearch {
+                query: query.to_owned(),
+                generation,
+            }) {
+                error = Some(request_error);
+            } else {
+                expected += 1;
+            }
+        }
+        for worker in self.root_file_workers.values() {
+            match worker.request(FileRequest::ProjectSearch {
+                query: query.to_owned(),
+                generation,
+            }) {
+                Ok(()) => expected += 1,
+                Err(request_error) => error = error.or(Some(request_error)),
+            }
+        }
+        if expected == 0 {
+            self.status = format!(
+                "E: project search: {}",
+                error.unwrap_or_else(|| "no workers".to_owned())
+            );
             self.dirty = true;
             return;
         }
         self.project_search_pending = Some(generation);
-        self.status = format!("searching project: {query}");
+        self.project_search_expected = expected;
+        self.project_search_received = 0;
+        self.project_search_results.clear();
+        self.project_search_truncated = false;
+        self.project_search_error = error;
+        self.status = format!("searching project: {query} ({expected} roots)");
         self.dirty = true;
     }
 
     pub(crate) fn handle_project_search(
         &mut self,
+        root: Option<PathBuf>,
         query: String,
         generation: u64,
         result: Result<(Vec<crate::pipe_locations::PipeLocation>, bool), String>,
@@ -279,27 +306,78 @@ impl Model {
         if self.project_search_pending != Some(generation) {
             return;
         }
-        self.project_search_pending = None;
+        self.project_search_received = self.project_search_received.saturating_add(1);
         match result {
-            Ok((locations, truncated)) => {
-                let count = locations.len();
-                self.set_project_search_results(&query, locations);
-                let suffix = if truncated { "+" } else { "" };
-                self.status = if count == 0 {
-                    format!("search: no matches for {query}")
-                } else {
-                    format!("search: {count}{suffix} matches for {query}")
-                };
+            Ok((mut locations, truncated)) => {
+                self.project_search_truncated |= truncated;
+                if let Some(root) = root {
+                    for location in &mut locations {
+                        if !Path::new(&location.path).is_absolute() {
+                            location.path =
+                                root.join(&location.path).to_string_lossy().into_owned();
+                        }
+                    }
+                }
+                self.project_search_results.extend(locations);
             }
             Err(error) => {
-                self.status = format!("E: project search: {error}");
+                self.project_search_error.get_or_insert(error);
             }
         }
+        if self.project_search_received < self.project_search_expected {
+            self.status = format!(
+                "searching project: {query} ({}/{})",
+                self.project_search_received, self.project_search_expected
+            );
+            self.dirty = true;
+            return;
+        }
+        self.project_search_pending = None;
+        let mut seen = std::collections::HashSet::new();
+        self.project_search_results.retain(|location| {
+            seen.insert((
+                location.path.clone(),
+                location.line,
+                location.column,
+                location.message.clone(),
+            ))
+        });
+        self.project_search_results.sort_by(|left, right| {
+            (&left.path, left.line, left.column).cmp(&(&right.path, right.line, right.column))
+        });
+        if self.project_search_results.len() > MAX_PROJECT_RESULTS {
+            self.project_search_results.truncate(MAX_PROJECT_RESULTS);
+            self.project_search_truncated = true;
+        }
+        let count = self.project_search_results.len();
+        let mut locations = std::mem::take(&mut self.project_search_results);
+        self.set_project_search_results(&query, std::mem::take(&mut locations));
+        let suffix = if self.project_search_truncated {
+            "+"
+        } else {
+            ""
+        };
+        self.status = match self.project_search_error.take() {
+            Some(error) => {
+                if count == 0 {
+                    format!("E: project search: {error}")
+                } else {
+                    format!("search: {count}{suffix} matches; error: {error}")
+                }
+            }
+            None if count == 0 => format!("search: no matches for {query}"),
+            None => format!("search: {count}{suffix} matches for {query}"),
+        };
         self.dirty = true;
     }
 
     pub(crate) fn cancel_project_search(&mut self) {
         self.project_search_pending = None;
+        self.project_search_expected = 0;
+        self.project_search_received = 0;
+        self.project_search_results.clear();
+        self.project_search_truncated = false;
+        self.project_search_error = None;
         self.stdin_locations.clear();
         self.stdin_location_selected = None;
         self.stdin_location_scroll = 0;
@@ -339,5 +417,116 @@ mod tests {
         model.cancel_project_search();
         assert!(model.stdin_locations.is_empty());
         assert_eq!(model.location_title, "Locations");
+    }
+
+    fn location(path: &str) -> PipeLocation {
+        PipeLocation {
+            path: path.to_owned(),
+            line: 1,
+            column: 1,
+            message: "needle".to_owned(),
+        }
+    }
+
+    #[test]
+    fn project_search_waits_for_all_roots_and_merges_absolute_paths() {
+        let mut model = Model::new(EditorState::from_text("x"), None);
+        let root = PathBuf::from("/tmp/second-root");
+        model.project_search_generation = 7;
+        model.project_search_pending = Some(7);
+        model.project_search_expected = 2;
+        model.project_search_received = 0;
+        model.project_search_results.clear();
+        model.project_search_truncated = false;
+        model.project_search_error = None;
+
+        model.handle_project_search(
+            Some(root.clone()),
+            "needle".to_owned(),
+            7,
+            Ok((vec![location("src/lib.rs")], false)),
+        );
+
+        assert_eq!(model.project_search_pending, Some(7));
+        assert!(model.stdin_locations.is_empty());
+
+        model.handle_project_search(
+            None,
+            "needle".to_owned(),
+            7,
+            Ok((vec![location("src/main.rs")], false)),
+        );
+
+        assert_eq!(model.project_search_pending, None);
+        assert_eq!(model.stdin_locations.len(), 2);
+        assert!(
+            model
+                .stdin_locations
+                .iter()
+                .any(|entry| entry.path == "src/main.rs")
+        );
+        assert!(
+            model
+                .stdin_locations
+                .iter()
+                .any(|entry| { entry.path == root.join("src/lib.rs").to_string_lossy() })
+        );
+        assert!(model.status.contains("2 matches"));
+    }
+
+    #[test]
+    fn stale_project_search_results_are_ignored() {
+        let mut model = Model::new(EditorState::from_text("x"), None);
+        model.project_search_pending = Some(7);
+        model.project_search_expected = 2;
+        model.project_search_received = 0;
+
+        model.handle_project_search(
+            None,
+            "needle".to_owned(),
+            6,
+            Ok((vec![location("src/main.rs")], false)),
+        );
+
+        assert_eq!(model.project_search_received, 0);
+        assert!(model.project_search_results.is_empty());
+        assert_eq!(model.project_search_pending, Some(7));
+    }
+
+    #[test]
+    fn project_search_caps_merged_results_globally() {
+        let mut model = Model::new(EditorState::from_text("x"), None);
+        model.project_search_pending = Some(1);
+        model.project_search_expected = 1;
+        model.project_search_received = 0;
+        let locations = (0..MAX_PROJECT_RESULTS + 1)
+            .map(|index| PipeLocation {
+                path: format!("src/{index}.rs"),
+                line: 1,
+                column: 1,
+                message: "needle".to_owned(),
+            })
+            .collect();
+
+        model.handle_project_search(None, "needle".to_owned(), 1, Ok((locations, false)));
+
+        assert_eq!(model.stdin_locations.len(), MAX_PROJECT_RESULTS);
+        assert!(model.status.contains('+'));
+    }
+
+    #[test]
+    fn project_search_cancel_clears_pending_root_state() {
+        let mut model = Model::new(EditorState::from_text("x"), None);
+        model.project_search_pending = Some(7);
+        model.project_search_expected = 2;
+        model.project_search_received = 1;
+        model.project_search_results.push(location("src/main.rs"));
+
+        model.cancel_project_search();
+
+        assert_eq!(model.project_search_pending, None);
+        assert_eq!(model.project_search_expected, 0);
+        assert_eq!(model.project_search_received, 0);
+        assert!(model.project_search_results.is_empty());
     }
 }
