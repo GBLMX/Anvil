@@ -18,7 +18,7 @@ pub(crate) enum FoldAction {
 impl Model {
     pub(crate) fn request_folding_ranges(&mut self, action: Option<FoldAction>) {
         self.language
-            .lsp
+            .lsp_requests
             .pending
             .retain(|_, kind| *kind != LspRequestKind::FoldingRange);
         self.prune_edit_requests();
@@ -43,7 +43,7 @@ impl Model {
 
     pub(crate) fn clear_folds(&mut self) {
         self.language
-            .lsp
+            .lsp_requests
             .pending
             .retain(|_, kind| *kind != LspRequestKind::FoldingRange);
         self.overlays.lsp_results.folds.clear();

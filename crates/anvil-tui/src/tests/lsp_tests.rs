@@ -261,7 +261,7 @@ fn call_hierarchy_round_trip_through_gateway() {
                 Instant::now() < deadline,
                 "no {direction:?} call to {expected}; status={}; pending={:?}; notifications={:?}",
                 model.status,
-                model.language.lsp.pending,
+                model.language.lsp_requests.pending,
                 model.ui.notifications
             );
             std::thread::sleep(Duration::from_millis(50));
@@ -473,21 +473,21 @@ fn cancelling_completion_drops_pending_response() {
     });
     model
         .language
-        .lsp
+        .lsp_requests
         .pending
         .insert(9, LspRequestKind::Completion);
     model.cancel_completion();
     assert!(model.overlays.lsp_results.completion.is_none());
-    assert!(!model.language.lsp.pending.contains_key(&9));
+    assert!(!model.language.lsp_requests.pending.contains_key(&9));
     model.handle_lsp_response(9, serde_json::json!({"items": []}), None);
     assert!(model.overlays.lsp_results.completion.is_none());
     model
         .language
-        .lsp
+        .lsp_requests
         .pending
         .insert(10, LspRequestKind::Completion);
     model.cancel_completion();
-    assert!(!model.language.lsp.pending.contains_key(&10));
+    assert!(!model.language.lsp_requests.pending.contains_key(&10));
     model.handle_lsp_response(10, serde_json::json!({"items": []}), None);
     assert!(model.overlays.lsp_results.completion.is_none());
 }
@@ -516,7 +516,7 @@ fn completion_resolve_updates_selected_item() {
     });
     model
         .language
-        .lsp
+        .lsp_requests
         .pending
         .insert(7, LspRequestKind::CompletionResolve);
     model.overlays.lsp_results.completion_resolve = Some((7, 0));
@@ -663,7 +663,11 @@ fn rename_response_applies_workspace_edit() {
     fs::write(&file, "foo").expect("file");
     let mut model = Model::open(&file).expect("open");
     let uri = lsp_worker::file_uri(&file);
-    model.language.lsp.pending.insert(7, LspRequestKind::Rename);
+    model
+        .language
+        .lsp_requests
+        .pending
+        .insert(7, LspRequestKind::Rename);
     model.handle_lsp_response(
         7,
         serde_json::json!({
@@ -689,7 +693,7 @@ fn code_action_response_applies_workspace_edit() {
     let uri = lsp_worker::file_uri(&file);
     model
         .language
-        .lsp
+        .lsp_requests
         .pending
         .insert(8, LspRequestKind::CodeAction);
     model.handle_lsp_response(
@@ -718,11 +722,11 @@ fn cancelling_code_action_drops_pending_response() {
     let mut model = Model::new(EditorState::from_text("text"), Some(PathBuf::from("a.rs")));
     model
         .language
-        .lsp
+        .lsp_requests
         .pending
         .insert(10, LspRequestKind::CodeAction);
     model.cancel_code_actions();
-    assert!(!model.language.lsp.pending.contains_key(&10));
+    assert!(!model.language.lsp_requests.pending.contains_key(&10));
     model.handle_lsp_response(10, serde_json::json!([{"title": "late"}]), None);
     assert!(model.overlays.lsp_results.code_actions.is_none());
 }
@@ -736,7 +740,7 @@ fn gopls_code_action_response_applies_organize_imports() {
     let uri = lsp_worker::file_uri(&file);
     model
         .language
-        .lsp
+        .lsp_requests
         .pending
         .insert(9, LspRequestKind::CodeAction);
     model.handle_lsp_response(
@@ -791,7 +795,7 @@ fn document_symbols_populate_and_jump_to_selection() {
     );
     model
         .language
-        .lsp
+        .lsp_requests
         .pending
         .insert(11, LspRequestKind::DocumentSymbol);
     model.handle_lsp_response(
@@ -877,7 +881,7 @@ fn document_symbol_depth_is_bounded() {
     );
     model
         .language
-        .lsp
+        .lsp_requests
         .pending
         .insert(14, LspRequestKind::DocumentSymbol);
     model.handle_lsp_response(14, serde_json::json!([value]), None);
@@ -898,7 +902,7 @@ fn formatting_response_applies_edits_without_writing() {
     let mut model = Model::open(&file).expect("open");
     model
         .language
-        .lsp
+        .lsp_requests
         .pending
         .insert(12, LspRequestKind::Formatting);
     model.handle_lsp_response(
@@ -926,10 +930,14 @@ fn formatting_response_for_inactive_path_is_ignored() {
     fs::write(&first, "fn first(){}").expect("first");
     let mut model = Model::open(&first).expect("open");
     let first_path = model.path.clone().expect("first path");
-    model.language.lsp.pending_edit_path.insert(13, first_path);
     model
         .language
-        .lsp
+        .lsp_requests
+        .pending_edit_path
+        .insert(13, first_path);
+    model
+        .language
+        .lsp_requests
         .pending
         .insert(13, LspRequestKind::Formatting);
     model
@@ -960,7 +968,7 @@ fn workspace_symbols_response_filters_and_jumps() {
     let uri = lsp_worker::file_uri(&file);
     model
         .language
-        .lsp
+        .lsp_requests
         .pending
         .insert(18, LspRequestKind::WorkspaceSymbol);
     model.handle_lsp_response(
@@ -1023,7 +1031,7 @@ fn signature_help_response_populates_active_signature() {
     );
     model
         .language
-        .lsp
+        .lsp_requests
         .pending
         .insert(17, LspRequestKind::SignatureHelp);
     model.handle_lsp_response(
@@ -1056,12 +1064,12 @@ fn stale_formatting_response_is_ignored() {
     let mut model = Model::open(&file).expect("open");
     model
         .language
-        .lsp
+        .lsp_requests
         .pending
         .insert(15, LspRequestKind::Formatting);
     model
         .language
-        .lsp
+        .lsp_requests
         .pending_edit_revision
         .insert(15, model.editor.revision());
     model.editor.insert(0, "x");
@@ -1089,15 +1097,19 @@ fn rename_response_for_inactive_path_is_ignored() {
     let mut model = Model::open(&first).expect("open");
     let first_path = model.path.clone().expect("first path");
     let uri = lsp_worker::file_uri(&first_path);
-    model.language.lsp.pending_edit_path.insert(16, first_path);
     model
         .language
-        .lsp
+        .lsp_requests
+        .pending_edit_path
+        .insert(16, first_path);
+    model
+        .language
+        .lsp_requests
         .pending_edit_revision
         .insert(16, model.editor.revision());
     model
         .language
-        .lsp
+        .lsp_requests
         .pending
         .insert(16, LspRequestKind::Rename);
     assert!(model.save_as(second.to_str().expect("second path")));
@@ -1401,10 +1413,14 @@ fn rename_response_rejects_a_stale_inactive_buffer_snapshot() {
         .expect("second buffer");
     base.insert(second_path.clone(), second_buffer.editor.revision());
     second_buffer.editor.insert(0, "stale");
-    model.language.lsp.pending_edit_snapshot.insert(17, base);
     model
         .language
-        .lsp
+        .lsp_requests
+        .pending_edit_snapshot
+        .insert(17, base);
+    model
+        .language
+        .lsp_requests
         .pending
         .insert(17, LspRequestKind::Rename);
     let first_uri = lsp_worker::file_uri(&first);
@@ -1434,10 +1450,10 @@ fn rename_response_rejects_a_stale_document_version() {
     fs::write(&file, "abc").expect("file");
     let mut model = Model::open(&file).expect("open");
     let path = model.path.clone().expect("path");
-    model.language.lsp.versions.insert(path.clone(), 3);
+    model.language.lsp_requests.versions.insert(path.clone(), 3);
     model
         .language
-        .lsp
+        .lsp_requests
         .pending
         .insert(18, LspRequestKind::Rename);
     model.handle_lsp_response(
@@ -1465,7 +1481,7 @@ fn completion_uses_sort_text_preselect_and_filter_text() {
     let mut model = Model::new(EditorState::from_text("x"), None);
     model
         .language
-        .lsp
+        .lsp_requests
         .pending
         .insert(21, LspRequestKind::Completion);
     model.handle_lsp_response(

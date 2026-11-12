@@ -263,9 +263,10 @@ Phase 1 started on 2026-11-12:
   limits, and refresh generations.
 - `Model.recent` owns recent workspaces/files, quick-open frecency, and the
   persistence switch.
-- `Model.language` owns `DapState`, `DiagnosticsState`, and `LspState`;
-  `LspState` keeps transport, worker, request-id, cancellation, and
-  format-on-save bookkeeping.
+- `Model.language` owns `DapState`, `DiagnosticsState`, `LspTransportState`,
+  and `LspRequestsState`. Transport keeps clients, workers, config, retries,
+  and retry deadlines; requests keep pending maps, document versions, request
+  ids, and format-on-save coordination.
 - Existing behavior is unchanged; tests access the composed state explicitly.
 - `Model` now has 99 top-level fields. Remaining buffers, UI, workspace, and
   session page state moves in later behavior-preserving slices.

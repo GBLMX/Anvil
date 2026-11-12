@@ -107,21 +107,21 @@ impl Model {
 
     fn clear_format_on_save(&mut self, kind: LspRequestKind) {
         if kind == LspRequestKind::Formatting {
-            self.language.lsp.format_on_save_pending = false;
+            self.language.lsp_requests.format_on_save_pending = false;
         }
     }
 
     fn finish_format_on_save(&mut self) {
-        if !self.language.lsp.format_on_save_pending {
+        if !self.language.lsp_requests.format_on_save_pending {
             return;
         }
-        self.language.lsp.format_on_save_pending = false;
+        self.language.lsp_requests.format_on_save_pending = false;
         if !self.modified {
             return;
         }
-        self.language.lsp.suppress_format_on_save = true;
+        self.language.lsp_requests.suppress_format_on_save = true;
         let saved = self.save();
-        self.language.lsp.suppress_format_on_save = false;
+        self.language.lsp_requests.suppress_format_on_save = false;
         if saved {
             self.status = "formatted and saved".to_owned();
             self.dirty = true;
@@ -134,12 +134,12 @@ impl Model {
         result: serde_json::Value,
         error: Option<String>,
     ) {
-        let Some(kind) = self.language.lsp.pending.remove(&id) else {
+        let Some(kind) = self.language.lsp_requests.pending.remove(&id) else {
             return;
         };
-        let edit_revision = self.language.lsp.pending_edit_revision.remove(&id);
-        let edit_path = self.language.lsp.pending_edit_path.remove(&id);
-        let edit_snapshot = self.language.lsp.pending_edit_snapshot.remove(&id);
+        let edit_revision = self.language.lsp_requests.pending_edit_revision.remove(&id);
+        let edit_path = self.language.lsp_requests.pending_edit_path.remove(&id);
+        let edit_snapshot = self.language.lsp_requests.pending_edit_snapshot.remove(&id);
         if let Some(error) = error {
             if kind == LspRequestKind::CodeLens {
                 self.overlays.lsp_results.code_lens = None;

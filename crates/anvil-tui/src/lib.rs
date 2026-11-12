@@ -337,12 +337,16 @@ struct DiagnosticsState {
 }
 
 #[derive(Default)]
-struct LspState {
+struct LspTransportState {
     client: Option<GatewayClient>,
     workers: HashMap<(String, String), LspWorker>,
     config: Option<(String, String)>,
     retries: HashMap<(String, String), u8>,
     retry: Option<((String, String), Instant)>,
+}
+
+#[derive(Default)]
+struct LspRequestsState {
     pending: HashMap<u64, LspRequestKind>,
     pending_edit_revision: HashMap<u64, u64>,
     pending_edit_path: HashMap<u64, PathBuf>,
@@ -474,7 +478,8 @@ struct GitState {
 struct LanguageState {
     dap: DapState,
     diagnostics: DiagnosticsState,
-    lsp: LspState,
+    lsp: LspTransportState,
+    lsp_requests: LspRequestsState,
 }
 
 #[derive(Default)]
@@ -1380,7 +1385,7 @@ impl Model {
             Ok(worker) => {
                 self.language.lsp.config = Some(desired.clone());
                 self.language.lsp.workers.insert(desired.clone(), worker);
-                self.language.lsp.versions.insert(path.clone(), 1);
+                self.language.lsp_requests.versions.insert(path.clone(), 1);
                 self.language.lsp.retries.entry(desired).or_insert(0);
                 self.clear_lsp_ui();
                 self.status = if settings.label == "jdtls" {

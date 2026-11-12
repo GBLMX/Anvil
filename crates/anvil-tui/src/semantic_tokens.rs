@@ -9,7 +9,7 @@ impl Model {
             return;
         }
         self.language
-            .lsp
+            .lsp_requests
             .pending
             .retain(|_, kind| *kind != LspRequestKind::SemanticTokens);
         self.prune_edit_requests();
@@ -90,7 +90,7 @@ impl Model {
 
     pub(crate) fn clear_semantic_tokens(&mut self) {
         self.language
-            .lsp
+            .lsp_requests
             .pending
             .retain(|_, kind| *kind != LspRequestKind::SemanticTokens);
         self.overlays.lsp_results.semantic_tokens.clear();

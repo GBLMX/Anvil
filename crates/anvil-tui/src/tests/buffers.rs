@@ -1380,7 +1380,7 @@ fn format_on_save_without_lsp_still_saves() {
     model.insert_text("x");
     assert!(model.save());
     assert_eq!(fs::read_to_string(&path).expect("content"), "xa");
-    assert!(!model.language.lsp.format_on_save_pending);
+    assert!(!model.language.lsp_requests.format_on_save_pending);
 }
 
 #[test]
