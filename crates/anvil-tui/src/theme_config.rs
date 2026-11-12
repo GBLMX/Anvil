@@ -72,22 +72,46 @@ pub(crate) fn save() -> Result<PathBuf, String> {
 }
 
 pub(crate) fn save_to_path(path: &Path, choice: Choice) -> Result<(), String> {
+    let mut document = if path.exists() {
+        let text = fs::read_to_string(path)
+            .map_err(|error| format!("cannot read {}: {error}", path.display()))?;
+        let _ = parse(&text)?;
+        text.parse::<toml_edit::DocumentMut>()
+            .map_err(|error| format!("invalid settings TOML: {error}"))?
+    } else {
+        toml_edit::DocumentMut::new()
+    };
+    let theme = if document.contains_key("theme") {
+        document["theme"]
+            .as_table_mut()
+            .ok_or_else(|| "[theme] must be a table".to_owned())?
+    } else {
+        document.insert("theme", toml_edit::Item::Table(toml_edit::Table::new()));
+        document["theme"]
+            .as_table_mut()
+            .expect("inserted theme table")
+    };
+    theme.remove("mode");
+    theme.remove("name");
+    theme.remove("dark");
+    theme.remove("light");
+    match choice {
+        Choice::Fixed(name) => {
+            theme["mode"] = toml_edit::value("fixed");
+            theme["name"] = toml_edit::value(name);
+        }
+        Choice::Auto { dark, light } => {
+            theme["mode"] = toml_edit::value("auto");
+            theme["dark"] = toml_edit::value(dark);
+            theme["light"] = toml_edit::value(light);
+        }
+    }
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)
             .map_err(|error| format!("cannot create {}: {error}", parent.display()))?;
     }
-    let text = match choice {
-        Choice::Fixed(name) => {
-            format!("[theme]\nmode = \"fixed\"\nname = \"{}\"\n", escape(name))
-        }
-        Choice::Auto { dark, light } => format!(
-            "[theme]\nmode = \"auto\"\ndark = \"{}\"\nlight = \"{}\"\n",
-            escape(dark),
-            escape(light)
-        ),
-    };
     let temporary = path.with_extension(format!("toml.tmp-{}", std::process::id()));
-    fs::write(&temporary, text)
+    fs::write(&temporary, document.to_string())
         .map_err(|error| format!("cannot write {}: {error}", temporary.display()))?;
     if let Err(error) = fs::rename(&temporary, path) {
         let _ = fs::remove_file(&temporary);
@@ -122,10 +146,6 @@ fn parse(text: &str) -> Result<Choice, String> {
             "unknown theme mode {mode:?}; expected fixed or auto"
         )),
     }
-}
-
-fn escape(value: &str) -> String {
-    value.replace('\\', "\\\\").replace('"', "\\\"")
 }
 
 impl Model {
@@ -194,6 +214,26 @@ mod tests {
         .expect("save auto");
         let text = fs::read_to_string(&path).expect("read");
         assert!(text.contains("mode = \"auto\""));
+        fs::remove_dir_all(directory).expect("cleanup");
+    }
+
+    #[test]
+    fn preserves_other_settings_sections() {
+        let directory =
+            std::env::temp_dir().join(format!("anvil-theme-preserve-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&directory);
+        let path = directory.join("settings.toml");
+        fs::create_dir_all(&directory).expect("mkdir");
+        fs::write(
+            &path,
+            "[editor]\nscroll_margin = 3\n\n[ui]\nreduced_motion = true\n",
+        )
+        .expect("write");
+        save_to_path(&path, Choice::Fixed("nord")).expect("save");
+        let text = fs::read_to_string(&path).expect("read");
+        assert!(text.contains("scroll_margin = 3"), "{text}");
+        assert!(text.contains("reduced_motion = true"), "{text}");
+        assert!(text.contains("name = \"nord\""), "{text}");
         fs::remove_dir_all(directory).expect("cleanup");
     }
 
