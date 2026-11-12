@@ -616,6 +616,7 @@ fn commit_states(model: &mut Model, prepared: HashMap<PathBuf, EditorState>) {
             );
         }
     }
+    model.sync_watch_paths();
     model.file.dirty = true;
 }
 
@@ -635,6 +636,11 @@ fn path_is_open(model: &Model, path: &Path) -> bool {
             .buffers
             .entries
             .iter()
+            .any(|buffer| buffer.path.as_deref() == Some(path))
+        || model
+            .buffers
+            .background
+            .values()
             .any(|buffer| buffer.path.as_deref() == Some(path))
         || model
             .buffers
@@ -736,6 +742,9 @@ impl Model {
             };
             self.close_buffer(index, true);
         }
+        self.buffers
+            .background
+            .retain(|path, _| !affected(Some(path)));
         self.tree.stale = true;
         self.sync_watch_paths();
         self.file.dirty = true;
@@ -874,6 +883,81 @@ mod tests {
         assert!(model.buffers.background.is_empty());
         assert_eq!(model.session.editor.text().slice(0..4), "two!");
         assert_eq!(model.buffers.entries.len(), 2);
+    }
+
+    #[test]
+    fn external_change_reloads_clean_background_buffer() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let first = dir.path().join("first.rs");
+        let second = dir.path().join("second.rs");
+        fs::write(&first, "first\n").expect("first");
+        fs::write(&second, "two\n").expect("second");
+        let mut model = Model::open(&first).expect("open");
+        let workspace_edit = WorkspaceEdit::from_lsp(&serde_json::json!({
+            "changes": {
+                uri(&second): [{
+                    "range": {"start": {"line": 0, "character": 3}, "end": {"line": 0, "character": 3}},
+                    "newText": "!"
+                }]
+            }
+        }))
+        .expect("parse");
+        workspace_edit.apply(&mut model).expect("apply");
+        let path = second.canonicalize().expect("canonical");
+        assert!(model.save_all());
+        fs::write(&second, "disk\n").expect("write disk");
+
+        model.handle_external_change(path.clone());
+        let buffer = model.buffers.background.get(&path).expect("background");
+        assert_eq!(buffer.editor.text().slice(0..5), "disk\n");
+        assert!(!buffer.modified);
+
+        fs::remove_file(&second).expect("remove");
+        model.handle_external_change(path.clone());
+        assert!(
+            model
+                .buffers
+                .background
+                .get(&path)
+                .expect("background")
+                .missing
+        );
+    }
+
+    #[test]
+    fn external_change_prompts_for_modified_background_buffer() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let first = dir.path().join("first.rs");
+        let second = dir.path().join("second.rs");
+        fs::write(&first, "first\n").expect("first");
+        fs::write(&second, "two\n").expect("second");
+        let mut model = Model::open(&first).expect("open");
+        let workspace_edit = WorkspaceEdit::from_lsp(&serde_json::json!({
+            "changes": {
+                uri(&second): [{
+                    "range": {"start": {"line": 0, "character": 3}, "end": {"line": 0, "character": 3}},
+                    "newText": "!"
+                }]
+            }
+        }))
+        .expect("parse");
+        workspace_edit.apply(&mut model).expect("apply");
+        let path = second.canonicalize().expect("canonical");
+        fs::write(&second, "disk\n").expect("write disk");
+
+        model.handle_external_change(path.clone());
+        assert!(matches!(
+            &model.ui.input_mode,
+            InputMode::ConfirmReload { path: pending } if pending == &path
+        ));
+        let buffer = model.buffers.background.get(&path).expect("background");
+        assert_eq!(buffer.editor.text().slice(0..4), "two!");
+        assert!(buffer.modified);
+
+        model.reload_external(&path).expect("reload");
+        let buffer = model.buffers.background.get(&path).expect("background");
+        assert_eq!(buffer.editor.text().slice(0..5), "disk\n");
+        assert!(!buffer.modified);
     }
 
     #[test]

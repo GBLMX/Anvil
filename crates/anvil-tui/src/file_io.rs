@@ -318,6 +318,11 @@ impl Model {
                 paths.push(path.clone());
             }
         }
+        for buffer in self.buffers.background.values() {
+            if let Some(path) = &buffer.path {
+                paths.push(path.clone());
+            }
+        }
         if let Some(pane) = &self.buffers.split
             && let Some(path) = &pane.buffer.path
         {
@@ -333,11 +338,17 @@ impl Model {
     pub(crate) fn handle_external_change(&mut self, path: PathBuf) {
         let modified = if self.session.path.as_ref() == Some(&path) {
             self.file.modified
+        } else if let Some(buffer) = self
+            .buffers
+            .entries
+            .iter()
+            .find(|buffer| buffer.path.as_ref() == Some(&path))
+        {
+            buffer.modified
         } else {
             self.buffers
-                .entries
-                .iter()
-                .find(|buffer| buffer.path.as_ref() == Some(&path))
+                .background
+                .get(&path)
                 .is_some_and(|buffer| buffer.modified)
         };
         if modified {
@@ -361,6 +372,11 @@ impl Model {
             self.file.missing = true;
         }
         for buffer in &mut self.buffers.entries {
+            if buffer.path.as_deref().is_some_and(affected) {
+                buffer.missing = true;
+            }
+        }
+        for buffer in self.buffers.background.values_mut() {
             if buffer.path.as_deref().is_some_and(affected) {
                 buffer.missing = true;
             }
@@ -396,6 +412,12 @@ impl Model {
             .iter_mut()
             .find(|buffer| buffer.path.as_deref() == Some(path))
         {
+            buffer.editor = EditorState::from_text(&text).into();
+            buffer.cursor = cursor.min(buffer.editor.text().len_bytes());
+            buffer.modified = false;
+            buffer.missing = false;
+        }
+        if let Some(buffer) = self.buffers.background.get_mut(path) {
             buffer.editor = EditorState::from_text(&text).into();
             buffer.cursor = cursor.min(buffer.editor.text().len_bytes());
             buffer.modified = false;
