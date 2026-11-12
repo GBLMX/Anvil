@@ -998,7 +998,7 @@ impl Model {
         self.dirty = true;
     }
 
-    pub(crate) fn request_formatting(&mut self) {
+    pub(crate) fn request_formatting(&mut self) -> bool {
         self.cancel_completion();
         self.cancel_code_actions();
         self.cancel_document_symbols();
@@ -1008,21 +1008,36 @@ impl Model {
         self.hover = None;
         self.ui.diagnostic_peek = None;
         let Some(path) = self.path.clone() else {
-            return;
+            return false;
         };
         let uri = lsp_worker::file_uri(&path);
         let params = serde_json::json!({
             "textDocument": {"uri": uri},
             "options": {"tabSize": 4, "insertSpaces": true}
         });
-        if self.send_lsp_request(
+        let sent = self.send_lsp_request(
             LspRequestKind::Formatting,
             "textDocument/formatting",
             params,
-        ) {
+        );
+        if sent {
             self.status = "formatting".to_owned();
         }
         self.dirty = true;
+        sent
+    }
+
+    pub(crate) fn request_format_after_save(&mut self) {
+        if !self.settings.editor.format_on_save
+            || self.suppress_format_on_save
+            || self.format_on_save_pending
+            || self.active_lsp_worker().is_none()
+        {
+            return;
+        }
+        if self.request_formatting() {
+            self.format_on_save_pending = true;
+        }
     }
 
     pub(crate) fn move_code_action(&mut self, delta: isize) {

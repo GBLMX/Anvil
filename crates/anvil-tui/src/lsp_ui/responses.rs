@@ -93,6 +93,29 @@ impl Model {
         }
     }
 
+    fn clear_format_on_save(&mut self, kind: LspRequestKind) {
+        if kind == LspRequestKind::Formatting {
+            self.format_on_save_pending = false;
+        }
+    }
+
+    fn finish_format_on_save(&mut self) {
+        if !self.format_on_save_pending {
+            return;
+        }
+        self.format_on_save_pending = false;
+        if !self.modified {
+            return;
+        }
+        self.suppress_format_on_save = true;
+        let saved = self.save();
+        self.suppress_format_on_save = false;
+        if saved {
+            self.status = "formatted and saved".to_owned();
+            self.dirty = true;
+        }
+    }
+
     pub(crate) fn handle_lsp_response(
         &mut self,
         id: u64,
@@ -114,6 +137,7 @@ impl Model {
             if kind == LspRequestKind::CompletionResolve {
                 self.completion_resolve = None;
             }
+            self.clear_format_on_save(kind);
             self.status = format!("E: lsp {kind:?}: {error}");
             self.dirty = true;
             return;
@@ -132,6 +156,7 @@ impl Model {
                 | LspRequestKind::SemanticTokens
         ) && edit_revision.is_some_and(|revision| revision != self.editor.revision())
         {
+            self.clear_format_on_save(kind);
             self.status = "lsp: stale edit response ignored".to_owned();
             self.dirty = true;
             return;
@@ -153,6 +178,7 @@ impl Model {
             .as_ref()
             .is_some_and(|path| self.path.as_ref() != Some(path))
         {
+            self.clear_format_on_save(kind);
             self.status = "lsp: edit response for inactive buffer".to_owned();
             self.dirty = true;
             return;
@@ -207,6 +233,7 @@ impl Model {
                     return;
                 };
                 self.apply_formatting_response(&result, &path, edit_snapshot);
+                self.finish_format_on_save();
             }
             LspRequestKind::DocumentSymbol => self.apply_document_symbols_response(&result),
         }

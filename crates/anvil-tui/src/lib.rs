@@ -620,6 +620,10 @@ pub struct Model {
     pending_fold_action: Option<FoldAction>,
     /// LSP requests waiting for responses.
     pending_lsp: HashMap<u64, LspRequestKind>,
+    /// Whether a format-on-save request is in flight.
+    format_on_save_pending: bool,
+    /// Suppress a second format request while saving formatted text.
+    suppress_format_on_save: bool,
     pending_edit_revision: HashMap<u64, u64>,
     pending_edit_path: HashMap<u64, PathBuf>,
     pending_edit_snapshot: HashMap<u64, HashMap<PathBuf, u64>>,
@@ -854,6 +858,8 @@ impl Model {
             fold_revision: None,
             pending_fold_action: None,
             pending_lsp: HashMap::new(),
+            format_on_save_pending: false,
+            suppress_format_on_save: false,
             pending_edit_revision: HashMap::new(),
             pending_edit_path: HashMap::new(),
             pending_edit_snapshot: HashMap::new(),

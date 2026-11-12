@@ -8,6 +8,10 @@ post-`0.5.0` feature line.
 
 ## [Unreleased]
 ### Added
+- `editor.format_on_save` (`ANVIL_EDITOR_FORMAT_ON_SAVE`) saves normally, then
+  requests LSP formatting and writes the formatted result if edits arrive.
+  Missing LSPs or formatting errors keep the saved buffer and report a status
+  warning; formatting never blocks the initial save.
 - Auto-pairs for `()`, `[]`, `{}`, quotes, and backticks in Insert mode.
   Typing an existing closer skips it, Backspace removes an empty pair, and
   typing an opener over a selection wraps the selection.

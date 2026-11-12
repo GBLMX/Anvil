@@ -318,7 +318,9 @@ impl Model {
                 Effect::LspDocumentSymbols => self.request_document_symbols(),
                 Effect::LspWorkspaceSymbols => self.request_workspace_symbols(),
                 Effect::LspRename(name) => self.request_rename(&name),
-                Effect::LspFormat => self.request_formatting(),
+                Effect::LspFormat => {
+                    let _ = self.request_formatting();
+                }
                 Effect::TreeCreate {
                     directory,
                     name,

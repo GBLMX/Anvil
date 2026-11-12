@@ -3,7 +3,7 @@
 use super::*;
 use crate::settings::{self, Settings};
 
-pub(crate) const SETTINGS_ROWS: usize = 5;
+pub(crate) const SETTINGS_ROWS: usize = 6;
 
 #[derive(Debug, Clone)]
 pub(crate) struct SettingsOverlayState {
@@ -19,7 +19,8 @@ impl SettingsOverlayState {
             1 => "search.case_sensitive",
             2 => "lsp.inlay_hints",
             3 => "editor.auto_save",
-            _ => "editor.soft_wrap",
+            4 => "editor.soft_wrap",
+            _ => "editor.format_on_save",
         }
     }
 
@@ -29,7 +30,8 @@ impl SettingsOverlayState {
             1 => settings.search.case_sensitive.to_string(),
             2 => settings.lsp.inlay_hints.to_string(),
             3 => settings.editor.auto_save.to_string(),
-            _ => settings.editor.soft_wrap.to_string(),
+            4 => settings.editor.soft_wrap.to_string(),
+            _ => settings.editor.format_on_save.to_string(),
         }
     }
 
@@ -86,7 +88,8 @@ impl Model {
             1 => draft.search.case_sensitive = !draft.search.case_sensitive,
             2 => draft.lsp.inlay_hints = !draft.lsp.inlay_hints,
             3 => draft.editor.auto_save = !draft.editor.auto_save,
-            _ => draft.editor.soft_wrap = !draft.editor.soft_wrap,
+            4 => draft.editor.soft_wrap = !draft.editor.soft_wrap,
+            _ => draft.editor.format_on_save = !draft.editor.format_on_save,
         }
         overlay.draft = draft;
         self.apply_settings(draft);
@@ -103,7 +106,8 @@ impl Model {
             1 => overlay.draft.search.case_sensitive = defaults.search.case_sensitive,
             2 => overlay.draft.lsp.inlay_hints = defaults.lsp.inlay_hints,
             3 => overlay.draft.editor.auto_save = defaults.editor.auto_save,
-            _ => overlay.draft.editor.soft_wrap = defaults.editor.soft_wrap,
+            4 => overlay.draft.editor.soft_wrap = defaults.editor.soft_wrap,
+            _ => overlay.draft.editor.format_on_save = defaults.editor.format_on_save,
         }
         self.apply_settings(overlay.draft);
         self.settings_overlay = Some(overlay);
@@ -156,6 +160,11 @@ mod tests {
         assert!(model.settings.editor.soft_wrap);
         model.reset_settings_row();
         assert!(!model.settings.editor.soft_wrap);
+        model.move_settings(1);
+        model.adjust_settings(1);
+        assert!(model.settings.editor.format_on_save);
+        model.reset_settings_row();
+        assert!(!model.settings.editor.format_on_save);
         model.cancel_settings();
         assert!(model.settings_overlay.is_none());
         assert_eq!(model.settings, Settings::default());

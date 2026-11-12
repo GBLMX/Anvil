@@ -1369,3 +1369,16 @@ fn ex_opening_the_current_file_does_not_auto_save() {
     assert!(model.modified);
     assert!(model.status.contains("Already editing"));
 }
+
+#[test]
+fn format_on_save_without_lsp_still_saves() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("main.rs");
+    fs::write(&path, "a").expect("write");
+    let mut model = Model::open(&path).expect("open");
+    model.settings.editor.format_on_save = true;
+    model.insert_text("x");
+    assert!(model.save());
+    assert_eq!(fs::read_to_string(&path).expect("content"), "xa");
+    assert!(!model.format_on_save_pending);
+}

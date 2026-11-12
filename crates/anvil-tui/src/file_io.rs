@@ -455,6 +455,7 @@ impl Model {
                 self.notify_lsp_save(&path, &text);
                 self.sync_watch_paths();
                 self.status = format!("\"{display}\" written");
+                self.request_format_after_save();
                 self.dirty = true;
                 true
             }
