@@ -54,8 +54,8 @@ pub(crate) fn restore(model: &mut Model, workspace: &Path) -> Result<bool, Strin
     if state.version != SESSION_VERSION || state.workspace != workspace {
         return Ok(false);
     }
-    model.conflict_swaps.clear();
-    model.stale_paths.clear();
+    model.workspace.conflict_swaps.clear();
+    model.workspace.stale_paths.clear();
     let mut buffers = Vec::new();
     let mut conflicts = 0;
     for saved in state.buffers {
@@ -67,7 +67,7 @@ pub(crate) fn restore(model: &mut Model, workspace: &Path) -> Result<bool, Strin
             conflicts += 1;
         }
         if let (Some(path), Some(swap)) = (buffer.path.as_ref(), conflict) {
-            model.conflict_swaps.insert(path.clone(), swap);
+            model.workspace.conflict_swaps.insert(path.clone(), swap);
         }
         buffers.push(buffer);
     }
@@ -90,7 +90,7 @@ pub(crate) fn restore(model: &mut Model, workspace: &Path) -> Result<bool, Strin
             conflicts += 1;
         }
         if let (Some(path), Some(swap)) = (buffer.path.as_ref(), conflict) {
-            model.conflict_swaps.insert(path.clone(), swap);
+            model.workspace.conflict_swaps.insert(path.clone(), swap);
         }
         model.buffers.split = Some(Pane { buffer });
         model.ui.focus.split = state.split_focus;
@@ -158,7 +158,7 @@ fn restore_buffer(model: &mut Model, saved: SessionBuffer) -> (Buffer, Option<Pa
 
 impl Model {
     pub(crate) fn clear_conflict(&mut self, path: &Path) {
-        if let Some(swap) = self.conflict_swaps.remove(path) {
+        if let Some(swap) = self.workspace.conflict_swaps.remove(path) {
             let _ = fs::remove_file(swap);
         }
     }
@@ -172,7 +172,7 @@ impl Model {
             self.dirty = true;
             return;
         };
-        let Some(swap) = self.conflict_swaps.get(&path).cloned() else {
+        let Some(swap) = self.workspace.conflict_swaps.get(&path).cloned() else {
             self.status.text = "no swap conflict for this buffer".to_owned();
             self.dirty = true;
             return;
@@ -192,7 +192,7 @@ impl Model {
         self.session.editor.set_selection_bytes(0, 0);
         self.modified = true;
         self.missing = false;
-        self.conflict_swaps.remove(&path);
+        self.workspace.conflict_swaps.remove(&path);
         self.syntax
             .borrow_mut()
             .switch_path(self.session.path.as_deref(), false);
@@ -208,7 +208,7 @@ impl Model {
             self.dirty = true;
             return;
         };
-        if !self.conflict_swaps.contains_key(&path) {
+        if !self.workspace.conflict_swaps.contains_key(&path) {
             self.status.text = "no swap conflict for this buffer".to_owned();
             self.dirty = true;
             return;
@@ -239,7 +239,7 @@ pub(crate) fn save(model: &mut Model, workspace: &Path) -> Result<(), String> {
         let conflict_swap = buffer
             .path
             .as_ref()
-            .and_then(|path| model.conflict_swaps.get(path))
+            .and_then(|path| model.workspace.conflict_swaps.get(path))
             .cloned();
         let swap = if buffer.modified {
             let path = swap_dir.join(format!("{index}.swap"));
@@ -272,7 +272,7 @@ pub(crate) fn save(model: &mut Model, workspace: &Path) -> Result<(), String> {
         let conflict_swap = buffer
             .path
             .as_ref()
-            .and_then(|path| model.conflict_swaps.get(path))
+            .and_then(|path| model.workspace.conflict_swaps.get(path))
             .cloned();
         let swap = if buffer.modified {
             let path = swap_dir.join("split.swap");
@@ -453,6 +453,7 @@ mod tests {
         assert!(!conflicted.modified);
         assert!(conflicted.status.text.contains("conflict"));
         let swap = conflicted
+            .workspace
             .conflict_swaps
             .values()
             .next()
@@ -516,6 +517,7 @@ mod tests {
             "changed on disk\n"
         );
         let swap = recovered
+            .workspace
             .conflict_swaps
             .values()
             .next()
@@ -525,12 +527,12 @@ mod tests {
         let other = workspace.join("other.rs");
         assert!(!recovered.save_to(other.clone()));
         assert!(!other.exists());
-        assert!(!recovered.conflict_swaps.is_empty());
+        assert!(!recovered.workspace.conflict_swaps.is_empty());
         assert!(swap.exists());
         recovered.execute_command("conflict-recover");
         assert!(recovered.modified);
         assert_eq!(recovered.session.editor.text().slice(0..5), "dirty");
-        assert!(recovered.conflict_swaps.is_empty());
+        assert!(recovered.workspace.conflict_swaps.is_empty());
         assert!(recovered.save());
         assert_eq!(fs::read_to_string(&path).expect("disk"), "dirtyclean\n");
 
@@ -538,6 +540,7 @@ mod tests {
         let mut discarded = Model::new(EditorState::from_text(""), None);
         assert!(restore(&mut discarded, &workspace).expect("restore"));
         let swap = discarded
+            .workspace
             .conflict_swaps
             .values()
             .next()
@@ -545,7 +548,7 @@ mod tests {
             .expect("conflict swap");
         discarded.execute_command("conflict-discard");
         assert!(!discarded.modified);
-        assert!(discarded.conflict_swaps.is_empty());
+        assert!(discarded.workspace.conflict_swaps.is_empty());
         assert!(!swap.exists());
         assert_eq!(fs::read_to_string(&path).expect("disk"), "changed again\n");
     }

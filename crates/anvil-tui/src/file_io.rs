@@ -393,7 +393,7 @@ impl Model {
             pane.buffer.missing = false;
         }
         self.sync_active();
-        self.stale_paths.remove(path);
+        self.workspace.stale_paths.remove(path);
         self.status.text = format!("reloaded {}", path.display());
         self.dirty = true;
         Ok(())
@@ -414,7 +414,7 @@ impl Model {
                 return false;
             }
         };
-        if self.stale_paths.contains(&path) {
+        if self.workspace.stale_paths.contains(&path) {
             self.status.text =
                 "E: file changed by project replace; reload before saving".to_owned();
             self.dirty = true;
@@ -424,7 +424,7 @@ impl Model {
             .session
             .path
             .as_ref()
-            .filter(|current| self.conflict_swaps.contains_key(*current))
+            .filter(|current| self.workspace.conflict_swaps.contains_key(*current))
             .cloned();
         if let Some(conflict) = &current_conflict {
             if path != *conflict {
@@ -440,7 +440,7 @@ impl Model {
                 return false;
             }
         }
-        let target_conflict = self.conflict_swaps.contains_key(&path);
+        let target_conflict = self.workspace.conflict_swaps.contains_key(&path);
         if target_conflict && current_conflict.is_none() {
             self.status.text = "E: destination has an unresolved swap conflict".to_owned();
             self.dirty = true;
@@ -517,7 +517,7 @@ impl Model {
             return true;
         }
         if let Some(path) = self.session.path.as_ref()
-            && self.conflict_swaps.contains_key(path)
+            && self.workspace.conflict_swaps.contains_key(path)
         {
             return true;
         }

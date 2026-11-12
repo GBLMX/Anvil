@@ -413,6 +413,10 @@ struct WorkspaceState {
     file_worker: Option<FileWorker>,
     /// Background workers for trusted non-primary workspace roots.
     root_file_workers: BTreeMap<PathBuf, FileWorker>,
+    /// Dirty swap files that must survive a source conflict.
+    conflict_swaps: HashMap<PathBuf, PathBuf>,
+    /// Paths changed by a multi-file replace whose buffer reload failed.
+    stale_paths: HashSet<PathBuf>,
 }
 
 #[derive(Default)]
@@ -962,10 +966,6 @@ pub struct Model {
     overlays: OverlayState,
     /// Icon and theme persistence state.
     appearance: AppearanceState,
-    /// Dirty swap files that must survive a source conflict.
-    conflict_swaps: HashMap<PathBuf, PathBuf>,
-    /// Paths changed by a multi-file replace whose buffer reload failed.
-    stale_paths: HashSet<PathBuf>,
     /// The active buffer was loaded from stdin and has no file path.
     stdin_buffer: bool,
     /// Reject mutating commands for a read-only input buffer.
@@ -1037,8 +1037,6 @@ impl Model {
                 persist_theme: !cfg!(test),
                 ..Default::default()
             },
-            conflict_swaps: HashMap::new(),
-            stale_paths: HashSet::new(),
             stdin_buffer: false,
             read_only: false,
             project: ProjectState::default(),

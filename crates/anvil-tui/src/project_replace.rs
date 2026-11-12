@@ -137,7 +137,8 @@ impl Model {
                 if let Some(plan) = self.project.replace_plan.take() {
                     if self.any_modified() {
                         for file in &plan.files {
-                            self.stale_paths
+                            self.workspace
+                                .stale_paths
                                 .insert(self.workspace.path.join(&file.relative));
                         }
                         self.status.text =
@@ -148,7 +149,7 @@ impl Model {
                         for file in &plan.files {
                             let path = self.workspace.path.join(&file.relative);
                             if let Err(error) = self.reload_external(&path) {
-                                self.stale_paths.insert(path);
+                                self.workspace.stale_paths.insert(path);
                                 reload_errors.push(format!("{}: {error}", file.relative));
                             }
                         }
