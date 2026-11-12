@@ -682,3 +682,91 @@ func TestStoreSweepsPersistedRevocations(t *testing.T) {
 		t.Fatal("persisted revoked plugin must be disabled")
 	}
 }
+
+func (check revocationCheck) PublisherRevoked(string) bool { return false }
+
+func (check revocationCheck) PublisherKeyIDs() []string { return nil }
+
+type publisherCheck struct {
+	packages   map[string]string
+	publishers map[string]bool
+}
+
+func (check publisherCheck) PackageRevoked(digest, pluginID string) bool {
+	return check.packages[digest] == pluginID
+}
+
+func (check publisherCheck) PackageDigests() map[string]string { return check.packages }
+
+func (check publisherCheck) PublisherRevoked(keyID string) bool { return check.publishers[keyID] }
+
+func (check publisherCheck) PublisherKeyIDs() []string {
+	keys := make([]string, 0, len(check.publishers))
+	for keyID := range check.publishers {
+		keys = append(keys, keyID)
+	}
+	return keys
+}
+
+func testPublisherKeyID(seed byte) string {
+	value := make([]byte, 32)
+	for index := range value {
+		value[index] = seed
+	}
+	return "sha256:" + fmt.Sprintf("%x", value)
+}
+
+func TestStoreRejectsRevokedPublisher(t *testing.T) {
+	store, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	digest := testDigest(8)
+	publisher := testPublisherKeyID(1)
+	if err := store.UpdateState(func(state *StoreState) error {
+		state.Plugins["demo"] = InstalledPlugin{
+			ActiveDigest: digest,
+			Enabled:      true,
+			Versions: []InstalledVersion{{
+				Digest:         digest,
+				Version:        "1.0.0",
+				PublisherKeyID: publisher,
+			}},
+		}
+		state.RevokedPublishers = []string{publisher}
+		return nil
+	}); err != nil {
+		t.Fatalf("update state: %v", err)
+	}
+	disabled, err := store.DisablePersistedRevoked()
+	if err != nil {
+		t.Fatalf("sweep publisher revocations: %v", err)
+	}
+	if len(disabled) != 1 || disabled[0] != "demo" {
+		t.Fatalf("unexpected disabled plugins: %v", disabled)
+	}
+	if err := store.SetEnabled("demo", true); err == nil {
+		t.Fatal("revoked publisher must not be enableable")
+	}
+}
+
+func TestStorePersistsPublisherRevocations(t *testing.T) {
+	store, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	publisher := testPublisherKeyID(2)
+	if _, err := store.DisableRevokedPackages(publisherCheck{
+		packages:   map[string]string{},
+		publishers: map[string]bool{publisher: true},
+	}); err != nil {
+		t.Fatalf("persist publisher revocations: %v", err)
+	}
+	state, err := store.ReadState()
+	if err != nil {
+		t.Fatalf("read state: %v", err)
+	}
+	if len(state.RevokedPublishers) != 1 || state.RevokedPublishers[0] != publisher {
+		t.Fatalf("publisher revocation was not persisted: %+v", state.RevokedPublishers)
+	}
+}

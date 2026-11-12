@@ -188,3 +188,15 @@ func (set *RevocationSet) PublisherRevoked(keyID string) bool {
 	_, ok := set.Publishers[keyID]
 	return ok
 }
+
+// PublisherKeyIDs returns a copy of revoked publisher key ids.
+func (set *RevocationSet) PublisherKeyIDs() []string {
+	keyIDs := make([]string, 0)
+	if set == nil {
+		return keyIDs
+	}
+	for keyID := range set.Publishers {
+		keyIDs = append(keyIDs, keyID)
+	}
+	return keyIDs
+}

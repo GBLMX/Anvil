@@ -64,6 +64,12 @@ func DecodePublicKey(value string) (ed25519.PublicKey, error) {
 	return ed25519.PublicKey(raw), nil
 }
 
+// PublisherKeyID returns the ADR-0021 key id for a publisher public key.
+func PublisherKeyID(public ed25519.PublicKey) string {
+	sum := sha256.Sum256(public)
+	return "sha256:" + hex.EncodeToString(sum[:])
+}
+
 // ReadSignature accepts a raw 64-byte signature, hex/base64 text, or a JSON
 // envelope with a "signature" field.
 func ReadSignature(path string) ([]byte, error) {

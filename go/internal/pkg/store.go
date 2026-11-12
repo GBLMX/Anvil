@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -27,10 +28,11 @@ const (
 
 // InstalledVersion is one retained package digest for a plugin.
 type InstalledVersion struct {
-	Digest       string `json:"digest"`
-	Version      string `json:"version"`
-	ManifestHash string `json:"manifest_hash"`
-	InstalledAt  int64  `json:"installed_at"`
+	Digest         string `json:"digest"`
+	Version        string `json:"version"`
+	ManifestHash   string `json:"manifest_hash"`
+	PublisherKeyID string `json:"publisher_key_id,omitempty"`
+	InstalledAt    int64  `json:"installed_at"`
 }
 
 // InstalledPlugin is the persisted installed state for one plugin id.
@@ -44,19 +46,21 @@ type InstalledPlugin struct {
 
 // StoreState is the persisted plugin store index.
 type StoreState struct {
-	Version         int                        `json:"version"`
-	Plugins         map[string]InstalledPlugin `json:"plugins"`
-	RevokedPackages map[string]string          `json:"revoked_packages,omitempty"`
+	Version           int                        `json:"version"`
+	Plugins           map[string]InstalledPlugin `json:"plugins"`
+	RevokedPackages   map[string]string          `json:"revoked_packages,omitempty"`
+	RevokedPublishers []string                   `json:"revoked_publishers,omitempty"`
 }
 
 // StoreMeta is the persisted metadata for one content-addressed entry.
 type StoreMeta struct {
-	Digest       string   `json:"digest"`
-	PluginID     string   `json:"plugin_id"`
-	Version      string   `json:"version"`
-	ManifestHash string   `json:"manifest_hash"`
-	Permissions  []string `json:"permissions"`
-	InstalledAt  int64    `json:"installed_at"`
+	Digest         string   `json:"digest"`
+	PluginID       string   `json:"plugin_id"`
+	Version        string   `json:"version"`
+	ManifestHash   string   `json:"manifest_hash"`
+	PublisherKeyID string   `json:"publisher_key_id,omitempty"`
+	Permissions    []string `json:"permissions"`
+	InstalledAt    int64    `json:"installed_at"`
 }
 
 // ManagedPlugin describes one active managed plugin.
@@ -135,9 +139,10 @@ func ValidateDigest(digest string) error {
 
 func emptyState() *StoreState {
 	return &StoreState{
-		Version:         StoreVersion,
-		Plugins:         map[string]InstalledPlugin{},
-		RevokedPackages: map[string]string{},
+		Version:           StoreVersion,
+		Plugins:           map[string]InstalledPlugin{},
+		RevokedPackages:   map[string]string{},
+		RevokedPublishers: []string{},
 	}
 }
 
@@ -200,6 +205,9 @@ func validateState(state *StoreState) error {
 			if strings.EqualFold(version.Digest, plugin.ActiveDigest) {
 				active = true
 			}
+			if version.PublisherKeyID != "" && !validPublisherKeyID(version.PublisherKeyID) {
+				return fmt.Errorf("plugin %q version publisher key id is invalid", pluginID)
+			}
 		}
 		if !active {
 			return fmt.Errorf("plugin %q active digest is not in versions", pluginID)
@@ -211,6 +219,11 @@ func validateState(state *StoreState) error {
 		}
 		if !ValidPluginID(pluginID) {
 			return fmt.Errorf("revoked package %s has invalid plugin id", digest)
+		}
+	}
+	for _, keyID := range state.RevokedPublishers {
+		if !validPublisherKeyID(keyID) {
+			return fmt.Errorf("revoked publisher key id is invalid")
 		}
 	}
 	return nil
@@ -323,6 +336,15 @@ func syncDir(path string) error {
 
 // AddInstalledVersion records an installed digest without enabling it.
 func (s *Store) AddInstalledVersion(pluginID, digest, version, manifestHash, source string, permissions []string) error {
+	return s.addInstalledVersion(pluginID, digest, version, manifestHash, source, permissions, "")
+}
+
+// AddInstalledVersionWithPublisher records an installed digest and its signer.
+func (s *Store) AddInstalledVersionWithPublisher(pluginID, digest, version, manifestHash, source string, permissions []string, publisherKeyID string) error {
+	return s.addInstalledVersion(pluginID, digest, version, manifestHash, source, permissions, publisherKeyID)
+}
+
+func (s *Store) addInstalledVersion(pluginID, digest, version, manifestHash, source string, permissions []string, publisherKeyID string) error {
 	if pluginID == "" || version == "" {
 		return errors.New("plugin id and version are required")
 	}
@@ -338,6 +360,9 @@ func (s *Store) AddInstalledVersion(pluginID, digest, version, manifestHash, sou
 		if owner, revoked := revokedOwner(state, digest); revoked {
 			return fmt.Errorf("plugin digest %s is revoked (%s)", digest, owner)
 		}
+		if publisherKeyID != "" && revokedPublisher(state, publisherKeyID) {
+			return fmt.Errorf("publisher key %s is revoked", publisherKeyID)
+		}
 		plugin, exists := state.Plugins[pluginID]
 		if !exists {
 			plugin = InstalledPlugin{
@@ -351,18 +376,22 @@ func (s *Store) AddInstalledVersion(pluginID, digest, version, manifestHash, sou
 			plugin.Enabled = false
 			plugin.GrantedPermissions = []string{}
 		}
-		for _, installed := range plugin.Versions {
-			if strings.EqualFold(installed.Digest, digest) {
+		for index := range plugin.Versions {
+			if strings.EqualFold(plugin.Versions[index].Digest, digest) {
+				if publisherKeyID != "" {
+					plugin.Versions[index].PublisherKeyID = publisherKeyID
+				}
 				plugin.ActiveDigest = digest
 				state.Plugins[pluginID] = plugin
 				return nil
 			}
 		}
 		plugin.Versions = append(plugin.Versions, InstalledVersion{
-			Digest:       digest,
-			Version:      version,
-			ManifestHash: manifestHash,
-			InstalledAt:  time.Now().Unix(),
+			Digest:         digest,
+			Version:        version,
+			ManifestHash:   manifestHash,
+			PublisherKeyID: publisherKeyID,
+			InstalledAt:    time.Now().Unix(),
 		})
 		plugin.ActiveDigest = digest
 		state.Plugins[pluginID] = plugin
@@ -383,6 +412,9 @@ func (s *Store) SetEnabled(pluginID string, enabled bool) error {
 		if enabled {
 			if owner, revoked := revokedOwner(state, plugin.ActiveDigest); revoked {
 				return fmt.Errorf("plugin %q version is revoked (%s)", pluginID, owner)
+			}
+			if keyID := activePublisher(plugin); keyID != "" && revokedPublisher(state, keyID) {
+				return fmt.Errorf("plugin %q publisher key is revoked", pluginID)
 			}
 		}
 		plugin.Enabled = enabled
@@ -483,12 +515,13 @@ func (s *Store) InstallPackage(
 			return ManagedPlugin{}, fmt.Errorf("store package archive: %w", err)
 		}
 		meta := StoreMeta{
-			Digest:       digestHex,
-			PluginID:     manifest.ID,
-			Version:      manifest.Version,
-			ManifestHash: manifestHashHex,
-			Permissions:  append([]string(nil), manifest.Permissions...),
-			InstalledAt:  time.Now().Unix(),
+			Digest:         digestHex,
+			PluginID:       manifest.ID,
+			Version:        manifest.Version,
+			ManifestHash:   manifestHashHex,
+			PublisherKeyID: PublisherKeyID(publicKey),
+			Permissions:    append([]string(nil), manifest.Permissions...),
+			InstalledAt:    time.Now().Unix(),
 		}
 		metaJSON, err := json.MarshalIndent(meta, "", "  ")
 		if err != nil {
@@ -514,13 +547,14 @@ func (s *Store) InstallPackage(
 			return ManagedPlugin{}, err
 		}
 	}
-	if err := s.AddInstalledVersion(
+	if err := s.AddInstalledVersionWithPublisher(
 		manifest.ID,
 		digestHex,
 		manifest.Version,
 		manifestHashHex,
 		source,
 		manifest.Permissions,
+		PublisherKeyID(publicKey),
 	); err != nil {
 		return ManagedPlugin{}, err
 	}
@@ -717,6 +751,8 @@ func makeTreeReadOnly(root string) error {
 type PackageRevocationChecker interface {
 	PackageRevoked(digest, pluginID string) bool
 	PackageDigests() map[string]string
+	PublisherRevoked(keyID string) bool
+	PublisherKeyIDs() []string
 }
 
 // DisableRevokedPackages disables active packages revoked by checker and
@@ -733,11 +769,21 @@ func (s *Store) DisableRevokedPackages(checker PackageRevocationChecker) ([]stri
 		for digest, pluginID := range checker.PackageDigests() {
 			state.RevokedPackages[digest] = pluginID
 		}
+		for _, keyID := range checker.PublisherKeyIDs() {
+			if !slices.Contains(state.RevokedPublishers, keyID) {
+				state.RevokedPublishers = append(state.RevokedPublishers, keyID)
+			}
+		}
 		for id, plugin := range state.Plugins {
-			if !checker.PackageRevoked(plugin.ActiveDigest, id) {
+			keyID := activePublisher(plugin)
+			packageRevoked := checker.PackageRevoked(plugin.ActiveDigest, id)
+			revoked := packageRevoked || (keyID != "" && checker.PublisherRevoked(keyID))
+			if !revoked {
 				continue
 			}
-			state.RevokedPackages[plugin.ActiveDigest] = id
+			if packageRevoked {
+				state.RevokedPackages[plugin.ActiveDigest] = id
+			}
 			if !plugin.Enabled {
 				continue
 			}
@@ -764,7 +810,8 @@ func revokedOwner(state *StoreState, digest string) (string, bool) {
 }
 
 type storedRevocations struct {
-	digests map[string]string
+	digests    map[string]string
+	publishers []string
 }
 
 func (stored storedRevocations) PackageRevoked(digest, pluginID string) bool {
@@ -784,6 +831,22 @@ func (stored storedRevocations) PackageDigests() map[string]string {
 	return digests
 }
 
+func (stored storedRevocations) PublisherRevoked(keyID string) bool {
+	if keyID == "" {
+		return false
+	}
+	for _, revoked := range stored.publishers {
+		if strings.EqualFold(revoked, keyID) {
+			return true
+		}
+	}
+	return false
+}
+
+func (stored storedRevocations) PublisherKeyIDs() []string {
+	return append([]string(nil), stored.publishers...)
+}
+
 // DisablePersistedRevoked applies the accepted revocation set stored in
 // state.json. It is a no-op when no enabled plugin is revoked.
 func (s *Store) DisablePersistedRevoked() ([]string, error) {
@@ -791,9 +854,18 @@ func (s *Store) DisablePersistedRevoked() ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
+	revocations := storedRevocations{
+		digests:    state.RevokedPackages,
+		publishers: state.RevokedPublishers,
+	}
 	needsSweep := false
 	for id, plugin := range state.Plugins {
-		if plugin.Enabled && (storedRevocations{state.RevokedPackages}).PackageRevoked(plugin.ActiveDigest, id) {
+		if !plugin.Enabled {
+			continue
+		}
+		keyID := activePublisher(plugin)
+		if revocations.PackageRevoked(plugin.ActiveDigest, id) ||
+			(keyID != "" && revocations.PublisherRevoked(keyID)) {
 			needsSweep = true
 			break
 		}
@@ -801,5 +873,31 @@ func (s *Store) DisablePersistedRevoked() ([]string, error) {
 	if !needsSweep {
 		return nil, nil
 	}
-	return s.DisableRevokedPackages(storedRevocations{state.RevokedPackages})
+	return s.DisableRevokedPackages(revocations)
+}
+
+func revokedPublisher(state *StoreState, keyID string) bool {
+	for _, revoked := range state.RevokedPublishers {
+		if strings.EqualFold(revoked, keyID) {
+			return true
+		}
+	}
+	return false
+}
+
+func activePublisher(plugin InstalledPlugin) string {
+	for _, version := range plugin.Versions {
+		if strings.EqualFold(version.Digest, plugin.ActiveDigest) {
+			return version.PublisherKeyID
+		}
+	}
+	return ""
+}
+
+func validPublisherKeyID(keyID string) bool {
+	if keyID != strings.ToLower(keyID) || !strings.HasPrefix(keyID, "sha256:") {
+		return false
+	}
+	raw, err := hex.DecodeString(strings.TrimPrefix(keyID, "sha256:"))
+	return err == nil && len(raw) == 32
 }
