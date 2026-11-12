@@ -218,6 +218,7 @@ pub(crate) fn render_panel(model: &Model, frame: &mut ratatui::Frame, area: rata
         width: area.width,
         height,
     };
+    frame.render_widget(ratatui::widgets::Clear, popup);
     let text = crate::pty_terminal::sanitize_terminal_output(&model.runtime.terminal_output);
     let visible = height.saturating_sub(2) as usize;
     let mut lines: Vec<ratatui::text::Line<'static>> = text
