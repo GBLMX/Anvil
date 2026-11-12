@@ -88,7 +88,7 @@ impl Model {
     }
 
     fn request_diff(&mut self, relative: String, staged: bool) {
-        let Some(worker) = self.file_worker.as_ref() else {
+        let Some(worker) = self.workspace.file_worker.as_ref() else {
             self.status = "E: file worker unavailable".to_owned();
             self.dirty = true;
             return;
@@ -230,7 +230,7 @@ impl Model {
             return;
         };
         let patch = view.hunks[index].patch.clone();
-        let Some(worker) = self.file_worker.as_ref() else {
+        let Some(worker) = self.workspace.file_worker.as_ref() else {
             self.status = "E: file worker unavailable".to_owned();
             self.dirty = true;
             return;
@@ -297,7 +297,7 @@ impl Model {
                 return;
             }
         };
-        let Some(worker) = self.file_worker.as_ref() else {
+        let Some(worker) = self.workspace.file_worker.as_ref() else {
             self.status = "E: file worker unavailable".to_owned();
             self.dirty = true;
             return;
@@ -360,7 +360,7 @@ impl Model {
             self.dirty = true;
             return;
         }
-        let Some(worker) = self.file_worker.as_ref() else {
+        let Some(worker) = self.workspace.file_worker.as_ref() else {
             self.status = "E: file worker unavailable".to_owned();
             self.dirty = true;
             return;
@@ -433,7 +433,7 @@ impl Model {
             self.dirty = true;
             return;
         }
-        let Some(worker) = self.file_worker.as_ref() else {
+        let Some(worker) = self.workspace.file_worker.as_ref() else {
             self.status = "E: file worker unavailable".to_owned();
             self.dirty = true;
             return;
@@ -526,7 +526,7 @@ impl Model {
             self.dirty = true;
             return;
         }
-        let Some(worker) = self.file_worker.as_ref() else {
+        let Some(worker) = self.workspace.file_worker.as_ref() else {
             self.status = "E: file worker unavailable".to_owned();
             self.dirty = true;
             return;
@@ -560,7 +560,7 @@ impl Model {
         self.git.resolve_pending = None;
         match result {
             Ok(()) => {
-                let path = self.workspace.join(&relative);
+                let path = self.workspace.path.join(&relative);
                 match self.reload_external(&path) {
                     Ok(()) => {
                         let name = if stage == 2 { "ours" } else { "theirs" };
@@ -573,7 +573,7 @@ impl Model {
             }
             Err(error) => {
                 if error.working_written {
-                    let path = self.workspace.join(&relative);
+                    let path = self.workspace.path.join(&relative);
                     let reload = self.reload_external(&path);
                     self.status = match reload {
                         Ok(()) => format!(
@@ -655,7 +655,7 @@ index 1111111..2222222 100644
             EditorState::from_text("<<<<<<< HEAD\nours\n=======\ntheirs\n>>>>>>> side\n"),
             Some(path),
         );
-        model.workspace = workspace;
+        model.workspace.path = workspace;
         model.git.resolve_pending = Some(7);
         model.handle_git_resolved(
             "a.txt".to_owned(),

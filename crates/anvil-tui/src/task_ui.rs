@@ -39,7 +39,7 @@ impl Model {
         self.rebuild_problems();
         self.task_worker = Some(TaskWorker::start(
             command.to_owned(),
-            self.workspace.clone(),
+            self.workspace.path.clone(),
         ));
         self.status = if tests {
             format!("tests: running {command}")

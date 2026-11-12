@@ -23,14 +23,15 @@ impl Model {
     }
 
     pub(crate) fn ensure_file_worker(&mut self) -> bool {
-        if self.file_worker.is_none() {
-            let Some(session) = self.gateway_session.as_mut() else {
+        if self.workspace.file_worker.is_none() {
+            let Some(session) = self.workspace.gateway_session.as_mut() else {
                 return false;
             };
             let Ok(client) = session.connect_lsp() else {
                 return false;
             };
-            self.file_worker = Some(FileWorker::start(client, self.workspace.clone()));
+            self.workspace.file_worker =
+                Some(FileWorker::start(client, self.workspace.path.clone()));
         }
         self.ensure_root_file_workers();
         true
@@ -38,44 +39,48 @@ impl Model {
 
     pub(crate) fn ensure_root_file_workers(&mut self) {
         let roots = self
-            .workspace_roots
+            .workspace
+            .roots
             .list()
             .iter()
-            .filter(|root| root.trusted && root.path != self.workspace)
+            .filter(|root| root.trusted && root.path != self.workspace.path)
             .map(|root| root.path.clone())
             .collect::<Vec<_>>();
         for root in roots {
-            if self.root_file_workers.contains_key(&root) {
+            if self.workspace.root_file_workers.contains_key(&root) {
                 continue;
             }
             let worker = self
+                .workspace
                 .root_gateways
                 .get_mut(&root)
                 .and_then(|(session, _)| session.connect_lsp().ok())
                 .map(|client| FileWorker::start(client, root.clone()));
             if let Some(worker) = worker {
-                self.root_file_workers.insert(root, worker);
+                self.workspace.root_file_workers.insert(root, worker);
             }
         }
     }
 
     pub(crate) fn stop_root_file_worker(&mut self, root: &Path) {
-        self.root_file_workers.remove(root);
+        self.workspace.root_file_workers.remove(root);
     }
 
     fn secondary_root(&self, path: &Path) -> Option<PathBuf> {
-        self.workspace_roots
+        self.workspace
+            .roots
             .owning_root(path)
-            .filter(|root| root.path != self.workspace)
+            .filter(|root| root.path != self.workspace.path)
             .map(|root| root.path.clone())
     }
 
     fn ensure_root_tree_nodes(&mut self) {
         let roots = self
-            .workspace_roots
+            .workspace
+            .roots
             .list()
             .iter()
-            .filter(|root| root.path != self.workspace)
+            .filter(|root| root.path != self.workspace.path)
             .map(|root| root.path.clone())
             .collect::<Vec<_>>();
         for root in roots {
@@ -94,8 +99,8 @@ impl Model {
 
     fn file_worker_for_path(&self, path: &Path) -> Option<&FileWorker> {
         match self.secondary_root(path) {
-            Some(root) => self.root_file_workers.get(&root),
-            None => self.file_worker.as_ref(),
+            Some(root) => self.workspace.root_file_workers.get(&root),
+            None => self.workspace.file_worker.as_ref(),
         }
     }
 
@@ -110,7 +115,7 @@ impl Model {
         );
         paths.sort();
         paths.dedup();
-        if let Some(worker) = self.root_file_workers.get(root) {
+        if let Some(worker) = self.workspace.root_file_workers.get(root) {
             for path in paths {
                 let _ = worker.request(FileRequest::List(path));
             }
@@ -134,7 +139,7 @@ impl Model {
             .into_iter()
             .filter(|entry| self.tree_entry_visible(&entry.name, entry.is_dir))
             .collect();
-        if path == self.workspace {
+        if path == self.workspace.path {
             let preserved = self
                 .tree
                 .entries
@@ -197,9 +202,9 @@ impl Model {
         let generation = self.git.status_generation;
         let mut expected = 0usize;
         let mut error = None;
-        if let Some(worker) = self.file_worker.as_ref() {
+        if let Some(worker) = self.workspace.file_worker.as_ref() {
             if let Err(request_error) = worker.request(FileRequest::GitStatus {
-                root: self.workspace.clone(),
+                root: self.workspace.path.clone(),
                 generation,
             }) {
                 error = Some(request_error);
@@ -207,7 +212,7 @@ impl Model {
                 expected += 1;
             }
         }
-        for (root, worker) in &self.root_file_workers {
+        for (root, worker) in &self.workspace.root_file_workers {
             match worker.request(FileRequest::GitStatus {
                 root: root.clone(),
                 generation,
@@ -255,6 +260,7 @@ impl Model {
 
     pub(crate) fn poll_file_worker(&mut self) {
         let events = self
+            .workspace
             .file_worker
             .as_ref()
             .map(|worker| worker.poll())
@@ -378,9 +384,15 @@ impl Model {
             }
             self.dirty = true;
         }
-        let roots = self.root_file_workers.keys().cloned().collect::<Vec<_>>();
+        let roots = self
+            .workspace
+            .root_file_workers
+            .keys()
+            .cloned()
+            .collect::<Vec<_>>();
         for root in roots {
             let events = self
+                .workspace
                 .root_file_workers
                 .get_mut(&root)
                 .map(|worker| worker.poll())
@@ -423,12 +435,13 @@ impl Model {
     fn tree_entries(&mut self, path: &Path) -> Result<Vec<DirEntry>, String> {
         let (root_path, trusted) = if let Some(root) = self.secondary_root(path) {
             let trusted = self
-                .workspace_roots
+                .workspace
+                .roots
                 .owning_root(path)
                 .is_some_and(|root| root.trusted);
             (root, trusted)
-        } else if path.starts_with(&self.workspace) {
-            (self.workspace.clone(), true)
+        } else if path.starts_with(&self.workspace.path) {
+            (self.workspace.path.clone(), true)
         } else {
             return Err(format!(
                 "path is outside workspace roots: {}",
@@ -449,13 +462,13 @@ impl Model {
                 .to_string_lossy()
                 .into_owned()
         };
-        if root_path == self.workspace {
-            if let Some(gateway) = self.gateway.as_mut() {
+        if root_path == self.workspace.path {
+            if let Some(gateway) = self.workspace.gateway.as_mut() {
                 return gateway
                     .read_dir(&relative)
                     .map_err(|error| error.to_string());
             }
-        } else if let Some((_, gateway)) = self.root_gateways.get_mut(&root_path) {
+        } else if let Some((_, gateway)) = self.workspace.root_gateways.get_mut(&root_path) {
             return gateway
                 .read_dir(&relative)
                 .map_err(|error| error.to_string());
@@ -487,15 +500,20 @@ impl Model {
         if self.tree.visible {
             self.tree.entries.clear();
             self.tree.selected = None;
-            let workspace = self.workspace.clone();
+            let workspace = self.workspace.path.clone();
             if self.ensure_file_worker() {
-                if let Some(worker) = self.file_worker.as_ref() {
+                if let Some(worker) = self.workspace.file_worker.as_ref() {
                     let _ = worker.request(FileRequest::List(workspace));
                 }
                 self.ensure_root_tree_nodes();
-                let roots = self.root_file_workers.keys().cloned().collect::<Vec<_>>();
+                let roots = self
+                    .workspace
+                    .root_file_workers
+                    .keys()
+                    .cloned()
+                    .collect::<Vec<_>>();
                 for root in roots {
-                    if let Some(worker) = self.root_file_workers.get(&root) {
+                    if let Some(worker) = self.workspace.root_file_workers.get(&root) {
                         let _ = worker.request(FileRequest::List(root));
                     }
                 }
@@ -536,10 +554,10 @@ impl Model {
 
     fn tree_target_directory(&self) -> PathBuf {
         let Some(index) = self.tree.selected else {
-            return self.workspace.clone();
+            return self.workspace.path.clone();
         };
         let Some(entry) = self.tree.entries.get(index) else {
-            return self.workspace.clone();
+            return self.workspace.path.clone();
         };
         if entry.is_dir {
             entry.path.clone()
@@ -548,7 +566,7 @@ impl Model {
                 .path
                 .parent()
                 .map(Path::to_path_buf)
-                .unwrap_or_else(|| self.workspace.clone())
+                .unwrap_or_else(|| self.workspace.path.clone())
         }
     }
 
@@ -581,13 +599,13 @@ impl Model {
     }
 
     fn sync_tree_watches(&mut self) {
-        let workspace = self.workspace.clone();
+        let workspace = self.workspace.path.clone();
         let mut directories: BTreeMap<PathBuf, Vec<PathBuf>> = BTreeMap::new();
         directories
             .entry(workspace.clone())
             .or_default()
             .push(workspace.clone());
-        for root in self.workspace_roots.list() {
+        for root in self.workspace.roots.list() {
             if root.trusted && root.path != workspace {
                 directories
                     .entry(root.path.clone())
@@ -600,7 +618,8 @@ impl Model {
                 directories.entry(workspace.clone()).or_default().push(path);
             } else if let Some(root) = self.secondary_root(&path)
                 && self
-                    .workspace_roots
+                    .workspace
+                    .roots
                     .owning_root(&path)
                     .is_some_and(|root| root.trusted)
             {
@@ -631,11 +650,13 @@ impl Model {
         for (root, paths) in directories {
             expected += 1;
             let request = if root == workspace {
-                self.file_worker
+                self.workspace
+                    .file_worker
                     .as_ref()
                     .map(|worker| worker.request(FileRequest::WatchDirs(paths)))
             } else {
-                self.root_file_workers
+                self.workspace
+                    .root_file_workers
                     .get(&root)
                     .map(|worker| worker.request(FileRequest::WatchDirs(paths)))
             };
@@ -657,17 +678,18 @@ impl Model {
         let expanded = self
             .expanded_tree_paths()
             .into_iter()
-            .filter(|path| path.starts_with(&self.workspace))
+            .filter(|path| path.starts_with(&self.workspace.path))
             .collect();
         if self.ensure_file_worker() {
             self.tree.refresh_generation = self.tree.refresh_generation.wrapping_add(1);
             let generation = self.tree.refresh_generation;
             let request = FileRequest::TreeSnapshot {
                 generation,
-                root: self.workspace.clone(),
+                root: self.workspace.path.clone(),
                 expanded,
             };
             let sent = self
+                .workspace
                 .file_worker
                 .as_ref()
                 .is_some_and(|worker| worker.request(request).is_ok());
@@ -686,9 +708,9 @@ impl Model {
         let expanded = self
             .expanded_tree_paths()
             .into_iter()
-            .filter(|path| path.starts_with(&self.workspace))
+            .filter(|path| path.starts_with(&self.workspace.path))
             .collect::<BTreeSet<_>>();
-        let workspace = self.workspace.clone();
+        let workspace = self.workspace.path.clone();
         let mut listings = Vec::new();
         listings.push((workspace.clone(), self.tree_entries(&workspace)));
         for path in expanded {
@@ -787,7 +809,7 @@ impl Model {
         let previous_index = self.tree.selected;
         let expanded = self.expanded_tree_paths();
         let listings: BTreeMap<_, _> = listings.into_iter().collect();
-        match listings.get(&self.workspace) {
+        match listings.get(&self.workspace.path) {
             None => {
                 self.status = "E: tree: missing root listing".to_owned();
                 self.tree.stale = true;
@@ -811,7 +833,7 @@ impl Model {
             .collect::<Vec<_>>();
         let mut tree = Vec::new();
         let needs_listing =
-            self.build_tree_entries(&self.workspace, 0, &listings, &expanded, &mut tree);
+            self.build_tree_entries(&self.workspace.path, 0, &listings, &expanded, &mut tree);
         tree.extend(preserved);
         let target = self.tree.pending_select.take().or(previous_path);
         self.tree.entries = tree;
@@ -869,7 +891,7 @@ mod tests {
         let src = workspace.join("src");
         fs::create_dir(&src).expect("src");
         let mut model = Model::new(EditorState::from_text(""), None);
-        model.workspace = workspace.clone();
+        model.workspace.path = workspace.clone();
         model.tree.entries = vec![TreeEntry {
             path: src.clone(),
             depth: 0,
@@ -904,7 +926,7 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         let workspace = dir.path().to_path_buf();
         let mut model = Model::new(EditorState::from_text(""), None);
-        model.workspace = workspace.clone();
+        model.workspace.path = workspace.clone();
         model.tree.entries = vec![TreeEntry {
             path: workspace.join("old.rs"),
             depth: 0,
@@ -966,8 +988,8 @@ mod tests {
         let workspace = workspace.canonicalize().expect("canonical");
         let root = root.canonicalize().expect("canonical");
         let mut model = Model::new(EditorState::from_text(""), None);
-        model.workspace = workspace;
-        model.workspace_roots.add(&root, false).expect("add root");
+        model.workspace.path = workspace;
+        model.workspace.roots.add(&root, false).expect("add root");
         model.open_tree();
         let index = model
             .tree
@@ -999,8 +1021,8 @@ mod tests {
         let workspace = workspace.canonicalize().expect("canonical");
         let root = root.canonicalize().expect("canonical");
         let mut model = Model::new(EditorState::from_text(""), None);
-        model.workspace = workspace.clone();
-        model.workspace_roots.add(&root, true).expect("add root");
+        model.workspace.path = workspace.clone();
+        model.workspace.roots.add(&root, true).expect("add root");
         model.open_tree();
         let root_index = model
             .tree
@@ -1041,8 +1063,8 @@ mod tests {
     fn tree_watch_cap_is_reported() {
         let dir = tempfile::tempdir().expect("tempdir");
         let mut model = Model::new(EditorState::from_text(""), None);
-        model.workspace = dir.path().to_path_buf();
-        let workspace = model.workspace.clone();
+        model.workspace.path = dir.path().to_path_buf();
+        let workspace = model.workspace.path.clone();
         model.tree.entries = (0..MAX_TREE_WATCH_DIRS + 1)
             .map(|index| TreeEntry {
                 path: workspace.join(format!("d{index}")),

@@ -22,7 +22,7 @@ impl Model {
             self.dirty = true;
             return;
         }
-        let Some(worker) = self.file_worker.as_ref() else {
+        let Some(worker) = self.workspace.file_worker.as_ref() else {
             self.status = "E: file worker unavailable".to_owned();
             self.dirty = true;
             return;
@@ -106,7 +106,7 @@ impl Model {
             self.dirty = true;
             return;
         }
-        let Some(worker) = self.file_worker.as_ref() else {
+        let Some(worker) = self.workspace.file_worker.as_ref() else {
             self.status = "E: file worker unavailable".to_owned();
             self.dirty = true;
             return;
@@ -137,7 +137,8 @@ impl Model {
                 if let Some(plan) = self.project_replace_plan.take() {
                     if self.any_modified() {
                         for file in &plan.files {
-                            self.stale_paths.insert(self.workspace.join(&file.relative));
+                            self.stale_paths
+                                .insert(self.workspace.path.join(&file.relative));
                         }
                         self.status =
                             "replace applied; modified buffers marked stale (reload before saving)"
@@ -145,7 +146,7 @@ impl Model {
                     } else {
                         let mut reload_errors = Vec::new();
                         for file in &plan.files {
-                            let path = self.workspace.join(&file.relative);
+                            let path = self.workspace.path.join(&file.relative);
                             if let Err(error) = self.reload_external(&path) {
                                 self.stale_paths.insert(path);
                                 reload_errors.push(format!("{}: {error}", file.relative));
@@ -225,7 +226,7 @@ mod tests {
         let path = workspace.join("a.txt");
         std::fs::write(&path, "new\n").expect("write");
         let mut model = Model::new(EditorState::from_text("old\n"), Some(path));
-        model.workspace = workspace;
+        model.workspace.path = workspace;
         model.project_replace_plan = Some(plan());
         model.project_replace_pending = Some(4);
         model.handle_project_replace_applied(4, Ok(()));
@@ -246,7 +247,7 @@ mod tests {
         std::fs::create_dir_all(&workspace).expect("mkdir");
         let path = workspace.join("a.txt");
         let mut model = Model::new(EditorState::from_text("x"), Some(path));
-        model.workspace = workspace;
+        model.workspace.path = workspace;
         model.project_replace_plan = Some(plan());
         model.project_replace_pending = Some(5);
         model.handle_project_replace_applied(5, Ok(()));
@@ -264,7 +265,7 @@ mod tests {
         let path = workspace.join("a.txt");
         std::fs::write(&path, "new\n").expect("write");
         let mut model = Model::new(EditorState::from_text("old\n"), Some(path));
-        model.workspace = workspace;
+        model.workspace.path = workspace;
         model.modified = true;
         model.project_replace_plan = Some(plan());
         model.project_replace_pending = Some(6);

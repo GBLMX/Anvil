@@ -377,8 +377,8 @@ pub(crate) fn ascii_mode() -> bool {
 
 impl crate::Model {
     pub(crate) fn reload_icons(&mut self) {
-        self.icons = IconTheme::load(&self.workspace);
-        self.icons_mtime = IconTheme::config_mtime(&self.workspace);
+        self.icons = IconTheme::load(&self.workspace.path);
+        self.icons_mtime = IconTheme::config_mtime(&self.workspace.path);
         self.icons_checked_at = Some(std::time::Instant::now());
     }
 
@@ -390,11 +390,11 @@ impl crate::Model {
             return;
         }
         self.icons_checked_at = Some(std::time::Instant::now());
-        let modified = IconTheme::config_mtime(&self.workspace);
+        let modified = IconTheme::config_mtime(&self.workspace.path);
         if modified == self.icons_mtime {
             return;
         }
-        self.icons = IconTheme::load(&self.workspace);
+        self.icons = IconTheme::load(&self.workspace.path);
         self.icons_mtime = modified;
         self.dirty = true;
     }
@@ -457,7 +457,7 @@ mod tests {
         )
         .expect("write");
         let mut model = crate::Model::new(crate::EditorState::from_text(""), None);
-        model.workspace = directory.path().to_path_buf();
+        model.workspace.path = directory.path().to_path_buf();
         model.reload_icons();
         assert_eq!(
             model.icons.glyph(icon_for("x.rs").expect("rust"), false),

@@ -24,7 +24,7 @@ impl Model {
             ControlRequest::Status => reply(Status {
                 version: env!("CARGO_PKG_VERSION").to_owned(),
                 protocol_version: PROTOCOL_VERSION.to_owned(),
-                workspace: self.workspace.clone(),
+                workspace: self.workspace.path.clone(),
                 file: self.path.clone(),
                 dirty: self.modified,
                 capabilities: CAPABILITIES
@@ -62,7 +62,7 @@ impl Model {
         let absolute = self
             .absolute_path(path)
             .map_err(|error| RpcError::new(codes::INVALID_PARAMS, error))?;
-        if !absolute.starts_with(&self.workspace) {
+        if !absolute.starts_with(&self.workspace.path) {
             return Err(RpcError::new(
                 codes::POLICY_DENIED,
                 format!("path is outside workspace: {}", path.display()),
@@ -139,7 +139,7 @@ impl Model {
                 let absolute = self
                     .absolute_path(path)
                     .map_err(|error| RpcError::new(codes::INVALID_PARAMS, error))?;
-                if !absolute.starts_with(&self.workspace) {
+                if !absolute.starts_with(&self.workspace.path) {
                     return Err(RpcError::new(
                         codes::POLICY_DENIED,
                         format!("path is outside workspace: {}", path.display()),
@@ -367,7 +367,7 @@ impl Model {
         }
         QueryResult {
             version: env!("CARGO_PKG_VERSION").to_owned(),
-            workspace: self.workspace.clone(),
+            workspace: self.workspace.path.clone(),
             path: self.path.clone(),
             modified: self.modified,
             read_only: self.read_only || self.help_back.is_some(),
@@ -423,7 +423,7 @@ mod tests {
         std::fs::create_dir_all(file.parent().expect("parent")).expect("mkdir");
         std::fs::write(&file, "one\ntwo\n").expect("write");
         let mut model = Model::new(EditorState::from_text("log"), None);
-        model.workspace = dir.path().canonicalize().expect("canonical");
+        model.workspace.path = dir.path().canonicalize().expect("canonical");
         let reply = model.handle_control(ControlRequest::Open {
             path: PathBuf::from("src/main.rs"),
             line: 99,
@@ -439,7 +439,7 @@ mod tests {
         let status = model
             .handle_control(ControlRequest::Status)
             .expect("status");
-        assert_eq!(status["workspace"], serde_json::json!(model.workspace));
+        assert_eq!(status["workspace"], serde_json::json!(model.workspace.path));
         assert_eq!(status["dirty"], false);
     }
 
@@ -451,7 +451,7 @@ mod tests {
         let workspace = dir.path().join("workspace");
         std::fs::create_dir_all(&workspace).expect("mkdir");
         let mut model = Model::new(EditorState::from_text("log"), None);
-        model.workspace = workspace.canonicalize().expect("canonical");
+        model.workspace.path = workspace.canonicalize().expect("canonical");
         let reply = model.handle_control(ControlRequest::Open {
             path: PathBuf::from("../outside.rs"),
             line: 1,

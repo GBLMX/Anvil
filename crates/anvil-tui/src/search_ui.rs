@@ -250,7 +250,7 @@ impl Model {
             self.dirty = true;
             return;
         }
-        if self.file_worker.is_none() {
+        if self.workspace.file_worker.is_none() {
             self.status = "E: file worker unavailable".to_owned();
             self.dirty = true;
             return;
@@ -259,7 +259,7 @@ impl Model {
         let generation = self.project_search_generation;
         let mut expected = 0usize;
         let mut error = None;
-        if let Some(worker) = self.file_worker.as_ref() {
+        if let Some(worker) = self.workspace.file_worker.as_ref() {
             if let Err(request_error) = worker.request(FileRequest::ProjectSearch {
                 query: query.to_owned(),
                 generation,
@@ -269,7 +269,7 @@ impl Model {
                 expected += 1;
             }
         }
-        for worker in self.root_file_workers.values() {
+        for worker in self.workspace.root_file_workers.values() {
             match worker.request(FileRequest::ProjectSearch {
                 query: query.to_owned(),
                 generation,

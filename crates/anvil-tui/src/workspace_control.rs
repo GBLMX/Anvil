@@ -15,7 +15,7 @@ impl Model {
             self.dirty = true;
             return;
         };
-        if let Err(error) = self.workspace_roots.add(&canonical, false) {
+        if let Err(error) = self.workspace.roots.add(&canonical, false) {
             self.status = format!("E: {error}");
             self.dirty = true;
             return;
@@ -41,8 +41,8 @@ impl Model {
         };
         if !trusted {
             self.stop_root_file_worker(&canonical);
-            self.root_gateways.remove(&canonical);
-            match self.workspace_roots.set_trusted(&canonical, false) {
+            self.workspace.root_gateways.remove(&canonical);
+            match self.workspace.roots.set_trusted(&canonical, false) {
                 Ok(()) => {
                     self.status = format!(
                         "workspace root {}: untrusted (gateway stopped)",
@@ -51,13 +51,14 @@ impl Model {
                 }
                 Err(error) => self.status = format!("E: {error}"),
             }
-        } else if self.root_gateways.contains_key(&canonical) {
+        } else if self.workspace.root_gateways.contains_key(&canonical) {
             self.status = format!("workspace root {}: already trusted", canonical.display());
         } else {
             match GatewaySession::start(&canonical) {
                 Ok((session, gateway, _lsp)) => {
-                    self.workspace_roots.set_trusted(&canonical, true).ok();
-                    self.root_gateways
+                    self.workspace.roots.set_trusted(&canonical, true).ok();
+                    self.workspace
+                        .root_gateways
                         .insert(canonical.clone(), (session, gateway));
                     self.ensure_root_file_workers();
                     self.status = format!(
@@ -85,10 +86,10 @@ impl Model {
             self.dirty = true;
             return;
         };
-        match self.workspace_roots.remove(&canonical) {
+        match self.workspace.roots.remove(&canonical) {
             Ok(()) => {
                 self.stop_root_file_worker(&canonical);
-                self.root_gateways.remove(&canonical);
+                self.workspace.root_gateways.remove(&canonical);
                 self.status = format!("workspace root removed: {}", canonical.display());
             }
             Err(error) => self.status = format!("E: {error}"),
@@ -97,7 +98,7 @@ impl Model {
     }
 
     pub(crate) fn list_workspace_roots(&mut self) {
-        let roots = self.workspace_roots.list();
+        let roots = self.workspace.roots.list();
         if roots.is_empty() {
             self.status = "no workspace roots".to_owned();
         } else {
@@ -112,8 +113,10 @@ impl Model {
                 })
                 .collect::<Vec<_>>()
                 .join("; ");
-            self.status
-                .push_str(&format!("; gateways: {}", self.root_gateways.len()));
+            self.status.push_str(&format!(
+                "; gateways: {}",
+                self.workspace.root_gateways.len()
+            ));
         }
         self.dirty = true;
     }
@@ -126,8 +129,8 @@ mod tests {
     #[test]
     fn roots_start_with_primary() {
         let model = Model::new(EditorState::from_text(""), None);
-        assert_eq!(model.workspace_roots.list().len(), 1);
-        assert!(model.workspace_roots.primary().is_some());
+        assert_eq!(model.workspace.roots.list().len(), 1);
+        assert!(model.workspace.roots.primary().is_some());
     }
 }
 
@@ -141,11 +144,12 @@ mod trust_tests {
         let canonical = root.path().canonicalize().expect("canonical");
         let mut model = Model::new(EditorState::from_text(""), None);
         model.add_workspace_root(canonical.to_str().expect("utf8"));
-        assert_eq!(model.workspace_roots.list().len(), 2);
-        assert!(model.root_gateways.is_empty());
-        assert!(model.root_file_workers.is_empty());
+        assert_eq!(model.workspace.roots.list().len(), 2);
+        assert!(model.workspace.root_gateways.is_empty());
+        assert!(model.workspace.root_file_workers.is_empty());
         let added = model
-            .workspace_roots
+            .workspace
+            .roots
             .list()
             .iter()
             .find(|root| root.path == canonical)

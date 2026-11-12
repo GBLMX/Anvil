@@ -76,15 +76,15 @@ pub fn run_with_input(
         }
         Err(error) => {
             let mut model = Model::new(EditorState::from_text(""), None);
-            model.workspace = workspace.clone();
+            model.workspace.path = workspace.clone();
             model.reload_icons();
-            model.require_gateway = true;
+            model.workspace.require_gateway = true;
             model.status = format!("E: gateway unavailable: {error}");
             model.dirty = true;
             (model, None)
         }
     };
-    model.gateway_session = session;
+    model.workspace.gateway_session = session;
     model.set_editor_mode(editor_mode);
     if session_enabled {
         model.install_recents(crate::recents::load());
@@ -367,7 +367,8 @@ fn reopen_tty_stdin() -> io::Result<()> {
 #[cfg(target_os = "linux")]
 impl Drop for Model {
     fn drop(&mut self) {
-        self.plugin_supervisor.shutdown(self.gateway.as_mut());
+        self.plugin_supervisor
+            .shutdown(self.workspace.gateway.as_mut());
     }
 }
 

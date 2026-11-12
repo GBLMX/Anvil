@@ -35,12 +35,13 @@ fn secondary_root_tree_lists_and_opens_through_owning_gateway() {
     let (secondary_session, secondary_client, _secondary_lsp) =
         GatewaySession::start(&secondary_root).expect("secondary gateway");
     let mut model = Model::with_gateway(primary_client, primary_root.clone());
-    model.gateway_session = Some(primary_session);
+    model.workspace.gateway_session = Some(primary_session);
     model
-        .workspace_roots
+        .workspace
+        .roots
         .add(&secondary_root, true)
         .expect("secondary root");
-    model.root_gateways.insert(
+    model.workspace.root_gateways.insert(
         secondary_root.clone(),
         (secondary_session, secondary_client),
     );

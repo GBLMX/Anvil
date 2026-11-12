@@ -11,15 +11,20 @@ impl Model {
             return;
         }
         if self.tree.entries.is_empty() {
-            let workspace = self.workspace.clone();
+            let workspace = self.workspace.path.clone();
             if self.ensure_file_worker() {
-                if let Some(worker) = self.file_worker.as_ref() {
+                if let Some(worker) = self.workspace.file_worker.as_ref() {
                     let _ = worker.request(FileRequest::List(workspace));
                 }
                 self.ensure_root_tree_nodes();
-                let roots = self.root_file_workers.keys().cloned().collect::<Vec<_>>();
+                let roots = self
+                    .workspace
+                    .root_file_workers
+                    .keys()
+                    .cloned()
+                    .collect::<Vec<_>>();
                 for root in roots {
-                    if let Some(worker) = self.root_file_workers.get(&root) {
+                    if let Some(worker) = self.workspace.root_file_workers.get(&root) {
                         let _ = worker.request(FileRequest::List(root));
                     }
                 }
@@ -98,7 +103,7 @@ impl Model {
                 self.tree.entries.remove(index + 1);
             }
         } else {
-            let owned = self.workspace_roots.owning_root(&entry.path);
+            let owned = self.workspace.roots.owning_root(&entry.path);
             if let Some(root) = owned
                 && !root.trusted
             {

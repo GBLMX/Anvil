@@ -94,11 +94,11 @@ impl Model {
         self.ui.focus.tree = true;
         let directory = directory.trim();
         let target_directory = if directory.is_empty() {
-            self.workspace.clone()
+            self.workspace.path.clone()
         } else {
             match self.absolute_path(Path::new(directory)) {
                 Ok(path)
-                    if path.starts_with(&self.workspace)
+                    if path.starts_with(&self.workspace.path)
                         || self.secondary_root(&path).is_some() =>
                 {
                     path
@@ -111,15 +111,17 @@ impl Model {
             }
         };
         let source_root = self
-            .workspace_roots
+            .workspace
+            .roots
             .owning_root(&path)
             .map(|root| root.path.clone())
-            .unwrap_or_else(|| self.workspace.clone());
+            .unwrap_or_else(|| self.workspace.path.clone());
         let target_root = self
-            .workspace_roots
+            .workspace
+            .roots
             .owning_root(&target_directory)
             .map(|root| root.path.clone())
-            .unwrap_or_else(|| self.workspace.clone());
+            .unwrap_or_else(|| self.workspace.path.clone());
         if source_root != target_root {
             self.status = "E: cannot transfer across workspace roots".to_owned();
             self.dirty = true;
@@ -194,7 +196,7 @@ impl Model {
                     if copy { "copied" } else { "moved" },
                     name.to_string_lossy(),
                     target_directory
-                        .strip_prefix(&self.workspace)
+                        .strip_prefix(&self.workspace.path)
                         .map(|path| path.display().to_string())
                         .unwrap_or_else(|_| ".".to_owned())
                 );

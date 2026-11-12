@@ -1429,7 +1429,7 @@ fn welcome_actions(model: &Model, width: usize) -> Vec<Line<'static>> {
         Line::styled("", theme::panel()),
         Line::styled(
             truncate_width(
-                &format!("workspace  {}", model.workspace.display()),
+                &format!("workspace  {}", model.workspace.path.display()),
                 u16::try_from(width.saturating_sub(2)).unwrap_or(u16::MAX),
             ),
             muted,
@@ -1448,7 +1448,7 @@ fn welcome_recent(model: &Model, width: usize, limit: usize) -> Vec<Line<'static
     } else {
         for path in files.iter().take(limit) {
             let display = path
-                .strip_prefix(&model.workspace)
+                .strip_prefix(&model.workspace.path)
                 .unwrap_or(path)
                 .display()
                 .to_string();

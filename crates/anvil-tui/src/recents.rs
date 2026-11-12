@@ -118,7 +118,8 @@ impl Model {
             .files
             .iter()
             .filter(|path| {
-                self.workspace_roots
+                self.workspace
+                    .roots
                     .owning_root(path)
                     .is_some_and(|root| root.trusted)
             })
@@ -139,11 +140,12 @@ impl Model {
             .iter()
             .map(|path| {
                 let primary = self
-                    .workspace_roots
+                    .workspace
+                    .roots
                     .owning_root(path)
-                    .is_some_and(|root| root.path == self.workspace);
+                    .is_some_and(|root| root.path == self.workspace.path);
                 if primary {
-                    path.strip_prefix(&self.workspace)
+                    path.strip_prefix(&self.workspace.path)
                         .unwrap_or(path)
                         .to_string_lossy()
                         .into_owned()

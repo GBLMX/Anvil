@@ -433,7 +433,7 @@ enum PathKind {
 }
 
 fn path_kind(model: &mut Model, path: &Path) -> Result<PathKind, String> {
-    if !model.require_gateway {
+    if !model.workspace.require_gateway {
         return match std::fs::symlink_metadata(path) {
             Ok(metadata) if metadata.is_dir() => Ok(PathKind::Directory),
             Ok(metadata) if metadata.is_file() => Ok(PathKind::File),
@@ -444,6 +444,7 @@ fn path_kind(model: &mut Model, path: &Path) -> Result<PathKind, String> {
     }
     let relative = model.relative_path(path)?;
     let gateway = model
+        .workspace
         .gateway
         .as_mut()
         .ok_or_else(|| "gateway unavailable".to_owned())?;
@@ -949,7 +950,7 @@ mod tests {
         let (session, gateway, _lsp) =
             crate::gateway::GatewaySession::start(&workspace).expect("gateway");
         let mut model = Model::with_gateway(gateway, workspace.clone());
-        model.require_gateway = true;
+        model.workspace.require_gateway = true;
 
         let create = WorkspaceEdit::from_lsp(&serde_json::json!({
             "documentChanges": [{"kind": "create", "uri": uri(&created)}]

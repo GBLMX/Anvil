@@ -596,8 +596,8 @@ fn gateway_required_refuses_file_operations_without_client() {
     let directory = tempfile::tempdir().expect("tempdir");
     let path = directory.path().join("file.txt");
     let mut model = Model::new(EditorState::from_text("data"), None);
-    model.require_gateway = true;
-    model.workspace = directory.path().to_path_buf();
+    model.workspace.require_gateway = true;
+    model.workspace.path = directory.path().to_path_buf();
     model.path = Some(path);
     assert!(!model.save());
     assert!(model.status.contains("gateway unavailable"));
@@ -613,8 +613,8 @@ fn gateway_refuses_paths_outside_workspace() {
     let directory = tempfile::tempdir().expect("tempdir");
     let outside = tempfile::tempdir().expect("outside");
     let mut model = Model::new(EditorState::from_text(""), None);
-    model.require_gateway = true;
-    model.workspace = directory.path().to_path_buf();
+    model.workspace.require_gateway = true;
+    model.workspace.path = directory.path().to_path_buf();
     handle_event(&mut model, key(KeyCode::Char(':')));
     type_text(
         &mut model,

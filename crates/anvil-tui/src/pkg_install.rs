@@ -50,7 +50,7 @@ impl Model {
             return;
         };
         self.installer = None;
-        match GatewaySession::start_installer(&self.workspace, &host) {
+        match GatewaySession::start_installer(&self.workspace.path, &host) {
             Ok((session, client)) => self.installer = Some((session, client)),
             Err(error) => {
                 self.status = format!("E: installer gateway: {error}");
@@ -91,7 +91,7 @@ impl Model {
         public_key: &str,
     ) {
         self.installer = None;
-        match GatewaySession::start_local_installer(&self.workspace) {
+        match GatewaySession::start_local_installer(&self.workspace.path) {
             Ok((session, client)) => self.installer = Some((session, client)),
             Err(error) => {
                 self.status = format!("E: installer gateway: {error}");
@@ -292,7 +292,7 @@ impl Model {
                     | HostState::Draining
             )
         {
-            let Some(gateway) = self.gateway.as_mut() else {
+            let Some(gateway) = self.workspace.gateway.as_mut() else {
                 self.status = "E: gateway unavailable".to_owned();
                 self.dirty = true;
                 return;
@@ -357,7 +357,7 @@ impl Model {
         else {
             return;
         };
-        let Some(gateway) = self.gateway.as_mut() else {
+        let Some(gateway) = self.workspace.gateway.as_mut() else {
             self.status = "E: pkg trust requires gateway".to_owned();
             return;
         };

@@ -240,10 +240,11 @@ mod tests {
         std::fs::write(first.path().join("a.txt"), "a").expect("write");
         std::fs::write(second.path().join("a.txt"), "a").expect("write");
         let mut model = Model::new(EditorState::from_text(""), None);
-        model.workspace = first.path().to_path_buf();
-        model.workspace_roots = WorkspaceRoots::new(first.path()).expect("primary root");
+        model.workspace.path = first.path().to_path_buf();
+        model.workspace.roots = WorkspaceRoots::new(first.path()).expect("primary root");
         model
-            .workspace_roots
+            .workspace
+            .roots
             .add(second.path(), true)
             .expect("second root");
 

@@ -398,6 +398,24 @@ struct LspResultsState {
 }
 
 #[derive(Default)]
+struct WorkspaceState {
+    /// Workspace root used to resolve all file paths.
+    path: PathBuf,
+    roots: workspace_roots::WorkspaceRoots,
+    /// Gateway client used for file I/O when present.
+    gateway: Option<GatewayClient>,
+    /// Owning child/socket for the current gateway client.
+    gateway_session: Option<GatewaySession>,
+    root_gateways: HashMap<PathBuf, (GatewaySession, GatewayClient)>,
+    /// Reject file operations instead of falling back when the gateway is absent.
+    require_gateway: bool,
+    /// Background directory and file enumerator.
+    file_worker: Option<FileWorker>,
+    /// Background workers for trusted non-primary workspace roots.
+    root_file_workers: BTreeMap<PathBuf, FileWorker>,
+}
+
+#[derive(Default)]
 struct RecentState {
     /// Quick-open usage counts keyed by the entry string.
     frecency: HashMap<String, u32>,
@@ -778,10 +796,8 @@ pub struct Model {
     buffers: Vec<Buffer>,
     /// Active buffer index.
     active: usize,
-    /// Background directory and file enumerator.
-    file_worker: Option<FileWorker>,
-    /// Background workers for trusted non-primary workspace roots.
-    root_file_workers: BTreeMap<PathBuf, FileWorker>,
+    /// Workspace root, gateways, and file workers.
+    workspace: WorkspaceState,
     /// Language services and debugger runtime.
     language: LanguageState,
     /// Git workspace, request, and view state.
@@ -807,20 +823,10 @@ pub struct Model {
     wrap_width: usize,
     /// Wrapped segment offset within the first visible source line.
     scroll_subrow: usize,
-    /// Gateway client used for file I/O when present.
-    gateway: Option<GatewayClient>,
-    /// Owning child/socket for the current gateway client.
-    gateway_session: Option<GatewaySession>,
     /// Dirty swap files that must survive a source conflict.
     conflict_swaps: HashMap<PathBuf, PathBuf>,
     /// Paths changed by a multi-file replace whose buffer reload failed.
     stale_paths: HashSet<PathBuf>,
-    /// Workspace root used to resolve all file paths.
-    workspace: PathBuf,
-    workspace_roots: workspace_roots::WorkspaceRoots,
-    root_gateways: HashMap<PathBuf, (GatewaySession, GatewayClient)>,
-    /// Reject file operations instead of falling back when the gateway is absent.
-    require_gateway: bool,
     /// The active buffer was loaded from stdin and has no file path.
     stdin_buffer: bool,
     /// Reject mutating commands for a read-only input buffer.
@@ -932,8 +938,11 @@ impl Model {
             read_only_title: None,
             buffers: Vec::new(),
             active: 0,
-            file_worker: None,
-            root_file_workers: BTreeMap::new(),
+            workspace: WorkspaceState {
+                path: workspace,
+                roots: workspace_roots,
+                ..Default::default()
+            },
             language: LanguageState::default(),
             git: GitState::default(),
             split: None,
@@ -951,14 +960,8 @@ impl Model {
             icons_checked_at: None,
             wrap_width: 80,
             scroll_subrow: 0,
-            gateway: None,
-            gateway_session: None,
             conflict_swaps: HashMap::new(),
             stale_paths: HashSet::new(),
-            workspace,
-            workspace_roots,
-            root_gateways: HashMap::new(),
-            require_gateway: false,
             stdin_buffer: false,
             read_only: false,
             project_search_generation: 0,
@@ -1059,7 +1062,7 @@ impl Model {
         let mut plugins = plugin_discovery::discover_bundled()?;
         let local = plugin_discovery::discover()?;
         let mut conflicts = plugin_discovery::merge_local(&mut plugins, local);
-        let managed = if let Some(gateway) = self.gateway.as_mut() {
+        let managed = if let Some(gateway) = self.workspace.gateway.as_mut() {
             match gateway.call("pkg.installed", serde_json::json!({})) {
                 Ok(value) => {
                     self.plugin_store_size = value
@@ -1094,14 +1097,14 @@ impl Model {
     /// Builds a model that uses `gateway` for all file I/O.
     pub fn with_gateway(gateway: GatewayClient, workspace: PathBuf) -> Self {
         let mut model = Self::new(EditorState::from_text(""), None);
-        model.gateway = Some(gateway);
-        model.workspace = workspace;
-        model.workspace_roots =
-            workspace_roots::WorkspaceRoots::new(&model.workspace).unwrap_or_default();
-        model.root_gateways.clear();
-        model.root_file_workers.clear();
+        model.workspace.gateway = Some(gateway);
+        model.workspace.path = workspace;
+        model.workspace.roots =
+            workspace_roots::WorkspaceRoots::new(&model.workspace.path).unwrap_or_default();
+        model.workspace.root_gateways.clear();
+        model.workspace.root_file_workers.clear();
         model.reload_icons();
-        model.require_gateway = true;
+        model.workspace.require_gateway = true;
         model
     }
 
@@ -1361,7 +1364,8 @@ impl Model {
             return;
         }
         let Some(client) = self.language.lsp.client.take().or_else(|| {
-            self.gateway_session
+            self.workspace
+                .gateway_session
                 .as_mut()
                 .and_then(|session| session.connect_lsp().ok())
         }) else {
@@ -1381,7 +1385,13 @@ impl Model {
                 .collect(),
             initialization_options: settings.initialization_options,
         };
-        match LspWorker::start(client, config, self.workspace.clone(), path.clone(), text) {
+        match LspWorker::start(
+            client,
+            config,
+            self.workspace.path.clone(),
+            path.clone(),
+            text,
+        ) {
             Ok(worker) => {
                 self.language.lsp.config = Some(desired.clone());
                 self.language.lsp.workers.insert(desired.clone(), worker);
@@ -1629,23 +1639,23 @@ impl Model {
     }
 
     fn reconnect_gateway(&mut self) {
-        if !self.require_gateway {
+        if !self.workspace.require_gateway {
             self.status = "E: gateway is not required in this session".to_owned();
             self.dirty = true;
             return;
         }
-        self.file_worker = None;
+        self.workspace.file_worker = None;
         self.language.lsp.workers.clear();
         self.language.lsp.client = None;
         self.language.lsp.config = None;
         self.language.lsp.retries.clear();
         self.clear_lsp_ui();
-        self.gateway = None;
-        self.gateway_session = None;
-        match GatewaySession::start(&self.workspace) {
+        self.workspace.gateway = None;
+        self.workspace.gateway_session = None;
+        match GatewaySession::start(&self.workspace.path) {
             Ok((session, client, lsp_client)) => {
-                self.gateway_session = Some(session);
-                self.gateway = Some(client);
+                self.workspace.gateway_session = Some(session);
+                self.workspace.gateway = Some(client);
                 self.language.lsp.client = Some(lsp_client);
                 self.status = "gateway reconnected".to_owned();
             }

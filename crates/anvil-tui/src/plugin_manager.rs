@@ -78,7 +78,7 @@ impl Model {
                     | HostState::Draining
             );
             if active {
-                let Some(gateway) = self.gateway.as_mut() else {
+                let Some(gateway) = self.workspace.gateway.as_mut() else {
                     self.status = "E: gateway unavailable".to_owned();
                     self.dirty = true;
                     return;
@@ -145,6 +145,7 @@ impl Model {
             return;
         }
         let result = self
+            .workspace
             .gateway
             .as_mut()
             .ok_or_else(|| "gateway unavailable".to_owned())
@@ -191,7 +192,7 @@ impl Model {
                 | HostState::Ready
                 | HostState::Draining
         ) {
-            let Some(gateway) = self.gateway.as_mut() else {
+            let Some(gateway) = self.workspace.gateway.as_mut() else {
                 self.status = "E: gateway unavailable".to_owned();
                 self.dirty = true;
                 return;
@@ -208,6 +209,7 @@ impl Model {
             return;
         }
         let result = self
+            .workspace
             .gateway
             .as_mut()
             .ok_or_else(|| "gateway unavailable".to_owned())

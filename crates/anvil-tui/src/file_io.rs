@@ -108,15 +108,18 @@ impl Model {
         let joined = if path.is_absolute() {
             path.to_path_buf()
         } else {
-            self.workspace.join(path)
+            self.workspace.path.join(path)
         };
         Ok(joined.canonicalize().unwrap_or(joined))
     }
 
     pub(crate) fn relative_path(&self, path: &Path) -> Result<String, String> {
-        let relative = path
-            .strip_prefix(&self.workspace)
-            .map_err(|_| format!("path is outside workspace {}", self.workspace.display()))?;
+        let relative = path.strip_prefix(&self.workspace.path).map_err(|_| {
+            format!(
+                "path is outside workspace {}",
+                self.workspace.path.display()
+            )
+        })?;
         let relative = relative
             .to_str()
             .filter(|relative| !relative.is_empty() && *relative != ".")
@@ -125,10 +128,10 @@ impl Model {
     }
 
     fn root_relative(&self, path: &Path) -> Result<(PathBuf, String), String> {
-        let root_path = if let Some(root) = self.workspace_roots.owning_root(path) {
+        let root_path = if let Some(root) = self.workspace.roots.owning_root(path) {
             root.path.clone()
-        } else if path.starts_with(&self.workspace) {
-            self.workspace.clone()
+        } else if path.starts_with(&self.workspace.path) {
+            self.workspace.path.clone()
         } else {
             return Err(format!(
                 "path is outside workspace roots: {}",
@@ -146,20 +149,22 @@ impl Model {
     }
 
     fn gateway_for_root(&mut self, root: &Path) -> Result<&mut GatewayClient, String> {
-        if root == self.workspace {
+        if root == self.workspace.path {
             return self
+                .workspace
                 .gateway
                 .as_mut()
                 .ok_or_else(|| "gateway unavailable".to_owned());
         }
-        self.root_gateways
+        self.workspace
+            .root_gateways
             .get_mut(root)
             .map(|(_, gateway)| gateway)
             .ok_or_else(|| format!("root gateway unavailable or untrusted: {}", root.display()))
     }
 
     pub(crate) fn read_file(&mut self, path: &Path) -> Result<String, String> {
-        if !self.require_gateway {
+        if !self.workspace.require_gateway {
             let data = fs::read(path).map_err(|error| error.to_string())?;
             return String::from_utf8(data)
                 .map_err(|_| format!("{}: invalid UTF-8", path.display()));
@@ -181,7 +186,7 @@ impl Model {
     }
 
     pub(crate) fn write_file(&mut self, path: &Path, text: &str) -> Result<(), String> {
-        if !self.require_gateway {
+        if !self.workspace.require_gateway {
             return fs::write(path, text).map_err(|error| error.to_string());
         }
         let (root, relative) = self.root_relative(path)?;
@@ -192,7 +197,7 @@ impl Model {
     }
 
     pub(crate) fn create_dir(&mut self, path: &Path) -> Result<(), String> {
-        if !self.require_gateway {
+        if !self.workspace.require_gateway {
             return fs::create_dir(path).map_err(|error| error.to_string());
         }
         let (root, relative) = self.root_relative(path)?;
@@ -221,10 +226,11 @@ impl Model {
 
     fn reject_cross_root(&self, from: &Path, to: &Path) -> Result<(), String> {
         let from_root = self
-            .workspace_roots
+            .workspace
+            .roots
             .owning_root(from)
             .map(|root| &root.path);
-        let to_root = self.workspace_roots.owning_root(to).map(|root| &root.path);
+        let to_root = self.workspace.roots.owning_root(to).map(|root| &root.path);
         if let (Some(from_root), Some(to_root)) = (from_root, to_root)
             && from_root != to_root
         {
@@ -238,7 +244,7 @@ impl Model {
     }
 
     pub(crate) fn rename_path(&mut self, from: &Path, to: &Path) -> Result<(), String> {
-        if !self.require_gateway {
+        if !self.workspace.require_gateway {
             self.reject_cross_root(from, to)?;
             return fs::rename(from, to).map_err(|error| error.to_string());
         }
@@ -250,7 +256,7 @@ impl Model {
     }
 
     pub(crate) fn remove_path(&mut self, path: &Path) -> Result<(), String> {
-        if !self.require_gateway {
+        if !self.workspace.require_gateway {
             let metadata = fs::symlink_metadata(path).map_err(|error| error.to_string())?;
             return if metadata.is_dir() {
                 fs::remove_dir_all(path).map_err(|error| error.to_string())
@@ -266,7 +272,7 @@ impl Model {
     }
 
     pub(crate) fn copy_path(&mut self, from: &Path, to: &Path) -> Result<(), String> {
-        if !self.require_gateway {
+        if !self.workspace.require_gateway {
             self.reject_cross_root(from, to)?;
             fs::copy(from, to)
                 .map(|_| ())
@@ -300,7 +306,7 @@ impl Model {
         }
         paths.sort();
         paths.dedup();
-        if let Some(worker) = self.file_worker.as_ref() {
+        if let Some(worker) = self.workspace.file_worker.as_ref() {
             let _ = worker.request(crate::file_worker::FileRequest::Watch(paths));
         }
     }

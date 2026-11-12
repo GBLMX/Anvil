@@ -242,7 +242,8 @@ impl Model {
         };
         let path = if Path::new(&location.path).is_absolute() {
             match self
-                .workspace_roots
+                .workspace
+                .roots
                 .resolve(Path::new(&location.path), true)
             {
                 Ok(path) => path,
@@ -261,7 +262,7 @@ impl Model {
                     return;
                 }
             };
-            if !path.starts_with(&self.workspace) {
+            if !path.starts_with(&self.workspace.path) {
                 self.status = format!("E: location outside workspace: {}", location.path);
                 self.dirty = true;
                 return;
@@ -420,7 +421,7 @@ mod tests {
         std::fs::create_dir_all(source.parent().expect("parent")).expect("mkdir");
         std::fs::write(&source, "one\ntwo\nthree\n").expect("write");
         let mut model = Model::new(EditorState::from_text("log"), None);
-        model.workspace = dir.path().canonicalize().expect("canonical");
+        model.workspace.path = dir.path().canonicalize().expect("canonical");
         model.set_pipe_locations("src/main.rs:99:99: error");
         model.open_stdin_location();
         assert_eq!(
@@ -441,7 +442,7 @@ mod tests {
         let workspace = dir.path().join("workspace");
         std::fs::create_dir_all(&workspace).expect("mkdir");
         let mut model = Model::new(EditorState::from_text("log"), None);
-        model.workspace = workspace.canonicalize().expect("canonical");
+        model.workspace.path = workspace.canonicalize().expect("canonical");
         model.set_pipe_locations("../outside.rs:1:1: error");
         model.open_stdin_location();
         assert!(model.path.is_none());
@@ -460,7 +461,7 @@ mod tests {
         let root = root.canonicalize().expect("canonical");
         let source = source.canonicalize().expect("canonical");
         let mut model = Model::new(EditorState::from_text("log"), None);
-        model.workspace_roots.add(&root, true).expect("add root");
+        model.workspace.roots.add(&root, true).expect("add root");
         let location = format!("{}:1:8: needle", source.display());
         model.set_pipe_locations(&location);
         model.open_stdin_location();

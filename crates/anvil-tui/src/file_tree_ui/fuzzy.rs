@@ -11,6 +11,7 @@ impl Model {
     pub(crate) fn fuzzy_display_path(&self, entry: &str) -> String {
         let path = Path::new(entry);
         if let Some(root) = self
+            .workspace
             .root_file_workers
             .keys()
             .find(|root| path.starts_with(root))
@@ -26,7 +27,8 @@ impl Model {
     }
 
     fn fuzzy_owner_root(&self, path: &Path) -> Option<PathBuf> {
-        self.root_file_workers
+        self.workspace
+            .root_file_workers
             .keys()
             .filter(|root| path.starts_with(root))
             .max_by_key(|root| root.components().count())
@@ -60,8 +62,8 @@ impl Model {
             None => path.clone(),
         };
         let has_worker = match owner.as_ref() {
-            Some(root) => self.root_file_workers.contains_key(root),
-            None => self.file_worker.is_some(),
+            Some(root) => self.workspace.root_file_workers.contains_key(root),
+            None => self.workspace.file_worker.is_some(),
         };
         if !has_worker {
             self.overlays.preview_generation = self.overlays.preview_generation.saturating_add(1);
@@ -82,13 +84,13 @@ impl Model {
             ..PreviewState::default()
         };
         let request = match owner.as_ref() {
-            Some(root) => self.root_file_workers.get(root).map(|worker| {
+            Some(root) => self.workspace.root_file_workers.get(root).map(|worker| {
                 worker.request(FileRequest::Preview {
                     path: request_path,
                     generation,
                 })
             }),
-            None => self.file_worker.as_ref().map(|worker| {
+            None => self.workspace.file_worker.as_ref().map(|worker| {
                 worker.request(FileRequest::Preview {
                     path: request_path,
                     generation,
@@ -142,17 +144,17 @@ impl Model {
         self.overlays.lsp_results.code_actions = None;
         self.overlays.lsp_results.document_symbols = None;
         self.clear_preview();
-        let workspace = self.workspace.clone();
+        let workspace = self.workspace.path.clone();
         let generation = self.overlays.fuzzy_generation.saturating_add(1);
         self.overlays.fuzzy_generation = generation;
         if self.ensure_file_worker() {
-            if let Some(worker) = self.file_worker.as_ref() {
+            if let Some(worker) = self.workspace.file_worker.as_ref() {
                 let _ = worker.request(FileRequest::Files {
                     hidden: self.tree.show_hidden,
                     generation,
                 });
             }
-            for worker in self.root_file_workers.values() {
+            for worker in self.workspace.root_file_workers.values() {
                 let _ = worker.request(FileRequest::Files {
                     hidden: self.tree.show_hidden,
                     generation,
@@ -276,7 +278,7 @@ impl Model {
         let path = if Path::new(&entry).is_absolute() {
             PathBuf::from(&entry)
         } else {
-            self.workspace.join(&entry)
+            self.workspace.path.join(&entry)
         };
         let count = self.recent.frecency.entry(entry).or_default();
         *count = count.saturating_add(1);

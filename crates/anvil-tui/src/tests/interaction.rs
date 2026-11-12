@@ -406,7 +406,7 @@ fn tree_expands_directories() {
     fs::write(dir.path().join("src/main.rs"), "fn main() {}").expect("file");
     fs::write(dir.path().join("Cargo.toml"), "").expect("manifest");
     let mut model = Model::new(EditorState::from_text(""), None);
-    model.workspace = dir.path().to_path_buf();
+    model.workspace.path = dir.path().to_path_buf();
     model.open_tree();
     assert!(model.tree.visible);
     let index = model
@@ -441,7 +441,7 @@ fn tree_refresh_preserves_selection_and_expansion() {
     fs::write(dir.path().join("src/main.rs"), "fn main() {}").expect("file");
     fs::write(dir.path().join("root.txt"), "").expect("file");
     let mut model = Model::new(EditorState::from_text(""), None);
-    model.workspace = dir.path().to_path_buf();
+    model.workspace.path = dir.path().to_path_buf();
     model.open_tree();
     let src = model
         .tree
@@ -504,7 +504,7 @@ fn fuzzy_filters_workspace_files() {
     fs::write(dir.path().join("src/main.rs"), "fn main() {}").expect("file");
     fs::write(dir.path().join("src/lib.rs"), "").expect("file");
     let mut model = Model::new(EditorState::from_text(""), None);
-    model.workspace = dir.path().to_path_buf();
+    model.workspace.path = dir.path().to_path_buf();
     model.start_fuzzy();
     let fuzzy = model.overlays.fuzzy.as_mut().expect("fuzzy");
     fuzzy.query = "main".to_owned();
@@ -1038,7 +1038,7 @@ fn fuzzy_open_records_frecency() {
     let dir = tempfile::tempdir().expect("tempdir");
     fs::write(dir.path().join("main.rs"), "fn main() {}").expect("file");
     let mut model = Model::new(EditorState::from_text(""), None);
-    model.workspace = dir.path().to_path_buf();
+    model.workspace.path = dir.path().to_path_buf();
     model.overlays.fuzzy = Some(FuzzyState {
         generation: 0,
         query: String::new(),

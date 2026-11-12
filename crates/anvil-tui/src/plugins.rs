@@ -24,7 +24,7 @@ impl Model {
             })
             .cloned()
             .collect::<Vec<_>>();
-        let Some(gateway) = self.gateway.as_mut() else {
+        let Some(gateway) = self.workspace.gateway.as_mut() else {
             return;
         };
         for plugin in candidates {
@@ -43,7 +43,7 @@ impl Model {
                 &plugin_id,
                 &plugin.root,
                 gateway,
-                &self.workspace,
+                &self.workspace.path,
             ) {
                 Ok(StartOutcome::Started) => {
                     self.status = format!("plugin {plugin_id} starting");
@@ -96,7 +96,7 @@ impl Model {
             self.dirty = true;
             return;
         }
-        let Some(gateway) = self.gateway.as_mut() else {
+        let Some(gateway) = self.workspace.gateway.as_mut() else {
             self.status = "E: gateway unavailable".to_owned();
             self.dirty = true;
             return;
@@ -119,7 +119,7 @@ impl Model {
             &plugin.root,
             command_id,
             gateway,
-            &self.workspace,
+            &self.workspace.path,
         ) {
             Ok(StartOutcome::Started) => {
                 self.status = format!("plugin {plugin_id} running {command_id}")
@@ -160,7 +160,7 @@ impl Model {
         if markers.is_empty() {
             return;
         }
-        let Some(gateway) = self.gateway.as_mut() else {
+        let Some(gateway) = self.workspace.gateway.as_mut() else {
             return;
         };
         let entries = match gateway.read_dir(".") {
@@ -201,7 +201,7 @@ impl Model {
 
     #[cfg(target_os = "linux")]
     pub(crate) fn start_oom_host(&mut self) {
-        let Some(gateway) = self.gateway.as_mut() else {
+        let Some(gateway) = self.workspace.gateway.as_mut() else {
             self.status = "E: gateway unavailable".to_owned();
             self.dirty = true;
             return;
@@ -215,7 +215,7 @@ impl Model {
             StartMode::Oom,
             &permissions,
             gateway,
-            &self.workspace,
+            &self.workspace.path,
         ) {
             Ok(StartOutcome::Started) => self.status = "plugin host OOM probe starting".to_owned(),
             Ok(StartOutcome::Queued) => self.status = "plugin host OOM probe queued".to_owned(),
@@ -232,7 +232,7 @@ impl Model {
 
     #[cfg(target_os = "linux")]
     pub(crate) fn start_host(&mut self) {
-        let Some(gateway) = self.gateway.as_mut() else {
+        let Some(gateway) = self.workspace.gateway.as_mut() else {
             self.status = "E: gateway unavailable".to_owned();
             self.dirty = true;
             return;
@@ -246,7 +246,7 @@ impl Model {
             StartMode::Normal,
             &permissions,
             gateway,
-            &self.workspace,
+            &self.workspace.path,
         ) {
             Ok(StartOutcome::Started) => self.status = "plugin host starting".to_owned(),
             Ok(StartOutcome::Queued) => self.status = "plugin host queued".to_owned(),
@@ -278,7 +278,7 @@ impl Model {
     pub(crate) fn stop_host(&mut self) {
         match self
             .plugin_supervisor
-            .stop(DEBUG_PLUGIN_ID, self.gateway.as_mut())
+            .stop(DEBUG_PLUGIN_ID, self.workspace.gateway.as_mut())
         {
             Ok(()) => self.status = "plugin host stopped".to_owned(),
             Err(error) => self.status = format!("E: {error}"),
@@ -294,6 +294,7 @@ impl Model {
     ) -> Result<(), String> {
         {
             let gateway = self
+                .workspace
                 .gateway
                 .as_mut()
                 .ok_or_else(|| "gateway unavailable".to_owned())?;
@@ -336,7 +337,7 @@ impl Model {
                 return;
             }
         }
-        let Some(gateway) = self.gateway.as_mut() else {
+        let Some(gateway) = self.workspace.gateway.as_mut() else {
             self.status = "E: gateway unavailable".to_owned();
             self.dirty = true;
             return;
@@ -346,10 +347,12 @@ impl Model {
             self.dirty = true;
             return;
         }
-        match self
-            .plugin_supervisor
-            .activate(plugin_id, &plugin.root, gateway, &self.workspace)
-        {
+        match self.plugin_supervisor.activate(
+            plugin_id,
+            &plugin.root,
+            gateway,
+            &self.workspace.path,
+        ) {
             Ok(StartOutcome::Started) => self.status = format!("plugin {plugin_id} starting"),
             Ok(StartOutcome::Queued) => self.status = format!("plugin {plugin_id} queued"),
             Err(error) => self.status = format!("E: plugin {plugin_id}: {error}"),
@@ -362,7 +365,7 @@ impl Model {
 
     #[cfg(target_os = "linux")]
     pub(crate) fn poll_host(&mut self) {
-        let events = self.plugin_supervisor.poll(self.gateway.as_mut());
+        let events = self.plugin_supervisor.poll(self.workspace.gateway.as_mut());
         for event in events {
             match event {
                 SupervisorEvent::State {

@@ -5,7 +5,7 @@ use crate::dap::DapClient;
 
 impl Model {
     pub(crate) fn start_dap_attach(&mut self, program: PathBuf, args: Vec<String>) {
-        let workspace = self.workspace.clone();
+        let workspace = self.workspace.path.clone();
         let display = program.display().to_string();
         let (sender, receiver) = std::sync::mpsc::channel();
         std::thread::spawn(move || {

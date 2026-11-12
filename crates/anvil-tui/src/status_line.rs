@@ -17,7 +17,7 @@ impl Model {
         self.prune_diagnostic_peek();
         if !self.git.branch_checked {
             self.git.branch_checked = true;
-            self.git.branch = detect_git_branch(&self.workspace);
+            self.git.branch = detect_git_branch(&self.workspace.path);
             self.dirty = true;
         }
         if self.language.diagnostics.path != self.path {
@@ -58,7 +58,7 @@ impl Model {
         let Some(path) = self.path.as_ref() else {
             return "[no file]".to_owned();
         };
-        path.strip_prefix(&self.workspace)
+        path.strip_prefix(&self.workspace.path)
             .unwrap_or(path)
             .display()
             .to_string()
@@ -348,7 +348,7 @@ mod tests {
     fn status_segments_fit_small_widths() {
         let mut model = Model::new(EditorState::from_text("alpha"), None);
         model.path = Some(PathBuf::from("/ws/src/company/project/Button.tsx"));
-        model.workspace = PathBuf::from("/ws");
+        model.workspace.path = PathBuf::from("/ws");
         model.status = "saved".to_owned();
         for width in [1, 12, 40, 200] {
             let text = model.status_text(width);
@@ -360,7 +360,7 @@ mod tests {
     fn pending_diagnostics_keep_the_stable_count() {
         let mut model = Model::new(EditorState::from_text("alpha"), None);
         model.path = Some(PathBuf::from("/ws/src/main.rs"));
-        model.workspace = PathBuf::from("/ws");
+        model.workspace.path = PathBuf::from("/ws");
         model.language.diagnostics.count_shown = 2;
         model.language.diagnostics.count_pending = Some((5, Instant::now()));
         let text = model.status_text(200);
@@ -371,7 +371,7 @@ mod tests {
     #[test]
     fn breadcrumbs_fall_back_to_the_relative_path() {
         let mut model = Model::new(EditorState::from_text(""), None);
-        model.workspace = PathBuf::from("/ws");
+        model.workspace.path = PathBuf::from("/ws");
         model.path = Some(PathBuf::from("/ws/src/main.rs"));
         assert_eq!(model.breadcrumb_text(80), "src/main.rs");
     }

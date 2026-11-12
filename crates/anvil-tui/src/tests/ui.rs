@@ -103,7 +103,7 @@ fn tree_visibility_toggles_hidden_directories() {
     fs::create_dir(dir.path().join(".github")).expect("github");
     fs::create_dir(dir.path().join(".hidden")).expect("hidden");
     let mut model = Model::new(EditorState::from_text(""), None);
-    model.workspace = dir.path().to_path_buf();
+    model.workspace.path = dir.path().to_path_buf();
     model.open_tree();
     assert!(
         model
@@ -134,7 +134,7 @@ fn tree_creates_and_renames_files_and_directories() {
     let dir = tempfile::tempdir().expect("tempdir");
     let workspace = dir.path().to_path_buf();
     let mut model = Model::new(EditorState::from_text(""), None);
-    model.workspace = workspace.clone();
+    model.workspace.path = workspace.clone();
     model.open_tree();
 
     model.finish_tree_create(workspace.clone(), "new.txt".to_owned(), CreateKind::File);
@@ -165,7 +165,7 @@ fn tree_moves_copies_and_recursively_deletes() {
     let source = workspace.join("src/file.txt");
     fs::write(&source, "content").expect("source");
     let mut model = Model::new(EditorState::from_text(""), None);
-    model.workspace = workspace.clone();
+    model.workspace.path = workspace.clone();
     model.open_tree();
     model.open_path(&source).expect("open");
 
@@ -203,7 +203,7 @@ fn tree_delete_requires_an_unopened_entry() {
     fs::write(workspace.join("open.txt"), "open").expect("open file");
     fs::write(workspace.join("closed.txt"), "closed").expect("closed file");
     let mut model = Model::new(EditorState::from_text(""), None);
-    model.workspace = workspace.clone();
+    model.workspace.path = workspace.clone();
     model.open_tree();
     model.open_path(workspace.join("open.txt")).expect("open");
 
@@ -221,7 +221,7 @@ fn tree_renders_file_and_folder_icons() {
     let dir = tempfile::tempdir().expect("tempdir");
     fs::write(dir.path().join("main.rs"), "").expect("file");
     let mut model = Model::new(EditorState::from_text(""), None);
-    model.workspace = dir.path().to_path_buf();
+    model.workspace.path = dir.path().to_path_buf();
     model.welcome = false;
     model.open_tree();
 
@@ -250,7 +250,7 @@ fn tree_shows_modified_and_diagnostic_markers() {
     let path = dir.path().join("main.rs");
     fs::write(&path, "fn main() {}\n").expect("file");
     let mut model = Model::new(EditorState::from_text(""), None);
-    model.workspace = dir.path().to_path_buf();
+    model.workspace.path = dir.path().to_path_buf();
     model.welcome = false;
     model.open_tree();
     model.open_path(&path).expect("open");
@@ -281,7 +281,7 @@ fn tree_renders_ascii_icon_fallback() {
     let dir = tempfile::tempdir().expect("tempdir");
     fs::write(dir.path().join("main.rs"), "").expect("file");
     let mut model = Model::new(EditorState::from_text(""), None);
-    model.workspace = dir.path().to_path_buf();
+    model.workspace.path = dir.path().to_path_buf();
     model.ascii_icons = true;
     model.welcome = false;
     model.open_tree();
@@ -307,7 +307,7 @@ fn tree_selection_scrolls_into_view() {
         fs::write(dir.path().join(format!("f{index:02}.txt")), "").expect("file");
     }
     let mut model = Model::new(EditorState::from_text(""), None);
-    model.workspace = dir.path().to_path_buf();
+    model.workspace.path = dir.path().to_path_buf();
     model.welcome = false;
     model.open_tree();
     model.tree.selected = Some(19);
@@ -459,7 +459,7 @@ fn notification_progress_and_problems_render_without_focus_change() {
 fn status_bar_renders_path_diagnostics_and_position() {
     let mut model = Model::new(EditorState::from_text("x"), None);
     model.welcome = false;
-    model.workspace = PathBuf::from("/ws");
+    model.workspace.path = PathBuf::from("/ws");
     model.path = Some(PathBuf::from(
         "/ws/src/company/project/module/very/long/path/Button.tsx",
     ));
@@ -683,7 +683,7 @@ fn breadcrumb_row_routes_path_clicks() {
     fs::write(workspace.join("main.rs"), "alpha").expect("source");
     let path = workspace.join("main.rs");
     let mut model = Model::new(EditorState::from_text("alpha"), Some(path.clone()));
-    model.workspace = workspace;
+    model.workspace.path = workspace;
     assert_eq!(
         crate::mouse::hit_test(&model, 1, 1, 80, 24),
         crate::mouse::Target::Breadcrumb(crate::breadcrumbs::BreadcrumbTarget::Path)
@@ -718,11 +718,11 @@ fn recent_files_and_workspaces_are_bounded_and_deduplicated() {
         vec![PathBuf::from("/ws/one"), PathBuf::from("/ws/two")]
     );
     let workspace = tempfile::tempdir().expect("workspace");
-    model.workspace = workspace.path().to_path_buf();
-    model.workspace_roots =
-        crate::workspace_roots::WorkspaceRoots::new(&model.workspace).expect("roots");
+    model.workspace.path = workspace.path().to_path_buf();
+    model.workspace.roots =
+        crate::workspace_roots::WorkspaceRoots::new(&model.workspace.path).expect("roots");
     for index in 0..25 {
-        model.record_recent_file(&model.workspace.join(format!("{index}.rs")));
+        model.record_recent_file(&model.workspace.path.join(format!("{index}.rs")));
     }
     model.record_recent_file(Path::new("/outside/ignored.rs"));
     assert_eq!(model.recent.files.len(), 20);
@@ -757,9 +757,9 @@ fn welcome_shows_recent_files_and_r_opens_them() {
     let workspace = tempfile::tempdir().expect("workspace");
     fs::write(workspace.path().join("main.rs"), "fn main() {}").expect("file");
     let mut model = Model::new(EditorState::from_text(""), None);
-    model.workspace = workspace.path().to_path_buf();
-    model.workspace_roots =
-        crate::workspace_roots::WorkspaceRoots::new(&model.workspace).expect("roots");
+    model.workspace.path = workspace.path().to_path_buf();
+    model.workspace.roots =
+        crate::workspace_roots::WorkspaceRoots::new(&model.workspace.path).expect("roots");
     model.record_recent_file(&workspace.path().join("main.rs"));
     let backend = TestBackend::new(80, 30);
     let mut terminal = Terminal::new(backend).expect("terminal");
@@ -786,9 +786,9 @@ fn welcome_recent_rows_are_clickable() {
     let path = workspace.path().join("main.rs");
     fs::write(&path, "fn main() {}").expect("file");
     let mut model = Model::new(EditorState::from_text(""), None);
-    model.workspace = workspace.path().to_path_buf();
-    model.workspace_roots =
-        crate::workspace_roots::WorkspaceRoots::new(&model.workspace).expect("roots");
+    model.workspace.path = workspace.path().to_path_buf();
+    model.workspace.roots =
+        crate::workspace_roots::WorkspaceRoots::new(&model.workspace.path).expect("roots");
     model.record_recent_file(&path);
     assert_eq!(
         crate::mouse::hit_test(&model, 35, 5, 80, 30),

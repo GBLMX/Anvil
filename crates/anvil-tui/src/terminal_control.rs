@@ -29,7 +29,7 @@ impl Model {
         }
         match PtySession::spawn(
             &program,
-            &self.workspace,
+            &self.workspace.path,
             self.viewport_width.max(20),
             self.viewport_height.max(5),
         ) {
