@@ -824,3 +824,14 @@ fn config_reload_applies_loaded_settings_and_keymap() {
     assert!(model.settings.search.case_sensitive);
     assert_eq!(model.status, "configuration reloaded");
 }
+
+#[test]
+fn soft_wrap_preserves_scroll_margin() {
+    let mut model = Model::new(EditorState::from_text("0\n1\n2\n3\n4\n5\n6\n7\n8\n9"), None);
+    model.settings.editor.soft_wrap = true;
+    model.scroll = 0;
+    model.cursor = model.offset_at_utf16(1, 0);
+    model.editor.set_selection_bytes(model.cursor, model.cursor);
+    model.ensure_cursor_visible(5, 80);
+    assert_eq!(model.scroll, 0);
+}

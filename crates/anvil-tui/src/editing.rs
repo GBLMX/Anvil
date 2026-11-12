@@ -471,6 +471,7 @@ impl Model {
             return;
         };
         let line = position.line;
+        let previous_scroll = self.scroll;
         let height = usize::from(height.max(1));
         let margin = self
             .settings
@@ -499,6 +500,12 @@ impl Model {
         let column = position.display_column;
         if self.settings.editor.soft_wrap {
             self.wrap_width = usize::from(width.saturating_sub(self.gutter_width()).max(1));
+            if self.row_of_position(line, column, height).is_none() {
+                self.scroll = line;
+                self.scroll_subrow = 0;
+            } else if previous_scroll != self.scroll {
+                self.scroll_subrow = 0;
+            }
             let segments = self.wrap_segments(line, self.wrap_width);
             let line_end = self
                 .editor
@@ -521,10 +528,6 @@ impl Model {
                 if column >= start_column && (column < end_column || *end >= line_end) {
                     segment = index;
                 }
-            }
-            if self.scroll != line {
-                self.scroll = line;
-                self.scroll_subrow = 0;
             }
             if segment < self.scroll_subrow {
                 self.scroll_subrow = segment;
