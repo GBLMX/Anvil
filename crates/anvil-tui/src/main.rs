@@ -28,6 +28,7 @@ Environment:
                          catppuccin-mocha, solarized-light
   ANVIL_SETTINGS         Explicit settings.toml path
   ANVIL_EDITOR_SCROLL_MARGIN  Viewport scroll margin (0-16)
+  ANVIL_EDITOR_MAX_BUFFERS  Maximum foreground buffers (1-99)
   ANVIL_SEARCH_CASE_SENSITIVE Search default: true or false
   ANVIL_LSP_INLAY_HINTS  Inlay hints: true or false
   ANVIL_BUNDLED_PLUGIN_DIR  Explicit bundled official plugin directory
@@ -396,6 +397,7 @@ mod tests {
         assert!(USAGE.contains("Space f"));
         assert!(USAGE.contains("previews"));
         assert!(USAGE.contains("ANVIL_GATEWAY"));
+        assert!(USAGE.contains("ANVIL_EDITOR_MAX_BUFFERS"));
     }
 
     #[test]
