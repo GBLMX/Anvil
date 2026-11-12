@@ -289,6 +289,8 @@ post-`0.5.0` feature line.
 - Keymap tests moved into `keymap/tests.rs`; `keymap.rs` is now 1,182 lines.
 - Editing operations split into `editing/objects.rs`, `editing/motions.rs`,
   `editing/selection.rs`, and `editing/input.rs`; `editing.rs` is now 62 lines.
+- Built-in semantic palettes moved into `theme/palette.rs`; `theme.rs` is now
+  1,191 lines.
 
 ### Fixed
 - The file tree now opens the command line on `:`, so commands such as
