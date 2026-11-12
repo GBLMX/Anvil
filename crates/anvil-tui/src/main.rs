@@ -23,8 +23,9 @@ Options:
 Environment:
   ANVIL_GATEWAY          Explicit path to anvil-gateway
   ANVIL_RG               Explicit ripgrep path for fuzzy file listing
-  ANVIL_THEME            Startup theme: anvil-dark, one-dark, gruvbox-dark,
-                         nord, catppuccin-mocha, solarized-light
+  ANVIL_THEME            Startup theme: anvil-dark, tokyonight, omp-kde,
+                         helix-base16, one-dark, gruvbox-dark, nord,
+                         catppuccin-mocha, solarized-light
   ANVIL_SETTINGS         Explicit settings.toml path
   ANVIL_EDITOR_SCROLL_MARGIN  Viewport scroll margin (0-16)
   ANVIL_SEARCH_CASE_SENSITIVE Search default: true or false

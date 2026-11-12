@@ -8,6 +8,12 @@ post-`0.5.0` feature line.
 
 ## [Unreleased]
 ### Added
+- Modern built-in themes: `tokyonight`, `omp-kde`, and `helix-base16`, all
+  held to the existing WCAG-AA contrast test.
+- Settings are grouped into Editor / Search / LSP / Accessibility, and active
+  overlays use the focused border token.
+- The start page supports mouse selection of recent files with the same
+  trusted-root filtering as `:recent-files`.
 - The start page lists openable recent files and `r` opens the recent-files
   picker; recent files outside trusted workspace roots are omitted.
 - The settings overlay now also edits `ui.reduced_motion` and

@@ -16,6 +16,7 @@ use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 mod editor;
 pub use editor::view;
+pub(crate) use editor::welcome_recent_at;
 
 pub(crate) const SPINNER: [&str; 8] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧"];
 
@@ -26,6 +27,10 @@ pub(crate) fn panel_block(title: impl Into<Line<'static>>) -> Block<'static> {
         .style(theme::panel())
         .title_style(theme::title())
         .title(title)
+}
+
+pub(crate) fn focused_panel_block(title: impl Into<Line<'static>>) -> Block<'static> {
+    panel_block(title).border_style(theme::border(true))
 }
 
 fn centered_rect(area: Rect, width: u16, height: u16) -> Rect {

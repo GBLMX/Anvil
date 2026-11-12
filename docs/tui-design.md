@@ -15,6 +15,18 @@ The texture is a synthesis, not a copy:
 Anvil keeps its own palette and layout. Reference behavior is limited to
 hierarchy, density, focus, and interaction rhythm.
 
+## Palettes
+
+Built-in modern palettes now include:
+
+| Theme | Reference |
+|---|---|
+| `tokyonight` | shared Yazi/Helix Tokyo Night palette |
+| `omp-kde` | omp KDE CachyOS palette |
+| `helix-base16` | Helix base16 default dark, adjusted for AA |
+
+All built-ins pass the existing WCAG-AA contrast test.
+
 ## Tokens
 
 | Token | Contract |
@@ -78,10 +90,10 @@ related workflows. Otherwise it remains a bounded overlay.
 
 ## Future slices
 
-1. Settings grouped into Editor / LSP / Accessibility sections, with inline
-   descriptions.
-2. Start page mouse selection for recent entries.
-3. Consistent focus ring and footer hints across every overlay.
+1. Settings are grouped into Editor / Search / LSP / Accessibility.
+2. Start page supports mouse selection for recent entries.
+3. Settings and debug overlays use the focused border token; remaining overlays
+   still need the same treatment.
 4. Theme preview page using the same panel/selected primitives.
 5. Optional animation only where it communicates transition, never for
    decoration.

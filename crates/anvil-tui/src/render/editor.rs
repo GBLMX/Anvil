@@ -842,10 +842,19 @@ pub fn view(model: &Model, frame: &mut Frame) {
     }
     if let Some(overlay) = &model.settings_overlay {
         let popup =
-            crate::render::document_symbols_rect(area, crate::settings_ui::SETTINGS_ROWS + 1);
+            crate::render::document_symbols_rect(area, crate::settings_ui::SETTINGS_ROWS + 5);
         frame.render_widget(Clear, popup);
         let mut lines = Vec::new();
+        let mut group = "";
         for row in 0..crate::settings_ui::SETTINGS_ROWS {
+            let next = crate::settings_ui::SettingsOverlayState::group(row);
+            if next != group {
+                group = next;
+                lines.push(Line::styled(
+                    group.to_ascii_uppercase(),
+                    theme::panel().fg(theme::dim()).add_modifier(Modifier::BOLD),
+                ));
+            }
             let marker = if overlay.changed(row) { "*" } else { " " };
             let text = format!(
                 "{marker} {:<24} {}",
@@ -866,7 +875,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
         frame.render_widget(
             Paragraph::new(lines)
                 .style(theme::panel())
-                .block(panel_block("Settings")),
+                .block(crate::render::focused_panel_block("Settings")),
             popup,
         );
     }
@@ -1130,6 +1139,56 @@ fn truncate_width(text: &str, max: u16) -> String {
     output
 }
 
+pub(crate) fn welcome_recent_at(
+    model: &Model,
+    column: u16,
+    row: u16,
+    width: u16,
+    height: u16,
+) -> Option<usize> {
+    if !model.welcome {
+        return None;
+    }
+    let area = Rect {
+        x: 1,
+        y: 1,
+        width: width.saturating_sub(2),
+        height: height.saturating_sub(2),
+    };
+    let panel_width = area.width.saturating_sub(4).clamp(12, 92).min(area.width);
+    let panel_height = area.height.saturating_sub(2).clamp(4, 28).min(area.height);
+    let panel = Rect {
+        x: area.x + area.width.saturating_sub(panel_width) / 2,
+        y: area.y + area.height.saturating_sub(panel_height) / 2,
+        width: panel_width,
+        height: panel_height,
+    };
+    let files = model.openable_recent_files();
+    if files.is_empty() {
+        return None;
+    }
+    if panel.width >= 68 && panel.height >= 14 {
+        let left_width = ((panel.width as usize * 2) / 5).clamp(26, 38) as u16;
+        let right = Rect {
+            x: panel.x + left_width + 2,
+            width: panel.width.saturating_sub(left_width + 2),
+            ..panel
+        };
+        if column <= right.x || column >= right.right().saturating_sub(1) {
+            return None;
+        }
+        let first = right.y.saturating_add(3);
+        let offset = usize::from(row.saturating_sub(first));
+        return (row >= first && offset < files.len().min(8)).then_some(offset);
+    }
+    let first = panel.y.saturating_add(15);
+    let offset = usize::from(row.saturating_sub(first));
+    if column <= panel.x || column >= panel.right().saturating_sub(1) {
+        return None;
+    }
+    (row >= first && offset < files.len().min(5)).then_some(offset)
+}
+
 fn render_welcome(frame: &mut Frame, area: Rect, model: &Model) {
     let width = area.width.saturating_sub(4).clamp(12, 92).min(area.width);
     let height = area.height.saturating_sub(2).clamp(4, 28).min(area.height);
@@ -1190,7 +1249,7 @@ fn welcome_actions(model: &Model, width: usize) -> Vec<Line<'static>> {
         .fg(theme::accent())
         .add_modifier(Modifier::BOLD);
     let muted = theme::panel().fg(theme::muted());
-    let mut lines = vec![
+    let lines = vec![
         Line::from(vec![
             Span::styled(
                 "ANVIL",
@@ -1238,7 +1297,6 @@ fn welcome_actions(model: &Model, width: usize) -> Vec<Line<'static>> {
             muted,
         ),
     ];
-    lines.truncate(width.max(4));
     lines
 }
 

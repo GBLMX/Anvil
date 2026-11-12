@@ -16,24 +16,33 @@ impl SettingsOverlayState {
     pub(crate) fn label(index: usize) -> &'static str {
         match index {
             0 => "editor.scroll_margin",
-            1 => "search.case_sensitive",
-            2 => "lsp.inlay_hints",
-            3 => "editor.auto_save",
-            4 => "editor.soft_wrap",
-            5 => "editor.format_on_save",
+            1 => "editor.auto_save",
+            2 => "editor.soft_wrap",
+            3 => "editor.format_on_save",
+            4 => "search.case_sensitive",
+            5 => "lsp.inlay_hints",
             6 => "ui.reduced_motion",
             _ => "ui.high_contrast",
+        }
+    }
+
+    pub(crate) fn group(index: usize) -> &'static str {
+        match index {
+            0..=3 => "Editor",
+            4 => "Search",
+            5 => "LSP",
+            _ => "Accessibility",
         }
     }
 
     pub(crate) fn value(settings: &Settings, index: usize) -> String {
         match index {
             0 => settings.editor.scroll_margin.to_string(),
-            1 => settings.search.case_sensitive.to_string(),
-            2 => settings.lsp.inlay_hints.to_string(),
-            3 => settings.editor.auto_save.to_string(),
-            4 => settings.editor.soft_wrap.to_string(),
-            5 => settings.editor.format_on_save.to_string(),
+            1 => settings.editor.auto_save.to_string(),
+            2 => settings.editor.soft_wrap.to_string(),
+            3 => settings.editor.format_on_save.to_string(),
+            4 => settings.search.case_sensitive.to_string(),
+            5 => settings.lsp.inlay_hints.to_string(),
             6 => settings.ui.reduced_motion.to_string(),
             _ => settings.ui.high_contrast.to_string(),
         }
@@ -89,11 +98,11 @@ impl Model {
                     .saturating_add_signed(delta)
                     .min(settings::MAX_SCROLL_MARGIN);
             }
-            1 => draft.search.case_sensitive = !draft.search.case_sensitive,
-            2 => draft.lsp.inlay_hints = !draft.lsp.inlay_hints,
-            3 => draft.editor.auto_save = !draft.editor.auto_save,
-            4 => draft.editor.soft_wrap = !draft.editor.soft_wrap,
-            5 => draft.editor.format_on_save = !draft.editor.format_on_save,
+            1 => draft.editor.auto_save = !draft.editor.auto_save,
+            2 => draft.editor.soft_wrap = !draft.editor.soft_wrap,
+            3 => draft.editor.format_on_save = !draft.editor.format_on_save,
+            4 => draft.search.case_sensitive = !draft.search.case_sensitive,
+            5 => draft.lsp.inlay_hints = !draft.lsp.inlay_hints,
             6 => draft.ui.reduced_motion = !draft.ui.reduced_motion,
             _ => draft.ui.high_contrast = !draft.ui.high_contrast,
         }
@@ -109,11 +118,11 @@ impl Model {
         let defaults = Settings::default();
         match overlay.selected {
             0 => overlay.draft.editor.scroll_margin = defaults.editor.scroll_margin,
-            1 => overlay.draft.search.case_sensitive = defaults.search.case_sensitive,
-            2 => overlay.draft.lsp.inlay_hints = defaults.lsp.inlay_hints,
-            3 => overlay.draft.editor.auto_save = defaults.editor.auto_save,
-            4 => overlay.draft.editor.soft_wrap = defaults.editor.soft_wrap,
-            5 => overlay.draft.editor.format_on_save = defaults.editor.format_on_save,
+            1 => overlay.draft.editor.auto_save = defaults.editor.auto_save,
+            2 => overlay.draft.editor.soft_wrap = defaults.editor.soft_wrap,
+            3 => overlay.draft.editor.format_on_save = defaults.editor.format_on_save,
+            4 => overlay.draft.search.case_sensitive = defaults.search.case_sensitive,
+            5 => overlay.draft.lsp.inlay_hints = defaults.lsp.inlay_hints,
             6 => overlay.draft.ui.reduced_motion = defaults.ui.reduced_motion,
             _ => overlay.draft.ui.high_contrast = defaults.ui.high_contrast,
         }
@@ -155,11 +164,6 @@ mod tests {
         assert!(model.settings_overlay.as_ref().expect("overlay").changed(0));
         model.move_settings(1);
         model.adjust_settings(1);
-        assert!(model.settings.search.case_sensitive);
-        model.reset_settings_row();
-        assert!(!model.settings.search.case_sensitive);
-        model.move_settings(2);
-        model.adjust_settings(1);
         assert!(model.settings.editor.auto_save);
         model.reset_settings_row();
         assert!(!model.settings.editor.auto_save);
@@ -173,6 +177,16 @@ mod tests {
         assert!(model.settings.editor.format_on_save);
         model.reset_settings_row();
         assert!(!model.settings.editor.format_on_save);
+        model.move_settings(1);
+        model.adjust_settings(1);
+        assert!(model.settings.search.case_sensitive);
+        model.reset_settings_row();
+        assert!(!model.settings.search.case_sensitive);
+        model.move_settings(1);
+        model.adjust_settings(1);
+        assert!(!model.settings.lsp.inlay_hints);
+        model.reset_settings_row();
+        assert!(model.settings.lsp.inlay_hints);
         model.move_settings(1);
         model.adjust_settings(1);
         assert!(model.settings.ui.reduced_motion);

@@ -147,6 +147,9 @@ Initial set:
 | ID | Kind | Notes |
 |---|---|---|
 | `anvil-dark` | dark | Current palette, default |
+| `tokyonight` | dark | Tokyo Night, shared Yazi/Helix palette |
+| `omp-kde` | dark | omp KDE CachyOS palette |
+| `helix-base16` | dark | Helix base16 default dark, adapted for AA |
 | `one-dark` | dark | One Dark family |
 | `gruvbox-dark` | dark | Warm, high-contrast |
 | `nord` | dark | Cool blue-gray |
@@ -238,8 +241,9 @@ command-palette theme rows, preview, and cancel restore landed.
   auto light/dark fallback.
 
 ### 6.3 Built-in palette set
-Status: done. Six built-ins land: `anvil-dark`, `one-dark`, `gruvbox-dark`,
-`nord`, `catppuccin-mocha`, and `solarized-light`.
+Status: done. Nine built-ins land: `anvil-dark`, `tokyonight`, `omp-kde`,
+`helix-base16`, `one-dark`, `gruvbox-dark`, `nord`, `catppuccin-mocha`, and
+`solarized-light`.
 
 - Add `one-dark`, `gruvbox-dark`, `nord`, `catppuccin-mocha`,
   `solarized-light`.

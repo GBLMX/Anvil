@@ -39,6 +39,7 @@ pub(crate) enum Target {
     },
     Status,
     Breadcrumb(crate::breadcrumbs::BreadcrumbTarget),
+    WelcomeRecent(usize),
 }
 
 pub(crate) fn handle_mouse(model: &mut Model, mouse: MouseEvent, width: u16, height: u16) -> bool {
@@ -97,6 +98,15 @@ pub(crate) fn handle_mouse(model: &mut Model, mouse: MouseEvent, width: u16, hei
                 }
                 Target::Breadcrumb(crate::breadcrumbs::BreadcrumbTarget::Symbol) => {
                     model.open_breadcrumb_symbols();
+                }
+                Target::WelcomeRecent(index) => {
+                    if let Some(path) = model.openable_recent_files().get(index).cloned() {
+                        model.welcome = false;
+                        if let Err(error) = model.open_path(&path) {
+                            model.status = format!("E: {error}");
+                        }
+                        model.dirty = true;
+                    }
                 }
                 Target::Status | Target::Outside => {
                     model.pointer = PointerState::Idle;
@@ -187,6 +197,10 @@ pub(crate) fn handle_mouse(model: &mut Model, mouse: MouseEvent, width: u16, hei
 pub(crate) fn hit_test(model: &Model, col: u16, row: u16, width: u16, height: u16) -> Target {
     if col >= width || row >= height {
         return Target::Outside;
+    }
+    if model.welcome {
+        return crate::render::welcome_recent_at(model, col, row, width, height)
+            .map_or(Target::Outside, Target::WelcomeRecent);
     }
     let Some((inner, tab_row, breadcrumb_row)) = content_rect(model, width, height) else {
         return Target::Outside;

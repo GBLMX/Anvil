@@ -619,9 +619,8 @@ pub(crate) fn render(model: &Model, frame: &mut Frame, area: Rect) {
         .take(visible)
         .collect::<Vec<_>>();
     frame.render_widget(
-        Paragraph::new(visible_lines)
-            .style(theme::panel())
-            .block(crate::render::panel_block(format!(
+        Paragraph::new(visible_lines).style(theme::panel()).block(
+            crate::render::focused_panel_block(format!(
                 "Debug · {}{}",
                 panel.kind.name(),
                 panel
@@ -629,7 +628,8 @@ pub(crate) fn render(model: &Model, frame: &mut Frame, area: Rect) {
                     .get(panel.selected_scope)
                     .map(|scope| format!(" · {}", scope.name))
                     .unwrap_or_default()
-            ))),
+            )),
+        ),
         popup,
     );
 }

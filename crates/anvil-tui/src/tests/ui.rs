@@ -768,3 +768,28 @@ fn welcome_shows_recent_files_and_r_opens_them() {
     assert!(!model.welcome);
     assert!(model.fuzzy.is_some());
 }
+
+#[test]
+fn welcome_recent_rows_are_clickable() {
+    let workspace = tempfile::tempdir().expect("workspace");
+    let path = workspace.path().join("main.rs");
+    fs::write(&path, "fn main() {}").expect("file");
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.workspace = workspace.path().to_path_buf();
+    model.workspace_roots =
+        crate::workspace_roots::WorkspaceRoots::new(&model.workspace).expect("roots");
+    model.record_recent_file(&path);
+    assert_eq!(
+        crate::mouse::hit_test(&model, 35, 5, 80, 30),
+        crate::mouse::Target::WelcomeRecent(0)
+    );
+    let click = crossterm::event::MouseEvent {
+        kind: crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left),
+        column: 35,
+        row: 5,
+        modifiers: crossterm::event::KeyModifiers::NONE,
+    };
+    assert!(crate::mouse::handle_mouse(&mut model, click, 80, 30));
+    assert!(!model.welcome);
+    assert_eq!(model.path.as_deref(), Some(path.as_path()));
+}

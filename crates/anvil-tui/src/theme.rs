@@ -84,6 +84,114 @@ impl Theme {
         status_modes: [None; 7],
     };
 
+    pub(crate) const TOKYO_NIGHT: Self = Self {
+        name: "tokyonight",
+        bg: Color::Rgb(26, 27, 38),
+        surface: Color::Rgb(31, 35, 53),
+        surface_alt: Color::Rgb(41, 46, 66),
+        code_block_bg: Color::Rgb(31, 35, 53),
+        border: Color::Rgb(41, 46, 66),
+        text: Color::Rgb(192, 202, 245),
+        muted: Color::Rgb(130, 140, 170),
+        dim: Color::Rgb(130, 140, 178),
+        accent: Color::Rgb(122, 162, 247),
+        selection: Color::Rgb(40, 52, 87),
+        success: Color::Rgb(158, 206, 106),
+        warning: Color::Rgb(224, 175, 104),
+        error: Color::Rgb(247, 118, 142),
+        magenta: Color::Rgb(187, 154, 247),
+        white: Color::Rgb(255, 255, 255),
+        syntax_keyword: Color::Rgb(187, 154, 247),
+        syntax_string: Color::Rgb(158, 206, 106),
+        syntax_comment: Color::Rgb(130, 140, 170),
+        syntax_number: Color::Rgb(255, 158, 100),
+        syntax_function: Color::Rgb(122, 162, 247),
+        syntax_type: Color::Rgb(42, 195, 222),
+        syntax_property: Color::Rgb(125, 207, 255),
+        syntax_constant: Color::Rgb(224, 175, 104),
+        syntax_heading: Color::Rgb(122, 162, 247),
+        syntax_link: Color::Rgb(122, 162, 247),
+        syntax_code: Color::Rgb(158, 206, 106),
+        syntax_emphasis: Color::Rgb(187, 154, 247),
+        syntax_list: Color::Rgb(125, 207, 255),
+        syntax_quote: Color::Rgb(130, 140, 170),
+        syntax_table: Color::Rgb(224, 175, 104),
+        syntax_modifiers: [Modifier::empty(); 15],
+        status_modes: [None; 7],
+    };
+
+    pub(crate) const OMP_KDE: Self = Self {
+        name: "omp-kde",
+        bg: Color::Rgb(22, 25, 37),
+        surface: Color::Rgb(30, 34, 51),
+        surface_alt: Color::Rgb(35, 40, 64),
+        code_block_bg: Color::Rgb(42, 51, 80),
+        border: Color::Rgb(42, 51, 80),
+        text: Color::Rgb(211, 218, 227),
+        muted: Color::Rgb(140, 148, 166),
+        dim: Color::Rgb(132, 140, 160),
+        accent: Color::Rgb(71, 173, 214),
+        selection: Color::Rgb(42, 51, 80),
+        success: Color::Rgb(223, 252, 0),
+        warning: Color::Rgb(255, 160, 64),
+        error: Color::Rgb(255, 83, 112),
+        magenta: Color::Rgb(226, 75, 232),
+        white: Color::Rgb(252, 252, 252),
+        syntax_keyword: Color::Rgb(226, 75, 232),
+        syntax_string: Color::Rgb(223, 252, 0),
+        syntax_comment: Color::Rgb(140, 148, 166),
+        syntax_number: Color::Rgb(255, 160, 64),
+        syntax_function: Color::Rgb(0, 168, 255),
+        syntax_type: Color::Rgb(0, 193, 228),
+        syntax_property: Color::Rgb(102, 194, 242),
+        syntax_constant: Color::Rgb(255, 160, 64),
+        syntax_heading: Color::Rgb(71, 173, 214),
+        syntax_link: Color::Rgb(0, 168, 255),
+        syntax_code: Color::Rgb(223, 252, 0),
+        syntax_emphasis: Color::Rgb(226, 75, 232),
+        syntax_list: Color::Rgb(102, 194, 242),
+        syntax_quote: Color::Rgb(140, 148, 166),
+        syntax_table: Color::Rgb(255, 160, 64),
+        syntax_modifiers: [Modifier::empty(); 15],
+        status_modes: [None; 7],
+    };
+
+    pub(crate) const HELIX_BASE16: Self = Self {
+        name: "helix-base16",
+        bg: Color::Rgb(24, 24, 24),
+        surface: Color::Rgb(40, 40, 40),
+        surface_alt: Color::Rgb(56, 56, 56),
+        code_block_bg: Color::Rgb(56, 56, 56),
+        border: Color::Rgb(88, 88, 88),
+        text: Color::Rgb(216, 216, 216),
+        muted: Color::Rgb(184, 184, 184),
+        dim: Color::Rgb(150, 150, 150),
+        accent: Color::Rgb(124, 175, 194),
+        selection: Color::Rgb(56, 56, 56),
+        success: Color::Rgb(161, 181, 108),
+        warning: Color::Rgb(247, 202, 136),
+        error: Color::Rgb(230, 110, 110),
+        magenta: Color::Rgb(186, 139, 175),
+        white: Color::Rgb(248, 248, 248),
+        syntax_keyword: Color::Rgb(186, 139, 175),
+        syntax_string: Color::Rgb(161, 181, 108),
+        syntax_comment: Color::Rgb(160, 160, 160),
+        syntax_number: Color::Rgb(220, 150, 86),
+        syntax_function: Color::Rgb(124, 175, 194),
+        syntax_type: Color::Rgb(247, 202, 136),
+        syntax_property: Color::Rgb(134, 193, 185),
+        syntax_constant: Color::Rgb(220, 150, 86),
+        syntax_heading: Color::Rgb(124, 175, 194),
+        syntax_link: Color::Rgb(124, 175, 194),
+        syntax_code: Color::Rgb(161, 181, 108),
+        syntax_emphasis: Color::Rgb(186, 139, 175),
+        syntax_list: Color::Rgb(205, 100, 100),
+        syntax_quote: Color::Rgb(134, 193, 185),
+        syntax_table: Color::Rgb(220, 150, 86),
+        syntax_modifiers: [Modifier::empty(); 15],
+        status_modes: [None; 7],
+    };
+
     pub(crate) const ONE_DARK: Self = Self {
         name: "one-dark",
         bg: Color::Rgb(40, 44, 52),
@@ -267,6 +375,9 @@ impl Theme {
 
 pub(crate) const BUILTINS: &[Theme] = &[
     Theme::ANVIL_DARK,
+    Theme::TOKYO_NIGHT,
+    Theme::OMP_KDE,
+    Theme::HELIX_BASE16,
     Theme::ONE_DARK,
     Theme::SOLARIZED_LIGHT,
     Theme::GRUVBOX_DARK,
@@ -1293,6 +1404,13 @@ mod tests {
         let light = high_contrast_theme(&degraded);
         assert_eq!(light.text, Color::Rgb(0, 0, 0));
         assert!(color_is_light(light.bg));
+    }
+
+    #[test]
+    fn lists_modern_builtins() {
+        for name in ["tokyonight", "omp-kde", "helix-base16"] {
+            assert!(names().contains(&name), "{name}");
+        }
     }
 
     #[test]
