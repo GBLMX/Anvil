@@ -144,7 +144,7 @@ fn keymap_context_prefers_popup_then_command_line_then_tree() {
     );
 
     model.ui.input_mode = InputMode::Normal;
-    model.visual_anchor = Some(0);
+    model.edit.visual_anchor = Some(0);
     assert_eq!(
         model.active_keymap_contexts(),
         vec![

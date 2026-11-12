@@ -405,7 +405,7 @@ impl Model {
             && self.overlays.command_palette.is_none()
             && self.overlays.fuzzy.is_none()
             && self.overlays.settings_overlay.is_none()
-            && self.modal_layer.is_none()
+            && self.edit.modal_layer.is_none()
             && self.ui.diagnostic_peek.is_none()
             && !self.ui.problems.visible
             && self.busy.is_none()

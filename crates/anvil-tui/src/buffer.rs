@@ -11,8 +11,8 @@ impl Model {
             scroll: self.view.scroll,
             missing: self.missing,
             hscroll: self.view.hscroll,
-            visual_anchor: self.visual_anchor,
-            visual_line: self.visual_line,
+            visual_anchor: self.edit.visual_anchor,
+            visual_line: self.edit.visual_line,
             modified: self.modified,
             search_query: self.search.query.clone(),
             syntax: self.syntax.borrow().active_cache(),
@@ -44,8 +44,8 @@ impl Model {
         };
         let syntax = buffer.syntax.clone();
         self.missing = buffer.missing;
-        self.visual_anchor = buffer.visual_anchor;
-        self.visual_line = buffer.visual_line;
+        self.edit.visual_anchor = buffer.visual_anchor;
+        self.edit.visual_line = buffer.visual_line;
         self.editor = buffer.editor;
         self.path = buffer.path;
         self.cursor = buffer.cursor;
@@ -231,8 +231,8 @@ impl Model {
         self.view.hscroll = 0;
         self.modified = false;
         self.missing = false;
-        self.visual_anchor = None;
-        self.visual_line = false;
+        self.edit.visual_anchor = None;
+        self.edit.visual_line = false;
         self.search.query.clear();
         self.search.state.reset_for_buffer();
         self.syntax.borrow_mut().switch_path(None, false);

@@ -675,8 +675,8 @@ fn visual_operations_refuse_writes_to_help_buffer() {
             handle_event(&mut model, key(key_code));
         }
         assert!(model.status.contains("read-only"));
-        assert!(model.modal_layer.is_none());
-        assert!(model.visual_anchor.is_none());
+        assert!(model.edit.modal_layer.is_none());
+        assert!(model.edit.visual_anchor.is_none());
         assert_eq!(model.editor.text().slice(0..HELP_TEXT.len()), HELP_TEXT);
     }
 }

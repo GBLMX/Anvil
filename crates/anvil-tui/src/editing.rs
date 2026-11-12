@@ -337,7 +337,7 @@ impl Model {
             self.modified = true;
         }
         if !deleted.is_empty() {
-            self.last_change = Some(LastChange::DeleteWords { motion, count });
+            self.edit.last_change = Some(LastChange::DeleteWords { motion, count });
         }
         if let Some(register) = self.input.register.take() {
             self.record_register_text(register, &deleted);
@@ -453,7 +453,7 @@ impl Model {
     }
 
     fn set_caret(&mut self, offset: usize) {
-        if let Some(session) = self.insert_session.as_mut() {
+        if let Some(session) = self.edit.insert_session.as_mut() {
             session.valid = false;
         }
         self.cursor = offset;
@@ -685,23 +685,23 @@ impl Model {
     }
 
     pub(crate) fn begin_visual(&mut self, line: bool) {
-        self.visual_anchor = Some(self.cursor);
-        self.visual_line = line;
+        self.edit.visual_anchor = Some(self.cursor);
+        self.edit.visual_line = line;
         self.sync_visual_selection();
         self.dirty = true;
     }
 
     pub(crate) fn exit_visual(&mut self) {
-        self.visual_anchor = None;
+        self.edit.visual_anchor = None;
         self.editor.set_selection_bytes(self.cursor, self.cursor);
         self.dirty = true;
     }
 
     pub(crate) fn sync_visual_selection(&mut self) {
-        let Some(anchor) = self.visual_anchor else {
+        let Some(anchor) = self.edit.visual_anchor else {
             return;
         };
-        let (start, end) = if self.visual_line {
+        let (start, end) = if self.edit.visual_line {
             let Some(anchor_line) = self.editor.index().offset_to_line(anchor) else {
                 return;
             };
@@ -1026,7 +1026,7 @@ impl Model {
         self.editor.set_selection_bytes(start, last.end);
         self.editor.delete(start..last.end);
         self.cursor = start;
-        self.last_change = Some(LastChange::DeleteLines { count });
+        self.edit.last_change = Some(LastChange::DeleteLines { count });
         if let Some(register) = self.input.register.take() {
             self.record_register_text(register, &deleted);
         }
@@ -1213,7 +1213,7 @@ impl Model {
             }
         }
         self.cancel_signature_help();
-        let at_insert_end = self.insert_session.as_ref().is_some_and(|session| {
+        let at_insert_end = self.edit.insert_session.as_ref().is_some_and(|session| {
             session.valid && self.cursor == session.start + session.text.len()
         });
         if self.delete_selections(false) {

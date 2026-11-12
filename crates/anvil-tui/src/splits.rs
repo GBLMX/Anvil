@@ -133,8 +133,8 @@ impl Model {
         self.view.hscroll = buffer.hscroll;
         self.modified = buffer.modified;
         self.missing = buffer.missing;
-        self.visual_anchor = buffer.visual_anchor;
-        self.visual_line = buffer.visual_line;
+        self.edit.visual_anchor = buffer.visual_anchor;
+        self.edit.visual_line = buffer.visual_line;
         self.search.query = buffer.search_query;
         self.search.state.reset_for_buffer();
         if let Some(active) = active {

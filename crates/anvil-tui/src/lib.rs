@@ -504,6 +504,19 @@ impl Default for PluginState {
 }
 
 #[derive(Default)]
+struct EditSessionState {
+    /// Anchor for the selection-first visual adapter.
+    visual_anchor: Option<usize>,
+    /// Whether the visual adapter selects whole lines.
+    visual_line: bool,
+    modal_layer: Option<ModalLayer>,
+    /// Last successful semantic change for `.`.
+    last_change: Option<LastChange>,
+    /// Text captured by the current insert session.
+    insert_session: Option<InsertSession>,
+}
+
+#[derive(Default)]
 struct InputState {
     /// Pending normal-mode operator (`d` or `y`).
     pending: Option<char>,
@@ -884,19 +897,12 @@ pub struct Model {
     jump_list: jump::JumpList,
     /// Bounded back/forward edit-position history.
     change_list: jump::JumpList,
-    /// Anchor for the selection-first visual adapter.
-    visual_anchor: Option<usize>,
-    /// Whether the visual adapter selects whole lines.
-    visual_line: bool,
-    modal_layer: Option<ModalLayer>,
+    /// Visual selection, modal layer, and insert-session state.
+    edit: EditSessionState,
     /// Viewport, scrolling, wrap, pointer, and split ratio.
     pub view: ViewState,
     /// Input state.
     pub ui: UiState,
-    /// Last successful semantic change for `.`.
-    last_change: Option<LastChange>,
-    /// Text captured by the current insert session.
-    insert_session: Option<InsertSession>,
     /// Typed effects produced by command dispatch.
     effects: EffectQueue,
     /// In-memory keymap overrides.
@@ -979,13 +985,9 @@ impl Model {
             cursor: 0,
             jump_list: jump::JumpList::default(),
             change_list: jump::JumpList::default(),
-            visual_anchor: None,
-            visual_line: false,
-            modal_layer: None,
+            edit: EditSessionState::default(),
             view: ViewState::default(),
             ui: UiState::default(),
-            last_change: None,
-            insert_session: None,
             effects: EffectQueue::new(EFFECT_QUEUE_CAPACITY),
             keymap: keymap::KeymapConfig::default(),
             quit: false,
@@ -1227,8 +1229,8 @@ impl Model {
             cursor: self.cursor,
             scroll: self.view.scroll,
             hscroll: self.view.hscroll,
-            visual_anchor: self.visual_anchor,
-            visual_line: self.visual_line,
+            visual_anchor: self.edit.visual_anchor,
+            visual_line: self.edit.visual_line,
             modified: self.modified,
             missing: self.missing,
             search_query: std::mem::take(&mut self.search.query),
@@ -1740,7 +1742,7 @@ impl Model {
         if overlay && contexts.last() != Some(&KeymapContext::Popup) {
             contexts.push(KeymapContext::Popup);
         }
-        if self.visual_anchor.is_some() {
+        if self.edit.visual_anchor.is_some() {
             contexts.push(KeymapContext::Modal);
         }
         contexts

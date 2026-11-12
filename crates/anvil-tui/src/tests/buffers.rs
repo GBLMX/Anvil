@@ -49,12 +49,12 @@ fn switching_buffers_preserves_visual_selection() {
 
     handle_event(&mut model, key(KeyCode::Char('v')));
     handle_event(&mut model, key(KeyCode::Right));
-    assert!(model.visual_anchor.is_some());
+    assert!(model.edit.visual_anchor.is_some());
 
     command(&mut model, "bn");
-    assert!(model.visual_anchor.is_none());
+    assert!(model.edit.visual_anchor.is_none());
     command(&mut model, "bp");
-    assert_eq!(model.visual_anchor, Some(0));
+    assert_eq!(model.edit.visual_anchor, Some(0));
 }
 
 #[test]
@@ -680,11 +680,11 @@ fn failed_delete_preserves_previous_last_change() {
     let mut model = Model::new(EditorState::from_text("one"), None);
     handle_event(&mut model, key(KeyCode::Char('d')));
     handle_event(&mut model, key(KeyCode::Char('w')));
-    let previous = model.last_change.clone();
+    let previous = model.edit.last_change.clone();
     assert_eq!(model.editor.text().len_bytes(), 0);
     handle_event(&mut model, key(KeyCode::Char('d')));
     handle_event(&mut model, key(KeyCode::Char('w')));
-    assert_eq!(model.last_change, previous);
+    assert_eq!(model.edit.last_change, previous);
 }
 
 #[test]
@@ -795,7 +795,7 @@ fn moved_insert_session_does_not_poison_last_change() {
     model.capture_insert("x");
     model.move_char(-1);
     model.finish_insert_session();
-    assert!(model.last_change.is_none());
+    assert!(model.edit.last_change.is_none());
 }
 
 #[test]
@@ -1011,8 +1011,8 @@ fn visual_surround_uses_operation_scoped_modal_layer() {
         handle_event(&mut model, key(key_code));
     }
     assert_eq!(model.editor.text().slice(0..6), "(wo)rd");
-    assert!(model.modal_layer.is_none());
-    assert!(model.visual_anchor.is_none());
+    assert!(model.edit.modal_layer.is_none());
+    assert!(model.edit.visual_anchor.is_none());
 }
 
 #[test]

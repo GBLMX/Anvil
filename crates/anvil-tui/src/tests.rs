@@ -145,12 +145,12 @@ fn split_focus_restores_buffer_state_and_active_tab() {
 
     model.focus_split(false);
     assert_eq!(model.buffers.active, 0);
-    assert!(model.visual_anchor.is_none());
+    assert!(model.edit.visual_anchor.is_none());
     assert!(!model.missing);
 
     model.focus_split(true);
     assert_eq!(model.buffers.active, 1);
-    assert_eq!(model.visual_anchor, Some(0));
+    assert_eq!(model.edit.visual_anchor, Some(0));
     assert!(model.missing);
 }
 

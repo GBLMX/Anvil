@@ -316,7 +316,7 @@ fn execute_context_action(model: &mut Model, action: ContextAction, key: KeyPres
             execute_pending_command(model, command, ' ', key);
         }
     }
-    if model.visual_anchor.is_some() {
+    if model.edit.visual_anchor.is_some() {
         model.sync_visual_selection();
     }
 }
@@ -1244,8 +1244,8 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             _ => {}
         },
         InputMode::Normal => {
-            if model.visual_anchor.is_some() {
-                if model.modal_layer == Some(ModalLayer::Surround) {
+            if model.edit.visual_anchor.is_some() {
+                if model.edit.modal_layer == Some(ModalLayer::Surround) {
                     match key.code {
                         KeyCode::Esc => model.cancel_modal_layer(),
                         KeyCode::Char('(') | KeyCode::Char(')') => {
@@ -1352,7 +1352,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
                     ContextAction::Normal(command) => command,
                     ContextAction::Pending(command) => {
                         execute_pending_command(model, command, ' ', key);
-                        if model.visual_anchor.is_some() {
+                        if model.edit.visual_anchor.is_some() {
                             model.sync_visual_selection();
                         }
                         return;
@@ -1360,7 +1360,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
                 };
                 execute_normal_command(model, command);
             }
-            if model.visual_anchor.is_some() {
+            if model.edit.visual_anchor.is_some() {
                 model.sync_visual_selection();
             }
         }

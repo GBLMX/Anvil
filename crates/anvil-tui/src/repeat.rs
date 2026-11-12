@@ -4,7 +4,7 @@ use super::*;
 
 impl Model {
     pub(crate) fn begin_insert(&mut self, origin: InsertOrigin) {
-        self.insert_session = Some(InsertSession {
+        self.edit.insert_session = Some(InsertSession {
             origin,
             text: String::new(),
             start: self.cursor,
@@ -15,14 +15,14 @@ impl Model {
     }
 
     pub(crate) fn capture_insert(&mut self, text: &str) {
-        if let Some(session) = self.insert_session.as_mut() {
+        if let Some(session) = self.edit.insert_session.as_mut() {
             session.text.push_str(text);
         }
     }
 
     pub(crate) fn finish_insert_session(&mut self) {
         self.overlays.lsp_results.snippet = None;
-        let Some(session) = self.insert_session.take() else {
+        let Some(session) = self.edit.insert_session.take() else {
             return;
         };
         if !session.valid {
@@ -70,11 +70,11 @@ impl Model {
                 inserted: session.text,
             },
         };
-        self.last_change = Some(last);
+        self.edit.last_change = Some(last);
     }
 
     pub(crate) fn trim_insert_session(&mut self, at_end: bool) {
-        let Some(session) = self.insert_session.as_mut() else {
+        let Some(session) = self.edit.insert_session.as_mut() else {
             return;
         };
         if !at_end {
@@ -85,7 +85,7 @@ impl Model {
     }
 
     pub(crate) fn repeat_last_change(&mut self, count: usize) {
-        let Some(last) = self.last_change.clone() else {
+        let Some(last) = self.edit.last_change.clone() else {
             self.status = "E: no previous change".to_owned();
             self.dirty = true;
             return;

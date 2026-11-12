@@ -498,7 +498,7 @@ impl Model {
             || self.overlays.settings_overlay.is_some()
             || self.overlays.command_palette.is_some()
             || self.overlays.fuzzy.is_some()
-            || self.modal_layer.is_some()
+            || self.edit.modal_layer.is_some()
             || matches!(
                 self.ui.input_mode,
                 InputMode::ConfirmClose { .. }

@@ -4,18 +4,18 @@ use super::*;
 
 impl Model {
     pub(crate) fn begin_surround(&mut self) {
-        if self.visual_anchor.is_none() {
+        if self.edit.visual_anchor.is_none() {
             self.status = "E: surround needs a visual selection".to_owned();
             self.dirty = true;
             return;
         }
-        self.modal_layer = Some(ModalLayer::Surround);
+        self.edit.modal_layer = Some(ModalLayer::Surround);
         self.status = "surround: ( [ { < \" ' ` ; Esc cancels".to_owned();
         self.dirty = true;
     }
 
     pub(crate) fn cancel_modal_layer(&mut self) {
-        if self.modal_layer.take().is_some() {
+        if self.edit.modal_layer.take().is_some() {
             self.status = "surround cancelled".to_owned();
             self.dirty = true;
         }
@@ -23,7 +23,7 @@ impl Model {
 
     pub(crate) fn surround_selection(&mut self, open: char, close: char) {
         if self.reject_read_only() {
-            self.modal_layer = None;
+            self.edit.modal_layer = None;
             self.exit_visual();
             return;
         }
@@ -42,7 +42,7 @@ impl Model {
             self.cancel_modal_layer();
             return;
         }
-        self.modal_layer = None;
+        self.edit.modal_layer = None;
         self.sync_cursor_from_selection();
         self.modified = true;
         self.exit_visual();
