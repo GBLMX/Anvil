@@ -50,10 +50,16 @@ pub(crate) fn handle_mouse(model: &mut Model, mouse: MouseEvent, width: u16, hei
         height,
     };
     if overlay_open(model) {
-        if mouse.kind == MouseEventKind::Down(MouseButton::Left)
-            && !inside_overlay(model, mouse.column, mouse.row, area)
-        {
-            close_outside_overlay(model);
+        if mouse.kind == MouseEventKind::Down(MouseButton::Left) {
+            if model.settings_overlay.is_some()
+                && let Some(row) = crate::settings_ui::hit(area, mouse.column, mouse.row)
+            {
+                model.select_settings_row(row);
+                return true;
+            }
+            if !inside_overlay(model, mouse.column, mouse.row, area) {
+                close_outside_overlay(model);
+            }
         }
         return true;
     }

@@ -89,7 +89,80 @@ impl SettingsOverlayState {
     }
 }
 
+pub(crate) fn hit(area: ratatui::layout::Rect, col: u16, row: u16) -> Option<usize> {
+    let popup = rect(area);
+    if !crate::render::rect_contains(popup, col, row) {
+        return None;
+    }
+    let inner = ratatui::layout::Rect {
+        x: popup.x + 2,
+        y: popup.y + 1,
+        width: popup.width.saturating_sub(4),
+        height: popup.height.saturating_sub(2),
+    };
+    if inner.width < 20 || inner.height < 6 {
+        return None;
+    }
+    if row == inner.y {
+        let x = col.saturating_sub(inner.x);
+        if x < 8 {
+            return Some(0);
+        }
+        if (9..20).contains(&x) {
+            return Some(6);
+        }
+        if (21..31).contains(&x) {
+            return Some(4);
+        }
+    }
+    let body = ratatui::layout::Rect {
+        y: inner.y + 2,
+        height: inner.height.saturating_sub(4),
+        ..inner
+    };
+    let sidebar_width = (inner.width / 5).clamp(18, 24);
+    let sidebar = ratatui::layout::Rect {
+        width: sidebar_width,
+        ..body
+    };
+    if crate::render::rect_contains(sidebar, col, row)
+        && col > sidebar.x
+        && col < sidebar.right().saturating_sub(1)
+        && row > sidebar.y
+    {
+        let index = usize::from(row.saturating_sub(sidebar.y).saturating_sub(1));
+        return [0usize, 4, 5, 6].get(index).copied();
+    }
+    None
+}
+
 impl Model {
+    pub(crate) fn select_settings_row(&mut self, selected: usize) {
+        if let Some(overlay) = self.settings_overlay.as_mut() {
+            overlay.selected = selected.min(SETTINGS_ROWS - 1);
+            self.dirty = true;
+        }
+    }
+
+    pub(crate) fn cycle_settings_tab(&mut self, backwards: bool) {
+        let Some(overlay) = self.settings_overlay.as_ref() else {
+            return;
+        };
+        let tabs = [0usize, 4, 6];
+        let current = tabs
+            .iter()
+            .position(|row| {
+                SettingsOverlayState::tab(overlay.selected) == SettingsOverlayState::tab(*row)
+            })
+            .unwrap_or(0);
+        let next = if backwards {
+            (current + tabs.len() - 1) % tabs.len()
+        } else {
+            (current + 1) % tabs.len()
+        };
+        self.select_settings_row(tabs[next]);
+    }
+
     pub(crate) fn open_settings(&mut self) {
         if self.settings_overlay.is_some() {
             return;
@@ -189,6 +262,27 @@ impl Model {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn settings_hit_test_maps_tabs_and_sections() {
+        let area = ratatui::layout::Rect {
+            x: 0,
+            y: 0,
+            width: 100,
+            height: 30,
+        };
+        let popup = rect(area);
+        let inner_y = popup.y + 1;
+        assert_eq!(hit(area, popup.x + 4, inner_y), Some(0));
+        assert_eq!(hit(area, popup.x + 14, inner_y), Some(6));
+        assert_eq!(hit(area, popup.x + 25, inner_y), Some(4));
+        let body_y = inner_y + 2;
+        let sidebar_x = popup.x + 3;
+        assert_eq!(hit(area, sidebar_x, body_y + 1), Some(0));
+        assert_eq!(hit(area, sidebar_x, body_y + 2), Some(4));
+        assert_eq!(hit(area, sidebar_x, body_y + 3), Some(5));
+        assert_eq!(hit(area, sidebar_x, body_y + 4), Some(6));
+    }
 
     #[test]
     fn settings_tabs_map_every_group() {

@@ -591,6 +591,10 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             KeyCode::Down | KeyCode::Char('j') => model.move_settings(1),
             KeyCode::Left | KeyCode::Char('h') => model.adjust_settings(-1),
             KeyCode::Right | KeyCode::Char('l') | KeyCode::Enter => model.adjust_settings(1),
+            KeyCode::Tab => model.cycle_settings_tab(
+                key.modifiers
+                    .contains(crossterm::event::KeyModifiers::SHIFT),
+            ),
             KeyCode::Char('r') => model.reset_settings_row(),
             KeyCode::Char('s') => model.save_settings(),
             _ => {}
