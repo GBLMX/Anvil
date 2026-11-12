@@ -54,7 +54,10 @@ impl Model {
             return;
         };
         self.status = match theme::set_theme(name) {
-            Ok(()) => format!("theme: {}", theme::name()),
+            Ok(()) => {
+                let status = format!("theme: {}", theme::name());
+                self.persist_theme_status(status)
+            }
             Err(error) => format!("E: {error}"),
         };
         self.dirty = true;
