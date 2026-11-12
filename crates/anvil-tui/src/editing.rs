@@ -19,7 +19,7 @@ impl Model {
                 break;
             }
             self.session.cursor = target;
-            self.dirty = true;
+            self.file.dirty = true;
         }
     }
 
@@ -43,9 +43,9 @@ impl Model {
             self.record_register_text(register, &deleted);
         }
         self.session.cursor = range.start;
-        self.modified = true;
+        self.file.modified = true;
         self.begin_insert(InsertOrigin::ChangeWord(motion));
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn change_inner_word(&mut self) {
@@ -54,7 +54,7 @@ impl Model {
         }
         let Some(range) = self.inner_word_range() else {
             self.status.text = "E: no word".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         };
         let deleted = self.session.editor.text().slice(range.clone());
@@ -66,9 +66,9 @@ impl Model {
             self.record_register_text(register, &deleted);
         }
         self.session.cursor = range.start;
-        self.modified = true;
+        self.file.modified = true;
         self.begin_insert(InsertOrigin::ChangeInnerWord);
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn change_inner_quote(&mut self, quote: char) {
@@ -77,7 +77,7 @@ impl Model {
         }
         let Some(range) = self.inner_quote_range(quote) else {
             self.status.text = "E: no quote pair".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         };
         let deleted = self.session.editor.text().slice(range.clone());
@@ -89,9 +89,9 @@ impl Model {
             self.record_register_text(register, &deleted);
         }
         self.session.cursor = range.start;
-        self.modified = true;
+        self.file.modified = true;
         self.begin_insert(InsertOrigin::ChangeInnerQuote(quote));
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn inner_word_range(&self) -> Option<std::ops::Range<usize>> {
@@ -200,7 +200,7 @@ impl Model {
                 if let Some(register) = self.input.register.take() {
                     self.record_register_text(register, &deleted);
                 }
-                self.modified = true;
+                self.file.modified = true;
                 self.begin_insert(change_origin);
             }
             'd' => {
@@ -213,18 +213,18 @@ impl Model {
                 if let Some(register) = self.input.register.take() {
                     self.record_register_text(register, &deleted);
                 }
-                self.modified = true;
+                self.file.modified = true;
             }
             _ => return,
         }
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn apply_word_operator(&mut self, operator: char, around: bool, count: usize) {
         let range = self.word_object_range(around, count);
         let Some(range) = range else {
             self.status.text = "E: no word object".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         };
         let origin = if around {
@@ -243,7 +243,7 @@ impl Model {
         };
         let Some(range) = range else {
             self.status.text = "E: no quote object".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         };
         let origin = if around {
@@ -257,7 +257,7 @@ impl Model {
     pub(crate) fn apply_bracket_operator(&mut self, operator: char, open: char, around: bool) {
         let Some(range) = self.bracket_range(open, around) else {
             self.status.text = "E: no bracket object".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         };
         self.apply_operator_range(
@@ -309,7 +309,7 @@ impl Model {
     pub(crate) fn apply_paragraph_operator(&mut self, operator: char, around: bool, count: usize) {
         let Some(range) = self.paragraph_object_range(around, count) else {
             self.status.text = "E: no paragraph object".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         };
         self.apply_operator_range(operator, range, InsertOrigin::ChangeParagraph { around });
@@ -338,7 +338,7 @@ impl Model {
     pub(crate) fn apply_tag_operator(&mut self, operator: char, around: bool) {
         let Some(range) = self.tag_range(around) else {
             self.status.text = "E: no tag object".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         };
         self.apply_operator_range(operator, range, InsertOrigin::ChangeTag { around });
@@ -367,7 +367,7 @@ impl Model {
                 .set_selection_bytes(range.start, range.end);
             self.session.editor.delete(range.clone());
             self.session.cursor = range.start;
-            self.modified = true;
+            self.file.modified = true;
         }
         if !deleted.is_empty() {
             self.edit.last_change = Some(LastChange::DeleteWords { motion, count });
@@ -375,7 +375,7 @@ impl Model {
         if let Some(register) = self.input.register.take() {
             self.record_register_text(register, &deleted);
         }
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn yank_words(&mut self, motion: WordMotion, count: usize) {
@@ -396,7 +396,7 @@ impl Model {
             self.record_register();
         }
         let _ = self.session.editor.set_selection_bytes(cursor, cursor);
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn move_lines(&mut self, delta: isize) {
@@ -427,7 +427,7 @@ impl Model {
             return;
         };
         self.set_caret(offset);
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn move_file_end(&mut self) {
@@ -454,7 +454,7 @@ impl Model {
             return;
         };
         self.set_caret(offset);
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn move_chars(&mut self, delta: isize) {
@@ -476,7 +476,7 @@ impl Model {
         };
         if let Some(offset) = next {
             self.set_caret(offset);
-            self.dirty = true;
+            self.file.dirty = true;
         }
     }
 
@@ -488,7 +488,7 @@ impl Model {
             .offset_to_line(self.session.cursor)
         {
             self.set_caret(line.start);
-            self.dirty = true;
+            self.file.dirty = true;
         }
     }
 
@@ -500,7 +500,7 @@ impl Model {
             .offset_to_line(self.session.cursor)
         {
             self.set_caret(line.end);
-            self.dirty = true;
+            self.file.dirty = true;
         }
     }
 
@@ -615,7 +615,7 @@ impl Model {
             return;
         }
         self.begin_insert(InsertOrigin::InsertHere);
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn select_word_occurrences(&mut self) {
@@ -627,7 +627,7 @@ impl Model {
         let cursor = self.session.cursor.min(text.len());
         let Some((start, end)) = word_bounds(&text, cursor) else {
             self.status.text = "E: no word under cursor".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         };
         let word = &text[start..end];
@@ -660,7 +660,7 @@ impl Model {
             .unwrap_or(cursor);
         self.begin_insert(InsertOrigin::InsertHere);
         self.status.text = format!("{} selections", self.session.editor.selection_bytes().len());
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn split_selection_lines(&mut self) {
@@ -685,7 +685,7 @@ impl Model {
         carets.dedup();
         if carets.len() < 2 || !self.session.editor.set_selections_bytes(carets) {
             self.status.text = "E: no lines to split".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         self.session.cursor = self
@@ -696,7 +696,7 @@ impl Model {
             .map(|(start, _)| *start)
             .unwrap_or(self.session.cursor);
         self.status.text = format!("{} cursors", self.session.editor.selection_bytes().len());
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn extend_line_cursor(&mut self, up: bool) {
@@ -738,7 +738,7 @@ impl Model {
         }
         self.session.cursor = target_offset;
         self.status.text = format!("{} cursors", self.session.editor.selection_bytes().len());
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn collapse_selections(&mut self) {
@@ -751,14 +751,14 @@ impl Model {
             .editor
             .set_selection_bytes(self.session.cursor, self.session.cursor);
         self.status.text = "cursors merged".to_owned();
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn begin_visual(&mut self, line: bool) {
         self.edit.visual_anchor = Some(self.session.cursor);
         self.edit.visual_line = line;
         self.sync_visual_selection();
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn exit_visual(&mut self) {
@@ -766,7 +766,7 @@ impl Model {
         self.session
             .editor
             .set_selection_bytes(self.session.cursor, self.session.cursor);
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn sync_visual_selection(&mut self) {
@@ -861,23 +861,23 @@ impl Model {
         }
         let Some(path) = self.session.path.as_deref() else {
             self.status.text = "E: comment: unnamed buffer".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         };
         let Some(style) = comment::comment_style(path) else {
             self.status.text = "E: comment: unsupported file type".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         };
         let lines = self.selected_line_ranges();
         if lines.is_empty() {
             self.status.text = "E: comment: no lines".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         if lines.len() > comment::MAX_COMMENT_LINES {
             self.status.text = "E: comment: too many lines".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         let text = self
@@ -887,18 +887,18 @@ impl Model {
             .slice(0..self.session.editor.text().len_bytes());
         let Some(edits) = comment::toggle_edits(&text, &lines, style.line) else {
             self.status.text = "E: comment: no changes".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         };
         let count = lines.len();
         if !self.session.editor.apply_transaction(edits) {
             self.status.text = "E: comment: edit failed".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         self.sync_cursor_from_selection();
-        self.modified = true;
-        self.dirty = true;
+        self.file.modified = true;
+        self.file.dirty = true;
         self.status.text = format!("toggled comment on {count} line(s)");
     }
 
@@ -1031,11 +1031,11 @@ impl Model {
                 } else {
                     self.sync_cursor_from_selection();
                 }
-                self.modified = true;
+                self.file.modified = true;
                 self.capture_insert(text);
             }
             self.maybe_request_signature_help(text);
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         self.session
@@ -1043,10 +1043,10 @@ impl Model {
             .set_selection_bytes(self.session.cursor, self.session.cursor);
         self.session.editor.insert(self.session.cursor, text);
         self.session.cursor += text.len();
-        self.modified = true;
+        self.file.modified = true;
         self.capture_insert(text);
         self.maybe_request_signature_help(text);
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     fn maybe_request_signature_help(&mut self, text: &str) {
@@ -1076,11 +1076,11 @@ impl Model {
         }
         if self.session.editor.undo() {
             self.sync_cursor_from_selection();
-            self.modified = true;
+            self.file.modified = true;
         } else {
             self.status.text = "Already at oldest change".to_owned();
         }
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn redo(&mut self) {
@@ -1089,11 +1089,11 @@ impl Model {
         }
         if self.session.editor.redo() {
             self.sync_cursor_from_selection();
-            self.modified = true;
+            self.file.modified = true;
         } else {
             self.status.text = "Already at newest change".to_owned();
         }
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn delete_lines(&mut self, count: usize) {
@@ -1130,8 +1130,8 @@ impl Model {
         if let Some(register) = self.input.register.take() {
             self.record_register_text(register, &deleted);
         }
-        self.modified = true;
-        self.dirty = true;
+        self.file.modified = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn yank_lines(&mut self, count: usize) {
@@ -1161,7 +1161,7 @@ impl Model {
             self.record_register();
             self.status.text = format!("{count} lines yanked");
         }
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn record_register(&mut self) {
@@ -1178,7 +1178,7 @@ impl Model {
             '+' => {
                 if let Err(error) = clipboard::copy(text) {
                     self.status.text = format!("E: {error}");
-                    self.dirty = true;
+                    self.file.dirty = true;
                 }
             }
             _ => {
@@ -1200,7 +1200,7 @@ impl Model {
                     Ok(text) => text,
                     Err(error) => {
                         self.status.text = format!("E: {error}");
-                        self.dirty = true;
+                        self.file.dirty = true;
                         return;
                     }
                 }
@@ -1212,7 +1212,7 @@ impl Model {
                     .map(str::to_owned)
                 else {
                     self.status.text = "E: register empty".to_owned();
-                    self.dirty = true;
+                    self.file.dirty = true;
                     return;
                 };
                 text
@@ -1222,17 +1222,17 @@ impl Model {
                 .set_selection_bytes(self.session.cursor, self.session.cursor);
             self.session.editor.insert(self.session.cursor, &text);
             self.session.cursor += text.len();
-            self.modified = true;
-            self.dirty = true;
+            self.file.modified = true;
+            self.file.dirty = true;
             return;
         }
         if self.session.editor.put(self.session.cursor).is_some() {
             self.sync_cursor_from_selection();
-            self.modified = true;
+            self.file.modified = true;
         } else {
             self.status.text = "E: register empty".to_owned();
         }
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn append(&mut self) {
@@ -1249,7 +1249,7 @@ impl Model {
             self.move_char(1);
         }
         self.begin_insert(InsertOrigin::Append);
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn append_line_end(&mut self) {
@@ -1265,7 +1265,7 @@ impl Model {
             self.session.cursor = line.end;
         }
         self.begin_insert(InsertOrigin::AppendLineEnd);
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn open_below(&mut self) {
@@ -1335,8 +1335,8 @@ impl Model {
                         self.session.editor.set_selection_bytes(previous, end);
                         self.session.editor.delete(previous..end);
                         self.session.cursor = previous;
-                        self.modified = true;
-                        self.dirty = true;
+                        self.file.modified = true;
+                        self.file.dirty = true;
                         return;
                     }
                 }
@@ -1368,7 +1368,7 @@ impl Model {
             .set_selection_bytes(start, self.session.cursor);
         self.session.editor.delete(start..self.session.cursor);
         self.session.cursor = start;
-        self.modified = true;
+        self.file.modified = true;
         self.trim_insert_session(at_insert_end);
     }
 
@@ -1397,8 +1397,8 @@ impl Model {
             .editor
             .set_selection_bytes(self.session.cursor, end);
         self.session.editor.delete(self.session.cursor..end);
-        self.modified = true;
-        self.dirty = true;
+        self.file.modified = true;
+        self.file.dirty = true;
     }
 
     fn delete_selections(&mut self, forward: bool) -> bool {
@@ -1468,8 +1468,8 @@ impl Model {
         } else {
             self.sync_cursor_from_selection();
         }
-        self.modified = true;
-        self.dirty = true;
+        self.file.modified = true;
+        self.file.dirty = true;
         true
     }
 }

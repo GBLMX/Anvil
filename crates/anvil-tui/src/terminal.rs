@@ -70,7 +70,7 @@ pub fn run_with_input(
                 && let Err(error) = model.open_path(path)
             {
                 model.status.text = format!("E: {error}");
-                model.dirty = true;
+                model.file.dirty = true;
             }
             (model, Some(session))
         }
@@ -80,7 +80,7 @@ pub fn run_with_input(
             model.reload_icons();
             model.workspace.require_gateway = true;
             model.status.text = format!("E: gateway unavailable: {error}");
-            model.dirty = true;
+            model.file.dirty = true;
             (model, None)
         }
     };
@@ -97,8 +97,8 @@ pub fn run_with_input(
         model.session.cursor = 0;
         model.view.scroll = 0;
         model.view.hscroll = 0;
-        model.modified = false;
-        model.missing = false;
+        model.file.modified = false;
+        model.file.missing = false;
         model.set_stdin_buffer(read_only);
         model.set_pipe_locations(&text);
         model.syntax.borrow_mut().switch_path(None, false);
@@ -107,7 +107,7 @@ pub fn run_with_input(
         } else {
             "[stdin]".to_owned()
         };
-        model.dirty = true;
+        model.file.dirty = true;
     }
     model.set_read_only(read_only);
     if restore_session && let Err(error) = session::restore(&mut model, &workspace) {
@@ -118,7 +118,7 @@ pub fn run_with_input(
             model.status.text.push_str(" | ");
             model.status.text.push_str(&message);
         }
-        model.dirty = true;
+        model.file.dirty = true;
     }
     if let Err(error) = theme::load_custom_themes() {
         let message = format!("E: themes: {error}");
@@ -128,7 +128,7 @@ pub fn run_with_input(
             model.status.text.push_str(" | ");
             model.status.text.push_str(&message);
         }
-        model.dirty = true;
+        model.file.dirty = true;
     }
     if let Err(error) = theme_config::load() {
         let message = format!("E: theme config: {error}");
@@ -138,7 +138,7 @@ pub fn run_with_input(
             model.status.text.push_str(" | ");
             model.status.text.push_str(&message);
         }
-        model.dirty = true;
+        model.file.dirty = true;
     }
     match settings::load() {
         Ok(settings) => model.apply_settings(settings),
@@ -150,7 +150,7 @@ pub fn run_with_input(
                 model.status.text.push_str(" | ");
                 model.status.text.push_str(&message);
             }
-            model.dirty = true;
+            model.file.dirty = true;
         }
     }
     if let Some(theme_name) = std::env::var_os("ANVIL_THEME") {
@@ -163,7 +163,7 @@ pub fn run_with_input(
                 model.status.text.push_str(" | ");
                 model.status.text.push_str(&message);
             }
-            model.dirty = true;
+            model.file.dirty = true;
         }
     }
     theme::set_high_contrast(model.config.settings.ui.high_contrast);
@@ -175,7 +175,7 @@ pub fn run_with_input(
             model.status.text.push_str(" | ");
             model.status.text.push_str(&message);
         }
-        model.dirty = true;
+        model.file.dirty = true;
     }
 
     #[cfg(target_os = "linux")]
@@ -187,7 +187,7 @@ pub fn run_with_input(
             model.status.text.push_str(" | ");
             model.status.text.push_str(&message);
         }
-        model.dirty = true;
+        model.file.dirty = true;
     }
     #[cfg(target_os = "linux")]
     if startup_activation_allowed() {
@@ -214,7 +214,7 @@ pub fn run_with_input(
                     model.status.text.push_str(" | ");
                     model.status.text.push_str(&message);
                 }
-                model.dirty = true;
+                model.file.dirty = true;
                 None
             }
         }
@@ -248,17 +248,17 @@ pub fn run_with_input(
         model.poll_debug_request();
         model.poll_sticky_symbols();
         match theme::reload_custom_if_changed() {
-            Ok(true) => model.dirty = true,
+            Ok(true) => model.file.dirty = true,
             Ok(false) => {}
             Err(error) => {
                 model.status.text = format!("E: theme reload: {error}");
-                model.dirty = true;
+                model.file.dirty = true;
             }
         }
         model.tick_search();
-        if model.dirty {
+        if model.file.dirty {
             terminal.terminal.draw(|frame| view(&model, frame))?;
-            model.dirty = false;
+            model.file.dirty = false;
             if first_draw {
                 first_draw = false;
                 if timing {
@@ -288,7 +288,7 @@ pub fn run_with_input(
         }
         if model.status.busy.is_some() && !model.config.settings.ui.reduced_motion {
             model.status.spinner = model.status.spinner.wrapping_add(1);
-            model.dirty = true;
+            model.file.dirty = true;
         }
         model.poll_inlay_hints(size.height.saturating_sub(2));
         model.poll_git();
@@ -311,13 +311,13 @@ pub fn run_with_input(
                 Err(error) => {
                     if !session_error_reported {
                         model.status.text = format!("E: session save: {error}");
-                        model.dirty = true;
+                        model.file.dirty = true;
                         session_error_reported = true;
                     }
                 }
             }
         }
-        if model.quit {
+        if model.file.quit {
             if session_enabled {
                 let _ = session::save(&mut model, &workspace);
             }

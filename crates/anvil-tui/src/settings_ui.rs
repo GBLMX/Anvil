@@ -140,7 +140,7 @@ impl Model {
     pub(crate) fn select_settings_row(&mut self, selected: usize) {
         if let Some(overlay) = self.overlays.settings_overlay.as_mut() {
             overlay.selected = selected.min(SETTINGS_ROWS - 1);
-            self.dirty = true;
+            self.file.dirty = true;
         }
     }
 
@@ -173,14 +173,14 @@ impl Model {
             draft: self.config.settings,
         });
         self.status.text = "settings".to_owned();
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn cancel_settings(&mut self) {
         if let Some(overlay) = self.overlays.settings_overlay.take() {
             self.apply_settings(overlay.original);
             self.status.text = "settings cancelled".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
         }
     }
 
@@ -190,7 +190,7 @@ impl Model {
                 .selected
                 .saturating_add_signed(delta)
                 .min(SETTINGS_ROWS - 1);
-            self.dirty = true;
+            self.file.dirty = true;
         }
     }
 
@@ -255,7 +255,7 @@ impl Model {
                 self.status.text = format!("E: settings: {error}");
             }
         }
-        self.dirty = true;
+        self.file.dirty = true;
     }
 }
 

@@ -77,9 +77,9 @@ impl Model {
     }
 
     fn jump_history(&mut self, forward: bool) {
-        if self.session.path.is_none() && self.modified {
+        if self.session.path.is_none() && self.file.modified {
             self.status.text = "E: save or discard the unnamed buffer before jumping".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         let current = self.current_jump_entry();
@@ -94,7 +94,7 @@ impl Model {
             } else {
                 "no back jump".to_owned()
             };
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         };
         if !self.jump_to(&target) {
@@ -118,7 +118,7 @@ impl Model {
             self.session.jump_list.back_len(),
             self.session.jump_list.forward_len()
         );
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     fn current_jump_entry(&self) -> Option<JumpEntry> {
@@ -136,7 +136,7 @@ impl Model {
             && let Err(error) = self.open_path(&entry.path)
         {
             self.status.text = format!("E: {error}");
-            self.dirty = true;
+            self.file.dirty = true;
             return false;
         }
         let length = self.session.editor.text().len_bytes();
@@ -144,7 +144,7 @@ impl Model {
         self.session
             .editor
             .set_selection_bytes(self.session.cursor, self.session.cursor);
-        self.dirty = true;
+        self.file.dirty = true;
         true
     }
 
@@ -178,9 +178,9 @@ impl Model {
     }
 
     fn change_history(&mut self, forward: bool) {
-        if self.session.path.is_none() && self.modified {
+        if self.session.path.is_none() && self.file.modified {
             self.status.text = "E: save or discard the unnamed buffer before jumping".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         let current = self.current_jump_entry();
@@ -195,7 +195,7 @@ impl Model {
             } else {
                 "no previous change".to_owned()
             };
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         };
         if current.as_ref() == Some(&target) {
@@ -209,7 +209,7 @@ impl Model {
                 } else {
                     "no previous change".to_owned()
                 };
-                self.dirty = true;
+                self.file.dirty = true;
                 return;
             };
             target = next;
@@ -239,7 +239,7 @@ impl Model {
             self.session.change_list.back_len(),
             self.session.change_list.forward_len()
         );
-        self.dirty = true;
+        self.file.dirty = true;
     }
 }
 #[cfg(test)]

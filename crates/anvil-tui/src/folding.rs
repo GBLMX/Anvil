@@ -38,7 +38,7 @@ impl Model {
         } else {
             self.overlays.lsp_results.pending_fold_action = None;
         }
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn clear_folds(&mut self) {
@@ -122,7 +122,7 @@ impl Model {
         } else {
             format!("folds: {count}")
         };
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn toggle_fold_at_cursor(&mut self) {
@@ -151,19 +151,19 @@ impl Model {
         self.move_cursor_out_of_hidden();
         self.normalize_scroll();
         self.status.text = format!("folds closed: {}", self.overlays.lsp_results.folded.len());
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn open_all_folds(&mut self) {
         self.overlays.lsp_results.folded.clear();
         self.status.text = "folds opened".to_owned();
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     fn toggle_fold_line(&mut self, line: usize) {
         let Some(start) = self.fold_start_containing(line) else {
             self.status.text = "no fold".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         };
         if !self.overlays.lsp_results.folded.insert(start) {
@@ -174,7 +174,7 @@ impl Model {
         }
         self.move_cursor_out_of_hidden();
         self.normalize_scroll();
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn fold_start_containing(&self, line: usize) -> Option<usize> {
@@ -232,7 +232,7 @@ impl Model {
     pub(crate) fn open_fold_containing(&mut self, line: usize) {
         if let Some(start) = self.fold_start_containing(line) {
             self.overlays.lsp_results.folded.remove(&start);
-            self.dirty = true;
+            self.file.dirty = true;
         }
     }
 

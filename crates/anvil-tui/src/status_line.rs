@@ -18,32 +18,32 @@ impl Model {
         if !self.git.branch_checked {
             self.git.branch_checked = true;
             self.git.branch = detect_git_branch(&self.workspace.path);
-            self.dirty = true;
+            self.file.dirty = true;
         }
         if self.language.diagnostics.path != self.session.path {
             self.language.diagnostics.path = self.session.path.clone();
             self.language.diagnostics.count_shown = self.diagnostic_count_now();
             self.language.diagnostics.count_pending = None;
-            self.dirty = true;
+            self.file.dirty = true;
         }
         let actual = self.diagnostic_count_now();
         if let Some((pending, since)) = self.language.diagnostics.count_pending {
             if pending != actual {
                 self.language.diagnostics.count_pending = Some((actual, Instant::now()));
-                self.dirty = true;
+                self.file.dirty = true;
             } else if since.elapsed() >= DIAGNOSTIC_STABLE {
                 self.language.diagnostics.count_pending = None;
                 if self.language.diagnostics.count_shown != actual {
                     self.language.diagnostics.count_shown = actual;
                 }
-                self.dirty = true;
+                self.file.dirty = true;
             } else if !self.config.settings.ui.reduced_motion {
                 self.status.spinner = self.status.spinner.wrapping_add(1);
-                self.dirty = true;
+                self.file.dirty = true;
             }
         } else if self.language.diagnostics.count_shown != actual {
             self.language.diagnostics.count_pending = Some((actual, Instant::now()));
-            self.dirty = true;
+            self.file.dirty = true;
         }
     }
 
@@ -97,7 +97,7 @@ impl Model {
             &self.relative_path_text(),
             width.saturating_sub(3).min(32),
         ));
-        if self.modified {
+        if self.file.modified {
             segments.push("●".to_owned());
         }
         if let Some(branch) = &self.git.branch {

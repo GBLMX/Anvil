@@ -46,7 +46,7 @@ impl Model {
     pub(crate) fn start_pkg_install(&mut self, url: &str) {
         let Some(host) = url_host(url) else {
             self.status.text = "E: pkg install requires an https URL".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         };
         self.plugins.installer = None;
@@ -54,7 +54,7 @@ impl Model {
             Ok((session, client)) => self.plugins.installer = Some((session, client)),
             Err(error) => {
                 self.status.text = format!("E: installer gateway: {error}");
-                self.dirty = true;
+                self.file.dirty = true;
                 return;
             }
         }
@@ -69,7 +69,7 @@ impl Model {
             Ok(result) => {
                 let Some(job_id) = result.get("job_id").and_then(|value| value.as_str()) else {
                     self.status.text = "E: pkg download: missing job id".to_owned();
-                    self.dirty = true;
+                    self.file.dirty = true;
                     return;
                 };
                 let progress = self.ui.progress.start("pkg download", url, false);
@@ -81,7 +81,7 @@ impl Model {
             }
             Err(error) => self.pkg_error(error),
         }
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn start_pkg_install_file(
@@ -95,7 +95,7 @@ impl Model {
             Ok((session, client)) => self.plugins.installer = Some((session, client)),
             Err(error) => {
                 self.status.text = format!("E: installer gateway: {error}");
-                self.dirty = true;
+                self.file.dirty = true;
                 return;
             }
         }
@@ -147,7 +147,7 @@ impl Model {
             }
             Err(error) => self.pkg_error(error),
         }
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn poll_pkg_notifications(&mut self) {
@@ -194,7 +194,7 @@ impl Model {
             .unwrap_or("downloading");
         let progress = *progress;
         self.ui.progress.update(progress, fraction, message);
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     fn pkg_downloaded(&mut self, params: &serde_json::Value) {
@@ -227,7 +227,7 @@ impl Model {
         else {
             self.plugins.pkg_install = None;
             self.status.text = "E: package manifest is malformed".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         };
         let trusted = params
@@ -237,20 +237,20 @@ impl Model {
         if public_key.is_empty() {
             self.plugins.pkg_install = None;
             self.status.text = "E: package signature has no public key".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         let digest = text("digest");
         if manifest.id.is_empty() || manifest.version.is_empty() {
             self.plugins.pkg_install = None;
             self.status.text = "E: package manifest has no id or version".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         if digest.is_empty() {
             self.plugins.pkg_install = None;
             self.status.text = "E: package download has no digest".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         self.plugins.pkg_install = Some(PkgInstallState::Review {
@@ -263,7 +263,7 @@ impl Model {
             digest,
         });
         self.status.text = "Pkg: review capabilities, Enter installs".to_owned();
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn confirm_pkg_install(&mut self) {
@@ -295,12 +295,12 @@ impl Model {
         {
             let Some(gateway) = self.workspace.gateway.as_mut() else {
                 self.status.text = "E: gateway unavailable".to_owned();
-                self.dirty = true;
+                self.file.dirty = true;
                 return;
             };
             if let Err(error) = self.plugins.supervisor.stop(&manifest.id, Some(gateway)) {
                 self.status.text = format!("E: stop plugin {}: {error}", manifest.id);
-                self.dirty = true;
+                self.file.dirty = true;
                 return;
             }
         }
@@ -346,7 +346,7 @@ impl Model {
             }
             Err(error) => self.pkg_error(error),
         }
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn trust_pkg_key(&mut self) {
@@ -377,7 +377,7 @@ impl Model {
             }
             Err(error) => self.pkg_error(error),
         }
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn cancel_pkg_install(&mut self) {
@@ -387,7 +387,7 @@ impl Model {
         }
         self.plugins.pkg_install = None;
         self.plugins.installer = None;
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     fn pkg_failed(&mut self, params: &serde_json::Value) {
@@ -414,7 +414,7 @@ impl Model {
         self.plugins.pkg_install = None;
         self.plugins.installer = None;
         self.status.text = format!("E: pkg: {message}");
-        self.dirty = true;
+        self.file.dirty = true;
     }
 }
 

@@ -189,7 +189,7 @@ impl Model {
             (!self.overlays.location.stdin_locations.is_empty()).then_some(0);
         self.overlays.location.stdin_location_scroll = 0;
         self.overlays.location.location_title = title;
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn set_project_search_results(&mut self, query: &str, locations: Vec<PipeLocation>) {
@@ -219,7 +219,7 @@ impl Model {
         } else if selected >= self.overlays.location.stdin_location_scroll + MAX_VISIBLE_LOCATIONS {
             self.overlays.location.stdin_location_scroll = selected + 1 - MAX_VISIBLE_LOCATIONS;
         }
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn select_stdin_location(&mut self, index: usize) {
@@ -227,7 +227,7 @@ impl Model {
             return;
         }
         self.overlays.location.stdin_location_selected = Some(index);
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn open_stdin_location(&mut self) {
@@ -249,7 +249,7 @@ impl Model {
                 Ok(path) => path,
                 Err(error) => {
                     self.status.text = format!("E: {error}");
-                    self.dirty = true;
+                    self.file.dirty = true;
                     return;
                 }
             }
@@ -258,20 +258,20 @@ impl Model {
                 Ok(path) => path,
                 Err(error) => {
                     self.status.text = format!("E: {error}");
-                    self.dirty = true;
+                    self.file.dirty = true;
                     return;
                 }
             };
             if !path.starts_with(&self.workspace.path) {
                 self.status.text = format!("E: location outside workspace: {}", location.path);
-                self.dirty = true;
+                self.file.dirty = true;
                 return;
             }
             path
         };
         if !path.is_file() {
             self.status.text = format!("E: location not found: {}", location.path);
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         self.record_jump();
@@ -279,7 +279,7 @@ impl Model {
             && let Err(error) = self.open_path(&path)
         {
             self.status.text = format!("E: {error}");
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         let line = location
@@ -291,7 +291,7 @@ impl Model {
             "location {}:{}:{}",
             location.path, location.line, location.column
         );
-        self.dirty = true;
+        self.file.dirty = true;
     }
 }
 

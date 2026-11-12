@@ -6,18 +6,18 @@ impl Model {
     pub(crate) fn begin_surround(&mut self) {
         if self.edit.visual_anchor.is_none() {
             self.status.text = "E: surround needs a visual selection".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         self.edit.modal_layer = Some(ModalLayer::Surround);
         self.status.text = "surround: ( [ { < \" ' ` ; Esc cancels".to_owned();
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn cancel_modal_layer(&mut self) {
         if self.edit.modal_layer.take().is_some() {
             self.status.text = "surround cancelled".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
         }
     }
 
@@ -44,9 +44,9 @@ impl Model {
         }
         self.edit.modal_layer = None;
         self.sync_cursor_from_selection();
-        self.modified = true;
+        self.file.modified = true;
         self.exit_visual();
         self.status.text = format!("surrounded with {open}{close}");
-        self.dirty = true;
+        self.file.dirty = true;
     }
 }

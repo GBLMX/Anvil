@@ -73,7 +73,7 @@ impl Model {
                 ..PreviewState::default()
             };
             self.status.text = "E: preview: gateway unavailable".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         self.overlays.preview_generation = self.overlays.preview_generation.saturating_add(1);
@@ -102,7 +102,7 @@ impl Model {
             self.overlays.preview.message = Some("preview worker stopped".to_owned());
             self.status.text = "E: preview: worker stopped".to_owned();
         }
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn handle_preview(
@@ -133,7 +133,7 @@ impl Model {
                 self.status.text = format!("E: preview: {error}");
             }
         }
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn start_fuzzy(&mut self) {
@@ -168,13 +168,13 @@ impl Model {
                 selected: 0,
             });
             self.status.text = "loading files".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         let mut entries = Vec::new();
         if let Err(error) = self.collect_files(&workspace, "", &mut entries) {
             self.status.text = format!("E: files: {error}");
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         entries.sort();
@@ -187,7 +187,7 @@ impl Model {
             selected: 0,
         });
         self.request_preview();
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn handle_fuzzy_files(
@@ -221,7 +221,7 @@ impl Model {
                 }
                 Err(error) => {
                     self.status.text = format!("E: files: {error}");
-                    self.dirty = true;
+                    self.file.dirty = true;
                     return;
                 }
             }
@@ -262,7 +262,7 @@ impl Model {
             .saturating_add_signed(delta)
             .min(fuzzy.filtered.len().saturating_sub(1));
         self.request_preview();
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn fuzzy_open(&mut self) {
@@ -271,7 +271,7 @@ impl Model {
         };
         self.clear_preview();
         let Some(index) = fuzzy.filtered.get(fuzzy.selected) else {
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         };
         let entry = fuzzy.entries[*index].clone();
@@ -287,7 +287,7 @@ impl Model {
             Ok(()) => {}
             Err(error) => self.status.text = format!("E: {error}"),
         }
-        self.dirty = true;
+        self.file.dirty = true;
     }
 }
 

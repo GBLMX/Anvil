@@ -8,23 +8,23 @@ impl Model {
     pub(crate) fn preview_project_replace(&mut self, spec: &str) {
         let Some((old, new)) = spec.split_once('/') else {
             self.status.text = "E: usage: :replace-project OLD/NEW/".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         };
         let new = new.strip_suffix('/').unwrap_or(new);
         if old.is_empty() {
             self.status.text = "E: replace search text is empty".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         if !self.ensure_file_worker() {
             self.status.text = "E: gateway unavailable".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         let Some(worker) = self.workspace.file_worker.as_ref() else {
             self.status.text = "E: file worker unavailable".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         };
         self.project.replace_generation = self.project.replace_generation.wrapping_add(1);
@@ -35,12 +35,12 @@ impl Model {
             generation,
         }) {
             self.status.text = format!("E: replace preview: {error}");
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         self.project.replace_pending = Some(generation);
         self.status.text = "building replace preview...".to_owned();
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn handle_project_replace_preview(
@@ -87,40 +87,40 @@ impl Model {
                 self.project.replace_plan = None;
             }
         }
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn apply_project_replace(&mut self) {
         let Some(plan) = self.project.replace_plan.clone() else {
             self.status.text = "E: no replace preview to apply".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         };
         if self.any_modified() {
             self.status.text = "E: save or discard modified buffers first".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         if !self.ensure_file_worker() {
             self.status.text = "E: gateway unavailable".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         let Some(worker) = self.workspace.file_worker.as_ref() else {
             self.status.text = "E: file worker unavailable".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         };
         self.project.replace_generation = self.project.replace_generation.wrapping_add(1);
         let generation = self.project.replace_generation;
         if let Err(error) = worker.request(FileRequest::ProjectReplaceApply { plan, generation }) {
             self.status.text = format!("E: replace apply: {error}");
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         self.project.replace_pending = Some(generation);
         self.status.text = "applying project replace...".to_owned();
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn handle_project_replace_applied(
@@ -181,7 +181,7 @@ impl Model {
         self.overlays.location.stdin_location_scroll = 0;
         self.overlays.location.location_title = "Locations".to_owned();
         self.status.text = "replace preview cancelled".to_owned();
-        self.dirty = true;
+        self.file.dirty = true;
     }
 }
 
@@ -268,7 +268,7 @@ mod tests {
         std::fs::write(&path, "new\n").expect("write");
         let mut model = Model::new(EditorState::from_text("old\n"), Some(path));
         model.workspace.path = workspace;
-        model.modified = true;
+        model.file.modified = true;
         model.project.replace_plan = Some(plan());
         model.project.replace_pending = Some(6);
         model.handle_project_replace_applied(6, Ok(()));

@@ -24,7 +24,7 @@ impl Model {
             selected,
         });
         self.status.text = "themes · Enter apply · Esc cancel".to_owned();
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn move_theme_browser(&mut self, delta: isize) {
@@ -42,7 +42,7 @@ impl Model {
         if let Some(name) = names.get(browser.selected) {
             let _ = theme::apply_choice(Choice::Fixed(name), false);
         }
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn apply_theme_browser(&mut self) {
@@ -60,7 +60,7 @@ impl Model {
             }
             Err(error) => format!("E: {error}"),
         };
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn cancel_theme_browser(&mut self) {
@@ -69,7 +69,7 @@ impl Model {
         };
         let _ = theme::apply_choice(browser.original, false);
         self.status.text = "theme preview cancelled".to_owned();
-        self.dirty = true;
+        self.file.dirty = true;
     }
 }
 

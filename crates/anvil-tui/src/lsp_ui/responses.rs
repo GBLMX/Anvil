@@ -34,7 +34,7 @@ impl Model {
         self.overlays.lsp_results.sticky_symbols_path = self.session.path.clone();
         self.overlays.lsp_results.sticky_symbols_revision = Some(self.session.editor.revision());
         self.overlays.lsp_results.sticky_symbols = items;
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     fn apply_signature_help_response(&mut self, result: &serde_json::Value) {
@@ -116,7 +116,7 @@ impl Model {
             return;
         }
         self.language.lsp_requests.format_on_save_pending = false;
-        if !self.modified {
+        if !self.file.modified {
             return;
         }
         self.language.lsp_requests.suppress_format_on_save = true;
@@ -124,7 +124,7 @@ impl Model {
         self.language.lsp_requests.suppress_format_on_save = false;
         if saved {
             self.status.text = "formatted and saved".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
         }
     }
 
@@ -143,7 +143,7 @@ impl Model {
         if let Some(error) = error {
             if kind == LspRequestKind::CodeLens {
                 self.overlays.lsp_results.code_lens = None;
-                self.dirty = true;
+                self.file.dirty = true;
                 return;
             }
             if kind == LspRequestKind::CompletionResolve {
@@ -151,12 +151,12 @@ impl Model {
             }
             if kind == LspRequestKind::StickySymbols {
                 self.overlays.lsp_results.sticky_pending = false;
-                self.dirty = true;
+                self.file.dirty = true;
                 return;
             }
             self.clear_format_on_save(kind);
             self.status.text = format!("E: lsp {kind:?}: {error}");
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         if matches!(
@@ -179,7 +179,7 @@ impl Model {
             }
             self.clear_format_on_save(kind);
             self.status.text = "lsp: stale edit response ignored".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         if matches!(
@@ -205,7 +205,7 @@ impl Model {
             }
             self.clear_format_on_save(kind);
             self.status.text = "lsp: edit response for inactive buffer".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         match kind {
@@ -263,7 +263,7 @@ impl Model {
             LspRequestKind::DocumentSymbol => self.apply_document_symbols_response(&result),
             LspRequestKind::StickySymbols => self.apply_sticky_symbols_response(&result),
         }
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     fn apply_completion_response(&mut self, id: u64, result: &serde_json::Value) {
@@ -395,7 +395,7 @@ impl Model {
         }
         item.raw = result.clone();
         item.resolved = true;
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn apply_definition_response(&mut self, result: &serde_json::Value) {

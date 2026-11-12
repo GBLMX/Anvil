@@ -15,7 +15,7 @@ impl Model {
             name: String::new(),
             kind,
         };
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn begin_tree_rename(&mut self) {
@@ -30,7 +30,7 @@ impl Model {
         };
         let Some(name) = entry.path.file_name().and_then(|name| name.to_str()) else {
             self.status.text = "E: invalid entry name".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         };
         self.ui.focus.tree = false;
@@ -38,7 +38,7 @@ impl Model {
             path: entry.path.clone(),
             name: name.to_owned(),
         };
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn begin_tree_delete(&mut self) {
@@ -53,14 +53,14 @@ impl Model {
         };
         if self.path_is_open(&entry.path) {
             self.status.text = "E: close the open buffer before deleting".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         self.ui.focus.tree = false;
         self.ui.input_mode = InputMode::ConfirmDelete {
             path: entry.path.clone(),
         };
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn begin_tree_transfer(&mut self, copy: bool) {
@@ -75,7 +75,7 @@ impl Model {
         };
         if copy && entry.is_dir {
             self.status.text = "E: copy supports files only".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         self.ui.focus.tree = false;
@@ -84,7 +84,7 @@ impl Model {
             copy,
             directory: String::new(),
         };
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn finish_tree_transfer(&mut self, path: PathBuf, copy: bool, directory: String) {
@@ -105,7 +105,7 @@ impl Model {
                 }
                 _ => {
                     self.status.text = "E: destination is outside the workspace".to_owned();
-                    self.dirty = true;
+                    self.file.dirty = true;
                     return;
                 }
             }
@@ -124,35 +124,35 @@ impl Model {
             .unwrap_or_else(|| self.workspace.path.clone());
         if source_root != target_root {
             self.status.text = "E: cannot transfer across workspace roots".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         if self.tree_entries(&target_directory).is_err() {
             self.status.text = "E: destination directory does not exist".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         let Some(name) = path.file_name() else {
             self.status.text = "E: invalid entry name".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         };
         let target = target_directory.join(name);
         if target == path {
             self.status.text = "E: source and destination are the same".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         match self.tree_entry_exists(&target_directory, &name.to_string_lossy()) {
             Ok(true) => {
                 self.status.text = format!("E: already exists: {}", name.to_string_lossy());
-                self.dirty = true;
+                self.file.dirty = true;
                 return;
             }
             Ok(false) => {}
             Err(error) => {
                 self.status.text = format!("E: {error}");
-                self.dirty = true;
+                self.file.dirty = true;
                 return;
             }
         }
@@ -171,12 +171,12 @@ impl Model {
                         false,
                     ));
                     self.status.text = format!("{label} {}…", name.to_string_lossy());
-                    self.dirty = true;
+                    self.file.dirty = true;
                     return;
                 }
                 Err(error) => {
                     self.status.text = format!("E: {error}");
-                    self.dirty = true;
+                    self.file.dirty = true;
                     return;
                 }
             }
@@ -207,7 +207,7 @@ impl Model {
             }
             Err(error) => {
                 self.status.text = format!("E: {error}");
-                self.dirty = true;
+                self.file.dirty = true;
             }
         }
     }
@@ -224,19 +224,19 @@ impl Model {
         let name = name.trim().to_owned();
         if !Self::valid_tree_name(&name) {
             self.status.text = "E: invalid entry name".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         match self.tree_entry_exists(&directory, &name) {
             Ok(true) => {
                 self.status.text = format!("E: already exists: {name}");
-                self.dirty = true;
+                self.file.dirty = true;
                 return;
             }
             Ok(false) => {}
             Err(error) => {
                 self.status.text = format!("E: {error}");
-                self.dirty = true;
+                self.file.dirty = true;
                 return;
             }
         }
@@ -251,14 +251,14 @@ impl Model {
                     && let Err(error) = self.open_path(&target)
                 {
                     self.status.text = format!("E: {error}");
-                    self.dirty = true;
+                    self.file.dirty = true;
                     return;
                 }
                 self.refresh_tree(Some(target));
             }
             Err(error) => {
                 self.status.text = format!("E: {error}");
-                self.dirty = true;
+                self.file.dirty = true;
             }
         }
     }
@@ -271,12 +271,12 @@ impl Model {
         let name = name.trim().to_owned();
         if !Self::valid_tree_name(&name) {
             self.status.text = "E: invalid entry name".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         let Some(parent) = path.parent() else {
             self.status.text = "E: invalid entry path".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         };
         let target = parent.join(&name);
@@ -287,13 +287,13 @@ impl Model {
         match self.tree_entry_exists(parent, &name) {
             Ok(true) => {
                 self.status.text = format!("E: already exists: {name}");
-                self.dirty = true;
+                self.file.dirty = true;
                 return;
             }
             Ok(false) => {}
             Err(error) => {
                 self.status.text = format!("E: {error}");
-                self.dirty = true;
+                self.file.dirty = true;
                 return;
             }
         }
@@ -307,7 +307,7 @@ impl Model {
             }
             Err(error) => {
                 self.status.text = format!("E: {error}");
-                self.dirty = true;
+                self.file.dirty = true;
             }
         }
     }
@@ -319,7 +319,7 @@ impl Model {
         }
         if self.path_is_open(&path) {
             self.status.text = "E: close the open buffer before deleting".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         if let Some(worker) = self.file_worker_for_path(&path) {
@@ -337,12 +337,12 @@ impl Model {
                             .map(|name| name.to_string_lossy())
                             .unwrap_or_default()
                     );
-                    self.dirty = true;
+                    self.file.dirty = true;
                     return;
                 }
                 Err(error) => {
                     self.status.text = format!("E: {error}");
-                    self.dirty = true;
+                    self.file.dirty = true;
                     return;
                 }
             }
@@ -356,7 +356,7 @@ impl Model {
             }
             Err(error) => {
                 self.status.text = format!("E: {error}");
-                self.dirty = true;
+                self.file.dirty = true;
             }
         }
     }

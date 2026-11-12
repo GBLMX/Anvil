@@ -10,18 +10,18 @@ impl Model {
         let mut parts = spec.splitn(3, '/');
         let (Some(old), Some(new)) = (parts.next(), parts.next()) else {
             self.status.text = "E: usage: :s/old/new/[g]".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         };
         let flags = parts.next().unwrap_or_default();
         if old.is_empty() {
             self.status.text = "E: empty search pattern".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         if !flags.is_empty() && flags != "g" {
             self.status.text = format!("E: unknown substitute flags: {flags}");
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         let range = if whole {
@@ -34,7 +34,7 @@ impl Model {
                 .offset_to_line(self.session.cursor)
             else {
                 self.status.text = "E: no line".to_owned();
-                self.dirty = true;
+                self.file.dirty = true;
                 return;
             };
             line.start..line.end
@@ -49,13 +49,13 @@ impl Model {
             Ok(result) => result,
             Err(error) => {
                 self.status.text = format!("E: {error}");
-                self.dirty = true;
+                self.file.dirty = true;
                 return;
             }
         };
         if truncated {
             self.status.text = "E: too many matches; narrow the range".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         let mut matches = matches
@@ -67,7 +67,7 @@ impl Model {
         }
         if matches.is_empty() {
             self.status.text = "E: pattern not found".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         let first = matches[0].start;
@@ -78,15 +78,15 @@ impl Model {
             .collect();
         if !self.session.editor.apply_transaction(edits) {
             self.status.text = "E: substitution failed".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         self.session.cursor = first.min(self.session.editor.text().len_bytes());
         self.session
             .editor
             .set_selection_bytes(self.session.cursor, self.session.cursor);
-        self.modified = true;
-        self.dirty = true;
+        self.file.modified = true;
+        self.file.dirty = true;
         self.status.text = format!("{count} replacements applied");
     }
 
@@ -101,7 +101,7 @@ impl Model {
         }
         if anvil_control::capability_for_command(command).is_none() {
             self.status.text = format!("E: unknown command: {command}");
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         let mut parts = command.splitn(2, char::is_whitespace);
@@ -183,7 +183,7 @@ impl Model {
                         Err(error) => self.status.text = format!("E: {error}"),
                     }
                 }
-                self.dirty = true;
+                self.file.dirty = true;
             }
             ("theme-auto", argument) => {
                 let (dark, light) = if argument.is_empty() {
@@ -194,7 +194,7 @@ impl Model {
                         (*dark, *light)
                     } else {
                         self.status.text = "E: usage: :theme-auto [dark] [light]".to_owned();
-                        self.dirty = true;
+                        self.file.dirty = true;
                         return;
                     }
                 };
@@ -209,14 +209,14 @@ impl Model {
                     }
                     Err(error) => self.status.text = format!("E: {error}"),
                 }
-                self.dirty = true;
+                self.file.dirty = true;
             }
             ("theme-save", "") => {
                 self.status.text = match theme_config::save() {
                     Ok(path) => format!("theme saved: {}", path.display()),
                     Err(error) => format!("E: {error}"),
                 };
-                self.dirty = true;
+                self.file.dirty = true;
             }
             ("pkg", argument) => {
                 if let Some(url) = argument.strip_prefix("install ") {
@@ -229,11 +229,11 @@ impl Model {
                         self.status.text =
                             "E: usage: :pkg install-file <package> <signature> <public-key>"
                                 .to_owned();
-                        self.dirty = true;
+                        self.file.dirty = true;
                     }
                 } else {
                     self.status.text = "E: usage: :pkg install <url> | :pkg install-file <package> <signature> <public-key>".to_owned();
-                    self.dirty = true;
+                    self.file.dirty = true;
                 }
             }
             ("reconnect", "") => self.queue_effect(Effect::ReconnectGateway),
@@ -246,7 +246,7 @@ impl Model {
                 let parts = argument.split_whitespace().collect::<Vec<_>>();
                 let Some(program) = parts.first() else {
                     self.status.text = "E: usage: :dap-attach <adapter> [args]".to_owned();
-                    self.dirty = true;
+                    self.file.dirty = true;
                     return;
                 };
                 let args = parts[1..]
@@ -254,14 +254,14 @@ impl Model {
                     .map(|arg| (*arg).to_owned())
                     .collect::<Vec<_>>();
                 self.start_dap_attach(std::path::PathBuf::from(program), args);
-                self.dirty = true;
+                self.file.dirty = true;
             }
             ("dap-detach", "") => {
                 self.language.dap.client = None;
                 self.language.dap.attach = None;
                 self.language.dap.attach_started = None;
                 self.status.text = "debug adapter detached".to_owned();
-                self.dirty = true;
+                self.file.dirty = true;
             }
             ("debug", "") => self.toggle_debug_panel(),
             ("debug-refresh", "") => self.request_debug_refresh(),
@@ -294,7 +294,7 @@ impl Model {
             | ("terminal-stop", "")
             | ("terminal-read", "") => {
                 self.status.text = "E: terminal is unsupported on this platform".to_owned();
-                self.dirty = true;
+                self.file.dirty = true;
             }
             ("workspace-add", path) => self.add_workspace_root(path),
             ("workspace-remove", path) => self.remove_workspace_root(path),
@@ -307,7 +307,7 @@ impl Model {
             ("wq", path) => self.queue_effect(Effect::SaveAsAndQuit(path.into())),
             _ => {
                 self.status.text = format!("E: unknown command: {name}");
-                self.dirty = true;
+                self.file.dirty = true;
             }
         }
     }
@@ -315,7 +315,7 @@ impl Model {
     pub(crate) fn queue_effect(&mut self, effect: Effect) {
         if self.config.effects.push(effect).is_err() {
             self.status.text = "E: effect queue full".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
         }
     }
 
@@ -390,7 +390,7 @@ impl Model {
                 Effect::Reload(path) => {
                     if let Err(error) = self.reload_external(&path) {
                         self.status.text = format!("E: {error}");
-                        self.dirty = true;
+                        self.file.dirty = true;
                     }
                 }
                 Effect::ReconnectGateway => self.reconnect_gateway(),
@@ -409,20 +409,20 @@ impl Model {
     fn finish_save_quit(&mut self) {
         if self.any_modified() {
             self.status.text = "E: other buffers have unsaved changes".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
         } else {
-            self.quit = true;
+            self.file.quit = true;
         }
     }
     fn close_buffer_number(&mut self, argument: &str, force: bool) {
         let Ok(number) = argument.parse::<usize>() else {
             self.status.text = "E: invalid buffer index".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         };
         if number == 0 {
             self.status.text = "E: buffer indexes start at 1".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         self.close_buffer(number - 1, force);

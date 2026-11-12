@@ -397,7 +397,7 @@ impl crate::Model {
         }
         self.appearance.icons = IconTheme::load(&self.workspace.path);
         self.appearance.icons_mtime = modified;
-        self.dirty = true;
+        self.file.dirty = true;
     }
 }
 

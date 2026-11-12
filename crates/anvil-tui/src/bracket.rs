@@ -273,7 +273,7 @@ impl Model {
     pub(crate) fn match_bracket(&mut self) {
         let Some((open, close)) = self.bracket_pair() else {
             self.status.text = "no matching bracket".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         };
         self.record_jump();
@@ -286,7 +286,7 @@ impl Model {
             .editor
             .set_selection_bytes(self.session.cursor, self.session.cursor);
         self.status.text = "matched bracket".to_owned();
-        self.dirty = true;
+        self.file.dirty = true;
     }
 }
 

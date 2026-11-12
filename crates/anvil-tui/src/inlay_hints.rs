@@ -81,7 +81,7 @@ impl Model {
         };
         if self.session.path.as_ref() != Some(&path) || self.session.editor.revision() != revision {
             self.overlays.lsp_results.inlay_hints.clear();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         let Some(items) = result.as_array() else {
@@ -119,7 +119,7 @@ impl Model {
         }
         hints.sort_by_key(|hint| (hint.line, hint.character));
         self.overlays.lsp_results.inlay_hints = hints;
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn insert_inlay_hints(

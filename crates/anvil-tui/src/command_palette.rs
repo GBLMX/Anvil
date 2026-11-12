@@ -96,14 +96,14 @@ impl Model {
         self.refresh_command_palette();
         self.input.pending = None;
         self.input.leader_deadline = None;
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn close_command_palette(&mut self) {
         if let Some(palette) = self.overlays.command_palette.take() {
             palette.theme_picker.cancel();
         }
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn commit_theme(&mut self, name: &str) {
@@ -116,7 +116,7 @@ impl Model {
                 Err(error) => format!("E: {error}"),
             };
         }
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn refresh_command_palette(&mut self) {
@@ -135,7 +135,7 @@ impl Model {
             });
         }
         self.preview_selected_theme();
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn move_command_palette(&mut self, delta: isize) {
@@ -144,7 +144,7 @@ impl Model {
         };
         palette.table.move_by(delta);
         self.preview_selected_theme();
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn selected_command(&self) -> Option<(String, Option<String>)> {
@@ -170,7 +170,7 @@ impl Model {
         if let Some(palette) = self.overlays.command_palette.as_ref() {
             palette.theme_picker.preview(selected);
         }
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn remember_command(&mut self, id: &str) {

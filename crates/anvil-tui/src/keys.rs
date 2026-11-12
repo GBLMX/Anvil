@@ -53,26 +53,26 @@ pub(crate) fn handle_event(model: &mut Model, event: Event) {
             let (text, truncated) = normalize_paste(&text);
             if truncated {
                 model.status.text = "E: paste truncated".to_owned();
-                model.dirty = true;
+                model.file.dirty = true;
             }
             if let InputMode::Insert = model.ui.input_mode {
                 model.insert_text(&text);
             } else if let InputMode::CommandLine { buffer } = &mut model.ui.input_mode {
                 buffer.insert_str(&text.replace('\n', " "));
-                model.dirty = true;
+                model.file.dirty = true;
             } else if let InputMode::Search { query } = &mut model.ui.input_mode {
                 query.insert_str(&text.replace('\n', " "));
-                model.dirty = true;
+                model.file.dirty = true;
             } else if let InputMode::Rename { name } = &mut model.ui.input_mode {
                 name.push_str(&text.replace('\n', " "));
-                model.dirty = true;
+                model.file.dirty = true;
             }
         }
         Event::FocusLost => {
             model.auto_save_before_focus_change();
-            model.dirty = true;
+            model.file.dirty = true;
         }
-        Event::Resize(_, _) => model.dirty = true,
+        Event::Resize(_, _) => model.file.dirty = true,
         _ => {}
     }
     model.drain_effects();
@@ -262,11 +262,11 @@ fn execute_normal_command(model: &mut Model, command: NormalCommand) {
         NormalCommand::Hover => model.queue_effect(Effect::LspHover),
         NormalCommand::MacroRecord => {
             model.input.macro_wait = Some('q');
-            model.dirty = true;
+            model.file.dirty = true;
         }
         NormalCommand::MacroReplay => {
             model.input.macro_wait = Some('@');
-            model.dirty = true;
+            model.file.dirty = true;
         }
         NormalCommand::SplitSelection => model.split_selection_lines(),
         NormalCommand::SelectWord => model.select_word_occurrences(),
@@ -277,7 +277,7 @@ fn execute_normal_command(model: &mut Model, command: NormalCommand) {
                 buffer: InputBuffer::default(),
             };
             model.overlays.command_completion = None;
-            model.dirty = true;
+            model.file.dirty = true;
         }
         NormalCommand::Search => model.begin_search(),
         NormalCommand::Append => model.append(),
@@ -287,7 +287,7 @@ fn execute_normal_command(model: &mut Model, command: NormalCommand) {
         NormalCommand::SearchNext(forward) => model.search_next(forward),
         NormalCommand::RegisterWait => {
             model.input.register_wait = true;
-            model.dirty = true;
+            model.file.dirty = true;
         }
         NormalCommand::DeleteForward => {
             let count = model.take_count();
@@ -388,7 +388,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
     if model.welcome {
         if key.code == KeyCode::Esc {
             model.welcome = false;
-            model.dirty = true;
+            model.file.dirty = true;
             return;
         }
         if key.code == KeyCode::Char('?') {
@@ -401,7 +401,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             return;
         }
         model.welcome = false;
-        model.dirty = true;
+        model.file.dirty = true;
     }
     if let Some(waiting) = model.input.macro_wait.take() {
         match waiting {
@@ -430,7 +430,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
                     for step in steps {
                         let Some(key) = macro_key(&step) else {
                             model.status.text = format!("E: macro step unavailable: {}", step.key);
-                            model.dirty = true;
+                            model.file.dirty = true;
                             break;
                         };
                         handle_key(model, KeyPress::from_key(key));
@@ -451,7 +451,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
                 .map(macro_step)
                 .collect();
             model.session.editor.set_macro(register, steps);
-            model.dirty = true;
+            model.file.dirty = true;
             return;
         }
         model.input.recording_keys.push(key.event());
@@ -461,7 +461,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
         if text_input && let KeyCode::Char(character) = key.code {
             model.input.register = Some(character);
             model.input.register_wait = false;
-            model.dirty = true;
+            model.file.dirty = true;
         }
         return;
     }
@@ -520,7 +520,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
 
     if let Some(pending) = model.input.pending.take() {
         model.input.leader_deadline = None;
-        model.dirty = true;
+        model.file.dirty = true;
         if key.ctrl() || key.alt() || key.super_key() {
             model.status.text = "E: modifier not valid in pending command".to_owned();
             return;
@@ -541,7 +541,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             KeyCode::Esc => {
                 model.overlays.fuzzy = None;
                 model.clear_preview();
-                model.dirty = true;
+                model.file.dirty = true;
             }
             KeyCode::Enter => model.fuzzy_open(),
             KeyCode::Up => model.fuzzy_move(-1),
@@ -551,14 +551,14 @@ fn handle_key(model: &mut Model, key: KeyPress) {
                     fuzzy.query.pop();
                 }
                 model.fuzzy_refresh();
-                model.dirty = true;
+                model.file.dirty = true;
             }
             KeyCode::Char(character) if text_input => {
                 if let Some(fuzzy) = model.overlays.fuzzy.as_mut() {
                     fuzzy.query.push(character);
                 }
                 model.fuzzy_refresh();
-                model.dirty = true;
+                model.file.dirty = true;
             }
             _ => {}
         }
@@ -784,7 +784,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
 
     if model.overlays.lsp_results.hover.is_some() {
         model.overlays.lsp_results.hover = None;
-        model.dirty = true;
+        model.file.dirty = true;
         if key.code == KeyCode::Esc {
             return;
         }
@@ -895,17 +895,17 @@ fn handle_key(model: &mut Model, key: KeyPress) {
         match key.code {
             KeyCode::Esc => {
                 model.ui.problems.visible = false;
-                model.dirty = true;
+                model.file.dirty = true;
                 return;
             }
             KeyCode::Up => {
                 model.ui.problems.move_selection(-1);
-                model.dirty = true;
+                model.file.dirty = true;
                 return;
             }
             KeyCode::Down => {
                 model.ui.problems.move_selection(1);
-                model.dirty = true;
+                model.file.dirty = true;
                 return;
             }
             KeyCode::Enter => {
@@ -936,7 +936,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             KeyCode::Esc => {
                 model.ui.focus.tree = false;
                 model.tree.visible = false;
-                model.dirty = true;
+                model.file.dirty = true;
             }
             KeyCode::Char('j') | KeyCode::Down => model.tree_move(1),
             KeyCode::Char('k') | KeyCode::Up => model.tree_move(-1),
@@ -980,7 +980,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             KeyCode::Esc => {
                 model.ui.input_mode = InputMode::Normal;
                 model.status.text = "rename cancelled".to_owned();
-                model.dirty = true;
+                model.file.dirty = true;
             }
             KeyCode::Enter => {
                 let new_name = std::mem::take(name);
@@ -989,11 +989,11 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             }
             KeyCode::Backspace => {
                 name.pop();
-                model.dirty = true;
+                model.file.dirty = true;
             }
             KeyCode::Char(character) if text_input => {
                 name.push(character);
-                model.dirty = true;
+                model.file.dirty = true;
             }
             _ => {}
         },
@@ -1005,7 +1005,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             KeyCode::Esc => {
                 model.ui.input_mode = InputMode::Normal;
                 model.ui.focus.tree = model.tree.visible;
-                model.dirty = true;
+                model.file.dirty = true;
             }
             KeyCode::Enter => {
                 let directory = directory.clone();
@@ -1020,11 +1020,11 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             }
             KeyCode::Backspace => {
                 name.pop();
-                model.dirty = true;
+                model.file.dirty = true;
             }
             KeyCode::Char(character) if text_input => {
                 name.push(character);
-                model.dirty = true;
+                model.file.dirty = true;
             }
             _ => {}
         },
@@ -1032,7 +1032,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             KeyCode::Esc => {
                 model.ui.input_mode = InputMode::Normal;
                 model.ui.focus.tree = model.tree.visible;
-                model.dirty = true;
+                model.file.dirty = true;
             }
             KeyCode::Enter => {
                 let path = path.clone();
@@ -1042,11 +1042,11 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             }
             KeyCode::Backspace => {
                 name.pop();
-                model.dirty = true;
+                model.file.dirty = true;
             }
             KeyCode::Char(character) if text_input => {
                 name.push(character);
-                model.dirty = true;
+                model.file.dirty = true;
             }
             _ => {}
         },
@@ -1059,7 +1059,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
                 model.ui.input_mode = InputMode::Normal;
                 model.ui.focus.tree = model.tree.visible;
                 model.status.text = "transfer cancelled".to_owned();
-                model.dirty = true;
+                model.file.dirty = true;
             }
             KeyCode::Enter => {
                 let path = path.clone();
@@ -1074,11 +1074,11 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             }
             KeyCode::Backspace => {
                 directory.pop();
-                model.dirty = true;
+                model.file.dirty = true;
             }
             KeyCode::Char(character) if text_input => {
                 directory.push(character);
-                model.dirty = true;
+                model.file.dirty = true;
             }
             _ => {}
         },
@@ -1095,7 +1095,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             KeyCode::Esc | KeyCode::Char('c') | KeyCode::Char('C') => {
                 model.ui.input_mode = InputMode::Normal;
                 model.status.text = "close cancelled".to_owned();
-                model.dirty = true;
+                model.file.dirty = true;
             }
             _ => {}
         },
@@ -1108,7 +1108,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             KeyCode::Esc | KeyCode::Char('n') | KeyCode::Char('N') => {
                 model.ui.input_mode = InputMode::Normal;
                 model.status.text = "kept local buffer".to_owned();
-                model.dirty = true;
+                model.file.dirty = true;
             }
             _ => {}
         },
@@ -1122,7 +1122,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
                 model.ui.input_mode = InputMode::Normal;
                 model.ui.focus.tree = model.tree.visible;
                 model.status.text = "delete cancelled".to_owned();
-                model.dirty = true;
+                model.file.dirty = true;
             }
             _ => {}
         },
@@ -1131,7 +1131,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
                 if !model.close_command_completion() {
                     model.ui.input_mode = InputMode::Normal;
                 }
-                model.dirty = true;
+                model.file.dirty = true;
             }
             KeyCode::Tab => model.complete_command_line(),
             KeyCode::Up => model.move_command_completion(-1),
@@ -1148,37 +1148,37 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             KeyCode::Left => {
                 buffer.move_left();
                 model.overlays.command_completion = None;
-                model.dirty = true;
+                model.file.dirty = true;
             }
             KeyCode::Right => {
                 buffer.move_right();
                 model.overlays.command_completion = None;
-                model.dirty = true;
+                model.file.dirty = true;
             }
             KeyCode::Home => {
                 buffer.move_home();
                 model.overlays.command_completion = None;
-                model.dirty = true;
+                model.file.dirty = true;
             }
             KeyCode::End => {
                 buffer.move_end();
                 model.overlays.command_completion = None;
-                model.dirty = true;
+                model.file.dirty = true;
             }
             KeyCode::Backspace => {
                 model.overlays.command_completion = None;
                 buffer.backspace();
-                model.dirty = true;
+                model.file.dirty = true;
             }
             KeyCode::Delete => {
                 model.overlays.command_completion = None;
                 buffer.delete();
-                model.dirty = true;
+                model.file.dirty = true;
             }
             KeyCode::Char(character) if text_input => {
                 model.overlays.command_completion = None;
                 buffer.insert(character);
-                model.dirty = true;
+                model.file.dirty = true;
             }
             _ => {}
         },
@@ -1200,19 +1200,19 @@ fn handle_key(model: &mut Model, key: KeyPress) {
                 }
                 KeyCode::Left => {
                     query.move_left();
-                    model.dirty = true;
+                    model.file.dirty = true;
                 }
                 KeyCode::Right => {
                     query.move_right();
-                    model.dirty = true;
+                    model.file.dirty = true;
                 }
                 KeyCode::Home => {
                     query.move_home();
-                    model.dirty = true;
+                    model.file.dirty = true;
                 }
                 KeyCode::End => {
                     query.move_end();
-                    model.dirty = true;
+                    model.file.dirty = true;
                 }
                 KeyCode::Backspace => {
                     query.backspace();
@@ -1236,7 +1236,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
                 model.cancel_snippet();
                 model.finish_insert_session();
                 model.ui.input_mode = InputMode::Normal;
-                model.dirty = true;
+                model.file.dirty = true;
             }
             KeyCode::Enter => model.insert_text("\n"),
             KeyCode::Tab => {
@@ -1332,7 +1332,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             }
             if key.ctrl() && key.code == KeyCode::Char('v') {
                 model.status.text = "E: block selection is not supported".to_owned();
-                model.dirty = true;
+                model.file.dirty = true;
                 return;
             }
             match key.code {

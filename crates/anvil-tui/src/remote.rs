@@ -26,7 +26,7 @@ impl Model {
                 protocol_version: PROTOCOL_VERSION.to_owned(),
                 workspace: self.workspace.path.clone(),
                 file: self.session.path.clone(),
-                dirty: self.modified,
+                dirty: self.file.modified,
                 capabilities: CAPABILITIES
                     .iter()
                     .map(|capability| (*capability).to_owned())
@@ -94,7 +94,7 @@ impl Model {
             line + 1,
             column.max(1)
         );
-        self.dirty = true;
+        self.file.dirty = true;
         Ok(json!({"accepted": true, "path": absolute}))
     }
 
@@ -203,9 +203,9 @@ impl Model {
                 self.view.scroll = 0;
                 self.view.hscroll = 0;
                 if changed {
-                    self.modified = true;
+                    self.file.modified = true;
                 }
-                self.missing = false;
+                self.file.missing = false;
                 self.syntax
                     .borrow_mut()
                     .switch_path(self.session.path.as_deref(), false);
@@ -264,9 +264,9 @@ impl Model {
                 self.session.editor.set_selection_bytes(start, start);
                 self.session.cursor = start;
                 if changed {
-                    self.modified = true;
+                    self.file.modified = true;
                 }
-                self.missing = false;
+                self.file.missing = false;
                 self.syntax
                     .borrow_mut()
                     .switch_path(self.session.path.as_deref(), false);
@@ -276,11 +276,11 @@ impl Model {
                 self.status.text = "remote edit: replace".to_owned();
             }
         }
-        self.dirty = true;
+        self.file.dirty = true;
         reply(EditResult {
             accepted: true,
             revision: self.session.editor.revision(),
-            modified: self.modified,
+            modified: self.file.modified,
             cursor: self.session.cursor,
         })
     }
@@ -385,7 +385,7 @@ impl Model {
         if buffers.is_empty() {
             buffers.push(BufferInfo {
                 path: self.session.path.clone(),
-                modified: self.modified,
+                modified: self.file.modified,
                 active: true,
             });
         }
@@ -393,7 +393,7 @@ impl Model {
             version: env!("CARGO_PKG_VERSION").to_owned(),
             workspace: self.workspace.path.clone(),
             path: self.session.path.clone(),
-            modified: self.modified,
+            modified: self.file.modified,
             read_only: self.read_only || self.buffers.help_back.is_some(),
             cursor: self.session.cursor,
             revision: self.session.editor.revision(),
@@ -417,7 +417,7 @@ impl Model {
                 "unsaved changes; pass --force to quit",
             ));
         }
-        self.quit = true;
+        self.file.quit = true;
         Ok(json!({"accepted": true}))
     }
 

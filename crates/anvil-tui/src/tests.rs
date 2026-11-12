@@ -149,12 +149,12 @@ fn split_focus_restores_buffer_state_and_active_tab() {
     model.focus_split(false);
     assert_eq!(model.buffers.active, 0);
     assert!(model.edit.visual_anchor.is_none());
-    assert!(!model.missing);
+    assert!(!model.file.missing);
 
     model.focus_split(true);
     assert_eq!(model.buffers.active, 1);
     assert_eq!(model.edit.visual_anchor, Some(0));
-    assert!(model.missing);
+    assert!(model.file.missing);
 }
 
 #[test]
@@ -357,7 +357,7 @@ fn normal_tab_does_not_insert_text() {
     handle_event(&mut model, key(KeyCode::Tab));
     handle_event(&mut model, key(KeyCode::BackTab));
     assert_eq!(model.session.editor.text().slice(0..1), "a");
-    assert!(!model.modified);
+    assert!(!model.file.modified);
 }
 
 #[test]
@@ -395,7 +395,7 @@ fn insert_mode_modifies_piece_table() {
     handle_event(&mut model, key(KeyCode::Char('b')));
     handle_event(&mut model, key(KeyCode::Esc));
     assert_eq!(model.session.editor.text().slice(0..3), "bac");
-    assert!(model.modified);
+    assert!(model.file.modified);
     assert_eq!(model.ui.input_mode, InputMode::Normal);
 }
 
@@ -411,7 +411,7 @@ fn command_line_saves() {
     handle_event(&mut model, key(KeyCode::Char(':')));
     handle_event(&mut model, key(KeyCode::Char('w')));
     handle_event(&mut model, key(KeyCode::Enter));
-    assert!(!model.modified);
+    assert!(!model.file.modified);
     assert_eq!(fs::read_to_string(path).expect("read"), "nold");
 }
 
@@ -472,7 +472,7 @@ fn syntax_keyword_is_rendered() {
         .iter()
         .any(|cell| cell.fg == theme::syntax_keyword());
     assert!(colored, "keyword span was not colored");
-    model.dirty = false;
+    model.file.dirty = false;
 }
 
 #[test]
@@ -552,7 +552,7 @@ fn navigation_preserves_modified_buffer() {
     fs::write(&second, "second").expect("second");
     let mut model = Model::open(&first).expect("open");
     model.insert_text("X");
-    assert!(model.modified);
+    assert!(model.file.modified);
     model.open_path(&second).expect("second open");
     assert_eq!(
         model.session.path.as_deref(),
@@ -564,5 +564,5 @@ fn navigation_preserves_modified_buffer() {
     assert_eq!(model.buffers.entries[0].editor.text().slice(0..6), "Xfirst");
     model.switch_buffer(-1);
     assert_eq!(model.session.editor.text().slice(0..6), "Xfirst");
-    assert!(model.modified);
+    assert!(model.file.modified);
 }

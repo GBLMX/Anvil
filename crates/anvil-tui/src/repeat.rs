@@ -11,7 +11,7 @@ impl Model {
             valid: true,
         });
         self.ui.input_mode = InputMode::Insert;
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn capture_insert(&mut self, text: &str) {
@@ -87,7 +87,7 @@ impl Model {
     pub(crate) fn repeat_last_change(&mut self, count: usize) {
         let Some(last) = self.edit.last_change.clone() else {
             self.status.text = "E: no previous change".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         };
         match last {
@@ -207,8 +207,8 @@ impl Model {
         self.session
             .editor
             .set_selection_bytes(self.session.cursor, self.session.cursor);
-        self.modified = true;
-        self.dirty = true;
+        self.file.modified = true;
+        self.file.dirty = true;
     }
 
     fn insert_now(&mut self, text: &str) {
@@ -217,7 +217,7 @@ impl Model {
             .set_selection_bytes(self.session.cursor, self.session.cursor);
         self.session.editor.insert(self.session.cursor, text);
         self.session.cursor += text.len();
-        self.modified = true;
-        self.dirty = true;
+        self.file.modified = true;
+        self.file.dirty = true;
     }
 }

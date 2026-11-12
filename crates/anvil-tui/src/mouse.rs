@@ -73,7 +73,7 @@ pub(crate) fn handle_mouse(model: &mut Model, mouse: MouseEvent, width: u16, hei
                     model.session.cursor = offset;
                     model.session.editor.set_selection_bytes(offset, offset);
                     model.view.pointer = PointerState::Pressed(DragKind::Editor { anchor: offset });
-                    model.dirty = true;
+                    model.file.dirty = true;
                 }
                 Target::Tree(index) => {
                     model.ui.focus.tree = true;
@@ -81,7 +81,7 @@ pub(crate) fn handle_mouse(model: &mut Model, mouse: MouseEvent, width: u16, hei
                     if index < model.tree.entries.len() {
                         model.tree.selected = Some(index);
                     }
-                    model.dirty = true;
+                    model.file.dirty = true;
                 }
                 Target::Location(index) => {
                     model.select_stdin_location(index);
@@ -97,7 +97,7 @@ pub(crate) fn handle_mouse(model: &mut Model, mouse: MouseEvent, width: u16, hei
                 }
                 Target::SplitHandle => {
                     model.view.pointer = PointerState::Pressed(DragKind::Split);
-                    model.dirty = true;
+                    model.file.dirty = true;
                 }
                 Target::Breadcrumb(crate::breadcrumbs::BreadcrumbTarget::Path) => {
                     model.reveal_breadcrumb_path();
@@ -111,7 +111,7 @@ pub(crate) fn handle_mouse(model: &mut Model, mouse: MouseEvent, width: u16, hei
                         if let Err(error) = model.open_path(&path) {
                             model.status.text = format!("E: {error}");
                         }
-                        model.dirty = true;
+                        model.file.dirty = true;
                     }
                 }
                 Target::Status | Target::Outside => {
@@ -141,7 +141,7 @@ pub(crate) fn handle_mouse(model: &mut Model, mouse: MouseEvent, width: u16, hei
                             }
                         }
                     }
-                    model.dirty = true;
+                    model.file.dirty = true;
                 }
                 PointerState::Idle => {}
             }
@@ -195,7 +195,7 @@ pub(crate) fn handle_mouse(model: &mut Model, mouse: MouseEvent, width: u16, hei
                     .min(model.session.editor.index().len_lines().saturating_sub(1));
                 model.ensure_cursor_visible(height.saturating_sub(2), width.saturating_sub(2));
             }
-            model.dirty = true;
+            model.file.dirty = true;
             true
         }
         _ => false,
@@ -381,7 +381,7 @@ fn close_outside_overlay(model: &mut Model) {
     }
     if model.ui.problems.visible {
         model.ui.problems.visible = false;
-        model.dirty = true;
+        model.file.dirty = true;
     }
     if model.overlays.command_palette.is_some() {
         model.close_command_palette();
@@ -389,7 +389,7 @@ fn close_outside_overlay(model: &mut Model) {
     if model.overlays.fuzzy.is_some() {
         model.overlays.fuzzy = None;
         model.clear_preview();
-        model.dirty = true;
+        model.file.dirty = true;
     }
     if model.overlays.lsp_results.code_actions.is_some() {
         model.cancel_code_actions();

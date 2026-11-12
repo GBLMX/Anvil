@@ -14,7 +14,7 @@ impl Model {
         self.ui
             .notifications
             .push(severity, source, message, now_millis());
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn finish_busy_progress(&mut self, error: Option<&str>) {
@@ -23,7 +23,7 @@ impl Model {
             if let Some(error) = error {
                 self.notify(NotificationSeverity::Error, "file", error);
             }
-            self.dirty = true;
+            self.file.dirty = true;
         }
     }
 
@@ -44,7 +44,7 @@ impl Model {
         }
         problems.extend(self.runtime.task_problems.iter().cloned());
         self.ui.problems.replace(problems);
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn toggle_problems(&mut self) {
@@ -53,20 +53,20 @@ impl Model {
             self.rebuild_problems();
             self.status.text = format!("problems: {}", self.ui.problems.items.len());
         }
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn jump_problem(&mut self) {
         let Some(problem) = self.ui.problems.selected().cloned() else {
             self.status.text = "no problems".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         };
         if self.session.path.as_deref() != Some(problem.path.as_path())
             && let Err(error) = self.open_path(&problem.path)
         {
             self.status.text = format!("E: {error}");
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         self.session.cursor =
@@ -81,7 +81,7 @@ impl Model {
             problem.line + 1,
             problem.message
         );
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn open_diagnostic_peek(
@@ -116,14 +116,14 @@ impl Model {
             line_count,
             scroll: 0,
         });
-        self.dirty = true;
+        self.file.dirty = true;
         true
     }
 
     pub(crate) fn close_diagnostic_peek(&mut self) {
         if let Some(peek) = self.ui.diagnostic_peek.take() {
             self.ui.focus = peek.focus;
-            self.dirty = true;
+            self.file.dirty = true;
         }
     }
 
@@ -134,7 +134,7 @@ impl Model {
                 .scroll
                 .saturating_add_signed(delta)
                 .min(peek.line_count.saturating_sub(visible));
-            self.dirty = true;
+            self.file.dirty = true;
         }
     }
 
@@ -145,7 +145,7 @@ impl Model {
         });
         if stale {
             self.ui.diagnostic_peek = None;
-            self.dirty = true;
+            self.file.dirty = true;
         }
     }
 }

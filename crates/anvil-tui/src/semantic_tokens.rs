@@ -25,7 +25,7 @@ impl Model {
             params,
         ) {
             self.status.text = "semantic tokens".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
         }
     }
 
@@ -85,7 +85,7 @@ impl Model {
             "semantic tokens: {}",
             self.overlays.lsp_results.semantic_tokens.len()
         );
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn clear_semantic_tokens(&mut self) {

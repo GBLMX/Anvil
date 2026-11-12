@@ -21,7 +21,7 @@ impl Model {
             } else {
                 "E: usage: :task <command>".to_owned()
             };
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         if self.reject_read_only() {
@@ -29,7 +29,7 @@ impl Model {
         }
         if self.runtime.task_worker.is_some() {
             self.status.text = "E: task already running".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         self.runtime.task_problems.clear();
@@ -46,7 +46,7 @@ impl Model {
         } else {
             format!("task: running {command}")
         };
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn poll_task(&mut self) {
@@ -103,13 +103,13 @@ impl Model {
             status.push_str("; output truncated");
         }
         self.status.text = status;
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn show_task_output(&mut self) {
         let Some(output) = self.runtime.task_output.clone() else {
             self.status.text = "no task output".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         };
         self.show_read_only(&output, "task output: :q returns", "task output");

@@ -303,7 +303,7 @@ impl crate::Model {
         self.overlays.lsp_results.inlay_pending = None;
         self.overlays.lsp_results.inlay_checked = None;
         crate::theme::set_high_contrast(settings.ui.high_contrast);
-        self.dirty = true;
+        self.file.dirty = true;
     }
 }
 

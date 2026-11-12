@@ -131,7 +131,7 @@ impl Model {
         let files = self.openable_recent_files();
         if files.is_empty() {
             self.status.text = "no recent files in this workspace".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         self.clear_preview();
@@ -163,7 +163,7 @@ impl Model {
         });
         self.status.text = "recent files".to_owned();
         self.request_preview();
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn show_recent_workspaces(&mut self) {
@@ -180,7 +180,7 @@ impl Model {
                     .join(", ")
             );
         }
-        self.dirty = true;
+        self.file.dirty = true;
     }
 }
 

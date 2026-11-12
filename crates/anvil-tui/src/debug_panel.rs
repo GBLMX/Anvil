@@ -122,19 +122,19 @@ impl Model {
         if self.overlays.debug_panel.is_some() {
             self.overlays.debug_panel = None;
             self.status.text = "debug panel closed".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         self.overlays.debug_panel = Some(DebugPanelState::default());
         self.status.text = "debug panel".to_owned();
-        self.dirty = true;
+        self.file.dirty = true;
         self.request_debug_refresh();
     }
 
     pub(crate) fn set_debug_panel(&mut self, name: &str) {
         let Some(panel) = self.overlays.debug_panel.as_mut() else {
             self.status.text = "E: debug panel is closed; use :debug".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         };
         let Some(kind) = (match name {
@@ -145,12 +145,12 @@ impl Model {
             _ => None,
         }) else {
             self.status.text = "E: usage: :debug-panel <threads|stack|variables|watch>".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         };
         panel.kind = kind;
         self.status.text = format!("debug panel: {}", kind.name());
-        self.dirty = true;
+        self.file.dirty = true;
         self.request_debug_refresh();
     }
 
@@ -160,7 +160,7 @@ impl Model {
         };
         panel.kind = panel.kind.next();
         self.status.text = format!("debug panel: {}", panel.kind.name());
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn move_debug_selection(&mut self, delta: isize) {
@@ -177,24 +177,24 @@ impl Model {
         } else {
             (*selected + delta.unsigned_abs()).min(len - 1)
         };
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn close_debug_panel(&mut self) {
         self.overlays.debug_panel = None;
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn add_debug_watch(&mut self, expression: &str) {
         let expression = expression.trim();
         if expression.is_empty() {
             self.status.text = "E: usage: :debug-watch <expression>".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         let Some(panel) = self.overlays.debug_panel.as_mut() else {
             self.status.text = "E: debug panel is closed; use :debug".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         };
         if !panel
@@ -209,7 +209,7 @@ impl Model {
         }
         panel.kind = DebugPanelKind::Watch;
         self.status.text = format!("watch: {expression}");
-        self.dirty = true;
+        self.file.dirty = true;
         self.request_debug_refresh();
     }
 
@@ -220,13 +220,13 @@ impl Model {
         panel.watches.clear();
         panel.selected_watch = 0;
         self.status.text = "watches cleared".to_owned();
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn request_debug_refresh(&mut self) {
         let Some(client) = self.language.dap.client.take() else {
             self.status.text = "E: no debug adapter; use :dap-attach".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         };
         let Some(panel) = self.overlays.debug_panel.as_ref() else {
@@ -259,7 +259,7 @@ impl Model {
             panel.pending = true;
         }
         self.status.text = "debug refresh…".to_owned();
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn poll_debug_request(&mut self) {
@@ -286,7 +286,7 @@ impl Model {
                         self.status.text = format!("E: debug refresh: {error}");
                     }
                 }
-                self.dirty = true;
+                self.file.dirty = true;
             }
             Err(std::sync::mpsc::TryRecvError::Disconnected) => {
                 self.language.dap.request = None;
@@ -295,7 +295,7 @@ impl Model {
                     panel.pending = false;
                 }
                 self.status.text = "E: debug refresh worker stopped".to_owned();
-                self.dirty = true;
+                self.file.dirty = true;
             }
             Err(std::sync::mpsc::TryRecvError::Empty) => {
                 if self
@@ -310,7 +310,7 @@ impl Model {
                         panel.pending = false;
                     }
                     self.status.text = "E: debug refresh timed out".to_owned();
-                    self.dirty = true;
+                    self.file.dirty = true;
                 }
             }
         }

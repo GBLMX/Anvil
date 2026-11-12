@@ -673,10 +673,10 @@ fn command_line_tab_completes_and_enter_executes() {
     for character in "the".chars() {
         handle_event(&mut model, key(KeyCode::Char(character)));
     }
-    model.dirty = false;
+    model.file.dirty = false;
     handle_event(&mut model, key(KeyCode::Tab));
     assert!(model.overlays.command_completion.is_some());
-    assert!(model.dirty);
+    assert!(model.file.dirty);
     handle_event(&mut model, key(KeyCode::Tab));
     assert!(matches!(
         &model.ui.input_mode,

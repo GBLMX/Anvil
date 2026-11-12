@@ -275,7 +275,7 @@ impl WorkspaceEdit {
                     model.write_file(path, "")?;
                     model.tree.stale = true;
                     model.sync_watch_paths();
-                    model.dirty = true;
+                    model.file.dirty = true;
                 }
                 Operation::Rename {
                     from,
@@ -574,7 +574,7 @@ fn commit_states(model: &mut Model, prepared: HashMap<PathBuf, EditorState>) {
                 .session
                 .cursor
                 .min(model.session.editor.text().len_bytes());
-            model.modified = true;
+            model.file.modified = true;
             model.syntax.borrow_mut().invalidate();
             if let Some(buffer) = model
                 .buffers
@@ -610,7 +610,7 @@ fn commit_states(model: &mut Model, prepared: HashMap<PathBuf, EditorState>) {
             });
         }
     }
-    model.dirty = true;
+    model.file.dirty = true;
 }
 
 fn remap_path(path: &Path, from: &Path, to: &Path) -> PathBuf {
@@ -639,7 +639,7 @@ fn path_is_open(model: &Model, path: &Path) -> bool {
 
 fn path_is_modified(model: &Model, path: &Path) -> bool {
     let affected = |candidate: &Path| candidate == path || candidate.starts_with(path);
-    let active = model.session.path.as_deref().is_some_and(affected) && model.modified;
+    let active = model.session.path.as_deref().is_some_and(affected) && model.file.modified;
     let buffer = model
         .buffers
         .entries
@@ -688,7 +688,7 @@ impl Model {
             .switch_path(self.session.path.as_deref(), true);
         self.tree.stale = true;
         self.sync_watch_paths();
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     fn close_paths_under(&mut self, path: &Path) {
@@ -717,7 +717,7 @@ impl Model {
         }
         self.tree.stale = true;
         self.sync_watch_paths();
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn lsp_document_version(&self, path: &Path) -> Option<u64> {
@@ -943,7 +943,7 @@ mod tests {
         let mut model = open(&dir);
         let path = model.session.path.clone().expect("path");
         model.session.editor.insert(0, "x");
-        model.modified = true;
+        model.file.modified = true;
         let workspace_edit = WorkspaceEdit::from_lsp(&serde_json::json!({
             "documentChanges": [{"kind": "delete", "uri": uri(&path)}]
         }))

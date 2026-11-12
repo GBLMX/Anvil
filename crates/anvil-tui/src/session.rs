@@ -101,7 +101,7 @@ pub(crate) fn restore(model: &mut Model, workspace: &Path) -> Result<bool, Strin
     } else {
         format!("session restored with {conflicts} swap conflict(s)")
     };
-    model.dirty = true;
+    model.file.dirty = true;
     Ok(true)
 }
 
@@ -169,19 +169,19 @@ impl Model {
         }
         let Some(path) = self.session.path.clone() else {
             self.status.text = "E: no file name".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         };
         let Some(swap) = self.workspace.conflict_swaps.get(&path).cloned() else {
             self.status.text = "no swap conflict for this buffer".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         };
         let text = match fs::read_to_string(&swap) {
             Ok(text) => text,
             Err(error) => {
                 self.status.text = format!("E: conflict swap: {error}");
-                self.dirty = true;
+                self.file.dirty = true;
                 return;
             }
         };
@@ -190,8 +190,8 @@ impl Model {
         self.view.scroll = 0;
         self.view.hscroll = 0;
         self.session.editor.set_selection_bytes(0, 0);
-        self.modified = true;
-        self.missing = false;
+        self.file.modified = true;
+        self.file.missing = false;
         self.workspace.conflict_swaps.remove(&path);
         self.syntax
             .borrow_mut()
@@ -199,23 +199,23 @@ impl Model {
         self.sync_lsp_active();
         self.sync_watch_paths();
         self.status.text = "conflict recovered from swap; buffer modified".to_owned();
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn discard_conflict(&mut self) {
         let Some(path) = self.session.path.clone() else {
             self.status.text = "E: no file name".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         };
         if !self.workspace.conflict_swaps.contains_key(&path) {
             self.status.text = "no swap conflict for this buffer".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         self.clear_conflict(&path);
         self.status.text = "conflict discarded; current buffer kept".to_owned();
-        self.dirty = true;
+        self.file.dirty = true;
     }
 }
 
@@ -439,7 +439,7 @@ mod tests {
         save(&mut model, &workspace).expect("save");
         let mut restored = Model::new(EditorState::from_text(""), None);
         assert!(restore(&mut restored, &workspace).expect("restore"));
-        assert!(restored.modified);
+        assert!(restored.file.modified);
         assert_eq!(
             restored.session.editor.undo_depth(),
             0,
@@ -450,7 +450,7 @@ mod tests {
         fs::write(&path, "changed on disk\n").expect("changed");
         let mut conflicted = Model::new(EditorState::from_text(""), None);
         assert!(restore(&mut conflicted, &workspace).expect("restore"));
-        assert!(!conflicted.modified);
+        assert!(!conflicted.file.modified);
         assert!(conflicted.status.text.contains("conflict"));
         let swap = conflicted
             .workspace
@@ -489,7 +489,7 @@ mod tests {
         assert!(restore(&mut restored, &workspace).expect("restore"));
         let split = restored.buffers.split.as_ref().expect("split restored");
         assert!(restored.ui.focus.split);
-        assert!(restored.modified);
+        assert!(restored.file.modified);
         assert_eq!(restored.session.editor.text().slice(0..5), "dirty");
         assert_eq!(restored.session.path.as_deref(), Some(right.as_path()));
         assert_eq!(split.buffer.path.as_deref(), Some(left.as_path()));
@@ -530,7 +530,7 @@ mod tests {
         assert!(!recovered.workspace.conflict_swaps.is_empty());
         assert!(swap.exists());
         recovered.execute_command("conflict-recover");
-        assert!(recovered.modified);
+        assert!(recovered.file.modified);
         assert_eq!(recovered.session.editor.text().slice(0..5), "dirty");
         assert!(recovered.workspace.conflict_swaps.is_empty());
         assert!(recovered.save());
@@ -547,7 +547,7 @@ mod tests {
             .cloned()
             .expect("conflict swap");
         discarded.execute_command("conflict-discard");
-        assert!(!discarded.modified);
+        assert!(!discarded.file.modified);
         assert!(discarded.workspace.conflict_swaps.is_empty());
         assert!(!swap.exists());
         assert_eq!(fs::read_to_string(&path).expect("disk"), "changed again\n");

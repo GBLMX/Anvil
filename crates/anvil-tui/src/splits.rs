@@ -6,7 +6,7 @@ impl Model {
     pub(crate) fn split_vertical(&mut self) {
         if self.buffers.split.is_some() {
             self.status.text = "split already open".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         self.buffers.split = Some(Pane {
@@ -15,7 +15,7 @@ impl Model {
         self.ui.focus.split = false;
         self.status.text = "vertical split".to_owned();
         self.sync_watch_paths();
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn focus_editor(&mut self) {
@@ -26,7 +26,7 @@ impl Model {
             }
         }
         self.ui.focus.tree = false;
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn focus_split(&mut self, right: bool) {
@@ -39,9 +39,9 @@ impl Model {
         if !self.auto_save_before_focus_change() {
             return;
         }
-        if self.ui.focus.split && self.modified {
+        if self.ui.focus.split && self.file.modified {
             self.status.text = "No write since last change (:q! to override)".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         let current = self.snapshot();
@@ -53,7 +53,7 @@ impl Model {
         self.ui.focus.split = right;
         self.sync_watch_paths();
         self.status.text = if right { "right pane" } else { "left pane" }.to_owned();
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn scroll_split_rows(&mut self, delta: isize) {
@@ -69,7 +69,7 @@ impl Model {
             .scroll
             .saturating_add_signed(delta)
             .min(total.saturating_sub(1));
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn close_split(&mut self) {
@@ -79,9 +79,9 @@ impl Model {
         if !self.auto_save_before_focus_change() {
             return;
         }
-        if self.ui.focus.split && self.modified {
+        if self.ui.focus.split && self.file.modified {
             self.status.text = "No write since last change (:q! to override)".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         if self
@@ -91,7 +91,7 @@ impl Model {
             .is_some_and(|pane| pane.buffer.modified)
         {
             self.status.text = "No write since last change in split (:q! to override)".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         if self.ui.focus.split {
@@ -103,7 +103,7 @@ impl Model {
         self.ui.focus.split = false;
         self.status.text = "split closed".to_owned();
         self.sync_watch_paths();
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn restore_buffer(&mut self, buffer: Buffer) {
@@ -131,8 +131,8 @@ impl Model {
         self.session.cursor = buffer.cursor;
         self.view.scroll = buffer.scroll;
         self.view.hscroll = buffer.hscroll;
-        self.modified = buffer.modified;
-        self.missing = buffer.missing;
+        self.file.modified = buffer.modified;
+        self.file.missing = buffer.missing;
         self.edit.visual_anchor = buffer.visual_anchor;
         self.edit.visual_line = buffer.visual_line;
         self.search.query = buffer.search_query;
@@ -146,6 +146,6 @@ impl Model {
             .borrow_mut()
             .switch_path(self.session.path.as_deref(), false);
         self.sync_lsp_active();
-        self.dirty = true;
+        self.file.dirty = true;
     }
 }

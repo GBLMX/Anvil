@@ -224,7 +224,7 @@ impl Model {
         if expected == 0 {
             if let Some(error) = error {
                 self.status.text = format!("E: git status: {error}");
-                self.dirty = true;
+                self.file.dirty = true;
             }
             return;
         }
@@ -247,14 +247,14 @@ impl Model {
             Ok(statuses) => self.git.status.extend(statuses),
             Err(error) => {
                 self.status.text = format!("E: git status: {error}");
-                self.dirty = true;
+                self.file.dirty = true;
             }
         }
         if self.git.status_received >= self.git.status_expected {
             self.git.status_pending = None;
             self.git.status_expected = 0;
             self.git.status_received = 0;
-            self.dirty = true;
+            self.file.dirty = true;
         }
     }
 
@@ -341,7 +341,7 @@ impl Model {
                         }
                         Err(error) => {
                             self.status.text = format!("E: {error}");
-                            self.dirty = true;
+                            self.file.dirty = true;
                             self.finish_busy_progress(Some(&error));
                         }
                     }
@@ -357,7 +357,7 @@ impl Model {
                         }
                         Err(error) => {
                             self.status.text = format!("E: {error}");
-                            self.dirty = true;
+                            self.file.dirty = true;
                             self.finish_busy_progress(Some(&error));
                         }
                     }
@@ -382,7 +382,7 @@ impl Model {
                     self.handle_git_status(generation, result);
                 }
             }
-            self.dirty = true;
+            self.file.dirty = true;
         }
         let roots = self
             .workspace
@@ -540,7 +540,7 @@ impl Model {
         };
         self.sync_tree_watches();
         self.request_git_status();
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     fn valid_tree_name(name: &str) -> bool {
@@ -865,13 +865,13 @@ impl Model {
         self.ui.focus.tree = true;
         self.request_tree_refresh(select);
         self.request_git_status();
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     fn tree_busy(&mut self) -> bool {
         if self.status.busy.is_some() {
             self.status.text = "E: file operation already in progress".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             true
         } else {
             false

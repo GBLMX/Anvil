@@ -13,10 +13,10 @@ impl Model {
         if self.session.path.as_ref() == Some(&absolute) {
             return Ok(());
         }
-        if self.session.path.is_none() && self.modified {
+        if self.session.path.is_none() && self.file.modified {
             self.status.text =
                 "E: save or discard the unnamed buffer before opening another file".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return Err("unnamed buffer is modified".to_owned());
         }
         if !self.auto_save_before_focus_change() {
@@ -70,8 +70,8 @@ impl Model {
             self.session.cursor = 0;
             self.view.scroll = 0;
             self.view.hscroll = 0;
-            self.modified = false;
-            self.missing = false;
+            self.file.modified = false;
+            self.file.missing = false;
             self.syntax
                 .borrow_mut()
                 .switch_path(self.session.path.as_deref(), true);
@@ -80,12 +80,12 @@ impl Model {
             eprintln!("open_path read={read_done:?} index={:?}", start.elapsed());
         }
         self.welcome = false;
-        self.stdin_buffer = false;
+        self.file.stdin_buffer = false;
         self.welcome_back = false;
         self.sync_lsp_active();
         self.sync_watch_paths();
         self.record_recent_file(&recent_path);
-        self.dirty = true;
+        self.file.dirty = true;
         Ok(())
     }
 
@@ -315,7 +315,7 @@ impl Model {
 
     pub(crate) fn handle_external_change(&mut self, path: PathBuf) {
         let modified = if self.session.path.as_ref() == Some(&path) {
-            self.modified
+            self.file.modified
         } else {
             self.buffers
                 .entries
@@ -332,16 +332,16 @@ impl Model {
             }
             self.ui.input_mode = InputMode::ConfirmReload { path: path.clone() };
             self.status.text = format!("File changed on disk: {} [y/N]", path.display());
-            self.dirty = true;
+            self.file.dirty = true;
         } else if let Err(error) = self.reload_external(&path) {
             self.status.text = format!("E: {error}");
-            self.dirty = true;
+            self.file.dirty = true;
         }
     }
     pub(crate) fn mark_missing(&mut self, path: &Path) {
         let affected = |candidate: &Path| candidate == path || candidate.starts_with(path);
         if self.session.path.as_deref().is_some_and(affected) {
-            self.missing = true;
+            self.file.missing = true;
         }
         for buffer in &mut self.buffers.entries {
             if buffer.path.as_deref().is_some_and(affected) {
@@ -353,7 +353,7 @@ impl Model {
         {
             pane.buffer.missing = true;
         }
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn reload_external(&mut self, path: &Path) -> Result<(), String> {
@@ -368,8 +368,8 @@ impl Model {
         if self.session.path.as_deref() == Some(path) {
             self.session.editor = EditorState::from_text(&text).into();
             self.session.cursor = cursor;
-            self.modified = false;
-            self.missing = false;
+            self.file.modified = false;
+            self.file.missing = false;
             self.syntax.borrow_mut().invalidate();
             self.sync_lsp_active();
         }
@@ -395,7 +395,7 @@ impl Model {
         self.sync_active();
         self.workspace.stale_paths.remove(path);
         self.status.text = format!("reloaded {}", path.display());
-        self.dirty = true;
+        self.file.dirty = true;
         Ok(())
     }
 
@@ -407,17 +407,17 @@ impl Model {
             Ok(path) => path,
             Err(error) => {
                 if self.editor_mode {
-                    self.exit_code = 1;
+                    self.file.exit_code = 1;
                 }
                 self.status.text = format!("E: {error}");
-                self.dirty = true;
+                self.file.dirty = true;
                 return false;
             }
         };
         if self.workspace.stale_paths.contains(&path) {
             self.status.text =
                 "E: file changed by project replace; reload before saving".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return false;
         }
         let current_conflict = self
@@ -430,20 +430,20 @@ impl Model {
             if path != *conflict {
                 self.status.text =
                     "E: resolve the current swap conflict before saving elsewhere".to_owned();
-                self.dirty = true;
+                self.file.dirty = true;
                 return false;
             }
-            if !self.modified {
+            if !self.file.modified {
                 self.status.text =
                     "E: swap conflict; :conflict-recover or :conflict-discard".to_owned();
-                self.dirty = true;
+                self.file.dirty = true;
                 return false;
             }
         }
         let target_conflict = self.workspace.conflict_swaps.contains_key(&path);
         if target_conflict && current_conflict.is_none() {
             self.status.text = "E: destination has an unresolved swap conflict".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return false;
         }
         let conflict_path = if target_conflict {
@@ -460,15 +460,15 @@ impl Model {
         match self.write_file(&path, &text) {
             Ok(()) => {
                 if self.editor_mode {
-                    self.exit_code = 0;
+                    self.file.exit_code = 0;
                 }
                 self.session.path = Some(path.clone());
                 if let Some(conflict) = conflict_path {
                     self.clear_conflict(&conflict);
                 }
-                self.stdin_buffer = false;
-                self.modified = false;
-                self.missing = false;
+                self.file.stdin_buffer = false;
+                self.file.modified = false;
+                self.file.missing = false;
                 self.git.diff_checked = None;
                 self.git.diff_due = Some(Instant::now());
                 self.sync_lsp_active();
@@ -476,15 +476,15 @@ impl Model {
                 self.sync_watch_paths();
                 self.status.text = format!("\"{display}\" written");
                 self.request_format_after_save();
-                self.dirty = true;
+                self.file.dirty = true;
                 true
             }
             Err(error) => {
                 if self.editor_mode {
-                    self.exit_code = 1;
+                    self.file.exit_code = 1;
                 }
                 self.status.text = format!("E: {error}");
-                self.dirty = true;
+                self.file.dirty = true;
                 false
             }
         }
@@ -497,11 +497,11 @@ impl Model {
     /// dirty.
     pub(crate) fn auto_save_before_focus_change(&mut self) -> bool {
         if !self.config.settings.editor.auto_save
-            || !self.modified
+            || !self.file.modified
             || self.session.path.is_none()
             || self.read_only
-            || self.stdin_buffer
-            || self.missing
+            || self.file.stdin_buffer
+            || self.file.missing
             || self.buffers.help_back.is_some()
             || self.overlays.settings_overlay.is_some()
             || self.overlays.command_palette.is_some()
@@ -537,10 +537,10 @@ impl Model {
         }
         let Some(path) = self.session.path.clone() else {
             if self.editor_mode {
-                self.exit_code = 1;
+                self.file.exit_code = 1;
             }
             self.status.text = "E: no file name".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return false;
         };
         self.save_to(path)
@@ -553,7 +553,7 @@ impl Model {
         self.sync_active();
         let active_path = self.session.path.clone();
         let mut failed = false;
-        if self.modified && !self.save() {
+        if self.file.modified && !self.save() {
             failed = true;
         }
         let mut writes = Vec::new();
@@ -591,7 +591,7 @@ impl Model {
         if !failed {
             self.status.text = "all files written".to_owned();
         }
-        self.dirty = true;
+        self.file.dirty = true;
         !failed
     }
 

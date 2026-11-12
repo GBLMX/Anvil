@@ -553,6 +553,22 @@ struct ConfigState {
 }
 
 #[derive(Default)]
+pub struct FileState {
+    /// Set by `q` / `:q`.
+    pub quit: bool,
+    /// Whether the file has unsaved changes.
+    pub modified: bool,
+    /// Whether the active file disappeared outside the editor.
+    pub missing: bool,
+    /// Whether the next loop iteration should render.
+    pub dirty: bool,
+    /// The active buffer was loaded from stdin and has no file path.
+    stdin_buffer: bool,
+    /// Process exit code accumulated by editor-mode failures or `:cq`.
+    exit_code: i32,
+}
+
+#[derive(Default)]
 struct InputState {
     /// Pending normal-mode operator (`d` or `y`).
     pending: Option<char>,
@@ -933,14 +949,8 @@ pub struct Model {
     pub ui: UiState,
     /// Keymap, settings, and typed command effects.
     config: ConfigState,
-    /// Set by `q` / `:q`.
-    pub quit: bool,
-    /// Whether the file has unsaved changes.
-    pub modified: bool,
-    /// Whether the active file disappeared outside the editor.
-    pub missing: bool,
-    /// Whether the next loop iteration should render.
-    pub dirty: bool,
+    /// File flags and process exit state.
+    pub file: FileState,
     /// Status text and background activity state.
     pub status: StatusState,
     /// Operator, register, macro, and replay input state.
@@ -966,8 +976,6 @@ pub struct Model {
     overlays: OverlayState,
     /// Icon and theme persistence state.
     appearance: AppearanceState,
-    /// The active buffer was loaded from stdin and has no file path.
-    stdin_buffer: bool,
     /// Reject mutating commands for a read-only input buffer.
     read_only: bool,
     /// File locations parsed from the stdin buffer.
@@ -975,8 +983,6 @@ pub struct Model {
     project: ProjectState,
     /// Whether the process was started as an external editor.
     editor_mode: bool,
-    /// Process exit code accumulated by editor-mode failures or `:cq`.
-    exit_code: i32,
     /// Tree-sitter highlights cached by editor revision and path.
     syntax: RefCell<SyntaxState>,
     /// Matching bracket cached by editor revision, path, and cursor.
@@ -1011,10 +1017,10 @@ impl Model {
                 keymap: keymap::KeymapConfig::default(),
                 settings: Settings::default(),
             },
-            quit: false,
-            modified: false,
-            missing: false,
-            dirty: true,
+            file: FileState {
+                dirty: true,
+                ..Default::default()
+            },
             status: StatusState::default(),
             input: InputState::default(),
             search: SearchSession::default(),
@@ -1037,11 +1043,9 @@ impl Model {
                 persist_theme: !cfg!(test),
                 ..Default::default()
             },
-            stdin_buffer: false,
             read_only: false,
             project: ProjectState::default(),
             editor_mode: false,
-            exit_code: 0,
             syntax: RefCell::new(SyntaxState::default()),
             bracket_cache: RefCell::new(bracket::BracketCache::default()),
             plugins: PluginState::default(),
@@ -1060,12 +1064,12 @@ impl Model {
             Ok((settings, keymap, theme)) => {
                 if let Err(error) = self.apply_loaded_config(settings, keymap, theme) {
                     self.status.text = format!("E: config-reload: {error}");
-                    self.dirty = true;
+                    self.file.dirty = true;
                 }
             }
             Err(error) => {
                 self.status.text = format!("E: config-reload: {error}");
-                self.dirty = true;
+                self.file.dirty = true;
             }
         }
     }
@@ -1082,7 +1086,7 @@ impl Model {
         self.apply_settings(settings);
         self.config.keymap = keymap;
         self.status.text = "configuration reloaded".to_owned();
-        self.dirty = true;
+        self.file.dirty = true;
         Ok(())
     }
 
@@ -1173,7 +1177,7 @@ impl Model {
     fn push_count(&mut self, character: char) {
         self.input.count =
             self.input.count.saturating_mul(10) + usize::from(character as u8 - b'0');
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     fn take_count(&mut self) -> usize {
@@ -1186,7 +1190,7 @@ impl Model {
         self.input.pending = Some(pending);
         self.input.leader_deadline =
             (pending == ' ').then(|| Instant::now() + Duration::from_millis(600));
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     fn expire_leader(&mut self) {
@@ -1196,7 +1200,7 @@ impl Model {
         if self.input.pending == Some(' ') && Instant::now() >= deadline {
             self.input.pending = None;
             self.input.leader_deadline = None;
-            self.dirty = true;
+            self.file.dirty = true;
         }
     }
 
@@ -1209,11 +1213,11 @@ impl Model {
     fn reject_read_only(&mut self) -> bool {
         if self.read_only {
             self.status.text = "E: read-only buffer".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             true
         } else if self.buffers.help_back.is_some() {
             self.status.text = "E: read-only view".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             true
         } else {
             false
@@ -1234,7 +1238,7 @@ impl Model {
     fn show_read_only(&mut self, text: &str, status: &str, title: &str) -> bool {
         if self.buffers.help_back.is_some() {
             self.status.text = "already viewing a read-only view".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return false;
         }
         let editor = std::mem::replace(
@@ -1249,8 +1253,8 @@ impl Model {
             hscroll: self.view.hscroll,
             visual_anchor: self.edit.visual_anchor,
             visual_line: self.edit.visual_line,
-            modified: self.modified,
-            missing: self.missing,
+            modified: self.file.modified,
+            missing: self.file.missing,
             search_query: std::mem::take(&mut self.search.query),
             syntax: self.syntax.borrow().active_cache(),
         };
@@ -1261,13 +1265,13 @@ impl Model {
         self.session.cursor = 0;
         self.view.scroll = 0;
         self.view.hscroll = 0;
-        self.modified = false;
+        self.file.modified = false;
         self.welcome_back = self.welcome;
         self.welcome = false;
         self.ui.input_mode = InputMode::Normal;
         self.input.pending = None;
         self.status.text = status.to_owned();
-        self.dirty = true;
+        self.file.dirty = true;
         true
     }
 
@@ -1282,10 +1286,10 @@ impl Model {
         self.session.cursor = 0;
         self.view.scroll = 0;
         self.view.hscroll = 0;
-        self.modified = false;
+        self.file.modified = false;
         self.buffers.read_only_title = Some(title.to_owned());
         self.status.text = status.to_owned();
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     fn close_help(&mut self) -> bool {
@@ -1310,7 +1314,7 @@ impl Model {
         self.session.cursor = saved.cursor;
         self.view.scroll = saved.scroll;
         self.view.hscroll = saved.hscroll;
-        self.modified = saved.modified;
+        self.file.modified = saved.modified;
         self.search.query = saved.search_query;
         self.syntax.borrow_mut().switch_path_with(
             self.session.path.as_deref(),
@@ -1321,7 +1325,7 @@ impl Model {
         self.welcome = std::mem::take(&mut self.welcome_back);
         self.input.pending = None;
         self.status.text = format!("Returned from {title}");
-        self.dirty = true;
+        self.file.dirty = true;
         true
     }
 
@@ -1334,7 +1338,7 @@ impl Model {
             .borrow_mut()
             .poll(text, revision, path.as_deref())
         {
-            self.dirty = true;
+            self.file.dirty = true;
         }
     }
 
@@ -1405,12 +1409,12 @@ impl Model {
     fn start_lsp(&mut self) {
         let Some(path) = self.session.path.clone() else {
             self.status.text = "E: lsp requires an open file".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         };
         let Some(settings) = lsp_settings(&path) else {
             self.status.text = format!("E: no language server for {}", path.display());
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         };
         let desired = (settings.tool.clone(), settings.language_id.clone());
@@ -1424,7 +1428,7 @@ impl Model {
                 .slice(0..self.session.editor.text().len_bytes());
             let _ = self.sync_lsp_document(&path, text);
             self.status.text = "lsp already running".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         let Some(client) = self.language.lsp.client.take().or_else(|| {
@@ -1434,7 +1438,7 @@ impl Model {
                 .and_then(|session| session.connect_lsp().ok())
         }) else {
             self.status.text = "E: lsp gateway connection unavailable".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         };
         let text = self
@@ -1474,7 +1478,7 @@ impl Model {
             }
             Err(error) => self.status.text = format!("E: lsp start: {error}"),
         }
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     fn stop_lsp(&mut self) {
@@ -1485,7 +1489,7 @@ impl Model {
         }
         self.clear_lsp_ui();
         self.status.text = "lsp stopped".to_owned();
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     fn handle_lsp_event(&mut self, key: &(String, String), event: LspEvent) {
@@ -1595,7 +1599,7 @@ impl Model {
                 }
             }
         }
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     fn poll_lsp(&mut self) {
@@ -1710,7 +1714,7 @@ impl Model {
     fn reconnect_gateway(&mut self) {
         if !self.workspace.require_gateway {
             self.status.text = "E: gateway is not required in this session".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         self.workspace.file_worker = None;
@@ -1732,7 +1736,7 @@ impl Model {
                 self.status.text = format!("E: reconnect failed: {error}");
             }
         }
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     fn active_keymap_contexts(&self) -> Vec<KeymapContext> {

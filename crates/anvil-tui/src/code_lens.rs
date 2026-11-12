@@ -48,7 +48,7 @@ impl Model {
         };
         let Some(command) = lens.command else {
             self.status.text = "code lens has no command".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         };
         let params = serde_json::json!({
@@ -77,7 +77,7 @@ impl Model {
             "textDocument/codeLens",
             serde_json::json!({"textDocument": {"uri": uri}}),
         ) {
-            self.dirty = true;
+            self.file.dirty = true;
         }
     }
 
@@ -89,7 +89,7 @@ impl Model {
         let Some(items) = result.as_array() else {
             self.overlays.lsp_results.code_lens = None;
             self.status.text = "lsp: invalid code lens response".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         };
         let mut lenses = Vec::new();
@@ -144,7 +144,7 @@ impl Model {
             "lsp",
             format!("code lens: {}", lenses.len()),
         );
-        self.dirty = true;
+        self.file.dirty = true;
     }
 }
 

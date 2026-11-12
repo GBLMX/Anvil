@@ -157,14 +157,14 @@ impl Model {
     ) -> bool {
         let Some(path) = self.session.path.clone() else {
             self.status.text = "E: lsp requires an open file".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return false;
         };
         let id = self.language.lsp_requests.next_request;
         self.language.lsp_requests.next_request += 1;
         if self.active_lsp_worker().is_none() {
             self.status.text = "E: lsp is not running".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return false;
         }
         let text = self
@@ -174,17 +174,17 @@ impl Model {
             .slice(0..self.session.editor.text().len_bytes());
         if let Err(error) = self.sync_lsp_document(&path, text) {
             self.status.text = format!("E: lsp request: {error}");
-            self.dirty = true;
+            self.file.dirty = true;
             return false;
         }
         let Some(worker) = self.active_lsp_worker() else {
             self.status.text = "E: lsp is not running".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return false;
         };
         if let Err(error) = worker.request(id, method, params) {
             self.status.text = format!("E: lsp request: {error}");
-            self.dirty = true;
+            self.file.dirty = true;
             return false;
         }
         self.language.lsp_requests.pending.insert(id, kind);
@@ -267,17 +267,17 @@ impl Model {
         self.overlays.lsp_results.hover = None;
         let Some(path) = self.session.path.clone() else {
             self.status.text = "E: no file".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         };
         let Some(diagnostics) = self.language.diagnostics.by_path.get(&path) else {
             self.status.text = "no diagnostics".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         };
         if diagnostics.is_empty() {
             self.status.text = "no diagnostics".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         let current = self
@@ -331,7 +331,7 @@ impl Model {
             .position(|item| *item == (line, character))
             .unwrap_or(0);
         self.status.text = format!("diagnostic {}/{}", index + 1, positions.len());
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn notify_lsp_save(&mut self, path: &std::path::Path, text: &str) {
@@ -362,7 +362,7 @@ impl Model {
         self.overlays.lsp_results.inlay_hints.clear();
         self.overlays.lsp_results.inlay_pending = None;
         self.overlays.lsp_results.inlay_checked = None;
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn cancel_signature_help(&mut self) {
@@ -372,7 +372,7 @@ impl Model {
             .retain(|_, kind| *kind != LspRequestKind::SignatureHelp);
         self.overlays.lsp_results.signature_help = None;
         self.prune_edit_requests();
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn request_signature_help(&mut self, trigger: char) {
@@ -405,7 +405,7 @@ impl Model {
         ) {
             self.status.text = "signature".to_owned();
         }
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn prune_edit_requests(&mut self) {
@@ -445,7 +445,7 @@ impl Model {
         self.prune_edit_requests();
         self.overlays.lsp_results.code_actions = None;
         self.overlays.lsp_results.document_symbols = None;
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn auto_completion(&mut self) {
@@ -482,7 +482,7 @@ impl Model {
         ) {
             self.status.text = "completion".to_owned();
         }
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn request_completion_resolve(&mut self) {
@@ -541,7 +541,7 @@ impl Model {
         ) {
             self.status.text = "definition".to_owned();
         }
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn request_references(&mut self) {
@@ -575,7 +575,7 @@ impl Model {
         ) {
             self.status.text = "references".to_owned();
         }
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn request_document_highlights(&mut self) {
@@ -606,7 +606,7 @@ impl Model {
         ) {
             self.status.text = "highlights".to_owned();
         }
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn cancel_document_highlights(&mut self) {
@@ -616,7 +616,7 @@ impl Model {
             .retain(|_, kind| *kind != LspRequestKind::DocumentHighlight);
         self.prune_edit_requests();
         self.overlays.lsp_results.document_highlights = None;
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn request_call_hierarchy(&mut self, direction: CallHierarchyDirection) {
@@ -648,7 +648,7 @@ impl Model {
         ) {
             self.status.text = "call hierarchy".to_owned();
         }
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     fn request_call_hierarchy_calls(
@@ -671,7 +671,7 @@ impl Model {
         if self.send_lsp_request(kind, method, serde_json::json!({ "item": item })) {
             self.status.text = label.to_owned();
         }
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn cancel_call_hierarchy(&mut self) {
@@ -685,7 +685,7 @@ impl Model {
         });
         self.prune_edit_requests();
         self.overlays.lsp_results.call_hierarchy = None;
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn request_hover(&mut self) {
@@ -710,7 +710,7 @@ impl Model {
         if self.send_lsp_request(LspRequestKind::Hover, "textDocument/hover", params) {
             self.status.text = "hover".to_owned();
         }
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn start_rename(&mut self) {
@@ -722,13 +722,13 @@ impl Model {
             name: String::new(),
         };
         self.status.text = "rename symbol".to_owned();
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn request_rename(&mut self, new_name: &str) {
         if new_name.trim().is_empty() {
             self.status.text = "E: empty rename".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         let Some(uri) = self
@@ -750,7 +750,7 @@ impl Model {
         if self.send_lsp_request(LspRequestKind::Rename, "textDocument/rename", params) {
             self.status.text = "renaming".to_owned();
         }
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn request_code_actions(&mut self) {
@@ -805,7 +805,7 @@ impl Model {
         ) {
             self.status.text = "code actions".to_owned();
         }
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn cancel_references(&mut self) {
@@ -814,7 +814,7 @@ impl Model {
             .pending
             .retain(|_, kind| *kind != LspRequestKind::References);
         self.overlays.lsp_results.references = None;
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn cancel_document_symbols(&mut self) {
@@ -823,7 +823,7 @@ impl Model {
             .pending
             .retain(|_, kind| *kind != LspRequestKind::DocumentSymbol);
         self.overlays.lsp_results.document_symbols = None;
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn cancel_workspace_symbols(&mut self) {
@@ -833,7 +833,7 @@ impl Model {
             .retain(|_, kind| *kind != LspRequestKind::WorkspaceSymbol);
         self.overlays.lsp_results.workspace_symbols = None;
         self.prune_edit_requests();
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn request_workspace_symbols(&mut self) {
@@ -851,7 +851,7 @@ impl Model {
         if self.send_lsp_request(LspRequestKind::WorkspaceSymbol, "workspace/symbol", params) {
             self.status.text = "workspace symbols".to_owned();
         }
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn move_workspace_symbol(&mut self, delta: isize) {
@@ -860,7 +860,7 @@ impl Model {
                 .selected
                 .saturating_add_signed(delta)
                 .min(symbols.filtered.len().saturating_sub(1));
-            self.dirty = true;
+            self.file.dirty = true;
         }
     }
 
@@ -881,7 +881,7 @@ impl Model {
             symbols.selected = symbols
                 .selected
                 .min(symbols.filtered.len().saturating_sub(1));
-            self.dirty = true;
+            self.file.dirty = true;
         }
     }
 
@@ -902,12 +902,12 @@ impl Model {
             && let Err(error) = self.open_path(&symbol.path)
         {
             self.status.text = format!("E: {error}");
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         self.session.cursor = self.offset_at_utf16(symbol.line, symbol.character);
         self.status.text = format!("symbol {}", symbol.name);
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     fn apply_workspace_symbols_response(&mut self, result: &serde_json::Value) {
@@ -994,7 +994,7 @@ impl Model {
         ) {
             self.status.text = "document symbols".to_owned();
         }
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn move_document_symbol(&mut self, delta: isize) {
@@ -1003,7 +1003,7 @@ impl Model {
                 .selected
                 .saturating_add_signed(delta)
                 .min(symbols.items.len().saturating_sub(1));
-            self.dirty = true;
+            self.file.dirty = true;
         }
     }
 
@@ -1017,7 +1017,7 @@ impl Model {
         self.record_jump();
         self.session.cursor = self.offset_at_utf16(symbol.line, symbol.character);
         self.status.text = format!("symbol {}", symbol.name);
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn move_reference(&mut self, delta: isize) {
@@ -1026,7 +1026,7 @@ impl Model {
                 .selected
                 .saturating_add_signed(delta)
                 .min(references.items.len().saturating_sub(1));
-            self.dirty = true;
+            self.file.dirty = true;
         }
     }
 
@@ -1042,7 +1042,7 @@ impl Model {
             && let Err(error) = self.open_path(&reference.path)
         {
             self.status.text = format!("E: {error}");
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         self.session.cursor = self.offset_at_utf16(reference.line, reference.character);
@@ -1051,7 +1051,7 @@ impl Model {
             reference.path.display(),
             reference.line + 1
         );
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn move_call_hierarchy(&mut self, delta: isize) {
@@ -1060,7 +1060,7 @@ impl Model {
                 .selected
                 .saturating_add_signed(delta)
                 .min(calls.items.len().saturating_sub(1));
-            self.dirty = true;
+            self.file.dirty = true;
         }
     }
 
@@ -1076,7 +1076,7 @@ impl Model {
             && let Err(error) = self.open_path(&item.path)
         {
             self.status.text = format!("E: {error}");
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         self.session.cursor = self.offset_at_utf16(item.line, item.character);
@@ -1085,7 +1085,7 @@ impl Model {
             CallHierarchyDirection::Outgoing => "outgoing",
         };
         self.status.text = format!("{direction} call {}:{}", item.name, item.line + 1);
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn request_formatting(&mut self) -> bool {
@@ -1115,7 +1115,7 @@ impl Model {
         if sent {
             self.status.text = "formatting".to_owned();
         }
-        self.dirty = true;
+        self.file.dirty = true;
         sent
     }
 
@@ -1138,7 +1138,7 @@ impl Model {
                 .selected
                 .saturating_add_signed(delta)
                 .min(actions.items.len().saturating_sub(1));
-            self.dirty = true;
+            self.file.dirty = true;
         }
     }
 
@@ -1159,7 +1159,7 @@ impl Model {
         } else {
             self.status.text = "E: command code actions are not supported".to_owned();
         }
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     fn apply_code_action_response(
@@ -1236,7 +1236,7 @@ impl Model {
             self.session.editor.delete(start..end);
             self.session.editor.insert(start, &insert);
             self.session.cursor = start + insert.len();
-            self.modified = true;
+            self.file.modified = true;
             if let Some(snippet) = snippet.take() {
                 self.start_snippet(&snippet, start);
             }
@@ -1255,7 +1255,7 @@ impl Model {
             }
         }
         self.status.text = format!("completed {label}");
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     fn start_snippet(&mut self, snippet: &Snippet, base: usize) {
@@ -1281,14 +1281,14 @@ impl Model {
         if mirrors > 1 {
             self.status.text = format!("snippet stop ({mirrors} mirrors)");
         }
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     fn select_snippet_groups(&mut self, ranges: Vec<(usize, usize)>) {
         if let Some((start, _)) = ranges.first().copied() {
             self.session.editor.set_selections_bytes(ranges);
             self.session.cursor = start;
-            self.dirty = true;
+            self.file.dirty = true;
         }
     }
 
@@ -1308,7 +1308,7 @@ impl Model {
             .unwrap_or(self.session.cursor);
         self.session.cursor = end;
         self.session.editor.set_selection_bytes(end, end);
-        self.dirty = true;
+        self.file.dirty = true;
         true
     }
 
@@ -1329,7 +1329,7 @@ impl Model {
 
     pub(crate) fn cancel_snippet(&mut self) {
         self.overlays.lsp_results.snippet = None;
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn move_completion(&mut self, delta: isize) {
@@ -1338,7 +1338,7 @@ impl Model {
                 .selected
                 .saturating_add_signed(delta)
                 .min(completion.filtered.len().saturating_sub(1));
-            self.dirty = true;
+            self.file.dirty = true;
         }
         self.request_completion_resolve();
     }
@@ -1363,7 +1363,7 @@ impl Model {
                 0
             };
             completion.selected = preferred.min(completion.filtered.len().saturating_sub(1));
-            self.dirty = true;
+            self.file.dirty = true;
         }
         self.request_completion_resolve();
     }

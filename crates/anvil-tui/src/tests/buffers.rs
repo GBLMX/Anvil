@@ -74,7 +74,7 @@ fn multi_buffer_w_saves_the_active_buffer() {
 
     assert_eq!(fs::read_to_string(&second).expect("read second"), "Xsecond");
     assert_eq!(fs::read_to_string(&first).expect("read first"), "first");
-    assert!(!model.modified);
+    assert!(!model.file.modified);
 }
 
 #[test]
@@ -163,12 +163,12 @@ fn load_buffer_syncs_the_current_buffer_before_switching() {
     handle_event(&mut model, key(KeyCode::Char('i')));
     type_text(&mut model, "X");
     handle_event(&mut model, key(KeyCode::Esc));
-    assert!(model.modified);
+    assert!(model.file.modified);
 
     model.switch_to_buffer(1);
     model.switch_to_buffer(0);
     assert_eq!(model.session.editor.text().slice(0..6), "Xfirst");
-    assert!(model.modified);
+    assert!(model.file.modified);
 }
 
 #[test]
@@ -186,11 +186,11 @@ fn save_then_buffer_switch_round_trip_keeps_the_buffer_clean() {
     type_text(&mut model, "X");
     handle_event(&mut model, key(KeyCode::Esc));
     command(&mut model, "w");
-    assert!(!model.modified);
+    assert!(!model.file.modified);
 
     model.switch_to_buffer(1);
     model.switch_to_buffer(0);
-    assert!(!model.modified);
+    assert!(!model.file.modified);
     assert_eq!(model.session.editor.text().slice(0..6), "Xfirst");
 }
 
@@ -198,7 +198,7 @@ fn save_then_buffer_switch_round_trip_keeps_the_buffer_clean() {
 fn cq_exits_with_status_one() {
     let mut model = Model::new(EditorState::from_text("x"), None);
     command(&mut model, "cq");
-    assert!(model.quit);
+    assert!(model.file.quit);
     assert_eq!(model.exit_code(), 1);
 }
 
@@ -210,12 +210,12 @@ fn editor_mode_keeps_save_failure_sticky_for_q_bang() {
         Some(directory.path().to_path_buf()),
     );
     model.set_editor_mode(true);
-    model.modified = true;
+    model.file.modified = true;
     assert!(!model.save());
     assert_eq!(model.exit_code(), 1);
 
     model.force_quit();
-    assert!(model.quit);
+    assert!(model.file.quit);
     assert_eq!(model.exit_code(), 1);
 }
 
@@ -274,7 +274,7 @@ fn mouse_tab_switch_preserves_the_active_buffer() {
     assert!(crate::mouse::handle_mouse(&mut model, click(2), 80, 24));
     assert_eq!(model.buffers.active, 0);
     assert_eq!(model.session.editor.text().slice(0..6), "Xfirst");
-    assert!(model.modified);
+    assert!(model.file.modified);
 }
 
 #[test]
@@ -379,7 +379,7 @@ fn failed_save_keeps_close_confirmation_open() {
     let dir = tempfile::tempdir().expect("tempdir");
     let mut model = Model::new(EditorState::from_text("dirty"), None);
     model.session.path = Some(dir.path().to_path_buf());
-    model.modified = true;
+    model.file.modified = true;
     model.ui.input_mode = InputMode::ConfirmClose { index: 0 };
     model.queue_effect(Effect::SaveBuffer {
         index: 0,
@@ -521,7 +521,7 @@ fn deleted_file_marks_the_buffer_missing() {
     fs::remove_file(&path).expect("remove");
 
     assert!(model.reload_external(&path).is_err());
-    assert!(model.missing);
+    assert!(model.file.missing);
 }
 
 #[test]
@@ -534,7 +534,7 @@ fn external_clean_change_reloads() {
 
     model.handle_external_change(path.clone());
     assert_eq!(model.session.editor.text().slice(0..4), "disk");
-    assert!(!model.modified);
+    assert!(!model.file.modified);
     assert!(model.status.text.contains("reloaded"));
 }
 
@@ -560,7 +560,7 @@ fn external_dirty_change_requires_confirmation() {
     model.handle_external_change(path);
     handle_event(&mut model, key(KeyCode::Char('y')));
     assert_eq!(model.session.editor.text().slice(0..4), "disk");
-    assert!(!model.modified);
+    assert!(!model.file.modified);
 }
 
 #[test]
@@ -583,13 +583,13 @@ fn quit_guard_checks_inactive_buffers() {
     for code in [KeyCode::Char(':'), KeyCode::Char('q'), KeyCode::Enter] {
         handle_event(&mut model, key(code));
     }
-    assert!(!model.quit);
+    assert!(!model.file.quit);
     assert!(model.status.text.contains("No write since last change"));
 
     handle_event(&mut model, key(KeyCode::Char(':')));
     type_text(&mut model, "q!");
     handle_event(&mut model, key(KeyCode::Enter));
-    assert!(model.quit);
+    assert!(model.file.quit);
 }
 
 #[test]
@@ -1083,12 +1083,12 @@ fn focus_change_auto_save_writes_the_active_buffer() {
     model.switch_buffer(-1);
     model.config.settings.editor.auto_save = true;
     model.insert_text("X");
-    assert!(model.modified);
+    assert!(model.file.modified);
 
     model.switch_buffer(1);
 
     assert_eq!(fs::read_to_string(&first).expect("first content"), "Xa");
-    assert!(!model.modified);
+    assert!(!model.file.modified);
 }
 
 #[test]
@@ -1108,7 +1108,7 @@ fn failed_auto_save_aborts_the_focus_change() {
     model.switch_buffer(1);
 
     assert_eq!(model.buffers.active, 0);
-    assert!(model.modified);
+    assert!(model.file.modified);
     assert!(model.status.text.contains("E:"));
 }
 
@@ -1123,13 +1123,13 @@ fn split_focus_change_auto_saves_the_split_pane() {
     model.split_vertical();
     model.focus_split(true);
     model.insert_text("X");
-    assert!(model.modified);
+    assert!(model.file.modified);
 
     model.focus_split(false);
 
     assert!(!model.ui.focus.split);
     assert_eq!(fs::read_to_string(&path).expect("content"), "Xa");
-    assert!(!model.modified);
+    assert!(!model.file.modified);
 }
 
 #[test]
@@ -1143,13 +1143,13 @@ fn focus_editor_auto_saves_a_dirty_split_pane() {
     model.split_vertical();
     model.focus_split(true);
     model.insert_text("X");
-    assert!(model.modified);
+    assert!(model.file.modified);
 
     model.focus_editor();
 
     assert!(!model.ui.focus.split);
     assert_eq!(fs::read_to_string(&path).expect("content"), "Xa");
-    assert!(!model.modified);
+    assert!(!model.file.modified);
 }
 
 #[test]
@@ -1178,7 +1178,7 @@ fn opening_another_file_refuses_a_dirty_unnamed_buffer() {
     let path = dir.path().join("main.rs");
     fs::write(&path, "a").expect("write");
     let mut model = Model::new(EditorState::from_text("draft"), None);
-    model.modified = true;
+    model.file.modified = true;
 
     assert!(model.open_path(&path).is_err());
 
@@ -1198,7 +1198,7 @@ fn quitting_auto_saves_the_active_buffer() {
 
     model.request_quit();
 
-    assert!(model.quit);
+    assert!(model.file.quit);
     assert_eq!(fs::read_to_string(&path).expect("content"), "Xa");
 }
 
@@ -1282,7 +1282,7 @@ fn focus_lost_auto_saves_the_active_buffer() {
     handle_event(&mut model, Event::FocusLost);
 
     assert_eq!(fs::read_to_string(&path).expect("content"), "Xa");
-    assert!(!model.modified);
+    assert!(!model.file.modified);
 }
 
 #[test]
@@ -1300,7 +1300,7 @@ fn focus_lost_auto_saves_while_insert_is_active() {
     handle_event(&mut model, Event::FocusLost);
 
     assert_eq!(fs::read_to_string(&path).expect("content"), "Xa");
-    assert!(!model.modified);
+    assert!(!model.file.modified);
     assert!(matches!(model.ui.input_mode, InputMode::Insert));
 }
 
@@ -1317,7 +1317,7 @@ fn focus_lost_skips_auto_save_during_blocking_confirmation() {
     handle_event(&mut model, Event::FocusLost);
 
     assert_eq!(fs::read_to_string(&path).expect("content"), "a");
-    assert!(model.modified);
+    assert!(model.file.modified);
     assert!(matches!(
         model.ui.input_mode,
         InputMode::ConfirmClose { .. }
@@ -1339,7 +1339,7 @@ fn focus_lost_auto_saves_while_search_is_active() {
     handle_event(&mut model, Event::FocusLost);
 
     assert_eq!(fs::read_to_string(&path).expect("content"), "Xa");
-    assert!(!model.modified);
+    assert!(!model.file.modified);
 }
 
 #[test]
@@ -1354,7 +1354,7 @@ fn switching_to_the_same_buffer_does_not_auto_save() {
     model.switch_buffer(1);
 
     assert_eq!(fs::read_to_string(&path).expect("content"), "a");
-    assert!(model.modified);
+    assert!(model.file.modified);
     assert!(model.status.text.contains("only one buffer"));
 }
 
@@ -1370,7 +1370,7 @@ fn ex_opening_the_current_file_does_not_auto_save() {
     model.open_file(path.to_str().expect("path"));
 
     assert_eq!(fs::read_to_string(&path).expect("content"), "a");
-    assert!(model.modified);
+    assert!(model.file.modified);
     assert!(model.status.text.contains("Already editing"));
 }
 

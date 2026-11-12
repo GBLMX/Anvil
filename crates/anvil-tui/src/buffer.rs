@@ -9,11 +9,11 @@ impl Model {
             path: self.session.path.clone(),
             cursor: self.session.cursor,
             scroll: self.view.scroll,
-            missing: self.missing,
+            missing: self.file.missing,
             hscroll: self.view.hscroll,
             visual_anchor: self.edit.visual_anchor,
             visual_line: self.edit.visual_line,
-            modified: self.modified,
+            modified: self.file.modified,
             search_query: self.search.query.clone(),
             syntax: self.syntax.borrow().active_cache(),
         }
@@ -43,7 +43,7 @@ impl Model {
             return;
         };
         let syntax = buffer.syntax.clone();
-        self.missing = buffer.missing;
+        self.file.missing = buffer.missing;
         self.edit.visual_anchor = buffer.visual_anchor;
         self.edit.visual_line = buffer.visual_line;
         self.session.editor = buffer.editor;
@@ -51,7 +51,7 @@ impl Model {
         self.session.cursor = buffer.cursor;
         self.view.scroll = buffer.scroll;
         self.view.hscroll = buffer.hscroll;
-        self.modified = buffer.modified;
+        self.file.modified = buffer.modified;
         self.search.query = buffer.search_query;
         self.search.state.reset_for_buffer();
         self.welcome = false;
@@ -65,7 +65,7 @@ impl Model {
         self.ui.input_mode = InputMode::Normal;
         self.input.pending = None;
         self.sync_lsp_active();
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     fn ensure_current_buffer(&mut self) -> usize {
@@ -102,11 +102,11 @@ impl Model {
         self.load_buffer(index);
         self.status.text = "new buffer".to_owned();
         self.sync_watch_paths();
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn buffer_name(&self, index: usize) -> String {
-        if index == self.buffers.active && self.stdin_buffer {
+        if index == self.buffers.active && self.file.stdin_buffer {
             return "[stdin]".to_owned();
         }
         self.buffers
@@ -121,7 +121,7 @@ impl Model {
         self.sync_active();
         if index >= self.buffers.entries.len() {
             self.status.text = "E: invalid buffer index".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return false;
         }
         if index == self.buffers.active {
@@ -129,7 +129,7 @@ impl Model {
         }
         let Some(path) = self.buffers.entries[index].path.clone() else {
             self.status.text = "E: buffer has no file name".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return false;
         };
         let text = self.buffers.entries[index]
@@ -144,12 +144,12 @@ impl Model {
                     buffer.missing = false;
                 }
                 self.status.text = format!("\"{display}\" written");
-                self.dirty = true;
+                self.file.dirty = true;
                 true
             }
             Err(error) => {
                 self.status.text = format!("E: {error}");
-                self.dirty = true;
+                self.file.dirty = true;
                 false
             }
         }
@@ -159,7 +159,7 @@ impl Model {
         self.ensure_current_buffer();
         if index >= self.buffers.entries.len() {
             self.status.text = "E: invalid buffer index".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         if self.buffers.entries[index].modified && !force {
@@ -173,7 +173,7 @@ impl Model {
                 self.ui.input_mode = InputMode::ConfirmClose { index };
                 self.status.text =
                     format!("Save {} before closing? [Y/n/c]", self.buffer_name(index));
-                self.dirty = true;
+                self.file.dirty = true;
                 return;
             }
         }
@@ -198,7 +198,7 @@ impl Model {
                 .is_some_and(|pane| pane.buffer.modified)
         {
             self.status.text = "E: split pane has unsaved changes".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         if split_same {
@@ -209,7 +209,7 @@ impl Model {
         if self.buffers.entries.is_empty() {
             self.reset_empty_buffer();
             self.status.text = "buffer closed".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         if was_active {
@@ -223,7 +223,7 @@ impl Model {
             index + 1,
             self.buffers.entries.len() + 1
         );
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     fn reset_empty_buffer(&mut self) {
@@ -232,8 +232,8 @@ impl Model {
         self.session.cursor = 0;
         self.view.scroll = 0;
         self.view.hscroll = 0;
-        self.modified = false;
-        self.missing = false;
+        self.file.modified = false;
+        self.file.missing = false;
         self.edit.visual_anchor = None;
         self.edit.visual_line = false;
         self.search.query.clear();
@@ -247,13 +247,13 @@ impl Model {
         self.ui.focus.split = false;
         self.buffers.active = 0;
         self.sync_lsp_active();
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn open_file(&mut self, path: &str) {
         if path.is_empty() {
             self.status.text = "E: file name required".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         if self.buffers.help_back.is_some() {
@@ -263,19 +263,19 @@ impl Model {
             Ok(path) => path,
             Err(error) => {
                 self.status.text = format!("E: {error}");
-                self.dirty = true;
+                self.file.dirty = true;
                 return;
             }
         };
         if self.session.path.as_ref() == Some(&path) {
             self.status.text = format!("Already editing {}", path.display());
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
-        if self.session.path.is_none() && self.modified {
+        if self.session.path.is_none() && self.file.modified {
             self.status.text =
                 "E: save or discard the unnamed buffer before opening another file".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         if !self.auto_save_before_focus_change() {
@@ -295,14 +295,14 @@ impl Model {
                 self.buffers.entries.len(),
                 path.display()
             );
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         let text = match self.read_file(&path) {
             Ok(text) => text,
             Err(error) => {
                 self.status.text = format!("E: {error}");
-                self.dirty = true;
+                self.file.dirty = true;
                 return;
             }
         };
@@ -331,7 +331,7 @@ impl Model {
             self.buffers.entries.len(),
             path.display()
         );
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn switch_buffer(&mut self, delta: isize) {
@@ -340,14 +340,14 @@ impl Model {
         }
         if self.buffers.entries.is_empty() {
             self.status.text = "E: only one buffer".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         let len = self.buffers.entries.len();
         let target = (self.buffers.active as isize + delta).rem_euclid(len as isize) as usize;
         if target == self.buffers.active {
             self.status.text = "E: only one buffer".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         if !self.auto_save_before_focus_change() {
@@ -365,7 +365,7 @@ impl Model {
     }
 
     pub(crate) fn any_modified(&self) -> bool {
-        self.modified
+        self.file.modified
             || self
                 .buffers
                 .split
@@ -388,15 +388,15 @@ impl Model {
         }
         if self.any_modified() {
             self.status.text = "No write since last change (:q! to override)".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
         } else {
-            self.quit = true;
+            self.file.quit = true;
         }
     }
 
     pub(crate) fn force_quit(&mut self) {
         if !self.close_help() {
-            self.quit = true;
+            self.file.quit = true;
         }
     }
 
@@ -405,16 +405,16 @@ impl Model {
     }
 
     pub(crate) fn exit_code(&self) -> i32 {
-        self.exit_code
+        self.file.exit_code
     }
 
     pub(crate) fn quit_with_code(&mut self, code: i32) {
-        self.exit_code = code;
-        self.quit = true;
+        self.file.exit_code = code;
+        self.file.quit = true;
     }
 
     pub(crate) fn set_stdin_buffer(&mut self, read_only: bool) {
-        self.stdin_buffer = true;
+        self.file.stdin_buffer = true;
         self.read_only = read_only;
         self.welcome = false;
     }

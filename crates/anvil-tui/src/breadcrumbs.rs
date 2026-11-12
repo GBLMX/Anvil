@@ -81,7 +81,7 @@ impl Model {
             self.tree.pending_select = Some(path);
         }
         self.status.text = "breadcrumb path".to_owned();
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn open_breadcrumb_symbols(&mut self) {

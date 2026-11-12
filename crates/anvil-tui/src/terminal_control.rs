@@ -8,13 +8,13 @@ impl Model {
     pub(crate) fn start_terminal(&mut self, shell: &str) {
         if self.read_only {
             self.status.text = "E: terminal is unavailable in read-only mode".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         if self.runtime.terminal.is_some() {
             self.runtime.terminal_panel = true;
             self.status.text = "terminal: panel opened".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         let program = if shell.trim().is_empty() {
@@ -24,7 +24,7 @@ impl Model {
         };
         if !Path::new(&program).is_absolute() {
             self.status.text = "E: terminal shell must be an absolute path".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         match PtySession::spawn(
@@ -41,25 +41,25 @@ impl Model {
             }
             Err(error) => self.status.text = format!("E: terminal: {error}"),
         }
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn stop_terminal(&mut self) {
         let Some(mut terminal) = self.runtime.terminal.take() else {
             self.status.text = "no terminal".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         };
         terminal.kill();
         self.runtime.terminal_panel = false;
         self.status.text = "terminal stopped".to_owned();
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn send_terminal(&mut self, text: &str) {
         let Some(terminal) = self.runtime.terminal.as_mut() else {
             self.status.text = "no terminal".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         };
         match terminal.write_all(format!("{text}\n").as_bytes()) {
@@ -68,7 +68,7 @@ impl Model {
             }
             Err(error) => self.status.text = format!("E: terminal write: {error}"),
         }
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn poll_terminal(&mut self) {
@@ -83,26 +83,26 @@ impl Model {
                     let excess = self.runtime.terminal_output.len() - MAX_TERMINAL_OUTPUT;
                     self.runtime.terminal_output.drain(..excess);
                 }
-                self.dirty = true;
+                self.file.dirty = true;
             }
             Ok(_) => {}
             Err(error) => {
                 self.status.text = format!("E: terminal read: {error}");
-                self.dirty = true;
+                self.file.dirty = true;
             }
         }
         if let Some(status) = exited {
             self.runtime.terminal = None;
             self.runtime.terminal_panel = false;
             self.status.text = format!("terminal exited: {status}");
-            self.dirty = true;
+            self.file.dirty = true;
         }
     }
 
     pub(crate) fn show_terminal_output(&mut self) {
         if self.runtime.terminal_output.is_empty() {
             self.status.text = "no terminal output".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         let output = crate::pty_terminal::sanitize_terminal_output(&self.runtime.terminal_output);
@@ -123,11 +123,11 @@ impl Model {
     pub(crate) fn toggle_terminal_panel(&mut self) {
         if self.runtime.terminal.is_none() {
             self.status.text = "no terminal".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         self.runtime.terminal_panel = !self.runtime.terminal_panel;
-        self.dirty = true;
+        self.file.dirty = true;
     }
     pub(crate) fn send_terminal_text(&mut self, text: &str) {
         self.write_terminal_bytes(text.as_bytes());
@@ -139,7 +139,7 @@ impl Model {
         };
         if let Err(error) = terminal.write_all(bytes) {
             self.status.text = format!("E: terminal write: {error}");
-            self.dirty = true;
+            self.file.dirty = true;
         }
     }
 

@@ -7,7 +7,7 @@ impl Model {
         if self.tree.visible && self.ui.focus.tree {
             self.ui.focus.tree = false;
             self.tree.visible = false;
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         if self.tree.entries.is_empty() {
@@ -58,7 +58,7 @@ impl Model {
             self.tree.selected = (!self.tree.entries.is_empty()).then_some(0);
         }
         self.sync_tree_watches();
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn tree_move(&mut self, delta: isize) {
@@ -71,7 +71,7 @@ impl Model {
                 .saturating_add_signed(delta)
                 .min(self.tree.entries.len().saturating_sub(1)),
         );
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn tree_toggle(&mut self) {
@@ -89,7 +89,7 @@ impl Model {
                 }
                 Err(error) => self.status.text = format!("E: {error}"),
             }
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         if entry.expanded {
@@ -108,7 +108,7 @@ impl Model {
                 && !root.trusted
             {
                 self.status.text = format!("E: untrusted workspace root: {}", root.path.display());
-                self.dirty = true;
+                self.file.dirty = true;
                 return;
             }
             let has_worker =
@@ -141,7 +141,7 @@ impl Model {
             }
         }
         self.sync_tree_watches();
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn tree_collapse(&mut self) {
@@ -167,7 +167,7 @@ impl Model {
                 self.tree_move(-1);
             }
             self.tree.selected = self.tree.selected.map(|index| index.saturating_sub(1));
-            self.dirty = true;
+            self.file.dirty = true;
         }
     }
 

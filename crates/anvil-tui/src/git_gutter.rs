@@ -11,10 +11,10 @@ impl Model {
             self.git.diff_request = None;
             self.git.diff_due = Some(Instant::now());
         }
-        if self.modified {
+        if self.file.modified {
             if !self.git.marks.is_empty() {
                 self.git.marks.clear();
-                self.dirty = true;
+                self.file.dirty = true;
             }
             return;
         }
@@ -67,12 +67,12 @@ impl Model {
             self.git.diff_request = None;
             self.git.marks.clear();
             self.git.diff_due = Some(Instant::now());
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         self.git.diff_request = None;
         self.git.marks = result.unwrap_or_default().into_iter().collect();
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn git_marker(&self, line: usize) -> Option<char> {

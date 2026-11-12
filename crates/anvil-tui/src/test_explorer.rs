@@ -46,12 +46,12 @@ impl Model {
             return;
         };
         explorer.move_by(delta);
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn close_test_explorer(&mut self) {
         self.overlays.test_explorer = None;
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn jump_test_failure(&mut self) {
@@ -63,14 +63,14 @@ impl Model {
             .cloned()
         else {
             self.status.text = "no test failures".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         };
         if self.session.path.as_deref() != Some(problem.path.as_path())
             && let Err(error) = self.open_path(&problem.path)
         {
             self.status.text = format!("E: {error}");
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         self.session.cursor =
@@ -85,7 +85,7 @@ impl Model {
             problem.line + 1,
             problem.message
         );
-        self.dirty = true;
+        self.file.dirty = true;
     }
 }
 

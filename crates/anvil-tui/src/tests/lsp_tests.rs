@@ -685,7 +685,7 @@ fn rename_response_applies_workspace_edit() {
         None,
     );
     assert_eq!(model.session.editor.text().slice(0..3), "bar");
-    assert!(model.modified);
+    assert!(model.file.modified);
 }
 
 #[test]
@@ -788,7 +788,7 @@ fn gopls_code_action_response_applies_organize_imports() {
             .slice(0..model.session.editor.text().len_bytes())
             .contains("fmt")
     );
-    assert!(model.modified);
+    assert!(model.file.modified);
 }
 
 #[test]
@@ -1623,7 +1623,7 @@ fn jump_back_refuses_to_discard_a_dirty_unnamed_buffer() {
         }
     }]));
     model.session.path = None;
-    model.modified = true;
+    model.file.modified = true;
     let before = model
         .session
         .editor
@@ -1633,7 +1633,7 @@ fn jump_back_refuses_to_discard_a_dirty_unnamed_buffer() {
     model.jump_back();
 
     assert!(model.session.path.is_none());
-    assert!(model.modified);
+    assert!(model.file.modified);
     assert_eq!(
         model
             .session

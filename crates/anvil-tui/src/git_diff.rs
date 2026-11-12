@@ -68,19 +68,19 @@ impl Model {
                 return;
             }
             self.status.text = "already viewing a read-only view".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         let Some(path) = self.session.path.clone() else {
             self.status.text = "E: no file name".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         };
         let relative = match self.relative_path(&path) {
             Ok(relative) => relative,
             Err(error) => {
                 self.status.text = format!("E: {error}");
-                self.dirty = true;
+                self.file.dirty = true;
                 return;
             }
         };
@@ -90,7 +90,7 @@ impl Model {
     fn request_diff(&mut self, relative: String, staged: bool) {
         let Some(worker) = self.workspace.file_worker.as_ref() else {
             self.status.text = "E: file worker unavailable".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         };
         self.git.diff_generation = self.git.diff_generation.wrapping_add(1);
@@ -101,7 +101,7 @@ impl Model {
             generation,
         }) {
             self.status.text = format!("E: git diff: {error}");
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         self.git.diff_pending = Some(generation);
@@ -110,7 +110,7 @@ impl Model {
         } else {
             "loading git diff...".to_owned()
         };
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn handle_git_diff_text(
@@ -149,7 +149,7 @@ impl Model {
             }
             Err(error) => {
                 self.status.text = format!("E: git diff: {error}");
-                self.dirty = true;
+                self.file.dirty = true;
             }
         }
     }
@@ -157,12 +157,12 @@ impl Model {
     pub(crate) fn move_git_hunk(&mut self, forward: bool) {
         let Some(view) = self.git.diff_view.as_ref() else {
             self.status.text = "E: not viewing a git diff".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         };
         if view.hunks.is_empty() {
             self.status.text = "E: diff has no hunks".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         let current = self
@@ -184,7 +184,7 @@ impl Model {
                 "first git hunk"
             }
             .to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         };
         let line = view.hunks[index].line;
@@ -192,19 +192,19 @@ impl Model {
             self.session.cursor = offset;
             self.session.editor.set_selection_bytes(offset, offset);
             self.status.text = format!("git hunk {}/{}", index + 1, view.hunks.len());
-            self.dirty = true;
+            self.file.dirty = true;
         }
     }
 
     pub(crate) fn apply_current_hunk(&mut self, unstage: bool) {
         let Some(view) = self.git.diff_view.as_ref() else {
             self.status.text = "E: not viewing a git diff".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         };
         if view.truncated {
             self.status.text = "E: diff is truncated; hunk staging disabled".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         if unstage != view.staged {
@@ -213,12 +213,12 @@ impl Model {
             } else {
                 "E: open :git-diff to stage".to_owned()
             };
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         if view.hunks.is_empty() {
             self.status.text = "E: diff has no hunks".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         let current = self
@@ -230,13 +230,13 @@ impl Model {
             .unwrap_or(0);
         let Some(index) = view.hunks.iter().rposition(|hunk| hunk.line <= current) else {
             self.status.text = "E: cursor is before the first hunk".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         };
         let patch = view.hunks[index].patch.clone();
         let Some(worker) = self.workspace.file_worker.as_ref() else {
             self.status.text = "E: file worker unavailable".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         };
         self.git.apply_generation = self.git.apply_generation.wrapping_add(1);
@@ -247,7 +247,7 @@ impl Model {
             generation,
         }) {
             self.status.text = format!("E: git apply: {error}");
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         self.git.apply_pending = Some(generation);
@@ -256,7 +256,7 @@ impl Model {
         } else {
             "staging hunk...".to_owned()
         };
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn handle_git_applied(&mut self, generation: u64, result: Result<(), String>) {
@@ -275,7 +275,7 @@ impl Model {
             }
             Err(error) => {
                 self.status.text = format!("E: git apply: {error}");
-                self.dirty = true;
+                self.file.dirty = true;
             }
         }
     }
@@ -285,25 +285,25 @@ impl Model {
     pub(crate) fn request_git_blame(&mut self) {
         if self.buffers.help_back.is_some() {
             self.status.text = "already viewing a read-only view".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         let Some(path) = self.session.path.clone() else {
             self.status.text = "E: no file name".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         };
         let relative = match self.relative_path(&path) {
             Ok(relative) => relative,
             Err(error) => {
                 self.status.text = format!("E: {error}");
-                self.dirty = true;
+                self.file.dirty = true;
                 return;
             }
         };
         let Some(worker) = self.workspace.file_worker.as_ref() else {
             self.status.text = "E: file worker unavailable".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         };
         self.git.blame_generation = self.git.blame_generation.wrapping_add(1);
@@ -313,12 +313,12 @@ impl Model {
             generation,
         }) {
             self.status.text = format!("E: git blame: {error}");
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         self.git.blame_pending = Some(generation);
         self.status.text = "loading git blame...".to_owned();
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn handle_git_blame_text(
@@ -346,7 +346,7 @@ impl Model {
             }
             Err(error) => {
                 self.status.text = format!("E: git blame: {error}");
-                self.dirty = true;
+                self.file.dirty = true;
             }
         }
     }
@@ -356,29 +356,29 @@ impl Model {
     pub(crate) fn request_git_conflicts(&mut self) {
         if self.buffers.help_back.is_some() {
             self.status.text = "already viewing a read-only view".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         if !self.ensure_file_worker() {
             self.status.text = "E: gateway unavailable".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         let Some(worker) = self.workspace.file_worker.as_ref() else {
             self.status.text = "E: file worker unavailable".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         };
         self.git.conflicts_generation = self.git.conflicts_generation.wrapping_add(1);
         let generation = self.git.conflicts_generation;
         if let Err(error) = worker.request(FileRequest::GitConflictsText { generation }) {
             self.status.text = format!("E: git conflicts: {error}");
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         self.git.conflicts_pending = Some(generation);
         self.status.text = "loading git conflicts...".to_owned();
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn handle_git_conflicts_text(
@@ -406,7 +406,7 @@ impl Model {
             }
             Err(error) => {
                 self.status.text = format!("E: git conflicts: {error}");
-                self.dirty = true;
+                self.file.dirty = true;
             }
         }
     }
@@ -416,30 +416,30 @@ impl Model {
     pub(crate) fn request_git_conflict_stage(&mut self, stage: u8) {
         if self.buffers.help_back.is_some() {
             self.status.text = "already viewing a read-only view".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         let Some(path) = self.session.path.clone() else {
             self.status.text = "E: no file name".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         };
         let relative = match self.relative_path(&path) {
             Ok(relative) => relative,
             Err(error) => {
                 self.status.text = format!("E: {error}");
-                self.dirty = true;
+                self.file.dirty = true;
                 return;
             }
         };
         if !self.ensure_file_worker() {
             self.status.text = "E: gateway unavailable".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         let Some(worker) = self.workspace.file_worker.as_ref() else {
             self.status.text = "E: file worker unavailable".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         };
         self.git.stage_generation = self.git.stage_generation.wrapping_add(1);
@@ -450,12 +450,12 @@ impl Model {
             generation,
         }) {
             self.status.text = format!("E: git conflict stage: {error}");
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         self.git.stage_pending = Some(generation);
         self.status.text = "loading conflict stage...".to_owned();
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn handle_git_conflict_stage(
@@ -491,7 +491,7 @@ impl Model {
             }
             Err(error) => {
                 self.status.text = format!("E: git conflict stage {name}: {error}");
-                self.dirty = true;
+                self.file.dirty = true;
             }
         }
     }
@@ -499,40 +499,40 @@ impl Model {
     pub(crate) fn resolve_git_conflict(&mut self, stage: u8, force: bool) {
         if self.buffers.help_back.is_some() {
             self.status.text = "E: close the read-only view first".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         let Some(path) = self.session.path.clone() else {
             self.status.text = "E: no file name".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         };
-        if self.modified && !force {
+        if self.file.modified && !force {
             self.status.text = "E: buffer is modified; save/discard or use the ! form".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         if self.git.resolve_pending.is_some() {
             self.status.text = "E: conflict resolution already in progress".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         let relative = match self.relative_path(&path) {
             Ok(relative) => relative,
             Err(error) => {
                 self.status.text = format!("E: {error}");
-                self.dirty = true;
+                self.file.dirty = true;
                 return;
             }
         };
         if !self.ensure_file_worker() {
             self.status.text = "E: gateway unavailable".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         let Some(worker) = self.workspace.file_worker.as_ref() else {
             self.status.text = "E: file worker unavailable".to_owned();
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         };
         self.git.resolve_generation = self.git.resolve_generation.wrapping_add(1);
@@ -543,12 +543,12 @@ impl Model {
             generation,
         }) {
             self.status.text = format!("E: git resolve: {error}");
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         self.git.resolve_pending = Some(generation);
         self.status.text = "resolving conflict...".to_owned();
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn handle_git_resolved(
@@ -594,7 +594,7 @@ impl Model {
                 }
             }
         }
-        self.dirty = true;
+        self.file.dirty = true;
     }
 }
 

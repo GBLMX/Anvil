@@ -20,14 +20,14 @@ impl Model {
         match Session::new(&mut self.session.editor, buffer_id).apply(request) {
             Ok(revision) => {
                 self.sync_cursor_from_selection();
-                self.modified = true;
-                self.dirty = true;
+                self.file.modified = true;
+                self.file.dirty = true;
                 self.status.text = format!("plugin apply_edit: {count} edits, revision {revision}");
                 Ok(revision)
             }
             Err(error) => {
                 self.status.text = format!("E: plugin apply_edit: {error}");
-                self.dirty = true;
+                self.file.dirty = true;
                 Err(error.to_string())
             }
         }
@@ -52,7 +52,7 @@ impl Model {
                 let request: SetModeRequest =
                     serde_json::from_value(params).map_err(|error| (-32602, error.to_string()))?;
                 self.session.editor.set_interaction_mode(request.mode);
-                self.dirty = true;
+                self.file.dirty = true;
                 Ok(serde_json::json!(SetModeResponse { mode: request.mode }))
             }
             "editor.apply_edit" => {

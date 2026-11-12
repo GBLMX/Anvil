@@ -2,13 +2,13 @@ use super::*;
 #[test]
 fn idle_events_do_not_request_a_redraw() {
     let mut model = Model::new(EditorState::from_text("a\nb"), None);
-    model.dirty = false;
+    model.file.dirty = false;
     handle_event(&mut model, Event::FocusGained);
-    assert!(!model.dirty);
+    assert!(!model.file.dirty);
     handle_event(&mut model, key(KeyCode::F(1)));
-    assert!(!model.dirty);
+    assert!(!model.file.dirty);
     handle_event(&mut model, key(KeyCode::Char('j')));
-    assert!(model.dirty);
+    assert!(model.file.dirty);
 }
 
 #[test]
@@ -22,10 +22,10 @@ fn invalid_utf8_is_rejected() {
 #[test]
 fn paste_only_inserts_in_edit_modes() {
     let mut model = Model::new(EditorState::from_text("a"), None);
-    model.dirty = false;
+    model.file.dirty = false;
     handle_event(&mut model, Event::Paste("x".to_owned()));
     assert_eq!(model.session.editor.text().slice(0..1), "a");
-    assert!(!model.dirty);
+    assert!(!model.file.dirty);
 
     handle_event(&mut model, key(KeyCode::Char('i')));
     handle_event(&mut model, Event::Paste("b".to_owned()));
@@ -42,14 +42,14 @@ fn quit_guard_requires_force_or_write() {
     for code in [KeyCode::Char(':'), KeyCode::Char('q'), KeyCode::Enter] {
         handle_event(&mut model, key(code));
     }
-    assert!(!model.quit);
+    assert!(!model.file.quit);
     assert!(model.status.text.contains("No write since last change"));
 
     handle_event(&mut model, key(KeyCode::Char(':')));
     handle_event(&mut model, key(KeyCode::Char('q')));
     handle_event(&mut model, key(KeyCode::Char('!')));
     handle_event(&mut model, key(KeyCode::Enter));
-    assert!(model.quit);
+    assert!(model.file.quit);
 }
 
 #[test]
@@ -289,7 +289,7 @@ fn substitute_is_literal_and_line_scoped() {
     let mut model = Model::new(EditorState::from_text("foo foo\nfoo"), None);
     model.execute_command("s/foo/bar/");
     assert_eq!(model.session.editor.text().slice(0..11), "bar foo\nfoo");
-    assert!(model.modified);
+    assert!(model.file.modified);
 
     let mut model = Model::new(EditorState::from_text("foo foo\nfoo"), None);
     model.execute_command("%s/foo/bar/g");
@@ -343,7 +343,7 @@ fn dd_deletes_current_line_and_keeps_line_start() {
     handle_event(&mut model, key(KeyCode::Char('d')));
     assert_eq!(model.session.editor.text().slice(0..3), "a\nc");
     assert_eq!(model.session.cursor, 2);
-    assert!(model.modified);
+    assert!(model.file.modified);
 }
 
 #[test]
@@ -411,7 +411,7 @@ fn x_deletes_forward() {
     handle_event(&mut model, key(KeyCode::Char('x')));
     assert_eq!(model.session.editor.text().slice(0..1), "b");
     assert_eq!(model.session.cursor, 0);
-    assert!(model.modified);
+    assert!(model.file.modified);
 }
 
 #[test]
@@ -425,7 +425,7 @@ fn wq_without_a_path_does_not_quit() {
     ] {
         handle_event(&mut model, key(code));
     }
-    assert!(!model.quit);
+    assert!(!model.file.quit);
     assert_eq!(model.status.text, "E: no file name");
 }
 
@@ -548,7 +548,7 @@ fn w_path_saves_as_and_updates_the_current_path() {
 
     assert_eq!(fs::read_to_string(&path).expect("read"), "data");
     assert_eq!(model.session.path.as_ref(), Some(&path));
-    assert!(!model.modified);
+    assert!(!model.file.modified);
 }
 
 #[test]
@@ -601,7 +601,7 @@ fn help_is_read_only_and_returns_to_the_previous_buffer() {
     model.session.cursor = 3;
     model.view.scroll = 1;
     model.view.hscroll = 2;
-    model.modified = true;
+    model.file.modified = true;
 
     handle_event(&mut model, key(KeyCode::Char(':')));
     type_text(&mut model, "help");
@@ -631,7 +631,7 @@ fn help_is_read_only_and_returns_to_the_previous_buffer() {
     assert_eq!(model.session.cursor, 3);
     assert_eq!(model.view.scroll, 1);
     assert_eq!(model.view.hscroll, 2);
-    assert!(model.modified);
+    assert!(model.file.modified);
 }
 
 #[test]
@@ -715,7 +715,7 @@ fn ctrl_slash_toggles_comments_and_undoes_once() {
         model.session.editor.text().slice(0..16),
         "// one\n  // two\n"
     );
-    assert!(model.modified);
+    assert!(model.file.modified);
     assert!(model.status.text.contains("2 line"));
 
     handle_event(&mut model, ctrl(KeyCode::Char('/')));
@@ -763,7 +763,7 @@ fn ex_comment_toggles_the_current_line() {
     let len = model.session.editor.text().len_bytes();
     let text = model.session.editor.text().slice(0..len);
     assert_eq!(text, "# one\n", "status={}", model.status.text);
-    assert!(model.modified);
+    assert!(model.file.modified);
 }
 
 #[test]
@@ -772,7 +772,7 @@ fn comment_toggles_an_empty_named_buffer() {
     handle_event(&mut model, ctrl(KeyCode::Char('/')));
     assert_eq!(model.session.editor.text().len_bytes(), 3);
     assert_eq!(model.session.editor.text().slice(0..3), "// ");
-    assert!(model.modified);
+    assert!(model.file.modified);
 
     handle_event(&mut model, key(KeyCode::Char('u')));
     assert_eq!(model.session.editor.text().len_bytes(), 0);

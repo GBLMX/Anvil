@@ -138,7 +138,7 @@ impl Model {
             if let Some(insert) = completion.selected() {
                 self.set_command_line(insert);
             }
-            self.dirty = true;
+            self.file.dirty = true;
             return;
         }
         self.refresh_command_completion();
@@ -153,19 +153,19 @@ impl Model {
             self.overlays.command_completion = None;
             self.set_command_line(&insert);
         }
-        self.dirty = true;
+        self.file.dirty = true;
     }
 
     pub(crate) fn move_command_completion(&mut self, delta: isize) {
         if let Some(completion) = self.overlays.command_completion.as_mut() {
             completion.move_by(delta);
-            self.dirty = true;
+            self.file.dirty = true;
         }
     }
 
     pub(crate) fn close_command_completion(&mut self) -> bool {
         if self.overlays.command_completion.take().is_some() {
-            self.dirty = true;
+            self.file.dirty = true;
             true
         } else {
             false
@@ -176,7 +176,7 @@ impl Model {
         self.ui.input_mode = InputMode::CommandLine {
             buffer: InputBuffer::new(command),
         };
-        self.dirty = true;
+        self.file.dirty = true;
     }
 }
 
