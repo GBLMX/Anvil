@@ -121,6 +121,8 @@ Normal mode
   :workspace-untrust <path> mark a workspace root untrusted
   :workspace-remove <path> remove a workspace root and stop its gateway
   :workspace-list      list workspace roots and trust state
+  :recent-files        fuzzy open recently opened files
+  :recent-workspaces   list recently opened workspaces
   :plugin-start       start the debug plugin host
   :plugin-list        open installed-plugin manager (enable/uninstall/rollback)
   :plugin-oom         start host with a 300 MB allocation probe

@@ -9,6 +9,7 @@ impl Model {
         let timing = std::env::var_os("ANVIL_OPEN_TIMING").is_some();
         let start = Instant::now();
         let absolute = self.absolute_path(path.as_ref())?;
+        let recent_path = absolute.clone();
         if self.path.as_ref() == Some(&absolute) {
             return Ok(());
         }
@@ -35,6 +36,7 @@ impl Model {
                 self.sync_active();
             }
             self.load_buffer(index);
+            self.record_recent_file(&absolute);
             return Ok(());
         }
         let text = self.read_file(&absolute)?;
@@ -80,6 +82,7 @@ impl Model {
         self.welcome_back = false;
         self.sync_lsp_active();
         self.sync_watch_paths();
+        self.record_recent_file(&recent_path);
         self.dirty = true;
         Ok(())
     }

@@ -375,6 +375,14 @@ pub const COMMANDS: &[CommandSpec] = &[
         name: "workspace-list",
         capability: Capability::Read,
     },
+    CommandSpec {
+        name: "recent-files",
+        capability: Capability::Read,
+    },
+    CommandSpec {
+        name: "recent-workspaces",
+        capability: Capability::Read,
+    },
 ];
 
 /// Look up an exact command name.

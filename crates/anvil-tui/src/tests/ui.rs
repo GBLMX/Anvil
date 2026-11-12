@@ -694,3 +694,26 @@ fn breadcrumb_row_routes_path_clicks() {
         Some(&path)
     );
 }
+
+#[test]
+fn recent_files_and_workspaces_are_bounded_and_deduplicated() {
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.persist_recent = false;
+    model.record_recent_workspace(Path::new("/ws/one"));
+    model.record_recent_workspace(Path::new("/ws/two"));
+    model.record_recent_workspace(Path::new("/ws/one"));
+    assert_eq!(
+        model.recent_workspaces,
+        vec![PathBuf::from("/ws/one"), PathBuf::from("/ws/two")]
+    );
+    for index in 0..25 {
+        model.record_recent_file(Path::new(&format!("/ws/{index}.rs")));
+    }
+    assert_eq!(model.recent_files.len(), 20);
+    assert_eq!(model.recent_files[0], PathBuf::from("/ws/24.rs"));
+    model.open_recent_files();
+    assert_eq!(
+        model.fuzzy.as_ref().expect("fuzzy").entries.len(),
+        model.recent_files.len()
+    );
+}

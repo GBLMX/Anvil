@@ -74,6 +74,7 @@ mod overlays;
 mod pipe_locations;
 #[cfg(unix)]
 pub mod pty_terminal;
+mod recents;
 mod remote;
 mod selection_table;
 mod session;
@@ -689,6 +690,11 @@ pub struct Model {
     tree: Vec<TreeEntry>,
     /// Quick-open usage counts keyed by the entry string.
     fuzzy_frecency: HashMap<String, u32>,
+    /// Recently opened workspaces and files, newest first.
+    recent_workspaces: Vec<PathBuf>,
+    recent_files: Vec<PathBuf>,
+    /// Whether recent lists are written to the state directory.
+    persist_recent: bool,
     tree_selected: Option<usize>,
     tree_visible: bool,
     /// Entry to select after the next tree refresh.
@@ -939,6 +945,9 @@ impl Model {
             split: None,
             tree: Vec::new(),
             fuzzy_frecency: HashMap::new(),
+            recent_workspaces: Vec::new(),
+            recent_files: Vec::new(),
+            persist_recent: !cfg!(test),
             tree_selected: None,
             tree_visible: false,
             tree_pending_select: None,

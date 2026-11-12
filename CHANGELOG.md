@@ -8,6 +8,9 @@ post-`0.5.0` feature line.
 
 ## [Unreleased]
 ### Added
+- Recent workspaces and files persist in `$XDG_STATE_HOME/anvil/recent.json`;
+  `:recent-files` opens the fuzzy picker over recent files and
+  `:recent-workspaces` lists recent workspaces.
 - Fuzzy quick-open ranks basename matches first, then frecency, then shorter
   paths; opening a result records its usage.
 - Theme files can style mode badges beyond normal: `mode_insert`,

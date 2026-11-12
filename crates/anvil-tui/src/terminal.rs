@@ -85,6 +85,10 @@ pub fn run_with_input(
     };
     model.gateway_session = session;
     model.set_editor_mode(editor_mode);
+    if session_enabled {
+        model.install_recents(crate::recents::load());
+        model.record_recent_workspace(&workspace);
+    }
 
     if let Some(text) = stdin_text {
         model.editor = EditorState::from_text(&text).into();

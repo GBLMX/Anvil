@@ -293,6 +293,8 @@ impl Model {
             ("workspace-trust", path) => self.trust_workspace_root(path, true),
             ("workspace-untrust", path) => self.trust_workspace_root(path, false),
             ("workspace-list", "") => self.list_workspace_roots(),
+            ("recent-files", "") => self.open_recent_files(),
+            ("recent-workspaces", "") => self.show_recent_workspaces(),
             ("wq", "") => self.queue_effect(Effect::SaveAndQuit),
             ("wq", path) => self.queue_effect(Effect::SaveAsAndQuit(path.into())),
             _ => {
