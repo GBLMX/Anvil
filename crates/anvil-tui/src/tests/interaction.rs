@@ -191,6 +191,24 @@ x = "view.focus_editor"
 }
 
 #[test]
+fn modal_context_bindings_apply_to_surround_layer() {
+    let mut model = Model::new(EditorState::from_text("alpha"), None);
+    model.start_page.welcome = false;
+    model.edit.visual_anchor = Some(0);
+    model.edit.modal_layer = Some(ModalLayer::Surround);
+    model.config.keymap = crate::keymap::KeymapConfig::from_toml(
+        r#"
+[keymap.contexts.modal]
+x = "view.focus_editor"
+"#,
+    )
+    .expect("context keymap");
+
+    handle_event(&mut model, key(KeyCode::Char('x')));
+    assert_eq!(model.edit.modal_layer, Some(ModalLayer::Surround));
+}
+
+#[test]
 fn file_tree_context_bindings_dispatch_before_hardcoded_keys() {
     let mut model = Model::new(EditorState::from_text("alpha"), None);
     model.start_page.welcome = false;
