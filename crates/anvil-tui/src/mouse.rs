@@ -241,9 +241,9 @@ pub(crate) fn hit_test(model: &Model, col: u16, row: u16, width: u16, height: u1
         && col >= panel.x
         && col < panel.right()
     {
-        let index = model.stdin_location_scroll
+        let index = model.overlays.location.stdin_location_scroll
             + usize::from(row.saturating_sub(panel.y).saturating_sub(1));
-        if index < model.stdin_locations.len() {
+        if index < model.overlays.location.stdin_locations.len() {
             return Target::Location(index);
         }
     }

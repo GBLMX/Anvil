@@ -295,6 +295,24 @@ impl SelectionItem for CommandPaletteItem {
     }
 }
 
+struct LocationPanelState {
+    stdin_locations: Vec<pipe_locations::PipeLocation>,
+    stdin_location_selected: Option<usize>,
+    stdin_location_scroll: usize,
+    location_title: String,
+}
+
+impl Default for LocationPanelState {
+    fn default() -> Self {
+        Self {
+            stdin_locations: Vec::new(),
+            stdin_location_selected: None,
+            stdin_location_scroll: 0,
+            location_title: "Locations".to_owned(),
+        }
+    }
+}
+
 #[derive(Default)]
 struct OverlayState {
     command_palette: Option<CommandPaletteState>,
@@ -308,6 +326,7 @@ struct OverlayState {
     test_explorer: Option<test_explorer::TestExplorerState>,
     command_completion: Option<CommandCompletion>,
     command_palette_recents: Vec<String>,
+    location: LocationPanelState,
 }
 
 #[derive(Debug, Clone)]
@@ -772,10 +791,6 @@ pub struct Model {
     /// Reject mutating commands for a read-only input buffer.
     read_only: bool,
     /// File locations parsed from the stdin buffer.
-    stdin_locations: Vec<pipe_locations::PipeLocation>,
-    stdin_location_selected: Option<usize>,
-    /// Title for the generic location panel.
-    location_title: String,
     /// Latest requested project-search generation.
     project_search_generation: u64,
     /// Pending project-search generation, if a request is in flight.
@@ -796,7 +811,6 @@ pub struct Model {
     project_replace_generation: u64,
     /// Pending project-replace generation, if a request is in flight.
     project_replace_pending: Option<u64>,
-    stdin_location_scroll: usize,
     /// Whether the process was started as an external editor.
     editor_mode: bool,
     /// Process exit code accumulated by editor-mode failures or `:cq`.
@@ -994,10 +1008,6 @@ impl Model {
             require_gateway: false,
             stdin_buffer: false,
             read_only: false,
-            stdin_locations: Vec::new(),
-            stdin_location_selected: None,
-            stdin_location_scroll: 0,
-            location_title: "Locations".to_owned(),
             project_search_generation: 0,
             project_search_pending: None,
             project_search_expected: 0,

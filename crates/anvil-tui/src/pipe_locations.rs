@@ -148,10 +148,15 @@ fn strip_ansi_csi(line: &str) -> String {
 }
 
 pub(crate) fn panel_height(model: &Model, content_height: u16) -> u16 {
-    if model.stdin_locations.is_empty() || content_height < 6 {
+    if model.overlays.location.stdin_locations.is_empty() || content_height < 6 {
         return 0;
     }
-    let rows = model.stdin_locations.len().min(MAX_VISIBLE_LOCATIONS) as u16;
+    let rows = model
+        .overlays
+        .location
+        .stdin_locations
+        .len()
+        .min(MAX_VISIBLE_LOCATIONS) as u16;
     let height = (rows + 2).min(content_height.saturating_sub(2));
     if height < 3 { 0 } else { height }
 }
@@ -171,17 +176,19 @@ pub(crate) fn panel_rect(model: &Model, content: Rect) -> Option<Rect> {
 
 impl Model {
     pub(crate) fn set_pipe_locations(&mut self, text: &str) {
-        self.stdin_locations = parse(text);
-        self.stdin_location_selected = (!self.stdin_locations.is_empty()).then_some(0);
-        self.stdin_location_scroll = 0;
-        self.location_title = "Locations".to_owned();
+        self.overlays.location.stdin_locations = parse(text);
+        self.overlays.location.stdin_location_selected =
+            (!self.overlays.location.stdin_locations.is_empty()).then_some(0);
+        self.overlays.location.stdin_location_scroll = 0;
+        self.overlays.location.location_title = "Locations".to_owned();
     }
 
     pub(crate) fn set_location_results(&mut self, title: String, locations: Vec<PipeLocation>) {
-        self.stdin_locations = locations;
-        self.stdin_location_selected = (!self.stdin_locations.is_empty()).then_some(0);
-        self.stdin_location_scroll = 0;
-        self.location_title = title;
+        self.overlays.location.stdin_locations = locations;
+        self.overlays.location.stdin_location_selected =
+            (!self.overlays.location.stdin_locations.is_empty()).then_some(0);
+        self.overlays.location.stdin_location_scroll = 0;
+        self.overlays.location.location_title = title;
         self.dirty = true;
     }
 
@@ -190,35 +197,45 @@ impl Model {
     }
 
     pub(crate) fn move_stdin_location(&mut self, delta: isize) {
-        if self.stdin_locations.is_empty() {
+        if self.overlays.location.stdin_locations.is_empty() {
             return;
         }
         let selected = self
+            .overlays
+            .location
             .stdin_location_selected
             .unwrap_or(0)
             .saturating_add_signed(delta)
-            .min(self.stdin_locations.len().saturating_sub(1));
-        self.stdin_location_selected = Some(selected);
-        if selected < self.stdin_location_scroll {
-            self.stdin_location_scroll = selected;
-        } else if selected >= self.stdin_location_scroll + MAX_VISIBLE_LOCATIONS {
-            self.stdin_location_scroll = selected + 1 - MAX_VISIBLE_LOCATIONS;
+            .min(
+                self.overlays
+                    .location
+                    .stdin_locations
+                    .len()
+                    .saturating_sub(1),
+            );
+        self.overlays.location.stdin_location_selected = Some(selected);
+        if selected < self.overlays.location.stdin_location_scroll {
+            self.overlays.location.stdin_location_scroll = selected;
+        } else if selected >= self.overlays.location.stdin_location_scroll + MAX_VISIBLE_LOCATIONS {
+            self.overlays.location.stdin_location_scroll = selected + 1 - MAX_VISIBLE_LOCATIONS;
         }
         self.dirty = true;
     }
 
     pub(crate) fn select_stdin_location(&mut self, index: usize) {
-        if index >= self.stdin_locations.len() {
+        if index >= self.overlays.location.stdin_locations.len() {
             return;
         }
-        self.stdin_location_selected = Some(index);
+        self.overlays.location.stdin_location_selected = Some(index);
         self.dirty = true;
     }
 
     pub(crate) fn open_stdin_location(&mut self) {
         let Some(location) = self
+            .overlays
+            .location
             .stdin_location_selected
-            .and_then(|index| self.stdin_locations.get(index))
+            .and_then(|index| self.overlays.location.stdin_locations.get(index))
             .cloned()
         else {
             return;

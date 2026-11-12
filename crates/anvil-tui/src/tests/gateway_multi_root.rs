@@ -77,17 +77,21 @@ fn secondary_root_tree_lists_and_opens_through_owning_gateway() {
     std::fs::write(secondary_root.join("lib.rs"), "needle secondary").expect("secondary needle");
     model.request_project_search("needle");
     wait_until(&mut model, |model| {
-        model.project_search_pending.is_none() && model.stdin_locations.len() == 2
+        model.project_search_pending.is_none() && model.overlays.location.stdin_locations.len() == 2
     });
     assert!(model.status.contains("2 matches"), "{}", model.status);
     assert!(
         model
+            .overlays
+            .location
             .stdin_locations
             .iter()
             .any(|location| location.path == "main.rs")
     );
     assert!(
         model
+            .overlays
+            .location
             .stdin_locations
             .iter()
             .any(|location| location.path == secondary_root.join("lib.rs").to_string_lossy())

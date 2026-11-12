@@ -56,9 +56,9 @@ impl Model {
             Ok(plan) => {
                 if plan.files.is_empty() {
                     self.project_replace_plan = None;
-                    self.stdin_locations.clear();
-                    self.stdin_location_selected = None;
-                    self.location_title = "Locations".to_owned();
+                    self.overlays.location.stdin_locations.clear();
+                    self.overlays.location.stdin_location_selected = None;
+                    self.overlays.location.location_title = "Locations".to_owned();
                     self.status = format!("replace: no matches for {}", plan.old);
                 } else {
                     let locations = plan
@@ -161,9 +161,9 @@ impl Model {
                         };
                     }
                 }
-                self.stdin_locations.clear();
-                self.stdin_location_selected = None;
-                self.location_title = "Locations".to_owned();
+                self.overlays.location.stdin_locations.clear();
+                self.overlays.location.stdin_location_selected = None;
+                self.overlays.location.location_title = "Locations".to_owned();
             }
             Err(error) => {
                 self.status = format!("E: replace apply: {error}");
@@ -174,10 +174,10 @@ impl Model {
     pub(crate) fn cancel_project_replace(&mut self) {
         self.project_replace_plan = None;
         self.project_replace_pending = None;
-        self.stdin_locations.clear();
-        self.stdin_location_selected = None;
-        self.stdin_location_scroll = 0;
-        self.location_title = "Locations".to_owned();
+        self.overlays.location.stdin_locations.clear();
+        self.overlays.location.stdin_location_selected = None;
+        self.overlays.location.stdin_location_scroll = 0;
+        self.overlays.location.location_title = "Locations".to_owned();
         self.status = "replace preview cancelled".to_owned();
         self.dirty = true;
     }
@@ -207,11 +207,14 @@ mod tests {
         model.project_replace_pending = Some(3);
         model.handle_project_replace_preview(3, Ok(plan()));
         assert!(model.project_replace_plan.is_some());
-        assert_eq!(model.location_title, "Replace: old -> new");
-        assert_eq!(model.stdin_locations.len(), 1);
+        assert_eq!(
+            model.overlays.location.location_title,
+            "Replace: old -> new"
+        );
+        assert_eq!(model.overlays.location.stdin_locations.len(), 1);
         model.cancel_project_replace();
         assert!(model.project_replace_plan.is_none());
-        assert!(model.stdin_locations.is_empty());
+        assert!(model.overlays.location.stdin_locations.is_empty());
     }
 
     #[test]

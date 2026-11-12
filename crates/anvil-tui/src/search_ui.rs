@@ -378,10 +378,10 @@ impl Model {
         self.project_search_results.clear();
         self.project_search_truncated = false;
         self.project_search_error = None;
-        self.stdin_locations.clear();
-        self.stdin_location_selected = None;
-        self.stdin_location_scroll = 0;
-        self.location_title = "Locations".to_owned();
+        self.overlays.location.stdin_locations.clear();
+        self.overlays.location.stdin_location_selected = None;
+        self.overlays.location.stdin_location_scroll = 0;
+        self.overlays.location.location_title = "Locations".to_owned();
         self.status = "search cancelled".to_owned();
         self.dirty = true;
     }
@@ -412,11 +412,11 @@ mod tests {
                 message: "needle".to_owned(),
             }],
         );
-        assert_eq!(model.location_title, "Search: needle");
-        assert_eq!(model.stdin_locations.len(), 1);
+        assert_eq!(model.overlays.location.location_title, "Search: needle");
+        assert_eq!(model.overlays.location.stdin_locations.len(), 1);
         model.cancel_project_search();
-        assert!(model.stdin_locations.is_empty());
-        assert_eq!(model.location_title, "Locations");
+        assert!(model.overlays.location.stdin_locations.is_empty());
+        assert_eq!(model.overlays.location.location_title, "Locations");
     }
 
     fn location(path: &str) -> PipeLocation {
@@ -448,7 +448,7 @@ mod tests {
         );
 
         assert_eq!(model.project_search_pending, Some(7));
-        assert!(model.stdin_locations.is_empty());
+        assert!(model.overlays.location.stdin_locations.is_empty());
 
         model.handle_project_search(
             None,
@@ -458,15 +458,19 @@ mod tests {
         );
 
         assert_eq!(model.project_search_pending, None);
-        assert_eq!(model.stdin_locations.len(), 2);
+        assert_eq!(model.overlays.location.stdin_locations.len(), 2);
         assert!(
             model
+                .overlays
+                .location
                 .stdin_locations
                 .iter()
                 .any(|entry| entry.path == "src/main.rs")
         );
         assert!(
             model
+                .overlays
+                .location
                 .stdin_locations
                 .iter()
                 .any(|entry| { entry.path == root.join("src/lib.rs").to_string_lossy() })
@@ -510,7 +514,10 @@ mod tests {
 
         model.handle_project_search(None, "needle".to_owned(), 1, Ok((locations, false)));
 
-        assert_eq!(model.stdin_locations.len(), MAX_PROJECT_RESULTS);
+        assert_eq!(
+            model.overlays.location.stdin_locations.len(),
+            MAX_PROJECT_RESULTS
+        );
         assert!(model.status.contains('+'));
     }
 

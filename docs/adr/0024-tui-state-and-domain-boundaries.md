@@ -254,7 +254,7 @@ Phase 1 started on 2026-11-12:
 
 - `Model.overlays` now owns `command_palette`, `settings_overlay`,
   `theme_browser`, `fuzzy`, `preview`, `debug_panel`, `test_explorer`,
-  `command_completion`, and command-palette recents.
+  `command_completion`, command-palette recents, and the pipe-location panel.
 - Existing behavior is unchanged; tests access the composed state explicitly.
 - The remaining fuzzy/preview/problems/diagnostics/test/debug page state is
   still on `Model` and moves in later behavior-preserving slices.

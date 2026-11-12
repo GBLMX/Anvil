@@ -1209,10 +1209,17 @@ pub fn view(model: &Model, frame: &mut Frame) {
 
 fn render_pipe_locations(model: &Model, frame: &mut Frame, area: Rect) {
     let rows = usize::from(area.height.saturating_sub(2));
-    let start = model
-        .stdin_location_scroll
-        .min(model.stdin_locations.len().saturating_sub(rows.max(1)));
+    let start = model.overlays.location.stdin_location_scroll.min(
+        model
+            .overlays
+            .location
+            .stdin_locations
+            .len()
+            .saturating_sub(rows.max(1)),
+    );
     let lines = model
+        .overlays
+        .location
         .stdin_locations
         .iter()
         .enumerate()
@@ -1226,7 +1233,7 @@ fn render_pipe_locations(model: &Model, frame: &mut Frame, area: Rect) {
                 ),
                 area.width.saturating_sub(3),
             );
-            let style = if model.stdin_location_selected == Some(index) {
+            let style = if model.overlays.location.stdin_location_selected == Some(index) {
                 theme::selected()
             } else {
                 theme::panel()
@@ -1239,8 +1246,8 @@ fn render_pipe_locations(model: &Model, frame: &mut Frame, area: Rect) {
             .style(theme::panel())
             .block(panel_block(format!(
                 "{} · {}",
-                model.location_title,
-                model.stdin_locations.len()
+                model.overlays.location.location_title,
+                model.overlays.location.stdin_locations.len()
             ))),
         area,
     );
