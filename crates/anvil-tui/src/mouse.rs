@@ -139,6 +139,8 @@ pub(crate) fn handle_mouse(model: &mut Model, mouse: MouseEvent, width: u16, hei
                 .contains(crossterm::event::KeyModifiers::SHIFT)
             {
                 model.hscroll = model.hscroll.saturating_add_signed(delta as isize * 3);
+            } else if model.settings.editor.soft_wrap {
+                model.scroll_display_rows(delta as isize, width.saturating_sub(2));
             } else {
                 model.scroll = model
                     .scroll
