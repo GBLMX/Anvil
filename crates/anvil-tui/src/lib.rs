@@ -250,6 +250,7 @@ struct InsertSession {
 /// TUI state.
 #[derive(Debug, Clone)]
 struct FuzzyState {
+    generation: u64,
     query: String,
     entries: Vec<String>,
     filtered: Vec<usize>,
@@ -653,6 +654,7 @@ pub struct Model {
     tree_refresh_generation: u64,
     show_hidden: bool,
     fuzzy: Option<FuzzyState>,
+    fuzzy_generation: u64,
     preview: PreviewState,
     preview_generation: u64,
     command_palette: Option<CommandPaletteState>,
@@ -861,6 +863,7 @@ impl Model {
             tree_refresh_generation: 0,
             show_hidden: false,
             fuzzy: None,
+            fuzzy_generation: 0,
             preview: PreviewState::default(),
             preview_generation: 0,
             command_palette: None,

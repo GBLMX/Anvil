@@ -217,3 +217,18 @@ acceptable; an invisible one is not.
   plugin bootstrap, and production-like signing/provenance dry run.
 - `cargo test --workspace --no-fail-fast`, clippy, fmt, Go tests/vet, shell/YAML
   checks, and the relevant real TUI/install smoke tests pass.
+
+## Implementation status (2026-11-12)
+
+- Multi-root: trusted-root `FileWorker`s are polled; quick-open enumerates,
+  labels, and previews files from every trusted root. File tree, project
+  search, and mutation fan-out remain primary-root-only.
+- File lifecycle: auto-save and atomic `:config-reload` are implemented.
+  External settings file watching remains explicit; persistent undo is still
+  rejected for this phase.
+- Plugin distribution: manifest `onCommand` dispatch works; dynamic
+  `editor.register_command` remains pending. Marketplace browse/detail,
+  indexed install, and revocation/provenance UI remain pending.
+- Plugin sandbox: `LANDLOCK_SCOPE_SIGNAL` is enabled on ABI >= 6; older
+  kernels keep seccomp as the primary signal control and report no synthetic
+  scope success.

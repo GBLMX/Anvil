@@ -8,6 +8,10 @@ post-`0.5.0` feature line.
 
 ## [Unreleased]
 ### Added
+- Quick-open now enumerates trusted secondary workspace roots through their
+  owning `FileWorker`, labels them as `<root-name>/<relative>`, and routes
+  preview reads through the same root. File tree, project search, and mutation
+  routing remain primary-root-only.
 - `Ctrl+/` and `:comment` toggle line comments for the selected lines in
   Rust, Go, shell, Python, TOML, YAML, JSONC, Makefile, Dockerfile, and
   `go.mod` files. The operation is one undo transaction and refuses

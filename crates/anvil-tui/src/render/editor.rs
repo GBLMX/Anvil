@@ -487,9 +487,9 @@ pub fn view(model: &Model, frame: &mut Frame) {
         let visible = list_area.height.saturating_sub(3) as usize;
         let start = fuzzy.selected.saturating_sub(visible.saturating_sub(1));
         for (row, index) in fuzzy.filtered.iter().skip(start).take(visible).enumerate() {
-            let name = &fuzzy.entries[*index];
+            let name = model.fuzzy_display_path(&fuzzy.entries[*index]);
             lines.push(fuzzy_path_line(
-                name,
+                &name,
                 &fuzzy.query,
                 list_area.width.saturating_sub(2) as usize,
                 start + row == fuzzy.selected,

@@ -79,7 +79,7 @@ pub enum FileRequest {
     /// List one directory.
     List(PathBuf),
     /// Enumerate workspace files with `rg --files`, or a bounded fallback.
-    Files { hidden: bool },
+    Files { hidden: bool, generation: u64 },
     /// Run a bounded ripgrep project search.
     ProjectSearch { query: String, generation: u64 },
     /// Read a bounded preview for one workspace-relative file.
@@ -153,8 +153,11 @@ pub enum FileRequest {
 pub enum FileEvent {
     /// Directory listing for the requested path.
     Listed(PathBuf, Result<Vec<DirEntry>, String>),
-    /// Workspace-relative files in sorted order.
-    Files(Result<Vec<String>, String>),
+    /// Workspace-relative files in sorted order for one request generation.
+    Files {
+        generation: u64,
+        result: Result<Vec<String>, String>,
+    },
     /// Bounded project search results.
     ProjectSearch {
         query: String,
@@ -344,9 +347,10 @@ impl FileWorker {
                                     .read_dir(&relative_path(&workspace, &path))
                                     .map_err(|error| error.to_string()),
                             ),
-                            FileRequest::Files { hidden } => {
-                                FileEvent::Files(files(&mut client, &workspace, hidden))
-                            }
+                            FileRequest::Files { hidden, generation } => FileEvent::Files {
+                                generation,
+                                result: files(&mut client, &workspace, hidden),
+                            },
                             FileRequest::ProjectSearch { query, generation } => {
                                 FileEvent::ProjectSearch {
                                     result: project_search(&mut client, &query),

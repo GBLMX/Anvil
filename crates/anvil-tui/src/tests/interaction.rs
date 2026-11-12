@@ -113,6 +113,7 @@ fn keymap_context_prefers_popup_then_command_line_then_tree() {
     );
 
     model.fuzzy = Some(FuzzyState {
+        generation: 0,
         query: String::new(),
         entries: vec!["a".to_owned()],
         filtered: vec![0],
@@ -555,6 +556,7 @@ fn preview_failure_keeps_the_list_usable() {
 fn preview_without_worker_reports_gateway_unavailable() {
     let mut model = Model::new(EditorState::from_text(""), None);
     model.fuzzy = Some(FuzzyState {
+        generation: 0,
         query: String::new(),
         entries: vec!["src/main.rs".to_owned()],
         filtered: vec![0],
@@ -877,4 +879,67 @@ fn managed_state_errors_are_visible_and_fail_closed() {
     assert!(error.contains("corrupt state"), "{error}");
     assert!(model.plugins.is_empty());
     server.join().expect("server");
+}
+
+#[test]
+fn fuzzy_merges_secondary_root_files() {
+    let mut model = Model::new(EditorState::from_text(""), None);
+    let root = PathBuf::from("/tmp/second-root");
+    model.fuzzy = Some(FuzzyState {
+        generation: 4,
+        query: String::new(),
+        entries: vec!["src/main.rs".to_owned()],
+        filtered: vec![0],
+        selected: 0,
+    });
+
+    model.handle_fuzzy_files(Some(root.clone()), 4, Ok(vec!["src/lib.rs".to_owned()]));
+
+    let entries = &model.fuzzy.as_ref().expect("fuzzy").entries;
+    assert!(entries.iter().any(|entry| entry == "src/main.rs"));
+    assert!(
+        entries
+            .iter()
+            .any(|entry| entry == &root.join("src/lib.rs").to_string_lossy())
+    );
+}
+
+#[test]
+fn stale_secondary_root_files_are_discarded() {
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.fuzzy = Some(FuzzyState {
+        generation: 4,
+        query: String::new(),
+        entries: Vec::new(),
+        filtered: Vec::new(),
+        selected: 0,
+    });
+
+    model.handle_fuzzy_files(
+        Some(PathBuf::from("/tmp/second-root")),
+        3,
+        Ok(vec!["src/lib.rs".to_owned()]),
+    );
+
+    assert!(model.fuzzy.as_ref().expect("fuzzy").entries.is_empty());
+}
+
+#[test]
+fn fuzzy_opens_absolute_secondary_root_file() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let file = dir.path().join("lib.rs");
+    fs::write(&file, "pub fn lib() {}").expect("file");
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.fuzzy = Some(FuzzyState {
+        generation: 1,
+        query: String::new(),
+        entries: vec![file.to_string_lossy().into_owned()],
+        filtered: vec![0],
+        selected: 0,
+    });
+
+    model.fuzzy_open();
+
+    assert_eq!(model.path.as_ref(), Some(&file));
+    assert_eq!(model.editor.text().slice(0..15), "pub fn lib() {}");
 }

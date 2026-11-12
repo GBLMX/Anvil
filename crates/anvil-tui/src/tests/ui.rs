@@ -243,6 +243,7 @@ fn fuzzy_selection_scrolls_into_view() {
     let mut model = Model::new(EditorState::from_text(""), None);
     model.welcome = false;
     model.fuzzy = Some(FuzzyState {
+        generation: 0,
         query: String::new(),
         entries: (0..20).map(|index| format!("f{index:02}.txt")).collect(),
         filtered: (0..20).collect(),
@@ -266,6 +267,7 @@ fn fuzzy_preview_and_icon_render_on_wide_terminals() {
     let mut model = Model::new(EditorState::from_text(""), None);
     model.welcome = false;
     model.fuzzy = Some(FuzzyState {
+        generation: 0,
         query: String::new(),
         entries: vec!["src/main.rs".to_owned()],
         filtered: vec![0],
@@ -297,6 +299,7 @@ fn fuzzy_preview_stacks_below_list_on_narrow_terminals() {
     let mut model = Model::new(EditorState::from_text(""), None);
     model.welcome = false;
     model.fuzzy = Some(FuzzyState {
+        generation: 0,
         query: String::new(),
         entries: vec!["src/main.rs".to_owned()],
         filtered: vec![0],

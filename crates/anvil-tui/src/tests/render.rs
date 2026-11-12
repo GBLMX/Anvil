@@ -348,6 +348,7 @@ fn clicking_outside_command_palette_closes_it() {
 fn clicking_outside_fuzzy_closes_it() {
     let mut model = Model::new(EditorState::from_text("one"), None);
     model.fuzzy = Some(FuzzyState {
+        generation: 0,
         query: String::new(),
         entries: vec!["src/main.rs".to_owned()],
         filtered: vec![0],

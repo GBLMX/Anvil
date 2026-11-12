@@ -113,14 +113,9 @@ impl Model {
                     self.sync_tree_watches();
                 }
                 FileEvent::Listed(_, Err(error)) => self.status = format!("E: tree: {error}"),
-                FileEvent::Files(Ok(files)) => {
-                    if let Some(fuzzy) = self.fuzzy.as_mut() {
-                        fuzzy.entries = files;
-                        self.fuzzy_refresh();
-                    }
-                    self.status = "files ready".to_owned();
+                FileEvent::Files { generation, result } => {
+                    self.handle_fuzzy_files(None, generation, result);
                 }
-                FileEvent::Files(Err(error)) => self.status = format!("E: files: {error}"),
                 FileEvent::ProjectSearch {
                     query,
                     generation,
@@ -228,6 +223,30 @@ impl Model {
                 } => self.apply_tree_snapshot(generation, listings),
             }
             self.dirty = true;
+        }
+        let roots = self.root_file_workers.keys().cloned().collect::<Vec<_>>();
+        for root in roots {
+            let events = self
+                .root_file_workers
+                .get_mut(&root)
+                .map(|worker| worker.poll())
+                .unwrap_or_default();
+            for event in events {
+                match event {
+                    FileEvent::Files { generation, result } => {
+                        self.handle_fuzzy_files(Some(root.clone()), generation, result);
+                    }
+                    FileEvent::Preview {
+                        path,
+                        generation,
+                        result,
+                    } => {
+                        let absolute = root.join(path).to_string_lossy().into_owned();
+                        self.handle_preview(absolute, generation, result);
+                    }
+                    _ => {}
+                }
+            }
         }
     }
 

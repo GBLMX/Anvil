@@ -8,6 +8,31 @@ impl Model {
         self.preview = PreviewState::default();
     }
 
+    pub(crate) fn fuzzy_display_path(&self, entry: &str) -> String {
+        let path = Path::new(entry);
+        if let Some(root) = self
+            .root_file_workers
+            .keys()
+            .find(|root| path.starts_with(root))
+            && let Ok(relative) = path.strip_prefix(root)
+        {
+            let name = root
+                .file_name()
+                .map(|name| name.to_string_lossy())
+                .unwrap_or_else(|| root.to_string_lossy());
+            return format!("{name}/{}", relative.display());
+        }
+        entry.to_owned()
+    }
+
+    fn fuzzy_owner_root(&self, path: &Path) -> Option<PathBuf> {
+        self.root_file_workers
+            .keys()
+            .filter(|root| path.starts_with(root))
+            .max_by_key(|root| root.components().count())
+            .cloned()
+    }
+
     fn selected_fuzzy_path(&self) -> Option<String> {
         let fuzzy = self.fuzzy.as_ref()?;
         fuzzy
@@ -26,7 +51,19 @@ impl Model {
         {
             return;
         }
-        if self.file_worker.is_none() {
+        let owner = self.fuzzy_owner_root(Path::new(&path));
+        let request_path = match owner.as_ref() {
+            Some(root) => match Path::new(&path).strip_prefix(root) {
+                Ok(relative) => relative.to_string_lossy().into_owned(),
+                Err(_) => path.clone(),
+            },
+            None => path.clone(),
+        };
+        let has_worker = match owner.as_ref() {
+            Some(root) => self.root_file_workers.contains_key(root),
+            None => self.file_worker.is_some(),
+        };
+        if !has_worker {
             self.preview_generation = self.preview_generation.saturating_add(1);
             self.preview = PreviewState {
                 path: Some(path),
@@ -40,15 +77,25 @@ impl Model {
         self.preview_generation = self.preview_generation.saturating_add(1);
         let generation = self.preview_generation;
         self.preview = PreviewState {
-            path: Some(path.clone()),
+            path: Some(path),
             loading: true,
             ..PreviewState::default()
         };
-        if let Some(worker) = self.file_worker.as_ref()
-            && worker
-                .request(FileRequest::Preview { path, generation })
-                .is_err()
-        {
+        let request = match owner.as_ref() {
+            Some(root) => self.root_file_workers.get(root).map(|worker| {
+                worker.request(FileRequest::Preview {
+                    path: request_path,
+                    generation,
+                })
+            }),
+            None => self.file_worker.as_ref().map(|worker| {
+                worker.request(FileRequest::Preview {
+                    path: request_path,
+                    generation,
+                })
+            }),
+        };
+        if !matches!(request, Some(Ok(()))) {
             self.preview.loading = false;
             self.preview.message = Some("preview worker stopped".to_owned());
             self.status = "E: preview: worker stopped".to_owned();
@@ -96,13 +143,23 @@ impl Model {
         self.document_symbols = None;
         self.clear_preview();
         let workspace = self.workspace.clone();
+        let generation = self.fuzzy_generation.saturating_add(1);
+        self.fuzzy_generation = generation;
         if self.ensure_file_worker() {
             if let Some(worker) = self.file_worker.as_ref() {
                 let _ = worker.request(FileRequest::Files {
                     hidden: self.show_hidden,
+                    generation,
+                });
+            }
+            for worker in self.root_file_workers.values() {
+                let _ = worker.request(FileRequest::Files {
+                    hidden: self.show_hidden,
+                    generation,
                 });
             }
             self.fuzzy = Some(FuzzyState {
+                generation,
                 query: String::new(),
                 entries: Vec::new(),
                 filtered: Vec::new(),
@@ -121,6 +178,7 @@ impl Model {
         entries.sort();
         let filtered = (0..entries.len()).collect();
         self.fuzzy = Some(FuzzyState {
+            generation,
             query: String::new(),
             entries,
             filtered,
@@ -128,6 +186,44 @@ impl Model {
         });
         self.request_preview();
         self.dirty = true;
+    }
+
+    pub(crate) fn handle_fuzzy_files(
+        &mut self,
+        root: Option<PathBuf>,
+        generation: u64,
+        result: Result<Vec<String>, String>,
+    ) {
+        {
+            let Some(fuzzy) = self.fuzzy.as_mut() else {
+                return;
+            };
+            if fuzzy.generation != generation {
+                return;
+            }
+            match result {
+                Ok(files) => {
+                    if let Some(root) = root {
+                        fuzzy.entries.extend(
+                            files
+                                .into_iter()
+                                .map(|relative| root.join(relative).to_string_lossy().into_owned()),
+                        );
+                        fuzzy.entries.sort();
+                        fuzzy.entries.dedup();
+                    } else {
+                        fuzzy.entries = files;
+                    }
+                }
+                Err(error) => {
+                    self.status = format!("E: files: {error}");
+                    self.dirty = true;
+                    return;
+                }
+            }
+        }
+        self.fuzzy_refresh();
+        self.status = "files ready".to_owned();
     }
 
     pub(crate) fn fuzzy_refresh(&mut self) {
@@ -167,7 +263,12 @@ impl Model {
             self.dirty = true;
             return;
         };
-        let path = self.workspace.join(&fuzzy.entries[*index]);
+        let entry = &fuzzy.entries[*index];
+        let path = if Path::new(entry).is_absolute() {
+            PathBuf::from(entry)
+        } else {
+            self.workspace.join(entry)
+        };
         self.record_jump();
         match self.open_path(&path) {
             Ok(()) => {}
