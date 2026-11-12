@@ -1644,3 +1644,89 @@ fn jump_back_refuses_to_discard_a_dirty_unnamed_buffer() {
     );
     assert!(model.status.text.contains("save or discard"));
 }
+
+#[test]
+fn completion_unknown_key_cancels_and_passes_through() {
+    let mut model = Model::new(EditorState::from_text("x"), None);
+    model.ui.input_mode = InputMode::Insert;
+    model.session.cursor = 1;
+    model.overlays.lsp_results.completion = Some(CompletionState {
+        id: 1,
+        items: Vec::new(),
+        filtered: Vec::new(),
+        query: String::new(),
+        selected: 0,
+    });
+
+    handle_event(&mut model, key(KeyCode::Home));
+    assert!(model.overlays.lsp_results.completion.is_none());
+    assert_eq!(model.session.cursor, 0);
+}
+
+#[test]
+fn completion_char_and_backspace_update_buffer_and_query() {
+    let mut model = Model::new(EditorState::from_text("x"), None);
+    model.ui.input_mode = InputMode::Insert;
+    model.overlays.lsp_results.completion = Some(CompletionState {
+        id: 1,
+        items: vec![CompletionItem {
+            label: "item".to_owned(),
+            filter_text: "item".to_owned(),
+            sort_text: "item".to_owned(),
+            preselect: false,
+            insert: "item".to_owned(),
+            snippet: None,
+            detail: String::new(),
+            replace: None,
+            documentation: None,
+            raw: serde_json::Value::Null,
+            resolved: false,
+        }],
+        filtered: vec![0],
+        query: String::new(),
+        selected: 0,
+    });
+
+    handle_event(&mut model, key(KeyCode::Char('a')));
+    assert_eq!(
+        model
+            .session
+            .editor
+            .text()
+            .slice(0..model.session.editor.text().len_bytes()),
+        "ax"
+    );
+    assert_eq!(
+        model
+            .overlays
+            .lsp_results
+            .completion
+            .as_ref()
+            .expect("completion")
+            .query,
+        "a"
+    );
+
+    handle_event(&mut model, key(KeyCode::Backspace));
+    assert_eq!(
+        model
+            .session
+            .editor
+            .text()
+            .slice(0..model.session.editor.text().len_bytes()),
+        "x"
+    );
+    assert!(
+        model
+            .overlays
+            .lsp_results
+            .completion
+            .as_ref()
+            .expect("completion")
+            .query
+            .is_empty()
+    );
+
+    handle_event(&mut model, key(KeyCode::Tab));
+    assert!(model.overlays.lsp_results.completion.is_none());
+}

@@ -640,6 +640,57 @@ fn execute_lsp_list_action(model: &mut Model, kind: LspListKind, action: LspList
     !matches!(action, LspListAction::CancelAndPassThrough)
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum CompletionAction {
+    Previous,
+    Next,
+    Accept,
+    Cancel,
+    Backspace,
+    Insert(char),
+    CancelAndPassThrough,
+}
+
+fn completion_action(key: KeyPress, text_input: bool) -> CompletionAction {
+    match key.code {
+        KeyCode::Esc => CompletionAction::Cancel,
+        KeyCode::Up => CompletionAction::Previous,
+        KeyCode::Down => CompletionAction::Next,
+        KeyCode::Enter | KeyCode::Tab => CompletionAction::Accept,
+        KeyCode::Backspace => CompletionAction::Backspace,
+        KeyCode::Char(character) if text_input => CompletionAction::Insert(character),
+        _ => CompletionAction::CancelAndPassThrough,
+    }
+}
+
+fn execute_completion_action(model: &mut Model, action: CompletionAction) -> bool {
+    match action {
+        CompletionAction::Previous => model.move_completion(-1),
+        CompletionAction::Next => model.move_completion(1),
+        CompletionAction::Accept => model.apply_completion(),
+        CompletionAction::Cancel => model.cancel_completion(),
+        CompletionAction::Backspace => {
+            if let Some(completion) = model.overlays.lsp_results.completion.as_mut() {
+                completion.query.pop();
+            }
+            model.backspace();
+            model.filter_completion();
+        }
+        CompletionAction::Insert(character) => {
+            if let Some(completion) = model.overlays.lsp_results.completion.as_mut() {
+                completion.query.push(character);
+            }
+            model.insert_text(&character.to_string());
+            model.filter_completion();
+        }
+        CompletionAction::CancelAndPassThrough => {
+            model.cancel_completion();
+            return false;
+        }
+    }
+    true
+}
+
 fn execute_command_id(model: &mut Model, id: &str, key: KeyPress) -> bool {
     if let Some(command) = NormalCommand::from_id(id) {
         execute_normal_command(model, command);
@@ -890,49 +941,11 @@ fn handle_key(model: &mut Model, key: KeyPress) {
     }
 
     if model.overlays.lsp_results.completion.is_some() {
-        let consumed = match key.code {
-            KeyCode::Esc => {
-                model.cancel_completion();
-                true
-            }
-            KeyCode::Up => {
-                model.move_completion(-1);
-                true
-            }
-            KeyCode::Down => {
-                model.move_completion(1);
-                true
-            }
-            KeyCode::Enter | KeyCode::Tab => {
-                model.apply_completion();
-                true
-            }
-            KeyCode::Backspace => {
-                if let Some(completion) = model.overlays.lsp_results.completion.as_mut() {
-                    completion.query.pop();
-                }
-                model.backspace();
-                model.filter_completion();
-                true
-            }
-            KeyCode::Char(character) if text_input => {
-                if let Some(completion) = model.overlays.lsp_results.completion.as_mut() {
-                    completion.query.push(character);
-                }
-                model.insert_text(&character.to_string());
-                model.filter_completion();
-                true
-            }
-            _ => {
-                model.cancel_completion();
-                false
-            }
-        };
-        if consumed {
+        let action = completion_action(key, text_input);
+        if execute_completion_action(model, action) {
             return;
         }
     }
-
     if model.overlays.lsp_results.hover.is_some() {
         model.overlays.lsp_results.hover = None;
         model.file.dirty = true;
