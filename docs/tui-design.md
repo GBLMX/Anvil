@@ -94,6 +94,6 @@ related workflows. Otherwise it remains a bounded overlay.
 2. Start page supports mouse selection for recent entries.
 3. Settings and debug overlays use the focused border token; remaining overlays
    still need the same treatment.
-4. Theme preview page using the same panel/selected primitives.
+4. Theme preview page uses the same panel/selected primitives (`:themes`).
 5. Optional animation only where it communicates transition, never for
    decoration.

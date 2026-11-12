@@ -632,6 +632,7 @@ fn debug_panel_renders_threads_stack_variables_and_watches() {
             .map(|cell| cell.symbol())
             .collect::<String>();
         assert!(rendered.contains(expected), "{kind:?}: {rendered}");
+        assert!(rendered.contains("r refresh"), "{kind:?}: {rendered}");
         assert!(
             rendered.contains("main")
                 || rendered.contains("run")

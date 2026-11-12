@@ -8,6 +8,8 @@ post-`0.5.0` feature line.
 
 ## [Unreleased]
 ### Added
+- `:themes` opens a two-pane theme browser with live preview, Enter apply, and
+  Esc restore.
 - Interactive overlays now share the focused border style; the debug panel
   carries its own key hints.
 - Modern built-in themes: `tokyonight`, `omp-kde`, and `helix-base16`, all

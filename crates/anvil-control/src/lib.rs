@@ -108,6 +108,10 @@ pub const COMMANDS: &[CommandSpec] = &[
         capability: Capability::Admin,
     },
     CommandSpec {
+        name: "themes",
+        capability: Capability::Admin,
+    },
+    CommandSpec {
         name: "theme-save",
         capability: Capability::Admin,
     },

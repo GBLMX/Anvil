@@ -78,6 +78,7 @@ mod recents;
 mod remote;
 mod selection_table;
 mod session;
+mod theme_browser;
 mod theme_picker;
 mod workspace_control;
 pub mod workspace_roots;
@@ -726,6 +727,7 @@ pub struct Model {
     /// Wrapped segment offset within the first visible source line.
     scroll_subrow: usize,
     settings_overlay: Option<SettingsOverlayState>,
+    theme_browser: Option<theme_browser::ThemeBrowser>,
     command_palette_recents: Vec<String>,
     /// Gateway client used for file I/O when present.
     gateway: Option<GatewayClient>,
@@ -972,6 +974,7 @@ impl Model {
             wrap_width: 80,
             scroll_subrow: 0,
             settings_overlay: None,
+            theme_browser: None,
             command_palette_recents: Vec::new(),
             gateway: None,
             gateway_session: None,

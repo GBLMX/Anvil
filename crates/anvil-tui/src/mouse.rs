@@ -362,6 +362,7 @@ fn overlay_open(model: &Model) -> bool {
         || model.references.is_some()
         || model.call_hierarchy.is_some()
         || model.settings_overlay.is_some()
+        || model.theme_browser.is_some()
         || model.completion.is_some()
 }
 
@@ -395,6 +396,9 @@ fn close_outside_overlay(model: &mut Model) {
     }
     if model.settings_overlay.is_some() {
         model.cancel_settings();
+    }
+    if model.theme_browser.is_some() {
+        model.cancel_theme_browser();
     }
     if model.completion.is_some() {
         model.cancel_completion();
@@ -467,6 +471,9 @@ fn inside_overlay(model: &Model, col: u16, row: u16, area: Rect) -> bool {
         let popup =
             crate::render::document_symbols_rect(area, crate::settings_ui::SETTINGS_POPUP_ROWS);
         return crate::render::rect_contains(popup, col, row);
+    }
+    if model.theme_browser.is_some() {
+        return crate::render::rect_contains(crate::theme_browser::rect(area), col, row);
     }
     if let Some(completion) = &model.completion {
         let popup = crate::render::completion_rect(area, completion.filtered.len());

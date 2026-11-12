@@ -611,13 +611,17 @@ pub(crate) fn render(model: &Model, frame: &mut Frame, area: Rect) {
             theme::panel().fg(theme::muted()),
         ));
     }
-    let visible = height.saturating_sub(2) as usize;
+    let visible = height.saturating_sub(3) as usize;
     let start = selected_line.saturating_sub(visible.saturating_sub(1));
-    let visible_lines = lines
+    let mut visible_lines = lines
         .into_iter()
         .skip(start)
         .take(visible)
         .collect::<Vec<_>>();
+    visible_lines.push(Line::styled(
+        "r refresh · Tab panel · Esc close",
+        theme::panel().fg(theme::muted()),
+    ));
     frame.render_widget(
         Paragraph::new(visible_lines).style(theme::panel()).block(
             crate::render::focused_panel_block(format!(

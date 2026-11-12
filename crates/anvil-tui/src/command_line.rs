@@ -195,7 +195,7 @@ mod tests {
         let completion = CommandCompletion::new("theme", &[]);
         assert_eq!(
             labels(&completion),
-            vec!["theme", "theme-auto", "theme-save"]
+            vec!["theme", "theme-auto", "themes", "theme-save"]
         );
         assert_eq!(
             labels(&CommandCompletion::new("theme ", &[])),
@@ -207,7 +207,7 @@ mod tests {
         let completion = CommandCompletion::new("the", &[]);
         assert_eq!(
             labels(&completion),
-            vec!["theme", "theme-auto", "theme-save"]
+            vec!["theme", "theme-auto", "themes", "theme-save"]
         );
         assert_eq!(
             labels(&CommandCompletion::new("set", &[])),

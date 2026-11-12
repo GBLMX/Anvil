@@ -794,6 +794,27 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             _ => model.close_diagnostic_peek(),
         }
     }
+    if model.theme_browser.is_some() {
+        match key.code {
+            KeyCode::Esc => {
+                model.cancel_theme_browser();
+                return;
+            }
+            KeyCode::Enter => {
+                model.apply_theme_browser();
+                return;
+            }
+            KeyCode::Up | KeyCode::Char('k') => {
+                model.move_theme_browser(-1);
+                return;
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                model.move_theme_browser(1);
+                return;
+            }
+            _ => {}
+        }
+    }
     if model.debug_panel.is_some() {
         match key.code {
             KeyCode::Esc => {

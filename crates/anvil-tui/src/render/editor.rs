@@ -706,6 +706,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
         );
     }
     crate::test_explorer::render(model, frame, area);
+    crate::theme_browser::render(model, frame, area);
     crate::debug_panel::render(model, frame, area);
     if let Some(peek) = &model.ui.diagnostic_peek {
         let width = (area.width * 2 / 3)
@@ -838,7 +839,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
         frame.render_widget(
             Paragraph::new(lines)
                 .style(theme::panel())
-                .block(panel_block(title.to_owned())),
+                .block(crate::render::focused_panel_block(title.to_owned())),
             popup,
         );
     }

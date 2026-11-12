@@ -158,6 +158,7 @@ impl Model {
             ("cq", "") => self.quit_with_code(1),
             ("help", "") => self.show_help(),
             ("settings", "") => self.open_settings(),
+            ("themes", "") => self.open_theme_browser(),
             ("theme", argument) => {
                 if argument.is_empty() || argument == "list" {
                     self.status = format!(
