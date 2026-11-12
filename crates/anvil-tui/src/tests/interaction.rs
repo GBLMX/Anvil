@@ -166,6 +166,31 @@ fn keymap_context_prefers_popup_then_command_line_then_tree() {
 }
 
 #[test]
+fn popup_context_bindings_consume_buffer_picker_keys() {
+    let mut model = Model::new(EditorState::from_text("alpha"), None);
+    model.start_page.welcome = false;
+    model.open_buffer_picker();
+    model.config.keymap = crate::keymap::KeymapConfig::from_toml(
+        r#"
+[keymap.contexts.popup]
+x = "view.focus_editor"
+"#,
+    )
+    .expect("context keymap");
+
+    handle_event(&mut model, key(KeyCode::Char('x')));
+    assert!(
+        model
+            .overlays
+            .buffer_picker
+            .as_ref()
+            .expect("picker")
+            .query
+            .is_empty()
+    );
+}
+
+#[test]
 fn file_tree_context_bindings_dispatch_before_hardcoded_keys() {
     let mut model = Model::new(EditorState::from_text("alpha"), None);
     model.start_page.welcome = false;
