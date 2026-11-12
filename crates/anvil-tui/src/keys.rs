@@ -368,7 +368,7 @@ fn dispatch_specific_context_binding(model: &mut Model, key: KeyPress) -> bool {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum BufferPickerAction {
+enum PickerAction {
     Next,
     Previous,
     Accept,
@@ -377,31 +377,31 @@ enum BufferPickerAction {
     AppendQuery(char),
 }
 
-fn buffer_picker_action(key: KeyPress, text_input: bool) -> Option<BufferPickerAction> {
+fn picker_action(key: KeyPress, text_input: bool) -> Option<PickerAction> {
     match key.code {
-        KeyCode::Esc => Some(BufferPickerAction::Cancel),
-        KeyCode::Enter => Some(BufferPickerAction::Accept),
-        KeyCode::Up => Some(BufferPickerAction::Previous),
-        KeyCode::Down => Some(BufferPickerAction::Next),
-        KeyCode::Backspace => Some(BufferPickerAction::PopQuery),
-        KeyCode::Char(character) if text_input => Some(BufferPickerAction::AppendQuery(character)),
+        KeyCode::Esc => Some(PickerAction::Cancel),
+        KeyCode::Enter => Some(PickerAction::Accept),
+        KeyCode::Up => Some(PickerAction::Previous),
+        KeyCode::Down => Some(PickerAction::Next),
+        KeyCode::Backspace => Some(PickerAction::PopQuery),
+        KeyCode::Char(character) if text_input => Some(PickerAction::AppendQuery(character)),
         _ => None,
     }
 }
 
-fn execute_buffer_picker_action(model: &mut Model, action: BufferPickerAction) {
+fn execute_buffer_picker_action(model: &mut Model, action: PickerAction) {
     match action {
-        BufferPickerAction::Next => model.move_buffer_picker(1),
-        BufferPickerAction::Previous => model.move_buffer_picker(-1),
-        BufferPickerAction::Accept => model.apply_buffer_picker(),
-        BufferPickerAction::Cancel => model.close_buffer_picker(),
-        BufferPickerAction::PopQuery => {
+        PickerAction::Next => model.move_buffer_picker(1),
+        PickerAction::Previous => model.move_buffer_picker(-1),
+        PickerAction::Accept => model.apply_buffer_picker(),
+        PickerAction::Cancel => model.close_buffer_picker(),
+        PickerAction::PopQuery => {
             if let Some(picker) = model.overlays.buffer_picker.as_mut() {
                 picker.query.pop();
             }
             model.refresh_buffer_picker();
         }
-        BufferPickerAction::AppendQuery(character) => {
+        PickerAction::AppendQuery(character) => {
             if let Some(picker) = model.overlays.buffer_picker.as_mut() {
                 picker.query.push(character);
             }
@@ -409,6 +409,33 @@ fn execute_buffer_picker_action(model: &mut Model, action: BufferPickerAction) {
         }
     }
 }
+fn execute_fuzzy_action(model: &mut Model, action: PickerAction) {
+    match action {
+        PickerAction::Next => model.fuzzy_move(1),
+        PickerAction::Previous => model.fuzzy_move(-1),
+        PickerAction::Accept => model.fuzzy_open(),
+        PickerAction::Cancel => {
+            model.overlays.fuzzy = None;
+            model.clear_preview();
+            model.file.dirty = true;
+        }
+        PickerAction::PopQuery => {
+            if let Some(fuzzy) = model.overlays.fuzzy.as_mut() {
+                fuzzy.query.pop();
+            }
+            model.fuzzy_refresh();
+            model.file.dirty = true;
+        }
+        PickerAction::AppendQuery(character) => {
+            if let Some(fuzzy) = model.overlays.fuzzy.as_mut() {
+                fuzzy.query.push(character);
+            }
+            model.fuzzy_refresh();
+            model.file.dirty = true;
+        }
+    }
+}
+
 fn execute_command_id(model: &mut Model, id: &str, key: KeyPress) -> bool {
     if let Some(command) = NormalCommand::from_id(id) {
         execute_normal_command(model, command);
@@ -605,36 +632,14 @@ fn handle_key(model: &mut Model, key: KeyPress) {
         return;
     }
     if model.overlays.buffer_picker.is_some() {
-        if let Some(action) = buffer_picker_action(key, text_input) {
+        if let Some(action) = picker_action(key, text_input) {
             execute_buffer_picker_action(model, action);
         }
         return;
     }
     if model.overlays.fuzzy.is_some() {
-        match key.code {
-            KeyCode::Esc => {
-                model.overlays.fuzzy = None;
-                model.clear_preview();
-                model.file.dirty = true;
-            }
-            KeyCode::Enter => model.fuzzy_open(),
-            KeyCode::Up => model.fuzzy_move(-1),
-            KeyCode::Down => model.fuzzy_move(1),
-            KeyCode::Backspace => {
-                if let Some(fuzzy) = model.overlays.fuzzy.as_mut() {
-                    fuzzy.query.pop();
-                }
-                model.fuzzy_refresh();
-                model.file.dirty = true;
-            }
-            KeyCode::Char(character) if text_input => {
-                if let Some(fuzzy) = model.overlays.fuzzy.as_mut() {
-                    fuzzy.query.push(character);
-                }
-                model.fuzzy_refresh();
-                model.file.dirty = true;
-            }
-            _ => {}
+        if let Some(action) = picker_action(key, text_input) {
+            execute_fuzzy_action(model, action);
         }
         return;
     }
