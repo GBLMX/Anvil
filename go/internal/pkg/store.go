@@ -44,8 +44,9 @@ type InstalledPlugin struct {
 
 // StoreState is the persisted plugin store index.
 type StoreState struct {
-	Version int                        `json:"version"`
-	Plugins map[string]InstalledPlugin `json:"plugins"`
+	Version         int                        `json:"version"`
+	Plugins         map[string]InstalledPlugin `json:"plugins"`
+	RevokedPackages map[string]string          `json:"revoked_packages,omitempty"`
 }
 
 // StoreMeta is the persisted metadata for one content-addressed entry.
@@ -133,7 +134,11 @@ func ValidateDigest(digest string) error {
 }
 
 func emptyState() *StoreState {
-	return &StoreState{Version: StoreVersion, Plugins: map[string]InstalledPlugin{}}
+	return &StoreState{
+		Version:         StoreVersion,
+		Plugins:         map[string]InstalledPlugin{},
+		RevokedPackages: map[string]string{},
+	}
 }
 
 // ReadState returns a snapshot of installed state. A missing file is empty.
@@ -158,6 +163,9 @@ func loadState(path string) (*StoreState, error) {
 	}
 	if state.Plugins == nil {
 		state.Plugins = map[string]InstalledPlugin{}
+	}
+	if state.RevokedPackages == nil {
+		state.RevokedPackages = map[string]string{}
 	}
 	if err := validateState(&state); err != nil {
 		return nil, err
@@ -195,6 +203,14 @@ func validateState(state *StoreState) error {
 		}
 		if !active {
 			return fmt.Errorf("plugin %q active digest is not in versions", pluginID)
+		}
+	}
+	for digest, pluginID := range state.RevokedPackages {
+		if err := ValidateDigest(digest); err != nil {
+			return fmt.Errorf("revoked package digest: %w", err)
+		}
+		if !ValidPluginID(pluginID) {
+			return fmt.Errorf("revoked package %s has invalid plugin id", digest)
 		}
 	}
 	return nil
@@ -319,6 +335,9 @@ func (s *Store) AddInstalledVersion(pluginID, digest, version, manifestHash, sou
 		return fmt.Errorf("plugin digest %s is not in the store", digest)
 	}
 	return s.UpdateState(func(state *StoreState) error {
+		if owner, revoked := revokedOwner(state, digest); revoked {
+			return fmt.Errorf("plugin digest %s is revoked (%s)", digest, owner)
+		}
 		plugin, exists := state.Plugins[pluginID]
 		if !exists {
 			plugin = InstalledPlugin{
@@ -360,6 +379,11 @@ func (s *Store) SetEnabled(pluginID string, enabled bool) error {
 		plugin, exists := state.Plugins[pluginID]
 		if !exists {
 			return fmt.Errorf("plugin %q is not installed", pluginID)
+		}
+		if enabled {
+			if owner, revoked := revokedOwner(state, plugin.ActiveDigest); revoked {
+				return fmt.Errorf("plugin %q version is revoked (%s)", pluginID, owner)
+			}
 		}
 		plugin.Enabled = enabled
 		state.Plugins[pluginID] = plugin
@@ -702,8 +726,15 @@ func (s *Store) DisableRevokedPackages(checker PackageRevocationChecker) ([]stri
 	}
 	var disabled []string
 	err := s.UpdateState(func(state *StoreState) error {
+		if state.RevokedPackages == nil {
+			state.RevokedPackages = map[string]string{}
+		}
 		for id, plugin := range state.Plugins {
-			if !plugin.Enabled || !checker.PackageRevoked(plugin.ActiveDigest, id) {
+			if !checker.PackageRevoked(plugin.ActiveDigest, id) {
+				continue
+			}
+			state.RevokedPackages[plugin.ActiveDigest] = id
+			if !plugin.Enabled {
 				continue
 			}
 			plugin.Enabled = false
@@ -717,4 +748,13 @@ func (s *Store) DisableRevokedPackages(checker PackageRevocationChecker) ([]stri
 	}
 	sort.Strings(disabled)
 	return disabled, nil
+}
+
+func revokedOwner(state *StoreState, digest string) (string, bool) {
+	for revoked, pluginID := range state.RevokedPackages {
+		if strings.EqualFold(revoked, digest) {
+			return pluginID, true
+		}
+	}
+	return "", false
 }

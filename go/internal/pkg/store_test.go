@@ -532,3 +532,80 @@ func TestStoreDisablesRevokedPackages(t *testing.T) {
 		t.Fatal("unrelated plugin must stay enabled")
 	}
 }
+
+func TestStoreRejectsEnablingRevokedPackage(t *testing.T) {
+	store, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	digest := testDigest(3)
+	if err := store.UpdateState(func(state *StoreState) error {
+		state.Plugins["demo"] = InstalledPlugin{
+			ActiveDigest: digest,
+			Enabled:      false,
+			Versions:     []InstalledVersion{{Digest: digest, Version: "1.0.0"}},
+		}
+		state.RevokedPackages = map[string]string{digest: "demo"}
+		return nil
+	}); err != nil {
+		t.Fatalf("update state: %v", err)
+	}
+	if err := store.SetEnabled("demo", true); err == nil {
+		t.Fatal("revoked package must not be enableable")
+	}
+	state, err := store.ReadState()
+	if err != nil {
+		t.Fatalf("read state: %v", err)
+	}
+	if state.Plugins["demo"].Enabled {
+		t.Fatal("revoked package was enabled")
+	}
+}
+
+func TestStorePersistsRevokedUnion(t *testing.T) {
+	store, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	disabledDigest := testDigest(4)
+	enabledDigest := testDigest(5)
+	if err := store.UpdateState(func(state *StoreState) error {
+		state.Plugins["disabled"] = InstalledPlugin{
+			ActiveDigest: disabledDigest,
+			Enabled:      false,
+			Versions:     []InstalledVersion{{Digest: disabledDigest, Version: "1.0.0"}},
+		}
+		state.Plugins["enabled"] = InstalledPlugin{
+			ActiveDigest: enabledDigest,
+			Enabled:      true,
+			Versions:     []InstalledVersion{{Digest: enabledDigest, Version: "1.0.0"}},
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("update state: %v", err)
+	}
+	disabled, err := store.DisableRevokedPackages(revocationCheck{
+		disabledDigest + "\x00disabled": true,
+		enabledDigest + "\x00enabled":   true,
+	})
+	if err != nil {
+		t.Fatalf("disable revoked: %v", err)
+	}
+	if len(disabled) != 1 || disabled[0] != "enabled" {
+		t.Fatalf("unexpected disabled plugins: %v", disabled)
+	}
+	reloaded, err := NewStore(store.Root)
+	if err != nil {
+		t.Fatalf("reopen store: %v", err)
+	}
+	state, err := reloaded.ReadState()
+	if err != nil {
+		t.Fatalf("read state: %v", err)
+	}
+	if _, ok := state.RevokedPackages[disabledDigest]; !ok {
+		t.Fatal("disabled revoked package was not persisted")
+	}
+	if _, ok := state.RevokedPackages[enabledDigest]; !ok {
+		t.Fatal("enabled revoked package was not persisted")
+	}
+}
