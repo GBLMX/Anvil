@@ -372,6 +372,12 @@ impl Model {
                     .as_ref()
                     .is_some_and(|open| open == path || open.starts_with(path))
             })
+            || self.buffers.background.values().any(|buffer| {
+                buffer
+                    .path
+                    .as_ref()
+                    .is_some_and(|open| open == path || open.starts_with(path))
+            })
             || self.buffers.split.as_ref().is_some_and(|pane| {
                 pane.buffer
                     .path
@@ -398,6 +404,15 @@ impl Model {
                 *path = remap(path);
             }
         }
+        let background = std::mem::take(&mut self.buffers.background);
+        self.buffers.background = background
+            .into_iter()
+            .map(|(path, mut buffer)| {
+                let path = remap(&path);
+                buffer.path = Some(path.clone());
+                (path, buffer)
+            })
+            .collect();
         if let Some(pane) = self.buffers.split.as_mut()
             && let Some(path) = pane.buffer.path.as_mut()
         {

@@ -37,6 +37,54 @@ fn multi_buffer_switch_preserves_per_buffer_state() {
 }
 
 #[test]
+fn buffer_limit_rejects_tenth_open() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let paths: Vec<_> = (0..10)
+        .map(|index| {
+            let path = dir.path().join(format!("{index}.txt"));
+            fs::write(&path, "text").expect("write buffer");
+            path
+        })
+        .collect();
+
+    let mut model = Model::open(&paths[0]).expect("open first");
+    for path in &paths[1..MAX_OPEN_BUFFERS] {
+        model.open_path(path).expect("open buffer");
+    }
+    assert_eq!(model.buffers.entries.len(), MAX_OPEN_BUFFERS);
+
+    let error = model.open_path(&paths[MAX_OPEN_BUFFERS]).unwrap_err();
+    assert_eq!(error, "buffer limit reached (9)");
+    assert_eq!(model.status.text, "E: buffer limit reached (9)");
+    assert_eq!(model.buffers.entries.len(), MAX_OPEN_BUFFERS);
+
+    let tenth = paths[MAX_OPEN_BUFFERS].to_string_lossy().into_owned();
+    model.open_file(&tenth);
+    assert_eq!(model.status.text, "E: buffer limit reached (9)");
+    assert_eq!(model.buffers.entries.len(), MAX_OPEN_BUFFERS);
+
+    model.open_path(&paths[1]).expect("switch existing");
+    assert_eq!(model.session.path.as_ref(), Some(&paths[1]));
+}
+
+#[test]
+fn new_buffer_respects_buffer_limit() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let first = dir.path().join("first.txt");
+    fs::write(&first, "text").expect("write buffer");
+    let mut model = Model::open(&first).expect("open first");
+
+    for _ in 0..MAX_OPEN_BUFFERS - 1 {
+        model.new_buffer();
+    }
+    assert_eq!(model.buffers.entries.len(), MAX_OPEN_BUFFERS);
+
+    model.new_buffer();
+    assert_eq!(model.buffers.entries.len(), MAX_OPEN_BUFFERS);
+    assert_eq!(model.status.text, "E: buffer limit reached (9)");
+}
+
+#[test]
 fn alt_digits_select_buffers_and_clear_count() {
     let dir = tempfile::tempdir().expect("tempdir");
     let first = dir.path().join("first.txt");
@@ -551,7 +599,7 @@ fn buffer_bar_shows_dirty_missing_and_read_only_states() {
 fn buffer_bar_scrolls_to_many_buffers() {
     let dir = tempfile::tempdir().expect("tempdir");
     let mut model: Option<Model> = None;
-    for index in 0..10 {
+    for index in 0..MAX_OPEN_BUFFERS {
         let path = dir.path().join(format!("f{index}.txt"));
         fs::write(&path, "x").expect("write");
         match model.as_mut() {
@@ -560,8 +608,8 @@ fn buffer_bar_scrolls_to_many_buffers() {
         }
     }
     let model = model.expect("model");
-    assert_eq!(model.buffers.entries.len(), 10);
-    assert_eq!(model.buffers.active, 9);
+    assert_eq!(model.buffers.entries.len(), MAX_OPEN_BUFFERS);
+    assert_eq!(model.buffers.active, MAX_OPEN_BUFFERS - 1);
 
     let backend = TestBackend::new(40, 12);
     let mut terminal = Terminal::new(backend).expect("terminal");
@@ -574,7 +622,7 @@ fn buffer_bar_scrolls_to_many_buffers() {
         .map(|cell| cell.symbol())
         .collect::<String>();
     assert!(rendered.contains("‹"), "{rendered}");
-    assert!(rendered.contains("f9.txt"), "{rendered}");
+    assert!(rendered.contains("f8.txt"), "{rendered}");
 }
 
 #[test]

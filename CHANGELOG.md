@@ -10,6 +10,9 @@ post-`0.5.0` feature line.
 ### Added
 - `Alt-1` through `Alt-9` switch directly to the matching open buffer while
   leaving bare digits available as count prefixes.
+- Foreground buffers are capped at 9; opening or creating a tenth reports
+  `E: buffer limit reached (9)` instead of evicting anything. WorkspaceEdit
+  ghost buffers live separately and do not consume these slots.
 - Started the ADR-0024 state refactor: command palette, settings, theme
   browser, fuzzy, preview, debug panel, test explorer, command completion, and
   command-palette recents, and the pipe-location panel now live under

@@ -90,7 +90,7 @@ impl Model {
         self.file.dirty = true;
     }
 
-    fn ensure_current_buffer(&mut self) -> usize {
+    pub(crate) fn ensure_current_buffer(&mut self) -> usize {
         self.sync_active();
         if self.buffers.entries.is_empty() {
             self.buffers.entries.push(self.snapshot());
@@ -99,9 +99,22 @@ impl Model {
         self.buffers.active
     }
 
+    pub(crate) fn ensure_buffer_capacity(&mut self) -> Result<(), String> {
+        if self.buffers.entries.len() < MAX_OPEN_BUFFERS {
+            return Ok(());
+        }
+        let message = format!("buffer limit reached ({MAX_OPEN_BUFFERS})");
+        self.status.text = format!("E: {message}");
+        self.file.dirty = true;
+        Err(message)
+    }
+
     pub(crate) fn new_buffer(&mut self) {
         if self.pager.back.is_some() {
             let _ = self.close_help();
+        }
+        if self.ensure_buffer_capacity().is_err() {
+            return;
         }
         if !self.auto_save_before_focus_change() {
             return;
@@ -303,16 +316,35 @@ impl Model {
             self.file.dirty = true;
             return;
         }
-        if !self.auto_save_before_focus_change() {
-            return;
-        }
-        if let Some(index) = self
+        let existing = self
             .buffers
             .entries
             .iter()
-            .position(|buffer| buffer.path.as_ref() == Some(&path))
-        {
+            .position(|buffer| buffer.path.as_ref() == Some(&path));
+        if existing.is_none() && self.ensure_buffer_capacity().is_err() {
+            return;
+        }
+        if !self.auto_save_before_focus_change() {
+            return;
+        }
+        if let Some(index) = existing {
             self.sync_active();
+            self.load_buffer(index);
+            self.status.text = format!(
+                "buffer {}/{}: {}",
+                index + 1,
+                self.buffers.entries.len(),
+                path.display()
+            );
+            self.file.dirty = true;
+            return;
+        }
+        if let Some(buffer) = self.buffers.background.remove(&path) {
+            if self.session.path.is_some() {
+                self.ensure_current_buffer();
+            }
+            self.buffers.entries.push(buffer);
+            let index = self.buffers.entries.len() - 1;
             self.load_buffer(index);
             self.status.text = format!(
                 "buffer {}/{}: {}",
@@ -402,6 +434,11 @@ impl Model {
                 .iter()
                 .enumerate()
                 .any(|(index, buffer)| index != self.buffers.active && buffer.modified)
+            || self
+                .buffers
+                .background
+                .values()
+                .any(|buffer| buffer.modified)
     }
 
     pub(crate) fn request_quit(&mut self) {

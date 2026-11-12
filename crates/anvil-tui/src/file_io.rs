@@ -19,6 +19,14 @@ impl Model {
             self.file.dirty = true;
             return Err("unnamed buffer is modified".to_owned());
         }
+        let existing = self
+            .buffers
+            .entries
+            .iter()
+            .position(|buffer| buffer.path.as_ref() == Some(&absolute));
+        if existing.is_none() {
+            self.ensure_buffer_capacity()?;
+        }
         if !self.auto_save_before_focus_change() {
             let error = self
                 .status
@@ -28,17 +36,25 @@ impl Model {
                 .to_owned();
             return Err(error);
         }
-        if let Some(index) = self
-            .buffers
-            .entries
-            .iter()
-            .position(|buffer| buffer.path.as_ref() == Some(&absolute))
-        {
+        if let Some(index) = existing {
             if self.session.path.is_some() {
                 self.sync_active();
             }
             self.load_buffer(index);
             self.record_recent_file(&absolute);
+            return Ok(());
+        }
+        if let Some(buffer) = self.buffers.background.remove(&absolute) {
+            if self.session.path.is_some() {
+                self.ensure_current_buffer();
+            }
+            self.buffers.entries.push(buffer);
+            let index = self.buffers.entries.len() - 1;
+            self.load_buffer(index);
+            self.sync_watch_paths();
+            self.record_recent_file(&absolute);
+            self.file.stdin_buffer = false;
+            self.file.dirty = true;
             return Ok(());
         }
         let text = self.read_file(&absolute)?;
@@ -573,10 +589,36 @@ impl Model {
                 .slice(0..buffer.editor.text().len_bytes());
             writes.push((index, path.clone(), text));
         }
+        let mut background_writes = Vec::new();
+        for (path, buffer) in &self.buffers.background {
+            if !buffer.modified || Some(path) == active_path.as_ref() {
+                continue;
+            }
+            let text = buffer
+                .editor
+                .text()
+                .slice(0..buffer.editor.text().len_bytes());
+            background_writes.push((path.clone(), text));
+        }
         for (index, path, text) in writes {
             match self.write_file(&path, &text) {
                 Ok(()) => {
                     if let Some(buffer) = self.buffers.entries.get_mut(index) {
+                        buffer.modified = false;
+                        buffer.missing = false;
+                    }
+                    self.clear_conflict(&path);
+                }
+                Err(error) => {
+                    self.status.text = format!("E: {}: {error}", path.display());
+                    failed = true;
+                }
+            }
+        }
+        for (path, text) in background_writes {
+            match self.write_file(&path, &text) {
+                Ok(()) => {
+                    if let Some(buffer) = self.buffers.background.get_mut(&path) {
                         buffer.modified = false;
                         buffer.missing = false;
                     }

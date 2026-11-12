@@ -594,20 +594,26 @@ fn commit_states(model: &mut Model, prepared: HashMap<PathBuf, EditorState>) {
         {
             buffer.editor = state.into();
             buffer.modified = true;
+        } else if let Some(buffer) = model.buffers.background.get_mut(&path) {
+            buffer.editor = state.into();
+            buffer.modified = true;
         } else {
-            model.buffers.entries.push(Buffer {
-                editor: state.into(),
-                path: Some(path),
-                cursor: 0,
-                visual_anchor: None,
-                visual_line: false,
-                missing: false,
-                scroll: 0,
-                hscroll: 0,
-                modified: true,
-                search_query: String::new(),
-                syntax: Default::default(),
-            });
+            model.buffers.background.insert(
+                path.clone(),
+                Buffer {
+                    editor: state.into(),
+                    path: Some(path),
+                    cursor: 0,
+                    visual_anchor: None,
+                    visual_line: false,
+                    missing: false,
+                    scroll: 0,
+                    hscroll: 0,
+                    modified: true,
+                    search_query: String::new(),
+                    syntax: Default::default(),
+                },
+            );
         }
     }
     model.file.dirty = true;
@@ -645,10 +651,15 @@ fn path_is_modified(model: &Model, path: &Path) -> bool {
         .entries
         .iter()
         .any(|buffer| buffer.path.as_deref().is_some_and(affected) && buffer.modified);
+    let background = model
+        .buffers
+        .background
+        .values()
+        .any(|buffer| buffer.path.as_deref().is_some_and(affected) && buffer.modified);
     let split = model.buffers.split.as_ref().is_some_and(|pane| {
         pane.buffer.path.as_deref().is_some_and(affected) && pane.buffer.modified
     });
-    active || buffer || split
+    active || buffer || background || split
 }
 
 impl Model {
@@ -661,6 +672,15 @@ impl Model {
                 *path = remap_path(path, from, to);
             }
         }
+        let background = std::mem::take(&mut self.buffers.background);
+        self.buffers.background = background
+            .into_iter()
+            .map(|(path, mut buffer)| {
+                let path = remap_path(&path, from, to);
+                buffer.path = Some(path.clone());
+                (path, buffer)
+            })
+            .collect();
         if let Some(pane) = self.buffers.split.as_mut()
             && let Some(path) = pane.buffer.path.as_mut()
         {
@@ -767,12 +787,93 @@ mod tests {
         assert_eq!(model.session.editor.text().slice(0..4), "Xone");
         let second_buffer = model
             .buffers
-            .entries
-            .iter()
-            .find(|buffer| buffer.path.as_ref() == Some(&second.canonicalize().expect("canonical")))
+            .background
+            .get(&second.canonicalize().expect("canonical"))
             .expect("second buffer");
         assert_eq!(second_buffer.editor.text().slice(0..4), "two!");
         assert!(second_buffer.modified);
+    }
+
+    #[test]
+    fn background_edits_do_not_consume_foreground_slots() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let paths: Vec<_> = (0..10)
+            .map(|index| {
+                let path = dir.path().join(format!("{index}.rs"));
+                fs::write(&path, "text\n").expect("file");
+                path
+            })
+            .collect();
+        let mut model = Model::open(&paths[0]).expect("open");
+        for path in &paths[1..8] {
+            model.open_path(path).expect("open");
+        }
+        let unopened = &paths[9];
+        let workspace_edit = WorkspaceEdit::from_lsp(&serde_json::json!({
+        "changes": {
+            uri(unopened): [{
+                "range": {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 0}},
+                "newText": "X"
+            }]
+        }
+    }))
+    .expect("parse");
+        workspace_edit.apply(&mut model).expect("apply");
+        assert_eq!(model.buffers.entries.len(), 8);
+        assert!(
+            model
+                .buffers
+                .background
+                .contains_key(&unopened.canonicalize().expect("canonical"))
+        );
+
+        model.open_path(&paths[8]).expect("open ninth");
+        assert_eq!(model.buffers.entries.len(), 9);
+        assert!(
+            model
+                .buffers
+                .background
+                .contains_key(&unopened.canonicalize().expect("canonical"))
+        );
+        let error = model.open_path(unopened).unwrap_err();
+        assert_eq!(error, "buffer limit reached (9)");
+        assert!(
+            model
+                .buffers
+                .background
+                .contains_key(&unopened.canonicalize().expect("canonical"))
+        );
+    }
+
+    #[test]
+    fn opening_a_background_buffer_promotes_it() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let first = dir.path().join("first.rs");
+        let second = dir.path().join("second.rs");
+        fs::write(&first, "first\n").expect("first");
+        fs::write(&second, "two\n").expect("second");
+        let mut model = Model::open(&first).expect("open");
+        let workspace_edit = WorkspaceEdit::from_lsp(&serde_json::json!({
+        "changes": {
+            uri(&second): [{
+                "range": {"start": {"line": 0, "character": 3}, "end": {"line": 0, "character": 3}},
+                "newText": "!"
+            }]
+        }
+    }))
+    .expect("parse");
+        workspace_edit.apply(&mut model).expect("apply");
+        assert!(
+            model
+                .buffers
+                .background
+                .contains_key(&second.canonicalize().expect("canonical"))
+        );
+
+        model.open_path(&second).expect("promote");
+        assert!(model.buffers.background.is_empty());
+        assert_eq!(model.session.editor.text().slice(0..4), "two!");
+        assert_eq!(model.buffers.entries.len(), 2);
     }
 
     #[test]
@@ -814,8 +915,6 @@ mod tests {
         fs::write(&first, "first").expect("first");
         fs::write(&second, "second").expect("second");
         let mut model = Model::open(&first).expect("open");
-        model.open_path(&second).expect("second");
-        model.switch_buffer(-1);
         let workspace_edit = WorkspaceEdit::from_lsp(&serde_json::json!({
             "changes": {
                 uri(&second): [{
@@ -826,9 +925,18 @@ mod tests {
         }))
         .expect("parse");
         workspace_edit.apply(&mut model).expect("apply");
+        assert!(
+            model
+                .buffers
+                .background
+                .contains_key(&second.canonicalize().expect("canonical"))
+        );
+        assert!(model.buffers.entries.is_empty());
+        assert!(model.any_modified());
         assert_eq!(fs::read_to_string(&second).expect("before save"), "second");
         assert!(model.save_all());
         assert_eq!(fs::read_to_string(&second).expect("after save"), "Gsecond");
+        assert!(!model.any_modified());
     }
 
     #[test]

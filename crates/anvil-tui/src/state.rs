@@ -487,6 +487,8 @@ pub(crate) struct AppearanceState {
     pub(crate) persist_theme: bool,
 }
 
+pub(crate) const MAX_OPEN_BUFFERS: usize = 9;
+
 #[derive(Default)]
 pub(crate) struct BufferState {
     /// All open buffers, including the active one after the first switch.
@@ -495,6 +497,8 @@ pub(crate) struct BufferState {
     pub(crate) active: usize,
     /// Secondary pane when a vertical split is open.
     pub(crate) split: Option<Pane>,
+    /// Internal buffers for unopened files changed by workspace edits.
+    pub(crate) background: HashMap<PathBuf, Buffer>,
 }
 
 #[derive(Default)]
