@@ -79,6 +79,14 @@ impl Model {
             let sidebar = (width / 5).clamp(18, 40).min(width - 20);
             width = width.saturating_sub(sidebar);
         }
+        if self.split.is_some() {
+            let split = width.saturating_mul(self.split_ratio.min(100)) / 100;
+            width = if self.ui.focus.split {
+                split
+            } else {
+                width.saturating_sub(split)
+            };
+        }
         usize::from(width.saturating_sub(self.gutter_width()).max(1))
     }
 
@@ -694,7 +702,7 @@ mod tests {
     }
 
     #[test]
-    fn wrap_width_accounts_for_tree_sidebar() {
+    fn wrap_width_accounts_for_tree_and_split() {
         let mut model = Model::new(EditorState::from_text("x"), None);
         let gutter = usize::from(model.gutter_width());
         assert_eq!(model.wrap_text_width(100), 100 - gutter);
@@ -704,6 +712,17 @@ mod tests {
             model.wrap_text_width(100),
             usize::from(100 - sidebar) - gutter
         );
+        model.split_vertical();
+        model.split_ratio = 50;
+        let editor_width = 100 - sidebar;
+        let half = editor_width / 2;
+        model.ui.focus.split = false;
+        assert_eq!(
+            model.wrap_text_width(100),
+            usize::from(editor_width - half) - gutter
+        );
+        model.ui.focus.split = true;
+        assert_eq!(model.wrap_text_width(100), usize::from(half) - gutter);
     }
 
     #[test]
