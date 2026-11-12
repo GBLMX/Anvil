@@ -57,12 +57,21 @@ impl TaskWorker {
 }
 
 fn run_task(command: &str, workspace: &Path) -> TaskResult {
+    run_task_with_timeout(command, workspace, TASK_TIMEOUT)
+}
+
+fn run_task_with_timeout(command: &str, workspace: &Path, timeout: Duration) -> TaskResult {
     let mut process = shell_command(command);
     process
         .current_dir(workspace)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        process.process_group(0);
+    }
     let mut child = match process.spawn() {
         Ok(child) => child,
         Err(error) => {
@@ -78,7 +87,8 @@ fn run_task(command: &str, workspace: &Path) -> TaskResult {
     };
     let stdout = child.stdout.take().map(spawn_reader);
     let stderr = child.stderr.take().map(spawn_reader);
-    let deadline = Instant::now() + TASK_TIMEOUT;
+    let task_id = child.id();
+    let deadline = Instant::now() + timeout;
     let mut timed_out = false;
     let status = loop {
         match child.try_wait() {
@@ -88,11 +98,13 @@ fn run_task(command: &str, workspace: &Path) -> TaskResult {
         }
         if Instant::now() >= deadline {
             let _ = child.kill();
+            kill_task_group(task_id);
             timed_out = true;
             break child.wait().ok();
         }
         thread::sleep(Duration::from_millis(20));
     };
+    kill_task_group(task_id);
     let (stdout, stdout_truncated) = join_reader(stdout);
     let (stderr, stderr_truncated) = join_reader(stderr);
     let mut output = String::from_utf8_lossy(&stdout).into_owned();
@@ -127,6 +139,29 @@ fn shell_command(command: &str) -> Command {
         process
     }
 }
+
+#[cfg(unix)]
+fn kill_task_group(pid: u32) {
+    use nix::sys::signal::{Signal, kill};
+    use nix::unistd::Pid;
+    let Ok(pid) = i32::try_from(pid) else {
+        return;
+    };
+    let _ = kill(Pid::from_raw(-pid), Signal::SIGKILL);
+}
+
+#[cfg(windows)]
+fn kill_task_group(pid: u32) {
+    let _ = Command::new("taskkill")
+        .args(["/T", "/F", "/PID", &pid.to_string()])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status();
+}
+
+#[cfg(not(any(unix, windows)))]
+fn kill_task_group(_pid: u32) {}
 
 fn spawn_reader<R>(mut reader: R) -> thread::JoinHandle<(Vec<u8>, bool)>
 where
@@ -247,5 +282,29 @@ mod tests {
         let result = run_task("head -c 1048576 /dev/zero | tr '\\0' x", Path::new("/tmp"));
         assert!(result.truncated);
         assert_eq!(result.output.len(), MAX_TASK_OUTPUT);
+    }
+}
+
+#[cfg(test)]
+mod process_tests {
+    use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn kills_background_children_after_shell_exit() {
+        let started = Instant::now();
+        let result = run_task_with_timeout("sleep 30 &", Path::new("/tmp"), Duration::from_secs(2));
+        assert!(!result.timed_out);
+        assert!(started.elapsed() < Duration::from_secs(2));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn times_out_and_kills_process_group() {
+        let started = Instant::now();
+        let result =
+            run_task_with_timeout("sleep 30", Path::new("/tmp"), Duration::from_millis(100));
+        assert!(result.timed_out);
+        assert!(started.elapsed() < Duration::from_secs(2));
     }
 }
