@@ -1249,3 +1249,19 @@ fn closing_a_dirty_split_pane_auto_saves() {
     assert!(model.split.is_none());
     assert_eq!(fs::read_to_string(&path).expect("content"), "Xa");
 }
+
+#[test]
+fn closing_the_active_buffer_auto_saves_first() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("main.rs");
+    fs::write(&path, "a").expect("write");
+    let mut model = Model::open(&path).expect("open");
+    model.settings.editor.auto_save = true;
+    model.insert_text("X");
+
+    model.close_buffer(0, false);
+
+    assert!(model.buffers.is_empty());
+    assert!(model.path.is_none());
+    assert_eq!(fs::read_to_string(&path).expect("content"), "Xa");
+}

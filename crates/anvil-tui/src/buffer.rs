@@ -160,10 +160,18 @@ impl Model {
             return;
         }
         if self.buffers[index].modified && !force {
-            self.ui.input_mode = InputMode::ConfirmClose { index };
-            self.status = format!("Save {} before closing? [Y/n/c]", self.buffer_name(index));
-            self.dirty = true;
-            return;
+            if index == self.active && self.settings.editor.auto_save {
+                if !self.auto_save_before_focus_change() {
+                    return;
+                }
+                self.sync_active();
+            }
+            if self.buffers[index].modified {
+                self.ui.input_mode = InputMode::ConfirmClose { index };
+                self.status = format!("Save {} before closing? [Y/n/c]", self.buffer_name(index));
+                self.dirty = true;
+                return;
+            }
         }
         self.finish_close_buffer(index);
         self.sync_watch_paths();
