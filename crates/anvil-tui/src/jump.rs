@@ -145,6 +145,100 @@ impl Model {
         self.dirty = true;
         true
     }
+
+    pub(crate) fn record_change(
+        &mut self,
+        before_path: Option<PathBuf>,
+        before_cursor: usize,
+        after_path: Option<PathBuf>,
+        after_cursor: usize,
+    ) {
+        if let Some(path) = before_path {
+            self.change_list.record(JumpEntry {
+                path,
+                cursor: before_cursor,
+            });
+        }
+        if let Some(path) = after_path {
+            self.change_list.record(JumpEntry {
+                path,
+                cursor: after_cursor,
+            });
+        }
+    }
+
+    pub(crate) fn change_back(&mut self) {
+        self.change_history(false);
+    }
+
+    pub(crate) fn change_forward(&mut self) {
+        self.change_history(true);
+    }
+
+    fn change_history(&mut self, forward: bool) {
+        if self.path.is_none() && self.modified {
+            self.status = "E: save or discard the unnamed buffer before jumping".to_owned();
+            self.dirty = true;
+            return;
+        }
+        let current = self.current_jump_entry();
+        let target = if forward {
+            self.change_list.take_forward()
+        } else {
+            self.change_list.take_back()
+        };
+        let Some(mut target) = target else {
+            self.status = if forward {
+                "no next change".to_owned()
+            } else {
+                "no previous change".to_owned()
+            };
+            self.dirty = true;
+            return;
+        };
+        if current.as_ref() == Some(&target) {
+            let Some(next) = (if forward {
+                self.change_list.take_forward()
+            } else {
+                self.change_list.take_back()
+            }) else {
+                self.status = if forward {
+                    "no next change".to_owned()
+                } else {
+                    "no previous change".to_owned()
+                };
+                self.dirty = true;
+                return;
+            };
+            target = next;
+        }
+        if !self.jump_to(&target) {
+            if forward {
+                self.change_list.push_forward(target);
+            } else {
+                self.change_list.push_back(target);
+            }
+            return;
+        }
+        if let Some(current) = current {
+            if forward {
+                self.change_list.push_back(current);
+            } else {
+                self.change_list.push_forward(current);
+            }
+        }
+        self.status = format!(
+            "{} [{}|{}]",
+            if forward {
+                "next change"
+            } else {
+                "previous change"
+            },
+            self.change_list.back_len(),
+            self.change_list.forward_len()
+        );
+        self.dirty = true;
+    }
 }
 #[cfg(test)]
 mod tests {

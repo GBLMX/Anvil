@@ -50,6 +50,7 @@ Normal mode
   Ctrl+/              toggle line comments
   Ctrl-o / Alt-o      jump back through navigation history
   Ctrl-i / Alt-i      jump forward through navigation history
+  g; / g,             previous / next change position
   /pattern            incremental search; Enter accepts, Esc restores cursor
   :undo / :redo       undo / redo via Ex command
   n / N               next / previous match

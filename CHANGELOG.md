@@ -16,6 +16,8 @@ post-`0.5.0` feature line.
   history across definitions, references, call hierarchy, symbols,
   diagnostics, quick-open, search, and stdin locations. A new jump clears the
   forward stack.
+- `g;`/`g,` navigate a bounded edit-position change list. Key-driven edits
+  record their before/after positions; `g;` skips the current position.
 - `anvil-ctl` is a JSON-capable control plane for a running TUI: `open`,
   `save`, `edit set|insert`, bounded `query`, allowlisted Ex `command`, and
   `quit`, with stable exit codes, timeouts, and typed errors. The control

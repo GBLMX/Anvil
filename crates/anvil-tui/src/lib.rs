@@ -484,6 +484,8 @@ pub struct Model {
     pub cursor: usize,
     /// Bounded back/forward navigation history.
     jump_list: jump::JumpList,
+    /// Bounded back/forward edit-position history.
+    change_list: jump::JumpList,
     /// Anchor for the selection-first visual adapter.
     visual_anchor: Option<usize>,
     /// Whether the visual adapter selects whole lines.
@@ -753,6 +755,7 @@ impl Model {
             welcome_back: false,
             cursor: 0,
             jump_list: jump::JumpList::default(),
+            change_list: jump::JumpList::default(),
             visual_anchor: None,
             visual_line: false,
             modal_layer: None,

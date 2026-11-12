@@ -718,6 +718,8 @@ pub(crate) enum PendingCommand {
     DocumentHighlight,
     IncomingCalls,
     OutgoingCalls,
+    ChangeBack,
+    ChangeForward,
     ToggleFold,
     CloseAllFolds,
     OpenAllFolds,
@@ -756,6 +758,8 @@ impl PendingCommand {
             DocumentHighlight => Some(command::DOCUMENT_HIGHLIGHT),
             IncomingCalls => Some(command::INCOMING_CALLS),
             OutgoingCalls => Some(command::OUTGOING_CALLS),
+            ChangeBack => Some(command::CHANGE_BACK),
+            ChangeForward => Some(command::CHANGE_FORWARD),
             ToggleFold => Some(command::TOGGLE_FOLD),
             CloseAllFolds => Some(command::CLOSE_ALL_FOLDS),
             OpenAllFolds => Some(command::OPEN_ALL_FOLDS),
@@ -875,6 +879,8 @@ impl PendingCommand {
                 | Self::DocumentHighlight
                 | Self::IncomingCalls
                 | Self::OutgoingCalls
+                | Self::ChangeBack
+                | Self::ChangeForward
                 | Self::ToggleFold
                 | Self::CloseAllFolds
                 | Self::OpenAllFolds
@@ -899,6 +905,8 @@ impl PendingCommand {
             "lsp.document_highlight" => Self::DocumentHighlight,
             "lsp.incoming_calls" => Self::IncomingCalls,
             "lsp.outgoing_calls" => Self::OutgoingCalls,
+            "navigation.change_back" => Self::ChangeBack,
+            "navigation.change_forward" => Self::ChangeForward,
             "view.toggle_fold" => Self::ToggleFold,
             "view.close_all_folds" => Self::CloseAllFolds,
             "view.open_all_folds" => Self::OpenAllFolds,
@@ -1001,6 +1009,8 @@ pub(crate) fn pending_action(
             KeyCode::Char('h') => Some(PendingCommand::DocumentHighlight),
             KeyCode::Char('i') => Some(PendingCommand::IncomingCalls),
             KeyCode::Char('o') => Some(PendingCommand::OutgoingCalls),
+            KeyCode::Char(';') => Some(PendingCommand::ChangeBack),
+            KeyCode::Char(',') => Some(PendingCommand::ChangeForward),
             _ => None,
         };
     }
@@ -1188,6 +1198,14 @@ mod tests {
         assert_eq!(
             pending_action('g', key(KeyCode::Char('o'), KeyModifiers::NONE), false),
             Some(PendingCommand::OutgoingCalls)
+        );
+        assert_eq!(
+            pending_action('g', key(KeyCode::Char(';'), KeyModifiers::NONE), false),
+            Some(PendingCommand::ChangeBack)
+        );
+        assert_eq!(
+            pending_action('g', key(KeyCode::Char(','), KeyModifiers::NONE), false),
+            Some(PendingCommand::ChangeForward)
         );
         assert_eq!(
             pending_action('z', key(KeyCode::Char('a'), KeyModifiers::NONE), false),

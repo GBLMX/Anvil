@@ -141,6 +141,8 @@ cursor.up
 editor.change_inner_word
 editor.change_inner_quote
 lsp.definition
+navigation.change_back
+navigation.change_forward
 diagnostics.next
 diagnostics.previous
 view.split_vertical

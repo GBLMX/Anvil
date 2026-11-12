@@ -89,6 +89,8 @@ pub const CODE_ACTION: CommandId = CommandId::new("lsp.code_action");
 pub const DOCUMENT_SYMBOLS: CommandId = CommandId::new("lsp.document_symbols");
 pub const WORKSPACE_SYMBOLS: CommandId = CommandId::new("lsp.workspace_symbols");
 pub const FORMAT: CommandId = CommandId::new("lsp.format");
+pub const CHANGE_BACK: CommandId = CommandId::new("navigation.change_back");
+pub const CHANGE_FORWARD: CommandId = CommandId::new("navigation.change_forward");
 pub const CHANGE_WORD_NEXT: CommandId = CommandId::new("editor.change_word_next");
 pub const CHANGE_WORD_END: CommandId = CommandId::new("editor.change_word_end");
 pub const CHANGE_WORD_PREVIOUS: CommandId = CommandId::new("editor.change_word_previous");
@@ -162,6 +164,8 @@ pub const COMMANDS: &[CommandSpec] = &[
     spec(DOCUMENT_SYMBOLS, PENDING),
     spec(WORKSPACE_SYMBOLS, PENDING),
     spec(FORMAT, PENDING),
+    spec(CHANGE_BACK, PENDING),
+    spec(CHANGE_FORWARD, PENDING),
     spec(CHANGE_WORD_NEXT, PENDING),
     spec(CHANGE_WORD_END, PENDING),
     spec(CHANGE_WORD_PREVIOUS, PENDING),

@@ -12,6 +12,13 @@ use super::*;
 use crossterm::event::{Event, KeyCode};
 
 pub(crate) fn handle_event(model: &mut Model, event: Event) {
+    let edit_before = match &event {
+        Event::Key(key) if is_action_key(key) => {
+            Some((model.path.clone(), model.cursor, model.editor.revision()))
+        }
+        Event::Paste(_) => Some((model.path.clone(), model.cursor, model.editor.revision())),
+        _ => None,
+    };
     match event {
         Event::Key(key) if is_action_key(&key) => {
             if matches!(model.pointer, mouse::PointerState::Dragging(_)) {
@@ -53,6 +60,12 @@ pub(crate) fn handle_event(model: &mut Model, event: Event) {
         _ => {}
     }
     model.drain_effects();
+    if let Some((path, cursor, revision)) = edit_before
+        && model.editor.revision() != revision
+        && model.path == path
+    {
+        model.record_change(path, cursor, model.path.clone(), model.cursor);
+    }
 }
 
 const MAX_PASTE_BYTES: usize = 8 * 1024 * 1024;
@@ -140,6 +153,8 @@ fn execute_pending_command(
         }
         PendingCommand::IncomingCalls => model.queue_effect(Effect::LspIncomingCalls),
         PendingCommand::OutgoingCalls => model.queue_effect(Effect::LspOutgoingCalls),
+        PendingCommand::ChangeBack => model.change_back(),
+        PendingCommand::ChangeForward => model.change_forward(),
         PendingCommand::ToggleFold => model.toggle_fold_at_cursor(),
         PendingCommand::CloseAllFolds => model.close_all_folds(),
         PendingCommand::OpenAllFolds => model.open_all_folds(),

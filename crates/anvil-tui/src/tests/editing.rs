@@ -758,3 +758,30 @@ fn comment_empty_buffer_preserves_carets_after_prefix() {
         "carets not mapped past the comment prefix: {selections:?}"
     );
 }
+
+#[test]
+fn g_semicolon_and_g_comma_navigate_change_list() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("main.rs");
+    fs::write(&path, "x").expect("write");
+    let mut model = Model::open(&path).expect("open");
+
+    for code in [
+        KeyCode::Char('i'),
+        KeyCode::Char('a'),
+        KeyCode::Char('b'),
+        KeyCode::Char('c'),
+        KeyCode::Esc,
+    ] {
+        handle_event(&mut model, key(code));
+    }
+    assert_eq!(model.editor.text().slice(0..4), "abcx");
+    assert_eq!(model.cursor, 3);
+    handle_event(&mut model, key(KeyCode::Char('g')));
+    handle_event(&mut model, key(KeyCode::Char(';')));
+    assert_eq!(model.cursor, 2);
+
+    handle_event(&mut model, key(KeyCode::Char('g')));
+    handle_event(&mut model, key(KeyCode::Char(',')));
+    assert_eq!(model.cursor, 3);
+}
