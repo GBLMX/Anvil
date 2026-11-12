@@ -107,7 +107,7 @@ pub(crate) fn handle_mouse(model: &mut Model, mouse: MouseEvent, width: u16, hei
                 }
                 Target::WelcomeRecent(index) => {
                     if let Some(path) = model.openable_recent_files().get(index).cloned() {
-                        model.welcome = false;
+                        model.start_page.welcome = false;
                         if let Err(error) = model.open_path(&path) {
                             model.status.text = format!("E: {error}");
                         }
@@ -206,7 +206,7 @@ pub(crate) fn hit_test(model: &Model, col: u16, row: u16, width: u16, height: u1
     if col >= width || row >= height {
         return Target::Outside;
     }
-    if model.welcome {
+    if model.start_page.welcome {
         return crate::render::welcome_recent_at(model, col, row, width, height)
             .map_or(Target::Outside, Target::WelcomeRecent);
     }
@@ -278,7 +278,7 @@ fn content_rect(
     width: u16,
     height: u16,
 ) -> Option<(Rect, Option<u16>, Option<Rect>)> {
-    if model.welcome {
+    if model.start_page.welcome {
         return None;
     }
     let mut inner = Rect {

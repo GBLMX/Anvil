@@ -2,7 +2,7 @@ use super::*;
 #[test]
 fn space_leader_focuses_editor_and_tree() {
     let mut model = Model::new(EditorState::from_text("alpha"), None);
-    model.welcome = false;
+    model.start_page.welcome = false;
     model.open_tree();
     assert!(model.ui.focus.tree);
     for key_code in [KeyCode::Char(' '), KeyCode::Char('1')] {
@@ -32,7 +32,7 @@ fn space_leader_expires_without_consuming_next_key() {
 #[test]
 fn popup_consumes_j_before_editor_motion() {
     let mut model = Model::new(EditorState::from_text("alpha\nbeta"), None);
-    model.welcome = false;
+    model.start_page.welcome = false;
     model.overlays.lsp_results.document_symbols = Some(SymbolState {
         items: vec![
             SymbolItem {
@@ -68,7 +68,7 @@ fn popup_consumes_j_before_editor_motion() {
 #[test]
 fn pending_space_renders_keymap_continuations() {
     let mut model = Model::new(EditorState::from_text("alpha"), None);
-    model.welcome = false;
+    model.start_page.welcome = false;
     model.begin_pending(' ');
     let backend = TestBackend::new(100, 20);
     let mut terminal = Terminal::new(backend).expect("terminal");
@@ -87,7 +87,7 @@ fn pending_space_renders_keymap_continuations() {
 #[test]
 fn pending_operator_which_key_shows_text_object_extenders() {
     let mut model = Model::new(EditorState::from_text("alpha"), None);
-    model.welcome = false;
+    model.start_page.welcome = false;
     model.begin_pending('d');
     handle_event(&mut model, key(KeyCode::Char('i')));
     let backend = TestBackend::new(100, 24);
@@ -107,7 +107,7 @@ fn pending_operator_which_key_shows_text_object_extenders() {
 #[test]
 fn keymap_context_prefers_popup_then_command_line_then_tree() {
     let mut model = Model::new(EditorState::from_text("alpha"), None);
-    model.welcome = false;
+    model.start_page.welcome = false;
     model.ui.focus.tree = true;
     assert_eq!(
         model.active_keymap_contexts(),
@@ -158,7 +158,7 @@ fn keymap_context_prefers_popup_then_command_line_then_tree() {
 #[test]
 fn file_tree_context_bindings_dispatch_before_hardcoded_keys() {
     let mut model = Model::new(EditorState::from_text("alpha"), None);
-    model.welcome = false;
+    model.start_page.welcome = false;
     model.open_tree();
     assert!(model.ui.focus.tree);
     model.config.keymap = crate::keymap::KeymapConfig::from_toml(
@@ -175,7 +175,7 @@ x = "view.focus_editor"
 #[test]
 fn popup_context_bindings_dispatch_before_popup_keys() {
     let mut model = Model::new(EditorState::from_text("alpha"), None);
-    model.welcome = false;
+    model.start_page.welcome = false;
     model.open_tree();
     model.overlays.lsp_results.document_symbols = Some(SymbolState {
         items: vec![SymbolItem {
@@ -202,7 +202,7 @@ x = "view.focus_editor"
 #[test]
 fn global_context_does_not_shadow_open_popup() {
     let mut model = Model::new(EditorState::from_text("alpha\nbeta"), None);
-    model.welcome = false;
+    model.start_page.welcome = false;
     model.overlays.lsp_results.document_symbols = Some(SymbolState {
         items: vec![
             SymbolItem {
@@ -245,7 +245,7 @@ j = "editor.undo"
 #[test]
 fn command_line_context_is_explicit_without_global_fallback() {
     let mut model = Model::new(EditorState::from_text("alpha"), None);
-    model.welcome = false;
+    model.start_page.welcome = false;
     model.open_tree();
     model.config.keymap = crate::keymap::KeymapConfig::from_toml(
         r#"
@@ -275,7 +275,7 @@ a = "editor.undo"
 #[test]
 fn command_palette_filters_and_executes_registry_commands() {
     let mut model = Model::new(EditorState::from_text("alpha"), None);
-    model.welcome = false;
+    model.start_page.welcome = false;
     model.open_tree();
     assert!(model.ui.focus.tree);
     for key_code in [KeyCode::Char(' '), KeyCode::Char('p')] {
@@ -345,7 +345,7 @@ fn command_palette_includes_plugin_commands() {
         .find(|item| item.id == "demo.trim")
         .expect("plugin command");
     assert_eq!(item.plugin_id.as_deref(), Some("demo"));
-    model.welcome = false;
+    model.start_page.welcome = false;
     for character in "demo.trim".chars() {
         handle_event(&mut model, key(KeyCode::Char(character)));
     }
@@ -372,7 +372,7 @@ fn search_and_rename_contexts_consume_explicit_bindings() {
     .expect("context keymap");
 
     let mut search = Model::new(EditorState::from_text("alpha"), None);
-    search.welcome = false;
+    search.start_page.welcome = false;
     search.open_tree();
     search.config.keymap = keymap;
     search.ui.input_mode = InputMode::Search {
@@ -383,7 +383,7 @@ fn search_and_rename_contexts_consume_explicit_bindings() {
     assert!(matches!(search.ui.input_mode, InputMode::Search { .. }));
 
     let mut rename = Model::new(EditorState::from_text("alpha"), None);
-    rename.welcome = false;
+    rename.start_page.welcome = false;
     rename.open_tree();
     rename.config.keymap = crate::keymap::KeymapConfig::from_toml(
         r#"
@@ -668,7 +668,7 @@ fn theme_command_switches_and_lists_builtins() {
 #[test]
 fn command_line_tab_completes_and_enter_executes() {
     let mut model = Model::new(EditorState::from_text("alpha"), None);
-    model.welcome = false;
+    model.start_page.welcome = false;
     handle_event(&mut model, key(KeyCode::Char(':')));
     for character in "the".chars() {
         handle_event(&mut model, key(KeyCode::Char(character)));
@@ -690,7 +690,7 @@ fn command_line_tab_completes_and_enter_executes() {
 #[test]
 fn command_line_tab_opens_theme_argument_list() {
     let mut model = Model::new(EditorState::from_text("alpha"), None);
-    model.welcome = false;
+    model.start_page.welcome = false;
     handle_event(&mut model, key(KeyCode::Char(':')));
     for character in "theme ".chars() {
         handle_event(&mut model, key(KeyCode::Char(character)));
@@ -706,7 +706,7 @@ fn command_line_tab_opens_theme_argument_list() {
 #[test]
 fn command_line_supports_mid_text_editing() {
     let mut model = Model::new(EditorState::from_text("alpha"), None);
-    model.welcome = false;
+    model.start_page.welcome = false;
     handle_event(&mut model, key(KeyCode::Char(':')));
     for character in "ab".chars() {
         handle_event(&mut model, key(KeyCode::Char(character)));
@@ -734,7 +734,7 @@ fn command_line_supports_mid_text_editing() {
 #[test]
 fn search_mode_supports_mid_text_editing() {
     let mut model = Model::new(EditorState::from_text("alpha beta"), None);
-    model.welcome = false;
+    model.start_page.welcome = false;
     handle_event(&mut model, key(KeyCode::Char('/')));
     for character in "ab".chars() {
         handle_event(&mut model, key(KeyCode::Char(character)));
@@ -750,7 +750,7 @@ fn search_mode_supports_mid_text_editing() {
 #[test]
 fn command_line_completes_theme_argument() {
     let mut model = Model::new(EditorState::from_text("alpha"), None);
-    model.welcome = false;
+    model.start_page.welcome = false;
     handle_event(&mut model, key(KeyCode::Char(':')));
     for character in "theme so".chars() {
         handle_event(&mut model, key(KeyCode::Char(character)));

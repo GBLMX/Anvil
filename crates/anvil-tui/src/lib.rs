@@ -569,6 +569,14 @@ pub struct FileState {
 }
 
 #[derive(Default)]
+struct StartPageState {
+    /// Full-editor start dashboard, shown until the first interaction or file open.
+    welcome: bool,
+    /// Dashboard state to restore after closing the help page.
+    welcome_back: bool,
+}
+
+#[derive(Default)]
 struct InputState {
     /// Pending normal-mode operator (`d` or `y`).
     pending: Option<char>,
@@ -957,10 +965,8 @@ pub struct Model {
     input: InputState,
     /// Substring search query and state.
     search: SearchSession,
-    /// Full-editor start dashboard, shown until the first interaction or file open.
-    welcome: bool,
-    /// Dashboard state to restore after closing the help page.
-    welcome_back: bool,
+    /// Start dashboard and help return state.
+    start_page: StartPageState,
     /// Open buffers, active pane, and help-page state.
     buffers: BufferState,
     /// Workspace root, gateways, and file workers.
@@ -1007,8 +1013,10 @@ impl Model {
                 jump_list: jump::JumpList::default(),
                 change_list: jump::JumpList::default(),
             },
-            welcome,
-            welcome_back: false,
+            start_page: StartPageState {
+                welcome,
+                welcome_back: false,
+            },
             edit: EditSessionState::default(),
             view: ViewState::default(),
             ui: UiState::default(),
@@ -1266,8 +1274,8 @@ impl Model {
         self.view.scroll = 0;
         self.view.hscroll = 0;
         self.file.modified = false;
-        self.welcome_back = self.welcome;
-        self.welcome = false;
+        self.start_page.welcome_back = self.start_page.welcome;
+        self.start_page.welcome = false;
         self.ui.input_mode = InputMode::Normal;
         self.input.pending = None;
         self.status.text = status.to_owned();
@@ -1322,7 +1330,7 @@ impl Model {
             Some(syntax),
         );
         self.ui.input_mode = InputMode::Normal;
-        self.welcome = std::mem::take(&mut self.welcome_back);
+        self.start_page.welcome = std::mem::take(&mut self.start_page.welcome_back);
         self.input.pending = None;
         self.status.text = format!("Returned from {title}");
         self.file.dirty = true;

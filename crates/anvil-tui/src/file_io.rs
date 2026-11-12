@@ -79,9 +79,9 @@ impl Model {
         if timing {
             eprintln!("open_path read={read_done:?} index={:?}", start.elapsed());
         }
-        self.welcome = false;
+        self.start_page.welcome = false;
         self.file.stdin_buffer = false;
-        self.welcome_back = false;
+        self.start_page.welcome_back = false;
         self.sync_lsp_active();
         self.sync_watch_paths();
         self.record_recent_file(&recent_path);

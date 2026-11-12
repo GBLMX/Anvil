@@ -54,8 +54,8 @@ impl Model {
         self.file.modified = buffer.modified;
         self.search.query = buffer.search_query;
         self.search.state.reset_for_buffer();
-        self.welcome = false;
-        self.welcome_back = false;
+        self.start_page.welcome = false;
+        self.start_page.welcome_back = false;
         self.syntax.borrow_mut().switch_path_with(
             self.session.path.as_deref(),
             false,
@@ -239,8 +239,8 @@ impl Model {
         self.search.query.clear();
         self.search.state.reset_for_buffer();
         self.syntax.borrow_mut().switch_path(None, false);
-        self.welcome = false;
-        self.welcome_back = false;
+        self.start_page.welcome = false;
+        self.start_page.welcome_back = false;
         self.ui.input_mode = InputMode::Normal;
         self.input.pending = None;
         self.buffers.split = None;
@@ -416,7 +416,7 @@ impl Model {
     pub(crate) fn set_stdin_buffer(&mut self, read_only: bool) {
         self.file.stdin_buffer = true;
         self.read_only = read_only;
-        self.welcome = false;
+        self.start_page.welcome = false;
     }
 
     pub(crate) fn set_read_only(&mut self, read_only: bool) {

@@ -13,7 +13,7 @@ use unicode_width::UnicodeWidthStr;
 pub(crate) fn visible(model: &Model, inner: Rect) -> bool {
     model.session.path.is_some()
         && model.buffers.help_back.is_none()
-        && !model.welcome
+        && !model.start_page.welcome
         && inner.height > 2
 }
 

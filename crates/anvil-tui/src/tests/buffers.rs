@@ -1003,7 +1003,7 @@ fn visual_adapter_maps_character_and_line_selection() {
 #[test]
 fn visual_surround_uses_operation_scoped_modal_layer() {
     let mut model = Model::new(EditorState::from_text("word"), None);
-    model.welcome = false;
+    model.start_page.welcome = false;
     model.session.cursor = 0;
     for key_code in [
         KeyCode::Char('v'),

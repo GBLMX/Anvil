@@ -201,7 +201,7 @@ fn model_uses_keymap_overrides() {
 #[test]
 fn context_keymap_runs_direct_pending_action() {
     let mut model = Model::new(EditorState::from_text("abc"), None);
-    model.welcome = false;
+    model.start_page.welcome = false;
     model.config.keymap = KeymapConfig::from_toml(
         r#"
 [keymap.contexts.editor]

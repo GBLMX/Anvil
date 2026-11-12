@@ -385,9 +385,9 @@ fn handle_key(model: &mut Model, key: KeyPress) {
         return;
     }
 
-    if model.welcome {
+    if model.start_page.welcome {
         if key.code == KeyCode::Esc {
-            model.welcome = false;
+            model.start_page.welcome = false;
             model.file.dirty = true;
             return;
         }
@@ -396,11 +396,11 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             return;
         }
         if key.code == KeyCode::Char('r') {
-            model.welcome = false;
+            model.start_page.welcome = false;
             model.open_recent_files();
             return;
         }
-        model.welcome = false;
+        model.start_page.welcome = false;
         model.file.dirty = true;
     }
     if let Some(waiting) = model.input.macro_wait.take() {

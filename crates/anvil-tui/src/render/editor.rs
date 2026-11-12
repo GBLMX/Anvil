@@ -149,7 +149,9 @@ pub fn view(model: &Model, frame: &mut Frame) {
         width: area.width.saturating_sub(2),
         height: area.height.saturating_sub(2),
     };
-    if !model.welcome && (model.buffers.entries.len() > 1 || model.buffers.help_back.is_some()) {
+    if !model.start_page.welcome
+        && (model.buffers.entries.len() > 1 || model.buffers.help_back.is_some())
+    {
         let bar = Rect {
             height: inner.height.min(1),
             ..inner
@@ -168,7 +170,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
         inner.height = inner.height.saturating_sub(1);
     }
     let mut content = inner;
-    if model.welcome {
+    if model.start_page.welcome {
         render_welcome(frame, inner, model);
         return;
     }
@@ -1297,7 +1299,7 @@ pub(crate) fn welcome_recent_at(
     width: u16,
     height: u16,
 ) -> Option<usize> {
-    if !model.welcome {
+    if !model.start_page.welcome {
         return None;
     }
     let area = Rect {

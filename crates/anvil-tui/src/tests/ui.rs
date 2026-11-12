@@ -2,7 +2,7 @@ use super::*;
 #[test]
 fn renders_start_dashboard_for_an_empty_launch() {
     let mut model = Model::new(EditorState::from_text(""), None);
-    assert!(model.welcome);
+    assert!(model.start_page.welcome);
     let backend = TestBackend::new(80, 24);
     let mut terminal = Terminal::new(backend).expect("terminal");
     terminal.draw(|frame| view(&model, frame)).expect("draw");
@@ -17,7 +17,7 @@ fn renders_start_dashboard_for_an_empty_launch() {
     assert!(rendered.contains("Space f"));
 
     handle_event(&mut model, key(KeyCode::Char('i')));
-    assert!(!model.welcome);
+    assert!(!model.start_page.welcome);
     assert!(matches!(model.ui.input_mode, InputMode::Insert));
 }
 
@@ -26,21 +26,21 @@ fn dashboard_survives_help_round_trip() {
     let mut model = Model::new(EditorState::from_text(""), None);
     handle_event(&mut model, key(KeyCode::Char('?')));
     assert!(model.buffers.help_back.is_some());
-    assert!(!model.welcome);
+    assert!(!model.start_page.welcome);
 
     handle_event(&mut model, key(KeyCode::Char(':')));
     type_text(&mut model, "q");
     handle_event(&mut model, key(KeyCode::Enter));
 
     assert!(model.buffers.help_back.is_none());
-    assert!(model.welcome);
+    assert!(model.start_page.welcome);
     assert_eq!(model.session.editor.text().slice(0..0), "");
 }
 
 #[test]
 fn start_dashboard_does_not_replace_provided_text() {
     let model = Model::new(EditorState::from_text("alpha"), None);
-    assert!(!model.welcome);
+    assert!(!model.start_page.welcome);
 }
 
 #[test]
@@ -222,7 +222,7 @@ fn tree_renders_file_and_folder_icons() {
     fs::write(dir.path().join("main.rs"), "").expect("file");
     let mut model = Model::new(EditorState::from_text(""), None);
     model.workspace.path = dir.path().to_path_buf();
-    model.welcome = false;
+    model.start_page.welcome = false;
     model.open_tree();
 
     let backend = TestBackend::new(80, 12);
@@ -251,7 +251,7 @@ fn tree_shows_modified_and_diagnostic_markers() {
     fs::write(&path, "fn main() {}\n").expect("file");
     let mut model = Model::new(EditorState::from_text(""), None);
     model.workspace.path = dir.path().to_path_buf();
-    model.welcome = false;
+    model.start_page.welcome = false;
     model.open_tree();
     model.open_path(&path).expect("open");
     model.insert_text("x");
@@ -283,7 +283,7 @@ fn tree_renders_ascii_icon_fallback() {
     let mut model = Model::new(EditorState::from_text(""), None);
     model.workspace.path = dir.path().to_path_buf();
     model.appearance.ascii_icons = true;
-    model.welcome = false;
+    model.start_page.welcome = false;
     model.open_tree();
 
     let backend = TestBackend::new(80, 12);
@@ -308,7 +308,7 @@ fn tree_selection_scrolls_into_view() {
     }
     let mut model = Model::new(EditorState::from_text(""), None);
     model.workspace.path = dir.path().to_path_buf();
-    model.welcome = false;
+    model.start_page.welcome = false;
     model.open_tree();
     model.tree.selected = Some(19);
 
@@ -328,7 +328,7 @@ fn tree_selection_scrolls_into_view() {
 #[test]
 fn fuzzy_selection_scrolls_into_view() {
     let mut model = Model::new(EditorState::from_text(""), None);
-    model.welcome = false;
+    model.start_page.welcome = false;
     model.overlays.fuzzy = Some(FuzzyState {
         generation: 0,
         query: String::new(),
@@ -352,7 +352,7 @@ fn fuzzy_selection_scrolls_into_view() {
 #[test]
 fn fuzzy_preview_and_icon_render_on_wide_terminals() {
     let mut model = Model::new(EditorState::from_text(""), None);
-    model.welcome = false;
+    model.start_page.welcome = false;
     model.overlays.fuzzy = Some(FuzzyState {
         generation: 0,
         query: String::new(),
@@ -384,7 +384,7 @@ fn fuzzy_preview_and_icon_render_on_wide_terminals() {
 #[test]
 fn fuzzy_preview_stacks_below_list_on_narrow_terminals() {
     let mut model = Model::new(EditorState::from_text(""), None);
-    model.welcome = false;
+    model.start_page.welcome = false;
     model.overlays.fuzzy = Some(FuzzyState {
         generation: 0,
         query: String::new(),
@@ -416,7 +416,7 @@ fn fuzzy_preview_stacks_below_list_on_narrow_terminals() {
 #[test]
 fn notification_progress_and_problems_render_without_focus_change() {
     let mut model = Model::new(EditorState::from_text("x"), None);
-    model.welcome = false;
+    model.start_page.welcome = false;
     model.notify(
         anvil_session::ui::NotificationSeverity::Info,
         "test",
@@ -458,7 +458,7 @@ fn notification_progress_and_problems_render_without_focus_change() {
 #[test]
 fn status_bar_renders_path_diagnostics_and_position() {
     let mut model = Model::new(EditorState::from_text("x"), None);
-    model.welcome = false;
+    model.start_page.welcome = false;
     model.workspace.path = PathBuf::from("/ws");
     model.session.path = Some(PathBuf::from(
         "/ws/src/company/project/module/very/long/path/Button.tsx",
@@ -483,7 +483,7 @@ fn status_bar_renders_path_diagnostics_and_position() {
 #[test]
 fn read_only_mode_renders_in_the_title() {
     let mut model = Model::new(EditorState::from_text("x"), None);
-    model.welcome = false;
+    model.start_page.welcome = false;
     model.set_read_only(true);
     let backend = TestBackend::new(80, 20);
     let mut terminal = Terminal::new(backend).expect("terminal");
@@ -501,7 +501,7 @@ fn read_only_mode_renders_in_the_title() {
 #[test]
 fn pipe_locations_render_a_bounded_panel() {
     let mut model = Model::new(EditorState::from_text("log"), None);
-    model.welcome = false;
+    model.start_page.welcome = false;
     model.set_pipe_locations("src/main.rs:2:3: error");
     let backend = TestBackend::new(80, 20);
     let mut terminal = Terminal::new(backend).expect("terminal");
@@ -519,7 +519,7 @@ fn pipe_locations_render_a_bounded_panel() {
 #[test]
 fn command_line_renders_physical_cursor_at_the_edit_position() {
     let mut model = Model::new(EditorState::from_text("x"), None);
-    model.welcome = false;
+    model.start_page.welcome = false;
     handle_event(&mut model, key(KeyCode::Char(':')));
     handle_event(&mut model, key(KeyCode::Char('a')));
     handle_event(&mut model, key(KeyCode::Char('b')));
@@ -535,7 +535,7 @@ fn command_line_renders_physical_cursor_at_the_edit_position() {
 #[test]
 fn search_renders_physical_cursor_at_the_query_position() {
     let mut model = Model::new(EditorState::from_text("alpha beta"), None);
-    model.welcome = false;
+    model.start_page.welcome = false;
     handle_event(&mut model, key(KeyCode::Char('/')));
     handle_event(&mut model, key(KeyCode::Char('a')));
     handle_event(&mut model, key(KeyCode::Char('b')));
@@ -554,7 +554,7 @@ fn tree_rolls_up_child_git_and_diagnostics_to_directory() {
     let directory = dir.path().join("src");
     let file = directory.join("main.rs");
     let mut model = Model::new(EditorState::from_text(""), None);
-    model.welcome = false;
+    model.start_page.welcome = false;
     model.tree.visible = true;
     model.tree.entries = vec![
         TreeEntry {
@@ -776,7 +776,7 @@ fn welcome_shows_recent_files_and_r_opens_them() {
     assert!(rendered.contains("recent files"), "{rendered}");
 
     handle_event(&mut model, key(KeyCode::Char('r')));
-    assert!(!model.welcome);
+    assert!(!model.start_page.welcome);
     assert!(model.overlays.fuzzy.is_some());
 }
 
@@ -801,7 +801,7 @@ fn welcome_recent_rows_are_clickable() {
         modifiers: crossterm::event::KeyModifiers::NONE,
     };
     assert!(crate::mouse::handle_mouse(&mut model, click, 80, 30));
-    assert!(!model.welcome);
+    assert!(!model.start_page.welcome);
     assert_eq!(model.session.path.as_deref(), Some(path.as_path()));
 }
 

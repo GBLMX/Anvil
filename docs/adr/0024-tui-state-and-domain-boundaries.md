@@ -290,12 +290,14 @@ Phase 1 started on 2026-11-12:
   effects.
 - `Model.file` owns quit/modified/missing/dirty flags, stdin-buffer mode, and
   the process exit code.
+- `Model.start_page` owns the start dashboard visibility and the state needed
+  to return to it after the help page.
 - `Model.language` owns `DapState`, `DiagnosticsState`, `LspTransportState`,
   and `LspRequestsState`. Transport keeps clients, workers, config, retries,
   and retry deadlines; requests keep pending maps, document versions, request
   ids, and format-on-save coordination.
 - Existing behavior is unchanged; tests access the composed state explicitly.
-- `Model` now has 26 top-level fields. Remaining mode, settings-adjacent, and
+- `Model` now has 25 top-level fields. Remaining mode, settings-adjacent, and
   syntax-cache fields move in later behavior-preserving slices.
 
 
