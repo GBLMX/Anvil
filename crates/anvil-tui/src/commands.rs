@@ -233,6 +233,7 @@ impl Model {
             ("tree", "") => self.open_tree(),
             ("lsp-stop", "") => self.queue_effect(Effect::LspStop),
             ("format", "") => self.queue_effect(Effect::LspFormat),
+            ("breakpoint", "") => self.toggle_breakpoint(),
             ("symbols", "") => self.queue_effect(Effect::LspDocumentSymbols),
             ("plugin-start", "") => self.queue_effect(Effect::PluginStart),
             ("plugin-list", "") => self.queue_effect(Effect::PluginList),

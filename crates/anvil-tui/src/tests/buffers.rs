@@ -1382,3 +1382,24 @@ fn format_on_save_without_lsp_still_saves() {
     assert_eq!(fs::read_to_string(&path).expect("content"), "xa");
     assert!(!model.format_on_save_pending);
 }
+
+#[test]
+fn toggles_breakpoint_gutter_marker() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("main.rs");
+    fs::write(&path, "one\ntwo\n").expect("write");
+    let mut model = Model::open(&path).expect("open");
+    model.cursor = model.offset_at_utf16(1, 0);
+    model.editor.set_selection_bytes(model.cursor, model.cursor);
+    model.toggle_breakpoint();
+    assert!(model.breakpoint_marker(&path, 1));
+    let gutter = model
+        .visible_gutter(5)
+        .into_iter()
+        .flat_map(|line| line.spans.into_iter())
+        .map(|span| span.content.into_owned())
+        .collect::<String>();
+    assert!(gutter.contains('●'), "{gutter}");
+    model.toggle_breakpoint();
+    assert!(!model.breakpoint_marker(&path, 1));
+}

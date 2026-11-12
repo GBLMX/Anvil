@@ -414,10 +414,17 @@ impl Model {
                 Some(current) if current != line_number => current.abs_diff(line_number),
                 _ => line_number + 1,
             };
-            let marker = self
-                .fold_marker(line_number)
-                .or_else(|| self.git_marker(line_number))
-                .unwrap_or(' ');
+            let marker = if self
+                .path
+                .as_ref()
+                .is_some_and(|path| self.breakpoint_marker(path, line_number))
+            {
+                '●'
+            } else {
+                self.fold_marker(line_number)
+                    .or_else(|| self.git_marker(line_number))
+                    .unwrap_or(' ')
+            };
             let number = format!("{display:>digits$} ");
             let mut style = Style::default().fg(theme::muted());
             if Some(line_number) == current {
@@ -428,6 +435,7 @@ impl Model {
                 '-' => Style::default().fg(theme::error()),
                 '~' => Style::default().fg(theme::warning()),
                 '▸' | '▾' => Style::default().fg(theme::accent()),
+                '●' => Style::default().fg(theme::error()),
                 _ => Style::default(),
             };
             lines.push(Line::from(vec![

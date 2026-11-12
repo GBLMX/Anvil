@@ -5,7 +5,7 @@
 
 use std::{
     cell::RefCell,
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     fs,
     io::{self, Stdout},
     path::{Path, PathBuf},
@@ -46,6 +46,7 @@ mod command_line;
 mod command_palette;
 mod commands;
 mod comment;
+mod debugger;
 mod editing;
 mod file_io;
 mod file_tree_ui;
@@ -570,6 +571,10 @@ pub struct Model {
     root_file_workers: BTreeMap<PathBuf, FileWorker>,
     /// Git gutter marks keyed by zero-based line.
     git_marks: HashMap<usize, char>,
+    /// Breakpoints keyed by absolute path and one-based line.
+    breakpoints: HashMap<PathBuf, BTreeSet<u32>>,
+    /// Optional DAP client used to mirror breakpoints.
+    dap_client: Option<crate::dap::DapClient>,
     /// Workspace git status keyed by absolute path.
     git_status: HashMap<PathBuf, char>,
     /// Latest requested tree git-status generation.
@@ -832,6 +837,8 @@ impl Model {
             file_worker: None,
             root_file_workers: BTreeMap::new(),
             git_marks: HashMap::new(),
+            breakpoints: HashMap::new(),
+            dap_client: None,
             git_status: HashMap::new(),
             git_status_generation: 0,
             git_status_pending: None,

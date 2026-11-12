@@ -8,6 +8,8 @@ post-`0.5.0` feature line.
 
 ## [Unreleased]
 ### Added
+- `:breakpoint` toggles a gutter breakpoint on the current line. Breakpoint
+  state is per-file and mirrors through an attached DAP client.
 - `editor.format_on_save` (`ANVIL_EDITOR_FORMAT_ON_SAVE`) saves normally, then
   requests LSP formatting and writes the formatted result if edits arrive.
   Missing LSPs or formatting errors keep the saved buffer and report a status
