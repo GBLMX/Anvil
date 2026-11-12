@@ -848,6 +848,44 @@ impl Model {
         ranges
     }
 
+    pub(crate) fn insert_auto_pair(&mut self, character: char) {
+        if self.reject_read_only() {
+            return;
+        }
+        let selections = self.editor.selection_bytes();
+        if selections.len() != 1 {
+            self.insert_text(&character.to_string());
+            return;
+        }
+        let (anchor, head) = selections[0];
+        if anchor != head {
+            if let Some(close) = matching_close(character) {
+                self.surround_selection(character, close);
+            } else {
+                self.insert_text(&character.to_string());
+            }
+            return;
+        }
+        let text = self.editor.text();
+        let next = self
+            .editor
+            .next_grapheme_boundary(self.cursor)
+            .and_then(|end| text.slice(self.cursor..end).chars().next());
+        if let Some(close) = closing_pair(character)
+            && let Some(next) = next
+            && next == close
+        {
+            self.move_char(1);
+            return;
+        }
+        if let Some(close) = matching_close(character) {
+            self.insert_text(&format!("{character}{close}"));
+            self.move_char(-1);
+        } else {
+            self.insert_text(&character.to_string());
+        }
+    }
+
     pub(crate) fn insert_text(&mut self, text: &str) {
         if text.is_empty() {
             return;
@@ -1138,6 +1176,38 @@ impl Model {
         if self.reject_read_only() {
             return;
         }
+        let selections = self.editor.selection_bytes();
+        if selections.len() == 1 {
+            let (anchor, head) = selections[0];
+            if anchor == head && self.cursor > 0 {
+                let text = self.editor.text();
+                if let Some(previous) = self.editor.previous_grapheme_boundary(self.cursor) {
+                    let opening = text
+                        .slice(previous..self.cursor)
+                        .chars()
+                        .next()
+                        .and_then(matching_close);
+                    let next = self
+                        .editor
+                        .next_grapheme_boundary(self.cursor)
+                        .and_then(|end| text.slice(self.cursor..end).chars().next());
+                    if let (Some(close), Some(next)) = (opening, next)
+                        && next == close
+                    {
+                        let end = self
+                            .editor
+                            .next_grapheme_boundary(self.cursor)
+                            .unwrap_or(self.cursor);
+                        self.editor.set_selection_bytes(previous, end);
+                        self.editor.delete(previous..end);
+                        self.cursor = previous;
+                        self.modified = true;
+                        self.dirty = true;
+                        return;
+                    }
+                }
+            }
+        }
         self.cancel_signature_help();
         let at_insert_end = self.insert_session.as_ref().is_some_and(|session| {
             session.valid && self.cursor == session.start + session.text.len()
@@ -1251,6 +1321,25 @@ impl Model {
         self.modified = true;
         self.dirty = true;
         true
+    }
+}
+
+fn closing_pair(character: char) -> Option<char> {
+    match character {
+        ')' | ']' | '}' | '"' | '\'' | '`' => Some(character),
+        _ => None,
+    }
+}
+
+fn matching_close(character: char) -> Option<char> {
+    match character {
+        '(' => Some(')'),
+        '[' => Some(']'),
+        '{' => Some('}'),
+        '"' => Some('"'),
+        '\'' => Some('\''),
+        '`' => Some('`'),
+        _ => None,
     }
 }
 

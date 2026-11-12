@@ -8,6 +8,9 @@ post-`0.5.0` feature line.
 
 ## [Unreleased]
 ### Added
+- Auto-pairs for `()`, `[]`, `{}`, quotes, and backticks in Insert mode.
+  Typing an existing closer skips it, Backspace removes an empty pair, and
+  typing an opener over a selection wraps the selection.
 - Opt-in soft wrap (`editor.soft_wrap` / `ANVIL_EDITOR_SOFT_WRAP=1`)
   projects long source lines into multiple display rows. Cursor and
   secondary-selection rows, mouse positioning, gutter numbering, scrolling,

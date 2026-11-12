@@ -835,3 +835,34 @@ fn soft_wrap_preserves_scroll_margin() {
     model.ensure_cursor_visible(5, 80);
     assert_eq!(model.scroll, 0);
 }
+
+#[test]
+fn auto_pairs_insert_skip_and_backspace() {
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.ui.input_mode = InputMode::Insert;
+    handle_event(&mut model, key(KeyCode::Char('(')));
+    assert_eq!(model.editor.text().slice(0..2), "()");
+    assert_eq!(model.cursor, 1);
+    handle_event(&mut model, key(KeyCode::Char(')')));
+    assert_eq!(model.editor.text().slice(0..2), "()");
+    assert_eq!(model.cursor, 2);
+    handle_event(&mut model, key(KeyCode::Backspace));
+    assert_eq!(model.editor.text().slice(0..1), "(");
+    handle_event(&mut model, key(KeyCode::Backspace));
+    assert_eq!(model.editor.text().len_bytes(), 0);
+
+    let mut pair = Model::new(EditorState::from_text(""), None);
+    pair.ui.input_mode = InputMode::Insert;
+    handle_event(&mut pair, key(KeyCode::Char('(')));
+    handle_event(&mut pair, key(KeyCode::Backspace));
+    assert_eq!(pair.editor.text().len_bytes(), 0);
+}
+
+#[test]
+fn auto_pairs_wrap_selection() {
+    let mut model = Model::new(EditorState::from_text("word"), None);
+    model.editor.set_selection_bytes(0, 4);
+    model.ui.input_mode = InputMode::Insert;
+    handle_event(&mut model, key(KeyCode::Char('(')));
+    assert_eq!(model.editor.text().slice(0..6), "(word)");
+}

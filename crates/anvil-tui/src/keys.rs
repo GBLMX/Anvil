@@ -1175,7 +1175,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             KeyCode::End => model.move_end(),
             KeyCode::Char(' ') if control => model.queue_effect(Effect::LspCompletion),
             KeyCode::Char(character) if text_input => {
-                model.insert_text(&character.to_string());
+                model.insert_auto_pair(character);
                 if matches!(character, '.' | ':') {
                     model.auto_completion();
                 }
