@@ -4,7 +4,8 @@ use nix::{
     errno::Errno,
     libc,
     pty::openpty,
-    unistd::{read, setsid, write},
+    sys::signal::{Signal, kill as kill_signal},
+    unistd::{Pid, read, setsid, write},
 };
 use std::{
     io,
@@ -136,9 +137,20 @@ impl PtySession {
     }
 
     pub(crate) fn kill(&mut self) {
-        if let Ok(Some(_)) = self.child.try_wait() {
+        let Ok(pid) = i32::try_from(self.child.id()) else {
+            let _ = self.child.kill();
+            let _ = self.child.wait();
             return;
+        };
+        let group = Pid::from_raw(-pid);
+        let _ = kill_signal(group, Signal::SIGHUP);
+        for _ in 0..20 {
+            if matches!(self.child.try_wait(), Ok(Some(_))) {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
         }
+        let _ = kill_signal(group, Signal::SIGKILL);
         let _ = self.child.kill();
         let _ = self.child.wait();
     }
@@ -232,5 +244,49 @@ mod tests {
         session.resize(100, 30).expect("resize");
         session.kill();
         assert!(session.try_wait().expect("wait").is_some());
+    }
+}
+
+#[cfg(test)]
+mod process_tests {
+    use super::*;
+    use std::time::{Duration, Instant};
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn kills_background_children() {
+        let mut session =
+            PtySession::spawn("/bin/sh", Path::new("/tmp"), 80, 24).expect("spawn pty shell");
+        session
+            .write_all(b"sleep 30 & echo CHILD:$!\n")
+            .expect("write");
+        let deadline = Instant::now() + Duration::from_secs(2);
+        let mut output = Vec::new();
+        let child = loop {
+            if Instant::now() >= deadline {
+                panic!("child pid was not printed");
+            }
+            if let Ok(bytes) = session.read_available() {
+                output.extend_from_slice(&bytes);
+                let text = String::from_utf8_lossy(&output);
+                if let Some(position) = text.rfind("CHILD:") {
+                    let digits = text[position + 6..]
+                        .chars()
+                        .take_while(|character| character.is_ascii_digit())
+                        .collect::<String>();
+                    if let Ok(pid) = digits.parse::<u32>() {
+                        break pid;
+                    }
+                }
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        };
+        session.kill();
+        let path = format!("/proc/{child}");
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while Path::new(&path).exists() && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(!Path::new(&path).exists(), "background child survived");
     }
 }
