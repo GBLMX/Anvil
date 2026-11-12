@@ -641,6 +641,55 @@ fn execute_lsp_list_action(model: &mut Model, kind: LspListKind, action: LspList
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum WorkspaceSymbolAction {
+    Previous,
+    Next,
+    Accept,
+    Cancel,
+    PopQuery,
+    AppendQuery(char),
+    CancelAndPassThrough,
+}
+
+fn workspace_symbol_action(key: KeyPress, text_input: bool) -> WorkspaceSymbolAction {
+    match key.code {
+        KeyCode::Esc => WorkspaceSymbolAction::Cancel,
+        KeyCode::Up => WorkspaceSymbolAction::Previous,
+        KeyCode::Down => WorkspaceSymbolAction::Next,
+        KeyCode::Enter => WorkspaceSymbolAction::Accept,
+        KeyCode::Backspace => WorkspaceSymbolAction::PopQuery,
+        KeyCode::Char(character) if text_input => WorkspaceSymbolAction::AppendQuery(character),
+        _ => WorkspaceSymbolAction::CancelAndPassThrough,
+    }
+}
+
+fn execute_workspace_symbol_action(model: &mut Model, action: WorkspaceSymbolAction) -> bool {
+    match action {
+        WorkspaceSymbolAction::Previous => model.move_workspace_symbol(-1),
+        WorkspaceSymbolAction::Next => model.move_workspace_symbol(1),
+        WorkspaceSymbolAction::Accept => model.apply_workspace_symbol(),
+        WorkspaceSymbolAction::Cancel => model.cancel_workspace_symbols(),
+        WorkspaceSymbolAction::PopQuery => {
+            if let Some(symbols) = model.overlays.lsp_results.workspace_symbols.as_mut() {
+                symbols.query.pop();
+            }
+            model.filter_workspace_symbols();
+        }
+        WorkspaceSymbolAction::AppendQuery(character) => {
+            if let Some(symbols) = model.overlays.lsp_results.workspace_symbols.as_mut() {
+                symbols.query.push(character);
+            }
+            model.filter_workspace_symbols();
+        }
+        WorkspaceSymbolAction::CancelAndPassThrough => {
+            model.cancel_workspace_symbols();
+            return false;
+        }
+    }
+    true
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum CompletionAction {
     Previous,
     Next,
@@ -872,43 +921,8 @@ fn handle_key(model: &mut Model, key: KeyPress) {
     }
 
     if model.overlays.lsp_results.workspace_symbols.is_some() {
-        let consumed = match key.code {
-            KeyCode::Esc => {
-                model.cancel_workspace_symbols();
-                true
-            }
-            KeyCode::Up => {
-                model.move_workspace_symbol(-1);
-                true
-            }
-            KeyCode::Down => {
-                model.move_workspace_symbol(1);
-                true
-            }
-            KeyCode::Enter => {
-                model.apply_workspace_symbol();
-                true
-            }
-            KeyCode::Backspace => {
-                if let Some(symbols) = model.overlays.lsp_results.workspace_symbols.as_mut() {
-                    symbols.query.pop();
-                }
-                model.filter_workspace_symbols();
-                true
-            }
-            KeyCode::Char(character) if text_input => {
-                if let Some(symbols) = model.overlays.lsp_results.workspace_symbols.as_mut() {
-                    symbols.query.push(character);
-                }
-                model.filter_workspace_symbols();
-                true
-            }
-            _ => {
-                model.cancel_workspace_symbols();
-                false
-            }
-        };
-        if consumed {
+        let action = workspace_symbol_action(key, text_input);
+        if execute_workspace_symbol_action(model, action) {
             return;
         }
     }

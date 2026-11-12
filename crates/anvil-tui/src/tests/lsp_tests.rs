@@ -1646,6 +1646,52 @@ fn jump_back_refuses_to_discard_a_dirty_unnamed_buffer() {
 }
 
 #[test]
+fn workspace_symbol_keys_filter_and_pass_through() {
+    let mut model = Model::new(
+        EditorState::from_text("x"),
+        Some(std::path::PathBuf::from("symbols.rs")),
+    );
+    model.start_page.welcome = false;
+    model.session.cursor = 1;
+    model.overlays.lsp_results.workspace_symbols = Some(WorkspaceSymbolState {
+        items: vec![
+            WorkspaceSymbolItem {
+                name: "alpha".to_owned(),
+                detail: String::new(),
+                path: std::path::PathBuf::from("symbols.rs"),
+                line: 0,
+                character: 0,
+            },
+            WorkspaceSymbolItem {
+                name: "beta".to_owned(),
+                detail: String::new(),
+                path: std::path::PathBuf::from("symbols.rs"),
+                line: 0,
+                character: 0,
+            },
+        ],
+        filtered: vec![0, 1],
+        query: String::new(),
+        selected: 0,
+    });
+
+    handle_event(&mut model, key(KeyCode::Char('e')));
+    handle_event(&mut model, key(KeyCode::Char('t')));
+    let symbols = model
+        .overlays
+        .lsp_results
+        .workspace_symbols
+        .as_ref()
+        .expect("symbols");
+    assert_eq!(symbols.query, "et");
+    assert_eq!(symbols.filtered, vec![1]);
+
+    handle_event(&mut model, key(KeyCode::Home));
+    assert!(model.overlays.lsp_results.workspace_symbols.is_none());
+    assert_eq!(model.session.cursor, 0);
+}
+
+#[test]
 fn completion_unknown_key_cancels_and_passes_through() {
     let mut model = Model::new(EditorState::from_text("x"), None);
     model.ui.input_mode = InputMode::Insert;
