@@ -909,8 +909,14 @@ fn managed_state_errors_are_visible_and_fail_closed() {
 
 #[test]
 fn fuzzy_merges_secondary_root_files() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let root = dir.path().join("second");
+    fs::create_dir_all(&root).expect("second root");
     let mut model = Model::new(EditorState::from_text(""), None);
-    let root = PathBuf::from("/tmp/second-root");
+    model.workspace.path = dir.path().to_path_buf();
+    model.workspace.roots =
+        crate::workspace_roots::WorkspaceRoots::new(dir.path()).expect("primary root");
+    model.workspace.roots.add(&root, true).expect("second root");
     model.overlays.fuzzy = Some(FuzzyState {
         generation: 4,
         query: String::new(),
@@ -932,7 +938,14 @@ fn fuzzy_merges_secondary_root_files() {
 
 #[test]
 fn stale_secondary_root_files_are_discarded() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let root = dir.path().join("second");
+    fs::create_dir_all(&root).expect("second root");
     let mut model = Model::new(EditorState::from_text(""), None);
+    model.workspace.path = dir.path().to_path_buf();
+    model.workspace.roots =
+        crate::workspace_roots::WorkspaceRoots::new(dir.path()).expect("primary root");
+    model.workspace.roots.add(&root, true).expect("second root");
     model.overlays.fuzzy = Some(FuzzyState {
         generation: 4,
         query: String::new(),
@@ -941,11 +954,7 @@ fn stale_secondary_root_files_are_discarded() {
         selected: 0,
     });
 
-    model.handle_fuzzy_files(
-        Some(PathBuf::from("/tmp/second-root")),
-        3,
-        Ok(vec!["src/lib.rs".to_owned()]),
-    );
+    model.handle_fuzzy_files(Some(root), 3, Ok(vec!["src/lib.rs".to_owned()]));
 
     assert!(
         model
@@ -980,8 +989,14 @@ fn fuzzy_opens_absolute_secondary_root_file() {
 
 #[test]
 fn fuzzy_keeps_root_files_when_primary_result_arrives_later() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let root = dir.path().join("second");
+    fs::create_dir_all(&root).expect("second root");
     let mut model = Model::new(EditorState::from_text(""), None);
-    let root = PathBuf::from("/tmp/second-root");
+    model.workspace.path = dir.path().to_path_buf();
+    model.workspace.roots =
+        crate::workspace_roots::WorkspaceRoots::new(dir.path()).expect("primary root");
+    model.workspace.roots.add(&root, true).expect("second root");
     model.overlays.fuzzy = Some(FuzzyState {
         generation: 4,
         query: String::new(),

@@ -192,15 +192,17 @@ pub fn view(model: &Model, frame: &mut Frame) {
             .skip(start)
             .take(visible_height)
         {
-            let name = entry
+            let name = model.tree_entry_label(entry);
+            let icon_name = entry
                 .path
                 .file_name()
                 .map(|name| name.to_string_lossy().into_owned())
                 .unwrap_or_default();
+            let untrusted = model.tree_entry_untrusted(entry);
             let icon = if entry.is_dir {
                 icon_theme::folder_icon(entry.expanded)
             } else {
-                icon_theme::icon_for(&name).unwrap_or_else(icon_theme::default_file_icon)
+                icon_theme::icon_for(&icon_name).unwrap_or_else(icon_theme::default_file_icon)
             };
             let glyph = model.appearance.icons.glyph(icon, ascii_icons);
             let icon_padding = if UnicodeWidthStr::width(glyph) == 1 {
@@ -210,14 +212,21 @@ pub fn view(model: &Model, frame: &mut Frame) {
             };
             let style = if model.tree.selected == Some(index) {
                 theme::selected()
+            } else if untrusted {
+                theme::panel().fg(theme::dim())
             } else if entry.is_dir {
                 Style::default().fg(theme::accent()).bg(theme::surface())
             } else {
                 theme::panel()
             };
+            let icon_color = if untrusted {
+                style.fg(theme::dim())
+            } else {
+                style.fg((icon.color)())
+            };
             let mut spans = vec![
                 Span::raw("  ".repeat(entry.depth)),
-                Span::styled(glyph, style.fg((icon.color)())),
+                Span::styled(glyph, icon_color),
                 Span::raw(icon_padding),
                 Span::styled(name, style),
             ];

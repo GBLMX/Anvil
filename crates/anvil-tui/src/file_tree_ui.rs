@@ -64,6 +64,9 @@ impl Model {
 
     pub(crate) fn stop_root_file_worker(&mut self, root: &Path) {
         self.workspace.root_file_workers.remove(root);
+        if self.project.search_pending.is_some() {
+            self.cancel_project_search();
+        }
     }
 
     fn secondary_root(&self, path: &Path) -> Option<PathBuf> {
@@ -72,6 +75,76 @@ impl Model {
             .owning_root(path)
             .filter(|root| root.path != self.workspace.path)
             .map(|root| root.path.clone())
+    }
+    pub(crate) fn root_label(&self, root: &Path) -> String {
+        let name = root
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_else(|| root.display().to_string());
+        let duplicates = self
+            .workspace
+            .roots
+            .list()
+            .iter()
+            .filter(|candidate| candidate.path.file_name() == root.file_name())
+            .count();
+        if duplicates <= 1 {
+            return name;
+        }
+        let Some(parent) = root.parent().and_then(Path::file_name) else {
+            return root.display().to_string();
+        };
+        let short = format!("{}/{}", parent.to_string_lossy(), name);
+        let short_duplicates = self
+            .workspace
+            .roots
+            .list()
+            .iter()
+            .filter(|candidate| {
+                candidate.path.file_name() == root.file_name()
+                    && candidate.path.parent().and_then(Path::file_name) == Some(parent)
+            })
+            .count();
+        if short_duplicates > 1 {
+            root.display().to_string()
+        } else {
+            short
+        }
+    }
+
+    pub(crate) fn tree_entry_untrusted(&self, entry: &TreeEntry) -> bool {
+        entry.depth == 0
+            && entry.path != self.workspace.path
+            && self
+                .workspace
+                .roots
+                .list()
+                .iter()
+                .any(|root| root.path == entry.path && !root.trusted)
+    }
+
+    pub(crate) fn tree_entry_label(&self, entry: &TreeEntry) -> String {
+        let is_root = entry.depth == 0
+            && entry.path != self.workspace.path
+            && self
+                .workspace
+                .roots
+                .list()
+                .iter()
+                .any(|root| root.path == entry.path);
+        if !is_root {
+            return entry
+                .path
+                .file_name()
+                .map(|name| name.to_string_lossy().into_owned())
+                .unwrap_or_default();
+        }
+        let label = self.root_label(&entry.path);
+        if self.tree_entry_untrusted(entry) {
+            format!("[untrusted] {label}")
+        } else {
+            label
+        }
     }
 
     fn ensure_root_tree_nodes(&mut self) {
@@ -128,6 +201,9 @@ impl Model {
     }
 
     fn handle_tree_listing(&mut self, path: PathBuf, result: Result<Vec<DirEntry>, String>) {
+        if self.workspace.roots.owning_root(&path).is_none() {
+            return;
+        }
         let entries = match result {
             Ok(entries) => entries,
             Err(error) => {
@@ -195,6 +271,7 @@ impl Model {
         }
         self.status.text = "file tree ready".to_owned();
         self.sync_tree_watches();
+        self.apply_pending_tree_selection();
     }
 
     pub(crate) fn request_git_status(&mut self) {
@@ -863,7 +940,27 @@ impl Model {
     pub(crate) fn refresh_tree(&mut self, select: Option<PathBuf>) {
         self.tree.visible = true;
         self.ui.focus.tree = true;
-        self.request_tree_refresh(select);
+        let refresh_all = select.is_none();
+        let secondary = select.as_deref().and_then(|path| self.secondary_root(path));
+        if let Some(root) = secondary {
+            self.tree.pending_select = select;
+            self.refresh_root_tree(&root);
+        } else {
+            self.request_tree_refresh(select);
+            if refresh_all {
+                let roots = self
+                    .workspace
+                    .roots
+                    .list()
+                    .iter()
+                    .filter(|root| root.trusted && root.path != self.workspace.path)
+                    .map(|root| root.path.clone())
+                    .collect::<Vec<_>>();
+                for root in roots {
+                    self.refresh_root_tree(&root);
+                }
+            }
+        }
         self.request_git_status();
         self.file.dirty = true;
     }
@@ -1007,6 +1104,49 @@ mod tests {
                 .any(|entry| entry.path == root.join("secret.rs"))
         );
         assert!(model.status.text.contains("untrusted workspace root"));
+        let entry = &model.tree.entries[index];
+        assert!(model.tree_entry_untrusted(entry));
+        assert!(model.tree_entry_label(entry).contains("[untrusted]"));
+    }
+
+    #[test]
+    fn root_labels_disambiguate_duplicate_basenames() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let first = dir.path().join("a/repo");
+        let second = dir.path().join("b/repo");
+        let unique = dir.path().join("unique");
+        for path in [&first, &second, &unique] {
+            std::fs::create_dir_all(path).expect("mkdir");
+        }
+        let first = first.canonicalize().expect("first");
+        let second = second.canonicalize().expect("second");
+        let unique = unique.canonicalize().expect("unique");
+        let mut model = Model::new(EditorState::from_text(""), None);
+        model.workspace.path = first.clone();
+        model.workspace.roots = crate::workspace_roots::WorkspaceRoots::new(&first).expect("roots");
+        model
+            .workspace
+            .roots
+            .add(&second, true)
+            .expect("second root");
+        model
+            .workspace
+            .roots
+            .add(&unique, true)
+            .expect("unique root");
+
+        assert_eq!(model.root_label(&first), "a/repo");
+        assert_eq!(model.root_label(&second), "b/repo");
+        assert_eq!(model.root_label(&unique), "unique");
+    }
+
+    #[test]
+    fn removing_a_root_cancels_pending_project_search() {
+        let mut model = Model::new(EditorState::from_text(""), None);
+        model.project.search_pending = Some(9);
+        model.project.search_expected = 2;
+        model.stop_root_file_worker(Path::new("/tmp/removed-root"));
+        assert!(model.project.search_pending.is_none());
     }
 
     #[test]

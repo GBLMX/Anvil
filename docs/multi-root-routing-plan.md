@@ -4,8 +4,10 @@ Status: phase 1 plus quick-open, project-search, file-tree root nodes, and
 mutation routing landed. Trust, root registration, per-root gateway lifecycle,
 open/save routing, trusted-root quick-open enumeration/preview,
 project-search merge/cancel, secondary-root tree list/expand/watch, and
-same-root create/rename/remove/copy are implemented. Cross-root mutation is
-rejected.
+same-root create/rename/remove/copy are implemented. Root labels disambiguate
+duplicate basenames, untrusted roots are marked and read-only, mutations
+refresh the owning root, stale root results are dropped, and root removal
+cancels a pending project search. Cross-root mutation is rejected.
 
 ## 1. Scope
 

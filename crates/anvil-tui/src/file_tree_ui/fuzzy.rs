@@ -17,10 +17,7 @@ impl Model {
             .find(|root| path.starts_with(root))
             && let Ok(relative) = path.strip_prefix(root)
         {
-            let name = root
-                .file_name()
-                .map(|name| name.to_string_lossy())
-                .unwrap_or_else(|| root.to_string_lossy());
+            let name = self.root_label(root);
             return format!("{name}/{}", relative.display());
         }
         entry.to_owned()
@@ -196,6 +193,16 @@ impl Model {
         generation: u64,
         result: Result<Vec<String>, String>,
     ) {
+        if let Some(root) = root.as_deref()
+            && !self
+                .workspace
+                .roots
+                .list()
+                .iter()
+                .any(|candidate| candidate.path == root && candidate.trusted)
+        {
+            return;
+        }
         {
             let Some(fuzzy) = self.overlays.fuzzy.as_mut() else {
                 return;
