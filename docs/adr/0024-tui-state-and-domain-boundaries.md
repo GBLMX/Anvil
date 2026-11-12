@@ -283,14 +283,16 @@ Phase 1 started on 2026-11-12:
   macro prompts, recording buffers, replay state, and inner-object state.
 - `Model.edit` owns visual-selection anchors, the modal layer, the last
   semantic change, and the current insert session.
+- `Model.session` owns the editor document, optional source path, cursor, and
+  jump/change history.
 - `Model.status` owns status text, the busy label, progress, and spinner.
 - `Model.language` owns `DapState`, `DiagnosticsState`, `LspTransportState`,
   and `LspRequestsState`. Transport keeps clients, workers, config, retries,
   and retry deadlines; requests keep pending maps, document versions, request
   ids, and format-on-save coordination.
 - Existing behavior is unchanged; tests access the composed state explicitly.
-- `Model` now has 39 top-level fields. Remaining editor/session and file-flag
-  fields move in later behavior-preserving slices.
+- `Model` now has 35 top-level fields. Remaining file flags and mode fields
+  move in later behavior-preserving slices.
 
 
 ## Acceptance
