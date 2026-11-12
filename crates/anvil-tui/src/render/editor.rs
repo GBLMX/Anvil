@@ -971,7 +971,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
             }
             let marker = if overlay.changed(row) { "*" } else { " " };
             let label = crate::settings_ui::SettingsOverlayState::label(row);
-            let value = crate::settings_ui::SettingsOverlayState::value(&overlay.draft, row);
+            let value = overlay.value(row);
             let style = if row == overlay.selected {
                 theme::selected()
             } else {

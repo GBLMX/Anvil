@@ -352,13 +352,16 @@ struct UiFile {
 
 impl crate::Model {
     pub(crate) fn apply_settings(&mut self, settings: Settings) {
+        let theme_changed = self.config.settings.theme != settings.theme;
         self.config.settings = settings;
         self.search.state.options.case_sensitive = settings.search.case_sensitive;
         self.overlays.lsp_results.inlay_hints.clear();
         self.overlays.lsp_results.inlay_pending = None;
         self.overlays.lsp_results.inlay_checked = None;
-        if let Err(error) = theme::apply_choice(settings.theme, false) {
-            self.status.text = format!("E: theme: {error}");
+        if theme_changed {
+            if let Err(error) = theme::apply_choice(settings.theme, false) {
+                self.status.text = format!("E: theme: {error}");
+            }
         }
         theme::set_high_contrast(settings.ui.high_contrast);
         self.file.dirty = true;

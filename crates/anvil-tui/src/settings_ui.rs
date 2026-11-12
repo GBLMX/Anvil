@@ -25,6 +25,9 @@ pub(crate) struct SettingsOverlayState {
     pub(crate) selected: usize,
     pub(crate) original: Settings,
     pub(crate) draft: Settings,
+    pub(crate) theme: theme::Choice,
+    pub(crate) opened_theme: theme::Choice,
+    pub(crate) theme_touched: bool,
 }
 
 impl SettingsOverlayState {
@@ -74,7 +77,14 @@ impl SettingsOverlayState {
         }
     }
 
-    pub(crate) fn value(settings: &Settings, index: usize) -> String {
+    pub(crate) fn value(&self, index: usize) -> String {
+        if index == 8 {
+            return theme_label(self.theme);
+        }
+        Self::value_from(&self.draft, index)
+    }
+
+    fn value_from(settings: &Settings, index: usize) -> String {
         match index {
             0 => settings.editor.scroll_margin.to_string(),
             1 => settings.editor.auto_save.to_string(),
@@ -89,7 +99,10 @@ impl SettingsOverlayState {
     }
 
     pub(crate) fn changed(&self, index: usize) -> bool {
-        Self::value(&self.draft, index) != Self::value(&self.original, index)
+        if index == 8 {
+            return self.theme_touched;
+        }
+        self.value(index) != Self::value_from(&self.original, index)
     }
 }
 fn theme_label(choice: theme::Choice) -> String {
@@ -194,10 +207,14 @@ impl Model {
         if self.overlays.settings_overlay.is_some() {
             return;
         }
+        let active_theme = theme::choice();
         self.overlays.settings_overlay = Some(SettingsOverlayState {
             selected: 0,
             original: self.config.settings,
             draft: self.config.settings,
+            theme: active_theme,
+            opened_theme: active_theme,
+            theme_touched: false,
         });
         self.status.text = "settings".to_owned();
         self.file.dirty = true;
@@ -206,6 +223,7 @@ impl Model {
     pub(crate) fn cancel_settings(&mut self) {
         if let Some(overlay) = self.overlays.settings_overlay.take() {
             self.apply_settings(overlay.original);
+            let _ = theme::apply_choice(overlay.opened_theme, false);
             self.status.text = "settings cancelled".to_owned();
             self.file.dirty = true;
         }
@@ -225,6 +243,15 @@ impl Model {
         let Some(mut overlay) = self.overlays.settings_overlay.take() else {
             return;
         };
+        if overlay.selected == 8 {
+            overlay.theme = cycle_theme(overlay.theme, delta);
+            overlay.theme_touched = true;
+            let choice = overlay.theme;
+            self.overlays.settings_overlay = Some(overlay);
+            let _ = theme::apply_choice(choice, false);
+            self.file.dirty = true;
+            return;
+        }
         let mut draft = overlay.draft;
         match overlay.selected {
             0 => {
@@ -240,8 +267,7 @@ impl Model {
             4 => draft.search.case_sensitive = !draft.search.case_sensitive,
             5 => draft.lsp.inlay_hints = !draft.lsp.inlay_hints,
             6 => draft.ui.reduced_motion = !draft.ui.reduced_motion,
-            7 => draft.ui.high_contrast = !draft.ui.high_contrast,
-            _ => draft.theme = cycle_theme(draft.theme, delta),
+            _ => draft.ui.high_contrast = !draft.ui.high_contrast,
         }
         overlay.draft = draft;
         self.apply_settings(draft);
@@ -253,6 +279,15 @@ impl Model {
             return;
         };
         let defaults = Settings::default();
+        if overlay.selected == 8 {
+            overlay.theme = defaults.theme;
+            overlay.theme_touched = true;
+            let choice = overlay.theme;
+            self.overlays.settings_overlay = Some(overlay);
+            let _ = theme::apply_choice(choice, false);
+            self.file.dirty = true;
+            return;
+        }
         match overlay.selected {
             0 => overlay.draft.editor.scroll_margin = defaults.editor.scroll_margin,
             1 => overlay.draft.editor.auto_save = defaults.editor.auto_save,
@@ -261,8 +296,7 @@ impl Model {
             4 => overlay.draft.search.case_sensitive = defaults.search.case_sensitive,
             5 => overlay.draft.lsp.inlay_hints = defaults.lsp.inlay_hints,
             6 => overlay.draft.ui.reduced_motion = defaults.ui.reduced_motion,
-            7 => overlay.draft.ui.high_contrast = defaults.ui.high_contrast,
-            _ => overlay.draft.theme = defaults.theme,
+            _ => overlay.draft.ui.high_contrast = defaults.ui.high_contrast,
         }
         self.apply_settings(overlay.draft);
         self.overlays.settings_overlay = Some(overlay);
@@ -272,10 +306,17 @@ impl Model {
         let Some(mut overlay) = self.overlays.settings_overlay.take() else {
             return;
         };
+        if overlay.theme_touched {
+            overlay.draft.theme = overlay.theme;
+        }
         match settings::save(overlay.draft) {
             Ok(path) => {
                 self.apply_settings(overlay.draft);
                 overlay.original = overlay.draft;
+                if overlay.theme_touched {
+                    overlay.opened_theme = overlay.theme;
+                }
+                overlay.theme_touched = false;
                 self.overlays.settings_overlay = Some(overlay);
                 self.status.text = format!("settings saved: {}", path.display());
             }
@@ -377,6 +418,19 @@ mod tests {
         model.cancel_settings();
         assert!(model.overlays.settings_overlay.is_none());
         assert_eq!(model.config.settings, Settings::default());
+    }
+
+    #[test]
+    fn settings_edits_preserve_active_startup_theme() {
+        theme::set_startup_theme("nord").expect("active theme");
+        let mut model = Model::new(crate::EditorState::from_text("x"), None);
+        model.open_settings();
+        model.adjust_settings(1);
+        assert_eq!(model.config.settings.editor.scroll_margin, 4);
+        assert_eq!(theme::name(), "nord");
+        model.cancel_settings();
+        assert_eq!(theme::name(), "nord");
+        theme::set_startup_theme("anvil-dark").expect("reset theme");
     }
 
     #[test]

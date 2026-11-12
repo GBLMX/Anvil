@@ -267,6 +267,9 @@ post-`0.5.0` feature line.
   change.
 
 ### Fixed
+- Settings edits no longer replace the active `ANVIL_THEME`; theme changes are
+  applied only when the settings theme value changes, cancel restores the
+  active theme, and unrelated saves keep the file theme.
 - Backspace after wide/emoji input no longer panics when stale Tree-sitter
   highlight boundaries fall inside a UTF-8 character; span slices clamp to
   grapheme boundaries.
