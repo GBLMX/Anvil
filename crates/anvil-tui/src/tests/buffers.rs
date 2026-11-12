@@ -1265,3 +1265,18 @@ fn closing_the_active_buffer_auto_saves_first() {
     assert!(model.path.is_none());
     assert_eq!(fs::read_to_string(&path).expect("content"), "Xa");
 }
+
+#[test]
+fn focus_lost_auto_saves_the_active_buffer() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("main.rs");
+    fs::write(&path, "a").expect("write");
+    let mut model = Model::open(&path).expect("open");
+    model.settings.editor.auto_save = true;
+    model.insert_text("X");
+
+    handle_event(&mut model, Event::FocusLost);
+
+    assert_eq!(fs::read_to_string(&path).expect("content"), "Xa");
+    assert!(!model.modified);
+}

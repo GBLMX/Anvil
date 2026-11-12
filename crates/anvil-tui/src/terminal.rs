@@ -365,6 +365,16 @@ impl TerminalSession {
             let _ = disable_raw_mode();
             return Err(error);
         }
+        if let Err(error) = execute!(stdout, EnableFocusChange) {
+            let _ = execute!(
+                stdout,
+                DisableFocusChange,
+                DisableBracketedPaste,
+                LeaveAlternateScreen
+            );
+            let _ = disable_raw_mode();
+            return Err(error);
+        }
         if let Err(error) = execute!(stdout, EnableMouseCapture) {
             let _ = execute!(stdout, DisableBracketedPaste, LeaveAlternateScreen);
             let _ = disable_raw_mode();
@@ -389,7 +399,12 @@ impl TerminalSession {
                 if keyboard_enhancement {
                     let _ = execute!(io::stdout(), PopKeyboardEnhancementFlags);
                 }
-                let _ = execute!(io::stdout(), LeaveAlternateScreen, DisableBracketedPaste);
+                let _ = execute!(
+                    io::stdout(),
+                    LeaveAlternateScreen,
+                    DisableBracketedPaste,
+                    DisableFocusChange
+                );
                 let _ = disable_raw_mode();
                 Err(error)
             }
@@ -416,6 +431,7 @@ impl Drop for TerminalSession {
         let _ = execute!(
             self.terminal.backend_mut(),
             DisableMouseCapture,
+            DisableFocusChange,
             DisableBracketedPaste,
             SetCursorStyle::DefaultUserShape,
             LeaveAlternateScreen

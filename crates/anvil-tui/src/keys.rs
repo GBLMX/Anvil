@@ -56,6 +56,10 @@ pub(crate) fn handle_event(model: &mut Model, event: Event) {
                 model.dirty = true;
             }
         }
+        Event::FocusLost => {
+            model.auto_save_before_focus_change();
+            model.dirty = true;
+        }
         Event::Resize(_, _) => model.dirty = true,
         _ => {}
     }
