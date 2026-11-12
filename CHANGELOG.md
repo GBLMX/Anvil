@@ -8,7 +8,7 @@ post-`0.5.0` feature line.
 
 ## [Unreleased]
 ### Added
-- The file tree marks modified open buffers with `*`, git status with
+- The file tree marks modified open buffers with `*`, per-root git status with
   `M/A/D/R/C`, and files with diagnostics with `!`, using semantic colors.
 - Custom themes load from `$XDG_CONFIG_HOME/anvil/themes/*.toml`
   (`ANVIL_THEMES` override). Theme files support hex, named ANSI, and

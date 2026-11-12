@@ -85,7 +85,7 @@ pub enum FileRequest {
     /// Read a bounded preview for one workspace-relative file.
     Preview { path: String, generation: u64 },
     /// Read workspace git status for tree decorations.
-    GitStatus { generation: u64 },
+    GitStatus { root: PathBuf, generation: u64 },
     /// Compare one workspace file with HEAD for gutter marks.
     GitDiff {
         path: PathBuf,
@@ -384,8 +384,8 @@ impl FileWorker {
                                 path,
                                 generation,
                             },
-                            FileRequest::GitStatus { generation } => FileEvent::GitStatus {
-                                result: git_status(&mut client, &workspace),
+                            FileRequest::GitStatus { root, generation } => FileEvent::GitStatus {
+                                result: git_status(&mut client, &root),
                                 generation,
                             },
                             FileRequest::GitDiff {

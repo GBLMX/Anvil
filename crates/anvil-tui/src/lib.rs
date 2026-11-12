@@ -576,6 +576,10 @@ pub struct Model {
     git_status_generation: u64,
     /// Pending tree git-status generation.
     git_status_pending: Option<u64>,
+    /// Number of roots expected to answer the pending git-status request.
+    git_status_expected: usize,
+    /// Number of roots that answered the pending git-status request.
+    git_status_received: usize,
     /// Requested git diff path and revision.
     git_pending: Option<(PathBuf, u64)>,
     /// Last requested git diff path and revision.
@@ -823,6 +827,8 @@ impl Model {
             git_status: HashMap::new(),
             git_status_generation: 0,
             git_status_pending: None,
+            git_status_expected: 0,
+            git_status_received: 0,
             git_pending: None,
             git_checked: None,
             git_due: None,
