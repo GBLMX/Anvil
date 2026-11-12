@@ -212,8 +212,10 @@ impl Model {
                         fuzzy.entries.sort();
                         fuzzy.entries.dedup();
                     } else {
-                        fuzzy.entries = files;
+                        fuzzy.entries.extend(files);
                     }
+                    fuzzy.entries.sort();
+                    fuzzy.entries.dedup();
                 }
                 Err(error) => {
                     self.status = format!("E: files: {error}");

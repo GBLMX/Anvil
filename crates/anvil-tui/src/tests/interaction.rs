@@ -943,3 +943,27 @@ fn fuzzy_opens_absolute_secondary_root_file() {
     assert_eq!(model.path.as_ref(), Some(&file));
     assert_eq!(model.editor.text().slice(0..15), "pub fn lib() {}");
 }
+
+#[test]
+fn fuzzy_keeps_root_files_when_primary_result_arrives_later() {
+    let mut model = Model::new(EditorState::from_text(""), None);
+    let root = PathBuf::from("/tmp/second-root");
+    model.fuzzy = Some(FuzzyState {
+        generation: 4,
+        query: String::new(),
+        entries: Vec::new(),
+        filtered: Vec::new(),
+        selected: 0,
+    });
+
+    model.handle_fuzzy_files(Some(root.clone()), 4, Ok(vec!["src/lib.rs".to_owned()]));
+    model.handle_fuzzy_files(None, 4, Ok(vec!["src/main.rs".to_owned()]));
+
+    let entries = &model.fuzzy.as_ref().expect("fuzzy").entries;
+    assert!(entries.iter().any(|entry| entry == "src/main.rs"));
+    assert!(
+        entries
+            .iter()
+            .any(|entry| entry == &root.join("src/lib.rs").to_string_lossy())
+    );
+}
