@@ -246,15 +246,6 @@ impl Model {
         if self.help_back.is_some() {
             let _ = self.close_help();
         }
-        if self.path.is_none() && self.modified {
-            self.status =
-                "E: save or discard the unnamed buffer before opening another file".to_owned();
-            self.dirty = true;
-            return;
-        }
-        if !self.auto_save_before_focus_change() {
-            return;
-        }
         let path = match self.absolute_path(Path::new(path)) {
             Ok(path) => path,
             Err(error) => {
@@ -266,6 +257,15 @@ impl Model {
         if self.path.as_ref() == Some(&path) {
             self.status = format!("Already editing {}", path.display());
             self.dirty = true;
+            return;
+        }
+        if self.path.is_none() && self.modified {
+            self.status =
+                "E: save or discard the unnamed buffer before opening another file".to_owned();
+            self.dirty = true;
+            return;
+        }
+        if !self.auto_save_before_focus_change() {
             return;
         }
         if let Some(index) = self
