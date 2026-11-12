@@ -199,7 +199,7 @@ fn join_reader(handle: Option<thread::JoinHandle<(Vec<u8>, bool)>>) -> (Vec<u8>,
 }
 
 fn parse_problems(output: &str, workspace: &Path) -> Vec<TaskProblem> {
-    let pattern = match Regex::new(r"^(.+?):(\d+):(\d+):\s*(.+)$") {
+    let pattern = match Regex::new(r"^(.+?):(\d+)(?::(\d+))?:\s*(.+)$") {
         Ok(pattern) => pattern,
         Err(_) => return Vec::new(),
     };
@@ -212,12 +212,13 @@ fn parse_problems(output: &str, workspace: &Path) -> Vec<TaskProblem> {
         let Some(captures) = pattern.captures(line.trim()) else {
             continue;
         };
-        let (Some(path), Ok(line_number), Ok(character), Some(message)) = (
-            captures.get(1),
-            captures[2].parse::<u32>(),
-            captures[3].parse::<u32>(),
-            captures.get(4),
-        ) else {
+        let character = captures
+            .get(3)
+            .and_then(|capture| capture.as_str().parse::<u32>().ok())
+            .unwrap_or(1);
+        let (Some(path), Ok(line_number), Some(message)) =
+            (captures.get(1), captures[2].parse::<u32>(), captures.get(4))
+        else {
             continue;
         };
         let path = resolve_path(workspace, path.as_str());
@@ -264,6 +265,22 @@ mod tests {
         assert_eq!(problems[0].line, 11);
         assert_eq!(problems[0].character, 3);
         assert_eq!(problems[0].message, "expected expression");
+    }
+
+    #[test]
+    fn parses_line_only_go_and_pytest_failures() {
+        let workspace = Path::new("/tmp/work");
+        let problems = parse_problems(
+            "foo_test.go:12: expected 1\ntests/test_x.py:10: AssertionError\n",
+            workspace,
+        );
+        assert_eq!(problems.len(), 2);
+        assert_eq!(problems[0].path, PathBuf::from("/tmp/work/foo_test.go"));
+        assert_eq!(problems[0].line, 11);
+        assert_eq!(problems[0].character, 0);
+        assert_eq!(problems[1].path, PathBuf::from("/tmp/work/tests/test_x.py"));
+        assert_eq!(problems[1].line, 9);
+        assert_eq!(problems[1].character, 0);
     }
 
     #[cfg(unix)]
