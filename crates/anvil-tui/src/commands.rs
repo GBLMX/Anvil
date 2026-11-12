@@ -259,6 +259,11 @@ impl Model {
                 self.status = "E: terminal is unsupported on this platform".to_owned();
                 self.dirty = true;
             }
+            ("workspace-add", path) => self.add_workspace_root(path),
+            ("workspace-remove", path) => self.remove_workspace_root(path),
+            ("workspace-trust", path) => self.trust_workspace_root(path, true),
+            ("workspace-untrust", path) => self.trust_workspace_root(path, false),
+            ("workspace-list", "") => self.list_workspace_roots(),
             ("wq", "") => self.queue_effect(Effect::SaveAndQuit),
             ("wq", path) => self.queue_effect(Effect::SaveAsAndQuit(path.into())),
             _ => {

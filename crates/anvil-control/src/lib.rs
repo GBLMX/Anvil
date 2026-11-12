@@ -315,6 +315,26 @@ pub const COMMANDS: &[CommandSpec] = &[
         name: "terminal-read",
         capability: Capability::Read,
     },
+    CommandSpec {
+        name: "workspace-add",
+        capability: Capability::Admin,
+    },
+    CommandSpec {
+        name: "workspace-remove",
+        capability: Capability::Admin,
+    },
+    CommandSpec {
+        name: "workspace-trust",
+        capability: Capability::Admin,
+    },
+    CommandSpec {
+        name: "workspace-untrust",
+        capability: Capability::Admin,
+    },
+    CommandSpec {
+        name: "workspace-list",
+        capability: Capability::Read,
+    },
 ];
 
 /// Look up an exact command name.

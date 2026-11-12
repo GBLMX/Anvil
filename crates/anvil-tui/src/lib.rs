@@ -70,6 +70,7 @@ mod remote;
 mod selection_table;
 mod session;
 mod theme_picker;
+mod workspace_control;
 pub mod workspace_roots;
 use selection_table::{SelectionItem, SelectionTable};
 mod pkg_install;
@@ -677,6 +678,8 @@ pub struct Model {
     git_branch_checked: bool,
     /// Workspace root used to resolve all file paths.
     workspace: PathBuf,
+    workspace_roots: workspace_roots::WorkspaceRoots,
+    root_gateways: HashMap<PathBuf, (GatewaySession, GatewayClient)>,
     /// Reject file operations instead of falling back when the gateway is absent.
     require_gateway: bool,
     /// The active buffer was loaded from stdin and has no file path.
@@ -735,6 +738,8 @@ impl Model {
     /// Builds a model from text and an optional source path.
     pub fn new(editor: EditorState, path: Option<PathBuf>) -> Self {
         let welcome = path.is_none() && editor.text().len_bytes() == 0;
+        let workspace = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        let workspace_roots = workspace_roots::WorkspaceRoots::new(&workspace).unwrap_or_default();
         Self {
             editor: DocumentSession::from(editor),
             path,
@@ -864,7 +869,9 @@ impl Model {
             stale_paths: HashSet::new(),
             git_branch: None,
             git_branch_checked: false,
-            workspace: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
+            workspace,
+            workspace_roots,
+            root_gateways: HashMap::new(),
             require_gateway: false,
             stdin_buffer: false,
             read_only: false,
@@ -965,6 +972,9 @@ impl Model {
         let mut model = Self::new(EditorState::from_text(""), None);
         model.gateway = Some(gateway);
         model.workspace = workspace;
+        model.workspace_roots =
+            workspace_roots::WorkspaceRoots::new(&model.workspace).unwrap_or_default();
+        model.root_gateways.clear();
         model.require_gateway = true;
         model
     }

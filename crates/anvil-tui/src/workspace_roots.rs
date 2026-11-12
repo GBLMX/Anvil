@@ -86,6 +86,17 @@ impl WorkspaceRoots {
         Ok(())
     }
 
+    pub fn set_trusted(&mut self, path: &Path, trusted: bool) -> Result<(), RootError> {
+        let path = canonical_directory(path)?;
+        let root = self
+            .roots
+            .iter_mut()
+            .find(|root| root.path == path)
+            .ok_or_else(|| RootError::Missing(path.clone()))?;
+        root.trusted = trusted;
+        Ok(())
+    }
+
     pub fn remove(&mut self, path: &Path) -> Result<(), RootError> {
         let path = canonical_directory(path)?;
         let before = self.roots.len();

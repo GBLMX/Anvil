@@ -101,6 +101,11 @@ Normal mode
   :terminal-send <text> send one line to the PTY shell
   :terminal-read       show captured terminal output
   :terminal-stop       stop the PTY shell
+  :workspace-add <path> add an untrusted workspace root and start its gateway
+  :workspace-trust <path> mark a workspace root trusted
+  :workspace-untrust <path> mark a workspace root untrusted
+  :workspace-remove <path> remove a workspace root and stop its gateway
+  :workspace-list      list workspace roots and trust state
   :plugin-start       start the debug plugin host
   :plugin-list        open installed-plugin manager (enable/uninstall/rollback)
   :plugin-oom         start host with a 300 MB allocation probe
