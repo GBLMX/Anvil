@@ -436,6 +436,69 @@ fn execute_fuzzy_action(model: &mut Model, action: PickerAction) {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum FileTreeAction {
+    Next,
+    Previous,
+    Collapse,
+    Toggle,
+    ToggleHidden,
+    CommandLine,
+    Create(CreateKind),
+    Rename,
+    Transfer(bool),
+    Delete,
+    PendingLeader,
+    Cancel,
+}
+
+fn file_tree_action(key: KeyPress, text_input: bool) -> Option<FileTreeAction> {
+    match key.code {
+        KeyCode::Esc => Some(FileTreeAction::Cancel),
+        KeyCode::Char('j') | KeyCode::Down => Some(FileTreeAction::Next),
+        KeyCode::Char('k') | KeyCode::Up => Some(FileTreeAction::Previous),
+        KeyCode::Char('h') | KeyCode::Left => Some(FileTreeAction::Collapse),
+        KeyCode::Char('l') | KeyCode::Right | KeyCode::Enter => Some(FileTreeAction::Toggle),
+        KeyCode::Char('H') if text_input => Some(FileTreeAction::ToggleHidden),
+        KeyCode::Char(':') if text_input => Some(FileTreeAction::CommandLine),
+        KeyCode::Char('a') if text_input => Some(FileTreeAction::Create(CreateKind::File)),
+        KeyCode::Char('A') if text_input => Some(FileTreeAction::Create(CreateKind::Directory)),
+        KeyCode::Char('r') if text_input => Some(FileTreeAction::Rename),
+        KeyCode::Char('m') if text_input => Some(FileTreeAction::Transfer(false)),
+        KeyCode::Char('c') if text_input => Some(FileTreeAction::Transfer(true)),
+        KeyCode::Char('d') | KeyCode::Delete => Some(FileTreeAction::Delete),
+        KeyCode::Char(' ') if text_input => Some(FileTreeAction::PendingLeader),
+        _ => None,
+    }
+}
+
+fn execute_file_tree_action(model: &mut Model, action: FileTreeAction) {
+    match action {
+        FileTreeAction::Next => model.tree_move(1),
+        FileTreeAction::Previous => model.tree_move(-1),
+        FileTreeAction::Collapse => model.tree_collapse(),
+        FileTreeAction::Toggle => model.tree_toggle(),
+        FileTreeAction::ToggleHidden => model.toggle_hidden(),
+        FileTreeAction::CommandLine => {
+            model.ui.input_mode = InputMode::CommandLine {
+                buffer: InputBuffer::default(),
+            };
+            model.overlays.command_completion = None;
+            model.file.dirty = true;
+        }
+        FileTreeAction::Create(kind) => model.begin_tree_create(kind),
+        FileTreeAction::Rename => model.begin_tree_rename(),
+        FileTreeAction::Transfer(copy) => model.begin_tree_transfer(copy),
+        FileTreeAction::Delete => model.begin_tree_delete(),
+        FileTreeAction::PendingLeader => model.begin_pending(' '),
+        FileTreeAction::Cancel => {
+            model.ui.focus.tree = false;
+            model.tree.visible = false;
+            model.file.dirty = true;
+        }
+    }
+}
+
 fn command_palette_action(key: KeyPress, text_input: bool) -> Option<PickerAction> {
     match key.code {
         KeyCode::Char('p') if key.ctrl() => Some(PickerAction::Previous),
@@ -1010,44 +1073,11 @@ fn handle_key(model: &mut Model, key: KeyPress) {
         return;
     }
     if model.keymap_context() == KeymapContext::FileTree {
-        if key.code == KeyCode::Char(' ') && text_input {
-            model.begin_pending(' ');
+        if let Some(action) = file_tree_action(key, text_input) {
+            execute_file_tree_action(model, action);
             return;
         }
-        match key.code {
-            KeyCode::Esc => {
-                model.ui.focus.tree = false;
-                model.tree.visible = false;
-                model.file.dirty = true;
-            }
-            KeyCode::Char('j') | KeyCode::Down => model.tree_move(1),
-            KeyCode::Char('k') | KeyCode::Up => model.tree_move(-1),
-            KeyCode::Char('h') | KeyCode::Left => model.tree_collapse(),
-            KeyCode::Char('l') | KeyCode::Right | KeyCode::Enter => model.tree_toggle(),
-            KeyCode::Char('H') => model.toggle_hidden(),
-            KeyCode::Char(':') => {
-                model.ui.input_mode = InputMode::CommandLine {
-                    buffer: InputBuffer::default(),
-                };
-                model.overlays.command_completion = None;
-                model.file.dirty = true;
-            }
-            KeyCode::Char('a') => model.begin_tree_create(CreateKind::File),
-            KeyCode::Char('A') => model.begin_tree_create(CreateKind::Directory),
-            KeyCode::Char('r') => model.begin_tree_rename(),
-            KeyCode::Char('m') => model.begin_tree_transfer(false),
-            KeyCode::Char('c') => model.begin_tree_transfer(true),
-            KeyCode::Char('d') | KeyCode::Delete => model.begin_tree_delete(),
-            _ => {
-                if let Some(action) = model
-                    .config
-                    .keymap
-                    .resolve_context(KeymapContext::Global, key)
-                {
-                    execute_context_action(model, action, key);
-                }
-            }
-        }
+        dispatch_context_binding(model, KeymapContext::Global, key);
         return;
     }
 

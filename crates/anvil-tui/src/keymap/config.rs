@@ -454,6 +454,7 @@ impl KeymapConfig {
         self.context_binding(context, key)
     }
 
+    #[cfg(test)]
     pub(crate) fn resolve_context(
         &self,
         context: KeymapContext,
