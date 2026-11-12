@@ -1147,3 +1147,38 @@ fn focus_editor_auto_saves_a_dirty_split_pane() {
     assert_eq!(fs::read_to_string(&path).expect("content"), "Xa");
     assert!(!model.modified);
 }
+
+#[test]
+fn opening_another_file_auto_saves_the_active_buffer() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let first = dir.path().join("first.rs");
+    let second = dir.path().join("second.rs");
+    fs::write(&first, "a").expect("first");
+    fs::write(&second, "b").expect("second");
+    let mut model = Model::open(&first).expect("open");
+    model.settings.editor.auto_save = true;
+    model.insert_text("X");
+
+    model.open_path(&second).expect("second");
+
+    assert_eq!(fs::read_to_string(&first).expect("first content"), "Xa");
+    assert_eq!(
+        model.path.as_deref(),
+        Some(second.canonicalize().expect("second").as_path())
+    );
+}
+
+#[test]
+fn opening_another_file_refuses_a_dirty_unnamed_buffer() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("main.rs");
+    fs::write(&path, "a").expect("write");
+    let mut model = Model::new(EditorState::from_text("draft"), None);
+    model.modified = true;
+
+    assert!(model.open_path(&path).is_err());
+
+    assert!(model.path.is_none());
+    assert_eq!(model.editor.text().slice(0..5), "draft");
+    assert!(model.status.contains("save or discard"));
+}

@@ -12,6 +12,20 @@ impl Model {
         if self.path.as_ref() == Some(&absolute) {
             return Ok(());
         }
+        if self.path.is_none() && self.modified {
+            self.status =
+                "E: save or discard the unnamed buffer before opening another file".to_owned();
+            self.dirty = true;
+            return Err("unnamed buffer is modified".to_owned());
+        }
+        if !self.auto_save_before_focus_change() {
+            let error = self
+                .status
+                .strip_prefix("E: ")
+                .unwrap_or("auto-save failed")
+                .to_owned();
+            return Err(error);
+        }
         if let Some(index) = self
             .buffers
             .iter()
