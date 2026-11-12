@@ -181,8 +181,7 @@ undo needs its own storage and migration design.
 - Named registers are stored in `anvil-editor::EditorState` and exposed through
   `set_register`/`register_text`; the TUI delegates named-register reads and
   writes.
-- Word, quote, and bracket text-object range semantics are exposed by
-  `EditorState`; the TUI delegates those ranges.
-- Paragraph/tag text objects, macro recording/replay, and the TUI key adapter
-  still live in the TUI.
+- Word, quote, bracket, paragraph, and tag text-object range semantics are
+  exposed by `EditorState`; the TUI delegates those ranges.
+- Macro recording/replay and the TUI key adapter still live in the TUI.
 - Soft wrap display projection remains unimplemented.

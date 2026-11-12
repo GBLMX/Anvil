@@ -245,51 +245,8 @@ impl Model {
         );
     }
 
-    fn line_is_blank(&self, line: usize) -> bool {
-        let Some(start) = self.editor.index().line_to_offset(line) else {
-            return true;
-        };
-        let Some(range) = self.editor.line_range_at(start) else {
-            return true;
-        };
-        self.editor
-            .text()
-            .slice(range.start..range.end)
-            .trim()
-            .is_empty()
-    }
-
     pub(crate) fn paragraph_range(&self, around: bool) -> Option<std::ops::Range<usize>> {
-        let position = self
-            .editor
-            .index()
-            .position(self.editor.text(), self.cursor)?;
-        let mut start = position.line;
-        let mut end = position.line;
-        if self.line_is_blank(position.line) {
-            while start > 0 && self.line_is_blank(start - 1) {
-                start -= 1;
-            }
-            while end + 1 < self.editor.index().len_lines() && self.line_is_blank(end + 1) {
-                end += 1;
-            }
-        } else {
-            while start > 0 && !self.line_is_blank(start - 1) {
-                start -= 1;
-            }
-            while end + 1 < self.editor.index().len_lines() && !self.line_is_blank(end + 1) {
-                end += 1;
-            }
-            if around {
-                while end + 1 < self.editor.index().len_lines() && self.line_is_blank(end + 1) {
-                    end += 1;
-                }
-            }
-        }
-        let start = self.editor.index().line_to_offset(start)?;
-        let last = self.editor.index().line_to_offset(end)?;
-        let end = self.editor.line_range_at(last)?.end;
-        (start < end).then_some(start..end)
+        self.editor.paragraph_object(self.cursor, around)
     }
 
     fn paragraph_object_range(
@@ -345,29 +302,7 @@ impl Model {
     }
 
     pub(crate) fn tag_range(&self, around: bool) -> Option<std::ops::Range<usize>> {
-        let line = self.editor.line_range_at(self.cursor)?;
-        let text = self.editor.text().slice(line.start..line.end);
-        let local = self.cursor.saturating_sub(line.start).min(text.len());
-        let open_start = text[..local].rfind('<')?;
-        if text[open_start..].starts_with("</") {
-            return None;
-        }
-        let open_end = text[open_start..].find('>')? + open_start;
-        let name = text[open_start + 1..open_end]
-            .split(|character: char| character.is_whitespace() || character == '/')
-            .next()?;
-        if name.is_empty() {
-            return None;
-        }
-        let close = format!("</{name}>");
-        let close_start = text[open_end + 1..].find(&close)? + open_end + 1;
-        let close_end = close_start + close.len();
-        let (start, end) = if around {
-            (open_start, close_end)
-        } else {
-            (open_end + 1, close_start)
-        };
-        (start < end).then_some(line.start + start..line.start + end)
+        self.editor.tag_object(self.cursor, around)
     }
 
     pub(crate) fn apply_tag_operator(&mut self, operator: char, around: bool) {

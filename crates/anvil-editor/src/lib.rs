@@ -291,6 +291,74 @@ impl EditorState {
         .then_some(start..end)
     }
 
+    /// Paragraph text object at `cursor`.
+    pub fn paragraph_object(&self, cursor: usize, around: bool) -> Option<Range<usize>> {
+        let position = self.index.position(&*self.text, cursor)?;
+        let mut start = position.line;
+        let mut end = position.line;
+        if self.line_is_blank(position.line) {
+            while start > 0 && self.line_is_blank(start - 1) {
+                start -= 1;
+            }
+            while end + 1 < self.index.len_lines() && self.line_is_blank(end + 1) {
+                end += 1;
+            }
+        } else {
+            while start > 0 && !self.line_is_blank(start - 1) {
+                start -= 1;
+            }
+            while end + 1 < self.index.len_lines() && !self.line_is_blank(end + 1) {
+                end += 1;
+            }
+            if around {
+                while end + 1 < self.index.len_lines() && self.line_is_blank(end + 1) {
+                    end += 1;
+                }
+            }
+        }
+        let start = self.index.line_to_offset(start)?;
+        let last = self.index.line_to_offset(end)?;
+        let end = self.line_range_at(last)?.end;
+        (start < end).then_some(start..end)
+    }
+
+    fn line_is_blank(&self, line: usize) -> bool {
+        let Some(start) = self.index.line_to_offset(line) else {
+            return true;
+        };
+        let Some(range) = self.line_range_at(start) else {
+            return true;
+        };
+        self.text.slice(range.start..range.end).trim().is_empty()
+    }
+
+    /// Tag text object at `cursor`; `around` includes the tags.
+    pub fn tag_object(&self, cursor: usize, around: bool) -> Option<Range<usize>> {
+        let line = self.line_range_at(cursor)?;
+        let text = self.text.slice(line.start..line.end);
+        let local = cursor.saturating_sub(line.start).min(text.len());
+        let open_start = text[..local].rfind('<')?;
+        if text[open_start..].starts_with("</") {
+            return None;
+        }
+        let open_end = text[open_start..].find('>')? + open_start;
+        let name = text[open_start + 1..open_end]
+            .split(|character: char| character.is_whitespace() || character == '/')
+            .next()?;
+        if name.is_empty() {
+            return None;
+        }
+        let close = format!("</{name}>");
+        let close_start = text[open_end + 1..].find(&close)? + open_end + 1;
+        let close_end = close_start + close.len();
+        let (start, end) = if around {
+            (open_start, close_end)
+        } else {
+            (open_end + 1, close_start)
+        };
+        (start < end).then_some(line.start + start..line.start + end)
+    }
+
     /// Bracket text object at `cursor`; `around` includes delimiters.
     pub fn bracket_object(&self, cursor: usize, open: char, around: bool) -> Option<Range<usize>> {
         let close = match open {
