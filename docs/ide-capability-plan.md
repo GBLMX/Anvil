@@ -58,6 +58,10 @@ remains the P1 follow-up tracked in
   open/save routing landed. Cross-root tree/search UX remains a follow-up.
 - Code folding with session persistence.
 - Auto-save policy remains; swap files and external-conflict recovery landed.
+The LSP surface, missing goto variants, language allowlist, large-file
+threshold, and primary-root-only boundary are defined in
+ADR-0025.
+
 
 These are separate adapters, not `anvil-session` monoliths. Quick-open preview
 and icon theme are not repeated here; they are `0.5.4`.
