@@ -907,6 +907,10 @@ impl Model {
 
     fn selected_line_ranges(&self) -> Vec<std::ops::Range<usize>> {
         let mut ranges = Vec::new();
+        if self.editor.text().len_bytes() == 0 {
+            ranges.push(0..0);
+            return ranges;
+        }
         for (anchor, head) in self.editor.selection_bytes() {
             let start = anchor.min(head);
             let end = anchor.max(head);

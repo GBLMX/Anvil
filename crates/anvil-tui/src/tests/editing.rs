@@ -728,3 +728,15 @@ fn ex_comment_toggles_the_current_line() {
     assert_eq!(text, "# one\n", "status={}", model.status);
     assert!(model.modified);
 }
+
+#[test]
+fn comment_toggles_an_empty_named_buffer() {
+    let mut model = Model::new(EditorState::from_text(""), Some(PathBuf::from("test.rs")));
+    handle_event(&mut model, ctrl(KeyCode::Char('/')));
+    assert_eq!(model.editor.text().len_bytes(), 3);
+    assert_eq!(model.editor.text().slice(0..3), "// ");
+    assert!(model.modified);
+
+    handle_event(&mut model, key(KeyCode::Char('u')));
+    assert_eq!(model.editor.text().len_bytes(), 0);
+}
