@@ -559,7 +559,12 @@ fn theme_signature(directory: &Path) -> Option<SystemTime> {
         if path.extension().and_then(|ext| ext.to_str()) != Some("toml") {
             continue;
         }
-        let modified = entry.metadata().ok()?.modified().ok()?;
+        let Ok(metadata) = entry.metadata() else {
+            continue;
+        };
+        let Ok(modified) = metadata.modified() else {
+            continue;
+        };
         signature = Some(signature.map_or(modified, |current: SystemTime| current.max(modified)));
     }
     signature
@@ -971,6 +976,23 @@ mod tests {
         assert_eq!(selection(), parse_color("color5").expect("ansi"));
         assert_eq!(syntax_keyword(), parse_color("#ff00aa").expect("hex"));
         set_startup_theme("anvil-dark").expect("reset");
+    }
+
+    #[test]
+    fn theme_signature_skips_unreadable_entries() {
+        let directory = tempfile::tempdir().expect("tempdir");
+        fs::write(
+            directory.path().join("valid.toml"),
+            "[ui]\nbackground = \"#101010\"\n",
+        )
+        .expect("write");
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(
+            directory.path().join("missing-target"),
+            directory.path().join("broken.toml"),
+        )
+        .expect("symlink");
+        assert!(theme_signature(directory.path()).is_some());
     }
 
     #[test]
