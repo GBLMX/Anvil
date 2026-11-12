@@ -37,7 +37,7 @@ impl Model {
                     self.language.diagnostics.count_shown = actual;
                 }
                 self.dirty = true;
-            } else if !self.settings.ui.reduced_motion {
+            } else if !self.config.settings.ui.reduced_motion {
                 self.status.spinner = self.status.spinner.wrapping_add(1);
                 self.dirty = true;
             }
@@ -66,7 +66,7 @@ impl Model {
     }
 
     pub(crate) fn spinner_glyph(&self) -> &'static str {
-        if self.settings.ui.reduced_motion {
+        if self.config.settings.ui.reduced_motion {
             "·"
         } else {
             crate::render::SPINNER[self.status.spinner % crate::render::SPINNER.len()]

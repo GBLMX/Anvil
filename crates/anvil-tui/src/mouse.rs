@@ -184,7 +184,7 @@ pub(crate) fn handle_mouse(model: &mut Model, mouse: MouseEvent, width: u16, hei
                 }
             } else if split_target {
                 model.scroll_split_rows(delta as isize);
-            } else if model.settings.editor.soft_wrap {
+            } else if model.config.settings.editor.soft_wrap {
                 let text_width = pane_width.saturating_sub(model.gutter_width());
                 model.scroll_display_rows_in_pane(delta as isize, text_width);
             } else {

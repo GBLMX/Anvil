@@ -92,7 +92,7 @@ impl Model {
 
     #[cfg(test)]
     pub(crate) fn scroll_display_rows(&mut self, delta: isize, width: u16) {
-        if !self.settings.editor.soft_wrap {
+        if !self.config.settings.editor.soft_wrap {
             self.view.scroll = self
                 .view
                 .scroll
@@ -106,7 +106,7 @@ impl Model {
     }
 
     pub(crate) fn scroll_display_rows_in_pane(&mut self, delta: isize, text_width: u16) {
-        if !self.settings.editor.soft_wrap {
+        if !self.config.settings.editor.soft_wrap {
             self.view.scroll = self
                 .view
                 .scroll
@@ -230,7 +230,7 @@ impl Model {
             if rows.len() >= height {
                 break;
             }
-            if self.settings.editor.soft_wrap && self.view.wrap_width > 0 {
+            if self.config.settings.editor.soft_wrap && self.view.wrap_width > 0 {
                 let segments = self.wrap_segments(line, self.view.wrap_width);
                 let first_segment = if line == self.view.scroll {
                     self.view
@@ -486,7 +486,7 @@ impl Model {
 
         let diagnostic_lines = self.diagnostic_lines();
         let bracket_pair = self.bracket_pair();
-        let hscroll = if self.settings.editor.soft_wrap {
+        let hscroll = if self.config.settings.editor.soft_wrap {
             0
         } else {
             self.view.hscroll
@@ -728,7 +728,7 @@ mod tests {
     #[test]
     fn soft_wrap_projects_sources_into_multiple_rows() {
         let mut model = Model::new(EditorState::from_text("abcdefghij\nnext"), None);
-        model.settings.editor.soft_wrap = true;
+        model.config.settings.editor.soft_wrap = true;
         model.view.wrap_width = 4;
 
         let rows = model.visible_rows(0, 10);
@@ -759,7 +759,7 @@ mod tests {
     #[test]
     fn soft_wrap_cursor_scroll_tracks_segment() {
         let mut model = Model::new(EditorState::from_text("abcdefghij"), None);
-        model.settings.editor.soft_wrap = true;
+        model.config.settings.editor.soft_wrap = true;
         model.view.wrap_width = 4;
         model.session.cursor = 9;
         model.session.editor.set_selection_bytes(9, 9);
@@ -798,7 +798,7 @@ mod tests {
     #[test]
     fn wrapped_scroll_advances_display_rows() {
         let mut model = Model::new(EditorState::from_text("abcdefghij\nnext"), None);
-        model.settings.editor.soft_wrap = true;
+        model.config.settings.editor.soft_wrap = true;
         let width = model.gutter_width() + 2;
         model.scroll_display_rows(1, width);
         assert_eq!(model.view.scroll, 0);
@@ -817,7 +817,7 @@ mod tests {
             EditorState::from_text(&format!("first\n{}", "a".repeat(300))),
             None,
         );
-        model.settings.editor.soft_wrap = true;
+        model.config.settings.editor.soft_wrap = true;
         let segments = model.wrap_segments(1, 1);
         assert_eq!(segments.len(), 256);
         assert_eq!(segments[0].0, 6);
@@ -828,7 +828,7 @@ mod tests {
     #[test]
     fn disabling_soft_wrap_restores_source_rows() {
         let mut model = Model::new(EditorState::from_text("abcdefghij"), None);
-        model.settings.editor.soft_wrap = false;
+        model.config.settings.editor.soft_wrap = false;
         let rows = model.visible_rows(0, 5);
         assert!(rows.iter().any(|row| matches!(row, DisplayRow::Source(0))));
         assert!(
@@ -911,7 +911,7 @@ mod pane_scroll_tests {
     #[test]
     fn pane_scroll_uses_the_explicit_text_width() {
         let mut model = Model::new(EditorState::from_text("abcdefghij"), None);
-        model.settings.editor.soft_wrap = true;
+        model.config.settings.editor.soft_wrap = true;
         model.scroll_display_rows_in_pane(1, 4);
         assert_eq!(model.view.wrap_width, 4);
         assert_eq!(model.view.scroll_subrow, 1);

@@ -509,6 +509,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
         model.input.pending = None;
         model.input.leader_deadline = None;
         if let Some(action) = model
+            .config
             .keymap
             .resolve_context_exact(KeymapContext::Popup, key)
         {
@@ -526,7 +527,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
         }
         let object_pending = model.input.object_pending;
         model.input.object_pending = false;
-        let command = resolve_pending(pending, key, object_pending, &model.keymap);
+        let command = resolve_pending(pending, key, object_pending, &model.config.keymap);
         if command.is_none() && !object_pending && !matches!(pending, 'g' | ']' | '[') {
             let _ = model.take_count();
         }
@@ -920,6 +921,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
     }
     if model.keymap_context() == KeymapContext::FileTree {
         if let Some(action) = model
+            .config
             .keymap
             .resolve_context_exact(KeymapContext::FileTree, key)
         {
@@ -948,7 +950,11 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             KeyCode::Char('c') => model.begin_tree_transfer(true),
             KeyCode::Char('d') | KeyCode::Delete => model.begin_tree_delete(),
             _ => {
-                if let Some(action) = model.keymap.resolve_context(KeymapContext::Global, key) {
+                if let Some(action) = model
+                    .config
+                    .keymap
+                    .resolve_context(KeymapContext::Global, key)
+                {
                     execute_context_action(model, action, key);
                 }
             }
@@ -963,7 +969,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
         _ => None,
     };
     if let Some(context) = text_context
-        && let Some(action) = model.keymap.resolve_context_exact(context, key)
+        && let Some(action) = model.config.keymap.resolve_context_exact(context, key)
     {
         execute_context_action(model, action, key);
         return;
@@ -1283,6 +1289,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
                     return;
                 }
                 if let Some(action) = model
+                    .config
                     .keymap
                     .resolve_context_exact(KeymapContext::Modal, key)
                 {
@@ -1342,22 +1349,25 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             let context = model.keymap_context();
             let command = if context == KeymapContext::Editor {
                 model
+                    .config
                     .keymap
                     .resolve_context_exact(context, key)
                     .or_else(|| {
-                        resolve_normal(key, model.input.count, &model.keymap)
+                        resolve_normal(key, model.input.count, &model.config.keymap)
                             .map(ContextAction::Normal)
                     })
                     .or_else(|| {
                         model
+                            .config
                             .keymap
                             .resolve_context_exact(KeymapContext::Global, key)
                     })
             } else {
-                resolve_normal(key, model.input.count, &model.keymap)
+                resolve_normal(key, model.input.count, &model.config.keymap)
                     .map(ContextAction::Normal)
                     .or_else(|| {
                         model
+                            .config
                             .keymap
                             .resolve_context_exact(KeymapContext::Global, key)
                     })

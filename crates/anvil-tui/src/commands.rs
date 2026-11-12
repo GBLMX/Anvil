@@ -313,14 +313,14 @@ impl Model {
     }
 
     pub(crate) fn queue_effect(&mut self, effect: Effect) {
-        if self.effects.push(effect).is_err() {
+        if self.config.effects.push(effect).is_err() {
             self.status.text = "E: effect queue full".to_owned();
             self.dirty = true;
         }
     }
 
     pub(crate) fn drain_effects(&mut self) {
-        while let Some(queued) = self.effects.pop() {
+        while let Some(queued) = self.config.effects.pop() {
             match queued.effect {
                 Effect::ExCommand { name, argument } => {
                     self.dispatch_ex(&name, &argument);

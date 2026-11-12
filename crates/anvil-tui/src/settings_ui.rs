@@ -169,8 +169,8 @@ impl Model {
         }
         self.overlays.settings_overlay = Some(SettingsOverlayState {
             selected: 0,
-            original: self.settings,
-            draft: self.settings,
+            original: self.config.settings,
+            draft: self.config.settings,
         });
         self.status.text = "settings".to_owned();
         self.dirty = true;
@@ -298,7 +298,7 @@ mod tests {
         model.open_settings();
         assert!(model.overlays.settings_overlay.is_some());
         model.adjust_settings(1);
-        assert_eq!(model.settings.editor.scroll_margin, 4);
+        assert_eq!(model.config.settings.editor.scroll_margin, 4);
         assert!(
             model
                 .overlays
@@ -309,41 +309,41 @@ mod tests {
         );
         model.move_settings(1);
         model.adjust_settings(1);
-        assert!(model.settings.editor.auto_save);
+        assert!(model.config.settings.editor.auto_save);
         model.reset_settings_row();
-        assert!(!model.settings.editor.auto_save);
+        assert!(!model.config.settings.editor.auto_save);
         model.move_settings(1);
         model.adjust_settings(1);
-        assert!(model.settings.editor.soft_wrap);
+        assert!(model.config.settings.editor.soft_wrap);
         model.reset_settings_row();
-        assert!(!model.settings.editor.soft_wrap);
+        assert!(!model.config.settings.editor.soft_wrap);
         model.move_settings(1);
         model.adjust_settings(1);
-        assert!(model.settings.editor.format_on_save);
+        assert!(model.config.settings.editor.format_on_save);
         model.reset_settings_row();
-        assert!(!model.settings.editor.format_on_save);
+        assert!(!model.config.settings.editor.format_on_save);
         model.move_settings(1);
         model.adjust_settings(1);
-        assert!(model.settings.search.case_sensitive);
+        assert!(model.config.settings.search.case_sensitive);
         model.reset_settings_row();
-        assert!(!model.settings.search.case_sensitive);
+        assert!(!model.config.settings.search.case_sensitive);
         model.move_settings(1);
         model.adjust_settings(1);
-        assert!(!model.settings.lsp.inlay_hints);
+        assert!(!model.config.settings.lsp.inlay_hints);
         model.reset_settings_row();
-        assert!(model.settings.lsp.inlay_hints);
+        assert!(model.config.settings.lsp.inlay_hints);
         model.move_settings(1);
         model.adjust_settings(1);
-        assert!(model.settings.ui.reduced_motion);
+        assert!(model.config.settings.ui.reduced_motion);
         model.reset_settings_row();
-        assert!(!model.settings.ui.reduced_motion);
+        assert!(!model.config.settings.ui.reduced_motion);
         model.move_settings(1);
         model.adjust_settings(1);
-        assert!(model.settings.ui.high_contrast);
+        assert!(model.config.settings.ui.high_contrast);
         model.reset_settings_row();
-        assert!(!model.settings.ui.high_contrast);
+        assert!(!model.config.settings.ui.high_contrast);
         model.cancel_settings();
         assert!(model.overlays.settings_overlay.is_none());
-        assert_eq!(model.settings, Settings::default());
+        assert_eq!(model.config.settings, Settings::default());
     }
 }

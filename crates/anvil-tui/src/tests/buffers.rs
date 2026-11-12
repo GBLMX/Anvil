@@ -1081,7 +1081,7 @@ fn focus_change_auto_save_writes_the_active_buffer() {
     let mut model = Model::open(&first).expect("open");
     model.open_path(&second).expect("second");
     model.switch_buffer(-1);
-    model.settings.editor.auto_save = true;
+    model.config.settings.editor.auto_save = true;
     model.insert_text("X");
     assert!(model.modified);
 
@@ -1101,7 +1101,7 @@ fn failed_auto_save_aborts_the_focus_change() {
     let mut model = Model::open(&first).expect("open");
     model.open_path(&second).expect("second");
     model.switch_buffer(-1);
-    model.settings.editor.auto_save = true;
+    model.config.settings.editor.auto_save = true;
     model.insert_text("X");
     model.session.path = Some(dir.path().to_path_buf());
 
@@ -1118,7 +1118,7 @@ fn split_focus_change_auto_saves_the_split_pane() {
     let path = dir.path().join("main.rs");
     fs::write(&path, "a").expect("write");
     let mut model = Model::open(&path).expect("open");
-    model.settings.editor.auto_save = true;
+    model.config.settings.editor.auto_save = true;
 
     model.split_vertical();
     model.focus_split(true);
@@ -1138,7 +1138,7 @@ fn focus_editor_auto_saves_a_dirty_split_pane() {
     let path = dir.path().join("main.rs");
     fs::write(&path, "a").expect("write");
     let mut model = Model::open(&path).expect("open");
-    model.settings.editor.auto_save = true;
+    model.config.settings.editor.auto_save = true;
 
     model.split_vertical();
     model.focus_split(true);
@@ -1160,7 +1160,7 @@ fn opening_another_file_auto_saves_the_active_buffer() {
     fs::write(&first, "a").expect("first");
     fs::write(&second, "b").expect("second");
     let mut model = Model::open(&first).expect("open");
-    model.settings.editor.auto_save = true;
+    model.config.settings.editor.auto_save = true;
     model.insert_text("X");
 
     model.open_path(&second).expect("second");
@@ -1193,7 +1193,7 @@ fn quitting_auto_saves_the_active_buffer() {
     let path = dir.path().join("main.rs");
     fs::write(&path, "a").expect("write");
     let mut model = Model::open(&path).expect("open");
-    model.settings.editor.auto_save = true;
+    model.config.settings.editor.auto_save = true;
     model.insert_text("X");
 
     model.request_quit();
@@ -1210,7 +1210,7 @@ fn ex_open_auto_saves_before_switching() {
     fs::write(&first, "a").expect("first");
     fs::write(&second, "b").expect("second");
     let mut model = Model::open(&first).expect("open");
-    model.settings.editor.auto_save = true;
+    model.config.settings.editor.auto_save = true;
     model.insert_text("X");
 
     model.open_file(second.to_str().expect("path"));
@@ -1228,7 +1228,7 @@ fn new_buffer_auto_saves_before_switching() {
     let path = dir.path().join("main.rs");
     fs::write(&path, "a").expect("write");
     let mut model = Model::open(&path).expect("open");
-    model.settings.editor.auto_save = true;
+    model.config.settings.editor.auto_save = true;
     model.insert_text("X");
 
     model.new_buffer();
@@ -1243,7 +1243,7 @@ fn closing_a_dirty_split_pane_auto_saves() {
     let path = dir.path().join("main.rs");
     fs::write(&path, "a").expect("write");
     let mut model = Model::open(&path).expect("open");
-    model.settings.editor.auto_save = true;
+    model.config.settings.editor.auto_save = true;
     model.split_vertical();
     model.focus_split(true);
     model.insert_text("X");
@@ -1260,7 +1260,7 @@ fn closing_the_active_buffer_auto_saves_first() {
     let path = dir.path().join("main.rs");
     fs::write(&path, "a").expect("write");
     let mut model = Model::open(&path).expect("open");
-    model.settings.editor.auto_save = true;
+    model.config.settings.editor.auto_save = true;
     model.insert_text("X");
 
     model.close_buffer(0, false);
@@ -1276,7 +1276,7 @@ fn focus_lost_auto_saves_the_active_buffer() {
     let path = dir.path().join("main.rs");
     fs::write(&path, "a").expect("write");
     let mut model = Model::open(&path).expect("open");
-    model.settings.editor.auto_save = true;
+    model.config.settings.editor.auto_save = true;
     model.insert_text("X");
 
     handle_event(&mut model, Event::FocusLost);
@@ -1291,7 +1291,7 @@ fn focus_lost_auto_saves_while_insert_is_active() {
     let path = dir.path().join("main.rs");
     fs::write(&path, "a").expect("write");
     let mut model = Model::open(&path).expect("open");
-    model.settings.editor.auto_save = true;
+    model.config.settings.editor.auto_save = true;
 
     handle_event(&mut model, key(KeyCode::Char('i')));
     handle_event(&mut model, key(KeyCode::Char('X')));
@@ -1310,7 +1310,7 @@ fn focus_lost_skips_auto_save_during_blocking_confirmation() {
     let path = dir.path().join("main.rs");
     fs::write(&path, "a").expect("write");
     let mut model = Model::open(&path).expect("open");
-    model.settings.editor.auto_save = true;
+    model.config.settings.editor.auto_save = true;
     model.insert_text("X");
     model.ui.input_mode = InputMode::ConfirmClose { index: 0 };
 
@@ -1330,7 +1330,7 @@ fn focus_lost_auto_saves_while_search_is_active() {
     let path = dir.path().join("main.rs");
     fs::write(&path, "a").expect("write");
     let mut model = Model::open(&path).expect("open");
-    model.settings.editor.auto_save = true;
+    model.config.settings.editor.auto_save = true;
     model.insert_text("X");
     model.ui.input_mode = InputMode::Search {
         query: InputBuffer::default(),
@@ -1348,7 +1348,7 @@ fn switching_to_the_same_buffer_does_not_auto_save() {
     let path = dir.path().join("main.rs");
     fs::write(&path, "a").expect("write");
     let mut model = Model::open(&path).expect("open");
-    model.settings.editor.auto_save = true;
+    model.config.settings.editor.auto_save = true;
     model.insert_text("X");
 
     model.switch_buffer(1);
@@ -1364,7 +1364,7 @@ fn ex_opening_the_current_file_does_not_auto_save() {
     let path = dir.path().join("main.rs");
     fs::write(&path, "a").expect("write");
     let mut model = Model::open(&path).expect("open");
-    model.settings.editor.auto_save = true;
+    model.config.settings.editor.auto_save = true;
     model.insert_text("X");
 
     model.open_file(path.to_str().expect("path"));
@@ -1380,7 +1380,7 @@ fn format_on_save_without_lsp_still_saves() {
     let path = dir.path().join("main.rs");
     fs::write(&path, "a").expect("write");
     let mut model = Model::open(&path).expect("open");
-    model.settings.editor.format_on_save = true;
+    model.config.settings.editor.format_on_save = true;
     model.insert_text("x");
     assert!(model.save());
     assert_eq!(fs::read_to_string(&path).expect("content"), "xa");

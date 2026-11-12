@@ -540,6 +540,14 @@ pub struct StatusState {
     spinner: usize,
 }
 
+struct ConfigState {
+    /// Typed effects produced by command dispatch.
+    effects: EffectQueue,
+    /// In-memory keymap overrides.
+    keymap: keymap::KeymapConfig,
+    settings: Settings,
+}
+
 #[derive(Default)]
 struct InputState {
     /// Pending normal-mode operator (`d` or `y`).
@@ -919,10 +927,8 @@ pub struct Model {
     pub view: ViewState,
     /// Input state.
     pub ui: UiState,
-    /// Typed effects produced by command dispatch.
-    effects: EffectQueue,
-    /// In-memory keymap overrides.
-    keymap: keymap::KeymapConfig,
+    /// Keymap, settings, and typed command effects.
+    config: ConfigState,
     /// Set by `q` / `:q`.
     pub quit: bool,
     /// Whether the file has unsaved changes.
@@ -954,7 +960,6 @@ pub struct Model {
     /// Workspace tree view and refresh state.
     tree: TreeState,
     overlays: OverlayState,
-    settings: Settings,
     /// Icon and theme persistence state.
     appearance: AppearanceState,
     /// Dirty swap files that must survive a source conflict.
@@ -1001,8 +1006,11 @@ impl Model {
             edit: EditSessionState::default(),
             view: ViewState::default(),
             ui: UiState::default(),
-            effects: EffectQueue::new(EFFECT_QUEUE_CAPACITY),
-            keymap: keymap::KeymapConfig::default(),
+            config: ConfigState {
+                effects: EffectQueue::new(EFFECT_QUEUE_CAPACITY),
+                keymap: keymap::KeymapConfig::default(),
+                settings: Settings::default(),
+            },
             quit: false,
             modified: false,
             missing: false,
@@ -1024,7 +1032,6 @@ impl Model {
             },
             tree: TreeState::default(),
             overlays: OverlayState::default(),
-            settings: Settings::default(),
             appearance: AppearanceState {
                 ascii_icons: icon_theme::ascii_mode(),
                 persist_theme: !cfg!(test),
@@ -1075,7 +1082,7 @@ impl Model {
             theme::apply_choice(choice, false)?;
         }
         self.apply_settings(settings);
-        self.keymap = keymap;
+        self.config.keymap = keymap;
         self.status.text = "configuration reloaded".to_owned();
         self.dirty = true;
         Ok(())
@@ -1083,7 +1090,7 @@ impl Model {
 
     pub(crate) fn load_keymap_config_from(&mut self, path: &Path) -> Result<(), String> {
         let config = keymap::KeymapConfig::from_path(path)?;
-        self.keymap = config;
+        self.config.keymap = config;
         Ok(())
     }
 
@@ -1094,7 +1101,7 @@ impl Model {
             return self.load_keymap_config_from(&path);
         }
         if let Some(preset) = std::env::var_os("ANVIL_KEYMAP_PRESET") {
-            self.keymap = keymap::KeymapConfig::from_preset(&preset.to_string_lossy())?;
+            self.config.keymap = keymap::KeymapConfig::from_preset(&preset.to_string_lossy())?;
         }
         Ok(())
     }
@@ -1787,7 +1794,8 @@ impl Model {
         self.input
             .pending
             .map(|prefix| {
-                self.keymap
+                self.config
+                    .keymap
                     .pending_actions(prefix, self.input.object_pending)
             })
             .unwrap_or_default()

@@ -163,7 +163,7 @@ impl Model {
             return;
         }
         if self.buffers.entries[index].modified && !force {
-            if index == self.buffers.active && self.settings.editor.auto_save {
+            if index == self.buffers.active && self.config.settings.editor.auto_save {
                 if !self.auto_save_before_focus_change() {
                     return;
                 }

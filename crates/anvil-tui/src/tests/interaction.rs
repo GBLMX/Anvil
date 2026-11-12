@@ -161,7 +161,7 @@ fn file_tree_context_bindings_dispatch_before_hardcoded_keys() {
     model.welcome = false;
     model.open_tree();
     assert!(model.ui.focus.tree);
-    model.keymap = crate::keymap::KeymapConfig::from_toml(
+    model.config.keymap = crate::keymap::KeymapConfig::from_toml(
         r#"
 [keymap.contexts.file_tree]
 x = "view.focus_editor"
@@ -187,7 +187,7 @@ fn popup_context_bindings_dispatch_before_popup_keys() {
         }],
         selected: 0,
     });
-    model.keymap = crate::keymap::KeymapConfig::from_toml(
+    model.config.keymap = crate::keymap::KeymapConfig::from_toml(
         r#"
 [keymap.contexts.popup]
 x = "view.focus_editor"
@@ -222,7 +222,7 @@ fn global_context_does_not_shadow_open_popup() {
         ],
         selected: 0,
     });
-    model.keymap = crate::keymap::KeymapConfig::from_toml(
+    model.config.keymap = crate::keymap::KeymapConfig::from_toml(
         r#"
 [keymap.contexts.global]
 j = "editor.undo"
@@ -247,7 +247,7 @@ fn command_line_context_is_explicit_without_global_fallback() {
     let mut model = Model::new(EditorState::from_text("alpha"), None);
     model.welcome = false;
     model.open_tree();
-    model.keymap = crate::keymap::KeymapConfig::from_toml(
+    model.config.keymap = crate::keymap::KeymapConfig::from_toml(
         r#"
 [keymap.contexts.global]
 a = "editor.undo"
@@ -374,7 +374,7 @@ fn search_and_rename_contexts_consume_explicit_bindings() {
     let mut search = Model::new(EditorState::from_text("alpha"), None);
     search.welcome = false;
     search.open_tree();
-    search.keymap = keymap;
+    search.config.keymap = keymap;
     search.ui.input_mode = InputMode::Search {
         query: InputBuffer::default(),
     };
@@ -385,7 +385,7 @@ fn search_and_rename_contexts_consume_explicit_bindings() {
     let mut rename = Model::new(EditorState::from_text("alpha"), None);
     rename.welcome = false;
     rename.open_tree();
-    rename.keymap = crate::keymap::KeymapConfig::from_toml(
+    rename.config.keymap = crate::keymap::KeymapConfig::from_toml(
         r#"
 [keymap.contexts.rename]
 "ctrl-y" = "view.focus_editor"

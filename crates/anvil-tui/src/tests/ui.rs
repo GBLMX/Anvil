@@ -736,7 +736,7 @@ fn recent_files_and_workspaces_are_bounded_and_deduplicated() {
 #[test]
 fn reduced_motion_uses_a_static_busy_glyph() {
     let mut model = Model::new(EditorState::from_text("alpha"), None);
-    model.settings.ui.reduced_motion = true;
+    model.config.settings.ui.reduced_motion = true;
     model.status.busy = Some("indexing".to_owned());
     let backend = TestBackend::new(80, 8);
     let mut terminal = Terminal::new(backend).expect("terminal");

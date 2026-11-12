@@ -1393,7 +1393,7 @@ fn disabled_inlay_hints_are_not_requested() {
     let key = ("rust-analyzer".to_owned(), "rust".to_owned());
     model.language.lsp.config = Some(key.clone());
     model.overlays.lsp_results.inlay_support.insert(key, true);
-    model.settings.lsp.inlay_hints = false;
+    model.config.settings.lsp.inlay_hints = false;
     model.poll_inlay_hints(10);
     assert!(model.overlays.lsp_results.inlay_pending.is_none());
     assert!(model.overlays.lsp_results.inlay_hints.is_empty());

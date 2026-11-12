@@ -193,7 +193,7 @@ fn model_uses_keymap_overrides() {
         KeyCode::Char('z'),
         KeyModifiers::NONE,
     )));
-    assert!(model.keymap.bind(chord, NormalCommand::MoveEnd));
+    assert!(model.config.keymap.bind(chord, NormalCommand::MoveEnd));
     handle_event(&mut model, key(KeyCode::Char('z')));
     assert_eq!(model.session.cursor, 3);
 }
@@ -202,7 +202,7 @@ fn model_uses_keymap_overrides() {
 fn context_keymap_runs_direct_pending_action() {
     let mut model = Model::new(EditorState::from_text("abc"), None);
     model.welcome = false;
-    model.keymap = KeymapConfig::from_toml(
+    model.config.keymap = KeymapConfig::from_toml(
         r#"
 [keymap.contexts.editor]
 "ctrl-w" = "view.split_vertical"
@@ -222,6 +222,7 @@ fn model_uses_pending_keymap_overrides() {
     )));
     assert!(
         model
+            .config
             .keymap
             .bind_pending('d', chord, PendingCommand::YankLines)
     );
@@ -852,15 +853,15 @@ fn config_reload_applies_loaded_settings_and_keymap() {
         .apply_loaded_config(settings, keymap, None)
         .expect("reload");
 
-    assert!(model.settings.editor.auto_save);
-    assert!(model.settings.search.case_sensitive);
+    assert!(model.config.settings.editor.auto_save);
+    assert!(model.config.settings.search.case_sensitive);
     assert_eq!(model.status.text, "configuration reloaded");
 }
 
 #[test]
 fn soft_wrap_preserves_scroll_margin() {
     let mut model = Model::new(EditorState::from_text("0\n1\n2\n3\n4\n5\n6\n7\n8\n9"), None);
-    model.settings.editor.soft_wrap = true;
+    model.config.settings.editor.soft_wrap = true;
     model.view.scroll = 0;
     model.session.cursor = model.offset_at_utf16(1, 0);
     model

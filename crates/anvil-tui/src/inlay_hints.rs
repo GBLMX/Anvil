@@ -6,7 +6,7 @@ use crate::theme;
 
 impl Model {
     pub(crate) fn poll_inlay_hints(&mut self, height: u16) {
-        if !self.settings.lsp.inlay_hints {
+        if !self.config.settings.lsp.inlay_hints {
             self.overlays.lsp_results.inlay_hints.clear();
             self.overlays.lsp_results.inlay_pending = None;
             self.overlays.lsp_results.inlay_checked = None;

@@ -496,7 +496,7 @@ impl Model {
     /// abort the focus change so the user sees the error and the buffer stays
     /// dirty.
     pub(crate) fn auto_save_before_focus_change(&mut self) -> bool {
-        if !self.settings.editor.auto_save
+        if !self.config.settings.editor.auto_save
             || !self.modified
             || self.session.path.is_none()
             || self.read_only

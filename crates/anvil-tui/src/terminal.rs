@@ -166,7 +166,7 @@ pub fn run_with_input(
             model.dirty = true;
         }
     }
-    theme::set_high_contrast(model.settings.ui.high_contrast);
+    theme::set_high_contrast(model.config.settings.ui.high_contrast);
     if let Err(error) = model.load_keymap_config() {
         let message = format!("E: keymap config: {error}");
         if model.status.text.is_empty() {
@@ -286,7 +286,7 @@ pub fn run_with_input(
                 let _ = call.reply.send(reply);
             }
         }
-        if model.status.busy.is_some() && !model.settings.ui.reduced_motion {
+        if model.status.busy.is_some() && !model.config.settings.ui.reduced_motion {
             model.status.spinner = model.status.spinner.wrapping_add(1);
             model.dirty = true;
         }
