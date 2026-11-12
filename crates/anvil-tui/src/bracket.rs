@@ -227,14 +227,16 @@ impl Model {
         let path = self.session.path.as_deref();
         let cursor = self.session.cursor;
         if self
-            .bracket_cache
+            .syntax_cache
+            .bracket
             .borrow()
             .key_matches(revision, path, cursor)
         {
-            return self.bracket_cache.borrow().cached();
+            return self.syntax_cache.bracket.borrow().cached();
         }
         if !self.cursor_is_on_bracket() {
-            self.bracket_cache
+            self.syntax_cache
+                .bracket
                 .borrow_mut()
                 .set_none(revision, path, cursor);
             return None;
@@ -244,7 +246,8 @@ impl Model {
             .editor
             .text()
             .slice(0..self.session.editor.text().len_bytes());
-        self.bracket_cache
+        self.syntax_cache
+            .bracket
             .borrow_mut()
             .pair(&text, revision, path, cursor)
     }

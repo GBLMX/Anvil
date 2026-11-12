@@ -31,7 +31,7 @@ pub(crate) fn handle_event(model: &mut Model, event: Event) {
             if matches!(model.view.pointer, mouse::PointerState::Dragging(_)) {
                 model.view.pointer = mouse::PointerState::Idle;
             }
-            model.syntax.borrow_mut().note_activity();
+            model.syntax_cache.highlights.borrow_mut().note_activity();
             handle_key(model, KeyPress::from_key(key));
         }
         Event::Mouse(mouse) => {
@@ -48,7 +48,7 @@ pub(crate) fn handle_event(model: &mut Model, event: Event) {
                 model.send_terminal_text(&text);
                 return;
             }
-            model.syntax.borrow_mut().note_activity();
+            model.syntax_cache.highlights.borrow_mut().note_activity();
             model.input.pending = None;
             let (text, truncated) = normalize_paste(&text);
             if truncated {

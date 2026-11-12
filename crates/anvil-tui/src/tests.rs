@@ -453,13 +453,24 @@ fn syntax_keyword_is_rendered() {
     );
     for _ in 0..200 {
         model.poll_syntax();
-        if !model.syntax.borrow().highlights().is_empty() {
+        if !model
+            .syntax_cache
+            .highlights
+            .borrow()
+            .highlights()
+            .is_empty()
+        {
             break;
         }
         std::thread::sleep(std::time::Duration::from_millis(10));
     }
     assert!(
-        !model.syntax.borrow().highlights().is_empty(),
+        !model
+            .syntax_cache
+            .highlights
+            .borrow()
+            .highlights()
+            .is_empty(),
         "no syntax highlights produced"
     );
     let backend = TestBackend::new(80, 8);
@@ -483,13 +494,24 @@ fn search_preserves_syntax_and_adds_background() {
     );
     for _ in 0..200 {
         model.poll_syntax();
-        if !model.syntax.borrow().highlights().is_empty() {
+        if !model
+            .syntax_cache
+            .highlights
+            .borrow()
+            .highlights()
+            .is_empty()
+        {
             break;
         }
         std::thread::sleep(std::time::Duration::from_millis(10));
     }
     assert!(
-        !model.syntax.borrow().highlights().is_empty(),
+        !model
+            .syntax_cache
+            .highlights
+            .borrow()
+            .highlights()
+            .is_empty(),
         "no syntax highlights produced"
     );
     handle_event(&mut model, key(KeyCode::Char('/')));

@@ -91,13 +91,24 @@ fn six_buffers_restore_cached_syntax_while_switching() {
         let model = model.as_mut().expect("model");
         for _ in 0..200 {
             model.poll_syntax();
-            if !model.syntax.borrow().highlights().is_empty() {
+            if !model
+                .syntax_cache
+                .highlights
+                .borrow()
+                .highlights()
+                .is_empty()
+            {
                 break;
             }
             std::thread::sleep(std::time::Duration::from_millis(10));
         }
         assert!(
-            !model.syntax.borrow().highlights().is_empty(),
+            !model
+                .syntax_cache
+                .highlights
+                .borrow()
+                .highlights()
+                .is_empty(),
             "syntax did not load for {index}.rs"
         );
     }
@@ -107,7 +118,12 @@ fn six_buffers_restore_cached_syntax_while_switching() {
     for index in 0..6 {
         model.switch_to_buffer(index);
         assert!(
-            !model.syntax.borrow().highlights().is_empty(),
+            !model
+                .syntax_cache
+                .highlights
+                .borrow()
+                .highlights()
+                .is_empty(),
             "buffer {index} lost cached syntax"
         );
     }
@@ -126,15 +142,29 @@ fn open_buffer_spans_survive_global_cache_pressure() {
     model.open_path(&second).expect("open second");
     wait_for_syntax(&mut model);
 
-    model.syntax.borrow_mut().fill_cache_for_test();
+    model
+        .syntax_cache
+        .highlights
+        .borrow_mut()
+        .fill_cache_for_test();
     model.switch_to_buffer(0);
     assert!(
-        !model.syntax.borrow().highlights().is_empty(),
+        !model
+            .syntax_cache
+            .highlights
+            .borrow()
+            .highlights()
+            .is_empty(),
         "first buffer lost spans under cache pressure"
     );
     model.switch_to_buffer(1);
     assert!(
-        !model.syntax.borrow().highlights().is_empty(),
+        !model
+            .syntax_cache
+            .highlights
+            .borrow()
+            .highlights()
+            .is_empty(),
         "second buffer lost spans under cache pressure"
     );
 }
@@ -142,7 +172,13 @@ fn open_buffer_spans_survive_global_cache_pressure() {
 fn wait_for_syntax(model: &mut Model) {
     for _ in 0..200 {
         model.poll_syntax();
-        if !model.syntax.borrow().highlights().is_empty() {
+        if !model
+            .syntax_cache
+            .highlights
+            .borrow()
+            .highlights()
+            .is_empty()
+        {
             return;
         }
         std::thread::sleep(std::time::Duration::from_millis(10));

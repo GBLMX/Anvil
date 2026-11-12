@@ -206,7 +206,8 @@ impl Model {
                     self.file.modified = true;
                 }
                 self.file.missing = false;
-                self.syntax
+                self.syntax_cache
+                    .highlights
                     .borrow_mut()
                     .switch_path(self.session.path.as_deref(), false);
                 self.git.diff_checked = None;
@@ -267,7 +268,8 @@ impl Model {
                     self.file.modified = true;
                 }
                 self.file.missing = false;
-                self.syntax
+                self.syntax_cache
+                    .highlights
                     .borrow_mut()
                     .switch_path(self.session.path.as_deref(), false);
                 self.git.diff_checked = None;

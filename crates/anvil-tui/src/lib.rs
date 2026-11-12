@@ -576,6 +576,13 @@ struct StartPageState {
     welcome_back: bool,
 }
 
+struct SyntaxCacheState {
+    /// Tree-sitter highlights cached by editor revision and path.
+    highlights: RefCell<SyntaxState>,
+    /// Matching bracket cached by editor revision, path, and cursor.
+    bracket: RefCell<bracket::BracketCache>,
+}
+
 #[derive(Default)]
 struct InputState {
     /// Pending normal-mode operator (`d` or `y`).
@@ -989,10 +996,8 @@ pub struct Model {
     project: ProjectState,
     /// Whether the process was started as an external editor.
     editor_mode: bool,
-    /// Tree-sitter highlights cached by editor revision and path.
-    syntax: RefCell<SyntaxState>,
-    /// Matching bracket cached by editor revision, path, and cursor.
-    bracket_cache: RefCell<bracket::BracketCache>,
+    /// Tree-sitter and bracket caches.
+    syntax_cache: SyntaxCacheState,
     /// Plugin discovery, host, manager, installer, and package install state.
     plugins: PluginState,
     /// Task and terminal runtime workers.
@@ -1054,8 +1059,10 @@ impl Model {
             read_only: false,
             project: ProjectState::default(),
             editor_mode: false,
-            syntax: RefCell::new(SyntaxState::default()),
-            bracket_cache: RefCell::new(bracket::BracketCache::default()),
+            syntax_cache: SyntaxCacheState {
+                highlights: RefCell::new(SyntaxState::default()),
+                bracket: RefCell::new(bracket::BracketCache::default()),
+            },
             plugins: PluginState::default(),
             runtime: RuntimeState::default(),
         }
@@ -1264,12 +1271,15 @@ impl Model {
             modified: self.file.modified,
             missing: self.file.missing,
             search_query: std::mem::take(&mut self.search.query),
-            syntax: self.syntax.borrow().active_cache(),
+            syntax: self.syntax_cache.highlights.borrow().active_cache(),
         };
         self.buffers.read_only_title = Some(title.to_owned());
         self.buffers.help_back = Some(saved);
         self.clear_git_gutter();
-        self.syntax.borrow_mut().switch_path(None, true);
+        self.syntax_cache
+            .highlights
+            .borrow_mut()
+            .switch_path(None, true);
         self.session.cursor = 0;
         self.view.scroll = 0;
         self.view.hscroll = 0;
@@ -1290,7 +1300,10 @@ impl Model {
         }
         self.clear_git_gutter();
         self.session.editor = EditorState::from_text(text).into();
-        self.syntax.borrow_mut().switch_path(None, true);
+        self.syntax_cache
+            .highlights
+            .borrow_mut()
+            .switch_path(None, true);
         self.session.cursor = 0;
         self.view.scroll = 0;
         self.view.hscroll = 0;
@@ -1324,7 +1337,7 @@ impl Model {
         self.view.hscroll = saved.hscroll;
         self.file.modified = saved.modified;
         self.search.query = saved.search_query;
-        self.syntax.borrow_mut().switch_path_with(
+        self.syntax_cache.highlights.borrow_mut().switch_path_with(
             self.session.path.as_deref(),
             false,
             Some(syntax),
@@ -1342,7 +1355,8 @@ impl Model {
         let revision = self.session.editor.revision();
         let path = self.session.path.clone();
         if self
-            .syntax
+            .syntax_cache
+            .highlights
             .borrow_mut()
             .poll(text, revision, path.as_deref())
         {

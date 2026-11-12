@@ -15,7 +15,7 @@ impl Model {
             visual_line: self.edit.visual_line,
             modified: self.file.modified,
             search_query: self.search.query.clone(),
-            syntax: self.syntax.borrow().active_cache(),
+            syntax: self.syntax_cache.highlights.borrow().active_cache(),
         }
     }
 
@@ -56,7 +56,7 @@ impl Model {
         self.search.state.reset_for_buffer();
         self.start_page.welcome = false;
         self.start_page.welcome_back = false;
-        self.syntax.borrow_mut().switch_path_with(
+        self.syntax_cache.highlights.borrow_mut().switch_path_with(
             self.session.path.as_deref(),
             false,
             Some(syntax),
@@ -238,7 +238,10 @@ impl Model {
         self.edit.visual_line = false;
         self.search.query.clear();
         self.search.state.reset_for_buffer();
-        self.syntax.borrow_mut().switch_path(None, false);
+        self.syntax_cache
+            .highlights
+            .borrow_mut()
+            .switch_path(None, false);
         self.start_page.welcome = false;
         self.start_page.welcome_back = false;
         self.ui.input_mode = InputMode::Normal;

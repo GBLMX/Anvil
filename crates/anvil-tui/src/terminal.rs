@@ -101,7 +101,11 @@ pub fn run_with_input(
         model.file.missing = false;
         model.set_stdin_buffer(read_only);
         model.set_pipe_locations(&text);
-        model.syntax.borrow_mut().switch_path(None, false);
+        model
+            .syntax_cache
+            .highlights
+            .borrow_mut()
+            .switch_path(None, false);
         model.status.text = if read_only {
             "[stdin] read-only".to_owned()
         } else {

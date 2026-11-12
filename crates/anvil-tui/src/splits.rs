@@ -142,7 +142,8 @@ impl Model {
         }
         self.ui.input_mode = InputMode::Normal;
         self.input.pending = None;
-        self.syntax
+        self.syntax_cache
+            .highlights
             .borrow_mut()
             .switch_path(self.session.path.as_deref(), false);
         self.sync_lsp_active();

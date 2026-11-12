@@ -76,7 +76,8 @@ impl Model {
     pub(crate) fn breadcrumb_text(&self, width: usize) -> String {
         let path = self.relative_path_text();
         let symbol = self.session.path.as_ref().and_then(|path| {
-            self.syntax
+            self.syntax_cache
+                .highlights
                 .borrow()
                 .scope_label(Some(path.as_path()), self.session.cursor)
                 .map(str::to_owned)

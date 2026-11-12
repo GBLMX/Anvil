@@ -6,7 +6,8 @@ fn markdown_fenced_code_renders_a_full_width_background() {
     for _ in 0..100 {
         model.poll_syntax();
         if model
-            .syntax
+            .syntax_cache
+            .highlights
             .borrow()
             .highlights()
             .iter()
@@ -43,7 +44,8 @@ fn fenced_code_background_reaches_right_edge_when_hscrolled() {
     for _ in 0..100 {
         model.poll_syntax();
         if model
-            .syntax
+            .syntax_cache
+            .highlights
             .borrow()
             .highlights()
             .iter()
@@ -66,7 +68,8 @@ fn cursorline_overlays_fenced_code_background() {
     for _ in 0..100 {
         model.poll_syntax();
         if model
-            .syntax
+            .syntax_cache
+            .highlights
             .borrow()
             .highlights()
             .iter()
@@ -94,7 +97,13 @@ fn inline_code_gets_a_background_span() {
     model.session.path = Some(PathBuf::from("x.md"));
     for _ in 0..100 {
         model.poll_syntax();
-        if !model.syntax.borrow().highlights().is_empty() {
+        if !model
+            .syntax_cache
+            .highlights
+            .borrow()
+            .highlights()
+            .is_empty()
+        {
             break;
         }
         std::thread::sleep(std::time::Duration::from_millis(2));
@@ -121,7 +130,8 @@ fn search_background_overlays_fenced_code_background() {
     for _ in 0..100 {
         model.poll_syntax();
         if model
-            .syntax
+            .syntax_cache
+            .highlights
             .borrow()
             .highlights()
             .iter()

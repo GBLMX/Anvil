@@ -575,7 +575,7 @@ fn commit_states(model: &mut Model, prepared: HashMap<PathBuf, EditorState>) {
                 .cursor
                 .min(model.session.editor.text().len_bytes());
             model.file.modified = true;
-            model.syntax.borrow_mut().invalidate();
+            model.syntax_cache.highlights.borrow_mut().invalidate();
             if let Some(buffer) = model
                 .buffers
                 .entries
@@ -683,7 +683,8 @@ impl Model {
         self.git.diff_checked = None;
         self.git.marks.clear();
         self.clear_lsp_ui();
-        self.syntax
+        self.syntax_cache
+            .highlights
             .borrow_mut()
             .switch_path(self.session.path.as_deref(), true);
         self.tree.stale = true;

@@ -72,7 +72,8 @@ impl Model {
             self.view.hscroll = 0;
             self.file.modified = false;
             self.file.missing = false;
-            self.syntax
+            self.syntax_cache
+                .highlights
                 .borrow_mut()
                 .switch_path(self.session.path.as_deref(), true);
         }
@@ -370,7 +371,7 @@ impl Model {
             self.session.cursor = cursor;
             self.file.modified = false;
             self.file.missing = false;
-            self.syntax.borrow_mut().invalidate();
+            self.syntax_cache.highlights.borrow_mut().invalidate();
             self.sync_lsp_active();
         }
         if let Some(buffer) = self

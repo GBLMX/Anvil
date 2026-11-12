@@ -292,13 +292,15 @@ Phase 1 started on 2026-11-12:
   the process exit code.
 - `Model.start_page` owns the start dashboard visibility and the state needed
   to return to it after the help page.
+- `Model.syntax_cache` owns tree-sitter highlight and bracket caches keyed by
+  editor revision, path, and cursor.
 - `Model.language` owns `DapState`, `DiagnosticsState`, `LspTransportState`,
   and `LspRequestsState`. Transport keeps clients, workers, config, retries,
   and retry deadlines; requests keep pending maps, document versions, request
   ids, and format-on-save coordination.
 - Existing behavior is unchanged; tests access the composed state explicitly.
-- `Model` now has 25 top-level fields. Remaining mode, settings-adjacent, and
-  syntax-cache fields move in later behavior-preserving slices.
+- `Model` now has 24 top-level fields. Remaining mode and settings-adjacent
+  fields move in later behavior-preserving slices.
 
 
 ## Acceptance

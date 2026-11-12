@@ -415,11 +415,16 @@ impl Model {
             return false;
         };
         let line_end = line.end.max(start + 1);
-        self.syntax.borrow().highlights().iter().any(|highlight| {
-            highlight.class == syntax::SyntaxClass::CodeBlock
-                && highlight.start < line_end
-                && highlight.end > start
-        })
+        self.syntax_cache
+            .highlights
+            .borrow()
+            .highlights()
+            .iter()
+            .any(|highlight| {
+                highlight.class == syntax::SyntaxClass::CodeBlock
+                    && highlight.start < line_end
+                    && highlight.end > start
+            })
     }
 
     pub(crate) fn visible_gutter(&self, height: u16) -> Vec<Line<'static>> {
@@ -586,7 +591,7 @@ impl Model {
                 })
                 .collect::<Vec<_>>();
             let semantic_ranges = self.semantic_ranges(start, line_end);
-            let syntax_guard = self.syntax.borrow();
+            let syntax_guard = self.syntax_cache.highlights.borrow();
             let highlights = syntax_guard.highlights();
             for chunk in text.chunks(render_start..render_end) {
                 push_syntax_spans(&mut spans, chunk, base, highlights);
