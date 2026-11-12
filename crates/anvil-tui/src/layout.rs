@@ -73,6 +73,77 @@ impl Model {
             .collect()
     }
 
+    pub(crate) fn wrap_text_width(&self, width: u16) -> usize {
+        let mut width = width;
+        if self.tree_visible && width > 50 {
+            let sidebar = (width / 5).clamp(18, 40).min(width - 20);
+            width = width.saturating_sub(sidebar);
+        }
+        usize::from(width.saturating_sub(self.gutter_width()).max(1))
+    }
+
+    pub(crate) fn scroll_display_rows(&mut self, delta: isize, width: u16) {
+        if !self.settings.editor.soft_wrap {
+            self.scroll = self
+                .scroll
+                .saturating_add_signed(delta)
+                .min(self.editor.index().len_lines().saturating_sub(1));
+            self.scroll_subrow = 0;
+            return;
+        }
+        self.wrap_width = self.wrap_text_width(width);
+        let total = self.editor.index().len_lines();
+        if total == 0 {
+            return;
+        }
+        self.scroll = self.scroll.min(total.saturating_sub(1));
+        let mut remaining = delta.unsigned_abs();
+        if delta > 0 {
+            while remaining > 0 {
+                let segments = self
+                    .wrap_segments(self.scroll, self.wrap_width)
+                    .len()
+                    .max(1);
+                let available = segments.saturating_sub(self.scroll_subrow);
+                if remaining < available {
+                    self.scroll_subrow += remaining;
+                    break;
+                }
+                remaining -= available;
+                let next = self.next_visible_line(self.scroll);
+                if next >= total {
+                    self.scroll = total - 1;
+                    self.scroll_subrow = segments.saturating_sub(1);
+                    break;
+                }
+                self.scroll = next;
+                self.scroll_subrow = 0;
+            }
+        } else {
+            while remaining > 0 {
+                if self.scroll_subrow > 0 {
+                    let take = remaining.min(self.scroll_subrow);
+                    self.scroll_subrow -= take;
+                    remaining -= take;
+                    continue;
+                }
+                if self.scroll == 0 {
+                    break;
+                }
+                let previous = self.first_visible_line(self.scroll.saturating_sub(1));
+                if previous == self.scroll {
+                    break;
+                }
+                self.scroll = previous;
+                self.scroll_subrow = self
+                    .wrap_segments(previous, self.wrap_width)
+                    .len()
+                    .saturating_sub(1);
+                remaining -= 1;
+            }
+        }
+    }
+
     pub(crate) fn visible_rows(&self, start: usize, height: usize) -> Vec<DisplayRow> {
         if height == 0 {
             return Vec::new();
@@ -620,6 +691,35 @@ mod tests {
         model.editor.set_selection_bytes(9, 9);
         model.ensure_cursor_visible(2, 5);
         assert!(model.scroll_subrow > 0, "subrow={}", model.scroll_subrow);
+    }
+
+    #[test]
+    fn wrap_width_accounts_for_tree_sidebar() {
+        let mut model = Model::new(EditorState::from_text("x"), None);
+        let gutter = usize::from(model.gutter_width());
+        assert_eq!(model.wrap_text_width(100), 100 - gutter);
+        model.tree_visible = true;
+        let sidebar = (100u16 / 5).clamp(18, 40).min(100 - 20);
+        assert_eq!(
+            model.wrap_text_width(100),
+            usize::from(100 - sidebar) - gutter
+        );
+    }
+
+    #[test]
+    fn wrapped_scroll_advances_display_rows() {
+        let mut model = Model::new(EditorState::from_text("abcdefghij\nnext"), None);
+        model.settings.editor.soft_wrap = true;
+        let width = model.gutter_width() + 2;
+        model.scroll_display_rows(1, width);
+        assert_eq!(model.scroll, 0);
+        assert_eq!(model.scroll_subrow, 1);
+        model.scroll_display_rows(4, width);
+        assert_eq!(model.scroll, 1);
+        assert_eq!(model.scroll_subrow, 0);
+        model.scroll_display_rows(-1, width);
+        assert_eq!(model.scroll, 0);
+        assert_eq!(model.scroll_subrow, 4);
     }
 
     #[test]

@@ -499,7 +499,7 @@ impl Model {
         }
         let column = position.display_column;
         if self.settings.editor.soft_wrap {
-            self.wrap_width = usize::from(width.saturating_sub(self.gutter_width()).max(1));
+            self.wrap_width = self.wrap_text_width(width);
             if self.row_of_position(line, column, height).is_none() {
                 self.scroll = line;
                 self.scroll_subrow = 0;
