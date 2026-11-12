@@ -224,17 +224,17 @@ impl Model {
     }
 
     pub(crate) fn request_debug_refresh(&mut self) {
-        let Some(client) = self.dap_client.take() else {
+        let Some(client) = self.language.dap_client.take() else {
             self.status = "E: no debug adapter; use :dap-attach".to_owned();
             self.dirty = true;
             return;
         };
         let Some(panel) = self.overlays.debug_panel.as_ref() else {
-            self.dap_client = Some(client);
+            self.language.dap_client = Some(client);
             return;
         };
-        if self.debug_request.is_some() {
-            self.dap_client = Some(client);
+        if self.language.debug_request.is_some() {
+            self.language.dap_client = Some(client);
             return;
         }
         let selection = DebugSelection {
@@ -253,8 +253,8 @@ impl Model {
             let result = snapshot(&mut client, &selection).map_err(|error| error.to_string());
             let _ = sender.send((client, result));
         });
-        self.debug_request = Some(receiver);
-        self.debug_request_started = Some(Instant::now());
+        self.language.debug_request = Some(receiver);
+        self.language.debug_request_started = Some(Instant::now());
         if let Some(panel) = self.overlays.debug_panel.as_mut() {
             panel.pending = true;
         }
@@ -263,14 +263,14 @@ impl Model {
     }
 
     pub(crate) fn poll_debug_request(&mut self) {
-        let Some(receiver) = self.debug_request.as_ref() else {
+        let Some(receiver) = self.language.debug_request.as_ref() else {
             return;
         };
         match receiver.try_recv() {
             Ok((client, result)) => {
-                self.debug_request = None;
-                self.debug_request_started = None;
-                self.dap_client = Some(client);
+                self.language.debug_request = None;
+                self.language.debug_request_started = None;
+                self.language.dap_client = Some(client);
                 match result {
                     Ok(snapshot) => {
                         if let Some(panel) = self.overlays.debug_panel.as_mut() {
@@ -289,8 +289,8 @@ impl Model {
                 self.dirty = true;
             }
             Err(std::sync::mpsc::TryRecvError::Disconnected) => {
-                self.debug_request = None;
-                self.debug_request_started = None;
+                self.language.debug_request = None;
+                self.language.debug_request_started = None;
                 if let Some(panel) = self.overlays.debug_panel.as_mut() {
                     panel.pending = false;
                 }
@@ -299,11 +299,12 @@ impl Model {
             }
             Err(std::sync::mpsc::TryRecvError::Empty) => {
                 if self
+                    .language
                     .debug_request_started
                     .is_some_and(|started| started.elapsed() >= Duration::from_secs(5))
                 {
-                    self.debug_request = None;
-                    self.debug_request_started = None;
+                    self.language.debug_request = None;
+                    self.language.debug_request_started = None;
                     if let Some(panel) = self.overlays.debug_panel.as_mut() {
                         panel.pending = false;
                     }

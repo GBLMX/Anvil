@@ -314,6 +314,21 @@ impl Default for LocationPanelState {
 }
 
 #[derive(Default)]
+struct LanguageState {
+    breakpoints: HashMap<PathBuf, BTreeSet<u32>>,
+    dap_client: Option<crate::dap::DapClient>,
+    dap_attach: Option<mpsc::Receiver<Result<crate::dap::DapClient, String>>>,
+    dap_attach_started: Option<Instant>,
+    debug_request: Option<
+        mpsc::Receiver<(
+            crate::dap::DapClient,
+            Result<debug_panel::DebugSnapshot, String>,
+        )>,
+    >,
+    debug_request_started: Option<Instant>,
+}
+
+#[derive(Default)]
 struct OverlayState {
     command_palette: Option<CommandPaletteState>,
     settings_overlay: Option<SettingsOverlayState>,
@@ -614,23 +629,8 @@ pub struct Model {
     root_file_workers: BTreeMap<PathBuf, FileWorker>,
     /// Git gutter marks keyed by zero-based line.
     git_marks: HashMap<usize, char>,
-    /// Breakpoints keyed by absolute path and one-based line.
-    breakpoints: HashMap<PathBuf, BTreeSet<u32>>,
-    /// Optional DAP client used to mirror breakpoints.
-    dap_client: Option<crate::dap::DapClient>,
-    /// Background DAP initialization result.
-    dap_attach: Option<mpsc::Receiver<Result<crate::dap::DapClient, String>>>,
-    /// When the background DAP attach started.
-    dap_attach_started: Option<Instant>,
-    /// Background DAP debug-state request.
-    debug_request: Option<
-        mpsc::Receiver<(
-            crate::dap::DapClient,
-            Result<debug_panel::DebugSnapshot, String>,
-        )>,
-    >,
-    /// When the background debug refresh started.
-    debug_request_started: Option<Instant>,
+    /// Language services and debugger runtime.
+    language: LanguageState,
     /// Workspace git status keyed by absolute path.
     git_status: HashMap<PathBuf, char>,
     /// Latest requested tree git-status generation.
@@ -900,12 +900,7 @@ impl Model {
             file_worker: None,
             root_file_workers: BTreeMap::new(),
             git_marks: HashMap::new(),
-            breakpoints: HashMap::new(),
-            dap_client: None,
-            dap_attach: None,
-            dap_attach_started: None,
-            debug_request: None,
-            debug_request_started: None,
+            language: LanguageState::default(),
             git_status: HashMap::new(),
             git_status_generation: 0,
             git_status_pending: None,

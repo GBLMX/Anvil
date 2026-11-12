@@ -17,43 +17,44 @@ impl Model {
                 .map_err(|error| error.to_string());
             let _ = sender.send(result);
         });
-        self.dap_attach = Some(receiver);
-        self.dap_attach_started = Some(Instant::now());
+        self.language.dap_attach = Some(receiver);
+        self.language.dap_attach_started = Some(Instant::now());
         self.status = format!("attaching debug adapter: {display}");
         self.dirty = true;
     }
 
     pub(crate) fn poll_dap_attach(&mut self) {
-        let Some(receiver) = self.dap_attach.as_ref() else {
+        let Some(receiver) = self.language.dap_attach.as_ref() else {
             return;
         };
         match receiver.try_recv() {
             Ok(Ok(client)) => {
-                self.dap_attach = None;
-                self.dap_attach_started = None;
+                self.language.dap_attach = None;
+                self.language.dap_attach_started = None;
                 self.attach_dap_client(client);
                 self.status = "debug adapter attached".to_owned();
                 self.dirty = true;
             }
             Ok(Err(error)) => {
-                self.dap_attach = None;
-                self.dap_attach_started = None;
+                self.language.dap_attach = None;
+                self.language.dap_attach_started = None;
                 self.status = format!("E: dap initialize: {error}");
                 self.dirty = true;
             }
             Err(std::sync::mpsc::TryRecvError::Disconnected) => {
-                self.dap_attach = None;
-                self.dap_attach_started = None;
+                self.language.dap_attach = None;
+                self.language.dap_attach_started = None;
                 self.status = "E: dap attach worker stopped".to_owned();
                 self.dirty = true;
             }
             Err(std::sync::mpsc::TryRecvError::Empty) => {
                 if self
+                    .language
                     .dap_attach_started
                     .is_some_and(|started| started.elapsed() >= Duration::from_secs(5))
                 {
-                    self.dap_attach = None;
-                    self.dap_attach_started = None;
+                    self.language.dap_attach = None;
+                    self.language.dap_attach_started = None;
                     self.status = "E: dap attach timed out (adapter may be hung)".to_owned();
                     self.dirty = true;
                 }
@@ -62,7 +63,7 @@ impl Model {
     }
 
     fn attach_dap_client(&mut self, client: DapClient) {
-        self.dap_client = Some(client);
+        self.language.dap_client = Some(client);
         self.sync_all_breakpoints();
     }
 
@@ -77,13 +78,13 @@ impl Model {
             self.dirty = true;
             return;
         };
-        let entry = self.breakpoints.entry(path.clone()).or_default();
+        let entry = self.language.breakpoints.entry(path.clone()).or_default();
         if !entry.remove(&line) {
             entry.insert(line);
         }
         let enabled = entry.contains(&line);
         if entry.is_empty() {
-            self.breakpoints.remove(&path);
+            self.language.breakpoints.remove(&path);
         }
         self.sync_breakpoints(&path);
         self.status = if enabled {
@@ -95,16 +96,18 @@ impl Model {
     }
 
     pub(crate) fn breakpoint_marker(&self, path: &Path, line: usize) -> bool {
-        self.breakpoints
+        self.language
+            .breakpoints
             .get(path)
             .is_some_and(|lines| lines.contains(&(line as u32 + 1)))
     }
 
     fn sync_breakpoints(&mut self, path: &Path) {
-        let Some(dap) = self.dap_client.as_mut() else {
+        let Some(dap) = self.language.dap_client.as_mut() else {
             return;
         };
         let lines = self
+            .language
             .breakpoints
             .get(path)
             .map(|lines| lines.iter().copied().collect::<Vec<_>>())
@@ -116,7 +119,12 @@ impl Model {
     }
 
     fn sync_all_breakpoints(&mut self) {
-        let paths = self.breakpoints.keys().cloned().collect::<Vec<_>>();
+        let paths = self
+            .language
+            .breakpoints
+            .keys()
+            .cloned()
+            .collect::<Vec<_>>();
         for path in paths {
             self.sync_breakpoints(&path);
         }

@@ -877,10 +877,10 @@ fn dap_attach_does_not_block_and_reports_failure() {
         model.status
     );
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
-    while model.dap_attach.is_some() && std::time::Instant::now() < deadline {
+    while model.language.dap_attach.is_some() && std::time::Instant::now() < deadline {
         model.poll_dap_attach();
         std::thread::sleep(std::time::Duration::from_millis(10));
     }
-    assert!(model.dap_attach.is_none());
+    assert!(model.language.dap_attach.is_none());
     assert!(model.status.contains("dap"), "{}", model.status);
 }

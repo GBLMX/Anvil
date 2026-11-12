@@ -11,7 +11,8 @@ post-`0.5.0` feature line.
 - Started the ADR-0024 state refactor: command palette, settings, theme
   browser, fuzzy, preview, debug panel, test explorer, command completion, and
   command-palette recents, and the pipe-location panel now live under
-  `Model.overlays`.
+  `Model.overlays`; breakpoints and DAP runtime state moved under
+  `Model.language`.
 - Settings is now a full page with top categories, a section sidebar,
   highlighted values, and a description footer.
 - The command palette renders title/detail columns, a result count, and a key
