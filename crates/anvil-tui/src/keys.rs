@@ -43,7 +43,7 @@ pub(crate) fn handle_event(model: &mut Model, event: Event) {
                 return;
             }
             model.syntax.borrow_mut().note_activity();
-            model.pending = None;
+            model.input.pending = None;
             let (text, truncated) = normalize_paste(&text);
             if truncated {
                 model.status = "E: paste truncated".to_owned();
@@ -124,7 +124,7 @@ fn execute_pending_command(
             } else {
                 operator
             });
-            model.object_pending = true;
+            model.input.object_pending = true;
         }
         PendingCommand::OperatorWord { operator, around } => {
             let count = model.take_count();
@@ -250,11 +250,11 @@ fn execute_normal_command(model: &mut Model, command: NormalCommand) {
         NormalCommand::Pending(pending) => model.begin_pending(pending),
         NormalCommand::Hover => model.queue_effect(Effect::LspHover),
         NormalCommand::MacroRecord => {
-            model.macro_wait = Some('q');
+            model.input.macro_wait = Some('q');
             model.dirty = true;
         }
         NormalCommand::MacroReplay => {
-            model.macro_wait = Some('@');
+            model.input.macro_wait = Some('@');
             model.dirty = true;
         }
         NormalCommand::SplitSelection => model.split_selection_lines(),
@@ -275,7 +275,7 @@ fn execute_normal_command(model: &mut Model, command: NormalCommand) {
         NormalCommand::OpenAbove => model.open_above(),
         NormalCommand::SearchNext(forward) => model.search_next(forward),
         NormalCommand::RegisterWait => {
-            model.register_wait = true;
+            model.input.register_wait = true;
             model.dirty = true;
         }
         NormalCommand::DeleteForward => {
@@ -288,7 +288,7 @@ fn execute_normal_command(model: &mut Model, command: NormalCommand) {
         NormalCommand::Undo => model.undo(),
         NormalCommand::Redo => model.redo(),
         NormalCommand::RepeatChange => {
-            let count = model.count;
+            let count = model.input.count;
             let _ = model.take_count();
             model.repeat_last_change(count);
         }
@@ -392,26 +392,26 @@ fn handle_key(model: &mut Model, key: KeyPress) {
         model.welcome = false;
         model.dirty = true;
     }
-    if let Some(waiting) = model.macro_wait.take() {
+    if let Some(waiting) = model.input.macro_wait.take() {
         match waiting {
             'q' => {
-                model.recording = Some(match key.code {
+                model.input.recording = Some(match key.code {
                     KeyCode::Char(register) => register,
                     _ => 'q',
                 });
-                model.recording_keys.clear();
+                model.input.recording_keys.clear();
             }
             '@' => {
                 let register = match key.code {
-                    KeyCode::Char('@') => model.last_macro,
+                    KeyCode::Char('@') => model.input.last_macro,
                     KeyCode::Char(register) => Some(register),
                     _ => None,
                 };
                 if let Some(register) = register
                     && let Some(steps) = model.editor.macro_steps(register).map(<[_]>::to_vec)
                 {
-                    model.last_macro = Some(register);
-                    model.replaying = true;
+                    model.input.last_macro = Some(register);
+                    model.input.replaying = true;
                     for step in steps {
                         let Some(key) = macro_key(&step) else {
                             model.status = format!("E: macro step unavailable: {}", step.key);
@@ -420,7 +420,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
                         };
                         handle_key(model, KeyPress::from_key(key));
                     }
-                    model.replaying = false;
+                    model.input.replaying = false;
                 }
             }
             _ => {}
@@ -428,10 +428,10 @@ fn handle_key(model: &mut Model, key: KeyPress) {
         return;
     }
 
-    if let Some(register) = model.recording {
+    if let Some(register) = model.input.recording {
         if key.code == KeyCode::Char('q') {
-            model.recording = None;
-            let steps = std::mem::take(&mut model.recording_keys)
+            model.input.recording = None;
+            let steps = std::mem::take(&mut model.input.recording_keys)
                 .into_iter()
                 .map(macro_step)
                 .collect();
@@ -439,13 +439,13 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             model.dirty = true;
             return;
         }
-        model.recording_keys.push(key.event());
+        model.input.recording_keys.push(key.event());
     }
 
-    if model.register_wait {
+    if model.input.register_wait {
         if text_input && let KeyCode::Char(character) = key.code {
-            model.register = Some(character);
-            model.register_wait = false;
+            model.input.register = Some(character);
+            model.input.register_wait = false;
             model.dirty = true;
         }
         return;
@@ -491,8 +491,8 @@ fn handle_key(model: &mut Model, key: KeyPress) {
     }
 
     if model.keymap_context() == KeymapContext::Popup {
-        model.pending = None;
-        model.leader_deadline = None;
+        model.input.pending = None;
+        model.input.leader_deadline = None;
         if let Some(action) = model
             .keymap
             .resolve_context_exact(KeymapContext::Popup, key)
@@ -502,15 +502,15 @@ fn handle_key(model: &mut Model, key: KeyPress) {
         }
     }
 
-    if let Some(pending) = model.pending.take() {
-        model.leader_deadline = None;
+    if let Some(pending) = model.input.pending.take() {
+        model.input.leader_deadline = None;
         model.dirty = true;
         if key.ctrl() || key.alt() || key.super_key() {
             model.status = "E: modifier not valid in pending command".to_owned();
             return;
         }
-        let object_pending = model.object_pending;
-        model.object_pending = false;
+        let object_pending = model.input.object_pending;
+        model.input.object_pending = false;
         let command = resolve_pending(pending, key, object_pending, &model.keymap);
         if command.is_none() && !object_pending && !matches!(pending, 'g' | ']' | '[') {
             let _ = model.take_count();
@@ -1330,7 +1330,8 @@ fn handle_key(model: &mut Model, key: KeyPress) {
                     .keymap
                     .resolve_context_exact(context, key)
                     .or_else(|| {
-                        resolve_normal(key, model.count, &model.keymap).map(ContextAction::Normal)
+                        resolve_normal(key, model.input.count, &model.keymap)
+                            .map(ContextAction::Normal)
                     })
                     .or_else(|| {
                         model
@@ -1338,7 +1339,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
                             .resolve_context_exact(KeymapContext::Global, key)
                     })
             } else {
-                resolve_normal(key, model.count, &model.keymap)
+                resolve_normal(key, model.input.count, &model.keymap)
                     .map(ContextAction::Normal)
                     .or_else(|| {
                         model

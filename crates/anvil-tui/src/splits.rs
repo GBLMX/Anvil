@@ -141,7 +141,7 @@ impl Model {
             self.buffers.active = active;
         }
         self.ui.input_mode = InputMode::Normal;
-        self.pending = None;
+        self.input.pending = None;
         self.syntax
             .borrow_mut()
             .switch_path(self.path.as_deref(), false);

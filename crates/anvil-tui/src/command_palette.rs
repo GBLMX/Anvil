@@ -94,8 +94,8 @@ impl Model {
             theme_picker: theme_picker::ThemePicker::new(),
         });
         self.refresh_command_palette();
-        self.pending = None;
-        self.leader_deadline = None;
+        self.input.pending = None;
+        self.input.leader_deadline = None;
         self.dirty = true;
     }
 

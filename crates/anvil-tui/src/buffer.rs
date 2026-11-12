@@ -61,7 +61,7 @@ impl Model {
             .switch_path_with(self.path.as_deref(), false, Some(syntax));
         self.buffers.active = index;
         self.ui.input_mode = InputMode::Normal;
-        self.pending = None;
+        self.input.pending = None;
         self.sync_lsp_active();
         self.dirty = true;
     }
@@ -239,7 +239,7 @@ impl Model {
         self.welcome = false;
         self.welcome_back = false;
         self.ui.input_mode = InputMode::Normal;
-        self.pending = None;
+        self.input.pending = None;
         self.buffers.split = None;
         self.ui.focus.split = false;
         self.buffers.active = 0;

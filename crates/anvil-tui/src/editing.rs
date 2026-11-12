@@ -33,7 +33,7 @@ impl Model {
         let deleted = self.editor.text().slice(range.clone());
         self.editor.set_selection_bytes(range.start, range.end);
         self.editor.delete(range.clone());
-        if let Some(register) = self.register.take() {
+        if let Some(register) = self.input.register.take() {
             self.record_register_text(register, &deleted);
         }
         self.cursor = range.start;
@@ -54,7 +54,7 @@ impl Model {
         let deleted = self.editor.text().slice(range.clone());
         self.editor.set_selection_bytes(range.start, range.end);
         self.editor.delete(range.clone());
-        if let Some(register) = self.register.take() {
+        if let Some(register) = self.input.register.take() {
             self.record_register_text(register, &deleted);
         }
         self.cursor = range.start;
@@ -75,7 +75,7 @@ impl Model {
         let deleted = self.editor.text().slice(range.clone());
         self.editor.set_selection_bytes(range.start, range.end);
         self.editor.delete(range.clone());
-        if let Some(register) = self.register.take() {
+        if let Some(register) = self.input.register.take() {
             self.record_register_text(register, &deleted);
         }
         self.cursor = range.start;
@@ -177,7 +177,7 @@ impl Model {
                 self.editor.set_selection_bytes(range.start, range.end);
                 self.editor.delete(range.clone());
                 self.cursor = range.start;
-                if let Some(register) = self.register.take() {
+                if let Some(register) = self.input.register.take() {
                     self.record_register_text(register, &deleted);
                 }
                 self.modified = true;
@@ -188,7 +188,7 @@ impl Model {
                 self.editor.set_selection_bytes(range.start, range.end);
                 self.editor.delete(range.clone());
                 self.cursor = range.start;
-                if let Some(register) = self.register.take() {
+                if let Some(register) = self.input.register.take() {
                     self.record_register_text(register, &deleted);
                 }
                 self.modified = true;
@@ -339,7 +339,7 @@ impl Model {
         if !deleted.is_empty() {
             self.last_change = Some(LastChange::DeleteWords { motion, count });
         }
-        if let Some(register) = self.register.take() {
+        if let Some(register) = self.input.register.take() {
             self.record_register_text(register, &deleted);
         }
         self.dirty = true;
@@ -395,7 +395,7 @@ impl Model {
     }
 
     pub(crate) fn move_file_end(&mut self) {
-        let count = self.count;
+        let count = self.input.count;
         let _ = self.take_count();
         let mut last_line = self.editor.index().len_lines().saturating_sub(1);
         let text_len = self.editor.text().len_bytes();
@@ -759,7 +759,7 @@ impl Model {
                 let _ = self.editor.yank(range);
             }
         }
-        if let Some(register) = self.register.take() {
+        if let Some(register) = self.input.register.take() {
             self.record_register_text(register, &deleted);
         }
         if !self.delete_selections(false) {
@@ -1027,7 +1027,7 @@ impl Model {
         self.editor.delete(start..last.end);
         self.cursor = start;
         self.last_change = Some(LastChange::DeleteLines { count });
-        if let Some(register) = self.register.take() {
+        if let Some(register) = self.input.register.take() {
             self.record_register_text(register, &deleted);
         }
         self.modified = true;
@@ -1063,7 +1063,7 @@ impl Model {
     }
 
     pub(crate) fn record_register(&mut self) {
-        let Some(register) = self.register.take() else {
+        let Some(register) = self.input.register.take() else {
             return;
         };
         let text = self.editor.yank_text().to_owned();
@@ -1089,7 +1089,7 @@ impl Model {
         if self.reject_read_only() {
             return;
         }
-        if let Some(register) = self.register.take() {
+        if let Some(register) = self.input.register.take() {
             if register == '_' {
                 return;
             }

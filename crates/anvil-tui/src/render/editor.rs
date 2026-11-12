@@ -384,7 +384,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
             }
         }
     }
-    if let Some(prefix) = model.pending {
+    if let Some(prefix) = model.input.pending {
         let entries = model.pending_hints();
         if !entries.is_empty() {
             let available = usize::from(area.width.saturating_sub(2)).max(1);

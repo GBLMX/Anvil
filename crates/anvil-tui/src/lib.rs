@@ -504,6 +504,32 @@ impl Default for PluginState {
 }
 
 #[derive(Default)]
+struct InputState {
+    /// Pending normal-mode operator (`d` or `y`).
+    pending: Option<char>,
+    /// Deadline for a pending Space leader.
+    leader_deadline: Option<Instant>,
+    /// Numeric count prefix, zero means no count.
+    count: usize,
+    /// Waiting for a register name after `"`.
+    register_wait: bool,
+    /// Register selected by `"x`.
+    register: Option<char>,
+    /// Register name waiting after `q` or `@`.
+    macro_wait: Option<char>,
+    /// Currently recording into a register.
+    recording: Option<char>,
+    /// Recorded key sequence.
+    recording_keys: Vec<KeyEvent>,
+    /// Last replayed macro.
+    last_macro: Option<char>,
+    /// Replay guard.
+    replaying: bool,
+    /// `c` / `y` operator waiting for an inner text object (`i`).
+    object_pending: bool,
+}
+
+#[derive(Default)]
 struct SearchSession {
     /// Last substring search.
     query: String,
@@ -890,28 +916,8 @@ pub struct Model {
     busy_progress: Option<u64>,
     /// Spinner frame for the busy label.
     spinner: usize,
-    /// Pending normal-mode operator (`d` or `y`).
-    pending: Option<char>,
-    /// Deadline for a pending Space leader.
-    leader_deadline: Option<Instant>,
-    /// Numeric count prefix, zero means no count.
-    count: usize,
-    /// Waiting for a register name after `"`.
-    register_wait: bool,
-    /// Register selected by `"x`.
-    register: Option<char>,
-    /// Register name waiting after `q` or `@`.
-    macro_wait: Option<char>,
-    /// Currently recording into a register.
-    recording: Option<char>,
-    /// Recorded key sequence.
-    recording_keys: Vec<KeyEvent>,
-    /// Last replayed macro.
-    last_macro: Option<char>,
-    /// Replay guard.
-    replaying: bool,
-    /// `c` / `y` operator waiting for an inner text object (`i`).
-    object_pending: bool,
+    /// Operator, register, macro, and replay input state.
+    input: InputState,
     /// Substring search query and state.
     search: SearchSession,
     /// Full-editor start dashboard, shown until the first interaction or file open.
@@ -990,17 +996,7 @@ impl Model {
             busy: None,
             busy_progress: None,
             spinner: 0,
-            pending: None,
-            leader_deadline: None,
-            count: 0,
-            register_wait: false,
-            register: None,
-            macro_wait: None,
-            recording: None,
-            recording_keys: Vec::new(),
-            last_macro: None,
-            replaying: false,
-            object_pending: false,
+            input: InputState::default(),
             search: SearchSession::default(),
             buffers: BufferState::default(),
             workspace: WorkspaceState {
@@ -1158,30 +1154,31 @@ impl Model {
     }
 
     fn push_count(&mut self, character: char) {
-        self.count = self.count.saturating_mul(10) + usize::from(character as u8 - b'0');
+        self.input.count =
+            self.input.count.saturating_mul(10) + usize::from(character as u8 - b'0');
         self.dirty = true;
     }
 
     fn take_count(&mut self) -> usize {
-        let count = self.count.max(1);
-        self.count = 0;
+        let count = self.input.count.max(1);
+        self.input.count = 0;
         count
     }
 
     fn begin_pending(&mut self, pending: char) {
-        self.pending = Some(pending);
-        self.leader_deadline =
+        self.input.pending = Some(pending);
+        self.input.leader_deadline =
             (pending == ' ').then(|| Instant::now() + Duration::from_millis(600));
         self.dirty = true;
     }
 
     fn expire_leader(&mut self) {
-        let Some(deadline) = self.leader_deadline else {
+        let Some(deadline) = self.input.leader_deadline else {
             return;
         };
-        if self.pending == Some(' ') && Instant::now() >= deadline {
-            self.pending = None;
-            self.leader_deadline = None;
+        if self.input.pending == Some(' ') && Instant::now() >= deadline {
+            self.input.pending = None;
+            self.input.leader_deadline = None;
             self.dirty = true;
         }
     }
@@ -1248,7 +1245,7 @@ impl Model {
         self.welcome_back = self.welcome;
         self.welcome = false;
         self.ui.input_mode = InputMode::Normal;
-        self.pending = None;
+        self.input.pending = None;
         self.status = status.to_owned();
         self.dirty = true;
         true
@@ -1300,7 +1297,7 @@ impl Model {
             .switch_path_with(self.path.as_deref(), false, Some(syntax));
         self.ui.input_mode = InputMode::Normal;
         self.welcome = std::mem::take(&mut self.welcome_back);
-        self.pending = None;
+        self.input.pending = None;
         self.status = format!("Returned from {title}");
         self.dirty = true;
         true
@@ -1757,8 +1754,12 @@ impl Model {
     }
 
     fn pending_hints(&self) -> Vec<(String, String)> {
-        self.pending
-            .map(|prefix| self.keymap.pending_actions(prefix, self.object_pending))
+        self.input
+            .pending
+            .map(|prefix| {
+                self.keymap
+                    .pending_actions(prefix, self.input.object_pending)
+            })
             .unwrap_or_default()
     }
 }

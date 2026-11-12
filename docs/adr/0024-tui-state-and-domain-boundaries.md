@@ -279,13 +279,15 @@ Phase 1 started on 2026-11-12:
   selection, plugin-store size, installer transport, and package install state.
 - `Model.search` owns the current substring query and its match, option, and
   origin-restore state.
+- `Model.input` owns pending operators, leader deadlines, counts, register and
+  macro prompts, recording buffers, replay state, and inner-object state.
 - `Model.language` owns `DapState`, `DiagnosticsState`, `LspTransportState`,
   and `LspRequestsState`. Transport keeps clients, workers, config, retries,
   and retry deadlines; requests keep pending maps, document versions, request
   ids, and format-on-save coordination.
 - Existing behavior is unchanged; tests access the composed state explicitly.
-- `Model` now has 56 top-level fields. Remaining input and session page state
-  moves in later behavior-preserving slices.
+- `Model` now has 46 top-level fields. Remaining editor/session and status
+  fields move in later behavior-preserving slices.
 
 
 ## Acceptance

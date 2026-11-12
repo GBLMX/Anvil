@@ -301,7 +301,7 @@ fn pending_commands_ignore_alt_modifiers() {
     handle_event(&mut model, key(KeyCode::Char('d')));
     handle_event(&mut model, alt(KeyCode::Char('w')));
     assert_eq!(model.editor.text().slice(0..7), "one two");
-    assert!(model.pending.is_none());
+    assert!(model.input.pending.is_none());
 }
 
 #[test]
@@ -319,7 +319,7 @@ fn normal_mode_ignores_alt_commands() {
     handle_event(&mut model, alt(KeyCode::Char('i')));
     handle_event(&mut model, alt(KeyCode::Char('d')));
     assert!(matches!(model.ui.input_mode, InputMode::Normal));
-    assert!(model.pending.is_none());
+    assert!(model.input.pending.is_none());
 }
 
 #[test]

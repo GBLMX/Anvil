@@ -167,20 +167,20 @@ fn pending_commands_consume_the_count() {
     for key_code in [KeyCode::Char('2'), KeyCode::Char('c'), KeyCode::Char('w')] {
         handle_event(&mut model, key(key_code));
     }
-    assert_eq!(model.count, 0);
+    assert_eq!(model.input.count, 0);
 
     let mut model = Model::new(EditorState::from_text("one"), None);
     handle_event(&mut model, key(KeyCode::Char('2')));
     handle_event(&mut model, ctrl(KeyCode::Char('w')));
     handle_event(&mut model, key(KeyCode::Char('v')));
-    assert_eq!(model.count, 0);
+    assert_eq!(model.input.count, 0);
     assert!(model.buffers.split.is_some());
 
     let mut model = Model::new(EditorState::from_text("one"), None);
     handle_event(&mut model, key(KeyCode::Char('2')));
     handle_event(&mut model, key(KeyCode::Char('d')));
     handle_event(&mut model, key(KeyCode::Char('x')));
-    assert_eq!(model.count, 0);
+    assert_eq!(model.input.count, 0);
 }
 
 #[test]

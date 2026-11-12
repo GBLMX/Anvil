@@ -21,10 +21,10 @@ fn space_leader_focuses_editor_and_tree() {
 fn space_leader_expires_without_consuming_next_key() {
     let mut model = Model::new(EditorState::from_text("alpha\nbeta"), None);
     handle_event(&mut model, key(KeyCode::Char(' ')));
-    assert_eq!(model.pending, Some(' '));
-    model.leader_deadline = Some(std::time::Instant::now());
+    assert_eq!(model.input.pending, Some(' '));
+    model.input.leader_deadline = Some(std::time::Instant::now());
     model.expire_leader();
-    assert_eq!(model.pending, None);
+    assert_eq!(model.input.pending, None);
     handle_event(&mut model, key(KeyCode::Char('j')));
     assert_eq!(model.cursor, 6);
 }
