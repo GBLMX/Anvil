@@ -488,3 +488,47 @@ func TestStorePermissionStableKeepsEnabledPreference(t *testing.T) {
 		t.Fatalf("stable permissions lost enabled preference: %#v", state.Plugins["demo"])
 	}
 }
+
+type revocationCheck map[string]bool
+
+func (check revocationCheck) PackageRevoked(digest, pluginID string) bool {
+	return check[digest+"\x00"+pluginID]
+}
+
+func TestStoreDisablesRevokedPackages(t *testing.T) {
+	store, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	revoked := testDigest(1)
+	allowed := testDigest(2)
+	if err := store.UpdateState(func(state *StoreState) error {
+		for id, digest := range map[string]string{"revoked": revoked, "allowed": allowed} {
+			state.Plugins[id] = InstalledPlugin{
+				ActiveDigest: digest,
+				Enabled:      true,
+				Versions:     []InstalledVersion{{Digest: digest, Version: "1.0.0"}},
+			}
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("update state: %v", err)
+	}
+	disabled, err := store.DisableRevokedPackages(revocationCheck{revoked + "\x00revoked": true})
+	if err != nil {
+		t.Fatalf("disable revoked: %v", err)
+	}
+	if len(disabled) != 1 || disabled[0] != "revoked" {
+		t.Fatalf("unexpected disabled plugins: %v", disabled)
+	}
+	state, err := store.ReadState()
+	if err != nil {
+		t.Fatalf("read state: %v", err)
+	}
+	if state.Plugins["revoked"].Enabled {
+		t.Fatal("revoked plugin must be disabled")
+	}
+	if !state.Plugins["allowed"].Enabled {
+		t.Fatal("unrelated plugin must stay enabled")
+	}
+}

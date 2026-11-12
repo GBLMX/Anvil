@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -686,4 +687,34 @@ func makeTreeReadOnly(root string) error {
 		}
 		return os.Chmod(path, info.Mode().Perm()&^0o222)
 	})
+}
+
+// PackageRevocationChecker reports whether a package digest is revoked.
+type PackageRevocationChecker interface {
+	PackageRevoked(digest, pluginID string) bool
+}
+
+// DisableRevokedPackages disables active packages revoked by checker and
+// returns the affected plugin ids in sorted order.
+func (s *Store) DisableRevokedPackages(checker PackageRevocationChecker) ([]string, error) {
+	if checker == nil {
+		return nil, errors.New("revocation checker is required")
+	}
+	var disabled []string
+	err := s.UpdateState(func(state *StoreState) error {
+		for id, plugin := range state.Plugins {
+			if !plugin.Enabled || !checker.PackageRevoked(plugin.ActiveDigest, id) {
+				continue
+			}
+			plugin.Enabled = false
+			state.Plugins[id] = plugin
+			disabled = append(disabled, id)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	sort.Strings(disabled)
+	return disabled, nil
 }
