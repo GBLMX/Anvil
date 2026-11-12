@@ -304,6 +304,8 @@ struct OverlayState {
     fuzzy_generation: u64,
     preview: PreviewState,
     preview_generation: u64,
+    debug_panel: Option<debug_panel::DebugPanelState>,
+    test_explorer: Option<test_explorer::TestExplorerState>,
 }
 
 #[derive(Debug, Clone)]
@@ -599,8 +601,6 @@ pub struct Model {
     dap_attach: Option<mpsc::Receiver<Result<crate::dap::DapClient, String>>>,
     /// When the background DAP attach started.
     dap_attach_started: Option<Instant>,
-    /// Debug adapter panels.
-    debug_panel: Option<debug_panel::DebugPanelState>,
     /// Background DAP debug-state request.
     debug_request: Option<
         mpsc::Receiver<(
@@ -822,7 +822,6 @@ pub struct Model {
     task_output: Option<String>,
     task_problems: Vec<Problem>,
     task_is_tests: bool,
-    test_explorer: Option<test_explorer::TestExplorerState>,
     #[cfg(unix)]
     terminal: Option<pty_terminal::PtySession>,
     #[cfg(unix)]
@@ -891,7 +890,6 @@ impl Model {
             dap_client: None,
             dap_attach: None,
             dap_attach_started: None,
-            debug_panel: None,
             debug_request: None,
             debug_request_started: None,
             git_status: HashMap::new(),
@@ -1031,7 +1029,6 @@ impl Model {
             task_output: None,
             task_problems: Vec::new(),
             task_is_tests: false,
-            test_explorer: None,
             #[cfg(unix)]
             terminal: None,
             #[cfg(unix)]

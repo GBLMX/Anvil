@@ -620,7 +620,7 @@ fn debug_panel_renders_threads_stack_variables_and_watches() {
         (DebugPanelKind::Watch, "Debug · Watch"),
     ] {
         panel.kind = kind;
-        model.debug_panel = Some(panel.clone());
+        model.overlays.debug_panel = Some(panel.clone());
         let backend = TestBackend::new(80, 16);
         let mut terminal = Terminal::new(backend).expect("terminal");
         terminal.draw(|frame| view(&model, frame)).expect("draw");
@@ -647,14 +647,14 @@ fn debug_panel_renders_threads_stack_variables_and_watches() {
 fn debug_panel_keys_cycle_and_close() {
     let mut model = Model::new(EditorState::from_text("alpha"), None);
     model.execute_command("debug");
-    assert!(model.debug_panel.is_some());
+    assert!(model.overlays.debug_panel.is_some());
     handle_event(&mut model, key(KeyCode::Tab));
     assert_eq!(
-        model.debug_panel.as_ref().map(|panel| panel.kind),
+        model.overlays.debug_panel.as_ref().map(|panel| panel.kind),
         Some(crate::debug_panel::DebugPanelKind::Stack)
     );
     handle_event(&mut model, key(KeyCode::Esc));
-    assert!(model.debug_panel.is_none());
+    assert!(model.overlays.debug_panel.is_none());
 }
 
 #[test]
@@ -662,7 +662,7 @@ fn debug_watch_command_adds_an_expression() {
     let mut model = Model::new(EditorState::from_text("alpha"), None);
     model.execute_command("debug");
     model.execute_command("debug-watch count");
-    let panel = model.debug_panel.as_ref().expect("debug panel");
+    let panel = model.overlays.debug_panel.as_ref().expect("debug panel");
     assert_eq!(panel.kind, crate::debug_panel::DebugPanelKind::Watch);
     assert_eq!(panel.watches[0].expression, "count");
 }

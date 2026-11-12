@@ -42,7 +42,7 @@ impl TestExplorerState {
 
 impl Model {
     pub(crate) fn move_test_explorer(&mut self, delta: isize) {
-        let Some(explorer) = self.test_explorer.as_mut() else {
+        let Some(explorer) = self.overlays.test_explorer.as_mut() else {
             return;
         };
         explorer.move_by(delta);
@@ -50,12 +50,13 @@ impl Model {
     }
 
     pub(crate) fn close_test_explorer(&mut self) {
-        self.test_explorer = None;
+        self.overlays.test_explorer = None;
         self.dirty = true;
     }
 
     pub(crate) fn jump_test_failure(&mut self) {
         let Some(problem) = self
+            .overlays
             .test_explorer
             .as_ref()
             .and_then(TestExplorerState::selected)
@@ -75,7 +76,7 @@ impl Model {
         self.cursor = self.offset_at_utf16(problem.line as usize, problem.character as usize);
         self.ui.focus.tree = false;
         self.ui.focus.split = false;
-        self.test_explorer = None;
+        self.overlays.test_explorer = None;
         self.ui.diagnostic_peek = None;
         self.status = format!(
             "{}:{}: {}",
@@ -88,7 +89,7 @@ impl Model {
 }
 
 pub(crate) fn render(model: &Model, frame: &mut Frame, area: Rect) {
-    let Some(explorer) = &model.test_explorer else {
+    let Some(explorer) = &model.overlays.test_explorer else {
         return;
     };
     let width = (area.width * 3 / 4)

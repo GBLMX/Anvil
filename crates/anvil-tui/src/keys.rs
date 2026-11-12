@@ -819,7 +819,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             _ => {}
         }
     }
-    if model.debug_panel.is_some() {
+    if model.overlays.debug_panel.is_some() {
         match key.code {
             KeyCode::Esc => {
                 model.close_debug_panel();
@@ -844,7 +844,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             _ => {}
         }
     }
-    if model.test_explorer.is_some() {
+    if model.overlays.test_explorer.is_some() {
         match key.code {
             KeyCode::Esc => {
                 model.close_test_explorer();

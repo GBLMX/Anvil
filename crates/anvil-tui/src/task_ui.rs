@@ -35,7 +35,7 @@ impl Model {
         self.task_problems.clear();
         self.task_output = None;
         self.task_is_tests = tests;
-        self.test_explorer = None;
+        self.overlays.test_explorer = None;
         self.rebuild_problems();
         self.task_worker = Some(TaskWorker::start(
             command.to_owned(),
@@ -73,7 +73,7 @@ impl Model {
             .collect();
         self.rebuild_problems();
         if tests {
-            self.test_explorer = Some(crate::test_explorer::TestExplorerState::new(
+            self.overlays.test_explorer = Some(crate::test_explorer::TestExplorerState::new(
                 self.task_problems.clone(),
             ));
             self.ui.problems.visible = false;

@@ -253,7 +253,8 @@ a second frontend exists would make the first extraction much more expensive.
 Phase 1 started on 2026-11-12:
 
 - `Model.overlays` now owns `command_palette`, `settings_overlay`,
-  `theme_browser`, `fuzzy`, and `preview` state.
+  `theme_browser`, `fuzzy`, `preview`, `debug_panel`, and `test_explorer`
+  state.
 - Existing behavior is unchanged; tests access the composed state explicitly.
 - The remaining fuzzy/preview/problems/diagnostics/test/debug page state is
   still on `Model` and moves in later behavior-preserving slices.
