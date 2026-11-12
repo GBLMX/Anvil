@@ -967,3 +967,56 @@ fn fuzzy_keeps_root_files_when_primary_result_arrives_later() {
             .any(|entry| entry == &root.join("src/lib.rs").to_string_lossy())
     );
 }
+
+#[test]
+fn fuzzy_ranks_basename_then_frecency_then_short_paths() {
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.fuzzy = Some(FuzzyState {
+        generation: 0,
+        query: "main".to_owned(),
+        entries: vec![
+            "src/domain.rs".to_owned(),
+            "deep/nested/main.rs".to_owned(),
+            "src/main.rs".to_owned(),
+            "tests/main_test.rs".to_owned(),
+        ],
+        filtered: Vec::new(),
+        selected: 0,
+    });
+    model
+        .fuzzy_frecency
+        .insert("tests/main_test.rs".to_owned(), 5);
+    model.fuzzy_refresh();
+    let fuzzy = model.fuzzy.as_ref().expect("fuzzy");
+    let ranked = fuzzy
+        .filtered
+        .iter()
+        .map(|index| fuzzy.entries[*index].as_str())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        ranked,
+        vec![
+            "tests/main_test.rs",
+            "src/main.rs",
+            "deep/nested/main.rs",
+            "src/domain.rs"
+        ]
+    );
+}
+
+#[test]
+fn fuzzy_open_records_frecency() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    fs::write(dir.path().join("main.rs"), "fn main() {}").expect("file");
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.workspace = dir.path().to_path_buf();
+    model.fuzzy = Some(FuzzyState {
+        generation: 0,
+        query: String::new(),
+        entries: vec!["main.rs".to_owned()],
+        filtered: vec![0],
+        selected: 0,
+    });
+    model.fuzzy_open();
+    assert_eq!(model.fuzzy_frecency.get("main.rs"), Some(&1));
+}

@@ -233,13 +233,20 @@ impl Model {
             return;
         };
         let query = fuzzy.query.to_lowercase();
-        fuzzy.filtered = fuzzy
+        let mut matched = fuzzy
             .entries
             .iter()
             .enumerate()
             .filter(|(_, entry)| entry.to_lowercase().contains(&query))
-            .map(|(index, _)| index)
-            .collect();
+            .map(|(index, entry)| {
+                let score = fuzzy_score(entry, &query, self.fuzzy_frecency.get(entry).copied());
+                (score, index)
+            })
+            .collect::<Vec<_>>();
+        matched.sort_by(|(left, left_index), (right, right_index)| {
+            left.cmp(right).then(left_index.cmp(right_index))
+        });
+        fuzzy.filtered = matched.into_iter().map(|(_, index)| index).collect();
         fuzzy.selected = fuzzy.selected.min(fuzzy.filtered.len().saturating_sub(1));
         self.request_preview();
     }
@@ -265,12 +272,14 @@ impl Model {
             self.dirty = true;
             return;
         };
-        let entry = &fuzzy.entries[*index];
-        let path = if Path::new(entry).is_absolute() {
-            PathBuf::from(entry)
+        let entry = fuzzy.entries[*index].clone();
+        let path = if Path::new(&entry).is_absolute() {
+            PathBuf::from(&entry)
         } else {
-            self.workspace.join(entry)
+            self.workspace.join(&entry)
         };
+        let count = self.fuzzy_frecency.entry(entry).or_default();
+        *count = count.saturating_add(1);
         self.record_jump();
         match self.open_path(&path) {
             Ok(()) => {}
@@ -278,4 +287,36 @@ impl Model {
         }
         self.dirty = true;
     }
+}
+
+fn fuzzy_score(
+    entry: &str,
+    query: &str,
+    frecency: Option<u32>,
+) -> (u8, u8, usize, std::cmp::Reverse<u32>, usize, String) {
+    let lower = entry.to_lowercase();
+    let basename = Path::new(entry)
+        .file_name()
+        .map(|name| name.to_string_lossy().to_lowercase())
+        .unwrap_or_else(|| lower.clone());
+    let basename_match = basename.contains(query);
+    let basename_prefix = if !query.is_empty() && basename.starts_with(query) {
+        0
+    } else {
+        1
+    };
+    let position = if basename_match {
+        basename.find(query).unwrap_or(usize::MAX)
+    } else {
+        lower.find(query).unwrap_or(usize::MAX)
+    };
+    let depth = Path::new(entry).components().count();
+    (
+        if basename_match { 0 } else { 1 },
+        basename_prefix,
+        position,
+        std::cmp::Reverse(frecency.unwrap_or(0)),
+        depth,
+        lower,
+    )
 }

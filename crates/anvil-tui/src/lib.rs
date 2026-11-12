@@ -687,6 +687,8 @@ pub struct Model {
     split: Option<Pane>,
     /// Flattened workspace tree, when open.
     tree: Vec<TreeEntry>,
+    /// Quick-open usage counts keyed by the entry string.
+    fuzzy_frecency: HashMap<String, u32>,
     tree_selected: Option<usize>,
     tree_visible: bool,
     /// Entry to select after the next tree refresh.
@@ -936,6 +938,7 @@ impl Model {
             inlay_support: HashMap::new(),
             split: None,
             tree: Vec::new(),
+            fuzzy_frecency: HashMap::new(),
             tree_selected: None,
             tree_visible: false,
             tree_pending_select: None,
