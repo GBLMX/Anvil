@@ -842,7 +842,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
     }
     if let Some(overlay) = &model.settings_overlay {
         let popup =
-            crate::render::document_symbols_rect(area, crate::settings_ui::SETTINGS_ROWS + 5);
+            crate::render::document_symbols_rect(area, crate::settings_ui::SETTINGS_POPUP_ROWS);
         frame.render_widget(Clear, popup);
         let mut lines = Vec::new();
         let mut group = "";

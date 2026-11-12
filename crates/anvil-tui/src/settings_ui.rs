@@ -4,6 +4,7 @@ use super::*;
 use crate::settings::{self, Settings};
 
 pub(crate) const SETTINGS_ROWS: usize = 8;
+pub(crate) const SETTINGS_POPUP_ROWS: usize = SETTINGS_ROWS + 5;
 
 #[derive(Debug, Clone)]
 pub(crate) struct SettingsOverlayState {

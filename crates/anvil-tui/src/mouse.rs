@@ -465,7 +465,7 @@ fn inside_overlay(model: &Model, col: u16, row: u16, area: Rect) -> bool {
     }
     if model.settings_overlay.is_some() {
         let popup =
-            crate::render::document_symbols_rect(area, crate::settings_ui::SETTINGS_ROWS + 1);
+            crate::render::document_symbols_rect(area, crate::settings_ui::SETTINGS_POPUP_ROWS);
         return crate::render::rect_contains(popup, col, row);
     }
     if let Some(completion) = &model.completion {
