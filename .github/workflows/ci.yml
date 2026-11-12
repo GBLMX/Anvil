@@ -163,8 +163,8 @@ jobs:
         run: cargo build --release -p anvil-tui -p anvil-ctl -p anvil-mcp
       - name: Build Go gateway
         run: |
-          go build -o target/release/anvil-gateway ./go/cmd/anvil-gateway
-          go build -o target/release/anvil-exec-runner ./go/cmd/anvil-exec-runner
+          go build -trimpath -buildvcs=false -ldflags='-s -w' -o target/release/anvil-gateway ./go/cmd/anvil-gateway
+          go build -trimpath -buildvcs=false -ldflags='-s -w' -o target/release/anvil-exec-runner ./go/cmd/anvil-exec-runner
       - name: Run real-TUI control smoke
         env:
           ANVIL_BIN: ${{ github.workspace }}/target/release/anvil
@@ -270,7 +270,7 @@ jobs:
           go-version-file: go.mod
           cache: true
       - name: Build gateway
-        run: go build -o "$RUNNER_TEMP/anvil-gateway" ./go/cmd/anvil-gateway
+        run: go build -trimpath -buildvcs=false -ldflags='-s -w' -o "$RUNNER_TEMP/anvil-gateway" ./go/cmd/anvil-gateway
       - name: Package and sign official plugin
         run: |
           openssl genpkey -algorithm ED25519 -out "$RUNNER_TEMP/official.pem"

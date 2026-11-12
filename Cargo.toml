@@ -10,3 +10,8 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/GBLMX/Anvil"
 
 [workspace.dependencies]
+
+[profile.release]
+codegen-units = 1
+lto = "fat"
+strip = "symbols"
