@@ -97,7 +97,12 @@ impl Model {
             self.workspace.clone()
         } else {
             match self.absolute_path(Path::new(directory)) {
-                Ok(path) if path.starts_with(&self.workspace) => path,
+                Ok(path)
+                    if path.starts_with(&self.workspace)
+                        || self.secondary_root(&path).is_some() =>
+                {
+                    path
+                }
                 _ => {
                     self.status = "E: destination is outside the workspace".to_owned();
                     self.dirty = true;
@@ -105,6 +110,21 @@ impl Model {
                 }
             }
         };
+        let source_root = self
+            .workspace_roots
+            .owning_root(&path)
+            .map(|root| root.path.clone())
+            .unwrap_or_else(|| self.workspace.clone());
+        let target_root = self
+            .workspace_roots
+            .owning_root(&target_directory)
+            .map(|root| root.path.clone())
+            .unwrap_or_else(|| self.workspace.clone());
+        if source_root != target_root {
+            self.status = "E: cannot transfer across workspace roots".to_owned();
+            self.dirty = true;
+            return;
+        }
         if self.tree_entries(&target_directory).is_err() {
             self.status = "E: destination directory does not exist".to_owned();
             self.dirty = true;
@@ -134,7 +154,7 @@ impl Model {
                 return;
             }
         }
-        if let Some(worker) = self.file_worker.as_ref() {
+        if let Some(worker) = self.file_worker_for_path(&path) {
             let label = if copy { "copying" } else { "moving" };
             match worker.request(FileRequest::Transfer {
                 from: path.clone(),
@@ -178,7 +198,10 @@ impl Model {
                         .map(|path| path.display().to_string())
                         .unwrap_or_else(|_| ".".to_owned())
                 );
-                self.refresh_tree(Some(target));
+                self.refresh_tree(Some(target.clone()));
+                if let Some(root) = self.secondary_root(&target) {
+                    self.refresh_root_tree(&root);
+                }
             }
             Err(error) => {
                 self.status = format!("E: {error}");
@@ -275,7 +298,10 @@ impl Model {
         match self.rename_path(&path, &target) {
             Ok(()) => {
                 self.remap_open_path(&path, &target);
-                self.refresh_tree(Some(target));
+                self.refresh_tree(Some(target.clone()));
+                if let Some(root) = self.secondary_root(&target) {
+                    self.refresh_root_tree(&root);
+                }
             }
             Err(error) => {
                 self.status = format!("E: {error}");
@@ -294,7 +320,7 @@ impl Model {
             self.dirty = true;
             return;
         }
-        if let Some(worker) = self.file_worker.as_ref() {
+        if let Some(worker) = self.file_worker_for_path(&path) {
             match worker.request(FileRequest::RemoveAll(path.clone())) {
                 Ok(()) => {
                     self.busy = Some("deleting".to_owned());
@@ -320,7 +346,12 @@ impl Model {
             }
         }
         match self.remove_path(&path) {
-            Ok(()) => self.refresh_tree(None),
+            Ok(()) => {
+                self.refresh_tree(None);
+                if let Some(root) = self.secondary_root(&path) {
+                    self.refresh_root_tree(&root);
+                }
+            }
             Err(error) => {
                 self.status = format!("E: {error}");
                 self.dirty = true;

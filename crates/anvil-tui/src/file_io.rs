@@ -192,26 +192,55 @@ impl Model {
         if !self.require_gateway {
             return fs::create_dir(path).map_err(|error| error.to_string());
         }
-        let relative = self.relative_path(path)?;
-        let gateway = self
-            .gateway
-            .as_mut()
-            .ok_or_else(|| "gateway unavailable".to_owned())?;
+        let (root, relative) = self.root_relative(path)?;
+        let gateway = self.gateway_for_root(&root)?;
         gateway
             .create_dir(&relative)
             .map_err(|error| error.to_string())
     }
 
+    fn mutation_relatives(
+        &self,
+        from: &Path,
+        to: &Path,
+    ) -> Result<(PathBuf, String, String), String> {
+        let (from_root, from_relative) = self.root_relative(from)?;
+        let (to_root, to_relative) = self.root_relative(to)?;
+        if from_root != to_root {
+            return Err(format!(
+                "cannot mutate across workspace roots: {} -> {}",
+                from_root.display(),
+                to_root.display()
+            ));
+        }
+        Ok((from_root, from_relative, to_relative))
+    }
+
+    fn reject_cross_root(&self, from: &Path, to: &Path) -> Result<(), String> {
+        let from_root = self
+            .workspace_roots
+            .owning_root(from)
+            .map(|root| &root.path);
+        let to_root = self.workspace_roots.owning_root(to).map(|root| &root.path);
+        if let (Some(from_root), Some(to_root)) = (from_root, to_root)
+            && from_root != to_root
+        {
+            return Err(format!(
+                "cannot mutate across workspace roots: {} -> {}",
+                from_root.display(),
+                to_root.display()
+            ));
+        }
+        Ok(())
+    }
+
     pub(crate) fn rename_path(&mut self, from: &Path, to: &Path) -> Result<(), String> {
         if !self.require_gateway {
+            self.reject_cross_root(from, to)?;
             return fs::rename(from, to).map_err(|error| error.to_string());
         }
-        let from_relative = self.relative_path(from)?;
-        let to_relative = self.relative_path(to)?;
-        let gateway = self
-            .gateway
-            .as_mut()
-            .ok_or_else(|| "gateway unavailable".to_owned())?;
+        let (root, from_relative, to_relative) = self.mutation_relatives(from, to)?;
+        let gateway = self.gateway_for_root(&root)?;
         gateway
             .rename(&from_relative, &to_relative)
             .map_err(|error| error.to_string())
@@ -226,11 +255,8 @@ impl Model {
                 fs::remove_file(path).map_err(|error| error.to_string())
             };
         }
-        let relative = self.relative_path(path)?;
-        let gateway = self
-            .gateway
-            .as_mut()
-            .ok_or_else(|| "gateway unavailable".to_owned())?;
+        let (root, relative) = self.root_relative(path)?;
+        let gateway = self.gateway_for_root(&root)?;
         gateway
             .remove_all(&relative)
             .map_err(|error| error.to_string())
@@ -238,16 +264,13 @@ impl Model {
 
     pub(crate) fn copy_path(&mut self, from: &Path, to: &Path) -> Result<(), String> {
         if !self.require_gateway {
+            self.reject_cross_root(from, to)?;
             fs::copy(from, to)
                 .map(|_| ())
                 .map_err(|error| error.to_string())
         } else {
-            let from_relative = self.relative_path(from)?;
-            let to_relative = self.relative_path(to)?;
-            let gateway = self
-                .gateway
-                .as_mut()
-                .ok_or_else(|| "gateway unavailable".to_owned())?;
+            let (root, from_relative, to_relative) = self.mutation_relatives(from, to)?;
+            let gateway = self.gateway_for_root(&root)?;
             gateway
                 .copy(&from_relative, &to_relative)
                 .map_err(|error| error.to_string())

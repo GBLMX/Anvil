@@ -225,7 +225,8 @@ acceptable; an invisible one is not.
   merges/deduplicates absolute results, and opens secondary-root locations.
   The file tree renders secondary root nodes, expands through owning workers,
   splits watches by root, and preserves secondary subtrees across primary
-  refreshes. Mutation fan-out remains primary-root-only.
+  refreshes. Create/rename/remove and same-root copy/transfer route through the
+  owning root; cross-root mutation is rejected.
 - File lifecycle: auto-save and atomic `:config-reload` are implemented.
   External settings file watching remains explicit; persistent undo is still
   rejected for this phase.

@@ -113,6 +113,11 @@ impl Model {
             for path in paths {
                 let _ = worker.request(FileRequest::List(path));
             }
+        } else {
+            for path in paths {
+                let result = self.tree_entries(&path);
+                self.handle_tree_listing(path, result);
+            }
         }
     }
 

@@ -1,10 +1,11 @@
 # Multi-Root File Tree and Search Routing Plan
 
-Status: phase 1 plus quick-open, project-search, and file-tree root nodes
-landed. Trust, root registration, per-root gateway lifecycle, open/save
-routing, trusted-root quick-open enumeration/preview, project-search
-merge/cancel, and secondary-root tree list/expand/watch are implemented.
-Mutation routing still assumes one primary workspace.
+Status: phase 1 plus quick-open, project-search, file-tree root nodes, and
+mutation routing landed. Trust, root registration, per-root gateway lifecycle,
+open/save routing, trusted-root quick-open enumeration/preview,
+project-search merge/cancel, secondary-root tree list/expand/watch, and
+same-root create/rename/remove/copy are implemented. Cross-root mutation is
+rejected.
 
 ## 1. Scope
 
@@ -202,6 +203,9 @@ Acceptance:
 - search highlights/open jump to the correct root
 
 ## 9. Mutations
+
+Status: landed for create/rename/remove and same-root copy/transfer. Cross-root
+rename/copy/transfer is rejected before mutation.
 
 Route by owning root:
 

@@ -17,8 +17,9 @@ post-`0.5.0` feature line.
   owning root.
 - The file tree shows secondary workspace roots as top-level nodes, expands
   them through the owning worker or local fallback, splits tree watches across
-  roots, and preserves secondary subtrees across primary refreshes. Mutation
-  routing remains primary-root-only.
+  roots, and preserves secondary subtrees across primary refreshes.
+- Create, rename, remove, and same-root copy/transfer route through the owning
+  root. Cross-root rename/copy/transfer is rejected before mutation.
 - `Ctrl+/` and `:comment` toggle line comments for the selected lines in
   Rust, Go, shell, Python, TOML, YAML, JSONC, Makefile, Dockerfile, and
   `go.mod` files. The operation is one undo transaction and refuses
