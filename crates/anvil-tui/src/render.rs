@@ -632,29 +632,32 @@ fn syntax_style(class: SyntaxClass) -> Style {
     if class == SyntaxClass::CodeBlock {
         return theme::code_block();
     }
-    let color = match class {
-        SyntaxClass::Keyword => theme::syntax_keyword(),
-        SyntaxClass::String => theme::syntax_string(),
-        SyntaxClass::Comment => theme::syntax_comment(),
-        SyntaxClass::Number => theme::syntax_number(),
-        SyntaxClass::Function => theme::syntax_function(),
-        SyntaxClass::Type => theme::syntax_type(),
-        SyntaxClass::Property => theme::syntax_property(),
-        SyntaxClass::Constant => theme::syntax_constant(),
-        SyntaxClass::Heading => theme::syntax_heading(),
-        SyntaxClass::Link => theme::syntax_link(),
-        SyntaxClass::Code => theme::syntax_code(),
-        SyntaxClass::InlineCode => theme::syntax_code(),
-        SyntaxClass::Emphasis => theme::syntax_emphasis(),
-        SyntaxClass::List => theme::syntax_list(),
-        SyntaxClass::Quote => theme::syntax_quote(),
-        SyntaxClass::Table => theme::syntax_table(),
-        SyntaxClass::CodeBlock => theme::syntax_code(),
+    let (color, index) = match class {
+        SyntaxClass::Keyword => (theme::syntax_keyword(), 0),
+        SyntaxClass::String => (theme::syntax_string(), 1),
+        SyntaxClass::Comment => (theme::syntax_comment(), 2),
+        SyntaxClass::Number => (theme::syntax_number(), 3),
+        SyntaxClass::Function => (theme::syntax_function(), 4),
+        SyntaxClass::Type => (theme::syntax_type(), 5),
+        SyntaxClass::Property => (theme::syntax_property(), 6),
+        SyntaxClass::Constant => (theme::syntax_constant(), 7),
+        SyntaxClass::Heading => (theme::syntax_heading(), 8),
+        SyntaxClass::Link => (theme::syntax_link(), 9),
+        SyntaxClass::Code => (theme::syntax_code(), 10),
+        SyntaxClass::InlineCode => (theme::syntax_code(), 10),
+        SyntaxClass::Emphasis => (theme::syntax_emphasis(), 11),
+        SyntaxClass::List => (theme::syntax_list(), 12),
+        SyntaxClass::Quote => (theme::syntax_quote(), 13),
+        SyntaxClass::Table => (theme::syntax_table(), 14),
+        SyntaxClass::CodeBlock => (theme::syntax_code(), 10),
     };
+    let style = Style::default()
+        .fg(color)
+        .add_modifier(theme::syntax_modifier(index));
     if class == SyntaxClass::InlineCode {
-        return Style::default().fg(color).bg(theme::code_block_bg());
+        return style.bg(theme::code_block_bg());
     }
-    Style::default().fg(color)
+    style
 }
 
 fn clip_path(path: &str, max_width: usize) -> String {

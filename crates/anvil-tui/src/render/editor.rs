@@ -111,7 +111,12 @@ pub fn view(model: &Model, frame: &mut Frame) {
             .saturating_add(UnicodeWidthStr::width(before) as u16);
         (x, area.y.saturating_add(area.height.saturating_sub(1)))
     });
-    let mode = Span::styled(mode_text, theme::mode_badge(mode_color));
+    let mode_style = if matches!(model.ui.input_mode, InputMode::Normal) {
+        theme::mode_normal_badge()
+    } else {
+        theme::mode_badge(mode_color)
+    };
+    let mode = Span::styled(mode_text, mode_style);
     let block = panel_block(title)
         .title_style(theme::title())
         .title_bottom(Line::from(vec![

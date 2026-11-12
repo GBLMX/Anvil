@@ -43,6 +43,8 @@ pub(crate) struct Theme {
     pub(crate) syntax_list: Color,
     pub(crate) syntax_quote: Color,
     pub(crate) syntax_table: Color,
+    pub(crate) syntax_modifiers: [Modifier; 15],
+    pub(crate) status_normal: Option<Style>,
 }
 
 impl Theme {
@@ -78,6 +80,8 @@ impl Theme {
         syntax_list: Color::Rgb(242, 204, 96),
         syntax_quote: Color::Rgb(139, 148, 158),
         syntax_table: Color::Rgb(255, 166, 87),
+        syntax_modifiers: [Modifier::empty(); 15],
+        status_normal: None,
     };
 
     pub(crate) const ONE_DARK: Self = Self {
@@ -112,6 +116,8 @@ impl Theme {
         syntax_list: Color::Rgb(229, 192, 123),
         syntax_quote: Color::Rgb(143, 150, 163),
         syntax_table: Color::Rgb(209, 154, 102),
+        syntax_modifiers: [Modifier::empty(); 15],
+        status_normal: None,
     };
 
     pub(crate) const SOLARIZED_LIGHT: Self = Self {
@@ -146,6 +152,8 @@ impl Theme {
         syntax_list: Color::Rgb(116, 89, 0),
         syntax_quote: Color::Rgb(82, 102, 109),
         syntax_table: Color::Rgb(168, 58, 18),
+        syntax_modifiers: [Modifier::empty(); 15],
+        status_normal: None,
     };
 
     pub(crate) const GRUVBOX_DARK: Self = Self {
@@ -180,6 +188,8 @@ impl Theme {
         syntax_list: Color::Rgb(250, 189, 47),
         syntax_quote: Color::Rgb(189, 174, 147),
         syntax_table: Color::Rgb(254, 128, 25),
+        syntax_modifiers: [Modifier::empty(); 15],
+        status_normal: None,
     };
 
     pub(crate) const NORD: Self = Self {
@@ -214,6 +224,8 @@ impl Theme {
         syntax_list: Color::Rgb(235, 203, 139),
         syntax_quote: Color::Rgb(184, 196, 214),
         syntax_table: Color::Rgb(255, 154, 168),
+        syntax_modifiers: [Modifier::empty(); 15],
+        status_normal: None,
     };
 
     pub(crate) const CATPPUCCIN_MOCHA: Self = Self {
@@ -248,6 +260,8 @@ impl Theme {
         syntax_list: Color::Rgb(249, 226, 175),
         syntax_quote: Color::Rgb(147, 153, 178),
         syntax_table: Color::Rgb(250, 179, 135),
+        syntax_modifiers: [Modifier::empty(); 15],
+        status_normal: None,
     };
 }
 
@@ -399,6 +413,17 @@ pub(crate) fn load_custom_themes_from(directory: &Path) -> Result<(), String> {
     Ok(())
 }
 
+fn style_modifiers(spec: &StyleSpec) -> Modifier {
+    let mut modifiers = Modifier::empty();
+    if spec.bold == Some(true) {
+        modifiers |= Modifier::BOLD;
+    }
+    if spec.italic == Some(true) {
+        modifiers |= Modifier::ITALIC;
+    }
+    modifiers
+}
+
 fn parse_theme_file(path: &Path, source: &str) -> Result<Theme, String> {
     let file: ThemeFile = toml_edit::de::from_str(source)
         .map_err(|error| format!("invalid theme TOML {}: {error}", path.display()))?;
@@ -416,48 +441,79 @@ fn parse_theme_file(path: &Path, source: &str) -> Result<Theme, String> {
     apply_color(&mut theme.surface_alt, file.ui.cursorline.as_deref())?;
     if let Some(style) = &file.syntax.keyword {
         apply_color(&mut theme.syntax_keyword, style.fg.as_deref())?;
+        theme.syntax_modifiers[0] = style_modifiers(style);
     }
     if let Some(style) = &file.syntax.string {
         apply_color(&mut theme.syntax_string, style.fg.as_deref())?;
+        theme.syntax_modifiers[1] = style_modifiers(style);
     }
     if let Some(style) = &file.syntax.comment {
         apply_color(&mut theme.syntax_comment, style.fg.as_deref())?;
+        theme.syntax_modifiers[2] = style_modifiers(style);
     }
     if let Some(style) = &file.syntax.function {
         apply_color(&mut theme.syntax_function, style.fg.as_deref())?;
+        theme.syntax_modifiers[4] = style_modifiers(style);
     }
     if let Some(style) = &file.syntax.number {
         apply_color(&mut theme.syntax_number, style.fg.as_deref())?;
+        theme.syntax_modifiers[3] = style_modifiers(style);
     }
     if let Some(style) = &file.syntax.r#type {
         apply_color(&mut theme.syntax_type, style.fg.as_deref())?;
+        theme.syntax_modifiers[5] = style_modifiers(style);
     }
     if let Some(style) = &file.syntax.property {
         apply_color(&mut theme.syntax_property, style.fg.as_deref())?;
+        theme.syntax_modifiers[6] = style_modifiers(style);
     }
     if let Some(style) = &file.syntax.constant {
         apply_color(&mut theme.syntax_constant, style.fg.as_deref())?;
+        theme.syntax_modifiers[7] = style_modifiers(style);
     }
     if let Some(style) = &file.syntax.heading {
         apply_color(&mut theme.syntax_heading, style.fg.as_deref())?;
+        theme.syntax_modifiers[8] = style_modifiers(style);
     }
     if let Some(style) = &file.syntax.link {
         apply_color(&mut theme.syntax_link, style.fg.as_deref())?;
+        theme.syntax_modifiers[9] = style_modifiers(style);
     }
     if let Some(style) = &file.syntax.code {
         apply_color(&mut theme.syntax_code, style.fg.as_deref())?;
+        theme.syntax_modifiers[10] = style_modifiers(style);
     }
     if let Some(style) = &file.syntax.emphasis {
         apply_color(&mut theme.syntax_emphasis, style.fg.as_deref())?;
+        theme.syntax_modifiers[11] = style_modifiers(style);
     }
     if let Some(style) = &file.syntax.list {
         apply_color(&mut theme.syntax_list, style.fg.as_deref())?;
+        theme.syntax_modifiers[12] = style_modifiers(style);
     }
     if let Some(style) = &file.syntax.quote {
         apply_color(&mut theme.syntax_quote, style.fg.as_deref())?;
+        theme.syntax_modifiers[13] = style_modifiers(style);
     }
     if let Some(style) = &file.syntax.table {
         apply_color(&mut theme.syntax_table, style.fg.as_deref())?;
+        theme.syntax_modifiers[14] = style_modifiers(style);
+    }
+    if let Some(style) = &file.status.mode_normal {
+        let fg = match style.fg.as_deref() {
+            Some(value) => parse_color(value)?,
+            None => theme.text,
+        };
+        let bg = match style.bg.as_deref() {
+            Some(value) => parse_color(value)?,
+            None => theme.surface_alt,
+        };
+        theme.status_normal = Some(
+            Style::default()
+                .fg(fg)
+                .bg(bg)
+                .add_modifier(style_modifiers(style)),
+        );
     }
     Ok(theme)
 }
@@ -824,6 +880,20 @@ pub(crate) fn syntax_table() -> Color {
     active().syntax_table
 }
 
+pub(crate) fn syntax_modifier(index: usize) -> Modifier {
+    active()
+        .syntax_modifiers
+        .get(index)
+        .copied()
+        .unwrap_or_else(Modifier::empty)
+}
+
+pub(crate) fn mode_normal_badge() -> Style {
+    active()
+        .status_normal
+        .unwrap_or_else(|| mode_badge(accent()))
+}
+
 pub(crate) fn text() -> Style {
     Style::default().fg(text_color()).bg(bg())
 }
@@ -975,6 +1045,15 @@ mod tests {
         assert_eq!(name(), "cyberpunk");
         assert_eq!(selection(), parse_color("color5").expect("ansi"));
         assert_eq!(syntax_keyword(), parse_color("#ff00aa").expect("hex"));
+        assert!(syntax_modifier(0).contains(Modifier::BOLD));
+        assert_eq!(
+            mode_normal_badge().fg,
+            Some(parse_color("color0").expect("ansi"))
+        );
+        assert_eq!(
+            mode_normal_badge().bg,
+            Some(parse_color("#ff00aa").expect("hex"))
+        );
         set_startup_theme("anvil-dark").expect("reset");
     }
 
