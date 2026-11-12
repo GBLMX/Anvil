@@ -50,8 +50,9 @@ P0/P1 items are complete. Cross-root file tree/search UX and focus-change
 auto-save policy are closed; root labels, secondary-root refresh, untrusted
 roots, root-removal cleanup, and auto-save safety guards are landed.
 
-The remaining follow-up is persistent undo; it is rejected for the current
-phase and needs a separate ADR to revisit.
+Persistent undo is deferred by
+[ADR-0026](docs/adr/0026-persistent-undo-decision.md); revisiting it requires
+a new ADR that supersedes that decision.
 
 Completion snippet mirrors/ranking and code lens are landed; see
 [docs/internal-polish-plan.md](docs/internal-polish-plan.md).

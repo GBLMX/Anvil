@@ -71,7 +71,8 @@ Landed:
 
 Rejected for this phase: persistent undo history. Offset-based edit records are
 valid only against one exact text state; restore keeps the exact buffer or swap
-text and starts a fresh undo stack.
+text and starts a fresh undo stack. See
+[ADR-0026](adr/0026-persistent-undo-decision.md).
 
 Difficulty: L–XL. Main risk is data loss and schema migration.
 

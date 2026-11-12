@@ -32,6 +32,7 @@ their decision sections.
 | [0023](0023-internal-capability-closure.md) | Internal capability closure before public distribution | Proposed |
 | [0024](0024-tui-state-and-domain-boundaries.md) | TUI state composition, page state, and domain boundaries | Proposed |
 | [0025](0025-lsp-and-language-breadth.md) | LSP surface and language breadth boundaries | Proposed |
+| [0026](0026-persistent-undo-decision.md) | Persistent undo is deferred and gated | Accepted |
 
 ## Numbering Rule
 

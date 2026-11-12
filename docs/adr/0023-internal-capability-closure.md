@@ -95,7 +95,8 @@ A created worker, parsed document, or cached index is not a closed capability.
 **Persistent undo**
 
 - Remains rejected for this phase. Restore keeps the exact buffer or swap text
-  and starts a fresh undo stack. Persisting undo requires a separate ADR.
+  and starts a fresh undo stack. See
+  [ADR-0026](0026-persistent-undo-decision.md) for the re-entry gates.
 
 ### 4. Close plugin/distribution in dependency order
 
