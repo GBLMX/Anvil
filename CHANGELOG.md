@@ -21,10 +21,10 @@ post-`0.5.0` feature line.
 - `%` jumps to the matching bracket with a bounded lexical scan; matching
   bracket pairs are emphasized in the editor. Strings and line/block comments
   are skipped.
-- Opt-in `editor.auto_save` writes the active named buffer on buffer-switch or
-  split-focus changes. Failed saves keep the buffer dirty and abort the focus
-  change. Configure via `settings.toml`, `:settings`, or
-  `ANVIL_EDITOR_AUTO_SAVE`.
+- Opt-in `editor.auto_save` writes the active named buffer on buffer-switch,
+  split-focus changes, opening another file, and `:q`. Failed saves keep the
+  buffer dirty and abort the focus change. Configure via `settings.toml`,
+  `:settings`, or `ANVIL_EDITOR_AUTO_SAVE`.
 - `anvil-ctl` is a JSON-capable control plane for a running TUI: `open`,
   `save`, `edit set|insert`, bounded `query`, allowlisted Ex `command`, and
   `quit`, with stable exit codes, timeouts, and typed errors. The control

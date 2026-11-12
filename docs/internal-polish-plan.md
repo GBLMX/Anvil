@@ -130,7 +130,8 @@ Status: swap/crash recovery landed. External-change conflicts preserve the
 swap and expose `:conflict-recover` / `:conflict-discard`; saving an
 unmodified conflicted buffer is refused until resolved.
 Remaining:
-- auto-save is implemented for the focus-change policy;
+- auto-save is implemented for buffer switches, split focus changes, opening
+  another file, and `:q`;
 - large/binary/read-only safe behavior remains.
 
 Landed: swap files, crash recovery, external-change conflict recovery, and

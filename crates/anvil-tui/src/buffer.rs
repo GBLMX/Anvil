@@ -343,6 +343,9 @@ impl Model {
         if self.close_help() {
             return;
         }
+        if !self.auto_save_before_focus_change() {
+            return;
+        }
         if self.any_modified() {
             self.status = "No write since last change (:q! to override)".to_owned();
             self.dirty = true;
