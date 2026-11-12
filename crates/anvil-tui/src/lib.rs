@@ -416,6 +416,30 @@ struct WorkspaceState {
 }
 
 #[derive(Default)]
+struct ProjectState {
+    /// Latest requested project-search generation.
+    search_generation: u64,
+    /// Pending project-search generation, if a request is in flight.
+    search_pending: Option<u64>,
+    /// Number of workers expected to answer the pending project search.
+    search_expected: usize,
+    /// Number of workers that answered the pending project search.
+    search_received: usize,
+    /// Accumulated project-search results for the pending generation.
+    search_results: Vec<pipe_locations::PipeLocation>,
+    /// Whether any project-search worker truncated its output.
+    search_truncated: bool,
+    /// First project-search worker error for the pending generation.
+    search_error: Option<String>,
+    /// Pending reviewed project replace plan.
+    replace_plan: Option<file_worker::ProjectReplacePlan>,
+    /// Latest requested project-replace generation.
+    replace_generation: u64,
+    /// Pending project-replace generation, if a request is in flight.
+    replace_pending: Option<u64>,
+}
+
+#[derive(Default)]
 struct RuntimeState {
     task_worker: Option<task_runner::TaskWorker>,
     task_output: Option<String>,
@@ -846,26 +870,8 @@ pub struct Model {
     /// Reject mutating commands for a read-only input buffer.
     read_only: bool,
     /// File locations parsed from the stdin buffer.
-    /// Latest requested project-search generation.
-    project_search_generation: u64,
-    /// Pending project-search generation, if a request is in flight.
-    project_search_pending: Option<u64>,
-    /// Number of workers expected to answer the pending project search.
-    project_search_expected: usize,
-    /// Number of workers that answered the pending project search.
-    project_search_received: usize,
-    /// Accumulated project-search results for the pending generation.
-    project_search_results: Vec<pipe_locations::PipeLocation>,
-    /// Whether any project-search worker truncated its output.
-    project_search_truncated: bool,
-    /// First project-search worker error for the pending generation.
-    project_search_error: Option<String>,
-    /// Pending reviewed project replace plan.
-    project_replace_plan: Option<file_worker::ProjectReplacePlan>,
-    /// Latest requested project-replace generation.
-    project_replace_generation: u64,
-    /// Pending project-replace generation, if a request is in flight.
-    project_replace_pending: Option<u64>,
+    /// Project search and replace runtime state.
+    project: ProjectState,
     /// Whether the process was started as an external editor.
     editor_mode: bool,
     /// Process exit code accumulated by editor-mode failures or `:cq`.
@@ -970,16 +976,7 @@ impl Model {
             stale_paths: HashSet::new(),
             stdin_buffer: false,
             read_only: false,
-            project_search_generation: 0,
-            project_search_pending: None,
-            project_search_expected: 0,
-            project_search_received: 0,
-            project_search_results: Vec::new(),
-            project_search_truncated: false,
-            project_search_error: None,
-            project_replace_plan: None,
-            project_replace_generation: 0,
-            project_replace_pending: None,
+            project: ProjectState::default(),
             editor_mode: false,
             exit_code: 0,
             syntax: RefCell::new(SyntaxState::default()),

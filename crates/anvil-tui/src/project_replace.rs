@@ -27,8 +27,8 @@ impl Model {
             self.dirty = true;
             return;
         };
-        self.project_replace_generation = self.project_replace_generation.wrapping_add(1);
-        let generation = self.project_replace_generation;
+        self.project.replace_generation = self.project.replace_generation.wrapping_add(1);
+        let generation = self.project.replace_generation;
         if let Err(error) = worker.request(FileRequest::ProjectReplacePreview {
             old: old.to_owned(),
             new: new.to_owned(),
@@ -38,7 +38,7 @@ impl Model {
             self.dirty = true;
             return;
         }
-        self.project_replace_pending = Some(generation);
+        self.project.replace_pending = Some(generation);
         self.status = "building replace preview...".to_owned();
         self.dirty = true;
     }
@@ -48,14 +48,14 @@ impl Model {
         generation: u64,
         result: Result<ProjectReplacePlan, String>,
     ) {
-        if self.project_replace_pending != Some(generation) {
+        if self.project.replace_pending != Some(generation) {
             return;
         }
-        self.project_replace_pending = None;
+        self.project.replace_pending = None;
         match result {
             Ok(plan) => {
                 if plan.files.is_empty() {
-                    self.project_replace_plan = None;
+                    self.project.replace_plan = None;
                     self.overlays.location.stdin_locations.clear();
                     self.overlays.location.stdin_location_selected = None;
                     self.overlays.location.location_title = "Locations".to_owned();
@@ -76,7 +76,7 @@ impl Model {
                         format!("Replace: {} -> {}", plan.old, plan.new),
                         locations,
                     );
-                    self.project_replace_plan = Some(plan);
+                    self.project.replace_plan = Some(plan);
                     self.status = format!(
                         "replace preview: {count} files; apply with :replace-project-apply"
                     );
@@ -84,14 +84,14 @@ impl Model {
             }
             Err(error) => {
                 self.status = format!("E: replace preview: {error}");
-                self.project_replace_plan = None;
+                self.project.replace_plan = None;
             }
         }
         self.dirty = true;
     }
 
     pub(crate) fn apply_project_replace(&mut self) {
-        let Some(plan) = self.project_replace_plan.clone() else {
+        let Some(plan) = self.project.replace_plan.clone() else {
             self.status = "E: no replace preview to apply".to_owned();
             self.dirty = true;
             return;
@@ -111,14 +111,14 @@ impl Model {
             self.dirty = true;
             return;
         };
-        self.project_replace_generation = self.project_replace_generation.wrapping_add(1);
-        let generation = self.project_replace_generation;
+        self.project.replace_generation = self.project.replace_generation.wrapping_add(1);
+        let generation = self.project.replace_generation;
         if let Err(error) = worker.request(FileRequest::ProjectReplaceApply { plan, generation }) {
             self.status = format!("E: replace apply: {error}");
             self.dirty = true;
             return;
         }
-        self.project_replace_pending = Some(generation);
+        self.project.replace_pending = Some(generation);
         self.status = "applying project replace...".to_owned();
         self.dirty = true;
     }
@@ -128,13 +128,13 @@ impl Model {
         generation: u64,
         result: Result<(), String>,
     ) {
-        if self.project_replace_pending != Some(generation) {
+        if self.project.replace_pending != Some(generation) {
             return;
         }
-        self.project_replace_pending = None;
+        self.project.replace_pending = None;
         match result {
             Ok(()) => {
-                if let Some(plan) = self.project_replace_plan.take() {
+                if let Some(plan) = self.project.replace_plan.take() {
                     if self.any_modified() {
                         for file in &plan.files {
                             self.stale_paths
@@ -173,8 +173,8 @@ impl Model {
     }
 
     pub(crate) fn cancel_project_replace(&mut self) {
-        self.project_replace_plan = None;
-        self.project_replace_pending = None;
+        self.project.replace_plan = None;
+        self.project.replace_pending = None;
         self.overlays.location.stdin_locations.clear();
         self.overlays.location.stdin_location_selected = None;
         self.overlays.location.stdin_location_scroll = 0;
@@ -205,16 +205,16 @@ mod tests {
     #[test]
     fn preview_populates_the_location_panel() {
         let mut model = Model::new(EditorState::from_text("x"), None);
-        model.project_replace_pending = Some(3);
+        model.project.replace_pending = Some(3);
         model.handle_project_replace_preview(3, Ok(plan()));
-        assert!(model.project_replace_plan.is_some());
+        assert!(model.project.replace_plan.is_some());
         assert_eq!(
             model.overlays.location.location_title,
             "Replace: old -> new"
         );
         assert_eq!(model.overlays.location.stdin_locations.len(), 1);
         model.cancel_project_replace();
-        assert!(model.project_replace_plan.is_none());
+        assert!(model.project.replace_plan.is_none());
         assert!(model.overlays.location.stdin_locations.is_empty());
     }
 
@@ -227,8 +227,8 @@ mod tests {
         std::fs::write(&path, "new\n").expect("write");
         let mut model = Model::new(EditorState::from_text("old\n"), Some(path));
         model.workspace.path = workspace;
-        model.project_replace_plan = Some(plan());
-        model.project_replace_pending = Some(4);
+        model.project.replace_plan = Some(plan());
+        model.project.replace_pending = Some(4);
         model.handle_project_replace_applied(4, Ok(()));
         assert_eq!(
             model
@@ -237,7 +237,7 @@ mod tests {
                 .slice(0..model.editor.text().len_bytes()),
             "new\n"
         );
-        assert!(model.project_replace_plan.is_none());
+        assert!(model.project.replace_plan.is_none());
     }
 
     #[test]
@@ -248,8 +248,8 @@ mod tests {
         let path = workspace.join("a.txt");
         let mut model = Model::new(EditorState::from_text("x"), Some(path));
         model.workspace.path = workspace;
-        model.project_replace_plan = Some(plan());
-        model.project_replace_pending = Some(5);
+        model.project.replace_plan = Some(plan());
+        model.project.replace_pending = Some(5);
         model.handle_project_replace_applied(5, Ok(()));
         assert!(model.status.contains("reload failed"));
         assert!(!model.status.contains("replaced 1 files"));
@@ -267,8 +267,8 @@ mod tests {
         let mut model = Model::new(EditorState::from_text("old\n"), Some(path));
         model.workspace.path = workspace;
         model.modified = true;
-        model.project_replace_plan = Some(plan());
-        model.project_replace_pending = Some(6);
+        model.project.replace_plan = Some(plan());
+        model.project.replace_pending = Some(6);
         model.handle_project_replace_applied(6, Ok(()));
         assert_eq!(
             model
