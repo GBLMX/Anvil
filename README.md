@@ -66,6 +66,7 @@ The same file owns typed editor/search/LSP settings:
 ```toml
 [editor]
 scroll_margin = 3
+auto_save = false
 
 [search]
 case_sensitive = false
@@ -74,11 +75,14 @@ case_sensitive = false
 inlay_hints = true
 ```
 
-`ANVIL_EDITOR_SCROLL_MARGIN`, `ANVIL_SEARCH_CASE_SENSITIVE`, and
-`ANVIL_LSP_INLAY_HINTS` override the file for the current process.
+`ANVIL_EDITOR_SCROLL_MARGIN`, `ANVIL_EDITOR_AUTO_SAVE`,
+`ANVIL_SEARCH_CASE_SENSITIVE`, and `ANVIL_LSP_INLAY_HINTS` override the file
+for the current process.
 `:settings` opens the minimal overlay: `j`/`k` select, `h`/`l` or `Enter`
 adjust, `r` resets the row, `s` saves, and `Esc` cancels.
-External file edits are read at startup; restart Anvil to apply them.
+Auto-save is off by default; when enabled it writes the active named buffer
+only on focus changes (buffer switch or split focus). External file edits are
+read at startup; restart Anvil to apply them.
 
 At the `:` prompt, `Tab` completes Ex command names, `:theme` /
 `:theme-auto` arguments, and `:plugin-enable` IDs; `Up`/`Down` selects a

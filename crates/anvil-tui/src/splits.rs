@@ -36,6 +36,9 @@ impl Model {
         if self.ui.focus.split == right {
             return;
         }
+        if !self.auto_save_before_focus_change() {
+            return;
+        }
         let current = self.snapshot();
         let Some(other) = self.split.take() else {
             return;

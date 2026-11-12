@@ -3,7 +3,7 @@
 use super::*;
 use crate::settings::{self, Settings};
 
-pub(crate) const SETTINGS_ROWS: usize = 3;
+pub(crate) const SETTINGS_ROWS: usize = 4;
 
 #[derive(Debug, Clone)]
 pub(crate) struct SettingsOverlayState {
@@ -17,7 +17,8 @@ impl SettingsOverlayState {
         match index {
             0 => "editor.scroll_margin",
             1 => "search.case_sensitive",
-            _ => "lsp.inlay_hints",
+            2 => "lsp.inlay_hints",
+            _ => "editor.auto_save",
         }
     }
 
@@ -25,7 +26,8 @@ impl SettingsOverlayState {
         match index {
             0 => settings.editor.scroll_margin.to_string(),
             1 => settings.search.case_sensitive.to_string(),
-            _ => settings.lsp.inlay_hints.to_string(),
+            2 => settings.lsp.inlay_hints.to_string(),
+            _ => settings.editor.auto_save.to_string(),
         }
     }
 
@@ -80,7 +82,8 @@ impl Model {
                     .min(settings::MAX_SCROLL_MARGIN);
             }
             1 => draft.search.case_sensitive = !draft.search.case_sensitive,
-            _ => draft.lsp.inlay_hints = !draft.lsp.inlay_hints,
+            2 => draft.lsp.inlay_hints = !draft.lsp.inlay_hints,
+            _ => draft.editor.auto_save = !draft.editor.auto_save,
         }
         overlay.draft = draft;
         self.apply_settings(draft);
@@ -95,7 +98,8 @@ impl Model {
         match overlay.selected {
             0 => overlay.draft.editor.scroll_margin = defaults.editor.scroll_margin,
             1 => overlay.draft.search.case_sensitive = defaults.search.case_sensitive,
-            _ => overlay.draft.lsp.inlay_hints = defaults.lsp.inlay_hints,
+            2 => overlay.draft.lsp.inlay_hints = defaults.lsp.inlay_hints,
+            _ => overlay.draft.editor.auto_save = defaults.editor.auto_save,
         }
         self.apply_settings(overlay.draft);
         self.settings_overlay = Some(overlay);
@@ -138,6 +142,11 @@ mod tests {
         assert!(model.settings.search.case_sensitive);
         model.reset_settings_row();
         assert!(!model.settings.search.case_sensitive);
+        model.move_settings(2);
+        model.adjust_settings(1);
+        assert!(model.settings.editor.auto_save);
+        model.reset_settings_row();
+        assert!(!model.settings.editor.auto_save);
         model.cancel_settings();
         assert!(model.settings_overlay.is_none());
         assert_eq!(model.settings, Settings::default());

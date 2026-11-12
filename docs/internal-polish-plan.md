@@ -44,7 +44,8 @@ These are the only internal-polish priorities until the phase exit gate.
 ### 3.1 Settings
 
 Status: typed registry and minimal `:settings` overlay landed for
-`editor.scroll_margin`, `search.case_sensitive`, and `lsp.inlay_hints`.
+`editor.scroll_margin`, `editor.auto_save`, `search.case_sensitive`, and
+`lsp.inlay_hints`.
 External-file hot reload remains out of scope.
 
 Implemented: typed registry, `:settings` overlay, changed markers, per-row
@@ -129,10 +130,11 @@ Status: swap/crash recovery landed. External-change conflicts preserve the
 swap and expose `:conflict-recover` / `:conflict-discard`; saving an
 unmodified conflicted buffer is refused until resolved.
 Remaining:
-- auto-save with an explicit policy;
-- large/binary/read-only safe behavior.
+- auto-save is implemented for the focus-change policy;
+- large/binary/read-only safe behavior remains.
 
-Landed: swap files, crash recovery, and external-change conflict recovery.
+Landed: swap files, crash recovery, external-change conflict recovery, and
+focus-change auto-save.
 
 Auto-save policy:
 

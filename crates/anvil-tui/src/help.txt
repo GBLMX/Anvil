@@ -118,7 +118,7 @@ Normal mode
   :plugin-exec        exercise sys.exec (returns unsupported)
   :plugin-stop        stop the plugin host
   :plugin-enable <id> re-enable a disabled plugin and start it
-  :settings           edit scroll margin, search case, and inlay hints
+  :settings           edit scroll margin, search case, inlay hints, auto-save
   :theme [name]        list or switch and remember built-in theme
   :theme-auto [dark] [light]  match background and remember
   :theme-save         re-save the runtime theme choice

@@ -432,6 +432,42 @@ impl Model {
         }
     }
 
+    /// Saves the active buffer when focus-change auto-save is enabled and safe.
+    ///
+    /// Returns false only when a save was attempted and failed; callers should
+    /// abort the focus change so the user sees the error and the buffer stays
+    /// dirty.
+    pub(crate) fn auto_save_before_focus_change(&mut self) -> bool {
+        if !self.settings.editor.auto_save
+            || !self.modified
+            || self.path.is_none()
+            || self.read_only
+            || self.stdin_buffer
+            || self.missing
+            || self.help_back.is_some()
+            || self.settings_overlay.is_some()
+            || self.command_palette.is_some()
+            || self.fuzzy.is_some()
+            || self.modal_layer.is_some()
+            || !matches!(self.ui.input_mode, InputMode::Normal)
+        {
+            return true;
+        }
+        if let Some(path) = self.path.as_ref()
+            && self.conflict_swaps.contains_key(path)
+        {
+            return true;
+        }
+        if self.save() {
+            true
+        } else {
+            if let Some(error) = self.status.strip_prefix("E: ") {
+                self.status = format!("E: auto-save: {error}");
+            }
+            false
+        }
+    }
+
     pub(crate) fn save(&mut self) -> bool {
         if self.reject_read_only() {
             return false;

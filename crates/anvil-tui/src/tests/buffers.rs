@@ -1066,3 +1066,44 @@ fn visual_delete_applies_to_multiple_selections_in_one_undo() {
     handle_event(&mut model, key(KeyCode::Char('u')));
     assert_eq!(model.editor.text().len_bytes(), 7);
 }
+
+#[test]
+fn focus_change_auto_save_writes_the_active_buffer() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let first = dir.path().join("first.rs");
+    let second = dir.path().join("second.rs");
+    fs::write(&first, "a").expect("first");
+    fs::write(&second, "b").expect("second");
+    let mut model = Model::open(&first).expect("open");
+    model.open_path(&second).expect("second");
+    model.switch_buffer(-1);
+    model.settings.editor.auto_save = true;
+    model.insert_text("X");
+    assert!(model.modified);
+
+    model.switch_buffer(1);
+
+    assert_eq!(fs::read_to_string(&first).expect("first content"), "Xa");
+    assert!(!model.modified);
+}
+
+#[test]
+fn failed_auto_save_aborts_the_focus_change() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let first = dir.path().join("first.rs");
+    let second = dir.path().join("second.rs");
+    fs::write(&first, "a").expect("first");
+    fs::write(&second, "b").expect("second");
+    let mut model = Model::open(&first).expect("open");
+    model.open_path(&second).expect("second");
+    model.switch_buffer(-1);
+    model.settings.editor.auto_save = true;
+    model.insert_text("X");
+    model.path = Some(dir.path().to_path_buf());
+
+    model.switch_buffer(1);
+
+    assert_eq!(model.active, 0);
+    assert!(model.modified);
+    assert!(model.status.contains("E:"));
+}
