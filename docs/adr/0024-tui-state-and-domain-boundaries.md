@@ -286,12 +286,14 @@ Phase 1 started on 2026-11-12:
 - `Model.session` owns the editor document, optional source path, cursor, and
   jump/change history.
 - `Model.status` owns status text, the busy label, progress, and spinner.
-- `Model.config` owns settings, in-memory keymap overrides, and typed command
-  effects.
+- `Model.config` owns settings, including the theme choice, in-memory keymap
+  overrides, and typed command effects.
 - `Model.file` owns quit/modified/missing/dirty flags, stdin-buffer and
   external-editor modes, read-only input mode, and the process exit code.
 - `Model.start_page` owns the start dashboard visibility and the state needed
   to return to it after the help page.
+- `Model.pager` owns the read-only page, its title, and the buffer it replaced.
+  Help, Git diff/blame/conflict, task output, and terminal output share it.
 - `Model.syntax_cache` owns tree-sitter highlight and bracket caches keyed by
   editor revision, path, and cursor.
 - `Model.language` owns `DapState`, `DiagnosticsState`, `LspTransportState`,
@@ -299,7 +301,7 @@ Phase 1 started on 2026-11-12:
   and retry deadlines; requests keep pending maps, document versions, request
   ids, and format-on-save coordination.
 - Existing behavior is unchanged; tests access the composed state explicitly.
-- `Model` now has 22 top-level fields, each a state group rather than a
+- `Model` now has 23 top-level fields, each a state group rather than a
   feature field.
 
 

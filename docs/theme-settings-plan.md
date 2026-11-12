@@ -253,8 +253,9 @@ Status: done. Nine built-ins land: `anvil-dark`, `tokyonight`, `omp-kde`,
 
 ### 6.4 Settings overlay gate
 
-Status: the typed registry, three domains, and minimal `:settings` overlay
-landed; hot reload remains gated.
+Status: the typed registry, `:settings` overlay, and Appearance theme row
+landed. Theme is part of `Settings` and `settings.toml`; hot reload remains
+gated.
 
 Proceed only if accepted by the review gate:
 

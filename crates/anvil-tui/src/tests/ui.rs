@@ -25,14 +25,14 @@ fn renders_start_dashboard_for_an_empty_launch() {
 fn dashboard_survives_help_round_trip() {
     let mut model = Model::new(EditorState::from_text(""), None);
     handle_event(&mut model, key(KeyCode::Char('?')));
-    assert!(model.buffers.help_back.is_some());
+    assert!(model.pager.back.is_some());
     assert!(!model.start_page.welcome);
 
     handle_event(&mut model, key(KeyCode::Char(':')));
     type_text(&mut model, "q");
     handle_event(&mut model, key(KeyCode::Enter));
 
-    assert!(model.buffers.help_back.is_none());
+    assert!(model.pager.back.is_none());
     assert!(model.start_page.welcome);
     assert_eq!(model.session.editor.text().slice(0..0), "");
 }

@@ -177,6 +177,7 @@ impl Model {
                 } else {
                     match theme::set_theme(argument) {
                         Ok(()) => {
+                            self.config.settings.theme = theme::choice();
                             let status = format!("theme: {}", theme::name());
                             self.status.text = self.persist_theme_status(status);
                         }
@@ -200,6 +201,7 @@ impl Model {
                 };
                 match theme::set_auto(dark, light) {
                     Ok(()) => {
+                        self.config.settings.theme = theme::choice();
                         let status = format!(
                             "theme: auto (dark {}, light {})",
                             theme::auto_mapping().0,
@@ -212,7 +214,7 @@ impl Model {
                 self.file.dirty = true;
             }
             ("theme-save", "") => {
-                self.status.text = match theme_config::save() {
+                self.status.text = match settings::save(self.config.settings) {
                     Ok(path) => format!("theme saved: {}", path.display()),
                     Err(error) => format!("E: {error}"),
                 };

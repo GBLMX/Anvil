@@ -53,7 +53,7 @@ impl Model {
                 "editor is busy; finish the current prompt first",
             ));
         }
-        if self.buffers.help_back.is_some() {
+        if self.pager.back.is_some() {
             return Err(RpcError::new(
                 codes::POLICY_DENIED,
                 "close the read-only view first",
@@ -135,7 +135,7 @@ impl Model {
                 "editor is busy; finish the current prompt first",
             ));
         }
-        if self.buffers.help_back.is_some() {
+        if self.pager.back.is_some() {
             return Err(RpcError::new(
                 codes::POLICY_DENIED,
                 "close the read-only view first",
@@ -182,7 +182,7 @@ impl Model {
                 "editor is busy; finish the current prompt first",
             ));
         }
-        if self.file.read_only || self.buffers.help_back.is_some() {
+        if self.file.read_only || self.pager.back.is_some() {
             return Err(RpcError::new(codes::POLICY_DENIED, "buffer is read-only"));
         }
         match mode {
@@ -329,7 +329,7 @@ impl Model {
     }
 
     fn remote_query(&mut self, options: QueryOptions) -> QueryResult {
-        if self.buffers.help_back.is_none() {
+        if self.pager.back.is_none() {
             self.sync_active();
         }
         let full = self
@@ -396,7 +396,7 @@ impl Model {
             workspace: self.workspace.path.clone(),
             path: self.session.path.clone(),
             modified: self.file.modified,
-            read_only: self.file.read_only || self.buffers.help_back.is_some(),
+            read_only: self.file.read_only || self.pager.back.is_some(),
             cursor: self.session.cursor,
             revision: self.session.editor.revision(),
             line_count,
@@ -425,7 +425,7 @@ impl Model {
 
     fn remote_ready(&self) -> bool {
         // Read-only views still accept Ex commands such as :q and hunk actions.
-        // File/save/edit operations guard help_back separately.
+        // File/save/edit operations guard `pager.back` separately.
         matches!(self.ui.input_mode, InputMode::Normal)
             && self.overlays.command_palette.is_none()
             && self.overlays.fuzzy.is_none()

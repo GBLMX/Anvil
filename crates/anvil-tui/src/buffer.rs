@@ -27,7 +27,7 @@ impl Model {
     }
 
     pub(crate) fn switch_to_buffer(&mut self, index: usize) {
-        if self.buffers.help_back.is_none() {
+        if self.pager.back.is_none() {
             self.sync_active();
         }
         self.load_buffer(index);
@@ -78,7 +78,7 @@ impl Model {
     }
 
     pub(crate) fn new_buffer(&mut self) {
-        if self.buffers.help_back.is_some() {
+        if self.pager.back.is_some() {
             let _ = self.close_help();
         }
         if !self.auto_save_before_focus_change() {
@@ -259,7 +259,7 @@ impl Model {
             self.file.dirty = true;
             return;
         }
-        if self.buffers.help_back.is_some() {
+        if self.pager.back.is_some() {
             let _ = self.close_help();
         }
         let path = match self.absolute_path(Path::new(path)) {
@@ -338,7 +338,7 @@ impl Model {
     }
 
     pub(crate) fn switch_buffer(&mut self, delta: isize) {
-        if self.buffers.help_back.is_some() {
+        if self.pager.back.is_some() {
             let _ = self.close_help();
         }
         if self.buffers.entries.is_empty() {

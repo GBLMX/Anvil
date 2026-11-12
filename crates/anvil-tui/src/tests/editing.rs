@@ -606,7 +606,7 @@ fn help_is_read_only_and_returns_to_the_previous_buffer() {
     handle_event(&mut model, key(KeyCode::Char(':')));
     type_text(&mut model, "help");
     handle_event(&mut model, key(KeyCode::Enter));
-    assert!(model.buffers.help_back.is_some());
+    assert!(model.pager.back.is_some());
     assert_eq!(
         model.session.editor.text().slice(0..HELP_TEXT.len()),
         HELP_TEXT
@@ -625,7 +625,7 @@ fn help_is_read_only_and_returns_to_the_previous_buffer() {
     handle_event(&mut model, key(KeyCode::Char(':')));
     type_text(&mut model, "q");
     handle_event(&mut model, key(KeyCode::Enter));
-    assert!(model.buffers.help_back.is_none());
+    assert!(model.pager.back.is_none());
     assert_eq!(model.session.editor.text().slice(0..8), "original");
     assert_eq!(model.session.path, Some(original_path));
     assert_eq!(model.session.cursor, 3);
@@ -664,7 +664,7 @@ fn help_refuses_writes() {
     handle_event(&mut model, key(KeyCode::Char(':')));
     type_text(&mut model, "w");
     handle_event(&mut model, key(KeyCode::Enter));
-    assert!(model.buffers.help_back.is_some());
+    assert!(model.pager.back.is_some());
     assert!(model.status.text.contains("read-only"));
     assert_eq!(
         model.session.editor.text().slice(0..HELP_TEXT.len()),
@@ -849,9 +849,7 @@ fn config_reload_applies_loaded_settings_and_keymap() {
     settings.search.case_sensitive = true;
     let keymap = crate::keymap::KeymapConfig::default();
 
-    model
-        .apply_loaded_config(settings, keymap, None)
-        .expect("reload");
+    model.apply_loaded_config(settings, keymap);
 
     assert!(model.config.settings.editor.auto_save);
     assert!(model.config.settings.search.case_sensitive);

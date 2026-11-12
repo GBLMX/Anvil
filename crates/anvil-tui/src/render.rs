@@ -142,8 +142,8 @@ fn buffer_bar_line(model: &Model, width: u16) -> Line<'static> {
         })
         .collect();
     let mut active = model.buffers.active.min(tabs.len().saturating_sub(1));
-    if model.buffers.help_back.is_some() {
-        let name = model.buffers.read_only_title.as_deref().unwrap_or("help");
+    if model.pager.back.is_some() {
+        let name = model.pager.title.as_deref().unwrap_or("help");
         tabs.push((format!(" [{name}] RO "), theme::selected()));
         active = tabs.len() - 1;
     }

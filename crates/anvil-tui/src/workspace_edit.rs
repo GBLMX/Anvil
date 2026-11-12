@@ -666,7 +666,7 @@ impl Model {
         {
             *path = remap_path(path, from, to);
         }
-        if let Some(back) = self.buffers.help_back.as_mut()
+        if let Some(back) = self.pager.back.as_mut()
             && let Some(path) = back.path.as_mut()
         {
             *path = remap_path(path, from, to);

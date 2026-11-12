@@ -3,7 +3,7 @@
 use super::*;
 use crate::settings::{self, Settings};
 
-pub(crate) const SETTINGS_ROWS: usize = 8;
+pub(crate) const SETTINGS_ROWS: usize = 9;
 
 pub(crate) fn rect(area: ratatui::layout::Rect) -> ratatui::layout::Rect {
     let width = (area.width * 9 / 10)
@@ -37,7 +37,8 @@ impl SettingsOverlayState {
             4 => "search.case_sensitive",
             5 => "lsp.inlay_hints",
             6 => "ui.reduced_motion",
-            _ => "ui.high_contrast",
+            7 => "ui.high_contrast",
+            _ => "theme.name",
         }
     }
 
@@ -50,7 +51,8 @@ impl SettingsOverlayState {
             4 => "Use case-sensitive matching for `/` and project search.",
             5 => "Request and render language-server inlay hints.",
             6 => "Freeze spinners and avoid continuous animation.",
-            _ => "Increase text, muted, and border contrast for the active theme.",
+            7 => "Increase text, muted, and border contrast for the active theme.",
+            _ => "Select the semantic palette used by the TUI.",
         }
     }
 
@@ -59,7 +61,8 @@ impl SettingsOverlayState {
             0..=3 => "Editor",
             4 => "Search",
             5 => "LSP",
-            _ => "Accessibility",
+            6..=7 => "Accessibility",
+            _ => "Appearance",
         }
     }
 
@@ -80,13 +83,37 @@ impl SettingsOverlayState {
             4 => settings.search.case_sensitive.to_string(),
             5 => settings.lsp.inlay_hints.to_string(),
             6 => settings.ui.reduced_motion.to_string(),
-            _ => settings.ui.high_contrast.to_string(),
+            7 => settings.ui.high_contrast.to_string(),
+            _ => theme_label(settings.theme),
         }
     }
 
     pub(crate) fn changed(&self, index: usize) -> bool {
         Self::value(&self.draft, index) != Self::value(&self.original, index)
     }
+}
+fn theme_label(choice: theme::Choice) -> String {
+    match choice {
+        theme::Choice::Fixed(name) => name.to_owned(),
+        theme::Choice::Auto { dark, light } => format!("auto ({dark} / {light})"),
+    }
+}
+fn cycle_theme(choice: theme::Choice, delta: isize) -> theme::Choice {
+    let names = theme::names();
+    if names.is_empty() {
+        return choice;
+    }
+    let current = match choice {
+        theme::Choice::Fixed(name) => names.iter().position(|candidate| *candidate == name),
+        theme::Choice::Auto { .. } => None,
+    };
+    let index = match current {
+        Some(index) if delta < 0 => (index + names.len() - 1) % names.len(),
+        Some(index) => (index + 1) % names.len(),
+        None if delta < 0 => names.len() - 1,
+        None => 0,
+    };
+    theme::Choice::Fixed(names[index])
 }
 
 pub(crate) fn hit(area: ratatui::layout::Rect, col: u16, row: u16) -> Option<usize> {
@@ -131,7 +158,7 @@ pub(crate) fn hit(area: ratatui::layout::Rect, col: u16, row: u16) -> Option<usi
         && row > sidebar.y
     {
         let index = usize::from(row.saturating_sub(sidebar.y).saturating_sub(1));
-        return [0usize, 4, 5, 6].get(index).copied();
+        return [0usize, 4, 5, 6, 8].get(index).copied();
     }
     None
 }
@@ -213,7 +240,8 @@ impl Model {
             4 => draft.search.case_sensitive = !draft.search.case_sensitive,
             5 => draft.lsp.inlay_hints = !draft.lsp.inlay_hints,
             6 => draft.ui.reduced_motion = !draft.ui.reduced_motion,
-            _ => draft.ui.high_contrast = !draft.ui.high_contrast,
+            7 => draft.ui.high_contrast = !draft.ui.high_contrast,
+            _ => draft.theme = cycle_theme(draft.theme, delta),
         }
         overlay.draft = draft;
         self.apply_settings(draft);
@@ -233,7 +261,8 @@ impl Model {
             4 => overlay.draft.search.case_sensitive = defaults.search.case_sensitive,
             5 => overlay.draft.lsp.inlay_hints = defaults.lsp.inlay_hints,
             6 => overlay.draft.ui.reduced_motion = defaults.ui.reduced_motion,
-            _ => overlay.draft.ui.high_contrast = defaults.ui.high_contrast,
+            7 => overlay.draft.ui.high_contrast = defaults.ui.high_contrast,
+            _ => overlay.draft.theme = defaults.theme,
         }
         self.apply_settings(overlay.draft);
         self.overlays.settings_overlay = Some(overlay);
@@ -282,6 +311,7 @@ mod tests {
         assert_eq!(hit(area, sidebar_x, body_y + 2), Some(4));
         assert_eq!(hit(area, sidebar_x, body_y + 3), Some(5));
         assert_eq!(hit(area, sidebar_x, body_y + 4), Some(6));
+        assert_eq!(hit(area, sidebar_x, body_y + 5), Some(8));
     }
 
     #[test]
@@ -290,6 +320,8 @@ mod tests {
         assert_eq!(SettingsOverlayState::tab(4), "Language");
         assert_eq!(SettingsOverlayState::tab(5), "Language");
         assert_eq!(SettingsOverlayState::tab(6), "Interface");
+        assert_eq!(SettingsOverlayState::tab(8), "Interface");
+        assert_eq!(SettingsOverlayState::group(8), "Appearance");
     }
 
     #[test]
@@ -345,5 +377,24 @@ mod tests {
         model.cancel_settings();
         assert!(model.overlays.settings_overlay.is_none());
         assert_eq!(model.config.settings, Settings::default());
+    }
+
+    #[test]
+    fn theme_row_cycles_builtins_and_resets() {
+        let first = theme::Choice::Fixed("anvil-dark");
+        let next = cycle_theme(first, 1);
+        assert_ne!(next, first);
+        assert_eq!(cycle_theme(next, -1), first);
+        assert_eq!(
+            cycle_theme(
+                theme::Choice::Auto {
+                    dark: "anvil-dark",
+                    light: "solarized-light",
+                },
+                1,
+            ),
+            first
+        );
+        assert_eq!(theme_label(first), "anvil-dark");
     }
 }

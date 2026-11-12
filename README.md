@@ -62,9 +62,13 @@ Built-in semantic themes are `anvil-dark`, `tokyonight`, `omp-kde`,
 `ANVIL_THEME` selects the startup theme.
 The command palette (`Space p`) lists themes and previews them while arrowing.
 
-The same file owns typed editor/search/LSP settings:
+The same file owns theme and typed editor/search/LSP settings:
 
 ```toml
+[theme]
+mode = "fixed"
+name = "anvil-dark"
+
 [editor]
 scroll_margin = 3
 auto_save = false
@@ -80,7 +84,8 @@ inlay_hints = true
 `ANVIL_SEARCH_CASE_SENSITIVE`, and `ANVIL_LSP_INLAY_HINTS` override the file
 for the current process.
 `:settings` opens the minimal overlay: `j`/`k` select, `h`/`l` or `Enter`
-adjust, `r` resets the row, `s` saves, and `Esc` cancels.
+adjust, `r` resets the row, `s` saves, and `Esc` cancels. The Appearance
+section includes the active theme row.
 Auto-save is off by default; when enabled it writes the active named buffer
 on buffer switch/close, split focus/close changes, opening another file, focus
 loss, and `:q`. Insert/search/rename input modes are eligible; only

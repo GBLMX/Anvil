@@ -6,11 +6,8 @@ use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 pub fn view(model: &Model, frame: &mut Frame) {
     let area = frame.area();
     let editor_view: EditorView = model.session.editor.snapshot().view();
-    let title = if model.buffers.help_back.is_some() {
-        format!(
-            "[{}]",
-            model.buffers.read_only_title.as_deref().unwrap_or("help")
-        )
+    let title = if model.pager.back.is_some() {
+        format!("[{}]", model.pager.title.as_deref().unwrap_or("help"))
     } else {
         let name = if model.file.stdin_buffer {
             "[stdin]".to_owned()
@@ -149,8 +146,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
         width: area.width.saturating_sub(2),
         height: area.height.saturating_sub(2),
     };
-    if !model.start_page.welcome
-        && (model.buffers.entries.len() > 1 || model.buffers.help_back.is_some())
+    if !model.start_page.welcome && (model.buffers.entries.len() > 1 || model.pager.back.is_some())
     {
         let bar = Rect {
             height: inner.height.min(1),
@@ -948,7 +944,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
             ..body
         };
         let mut sidebar_lines = Vec::new();
-        for name in ["Editor", "Search", "LSP", "Accessibility"] {
+        for name in ["Editor", "Search", "LSP", "Accessibility", "Appearance"] {
             let style = if name == group {
                 theme::selected()
             } else {

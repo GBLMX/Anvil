@@ -1,5 +1,6 @@
 //! Typed settings registry with explicit defaults, file, and environment layers.
 
+use crate::theme::{self, Choice};
 use serde::Deserialize;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -43,6 +44,7 @@ pub(crate) struct UiSettings {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Settings {
+    pub(crate) theme: Choice,
     pub(crate) editor: EditorSettings,
     pub(crate) search: SearchSettings,
     pub(crate) lsp: LspSettings,
@@ -52,6 +54,7 @@ pub(crate) struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
+            theme: Choice::Fixed("anvil-dark"),
             editor: EditorSettings {
                 scroll_margin: DEFAULT_SCROLL_MARGIN,
                 auto_save: false,
@@ -111,6 +114,21 @@ pub(crate) fn save_to_path(path: &Path, settings: Settings) -> Result<(), String
     } else {
         toml_edit::DocumentMut::new()
     };
+    let theme = table_mut(&mut document, "theme")?;
+    for key in ["mode", "name", "dark", "light"] {
+        theme.remove(key);
+    }
+    match settings.theme {
+        Choice::Fixed(name) => {
+            theme["mode"] = toml_edit::value("fixed");
+            theme["name"] = toml_edit::value(name);
+        }
+        Choice::Auto { dark, light } => {
+            theme["mode"] = toml_edit::value("auto");
+            theme["dark"] = toml_edit::value(dark);
+            theme["light"] = toml_edit::value(light);
+        }
+    }
     let editor = table_mut(&mut document, "editor")?;
     editor["scroll_margin"] = toml_edit::value(settings.editor.scroll_margin as i64);
     editor["auto_save"] = toml_edit::value(settings.editor.auto_save);
@@ -160,7 +178,10 @@ pub(crate) fn parse(text: &str) -> Result<Settings, String> {
     }
     let file: SettingsFile =
         toml_edit::de::from_str(text).map_err(|error| format!("invalid settings TOML: {error}"))?;
-    let mut settings = Settings::default();
+    let mut settings = Settings {
+        theme: parse_theme(file.theme)?,
+        ..Settings::default()
+    };
     if let Some(scroll_margin) = file.editor.scroll_margin {
         if scroll_margin > MAX_SCROLL_MARGIN {
             return Err(format!(
@@ -191,6 +212,31 @@ pub(crate) fn parse(text: &str) -> Result<Settings, String> {
         settings.ui.high_contrast = high_contrast;
     }
     Ok(settings)
+}
+fn parse_theme(theme: Option<ThemeFile>) -> Result<Choice, String> {
+    let Some(theme) = theme else {
+        return Ok(Choice::Fixed("anvil-dark"));
+    };
+    match theme.mode.as_deref().unwrap_or("fixed") {
+        "fixed" => {
+            if theme.dark.is_some() || theme.light.is_some() {
+                return Err("fixed theme mode must not set dark or light".to_owned());
+            }
+            let name = theme::canonical(theme.name.as_deref().unwrap_or("anvil-dark"))?;
+            Ok(Choice::Fixed(name))
+        }
+        "auto" => {
+            if theme.name.is_some() {
+                return Err("auto theme mode must not set name".to_owned());
+            }
+            let dark = theme::canonical(theme.dark.as_deref().unwrap_or("anvil-dark"))?;
+            let light = theme::canonical(theme.light.as_deref().unwrap_or("solarized-light"))?;
+            Ok(Choice::Auto { dark, light })
+        }
+        mode => Err(format!(
+            "unknown theme mode {mode:?}; expected fixed or auto"
+        )),
+    }
 }
 
 fn apply_env(
@@ -261,12 +307,21 @@ pub(crate) fn path() -> Result<PathBuf, String> {
 #[derive(Debug, Default, Deserialize)]
 #[serde(default)]
 struct SettingsFile {
+    theme: Option<ThemeFile>,
     editor: EditorFile,
     search: SearchFile,
     lsp: LspFile,
     ui: UiFile,
 }
 
+#[derive(Debug, Default, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+struct ThemeFile {
+    mode: Option<String>,
+    name: Option<String>,
+    dark: Option<String>,
+    light: Option<String>,
+}
 #[derive(Debug, Default, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 struct EditorFile {
@@ -302,8 +357,24 @@ impl crate::Model {
         self.overlays.lsp_results.inlay_hints.clear();
         self.overlays.lsp_results.inlay_pending = None;
         self.overlays.lsp_results.inlay_checked = None;
-        crate::theme::set_high_contrast(settings.ui.high_contrast);
+        if let Err(error) = theme::apply_choice(settings.theme, false) {
+            self.status.text = format!("E: theme: {error}");
+        }
+        theme::set_high_contrast(settings.ui.high_contrast);
         self.file.dirty = true;
+    }
+
+    pub(crate) fn persist_theme_status(&mut self, status: String) -> String {
+        if let Some(choice) = theme::runtime_choice() {
+            self.config.settings.theme = choice;
+        }
+        if !self.appearance.persist_theme {
+            return status;
+        }
+        match save(self.config.settings) {
+            Ok(_) => format!("{status} (saved)"),
+            Err(error) => format!("{status}; E: {error}"),
+        }
     }
 }
 
@@ -316,6 +387,7 @@ mod tests {
         assert_eq!(
             Settings::default(),
             Settings {
+                theme: Choice::Fixed("anvil-dark"),
                 editor: EditorSettings {
                     scroll_margin: 3,
                     auto_save: false,
@@ -335,11 +407,12 @@ mod tests {
     }
 
     #[test]
-    fn parses_all_domains_and_ignores_theme() {
+    fn parses_all_domains_and_theme() {
         let settings = parse(
             "[theme]\nmode = \"fixed\"\n[editor]\nscroll_margin = 1\nauto_save = true\nsoft_wrap = true\nformat_on_save = true\n[search]\ncase_sensitive = true\n[lsp]\ninlay_hints = false\n",
         )
         .expect("settings");
+        assert_eq!(settings.theme, Choice::Fixed("anvil-dark"));
         assert_eq!(settings.editor.scroll_margin, 1);
         assert!(settings.editor.auto_save);
         assert!(settings.editor.soft_wrap);
@@ -372,7 +445,7 @@ mod tests {
     }
 
     #[test]
-    fn save_preserves_theme_and_writes_domains() {
+    fn save_writes_theme_and_domains() {
         let directory =
             std::env::temp_dir().join(format!("anvil-settings-save-{}", std::process::id()));
         let _ = fs::remove_dir_all(&directory);
@@ -383,7 +456,10 @@ mod tests {
             "[theme]\nmode = \"fixed\"\nname = \"nord\"\n[editor]\nscroll_margin = 1\n",
         )
         .expect("write");
-        let mut settings = Settings::default();
+        let mut settings = Settings {
+            theme: Choice::Fixed("nord"),
+            ..Settings::default()
+        };
         settings.editor.scroll_margin = 5;
         settings.search.case_sensitive = true;
         settings.lsp.inlay_hints = false;
@@ -393,6 +469,27 @@ mod tests {
         assert!(text.contains("name = \"nord\""));
         assert_eq!(load_file_from_path(&path).expect("load"), settings);
         let _ = fs::remove_dir_all(&directory);
+    }
+
+    #[test]
+    fn theme_parser_rejects_ambiguous_and_unknown_values() {
+        assert!(parse("[theme]\nmode = \"auto\"\nname = \"nord\"\n").is_err());
+        assert!(parse("[theme]\ndark = \"nord\"\n").is_err());
+        assert!(parse("[theme]\nname = \"missing\"\n").is_err());
+        assert!(parse("[theme]\nmode = \"system\"\n").is_err());
+    }
+    #[test]
+    fn parses_auto_theme_mode() {
+        let settings =
+            parse("[theme]\nmode = \"auto\"\ndark = \"nord\"\nlight = \"solarized-light\"\n")
+                .expect("auto theme");
+        assert_eq!(
+            settings.theme,
+            Choice::Auto {
+                dark: "nord",
+                light: "solarized-light",
+            }
+        );
     }
 
     #[test]

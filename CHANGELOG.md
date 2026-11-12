@@ -17,10 +17,14 @@ post-`0.5.0` feature line.
   to `Model.overlays.lsp_results`.
 - Settings is now a full page with top categories, a section sidebar,
   highlighted values, and a description footer.
+- Theme choice is now part of typed `Settings` and `settings.toml` instead of a
+  parallel parser; `:theme`, `:theme-auto`, previews, and `:theme-save` all
+  persist through the settings registry.
+- Help, Git diff/blame/conflict, task output, and terminal output now share
+  `Model.pager`; the old `BufferState.help_back` fields are gone.
+- The Settings overlay adds an Appearance theme row with live apply and reset.
 - The command palette renders title/detail columns, a result count, and a key
   hint footer.
-- Saving a theme edits only `[theme]` and preserves every other settings
-  section.
 - `:themes` opens a two-pane theme browser with live preview, Enter apply, and
   Esc restore.
 - Interactive overlays now share the focused border style; the debug panel

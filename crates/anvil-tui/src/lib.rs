@@ -101,10 +101,13 @@ mod input;
 mod keymap;
 mod keys;
 mod lsp_worker;
+mod readonly;
 mod render;
+#[cfg(test)]
+use readonly::HELP_TEXT;
+use readonly::ReadOnlyState;
 mod settings;
 mod theme;
-mod theme_config;
 use settings::Settings;
 mod settings_ui;
 use settings_ui::SettingsOverlayState;
@@ -146,8 +149,6 @@ pub use terminal::{run, run_with_input, run_with_workspace, run_with_workspace_s
 
 const MAX_OPEN_BYTES: usize = 256 * 1024 * 1024;
 const EFFECT_QUEUE_CAPACITY: usize = 32;
-
-const HELP_TEXT: &str = include_str!("help.txt");
 
 #[derive(Clone)]
 struct Buffer {
@@ -642,10 +643,6 @@ struct BufferState {
     active: usize,
     /// Secondary pane when a vertical split is open.
     split: Option<Pane>,
-    /// Buffer replaced by the read-only help page.
-    help_back: Option<Buffer>,
-    /// Short title for the current read-only view.
-    read_only_title: Option<String>,
 }
 
 #[derive(Default)]
@@ -978,7 +975,9 @@ pub struct Model {
     search: SearchSession,
     /// Start dashboard and help return state.
     start_page: StartPageState,
-    /// Open buffers, active pane, and help-page state.
+    /// Read-only page replacing the active buffer.
+    pager: ReadOnlyState,
+    /// Open buffers and active pane.
     buffers: BufferState,
     /// Workspace root, gateways, and file workers.
     workspace: WorkspaceState,
@@ -1036,6 +1035,7 @@ impl Model {
             status: StatusState::default(),
             input: InputState::default(),
             search: SearchSession::default(),
+            pager: ReadOnlyState::default(),
             buffers: BufferState::default(),
             workspace: WorkspaceState {
                 path: workspace,
@@ -1069,16 +1069,10 @@ impl Model {
         let loaded = (|| -> Result<_, String> {
             let settings = settings::load()?;
             let keymap = keymap::KeymapConfig::load_default()?;
-            let theme = theme_config::read_choice()?;
-            Ok((settings, keymap, theme))
+            Ok((settings, keymap))
         })();
         match loaded {
-            Ok((settings, keymap, theme)) => {
-                if let Err(error) = self.apply_loaded_config(settings, keymap, theme) {
-                    self.status.text = format!("E: config-reload: {error}");
-                    self.file.dirty = true;
-                }
-            }
+            Ok((settings, keymap)) => self.apply_loaded_config(settings, keymap),
             Err(error) => {
                 self.status.text = format!("E: config-reload: {error}");
                 self.file.dirty = true;
@@ -1086,20 +1080,11 @@ impl Model {
         }
     }
 
-    fn apply_loaded_config(
-        &mut self,
-        settings: settings::Settings,
-        keymap: keymap::KeymapConfig,
-        theme: Option<theme::Choice>,
-    ) -> Result<(), String> {
-        if let Some(choice) = theme {
-            theme::apply_choice(choice, false)?;
-        }
+    fn apply_loaded_config(&mut self, settings: settings::Settings, keymap: keymap::KeymapConfig) {
         self.apply_settings(settings);
         self.config.keymap = keymap;
         self.status.text = "configuration reloaded".to_owned();
         self.file.dirty = true;
-        Ok(())
     }
 
     pub(crate) fn load_keymap_config_from(&mut self, path: &Path) -> Result<(), String> {
@@ -1227,7 +1212,7 @@ impl Model {
             self.status.text = "E: read-only buffer".to_owned();
             self.file.dirty = true;
             true
-        } else if self.buffers.help_back.is_some() {
+        } else if self.pager.back.is_some() {
             self.status.text = "E: read-only view".to_owned();
             self.file.dirty = true;
             true
@@ -1241,110 +1226,6 @@ impl Model {
         self.git.diff_request = None;
         self.git.diff_checked = None;
         self.git.diff_due = None;
-    }
-
-    fn show_help(&mut self) {
-        self.show_read_only(HELP_TEXT, "Help: :q returns", "help");
-    }
-
-    fn show_read_only(&mut self, text: &str, status: &str, title: &str) -> bool {
-        if self.buffers.help_back.is_some() {
-            self.status.text = "already viewing a read-only view".to_owned();
-            self.file.dirty = true;
-            return false;
-        }
-        let editor = std::mem::replace(
-            &mut self.session.editor,
-            EditorState::from_text(text).into(),
-        );
-        let saved = Buffer {
-            editor,
-            path: self.session.path.take(),
-            cursor: self.session.cursor,
-            scroll: self.view.scroll,
-            hscroll: self.view.hscroll,
-            visual_anchor: self.edit.visual_anchor,
-            visual_line: self.edit.visual_line,
-            modified: self.file.modified,
-            missing: self.file.missing,
-            search_query: std::mem::take(&mut self.search.query),
-            syntax: self.syntax_cache.highlights.borrow().active_cache(),
-        };
-        self.buffers.read_only_title = Some(title.to_owned());
-        self.buffers.help_back = Some(saved);
-        self.clear_git_gutter();
-        self.syntax_cache
-            .highlights
-            .borrow_mut()
-            .switch_path(None, true);
-        self.session.cursor = 0;
-        self.view.scroll = 0;
-        self.view.hscroll = 0;
-        self.file.modified = false;
-        self.start_page.welcome_back = self.start_page.welcome;
-        self.start_page.welcome = false;
-        self.ui.input_mode = InputMode::Normal;
-        self.input.pending = None;
-        self.status.text = status.to_owned();
-        self.file.dirty = true;
-        true
-    }
-
-    fn replace_read_only(&mut self, text: &str, status: &str, title: &str) {
-        if self.buffers.help_back.is_none() {
-            self.show_read_only(text, status, title);
-            return;
-        }
-        self.clear_git_gutter();
-        self.session.editor = EditorState::from_text(text).into();
-        self.syntax_cache
-            .highlights
-            .borrow_mut()
-            .switch_path(None, true);
-        self.session.cursor = 0;
-        self.view.scroll = 0;
-        self.view.hscroll = 0;
-        self.file.modified = false;
-        self.buffers.read_only_title = Some(title.to_owned());
-        self.status.text = status.to_owned();
-        self.file.dirty = true;
-    }
-
-    fn close_help(&mut self) -> bool {
-        let Some(saved) = self.buffers.help_back.take() else {
-            return false;
-        };
-        let title = self
-            .buffers
-            .read_only_title
-            .take()
-            .unwrap_or_else(|| "help".to_owned());
-        self.git.diff_view = None;
-        self.git.diff_pending = None;
-        self.git.apply_pending = None;
-        self.git.blame_pending = None;
-        self.git.conflicts_pending = None;
-        self.git.stage_pending = None;
-        self.git.resolve_pending = None;
-        let syntax = saved.syntax.clone();
-        self.session.editor = saved.editor;
-        self.session.path = saved.path;
-        self.session.cursor = saved.cursor;
-        self.view.scroll = saved.scroll;
-        self.view.hscroll = saved.hscroll;
-        self.file.modified = saved.modified;
-        self.search.query = saved.search_query;
-        self.syntax_cache.highlights.borrow_mut().switch_path_with(
-            self.session.path.as_deref(),
-            false,
-            Some(syntax),
-        );
-        self.ui.input_mode = InputMode::Normal;
-        self.start_page.welcome = std::mem::take(&mut self.start_page.welcome_back);
-        self.input.pending = None;
-        self.status.text = format!("Returned from {title}");
-        self.file.dirty = true;
-        true
     }
 
     pub fn poll_syntax(&mut self) {
@@ -1794,7 +1675,7 @@ impl Model {
             || self.overlays.lsp_results.hover.is_some()
             || self.ui.diagnostic_peek.is_some()
             || self.ui.problems.visible
-            || self.buffers.help_back.is_some();
+            || self.pager.back.is_some();
         if overlay && contexts.last() != Some(&KeymapContext::Popup) {
             contexts.push(KeymapContext::Popup);
         }

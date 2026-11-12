@@ -61,7 +61,7 @@ impl GitDiffView {
 
 impl Model {
     pub(crate) fn request_git_diff(&mut self, staged: bool) {
-        if self.buffers.help_back.is_some() {
+        if self.pager.back.is_some() {
             if let Some(view) = self.git.diff_view.as_ref() {
                 let relative = view.relative.clone();
                 self.request_diff(relative, staged);
@@ -139,9 +139,7 @@ impl Model {
                     "Git diff"
                 };
                 let body = format!("{header}\n\n{text}");
-                if self.buffers.help_back.is_some()
-                    && self.buffers.read_only_title.as_deref() != Some("Git diff")
-                {
+                if self.pager.back.is_some() && self.pager.title.as_deref() != Some("Git diff") {
                     self.git.diff_view = None;
                     return;
                 }
@@ -283,7 +281,7 @@ impl Model {
 
 impl Model {
     pub(crate) fn request_git_blame(&mut self) {
-        if self.buffers.help_back.is_some() {
+        if self.pager.back.is_some() {
             self.status.text = "already viewing a read-only view".to_owned();
             self.file.dirty = true;
             return;
@@ -354,7 +352,7 @@ impl Model {
 
 impl Model {
     pub(crate) fn request_git_conflicts(&mut self) {
-        if self.buffers.help_back.is_some() {
+        if self.pager.back.is_some() {
             self.status.text = "already viewing a read-only view".to_owned();
             self.file.dirty = true;
             return;
@@ -414,7 +412,7 @@ impl Model {
 
 impl Model {
     pub(crate) fn request_git_conflict_stage(&mut self, stage: u8) {
-        if self.buffers.help_back.is_some() {
+        if self.pager.back.is_some() {
             self.status.text = "already viewing a read-only view".to_owned();
             self.file.dirty = true;
             return;
@@ -497,7 +495,7 @@ impl Model {
     }
 
     pub(crate) fn resolve_git_conflict(&mut self, stage: u8, force: bool) {
-        if self.buffers.help_back.is_some() {
+        if self.pager.back.is_some() {
             self.status.text = "E: close the read-only view first".to_owned();
             self.file.dirty = true;
             return;

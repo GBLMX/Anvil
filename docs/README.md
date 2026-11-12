@@ -63,7 +63,7 @@ Cross-cutting tracks that do not jump the queue:
 | [Linux platform](linux-platform-plan.md) | seccomp/cgroup, atomic install, watcher measurements | planned |
 | [Command architecture](command-architecture-plan.md) | command registry, keymap trie, effects | registry + effect queue landed; trie/Lua pending |
 | [Keymap configuration](keymap.md) | TOML overrides and key syntax | current |
-| [Theme and settings](theme-settings-plan.md) | built-in semantic themes, selection, deferred Settings overlay | theme/settings persistence landed; overlay gated |
+| [Theme and settings](theme-settings-plan.md) | built-in semantic themes, settings overlay, and theme selection | theme in typed settings; overlay active |
 | [Deployment](deployment.md) | gateway, exec-runner, cgroup boundaries | current |
 
 ## Historical plans

@@ -503,7 +503,7 @@ impl Model {
             || self.file.read_only
             || self.file.stdin_buffer
             || self.file.missing
-            || self.buffers.help_back.is_some()
+            || self.pager.back.is_some()
             || self.overlays.settings_overlay.is_some()
             || self.overlays.command_palette.is_some()
             || self.overlays.fuzzy.is_some()

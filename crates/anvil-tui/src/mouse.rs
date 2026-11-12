@@ -291,7 +291,7 @@ fn content_rect(
         return None;
     }
     let mut tab_row = None;
-    if model.buffers.entries.len() > 1 || model.buffers.help_back.is_some() {
+    if model.buffers.entries.len() > 1 || model.pager.back.is_some() {
         tab_row = Some(inner.y);
         inner.y = inner.y.saturating_add(1);
         inner.height = inner.height.saturating_sub(1);

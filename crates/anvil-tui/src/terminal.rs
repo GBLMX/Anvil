@@ -134,16 +134,6 @@ pub fn run_with_input(
         }
         model.file.dirty = true;
     }
-    if let Err(error) = theme_config::load() {
-        let message = format!("E: theme config: {error}");
-        if model.status.text.is_empty() {
-            model.status.text = message;
-        } else {
-            model.status.text.push_str(" | ");
-            model.status.text.push_str(&message);
-        }
-        model.file.dirty = true;
-    }
     match settings::load() {
         Ok(settings) => model.apply_settings(settings),
         Err(error) => {
