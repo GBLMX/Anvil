@@ -191,12 +191,44 @@ pub fn view(model: &Model, frame: &mut Frame) {
             } else {
                 theme::panel()
             };
-            lines.push(Line::from(vec![
+            let mut spans = vec![
                 Span::raw("  ".repeat(entry.depth)),
                 Span::styled(glyph, style.fg((icon.color)())),
                 Span::raw(icon_padding),
                 Span::styled(name, style),
-            ]));
+            ];
+            let modified = model.path.as_ref() == Some(&entry.path) && model.modified
+                || model
+                    .buffers
+                    .iter()
+                    .any(|buffer| buffer.path.as_ref() == Some(&entry.path) && buffer.modified)
+                || model.split.as_ref().is_some_and(|pane| {
+                    pane.buffer.path.as_ref() == Some(&entry.path) && pane.buffer.modified
+                });
+            if modified {
+                spans.push(Span::styled(
+                    " *",
+                    style.fg(theme::warning()).add_modifier(Modifier::BOLD),
+                ));
+            }
+            if let Some(diagnostics) = model.diagnostics.get(&entry.path)
+                && !diagnostics.is_empty()
+            {
+                let severity = diagnostics
+                    .iter()
+                    .filter_map(|diagnostic| diagnostic.severity)
+                    .min();
+                let color = match severity {
+                    Some(1) => theme::error(),
+                    Some(2) => theme::warning(),
+                    _ => theme::accent(),
+                };
+                spans.push(Span::styled(
+                    " !",
+                    style.fg(color).add_modifier(Modifier::BOLD),
+                ));
+            }
+            lines.push(Line::from(spans));
         }
         if lines.is_empty() {
             lines.push(Line::styled("empty", theme::panel().fg(theme::muted())));

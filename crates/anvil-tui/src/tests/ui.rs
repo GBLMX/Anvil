@@ -242,6 +242,35 @@ fn tree_renders_file_and_folder_icons() {
 }
 
 #[test]
+fn tree_shows_modified_and_diagnostic_markers() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("main.rs");
+    fs::write(&path, "fn main() {}\n").expect("file");
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.workspace = dir.path().to_path_buf();
+    model.welcome = false;
+    model.open_tree();
+    model.open_path(&path).expect("open");
+    model.insert_text("x");
+    model
+        .diagnostics
+        .insert(path.clone(), vec![diagnostic(0, 0, "broken")]);
+
+    let backend = TestBackend::new(80, 12);
+    let mut terminal = Terminal::new(backend).expect("terminal");
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+    let rendered = terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect::<String>();
+    assert!(rendered.contains("main.rs *"), "{rendered}");
+    assert!(rendered.contains("main.rs * !"), "{rendered}");
+}
+
+#[test]
 fn tree_renders_ascii_icon_fallback() {
     let dir = tempfile::tempdir().expect("tempdir");
     fs::write(dir.path().join("main.rs"), "").expect("file");
