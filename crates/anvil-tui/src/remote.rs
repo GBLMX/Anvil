@@ -198,8 +198,8 @@ impl Model {
                 self.syntax
                     .borrow_mut()
                     .switch_path(self.path.as_deref(), false);
-                self.git_checked = None;
-                self.git_due = Some(Instant::now());
+                self.git.diff_checked = None;
+                self.git.diff_due = Some(Instant::now());
                 self.sync_lsp_active();
                 self.status = "remote edit: set".to_owned();
             }
@@ -258,8 +258,8 @@ impl Model {
                 self.syntax
                     .borrow_mut()
                     .switch_path(self.path.as_deref(), false);
-                self.git_checked = None;
-                self.git_due = Some(Instant::now());
+                self.git.diff_checked = None;
+                self.git.diff_due = Some(Instant::now());
                 self.sync_lsp_active();
                 self.status = "remote edit: replace".to_owned();
             }

@@ -15,9 +15,9 @@ const STATUS_SEPARATOR: &str = " · ";
 impl Model {
     pub(crate) fn tick_status(&mut self) {
         self.prune_diagnostic_peek();
-        if !self.git_branch_checked {
-            self.git_branch_checked = true;
-            self.git_branch = detect_git_branch(&self.workspace);
+        if !self.git.branch_checked {
+            self.git.branch_checked = true;
+            self.git.branch = detect_git_branch(&self.workspace);
             self.dirty = true;
         }
         if self.language.diagnostics.path != self.path {
@@ -99,7 +99,7 @@ impl Model {
         if self.modified {
             segments.push("●".to_owned());
         }
-        if let Some(branch) = &self.git_branch {
+        if let Some(branch) = &self.git.branch {
             segments.push(branch.clone());
         }
         let diagnostics = if self.language.diagnostics.count_pending.is_some() {

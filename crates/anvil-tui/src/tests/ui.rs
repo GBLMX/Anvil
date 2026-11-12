@@ -257,7 +257,7 @@ fn tree_shows_modified_and_diagnostic_markers() {
         .diagnostics
         .by_path
         .insert(path.clone(), vec![diagnostic(0, 0, "broken")]);
-    model.git_status.insert(path.clone(), 'M');
+    model.git.status.insert(path.clone(), 'M');
 
     let backend = TestBackend::new(80, 12);
     let mut terminal = Terminal::new(backend).expect("terminal");
@@ -570,7 +570,7 @@ fn tree_rolls_up_child_git_and_diagnostics_to_directory() {
         },
     ];
     model.tree_selected = Some(0);
-    model.git_status.insert(file.clone(), 'M');
+    model.git.status.insert(file.clone(), 'M');
     model
         .language
         .diagnostics

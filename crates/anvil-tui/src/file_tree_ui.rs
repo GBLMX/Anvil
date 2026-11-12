@@ -186,8 +186,8 @@ impl Model {
     }
 
     pub(crate) fn request_git_status(&mut self) {
-        self.git_status_generation = self.git_status_generation.wrapping_add(1);
-        let generation = self.git_status_generation;
+        self.git.status_generation = self.git.status_generation.wrapping_add(1);
+        let generation = self.git.status_generation;
         let mut expected = 0usize;
         let mut error = None;
         if let Some(worker) = self.file_worker.as_ref() {
@@ -216,10 +216,10 @@ impl Model {
             }
             return;
         }
-        self.git_status.clear();
-        self.git_status_pending = Some(generation);
-        self.git_status_expected = expected;
-        self.git_status_received = 0;
+        self.git.status.clear();
+        self.git.status_pending = Some(generation);
+        self.git.status_expected = expected;
+        self.git.status_received = 0;
     }
 
     fn handle_git_status(
@@ -227,21 +227,21 @@ impl Model {
         generation: u64,
         result: Result<std::collections::HashMap<PathBuf, char>, String>,
     ) {
-        if self.git_status_pending != Some(generation) {
+        if self.git.status_pending != Some(generation) {
             return;
         }
-        self.git_status_received = self.git_status_received.saturating_add(1);
+        self.git.status_received = self.git.status_received.saturating_add(1);
         match result {
-            Ok(statuses) => self.git_status.extend(statuses),
+            Ok(statuses) => self.git.status.extend(statuses),
             Err(error) => {
                 self.status = format!("E: git status: {error}");
                 self.dirty = true;
             }
         }
-        if self.git_status_received >= self.git_status_expected {
-            self.git_status_pending = None;
-            self.git_status_expected = 0;
-            self.git_status_received = 0;
+        if self.git.status_received >= self.git.status_expected {
+            self.git.status_pending = None;
+            self.git.status_expected = 0;
+            self.git.status_received = 0;
             self.dirty = true;
         }
     }
@@ -913,24 +913,24 @@ mod tests {
         let primary = dir.path().join("primary.rs");
         let secondary = dir.path().join("secondary.rs");
         let mut model = Model::new(EditorState::from_text(""), None);
-        model.git_status_pending = Some(7);
-        model.git_status_expected = 2;
-        model.git_status_received = 0;
-        model.git_status.clear();
+        model.git.status_pending = Some(7);
+        model.git.status_expected = 2;
+        model.git.status_received = 0;
+        model.git.status.clear();
 
         model.handle_git_status(
             7,
             Ok(std::collections::HashMap::from([(secondary.clone(), 'M')])),
         );
-        assert_eq!(model.git_status_pending, Some(7));
+        assert_eq!(model.git.status_pending, Some(7));
 
         model.handle_git_status(
             7,
             Ok(std::collections::HashMap::from([(primary.clone(), 'A')])),
         );
-        assert_eq!(model.git_status_pending, None);
-        assert_eq!(model.git_status.get(&primary), Some(&'A'));
-        assert_eq!(model.git_status.get(&secondary), Some(&'M'));
+        assert_eq!(model.git.status_pending, None);
+        assert_eq!(model.git.status.get(&primary), Some(&'A'));
+        assert_eq!(model.git.status.get(&secondary), Some(&'M'));
     }
 
     #[test]

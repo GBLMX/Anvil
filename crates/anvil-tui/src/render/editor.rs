@@ -231,7 +231,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
             let git_marker = if entry.is_dir {
                 tree_rollup_git(model, &model.tree, index)
             } else {
-                model.git_status.get(&entry.path).copied()
+                model.git.status.get(&entry.path).copied()
             };
             if let Some(marker) = git_marker {
                 let color = match marker {
@@ -1496,7 +1496,7 @@ fn tree_rollup_git(model: &Model, entries: &[TreeEntry], index: usize) -> Option
         if child.depth <= depth {
             break;
         }
-        if let Some(next) = model.git_status.get(&child.path)
+        if let Some(next) = model.git.status.get(&child.path)
             && git_priority(*next) > marker.map_or(0, git_priority)
         {
             marker = Some(*next);

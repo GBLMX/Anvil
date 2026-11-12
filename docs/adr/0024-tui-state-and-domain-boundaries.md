@@ -256,10 +256,12 @@ Phase 1 started on 2026-11-12:
   `theme_browser`, `fuzzy`, `preview`, `debug_panel`, `test_explorer`,
   `command_completion`, command-palette recents, the pipe-location panel, and
   LSP presentation results (`lsp_results`).
+- `Model.git` owns gutter marks, status, diff, apply, blame, conflict, stage,
+  resolve, request generations, and branch state.
 - `Model.language` owns `DapState`, `DiagnosticsState`, and `LspState`;
   `LspState` keeps transport, worker, request, and cancellation bookkeeping.
 - Existing behavior is unchanged; tests access the composed state explicitly.
-- `Model` now has 145 top-level fields. Remaining buffers, UI, workspace, and
+- `Model` now has 122 top-level fields. Remaining buffers, UI, workspace, and
   session page state moves in later behavior-preserving slices.
 
 

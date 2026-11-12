@@ -5,15 +5,15 @@ use crate::file_worker::FileRequest;
 
 impl Model {
     pub(crate) fn poll_git(&mut self) {
-        if let Some(pending) = &self.git_pending
+        if let Some(pending) = &self.git.diff_request
             && self.path.as_ref() != Some(&pending.0)
         {
-            self.git_pending = None;
-            self.git_due = Some(Instant::now());
+            self.git.diff_request = None;
+            self.git.diff_due = Some(Instant::now());
         }
         if self.modified {
-            if !self.git_marks.is_empty() {
-                self.git_marks.clear();
+            if !self.git.marks.is_empty() {
+                self.git.marks.clear();
                 self.dirty = true;
             }
             return;
@@ -22,14 +22,17 @@ impl Model {
             return;
         };
         let revision = self.editor.revision();
-        if self.git_checked.as_ref() == Some(&(path.clone(), revision)) {
+        if self.git.diff_checked.as_ref() == Some(&(path.clone(), revision)) {
             return;
         }
-        if self.git_pending.is_some() {
+        if self.git.diff_request.is_some() {
             return;
         }
         let now = Instant::now();
-        let due = *self.git_due.get_or_insert(now + Duration::from_millis(300));
+        let due = *self
+            .git
+            .diff_due
+            .get_or_insert(now + Duration::from_millis(300));
         if now < due || !self.ensure_file_worker() {
             return;
         }
@@ -48,9 +51,9 @@ impl Model {
             })
             .is_ok()
         {
-            self.git_pending = Some((path.clone(), revision));
-            self.git_checked = Some((path, revision));
-            self.git_due = None;
+            self.git.diff_request = Some((path.clone(), revision));
+            self.git.diff_checked = Some((path, revision));
+            self.git.diff_due = None;
         }
     }
 
@@ -61,18 +64,18 @@ impl Model {
         result: Result<Vec<(usize, char)>, String>,
     ) {
         if self.path.as_ref() != Some(&path) || self.editor.revision() != revision {
-            self.git_pending = None;
-            self.git_marks.clear();
-            self.git_due = Some(Instant::now());
+            self.git.diff_request = None;
+            self.git.marks.clear();
+            self.git.diff_due = Some(Instant::now());
             self.dirty = true;
             return;
         }
-        self.git_pending = None;
-        self.git_marks = result.unwrap_or_default().into_iter().collect();
+        self.git.diff_request = None;
+        self.git.marks = result.unwrap_or_default().into_iter().collect();
         self.dirty = true;
     }
 
     pub(crate) fn git_marker(&self, line: usize) -> Option<char> {
-        self.git_marks.get(&line).copied()
+        self.git.marks.get(&line).copied()
     }
 }

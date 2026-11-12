@@ -669,8 +669,8 @@ impl Model {
             .lsp
             .versions
             .retain(|path, _| path != from && !path.starts_with(from));
-        self.git_checked = None;
-        self.git_marks.clear();
+        self.git.diff_checked = None;
+        self.git.marks.clear();
         self.clear_lsp_ui();
         self.syntax
             .borrow_mut()

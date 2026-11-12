@@ -375,6 +375,56 @@ struct LspResultsState {
 }
 
 #[derive(Default)]
+struct GitState {
+    /// Git gutter marks keyed by zero-based line.
+    marks: HashMap<usize, char>,
+    /// Workspace git status keyed by absolute path.
+    status: HashMap<PathBuf, char>,
+    /// Latest requested tree git-status generation.
+    status_generation: u64,
+    /// Pending tree git-status generation.
+    status_pending: Option<u64>,
+    /// Number of roots expected to answer the pending git-status request.
+    status_expected: usize,
+    /// Number of roots that answered the pending git-status request.
+    status_received: usize,
+    /// Requested git diff path and revision.
+    diff_request: Option<(PathBuf, u64)>,
+    /// Last requested git diff path and revision.
+    diff_checked: Option<(PathBuf, u64)>,
+    /// Debounce deadline for the next git diff request.
+    diff_due: Option<Instant>,
+    /// Latest requested read-only Git diff generation.
+    diff_generation: u64,
+    /// Pending Git diff generation, if a request is in flight.
+    diff_pending: Option<u64>,
+    /// Parsed hunks for the active Git diff view.
+    diff_view: Option<git_diff::GitDiffView>,
+    /// Latest requested hunk-apply generation.
+    apply_generation: u64,
+    /// Pending hunk-apply generation, if a request is in flight.
+    apply_pending: Option<u64>,
+    /// Latest requested Git blame generation.
+    blame_generation: u64,
+    /// Pending Git blame generation, if a request is in flight.
+    blame_pending: Option<u64>,
+    /// Latest requested Git conflict-list generation.
+    conflicts_generation: u64,
+    /// Pending Git conflict-list generation, if a request is in flight.
+    conflicts_pending: Option<u64>,
+    /// Latest requested conflict-stage generation.
+    stage_generation: u64,
+    /// Pending conflict-stage generation, if a request is in flight.
+    stage_pending: Option<u64>,
+    /// Latest requested conflict-resolution generation.
+    resolve_generation: u64,
+    /// Pending conflict-resolution generation, if a request is in flight.
+    resolve_pending: Option<u64>,
+    branch: Option<String>,
+    branch_checked: bool,
+}
+
+#[derive(Default)]
 struct LanguageState {
     dap: DapState,
     diagnostics: DiagnosticsState,
@@ -681,52 +731,10 @@ pub struct Model {
     file_worker: Option<FileWorker>,
     /// Background workers for trusted non-primary workspace roots.
     root_file_workers: BTreeMap<PathBuf, FileWorker>,
-    /// Git gutter marks keyed by zero-based line.
-    git_marks: HashMap<usize, char>,
     /// Language services and debugger runtime.
     language: LanguageState,
-    /// Workspace git status keyed by absolute path.
-    git_status: HashMap<PathBuf, char>,
-    /// Latest requested tree git-status generation.
-    git_status_generation: u64,
-    /// Pending tree git-status generation.
-    git_status_pending: Option<u64>,
-    /// Number of roots expected to answer the pending git-status request.
-    git_status_expected: usize,
-    /// Number of roots that answered the pending git-status request.
-    git_status_received: usize,
-    /// Requested git diff path and revision.
-    git_pending: Option<(PathBuf, u64)>,
-    /// Last requested git diff path and revision.
-    git_checked: Option<(PathBuf, u64)>,
-    /// Debounce deadline for the next git diff request.
-    git_due: Option<Instant>,
-    /// Latest requested read-only Git diff generation.
-    git_diff_generation: u64,
-    /// Pending Git diff generation, if a request is in flight.
-    git_diff_pending: Option<u64>,
-    /// Parsed hunks for the active Git diff view.
-    git_diff_view: Option<git_diff::GitDiffView>,
-    /// Latest requested hunk-apply generation.
-    git_apply_generation: u64,
-    /// Pending hunk-apply generation, if a request is in flight.
-    git_apply_pending: Option<u64>,
-    /// Latest requested Git blame generation.
-    git_blame_generation: u64,
-    /// Pending Git blame generation, if a request is in flight.
-    git_blame_pending: Option<u64>,
-    /// Latest requested Git conflict-list generation.
-    git_conflicts_generation: u64,
-    /// Pending Git conflict-list generation, if a request is in flight.
-    git_conflicts_pending: Option<u64>,
-    /// Latest requested conflict-stage generation.
-    git_stage_generation: u64,
-    /// Pending conflict-stage generation, if a request is in flight.
-    git_stage_pending: Option<u64>,
-    /// Latest requested conflict-resolution generation.
-    git_resolve_generation: u64,
-    /// Pending conflict-resolution generation, if a request is in flight.
-    git_resolve_pending: Option<u64>,
+    /// Git workspace, request, and view state.
+    git: GitState,
     /// Document symbols used for the sticky scroll header.
     sticky_symbols: Vec<SymbolItem>,
     /// Path and revision those symbols describe.
@@ -790,8 +798,6 @@ pub struct Model {
     conflict_swaps: HashMap<PathBuf, PathBuf>,
     /// Paths changed by a multi-file replace whose buffer reload failed.
     stale_paths: HashSet<PathBuf>,
-    git_branch: Option<String>,
-    git_branch_checked: bool,
     /// Workspace root used to resolve all file paths.
     workspace: PathBuf,
     workspace_roots: workspace_roots::WorkspaceRoots,
@@ -911,29 +917,8 @@ impl Model {
             active: 0,
             file_worker: None,
             root_file_workers: BTreeMap::new(),
-            git_marks: HashMap::new(),
             language: LanguageState::default(),
-            git_status: HashMap::new(),
-            git_status_generation: 0,
-            git_status_pending: None,
-            git_status_expected: 0,
-            git_status_received: 0,
-            git_pending: None,
-            git_checked: None,
-            git_due: None,
-            git_diff_generation: 0,
-            git_diff_pending: None,
-            git_diff_view: None,
-            git_apply_generation: 0,
-            git_apply_pending: None,
-            git_blame_generation: 0,
-            git_blame_pending: None,
-            git_conflicts_generation: 0,
-            git_conflicts_pending: None,
-            git_stage_generation: 0,
-            git_stage_pending: None,
-            git_resolve_generation: 0,
-            git_resolve_pending: None,
+            git: GitState::default(),
             sticky_symbols: Vec::new(),
             sticky_symbols_path: None,
             sticky_symbols_revision: None,
@@ -973,8 +958,6 @@ impl Model {
             gateway_session: None,
             conflict_swaps: HashMap::new(),
             stale_paths: HashSet::new(),
-            git_branch: None,
-            git_branch_checked: false,
             workspace,
             workspace_roots,
             root_gateways: HashMap::new(),
@@ -1188,10 +1171,10 @@ impl Model {
     }
 
     fn clear_git_gutter(&mut self) {
-        self.git_marks.clear();
-        self.git_pending = None;
-        self.git_checked = None;
-        self.git_due = None;
+        self.git.marks.clear();
+        self.git.diff_request = None;
+        self.git.diff_checked = None;
+        self.git.diff_due = None;
     }
 
     fn show_help(&mut self) {
@@ -1260,13 +1243,13 @@ impl Model {
             .read_only_title
             .take()
             .unwrap_or_else(|| "help".to_owned());
-        self.git_diff_view = None;
-        self.git_diff_pending = None;
-        self.git_apply_pending = None;
-        self.git_blame_pending = None;
-        self.git_conflicts_pending = None;
-        self.git_stage_pending = None;
-        self.git_resolve_pending = None;
+        self.git.diff_view = None;
+        self.git.diff_pending = None;
+        self.git.apply_pending = None;
+        self.git.blame_pending = None;
+        self.git.conflicts_pending = None;
+        self.git.stage_pending = None;
+        self.git.resolve_pending = None;
         let syntax = saved.syntax.clone();
         self.editor = saved.editor;
         self.path = saved.path;
