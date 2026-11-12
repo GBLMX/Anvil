@@ -1376,32 +1376,13 @@ fn handle_key(model: &mut Model, key: KeyPress) {
                 }
                 _ => {}
             }
-            let context = model.keymap_context();
-            let command = if context == KeymapContext::Editor {
-                model
-                    .config
-                    .keymap
-                    .resolve_context_exact(context, key)
-                    .or_else(|| {
-                        resolve_normal(key, model.input.count, &model.config.keymap)
-                            .map(ContextAction::Normal)
-                    })
-                    .or_else(|| {
-                        model
-                            .config
-                            .keymap
-                            .resolve_context_exact(KeymapContext::Global, key)
-                    })
-            } else {
-                resolve_normal(key, model.input.count, &model.config.keymap)
-                    .map(ContextAction::Normal)
-                    .or_else(|| {
-                        model
-                            .config
-                            .keymap
-                            .resolve_context_exact(KeymapContext::Global, key)
-                    })
-            };
+            if model.edit.visual_anchor.is_none()
+                && dispatch_context_binding(model, KeymapContext::Editor, key)
+            {
+                return;
+            }
+            let command = resolve_normal(key, model.input.count, &model.config.keymap)
+                .map(ContextAction::Normal);
             if let Some(command) = command {
                 let command = match command {
                     ContextAction::Normal(command) => command,
@@ -1414,6 +1395,8 @@ fn handle_key(model: &mut Model, key: KeyPress) {
                     }
                 };
                 execute_normal_command(model, command);
+            } else if dispatch_context_binding(model, KeymapContext::Global, key) {
+                return;
             }
             if model.edit.visual_anchor.is_some() {
                 model.sync_visual_selection();
