@@ -27,12 +27,9 @@ impl Model {
             self.file.dirty = true;
             return;
         }
-        match PtySession::spawn(
-            &program,
-            &self.workspace.path,
-            self.view.viewport_width.max(20),
-            self.view.viewport_height.max(5),
-        ) {
+        let (columns, rows) =
+            terminal_panel_size(self.view.viewport_width, self.view.viewport_height);
+        match PtySession::spawn(&program, &self.workspace.path, columns, rows) {
             Ok(session) => {
                 self.status.text = format!("terminal: {} pid {}", session.shell(), session.pid());
                 self.runtime.terminal_output.clear();
@@ -111,10 +108,9 @@ impl Model {
 
     pub(crate) fn resize_terminal(&self) {
         if let Some(terminal) = self.runtime.terminal.as_ref() {
-            let _ = terminal.resize(
-                self.view.viewport_width.max(20),
-                self.view.viewport_height.max(5),
-            );
+            let (columns, rows) =
+                terminal_panel_size(self.view.viewport_width, self.view.viewport_height);
+            let _ = terminal.resize(columns, rows);
         }
     }
 }
@@ -199,11 +195,20 @@ fn terminal_key_bytes(key: KeyEvent) -> Option<Vec<u8>> {
     if bytes.is_empty() { None } else { Some(bytes) }
 }
 
+pub(crate) fn panel_height(area_height: u16) -> u16 {
+    (area_height / 3).max(6).min(area_height.saturating_sub(2))
+}
+
+fn terminal_panel_size(width: u16, height: u16) -> (u16, u16) {
+    let rows = panel_height(height).saturating_sub(2).max(5);
+    (width.saturating_sub(2).max(20), rows)
+}
+
 pub(crate) fn render_panel(model: &Model, frame: &mut ratatui::Frame, area: ratatui::layout::Rect) {
     if !model.runtime.terminal_panel {
         return;
     }
-    let height = (area.height / 3).max(6).min(area.height.saturating_sub(2));
+    let height = panel_height(area.height);
     if height < 3 {
         return;
     }
@@ -240,6 +245,13 @@ pub(crate) fn render_panel(model: &Model, frame: &mut ratatui::Frame, area: rata
 mod tests {
     use super::*;
     use crossterm::event::KeyEvent;
+
+    #[test]
+    fn terminal_panel_size_matches_rendered_rows() {
+        assert_eq!(panel_height(40), 13);
+        assert_eq!(terminal_panel_size(120, 40), (118, 11));
+        assert_eq!(terminal_panel_size(10, 5), (20, 5));
+    }
 
     #[test]
     fn encodes_terminal_keys() {
