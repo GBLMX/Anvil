@@ -185,7 +185,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
             .selected
             .unwrap_or(0)
             .saturating_sub(visible_height.saturating_sub(1));
-        let ascii_icons = model.ascii_icons;
+        let ascii_icons = model.appearance.ascii_icons;
         for (index, entry) in model
             .tree
             .entries
@@ -204,7 +204,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
             } else {
                 icon_theme::icon_for(&name).unwrap_or_else(icon_theme::default_file_icon)
             };
-            let glyph = model.icons.glyph(icon, ascii_icons);
+            let glyph = model.appearance.icons.glyph(icon, ascii_icons);
             let icon_padding = if UnicodeWidthStr::width(glyph) == 1 {
                 " "
             } else {
@@ -622,12 +622,12 @@ pub fn view(model: &Model, frame: &mut Frame) {
         };
         let mut lines = Vec::new();
         let visible = list_area.height.saturating_sub(3) as usize;
-        let ascii_icons = model.ascii_icons;
+        let ascii_icons = model.appearance.ascii_icons;
         let start = fuzzy.selected.saturating_sub(visible.saturating_sub(1));
         for (row, index) in fuzzy.filtered.iter().skip(start).take(visible).enumerate() {
             let name = model.fuzzy_display_path(&fuzzy.entries[*index]);
             lines.push(fuzzy_path_line(
-                &model.icons,
+                &model.appearance.icons,
                 ascii_icons,
                 &name,
                 &fuzzy.query,

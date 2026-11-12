@@ -377,25 +377,26 @@ pub(crate) fn ascii_mode() -> bool {
 
 impl crate::Model {
     pub(crate) fn reload_icons(&mut self) {
-        self.icons = IconTheme::load(&self.workspace.path);
-        self.icons_mtime = IconTheme::config_mtime(&self.workspace.path);
-        self.icons_checked_at = Some(std::time::Instant::now());
+        self.appearance.icons = IconTheme::load(&self.workspace.path);
+        self.appearance.icons_mtime = IconTheme::config_mtime(&self.workspace.path);
+        self.appearance.icons_checked_at = Some(std::time::Instant::now());
     }
 
     pub(crate) fn poll_icons(&mut self) {
         let due = self
+            .appearance
             .icons_checked_at
             .is_none_or(|last| last.elapsed() >= std::time::Duration::from_secs(1));
         if !due {
             return;
         }
-        self.icons_checked_at = Some(std::time::Instant::now());
+        self.appearance.icons_checked_at = Some(std::time::Instant::now());
         let modified = IconTheme::config_mtime(&self.workspace.path);
-        if modified == self.icons_mtime {
+        if modified == self.appearance.icons_mtime {
             return;
         }
-        self.icons = IconTheme::load(&self.workspace.path);
-        self.icons_mtime = modified;
+        self.appearance.icons = IconTheme::load(&self.workspace.path);
+        self.appearance.icons_mtime = modified;
         self.dirty = true;
     }
 }
@@ -460,7 +461,10 @@ mod tests {
         model.workspace.path = directory.path().to_path_buf();
         model.reload_icons();
         assert_eq!(
-            model.icons.glyph(icon_for("x.rs").expect("rust"), false),
+            model
+                .appearance
+                .icons
+                .glyph(icon_for("x.rs").expect("rust"), false),
             "A"
         );
         std::fs::write(
@@ -468,10 +472,13 @@ mod tests {
             "[ui.icons]\nrust = \"B\"\n",
         )
         .expect("write");
-        model.icons_checked_at = None;
+        model.appearance.icons_checked_at = None;
         model.poll_icons();
         assert_eq!(
-            model.icons.glyph(icon_for("x.rs").expect("rust"), false),
+            model
+                .appearance
+                .icons
+                .glyph(icon_for("x.rs").expect("rust"), false),
             "B"
         );
     }

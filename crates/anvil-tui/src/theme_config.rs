@@ -150,7 +150,7 @@ fn parse(text: &str) -> Result<Choice, String> {
 
 impl Model {
     pub(crate) fn persist_theme_status(&self, status: String) -> String {
-        if !self.persist_theme {
+        if !self.appearance.persist_theme {
             return status;
         }
         match save() {

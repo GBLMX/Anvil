@@ -235,7 +235,7 @@ fn tree_renders_file_and_folder_icons() {
         .iter()
         .map(|cell| cell.symbol())
         .collect::<String>();
-    let expected = if model.ascii_icons {
+    let expected = if model.appearance.ascii_icons {
         icon_theme::ascii_glyph(icon_theme::IconKind::Rust)
     } else {
         icon_theme::nerd_glyph(icon_theme::IconKind::Rust)
@@ -282,7 +282,7 @@ fn tree_renders_ascii_icon_fallback() {
     fs::write(dir.path().join("main.rs"), "").expect("file");
     let mut model = Model::new(EditorState::from_text(""), None);
     model.workspace.path = dir.path().to_path_buf();
-    model.ascii_icons = true;
+    model.appearance.ascii_icons = true;
     model.welcome = false;
     model.open_tree();
 

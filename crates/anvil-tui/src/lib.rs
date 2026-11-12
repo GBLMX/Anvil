@@ -440,6 +440,20 @@ struct ProjectState {
 }
 
 #[derive(Default)]
+struct AppearanceState {
+    /// Project-local icon overrides from `.anvil.toml`.
+    icons: icon_theme::IconTheme,
+    /// Whether the icon renderer uses ASCII fallbacks.
+    ascii_icons: bool,
+    /// Last seen mtime for workspace icon overrides.
+    icons_mtime: Option<SystemTime>,
+    /// Next allowed mtime check for icon overrides.
+    icons_checked_at: Option<Instant>,
+    /// Whether the theme choice is persisted.
+    persist_theme: bool,
+}
+
+#[derive(Default)]
 struct BufferState {
     /// All open buffers, including the active one after the first switch.
     entries: Vec<Buffer>,
@@ -853,16 +867,9 @@ pub struct Model {
     /// Workspace tree view and refresh state.
     tree: TreeState,
     overlays: OverlayState,
-    persist_theme: bool,
     settings: Settings,
-    /// Project-local icon overrides from `.anvil.toml`.
-    icons: icon_theme::IconTheme,
-    /// Whether the icon renderer uses ASCII fallbacks.
-    ascii_icons: bool,
-    /// Last seen mtime for workspace icon overrides.
-    icons_mtime: Option<SystemTime>,
-    /// Next allowed mtime check for icon overrides.
-    icons_checked_at: Option<Instant>,
+    /// Icon and theme persistence state.
+    appearance: AppearanceState,
     /// Text-area width used by the soft-wrap projection.
     wrap_width: usize,
     /// Wrapped segment offset within the first visible source line.
@@ -966,12 +973,12 @@ impl Model {
             },
             tree: TreeState::default(),
             overlays: OverlayState::default(),
-            persist_theme: !cfg!(test),
             settings: Settings::default(),
-            icons: icon_theme::IconTheme::default(),
-            ascii_icons: icon_theme::ascii_mode(),
-            icons_mtime: None,
-            icons_checked_at: None,
+            appearance: AppearanceState {
+                ascii_icons: icon_theme::ascii_mode(),
+                persist_theme: !cfg!(test),
+                ..Default::default()
+            },
             wrap_width: 80,
             scroll_subrow: 0,
             conflict_swaps: HashMap::new(),

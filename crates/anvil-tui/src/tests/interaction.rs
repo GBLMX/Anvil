@@ -797,7 +797,7 @@ fn theme_auto_and_save_persist_choice() {
     let path = directory.join("settings.toml");
     unsafe { std::env::set_var("ANVIL_SETTINGS", &path) };
     let mut model = Model::new(EditorState::from_text("alpha"), None);
-    model.persist_theme = true;
+    model.appearance.persist_theme = true;
     model.execute_command("theme nord");
     assert!(model.status.contains("saved"));
     assert!(
@@ -810,7 +810,7 @@ fn theme_auto_and_save_persist_choice() {
     let text = std::fs::read_to_string(&path).expect("settings");
     assert!(text.contains("mode = \"auto\""));
     assert!(text.contains("dark = \"nord\""));
-    model.persist_theme = false;
+    model.appearance.persist_theme = false;
     model.execute_command("theme one-dark");
     model.execute_command("theme-save");
     assert!(model.status.contains("theme saved"));
