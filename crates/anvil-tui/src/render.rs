@@ -15,10 +15,12 @@ use ratatui::{
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 mod editor;
+mod overlays;
 mod panes;
 mod tree;
 mod welcome;
 pub use editor::view;
+use overlays::render_overlays;
 use panes::{render_pipe_locations, render_split_pane};
 use tree::render_tree;
 use welcome::render_welcome;
