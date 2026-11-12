@@ -394,6 +394,22 @@ struct LspResultsState {
 }
 
 #[derive(Default)]
+struct TreeState {
+    /// Flattened workspace tree, when open.
+    entries: Vec<TreeEntry>,
+    selected: Option<usize>,
+    visible: bool,
+    /// Entry to select after the next tree refresh.
+    pending_select: Option<PathBuf>,
+    stale: bool,
+    watch_limited: bool,
+    refresh_in_flight: bool,
+    refresh_queued: bool,
+    refresh_generation: u64,
+    show_hidden: bool,
+}
+
+#[derive(Default)]
 struct GitState {
     /// Git gutter marks keyed by zero-based line.
     marks: HashMap<usize, char>,
@@ -756,8 +772,6 @@ pub struct Model {
     git: GitState,
     /// Secondary pane when a vertical split is open.
     split: Option<Pane>,
-    /// Flattened workspace tree, when open.
-    tree: Vec<TreeEntry>,
     /// Quick-open usage counts keyed by the entry string.
     fuzzy_frecency: HashMap<String, u32>,
     /// Recently opened workspaces and files, newest first.
@@ -765,16 +779,8 @@ pub struct Model {
     recent_files: Vec<PathBuf>,
     /// Whether recent lists are written to the state directory.
     persist_recent: bool,
-    tree_selected: Option<usize>,
-    tree_visible: bool,
-    /// Entry to select after the next tree refresh.
-    tree_pending_select: Option<PathBuf>,
-    tree_stale: bool,
-    tree_watch_limited: bool,
-    tree_refresh_in_flight: bool,
-    tree_refresh_queued: bool,
-    tree_refresh_generation: u64,
-    show_hidden: bool,
+    /// Workspace tree view and refresh state.
+    tree: TreeState,
     overlays: OverlayState,
     persist_theme: bool,
     settings: Settings,
@@ -920,20 +926,11 @@ impl Model {
             language: LanguageState::default(),
             git: GitState::default(),
             split: None,
-            tree: Vec::new(),
             fuzzy_frecency: HashMap::new(),
             recent_workspaces: Vec::new(),
             recent_files: Vec::new(),
             persist_recent: !cfg!(test),
-            tree_selected: None,
-            tree_visible: false,
-            tree_pending_select: None,
-            tree_stale: false,
-            tree_watch_limited: false,
-            tree_refresh_in_flight: false,
-            tree_refresh_queued: false,
-            tree_refresh_generation: 0,
-            show_hidden: false,
+            tree: TreeState::default(),
             overlays: OverlayState::default(),
             persist_theme: !cfg!(test),
             settings: Settings::default(),

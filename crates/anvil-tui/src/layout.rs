@@ -75,7 +75,7 @@ impl Model {
 
     pub(crate) fn wrap_text_width(&self, width: u16) -> usize {
         let mut width = width;
-        if self.tree_visible && width > 50 {
+        if self.tree.visible && width > 50 {
             let sidebar = (width / 5).clamp(18, 40).min(width - 20);
             width = width.saturating_sub(sidebar);
         }
@@ -755,7 +755,7 @@ mod tests {
         let mut model = Model::new(EditorState::from_text("x"), None);
         let gutter = usize::from(model.gutter_width());
         assert_eq!(model.wrap_text_width(100), 100 - gutter);
-        model.tree_visible = true;
+        model.tree.visible = true;
         let sidebar = (100u16 / 5).clamp(18, 40).min(100 - 20);
         assert_eq!(
             model.wrap_text_width(100),

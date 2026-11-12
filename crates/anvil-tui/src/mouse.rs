@@ -78,8 +78,8 @@ pub(crate) fn handle_mouse(model: &mut Model, mouse: MouseEvent, width: u16, hei
                 Target::Tree(index) => {
                     model.ui.focus.tree = true;
                     model.ui.focus.split = false;
-                    if index < model.tree.len() {
-                        model.tree_selected = Some(index);
+                    if index < model.tree.entries.len() {
+                        model.tree.selected = Some(index);
                     }
                     model.dirty = true;
                 }
@@ -220,12 +220,13 @@ pub(crate) fn hit_test(model: &Model, col: u16, row: u16, width: u16, height: u1
         return Target::Tabs(tab_at(model, col.saturating_sub(inner.x), inner.width));
     }
     let mut editor_inner = inner;
-    if model.tree_visible && editor_inner.width > 50 {
+    if model.tree.visible && editor_inner.width > 50 {
         let sidebar = sidebar_width(editor_inner);
         if col < editor_inner.x.saturating_add(sidebar) {
             let visible = editor_inner.height.saturating_sub(2) as usize;
             let start = model
-                .tree_selected
+                .tree
+                .selected
                 .unwrap_or(0)
                 .saturating_sub(visible.saturating_sub(1));
             let index =
@@ -310,7 +311,7 @@ fn sidebar_width(inner: Rect) -> u16 {
 
 fn editor_area(model: &Model, width: u16, height: u16) -> Option<Rect> {
     let (mut inner, _, _) = content_rect(model, width, height)?;
-    if model.tree_visible && inner.width > 50 {
+    if model.tree.visible && inner.width > 50 {
         let sidebar = sidebar_width(inner);
         inner.x = inner.x.saturating_add(sidebar);
         inner.width = inner.width.saturating_sub(sidebar);

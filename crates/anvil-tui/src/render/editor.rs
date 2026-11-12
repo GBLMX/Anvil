@@ -165,7 +165,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
         render_welcome(frame, inner, model);
         return;
     }
-    if model.tree_visible && inner.width > 50 {
+    if model.tree.visible && inner.width > 50 {
         let sidebar_width = (inner.width / 5).clamp(18, 40).min(inner.width - 20);
         let tree_area = Rect {
             width: sidebar_width,
@@ -174,12 +174,14 @@ pub fn view(model: &Model, frame: &mut Frame) {
         let mut lines = Vec::new();
         let visible_height = tree_area.height.saturating_sub(2) as usize;
         let start = model
-            .tree_selected
+            .tree
+            .selected
             .unwrap_or(0)
             .saturating_sub(visible_height.saturating_sub(1));
         let ascii_icons = model.ascii_icons;
         for (index, entry) in model
             .tree
+            .entries
             .iter()
             .enumerate()
             .skip(start)
@@ -201,7 +203,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
             } else {
                 ""
             };
-            let style = if model.tree_selected == Some(index) {
+            let style = if model.tree.selected == Some(index) {
                 theme::selected()
             } else if entry.is_dir {
                 Style::default().fg(theme::accent()).bg(theme::surface())
@@ -229,7 +231,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
                 ));
             }
             let git_marker = if entry.is_dir {
-                tree_rollup_git(model, &model.tree, index)
+                tree_rollup_git(model, &model.tree.entries, index)
             } else {
                 model.git.status.get(&entry.path).copied()
             };
@@ -247,7 +249,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
                 ));
             }
             let diagnostic_severity = if entry.is_dir {
-                tree_rollup_diagnostic(model, &model.tree, index)
+                tree_rollup_diagnostic(model, &model.tree.entries, index)
             } else {
                 model
                     .language
@@ -277,11 +279,11 @@ pub fn view(model: &Model, frame: &mut Frame) {
         if lines.is_empty() {
             lines.push(Line::styled("empty", theme::panel().fg(theme::muted())));
         }
-        let tree_title = if model.tree_stale {
+        let tree_title = if model.tree.stale {
             "Files · stale"
-        } else if model.tree_watch_limited {
+        } else if model.tree.watch_limited {
             "Files · watch limit"
-        } else if model.show_hidden {
+        } else if model.tree.show_hidden {
             "Files · hidden"
         } else {
             "Files"
@@ -632,11 +634,13 @@ pub fn view(model: &Model, frame: &mut Frame) {
         frame.render_widget(
             Paragraph::new(lines)
                 .style(theme::panel())
-                .block(crate::render::focused_panel_block(if model.show_hidden {
-                    "Files · hidden"
-                } else {
-                    "Files"
-                })),
+                .block(crate::render::focused_panel_block(
+                    if model.tree.show_hidden {
+                        "Files · hidden"
+                    } else {
+                        "Files"
+                    },
+                )),
             list_area,
         );
         let preview_area = if horizontal {

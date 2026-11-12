@@ -108,12 +108,14 @@ fn tree_visibility_toggles_hidden_directories() {
     assert!(
         model
             .tree
+            .entries
             .iter()
             .any(|entry| entry.path.ends_with(".github"))
     );
     assert!(
         !model
             .tree
+            .entries
             .iter()
             .any(|entry| entry.path.ends_with(".hidden"))
     );
@@ -121,6 +123,7 @@ fn tree_visibility_toggles_hidden_directories() {
     assert!(
         model
             .tree
+            .entries
             .iter()
             .any(|entry| entry.path.ends_with(".hidden"))
     );
@@ -307,7 +310,7 @@ fn tree_selection_scrolls_into_view() {
     model.workspace = dir.path().to_path_buf();
     model.welcome = false;
     model.open_tree();
-    model.tree_selected = Some(19);
+    model.tree.selected = Some(19);
 
     let backend = TestBackend::new(80, 12);
     let mut terminal = Terminal::new(backend).expect("terminal");
@@ -552,8 +555,8 @@ fn tree_rolls_up_child_git_and_diagnostics_to_directory() {
     let file = directory.join("main.rs");
     let mut model = Model::new(EditorState::from_text(""), None);
     model.welcome = false;
-    model.tree_visible = true;
-    model.tree = vec![
+    model.tree.visible = true;
+    model.tree.entries = vec![
         TreeEntry {
             path: directory.clone(),
             depth: 0,
@@ -569,7 +572,7 @@ fn tree_rolls_up_child_git_and_diagnostics_to_directory() {
             expanded: false,
         },
     ];
-    model.tree_selected = Some(0);
+    model.tree.selected = Some(0);
     model.git.status.insert(file.clone(), 'M');
     model
         .language
@@ -692,11 +695,12 @@ fn breadcrumb_row_routes_path_clicks() {
         modifiers: crossterm::event::KeyModifiers::NONE,
     };
     assert!(crate::mouse::handle_mouse(&mut model, click, 80, 24));
-    assert!(model.tree_visible);
+    assert!(model.tree.visible);
     assert_eq!(
         model
             .tree
-            .get(model.tree_selected.unwrap_or(0))
+            .entries
+            .get(model.tree.selected.unwrap_or(0))
             .map(|entry| &entry.path),
         Some(&path)
     );

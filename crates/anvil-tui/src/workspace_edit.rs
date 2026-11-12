@@ -272,7 +272,7 @@ impl WorkspaceEdit {
                         return Err(format!("file exists: {}", path.display()));
                     }
                     model.write_file(path, "")?;
-                    model.tree_stale = true;
+                    model.tree.stale = true;
                     model.sync_watch_paths();
                     model.dirty = true;
                 }
@@ -675,7 +675,7 @@ impl Model {
         self.syntax
             .borrow_mut()
             .switch_path(self.path.as_deref(), true);
-        self.tree_stale = true;
+        self.tree.stale = true;
         self.sync_watch_paths();
         self.dirty = true;
     }
@@ -702,7 +702,7 @@ impl Model {
             };
             self.close_buffer(index, true);
         }
-        self.tree_stale = true;
+        self.tree.stale = true;
         self.sync_watch_paths();
         self.dirty = true;
     }

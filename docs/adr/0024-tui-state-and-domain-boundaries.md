@@ -259,11 +259,13 @@ Phase 1 started on 2026-11-12:
   inlay hints, references, and code actions.
 - `Model.git` owns gutter marks, status, diff, apply, blame, conflict, stage,
   resolve, request generations, and branch state.
+- `Model.tree` owns entries, selection, visibility, hidden-file mode, watch
+  limits, and refresh generations.
 - `Model.language` owns `DapState`, `DiagnosticsState`, and `LspState`;
   `LspState` keeps transport, worker, request-id, cancellation, and
   format-on-save bookkeeping.
 - Existing behavior is unchanged; tests access the composed state explicitly.
-- `Model` now has 111 top-level fields. Remaining buffers, UI, workspace, and
+- `Model` now has 102 top-level fields. Remaining buffers, UI, workspace, and
   session page state moves in later behavior-preserving slices.
 
 

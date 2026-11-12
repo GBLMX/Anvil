@@ -148,13 +148,13 @@ impl Model {
         if self.ensure_file_worker() {
             if let Some(worker) = self.file_worker.as_ref() {
                 let _ = worker.request(FileRequest::Files {
-                    hidden: self.show_hidden,
+                    hidden: self.tree.show_hidden,
                     generation,
                 });
             }
             for worker in self.root_file_workers.values() {
                 let _ = worker.request(FileRequest::Files {
-                    hidden: self.show_hidden,
+                    hidden: self.tree.show_hidden,
                     generation,
                 });
             }

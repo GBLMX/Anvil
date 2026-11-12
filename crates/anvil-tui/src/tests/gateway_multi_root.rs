@@ -49,21 +49,28 @@ fn secondary_root_tree_lists_and_opens_through_owning_gateway() {
     wait_until(&mut model, |model| {
         model
             .tree
+            .entries
             .iter()
             .any(|entry| entry.path == primary_root.join("main.rs"))
-            && model.tree.iter().any(|entry| entry.path == secondary_root)
+            && model
+                .tree
+                .entries
+                .iter()
+                .any(|entry| entry.path == secondary_root)
     });
 
     let index = model
         .tree
+        .entries
         .iter()
         .position(|entry| entry.path == secondary_root)
         .expect("secondary root node");
-    model.tree_selected = Some(index);
+    model.tree.selected = Some(index);
     model.tree_toggle();
     wait_until(&mut model, |model| {
         model
             .tree
+            .entries
             .iter()
             .any(|entry| entry.path == secondary_root.join("lib.rs"))
     });

@@ -9,11 +9,11 @@ fn space_leader_focuses_editor_and_tree() {
         handle_event(&mut model, key(key_code));
     }
     assert!(!model.ui.focus.tree);
-    assert!(model.tree_visible);
+    assert!(model.tree.visible);
     for key_code in [KeyCode::Char(' '), KeyCode::Char('2')] {
         handle_event(&mut model, key(key_code));
     }
-    assert!(model.tree_visible);
+    assert!(model.tree.visible);
     assert!(model.ui.focus.tree);
 }
 
@@ -408,17 +408,19 @@ fn tree_expands_directories() {
     let mut model = Model::new(EditorState::from_text(""), None);
     model.workspace = dir.path().to_path_buf();
     model.open_tree();
-    assert!(model.tree_visible);
+    assert!(model.tree.visible);
     let index = model
         .tree
+        .entries
         .iter()
         .position(|entry| entry.path.ends_with("src"))
         .expect("src");
-    model.tree_selected = Some(index);
+    model.tree.selected = Some(index);
     model.tree_toggle();
     assert!(
         model
             .tree
+            .entries
             .iter()
             .any(|entry| entry.path.ends_with("src/main.rs"))
     );
@@ -426,6 +428,7 @@ fn tree_expands_directories() {
     assert!(
         !model
             .tree
+            .entries
             .iter()
             .any(|entry| entry.path.ends_with("src/main.rs"))
     );
@@ -442,50 +445,54 @@ fn tree_refresh_preserves_selection_and_expansion() {
     model.open_tree();
     let src = model
         .tree
+        .entries
         .iter()
         .position(|entry| entry.path.ends_with("src"))
         .expect("src");
-    model.tree_selected = Some(src);
+    model.tree.selected = Some(src);
     model.tree_toggle();
     let main = model
         .tree
+        .entries
         .iter()
         .position(|entry| entry.path.ends_with("src/main.rs"))
         .expect("main");
-    model.tree_selected = Some(main);
+    model.tree.selected = Some(main);
     fs::write(dir.path().join("src/added.rs"), "").expect("new file");
 
     model.refresh_tree(None);
     assert!(
         model
             .tree
+            .entries
             .iter()
             .any(|entry| entry.path.ends_with("src/added.rs"))
     );
     assert!(
         model
             .tree
+            .entries
             .iter()
             .any(|entry| entry.path.ends_with("src") && entry.expanded)
     );
     assert_eq!(
-        model.tree[model.tree_selected.expect("selection")].path,
+        model.tree.entries[model.tree.selected.expect("selection")].path,
         dir.path().join("src/main.rs")
     );
 
     let renamed = dir.path().join("src/renamed.rs");
     fs::rename(dir.path().join("src/main.rs"), &renamed).expect("rename");
     model.refresh_tree(None);
-    assert!(model.tree.iter().any(|entry| entry.path == renamed));
+    assert!(model.tree.entries.iter().any(|entry| entry.path == renamed));
     assert_eq!(
-        model.tree[model.tree_selected.expect("rename fallback")].path,
+        model.tree.entries[model.tree.selected.expect("rename fallback")].path,
         dir.path().join("src")
     );
 
     fs::remove_file(renamed).expect("remove");
     model.refresh_tree(None);
     assert_eq!(
-        model.tree[model.tree_selected.expect("delete fallback")].path,
+        model.tree.entries[model.tree.selected.expect("delete fallback")].path,
         dir.path().join("src")
     );
 }

@@ -61,16 +61,21 @@ impl Model {
         let Some(path) = self.path.clone() else {
             return;
         };
-        if !self.tree_visible {
+        if !self.tree.visible {
             self.open_tree();
         } else {
             self.ui.focus.tree = true;
             self.ui.focus.split = false;
         }
-        if let Some(index) = self.tree.iter().position(|entry| entry.path == path) {
-            self.tree_selected = Some(index);
+        if let Some(index) = self
+            .tree
+            .entries
+            .iter()
+            .position(|entry| entry.path == path)
+        {
+            self.tree.selected = Some(index);
         } else {
-            self.tree_pending_select = Some(path);
+            self.tree.pending_select = Some(path);
         }
         self.status = "breadcrumb path".to_owned();
         self.dirty = true;

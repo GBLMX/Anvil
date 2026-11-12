@@ -17,7 +17,7 @@ mod tree;
 impl Model {
     fn tree_entry_visible(&self, name: &str, is_dir: bool) -> bool {
         !is_dir
-            || self.show_hidden
+            || self.tree.show_hidden
             || !name.starts_with('.')
             || matches!(name, ".github" | ".cargo")
     }
@@ -79,10 +79,10 @@ impl Model {
             .map(|root| root.path.clone())
             .collect::<Vec<_>>();
         for root in roots {
-            if self.tree.iter().any(|entry| entry.path == root) {
+            if self.tree.entries.iter().any(|entry| entry.path == root) {
                 continue;
             }
-            self.tree.push(TreeEntry {
+            self.tree.entries.push(TreeEntry {
                 path: root,
                 depth: 0,
                 is_dir: true,
@@ -103,6 +103,7 @@ impl Model {
         let mut paths = vec![root.to_path_buf()];
         paths.extend(
             self.tree
+                .entries
                 .iter()
                 .filter(|entry| entry.expanded && entry.path.starts_with(root))
                 .map(|entry| entry.path.clone()),
@@ -136,11 +137,12 @@ impl Model {
         if path == self.workspace {
             let preserved = self
                 .tree
+                .entries
                 .iter()
                 .filter(|entry| self.secondary_root(&entry.path).is_some())
                 .cloned()
                 .collect::<Vec<_>>();
-            self.tree = entries
+            self.tree.entries = entries
                 .into_iter()
                 .map(|entry| TreeEntry {
                     path: path.join(entry.name),
@@ -150,17 +152,21 @@ impl Model {
                     expanded: false,
                 })
                 .collect();
-            self.tree.extend(preserved);
+            self.tree.entries.extend(preserved);
             self.ensure_root_tree_nodes();
-            if self.tree_selected.is_none() && !self.tree.is_empty() {
-                self.tree_selected = Some(0);
+            if self.tree.selected.is_none() && !self.tree.entries.is_empty() {
+                self.tree.selected = Some(0);
             }
             self.apply_pending_tree_selection();
-        } else if let Some(index) = self.tree.iter().position(|entry| entry.path == path)
-            && self.tree[index].expanded
+        } else if let Some(index) = self
+            .tree
+            .entries
+            .iter()
+            .position(|entry| entry.path == path)
+            && self.tree.entries[index].expanded
         {
-            let depth = self.tree[index].depth + 1;
-            let parent_depth = self.tree[index].depth;
+            let depth = self.tree.entries[index].depth + 1;
+            let parent_depth = self.tree.entries[index].depth;
             let children: Vec<TreeEntry> = entries
                 .into_iter()
                 .map(|entry| TreeEntry {
@@ -174,12 +180,13 @@ impl Model {
             let mut end = index + 1;
             while self
                 .tree
+                .entries
                 .get(end)
                 .is_some_and(|child| child.depth > parent_depth)
             {
                 end += 1;
             }
-            self.tree.splice(index + 1..end, children);
+            self.tree.entries.splice(index + 1..end, children);
         }
         self.status = "file tree ready".to_owned();
         self.sync_tree_watches();
@@ -356,7 +363,7 @@ impl Model {
                     }
                 }
                 FileEvent::TreeWatchUnavailable(error) => {
-                    self.tree_stale = true;
+                    self.tree.stale = true;
                     self.status = format!("E: tree watcher: {error}");
                 }
                 FileEvent::TreeSnapshot {
@@ -404,7 +411,7 @@ impl Model {
                     } => self.handle_git_status(generation, result),
                     FileEvent::TreeChanged { .. } => self.refresh_root_tree(&root),
                     FileEvent::TreeWatchUnavailable(error) => {
-                        self.tree_stale = true;
+                        self.tree.stale = true;
                         self.status = format!("E: tree watcher: {error}");
                     }
                     _ => {}
@@ -476,10 +483,10 @@ impl Model {
     }
 
     pub(crate) fn toggle_hidden(&mut self) {
-        self.show_hidden = !self.show_hidden;
-        if self.tree_visible {
-            self.tree.clear();
-            self.tree_selected = None;
+        self.tree.show_hidden = !self.tree.show_hidden;
+        if self.tree.visible {
+            self.tree.entries.clear();
+            self.tree.selected = None;
             let workspace = self.workspace.clone();
             if self.ensure_file_worker() {
                 if let Some(worker) = self.file_worker.as_ref() {
@@ -493,7 +500,7 @@ impl Model {
                     }
                 }
             } else if let Ok(entries) = self.tree_entries(&workspace) {
-                self.tree = entries
+                self.tree.entries = entries
                     .into_iter()
                     .filter(|entry| self.tree_entry_visible(&entry.name, entry.is_dir))
                     .map(|entry| TreeEntry {
@@ -506,9 +513,9 @@ impl Model {
                     .collect();
                 self.ensure_root_tree_nodes();
             }
-            self.tree_selected = (!self.tree.is_empty()).then_some(0);
+            self.tree.selected = (!self.tree.entries.is_empty()).then_some(0);
         }
-        self.status = if self.show_hidden {
+        self.status = if self.tree.show_hidden {
             "hidden files shown".to_owned()
         } else {
             "hidden files hidden".to_owned()
@@ -528,10 +535,10 @@ impl Model {
     }
 
     fn tree_target_directory(&self) -> PathBuf {
-        let Some(index) = self.tree_selected else {
+        let Some(index) = self.tree.selected else {
             return self.workspace.clone();
         };
-        let Some(entry) = self.tree.get(index) else {
+        let Some(entry) = self.tree.entries.get(index) else {
             return self.workspace.clone();
         };
         if entry.is_dir {
@@ -551,16 +558,22 @@ impl Model {
     }
 
     fn apply_pending_tree_selection(&mut self) {
-        let Some(path) = self.tree_pending_select.take() else {
+        let Some(path) = self.tree.pending_select.take() else {
             return;
         };
-        if let Some(index) = self.tree.iter().position(|entry| entry.path == path) {
-            self.tree_selected = Some(index);
+        if let Some(index) = self
+            .tree
+            .entries
+            .iter()
+            .position(|entry| entry.path == path)
+        {
+            self.tree.selected = Some(index);
         }
     }
 
     fn expanded_tree_paths(&self) -> BTreeSet<PathBuf> {
         self.tree
+            .entries
             .iter()
             .filter(|entry| entry.is_dir && entry.expanded)
             .map(|entry| entry.path.clone())
@@ -604,13 +617,13 @@ impl Model {
                 limited = true;
             }
         }
-        if limited && !self.tree_watch_limited {
+        if limited && !self.tree.watch_limited {
             self.status =
                 format!("tree watch limit reached ({MAX_TREE_WATCH_DIRS}); auto-refresh limited");
         }
-        self.tree_watch_limited = limited;
+        self.tree.watch_limited = limited;
         if !self.ensure_file_worker() {
-            self.tree_stale = true;
+            self.tree.stale = true;
             return;
         }
         let mut sent = 0usize;
@@ -630,15 +643,15 @@ impl Model {
                 sent += 1;
             }
         }
-        self.tree_stale = sent < expected;
+        self.tree.stale = sent < expected;
     }
 
     fn request_tree_refresh(&mut self, select: Option<PathBuf>) {
         if select.is_some() {
-            self.tree_pending_select = select;
+            self.tree.pending_select = select;
         }
-        if self.tree_refresh_in_flight {
-            self.tree_refresh_queued = true;
+        if self.tree.refresh_in_flight {
+            self.tree.refresh_queued = true;
             return;
         }
         let expanded = self
@@ -647,8 +660,8 @@ impl Model {
             .filter(|path| path.starts_with(&self.workspace))
             .collect();
         if self.ensure_file_worker() {
-            self.tree_refresh_generation = self.tree_refresh_generation.wrapping_add(1);
-            let generation = self.tree_refresh_generation;
+            self.tree.refresh_generation = self.tree.refresh_generation.wrapping_add(1);
+            let generation = self.tree.refresh_generation;
             let request = FileRequest::TreeSnapshot {
                 generation,
                 root: self.workspace.clone(),
@@ -658,8 +671,8 @@ impl Model {
                 .file_worker
                 .as_ref()
                 .is_some_and(|worker| worker.request(request).is_ok());
-            self.tree_refresh_in_flight = sent;
-            self.tree_stale = !sent;
+            self.tree.refresh_in_flight = sent;
+            self.tree.stale = !sent;
             return;
         }
         self.rebuild_tree_from_disk();
@@ -683,8 +696,8 @@ impl Model {
                 listings.push((path, Ok(entries)));
             }
         }
-        self.tree_refresh_generation = self.tree_refresh_generation.wrapping_add(1);
-        let generation = self.tree_refresh_generation;
+        self.tree.refresh_generation = self.tree.refresh_generation.wrapping_add(1);
+        let generation = self.tree.refresh_generation;
         self.apply_tree_snapshot(generation, listings);
     }
 
@@ -761,26 +774,29 @@ impl Model {
         generation: u64,
         listings: Vec<(PathBuf, Result<Vec<DirEntry>, String>)>,
     ) {
-        if generation != self.tree_refresh_generation {
+        if generation != self.tree.refresh_generation {
             return;
         }
-        self.tree_refresh_in_flight = false;
-        let previous = self.tree_selected.and_then(|index| self.tree.get(index));
+        self.tree.refresh_in_flight = false;
+        let previous = self
+            .tree
+            .selected
+            .and_then(|index| self.tree.entries.get(index));
         let previous_path = previous.map(|entry| entry.path.clone());
         let previous_ino = previous.map(|entry| entry.ino).filter(|ino| *ino != 0);
-        let previous_index = self.tree_selected;
+        let previous_index = self.tree.selected;
         let expanded = self.expanded_tree_paths();
         let listings: BTreeMap<_, _> = listings.into_iter().collect();
         match listings.get(&self.workspace) {
             None => {
                 self.status = "E: tree: missing root listing".to_owned();
-                self.tree_stale = true;
+                self.tree.stale = true;
                 self.finish_tree_refresh();
                 return;
             }
             Some(Err(error)) => {
                 self.status = format!("E: tree: {error}");
-                self.tree_stale = true;
+                self.tree.stale = true;
                 self.finish_tree_refresh();
                 return;
             }
@@ -788,6 +804,7 @@ impl Model {
         }
         let preserved = self
             .tree
+            .entries
             .iter()
             .filter(|entry| self.secondary_root(&entry.path).is_some())
             .cloned()
@@ -796,14 +813,18 @@ impl Model {
         let needs_listing =
             self.build_tree_entries(&self.workspace, 0, &listings, &expanded, &mut tree);
         tree.extend(preserved);
-        let target = self.tree_pending_select.take().or(previous_path);
-        self.tree = tree;
+        let target = self.tree.pending_select.take().or(previous_path);
+        self.tree.entries = tree;
         self.ensure_root_tree_nodes();
-        self.tree_selected =
-            Self::select_tree_path(&self.tree, target.as_deref(), previous_index, previous_ino);
-        self.tree_stale = false;
+        self.tree.selected = Self::select_tree_path(
+            &self.tree.entries,
+            target.as_deref(),
+            previous_index,
+            previous_ino,
+        );
+        self.tree.stale = false;
         if needs_listing {
-            self.tree_refresh_queued = true;
+            self.tree.refresh_queued = true;
         }
         self.sync_tree_watches();
         self.request_git_status();
@@ -811,14 +832,14 @@ impl Model {
     }
 
     fn finish_tree_refresh(&mut self) {
-        if self.tree_refresh_queued {
-            self.tree_refresh_queued = false;
+        if self.tree.refresh_queued {
+            self.tree.refresh_queued = false;
             self.refresh_tree_background();
         }
     }
 
     pub(crate) fn refresh_tree(&mut self, select: Option<PathBuf>) {
-        self.tree_visible = true;
+        self.tree.visible = true;
         self.ui.focus.tree = true;
         self.request_tree_refresh(select);
         self.request_git_status();
@@ -849,15 +870,15 @@ mod tests {
         fs::create_dir(&src).expect("src");
         let mut model = Model::new(EditorState::from_text(""), None);
         model.workspace = workspace.clone();
-        model.tree = vec![TreeEntry {
+        model.tree.entries = vec![TreeEntry {
             path: src.clone(),
             depth: 0,
             is_dir: true,
             ino: 0,
             expanded: true,
         }];
-        model.tree_selected = Some(0);
-        model.tree_refresh_generation = 1;
+        model.tree.selected = Some(0);
+        model.tree.refresh_generation = 1;
         model.apply_tree_snapshot(
             1,
             vec![(
@@ -872,6 +893,7 @@ mod tests {
         assert!(
             model
                 .tree
+                .entries
                 .iter()
                 .any(|entry| entry.path == src && entry.expanded)
         );
@@ -883,15 +905,15 @@ mod tests {
         let workspace = dir.path().to_path_buf();
         let mut model = Model::new(EditorState::from_text(""), None);
         model.workspace = workspace.clone();
-        model.tree = vec![TreeEntry {
+        model.tree.entries = vec![TreeEntry {
             path: workspace.join("old.rs"),
             depth: 0,
             is_dir: false,
             ino: 42,
             expanded: false,
         }];
-        model.tree_selected = Some(0);
-        model.tree_refresh_generation = 1;
+        model.tree.selected = Some(0);
+        model.tree.refresh_generation = 1;
         model.apply_tree_snapshot(
             1,
             vec![(
@@ -903,8 +925,8 @@ mod tests {
                 }]),
             )],
         );
-        let selected = model.tree_selected.expect("selection");
-        assert_eq!(model.tree[selected].path, workspace.join("new.rs"));
+        let selected = model.tree.selected.expect("selection");
+        assert_eq!(model.tree.entries[selected].path, workspace.join("new.rs"));
     }
 
     #[test]
@@ -949,14 +971,16 @@ mod tests {
         model.open_tree();
         let index = model
             .tree
+            .entries
             .iter()
             .position(|entry| entry.path == root)
             .expect("root node");
-        model.tree_selected = Some(index);
+        model.tree.selected = Some(index);
         model.tree_toggle();
         assert!(
             !model
                 .tree
+                .entries
                 .iter()
                 .any(|entry| entry.path == root.join("secret.rs"))
         );
@@ -980,30 +1004,34 @@ mod tests {
         model.open_tree();
         let root_index = model
             .tree
+            .entries
             .iter()
             .position(|entry| entry.path == root)
             .expect("root node");
-        model.tree_selected = Some(root_index);
+        model.tree.selected = Some(root_index);
         model.tree_toggle();
         assert!(
             model
                 .tree
+                .entries
                 .iter()
                 .any(|entry| entry.path == root.join("lib.rs"))
         );
 
         model.refresh_tree(None);
 
-        assert!(model.tree.iter().any(|entry| entry.path == root));
+        assert!(model.tree.entries.iter().any(|entry| entry.path == root));
         assert!(
             model
                 .tree
+                .entries
                 .iter()
                 .any(|entry| entry.path == root.join("lib.rs"))
         );
         assert!(
             model
                 .tree
+                .entries
                 .iter()
                 .any(|entry| entry.path == workspace.join("main.rs"))
         );
@@ -1015,7 +1043,7 @@ mod tests {
         let mut model = Model::new(EditorState::from_text(""), None);
         model.workspace = dir.path().to_path_buf();
         let workspace = model.workspace.clone();
-        model.tree = (0..MAX_TREE_WATCH_DIRS + 1)
+        model.tree.entries = (0..MAX_TREE_WATCH_DIRS + 1)
             .map(|index| TreeEntry {
                 path: workspace.join(format!("d{index}")),
                 depth: 0,
@@ -1025,7 +1053,7 @@ mod tests {
             })
             .collect();
         model.sync_tree_watches();
-        assert!(model.tree_watch_limited);
+        assert!(model.tree.watch_limited);
         assert!(model.status.contains("watch limit"));
     }
 }

@@ -912,7 +912,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
         match key.code {
             KeyCode::Esc => {
                 model.ui.focus.tree = false;
-                model.tree_visible = false;
+                model.tree.visible = false;
                 model.dirty = true;
             }
             KeyCode::Char('j') | KeyCode::Down => model.tree_move(1),
@@ -977,7 +977,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
         } => match key.code {
             KeyCode::Esc => {
                 model.ui.input_mode = InputMode::Normal;
-                model.ui.focus.tree = model.tree_visible;
+                model.ui.focus.tree = model.tree.visible;
                 model.dirty = true;
             }
             KeyCode::Enter => {
@@ -1004,7 +1004,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
         InputMode::RenameEntry { path, name } => match key.code {
             KeyCode::Esc => {
                 model.ui.input_mode = InputMode::Normal;
-                model.ui.focus.tree = model.tree_visible;
+                model.ui.focus.tree = model.tree.visible;
                 model.dirty = true;
             }
             KeyCode::Enter => {
@@ -1030,7 +1030,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
         } => match key.code {
             KeyCode::Esc => {
                 model.ui.input_mode = InputMode::Normal;
-                model.ui.focus.tree = model.tree_visible;
+                model.ui.focus.tree = model.tree.visible;
                 model.status = "transfer cancelled".to_owned();
                 model.dirty = true;
             }
@@ -1093,7 +1093,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             }
             KeyCode::Esc | KeyCode::Char('n') | KeyCode::Char('N') => {
                 model.ui.input_mode = InputMode::Normal;
-                model.ui.focus.tree = model.tree_visible;
+                model.ui.focus.tree = model.tree.visible;
                 model.status = "delete cancelled".to_owned();
                 model.dirty = true;
             }
