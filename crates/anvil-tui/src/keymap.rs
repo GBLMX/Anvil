@@ -10,6 +10,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use crate::WordMotion;
 use crate::input::KeyPress;
+use crate::{InputMode, Model};
 use anvil_editor::MacroStep;
 use anvil_session::command::{self, CommandContext, CommandId, is_registered};
 use anvil_session::keymap::KeymapContext;
@@ -1108,6 +1109,72 @@ pub(crate) fn pending_action(
         ('y', KeyCode::Char('e')) => Some(PendingCommand::YankWords(WordMotion::End)),
         ('y', KeyCode::Char('b')) => Some(PendingCommand::YankWords(WordMotion::PreviousStart)),
         _ => None,
+    }
+}
+
+impl Model {
+    pub(crate) fn active_keymap_contexts(&self) -> Vec<KeymapContext> {
+        let mut contexts = vec![KeymapContext::Global];
+        contexts.push(if self.ui.focus.tree {
+            KeymapContext::FileTree
+        } else {
+            KeymapContext::Editor
+        });
+        let input = match &self.ui.input_mode {
+            InputMode::CommandLine { .. } => Some(KeymapContext::CommandLine),
+            InputMode::Search { .. } => Some(KeymapContext::Search),
+            InputMode::Rename { .. } => Some(KeymapContext::Rename),
+            InputMode::Create { .. }
+            | InputMode::RenameEntry { .. }
+            | InputMode::ConfirmDelete { .. }
+            | InputMode::ConfirmClose { .. }
+            | InputMode::ConfirmReload { .. }
+            | InputMode::TransferEntry { .. } => Some(KeymapContext::Popup),
+            InputMode::Normal | InputMode::Insert => None,
+        };
+        if let Some(context) = input
+            && contexts.last() != Some(&context)
+        {
+            contexts.push(context);
+        }
+        let overlay = self.overlays.command_palette.is_some()
+            || self.overlays.fuzzy.is_some()
+            || self.overlays.lsp_results.workspace_symbols.is_some()
+            || self.overlays.lsp_results.document_symbols.is_some()
+            || self.overlays.lsp_results.references.is_some()
+            || self.overlays.lsp_results.call_hierarchy.is_some()
+            || self.overlays.settings_overlay.is_some()
+            || self.overlays.lsp_results.code_actions.is_some()
+            || self.overlays.lsp_results.completion.is_some()
+            || self.overlays.lsp_results.hover.is_some()
+            || self.ui.diagnostic_peek.is_some()
+            || self.ui.problems.visible
+            || self.pager.back.is_some();
+        if overlay && contexts.last() != Some(&KeymapContext::Popup) {
+            contexts.push(KeymapContext::Popup);
+        }
+        if self.edit.visual_anchor.is_some() {
+            contexts.push(KeymapContext::Modal);
+        }
+        contexts
+    }
+
+    pub(crate) fn keymap_context(&self) -> KeymapContext {
+        self.active_keymap_contexts()
+            .last()
+            .copied()
+            .unwrap_or(KeymapContext::Global)
+    }
+
+    pub(crate) fn pending_hints(&self) -> Vec<(String, String)> {
+        self.input
+            .pending
+            .map(|prefix| {
+                self.config
+                    .keymap
+                    .pending_actions(prefix, self.input.object_pending)
+            })
+            .unwrap_or_default()
     }
 }
 

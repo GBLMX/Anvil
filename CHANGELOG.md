@@ -283,8 +283,9 @@ post-`0.5.0` feature line.
   `file_worker/worker.rs`. `file_worker.rs` is now 355 lines.
 - Model construction, config reload, plugin/keymap loading, dispatch, count,
   leader, read-only guard, and syntax polling moved into `model.rs`; LSP worker
-  lifecycle, polling, and diagnostic helpers moved into `lsp_runtime.rs`.
-  `lib.rs` is now 1,074 lines.
+  lifecycle, polling, and diagnostic helpers moved into `lsp_runtime.rs`;
+  keymap context resolution moved into `keymap.rs`. `lib.rs` is now 1,008
+  lines.
 
 ### Fixed
 - The file tree now opens the command line on `:`, so commands such as
