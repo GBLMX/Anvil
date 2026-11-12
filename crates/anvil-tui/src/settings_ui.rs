@@ -152,10 +152,10 @@ pub(crate) fn hit(area: ratatui::layout::Rect, col: u16, row: u16) -> Option<usi
             return Some(0);
         }
         if (9..20).contains(&x) {
-            return Some(6);
+            return Some(5);
         }
         if (21..31).contains(&x) {
-            return Some(4);
+            return Some(7);
         }
     }
     let body = ratatui::layout::Rect {
@@ -174,7 +174,7 @@ pub(crate) fn hit(area: ratatui::layout::Rect, col: u16, row: u16) -> Option<usi
         && row > sidebar.y
     {
         let index = usize::from(row.saturating_sub(sidebar.y).saturating_sub(1));
-        return [0usize, 4, 5, 6, 8].get(index).copied();
+        return [0usize, 5, 6, 7, 9].get(index).copied();
     }
     None
 }
@@ -355,15 +355,15 @@ mod tests {
         let popup = rect(area);
         let inner_y = popup.y + 1;
         assert_eq!(hit(area, popup.x + 4, inner_y), Some(0));
-        assert_eq!(hit(area, popup.x + 14, inner_y), Some(6));
-        assert_eq!(hit(area, popup.x + 25, inner_y), Some(4));
+        assert_eq!(hit(area, popup.x + 14, inner_y), Some(5));
+        assert_eq!(hit(area, popup.x + 25, inner_y), Some(7));
         let body_y = inner_y + 2;
         let sidebar_x = popup.x + 3;
         assert_eq!(hit(area, sidebar_x, body_y + 1), Some(0));
-        assert_eq!(hit(area, sidebar_x, body_y + 2), Some(4));
-        assert_eq!(hit(area, sidebar_x, body_y + 3), Some(5));
-        assert_eq!(hit(area, sidebar_x, body_y + 4), Some(6));
-        assert_eq!(hit(area, sidebar_x, body_y + 5), Some(8));
+        assert_eq!(hit(area, sidebar_x, body_y + 2), Some(5));
+        assert_eq!(hit(area, sidebar_x, body_y + 3), Some(6));
+        assert_eq!(hit(area, sidebar_x, body_y + 4), Some(7));
+        assert_eq!(hit(area, sidebar_x, body_y + 5), Some(9));
     }
 
     #[test]
