@@ -2,9 +2,10 @@
 
 Status: partially implemented. Stable command IDs, a read-only metadata
 registry, TOML keymap overrides, and the shared `anvil-control` command
-manifest/capability policy exist. `commands.rs` still dispatches with string
-matching; there is no keymap trie, effect queue, Lua/Luau keymap host, or
-execution path fully driven by the registry.
+manifest/capability policy exist. Every non-substitute Ex command is validated
+by the shared capability registry and dispatched through the bounded
+`EffectQueue`; handler lookup still uses string matching, and the keymap trie,
+Lua/Luau keymap host, and fully registry-driven execution path remain pending.
 
 ## Goal
 

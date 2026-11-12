@@ -100,6 +100,14 @@ impl Model {
         let mut parts = command.splitn(2, char::is_whitespace);
         let name = parts.next().unwrap_or_default();
         let argument = parts.next().unwrap_or_default().trim();
+        self.queue_effect(Effect::ExCommand {
+            name: name.to_owned(),
+            argument: argument.to_owned(),
+        });
+        self.drain_effects();
+    }
+
+    fn dispatch_ex(&mut self, name: &str, argument: &str) {
         match (name, argument) {
             ("w", "") => self.queue_effect(Effect::Save),
             ("conflict-recover", "") => self.recover_conflict(),
@@ -235,11 +243,10 @@ impl Model {
             ("wq", "") => self.queue_effect(Effect::SaveAndQuit),
             ("wq", path) => self.queue_effect(Effect::SaveAsAndQuit(path.into())),
             _ => {
-                self.status = format!("E: unknown command: {command}");
+                self.status = format!("E: unknown command: {name}");
                 self.dirty = true;
             }
         }
-        self.drain_effects();
     }
 
     pub(crate) fn queue_effect(&mut self, effect: Effect) {
@@ -252,6 +259,9 @@ impl Model {
     pub(crate) fn drain_effects(&mut self) {
         while let Some(queued) = self.effects.pop() {
             match queued.effect {
+                Effect::ExCommand { name, argument } => {
+                    self.dispatch_ex(&name, &argument);
+                }
                 Effect::Save => {
                     self.save();
                 }

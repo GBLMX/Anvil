@@ -83,6 +83,8 @@ pub enum Effect {
     PluginStop,
     /// Re-enable a disabled plugin.
     PluginEnable(String),
+    /// Dispatch one already-validated Ex command.
+    ExCommand { name: String, argument: String },
 }
 
 /// One queued effect with its request id.
