@@ -260,7 +260,7 @@ fn execute_normal_command(model: &mut Model, command: NormalCommand) {
             model.ui.input_mode = InputMode::CommandLine {
                 buffer: InputBuffer::default(),
             };
-            model.command_completion = None;
+            model.overlays.command_completion = None;
             model.dirty = true;
         }
         NormalCommand::Search => model.begin_search(),
@@ -1110,7 +1110,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             KeyCode::Up => model.move_command_completion(-1),
             KeyCode::Down => model.move_command_completion(1),
             KeyCode::Enter => {
-                if model.command_completion.is_some() {
+                if model.overlays.command_completion.is_some() {
                     model.complete_command_line();
                 } else {
                     let command = buffer.take();
@@ -1120,36 +1120,36 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             }
             KeyCode::Left => {
                 buffer.move_left();
-                model.command_completion = None;
+                model.overlays.command_completion = None;
                 model.dirty = true;
             }
             KeyCode::Right => {
                 buffer.move_right();
-                model.command_completion = None;
+                model.overlays.command_completion = None;
                 model.dirty = true;
             }
             KeyCode::Home => {
                 buffer.move_home();
-                model.command_completion = None;
+                model.overlays.command_completion = None;
                 model.dirty = true;
             }
             KeyCode::End => {
                 buffer.move_end();
-                model.command_completion = None;
+                model.overlays.command_completion = None;
                 model.dirty = true;
             }
             KeyCode::Backspace => {
-                model.command_completion = None;
+                model.overlays.command_completion = None;
                 buffer.backspace();
                 model.dirty = true;
             }
             KeyCode::Delete => {
-                model.command_completion = None;
+                model.overlays.command_completion = None;
                 buffer.delete();
                 model.dirty = true;
             }
             KeyCode::Char(character) if text_input => {
-                model.command_completion = None;
+                model.overlays.command_completion = None;
                 buffer.insert(character);
                 model.dirty = true;
             }

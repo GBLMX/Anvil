@@ -306,6 +306,8 @@ struct OverlayState {
     preview_generation: u64,
     debug_panel: Option<debug_panel::DebugPanelState>,
     test_explorer: Option<test_explorer::TestExplorerState>,
+    command_completion: Option<CommandCompletion>,
+    command_palette_recents: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -720,7 +722,6 @@ pub struct Model {
     tree_refresh_generation: u64,
     show_hidden: bool,
     overlays: OverlayState,
-    command_completion: Option<CommandCompletion>,
     persist_theme: bool,
     settings: Settings,
     /// Project-local icon overrides from `.anvil.toml`.
@@ -735,7 +736,6 @@ pub struct Model {
     wrap_width: usize,
     /// Wrapped segment offset within the first visible source line.
     scroll_subrow: usize,
-    command_palette_recents: Vec<String>,
     /// Gateway client used for file I/O when present.
     gateway: Option<GatewayClient>,
     /// Owning child/socket for the current gateway client.
@@ -965,7 +965,6 @@ impl Model {
             tree_refresh_generation: 0,
             show_hidden: false,
             overlays: OverlayState::default(),
-            command_completion: None,
             persist_theme: !cfg!(test),
             settings: Settings::default(),
             icons: icon_theme::IconTheme::default(),
@@ -974,7 +973,6 @@ impl Model {
             icons_checked_at: None,
             wrap_width: 80,
             scroll_subrow: 0,
-            command_palette_recents: Vec::new(),
             gateway: None,
             gateway_session: None,
             lsp_client: None,

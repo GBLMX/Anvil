@@ -546,7 +546,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
         );
     }
 
-    if let Some(completion) = &model.command_completion {
+    if let Some(completion) = &model.overlays.command_completion {
         let popup = crate::render::command_completion_rect(area, completion.filtered().len());
         frame.render_widget(Clear, popup);
         let visible = popup.height.saturating_sub(2) as usize;

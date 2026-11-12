@@ -120,7 +120,7 @@ impl Model {
     }
 
     pub(crate) fn refresh_command_palette(&mut self) {
-        let recents = self.command_palette_recents.clone();
+        let recents = self.overlays.command_palette_recents.clone();
         let Some(palette) = self.overlays.command_palette.as_mut() else {
             return;
         };
@@ -174,8 +174,12 @@ impl Model {
     }
 
     pub(crate) fn remember_command(&mut self, id: &str) {
-        self.command_palette_recents.retain(|recent| recent != id);
-        self.command_palette_recents.insert(0, id.to_owned());
-        self.command_palette_recents.truncate(10);
+        self.overlays
+            .command_palette_recents
+            .retain(|recent| recent != id);
+        self.overlays
+            .command_palette_recents
+            .insert(0, id.to_owned());
+        self.overlays.command_palette_recents.truncate(10);
     }
 }

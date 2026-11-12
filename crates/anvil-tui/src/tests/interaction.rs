@@ -658,7 +658,7 @@ fn command_line_tab_completes_and_enter_executes() {
     }
     model.dirty = false;
     handle_event(&mut model, key(KeyCode::Tab));
-    assert!(model.command_completion.is_some());
+    assert!(model.overlays.command_completion.is_some());
     assert!(model.dirty);
     handle_event(&mut model, key(KeyCode::Tab));
     assert!(matches!(
@@ -679,7 +679,7 @@ fn command_line_tab_opens_theme_argument_list() {
         handle_event(&mut model, key(KeyCode::Char(character)));
     }
     handle_event(&mut model, key(KeyCode::Tab));
-    assert!(model.command_completion.is_some());
+    assert!(model.overlays.command_completion.is_some());
     assert!(matches!(
         &model.ui.input_mode,
         InputMode::CommandLine { buffer } if buffer.text() == "theme "

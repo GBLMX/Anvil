@@ -117,7 +117,7 @@ fn argument_items(
 impl Model {
     pub(crate) fn refresh_command_completion(&mut self) {
         let InputMode::CommandLine { buffer } = &self.ui.input_mode else {
-            self.command_completion = None;
+            self.overlays.command_completion = None;
             return;
         };
         #[cfg(target_os = "linux")]
@@ -129,11 +129,11 @@ impl Model {
         #[cfg(not(target_os = "linux"))]
         let plugin_ids: Vec<&str> = Vec::new();
         let completion = CommandCompletion::new(buffer.text(), &plugin_ids);
-        self.command_completion = (!completion.is_empty()).then_some(completion);
+        self.overlays.command_completion = (!completion.is_empty()).then_some(completion);
     }
 
     pub(crate) fn complete_command_line(&mut self) {
-        if let Some(completion) = self.command_completion.take() {
+        if let Some(completion) = self.overlays.command_completion.take() {
             if let Some(insert) = completion.selected() {
                 self.set_command_line(insert);
             }
@@ -142,27 +142,28 @@ impl Model {
         }
         self.refresh_command_completion();
         let single = self
+            .overlays
             .command_completion
             .as_ref()
             .filter(|completion| completion.filtered().len() == 1)
             .and_then(CommandCompletion::selected)
             .map(str::to_owned);
         if let Some(insert) = single {
-            self.command_completion = None;
+            self.overlays.command_completion = None;
             self.set_command_line(&insert);
         }
         self.dirty = true;
     }
 
     pub(crate) fn move_command_completion(&mut self, delta: isize) {
-        if let Some(completion) = self.command_completion.as_mut() {
+        if let Some(completion) = self.overlays.command_completion.as_mut() {
             completion.move_by(delta);
             self.dirty = true;
         }
     }
 
     pub(crate) fn close_command_completion(&mut self) -> bool {
-        if self.command_completion.take().is_some() {
+        if self.overlays.command_completion.take().is_some() {
             self.dirty = true;
             true
         } else {
