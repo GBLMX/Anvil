@@ -58,7 +58,9 @@ remains the P1 follow-up tracked in
   open/save routing, cross-root tree/search UX, root labels, and root-removal
   cleanup landed.
 - Code folding with session persistence.
-- Auto-save policy remains; swap files and external-conflict recovery landed.
+- Auto-save policy is closed: focus-change only, with fixed guards for
+  read-only, help, missing, stdin, and conflicted buffers; swap files and
+  external-conflict recovery landed.
 The LSP surface, missing goto variants, language allowlist, large-file
 threshold, and primary-root-only boundary are defined in
 ADR-0025.

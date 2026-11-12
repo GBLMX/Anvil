@@ -129,10 +129,10 @@ surfaces.
 Status: swap/crash recovery landed. External-change conflicts preserve the
 swap and expose `:conflict-recover` / `:conflict-discard`; saving an
 unmodified conflicted buffer is refused until resolved.
-Remaining:
-- auto-save is implemented for buffer switch/close, split focus/close changes,
-  opening another file, terminal focus loss (including Insert mode), and `:q`;
-- large/binary/read-only safe behavior remains.
+Auto-save status: the focus-change policy is closed. It covers buffer
+switch/close, split focus/close changes, opening another file, terminal focus
+loss (including Insert mode), and `:q`; read-only, help, missing, stdin, and
+conflicted buffers are skipped.
 
 Landed: swap files, crash recovery, external-change conflict recovery, and
 focus-change auto-save.

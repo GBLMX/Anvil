@@ -1322,6 +1322,70 @@ fn focus_lost_auto_saves_the_active_buffer() {
 }
 
 #[test]
+fn focus_lost_skips_auto_save_for_read_only_buffers() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("main.rs");
+    fs::write(&path, "a").expect("write");
+    let mut model = Model::open(&path).expect("open");
+    model.config.settings.editor.auto_save = true;
+    model.set_read_only(true);
+    model.file.modified = true;
+
+    handle_event(&mut model, Event::FocusLost);
+
+    assert_eq!(fs::read_to_string(&path).expect("content"), "a");
+    assert!(model.file.modified);
+}
+
+#[test]
+fn focus_lost_skips_auto_save_while_help_page_is_open() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("main.rs");
+    fs::write(&path, "a").expect("write");
+    let mut model = Model::open(&path).expect("open");
+    model.config.settings.editor.auto_save = true;
+    model.show_help();
+    model.file.modified = true;
+
+    handle_event(&mut model, Event::FocusLost);
+
+    assert_eq!(fs::read_to_string(&path).expect("content"), "a");
+    assert!(model.pager.back.is_some());
+}
+
+#[test]
+fn focus_lost_skips_auto_save_for_missing_files() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("main.rs");
+    fs::write(&path, "a").expect("write");
+    let mut model = Model::open(&path).expect("open");
+    model.config.settings.editor.auto_save = true;
+    model.file.missing = true;
+    model.file.modified = true;
+
+    handle_event(&mut model, Event::FocusLost);
+
+    assert!(model.file.modified);
+}
+
+#[test]
+fn focus_lost_skips_auto_save_for_conflicted_buffers() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("main.rs");
+    let swap = dir.path().join("main.rs.swp");
+    fs::write(&path, "a").expect("write");
+    let mut model = Model::open(&path).expect("open");
+    model.config.settings.editor.auto_save = true;
+    model.insert_text("X");
+    model.workspace.conflict_swaps.insert(path.clone(), swap);
+
+    handle_event(&mut model, Event::FocusLost);
+
+    assert_eq!(fs::read_to_string(&path).expect("content"), "a");
+    assert!(model.file.modified);
+}
+
+#[test]
 fn focus_lost_auto_saves_while_insert_is_active() {
     let dir = tempfile::tempdir().expect("tempdir");
     let path = dir.path().join("main.rs");
