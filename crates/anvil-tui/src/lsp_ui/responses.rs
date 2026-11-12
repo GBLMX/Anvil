@@ -25,6 +25,18 @@ impl Model {
         }
     }
 
+    fn apply_sticky_symbols_response(&mut self, result: &serde_json::Value) {
+        self.sticky_pending = false;
+        let items = result
+            .as_array()
+            .map(|items| symbols_from_lsp(items))
+            .unwrap_or_default();
+        self.sticky_symbols_path = self.path.clone();
+        self.sticky_symbols_revision = Some(self.editor.revision());
+        self.sticky_symbols = items;
+        self.dirty = true;
+    }
+
     fn apply_signature_help_response(&mut self, result: &serde_json::Value) {
         let Some(signatures) = result
             .get("signatures")
@@ -137,6 +149,11 @@ impl Model {
             if kind == LspRequestKind::CompletionResolve {
                 self.completion_resolve = None;
             }
+            if kind == LspRequestKind::StickySymbols {
+                self.sticky_pending = false;
+                self.dirty = true;
+                return;
+            }
             self.clear_format_on_save(kind);
             self.status = format!("E: lsp {kind:?}: {error}");
             self.dirty = true;
@@ -154,8 +171,12 @@ impl Model {
                 | LspRequestKind::CallHierarchyOutgoing
                 | LspRequestKind::FoldingRange
                 | LspRequestKind::SemanticTokens
+                | LspRequestKind::StickySymbols
         ) && edit_revision.is_some_and(|revision| revision != self.editor.revision())
         {
+            if kind == LspRequestKind::StickySymbols {
+                self.sticky_pending = false;
+            }
             self.clear_format_on_save(kind);
             self.status = "lsp: stale edit response ignored".to_owned();
             self.dirty = true;
@@ -174,10 +195,14 @@ impl Model {
                 | LspRequestKind::FoldingRange
                 | LspRequestKind::SemanticTokens
                 | LspRequestKind::CodeLens
+                | LspRequestKind::StickySymbols
         ) && edit_path
             .as_ref()
             .is_some_and(|path| self.path.as_ref() != Some(path))
         {
+            if kind == LspRequestKind::StickySymbols {
+                self.sticky_pending = false;
+            }
             self.clear_format_on_save(kind);
             self.status = "lsp: edit response for inactive buffer".to_owned();
             self.dirty = true;
@@ -236,6 +261,7 @@ impl Model {
                 self.finish_format_on_save();
             }
             LspRequestKind::DocumentSymbol => self.apply_document_symbols_response(&result),
+            LspRequestKind::StickySymbols => self.apply_sticky_symbols_response(&result),
         }
         self.dirty = true;
     }

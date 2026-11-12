@@ -240,6 +240,7 @@ pub fn run_with_input(
         model.poll_icons();
         model.poll_dap_attach();
         model.poll_debug_request();
+        model.poll_sticky_symbols();
         match theme::reload_custom_if_changed() {
             Ok(true) => model.dirty = true,
             Ok(false) => {}

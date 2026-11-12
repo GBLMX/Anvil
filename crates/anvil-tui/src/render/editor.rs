@@ -397,6 +397,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
             );
         }
     }
+    crate::sticky::render(model, frame, text_area);
     if status_cursor.is_none()
         && let Some(position) = model
             .editor

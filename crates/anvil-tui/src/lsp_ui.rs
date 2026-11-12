@@ -191,6 +191,7 @@ impl Model {
                 | LspRequestKind::FoldingRange
                 | LspRequestKind::SemanticTokens
                 | LspRequestKind::CodeLens
+                | LspRequestKind::StickySymbols
         ) {
             self.pending_edit_revision
                 .insert(id, self.editor.revision());

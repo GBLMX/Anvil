@@ -8,6 +8,9 @@ post-`0.5.0` feature line.
 
 ## [Unreleased]
 ### Added
+- Sticky scroll shows the deepest enclosing LSP document symbol over the first
+  visible source row; symbol data refreshes in the background after edits and
+  path changes.
 - Inline diagnostics append the highest-severity message to the end of the
   affected source line, only when horizontal space remains and not for
   horizontally scrolled rows.

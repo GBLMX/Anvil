@@ -55,6 +55,7 @@ mod file_tree_ui;
 mod file_worker;
 mod folding;
 mod jump;
+mod sticky;
 use folding::{FoldAction, FoldRange};
 mod gateway;
 mod git_diff;
@@ -337,6 +338,7 @@ enum LspRequestKind {
     CodeAction,
     Formatting,
     DocumentSymbol,
+    StickySymbols,
     SignatureHelp,
     WorkspaceSymbol,
     InlayHint,
@@ -634,6 +636,15 @@ pub struct Model {
     git_resolve_generation: u64,
     /// Pending conflict-resolution generation, if a request is in flight.
     git_resolve_pending: Option<u64>,
+    /// Document symbols used for the sticky scroll header.
+    sticky_symbols: Vec<SymbolItem>,
+    /// Path and revision those symbols describe.
+    sticky_symbols_path: Option<PathBuf>,
+    sticky_symbols_revision: Option<u64>,
+    /// Whether a sticky-symbol request is in flight.
+    sticky_pending: bool,
+    /// Debounce for the next sticky-symbol request.
+    sticky_checked_at: Option<Instant>,
     /// LSP folding ranges for the active buffer.
     folds: Vec<FoldRange>,
     /// Start lines of closed folds.
@@ -886,6 +897,11 @@ impl Model {
             git_stage_pending: None,
             git_resolve_generation: 0,
             git_resolve_pending: None,
+            sticky_symbols: Vec::new(),
+            sticky_symbols_path: None,
+            sticky_symbols_revision: None,
+            sticky_pending: false,
+            sticky_checked_at: None,
             folds: Vec::new(),
             folded: HashSet::new(),
             fold_revision: None,
