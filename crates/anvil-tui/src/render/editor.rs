@@ -148,6 +148,12 @@ pub fn view(model: &Model, frame: &mut Frame) {
         inner.y = inner.y.saturating_add(1);
         inner.height = inner.height.saturating_sub(1);
     }
+    if crate::breadcrumbs::visible(model, inner) {
+        let breadcrumb = Rect { height: 1, ..inner };
+        crate::breadcrumbs::render(model, frame, breadcrumb);
+        inner.y = inner.y.saturating_add(1);
+        inner.height = inner.height.saturating_sub(1);
+    }
     let mut content = inner;
     if model.welcome {
         render_welcome(frame, inner, model);

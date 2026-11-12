@@ -8,6 +8,8 @@ post-`0.5.0` feature line.
 
 ## [Unreleased]
 ### Added
+- Breadcrumbs render as a clickable row: the path segment reveals the file in
+  the workspace tree, and the symbol segment opens document symbols.
 - Sticky scroll shows the deepest enclosing LSP document symbol over the first
   visible source row; symbol data refreshes in the background after edits and
   path changes.

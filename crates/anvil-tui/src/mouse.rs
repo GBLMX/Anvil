@@ -38,6 +38,7 @@ pub(crate) enum Target {
         column: usize,
     },
     Status,
+    Breadcrumb(crate::breadcrumbs::BreadcrumbTarget),
 }
 
 pub(crate) fn handle_mouse(model: &mut Model, mouse: MouseEvent, width: u16, height: u16) -> bool {
@@ -90,6 +91,12 @@ pub(crate) fn handle_mouse(model: &mut Model, mouse: MouseEvent, width: u16, hei
                 Target::SplitHandle => {
                     model.pointer = PointerState::Pressed(DragKind::Split);
                     model.dirty = true;
+                }
+                Target::Breadcrumb(crate::breadcrumbs::BreadcrumbTarget::Path) => {
+                    model.reveal_breadcrumb_path();
+                }
+                Target::Breadcrumb(crate::breadcrumbs::BreadcrumbTarget::Symbol) => {
+                    model.open_breadcrumb_symbols();
                 }
                 Target::Status | Target::Outside => {
                     model.pointer = PointerState::Idle;
@@ -159,9 +166,14 @@ pub(crate) fn hit_test(model: &Model, col: u16, row: u16, width: u16, height: u1
     if col >= width || row >= height {
         return Target::Outside;
     }
-    let Some((inner, tab_row)) = content_rect(model, width, height) else {
+    let Some((inner, tab_row, breadcrumb_row)) = content_rect(model, width, height) else {
         return Target::Outside;
     };
+    if let Some(area) = breadcrumb_row
+        && row == area.y
+    {
+        return Target::Breadcrumb(crate::breadcrumbs::target_at(model, col, area));
+    }
     if tab_row == Some(row) {
         return Target::Tabs(tab_at(model, col.saturating_sub(inner.x), inner.width));
     }
@@ -216,7 +228,11 @@ pub(crate) fn hit_test(model: &Model, col: u16, row: u16, width: u16, height: u1
     Target::Editor { side, line, column }
 }
 
-fn content_rect(model: &Model, width: u16, height: u16) -> Option<(Rect, Option<u16>)> {
+fn content_rect(
+    model: &Model,
+    width: u16,
+    height: u16,
+) -> Option<(Rect, Option<u16>, Option<Rect>)> {
     if model.welcome {
         return None;
     }
@@ -235,7 +251,15 @@ fn content_rect(model: &Model, width: u16, height: u16) -> Option<(Rect, Option<
         inner.y = inner.y.saturating_add(1);
         inner.height = inner.height.saturating_sub(1);
     }
-    Some((inner, tab_row))
+    let breadcrumb_row = if crate::breadcrumbs::visible(model, inner) {
+        let area = Rect { height: 1, ..inner };
+        inner.y = inner.y.saturating_add(1);
+        inner.height = inner.height.saturating_sub(1);
+        Some(area)
+    } else {
+        None
+    };
+    Some((inner, tab_row, breadcrumb_row))
 }
 
 fn sidebar_width(inner: Rect) -> u16 {
@@ -243,7 +267,7 @@ fn sidebar_width(inner: Rect) -> u16 {
 }
 
 fn editor_area(model: &Model, width: u16, height: u16) -> Option<Rect> {
-    let (mut inner, _) = content_rect(model, width, height)?;
+    let (mut inner, _, _) = content_rect(model, width, height)?;
     if model.tree_visible && inner.width > 50 {
         let sidebar = sidebar_width(inner);
         inner.x = inner.x.saturating_add(sidebar);

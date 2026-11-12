@@ -665,3 +665,32 @@ fn debug_watch_command_adds_an_expression() {
     assert_eq!(panel.kind, crate::debug_panel::DebugPanelKind::Watch);
     assert_eq!(panel.watches[0].expression, "count");
 }
+
+#[test]
+fn breadcrumb_row_routes_path_clicks() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let workspace = dir.path().to_path_buf();
+    fs::write(workspace.join("main.rs"), "alpha").expect("source");
+    let path = workspace.join("main.rs");
+    let mut model = Model::new(EditorState::from_text("alpha"), Some(path.clone()));
+    model.workspace = workspace;
+    assert_eq!(
+        crate::mouse::hit_test(&model, 1, 1, 80, 24),
+        crate::mouse::Target::Breadcrumb(crate::breadcrumbs::BreadcrumbTarget::Path)
+    );
+    let click = crossterm::event::MouseEvent {
+        kind: crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left),
+        column: 1,
+        row: 1,
+        modifiers: crossterm::event::KeyModifiers::NONE,
+    };
+    assert!(crate::mouse::handle_mouse(&mut model, click, 80, 24));
+    assert!(model.tree_visible);
+    assert_eq!(
+        model
+            .tree
+            .get(model.tree_selected.unwrap_or(0))
+            .map(|entry| &entry.path),
+        Some(&path)
+    );
+}
