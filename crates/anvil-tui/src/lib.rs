@@ -9,6 +9,7 @@ use std::{
     fs,
     io::{self, Stdout},
     path::{Path, PathBuf},
+    sync::mpsc,
     time::{Duration, Instant, SystemTime},
 };
 
@@ -575,6 +576,10 @@ pub struct Model {
     breakpoints: HashMap<PathBuf, BTreeSet<u32>>,
     /// Optional DAP client used to mirror breakpoints.
     dap_client: Option<crate::dap::DapClient>,
+    /// Background DAP initialization result.
+    dap_attach: Option<mpsc::Receiver<Result<crate::dap::DapClient, String>>>,
+    /// When the background DAP attach started.
+    dap_attach_started: Option<Instant>,
     /// Workspace git status keyed by absolute path.
     git_status: HashMap<PathBuf, char>,
     /// Latest requested tree git-status generation.
@@ -843,6 +848,8 @@ impl Model {
             git_marks: HashMap::new(),
             breakpoints: HashMap::new(),
             dap_client: None,
+            dap_attach: None,
+            dap_attach_started: None,
             git_status: HashMap::new(),
             git_status_generation: 0,
             git_status_pending: None,

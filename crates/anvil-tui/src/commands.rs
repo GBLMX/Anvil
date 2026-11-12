@@ -245,27 +245,13 @@ impl Model {
                     .iter()
                     .map(|arg| (*arg).to_owned())
                     .collect::<Vec<_>>();
-                match crate::dap::DapClient::spawn(
-                    std::path::Path::new(program),
-                    &args,
-                    &self.workspace,
-                ) {
-                    Ok(mut client) => match client
-                        .initialize()
-                        .and_then(|request| client.wait_response(request))
-                    {
-                        Ok(_) => {
-                            self.attach_dap_client(client);
-                            self.status = format!("debug adapter attached: {program}");
-                        }
-                        Err(error) => self.status = format!("E: dap initialize: {error}"),
-                    },
-                    Err(error) => self.status = format!("E: dap attach: {error}"),
-                }
+                self.start_dap_attach(std::path::PathBuf::from(program), args);
                 self.dirty = true;
             }
             ("dap-detach", "") => {
                 self.dap_client = None;
+                self.dap_attach = None;
+                self.dap_attach_started = None;
                 self.status = "debug adapter detached".to_owned();
                 self.dirty = true;
             }

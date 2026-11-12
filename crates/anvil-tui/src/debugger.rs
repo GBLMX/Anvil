@@ -4,7 +4,64 @@ use super::*;
 use crate::dap::DapClient;
 
 impl Model {
-    pub(crate) fn attach_dap_client(&mut self, client: DapClient) {
+    pub(crate) fn start_dap_attach(&mut self, program: PathBuf, args: Vec<String>) {
+        let workspace = self.workspace.clone();
+        let display = program.display().to_string();
+        let (sender, receiver) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let result = DapClient::spawn(&program, &args, &workspace)
+                .and_then(|mut client| {
+                    let request = client.initialize()?;
+                    client.wait_response(request).map(|_| client)
+                })
+                .map_err(|error| error.to_string());
+            let _ = sender.send(result);
+        });
+        self.dap_attach = Some(receiver);
+        self.dap_attach_started = Some(Instant::now());
+        self.status = format!("attaching debug adapter: {display}");
+        self.dirty = true;
+    }
+
+    pub(crate) fn poll_dap_attach(&mut self) {
+        let Some(receiver) = self.dap_attach.as_ref() else {
+            return;
+        };
+        match receiver.try_recv() {
+            Ok(Ok(client)) => {
+                self.dap_attach = None;
+                self.dap_attach_started = None;
+                self.attach_dap_client(client);
+                self.status = "debug adapter attached".to_owned();
+                self.dirty = true;
+            }
+            Ok(Err(error)) => {
+                self.dap_attach = None;
+                self.dap_attach_started = None;
+                self.status = format!("E: dap initialize: {error}");
+                self.dirty = true;
+            }
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                self.dap_attach = None;
+                self.dap_attach_started = None;
+                self.status = "E: dap attach worker stopped".to_owned();
+                self.dirty = true;
+            }
+            Err(std::sync::mpsc::TryRecvError::Empty) => {
+                if self
+                    .dap_attach_started
+                    .is_some_and(|started| started.elapsed() >= Duration::from_secs(5))
+                {
+                    self.dap_attach = None;
+                    self.dap_attach_started = None;
+                    self.status = "E: dap attach timed out (adapter may be hung)".to_owned();
+                    self.dirty = true;
+                }
+            }
+        }
+    }
+
+    fn attach_dap_client(&mut self, client: DapClient) {
         self.dap_client = Some(client);
         self.sync_all_breakpoints();
     }

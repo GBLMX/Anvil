@@ -10,8 +10,9 @@ post-`0.5.0` feature line.
 ### Added
 - Directory rows in the file tree roll up child git status and diagnostics,
   using the highest-priority marker/severity.
-- `:dap-attach <adapter> [args]` initializes an external DAP adapter and syncs
-  existing breakpoints; `:dap-detach` releases it.
+- `:dap-attach <adapter> [args]` initializes an external DAP adapter on a
+  background thread, reports pending/timeout state, and syncs existing
+  breakpoints; `:dap-detach` releases it.
 - `:breakpoint` toggles a gutter breakpoint on the current line. Breakpoint
   state is per-file and mirrors through an attached DAP client.
 - `editor.format_on_save` (`ANVIL_EDITOR_FORMAT_ON_SAVE`) saves normally, then

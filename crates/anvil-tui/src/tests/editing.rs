@@ -866,3 +866,21 @@ fn auto_pairs_wrap_selection() {
     handle_event(&mut model, key(KeyCode::Char('(')));
     assert_eq!(model.editor.text().slice(0..6), "(word)");
 }
+
+#[test]
+fn dap_attach_does_not_block_and_reports_failure() {
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.execute_command("dap-attach /definitely/not-a-real-adapter");
+    assert!(
+        model.status.contains("dap") || model.status.contains("attach"),
+        "{}",
+        model.status
+    );
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+    while model.dap_attach.is_some() && std::time::Instant::now() < deadline {
+        model.poll_dap_attach();
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    assert!(model.dap_attach.is_none());
+    assert!(model.status.contains("dap"), "{}", model.status);
+}

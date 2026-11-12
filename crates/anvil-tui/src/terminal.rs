@@ -238,6 +238,7 @@ pub fn run_with_input(
         model.ensure_cursor_visible(size.height.saturating_sub(2), size.width.saturating_sub(2));
         model.tick_status();
         model.poll_icons();
+        model.poll_dap_attach();
         match theme::reload_custom_if_changed() {
             Ok(true) => model.dirty = true,
             Ok(false) => {}
