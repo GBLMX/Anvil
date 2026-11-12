@@ -918,3 +918,30 @@ fn dap_attach_does_not_block_and_reports_failure() {
     assert!(model.language.dap.attach.is_none());
     assert!(model.status.text.contains("dap"), "{}", model.status.text);
 }
+
+#[test]
+fn za_zm_zr_fold_keys_work_through_dispatch() {
+    let mut model = Model::new(
+        EditorState::from_text("one\ntwo\nthree"),
+        Some(std::path::PathBuf::from("test.rs")),
+    );
+    model.start_page.welcome = false;
+    model.overlays.lsp_results.folds = vec![FoldRange { start: 0, end: 2 }];
+    model.overlays.lsp_results.fold_revision = Some(model.session.editor.revision());
+
+    handle_event(&mut model, key(KeyCode::Char('z')));
+    handle_event(&mut model, key(KeyCode::Char('a')));
+    assert!(model.overlays.lsp_results.folded.contains(&0));
+
+    handle_event(&mut model, key(KeyCode::Char('z')));
+    handle_event(&mut model, key(KeyCode::Char('a')));
+    assert!(model.overlays.lsp_results.folded.is_empty());
+
+    handle_event(&mut model, key(KeyCode::Char('z')));
+    handle_event(&mut model, key(KeyCode::Char('M')));
+    assert!(model.overlays.lsp_results.folded.contains(&0));
+
+    handle_event(&mut model, key(KeyCode::Char('z')));
+    handle_event(&mut model, key(KeyCode::Char('R')));
+    assert!(model.overlays.lsp_results.folded.is_empty());
+}
