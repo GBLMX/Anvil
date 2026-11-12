@@ -290,7 +290,9 @@ post-`0.5.0` feature line.
 - Editing operations split into `editing/objects.rs`, `editing/motions.rs`,
   `editing/selection.rs`, and `editing/input.rs`; `editing.rs` is now 62 lines.
 - Built-in semantic palettes moved into `theme/palette.rs`; custom theme file
-  parsing moved into `theme/custom.rs`. `theme.rs` is now 967 lines.
+  parsing moved into `theme/custom.rs`; style accessors and color
+  quantization moved into `theme/style.rs` and `theme/color.rs`. `theme.rs` is
+  now 664 lines.
 
 ### Fixed
 - The file tree now opens the command line on `:`, so commands such as
