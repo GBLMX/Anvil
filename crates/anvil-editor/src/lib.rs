@@ -6,6 +6,15 @@ use anvil_api::{EditorView, InteractionMode, Selection, TextPosition, Viewport};
 use anvil_core::{LineIndex, TextBuffer, TextDocument};
 
 /// Default viewport until the TUI supplies the terminal size.
+/// One frontend-neutral macro step.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MacroStep {
+    /// Canonical key label, including ctrl-/alt-/super- prefixes.
+    pub key: String,
+    /// Whether shift was held for a non-character key.
+    pub shift: bool,
+}
+
 pub const DEFAULT_VIEWPORT: Viewport = Viewport {
     first_line: 0,
     first_column: 0,
@@ -68,6 +77,7 @@ pub struct EditorState {
     redo: Vec<EditRecord>,
     yank: String,
     registers: HashMap<char, String>,
+    macros: HashMap<char, Vec<MacroStep>>,
 }
 
 /// Immutable view of the editor at one revision.
@@ -106,6 +116,7 @@ impl EditorState {
             redo: Vec::new(),
             yank: String::new(),
             registers: HashMap::new(),
+            macros: HashMap::new(),
         }
     }
 
@@ -230,6 +241,16 @@ impl EditorState {
     /// Reads a named register without creating an empty entry.
     pub fn register_text(&self, register: char) -> Option<&str> {
         self.registers.get(&register).map(String::as_str)
+    }
+
+    /// Stores a recorded macro.
+    pub fn set_macro(&mut self, register: char, steps: Vec<MacroStep>) {
+        self.macros.insert(register, steps);
+    }
+
+    /// Reads a recorded macro.
+    pub fn macro_steps(&self, register: char) -> Option<&[MacroStep]> {
+        self.macros.get(&register).map(Vec::as_slice)
     }
 
     /// Inner word text object at `cursor`.
@@ -993,6 +1014,30 @@ mod tests {
         assert_eq!(state.line_range_at(0), Some(0..2));
         assert_eq!(state.line_range_at(2), Some(2..4));
         assert_eq!(state.line_range_at(4), Some(4..5));
+    }
+
+    #[test]
+    fn macro_steps_round_trip_and_clone() {
+        let mut state = EditorState::from_text("a");
+        state.set_macro(
+            'a',
+            vec![MacroStep {
+                key: "x".to_owned(),
+                shift: false,
+            }],
+        );
+        assert_eq!(
+            state.macro_steps('a'),
+            Some(
+                &[MacroStep {
+                    key: "x".to_owned(),
+                    shift: false,
+                }][..]
+            )
+        );
+        let cloned = state.clone();
+        assert_eq!(cloned.macro_steps('a').map(<[_]>::len), Some(1));
+        assert_eq!(state.macro_steps('b'), None);
     }
 
     #[test]

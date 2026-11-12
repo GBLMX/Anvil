@@ -543,8 +543,6 @@ pub struct Model {
     recording: Option<char>,
     /// Recorded key sequence.
     recording_keys: Vec<KeyEvent>,
-    /// Recorded macros.
-    macros: HashMap<char, Vec<KeyEvent>>,
     /// Last replayed macro.
     last_macro: Option<char>,
     /// Replay guard.
@@ -800,7 +798,6 @@ impl Model {
             macro_wait: None,
             recording: None,
             recording_keys: Vec::new(),
-            macros: HashMap::new(),
             last_macro: None,
             replaying: false,
             object_pending: false,

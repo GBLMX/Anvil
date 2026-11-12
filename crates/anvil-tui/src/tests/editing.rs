@@ -119,7 +119,7 @@ fn macro_records_and_replays() {
     ] {
         handle_event(&mut model, key(code));
     }
-    assert_eq!(model.macros.get(&'a').map(Vec::len), Some(3));
+    assert_eq!(model.editor.macro_steps('a').map(<[_]>::len), Some(3));
     for code in [KeyCode::Char('@'), KeyCode::Char('a')] {
         handle_event(&mut model, key(code));
     }

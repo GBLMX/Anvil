@@ -10,6 +10,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use crate::WordMotion;
 use crate::input::KeyPress;
+use anvil_editor::MacroStep;
 use anvil_session::command::{self, CommandContext, CommandId, is_registered};
 use anvil_session::keymap::KeymapContext;
 
@@ -230,6 +231,33 @@ pub(crate) struct KeyChord {
     super_key: bool,
 }
 
+/// Converts a terminal key event into a frontend-neutral macro step.
+pub(crate) fn macro_step(key: KeyEvent) -> MacroStep {
+    MacroStep {
+        key: KeyChord::from_key(KeyPress::from_key(key)).label(),
+        shift: key.modifiers.contains(KeyModifiers::SHIFT),
+    }
+}
+
+/// Rebuilds a terminal key event from a macro step.
+pub(crate) fn macro_key(step: &MacroStep) -> Option<KeyEvent> {
+    let chord = KeyChord::parse(&step.key).ok()?;
+    let mut modifiers = KeyModifiers::NONE;
+    if chord.ctrl {
+        modifiers |= KeyModifiers::CONTROL;
+    }
+    if chord.alt {
+        modifiers |= KeyModifiers::ALT;
+    }
+    if chord.super_key {
+        modifiers |= KeyModifiers::SUPER;
+    }
+    if step.shift {
+        modifiers |= KeyModifiers::SHIFT;
+    }
+    Some(KeyEvent::new(chord.code, modifiers))
+}
+
 impl KeyChord {
     pub(crate) fn from_key(key: KeyPress) -> Self {
         let code = match key.code {
@@ -345,7 +373,7 @@ impl KeyChord {
     }
 }
 
-fn parse_key_name(name: &str) -> Result<KeyCode, String> {
+pub(crate) fn parse_key_name(name: &str) -> Result<KeyCode, String> {
     for number in 1..=12 {
         if name.eq_ignore_ascii_case(&format!("f{number}")) {
             return Ok(KeyCode::F(number));

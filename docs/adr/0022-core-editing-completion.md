@@ -183,5 +183,6 @@ undo needs its own storage and migration design.
   writes.
 - Word, quote, bracket, paragraph, and tag text-object range semantics are
   exposed by `EditorState`; the TUI delegates those ranges.
-- Macro recording/replay and the TUI key adapter still live in the TUI.
+- Macro storage lives in `anvil-editor::EditorState` as `MacroStep` entries;
+  recording/replay remains a TUI key-adapter concern.
 - Soft wrap display projection remains unimplemented.

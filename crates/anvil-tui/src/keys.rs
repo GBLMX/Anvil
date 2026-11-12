@@ -2,7 +2,8 @@
 
 use crate::input::{KeyPress, is_action_key};
 use crate::keymap::{
-    ContextAction, NormalCommand, PendingCommand, resolve_normal, resolve_pending,
+    ContextAction, NormalCommand, PendingCommand, macro_key, macro_step, resolve_normal,
+    resolve_pending,
 };
 use anvil_session::command::{CommandContext, is_registered};
 use anvil_session::ui::CreateKind;
@@ -396,12 +397,14 @@ fn handle_key(model: &mut Model, key: KeyPress) {
                     _ => None,
                 };
                 if let Some(register) = register
-                    && let Some(keys) = model.macros.get(&register).cloned()
+                    && let Some(steps) = model.editor.macro_steps(register).map(<[_]>::to_vec)
                 {
                     model.last_macro = Some(register);
                     model.replaying = true;
-                    for key in keys {
-                        handle_key(model, KeyPress::from_key(key));
+                    for step in steps {
+                        if let Some(key) = macro_key(&step) {
+                            handle_key(model, KeyPress::from_key(key));
+                        }
                     }
                     model.replaying = false;
                 }
@@ -414,9 +417,11 @@ fn handle_key(model: &mut Model, key: KeyPress) {
     if let Some(register) = model.recording {
         if key.code == KeyCode::Char('q') {
             model.recording = None;
-            model
-                .macros
-                .insert(register, std::mem::take(&mut model.recording_keys));
+            let steps = std::mem::take(&mut model.recording_keys)
+                .into_iter()
+                .map(macro_step)
+                .collect();
+            model.editor.set_macro(register, steps);
             model.dirty = true;
             return;
         }
