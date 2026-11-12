@@ -14,7 +14,7 @@ impl Model {
             visual_anchor: self.visual_anchor,
             visual_line: self.visual_line,
             modified: self.modified,
-            search_query: self.search_query.clone(),
+            search_query: self.search.query.clone(),
             syntax: self.syntax.borrow().active_cache(),
         }
     }
@@ -52,8 +52,8 @@ impl Model {
         self.view.scroll = buffer.scroll;
         self.view.hscroll = buffer.hscroll;
         self.modified = buffer.modified;
-        self.search_query = buffer.search_query;
-        self.search.reset_for_buffer();
+        self.search.query = buffer.search_query;
+        self.search.state.reset_for_buffer();
         self.welcome = false;
         self.welcome_back = false;
         self.syntax
@@ -233,8 +233,8 @@ impl Model {
         self.missing = false;
         self.visual_anchor = None;
         self.visual_line = false;
-        self.search_query.clear();
-        self.search.reset_for_buffer();
+        self.search.query.clear();
+        self.search.state.reset_for_buffer();
         self.syntax.borrow_mut().switch_path(None, false);
         self.welcome = false;
         self.welcome_back = false;

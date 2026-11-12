@@ -298,7 +298,7 @@ struct UiFile {
 impl crate::Model {
     pub(crate) fn apply_settings(&mut self, settings: Settings) {
         self.settings = settings;
-        self.search.options.case_sensitive = settings.search.case_sensitive;
+        self.search.state.options.case_sensitive = settings.search.case_sensitive;
         self.overlays.lsp_results.inlay_hints.clear();
         self.overlays.lsp_results.inlay_pending = None;
         self.overlays.lsp_results.inlay_checked = None;
@@ -444,7 +444,7 @@ mod tests {
         settings.search.case_sensitive = true;
         settings.lsp.inlay_hints = false;
         model.apply_settings(settings);
-        assert!(model.search.options.case_sensitive);
+        assert!(model.search.state.options.case_sensitive);
         assert!(!model.settings.lsp.inlay_hints);
     }
 }

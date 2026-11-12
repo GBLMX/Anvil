@@ -447,13 +447,13 @@ fn incremental_search_debounces_and_esc_restores_cursor() {
     model.cursor = 5;
     handle_event(&mut model, key(KeyCode::Char('/')));
     type_text(&mut model, "foo");
-    assert!(model.search.matches.is_empty());
-    model.search.due = Some(std::time::Instant::now());
+    assert!(model.search.state.matches.is_empty());
+    model.search.state.due = Some(std::time::Instant::now());
     model.tick_search();
-    assert_eq!(model.search.matches.len(), 2);
+    assert_eq!(model.search.state.matches.len(), 2);
     handle_event(&mut model, key(KeyCode::Esc));
     assert_eq!(model.cursor, 5);
-    assert!(model.search.matches.is_empty());
+    assert!(model.search.state.matches.is_empty());
     assert!(matches!(model.ui.input_mode, InputMode::Normal));
 }
 
@@ -461,18 +461,18 @@ fn incremental_search_debounces_and_esc_restores_cursor() {
 fn invalid_regex_keeps_previous_matches() {
     let mut model = Model::new(EditorState::from_text("foo foo"), None);
     model.commit_search("foo".to_owned());
-    assert_eq!(model.search.matches.len(), 2);
-    model.search.options.regex = true;
+    assert_eq!(model.search.state.matches.len(), 2);
+    model.search.state.options.regex = true;
     model.commit_search("[a-".to_owned());
-    assert!(model.search.error.is_some());
-    assert_eq!(model.search.matches.len(), 2);
+    assert!(model.search.state.error.is_some());
+    assert_eq!(model.search.state.matches.len(), 2);
 }
 
 #[test]
 fn replace_all_is_one_undo_and_handles_unicode() {
     let mut model = Model::new(EditorState::from_text(&"x ".repeat(100)), None);
     model.commit_search("x".to_owned());
-    assert_eq!(model.search.matches.len(), 100);
+    assert_eq!(model.search.state.matches.len(), 100);
     assert!(model.replace_all("y"));
     assert_eq!(model.editor.text().slice(0..3), "y y");
     model.undo();
@@ -480,7 +480,7 @@ fn replace_all_is_one_undo_and_handles_unicode() {
 
     let mut unicode = Model::new(EditorState::from_text("你好 你好"), None);
     unicode.commit_search("你好".to_owned());
-    assert_eq!(unicode.search.matches.len(), 2);
+    assert_eq!(unicode.search.state.matches.len(), 2);
     assert!(unicode.replace_all("hi"));
     assert_eq!(unicode.editor.text().slice(0..5), "hi hi");
 }

@@ -158,10 +158,10 @@ fn split_focus_restores_buffer_state_and_active_tab() {
 fn split_focus_resets_stale_search_matches() {
     let mut model = Model::new(EditorState::from_text("foo"), None);
     model.commit_search("foo".to_owned());
-    assert_eq!(model.search.matches.len(), 1);
+    assert_eq!(model.search.state.matches.len(), 1);
     model.split_vertical();
     model.focus_split(true);
-    assert!(model.search.matches.is_empty());
+    assert!(model.search.state.matches.is_empty());
 }
 #[test]
 fn closing_focused_split_restores_left_pane() {

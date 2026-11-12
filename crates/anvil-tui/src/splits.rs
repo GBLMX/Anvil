@@ -135,8 +135,8 @@ impl Model {
         self.missing = buffer.missing;
         self.visual_anchor = buffer.visual_anchor;
         self.visual_line = buffer.visual_line;
-        self.search_query = buffer.search_query;
-        self.search.reset_for_buffer();
+        self.search.query = buffer.search_query;
+        self.search.state.reset_for_buffer();
         if let Some(active) = active {
             self.buffers.active = active;
         }

@@ -38,7 +38,7 @@ impl Model {
         let (matches, truncated) = match crate::search::find_matches_limited(
             &search_text,
             old,
-            self.search.options,
+            self.search.state.options,
             crate::search::MAX_SEARCH_MATCHES,
         ) {
             Ok(result) => result,

@@ -504,6 +504,13 @@ impl Default for PluginState {
 }
 
 #[derive(Default)]
+struct SearchSession {
+    /// Last substring search.
+    query: String,
+    state: search::SearchState,
+}
+
+#[derive(Default)]
 struct AppearanceState {
     /// Project-local icon overrides from `.anvil.toml`.
     icons: icon_theme::IconTheme,
@@ -905,9 +912,8 @@ pub struct Model {
     replaying: bool,
     /// `c` / `y` operator waiting for an inner text object (`i`).
     object_pending: bool,
-    /// Last substring search.
-    search_query: String,
-    search: search::SearchState,
+    /// Substring search query and state.
+    search: SearchSession,
     /// Full-editor start dashboard, shown until the first interaction or file open.
     welcome: bool,
     /// Dashboard state to restore after closing the help page.
@@ -995,8 +1001,7 @@ impl Model {
             last_macro: None,
             replaying: false,
             object_pending: false,
-            search_query: String::new(),
-            search: search::SearchState::default(),
+            search: SearchSession::default(),
             buffers: BufferState::default(),
             workspace: WorkspaceState {
                 path: workspace,
@@ -1229,7 +1234,7 @@ impl Model {
             visual_line: self.visual_line,
             modified: self.modified,
             missing: self.missing,
-            search_query: std::mem::take(&mut self.search_query),
+            search_query: std::mem::take(&mut self.search.query),
             syntax: self.syntax.borrow().active_cache(),
         };
         self.buffers.read_only_title = Some(title.to_owned());
@@ -1289,7 +1294,7 @@ impl Model {
         self.view.scroll = saved.scroll;
         self.view.hscroll = saved.hscroll;
         self.modified = saved.modified;
-        self.search_query = saved.search_query;
+        self.search.query = saved.search_query;
         self.syntax
             .borrow_mut()
             .switch_path_with(self.path.as_deref(), false, Some(syntax));

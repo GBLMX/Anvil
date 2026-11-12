@@ -561,6 +561,7 @@ impl Model {
             let mut base = render_start;
             let search_ranges: Vec<(usize, usize)> = self
                 .search
+                .state
                 .matches
                 .iter()
                 .filter(|range| range.start < render_end && range.end > render_start)

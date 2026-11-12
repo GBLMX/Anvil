@@ -277,12 +277,14 @@ Phase 1 started on 2026-11-12:
   state, and soft-wrap projection state.
 - `Model.plugins` owns discovered plugin entries, the host supervisor, manager
   selection, plugin-store size, installer transport, and package install state.
+- `Model.search` owns the current substring query and its match, option, and
+  origin-restore state.
 - `Model.language` owns `DapState`, `DiagnosticsState`, `LspTransportState`,
   and `LspRequestsState`. Transport keeps clients, workers, config, retries,
   and retry deadlines; requests keep pending maps, document versions, request
   ids, and format-on-save coordination.
 - Existing behavior is unchanged; tests access the composed state explicitly.
-- `Model` now has 57 top-level fields. Remaining input and session page state
+- `Model` now has 56 top-level fields. Remaining input and session page state
   moves in later behavior-preserving slices.
 
 

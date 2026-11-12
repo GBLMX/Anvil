@@ -7,8 +7,9 @@ use crate::search::{MAX_SEARCH_MATCHES, find_matches_limited};
 impl Model {
     pub(crate) fn begin_search(&mut self) {
         self.search
+            .state
             .begin(self.cursor, self.editor.selection_bytes());
-        self.search_query.clear();
+        self.search.query.clear();
         self.ui.input_mode = InputMode::Search {
             query: InputBuffer::default(),
         };
@@ -16,50 +17,50 @@ impl Model {
     }
 
     pub(crate) fn schedule_search(&mut self) {
-        self.search.schedule();
+        self.search.state.schedule();
         self.dirty = true;
     }
 
     pub(crate) fn tick_search(&mut self) {
-        if !self.search.take_due() {
+        if !self.search.state.take_due() {
             return;
         }
         let query = match &self.ui.input_mode {
             InputMode::Search { query } => query.text().to_owned(),
-            _ => self.search_query.clone(),
+            _ => self.search.query.clone(),
         };
         self.apply_search_query(&query, false);
     }
 
     pub(crate) fn commit_search(&mut self, query: String) {
         if self.apply_search_query(&query, true) {
-            self.search_query = query;
+            self.search.query = query;
             self.ui.input_mode = InputMode::Normal;
         }
         self.dirty = true;
     }
 
     pub(crate) fn cancel_search(&mut self) {
-        if let Some((cursor, selections)) = self.search.restore_origin() {
+        if let Some((cursor, selections)) = self.search.state.restore_origin() {
             self.cursor = cursor;
             self.editor.set_selections_bytes(selections);
         }
-        self.search_query.clear();
+        self.search.query.clear();
         self.ui.input_mode = InputMode::Normal;
         self.dirty = true;
     }
 
     fn apply_search_query(&mut self, query: &str, committed: bool) -> bool {
-        self.search.due = None;
+        self.search.state.due = None;
         if query.is_empty() {
-            self.search.matches.clear();
-            self.search.current = 0;
-            self.search.error = None;
-            self.search.truncated = false;
+            self.search.state.matches.clear();
+            self.search.state.current = 0;
+            self.search.state.error = None;
+            self.search.state.truncated = false;
             return true;
         }
         let text = self.editor.text().slice(0..self.editor.text().len_bytes());
-        match find_matches_limited(&text, query, self.search.options, MAX_SEARCH_MATCHES) {
+        match find_matches_limited(&text, query, self.search.state.options, MAX_SEARCH_MATCHES) {
             Ok((matches, truncated)) => {
                 let cursor = self.cursor;
                 let current = matches
@@ -75,10 +76,10 @@ impl Model {
                     .map(|range| (range.start, range.end))
                     .collect();
                 self.editor.set_selections_bytes(selections);
-                self.search.matches = matches;
-                self.search.current = current;
-                self.search.error = None;
-                self.search.truncated = truncated;
+                self.search.state.matches = matches;
+                self.search.state.current = current;
+                self.search.state.error = None;
+                self.search.state.truncated = truncated;
                 if committed {
                     self.status = self.search_status(query);
                 }
@@ -86,7 +87,7 @@ impl Model {
                 true
             }
             Err(error) => {
-                self.search.error = Some(error.clone());
+                self.search.state.error = Some(error.clone());
                 self.status = format!("E: {error}");
                 self.dirty = true;
                 false
@@ -95,40 +96,40 @@ impl Model {
     }
 
     pub(crate) fn search_next(&mut self, forward: bool) {
-        if self.search_query.is_empty() {
+        if self.search.query.is_empty() {
             self.status = "E: no previous search".to_owned();
             self.dirty = true;
             return;
         }
-        if !self.apply_search_query(&self.search_query.clone(), false) {
+        if !self.apply_search_query(&self.search.query.clone(), false) {
             return;
         }
-        if self.search.matches.is_empty() {
+        if self.search.state.matches.is_empty() {
             self.status = "E: pattern not found".to_owned();
             self.dirty = true;
             return;
         }
         self.record_jump();
-        let len = self.search.matches.len();
-        self.search.current = if forward {
-            (self.search.current + 1) % len
+        let len = self.search.state.matches.len();
+        self.search.state.current = if forward {
+            (self.search.state.current + 1) % len
         } else {
-            (self.search.current + len - 1) % len
+            (self.search.state.current + len - 1) % len
         };
-        self.cursor = self.search.matches[self.search.current].start;
-        self.status = self.search_status(&self.search_query);
+        self.cursor = self.search.state.matches[self.search.state.current].start;
+        self.status = self.search_status(&self.search.query);
         self.dirty = true;
     }
 
     pub(crate) fn search_status(&self, query: &str) -> String {
         let mut flags = Vec::new();
-        if self.search.options.regex {
+        if self.search.state.options.regex {
             flags.push("rx");
         }
-        if self.search.options.whole_word {
+        if self.search.state.options.whole_word {
             flags.push("ww");
         }
-        if self.search.options.case_sensitive {
+        if self.search.state.options.case_sensitive {
             flags.push("cs");
         }
         let flags = if flags.is_empty() {
@@ -136,17 +137,17 @@ impl Model {
         } else {
             format!(" [{}]", flags.join(" "))
         };
-        if let Some(error) = &self.search.error {
+        if let Some(error) = &self.search.state.error {
             return format!("/{query}{flags} error: {error}");
         }
-        let suffix = if self.search.truncated { "+" } else { "" };
-        if self.search.matches.is_empty() {
+        let suffix = if self.search.state.truncated { "+" } else { "" };
+        if self.search.state.matches.is_empty() {
             format!("/{query}{flags} [0/0]")
         } else {
             format!(
                 "/{query}{flags} [{}/{}{suffix}]",
-                self.search.current + 1,
-                self.search.matches.len()
+                self.search.state.current + 1,
+                self.search.state.matches.len()
             )
         }
     }
@@ -161,7 +162,7 @@ impl Model {
             self.dirty = true;
             return false;
         }
-        let Some(range) = self.search.selected().cloned() else {
+        let Some(range) = self.search.state.selected().cloned() else {
             self.status = "E: pattern not found".to_owned();
             self.dirty = true;
             return false;
@@ -191,14 +192,15 @@ impl Model {
             self.dirty = true;
             return false;
         }
-        if self.search.matches.is_empty() {
+        if self.search.state.matches.is_empty() {
             self.status = "E: pattern not found".to_owned();
             self.dirty = true;
             return false;
         }
-        let count = self.search.matches.len();
+        let count = self.search.state.matches.len();
         let edits = self
             .search
+            .state
             .matches
             .iter()
             .cloned()
@@ -219,22 +221,22 @@ impl Model {
     fn replace_query(&self) -> String {
         match &self.ui.input_mode {
             InputMode::Search { query } => query.text().to_owned(),
-            _ => self.search_query.clone(),
+            _ => self.search.query.clone(),
         }
     }
 
     pub(crate) fn toggle_search_regex(&mut self) {
-        self.search.options.regex = !self.search.options.regex;
+        self.search.state.options.regex = !self.search.state.options.regex;
         self.schedule_search();
     }
 
     pub(crate) fn toggle_search_whole_word(&mut self) {
-        self.search.options.whole_word = !self.search.options.whole_word;
+        self.search.state.options.whole_word = !self.search.state.options.whole_word;
         self.schedule_search();
     }
 
     pub(crate) fn toggle_search_case(&mut self) {
-        self.search.options.case_sensitive = !self.search.options.case_sensitive;
+        self.search.state.options.case_sensitive = !self.search.state.options.case_sensitive;
         self.schedule_search();
     }
 
