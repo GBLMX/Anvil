@@ -234,6 +234,41 @@ impl Model {
             ("lsp-stop", "") => self.queue_effect(Effect::LspStop),
             ("format", "") => self.queue_effect(Effect::LspFormat),
             ("breakpoint", "") => self.toggle_breakpoint(),
+            ("dap-attach", argument) => {
+                let parts = argument.split_whitespace().collect::<Vec<_>>();
+                let Some(program) = parts.first() else {
+                    self.status = "E: usage: :dap-attach <adapter> [args]".to_owned();
+                    self.dirty = true;
+                    return;
+                };
+                let args = parts[1..]
+                    .iter()
+                    .map(|arg| (*arg).to_owned())
+                    .collect::<Vec<_>>();
+                match crate::dap::DapClient::spawn(
+                    std::path::Path::new(program),
+                    &args,
+                    &self.workspace,
+                ) {
+                    Ok(mut client) => match client
+                        .initialize()
+                        .and_then(|request| client.wait_response(request))
+                    {
+                        Ok(_) => {
+                            self.attach_dap_client(client);
+                            self.status = format!("debug adapter attached: {program}");
+                        }
+                        Err(error) => self.status = format!("E: dap initialize: {error}"),
+                    },
+                    Err(error) => self.status = format!("E: dap attach: {error}"),
+                }
+                self.dirty = true;
+            }
+            ("dap-detach", "") => {
+                self.dap_client = None;
+                self.status = "debug adapter detached".to_owned();
+                self.dirty = true;
+            }
             ("symbols", "") => self.queue_effect(Effect::LspDocumentSymbols),
             ("plugin-start", "") => self.queue_effect(Effect::PluginStart),
             ("plugin-list", "") => self.queue_effect(Effect::PluginList),

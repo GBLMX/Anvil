@@ -4,7 +4,6 @@ use super::*;
 use crate::dap::DapClient;
 
 impl Model {
-    #[allow(dead_code)]
     pub(crate) fn attach_dap_client(&mut self, client: DapClient) {
         self.dap_client = Some(client);
         self.sync_all_breakpoints();

@@ -540,3 +540,46 @@ fn search_renders_physical_cursor_at_the_query_position() {
     let cursor = terminal.backend().cursor_position();
     assert_eq!((cursor.x, cursor.y), (8, 19));
 }
+
+#[test]
+fn tree_rolls_up_child_git_and_diagnostics_to_directory() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let directory = dir.path().join("src");
+    let file = directory.join("main.rs");
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.welcome = false;
+    model.tree_visible = true;
+    model.tree = vec![
+        TreeEntry {
+            path: directory.clone(),
+            depth: 0,
+            is_dir: true,
+            ino: 0,
+            expanded: true,
+        },
+        TreeEntry {
+            path: file.clone(),
+            depth: 1,
+            is_dir: false,
+            ino: 0,
+            expanded: false,
+        },
+    ];
+    model.tree_selected = Some(0);
+    model.git_status.insert(file.clone(), 'M');
+    model
+        .diagnostics
+        .insert(file, vec![diagnostic(0, 0, "broken")]);
+
+    let backend = TestBackend::new(80, 12);
+    let mut terminal = Terminal::new(backend).expect("terminal");
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+    let rendered = terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect::<String>();
+    assert!(rendered.contains("src M !"), "{rendered}");
+}

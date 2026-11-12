@@ -216,7 +216,12 @@ pub fn view(model: &Model, frame: &mut Frame) {
                     style.fg(theme::warning()).add_modifier(Modifier::BOLD),
                 ));
             }
-            if let Some(marker) = model.git_status.get(&entry.path) {
+            let git_marker = if entry.is_dir {
+                tree_rollup_git(model, &model.tree, index)
+            } else {
+                model.git_status.get(&entry.path).copied()
+            };
+            if let Some(marker) = git_marker {
                 let color = match marker {
                     'A' => theme::success(),
                     'D' => theme::error(),
@@ -229,16 +234,20 @@ pub fn view(model: &Model, frame: &mut Frame) {
                     style.fg(color).add_modifier(Modifier::BOLD),
                 ));
             }
-            if let Some(diagnostics) = model.diagnostics.get(&entry.path)
-                && !diagnostics.is_empty()
-            {
-                let severity = diagnostics
-                    .iter()
-                    .filter_map(|diagnostic| diagnostic.severity)
-                    .min();
+            let diagnostic_severity = if entry.is_dir {
+                tree_rollup_diagnostic(model, &model.tree, index)
+            } else {
+                model.diagnostics.get(&entry.path).and_then(|diagnostics| {
+                    diagnostics
+                        .iter()
+                        .filter_map(|diagnostic| diagnostic.severity)
+                        .min()
+                })
+            };
+            if let Some(severity) = diagnostic_severity {
                 let color = match severity {
-                    Some(1) => theme::error(),
-                    Some(2) => theme::warning(),
+                    1 => theme::error(),
+                    2 => theme::warning(),
                     _ => theme::accent(),
                 };
                 spans.push(Span::styled(
@@ -1168,6 +1177,51 @@ fn render_welcome(frame: &mut Frame, area: Rect, model: &Model) {
             .block(panel_block(" start ")),
         panel,
     );
+}
+
+fn tree_rollup_git(model: &Model, entries: &[TreeEntry], index: usize) -> Option<char> {
+    let depth = entries[index].depth;
+    let mut marker = None;
+    for child in entries.iter().skip(index + 1) {
+        if child.depth <= depth {
+            break;
+        }
+        if let Some(next) = model.git_status.get(&child.path)
+            && git_priority(*next) > marker.map_or(0, git_priority)
+        {
+            marker = Some(*next);
+        }
+    }
+    marker
+}
+
+fn git_priority(marker: char) -> u8 {
+    match marker {
+        'D' => 4,
+        'R' | 'C' => 3,
+        'A' => 2,
+        'M' => 1,
+        _ => 0,
+    }
+}
+
+fn tree_rollup_diagnostic(model: &Model, entries: &[TreeEntry], index: usize) -> Option<u32> {
+    let depth = entries[index].depth;
+    let mut severity = None;
+    for child in entries.iter().skip(index + 1) {
+        if child.depth <= depth {
+            break;
+        }
+        if let Some(diagnostics) = model.diagnostics.get(&child.path)
+            && let Some(next) = diagnostics
+                .iter()
+                .filter_map(|diagnostic| diagnostic.severity)
+                .min()
+        {
+            severity = Some(severity.map_or(next, |current: u32| current.min(next)));
+        }
+    }
+    severity
 }
 
 fn render_split_pane(frame: &mut Frame, area: Rect, buffer: &Buffer, is_active: bool) {

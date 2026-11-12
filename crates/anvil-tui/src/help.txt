@@ -100,6 +100,8 @@ Normal mode
   :lsp-stop           stop the active language server
   :format              format the current document
   :breakpoint          toggle a breakpoint on the current line
+  :dap-attach <cmd>    attach a DAP adapter and sync breakpoints
+  :dap-detach          detach the DAP adapter
   :symbols             document symbols
   :problems           toggle the problems panel
   :task <command>      run a bounded background shell task in the workspace
