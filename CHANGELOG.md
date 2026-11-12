@@ -271,6 +271,7 @@ post-`0.5.0` feature line.
   change.
 - Start-dashboard rendering moved from `render/editor.rs` into
   `render/welcome.rs`; `truncate_width` is shared from the render module.
+- Split-pane and pipe-location rendering moved into `render/panes.rs`.
 
 ### Fixed
 - The file tree now opens the command line on `:`, so commands such as

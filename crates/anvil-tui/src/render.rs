@@ -15,8 +15,10 @@ use ratatui::{
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 mod editor;
+mod panes;
 mod welcome;
 pub use editor::view;
+use panes::{render_pipe_locations, render_split_pane};
 use welcome::render_welcome;
 pub(crate) use welcome::welcome_recent_at;
 
