@@ -295,6 +295,13 @@ impl SelectionItem for CommandPaletteItem {
     }
 }
 
+#[derive(Default)]
+struct OverlayState {
+    command_palette: Option<CommandPaletteState>,
+    settings_overlay: Option<SettingsOverlayState>,
+    theme_browser: Option<theme_browser::ThemeBrowser>,
+}
+
 #[derive(Debug, Clone)]
 struct CompletionItem {
     label: String,
@@ -712,7 +719,7 @@ pub struct Model {
     fuzzy_generation: u64,
     preview: PreviewState,
     preview_generation: u64,
-    command_palette: Option<CommandPaletteState>,
+    overlays: OverlayState,
     command_completion: Option<CommandCompletion>,
     persist_theme: bool,
     settings: Settings,
@@ -728,8 +735,6 @@ pub struct Model {
     wrap_width: usize,
     /// Wrapped segment offset within the first visible source line.
     scroll_subrow: usize,
-    settings_overlay: Option<SettingsOverlayState>,
-    theme_browser: Option<theme_browser::ThemeBrowser>,
     command_palette_recents: Vec<String>,
     /// Gateway client used for file I/O when present.
     gateway: Option<GatewayClient>,
@@ -965,7 +970,7 @@ impl Model {
             fuzzy_generation: 0,
             preview: PreviewState::default(),
             preview_generation: 0,
-            command_palette: None,
+            overlays: OverlayState::default(),
             command_completion: None,
             persist_theme: !cfg!(test),
             settings: Settings::default(),
@@ -975,8 +980,6 @@ impl Model {
             icons_checked_at: None,
             wrap_width: 80,
             scroll_subrow: 0,
-            settings_overlay: None,
-            theme_browser: None,
             command_palette_recents: Vec::new(),
             gateway: None,
             gateway_session: None,
@@ -1707,13 +1710,13 @@ impl Model {
         {
             contexts.push(context);
         }
-        let overlay = self.command_palette.is_some()
+        let overlay = self.overlays.command_palette.is_some()
             || self.fuzzy.is_some()
             || self.workspace_symbols.is_some()
             || self.document_symbols.is_some()
             || self.references.is_some()
             || self.call_hierarchy.is_some()
-            || self.settings_overlay.is_some()
+            || self.overlays.settings_overlay.is_some()
             || self.code_actions.is_some()
             || self.completion.is_some()
             || self.hover.is_some()

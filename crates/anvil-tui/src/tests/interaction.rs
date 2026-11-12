@@ -277,7 +277,7 @@ fn command_palette_filters_and_executes_registry_commands() {
     for key_code in [KeyCode::Char(' '), KeyCode::Char('p')] {
         handle_event(&mut model, key(key_code));
     }
-    assert!(model.command_palette.is_some());
+    assert!(model.overlays.command_palette.is_some());
     for character in "focus_editor".chars() {
         handle_event(&mut model, key(KeyCode::Char(character)));
     }
@@ -294,7 +294,7 @@ fn command_palette_filters_and_executes_registry_commands() {
     assert!(rendered.contains("View Focus Editor"), "{rendered}");
     handle_event(&mut model, key(KeyCode::Enter));
     assert!(!model.ui.focus.tree);
-    assert!(model.command_palette.is_none());
+    assert!(model.overlays.command_palette.is_none());
     model.open_command_palette();
     assert_eq!(
         model.selected_command().map(|(id, _)| id).as_deref(),
@@ -330,6 +330,7 @@ fn command_palette_includes_plugin_commands() {
         });
     model.open_command_palette();
     let item = model
+        .overlays
         .command_palette
         .as_ref()
         .expect("palette")
@@ -747,6 +748,7 @@ fn command_palette_previews_and_applies_themes() {
     let mut model = Model::new(EditorState::from_text("alpha"), None);
     model.open_command_palette();
     *model
+        .overlays
         .command_palette
         .as_mut()
         .expect("palette")
@@ -758,6 +760,7 @@ fn command_palette_previews_and_applies_themes() {
     assert_eq!(theme::name(), "anvil-dark");
     model.open_command_palette();
     *model
+        .overlays
         .command_palette
         .as_mut()
         .expect("palette")
@@ -766,7 +769,7 @@ fn command_palette_previews_and_applies_themes() {
     model.refresh_command_palette();
     handle_event(&mut model, key(KeyCode::Enter));
     assert_eq!(theme::name(), "solarized-light");
-    assert!(model.command_palette.is_none());
+    assert!(model.overlays.command_palette.is_none());
     model.execute_command("theme anvil-dark");
 }
 

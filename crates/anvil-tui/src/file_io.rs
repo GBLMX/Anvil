@@ -486,8 +486,8 @@ impl Model {
             || self.stdin_buffer
             || self.missing
             || self.help_back.is_some()
-            || self.settings_overlay.is_some()
-            || self.command_palette.is_some()
+            || self.overlays.settings_overlay.is_some()
+            || self.overlays.command_palette.is_some()
             || self.fuzzy.is_some()
             || self.modal_layer.is_some()
             || matches!(

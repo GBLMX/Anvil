@@ -474,7 +474,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
         };
         render_split_pane(frame, split_area, &split.buffer, model.ui.focus.split);
     }
-    if let Some(palette) = &model.command_palette {
+    if let Some(palette) = &model.overlays.command_palette {
         let popup = command_palette_rect(area);
         frame.render_widget(Clear, popup);
         let visible = popup.height.saturating_sub(4) as usize;
@@ -873,7 +873,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
             popup,
         );
     }
-    if let Some(overlay) = &model.settings_overlay {
+    if let Some(overlay) = &model.overlays.settings_overlay {
         let popup = crate::settings_ui::rect(area);
         frame.render_widget(Clear, popup);
         frame.render_widget(crate::render::focused_panel_block("Settings"), popup);

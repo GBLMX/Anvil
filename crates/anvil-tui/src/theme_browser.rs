@@ -11,7 +11,7 @@ pub(crate) struct ThemeBrowser {
 
 impl Model {
     pub(crate) fn open_theme_browser(&mut self) {
-        if self.theme_browser.is_some() {
+        if self.overlays.theme_browser.is_some() {
             return;
         }
         let names = theme::names();
@@ -19,7 +19,7 @@ impl Model {
             .iter()
             .position(|name| *name == theme::name())
             .unwrap_or(0);
-        self.theme_browser = Some(ThemeBrowser {
+        self.overlays.theme_browser = Some(ThemeBrowser {
             original: theme::choice(),
             selected,
         });
@@ -28,7 +28,7 @@ impl Model {
     }
 
     pub(crate) fn move_theme_browser(&mut self, delta: isize) {
-        let Some(browser) = self.theme_browser.as_mut() else {
+        let Some(browser) = self.overlays.theme_browser.as_mut() else {
             return;
         };
         let names = theme::names();
@@ -46,7 +46,7 @@ impl Model {
     }
 
     pub(crate) fn apply_theme_browser(&mut self) {
-        let Some(browser) = self.theme_browser.take() else {
+        let Some(browser) = self.overlays.theme_browser.take() else {
             return;
         };
         let names = theme::names();
@@ -64,7 +64,7 @@ impl Model {
     }
 
     pub(crate) fn cancel_theme_browser(&mut self) {
-        let Some(browser) = self.theme_browser.take() else {
+        let Some(browser) = self.overlays.theme_browser.take() else {
             return;
         };
         let _ = theme::apply_choice(browser.original, false);
@@ -90,7 +90,7 @@ pub(crate) fn rect(area: ratatui::layout::Rect) -> ratatui::layout::Rect {
 }
 
 pub(crate) fn render(model: &Model, frame: &mut ratatui::Frame, area: ratatui::layout::Rect) {
-    let Some(browser) = &model.theme_browser else {
+    let Some(browser) = &model.overlays.theme_browser else {
         return;
     };
     let names = theme::names();
@@ -169,7 +169,7 @@ mod tests {
         theme::set_startup_theme("anvil-dark").expect("reset");
         let mut model = Model::new(EditorState::from_text("x"), None);
         model.execute_command("themes");
-        assert!(model.theme_browser.is_some());
+        assert!(model.overlays.theme_browser.is_some());
         model.move_theme_browser(1);
         assert_ne!(theme::name(), "anvil-dark");
         model.cancel_theme_browser();

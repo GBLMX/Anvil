@@ -444,7 +444,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
         }
         return;
     }
-    if model.command_palette.is_some() {
+    if model.overlays.command_palette.is_some() {
         match key.code {
             KeyCode::Esc => model.close_command_palette(),
             KeyCode::Up => model.move_command_palette(-1),
@@ -468,13 +468,13 @@ fn handle_key(model: &mut Model, key: KeyPress) {
                 }
             }
             KeyCode::Backspace => {
-                if let Some(palette) = model.command_palette.as_mut() {
+                if let Some(palette) = model.overlays.command_palette.as_mut() {
                     palette.table.query_mut().pop();
                 }
                 model.refresh_command_palette();
             }
             KeyCode::Char(character) if text_input => {
-                if let Some(palette) = model.command_palette.as_mut() {
+                if let Some(palette) = model.overlays.command_palette.as_mut() {
                     palette.table.query_mut().push(character);
                 }
                 model.refresh_command_palette();
@@ -584,7 +584,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             return;
         }
     }
-    if model.settings_overlay.is_some() {
+    if model.overlays.settings_overlay.is_some() {
         match key.code {
             KeyCode::Esc => model.cancel_settings(),
             KeyCode::Up | KeyCode::Char('k') => model.move_settings(-1),
@@ -798,7 +798,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             _ => model.close_diagnostic_peek(),
         }
     }
-    if model.theme_browser.is_some() {
+    if model.overlays.theme_browser.is_some() {
         match key.code {
             KeyCode::Esc => {
                 model.cancel_theme_browser();

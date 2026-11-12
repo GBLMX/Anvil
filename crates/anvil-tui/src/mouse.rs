@@ -51,7 +51,7 @@ pub(crate) fn handle_mouse(model: &mut Model, mouse: MouseEvent, width: u16, hei
     };
     if overlay_open(model) {
         if mouse.kind == MouseEventKind::Down(MouseButton::Left) {
-            if model.settings_overlay.is_some()
+            if model.overlays.settings_overlay.is_some()
                 && let Some(row) = crate::settings_ui::hit(area, mouse.column, mouse.row)
             {
                 model.select_settings_row(row);
@@ -361,14 +361,14 @@ fn editor_position_at(
 fn overlay_open(model: &Model) -> bool {
     model.ui.diagnostic_peek.is_some()
         || model.ui.problems.visible
-        || model.command_palette.is_some()
+        || model.overlays.command_palette.is_some()
         || model.fuzzy.is_some()
         || model.code_actions.is_some()
         || model.document_symbols.is_some()
         || model.references.is_some()
         || model.call_hierarchy.is_some()
-        || model.settings_overlay.is_some()
-        || model.theme_browser.is_some()
+        || model.overlays.settings_overlay.is_some()
+        || model.overlays.theme_browser.is_some()
         || model.completion.is_some()
 }
 
@@ -380,7 +380,7 @@ fn close_outside_overlay(model: &mut Model) {
         model.ui.problems.visible = false;
         model.dirty = true;
     }
-    if model.command_palette.is_some() {
+    if model.overlays.command_palette.is_some() {
         model.close_command_palette();
     }
     if model.fuzzy.is_some() {
@@ -400,10 +400,10 @@ fn close_outside_overlay(model: &mut Model) {
     if model.call_hierarchy.is_some() {
         model.cancel_call_hierarchy();
     }
-    if model.settings_overlay.is_some() {
+    if model.overlays.settings_overlay.is_some() {
         model.cancel_settings();
     }
-    if model.theme_browser.is_some() {
+    if model.overlays.theme_browser.is_some() {
         model.cancel_theme_browser();
     }
     if model.completion.is_some() {
@@ -451,7 +451,7 @@ fn inside_overlay(model: &Model, col: u16, row: u16, area: Rect) -> bool {
         };
         return crate::render::rect_contains(popup, col, row);
     }
-    if model.command_palette.is_some() {
+    if model.overlays.command_palette.is_some() {
         return crate::render::rect_contains(crate::render::command_palette_rect(area), col, row);
     }
     if model.fuzzy.is_some() {
@@ -473,10 +473,10 @@ fn inside_overlay(model: &Model, col: u16, row: u16, area: Rect) -> bool {
         let popup = crate::render::document_symbols_rect(area, calls.items.len());
         return crate::render::rect_contains(popup, col, row);
     }
-    if model.settings_overlay.is_some() {
+    if model.overlays.settings_overlay.is_some() {
         return crate::render::rect_contains(crate::settings_ui::rect(area), col, row);
     }
-    if model.theme_browser.is_some() {
+    if model.overlays.theme_browser.is_some() {
         return crate::render::rect_contains(crate::theme_browser::rect(area), col, row);
     }
     if let Some(completion) = &model.completion {

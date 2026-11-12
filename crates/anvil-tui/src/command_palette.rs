@@ -89,7 +89,7 @@ impl Model {
                 });
             }
         }
-        self.command_palette = Some(CommandPaletteState {
+        self.overlays.command_palette = Some(CommandPaletteState {
             table: SelectionTable::new(items),
             theme_picker: theme_picker::ThemePicker::new(),
         });
@@ -100,14 +100,14 @@ impl Model {
     }
 
     pub(crate) fn close_command_palette(&mut self) {
-        if let Some(palette) = self.command_palette.take() {
+        if let Some(palette) = self.overlays.command_palette.take() {
             palette.theme_picker.cancel();
         }
         self.dirty = true;
     }
 
     pub(crate) fn commit_theme(&mut self, name: &str) {
-        if let Some(palette) = self.command_palette.take() {
+        if let Some(palette) = self.overlays.command_palette.take() {
             self.status = match palette.theme_picker.commit(name) {
                 Ok(()) => {
                     let status = format!("theme: {}", theme::name());
@@ -121,7 +121,7 @@ impl Model {
 
     pub(crate) fn refresh_command_palette(&mut self) {
         let recents = self.command_palette_recents.clone();
-        let Some(palette) = self.command_palette.as_mut() else {
+        let Some(palette) = self.overlays.command_palette.as_mut() else {
             return;
         };
         let empty_query = palette.table.query().is_empty();
@@ -139,7 +139,7 @@ impl Model {
     }
 
     pub(crate) fn move_command_palette(&mut self, delta: isize) {
-        let Some(palette) = self.command_palette.as_mut() else {
+        let Some(palette) = self.overlays.command_palette.as_mut() else {
             return;
         };
         palette.table.move_by(delta);
@@ -148,7 +148,7 @@ impl Model {
     }
 
     pub(crate) fn selected_command(&self) -> Option<(String, Option<String>)> {
-        let palette = self.command_palette.as_ref()?;
+        let palette = self.overlays.command_palette.as_ref()?;
         palette
             .table
             .selected()
@@ -157,7 +157,8 @@ impl Model {
     }
 
     pub(crate) fn selected_theme(&self) -> Option<&'static str> {
-        self.command_palette
+        self.overlays
+            .command_palette
             .as_ref()?
             .table
             .selected()
@@ -166,7 +167,7 @@ impl Model {
 
     fn preview_selected_theme(&mut self) {
         let selected = self.selected_theme();
-        if let Some(palette) = self.command_palette.as_ref() {
+        if let Some(palette) = self.overlays.command_palette.as_ref() {
             palette.theme_picker.preview(selected);
         }
         self.dirty = true;

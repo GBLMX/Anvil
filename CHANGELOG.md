@@ -8,6 +8,8 @@ post-`0.5.0` feature line.
 
 ## [Unreleased]
 ### Added
+- Started the ADR-0024 state refactor: command palette, settings, and theme
+  browser state now live under `Model.overlays`.
 - Settings is now a full page with top categories, a section sidebar,
   highlighted values, and a description footer.
 - The command palette renders title/detail columns, a result count, and a key

@@ -138,14 +138,14 @@ pub(crate) fn hit(area: ratatui::layout::Rect, col: u16, row: u16) -> Option<usi
 
 impl Model {
     pub(crate) fn select_settings_row(&mut self, selected: usize) {
-        if let Some(overlay) = self.settings_overlay.as_mut() {
+        if let Some(overlay) = self.overlays.settings_overlay.as_mut() {
             overlay.selected = selected.min(SETTINGS_ROWS - 1);
             self.dirty = true;
         }
     }
 
     pub(crate) fn cycle_settings_tab(&mut self, backwards: bool) {
-        let Some(overlay) = self.settings_overlay.as_ref() else {
+        let Some(overlay) = self.overlays.settings_overlay.as_ref() else {
             return;
         };
         let tabs = [0usize, 4, 6];
@@ -164,10 +164,10 @@ impl Model {
     }
 
     pub(crate) fn open_settings(&mut self) {
-        if self.settings_overlay.is_some() {
+        if self.overlays.settings_overlay.is_some() {
             return;
         }
-        self.settings_overlay = Some(SettingsOverlayState {
+        self.overlays.settings_overlay = Some(SettingsOverlayState {
             selected: 0,
             original: self.settings,
             draft: self.settings,
@@ -177,7 +177,7 @@ impl Model {
     }
 
     pub(crate) fn cancel_settings(&mut self) {
-        if let Some(overlay) = self.settings_overlay.take() {
+        if let Some(overlay) = self.overlays.settings_overlay.take() {
             self.apply_settings(overlay.original);
             self.status = "settings cancelled".to_owned();
             self.dirty = true;
@@ -185,7 +185,7 @@ impl Model {
     }
 
     pub(crate) fn move_settings(&mut self, delta: isize) {
-        if let Some(overlay) = self.settings_overlay.as_mut() {
+        if let Some(overlay) = self.overlays.settings_overlay.as_mut() {
             overlay.selected = overlay
                 .selected
                 .saturating_add_signed(delta)
@@ -195,7 +195,7 @@ impl Model {
     }
 
     pub(crate) fn adjust_settings(&mut self, delta: isize) {
-        let Some(mut overlay) = self.settings_overlay.take() else {
+        let Some(mut overlay) = self.overlays.settings_overlay.take() else {
             return;
         };
         let mut draft = overlay.draft;
@@ -217,11 +217,11 @@ impl Model {
         }
         overlay.draft = draft;
         self.apply_settings(draft);
-        self.settings_overlay = Some(overlay);
+        self.overlays.settings_overlay = Some(overlay);
     }
 
     pub(crate) fn reset_settings_row(&mut self) {
-        let Some(mut overlay) = self.settings_overlay.take() else {
+        let Some(mut overlay) = self.overlays.settings_overlay.take() else {
             return;
         };
         let defaults = Settings::default();
@@ -236,22 +236,22 @@ impl Model {
             _ => overlay.draft.ui.high_contrast = defaults.ui.high_contrast,
         }
         self.apply_settings(overlay.draft);
-        self.settings_overlay = Some(overlay);
+        self.overlays.settings_overlay = Some(overlay);
     }
 
     pub(crate) fn save_settings(&mut self) {
-        let Some(mut overlay) = self.settings_overlay.take() else {
+        let Some(mut overlay) = self.overlays.settings_overlay.take() else {
             return;
         };
         match settings::save(overlay.draft) {
             Ok(path) => {
                 self.apply_settings(overlay.draft);
                 overlay.original = overlay.draft;
-                self.settings_overlay = Some(overlay);
+                self.overlays.settings_overlay = Some(overlay);
                 self.status = format!("settings saved: {}", path.display());
             }
             Err(error) => {
-                self.settings_overlay = Some(overlay);
+                self.overlays.settings_overlay = Some(overlay);
                 self.status = format!("E: settings: {error}");
             }
         }
@@ -296,10 +296,17 @@ mod tests {
     fn overlay_edits_apply_and_cancel_restores() {
         let mut model = Model::new(crate::EditorState::from_text("x"), None);
         model.open_settings();
-        assert!(model.settings_overlay.is_some());
+        assert!(model.overlays.settings_overlay.is_some());
         model.adjust_settings(1);
         assert_eq!(model.settings.editor.scroll_margin, 4);
-        assert!(model.settings_overlay.as_ref().expect("overlay").changed(0));
+        assert!(
+            model
+                .overlays
+                .settings_overlay
+                .as_ref()
+                .expect("overlay")
+                .changed(0)
+        );
         model.move_settings(1);
         model.adjust_settings(1);
         assert!(model.settings.editor.auto_save);
@@ -336,7 +343,7 @@ mod tests {
         model.reset_settings_row();
         assert!(!model.settings.ui.high_contrast);
         model.cancel_settings();
-        assert!(model.settings_overlay.is_none());
+        assert!(model.overlays.settings_overlay.is_none());
         assert_eq!(model.settings, Settings::default());
     }
 }

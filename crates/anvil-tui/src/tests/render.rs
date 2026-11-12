@@ -341,7 +341,7 @@ fn clicking_outside_command_palette_closes_it() {
         modifiers: crossterm::event::KeyModifiers::NONE,
     };
     handle_event(&mut model, Event::Mouse(click));
-    assert!(model.command_palette.is_none());
+    assert!(model.overlays.command_palette.is_none());
 }
 
 #[test]

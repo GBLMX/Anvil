@@ -248,6 +248,16 @@ The refactor is justified because the current `Model` already owns the next
 three feature areas (pages, language services, runtime workers). Waiting until
 a second frontend exists would make the first extraction much more expensive.
 
+## Implementation status
+
+Phase 1 started on 2026-11-12:
+
+- `Model.overlays` now owns `command_palette`, `settings_overlay`, and
+  `theme_browser`.
+- Existing behavior is unchanged; tests access the composed state explicitly.
+- The remaining fuzzy/preview/problems/diagnostics/test/debug page state is
+  still on `Model` and moves in later behavior-preserving slices.
+
 ## Acceptance
 
 - `Model` contains state groups, not feature fields.

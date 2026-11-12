@@ -401,9 +401,9 @@ impl Model {
         // Read-only views still accept Ex commands such as :q and hunk actions.
         // File/save/edit operations guard help_back separately.
         matches!(self.ui.input_mode, InputMode::Normal)
-            && self.command_palette.is_none()
+            && self.overlays.command_palette.is_none()
             && self.fuzzy.is_none()
-            && self.settings_overlay.is_none()
+            && self.overlays.settings_overlay.is_none()
             && self.modal_layer.is_none()
             && self.ui.diagnostic_peek.is_none()
             && !self.ui.problems.visible
