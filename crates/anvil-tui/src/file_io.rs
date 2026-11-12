@@ -463,7 +463,12 @@ impl Model {
             || self.command_palette.is_some()
             || self.fuzzy.is_some()
             || self.modal_layer.is_some()
-            || !matches!(self.ui.input_mode, InputMode::Normal)
+            || matches!(
+                self.ui.input_mode,
+                InputMode::ConfirmClose { .. }
+                    | InputMode::ConfirmReload { .. }
+                    | InputMode::ConfirmDelete { .. }
+            )
         {
             return true;
         }

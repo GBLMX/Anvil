@@ -1280,3 +1280,22 @@ fn focus_lost_auto_saves_the_active_buffer() {
     assert_eq!(fs::read_to_string(&path).expect("content"), "Xa");
     assert!(!model.modified);
 }
+
+#[test]
+fn focus_lost_auto_saves_while_insert_is_active() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("main.rs");
+    fs::write(&path, "a").expect("write");
+    let mut model = Model::open(&path).expect("open");
+    model.settings.editor.auto_save = true;
+
+    handle_event(&mut model, key(KeyCode::Char('i')));
+    handle_event(&mut model, key(KeyCode::Char('X')));
+    assert!(matches!(model.ui.input_mode, InputMode::Insert));
+
+    handle_event(&mut model, Event::FocusLost);
+
+    assert_eq!(fs::read_to_string(&path).expect("content"), "Xa");
+    assert!(!model.modified);
+    assert!(matches!(model.ui.input_mode, InputMode::Insert));
+}

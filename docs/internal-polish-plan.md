@@ -131,7 +131,7 @@ swap and expose `:conflict-recover` / `:conflict-discard`; saving an
 unmodified conflicted buffer is refused until resolved.
 Remaining:
 - auto-save is implemented for buffer switch/close, split focus/close changes,
-  opening another file, terminal focus loss, and `:q`;
+  opening another file, terminal focus loss (including Insert mode), and `:q`;
 - large/binary/read-only safe behavior remains.
 
 Landed: swap files, crash recovery, external-change conflict recovery, and
