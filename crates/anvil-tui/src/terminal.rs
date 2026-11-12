@@ -64,7 +64,7 @@ pub fn run_with_input(
     let (mut model, session) = match GatewaySession::start(&workspace) {
         Ok((session, client, lsp_client)) => {
             let mut model = Model::with_gateway(client, workspace.clone());
-            model.lsp_client = Some(lsp_client);
+            model.language.lsp_client = Some(lsp_client);
             if stdin_text.is_none()
                 && let Some(path) = path
                 && let Err(error) = model.open_path(path)

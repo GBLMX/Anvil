@@ -112,7 +112,7 @@ impl Model {
             format!("diag {}", self.language.diagnostic_count_shown)
         };
         segments.push(diagnostics);
-        if let Some((tool, _)) = &self.lsp_config {
+        if let Some((tool, _)) = &self.language.lsp_config {
             segments.push(format!("lsp {tool}"));
         } else if self
             .path

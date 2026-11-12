@@ -315,7 +315,7 @@ impl Model {
 
     pub(crate) fn notify_lsp_save(&mut self, path: &std::path::Path, text: &str) {
         let sent = if let Some(key) = Self::lsp_key(path)
-            && let Some(worker) = self.lsp_workers.get(&key)
+            && let Some(worker) = self.language.lsp_workers.get(&key)
         {
             worker.save(path, text.to_owned()).is_ok()
         } else {

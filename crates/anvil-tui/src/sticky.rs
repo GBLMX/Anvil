@@ -32,7 +32,7 @@ impl Model {
         {
             return;
         }
-        if self.lsp_config.is_none() {
+        if self.language.lsp_config.is_none() {
             return;
         }
         self.sticky_checked_at = Some(Instant::now());

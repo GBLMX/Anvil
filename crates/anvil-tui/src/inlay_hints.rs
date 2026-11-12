@@ -17,6 +17,7 @@ impl Model {
             return;
         };
         let supported = self
+            .language
             .lsp_config
             .as_ref()
             .and_then(|key| self.inlay_support.get(key))

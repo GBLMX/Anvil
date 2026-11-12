@@ -222,7 +222,7 @@ fn call_hierarchy_round_trip_through_gateway() {
     let (session, gateway, lsp_client) =
         crate::gateway::GatewaySession::start(&workspace).expect("gateway");
     let mut model = Model::with_gateway(gateway, workspace);
-    model.lsp_client = Some(lsp_client);
+    model.language.lsp_client = Some(lsp_client);
     model.open_path(&main).expect("open");
     std::thread::sleep(Duration::from_secs(3));
 
@@ -289,7 +289,7 @@ fn folding_round_trip_through_gateway() {
     let (session, gateway, lsp_client) =
         crate::gateway::GatewaySession::start(&workspace).expect("gateway");
     let mut model = Model::with_gateway(gateway, workspace);
-    model.lsp_client = Some(lsp_client);
+    model.language.lsp_client = Some(lsp_client);
     model.open_path(&main).expect("open");
     std::thread::sleep(Duration::from_secs(3));
     model.request_folding_ranges(None);
@@ -330,7 +330,7 @@ fn completion_resolve_round_trip_through_gateway() {
     let (session, gateway, lsp_client) =
         crate::gateway::GatewaySession::start(&workspace).expect("gateway");
     let mut model = Model::with_gateway(gateway, workspace);
-    model.lsp_client = Some(lsp_client);
+    model.language.lsp_client = Some(lsp_client);
     model.open_path(&main).expect("open");
     std::thread::sleep(Duration::from_secs(3));
     model.cursor = model.offset_at_utf16(2, 7);
@@ -377,7 +377,7 @@ fn semantic_tokens_round_trip_through_gateway() {
     let (session, gateway, lsp_client) =
         crate::gateway::GatewaySession::start(&workspace).expect("gateway");
     let mut model = Model::with_gateway(gateway, workspace);
-    model.lsp_client = Some(lsp_client);
+    model.language.lsp_client = Some(lsp_client);
     model.open_path(&main).expect("open");
     std::thread::sleep(Duration::from_secs(3));
     model.poll_lsp();
@@ -1252,7 +1252,7 @@ fn status_column_uses_grapheme_index() {
 fn disabled_inlay_hints_are_not_requested() {
     let mut model = Model::new(EditorState::from_text("x"), Some(PathBuf::from("main.rs")));
     let key = ("rust-analyzer".to_owned(), "rust".to_owned());
-    model.lsp_config = Some(key.clone());
+    model.language.lsp_config = Some(key.clone());
     model.inlay_support.insert(key, true);
     model.settings.lsp.inlay_hints = false;
     model.poll_inlay_hints(10);

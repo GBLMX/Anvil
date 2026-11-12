@@ -330,6 +330,11 @@ struct LanguageState {
     diagnostic_count_shown: usize,
     diagnostic_count_pending: Option<(usize, Instant)>,
     diagnostic_path: Option<PathBuf>,
+    lsp_client: Option<GatewayClient>,
+    lsp_workers: HashMap<(String, String), LspWorker>,
+    lsp_config: Option<(String, String)>,
+    lsp_retries: HashMap<(String, String), u8>,
+    lsp_retry: Option<((String, String), Instant)>,
 }
 
 #[derive(Default)]
@@ -763,16 +768,6 @@ pub struct Model {
     gateway: Option<GatewayClient>,
     /// Owning child/socket for the current gateway client.
     gateway_session: Option<GatewaySession>,
-    /// Second authenticated gateway connection owned by the LSP worker.
-    lsp_client: Option<GatewayClient>,
-    /// Language-server workers keyed by `(tool, language_id)`.
-    lsp_workers: HashMap<(String, String), LspWorker>,
-    /// Active language-server key used by the UI.
-    lsp_config: Option<(String, String)>,
-    /// Automatic restart counts per language server.
-    lsp_retries: HashMap<(String, String), u8>,
-    /// Pending language-server restart after crash backoff.
-    lsp_retry: Option<((String, String), Instant)>,
     /// Dirty swap files that must survive a source conflict.
     conflict_swaps: HashMap<PathBuf, PathBuf>,
     /// Paths changed by a multi-file replace whose buffer reload failed.
@@ -983,11 +978,6 @@ impl Model {
             scroll_subrow: 0,
             gateway: None,
             gateway_session: None,
-            lsp_client: None,
-            lsp_workers: HashMap::new(),
-            lsp_config: None,
-            lsp_retries: HashMap::new(),
-            lsp_retry: None,
             conflict_swaps: HashMap::new(),
             stale_paths: HashSet::new(),
             git_branch: None,
@@ -1331,9 +1321,10 @@ impl Model {
     }
 
     fn active_lsp_worker(&self) -> Option<&LspWorker> {
-        self.lsp_config
+        self.language
+            .lsp_config
             .as_ref()
-            .and_then(|key| self.lsp_workers.get(key))
+            .and_then(|key| self.language.lsp_workers.get(key))
     }
 
     fn lsp_key(path: &Path) -> Option<(String, String)> {
@@ -1342,18 +1333,18 @@ impl Model {
 
     pub(crate) fn sync_lsp_active(&mut self) {
         let Some(path) = self.path.clone() else {
-            self.lsp_config = None;
+            self.language.lsp_config = None;
             self.clear_lsp_ui();
             return;
         };
         let Some(settings) = lsp_settings(&path) else {
-            self.lsp_config = None;
+            self.language.lsp_config = None;
             self.clear_lsp_ui();
             return;
         };
         self.activate_plugins(ActivationEvent::Language(settings.language_id.clone()));
         let desired = (settings.tool.clone(), settings.language_id.clone());
-        if !self.lsp_workers.contains_key(&desired) {
+        if !self.language.lsp_workers.contains_key(&desired) {
             self.start_lsp();
             if self.active_lsp_worker().is_some() {
                 self.request_folding_ranges(None);
@@ -1361,8 +1352,8 @@ impl Model {
             }
             return;
         }
-        if self.lsp_config.as_ref() != Some(&desired) {
-            self.lsp_config = Some(desired.clone());
+        if self.language.lsp_config.as_ref() != Some(&desired) {
+            self.language.lsp_config = Some(desired.clone());
             self.clear_lsp_ui();
         }
         let text = self.editor.text().slice(0..self.editor.text().len_bytes());
@@ -1386,8 +1377,8 @@ impl Model {
             return;
         };
         let desired = (settings.tool.clone(), settings.language_id.clone());
-        if self.lsp_workers.contains_key(&desired) {
-            self.lsp_config = Some(desired.clone());
+        if self.language.lsp_workers.contains_key(&desired) {
+            self.language.lsp_config = Some(desired.clone());
             self.clear_lsp_ui();
             let text = self.editor.text().slice(0..self.editor.text().len_bytes());
             let _ = self.sync_lsp_document(&path, text);
@@ -1395,7 +1386,7 @@ impl Model {
             self.dirty = true;
             return;
         }
-        let Some(client) = self.lsp_client.take().or_else(|| {
+        let Some(client) = self.language.lsp_client.take().or_else(|| {
             self.gateway_session
                 .as_mut()
                 .and_then(|session| session.connect_lsp().ok())
@@ -1418,10 +1409,10 @@ impl Model {
         };
         match LspWorker::start(client, config, self.workspace.clone(), path.clone(), text) {
             Ok(worker) => {
-                self.lsp_config = Some(desired.clone());
-                self.lsp_workers.insert(desired.clone(), worker);
+                self.language.lsp_config = Some(desired.clone());
+                self.language.lsp_workers.insert(desired.clone(), worker);
                 self.lsp_versions.insert(path.clone(), 1);
-                self.lsp_retries.entry(desired).or_insert(0);
+                self.language.lsp_retries.entry(desired).or_insert(0);
                 self.clear_lsp_ui();
                 self.status = if settings.label == "jdtls" {
                     "jdtls starting (indexing workspace)".to_owned()
@@ -1435,9 +1426,9 @@ impl Model {
     }
 
     fn stop_lsp(&mut self) {
-        if let Some(key) = self.lsp_config.take() {
-            self.lsp_workers.remove(&key);
-            self.lsp_retries.remove(&key);
+        if let Some(key) = self.language.lsp_config.take() {
+            self.language.lsp_workers.remove(&key);
+            self.language.lsp_retries.remove(&key);
             self.inlay_support.remove(&key);
         }
         self.clear_lsp_ui();
@@ -1446,15 +1437,15 @@ impl Model {
     }
 
     fn handle_lsp_event(&mut self, key: &(String, String), event: LspEvent) {
-        let active = self.lsp_config.as_ref() == Some(key);
+        let active = self.language.lsp_config.as_ref() == Some(key);
         match event {
             LspEvent::Capabilities {
                 inlay_hints,
                 semantic_token_types,
                 server_info,
             } => {
-                self.lsp_retries.remove(key);
-                self.lsp_retry = None;
+                self.language.lsp_retries.remove(key);
+                self.language.lsp_retry = None;
                 self.inlay_support.insert(key.clone(), inlay_hints);
                 if active {
                     if let Some(info) = server_info {
@@ -1488,18 +1479,18 @@ impl Model {
                 }
             }
             LspEvent::Crashed(error) => {
-                self.lsp_workers.remove(key);
+                self.language.lsp_workers.remove(key);
                 if active {
-                    self.lsp_config = None;
+                    self.language.lsp_config = None;
                     self.clear_lsp_ui();
                     let retries = {
-                        let retries = self.lsp_retries.entry(key.clone()).or_insert(0);
+                        let retries = self.language.lsp_retries.entry(key.clone()).or_insert(0);
                         *retries += 1;
                         *retries
                     };
                     if retries <= 3 {
                         let delay_ms = 250u64 << (retries.saturating_sub(1).min(3));
-                        self.lsp_retry = Some((
+                        self.language.lsp_retry = Some((
                             key.clone(),
                             Instant::now() + Duration::from_millis(delay_ms),
                         ));
@@ -1519,9 +1510,9 @@ impl Model {
                 self.handle_lsp_response(id, result, error);
             }
             LspEvent::StartupError(error) => {
-                self.lsp_workers.remove(key);
+                self.language.lsp_workers.remove(key);
                 if active {
-                    self.lsp_config = None;
+                    self.language.lsp_config = None;
                     self.clear_lsp_ui();
                     self.status = format!("E: lsp startup failed: {error}");
                     self.notify(
@@ -1551,9 +1542,10 @@ impl Model {
     }
 
     fn poll_lsp(&mut self) {
-        let keys: Vec<(String, String)> = self.lsp_workers.keys().cloned().collect();
+        let keys: Vec<(String, String)> = self.language.lsp_workers.keys().cloned().collect();
         for key in keys {
             let events = self
+                .language
                 .lsp_workers
                 .get(&key)
                 .map(LspWorker::poll)
@@ -1565,14 +1557,14 @@ impl Model {
     }
 
     pub(crate) fn poll_lsp_retry(&mut self) {
-        let Some((key, deadline)) = self.lsp_retry.clone() else {
+        let Some((key, deadline)) = self.language.lsp_retry.clone() else {
             return;
         };
         if Instant::now() < deadline {
             return;
         }
-        self.lsp_retry = None;
-        if !self.lsp_workers.contains_key(&key) {
+        self.language.lsp_retry = None;
+        if !self.language.lsp_workers.contains_key(&key) {
             self.start_lsp();
         }
     }
@@ -1662,10 +1654,10 @@ impl Model {
             return;
         }
         self.file_worker = None;
-        self.lsp_workers.clear();
-        self.lsp_client = None;
-        self.lsp_config = None;
-        self.lsp_retries.clear();
+        self.language.lsp_workers.clear();
+        self.language.lsp_client = None;
+        self.language.lsp_config = None;
+        self.language.lsp_retries.clear();
         self.clear_lsp_ui();
         self.gateway = None;
         self.gateway_session = None;
@@ -1673,7 +1665,7 @@ impl Model {
             Ok((session, client, lsp_client)) => {
                 self.gateway_session = Some(session);
                 self.gateway = Some(client);
-                self.lsp_client = Some(lsp_client);
+                self.language.lsp_client = Some(lsp_client);
                 self.status = "gateway reconnected".to_owned();
             }
             Err(error) => {
