@@ -53,7 +53,7 @@ impl Model {
                 "end": {"line": end, "character": 0}
             }
         });
-        let id = self.next_lsp_request;
+        let id = self.language.next_lsp_request;
         if self.send_lsp_request(LspRequestKind::InlayHint, "textDocument/inlayHint", params) {
             self.inlay_pending = Some((id, path, revision, start, end));
             self.inlay_checked = Some(signature);

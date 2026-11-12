@@ -134,12 +134,12 @@ impl Model {
         result: serde_json::Value,
         error: Option<String>,
     ) {
-        let Some(kind) = self.pending_lsp.remove(&id) else {
+        let Some(kind) = self.language.pending_lsp.remove(&id) else {
             return;
         };
-        let edit_revision = self.pending_edit_revision.remove(&id);
-        let edit_path = self.pending_edit_path.remove(&id);
-        let edit_snapshot = self.pending_edit_snapshot.remove(&id);
+        let edit_revision = self.language.pending_edit_revision.remove(&id);
+        let edit_path = self.language.pending_edit_path.remove(&id);
+        let edit_snapshot = self.language.pending_edit_snapshot.remove(&id);
         if let Some(error) = error {
             if kind == LspRequestKind::CodeLens {
                 self.code_lens = None;

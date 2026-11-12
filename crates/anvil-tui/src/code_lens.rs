@@ -62,7 +62,8 @@ impl Model {
         }
     }
     pub(crate) fn request_code_lens(&mut self) {
-        self.pending_lsp
+        self.language
+            .pending_lsp
             .retain(|_, kind| *kind != LspRequestKind::CodeLens);
         self.code_lens = None;
         let Some(uri) = self.path.as_ref().map(|path| lsp_uri(path)) else {
@@ -159,7 +160,10 @@ mod tests {
     fn parses_bounded_code_lenses_and_ignores_missing_commands() {
         let mut model = Model::new(EditorState::from_text("fn main() {}"), None);
         model.path = Some(PathBuf::from("main.rs"));
-        model.pending_lsp.insert(31, LspRequestKind::CodeLens);
+        model
+            .language
+            .pending_lsp
+            .insert(31, LspRequestKind::CodeLens);
         model.handle_lsp_response(
             31,
             serde_json::json!([
@@ -187,7 +191,10 @@ mod tests {
     fn stale_response_uses_explicit_revision() {
         let mut model = Model::new(EditorState::from_text("fn main() {}"), None);
         model.path = Some(PathBuf::from("main.rs"));
-        model.pending_lsp.insert(32, LspRequestKind::CodeLens);
+        model
+            .language
+            .pending_lsp
+            .insert(32, LspRequestKind::CodeLens);
         model.handle_lsp_response(
             32,
             serde_json::json!([

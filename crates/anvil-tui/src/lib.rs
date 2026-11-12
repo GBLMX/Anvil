@@ -335,6 +335,12 @@ struct LanguageState {
     lsp_config: Option<(String, String)>,
     lsp_retries: HashMap<(String, String), u8>,
     lsp_retry: Option<((String, String), Instant)>,
+    pending_lsp: HashMap<u64, LspRequestKind>,
+    pending_edit_revision: HashMap<u64, u64>,
+    pending_edit_path: HashMap<u64, PathBuf>,
+    pending_edit_snapshot: HashMap<u64, HashMap<PathBuf, u64>>,
+    lsp_versions: HashMap<PathBuf, u64>,
+    next_lsp_request: u64,
 }
 
 #[derive(Default)]
@@ -697,18 +703,10 @@ pub struct Model {
     folded: HashSet<usize>,
     fold_revision: Option<u64>,
     pending_fold_action: Option<FoldAction>,
-    /// LSP requests waiting for responses.
-    pending_lsp: HashMap<u64, LspRequestKind>,
     /// Whether a format-on-save request is in flight.
     format_on_save_pending: bool,
     /// Suppress a second format request while saving formatted text.
     suppress_format_on_save: bool,
-    pending_edit_revision: HashMap<u64, u64>,
-    pending_edit_path: HashMap<u64, PathBuf>,
-    pending_edit_snapshot: HashMap<u64, HashMap<PathBuf, u64>>,
-    /// Last LSP document version sent for each path.
-    lsp_versions: HashMap<PathBuf, u64>,
-    next_lsp_request: u64,
     completion: Option<CompletionState>,
     completion_resolve: Option<(u64, usize)>,
     code_lens: Option<code_lens::CodeLensState>,
@@ -925,14 +923,8 @@ impl Model {
             folded: HashSet::new(),
             fold_revision: None,
             pending_fold_action: None,
-            pending_lsp: HashMap::new(),
             format_on_save_pending: false,
             suppress_format_on_save: false,
-            pending_edit_revision: HashMap::new(),
-            pending_edit_path: HashMap::new(),
-            pending_edit_snapshot: HashMap::new(),
-            lsp_versions: HashMap::new(),
-            next_lsp_request: 2,
             completion: None,
             code_lens: None,
             completion_resolve: None,
@@ -1411,7 +1403,7 @@ impl Model {
             Ok(worker) => {
                 self.language.lsp_config = Some(desired.clone());
                 self.language.lsp_workers.insert(desired.clone(), worker);
-                self.lsp_versions.insert(path.clone(), 1);
+                self.language.lsp_versions.insert(path.clone(), 1);
                 self.language.lsp_retries.entry(desired).or_insert(0);
                 self.clear_lsp_ui();
                 self.status = if settings.label == "jdtls" {

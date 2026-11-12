@@ -665,7 +665,8 @@ impl Model {
             .into_iter()
             .map(|(path, value)| (remap_path(&path, from, to), value))
             .collect();
-        self.lsp_versions
+        self.language
+            .lsp_versions
             .retain(|path, _| path != from && !path.starts_with(from));
         self.git_checked = None;
         self.git_marks.clear();
@@ -706,7 +707,7 @@ impl Model {
     }
 
     pub(crate) fn lsp_document_version(&self, path: &Path) -> Option<u64> {
-        self.lsp_versions.get(path).copied()
+        self.language.lsp_versions.get(path).copied()
     }
 }
 
@@ -835,7 +836,7 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         let mut model = open(&dir);
         let path = model.path.clone().expect("path");
-        model.lsp_versions.insert(path.clone(), 3);
+        model.language.lsp_versions.insert(path.clone(), 3);
         let workspace_edit = WorkspaceEdit::from_lsp(&serde_json::json!({
             "documentChanges": [{
                 "textDocument": {"uri": uri(&path), "version": 2},
@@ -855,7 +856,7 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         let mut model = open(&dir);
         let path = model.path.clone().expect("path");
-        model.lsp_versions.insert(path.clone(), 2);
+        model.language.lsp_versions.insert(path.clone(), 2);
         let workspace_edit = WorkspaceEdit::from_lsp(&serde_json::json!({
             "documentChanges": [{
                 "textDocument": {"uri": uri(&path), "version": 2},
