@@ -264,7 +264,7 @@ Phase 1 started on 2026-11-12:
 - `Model.recent` owns recent workspaces/files, quick-open frecency, and the
   persistence switch.
 - `Model.workspace` owns the root path, workspace roots, primary and per-root
-  gateways, gateway requirement, and file workers.
+  gateways, gateway requirement, file workers, conflict swaps, and stale paths.
 - `Model.runtime` owns task workers/results and terminal/PTY sessions and
   output.
 - `Model.project` owns project-search generations, worker accounting,
