@@ -1,6 +1,6 @@
 //! Editor state, immutable snapshots, and `editor.get_view` projection.
 
-use std::{fmt, ops::Range, sync::Arc};
+use std::{collections::HashMap, fmt, ops::Range, sync::Arc};
 
 use anvil_api::{EditorView, InteractionMode, Selection, TextPosition, Viewport};
 use anvil_core::{LineIndex, TextBuffer, TextDocument};
@@ -67,6 +67,7 @@ pub struct EditorState {
     undo: Vec<EditRecord>,
     redo: Vec<EditRecord>,
     yank: String,
+    registers: HashMap<char, String>,
 }
 
 /// Immutable view of the editor at one revision.
@@ -104,6 +105,7 @@ impl EditorState {
             undo: Vec::new(),
             redo: Vec::new(),
             yank: String::new(),
+            registers: HashMap::new(),
         }
     }
 
@@ -213,6 +215,21 @@ impl EditorState {
     /// Current unnamed register contents.
     pub fn yank_text(&self) -> &str {
         &self.yank
+    }
+
+    /// Stores text in a named register. Blackhole and clipboard registers are
+    /// handled by the frontend.
+    pub fn set_register(&mut self, register: char, text: &str) -> bool {
+        if register == '_' || register == '+' {
+            return false;
+        }
+        self.registers.insert(register, text.to_owned());
+        true
+    }
+
+    /// Reads a named register without creating an empty entry.
+    pub fn register_text(&self, register: char) -> Option<&str> {
+        self.registers.get(&register).map(String::as_str)
     }
 
     /// Inserts the unnamed register at `at`, returning the inserted range.
@@ -817,6 +834,18 @@ mod tests {
         assert_eq!(state.line_range_at(0), Some(0..2));
         assert_eq!(state.line_range_at(2), Some(2..4));
         assert_eq!(state.line_range_at(4), Some(4..5));
+    }
+
+    #[test]
+    fn named_registers_round_trip_and_clone() {
+        let mut state = EditorState::from_text("a");
+        assert!(state.set_register('a', "alpha"));
+        assert_eq!(state.register_text('a'), Some("alpha"));
+        let cloned = state.clone();
+        assert_eq!(cloned.register_text('a'), Some("alpha"));
+        assert!(!state.set_register('_', "ignored"));
+        assert!(!state.set_register('+', "clipboard"));
+        assert_eq!(state.register_text('_'), None);
     }
 
     #[test]

@@ -8,6 +8,9 @@ post-`0.5.0` feature line.
 
 ## [Unreleased]
 ### Added
+- Named register storage moved from the TUI `Model` into `anvil-editor`.
+  Frontends can read and write named registers through `EditorState`; macros
+  and text objects still live in the TUI.
 - Quick-open now enumerates trusted secondary workspace roots through their
   owning `FileWorker`, labels them as `<root-name>/<relative>`, and routes
   preview reads through the same root.

@@ -1133,7 +1133,7 @@ impl Model {
                 }
             }
             _ => {
-                self.registers.insert(register, text.to_owned());
+                self.editor.set_register(register, text);
             }
         }
     }
@@ -1156,7 +1156,7 @@ impl Model {
                     }
                 }
             } else {
-                let Some(text) = self.registers.get(&register).cloned() else {
+                let Some(text) = self.editor.register_text(register).map(str::to_owned) else {
                     self.status = "E: register empty".to_owned();
                     self.dirty = true;
                     return;

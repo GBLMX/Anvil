@@ -537,8 +537,6 @@ pub struct Model {
     register_wait: bool,
     /// Register selected by `"x`.
     register: Option<char>,
-    /// Named yank registers.
-    registers: HashMap<char, String>,
     /// Register name waiting after `q` or `@`.
     macro_wait: Option<char>,
     /// Currently recording into a register.
@@ -799,7 +797,6 @@ impl Model {
             count: 0,
             register_wait: false,
             register: None,
-            registers: HashMap::new(),
             macro_wait: None,
             recording: None,
             recording_keys: Vec::new(),

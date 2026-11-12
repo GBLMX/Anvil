@@ -174,3 +174,12 @@ undo needs its own storage and migration design.
   macro replay without a TUI key event.
 - `cargo test --workspace --no-fail-fast`, clippy, fmt, and a real TUI smoke
   test pass for each slice.
+
+## Implementation status (2026-11-12)
+
+- Toggle comment, jump/change lists, and bracket matching are implemented.
+- Named registers are stored in `anvil-editor::EditorState` and exposed through
+  `set_register`/`register_text`; the TUI delegates named-register reads and
+  writes.
+- Macro recording/replay and text-object semantics still live in the TUI.
+- Soft wrap display projection remains unimplemented.

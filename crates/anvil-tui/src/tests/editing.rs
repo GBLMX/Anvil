@@ -80,10 +80,7 @@ fn delete_into_named_register() {
     ] {
         handle_event(&mut model, key(key_code));
     }
-    assert_eq!(
-        model.registers.get(&'a').map(String::as_str),
-        Some("alpha ")
-    );
+    assert_eq!(model.editor.register_text('a'), Some("alpha "));
     for key_code in [KeyCode::Char('"'), KeyCode::Char('a'), KeyCode::Char('p')] {
         handle_event(&mut model, key(key_code));
     }
@@ -101,10 +98,7 @@ fn named_register_yank_and_put() {
     ] {
         handle_event(&mut model, key(key_code));
     }
-    assert_eq!(
-        model.registers.get(&'a').map(String::as_str),
-        Some("alpha\n")
-    );
+    assert_eq!(model.editor.register_text('a'), Some("alpha\n"));
     model.cursor = 0;
     for key_code in [KeyCode::Char('"'), KeyCode::Char('a'), KeyCode::Char('p')] {
         handle_event(&mut model, key(key_code));
