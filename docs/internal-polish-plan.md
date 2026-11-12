@@ -1,6 +1,6 @@
 # Internal Polish Plan
 
-Status: active, P0 complete. Version is frozen at **0.6.0**. This is a long
+Status: active, P0 and P1 complete. Version is frozen at **0.6.0**. This is a long
 internal-polish phase, not a public release line.
 
 The project keeps landing code and docs, but does not bump the version, create
@@ -153,38 +153,35 @@ Difficulty: M–L. Main risk is write races and incorrect merge resolution.
 
 ### 3.6 Search
 
-Status: not started. Remaining:
-- multi-file/project search with cancellation, result caps, and stale-result
-  handling;
-- replace across files as one reviewable transaction.
+Status: landed. Project search has cancellation, result caps, and stale-result
+handling; replace across files is a reviewed transaction.
 
 Difficulty: M. Reuse the gateway/tree layers; do not add a second index until
 measurements justify it.
 
 ### 3.7 LSP lifecycle
 
-Status: not started. Remaining:
-- server discovery, version reporting, restart/backoff, and visible failure;
-- optional bundled servers remain a separate distribution decision.
+Status: landed. Server discovery, version reporting, restart/backoff, and
+visible failure are implemented.
 
 Difficulty: M. Main risk is hidden fallback behavior.
 
 ## 4. P1: IDE-like adapters
 
-Only start after P0 is complete and dogfooded:
+Status: landed.
+
+Implemented:
 
 - task runner with problem matchers;
 - test explorer with jump-to-failure;
 - DAP debugger in a separate process;
 - terminal panel with explicit workspace/trust boundaries;
-- multi-root workspaces with per-root gateway and trust policy;
-- folding state persistence.
-- external control/MCP adapter over `anvil-control`; no second transport and no
-  direct workspace file access (see
-  [external-integration-plan.md](external-integration-plan.md)).
+- multi-root roots, trust-gated per-root gateways, and open/save routing;
+- folding state persistence;
+- external control/MCP adapter over `anvil-control`.
 
-Difficulty: L–XL. DAP, terminal, and multi-root are architecture-level work and
-must not be folded into `anvil-session`.
+Remaining follow-up: cross-root file tree/search/mutations, tracked in
+[multi-root-routing-plan.md](multi-root-routing-plan.md).
 
 ## 5. Explicitly deferred
 

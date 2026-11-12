@@ -1,6 +1,6 @@
 # ADR-0014: Plugin WIT Contract from Exercised Editor Seams
 
-- Status: Proposed
+- Status: Proposed; number collision with accepted ADR-0014, renumber before acceptance
 - Date: 2026-11-01
 - Related: [ADR-0001](0001-plugin-isolation.md), [ADR-0003](0003-idl.md),
   [ADR-0007](0007-jsonrpc-envelope-and-capability-token.md),

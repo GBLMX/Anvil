@@ -52,14 +52,15 @@ Cross-cutting tracks that do not jump the queue:
 |---|---|---|
 | [0.4.x](0.4.x-plan.md) | plugin lifecycle, I/O, session/protocol | landed / rescoped |
 | [0.5.x](0.5.x-plan.md) | modal editing and modern TUI interaction | landed |
-| [Internal polish](internal-polish-plan.md) | P0/P1 feature polish under frozen `0.6.0` | P0 complete; P1 gated |
+| [Internal polish](internal-polish-plan.md) | P0/P1 feature polish under frozen `0.6.0` | P0 and P1 landed; frozen |
 | [Small features](small-features-plan.md) | Vim-like motions, operators, registers, visual/display polish | proposed |
 | [External integration](external-integration-plan.md) | `$EDITOR`, stdin, pipe locations, control socket, MCP adapter | 1a/1b/2/3, control v3, and MCP landed |
-| [IDE capabilities](ide-capability-plan.md) | LSP depth, search, sessions, Git, adapters | P0 mostly landed; P1 planned |
-| [0.6.x](0.6.x-plan.md) | signed packages, download manager, marketplace | 0.6.0–0.6.3, official-only release, and signed index/revocation verifier landed; marketplace planned |
+| [IDE capabilities](ide-capability-plan.md) | LSP depth, search, sessions, Git, adapters | P0 and P1 landed; cross-root follow-up |
+| [Multi-root routing](multi-root-routing-plan.md) | tree, quick open, search, mutations across roots | phase 1 landed; routing phases pending |
+| [0.6.x](0.6.x-plan.md) | signed packages, download manager, marketplace | signing verifier/cache landed; marketplace blocked on external signing/index inputs |
 | [0.7.x](0.7.x-plan.md) | official optional Rust modules (source-level, trusted) | planned |
 | [Linux platform](linux-platform-plan.md) | seccomp/cgroup, atomic install, watcher measurements | planned |
-| [Command architecture](command-architecture-plan.md) | command registry, keymap trie, effects | partially implemented |
+| [Command architecture](command-architecture-plan.md) | command registry, keymap trie, effects | registry + effect queue landed; trie/Lua pending |
 | [Keymap configuration](keymap.md) | TOML overrides and key syntax | current |
 | [Theme and settings](theme-settings-plan.md) | built-in semantic themes, selection, deferred Settings overlay | theme/settings persistence landed; overlay gated |
 | [Deployment](deployment.md) | gateway, exec-runner, cgroup boundaries | current |
@@ -84,19 +85,21 @@ new plan or ADR when the current direction changes.
 
 ## ADRs
 
-Architecture decisions live in [`adr/`](adr/). Start with:
+Architecture decisions live in [`adr/`](adr/). The canonical status table is
+[`adr/README.md`](adr/README.md). Key decisions:
 
 - [0001 plugin isolation](adr/0001-plugin-isolation.md)
 - [0003 IDL / ten-method API](adr/0003-idl.md)
 - [0007 JSON-RPC and capability token](adr/0007-jsonrpc-envelope-and-capability-token.md)
-- [0008 selection-first interaction](adr/0008-selection-first-interaction.md)
 - [0013 kernel/distribution boundary](adr/0013-kernel-distribution-boundary.md)
-- [0014 plugin WIT seams](adr/0014-plugin-wit-seams.md)
+- [0014 plugin API v1 freeze](adr/0014-plugin-api-v1-freeze.md)
 - [0017 activation and lifecycle](adr/0017-plugin-activation-and-lifecycle.md)
 - [0018 workspace tree watch](adr/0018-workspace-tree-watch.md)
-- [0019 terminal keyboard enhancement](adr/0019-terminal-keyboard-enhancement.md)
 - [0020 content-addressed plugin store](adr/0020-content-addressed-plugin-store.md)
 - [0021 signed plugin index](adr/0021-signed-plugin-index.md)
+
+Known numbering collision: [0014 plugin WIT seams](adr/0014-plugin-wit-seams.md)
+is proposed and must be renumbered before acceptance.
 
 ## Benchmarks
 
