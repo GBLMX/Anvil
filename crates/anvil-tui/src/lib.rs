@@ -394,6 +394,17 @@ struct LspResultsState {
 }
 
 #[derive(Default)]
+struct RecentState {
+    /// Quick-open usage counts keyed by the entry string.
+    frecency: HashMap<String, u32>,
+    /// Recently opened workspaces and files, newest first.
+    workspaces: Vec<PathBuf>,
+    files: Vec<PathBuf>,
+    /// Whether recent lists are written to the state directory.
+    persist: bool,
+}
+
+#[derive(Default)]
 struct TreeState {
     /// Flattened workspace tree, when open.
     entries: Vec<TreeEntry>,
@@ -772,13 +783,8 @@ pub struct Model {
     git: GitState,
     /// Secondary pane when a vertical split is open.
     split: Option<Pane>,
-    /// Quick-open usage counts keyed by the entry string.
-    fuzzy_frecency: HashMap<String, u32>,
-    /// Recently opened workspaces and files, newest first.
-    recent_workspaces: Vec<PathBuf>,
-    recent_files: Vec<PathBuf>,
-    /// Whether recent lists are written to the state directory.
-    persist_recent: bool,
+    /// Recent workspaces, files, and quick-open ranking.
+    recent: RecentState,
     /// Workspace tree view and refresh state.
     tree: TreeState,
     overlays: OverlayState,
@@ -926,10 +932,10 @@ impl Model {
             language: LanguageState::default(),
             git: GitState::default(),
             split: None,
-            fuzzy_frecency: HashMap::new(),
-            recent_workspaces: Vec::new(),
-            recent_files: Vec::new(),
-            persist_recent: !cfg!(test),
+            recent: RecentState {
+                persist: !cfg!(test),
+                ..Default::default()
+            },
             tree: TreeState::default(),
             overlays: OverlayState::default(),
             persist_theme: !cfg!(test),

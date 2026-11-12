@@ -87,34 +87,35 @@ fn state_path() -> Option<PathBuf> {
 
 impl Model {
     pub(crate) fn install_recents(&mut self, recents: Recents) {
-        self.recent_workspaces = recents.workspaces;
-        self.recent_files = recents.files;
+        self.recent.workspaces = recents.workspaces;
+        self.recent.files = recents.files;
     }
 
     pub(crate) fn record_recent_workspace(&mut self, workspace: &Path) {
-        push_recent(&mut self.recent_workspaces, workspace);
+        push_recent(&mut self.recent.workspaces, workspace);
         self.save_recents();
     }
 
     pub(crate) fn record_recent_file(&mut self, path: &Path) {
-        push_recent(&mut self.recent_files, path);
+        push_recent(&mut self.recent.files, path);
         self.save_recents();
     }
 
     fn save_recents(&self) {
-        if !self.persist_recent {
+        if !self.recent.persist {
             return;
         }
         let recents = Recents {
             version: RECENTS_VERSION,
-            workspaces: self.recent_workspaces.clone(),
-            files: self.recent_files.clone(),
+            workspaces: self.recent.workspaces.clone(),
+            files: self.recent.files.clone(),
         };
         let _ = save(&recents);
     }
 
     pub(crate) fn openable_recent_files(&self) -> Vec<PathBuf> {
-        self.recent_files
+        self.recent
+            .files
             .iter()
             .filter(|path| {
                 self.workspace_roots
@@ -164,12 +165,13 @@ impl Model {
     }
 
     pub(crate) fn show_recent_workspaces(&mut self) {
-        if self.recent_workspaces.is_empty() {
+        if self.recent.workspaces.is_empty() {
             self.status = "no recent workspaces".to_owned();
         } else {
             self.status = format!(
                 "recent: {}",
-                self.recent_workspaces
+                self.recent
+                    .workspaces
                     .iter()
                     .map(|path| path.display().to_string())
                     .collect::<Vec<_>>()

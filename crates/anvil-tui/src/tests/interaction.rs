@@ -1012,7 +1012,8 @@ fn fuzzy_ranks_basename_then_frecency_then_short_paths() {
         selected: 0,
     });
     model
-        .fuzzy_frecency
+        .recent
+        .frecency
         .insert("tests/main_test.rs".to_owned(), 5);
     model.fuzzy_refresh();
     let fuzzy = model.overlays.fuzzy.as_ref().expect("fuzzy");
@@ -1046,5 +1047,5 @@ fn fuzzy_open_records_frecency() {
         selected: 0,
     });
     model.fuzzy_open();
-    assert_eq!(model.fuzzy_frecency.get("main.rs"), Some(&1));
+    assert_eq!(model.recent.frecency.get("main.rs"), Some(&1));
 }

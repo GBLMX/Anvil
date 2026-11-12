@@ -239,7 +239,7 @@ impl Model {
             .enumerate()
             .filter(|(_, entry)| entry.to_lowercase().contains(&query))
             .map(|(index, entry)| {
-                let score = fuzzy_score(entry, &query, self.fuzzy_frecency.get(entry).copied());
+                let score = fuzzy_score(entry, &query, self.recent.frecency.get(entry).copied());
                 (score, index)
             })
             .collect::<Vec<_>>();
@@ -278,7 +278,7 @@ impl Model {
         } else {
             self.workspace.join(&entry)
         };
-        let count = self.fuzzy_frecency.entry(entry).or_default();
+        let count = self.recent.frecency.entry(entry).or_default();
         *count = count.saturating_add(1);
         self.record_jump();
         match self.open_path(&path) {
