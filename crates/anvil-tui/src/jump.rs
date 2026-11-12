@@ -77,6 +77,11 @@ impl Model {
     }
 
     fn jump_history(&mut self, forward: bool) {
+        if self.path.is_none() && self.modified {
+            self.status = "E: save or discard the unnamed buffer before jumping".to_owned();
+            self.dirty = true;
+            return;
+        }
         let current = self.current_jump_entry();
         let target = if forward {
             self.jump_list.take_forward()
