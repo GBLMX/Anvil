@@ -706,16 +706,18 @@ fn recent_files_and_workspaces_are_bounded_and_deduplicated() {
         model.recent_workspaces,
         vec![PathBuf::from("/ws/one"), PathBuf::from("/ws/two")]
     );
+    let workspace = tempfile::tempdir().expect("workspace");
+    model.workspace = workspace.path().to_path_buf();
+    model.workspace_roots =
+        crate::workspace_roots::WorkspaceRoots::new(&model.workspace).expect("roots");
     for index in 0..25 {
-        model.record_recent_file(Path::new(&format!("/ws/{index}.rs")));
+        model.record_recent_file(&model.workspace.join(format!("{index}.rs")));
     }
+    model.record_recent_file(Path::new("/outside/ignored.rs"));
     assert_eq!(model.recent_files.len(), 20);
-    assert_eq!(model.recent_files[0], PathBuf::from("/ws/24.rs"));
+    assert_eq!(model.recent_files[0], PathBuf::from("/outside/ignored.rs"));
     model.open_recent_files();
-    assert_eq!(
-        model.fuzzy.as_ref().expect("fuzzy").entries.len(),
-        model.recent_files.len()
-    );
+    assert_eq!(model.fuzzy.as_ref().expect("fuzzy").entries.len(), 19);
 }
 
 #[test]
@@ -735,4 +737,32 @@ fn reduced_motion_uses_a_static_busy_glyph() {
         .collect::<String>();
     assert!(rendered.contains("· indexing"), "{rendered}");
     assert!(!rendered.contains('⠋'), "{rendered}");
+}
+
+#[test]
+fn welcome_shows_recent_files_and_r_opens_them() {
+    let workspace = tempfile::tempdir().expect("workspace");
+    fs::write(workspace.path().join("main.rs"), "fn main() {}").expect("file");
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.workspace = workspace.path().to_path_buf();
+    model.workspace_roots =
+        crate::workspace_roots::WorkspaceRoots::new(&model.workspace).expect("roots");
+    model.record_recent_file(&workspace.path().join("main.rs"));
+    let backend = TestBackend::new(80, 30);
+    let mut terminal = Terminal::new(backend).expect("terminal");
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+    let rendered = terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect::<String>();
+    assert!(rendered.contains("recent"), "{rendered}");
+    assert!(rendered.contains("main.rs"), "{rendered}");
+    assert!(rendered.contains("recent files"), "{rendered}");
+
+    handle_event(&mut model, key(KeyCode::Char('r')));
+    assert!(!model.welcome);
+    assert!(model.fuzzy.is_some());
 }

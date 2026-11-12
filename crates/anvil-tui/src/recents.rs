@@ -113,16 +113,28 @@ impl Model {
         let _ = save(&recents);
     }
 
+    pub(crate) fn openable_recent_files(&self) -> Vec<PathBuf> {
+        self.recent_files
+            .iter()
+            .filter(|path| {
+                self.workspace_roots
+                    .owning_root(path)
+                    .is_some_and(|root| root.trusted)
+            })
+            .cloned()
+            .collect()
+    }
+
     pub(crate) fn open_recent_files(&mut self) {
-        if self.recent_files.is_empty() {
-            self.status = "no recent files".to_owned();
+        let files = self.openable_recent_files();
+        if files.is_empty() {
+            self.status = "no recent files in this workspace".to_owned();
             self.dirty = true;
             return;
         }
         self.clear_preview();
         self.fuzzy_generation = self.fuzzy_generation.saturating_add(1);
-        let entries = self
-            .recent_files
+        let entries = files
             .iter()
             .map(|path| path.to_string_lossy().into_owned())
             .collect::<Vec<_>>();

@@ -378,6 +378,11 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             model.show_help();
             return;
         }
+        if key.code == KeyCode::Char('r') {
+            model.welcome = false;
+            model.open_recent_files();
+            return;
+        }
         model.welcome = false;
         model.dirty = true;
     }

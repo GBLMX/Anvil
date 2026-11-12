@@ -8,6 +8,10 @@ post-`0.5.0` feature line.
 
 ## [Unreleased]
 ### Added
+- The start page lists openable recent files and `r` opens the recent-files
+  picker; recent files outside trusted workspace roots are omitted.
+- The settings overlay now also edits `ui.reduced_motion` and
+  `ui.high_contrast`.
 - Mouse-wheel scrolling now targets the split pane under the pointer and uses
   that pane's text width when advancing soft-wrapped display rows.
 - Accessibility settings add `[ui] reduced_motion` and `high_contrast` (env

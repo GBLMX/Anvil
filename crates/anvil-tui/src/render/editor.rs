@@ -1131,8 +1131,8 @@ fn truncate_width(text: &str, max: u16) -> String {
 }
 
 fn render_welcome(frame: &mut Frame, area: Rect, model: &Model) {
-    let width = area.width.saturating_sub(4).clamp(12, 64).min(area.width);
-    let height = area.height.saturating_sub(2).clamp(4, 18).min(area.height);
+    let width = area.width.saturating_sub(4).clamp(12, 72).min(area.width);
+    let height = area.height.saturating_sub(2).clamp(4, 26).min(area.height);
     let panel = Rect {
         x: area.x + area.width.saturating_sub(width) / 2,
         y: area.y + area.height.saturating_sub(height) / 2,
@@ -1140,6 +1140,8 @@ fn render_welcome(frame: &mut Frame, area: Rect, model: &Model) {
         height,
     };
     frame.render_widget(Clear, panel);
+    let muted = Style::default().fg(theme::muted()).bg(theme::surface());
+    let accent = Style::default().fg(theme::accent());
     let mut lines = vec![
         Line::from(vec![Span::styled(
             "ANVIL",
@@ -1148,41 +1150,57 @@ fn render_welcome(frame: &mut Frame, area: Rect, model: &Model) {
                 .bg(theme::surface())
                 .add_modifier(Modifier::BOLD),
         )]),
-        Line::styled(
-            "selection-first terminal editor",
-            Style::default().fg(theme::muted()).bg(theme::surface()),
-        ),
-        Line::raw(""),
+        Line::styled("selection-first terminal editor", muted),
+        Line::styled("", muted),
+        Line::from(vec![Span::styled("i", accent), Span::raw("      insert")]),
         Line::from(vec![
-            Span::styled("i", Style::default().fg(theme::accent())),
-            Span::raw("      insert"),
-        ]),
-        Line::from(vec![
-            Span::styled("Space f", Style::default().fg(theme::accent())),
+            Span::styled("Space f", accent),
             Span::raw(" find file"),
         ]),
         Line::from(vec![
-            Span::styled("Space e", Style::default().fg(theme::accent())),
+            Span::styled("Space e", accent),
             Span::raw(" file tree"),
         ]),
         Line::from(vec![
-            Span::styled("?", Style::default().fg(theme::accent())),
-            Span::raw("      help"),
+            Span::styled("r", accent),
+            Span::raw("      recent files"),
         ]),
-        Line::from(vec![
-            Span::styled(":q", Style::default().fg(theme::accent())),
-            Span::raw("      quit"),
-        ]),
-        Line::raw(""),
-        Line::styled(
-            format!("workspace  {}", model.workspace.display()),
-            Style::default().fg(theme::muted()).bg(theme::surface()),
-        ),
-        Line::styled(
-            format!("version    {}", env!("CARGO_PKG_VERSION")),
-            Style::default().fg(theme::muted()).bg(theme::surface()),
-        ),
+        Line::from(vec![Span::styled("?", accent), Span::raw("      help")]),
+        Line::from(vec![Span::styled(":q", accent), Span::raw("      quit")]),
+        Line::styled("", muted),
+        Line::styled("recent", muted),
     ];
+    let recent = model.openable_recent_files();
+    if recent.is_empty() {
+        lines.push(Line::styled("  no recent files in this workspace", muted));
+    } else {
+        for path in recent.iter().take(4) {
+            let display = path
+                .strip_prefix(&model.workspace)
+                .unwrap_or(path)
+                .display()
+                .to_string();
+            lines.push(Line::styled(
+                format!("  {}", truncate_width(&display, width.saturating_sub(4))),
+                muted,
+            ));
+        }
+    }
+    lines.push(Line::styled("", muted));
+    lines.push(Line::styled(
+        format!(
+            "workspace  {}",
+            truncate_width(
+                &model.workspace.display().to_string(),
+                width.saturating_sub(13)
+            )
+        ),
+        muted,
+    ));
+    lines.push(Line::styled(
+        format!("version    {}", env!("CARGO_PKG_VERSION")),
+        muted,
+    ));
     lines.truncate(usize::from(height.saturating_sub(2)));
     frame.render_widget(
         Paragraph::new(lines)
