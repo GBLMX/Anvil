@@ -131,6 +131,16 @@ fn keymap_context_prefers_popup_then_command_line_then_tree() {
     );
 
     model.overlays.fuzzy = None;
+    model.open_buffer_picker();
+    assert_eq!(
+        model.active_keymap_contexts(),
+        vec![
+            KeymapContext::Global,
+            KeymapContext::FileTree,
+            KeymapContext::Popup
+        ]
+    );
+    model.close_buffer_picker();
     model.ui.input_mode = InputMode::CommandLine {
         buffer: InputBuffer::default(),
     };

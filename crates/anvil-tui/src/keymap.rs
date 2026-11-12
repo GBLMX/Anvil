@@ -683,6 +683,7 @@ impl Model {
         }
         let overlay = self.overlays.command_palette.is_some()
             || self.overlays.fuzzy.is_some()
+            || self.overlays.buffer_picker.is_some()
             || self.overlays.lsp_results.workspace_symbols.is_some()
             || self.overlays.lsp_results.document_symbols.is_some()
             || self.overlays.lsp_results.references.is_some()
