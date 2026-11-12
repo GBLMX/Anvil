@@ -86,3 +86,43 @@ func TestCacheRejectsDigestMismatch(t *testing.T) {
 		t.Fatal("cache with mismatched digest must fail")
 	}
 }
+
+func TestCacheLoadsIndexWithoutRevocations(t *testing.T) {
+	fixture := newFixture(t)
+	cache := Cache{Dir: t.TempDir()}
+	if err := cache.AcceptIndex(&fixture.index, fixture.payload, fixture.signature, fixture.roots, ""); err != nil {
+		t.Fatalf("accept index: %v", err)
+	}
+	state, indexPayload, revocations, err := cache.Load()
+	if err != nil {
+		t.Fatalf("load index-only cache: %v", err)
+	}
+	if len(indexPayload) == 0 || revocations != nil {
+		t.Fatalf("unexpected cached documents: index=%d revocations=%d", len(indexPayload), len(revocations))
+	}
+	if state.Revocations.Digest != "" {
+		t.Fatalf("unexpected revocation state: %+v", state.Revocations)
+	}
+}
+
+func TestCacheLoadsRevocationsWithoutIndex(t *testing.T) {
+	fixture := newFixture(t)
+	cache := Cache{Dir: t.TempDir()}
+	payload, err := json.Marshal(fixture.revocation)
+	if err != nil {
+		t.Fatalf("marshal revocations: %v", err)
+	}
+	if err := cache.AcceptRevocations(&fixture.revocation, payload, sign(t, payload, fixture.private), fixture.roots); err != nil {
+		t.Fatalf("accept revocations: %v", err)
+	}
+	state, indexPayload, revocations, err := cache.Load()
+	if err != nil {
+		t.Fatalf("load revocation-only cache: %v", err)
+	}
+	if indexPayload != nil || len(revocations) == 0 {
+		t.Fatalf("unexpected cached documents: index=%d revocations=%d", len(indexPayload), len(revocations))
+	}
+	if state.Index.Digest != "" {
+		t.Fatalf("unexpected index state: %+v", state.Index)
+	}
+}

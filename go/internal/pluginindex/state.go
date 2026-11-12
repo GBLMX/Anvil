@@ -66,22 +66,35 @@ func (cache Cache) Load() (State, []byte, []byte, error) {
 	if state.Version != stateVersion {
 		return State{}, nil, nil, fmt.Errorf("%w: unsupported state version", ErrCacheInvalid)
 	}
-	indexPayload, err := os.ReadFile(filepath.Join(cache.Dir, indexFile))
+	indexPayload, err := readCachedDocument(cache.Dir, indexFile, state.Index.Digest, "index")
 	if err != nil {
-		return State{}, nil, nil, fmt.Errorf("%w: %s: %v", ErrCacheInvalid, indexFile, err)
+		return State{}, nil, nil, err
 	}
-	revocationPayload, err := os.ReadFile(filepath.Join(cache.Dir, revocationFile))
+	revocationPayload, err := readCachedDocument(
+		cache.Dir,
+		revocationFile,
+		state.Revocations.Digest,
+		"revocation",
+	)
 	if err != nil {
-		return State{}, nil, nil, fmt.Errorf("%w: %s: %v", ErrCacheInvalid, revocationFile, err)
-	}
-	if digest(indexPayload) != state.Index.Digest {
-		return State{}, nil, nil, fmt.Errorf("%w: index digest mismatch", ErrCacheInvalid)
-	}
-	if digest(revocationPayload) != state.Revocations.Digest {
-		return State{}, nil, nil, fmt.Errorf("%w: revocation digest mismatch", ErrCacheInvalid)
+		return State{}, nil, nil, err
 	}
 
 	return state, indexPayload, revocationPayload, nil
+}
+
+func readCachedDocument(dir, name, expected, label string) ([]byte, error) {
+	if expected == "" {
+		return nil, nil
+	}
+	payload, err := os.ReadFile(filepath.Join(dir, name))
+	if err != nil {
+		return nil, fmt.Errorf("%w: %s: %v", ErrCacheInvalid, name, err)
+	}
+	if digest(payload) != expected {
+		return nil, fmt.Errorf("%w: %s digest mismatch", ErrCacheInvalid, label)
+	}
+	return payload, nil
 }
 
 // AcceptIndex verifies anti-rollback rules and stores a verified index.
