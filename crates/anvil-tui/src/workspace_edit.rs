@@ -98,11 +98,12 @@ impl WorkspaceEdit {
             } else {
                 model
                     .buffers
+                    .entries
                     .iter()
                     .find(|buffer| buffer.path.as_ref() == Some(path))
                     .map(|buffer| buffer.editor.revision())
                     .or_else(|| {
-                        model.split.as_ref().and_then(|pane| {
+                        model.buffers.split.as_ref().and_then(|pane| {
                             (pane.buffer.path.as_ref() == Some(path))
                                 .then(|| pane.buffer.editor.revision())
                         })
@@ -482,6 +483,7 @@ fn load_state(model: &mut Model, path: &Path) -> Result<Option<EditorState>, Str
     }
     if let Some(buffer) = model
         .buffers
+        .entries
         .iter()
         .find(|buffer| buffer.path.as_deref() == Some(path))
     {
@@ -573,6 +575,7 @@ fn commit_states(model: &mut Model, prepared: HashMap<PathBuf, EditorState>) {
             model.syntax.borrow_mut().invalidate();
             if let Some(buffer) = model
                 .buffers
+                .entries
                 .iter_mut()
                 .find(|buffer| buffer.path.as_ref() == Some(&path))
             {
@@ -582,13 +585,14 @@ fn commit_states(model: &mut Model, prepared: HashMap<PathBuf, EditorState>) {
             }
         } else if let Some(buffer) = model
             .buffers
+            .entries
             .iter_mut()
             .find(|buffer| buffer.path.as_ref() == Some(&path))
         {
             buffer.editor = state.into();
             buffer.modified = true;
         } else {
-            model.buffers.push(Buffer {
+            model.buffers.entries.push(Buffer {
                 editor: state.into(),
                 path: Some(path),
                 cursor: 0,
@@ -620,9 +624,11 @@ fn path_is_open(model: &Model, path: &Path) -> bool {
     model.path.as_deref() == Some(path)
         || model
             .buffers
+            .entries
             .iter()
             .any(|buffer| buffer.path.as_deref() == Some(path))
         || model
+            .buffers
             .split
             .as_ref()
             .is_some_and(|pane| pane.buffer.path.as_deref() == Some(path))
@@ -633,9 +639,10 @@ fn path_is_modified(model: &Model, path: &Path) -> bool {
     let active = model.path.as_deref().is_some_and(affected) && model.modified;
     let buffer = model
         .buffers
+        .entries
         .iter()
         .any(|buffer| buffer.path.as_deref().is_some_and(affected) && buffer.modified);
-    let split = model.split.as_ref().is_some_and(|pane| {
+    let split = model.buffers.split.as_ref().is_some_and(|pane| {
         pane.buffer.path.as_deref().is_some_and(affected) && pane.buffer.modified
     });
     active || buffer || split
@@ -646,17 +653,17 @@ impl Model {
         if let Some(path) = self.path.as_mut() {
             *path = remap_path(path, from, to);
         }
-        for buffer in &mut self.buffers {
+        for buffer in &mut self.buffers.entries {
             if let Some(path) = buffer.path.as_mut() {
                 *path = remap_path(path, from, to);
             }
         }
-        if let Some(pane) = self.split.as_mut()
+        if let Some(pane) = self.buffers.split.as_mut()
             && let Some(path) = pane.buffer.path.as_mut()
         {
             *path = remap_path(path, from, to);
         }
-        if let Some(back) = self.help_back.as_mut()
+        if let Some(back) = self.buffers.help_back.as_mut()
             && let Some(path) = back.path.as_mut()
         {
             *path = remap_path(path, from, to);
@@ -686,16 +693,18 @@ impl Model {
             candidate.is_some_and(|candidate| candidate == path || candidate.starts_with(path))
         };
         if self
+            .buffers
             .split
             .as_ref()
             .is_some_and(|pane| affected(pane.buffer.path.as_deref()))
         {
-            self.split = None;
+            self.buffers.split = None;
             self.ui.focus.split = false;
         }
         loop {
             let Some(index) = self
                 .buffers
+                .entries
                 .iter()
                 .position(|buffer| affected(buffer.path.as_deref()))
             else {
@@ -754,6 +763,7 @@ mod tests {
         assert_eq!(model.editor.text().slice(0..4), "Xone");
         let second_buffer = model
             .buffers
+            .entries
             .iter()
             .find(|buffer| buffer.path.as_ref() == Some(&second.canonicalize().expect("canonical")))
             .expect("second buffer");
@@ -783,10 +793,13 @@ mod tests {
         workspace_edit.apply(&mut model).expect("apply");
         assert_eq!(model.editor.text().slice(0..6), "Xfirst");
         assert_eq!(
-            model.buffers[model.active].editor.text().slice(0..6),
+            model.buffers.entries[model.buffers.active]
+                .editor
+                .text()
+                .slice(0..6),
             "Xfirst"
         );
-        assert!(model.buffers[model.active].modified);
+        assert!(model.buffers.entries[model.buffers.active].modified);
     }
 
     #[test]

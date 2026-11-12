@@ -1408,6 +1408,7 @@ fn rename_response_rejects_a_stale_inactive_buffer_snapshot() {
     let mut base = HashMap::new();
     let second_buffer = model
         .buffers
+        .entries
         .iter_mut()
         .find(|buffer| buffer.path.as_ref() == Some(&second_path))
         .expect("second buffer");

@@ -549,11 +549,17 @@ fn wheel_scrolls_the_pane_under_the_pointer() {
     };
     assert!(crate::mouse::handle_mouse(&mut model, scroll(60), 80, 24));
     assert_eq!(model.scroll, 0);
-    assert_eq!(model.split.as_ref().expect("split").buffer.scroll, 1);
+    assert_eq!(
+        model.buffers.split.as_ref().expect("split").buffer.scroll,
+        1
+    );
 
     model.focus_split(true);
     assert_eq!(model.scroll, 1);
     assert!(crate::mouse::handle_mouse(&mut model, scroll(5), 80, 24));
     assert_eq!(model.scroll, 1);
-    assert_eq!(model.split.as_ref().expect("split").buffer.scroll, 1);
+    assert_eq!(
+        model.buffers.split.as_ref().expect("split").buffer.scroll,
+        1
+    );
 }

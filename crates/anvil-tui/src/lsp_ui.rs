@@ -234,14 +234,14 @@ impl Model {
         if let Some(path) = &self.path {
             revisions.insert(path.clone(), self.editor.revision());
         }
-        for buffer in &self.buffers {
+        for buffer in &self.buffers.entries {
             if let Some(path) = &buffer.path {
                 revisions
                     .entry(path.clone())
                     .or_insert_with(|| buffer.editor.revision());
             }
         }
-        if let Some(pane) = &self.split
+        if let Some(pane) = &self.buffers.split
             && let Some(path) = &pane.buffer.path
         {
             revisions

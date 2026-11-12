@@ -440,6 +440,20 @@ struct ProjectState {
 }
 
 #[derive(Default)]
+struct BufferState {
+    /// All open buffers, including the active one after the first switch.
+    entries: Vec<Buffer>,
+    /// Active buffer index.
+    active: usize,
+    /// Secondary pane when a vertical split is open.
+    split: Option<Pane>,
+    /// Buffer replaced by the read-only help page.
+    help_back: Option<Buffer>,
+    /// Short title for the current read-only view.
+    read_only_title: Option<String>,
+}
+
+#[derive(Default)]
 struct RuntimeState {
     task_worker: Option<task_runner::TaskWorker>,
     task_output: Option<String>,
@@ -826,22 +840,14 @@ pub struct Model {
     welcome: bool,
     /// Dashboard state to restore after closing the help page.
     welcome_back: bool,
-    /// Buffer replaced by the read-only help page.
-    help_back: Option<Buffer>,
-    /// Short title for the current read-only view.
-    read_only_title: Option<String>,
-    /// All open buffers, including the active one after the first switch.
-    buffers: Vec<Buffer>,
-    /// Active buffer index.
-    active: usize,
+    /// Open buffers, active pane, and help-page state.
+    buffers: BufferState,
     /// Workspace root, gateways, and file workers.
     workspace: WorkspaceState,
     /// Language services and debugger runtime.
     language: LanguageState,
     /// Git workspace, request, and view state.
     git: GitState,
-    /// Secondary pane when a vertical split is open.
-    split: Option<Pane>,
     /// Recent workspaces, files, and quick-open ranking.
     recent: RecentState,
     /// Workspace tree view and refresh state.
@@ -946,10 +952,7 @@ impl Model {
             object_pending: false,
             search_query: String::new(),
             search: search::SearchState::default(),
-            help_back: None,
-            read_only_title: None,
-            buffers: Vec::new(),
-            active: 0,
+            buffers: BufferState::default(),
             workspace: WorkspaceState {
                 path: workspace,
                 roots: workspace_roots,
@@ -957,7 +960,6 @@ impl Model {
             },
             language: LanguageState::default(),
             git: GitState::default(),
-            split: None,
             recent: RecentState {
                 persist: !cfg!(test),
                 ..Default::default()
@@ -1155,7 +1157,7 @@ impl Model {
             self.status = "E: read-only buffer".to_owned();
             self.dirty = true;
             true
-        } else if self.help_back.is_some() {
+        } else if self.buffers.help_back.is_some() {
             self.status = "E: read-only view".to_owned();
             self.dirty = true;
             true
@@ -1176,7 +1178,7 @@ impl Model {
     }
 
     fn show_read_only(&mut self, text: &str, status: &str, title: &str) -> bool {
-        if self.help_back.is_some() {
+        if self.buffers.help_back.is_some() {
             self.status = "already viewing a read-only view".to_owned();
             self.dirty = true;
             return false;
@@ -1195,8 +1197,8 @@ impl Model {
             search_query: std::mem::take(&mut self.search_query),
             syntax: self.syntax.borrow().active_cache(),
         };
-        self.read_only_title = Some(title.to_owned());
-        self.help_back = Some(saved);
+        self.buffers.read_only_title = Some(title.to_owned());
+        self.buffers.help_back = Some(saved);
         self.clear_git_gutter();
         self.syntax.borrow_mut().switch_path(None, true);
         self.cursor = 0;
@@ -1213,7 +1215,7 @@ impl Model {
     }
 
     fn replace_read_only(&mut self, text: &str, status: &str, title: &str) {
-        if self.help_back.is_none() {
+        if self.buffers.help_back.is_none() {
             self.show_read_only(text, status, title);
             return;
         }
@@ -1224,16 +1226,17 @@ impl Model {
         self.scroll = 0;
         self.hscroll = 0;
         self.modified = false;
-        self.read_only_title = Some(title.to_owned());
+        self.buffers.read_only_title = Some(title.to_owned());
         self.status = status.to_owned();
         self.dirty = true;
     }
 
     fn close_help(&mut self) -> bool {
-        let Some(saved) = self.help_back.take() else {
+        let Some(saved) = self.buffers.help_back.take() else {
             return false;
         };
         let title = self
+            .buffers
             .read_only_title
             .take()
             .unwrap_or_else(|| "help".to_owned());
@@ -1696,7 +1699,7 @@ impl Model {
             || self.overlays.lsp_results.hover.is_some()
             || self.ui.diagnostic_peek.is_some()
             || self.ui.problems.visible
-            || self.help_back.is_some();
+            || self.buffers.help_back.is_some();
         if overlay && contexts.last() != Some(&KeymapContext::Popup) {
             contexts.push(KeymapContext::Popup);
         }

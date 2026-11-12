@@ -53,7 +53,7 @@ impl Model {
                 "editor is busy; finish the current prompt first",
             ));
         }
-        if self.help_back.is_some() {
+        if self.buffers.help_back.is_some() {
             return Err(RpcError::new(
                 codes::POLICY_DENIED,
                 "close the read-only view first",
@@ -128,7 +128,7 @@ impl Model {
                 "editor is busy; finish the current prompt first",
             ));
         }
-        if self.help_back.is_some() {
+        if self.buffers.help_back.is_some() {
             return Err(RpcError::new(
                 codes::POLICY_DENIED,
                 "close the read-only view first",
@@ -172,7 +172,7 @@ impl Model {
                 "editor is busy; finish the current prompt first",
             ));
         }
-        if self.read_only || self.help_back.is_some() {
+        if self.read_only || self.buffers.help_back.is_some() {
             return Err(RpcError::new(codes::POLICY_DENIED, "buffer is read-only"));
         }
         match mode {
@@ -310,7 +310,7 @@ impl Model {
     }
 
     fn remote_query(&mut self, options: QueryOptions) -> QueryResult {
-        if self.help_back.is_none() {
+        if self.buffers.help_back.is_none() {
             self.sync_active();
         }
         let full = self.editor.text().slice(0..self.editor.text().len_bytes());
@@ -350,12 +350,13 @@ impl Model {
         }
         let mut buffers = self
             .buffers
+            .entries
             .iter()
             .enumerate()
             .map(|(index, buffer)| BufferInfo {
                 path: buffer.path.clone(),
                 modified: buffer.modified,
-                active: index == self.active,
+                active: index == self.buffers.active,
             })
             .collect::<Vec<_>>();
         if buffers.is_empty() {
@@ -370,7 +371,7 @@ impl Model {
             workspace: self.workspace.path.clone(),
             path: self.path.clone(),
             modified: self.modified,
-            read_only: self.read_only || self.help_back.is_some(),
+            read_only: self.read_only || self.buffers.help_back.is_some(),
             cursor: self.cursor,
             revision: self.editor.revision(),
             line_count,
@@ -381,7 +382,7 @@ impl Model {
             text_truncated: truncated,
             start_line,
             end_line,
-            active: self.active,
+            active: self.buffers.active,
             buffers,
         }
     }

@@ -79,7 +79,7 @@ impl Model {
             let sidebar = (width / 5).clamp(18, 40).min(width - 20);
             width = width.saturating_sub(sidebar);
         }
-        if self.split.is_some() {
+        if self.buffers.split.is_some() {
             let split = width.saturating_mul(self.split_ratio.min(100)) / 100;
             width = if self.ui.focus.split {
                 split

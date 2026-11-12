@@ -74,12 +74,14 @@ pub(crate) fn restore(model: &mut Model, workspace: &Path) -> Result<bool, Strin
     if buffers.is_empty() {
         return Ok(false);
     }
-    model.buffers = buffers;
-    model.active = state.active.min(model.buffers.len().saturating_sub(1));
+    model.buffers.entries = buffers;
+    model.buffers.active = state
+        .active
+        .min(model.buffers.entries.len().saturating_sub(1));
     model.split_ratio = state.split_ratio.min(100);
     model.tree.visible = state.tree_visible;
     model.tree.show_hidden = state.show_hidden;
-    let index = model.active;
+    let index = model.buffers.active;
     model.load_buffer(index);
     model.overlays.lsp_results.folded = state.folded.into_iter().collect();
     if let Some(saved_split) = state.split {
@@ -90,7 +92,7 @@ pub(crate) fn restore(model: &mut Model, workspace: &Path) -> Result<bool, Strin
         if let (Some(path), Some(swap)) = (buffer.path.as_ref(), conflict) {
             model.conflict_swaps.insert(path.clone(), swap);
         }
-        model.split = Some(Pane { buffer });
+        model.buffers.split = Some(Pane { buffer });
         model.ui.focus.split = state.split_focus;
     }
 
@@ -226,10 +228,10 @@ pub(crate) fn save(model: &mut Model, workspace: &Path) -> Result<(), String> {
         .map_err(|error| error.to_string())?;
     let swap_dir = directory.join("swaps");
     fs::create_dir_all(&swap_dir).map_err(|error| error.to_string())?;
-    let mut buffers = if model.buffers.is_empty() {
+    let mut buffers = if model.buffers.entries.is_empty() {
         vec![model.snapshot()]
     } else {
-        model.buffers.clone()
+        model.buffers.entries.clone()
     };
     let mut saved = Vec::with_capacity(buffers.len());
     let mut kept_swaps = Vec::new();
@@ -265,7 +267,7 @@ pub(crate) fn save(model: &mut Model, workspace: &Path) -> Result<(), String> {
             source_mtime_ns: buffer.path.as_deref().and_then(source_mtime_ns),
         });
     }
-    let split = if let Some(pane) = model.split.as_ref() {
+    let split = if let Some(pane) = model.buffers.split.as_ref() {
         let buffer = &pane.buffer;
         let conflict_swap = buffer
             .path
@@ -313,7 +315,7 @@ pub(crate) fn save(model: &mut Model, workspace: &Path) -> Result<(), String> {
     let state = SessionFile {
         version: SESSION_VERSION,
         workspace: workspace.to_path_buf(),
-        active: model.active,
+        active: model.buffers.active,
         buffers: saved,
         split,
         split_focus: model.ui.focus.split,
@@ -412,8 +414,8 @@ mod tests {
         save(&mut model, &workspace).expect("save");
         let mut restored = Model::new(EditorState::from_text(""), None);
         assert!(restore(&mut restored, &workspace).expect("restore"));
-        assert_eq!(restored.buffers.len(), 2);
-        assert_eq!(restored.active, 1);
+        assert_eq!(restored.buffers.entries.len(), 2);
+        assert_eq!(restored.buffers.active, 1);
         assert_eq!(restored.cursor, 3);
         assert!(restored.overlays.lsp_results.folded.contains(&2));
         let state = state_path(&workspace).expect("state");
@@ -484,7 +486,7 @@ mod tests {
 
         let mut restored = Model::new(EditorState::from_text(""), None);
         assert!(restore(&mut restored, &workspace).expect("restore"));
-        let split = restored.split.as_ref().expect("split restored");
+        let split = restored.buffers.split.as_ref().expect("split restored");
         assert!(restored.ui.focus.split);
         assert!(restored.modified);
         assert_eq!(restored.editor.text().slice(0..5), "dirty");

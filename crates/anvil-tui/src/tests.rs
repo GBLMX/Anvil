@@ -141,15 +141,15 @@ fn split_focus_restores_buffer_state_and_active_tab() {
     model.mark_missing(&right);
     handle_event(&mut model, key(KeyCode::Char('v')));
     handle_event(&mut model, key(KeyCode::Right));
-    assert_eq!(model.active, 1);
+    assert_eq!(model.buffers.active, 1);
 
     model.focus_split(false);
-    assert_eq!(model.active, 0);
+    assert_eq!(model.buffers.active, 0);
     assert!(model.visual_anchor.is_none());
     assert!(!model.missing);
 
     model.focus_split(true);
-    assert_eq!(model.active, 1);
+    assert_eq!(model.buffers.active, 1);
     assert_eq!(model.visual_anchor, Some(0));
     assert!(model.missing);
 }
@@ -170,7 +170,7 @@ fn closing_focused_split_restores_left_pane() {
     model.focus_split(true);
     model.cursor = 5;
     model.close_split();
-    assert!(model.split.is_none());
+    assert!(model.buffers.split.is_none());
     assert!(!model.ui.focus.split);
     assert_eq!(model.cursor, 0);
     assert_eq!(model.editor.text().slice(0..4), "left");
@@ -181,7 +181,7 @@ fn ctrl_w_v_opens_split_and_ctrl_w_h_l_switches_focus() {
     let mut model = Model::new(EditorState::from_text("alpha\nbeta\ngamma"), None);
     handle_event(&mut model, ctrl(KeyCode::Char('w')));
     handle_event(&mut model, key(KeyCode::Char('v')));
-    assert!(model.split.is_some());
+    assert!(model.buffers.split.is_some());
     handle_event(&mut model, ctrl(KeyCode::Char('w')));
     handle_event(&mut model, key(KeyCode::Char('l')));
     assert!(model.ui.focus.split);
@@ -195,7 +195,7 @@ fn split_panes_keep_independent_cursors() {
     let mut model = Model::new(EditorState::from_text("one\ntwo\nthree"), None);
     model.cursor = 1;
     model.split_vertical();
-    assert!(model.split.is_some());
+    assert!(model.buffers.split.is_some());
     assert!(!model.ui.focus.split);
     model.focus_split(true);
     assert!(model.ui.focus.split);
@@ -544,9 +544,9 @@ fn navigation_preserves_modified_buffer() {
         Some(second.canonicalize().expect("canonical").as_path())
     );
     assert_eq!(model.editor.text().slice(0..6), "second");
-    assert_eq!(model.buffers.len(), 2);
-    assert!(model.buffers[0].modified);
-    assert_eq!(model.buffers[0].editor.text().slice(0..6), "Xfirst");
+    assert_eq!(model.buffers.entries.len(), 2);
+    assert!(model.buffers.entries[0].modified);
+    assert_eq!(model.buffers.entries[0].editor.text().slice(0..6), "Xfirst");
     model.switch_buffer(-1);
     assert_eq!(model.editor.text().slice(0..6), "Xfirst");
     assert!(model.modified);

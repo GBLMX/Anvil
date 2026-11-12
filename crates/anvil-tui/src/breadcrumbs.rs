@@ -11,7 +11,7 @@ use ratatui::{
 use unicode_width::UnicodeWidthStr;
 
 pub(crate) fn visible(model: &Model, inner: Rect) -> bool {
-    model.path.is_some() && model.help_back.is_none() && !model.welcome && inner.height > 2
+    model.path.is_some() && model.buffers.help_back.is_none() && !model.welcome && inner.height > 2
 }
 
 pub(crate) fn render(model: &Model, frame: &mut Frame, area: Rect) {

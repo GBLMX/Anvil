@@ -72,7 +72,7 @@ impl Model {
         }
     }
     fn plugin_buffer_id(&self) -> u64 {
-        self.active as u64 + 1
+        self.buffers.active as u64 + 1
     }
 }
 

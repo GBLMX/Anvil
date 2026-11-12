@@ -29,6 +29,7 @@ impl Model {
         }
         if let Some(index) = self
             .buffers
+            .entries
             .iter()
             .position(|buffer| buffer.path.as_ref() == Some(&absolute))
         {
@@ -43,11 +44,11 @@ impl Model {
         let read_done = start.elapsed();
         if self.path.is_some() {
             self.sync_active();
-            if self.buffers.is_empty() {
-                self.buffers.push(self.snapshot());
-                self.active = 0;
+            if self.buffers.entries.is_empty() {
+                self.buffers.entries.push(self.snapshot());
+                self.buffers.active = 0;
             }
-            self.buffers.push(Buffer {
+            self.buffers.entries.push(Buffer {
                 editor: EditorState::from_text(&text).into(),
                 path: Some(absolute),
                 visual_anchor: None,
@@ -60,7 +61,7 @@ impl Model {
                 search_query: String::new(),
                 syntax: Default::default(),
             });
-            let index = self.buffers.len() - 1;
+            let index = self.buffers.entries.len() - 1;
             self.load_buffer(index);
         } else {
             self.editor = EditorState::from_text(&text).into();
@@ -294,12 +295,12 @@ impl Model {
         if let Some(path) = &self.path {
             paths.push(path.clone());
         }
-        for buffer in &self.buffers {
+        for buffer in &self.buffers.entries {
             if let Some(path) = &buffer.path {
                 paths.push(path.clone());
             }
         }
-        if let Some(pane) = &self.split
+        if let Some(pane) = &self.buffers.split
             && let Some(path) = &pane.buffer.path
         {
             paths.push(path.clone());
@@ -316,6 +317,7 @@ impl Model {
             self.modified
         } else {
             self.buffers
+                .entries
                 .iter()
                 .find(|buffer| buffer.path.as_ref() == Some(&path))
                 .is_some_and(|buffer| buffer.modified)
@@ -340,12 +342,12 @@ impl Model {
         if self.path.as_deref().is_some_and(affected) {
             self.missing = true;
         }
-        for buffer in &mut self.buffers {
+        for buffer in &mut self.buffers.entries {
             if buffer.path.as_deref().is_some_and(affected) {
                 buffer.missing = true;
             }
         }
-        if let Some(pane) = self.split.as_mut()
+        if let Some(pane) = self.buffers.split.as_mut()
             && pane.buffer.path.as_deref().is_some_and(affected)
         {
             pane.buffer.missing = true;
@@ -372,6 +374,7 @@ impl Model {
         }
         if let Some(buffer) = self
             .buffers
+            .entries
             .iter_mut()
             .find(|buffer| buffer.path.as_deref() == Some(path))
         {
@@ -380,7 +383,7 @@ impl Model {
             buffer.modified = false;
             buffer.missing = false;
         }
-        if let Some(pane) = self.split.as_mut()
+        if let Some(pane) = self.buffers.split.as_mut()
             && pane.buffer.path.as_deref() == Some(path)
         {
             pane.buffer.editor = EditorState::from_text(&text).into();
@@ -491,7 +494,7 @@ impl Model {
             || self.read_only
             || self.stdin_buffer
             || self.missing
-            || self.help_back.is_some()
+            || self.buffers.help_back.is_some()
             || self.overlays.settings_overlay.is_some()
             || self.overlays.command_palette.is_some()
             || self.overlays.fuzzy.is_some()
@@ -546,7 +549,7 @@ impl Model {
             failed = true;
         }
         let mut writes = Vec::new();
-        for (index, buffer) in self.buffers.iter().enumerate() {
+        for (index, buffer) in self.buffers.entries.iter().enumerate() {
             if !buffer.modified || buffer.path == active_path {
                 continue;
             }
@@ -564,7 +567,7 @@ impl Model {
         for (index, path, text) in writes {
             match self.write_file(&path, &text) {
                 Ok(()) => {
-                    if let Some(buffer) = self.buffers.get_mut(index) {
+                    if let Some(buffer) = self.buffers.entries.get_mut(index) {
                         buffer.modified = false;
                         buffer.missing = false;
                     }

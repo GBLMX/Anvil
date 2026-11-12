@@ -33,7 +33,7 @@ fn multi_buffer_switch_preserves_per_buffer_state() {
     type_text(&mut model, &format!("e {}", first.display()));
     handle_event(&mut model, key(KeyCode::Enter));
     assert_eq!(model.path.as_ref(), Some(&first));
-    assert_eq!(model.buffers.len(), 2);
+    assert_eq!(model.buffers.entries.len(), 2);
 }
 
 #[test]
@@ -103,7 +103,7 @@ fn six_buffers_restore_cached_syntax_while_switching() {
     }
 
     let mut model = model.expect("model");
-    assert_eq!(model.buffers.len(), 6);
+    assert_eq!(model.buffers.entries.len(), 6);
     for index in 0..6 {
         model.switch_to_buffer(index);
         assert!(
@@ -270,9 +270,9 @@ fn mouse_tab_switch_preserves_the_active_buffer() {
         modifiers: crossterm::event::KeyModifiers::NONE,
     };
     assert!(crate::mouse::handle_mouse(&mut model, click(13), 80, 24));
-    assert_eq!(model.active, 1);
+    assert_eq!(model.buffers.active, 1);
     assert!(crate::mouse::handle_mouse(&mut model, click(2), 80, 24));
-    assert_eq!(model.active, 0);
+    assert_eq!(model.buffers.active, 0);
     assert_eq!(model.editor.text().slice(0..6), "Xfirst");
     assert!(model.modified);
 }
@@ -293,10 +293,10 @@ fn closing_active_middle_buffer_keeps_the_following_buffer() {
     model.switch_to_buffer(1);
     model.close_buffer(1, false);
 
-    assert_eq!(model.buffers.len(), 2);
-    assert_eq!(model.active, 1);
+    assert_eq!(model.buffers.entries.len(), 2);
+    assert_eq!(model.buffers.active, 1);
     assert_eq!(model.editor.text().slice(0..5), "third");
-    assert_eq!(model.buffers[1].editor.text().slice(0..5), "third");
+    assert_eq!(model.buffers.entries[1].editor.text().slice(0..5), "third");
 }
 
 #[test]
@@ -322,8 +322,8 @@ fn new_and_close_buffer_lifecycle() {
 
     command(&mut model, "new");
     assert_eq!(model.path, None);
-    assert_eq!(model.buffers.len(), 2);
-    assert_eq!(model.active, 1);
+    assert_eq!(model.buffers.entries.len(), 2);
+    assert_eq!(model.buffers.active, 1);
     assert_eq!(model.editor.text().len_bytes(), 0);
 
     handle_event(&mut model, key(KeyCode::Char('i')));
@@ -340,11 +340,11 @@ fn new_and_close_buffer_lifecycle() {
     command(&mut model, "bd");
     handle_event(&mut model, key(KeyCode::Char('n')));
     assert_eq!(model.path.as_ref(), Some(&path));
-    assert_eq!(model.buffers.len(), 1);
+    assert_eq!(model.buffers.entries.len(), 1);
 
     command(&mut model, "bd");
     assert_eq!(model.path, None);
-    assert!(model.buffers.is_empty());
+    assert!(model.buffers.entries.is_empty());
     assert_eq!(model.editor.text().len_bytes(), 0);
 }
 
@@ -361,7 +361,7 @@ fn closing_modified_buffer_can_save_or_discard() {
     handle_event(&mut model, key(KeyCode::Char('y')));
     assert_eq!(fs::read_to_string(&path).expect("read"), "Xfile");
     assert_eq!(model.path, None);
-    assert!(model.buffers.is_empty());
+    assert!(model.buffers.entries.is_empty());
 
     fs::write(&path, "file").expect("rewrite");
     let mut model = Model::open(&path).expect("open");
@@ -406,8 +406,8 @@ fn close_indexed_buffer_keeps_active_buffer() {
 
     command(&mut model, "bd 1");
     assert_eq!(model.path.as_ref(), Some(&second));
-    assert_eq!(model.buffers.len(), 1);
-    assert_eq!(model.buffers[0].path.as_ref(), Some(&second));
+    assert_eq!(model.buffers.entries.len(), 1);
+    assert_eq!(model.buffers.entries[0].path.as_ref(), Some(&second));
 }
 
 #[test]
@@ -417,10 +417,10 @@ fn closing_buffer_clears_matching_split() {
     fs::write(&path, "file").expect("write");
     let mut model = Model::open(&path).expect("open");
     model.split_vertical();
-    assert!(model.split.is_some());
+    assert!(model.buffers.split.is_some());
 
     command(&mut model, "bd");
-    assert!(model.split.is_none());
+    assert!(model.buffers.split.is_none());
     assert!(!model.ui.focus.split);
     assert_eq!(model.path, None);
 }
@@ -440,6 +440,7 @@ fn closing_buffer_refuses_to_drop_dirty_split() {
     command(&mut model, "bd");
     assert!(
         model
+            .buffers
             .split
             .as_ref()
             .is_some_and(|pane| pane.buffer.modified)
@@ -457,7 +458,7 @@ fn buffer_bar_shows_dirty_missing_and_read_only_states() {
     fs::write(&second, "second").expect("second");
     let mut model = Model::open(&first).expect("open first");
     model.open_path(&second).expect("open second");
-    model.buffers[0].modified = true;
+    model.buffers.entries[0].modified = true;
     model.mark_missing(&second);
 
     let render = |model: &Model, width: u16, height: u16| {
@@ -494,8 +495,8 @@ fn buffer_bar_scrolls_to_many_buffers() {
         }
     }
     let model = model.expect("model");
-    assert_eq!(model.buffers.len(), 10);
-    assert_eq!(model.active, 9);
+    assert_eq!(model.buffers.entries.len(), 10);
+    assert_eq!(model.buffers.active, 9);
 
     let backend = TestBackend::new(40, 12);
     let mut terminal = Terminal::new(backend).expect("terminal");
@@ -1103,7 +1104,7 @@ fn failed_auto_save_aborts_the_focus_change() {
 
     model.switch_buffer(1);
 
-    assert_eq!(model.active, 0);
+    assert_eq!(model.buffers.active, 0);
     assert!(model.modified);
     assert!(model.status.contains("E:"));
 }
@@ -1246,7 +1247,7 @@ fn closing_a_dirty_split_pane_auto_saves() {
 
     model.close_split();
 
-    assert!(model.split.is_none());
+    assert!(model.buffers.split.is_none());
     assert_eq!(fs::read_to_string(&path).expect("content"), "Xa");
 }
 
@@ -1261,7 +1262,7 @@ fn closing_the_active_buffer_auto_saves_first() {
 
     model.close_buffer(0, false);
 
-    assert!(model.buffers.is_empty());
+    assert!(model.buffers.entries.is_empty());
     assert!(model.path.is_none());
     assert_eq!(fs::read_to_string(&path).expect("content"), "Xa");
 }

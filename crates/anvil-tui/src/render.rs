@@ -122,6 +122,7 @@ fn buffer_bar_line(model: &Model, width: u16) -> Line<'static> {
     let width = usize::from(width);
     let mut tabs: Vec<(String, Style)> = model
         .buffers
+        .entries
         .iter()
         .map(|buffer| {
             let name = buffer
@@ -140,9 +141,9 @@ fn buffer_bar_line(model: &Model, width: u16) -> Line<'static> {
             (format!(" {name}{marker} "), theme::panel())
         })
         .collect();
-    let mut active = model.active.min(tabs.len().saturating_sub(1));
-    if model.help_back.is_some() {
-        let name = model.read_only_title.as_deref().unwrap_or("help");
+    let mut active = model.buffers.active.min(tabs.len().saturating_sub(1));
+    if model.buffers.help_back.is_some() {
+        let name = model.buffers.read_only_title.as_deref().unwrap_or("help");
         tabs.push((format!(" [{name}] RO "), theme::selected()));
         active = tabs.len() - 1;
     }

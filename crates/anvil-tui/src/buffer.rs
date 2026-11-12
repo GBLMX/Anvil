@@ -21,13 +21,13 @@ impl Model {
 
     pub(crate) fn sync_active(&mut self) {
         let snapshot = self.snapshot();
-        if let Some(buffer) = self.buffers.get_mut(self.active) {
+        if let Some(buffer) = self.buffers.entries.get_mut(self.buffers.active) {
             *buffer = snapshot;
         }
     }
 
     pub(crate) fn switch_to_buffer(&mut self, index: usize) {
-        if self.help_back.is_none() {
+        if self.buffers.help_back.is_none() {
             self.sync_active();
         }
         self.load_buffer(index);
@@ -39,7 +39,7 @@ impl Model {
         self.ui.diagnostic_peek = None;
         self.overlays.lsp_results.code_actions = None;
         self.overlays.lsp_results.document_symbols = None;
-        let Some(buffer) = self.buffers.get(index).cloned() else {
+        let Some(buffer) = self.buffers.entries.get(index).cloned() else {
             return;
         };
         let syntax = buffer.syntax.clone();
@@ -59,7 +59,7 @@ impl Model {
         self.syntax
             .borrow_mut()
             .switch_path_with(self.path.as_deref(), false, Some(syntax));
-        self.active = index;
+        self.buffers.active = index;
         self.ui.input_mode = InputMode::Normal;
         self.pending = None;
         self.sync_lsp_active();
@@ -68,22 +68,22 @@ impl Model {
 
     fn ensure_current_buffer(&mut self) -> usize {
         self.sync_active();
-        if self.buffers.is_empty() {
-            self.buffers.push(self.snapshot());
-            self.active = 0;
+        if self.buffers.entries.is_empty() {
+            self.buffers.entries.push(self.snapshot());
+            self.buffers.active = 0;
         }
-        self.active
+        self.buffers.active
     }
 
     pub(crate) fn new_buffer(&mut self) {
-        if self.help_back.is_some() {
+        if self.buffers.help_back.is_some() {
             let _ = self.close_help();
         }
         if !self.auto_save_before_focus_change() {
             return;
         }
         self.ensure_current_buffer();
-        self.buffers.push(Buffer {
+        self.buffers.entries.push(Buffer {
             editor: EditorState::from_text("").into(),
             path: None,
             cursor: 0,
@@ -96,7 +96,7 @@ impl Model {
             search_query: String::new(),
             syntax: Default::default(),
         });
-        let index = self.buffers.len() - 1;
+        let index = self.buffers.entries.len() - 1;
         self.load_buffer(index);
         self.status = "new buffer".to_owned();
         self.sync_watch_paths();
@@ -104,10 +104,11 @@ impl Model {
     }
 
     pub(crate) fn buffer_name(&self, index: usize) -> String {
-        if index == self.active && self.stdin_buffer {
+        if index == self.buffers.active && self.stdin_buffer {
             return "[stdin]".to_owned();
         }
         self.buffers
+            .entries
             .get(index)
             .and_then(|buffer| buffer.path.as_ref())
             .map(|path| path.display().to_string())
@@ -116,27 +117,27 @@ impl Model {
 
     pub(crate) fn save_buffer(&mut self, index: usize) -> bool {
         self.sync_active();
-        if index >= self.buffers.len() {
+        if index >= self.buffers.entries.len() {
             self.status = "E: invalid buffer index".to_owned();
             self.dirty = true;
             return false;
         }
-        if index == self.active {
+        if index == self.buffers.active {
             return self.save();
         }
-        let Some(path) = self.buffers[index].path.clone() else {
+        let Some(path) = self.buffers.entries[index].path.clone() else {
             self.status = "E: buffer has no file name".to_owned();
             self.dirty = true;
             return false;
         };
-        let text = self.buffers[index]
+        let text = self.buffers.entries[index]
             .editor
             .text()
-            .slice(0..self.buffers[index].editor.text().len_bytes());
+            .slice(0..self.buffers.entries[index].editor.text().len_bytes());
         let display = path.display().to_string();
         match self.write_file(&path, &text) {
             Ok(()) => {
-                if let Some(buffer) = self.buffers.get_mut(index) {
+                if let Some(buffer) = self.buffers.entries.get_mut(index) {
                     buffer.modified = false;
                     buffer.missing = false;
                 }
@@ -154,19 +155,19 @@ impl Model {
 
     pub(crate) fn close_buffer(&mut self, index: usize, force: bool) {
         self.ensure_current_buffer();
-        if index >= self.buffers.len() {
+        if index >= self.buffers.entries.len() {
             self.status = "E: invalid buffer index".to_owned();
             self.dirty = true;
             return;
         }
-        if self.buffers[index].modified && !force {
-            if index == self.active && self.settings.editor.auto_save {
+        if self.buffers.entries[index].modified && !force {
+            if index == self.buffers.active && self.settings.editor.auto_save {
                 if !self.auto_save_before_focus_change() {
                     return;
                 }
                 self.sync_active();
             }
-            if self.buffers[index].modified {
+            if self.buffers.entries[index].modified {
                 self.ui.input_mode = InputMode::ConfirmClose { index };
                 self.status = format!("Save {} before closing? [Y/n/c]", self.buffer_name(index));
                 self.dirty = true;
@@ -177,39 +178,48 @@ impl Model {
         self.sync_watch_paths();
     }
     fn finish_close_buffer(&mut self, index: usize) {
-        let was_active = index == self.active;
-        let target_path = self.buffers[index].path.clone();
-        let split_same =
-            self.split
+        let was_active = index == self.buffers.active;
+        let target_path = self.buffers.entries[index].path.clone();
+        let split_same = self.buffers.split.as_ref().is_some_and(|pane| {
+            match (&target_path, &pane.buffer.path) {
+                (Some(target), Some(split)) => target == split,
+                (None, None) => was_active,
+                _ => false,
+            }
+        });
+        if split_same
+            && self
+                .buffers
+                .split
                 .as_ref()
-                .is_some_and(|pane| match (&target_path, &pane.buffer.path) {
-                    (Some(target), Some(split)) => target == split,
-                    (None, None) => was_active,
-                    _ => false,
-                });
-        if split_same && self.split.as_ref().is_some_and(|pane| pane.buffer.modified) {
+                .is_some_and(|pane| pane.buffer.modified)
+        {
             self.status = "E: split pane has unsaved changes".to_owned();
             self.dirty = true;
             return;
         }
         if split_same {
-            self.split = None;
+            self.buffers.split = None;
             self.ui.focus.split = false;
         }
-        self.buffers.remove(index);
-        if self.buffers.is_empty() {
+        self.buffers.entries.remove(index);
+        if self.buffers.entries.is_empty() {
             self.reset_empty_buffer();
             self.status = "buffer closed".to_owned();
             self.dirty = true;
             return;
         }
         if was_active {
-            let next = index.min(self.buffers.len() - 1);
+            let next = index.min(self.buffers.entries.len() - 1);
             self.load_buffer(next);
-        } else if index < self.active {
-            self.active -= 1;
+        } else if index < self.buffers.active {
+            self.buffers.active -= 1;
         }
-        self.status = format!("buffer {}/{} closed", index + 1, self.buffers.len() + 1);
+        self.status = format!(
+            "buffer {}/{} closed",
+            index + 1,
+            self.buffers.entries.len() + 1
+        );
         self.dirty = true;
     }
 
@@ -230,9 +240,9 @@ impl Model {
         self.welcome_back = false;
         self.ui.input_mode = InputMode::Normal;
         self.pending = None;
-        self.split = None;
+        self.buffers.split = None;
         self.ui.focus.split = false;
-        self.active = 0;
+        self.buffers.active = 0;
         self.sync_lsp_active();
         self.dirty = true;
     }
@@ -243,7 +253,7 @@ impl Model {
             self.dirty = true;
             return;
         }
-        if self.help_back.is_some() {
+        if self.buffers.help_back.is_some() {
             let _ = self.close_help();
         }
         let path = match self.absolute_path(Path::new(path)) {
@@ -270,6 +280,7 @@ impl Model {
         }
         if let Some(index) = self
             .buffers
+            .entries
             .iter()
             .position(|buffer| buffer.path.as_ref() == Some(&path))
         {
@@ -278,7 +289,7 @@ impl Model {
             self.status = format!(
                 "buffer {}/{}: {}",
                 index + 1,
-                self.buffers.len(),
+                self.buffers.entries.len(),
                 path.display()
             );
             self.dirty = true;
@@ -293,10 +304,10 @@ impl Model {
             }
         };
         self.sync_active();
-        if self.buffers.is_empty() {
-            self.buffers.push(self.snapshot());
+        if self.buffers.entries.is_empty() {
+            self.buffers.entries.push(self.snapshot());
         }
-        self.buffers.push(Buffer {
+        self.buffers.entries.push(Buffer {
             editor: EditorState::from_text(&text).into(),
             path: Some(path.clone()),
             cursor: 0,
@@ -309,29 +320,29 @@ impl Model {
             search_query: String::new(),
             syntax: Default::default(),
         });
-        let index = self.buffers.len() - 1;
+        let index = self.buffers.entries.len() - 1;
         self.load_buffer(index);
         self.status = format!(
             "buffer {}/{}: {}",
             index + 1,
-            self.buffers.len(),
+            self.buffers.entries.len(),
             path.display()
         );
         self.dirty = true;
     }
 
     pub(crate) fn switch_buffer(&mut self, delta: isize) {
-        if self.help_back.is_some() {
+        if self.buffers.help_back.is_some() {
             let _ = self.close_help();
         }
-        if self.buffers.is_empty() {
+        if self.buffers.entries.is_empty() {
             self.status = "E: only one buffer".to_owned();
             self.dirty = true;
             return;
         }
-        let len = self.buffers.len();
-        let target = (self.active as isize + delta).rem_euclid(len as isize) as usize;
-        if target == self.active {
+        let len = self.buffers.entries.len();
+        let target = (self.buffers.active as isize + delta).rem_euclid(len as isize) as usize;
+        if target == self.buffers.active {
             self.status = "E: only one buffer".to_owned();
             self.dirty = true;
             return;
@@ -351,12 +362,17 @@ impl Model {
 
     pub(crate) fn any_modified(&self) -> bool {
         self.modified
-            || self.split.as_ref().is_some_and(|pane| pane.buffer.modified)
             || self
                 .buffers
+                .split
+                .as_ref()
+                .is_some_and(|pane| pane.buffer.modified)
+            || self
+                .buffers
+                .entries
                 .iter()
                 .enumerate()
-                .any(|(index, buffer)| index != self.active && buffer.modified)
+                .any(|(index, buffer)| index != self.buffers.active && buffer.modified)
     }
 
     pub(crate) fn request_quit(&mut self) {

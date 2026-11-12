@@ -365,13 +365,13 @@ impl Model {
         self.path
             .as_ref()
             .is_some_and(|open| open == path || open.starts_with(path))
-            || self.buffers.iter().any(|buffer| {
+            || self.buffers.entries.iter().any(|buffer| {
                 buffer
                     .path
                     .as_ref()
                     .is_some_and(|open| open == path || open.starts_with(path))
             })
-            || self.split.as_ref().is_some_and(|pane| {
+            || self.buffers.split.as_ref().is_some_and(|pane| {
                 pane.buffer
                     .path
                     .as_ref()
@@ -392,12 +392,12 @@ impl Model {
         if let Some(path) = self.path.as_mut() {
             *path = remap(path);
         }
-        for buffer in &mut self.buffers {
+        for buffer in &mut self.buffers.entries {
             if let Some(path) = buffer.path.as_mut() {
                 *path = remap(path);
             }
         }
-        if let Some(pane) = self.split.as_mut()
+        if let Some(pane) = self.buffers.split.as_mut()
             && let Some(path) = pane.buffer.path.as_mut()
         {
             *path = remap(path);

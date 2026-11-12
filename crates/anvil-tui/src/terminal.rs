@@ -226,7 +226,7 @@ pub fn run_with_input(
     let terminal_ready = start.elapsed();
     let mut first_draw = true;
     let mut last_session_revision = model.editor.revision();
-    let mut last_session_active = model.active;
+    let mut last_session_active = model.buffers.active;
     let mut session_saved_at = Instant::now();
     let mut session_error_reported = false;
     let mut insert_cursor: Option<bool> = None;
@@ -298,14 +298,14 @@ pub fn run_with_input(
         }
         if session_enabled
             && (model.editor.revision() != last_session_revision
-                || model.active != last_session_active)
+                || model.buffers.active != last_session_active)
             && session_saved_at.elapsed() >= std::time::Duration::from_secs(2)
         {
             match session::save(&mut model, &workspace) {
                 Ok(()) => {
                     session_error_reported = false;
                     last_session_revision = model.editor.revision();
-                    last_session_active = model.active;
+                    last_session_active = model.buffers.active;
                     session_saved_at = Instant::now();
                 }
                 Err(error) => {

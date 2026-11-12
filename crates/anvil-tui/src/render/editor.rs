@@ -6,8 +6,11 @@ use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 pub fn view(model: &Model, frame: &mut Frame) {
     let area = frame.area();
     let editor_view: EditorView = model.editor.snapshot().view();
-    let title = if model.help_back.is_some() {
-        format!("[{}]", model.read_only_title.as_deref().unwrap_or("help"))
+    let title = if model.buffers.help_back.is_some() {
+        format!(
+            "[{}]",
+            model.buffers.read_only_title.as_deref().unwrap_or("help")
+        )
     } else {
         let name = if model.stdin_buffer {
             "[stdin]".to_owned()
@@ -24,10 +27,14 @@ pub fn view(model: &Model, frame: &mut Frame) {
         } else {
             name
         };
-        if model.buffers.is_empty() {
+        if model.buffers.entries.is_empty() {
             name
         } else {
-            format!("[{}/{}] {name}", model.active + 1, model.buffers.len())
+            format!(
+                "[{}/{}] {name}",
+                model.buffers.active + 1,
+                model.buffers.entries.len()
+            )
         }
     };
     let debug_revision = std::env::var_os("ANVIL_DEBUG_REV").is_some();
@@ -142,7 +149,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
         width: area.width.saturating_sub(2),
         height: area.height.saturating_sub(2),
     };
-    if !model.welcome && (model.buffers.len() > 1 || model.help_back.is_some()) {
+    if !model.welcome && (model.buffers.entries.len() > 1 || model.buffers.help_back.is_some()) {
         let bar = Rect {
             height: inner.height.min(1),
             ..inner
@@ -219,9 +226,10 @@ pub fn view(model: &Model, frame: &mut Frame) {
             let modified = model.path.as_ref() == Some(&entry.path) && model.modified
                 || model
                     .buffers
+                    .entries
                     .iter()
                     .any(|buffer| buffer.path.as_ref() == Some(&entry.path) && buffer.modified)
-                || model.split.as_ref().is_some_and(|pane| {
+                || model.buffers.split.as_ref().is_some_and(|pane| {
                     pane.buffer.path.as_ref() == Some(&entry.path) && pane.buffer.modified
                 });
             if modified {
@@ -465,7 +473,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
             );
         }
     }
-    if let Some(split) = &model.split {
+    if let Some(split) = &model.buffers.split {
         let half = content.width.saturating_mul(model.split_ratio.min(100)) / 100;
         let split_area = if model.ui.focus.split {
             Rect {

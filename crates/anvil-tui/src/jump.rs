@@ -129,7 +129,7 @@ impl Model {
     }
 
     fn jump_to(&mut self, entry: &JumpEntry) -> bool {
-        if self.help_back.is_some() {
+        if self.buffers.help_back.is_some() {
             self.close_help();
         }
         if self.path.as_ref() != Some(&entry.path)

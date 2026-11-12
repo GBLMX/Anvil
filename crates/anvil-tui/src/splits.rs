@@ -4,12 +4,12 @@ use super::*;
 
 impl Model {
     pub(crate) fn split_vertical(&mut self) {
-        if self.split.is_some() {
+        if self.buffers.split.is_some() {
             self.status = "split already open".to_owned();
             self.dirty = true;
             return;
         }
-        self.split = Some(Pane {
+        self.buffers.split = Some(Pane {
             buffer: self.snapshot(),
         });
         self.ui.focus.split = false;
@@ -30,7 +30,7 @@ impl Model {
     }
 
     pub(crate) fn focus_split(&mut self, right: bool) {
-        if self.split.is_none() {
+        if self.buffers.split.is_none() {
             return;
         }
         if self.ui.focus.split == right {
@@ -45,10 +45,10 @@ impl Model {
             return;
         }
         let current = self.snapshot();
-        let Some(other) = self.split.take() else {
+        let Some(other) = self.buffers.split.take() else {
             return;
         };
-        self.split = Some(Pane { buffer: current });
+        self.buffers.split = Some(Pane { buffer: current });
         self.restore_buffer(other.buffer);
         self.ui.focus.split = right;
         self.sync_watch_paths();
@@ -57,7 +57,7 @@ impl Model {
     }
 
     pub(crate) fn scroll_split_rows(&mut self, delta: isize) {
-        let Some(pane) = self.split.as_mut() else {
+        let Some(pane) = self.buffers.split.as_mut() else {
             return;
         };
         let total = pane.buffer.editor.index().len_lines();
@@ -73,7 +73,7 @@ impl Model {
     }
 
     pub(crate) fn close_split(&mut self) {
-        if self.split.is_none() {
+        if self.buffers.split.is_none() {
             return;
         }
         if !self.auto_save_before_focus_change() {
@@ -84,16 +84,21 @@ impl Model {
             self.dirty = true;
             return;
         }
-        if self.split.as_ref().is_some_and(|pane| pane.buffer.modified) {
+        if self
+            .buffers
+            .split
+            .as_ref()
+            .is_some_and(|pane| pane.buffer.modified)
+        {
             self.status = "No write since last change in split (:q! to override)".to_owned();
             self.dirty = true;
             return;
         }
         if self.ui.focus.split {
-            let other = self.split.take().expect("split");
+            let other = self.buffers.split.take().expect("split");
             self.restore_buffer(other.buffer);
         } else {
-            self.split = None;
+            self.buffers.split = None;
         }
         self.ui.focus.split = false;
         self.status = "split closed".to_owned();
@@ -105,15 +110,18 @@ impl Model {
         let active = match buffer.path.as_ref() {
             Some(path) => self
                 .buffers
+                .entries
                 .iter()
                 .position(|candidate| candidate.path.as_ref() == Some(path)),
             None => self
                 .buffers
-                .get(self.active)
+                .entries
+                .get(self.buffers.active)
                 .filter(|candidate| candidate.path.is_none())
-                .map(|_| self.active)
+                .map(|_| self.buffers.active)
                 .or_else(|| {
                     self.buffers
+                        .entries
                         .iter()
                         .position(|candidate| candidate.path.is_none())
                 }),
@@ -130,7 +138,7 @@ impl Model {
         self.search_query = buffer.search_query;
         self.search.reset_for_buffer();
         if let Some(active) = active {
-            self.active = active;
+            self.buffers.active = active;
         }
         self.ui.input_mode = InputMode::Normal;
         self.pending = None;

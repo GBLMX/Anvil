@@ -90,7 +90,7 @@ pub(crate) fn handle_mouse(model: &mut Model, mouse: MouseEvent, width: u16, hei
                     model.execute_code_lens(index);
                 }
                 Target::Tabs(index) => {
-                    if index < model.buffers.len() && index != model.active {
+                    if index < model.buffers.entries.len() && index != model.buffers.active {
                         model.switch_to_buffer(index);
                     }
                     model.focus_editor();
@@ -166,13 +166,13 @@ pub(crate) fn handle_mouse(model: &mut Model, mouse: MouseEvent, width: u16, hei
             } else {
                 Side::Left
             };
-            let split_target = model.split.is_some() && side != active_side;
+            let split_target = model.buffers.split.is_some() && side != active_side;
             if mouse
                 .modifiers
                 .contains(crossterm::event::KeyModifiers::SHIFT)
             {
                 if split_target {
-                    if let Some(pane) = model.split.as_mut() {
+                    if let Some(pane) = model.buffers.split.as_mut() {
                         pane.buffer.hscroll = pane
                             .buffer
                             .hscroll
@@ -260,7 +260,7 @@ pub(crate) fn hit_test(model: &Model, col: u16, row: u16, width: u16, height: u1
         return Target::Status;
     }
     let split_x = split_x(editor_inner, model.split_ratio);
-    if model.split.is_some() && col.abs_diff(split_x) <= 1 {
+    if model.buffers.split.is_some() && col.abs_diff(split_x) <= 1 {
         return Target::SplitHandle;
     }
     let (side, line, column) = editor_position_at(model, col, row, width, height).unwrap_or((
@@ -289,7 +289,7 @@ fn content_rect(
         return None;
     }
     let mut tab_row = None;
-    if model.buffers.len() > 1 || model.help_back.is_some() {
+    if model.buffers.entries.len() > 1 || model.buffers.help_back.is_some() {
         tab_row = Some(inner.y);
         inner.y = inner.y.saturating_add(1);
         inner.height = inner.height.saturating_sub(1);
@@ -327,7 +327,7 @@ fn split_x(inner: Rect, ratio: u16) -> u16 {
 
 fn pane_at(model: &Model, inner: Rect, col: u16) -> (Side, u16, u16) {
     let split_x = split_x(inner, model.split_ratio);
-    if model.split.is_some() {
+    if model.buffers.split.is_some() {
         if col < split_x {
             (Side::Left, inner.x, split_x.saturating_sub(inner.x))
         } else {
@@ -489,7 +489,7 @@ fn inside_overlay(model: &Model, col: u16, row: u16, area: Rect) -> bool {
 
 fn focus_editor_side(model: &mut Model, side: Side) {
     model.ui.focus.tree = false;
-    if model.split.is_none() {
+    if model.buffers.split.is_none() {
         model.ui.focus.split = false;
     } else {
         let split_side = Side::Right;
@@ -556,7 +556,7 @@ fn split_ratio_at(inner: Rect, col: u16) -> u16 {
 
 fn tab_at(model: &Model, offset: u16, _width: u16) -> usize {
     let mut used = 0u16;
-    for (index, buffer) in model.buffers.iter().enumerate() {
+    for (index, buffer) in model.buffers.entries.iter().enumerate() {
         let name = buffer
             .path
             .as_ref()
@@ -570,5 +570,5 @@ fn tab_at(model: &Model, offset: u16, _width: u16) -> usize {
         }
         used = used.saturating_add(label_width + 1);
     }
-    model.active
+    model.buffers.active
 }

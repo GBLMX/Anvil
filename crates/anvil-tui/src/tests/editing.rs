@@ -174,7 +174,7 @@ fn pending_commands_consume_the_count() {
     handle_event(&mut model, ctrl(KeyCode::Char('w')));
     handle_event(&mut model, key(KeyCode::Char('v')));
     assert_eq!(model.count, 0);
-    assert!(model.split.is_some());
+    assert!(model.buffers.split.is_some());
 
     let mut model = Model::new(EditorState::from_text("one"), None);
     handle_event(&mut model, key(KeyCode::Char('2')));
@@ -207,7 +207,7 @@ fn context_keymap_runs_direct_pending_action() {
     )
     .expect("valid contextual keymap");
     handle_event(&mut model, ctrl(KeyCode::Char('w')));
-    assert!(model.split.is_some());
+    assert!(model.buffers.split.is_some());
 }
 
 #[test]
@@ -596,7 +596,7 @@ fn help_is_read_only_and_returns_to_the_previous_buffer() {
     handle_event(&mut model, key(KeyCode::Char(':')));
     type_text(&mut model, "help");
     handle_event(&mut model, key(KeyCode::Enter));
-    assert!(model.help_back.is_some());
+    assert!(model.buffers.help_back.is_some());
     assert_eq!(model.editor.text().slice(0..HELP_TEXT.len()), HELP_TEXT);
     assert_eq!(model.ui.input_mode, InputMode::Normal);
 
@@ -609,7 +609,7 @@ fn help_is_read_only_and_returns_to_the_previous_buffer() {
     handle_event(&mut model, key(KeyCode::Char(':')));
     type_text(&mut model, "q");
     handle_event(&mut model, key(KeyCode::Enter));
-    assert!(model.help_back.is_none());
+    assert!(model.buffers.help_back.is_none());
     assert_eq!(model.editor.text().slice(0..8), "original");
     assert_eq!(model.path, Some(original_path));
     assert_eq!(model.cursor, 3);
@@ -648,7 +648,7 @@ fn help_refuses_writes() {
     handle_event(&mut model, key(KeyCode::Char(':')));
     type_text(&mut model, "w");
     handle_event(&mut model, key(KeyCode::Enter));
-    assert!(model.help_back.is_some());
+    assert!(model.buffers.help_back.is_some());
     assert!(model.status.contains("read-only"));
     assert_eq!(model.editor.text().slice(0..HELP_TEXT.len()), HELP_TEXT);
 }
