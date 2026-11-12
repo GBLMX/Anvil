@@ -136,7 +136,20 @@ impl Model {
         self.fuzzy_generation = self.fuzzy_generation.saturating_add(1);
         let entries = files
             .iter()
-            .map(|path| path.to_string_lossy().into_owned())
+            .map(|path| {
+                let primary = self
+                    .workspace_roots
+                    .owning_root(path)
+                    .is_some_and(|root| root.path == self.workspace);
+                if primary {
+                    path.strip_prefix(&self.workspace)
+                        .unwrap_or(path)
+                        .to_string_lossy()
+                        .into_owned()
+                } else {
+                    path.to_string_lossy().into_owned()
+                }
+            })
             .collect::<Vec<_>>();
         self.fuzzy = Some(FuzzyState {
             generation: self.fuzzy_generation,

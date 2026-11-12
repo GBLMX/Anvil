@@ -717,7 +717,9 @@ fn recent_files_and_workspaces_are_bounded_and_deduplicated() {
     assert_eq!(model.recent_files.len(), 20);
     assert_eq!(model.recent_files[0], PathBuf::from("/outside/ignored.rs"));
     model.open_recent_files();
-    assert_eq!(model.fuzzy.as_ref().expect("fuzzy").entries.len(), 19);
+    let entries = &model.fuzzy.as_ref().expect("fuzzy").entries;
+    assert_eq!(entries.len(), 19);
+    assert!(entries.iter().all(|entry| !entry.starts_with('/')));
 }
 
 #[test]
