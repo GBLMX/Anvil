@@ -943,6 +943,13 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             KeyCode::Char('h') | KeyCode::Left => model.tree_collapse(),
             KeyCode::Char('l') | KeyCode::Right | KeyCode::Enter => model.tree_toggle(),
             KeyCode::Char('H') => model.toggle_hidden(),
+            KeyCode::Char(':') => {
+                model.ui.input_mode = InputMode::CommandLine {
+                    buffer: InputBuffer::default(),
+                };
+                model.overlays.command_completion = None;
+                model.file.dirty = true;
+            }
             KeyCode::Char('a') => model.begin_tree_create(CreateKind::File),
             KeyCode::Char('A') => model.begin_tree_create(CreateKind::Directory),
             KeyCode::Char('r') => model.begin_tree_rename(),

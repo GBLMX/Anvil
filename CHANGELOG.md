@@ -271,6 +271,8 @@ post-`0.5.0` feature line.
   change.
 
 ### Fixed
+- The file tree now opens the command line on `:`, so commands such as
+  `:workspace-remove` work while the tree has focus.
 - Settings edits no longer replace the active `ANVIL_THEME`; theme changes are
   applied only when the settings theme value changes, cancel restores the
   active theme, and unrelated saves keep the file theme.
