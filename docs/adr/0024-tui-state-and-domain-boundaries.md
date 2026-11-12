@@ -252,12 +252,16 @@ a second frontend exists would make the first extraction much more expensive.
 
 Phase 1 started on 2026-11-12:
 
-- `Model.overlays` now owns `command_palette`, `settings_overlay`,
+- `Model.overlays` owns `command_palette`, `settings_overlay`,
   `theme_browser`, `fuzzy`, `preview`, `debug_panel`, `test_explorer`,
-  `command_completion`, command-palette recents, and the pipe-location panel.
+  `command_completion`, command-palette recents, the pipe-location panel, and
+  LSP presentation results (`lsp_results`).
+- `Model.language` owns `DapState`, `DiagnosticsState`, and `LspState`;
+  `LspState` keeps transport, worker, request, and cancellation bookkeeping.
 - Existing behavior is unchanged; tests access the composed state explicitly.
-- The remaining fuzzy/preview/problems/diagnostics/test/debug page state is
-  still on `Model` and moves in later behavior-preserving slices.
+- `Model` now has 145 top-level fields. Remaining buffers, UI, workspace, and
+  session page state moves in later behavior-preserving slices.
+
 
 ## Acceptance
 
