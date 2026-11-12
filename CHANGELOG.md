@@ -12,6 +12,10 @@ post-`0.5.0` feature line.
   Rust, Go, shell, Python, TOML, YAML, JSONC, Makefile, Dockerfile, and
   `go.mod` files. The operation is one undo transaction and refuses
   read-only buffers.
+- `Ctrl-o`/`Alt-o` and `Ctrl-i`/`Alt-i` navigate a bounded 256-entry jump
+  history across definitions, references, call hierarchy, symbols,
+  diagnostics, quick-open, search, and stdin locations. A new jump clears the
+  forward stack.
 - `anvil-ctl` is a JSON-capable control plane for a running TUI: `open`,
   `save`, `edit set|insert`, bounded `query`, allowlisted Ex `command`, and
   `quit`, with stable exit codes, timeouts, and typed errors. The control

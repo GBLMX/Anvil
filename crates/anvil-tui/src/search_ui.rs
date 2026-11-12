@@ -108,6 +108,7 @@ impl Model {
             self.dirty = true;
             return;
         }
+        self.record_jump();
         let len = self.search.matches.len();
         self.search.current = if forward {
             (self.search.current + 1) % len

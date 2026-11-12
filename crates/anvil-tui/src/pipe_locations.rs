@@ -241,6 +241,7 @@ impl Model {
             self.dirty = true;
             return;
         }
+        self.record_jump();
         if self.path.as_deref() != Some(path.as_path())
             && let Err(error) = self.open_path(&path)
         {

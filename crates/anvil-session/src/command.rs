@@ -51,6 +51,8 @@ pub const UNDO: CommandId = CommandId::new("editor.undo");
 pub const REDO: CommandId = CommandId::new("editor.redo");
 pub const REPEAT_CHANGE: CommandId = CommandId::new("editor.repeat_change");
 pub const TOGGLE_COMMENT: CommandId = CommandId::new("editor.toggle_comment");
+pub const JUMP_BACK: CommandId = CommandId::new("navigation.jump_back");
+pub const JUMP_FORWARD: CommandId = CommandId::new("navigation.jump_forward");
 pub const LINE_START: CommandId = CommandId::new("cursor.line_start");
 pub const LINE_END: CommandId = CommandId::new("cursor.line_end");
 pub const WORD_NEXT: CommandId = CommandId::new("cursor.word_next");
@@ -124,6 +126,8 @@ pub const COMMANDS: &[CommandSpec] = &[
     spec(REPEAT_CHANGE, NORMAL),
     spec(TOGGLE_COMMENT, NORMAL),
     spec(LINE_START, NORMAL),
+    spec(JUMP_BACK, NORMAL),
+    spec(JUMP_FORWARD, NORMAL),
     spec(LINE_END, NORMAL),
     spec(WORD_NEXT, NORMAL),
     spec(WORD_PREVIOUS, NORMAL),

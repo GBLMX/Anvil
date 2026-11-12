@@ -301,6 +301,7 @@ impl Model {
         let Some(&(line, character)) = selected else {
             return;
         };
+        self.record_jump();
         self.cursor = self.offset_at_utf16(line, character);
         self.open_diagnostic_peek(path, line as u32, character as u32);
         let index = positions
@@ -811,6 +812,7 @@ impl Model {
         else {
             return;
         };
+        self.record_jump();
         if self.path.as_ref() != Some(&symbol.path)
             && let Err(error) = self.open_path(&symbol.path)
         {
@@ -922,6 +924,7 @@ impl Model {
         let Some(symbol) = symbols.items.get(symbols.selected).cloned() else {
             return;
         };
+        self.record_jump();
         self.cursor = self.offset_at_utf16(symbol.line, symbol.character);
         self.status = format!("symbol {}", symbol.name);
         self.dirty = true;
@@ -944,6 +947,7 @@ impl Model {
         let Some(reference) = references.items.get(references.selected).cloned() else {
             return;
         };
+        self.record_jump();
         if self.path.as_ref() != Some(&reference.path)
             && let Err(error) = self.open_path(&reference.path)
         {
@@ -977,6 +981,7 @@ impl Model {
         let Some(item) = calls.items.get(calls.selected).cloned() else {
             return;
         };
+        self.record_jump();
         if self.path.as_ref() != Some(&item.path)
             && let Err(error) = self.open_path(&item.path)
         {

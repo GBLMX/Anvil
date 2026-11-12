@@ -48,6 +48,8 @@ Normal mode
   p                   put unnamed register
   u / Ctrl+r          undo / redo
   Ctrl+/              toggle line comments
+  Ctrl-o / Alt-o      jump back through navigation history
+  Ctrl-i / Alt-i      jump forward through navigation history
   /pattern            incremental search; Enter accepts, Esc restores cursor
   :undo / :redo       undo / redo via Ex command
   n / N               next / previous match

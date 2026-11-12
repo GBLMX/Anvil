@@ -1357,3 +1357,44 @@ fn completion_uses_sort_text_preselect_and_filter_text() {
     assert_eq!(completion.filtered.len(), 1);
     assert_eq!(completion.items[completion.filtered[0]].label, "alpha");
 }
+
+#[test]
+fn definition_jump_back_and_forward_round_trip() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let main = dir.path().join("main.rs");
+    let other = dir.path().join("other.rs");
+    fs::write(&main, "fn main() {}\n").expect("main");
+    fs::write(&other, "fn target() {}\n").expect("other");
+    let mut model = Model::open(&main).expect("open");
+    let main = main.canonicalize().expect("main");
+    let other = other.canonicalize().expect("other");
+    let uri = lsp_worker::file_uri(&other);
+
+    model.apply_definition_response(&serde_json::json!([{
+        "targetUri": uri,
+        "targetSelectionRange": {
+            "start": {"line": 0, "character": 3},
+            "end": {"line": 0, "character": 9}
+        }
+    }]));
+    assert_eq!(model.path.as_deref(), Some(other.as_path()));
+    let target_cursor = model.cursor;
+
+    model.jump_back();
+    assert_eq!(model.path.as_deref(), Some(main.as_path()));
+    assert_eq!(model.cursor, 0);
+
+    model.jump_forward();
+    assert_eq!(model.path.as_deref(), Some(other.as_path()));
+    assert_eq!(model.cursor, target_cursor);
+}
+
+#[test]
+fn jump_back_without_history_reports_status() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("main.rs");
+    fs::write(&path, "fn main() {}\n").expect("write");
+    let mut model = Model::open(&path).expect("open");
+    model.jump_back();
+    assert!(model.status.contains("no back jump"));
+}

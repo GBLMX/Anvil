@@ -122,6 +122,8 @@ editor.put
 editor.undo
 editor.redo
 editor.toggle_comment
+navigation.jump_back
+navigation.jump_forward
 cursor.line_start
 cursor.line_end
 cursor.word_next

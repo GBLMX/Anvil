@@ -168,6 +168,7 @@ impl Model {
             return;
         };
         let path = self.workspace.join(&fuzzy.entries[*index]);
+        self.record_jump();
         match self.open_path(&path) {
             Ok(()) => {}
             Err(error) => self.status = format!("E: {error}"),

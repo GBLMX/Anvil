@@ -50,6 +50,7 @@ mod file_io;
 mod file_tree_ui;
 mod file_worker;
 mod folding;
+mod jump;
 use folding::{FoldAction, FoldRange};
 mod gateway;
 mod git_diff;
@@ -481,6 +482,8 @@ pub struct Model {
     pub path: Option<PathBuf>,
     /// Cursor byte offset.
     pub cursor: usize,
+    /// Bounded back/forward navigation history.
+    jump_list: jump::JumpList,
     /// Anchor for the selection-first visual adapter.
     visual_anchor: Option<usize>,
     /// Whether the visual adapter selects whole lines.
@@ -749,6 +752,7 @@ impl Model {
             welcome,
             welcome_back: false,
             cursor: 0,
+            jump_list: jump::JumpList::default(),
             visual_anchor: None,
             visual_line: false,
             modal_layer: None,

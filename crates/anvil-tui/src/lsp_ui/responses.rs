@@ -376,6 +376,7 @@ impl Model {
             .and_then(|start| start.get("character"))
             .and_then(serde_json::Value::as_u64)
             .unwrap_or(0) as usize;
+        self.record_jump();
         if self.path.as_ref() != Some(&path) {
             if let Err(error) = self.open_path(&path) {
                 self.status = format!("E: {error}");
