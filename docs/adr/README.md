@@ -30,6 +30,7 @@ their decision sections.
 | [0021](0021-signed-plugin-index.md) | Signed plugin index, revocations, anti-rollback | Accepted; verifier/cache partial |
 | [0022](0022-core-editing-completion.md) | Core editing completion and semantic ownership | Proposed |
 | [0023](0023-internal-capability-closure.md) | Internal capability closure before public distribution | Proposed |
+| [0024](0024-tui-state-and-domain-boundaries.md) | TUI state composition, page state, and domain boundaries | Proposed |
 
 ## Numbering Rule
 
