@@ -1,9 +1,9 @@
 # IDE Capability Plan
 
 Status: P0 mostly landed; P1 is in progress. Task runner, test failure explorer,
-DAP client, PTY terminal panel, and folding persistence landed. Search/replace,
-problems, quick-open preview, and icon themes are owned by
-`0.5.4`/`0.5.7`/`0.5.8`; this plan does not re-schedule them.
+DAP client, PTY terminal panel, multi-root routing core, and folding persistence
+landed. Search/replace, problems, quick-open preview, and icon themes are owned
+by `0.5.4`/`0.5.7`/`0.5.8`; this plan does not re-schedule them.
 
 Scope: editor-level capabilities that make Anvil usable for daily software work
 without turning the kernel into a full IDE. Anvil remains Linux-first, with no
@@ -47,7 +47,8 @@ reset/hot-reload boundary. Each item needs a deterministic failure test.
 - Terminal panel with explicit workspace and trust boundaries: PTY session,
   Admin-gated `:terminal*` controls, interactive bottom panel with key/paste
   routing, and process-group cleanup landed.
-- Multi-root workspaces with per-root gateway/trust policy.
+- Multi-root workspaces with per-root gateway/trust policy: `WorkspaceRoots`
+  routing/trust core landed; per-root gateway sessions remain pending.
 - Code folding with session persistence.
 - Auto-save policy remains; swap files and external-conflict recovery landed.
 

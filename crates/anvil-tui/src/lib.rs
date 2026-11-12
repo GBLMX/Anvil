@@ -70,6 +70,7 @@ mod remote;
 mod selection_table;
 mod session;
 mod theme_picker;
+pub mod workspace_roots;
 use selection_table::{SelectionItem, SelectionTable};
 mod pkg_install;
 mod plugin_activation;
