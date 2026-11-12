@@ -887,8 +887,9 @@ pub fn view(model: &Model, frame: &mut Frame) {
             return;
         }
         let group = crate::settings_ui::SettingsOverlayState::group(overlay.selected);
+        let active_tab = crate::settings_ui::SettingsOverlayState::tab(overlay.selected);
         let tab_style = |name| {
-            if name == group {
+            if name == active_tab {
                 theme::panel()
                     .fg(theme::accent())
                     .add_modifier(Modifier::BOLD)
@@ -899,9 +900,9 @@ pub fn view(model: &Model, frame: &mut Frame) {
         let tabs = Line::from(vec![
             Span::styled(" Editor ", tab_style("Editor")),
             Span::styled("│", theme::panel().fg(theme::border_color())),
-            Span::styled(" Interface ", tab_style("Accessibility")),
+            Span::styled(" Interface ", tab_style("Interface")),
             Span::styled("│", theme::panel().fg(theme::border_color())),
-            Span::styled(" Language ", tab_style("Search")),
+            Span::styled(" Language ", tab_style("Language")),
         ]);
         frame.render_widget(
             Paragraph::new(tabs).style(theme::panel()),

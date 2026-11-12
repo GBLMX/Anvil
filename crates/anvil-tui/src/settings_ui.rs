@@ -63,6 +63,14 @@ impl SettingsOverlayState {
         }
     }
 
+    pub(crate) fn tab(index: usize) -> &'static str {
+        match Self::group(index) {
+            "Editor" => "Editor",
+            "Search" | "LSP" => "Language",
+            _ => "Interface",
+        }
+    }
+
     pub(crate) fn value(settings: &Settings, index: usize) -> String {
         match index {
             0 => settings.editor.scroll_margin.to_string(),
@@ -181,6 +189,14 @@ impl Model {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn settings_tabs_map_every_group() {
+        assert_eq!(SettingsOverlayState::tab(0), "Editor");
+        assert_eq!(SettingsOverlayState::tab(4), "Language");
+        assert_eq!(SettingsOverlayState::tab(5), "Language");
+        assert_eq!(SettingsOverlayState::tab(6), "Interface");
+    }
 
     #[test]
     fn overlay_edits_apply_and_cancel_restores() {
