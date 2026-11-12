@@ -716,7 +716,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
         }
     }
 
-    if model.completion.is_some() {
+    if model.language.lsp.completion.is_some() {
         let consumed = match key.code {
             KeyCode::Esc => {
                 model.cancel_completion();
@@ -735,7 +735,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
                 true
             }
             KeyCode::Backspace => {
-                if let Some(completion) = model.completion.as_mut() {
+                if let Some(completion) = model.language.lsp.completion.as_mut() {
                     completion.query.pop();
                 }
                 model.backspace();
@@ -743,7 +743,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
                 true
             }
             KeyCode::Char(character) if text_input => {
-                if let Some(completion) = model.completion.as_mut() {
+                if let Some(completion) = model.language.lsp.completion.as_mut() {
                     completion.query.push(character);
                 }
                 model.insert_text(&character.to_string());

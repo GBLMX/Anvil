@@ -255,6 +255,7 @@ fn tree_shows_modified_and_diagnostic_markers() {
     model
         .language
         .diagnostics
+        .by_path
         .insert(path.clone(), vec![diagnostic(0, 0, "broken")]);
     model.git_status.insert(path.clone(), 'M');
 
@@ -422,6 +423,7 @@ fn notification_progress_and_problems_render_without_focus_change() {
     model
         .language
         .diagnostics
+        .by_path
         .insert(PathBuf::from("diag.rs"), vec![diagnostic(0, 0, "problem")]);
     model.rebuild_problems();
     model.ui.problems.visible = true;
@@ -572,6 +574,7 @@ fn tree_rolls_up_child_git_and_diagnostics_to_directory() {
     model
         .language
         .diagnostics
+        .by_path
         .insert(file, vec![diagnostic(0, 0, "broken")]);
 
     let backend = TestBackend::new(80, 12);

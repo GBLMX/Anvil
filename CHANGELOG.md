@@ -12,8 +12,9 @@ post-`0.5.0` feature line.
   browser, fuzzy, preview, debug panel, test explorer, command completion, and
   command-palette recents, and the pipe-location panel now live under
   `Model.overlays`; breakpoints, DAP runtime state, diagnostics, LSP workers,
-  LSP config, restart backoff, request bookkeeping, edit snapshots, and LSP
-  document versions moved under `Model.language`.
+  LSP config, restart backoff, request bookkeeping, edit snapshots, document
+  versions, and completion state moved under nested
+  `Model.language.lsp/.dap/.diagnostics`.
 - Settings is now a full page with top categories, a section sidebar,
   highlighted values, and a description footer.
 - The command palette renders title/detail columns, a result count, and a key

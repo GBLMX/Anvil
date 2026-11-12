@@ -660,13 +660,14 @@ impl Model {
         {
             *path = remap_path(path, from, to);
         }
-        let diagnostics = std::mem::take(&mut self.language.diagnostics);
-        self.language.diagnostics = diagnostics
+        let diagnostics = std::mem::take(&mut self.language.diagnostics.by_path);
+        self.language.diagnostics.by_path = diagnostics
             .into_iter()
             .map(|(path, value)| (remap_path(&path, from, to), value))
             .collect();
         self.language
-            .lsp_versions
+            .lsp
+            .versions
             .retain(|path, _| path != from && !path.starts_with(from));
         self.git_checked = None;
         self.git_marks.clear();
@@ -707,7 +708,7 @@ impl Model {
     }
 
     pub(crate) fn lsp_document_version(&self, path: &Path) -> Option<u64> {
-        self.language.lsp_versions.get(path).copied()
+        self.language.lsp.versions.get(path).copied()
     }
 }
 
@@ -836,7 +837,7 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         let mut model = open(&dir);
         let path = model.path.clone().expect("path");
-        model.language.lsp_versions.insert(path.clone(), 3);
+        model.language.lsp.versions.insert(path.clone(), 3);
         let workspace_edit = WorkspaceEdit::from_lsp(&serde_json::json!({
             "documentChanges": [{
                 "textDocument": {"uri": uri(&path), "version": 2},
@@ -856,7 +857,7 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         let mut model = open(&dir);
         let path = model.path.clone().expect("path");
-        model.language.lsp_versions.insert(path.clone(), 2);
+        model.language.lsp.versions.insert(path.clone(), 2);
         let workspace_edit = WorkspaceEdit::from_lsp(&serde_json::json!({
             "documentChanges": [{
                 "textDocument": {"uri": uri(&path), "version": 2},

@@ -154,8 +154,8 @@ impl Model {
             self.dirty = true;
             return false;
         };
-        let id = self.language.next_lsp_request;
-        self.language.next_lsp_request += 1;
+        let id = self.language.lsp.next_request;
+        self.language.lsp.next_request += 1;
         if self.active_lsp_worker().is_none() {
             self.status = "E: lsp is not running".to_owned();
             self.dirty = true;
@@ -177,7 +177,7 @@ impl Model {
             self.dirty = true;
             return false;
         }
-        self.language.pending_lsp.insert(id, kind);
+        self.language.lsp.pending.insert(id, kind);
         if matches!(
             kind,
             LspRequestKind::Rename
@@ -194,10 +194,12 @@ impl Model {
                 | LspRequestKind::StickySymbols
         ) {
             self.language
+                .lsp
                 .pending_edit_revision
                 .insert(id, self.editor.revision());
-            self.language.pending_edit_path.insert(id, path);
+            self.language.lsp.pending_edit_path.insert(id, path);
             self.language
+                .lsp
                 .pending_edit_snapshot
                 .insert(id, self.buffer_revisions());
         }
@@ -214,10 +216,10 @@ impl Model {
     }
 
     fn record_lsp_version(&mut self, path: &Path) {
-        if let Some(version) = self.language.lsp_versions.get_mut(path) {
+        if let Some(version) = self.language.lsp.versions.get_mut(path) {
             *version += 1;
         } else {
-            self.language.lsp_versions.insert(path.to_path_buf(), 1);
+            self.language.lsp.versions.insert(path.to_path_buf(), 1);
         }
     }
 
@@ -252,7 +254,7 @@ impl Model {
             self.dirty = true;
             return;
         };
-        let Some(diagnostics) = self.language.diagnostics.get(&path) else {
+        let Some(diagnostics) = self.language.diagnostics.by_path.get(&path) else {
             self.status = "no diagnostics".to_owned();
             self.dirty = true;
             return;
@@ -317,7 +319,7 @@ impl Model {
 
     pub(crate) fn notify_lsp_save(&mut self, path: &std::path::Path, text: &str) {
         let sent = if let Some(key) = Self::lsp_key(path)
-            && let Some(worker) = self.language.lsp_workers.get(&key)
+            && let Some(worker) = self.language.lsp.workers.get(&key)
         {
             worker.save(path, text.to_owned()).is_ok()
         } else {
@@ -329,10 +331,10 @@ impl Model {
     }
 
     pub(crate) fn clear_lsp_requests(&mut self) {
-        self.language.pending_lsp.clear();
-        self.language.pending_edit_revision.clear();
-        self.language.pending_edit_path.clear();
-        self.language.pending_edit_snapshot.clear();
+        self.language.lsp.pending.clear();
+        self.language.lsp.pending_edit_revision.clear();
+        self.language.lsp.pending_edit_path.clear();
+        self.language.lsp.pending_edit_snapshot.clear();
         self.signature_help = None;
         self.workspace_symbols = None;
         self.references = None;
@@ -348,7 +350,8 @@ impl Model {
 
     pub(crate) fn cancel_signature_help(&mut self) {
         self.language
-            .pending_lsp
+            .lsp
+            .pending
             .retain(|_, kind| *kind != LspRequestKind::SignatureHelp);
         self.signature_help = None;
         self.prune_edit_requests();
@@ -384,31 +387,34 @@ impl Model {
     }
 
     pub(crate) fn prune_edit_requests(&mut self) {
-        let pending: Vec<u64> = self.language.pending_lsp.keys().copied().collect();
+        let pending: Vec<u64> = self.language.lsp.pending.keys().copied().collect();
         self.language
+            .lsp
             .pending_edit_revision
             .retain(|id, _| pending.contains(id));
         self.language
+            .lsp
             .pending_edit_path
             .retain(|id, _| pending.contains(id));
         self.language
+            .lsp
             .pending_edit_snapshot
             .retain(|id, _| pending.contains(id));
     }
 
     pub(crate) fn cancel_completion(&mut self) {
-        self.language.pending_lsp.retain(|_, kind| {
+        self.language.lsp.pending.retain(|_, kind| {
             !matches!(
                 kind,
                 LspRequestKind::Completion | LspRequestKind::CompletionResolve
             )
         });
-        self.completion = None;
-        self.completion_resolve = None;
+        self.language.lsp.completion = None;
+        self.language.lsp.completion_resolve = None;
     }
 
     pub(crate) fn cancel_code_actions(&mut self) {
-        self.language.pending_lsp.retain(|_, kind| {
+        self.language.lsp.pending.retain(|_, kind| {
             !matches!(
                 kind,
                 LspRequestKind::CodeAction | LspRequestKind::DocumentSymbol
@@ -453,7 +459,7 @@ impl Model {
     }
 
     pub(crate) fn request_completion_resolve(&mut self) {
-        let Some(completion) = self.completion.as_ref() else {
+        let Some(completion) = self.language.lsp.completion.as_ref() else {
             return;
         };
         let Some(index) = completion.filtered.get(completion.selected).copied() else {
@@ -464,19 +470,21 @@ impl Model {
         };
         if item.resolved
             || self
+                .language
+                .lsp
                 .completion_resolve
                 .is_some_and(|(_, pending)| pending == index)
         {
             return;
         }
         let raw = item.raw.clone();
-        let id = self.language.next_lsp_request;
+        let id = self.language.lsp.next_request;
         if self.send_lsp_request(
             LspRequestKind::CompletionResolve,
             "completionItem/resolve",
             raw,
         ) {
-            self.completion_resolve = Some((id, index));
+            self.language.lsp.completion_resolve = Some((id, index));
         }
     }
 
@@ -561,7 +569,8 @@ impl Model {
 
     pub(crate) fn cancel_document_highlights(&mut self) {
         self.language
-            .pending_lsp
+            .lsp
+            .pending
             .retain(|_, kind| *kind != LspRequestKind::DocumentHighlight);
         self.prune_edit_requests();
         self.document_highlights = None;
@@ -619,7 +628,7 @@ impl Model {
     }
 
     pub(crate) fn cancel_call_hierarchy(&mut self) {
-        self.language.pending_lsp.retain(|_, kind| {
+        self.language.lsp.pending.retain(|_, kind| {
             !matches!(
                 kind,
                 LspRequestKind::CallHierarchyPrepare(_)
@@ -715,6 +724,7 @@ impl Model {
         let diagnostics = self
             .language
             .diagnostics
+            .by_path
             .get(&path)
             .cloned()
             .unwrap_or_default()
@@ -741,7 +751,8 @@ impl Model {
 
     pub(crate) fn cancel_references(&mut self) {
         self.language
-            .pending_lsp
+            .lsp
+            .pending
             .retain(|_, kind| *kind != LspRequestKind::References);
         self.references = None;
         self.dirty = true;
@@ -749,7 +760,8 @@ impl Model {
 
     pub(crate) fn cancel_document_symbols(&mut self) {
         self.language
-            .pending_lsp
+            .lsp
+            .pending
             .retain(|_, kind| *kind != LspRequestKind::DocumentSymbol);
         self.document_symbols = None;
         self.dirty = true;
@@ -757,7 +769,8 @@ impl Model {
 
     pub(crate) fn cancel_workspace_symbols(&mut self) {
         self.language
-            .pending_lsp
+            .lsp
+            .pending
             .retain(|_, kind| *kind != LspRequestKind::WorkspaceSymbol);
         self.workspace_symbols = None;
         self.prune_edit_requests();
@@ -1016,7 +1029,8 @@ impl Model {
         self.cancel_code_actions();
         self.cancel_document_symbols();
         self.language
-            .pending_lsp
+            .lsp
+            .pending
             .retain(|_, kind| *kind != LspRequestKind::Formatting);
         self.prune_edit_requests();
         self.hover = None;
@@ -1136,7 +1150,7 @@ impl Model {
     }
 
     pub(crate) fn apply_completion(&mut self) {
-        let Some(completion) = self.completion.take() else {
+        let Some(completion) = self.language.lsp.completion.take() else {
             return;
         };
         let Some(item) = completion
@@ -1250,7 +1264,7 @@ impl Model {
     }
 
     pub(crate) fn move_completion(&mut self, delta: isize) {
-        if let Some(completion) = self.completion.as_mut() {
+        if let Some(completion) = self.language.lsp.completion.as_mut() {
             completion.selected = completion
                 .selected
                 .saturating_add_signed(delta)
@@ -1261,7 +1275,7 @@ impl Model {
     }
 
     pub(crate) fn filter_completion(&mut self) {
-        if let Some(completion) = self.completion.as_mut() {
+        if let Some(completion) = self.language.lsp.completion.as_mut() {
             let query = completion.query.to_lowercase();
             completion.filtered = completion
                 .items

@@ -20,29 +20,29 @@ impl Model {
             self.git_branch = detect_git_branch(&self.workspace);
             self.dirty = true;
         }
-        if self.language.diagnostic_path != self.path {
-            self.language.diagnostic_path = self.path.clone();
-            self.language.diagnostic_count_shown = self.diagnostic_count_now();
-            self.language.diagnostic_count_pending = None;
+        if self.language.diagnostics.path != self.path {
+            self.language.diagnostics.path = self.path.clone();
+            self.language.diagnostics.count_shown = self.diagnostic_count_now();
+            self.language.diagnostics.count_pending = None;
             self.dirty = true;
         }
         let actual = self.diagnostic_count_now();
-        if let Some((pending, since)) = self.language.diagnostic_count_pending {
+        if let Some((pending, since)) = self.language.diagnostics.count_pending {
             if pending != actual {
-                self.language.diagnostic_count_pending = Some((actual, Instant::now()));
+                self.language.diagnostics.count_pending = Some((actual, Instant::now()));
                 self.dirty = true;
             } else if since.elapsed() >= DIAGNOSTIC_STABLE {
-                self.language.diagnostic_count_pending = None;
-                if self.language.diagnostic_count_shown != actual {
-                    self.language.diagnostic_count_shown = actual;
+                self.language.diagnostics.count_pending = None;
+                if self.language.diagnostics.count_shown != actual {
+                    self.language.diagnostics.count_shown = actual;
                 }
                 self.dirty = true;
             } else if !self.settings.ui.reduced_motion {
                 self.spinner = self.spinner.wrapping_add(1);
                 self.dirty = true;
             }
-        } else if self.language.diagnostic_count_shown != actual {
-            self.language.diagnostic_count_pending = Some((actual, Instant::now()));
+        } else if self.language.diagnostics.count_shown != actual {
+            self.language.diagnostics.count_pending = Some((actual, Instant::now()));
             self.dirty = true;
         }
     }
@@ -50,7 +50,7 @@ impl Model {
     fn diagnostic_count_now(&self) -> usize {
         self.path
             .as_ref()
-            .and_then(|path| self.language.diagnostics.get(path))
+            .and_then(|path| self.language.diagnostics.by_path.get(path))
             .map_or(0, Vec::len)
     }
 
@@ -102,17 +102,17 @@ impl Model {
         if let Some(branch) = &self.git_branch {
             segments.push(branch.clone());
         }
-        let diagnostics = if self.language.diagnostic_count_pending.is_some() {
+        let diagnostics = if self.language.diagnostics.count_pending.is_some() {
             format!(
                 "diag [{} {}]",
                 self.spinner_glyph(),
-                self.language.diagnostic_count_shown
+                self.language.diagnostics.count_shown
             )
         } else {
-            format!("diag {}", self.language.diagnostic_count_shown)
+            format!("diag {}", self.language.diagnostics.count_shown)
         };
         segments.push(diagnostics);
-        if let Some((tool, _)) = &self.language.lsp_config {
+        if let Some((tool, _)) = &self.language.lsp.config {
             segments.push(format!("lsp {tool}"));
         } else if self
             .path
@@ -311,7 +311,7 @@ mod tests {
     fn diagnostics_use_hysteresis() {
         let mut model = Model::new(EditorState::from_text(""), None);
         model.path = Some(PathBuf::from("/ws/src/main.rs"));
-        model.language.diagnostics.insert(
+        model.language.diagnostics.by_path.insert(
             PathBuf::from("/ws/src/main.rs"),
             vec![lsp::Diagnostic {
                 range: lsp::Range {
@@ -330,18 +330,18 @@ mod tests {
                 extra: Default::default(),
             }],
         );
-        model.language.diagnostic_path = model.path.clone();
+        model.language.diagnostics.path = model.path.clone();
         model.tick_status();
-        assert_eq!(model.language.diagnostic_count_shown, 0);
-        assert!(model.language.diagnostic_count_pending.is_some());
+        assert_eq!(model.language.diagnostics.count_shown, 0);
+        assert!(model.language.diagnostics.count_pending.is_some());
 
-        model.language.diagnostic_count_pending = Some((
+        model.language.diagnostics.count_pending = Some((
             1,
             Instant::now() - DIAGNOSTIC_STABLE - Duration::from_millis(1),
         ));
         model.tick_status();
-        assert_eq!(model.language.diagnostic_count_shown, 1);
-        assert!(model.language.diagnostic_count_pending.is_none());
+        assert_eq!(model.language.diagnostics.count_shown, 1);
+        assert!(model.language.diagnostics.count_pending.is_none());
     }
 
     #[test]
@@ -361,8 +361,8 @@ mod tests {
         let mut model = Model::new(EditorState::from_text("alpha"), None);
         model.path = Some(PathBuf::from("/ws/src/main.rs"));
         model.workspace = PathBuf::from("/ws");
-        model.language.diagnostic_count_shown = 2;
-        model.language.diagnostic_count_pending = Some((5, Instant::now()));
+        model.language.diagnostics.count_shown = 2;
+        model.language.diagnostics.count_pending = Some((5, Instant::now()));
         let text = model.status_text(200);
         assert!(text.contains("diag [⠋ 2]"), "{text}");
         assert!(!text.contains("diag [⠋ 5]"), "{text}");

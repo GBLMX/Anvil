@@ -63,7 +63,8 @@ impl Model {
     }
     pub(crate) fn request_code_lens(&mut self) {
         self.language
-            .pending_lsp
+            .lsp
+            .pending
             .retain(|_, kind| *kind != LspRequestKind::CodeLens);
         self.code_lens = None;
         let Some(uri) = self.path.as_ref().map(|path| lsp_uri(path)) else {
@@ -162,7 +163,8 @@ mod tests {
         model.path = Some(PathBuf::from("main.rs"));
         model
             .language
-            .pending_lsp
+            .lsp
+            .pending
             .insert(31, LspRequestKind::CodeLens);
         model.handle_lsp_response(
             31,
@@ -193,7 +195,8 @@ mod tests {
         model.path = Some(PathBuf::from("main.rs"));
         model
             .language
-            .pending_lsp
+            .lsp
+            .pending
             .insert(32, LspRequestKind::CodeLens);
         model.handle_lsp_response(
             32,

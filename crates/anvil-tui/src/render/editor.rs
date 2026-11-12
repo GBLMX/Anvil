@@ -252,6 +252,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
                 model
                     .language
                     .diagnostics
+                    .by_path
                     .get(&entry.path)
                     .and_then(|diagnostics| {
                         diagnostics
@@ -1125,7 +1126,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
             popup,
         );
     }
-    if let Some(completion) = &model.completion {
+    if let Some(completion) = &model.language.lsp.completion {
         let documentation = completion
             .filtered
             .get(completion.selected)
@@ -1521,7 +1522,7 @@ fn tree_rollup_diagnostic(model: &Model, entries: &[TreeEntry], index: usize) ->
         if child.depth <= depth {
             break;
         }
-        if let Some(diagnostics) = model.language.diagnostics.get(&child.path)
+        if let Some(diagnostics) = model.language.diagnostics.by_path.get(&child.path)
             && let Some(next) = diagnostics
                 .iter()
                 .filter_map(|diagnostic| diagnostic.severity)

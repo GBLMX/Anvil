@@ -9,7 +9,8 @@ impl Model {
             return;
         }
         self.language
-            .pending_lsp
+            .lsp
+            .pending
             .retain(|_, kind| *kind != LspRequestKind::SemanticTokens);
         self.prune_edit_requests();
         let Some(path) = self.path.clone() else {
@@ -85,7 +86,8 @@ impl Model {
 
     pub(crate) fn clear_semantic_tokens(&mut self) {
         self.language
-            .pending_lsp
+            .lsp
+            .pending
             .retain(|_, kind| *kind != LspRequestKind::SemanticTokens);
         self.semantic_tokens.clear();
         self.semantic_revision = None;

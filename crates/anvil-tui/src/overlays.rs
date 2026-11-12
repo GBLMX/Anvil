@@ -29,7 +29,7 @@ impl Model {
 
     pub(crate) fn rebuild_problems(&mut self) {
         let mut problems = Vec::new();
-        for (path, diagnostics) in &self.language.diagnostics {
+        for (path, diagnostics) in &self.language.diagnostics.by_path {
             for diagnostic in diagnostics {
                 problems.push(Problem {
                     path: path.clone(),
@@ -89,7 +89,7 @@ impl Model {
         line: u32,
         character: u32,
     ) -> bool {
-        let Some(diagnostics) = self.language.diagnostics.get(&path) else {
+        let Some(diagnostics) = self.language.diagnostics.by_path.get(&path) else {
             return false;
         };
         let diagnostics: Vec<PeekDiagnostic> = diagnostics

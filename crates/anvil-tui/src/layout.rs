@@ -828,7 +828,7 @@ mod inline_diagnostic_tests {
         let directory = tempfile::tempdir().expect("tempdir");
         let path = directory.path().join("main.rs");
         let mut model = Model::new(EditorState::from_text("let x"), Some(path.clone()));
-        model.language.diagnostics.insert(
+        model.language.diagnostics.by_path.insert(
             path,
             vec![
                 Diagnostic {

@@ -134,12 +134,12 @@ impl Model {
         result: serde_json::Value,
         error: Option<String>,
     ) {
-        let Some(kind) = self.language.pending_lsp.remove(&id) else {
+        let Some(kind) = self.language.lsp.pending.remove(&id) else {
             return;
         };
-        let edit_revision = self.language.pending_edit_revision.remove(&id);
-        let edit_path = self.language.pending_edit_path.remove(&id);
-        let edit_snapshot = self.language.pending_edit_snapshot.remove(&id);
+        let edit_revision = self.language.lsp.pending_edit_revision.remove(&id);
+        let edit_path = self.language.lsp.pending_edit_path.remove(&id);
+        let edit_snapshot = self.language.lsp.pending_edit_snapshot.remove(&id);
         if let Some(error) = error {
             if kind == LspRequestKind::CodeLens {
                 self.code_lens = None;
@@ -147,7 +147,7 @@ impl Model {
                 return;
             }
             if kind == LspRequestKind::CompletionResolve {
-                self.completion_resolve = None;
+                self.language.lsp.completion_resolve = None;
             }
             if kind == LspRequestKind::StickySymbols {
                 self.sticky_pending = false;
@@ -356,11 +356,11 @@ impl Model {
         items.truncate(200);
         if items.is_empty() {
             self.status = "lsp: no completions".to_owned();
-            self.completion = None;
+            self.language.lsp.completion = None;
         } else {
             let filtered = (0..items.len()).collect();
             let selected = items.iter().position(|item| item.preselect).unwrap_or(0);
-            self.completion = Some(CompletionState {
+            self.language.lsp.completion = Some(CompletionState {
                 id,
                 items,
                 filtered,
@@ -373,14 +373,14 @@ impl Model {
     }
 
     fn apply_completion_resolve_response(&mut self, id: u64, result: &serde_json::Value) {
-        let Some((pending, index)) = self.completion_resolve else {
+        let Some((pending, index)) = self.language.lsp.completion_resolve else {
             return;
         };
         if pending != id {
             return;
         }
-        self.completion_resolve = None;
-        let Some(completion) = self.completion.as_mut() else {
+        self.language.lsp.completion_resolve = None;
+        let Some(completion) = self.language.lsp.completion.as_mut() else {
             return;
         };
         let Some(item) = completion.items.get_mut(index) else {
