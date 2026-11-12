@@ -716,6 +716,7 @@ func makeTreeReadOnly(root string) error {
 // PackageRevocationChecker reports whether a package digest is revoked.
 type PackageRevocationChecker interface {
 	PackageRevoked(digest, pluginID string) bool
+	PackageDigests() map[string]string
 }
 
 // DisableRevokedPackages disables active packages revoked by checker and
@@ -728,6 +729,9 @@ func (s *Store) DisableRevokedPackages(checker PackageRevocationChecker) ([]stri
 	err := s.UpdateState(func(state *StoreState) error {
 		if state.RevokedPackages == nil {
 			state.RevokedPackages = map[string]string{}
+		}
+		for digest, pluginID := range checker.PackageDigests() {
+			state.RevokedPackages[digest] = pluginID
 		}
 		for id, plugin := range state.Plugins {
 			if !checker.PackageRevoked(plugin.ActiveDigest, id) {

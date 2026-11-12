@@ -168,6 +168,18 @@ func (set *RevocationSet) PackageRevoked(digest, pluginID string) bool {
 	return ok && owner == pluginID
 }
 
+// PackageDigests returns a copy of the revoked digest to plugin mapping.
+func (set *RevocationSet) PackageDigests() map[string]string {
+	digests := make(map[string]string)
+	if set == nil {
+		return digests
+	}
+	for digest, pluginID := range set.Packages {
+		digests[digest] = pluginID
+	}
+	return digests
+}
+
 // PublisherRevoked reports whether a publisher key is revoked.
 func (set *RevocationSet) PublisherRevoked(keyID string) bool {
 	if set == nil {

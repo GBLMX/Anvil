@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 )
@@ -495,6 +496,17 @@ func (check revocationCheck) PackageRevoked(digest, pluginID string) bool {
 	return check[digest+"\x00"+pluginID]
 }
 
+func (check revocationCheck) PackageDigests() map[string]string {
+	digests := make(map[string]string, len(check))
+	for key := range check {
+		digest, pluginID, ok := strings.Cut(key, "\x00")
+		if ok {
+			digests[digest] = pluginID
+		}
+	}
+	return digests
+}
+
 func TestStoreDisablesRevokedPackages(t *testing.T) {
 	store, err := NewStore(t.TempDir())
 	if err != nil {
@@ -607,5 +619,33 @@ func TestStorePersistsRevokedUnion(t *testing.T) {
 	}
 	if _, ok := state.RevokedPackages[enabledDigest]; !ok {
 		t.Fatal("enabled revoked package was not persisted")
+	}
+}
+
+func TestStorePersistsRevocationsForUninstalledPackages(t *testing.T) {
+	store, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	digest := testDigest(6)
+	if _, err := store.DisableRevokedPackages(revocationCheck{digest + "\x00future": true}); err != nil {
+		t.Fatalf("persist revocations: %v", err)
+	}
+	state, err := store.ReadState()
+	if err != nil {
+		t.Fatalf("read state: %v", err)
+	}
+	if owner, ok := state.RevokedPackages[digest]; !ok || owner != "future" {
+		t.Fatalf("revocation was not persisted: %+v", state.RevokedPackages)
+	}
+	entry, err := store.EntryPath(digest)
+	if err != nil {
+		t.Fatalf("entry path: %v", err)
+	}
+	if err := os.MkdirAll(entry, 0o700); err != nil {
+		t.Fatalf("create store entry: %v", err)
+	}
+	if err := store.AddInstalledVersion("future", digest, "1.0.0", "", "local-file", nil); err == nil {
+		t.Fatal("revoked package must not be installable")
 	}
 }
