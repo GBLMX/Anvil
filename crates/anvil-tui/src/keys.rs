@@ -436,6 +436,50 @@ fn execute_fuzzy_action(model: &mut Model, action: PickerAction) {
     }
 }
 
+fn command_palette_action(key: KeyPress, text_input: bool) -> Option<PickerAction> {
+    match key.code {
+        KeyCode::Char('p') if key.ctrl() => Some(PickerAction::Previous),
+        KeyCode::Char('n') if key.ctrl() => Some(PickerAction::Next),
+        _ => picker_action(key, text_input),
+    }
+}
+
+fn execute_command_palette_action(model: &mut Model, action: PickerAction, key: KeyPress) {
+    match action {
+        PickerAction::Next => model.move_command_palette(1),
+        PickerAction::Previous => model.move_command_palette(-1),
+        PickerAction::Accept => {
+            if let Some(name) = model.selected_theme() {
+                model.commit_theme(name);
+                return;
+            }
+            let selected = model.selected_command();
+            model.close_command_palette();
+            if let Some((id, plugin_id)) = selected {
+                model.remember_command(&id);
+                if let Some(plugin_id) = plugin_id {
+                    model.run_plugin_command(&plugin_id, &id);
+                } else {
+                    execute_command_id(model, &id, key);
+                }
+            }
+        }
+        PickerAction::Cancel => model.close_command_palette(),
+        PickerAction::PopQuery => {
+            if let Some(palette) = model.overlays.command_palette.as_mut() {
+                palette.table.query_mut().pop();
+            }
+            model.refresh_command_palette();
+        }
+        PickerAction::AppendQuery(character) => {
+            if let Some(palette) = model.overlays.command_palette.as_mut() {
+                palette.table.query_mut().push(character);
+            }
+            model.refresh_command_palette();
+        }
+    }
+}
+
 fn execute_command_id(model: &mut Model, id: &str, key: KeyPress) -> bool {
     if let Some(command) = NormalCommand::from_id(id) {
         execute_normal_command(model, command);
@@ -570,41 +614,8 @@ fn handle_key(model: &mut Model, key: KeyPress) {
         return;
     }
     if model.overlays.command_palette.is_some() {
-        match key.code {
-            KeyCode::Esc => model.close_command_palette(),
-            KeyCode::Up => model.move_command_palette(-1),
-            KeyCode::Down => model.move_command_palette(1),
-            KeyCode::Char('p') if key.ctrl() => model.move_command_palette(-1),
-            KeyCode::Char('n') if key.ctrl() => model.move_command_palette(1),
-            KeyCode::Enter => {
-                if let Some(name) = model.selected_theme() {
-                    model.commit_theme(name);
-                    return;
-                }
-                let selected = model.selected_command();
-                model.close_command_palette();
-                if let Some((id, plugin_id)) = selected {
-                    model.remember_command(&id);
-                    if let Some(plugin_id) = plugin_id {
-                        model.run_plugin_command(&plugin_id, &id);
-                    } else {
-                        execute_command_id(model, &id, key);
-                    }
-                }
-            }
-            KeyCode::Backspace => {
-                if let Some(palette) = model.overlays.command_palette.as_mut() {
-                    palette.table.query_mut().pop();
-                }
-                model.refresh_command_palette();
-            }
-            KeyCode::Char(character) if text_input => {
-                if let Some(palette) = model.overlays.command_palette.as_mut() {
-                    palette.table.query_mut().push(character);
-                }
-                model.refresh_command_palette();
-            }
-            _ => {}
+        if let Some(action) = command_palette_action(key, text_input) {
+            execute_command_palette_action(model, action, key);
         }
         return;
     }
