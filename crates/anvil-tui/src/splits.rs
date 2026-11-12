@@ -60,6 +60,9 @@ impl Model {
         if self.split.is_none() {
             return;
         }
+        if !self.auto_save_before_focus_change() {
+            return;
+        }
         if self.ui.focus.split && self.modified {
             self.status = "No write since last change (:q! to override)".to_owned();
             self.dirty = true;

@@ -25,7 +25,7 @@ post-`0.5.0` feature line.
   files keep the last good configuration; it does not restart LSP, plugins, or
   gateways.
 - Opt-in `editor.auto_save` writes the active named buffer on buffer-switch,
-  split-focus changes, opening another file, and `:q`. Failed saves keep the
+  split focus/close changes, opening another file, and `:q`. Failed saves keep the
   buffer dirty and abort the focus change. Configure via `settings.toml`,
   `:settings`, or `ANVIL_EDITOR_AUTO_SAVE`.
 - `anvil-ctl` is a JSON-capable control plane for a running TUI: `open`,
