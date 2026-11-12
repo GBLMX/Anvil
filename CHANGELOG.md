@@ -23,8 +23,9 @@ post-`0.5.0` feature line.
 - Help, Git diff/blame/conflict, task output, and terminal output now share
   `Model.pager`; the old `BufferState.help_back` fields are gone.
 - Multi-root file tree roots use disambiguated short labels and mark untrusted
-  roots; mutations refresh the owning root, stale root results are dropped, and
-  removing a root cancels a pending project search.
+  roots; mutations refresh the owning root, keep expansion and pending
+  selection, drop stale root results, and cancel a pending project search when
+  a root is removed.
 - The Settings overlay adds an Appearance theme row with live apply and reset.
 - The command palette renders title/detail columns, a result count, and a key
   hint footer.

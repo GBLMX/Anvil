@@ -215,6 +215,12 @@ impl Model {
             .into_iter()
             .filter(|entry| self.tree_entry_visible(&entry.name, entry.is_dir))
             .collect();
+        let expanded = self
+            .tree
+            .entries
+            .iter()
+            .map(|entry| (entry.path.clone(), entry.expanded))
+            .collect::<BTreeMap<_, _>>();
         if path == self.workspace.path {
             let preserved = self
                 .tree
@@ -225,12 +231,15 @@ impl Model {
                 .collect::<Vec<_>>();
             self.tree.entries = entries
                 .into_iter()
-                .map(|entry| TreeEntry {
-                    path: path.join(entry.name),
-                    depth: 0,
-                    is_dir: entry.is_dir,
-                    ino: entry.ino,
-                    expanded: false,
+                .map(|entry| {
+                    let child = path.join(entry.name);
+                    TreeEntry {
+                        expanded: expanded.get(&child).copied().unwrap_or(false),
+                        path: child,
+                        depth: 0,
+                        is_dir: entry.is_dir,
+                        ino: entry.ino,
+                    }
                 })
                 .collect();
             self.tree.entries.extend(preserved);
@@ -250,12 +259,15 @@ impl Model {
             let parent_depth = self.tree.entries[index].depth;
             let children: Vec<TreeEntry> = entries
                 .into_iter()
-                .map(|entry| TreeEntry {
-                    path: path.join(entry.name),
-                    depth,
-                    is_dir: entry.is_dir,
-                    ino: entry.ino,
-                    expanded: false,
+                .map(|entry| {
+                    let child = path.join(entry.name);
+                    TreeEntry {
+                        expanded: expanded.get(&child).copied().unwrap_or(false),
+                        path: child,
+                        depth,
+                        is_dir: entry.is_dir,
+                        ino: entry.ino,
+                    }
                 })
                 .collect();
             let mut end = index + 1;
@@ -653,7 +665,7 @@ impl Model {
     }
 
     fn apply_pending_tree_selection(&mut self) {
-        let Some(path) = self.tree.pending_select.take() else {
+        let Some(path) = self.tree.pending_select.clone() else {
             return;
         };
         if let Some(index) = self
@@ -662,6 +674,7 @@ impl Model {
             .iter()
             .position(|entry| entry.path == path)
         {
+            self.tree.pending_select = None;
             self.tree.selected = Some(index);
         }
     }
@@ -1197,6 +1210,52 @@ mod tests {
                 .iter()
                 .any(|entry| entry.path == workspace.join("main.rs"))
         );
+    }
+
+    #[test]
+    fn secondary_refresh_preserves_pending_selection() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let primary = dir.path().join("primary");
+        let secondary = dir.path().join("secondary");
+        let src = secondary.join("src");
+        std::fs::create_dir_all(&primary).expect("primary");
+        std::fs::create_dir_all(&src).expect("src");
+        std::fs::write(src.join("new.rs"), "").expect("new file");
+        let primary = primary.canonicalize().expect("primary canonical");
+        let secondary = secondary.canonicalize().expect("secondary canonical");
+        let src = secondary.join("src");
+        let target = src.join("new.rs");
+        let mut model = Model::new(EditorState::from_text(""), None);
+        model.workspace.path = primary.clone();
+        model.workspace.roots =
+            crate::workspace_roots::WorkspaceRoots::new(&primary).expect("roots");
+        model
+            .workspace
+            .roots
+            .add(&secondary, true)
+            .expect("secondary");
+        model.tree.entries = vec![
+            TreeEntry {
+                path: secondary.clone(),
+                depth: 0,
+                is_dir: true,
+                ino: 0,
+                expanded: true,
+            },
+            TreeEntry {
+                path: src,
+                depth: 1,
+                is_dir: true,
+                ino: 0,
+                expanded: true,
+            },
+        ];
+        model.tree.pending_select = Some(target.clone());
+
+        model.refresh_root_tree(&secondary);
+
+        let selected = model.tree.selected.expect("selection");
+        assert_eq!(model.tree.entries[selected].path, target);
     }
 
     #[test]
