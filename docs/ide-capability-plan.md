@@ -1,8 +1,8 @@
 # IDE Capability Plan
 
-Status: P0 mostly landed; P1 is planned. Search/replace, problems, quick-open
-preview, and icon themes are owned by `0.5.4`/`0.5.7`/`0.5.8`; this plan does
-not re-schedule them.
+Status: P0 mostly landed; P1 is in progress. Task runner and folding persistence
+landed. Search/replace, problems, quick-open preview, and icon themes are owned
+by `0.5.4`/`0.5.7`/`0.5.8`; this plan does not re-schedule them.
 
 Scope: editor-level capabilities that make Anvil usable for daily software work
 without turning the kernel into a full IDE. Anvil remains Linux-first, with no
@@ -37,7 +37,8 @@ reset/hot-reload boundary. Each item needs a deterministic failure test.
 
 ## 3. P1: IDE-like capability
 
-- Task runner with problem matchers and bounded output.
+- Task runner with problem matchers and bounded output: landed in `:task` and
+  `:task-output`, with background timeout and problems-panel integration.
 - Test explorer with jump-to-failure.
 - Debug Adapter Protocol client in a separate process.
 - Terminal panel with explicit workspace and trust boundaries.

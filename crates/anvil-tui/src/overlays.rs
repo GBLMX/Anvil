@@ -42,6 +42,7 @@ impl Model {
                 });
             }
         }
+        problems.extend(self.task_problems.iter().cloned());
         self.ui.problems.replace(problems);
         self.dirty = true;
     }

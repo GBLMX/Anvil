@@ -240,6 +240,8 @@ impl Model {
             ("plugin-enable", plugin_id) => {
                 self.queue_effect(Effect::PluginEnable(plugin_id.to_owned()))
             }
+            ("task", command) => self.start_task(command),
+            ("task-output", "") => self.show_task_output(),
             ("wq", "") => self.queue_effect(Effect::SaveAndQuit),
             ("wq", path) => self.queue_effect(Effect::SaveAsAndQuit(path.into())),
             _ => {

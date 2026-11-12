@@ -287,6 +287,14 @@ pub const COMMANDS: &[CommandSpec] = &[
         name: "git-resolve-theirs!",
         capability: Capability::Git,
     },
+    CommandSpec {
+        name: "task",
+        capability: Capability::Admin,
+    },
+    CommandSpec {
+        name: "task-output",
+        capability: Capability::Read,
+    },
 ];
 
 /// Look up an exact command name.

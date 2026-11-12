@@ -94,6 +94,8 @@ Normal mode
   :format              format the current document
   :symbols             document symbols
   :problems           toggle the problems panel
+  :task <command>      run a bounded background shell task in the workspace
+  :task-output         show the last task output
   :plugin-start       start the debug plugin host
   :plugin-list        open installed-plugin manager (enable/uninstall/rollback)
   :plugin-oom         start host with a 300 MB allocation probe

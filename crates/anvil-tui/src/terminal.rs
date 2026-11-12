@@ -246,6 +246,7 @@ pub fn run_with_input(
         model.poll_lsp();
         model.poll_lsp_retry();
         model.poll_file_worker();
+        model.poll_task();
         if let Some(control) = &control {
             while let Ok(call) = control.try_recv() {
                 let reply = model.handle_control(call.request);

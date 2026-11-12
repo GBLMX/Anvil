@@ -18,7 +18,7 @@ use anvil_ipc::GatewayClient;
 use anvil_session::DocumentSession;
 use anvil_session::effect::{Effect, EffectQueue};
 use anvil_session::keymap::KeymapContext;
-use anvil_session::ui::{InputBuffer, InputMode, UiState};
+use anvil_session::ui::{InputBuffer, InputMode, Problem, UiState};
 use crossterm::{
     cursor::SetCursorStyle,
     event::{
@@ -106,6 +106,8 @@ use render::{
 };
 mod layout;
 mod syntax;
+mod task_runner;
+mod task_ui;
 mod terminal;
 mod terminal_background;
 #[cfg(target_os = "linux")]
@@ -709,6 +711,9 @@ pub struct Model {
     #[cfg(target_os = "linux")]
     installer: Option<(GatewaySession, GatewayClient)>,
     pkg_install: Option<pkg_install::PkgInstallState>,
+    task_worker: Option<task_runner::TaskWorker>,
+    task_output: Option<String>,
+    task_problems: Vec<Problem>,
 }
 
 impl Model {
@@ -871,6 +876,9 @@ impl Model {
             #[cfg(target_os = "linux")]
             installer: None,
             pkg_install: None,
+            task_worker: None,
+            task_output: None,
+            task_problems: Vec::new(),
         }
     }
 
