@@ -1299,3 +1299,41 @@ fn focus_lost_auto_saves_while_insert_is_active() {
     assert!(!model.modified);
     assert!(matches!(model.ui.input_mode, InputMode::Insert));
 }
+
+#[test]
+fn focus_lost_skips_auto_save_during_blocking_confirmation() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("main.rs");
+    fs::write(&path, "a").expect("write");
+    let mut model = Model::open(&path).expect("open");
+    model.settings.editor.auto_save = true;
+    model.insert_text("X");
+    model.ui.input_mode = InputMode::ConfirmClose { index: 0 };
+
+    handle_event(&mut model, Event::FocusLost);
+
+    assert_eq!(fs::read_to_string(&path).expect("content"), "a");
+    assert!(model.modified);
+    assert!(matches!(
+        model.ui.input_mode,
+        InputMode::ConfirmClose { .. }
+    ));
+}
+
+#[test]
+fn focus_lost_auto_saves_while_search_is_active() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("main.rs");
+    fs::write(&path, "a").expect("write");
+    let mut model = Model::open(&path).expect("open");
+    model.settings.editor.auto_save = true;
+    model.insert_text("X");
+    model.ui.input_mode = InputMode::Search {
+        query: InputBuffer::default(),
+    };
+
+    handle_event(&mut model, Event::FocusLost);
+
+    assert_eq!(fs::read_to_string(&path).expect("content"), "Xa");
+    assert!(!model.modified);
+}
