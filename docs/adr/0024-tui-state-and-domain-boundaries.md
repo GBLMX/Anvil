@@ -129,11 +129,35 @@ A module is eligible for a crate when at least one is true:
 3. extraction removes a dependency direction that is currently wrong;
 4. a measured build/ownership problem exists.
 
+**UI-neutral token rule**
+
+`theme.rs` and `keymap.rs` are UI adapters today:
+
+- `theme.rs` exposes `ratatui::{Color, Style, Modifier}`;
+- `keymap.rs` uses crossterm key types for dispatch.
+
+They are therefore **not** eligible to move into a UI-neutral config crate
+as-is. A future `anvil-config` may own only:
+
+- settings schema, defaults, validation, path resolution, file/env precedence,
+  and atomic save;
+- theme choice (`fixed`/`auto`) and serialized palette tokens as plain RGB /
+  modifier enums;
+- keymap file syntax and binding tokens as plain key-code / modifier enums;
+- no `ratatui`, `crossterm`, terminal rendering, or event-loop behavior.
+
+The TUI keeps frontend adapters that convert neutral tokens into
+`ratatui::Style` and crossterm `KeyEvent`. Until that layer exists, theme
+rendering and key dispatch stay in `anvil-tui`.
+
+Rejected for this ADR: extracting `theme.rs` and `keymap.rs` unchanged into
+`anvil-config`. That would move UI dependencies rather than remove them.
+
 Candidate order:
 
 | Candidate | Extract when |
 |---|---|
-| `anvil-config` | settings/theme/keymap need a non-TUI consumer |
+| `anvil-config` | settings schema/serialization and neutral palette/key tokens need a non-TUI consumer; no ratatui/crossterm types |
 | `anvil-git` | diff/blame/conflict/hunk logic is reused outside the TUI |
 | `anvil-lsp-client` | transport/request routing is needed by another frontend |
 | `anvil-task` | task runner/problem matcher is reused by MCP or headless mode |
@@ -157,9 +181,9 @@ anvil-api / anvil-core
         |
      anvil-tui
 
-anvil-config  anvil-git  anvil-lsp-client
-             \    |    /
-              anvil-tui
+anvil-config (no ratatui/crossterm)  anvil-git  anvil-lsp-client
+                  \                     |        /
+                              anvil-tui
 ```
 
 Rules:
@@ -168,6 +192,8 @@ Rules:
 - `anvil-editor` has no rendering, crossterm, gateway, or settings dependency.
 - `anvil-session` has no ratatui/crossterm dependency and no renderer widgets.
 - `anvil-tui` is the only crate that knows terminal input/rendering.
+- `anvil-config` has no `ratatui` or `crossterm` dependency; the TUI owns the
+  adapters from neutral palette/key tokens to those types.
 - Domain crates receive data and return data; they do not read the TUI model.
 - The gateway remains the file/network/process policy point. A refactor must not
   add direct ambient I/O to a page.
@@ -182,10 +208,13 @@ failure; a wrong dependency edge is.
 3. Split `WorkspaceState`, including tree/file-worker ownership.
 4. Split `RuntimeState` and make worker ownership explicit.
 5. Reduce `Model` to composition and cross-state transitions.
-6. Extract `anvil-config` after page settings are frontend-neutral.
-7. Extract `anvil-git` when a second consumer appears.
-8. Extract `anvil-lsp-client` when transport is reused.
-9. Add dependency checks and update architecture docs.
+6. Define neutral palette/key tokens; keep theme rendering and key dispatch in
+   the TUI.
+7. Extract `anvil-config` for settings schema/serialization and neutral tokens
+   only after page settings are frontend-neutral.
+8. Extract `anvil-git` when a second consumer appears.
+9. Extract `anvil-lsp-client` when transport is reused.
+10. Add dependency checks and update architecture docs.
 
 Each step must be behavior-preserving with existing tests; do not combine a
 state split with a feature change.
@@ -226,5 +255,6 @@ a second frontend exists would make the first extraction much more expensive.
 - Every background owner has bounded queue, cancellation, and stale-response
   behavior.
 - Dependency direction is checked automatically.
+- `anvil-config`, if extracted, has no `ratatui` or `crossterm` dependency.
 - Full workspace tests, clippy, formatting, and architecture checks pass.
 - No user-visible behavior change is bundled into the state split.
