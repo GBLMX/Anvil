@@ -185,4 +185,6 @@ undo needs its own storage and migration design.
   exposed by `EditorState`; the TUI delegates those ranges.
 - Macro storage lives in `anvil-editor::EditorState` as `MacroStep` entries;
   recording/replay remains a TUI key-adapter concern.
-- Soft wrap display projection remains unimplemented.
+- Soft wrap is implemented as an opt-in TUI display projection: wrapped rows,
+  per-line bounded segments, a display subrow for scrolling, and cursor,
+  selection, mouse, gutter, search/diagnostic, and inlay mapping.

@@ -394,8 +394,15 @@ pub fn view(model: &Model, frame: &mut Frame) {
             .index()
             .position(model.editor.text(), model.cursor)
     {
-        let x = text_area.x + position.display_column.saturating_sub(model.hscroll) as u16;
-        if let Some(row) = model.row_of_source_line(position.line, usize::from(content.height)) {
+        if let Some(row) = model.row_of_position(
+            position.line,
+            position.display_column,
+            usize::from(content.height),
+        ) {
+            let base = model
+                .position_at_visible_row(row)
+                .map_or(model.hscroll, |(_, base)| base);
+            let x = text_area.x + position.display_column.saturating_sub(base) as u16;
             let y = content.y + row as u16;
             if x < content.right() && y < content.bottom() {
                 frame.set_cursor_position((x, y));
@@ -409,7 +416,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
             continue;
         }
         let x = text_area.x + (column - model.hscroll) as u16;
-        let Some(row) = model.row_of_source_line(line, usize::from(content.height)) else {
+        let Some(row) = model.row_of_position(line, column, usize::from(content.height)) else {
             continue;
         };
         let y = content.y + row as u16;

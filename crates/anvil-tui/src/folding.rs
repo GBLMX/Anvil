@@ -1,7 +1,6 @@
 //! LSP folding ranges, folded-line visibility, and fold commands.
 
 use super::*;
-use crate::layout::DisplayRow;
 use crate::lsp_worker;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -196,19 +195,12 @@ impl Model {
         lines
     }
 
-    pub(crate) fn line_at_visible_row(&self, offset: usize, height: usize) -> usize {
-        let rows = self.visible_rows(self.scroll, height);
-        match rows.get(offset) {
-            Some(DisplayRow::Source(line) | DisplayRow::CodeLens { line, .. }) => *line,
-            None => self.editor.index().len_lines().saturating_sub(1),
-        }
-    }
-
     pub(crate) fn normalize_scroll(&mut self) {
         let total = self.editor.index().len_lines();
         self.scroll = self
             .first_visible_line(self.scroll)
             .min(total.saturating_sub(1));
+        self.scroll_subrow = 0;
     }
 
     pub(crate) fn open_fold_containing(&mut self, line: usize) {

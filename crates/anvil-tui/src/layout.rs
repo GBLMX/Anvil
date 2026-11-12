@@ -1,6 +1,8 @@
 //! Viewport, gutter, and visible-line layout.
 
 use super::*;
+use unicode_segmentation::UnicodeSegmentation;
+use unicode_width::UnicodeWidthStr;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum DisplayRow {
@@ -11,9 +13,64 @@ pub(crate) enum DisplayRow {
         hidden: usize,
         index: Option<usize>,
     },
+    Wrapped {
+        line: usize,
+        start: usize,
+        end: usize,
+        first: bool,
+        truncated: bool,
+    },
 }
 
 impl Model {
+    pub(crate) fn wrap_segments(&self, line: usize, width: usize) -> Vec<(usize, usize, bool)> {
+        let Some(start) = self.editor.index().line_to_offset(line) else {
+            return Vec::new();
+        };
+        let Some(range) = self.editor.index().offset_to_line(start) else {
+            return Vec::new();
+        };
+        let text = self.editor.text().slice(start..range.end);
+        let line_start = start;
+        let width = width.max(1);
+        let mut segments = Vec::new();
+        let mut segment_start = 0usize;
+        let mut display = 0usize;
+        for (index, grapheme) in text.grapheme_indices(true) {
+            let grapheme_width = if grapheme == "\t" {
+                4
+            } else {
+                UnicodeWidthStr::width(grapheme)
+            };
+            if display > 0 && display + grapheme_width > width {
+                if segments.len() >= 256 {
+                    return segments
+                        .into_iter()
+                        .enumerate()
+                        .map(|(index, (start, end))| (start, end, index + 1 == 256))
+                        .collect();
+                }
+                segments.push((segment_start, index));
+                segment_start = index;
+                display = 0;
+            }
+            display += grapheme_width;
+        }
+        segments.push((segment_start, text.len()));
+        let count = segments.len();
+        segments
+            .into_iter()
+            .enumerate()
+            .map(|(index, (start, end))| {
+                (
+                    line_start + start,
+                    line_start + end,
+                    index + 1 == count && count >= 256,
+                )
+            })
+            .collect()
+    }
+
     pub(crate) fn visible_rows(&self, start: usize, height: usize) -> Vec<DisplayRow> {
         if height == 0 {
             return Vec::new();
@@ -72,7 +129,30 @@ impl Model {
             if rows.len() >= height {
                 break;
             }
-            rows.push(DisplayRow::Source(line));
+            if self.settings.editor.soft_wrap && self.wrap_width > 0 {
+                let segments = self.wrap_segments(line, self.wrap_width);
+                let first_segment = if line == self.scroll {
+                    self.scroll_subrow.min(segments.len().saturating_sub(1))
+                } else {
+                    0
+                };
+                for (index, (start, end, truncated)) in
+                    segments.into_iter().enumerate().skip(first_segment)
+                {
+                    rows.push(DisplayRow::Wrapped {
+                        line,
+                        start,
+                        end,
+                        first: index == first_segment,
+                        truncated,
+                    });
+                    if rows.len() >= height {
+                        break;
+                    }
+                }
+            } else {
+                rows.push(DisplayRow::Source(line));
+            }
             line = self.next_visible_line(line);
         }
         if global_hidden > 0 {
@@ -99,10 +179,81 @@ impl Model {
         }
     }
 
+    pub(crate) fn position_at_visible_row(&self, row: usize) -> Option<(usize, usize)> {
+        let text = self.editor.text();
+        let rows = self.visible_rows(self.scroll, row.saturating_add(1));
+        match rows.get(row) {
+            Some(DisplayRow::Source(line)) => Some((*line, self.hscroll)),
+            Some(DisplayRow::Wrapped { line, start, .. }) => {
+                let base = self
+                    .editor
+                    .index()
+                    .position(text, *start)
+                    .map_or(0, |position| position.display_column);
+                Some((*line, base))
+            }
+            _ => None,
+        }
+    }
+
+    pub(crate) fn row_of_position(
+        &self,
+        line: usize,
+        display_column: usize,
+        height: usize,
+    ) -> Option<usize> {
+        let text = self.editor.text();
+        let line_end = self
+            .editor
+            .index()
+            .line_to_offset(line)
+            .and_then(|offset| self.editor.index().offset_to_line(offset))
+            .map_or(0, |range| range.end);
+        self.visible_rows(self.scroll, height)
+            .iter()
+            .enumerate()
+            .find_map(|(row, candidate)| match candidate {
+                DisplayRow::Source(source) if *source == line => Some(row),
+                DisplayRow::Wrapped {
+                    line: wrapped,
+                    start,
+                    end,
+                    ..
+                } if *wrapped == line => {
+                    let start_column = self
+                        .editor
+                        .index()
+                        .position(text, *start)
+                        .map_or(0, |position| position.display_column);
+                    let end_column = self
+                        .editor
+                        .index()
+                        .position(text, *end)
+                        .map_or(start_column, |position| position.display_column);
+                    (display_column >= start_column
+                        && (display_column < end_column || *end >= line_end))
+                        .then_some(row)
+                }
+                _ => None,
+            })
+    }
+
     pub(crate) fn row_of_source_line(&self, line: usize, height: usize) -> Option<usize> {
         self.visible_rows(self.scroll, height)
             .iter()
-            .position(|row| matches!(row, DisplayRow::Source(source) if *source == line))
+            .position(|row| {
+                matches!(
+                    row,
+                    DisplayRow::Source(source) if *source == line
+                ) || matches!(
+                    row,
+                    DisplayRow::Wrapped {
+                        line: wrapped,
+                        first: true,
+                        ..
+                    } if *wrapped == line
+                )
+            })
     }
 }
 impl Model {
@@ -168,9 +319,15 @@ impl Model {
         let digits = self.gutter_digits();
         let mut lines = Vec::with_capacity(visible.len());
         for row in visible {
-            let DisplayRow::Source(line_number) = row else {
-                lines.push(Line::raw(" ".repeat(digits + 1)));
-                continue;
+            let line_number = match row {
+                DisplayRow::Source(line_number) => line_number,
+                DisplayRow::Wrapped {
+                    line, first: true, ..
+                } => line,
+                DisplayRow::Wrapped { .. } | DisplayRow::CodeLens { .. } => {
+                    lines.push(Line::raw(" ".repeat(digits + 1)));
+                    continue;
+                }
             };
             let display = match current {
                 Some(current) if current != line_number => current.abs_diff(line_number),
@@ -211,12 +368,46 @@ impl Model {
 
         let diagnostic_lines = self.diagnostic_lines();
         let bracket_pair = self.bracket_pair();
-        let hscroll = self.hscroll;
+        let hscroll = if self.settings.editor.soft_wrap {
+            0
+        } else {
+            self.hscroll
+        };
         let visible_width = usize::from(width);
         let mut lines = Vec::with_capacity(visible.len());
         for row in visible {
-            let line_number = match row {
-                DisplayRow::Source(line) => line,
+            let (
+                line_number,
+                start,
+                line_end,
+                render_start,
+                render_end,
+                pad,
+                truncated,
+                row_base,
+                last_segment,
+            ) = match row {
+                DisplayRow::Source(line) => {
+                    let Some(start) = index.line_to_offset(line) else {
+                        break;
+                    };
+                    let Some(line_range) = index.offset_to_line(start) else {
+                        break;
+                    };
+                    let (render_start, render_end, pad) =
+                        self.line_window(line, start, line_range.end, usize::from(width));
+                    (
+                        line,
+                        start,
+                        line_range.end,
+                        render_start,
+                        render_end,
+                        pad,
+                        false,
+                        hscroll,
+                        true,
+                    )
+                }
                 DisplayRow::CodeLens { title, hidden, .. } => {
                     let style = if hidden > 0 {
                         Style::default().fg(theme::muted())
@@ -226,15 +417,35 @@ impl Model {
                     lines.push(Line::styled(format!(" {title}"), style));
                     continue;
                 }
+                DisplayRow::Wrapped {
+                    line,
+                    start,
+                    end,
+                    truncated,
+                    ..
+                } => {
+                    let Some(line_start) = index.line_to_offset(line) else {
+                        break;
+                    };
+                    let Some(line_range) = index.offset_to_line(line_start) else {
+                        break;
+                    };
+                    let base = index
+                        .position(text, start)
+                        .map_or(0, |position| position.display_column);
+                    (
+                        line,
+                        line_start,
+                        line_range.end,
+                        start,
+                        end,
+                        0,
+                        truncated,
+                        base,
+                        end >= line_range.end,
+                    )
+                }
             };
-            let Some(start) = index.line_to_offset(line_number) else {
-                break;
-            };
-            let Some(line) = index.offset_to_line(start) else {
-                break;
-            };
-            let (render_start, render_end, pad) =
-                self.line_window(line_number, start, line.end, usize::from(width));
             let mut spans = Vec::new();
             let mut base = render_start;
             let search_ranges: Vec<(usize, usize)> = self
@@ -244,7 +455,7 @@ impl Model {
                 .filter(|range| range.start < render_end && range.end > render_start)
                 .map(|range| (range.start.max(render_start), range.end.min(render_end)))
                 .collect();
-            let document_highlight_ranges = self.document_highlight_ranges(start, line.end);
+            let document_highlight_ranges = self.document_highlight_ranges(start, line_end);
             let bracket_ranges = bracket_pair
                 .iter()
                 .flat_map(|&(open, close)| [(open, open + 1), (close, close + 1)])
@@ -255,7 +466,7 @@ impl Model {
                     (range_start.max(render_start), range_end.min(render_end))
                 })
                 .collect::<Vec<_>>();
-            let semantic_ranges = self.semantic_ranges(start, line.end);
+            let semantic_ranges = self.semantic_ranges(start, line_end);
             let syntax_guard = self.syntax.borrow();
             let highlights = syntax_guard.highlights();
             for chunk in text.chunks(render_start..render_end) {
@@ -277,14 +488,19 @@ impl Model {
             if spans.is_empty() {
                 spans.push(Span::raw(""));
             }
-            self.insert_inlay_hints(line_number, render_start, render_end, &mut spans);
+            if last_segment {
+                self.insert_inlay_hints(line_number, render_start, render_end, &mut spans);
+            }
             if pad > 0 {
                 spans.insert(0, Span::raw(" ".repeat(pad)));
             }
             expand_tabs(&mut spans, pad);
+            if truncated {
+                spans.push(Span::styled("…", Style::default().fg(theme::warning())));
+            }
             let diagnostic = diagnostic_lines.contains(&line_number);
             let full_ranges = if diagnostic {
-                self.diagnostic_ranges(line_number, start, line.end)
+                self.diagnostic_ranges(line_number, start, line_end)
             } else {
                 Vec::new()
             };
@@ -292,8 +508,8 @@ impl Model {
                 .iter()
                 .filter_map(|(range_start, range_end)| {
                     let start =
-                        (*range_start as isize - hscroll as isize + pad as isize).max(0) as usize;
-                    let end = (*range_end as isize - hscroll as isize + pad as isize)
+                        (*range_start as isize - row_base as isize + pad as isize).max(0) as usize;
+                    let end = (*range_end as isize - row_base as isize + pad as isize)
                         .min(visible_width as isize);
                     (end > start as isize).then_some((start, end as usize))
                 })
@@ -355,5 +571,65 @@ impl Model {
             render_end = render_start;
         }
         (render_start, render_end, pad)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn soft_wrap_projects_sources_into_multiple_rows() {
+        let mut model = Model::new(EditorState::from_text("abcdefghij\nnext"), None);
+        model.settings.editor.soft_wrap = true;
+        model.wrap_width = 4;
+
+        let rows = model.visible_rows(0, 10);
+        let wrapped = rows
+            .iter()
+            .filter(|row| matches!(row, DisplayRow::Wrapped { .. }))
+            .count();
+        assert!(wrapped >= 3, "{rows:?}");
+        assert_eq!(model.row_of_position(0, 5, 10), Some(1));
+        assert_eq!(model.position_at_visible_row(1), Some((0, 4)));
+        let rendered = model
+            .visible_lines(10, 4)
+            .into_iter()
+            .map(|line| {
+                line.spans
+                    .into_iter()
+                    .map(|span| span.content.into_owned())
+                    .collect::<String>()
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(rendered.len(), 4);
+        assert_eq!(rendered[0], "abcd");
+        assert_eq!(rendered[1], "efgh");
+        assert_eq!(rendered[2], "ij");
+        assert_eq!(rendered[3], "next");
+    }
+
+    #[test]
+    fn soft_wrap_cursor_scroll_tracks_segment() {
+        let mut model = Model::new(EditorState::from_text("abcdefghij"), None);
+        model.settings.editor.soft_wrap = true;
+        model.wrap_width = 4;
+        model.cursor = 9;
+        model.editor.set_selection_bytes(9, 9);
+        model.ensure_cursor_visible(2, 5);
+        assert!(model.scroll_subrow > 0, "subrow={}", model.scroll_subrow);
+    }
+
+    #[test]
+    fn disabling_soft_wrap_restores_source_rows() {
+        let mut model = Model::new(EditorState::from_text("abcdefghij"), None);
+        model.settings.editor.soft_wrap = false;
+        let rows = model.visible_rows(0, 5);
+        assert!(rows.iter().any(|row| matches!(row, DisplayRow::Source(0))));
+        assert!(
+            !rows
+                .iter()
+                .any(|row| matches!(row, DisplayRow::Wrapped { .. }))
+        );
     }
 }

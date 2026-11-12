@@ -8,6 +8,11 @@ post-`0.5.0` feature line.
 
 ## [Unreleased]
 ### Added
+- Opt-in soft wrap (`editor.soft_wrap` / `ANVIL_EDITOR_SOFT_WRAP=1`)
+  projects long source lines into multiple display rows. Cursor and
+  secondary-selection rows, mouse positioning, gutter numbering, scrolling,
+  search/diagnostic underlines, and inlay placement use the wrapped
+  projection; horizontal scroll is disabled while wrapped.
 - The file tree marks modified open buffers with `*`, per-root git status with
   `M/A/D/R/C`, and files with diagnostics with `!`, using semantic colors.
 - Custom themes load from `$XDG_CONFIG_HOME/anvil/themes/*.toml`

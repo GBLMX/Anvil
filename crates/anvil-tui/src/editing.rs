@@ -479,6 +479,7 @@ impl Model {
             .min(height.saturating_sub(1) / 2);
         if self.code_lens.is_some() && self.row_of_source_line(line, height).is_none() {
             self.scroll = line;
+            self.scroll_subrow = 0;
         }
         if self.has_closed_folds() {
             if self.is_line_hidden(line) {
@@ -487,6 +488,7 @@ impl Model {
             let visible = self.visible_line_numbers(self.scroll, height);
             if !visible.contains(&line) {
                 self.scroll = line;
+                self.scroll_subrow = 0;
                 self.normalize_scroll();
             }
         } else if line < self.scroll.saturating_add(margin) {
@@ -495,6 +497,43 @@ impl Model {
             self.scroll = line + margin + 1 - height;
         }
         let column = position.display_column;
+        if self.settings.editor.soft_wrap {
+            self.wrap_width = usize::from(width.saturating_sub(self.gutter_width()).max(1));
+            let segments = self.wrap_segments(line, self.wrap_width);
+            let line_end = self
+                .editor
+                .index()
+                .line_to_offset(line)
+                .and_then(|offset| self.editor.index().offset_to_line(offset))
+                .map_or(0, |range| range.end);
+            let mut segment = 0usize;
+            for (index, (start, end, _)) in segments.iter().enumerate() {
+                let start_column = self
+                    .editor
+                    .index()
+                    .position(self.editor.text(), *start)
+                    .map_or(0, |position| position.display_column);
+                let end_column = self
+                    .editor
+                    .index()
+                    .position(self.editor.text(), *end)
+                    .map_or(start_column, |position| position.display_column);
+                if column >= start_column && (column < end_column || *end >= line_end) {
+                    segment = index;
+                }
+            }
+            if self.scroll != line {
+                self.scroll = line;
+                self.scroll_subrow = 0;
+            }
+            if segment < self.scroll_subrow {
+                self.scroll_subrow = segment;
+            } else if segment >= self.scroll_subrow.saturating_add(height) {
+                self.scroll_subrow = segment + 1 - height;
+            }
+            self.hscroll = 0;
+            return;
+        }
         let width = usize::from(width.max(1));
         if column < self.hscroll {
             self.hscroll = column;

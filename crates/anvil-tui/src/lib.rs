@@ -671,6 +671,10 @@ pub struct Model {
     icons: icon_theme::IconTheme,
     /// Whether the icon renderer uses ASCII fallbacks.
     ascii_icons: bool,
+    /// Text-area width used by the soft-wrap projection.
+    wrap_width: usize,
+    /// Wrapped segment offset within the first visible source line.
+    scroll_subrow: usize,
     settings_overlay: Option<SettingsOverlayState>,
     command_palette_recents: Vec<String>,
     /// Gateway client used for file I/O when present.
@@ -895,6 +899,8 @@ impl Model {
             settings: Settings::default(),
             icons: icon_theme::IconTheme::default(),
             ascii_icons: icon_theme::ascii_mode(),
+            wrap_width: 80,
+            scroll_subrow: 0,
             settings_overlay: None,
             command_palette_recents: Vec::new(),
             gateway: None,

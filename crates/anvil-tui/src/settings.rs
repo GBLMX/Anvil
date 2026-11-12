@@ -10,6 +10,7 @@ pub(crate) const MAX_SCROLL_MARGIN: usize = 16;
 
 const ENV_SCROLL_MARGIN: &str = "ANVIL_EDITOR_SCROLL_MARGIN";
 const ENV_AUTO_SAVE: &str = "ANVIL_EDITOR_AUTO_SAVE";
+const ENV_SOFT_WRAP: &str = "ANVIL_EDITOR_SOFT_WRAP";
 const ENV_SEARCH_CASE_SENSITIVE: &str = "ANVIL_SEARCH_CASE_SENSITIVE";
 const ENV_INLAY_HINTS: &str = "ANVIL_LSP_INLAY_HINTS";
 
@@ -17,6 +18,7 @@ const ENV_INLAY_HINTS: &str = "ANVIL_LSP_INLAY_HINTS";
 pub(crate) struct EditorSettings {
     pub(crate) scroll_margin: usize,
     pub(crate) auto_save: bool,
+    pub(crate) soft_wrap: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -42,6 +44,7 @@ impl Default for Settings {
             editor: EditorSettings {
                 scroll_margin: DEFAULT_SCROLL_MARGIN,
                 auto_save: false,
+                soft_wrap: false,
             },
             search: SearchSettings {
                 case_sensitive: false,
@@ -95,6 +98,7 @@ pub(crate) fn save_to_path(path: &Path, settings: Settings) -> Result<(), String
     let editor = table_mut(&mut document, "editor")?;
     editor["scroll_margin"] = toml_edit::value(settings.editor.scroll_margin as i64);
     editor["auto_save"] = toml_edit::value(settings.editor.auto_save);
+    editor["soft_wrap"] = toml_edit::value(settings.editor.soft_wrap);
     let search = table_mut(&mut document, "search")?;
     search["case_sensitive"] = toml_edit::value(settings.search.case_sensitive);
     let lsp = table_mut(&mut document, "lsp")?;
@@ -148,6 +152,9 @@ pub(crate) fn parse(text: &str) -> Result<Settings, String> {
     if let Some(auto_save) = file.editor.auto_save {
         settings.editor.auto_save = auto_save;
     }
+    if let Some(soft_wrap) = file.editor.soft_wrap {
+        settings.editor.soft_wrap = soft_wrap;
+    }
     if let Some(case_sensitive) = file.search.case_sensitive {
         settings.search.case_sensitive = case_sensitive;
     }
@@ -174,6 +181,9 @@ fn apply_env(
     }
     if let Some(value) = get(ENV_AUTO_SAVE) {
         settings.editor.auto_save = parse_bool(ENV_AUTO_SAVE, &value)?;
+    }
+    if let Some(value) = get(ENV_SOFT_WRAP) {
+        settings.editor.soft_wrap = parse_bool(ENV_SOFT_WRAP, &value)?;
     }
     if let Some(value) = get(ENV_SEARCH_CASE_SENSITIVE) {
         settings.search.case_sensitive = parse_bool(ENV_SEARCH_CASE_SENSITIVE, &value)?;
@@ -223,6 +233,7 @@ struct SettingsFile {
 struct EditorFile {
     scroll_margin: Option<usize>,
     auto_save: Option<bool>,
+    soft_wrap: Option<bool>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -260,6 +271,7 @@ mod tests {
                 editor: EditorSettings {
                     scroll_margin: 3,
                     auto_save: false,
+                    soft_wrap: false,
                 },
                 search: SearchSettings {
                     case_sensitive: false,
@@ -272,11 +284,12 @@ mod tests {
     #[test]
     fn parses_all_domains_and_ignores_theme() {
         let settings = parse(
-            "[theme]\nmode = \"fixed\"\n[editor]\nscroll_margin = 1\nauto_save = true\n[search]\ncase_sensitive = true\n[lsp]\ninlay_hints = false\n",
+            "[theme]\nmode = \"fixed\"\n[editor]\nscroll_margin = 1\nauto_save = true\nsoft_wrap = true\n[search]\ncase_sensitive = true\n[lsp]\ninlay_hints = false\n",
         )
         .expect("settings");
         assert_eq!(settings.editor.scroll_margin, 1);
         assert!(settings.editor.auto_save);
+        assert!(settings.editor.soft_wrap);
         assert!(settings.search.case_sensitive);
         assert!(!settings.lsp.inlay_hints);
     }

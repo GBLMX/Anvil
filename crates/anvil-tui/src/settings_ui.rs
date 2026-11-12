@@ -3,7 +3,7 @@
 use super::*;
 use crate::settings::{self, Settings};
 
-pub(crate) const SETTINGS_ROWS: usize = 4;
+pub(crate) const SETTINGS_ROWS: usize = 5;
 
 #[derive(Debug, Clone)]
 pub(crate) struct SettingsOverlayState {
@@ -18,7 +18,8 @@ impl SettingsOverlayState {
             0 => "editor.scroll_margin",
             1 => "search.case_sensitive",
             2 => "lsp.inlay_hints",
-            _ => "editor.auto_save",
+            3 => "editor.auto_save",
+            _ => "editor.soft_wrap",
         }
     }
 
@@ -27,7 +28,8 @@ impl SettingsOverlayState {
             0 => settings.editor.scroll_margin.to_string(),
             1 => settings.search.case_sensitive.to_string(),
             2 => settings.lsp.inlay_hints.to_string(),
-            _ => settings.editor.auto_save.to_string(),
+            3 => settings.editor.auto_save.to_string(),
+            _ => settings.editor.soft_wrap.to_string(),
         }
     }
 
@@ -83,7 +85,8 @@ impl Model {
             }
             1 => draft.search.case_sensitive = !draft.search.case_sensitive,
             2 => draft.lsp.inlay_hints = !draft.lsp.inlay_hints,
-            _ => draft.editor.auto_save = !draft.editor.auto_save,
+            3 => draft.editor.auto_save = !draft.editor.auto_save,
+            _ => draft.editor.soft_wrap = !draft.editor.soft_wrap,
         }
         overlay.draft = draft;
         self.apply_settings(draft);
@@ -99,7 +102,8 @@ impl Model {
             0 => overlay.draft.editor.scroll_margin = defaults.editor.scroll_margin,
             1 => overlay.draft.search.case_sensitive = defaults.search.case_sensitive,
             2 => overlay.draft.lsp.inlay_hints = defaults.lsp.inlay_hints,
-            _ => overlay.draft.editor.auto_save = defaults.editor.auto_save,
+            3 => overlay.draft.editor.auto_save = defaults.editor.auto_save,
+            _ => overlay.draft.editor.soft_wrap = defaults.editor.soft_wrap,
         }
         self.apply_settings(overlay.draft);
         self.settings_overlay = Some(overlay);
@@ -147,6 +151,11 @@ mod tests {
         assert!(model.settings.editor.auto_save);
         model.reset_settings_row();
         assert!(!model.settings.editor.auto_save);
+        model.move_settings(1);
+        model.adjust_settings(1);
+        assert!(model.settings.editor.soft_wrap);
+        model.reset_settings_row();
+        assert!(!model.settings.editor.soft_wrap);
         model.cancel_settings();
         assert!(model.settings_overlay.is_none());
         assert_eq!(model.settings, Settings::default());
