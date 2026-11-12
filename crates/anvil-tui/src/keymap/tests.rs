@@ -153,6 +153,14 @@ fn pending_g_resolves_navigation_commands() {
         Some(PendingCommand::FileStart)
     );
     assert_eq!(
+        pending_action('[', key(KeyCode::Char('['), KeyModifiers::NONE), false),
+        Some(PendingCommand::SectionPrevious)
+    );
+    assert_eq!(
+        pending_action(']', key(KeyCode::Char(']'), KeyModifiers::NONE), false),
+        Some(PendingCommand::SectionNext)
+    );
+    assert_eq!(
         pending_action('z', key(KeyCode::Char('z'), KeyModifiers::NONE), false),
         Some(PendingCommand::CenterCursor)
     );

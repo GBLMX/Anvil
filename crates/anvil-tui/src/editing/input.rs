@@ -192,6 +192,51 @@ impl Model {
         self.file.dirty = true;
     }
 
+    pub(crate) fn change_lines(&mut self, count: usize) {
+        if self.reject_read_only() {
+            return;
+        }
+        let Some(position) = self
+            .session
+            .editor
+            .index()
+            .position(self.session.editor.text(), self.session.cursor)
+        else {
+            return;
+        };
+        let Some(start) = self.session.editor.index().line_to_offset(position.line) else {
+            return;
+        };
+        let Some(last_start) = self
+            .session
+            .editor
+            .index()
+            .line_to_offset(position.line.saturating_add(count.saturating_sub(1)))
+        else {
+            return;
+        };
+        let Some(last) = self.session.editor.line_range_at(last_start) else {
+            return;
+        };
+        let mut end = last.end;
+        if end > start && self.session.editor.text().slice(end - 1..end) == "\n" {
+            end -= 1;
+        }
+        if end > start && self.session.editor.text().slice(end - 1..end) == "\r" {
+            end -= 1;
+        }
+        let deleted = self.session.editor.text().slice(start..end);
+        self.session.editor.set_selection_bytes(start, end);
+        self.session.editor.delete(start..end);
+        self.session.cursor = start;
+        if let Some(register) = self.input.register.take() {
+            self.record_register_text(register, &deleted);
+        }
+        self.file.modified = true;
+        self.begin_insert(InsertOrigin::InsertHere);
+        self.file.dirty = true;
+    }
+
     pub(crate) fn yank_lines(&mut self, count: usize) {
         let Some(position) = self
             .session

@@ -82,6 +82,69 @@ impl Model {
         }
     }
 
+    pub(crate) fn move_section(&mut self, forward: bool, count: usize) {
+        let Some(position) = self
+            .session
+            .editor
+            .index()
+            .position(self.session.editor.text(), self.session.cursor)
+        else {
+            return;
+        };
+        let lines = self.session.editor.index().len_lines();
+        let is_blank = |line: usize| {
+            let Some(start) = self.session.editor.index().line_to_offset(line) else {
+                return true;
+            };
+            let Some(range) = self.session.editor.line_range_at(start) else {
+                return true;
+            };
+            self.session
+                .editor
+                .text()
+                .slice(range.start..range.end)
+                .trim()
+                .is_empty()
+        };
+        let mut line = position.line;
+        for _ in 0..count.max(1) {
+            if forward {
+                let mut next = line;
+                while next < lines && !is_blank(next) {
+                    next += 1;
+                }
+                while next < lines && is_blank(next) {
+                    next += 1;
+                }
+                if next >= lines {
+                    break;
+                }
+                line = next;
+            } else {
+                if line == 0 {
+                    break;
+                }
+                let mut previous = line - 1;
+                while previous > 0 && is_blank(previous) {
+                    previous -= 1;
+                }
+                while previous > 0 && !is_blank(previous - 1) {
+                    previous -= 1;
+                }
+                line = previous;
+            }
+        }
+        let Some(offset) = self.session.editor.index().offset_at_display_column(
+            self.session.editor.text(),
+            line,
+            0,
+        ) else {
+            return;
+        };
+        self.set_caret(offset);
+        self.file.dirty = true;
+    }
+
     pub(crate) fn move_file_start(&mut self) {
         let Some(offset) =
             self.session

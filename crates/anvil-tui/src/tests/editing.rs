@@ -973,10 +973,68 @@ fn gg_and_zz_keys_are_real_commands() {
 }
 
 #[test]
-fn repeated_missing_prefix_keeps_pending() {
-    let mut model = Model::new(EditorState::from_text("alpha"), None);
+fn cc_changes_the_current_line() {
+    let mut model = Model::new(EditorState::from_text("one\ntwo"), None);
     model.start_page.welcome = false;
     handle_event(&mut model, key(KeyCode::Char('c')));
     handle_event(&mut model, key(KeyCode::Char('c')));
-    assert_eq!(model.input.pending, Some('c'));
+    assert!(matches!(model.ui.input_mode, InputMode::Insert));
+    assert_eq!(
+        model
+            .session
+            .editor
+            .text()
+            .slice(0..model.session.editor.text().len_bytes()),
+        "\ntwo"
+    );
+    type_text(&mut model, "one");
+    handle_event(&mut model, key(KeyCode::Esc));
+    assert_eq!(model.session.editor.text().slice(0..7), "one\ntwo");
+}
+
+#[test]
+fn bracket_bracket_moves_between_paragraph_sections() {
+    let mut model = Model::new(EditorState::from_text("a\nb\n\nc\nd"), None);
+    model.start_page.welcome = false;
+    model.session.cursor = model
+        .session
+        .editor
+        .index()
+        .line_to_offset(1)
+        .expect("line 1");
+
+    handle_event(&mut model, key(KeyCode::Char(']')));
+    handle_event(&mut model, key(KeyCode::Char(']')));
+    assert_eq!(
+        model
+            .session
+            .editor
+            .index()
+            .position(model.session.editor.text(), model.session.cursor)
+            .expect("cursor")
+            .line,
+        3
+    );
+
+    handle_event(&mut model, key(KeyCode::Char('[')));
+    handle_event(&mut model, key(KeyCode::Char('[')));
+    assert_eq!(
+        model
+            .session
+            .editor
+            .index()
+            .position(model.session.editor.text(), model.session.cursor)
+            .expect("cursor")
+            .line,
+        0
+    );
+}
+
+#[test]
+fn repeated_missing_prefix_keeps_pending() {
+    let mut model = Model::new(EditorState::from_text("alpha"), None);
+    model.start_page.welcome = false;
+    handle_event(&mut model, ctrl(KeyCode::Char('w')));
+    handle_event(&mut model, key(KeyCode::Char('w')));
+    assert_eq!(model.input.pending, Some('w'));
 }

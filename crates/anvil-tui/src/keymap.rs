@@ -342,12 +342,15 @@ pub(crate) enum PendingCommand {
     WorkspaceSymbols,
     Formatting,
     ChangeWord(WordMotion),
+    ChangeLines,
     DeleteLines,
     YankLines,
     DeleteWords(WordMotion),
     YankWords(WordMotion),
     FileStart,
     CenterCursor,
+    SectionPrevious,
+    SectionNext,
 }
 
 impl PendingCommand {
@@ -401,7 +404,10 @@ impl PendingCommand {
             | Count { .. }
             | BufferPicker
             | FileStart
-            | CenterCursor => None,
+            | CenterCursor
+            | SectionPrevious
+            | SectionNext
+            | ChangeLines => None,
         }
     }
 
@@ -465,6 +471,9 @@ impl PendingCommand {
             Self::Count { .. } => "count".to_owned(),
             Self::FileStart => "file start".to_owned(),
             Self::CenterCursor => "center cursor".to_owned(),
+            Self::SectionPrevious => "previous section".to_owned(),
+            Self::SectionNext => "next section".to_owned(),
+            Self::ChangeLines => "change line".to_owned(),
             _ => "command".to_owned(),
         }
     }
@@ -633,8 +642,12 @@ pub(crate) fn pending_action(
         };
     }
     if pending == ']' || pending == '[' {
-        return (key.code == KeyCode::Char('d'))
-            .then_some(PendingCommand::Diagnostic(pending == ']'));
+        return match key.code {
+            KeyCode::Char('d') => Some(PendingCommand::Diagnostic(pending == ']')),
+            KeyCode::Char(']') if pending == ']' => Some(PendingCommand::SectionNext),
+            KeyCode::Char('[') if pending == '[' => Some(PendingCommand::SectionPrevious),
+            _ => None,
+        };
     }
     if let KeyCode::Char(character) = key.code
         && character.is_ascii_digit()
@@ -661,6 +674,7 @@ pub(crate) fn pending_action(
         (' ', KeyCode::Char('b')) => Some(PendingCommand::BufferPicker),
         (' ', KeyCode::Char('S')) => Some(PendingCommand::WorkspaceSymbols),
         (' ', KeyCode::Char('F')) => Some(PendingCommand::Formatting),
+        ('c', KeyCode::Char('c')) => Some(PendingCommand::ChangeLines),
         ('c', KeyCode::Char('w')) => Some(PendingCommand::ChangeWord(WordMotion::NextStart)),
         ('c', KeyCode::Char('e')) => Some(PendingCommand::ChangeWord(WordMotion::End)),
         ('c', KeyCode::Char('b')) => Some(PendingCommand::ChangeWord(WordMotion::PreviousStart)),

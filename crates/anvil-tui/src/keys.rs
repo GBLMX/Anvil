@@ -248,6 +248,18 @@ fn execute_pending_command(
             let _ = model.take_count();
             model.change_word(motion);
         }
+        PendingCommand::ChangeLines => {
+            let count = model.take_count();
+            model.change_lines(count);
+        }
+        PendingCommand::SectionPrevious => {
+            let count = model.take_count();
+            model.move_section(false, count);
+        }
+        PendingCommand::SectionNext => {
+            let count = model.take_count();
+            model.move_section(true, count);
+        }
         PendingCommand::DeleteLines => {
             let count = model.take_count();
             model.delete_lines(count);
