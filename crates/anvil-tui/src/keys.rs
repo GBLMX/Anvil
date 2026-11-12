@@ -283,6 +283,7 @@ fn execute_normal_command(model: &mut Model, command: NormalCommand) {
             model.repeat_last_change(count);
         }
         NormalCommand::ToggleComment => model.toggle_comment(),
+        NormalCommand::MatchBracket => model.match_bracket(),
         NormalCommand::JumpBack => model.jump_back(),
         NormalCommand::JumpForward => model.jump_forward(),
         NormalCommand::Count(character) => model.push_count(character),

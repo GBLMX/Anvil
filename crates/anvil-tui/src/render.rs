@@ -542,6 +542,25 @@ pub(crate) fn apply_document_highlights<'a>(
     );
 }
 
+/// Applies matching-bracket emphasis without replacing syntax colors.
+pub(crate) fn apply_bracket_highlights(
+    spans: &mut Vec<Span<'_>>,
+    line_start: usize,
+    ranges: &[(usize, usize)],
+) {
+    apply_overlay_ranges(
+        spans,
+        line_start,
+        ranges,
+        |range| range,
+        |_| {
+            Style::default()
+                .fg(theme::accent())
+                .add_modifier(Modifier::BOLD)
+        },
+    );
+}
+
 /// Applies semantic-token foregrounds over syntax spans.
 pub(crate) fn apply_semantic_tokens<'a>(
     spans: &mut Vec<Span<'a>>,

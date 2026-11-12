@@ -39,6 +39,7 @@ use ratatui::{
     text::{Line, Span},
 };
 
+mod bracket;
 mod buffer;
 mod clipboard;
 mod command_line;
@@ -108,8 +109,9 @@ mod workspace_edit;
 pub(crate) use keys::handle_event;
 pub use render::view;
 use render::{
-    apply_diagnostic_underlines, apply_document_highlights, apply_search_highlights,
-    apply_semantic_tokens, display_column, expand_tabs, push_syntax_spans, utf16_to_byte,
+    apply_bracket_highlights, apply_diagnostic_underlines, apply_document_highlights,
+    apply_search_highlights, apply_semantic_tokens, display_column, expand_tabs, push_syntax_spans,
+    utf16_to_byte,
 };
 mod layout;
 mod syntax;
@@ -716,6 +718,8 @@ pub struct Model {
     exit_code: i32,
     /// Tree-sitter highlights cached by editor revision and path.
     syntax: RefCell<SyntaxState>,
+    /// Matching bracket cached by editor revision, path, and cursor.
+    bracket_cache: RefCell<bracket::BracketCache>,
     /// Discovered local plugins.
     #[cfg(target_os = "linux")]
     plugins: Vec<plugin_discovery::PluginDescriptor>,
@@ -898,6 +902,7 @@ impl Model {
             editor_mode: false,
             exit_code: 0,
             syntax: RefCell::new(SyntaxState::default()),
+            bracket_cache: RefCell::new(bracket::BracketCache::default()),
             #[cfg(target_os = "linux")]
             plugins: Vec::new(),
             #[cfg(target_os = "linux")]

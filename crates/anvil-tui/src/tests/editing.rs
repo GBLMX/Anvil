@@ -785,3 +785,16 @@ fn g_semicolon_and_g_comma_navigate_change_list() {
     handle_event(&mut model, key(KeyCode::Char(',')));
     assert_eq!(model.cursor, 3);
 }
+
+#[test]
+fn percent_jumps_to_matching_bracket_and_back() {
+    let mut model = Model::new(
+        EditorState::from_text("(a)\n"),
+        Some(PathBuf::from("test.rs")),
+    );
+    handle_event(&mut model, key(KeyCode::Char('%')));
+    assert_eq!(model.cursor, 2);
+
+    handle_event(&mut model, ctrl(KeyCode::Char('o')));
+    assert_eq!(model.cursor, 0);
+}

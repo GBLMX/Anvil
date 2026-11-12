@@ -210,6 +210,7 @@ impl Model {
         let current = self.current_line();
 
         let diagnostic_lines = self.diagnostic_lines();
+        let bracket_pair = self.bracket_pair();
         let hscroll = self.hscroll;
         let visible_width = usize::from(width);
         let mut lines = Vec::with_capacity(visible.len());
@@ -244,6 +245,16 @@ impl Model {
                 .map(|range| (range.start.max(render_start), range.end.min(render_end)))
                 .collect();
             let document_highlight_ranges = self.document_highlight_ranges(start, line.end);
+            let bracket_ranges = bracket_pair
+                .iter()
+                .flat_map(|&(open, close)| [(open, open + 1), (close, close + 1)])
+                .filter(|&(range_start, range_end)| {
+                    range_start < render_end && range_end > render_start
+                })
+                .map(|(range_start, range_end)| {
+                    (range_start.max(render_start), range_end.min(render_end))
+                })
+                .collect::<Vec<_>>();
             let semantic_ranges = self.semantic_ranges(start, line.end);
             let syntax_guard = self.syntax.borrow();
             let highlights = syntax_guard.highlights();
@@ -256,6 +267,9 @@ impl Model {
             }
             if !document_highlight_ranges.is_empty() {
                 apply_document_highlights(&mut spans, render_start, &document_highlight_ranges);
+            }
+            if !bracket_ranges.is_empty() {
+                apply_bracket_highlights(&mut spans, render_start, &bracket_ranges);
             }
             if !search_ranges.is_empty() {
                 apply_search_highlights(&mut spans, render_start, &search_ranges, self.cursor);

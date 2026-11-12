@@ -18,6 +18,9 @@ post-`0.5.0` feature line.
   forward stack.
 - `g;`/`g,` navigate a bounded edit-position change list. Key-driven edits
   record their before/after positions; `g;` skips the current position.
+- `%` jumps to the matching bracket with a bounded lexical scan; matching
+  bracket pairs are emphasized in the editor. Strings and line/block comments
+  are skipped.
 - `anvil-ctl` is a JSON-capable control plane for a running TUI: `open`,
   `save`, `edit set|insert`, bounded `query`, allowlisted Ex `command`, and
   `quit`, with stable exit codes, timeouts, and typed errors. The control

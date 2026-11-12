@@ -41,6 +41,7 @@ pub(crate) enum NormalCommand {
     Redo,
     RepeatChange,
     ToggleComment,
+    MatchBracket,
     JumpBack,
     JumpForward,
     Count(char),
@@ -82,6 +83,7 @@ impl NormalCommand {
             Redo => Some(command::REDO),
             RepeatChange => Some(command::REPEAT_CHANGE),
             ToggleComment => Some(command::TOGGLE_COMMENT),
+            MatchBracket => Some(command::MATCH_BRACKET),
             JumpBack => Some(command::JUMP_BACK),
             JumpForward => Some(command::JUMP_FORWARD),
             MoveHome => Some(command::LINE_START),
@@ -126,6 +128,7 @@ impl NormalCommand {
             "editor.redo" => Self::Redo,
             "editor.repeat_change" => Self::RepeatChange,
             "editor.toggle_comment" => Self::ToggleComment,
+            "navigation.match_bracket" => Self::MatchBracket,
             "navigation.jump_back" => Self::JumpBack,
             "navigation.jump_forward" => Self::JumpForward,
             "cursor.line_start" => Self::MoveHome,
@@ -175,6 +178,7 @@ pub(crate) fn normal_action(key: KeyPress, count: usize) -> Option<NormalCommand
         }
         KeyCode::Char('o') if key.ctrl() => Some(NormalCommand::JumpBack),
         KeyCode::Char('i') if key.ctrl() => Some(NormalCommand::JumpForward),
+        KeyCode::Char('%') if text_input => Some(NormalCommand::MatchBracket),
         KeyCode::Char('/') if text_input => Some(NormalCommand::Search),
         KeyCode::Char('a') if text_input => Some(NormalCommand::Append),
         KeyCode::Char('A') if text_input => Some(NormalCommand::AppendLineEnd),
@@ -1139,6 +1143,14 @@ mod tests {
         assert_eq!(
             normal_action(key(KeyCode::Char('0'), KeyModifiers::NONE), 2),
             Some(NormalCommand::Count('0'))
+        );
+    }
+
+    #[test]
+    fn percent_matches_brackets() {
+        assert_eq!(
+            normal_action(key(KeyCode::Char('%'), KeyModifiers::SHIFT), 0),
+            Some(NormalCommand::MatchBracket)
         );
     }
 
