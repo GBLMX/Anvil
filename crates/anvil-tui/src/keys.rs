@@ -349,6 +349,24 @@ fn dispatch_context_binding(model: &mut Model, context: KeymapContext, key: KeyP
     }
 }
 
+fn dispatch_specific_context_binding(model: &mut Model, key: KeyPress) -> bool {
+    let contexts = model
+        .active_keymap_contexts()
+        .into_iter()
+        .filter(|context| !matches!(context, KeymapContext::Editor | KeymapContext::Global))
+        .collect::<Vec<_>>();
+    if contexts.is_empty() {
+        return false;
+    }
+    let Some((_, action)) = resolve_context_binding(&contexts, key, &model.config.keymap) else {
+        return false;
+    };
+    model.input.pending = None;
+    model.input.leader_deadline = None;
+    execute_context_action(model, action, key);
+    true
+}
+
 fn execute_command_id(model: &mut Model, id: &str, key: KeyPress) -> bool {
     if let Some(command) = NormalCommand::from_id(id) {
         execute_normal_command(model, command);
@@ -522,12 +540,8 @@ fn handle_key(model: &mut Model, key: KeyPress) {
         return;
     }
 
-    if model.keymap_context() == KeymapContext::Popup {
-        model.input.pending = None;
-        model.input.leader_deadline = None;
-        if dispatch_context_binding(model, KeymapContext::Popup, key) {
-            return;
-        }
+    if dispatch_specific_context_binding(model, key) {
+        return;
     }
 
     if let Some(pending) = model.input.pending.take() {
@@ -954,9 +968,6 @@ fn handle_key(model: &mut Model, key: KeyPress) {
         return;
     }
     if model.keymap_context() == KeymapContext::FileTree {
-        if dispatch_context_binding(model, KeymapContext::FileTree, key) {
-            return;
-        }
         if key.code == KeyCode::Char(' ') && text_input {
             model.begin_pending(' ');
             return;
@@ -995,18 +1006,6 @@ fn handle_key(model: &mut Model, key: KeyPress) {
                 }
             }
         }
-        return;
-    }
-
-    let text_context = match &model.ui.input_mode {
-        InputMode::CommandLine { .. } => Some(KeymapContext::CommandLine),
-        InputMode::Search { .. } => Some(KeymapContext::Search),
-        InputMode::Rename { .. } => Some(KeymapContext::Rename),
-        _ => None,
-    };
-    if let Some(context) = text_context
-        && dispatch_context_binding(model, context, key)
-    {
         return;
     }
 
@@ -1301,9 +1300,6 @@ fn handle_key(model: &mut Model, key: KeyPress) {
         },
         InputMode::Normal => {
             if model.edit.visual_anchor.is_some() {
-                if dispatch_context_binding(model, KeymapContext::Modal, key) {
-                    return;
-                }
                 if model.edit.modal_layer == Some(ModalLayer::Surround) {
                     match key.code {
                         KeyCode::Esc => model.cancel_modal_layer(),
