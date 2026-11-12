@@ -277,6 +277,8 @@ struct PreviewState {
 struct CommandPaletteItem {
     id: String,
     label: String,
+    title: String,
+    detail: String,
     plugin_id: Option<String>,
     theme: Option<&'static str>,
 }

@@ -4,7 +4,21 @@ use super::*;
 use crate::settings::{self, Settings};
 
 pub(crate) const SETTINGS_ROWS: usize = 8;
-pub(crate) const SETTINGS_POPUP_ROWS: usize = SETTINGS_ROWS + 5;
+
+pub(crate) fn rect(area: ratatui::layout::Rect) -> ratatui::layout::Rect {
+    let width = (area.width * 9 / 10)
+        .max(56)
+        .min(area.width.saturating_sub(2));
+    let height = (area.height * 4 / 5)
+        .max(16)
+        .min(area.height.saturating_sub(2));
+    ratatui::layout::Rect {
+        x: area.x + area.width.saturating_sub(width) / 2,
+        y: area.y + area.height.saturating_sub(height) / 2,
+        width,
+        height,
+    }
+}
 
 #[derive(Debug, Clone)]
 pub(crate) struct SettingsOverlayState {
@@ -24,6 +38,19 @@ impl SettingsOverlayState {
             5 => "lsp.inlay_hints",
             6 => "ui.reduced_motion",
             _ => "ui.high_contrast",
+        }
+    }
+
+    pub(crate) fn description(index: usize) -> &'static str {
+        match index {
+            0 => "Lines kept visible around the cursor before scrolling.",
+            1 => "Save the active buffer when focus moves to another surface.",
+            2 => "Wrap long lines to the pane width and scroll by display row.",
+            3 => "Run LSP formatting after a successful write.",
+            4 => "Use case-sensitive matching for `/` and project search.",
+            5 => "Request and render language-server inlay hints.",
+            6 => "Freeze spinners and avoid continuous animation.",
+            _ => "Increase text, muted, and border contrast for the active theme.",
         }
     }
 

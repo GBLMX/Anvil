@@ -8,6 +8,12 @@ post-`0.5.0` feature line.
 
 ## [Unreleased]
 ### Added
+- Settings is now a full page with top categories, a section sidebar,
+  highlighted values, and a description footer.
+- The command palette renders title/detail columns, a result count, and a key
+  hint footer.
+- Saving a theme edits only `[theme]` and preserves every other settings
+  section.
 - `:themes` opens a two-pane theme browser with live preview, Enter apply, and
   Esc restore.
 - Interactive overlays now share the focused border style; the debug panel

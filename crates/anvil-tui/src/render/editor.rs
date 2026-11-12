@@ -477,13 +477,14 @@ pub fn view(model: &Model, frame: &mut Frame) {
     if let Some(palette) = &model.command_palette {
         let popup = command_palette_rect(area);
         frame.render_widget(Clear, popup);
-        let visible = popup.height.saturating_sub(3) as usize;
+        let visible = popup.height.saturating_sub(4) as usize;
         let selected = palette.table.selected_index();
         let start = selected.saturating_sub(visible.saturating_sub(1));
         let mut lines = vec![Line::styled(
             format!("> {}", palette.table.query()),
             Style::default().fg(theme::accent()),
         )];
+        let detail_width = usize::from(popup.width).saturating_sub(34).clamp(12, 40);
         for (row, index) in palette
             .table
             .filtered()
@@ -492,15 +493,37 @@ pub fn view(model: &Model, frame: &mut Frame) {
             .take(visible)
             .enumerate()
         {
-            let style = if start + row == selected {
+            let selected_row = start + row == selected;
+            let style = if selected_row {
                 theme::selected()
             } else {
                 theme::panel()
             };
-            lines.push(Line::styled(
-                palette.table.items()[*index].label.clone(),
-                style,
-            ));
+            let item = &palette.table.items()[*index];
+            let title = truncate_width(
+                &item.title,
+                (popup.width.saturating_sub(4) as usize).min(30) as u16,
+            );
+            let detail = truncate_width(&item.detail, detail_width as u16);
+            lines.push(Line::from(vec![
+                Span::styled(if selected_row { "❯ " } else { "  " }, style),
+                Span::styled(
+                    format!("{title:<30}"),
+                    if selected_row {
+                        style
+                    } else {
+                        style.fg(theme::text_color())
+                    },
+                ),
+                Span::styled(
+                    detail,
+                    if selected_row {
+                        style
+                    } else {
+                        style.fg(theme::muted())
+                    },
+                ),
+            ]));
         }
         if palette.table.is_empty() {
             lines.push(Line::styled(
@@ -508,10 +531,17 @@ pub fn view(model: &Model, frame: &mut Frame) {
                 theme::panel().fg(theme::muted()),
             ));
         }
+        lines.push(Line::styled(
+            "Enter run · ↑/↓ move · Esc close",
+            theme::panel().fg(theme::muted()),
+        ));
         frame.render_widget(
             Paragraph::new(lines)
                 .style(theme::panel())
-                .block(crate::render::focused_panel_block("Commands")),
+                .block(crate::render::focused_panel_block(format!(
+                    "Commands · {} · Esc close",
+                    palette.table.filtered().len()
+                ))),
             popup,
         );
     }
@@ -844,42 +874,127 @@ pub fn view(model: &Model, frame: &mut Frame) {
         );
     }
     if let Some(overlay) = &model.settings_overlay {
-        let popup =
-            crate::render::document_symbols_rect(area, crate::settings_ui::SETTINGS_POPUP_ROWS);
+        let popup = crate::settings_ui::rect(area);
         frame.render_widget(Clear, popup);
+        frame.render_widget(crate::render::focused_panel_block("Settings"), popup);
+        let inner = Rect {
+            x: popup.x + 2,
+            y: popup.y + 1,
+            width: popup.width.saturating_sub(4),
+            height: popup.height.saturating_sub(2),
+        };
+        if inner.width < 20 || inner.height < 6 {
+            return;
+        }
+        let group = crate::settings_ui::SettingsOverlayState::group(overlay.selected);
+        let tab_style = |name| {
+            if name == group {
+                theme::panel()
+                    .fg(theme::accent())
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                theme::panel().fg(theme::dim())
+            }
+        };
+        let tabs = Line::from(vec![
+            Span::styled(" Editor ", tab_style("Editor")),
+            Span::styled("│", theme::panel().fg(theme::border_color())),
+            Span::styled(" Interface ", tab_style("Accessibility")),
+            Span::styled("│", theme::panel().fg(theme::border_color())),
+            Span::styled(" Language ", tab_style("Search")),
+        ]);
+        frame.render_widget(
+            Paragraph::new(tabs).style(theme::panel()),
+            Rect { height: 1, ..inner },
+        );
+        let body = Rect {
+            y: inner.y + 2,
+            height: inner.height.saturating_sub(4),
+            ..inner
+        };
+        let sidebar_width = (inner.width / 5).clamp(18, 24);
+        let sidebar = Rect {
+            width: sidebar_width,
+            ..body
+        };
+        let content = Rect {
+            x: body.x + sidebar_width,
+            width: body.width.saturating_sub(sidebar_width),
+            ..body
+        };
+        let mut sidebar_lines = Vec::new();
+        for name in ["Editor", "Search", "LSP", "Accessibility"] {
+            let style = if name == group {
+                theme::selected()
+            } else {
+                theme::panel().fg(theme::muted())
+            };
+            sidebar_lines.push(Line::styled(format!("  {name}"), style));
+        }
+        frame.render_widget(
+            Paragraph::new(sidebar_lines)
+                .style(theme::panel())
+                .block(panel_block("Sections")),
+            sidebar,
+        );
         let mut lines = Vec::new();
-        let mut group = "";
+        let mut rendered_group = "";
         for row in 0..crate::settings_ui::SETTINGS_ROWS {
             let next = crate::settings_ui::SettingsOverlayState::group(row);
-            if next != group {
-                group = next;
+            if next != rendered_group {
+                rendered_group = next;
                 lines.push(Line::styled(
-                    group.to_ascii_uppercase(),
+                    rendered_group.to_ascii_uppercase(),
                     theme::panel().fg(theme::dim()).add_modifier(Modifier::BOLD),
                 ));
             }
             let marker = if overlay.changed(row) { "*" } else { " " };
-            let text = format!(
-                "{marker} {:<24} {}",
-                crate::settings_ui::SettingsOverlayState::label(row),
-                crate::settings_ui::SettingsOverlayState::value(&overlay.draft, row)
-            );
+            let label = crate::settings_ui::SettingsOverlayState::label(row);
+            let value = crate::settings_ui::SettingsOverlayState::value(&overlay.draft, row);
             let style = if row == overlay.selected {
                 theme::selected()
             } else {
                 theme::panel()
             };
-            lines.push(Line::styled(text, style));
+            let value_style = if row == overlay.selected {
+                style
+            } else {
+                theme::panel().fg(theme::warning())
+            };
+            lines.push(Line::from(vec![
+                Span::styled(format!("{marker} {label:<27} "), style),
+                Span::styled(value, value_style),
+            ]));
         }
-        lines.push(Line::styled(
-            "Enter toggle · ←/→ adjust · r reset · s save · Esc cancel",
-            theme::panel().fg(theme::muted()),
-        ));
+        let visible = body.height.saturating_sub(2) as usize;
+        let start = overlay
+            .selected
+            .saturating_add(crate::settings_ui::SETTINGS_ROWS / 2)
+            .saturating_sub(visible)
+            .min(lines.len().saturating_sub(visible));
         frame.render_widget(
-            Paragraph::new(lines)
-                .style(theme::panel())
-                .block(crate::render::focused_panel_block("Settings")),
-            popup,
+            Paragraph::new(
+                lines
+                    .into_iter()
+                    .skip(start)
+                    .take(visible)
+                    .collect::<Vec<_>>(),
+            )
+            .style(theme::panel())
+            .block(panel_block("Values")),
+            content,
+        );
+        let description = Rect {
+            y: inner.y + inner.height.saturating_sub(1),
+            height: 1,
+            ..inner
+        };
+        frame.render_widget(
+            Paragraph::new(Line::styled(
+                crate::settings_ui::SettingsOverlayState::description(overlay.selected),
+                theme::panel().fg(theme::muted()),
+            )),
+            description,
         );
     }
     if let Some(symbols) = &model.document_symbols {

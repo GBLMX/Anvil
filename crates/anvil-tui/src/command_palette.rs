@@ -35,14 +35,13 @@ impl Model {
                     contexts.push("pending");
                 }
                 let id = spec.id.as_str();
+                let title = command_title(id);
+                let detail = format!("{id} · {}", contexts.join("+"));
                 CommandPaletteItem {
                     id: id.to_owned(),
-                    label: format!(
-                        "{:<28} {:<36} [{}]",
-                        command_title(id),
-                        id,
-                        contexts.join("+")
-                    ),
+                    label: format!("{title} {id}"),
+                    title,
+                    detail,
                     plugin_id: None,
                     theme: None,
                 }
@@ -56,7 +55,9 @@ impl Model {
             };
             items.push(CommandPaletteItem {
                 id: format!("theme.{name}"),
-                label: format!("Theme: {name}{current}"),
+                label: format!("Theme {name}{current}"),
+                title: format!("Theme: {name}"),
+                detail: current.trim().to_owned(),
                 plugin_id: None,
                 theme: Some(name),
             });
@@ -73,8 +74,13 @@ impl Model {
                 items.push(CommandPaletteItem {
                     id: command.id.clone(),
                     label: format!(
-                        "{:<28} {:<36} [plugin {}]",
+                        "{} {}",
                         command.title.escape_default(),
+                        command.id.escape_default()
+                    ),
+                    title: command.title.escape_default().to_string(),
+                    detail: format!(
+                        "{} · plugin {}",
                         command.id.escape_default(),
                         plugin.manifest.id.escape_default()
                     ),

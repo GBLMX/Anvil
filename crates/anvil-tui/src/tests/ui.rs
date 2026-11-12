@@ -794,3 +794,47 @@ fn welcome_recent_rows_are_clickable() {
     assert!(!model.welcome);
     assert_eq!(model.path.as_deref(), Some(path.as_path()));
 }
+
+#[test]
+fn settings_page_renders_tabs_sections_values_and_description() {
+    let mut model = Model::new(EditorState::from_text("alpha"), None);
+    model.open_settings();
+    let backend = TestBackend::new(100, 30);
+    let mut terminal = Terminal::new(backend).expect("terminal");
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+    let rendered = terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect::<String>();
+    assert!(rendered.contains("Editor"), "{rendered}");
+    assert!(rendered.contains("Interface"), "{rendered}");
+    assert!(rendered.contains("Language"), "{rendered}");
+    assert!(rendered.contains("Sections"), "{rendered}");
+    assert!(rendered.contains("scroll_margin"), "{rendered}");
+    assert!(
+        rendered.contains("Lines kept visible around the cursor"),
+        "{rendered}"
+    );
+}
+
+#[test]
+fn command_palette_renders_title_detail_and_footer() {
+    let mut model = Model::new(EditorState::from_text("alpha"), None);
+    model.open_command_palette();
+    let backend = TestBackend::new(120, 40);
+    let mut terminal = Terminal::new(backend).expect("terminal");
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+    let rendered = terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect::<String>();
+    assert!(rendered.contains("Commands ·"), "{rendered}");
+    assert!(rendered.contains("Enter run"), "{rendered}");
+    assert!(rendered.contains("normal"), "{rendered}");
+}

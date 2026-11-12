@@ -90,7 +90,8 @@ related workflows. Otherwise it remains a bounded overlay.
 
 ## Future slices
 
-1. Settings are grouped into Editor / Search / LSP / Accessibility.
+1. Settings use a full page with Editor / Interface / Language tabs, a section
+   sidebar, value column, and description footer.
 2. Start page supports mouse selection for recent entries.
 3. Settings and debug overlays use the focused border token; remaining overlays
    still need the same treatment.
