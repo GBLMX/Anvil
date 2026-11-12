@@ -740,3 +740,21 @@ fn comment_toggles_an_empty_named_buffer() {
     handle_event(&mut model, key(KeyCode::Char('u')));
     assert_eq!(model.editor.text().len_bytes(), 0);
 }
+
+#[test]
+fn comment_empty_buffer_preserves_carets_after_prefix() {
+    let mut model = Model::new(EditorState::from_text(""), Some(PathBuf::from("test.rs")));
+    assert!(model.editor.set_selections_bytes(vec![(0, 0), (0, 0)]));
+
+    handle_event(&mut model, ctrl(KeyCode::Char('/')));
+
+    assert_eq!(model.editor.text().slice(0..3), "// ");
+    let selections = model.editor.selection_bytes();
+    assert_eq!(selections.len(), 2);
+    assert!(
+        selections
+            .iter()
+            .all(|(anchor, head)| *anchor == 3 && *head == 3),
+        "carets not mapped past the comment prefix: {selections:?}"
+    );
+}
