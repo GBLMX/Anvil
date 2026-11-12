@@ -71,6 +71,7 @@ name = "anvil-dark"
 
 [editor]
 scroll_margin = 3
+max_buffers = 9
 auto_save = false
 
 [search]
@@ -80,9 +81,9 @@ case_sensitive = false
 inlay_hints = true
 ```
 
-`ANVIL_EDITOR_SCROLL_MARGIN`, `ANVIL_EDITOR_AUTO_SAVE`,
-`ANVIL_SEARCH_CASE_SENSITIVE`, and `ANVIL_LSP_INLAY_HINTS` override the file
-for the current process.
+`ANVIL_EDITOR_SCROLL_MARGIN`, `ANVIL_EDITOR_MAX_BUFFERS`,
+`ANVIL_EDITOR_AUTO_SAVE`, `ANVIL_SEARCH_CASE_SENSITIVE`, and
+`ANVIL_LSP_INLAY_HINTS` override the file for the current process.
 `:settings` opens the minimal overlay: `j`/`k` select, `h`/`l` or `Enter`
 adjust, `r` resets the row, `s` saves, and `Esc` cancels. The Appearance
 section includes the active theme row.

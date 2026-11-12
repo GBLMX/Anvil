@@ -3,7 +3,7 @@
 use super::*;
 use crate::settings::{self, Settings};
 
-pub(crate) const SETTINGS_ROWS: usize = 9;
+pub(crate) const SETTINGS_ROWS: usize = 10;
 
 pub(crate) fn rect(area: ratatui::layout::Rect) -> ratatui::layout::Rect {
     let width = (area.width * 9 / 10)
@@ -37,10 +37,11 @@ impl SettingsOverlayState {
             1 => "editor.auto_save",
             2 => "editor.soft_wrap",
             3 => "editor.format_on_save",
-            4 => "search.case_sensitive",
-            5 => "lsp.inlay_hints",
-            6 => "ui.reduced_motion",
-            7 => "ui.high_contrast",
+            4 => "editor.max_buffers",
+            5 => "search.case_sensitive",
+            6 => "lsp.inlay_hints",
+            7 => "ui.reduced_motion",
+            8 => "ui.high_contrast",
             _ => "theme.name",
         }
     }
@@ -51,20 +52,21 @@ impl SettingsOverlayState {
             1 => "Save the active buffer when focus moves to another surface.",
             2 => "Wrap long lines to the pane width and scroll by display row.",
             3 => "Run LSP formatting after a successful write.",
-            4 => "Use case-sensitive matching for `/` and project search.",
-            5 => "Request and render language-server inlay hints.",
-            6 => "Freeze spinners and avoid continuous animation.",
-            7 => "Increase text, muted, and border contrast for the active theme.",
+            4 => "Maximum foreground buffers; Alt-1..9 still select the first nine.",
+            5 => "Use case-sensitive matching for `/` and project search.",
+            6 => "Request and render language-server inlay hints.",
+            7 => "Freeze spinners and avoid continuous animation.",
+            8 => "Increase text, muted, and border contrast for the active theme.",
             _ => "Select the semantic palette used by the TUI.",
         }
     }
 
     pub(crate) fn group(index: usize) -> &'static str {
         match index {
-            0..=3 => "Editor",
-            4 => "Search",
-            5 => "LSP",
-            6..=7 => "Accessibility",
+            0..=4 => "Editor",
+            5 => "Search",
+            6 => "LSP",
+            7..=8 => "Accessibility",
             _ => "Appearance",
         }
     }
@@ -78,7 +80,7 @@ impl SettingsOverlayState {
     }
 
     pub(crate) fn value(&self, index: usize) -> String {
-        if index == 8 {
+        if index == 9 {
             return theme_label(self.theme);
         }
         Self::value_from(&self.draft, index)
@@ -90,16 +92,17 @@ impl SettingsOverlayState {
             1 => settings.editor.auto_save.to_string(),
             2 => settings.editor.soft_wrap.to_string(),
             3 => settings.editor.format_on_save.to_string(),
-            4 => settings.search.case_sensitive.to_string(),
-            5 => settings.lsp.inlay_hints.to_string(),
-            6 => settings.ui.reduced_motion.to_string(),
-            7 => settings.ui.high_contrast.to_string(),
+            4 => settings.editor.max_buffers.to_string(),
+            5 => settings.search.case_sensitive.to_string(),
+            6 => settings.lsp.inlay_hints.to_string(),
+            7 => settings.ui.reduced_motion.to_string(),
+            8 => settings.ui.high_contrast.to_string(),
             _ => theme_label(settings.theme),
         }
     }
 
     pub(crate) fn changed(&self, index: usize) -> bool {
-        if index == 8 {
+        if index == 9 {
             return self.theme_touched;
         }
         self.value(index) != Self::value_from(&self.original, index)
@@ -243,7 +246,7 @@ impl Model {
         let Some(mut overlay) = self.overlays.settings_overlay.take() else {
             return;
         };
-        if overlay.selected == 8 {
+        if overlay.selected == 9 {
             overlay.theme = cycle_theme(overlay.theme, delta);
             overlay.theme_touched = true;
             let choice = overlay.theme;
@@ -264,9 +267,16 @@ impl Model {
             1 => draft.editor.auto_save = !draft.editor.auto_save,
             2 => draft.editor.soft_wrap = !draft.editor.soft_wrap,
             3 => draft.editor.format_on_save = !draft.editor.format_on_save,
-            4 => draft.search.case_sensitive = !draft.search.case_sensitive,
-            5 => draft.lsp.inlay_hints = !draft.lsp.inlay_hints,
-            6 => draft.ui.reduced_motion = !draft.ui.reduced_motion,
+            4 => {
+                draft.editor.max_buffers = draft
+                    .editor
+                    .max_buffers
+                    .saturating_add_signed(delta)
+                    .clamp(1, settings::MAX_MAX_BUFFERS);
+            }
+            5 => draft.search.case_sensitive = !draft.search.case_sensitive,
+            6 => draft.lsp.inlay_hints = !draft.lsp.inlay_hints,
+            7 => draft.ui.reduced_motion = !draft.ui.reduced_motion,
             _ => draft.ui.high_contrast = !draft.ui.high_contrast,
         }
         overlay.draft = draft;
@@ -279,7 +289,7 @@ impl Model {
             return;
         };
         let defaults = Settings::default();
-        if overlay.selected == 8 {
+        if overlay.selected == 9 {
             overlay.theme = defaults.theme;
             overlay.theme_touched = true;
             let choice = overlay.theme;
@@ -293,9 +303,10 @@ impl Model {
             1 => overlay.draft.editor.auto_save = defaults.editor.auto_save,
             2 => overlay.draft.editor.soft_wrap = defaults.editor.soft_wrap,
             3 => overlay.draft.editor.format_on_save = defaults.editor.format_on_save,
-            4 => overlay.draft.search.case_sensitive = defaults.search.case_sensitive,
-            5 => overlay.draft.lsp.inlay_hints = defaults.lsp.inlay_hints,
-            6 => overlay.draft.ui.reduced_motion = defaults.ui.reduced_motion,
+            4 => overlay.draft.editor.max_buffers = defaults.editor.max_buffers,
+            5 => overlay.draft.search.case_sensitive = defaults.search.case_sensitive,
+            6 => overlay.draft.lsp.inlay_hints = defaults.lsp.inlay_hints,
+            7 => overlay.draft.ui.reduced_motion = defaults.ui.reduced_motion,
             _ => overlay.draft.ui.high_contrast = defaults.ui.high_contrast,
         }
         self.apply_settings(overlay.draft);
@@ -358,11 +369,12 @@ mod tests {
     #[test]
     fn settings_tabs_map_every_group() {
         assert_eq!(SettingsOverlayState::tab(0), "Editor");
-        assert_eq!(SettingsOverlayState::tab(4), "Language");
+        assert_eq!(SettingsOverlayState::tab(4), "Editor");
         assert_eq!(SettingsOverlayState::tab(5), "Language");
-        assert_eq!(SettingsOverlayState::tab(6), "Interface");
-        assert_eq!(SettingsOverlayState::tab(8), "Interface");
-        assert_eq!(SettingsOverlayState::group(8), "Appearance");
+        assert_eq!(SettingsOverlayState::tab(6), "Language");
+        assert_eq!(SettingsOverlayState::tab(7), "Interface");
+        assert_eq!(SettingsOverlayState::tab(9), "Interface");
+        assert_eq!(SettingsOverlayState::group(9), "Appearance");
     }
 
     #[test]
@@ -395,6 +407,11 @@ mod tests {
         assert!(model.config.settings.editor.format_on_save);
         model.reset_settings_row();
         assert!(!model.config.settings.editor.format_on_save);
+        model.move_settings(1);
+        model.adjust_settings(1);
+        assert_eq!(model.config.settings.editor.max_buffers, 10);
+        model.reset_settings_row();
+        assert_eq!(model.config.settings.editor.max_buffers, 9);
         model.move_settings(1);
         model.adjust_settings(1);
         assert!(model.config.settings.search.case_sensitive);

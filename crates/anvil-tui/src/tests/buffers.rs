@@ -1,4 +1,5 @@
 use super::*;
+use crate::settings::DEFAULT_MAX_BUFFERS;
 use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 #[test]
 fn multi_buffer_switch_preserves_per_buffer_state() {
@@ -48,20 +49,20 @@ fn buffer_limit_rejects_tenth_open() {
         .collect();
 
     let mut model = Model::open(&paths[0]).expect("open first");
-    for path in &paths[1..MAX_OPEN_BUFFERS] {
+    for path in &paths[1..DEFAULT_MAX_BUFFERS] {
         model.open_path(path).expect("open buffer");
     }
-    assert_eq!(model.buffers.entries.len(), MAX_OPEN_BUFFERS);
+    assert_eq!(model.buffers.entries.len(), DEFAULT_MAX_BUFFERS);
 
-    let error = model.open_path(&paths[MAX_OPEN_BUFFERS]).unwrap_err();
+    let error = model.open_path(&paths[DEFAULT_MAX_BUFFERS]).unwrap_err();
     assert_eq!(error, "buffer limit reached (9)");
     assert_eq!(model.status.text, "E: buffer limit reached (9)");
-    assert_eq!(model.buffers.entries.len(), MAX_OPEN_BUFFERS);
+    assert_eq!(model.buffers.entries.len(), DEFAULT_MAX_BUFFERS);
 
-    let tenth = paths[MAX_OPEN_BUFFERS].to_string_lossy().into_owned();
+    let tenth = paths[DEFAULT_MAX_BUFFERS].to_string_lossy().into_owned();
     model.open_file(&tenth);
     assert_eq!(model.status.text, "E: buffer limit reached (9)");
-    assert_eq!(model.buffers.entries.len(), MAX_OPEN_BUFFERS);
+    assert_eq!(model.buffers.entries.len(), DEFAULT_MAX_BUFFERS);
 
     model.open_path(&paths[1]).expect("switch existing");
     assert_eq!(model.session.path.as_ref(), Some(&paths[1]));
@@ -74,14 +75,37 @@ fn new_buffer_respects_buffer_limit() {
     fs::write(&first, "text").expect("write buffer");
     let mut model = Model::open(&first).expect("open first");
 
-    for _ in 0..MAX_OPEN_BUFFERS - 1 {
+    for _ in 0..DEFAULT_MAX_BUFFERS - 1 {
         model.new_buffer();
     }
-    assert_eq!(model.buffers.entries.len(), MAX_OPEN_BUFFERS);
+    assert_eq!(model.buffers.entries.len(), DEFAULT_MAX_BUFFERS);
 
     model.new_buffer();
-    assert_eq!(model.buffers.entries.len(), MAX_OPEN_BUFFERS);
+    assert_eq!(model.buffers.entries.len(), DEFAULT_MAX_BUFFERS);
     assert_eq!(model.status.text, "E: buffer limit reached (9)");
+}
+
+#[test]
+fn configured_buffer_limit_is_enforced() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let paths: Vec<_> = (0..5)
+        .map(|index| {
+            let path = dir.path().join(format!("{index}.txt"));
+            fs::write(&path, "text").expect("write buffer");
+            path
+        })
+        .collect();
+    let mut model = Model::open(&paths[0]).expect("open first");
+    model.config.settings.editor.max_buffers = 2;
+
+    model.open_path(&paths[1]).expect("open second");
+    let error = model.open_path(&paths[2]).unwrap_err();
+    assert_eq!(error, "buffer limit reached (2)");
+    assert_eq!(model.buffers.entries.len(), 2);
+
+    model.new_buffer();
+    assert_eq!(model.buffers.entries.len(), 2);
+    assert_eq!(model.status.text, "E: buffer limit reached (2)");
 }
 
 #[test]
@@ -649,7 +673,7 @@ fn buffer_bar_shows_dirty_missing_and_read_only_states() {
 fn buffer_bar_scrolls_to_many_buffers() {
     let dir = tempfile::tempdir().expect("tempdir");
     let mut model: Option<Model> = None;
-    for index in 0..MAX_OPEN_BUFFERS {
+    for index in 0..DEFAULT_MAX_BUFFERS {
         let path = dir.path().join(format!("f{index}.txt"));
         fs::write(&path, "x").expect("write");
         match model.as_mut() {
@@ -658,8 +682,8 @@ fn buffer_bar_scrolls_to_many_buffers() {
         }
     }
     let model = model.expect("model");
-    assert_eq!(model.buffers.entries.len(), MAX_OPEN_BUFFERS);
-    assert_eq!(model.buffers.active, MAX_OPEN_BUFFERS - 1);
+    assert_eq!(model.buffers.entries.len(), DEFAULT_MAX_BUFFERS);
+    assert_eq!(model.buffers.active, DEFAULT_MAX_BUFFERS - 1);
 
     let backend = TestBackend::new(40, 12);
     let mut terminal = Terminal::new(backend).expect("terminal");

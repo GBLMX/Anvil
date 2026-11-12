@@ -44,8 +44,8 @@ These are the only internal-polish priorities until the phase exit gate.
 ### 3.1 Settings
 
 Status: typed registry and minimal `:settings` overlay landed for
-`editor.scroll_margin`, `editor.auto_save`, `search.case_sensitive`, and
-`lsp.inlay_hints`.
+`editor.scroll_margin`, `editor.max_buffers`, `editor.auto_save`,
+`search.case_sensitive`, and `lsp.inlay_hints`.
 External-file hot reload remains out of scope.
 
 Implemented: typed registry, `:settings` overlay, changed markers, per-row

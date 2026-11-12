@@ -8,11 +8,14 @@ use std::path::{Path, PathBuf};
 pub(crate) const MAX_BYTES: u64 = 64 * 1024;
 pub(crate) const DEFAULT_SCROLL_MARGIN: usize = 3;
 pub(crate) const MAX_SCROLL_MARGIN: usize = 16;
+pub(crate) const DEFAULT_MAX_BUFFERS: usize = 9;
+pub(crate) const MAX_MAX_BUFFERS: usize = 99;
 
 const ENV_SCROLL_MARGIN: &str = "ANVIL_EDITOR_SCROLL_MARGIN";
 const ENV_AUTO_SAVE: &str = "ANVIL_EDITOR_AUTO_SAVE";
 const ENV_SOFT_WRAP: &str = "ANVIL_EDITOR_SOFT_WRAP";
 const ENV_FORMAT_ON_SAVE: &str = "ANVIL_EDITOR_FORMAT_ON_SAVE";
+const ENV_MAX_BUFFERS: &str = "ANVIL_EDITOR_MAX_BUFFERS";
 const ENV_SEARCH_CASE_SENSITIVE: &str = "ANVIL_SEARCH_CASE_SENSITIVE";
 const ENV_INLAY_HINTS: &str = "ANVIL_LSP_INLAY_HINTS";
 const ENV_REDUCED_MOTION: &str = "ANVIL_REDUCED_MOTION";
@@ -21,6 +24,7 @@ const ENV_HIGH_CONTRAST: &str = "ANVIL_HIGH_CONTRAST";
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct EditorSettings {
     pub(crate) scroll_margin: usize,
+    pub(crate) max_buffers: usize,
     pub(crate) auto_save: bool,
     pub(crate) soft_wrap: bool,
     pub(crate) format_on_save: bool,
@@ -57,6 +61,7 @@ impl Default for Settings {
             theme: Choice::Fixed("anvil-dark"),
             editor: EditorSettings {
                 scroll_margin: DEFAULT_SCROLL_MARGIN,
+                max_buffers: DEFAULT_MAX_BUFFERS,
                 auto_save: false,
                 soft_wrap: false,
                 format_on_save: false,
@@ -131,6 +136,7 @@ pub(crate) fn save_to_path(path: &Path, settings: Settings) -> Result<(), String
     }
     let editor = table_mut(&mut document, "editor")?;
     editor["scroll_margin"] = toml_edit::value(settings.editor.scroll_margin as i64);
+    editor["max_buffers"] = toml_edit::value(settings.editor.max_buffers as i64);
     editor["auto_save"] = toml_edit::value(settings.editor.auto_save);
     editor["soft_wrap"] = toml_edit::value(settings.editor.soft_wrap);
     editor["format_on_save"] = toml_edit::value(settings.editor.format_on_save);
@@ -189,6 +195,14 @@ pub(crate) fn parse(text: &str) -> Result<Settings, String> {
             ));
         }
         settings.editor.scroll_margin = scroll_margin;
+    }
+    if let Some(max_buffers) = file.editor.max_buffers {
+        if !(1..=MAX_MAX_BUFFERS).contains(&max_buffers) {
+            return Err(format!(
+                "editor.max_buffers must be 1..={MAX_MAX_BUFFERS}, got {max_buffers}"
+            ));
+        }
+        settings.editor.max_buffers = max_buffers;
     }
     if let Some(auto_save) = file.editor.auto_save {
         settings.editor.auto_save = auto_save;
@@ -253,6 +267,17 @@ fn apply_env(
             ));
         }
         settings.editor.scroll_margin = margin;
+    }
+    if let Some(value) = get(ENV_MAX_BUFFERS) {
+        let max_buffers = value
+            .parse::<usize>()
+            .map_err(|_| format!("{ENV_MAX_BUFFERS} must be an integer 1..={MAX_MAX_BUFFERS}"))?;
+        if !(1..=MAX_MAX_BUFFERS).contains(&max_buffers) {
+            return Err(format!(
+                "{ENV_MAX_BUFFERS} must be 1..={MAX_MAX_BUFFERS}, got {max_buffers}"
+            ));
+        }
+        settings.editor.max_buffers = max_buffers;
     }
     if let Some(value) = get(ENV_AUTO_SAVE) {
         settings.editor.auto_save = parse_bool(ENV_AUTO_SAVE, &value)?;
@@ -326,6 +351,7 @@ struct ThemeFile {
 #[serde(default, deny_unknown_fields)]
 struct EditorFile {
     scroll_margin: Option<usize>,
+    max_buffers: Option<usize>,
     auto_save: Option<bool>,
     soft_wrap: Option<bool>,
     format_on_save: Option<bool>,
@@ -393,6 +419,7 @@ mod tests {
                 theme: Choice::Fixed("anvil-dark"),
                 editor: EditorSettings {
                     scroll_margin: 3,
+                    max_buffers: DEFAULT_MAX_BUFFERS,
                     auto_save: false,
                     soft_wrap: false,
                     format_on_save: false,
@@ -412,11 +439,12 @@ mod tests {
     #[test]
     fn parses_all_domains_and_theme() {
         let settings = parse(
-            "[theme]\nmode = \"fixed\"\n[editor]\nscroll_margin = 1\nauto_save = true\nsoft_wrap = true\nformat_on_save = true\n[search]\ncase_sensitive = true\n[lsp]\ninlay_hints = false\n",
+            "[theme]\nmode = \"fixed\"\n[editor]\nscroll_margin = 1\nmax_buffers = 4\nauto_save = true\nsoft_wrap = true\nformat_on_save = true\n[search]\ncase_sensitive = true\n[lsp]\ninlay_hints = false\n",
         )
         .expect("settings");
         assert_eq!(settings.theme, Choice::Fixed("anvil-dark"));
         assert_eq!(settings.editor.scroll_margin, 1);
+        assert_eq!(settings.editor.max_buffers, 4);
         assert!(settings.editor.auto_save);
         assert!(settings.editor.soft_wrap);
         assert!(settings.editor.format_on_save);
@@ -464,12 +492,14 @@ mod tests {
             ..Settings::default()
         };
         settings.editor.scroll_margin = 5;
+        settings.editor.max_buffers = 12;
         settings.search.case_sensitive = true;
         settings.lsp.inlay_hints = false;
         save_to_path(&path, settings).expect("save");
         let text = fs::read_to_string(&path).expect("read");
         assert!(text.contains("[theme]"));
         assert!(text.contains("name = \"nord\""));
+        assert!(text.contains("max_buffers = 12"));
         assert_eq!(load_file_from_path(&path).expect("load"), settings);
         let _ = fs::remove_dir_all(&directory);
     }
@@ -501,6 +531,8 @@ mod tests {
         assert!(parse("[editor]\ntab_width = 2\n").is_err());
         assert!(parse("[editor]\nscroll_margin = 99\n").is_err());
         assert!(parse("[search]\ncase_sensitive = \"yes\"\n").is_err());
+        assert!(parse("[editor]\nmax_buffers = 0\n").is_err());
+        assert!(parse("[editor]\nmax_buffers = 100\n").is_err());
     }
 
     #[test]
@@ -510,12 +542,14 @@ mod tests {
                 .expect("file"),
             |name| match name {
                 ENV_SCROLL_MARGIN => Some("4".to_owned()),
+                ENV_MAX_BUFFERS => Some("12".to_owned()),
                 ENV_SEARCH_CASE_SENSITIVE => Some("false".to_owned()),
                 ENV_INLAY_HINTS => Some("true".to_owned()),
                 _ => None,
             },
         )
         .expect("env");
+        assert_eq!(settings.editor.max_buffers, 12);
         assert_eq!(settings.editor.scroll_margin, 4);
         assert!(!settings.search.case_sensitive);
         assert!(settings.lsp.inlay_hints);
@@ -526,6 +560,12 @@ mod tests {
         assert!(
             apply_env(Settings::default(), |name| {
                 (name == ENV_SCROLL_MARGIN).then(|| "99".to_owned())
+            })
+            .is_err()
+        );
+        assert!(
+            apply_env(Settings::default(), |name| {
+                (name == ENV_MAX_BUFFERS).then(|| "100".to_owned())
             })
             .is_err()
         );

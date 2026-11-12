@@ -100,10 +100,11 @@ impl Model {
     }
 
     pub(crate) fn ensure_buffer_capacity(&mut self) -> Result<(), String> {
-        if self.buffers.entries.len() < MAX_OPEN_BUFFERS {
+        let max_buffers = self.config.settings.editor.max_buffers;
+        if self.buffers.entries.len() < max_buffers {
             return Ok(());
         }
-        let message = format!("buffer limit reached ({MAX_OPEN_BUFFERS})");
+        let message = format!("buffer limit reached ({max_buffers})");
         self.status.text = format!("E: {message}");
         self.file.dirty = true;
         Err(message)
