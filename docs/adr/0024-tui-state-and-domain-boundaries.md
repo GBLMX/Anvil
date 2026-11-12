@@ -299,8 +299,8 @@ Phase 1 started on 2026-11-12:
   and retry deadlines; requests keep pending maps, document versions, request
   ids, and format-on-save coordination.
 - Existing behavior is unchanged; tests access the composed state explicitly.
-- `Model` now has 22 top-level fields. Remaining settings-adjacent fields move
-  in later behavior-preserving slices.
+- `Model` now has 22 top-level fields, each a state group rather than a
+  feature field.
 
 
 ## Acceptance
