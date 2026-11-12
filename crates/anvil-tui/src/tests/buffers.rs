@@ -1197,3 +1197,38 @@ fn quitting_auto_saves_the_active_buffer() {
     assert!(model.quit);
     assert_eq!(fs::read_to_string(&path).expect("content"), "Xa");
 }
+
+#[test]
+fn ex_open_auto_saves_before_switching() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let first = dir.path().join("first.rs");
+    let second = dir.path().join("second.rs");
+    fs::write(&first, "a").expect("first");
+    fs::write(&second, "b").expect("second");
+    let mut model = Model::open(&first).expect("open");
+    model.settings.editor.auto_save = true;
+    model.insert_text("X");
+
+    model.open_file(second.to_str().expect("path"));
+
+    assert_eq!(fs::read_to_string(&first).expect("first content"), "Xa");
+    assert_eq!(
+        model.path.as_deref(),
+        Some(second.canonicalize().expect("second").as_path())
+    );
+}
+
+#[test]
+fn new_buffer_auto_saves_before_switching() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("main.rs");
+    fs::write(&path, "a").expect("write");
+    let mut model = Model::open(&path).expect("open");
+    model.settings.editor.auto_save = true;
+    model.insert_text("X");
+
+    model.new_buffer();
+
+    assert!(model.path.is_none());
+    assert_eq!(fs::read_to_string(&path).expect("content"), "Xa");
+}

@@ -79,6 +79,9 @@ impl Model {
         if self.help_back.is_some() {
             let _ = self.close_help();
         }
+        if !self.auto_save_before_focus_change() {
+            return;
+        }
         self.ensure_current_buffer();
         self.buffers.push(Buffer {
             editor: EditorState::from_text("").into(),
@@ -234,6 +237,15 @@ impl Model {
         }
         if self.help_back.is_some() {
             let _ = self.close_help();
+        }
+        if self.path.is_none() && self.modified {
+            self.status =
+                "E: save or discard the unnamed buffer before opening another file".to_owned();
+            self.dirty = true;
+            return;
+        }
+        if !self.auto_save_before_focus_change() {
+            return;
         }
         let path = match self.absolute_path(Path::new(path)) {
             Ok(path) => path,
