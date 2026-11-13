@@ -196,6 +196,18 @@ fn keymap_context_prefers_popup_then_command_line_then_tree() {
 }
 
 #[test]
+fn settings_keys_use_the_action_table() {
+    let mut model = Model::new(EditorState::from_text("x"), None);
+    model.start_page.welcome = false;
+    model.open_settings();
+    handle_event(&mut model, key(KeyCode::Char('j')));
+    handle_event(&mut model, key(KeyCode::Char('l')));
+    assert!(model.config.settings.editor.auto_save);
+    handle_event(&mut model, key(KeyCode::Esc));
+    assert!(model.overlays.settings_overlay.is_none());
+}
+
+#[test]
 fn popup_context_bindings_consume_buffer_picker_keys() {
     let mut model = Model::new(EditorState::from_text("alpha"), None);
     model.start_page.welcome = false;

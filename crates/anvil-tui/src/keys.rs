@@ -641,6 +641,48 @@ fn execute_lsp_list_action(model: &mut Model, kind: LspListKind, action: LspList
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum SettingsAction {
+    Previous,
+    Next,
+    Decrease,
+    Increase,
+    CycleTab(bool),
+    Reset,
+    Save,
+    Cancel,
+}
+
+fn settings_action(key: KeyPress) -> Option<SettingsAction> {
+    match key.code {
+        KeyCode::Esc => Some(SettingsAction::Cancel),
+        KeyCode::Up | KeyCode::Char('k') => Some(SettingsAction::Previous),
+        KeyCode::Down | KeyCode::Char('j') => Some(SettingsAction::Next),
+        KeyCode::Left | KeyCode::Char('h') => Some(SettingsAction::Decrease),
+        KeyCode::Right | KeyCode::Char('l') | KeyCode::Enter => Some(SettingsAction::Increase),
+        KeyCode::Tab => Some(SettingsAction::CycleTab(
+            key.modifiers
+                .contains(crossterm::event::KeyModifiers::SHIFT),
+        )),
+        KeyCode::Char('r') => Some(SettingsAction::Reset),
+        KeyCode::Char('s') => Some(SettingsAction::Save),
+        _ => None,
+    }
+}
+
+fn execute_settings_action(model: &mut Model, action: SettingsAction) {
+    match action {
+        SettingsAction::Previous => model.move_settings(-1),
+        SettingsAction::Next => model.move_settings(1),
+        SettingsAction::Decrease => model.adjust_settings(-1),
+        SettingsAction::Increase => model.adjust_settings(1),
+        SettingsAction::CycleTab(backwards) => model.cycle_settings_tab(backwards),
+        SettingsAction::Reset => model.reset_settings_row(),
+        SettingsAction::Save => model.save_settings(),
+        SettingsAction::Cancel => model.cancel_settings(),
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum WorkspaceSymbolAction {
     Previous,
     Next,
@@ -927,19 +969,8 @@ fn handle_key(model: &mut Model, key: KeyPress) {
         }
     }
     if model.overlays.settings_overlay.is_some() {
-        match key.code {
-            KeyCode::Esc => model.cancel_settings(),
-            KeyCode::Up | KeyCode::Char('k') => model.move_settings(-1),
-            KeyCode::Down | KeyCode::Char('j') => model.move_settings(1),
-            KeyCode::Left | KeyCode::Char('h') => model.adjust_settings(-1),
-            KeyCode::Right | KeyCode::Char('l') | KeyCode::Enter => model.adjust_settings(1),
-            KeyCode::Tab => model.cycle_settings_tab(
-                key.modifiers
-                    .contains(crossterm::event::KeyModifiers::SHIFT),
-            ),
-            KeyCode::Char('r') => model.reset_settings_row(),
-            KeyCode::Char('s') => model.save_settings(),
-            _ => {}
+        if let Some(action) = settings_action(key) {
+            execute_settings_action(model, action);
         }
         return;
     }
