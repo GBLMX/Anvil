@@ -106,7 +106,7 @@ pub(crate) fn run_file(
     path: &Path,
     editor: Option<EditorClient>,
     command: Option<&str>,
-) -> Result<()> {
+) -> Result<Lua> {
     let source = std::fs::read_to_string(path)
         .map_err(|error| mlua::Error::RuntimeError(format!("read plugin: {error}")))?;
     let lua = Lua::new();
@@ -115,7 +115,27 @@ pub(crate) fn run_file(
     install_print(&lua)?;
     install_editor(&lua, editor)?;
     install_plugin(&lua, command)?;
-    lua.load(source).exec()
+    lua.load(source).exec()?;
+    Ok(lua)
+}
+
+pub(crate) fn call_provider(
+    lua: &Lua,
+    params: &JsonValue,
+) -> std::result::Result<JsonValue, String> {
+    let handler = params
+        .get("handler")
+        .and_then(JsonValue::as_str)
+        .ok_or_else(|| "missing provider handler".to_owned())?;
+    let function: mlua::Function = lua
+        .globals()
+        .get(handler)
+        .map_err(|error| format!("provider handler {handler}: {error}"))?;
+    let request = lua.to_value(params).map_err(|error| error.to_string())?;
+    let result: Value = function
+        .call(request)
+        .map_err(|error| format!("provider handler {handler}: {error}"))?;
+    lua.from_value(result).map_err(|error| error.to_string())
 }
 
 fn install_print(lua: &Lua) -> Result<()> {
@@ -311,6 +331,46 @@ mod tests {
     #[test]
     fn luau_sandbox_runs_without_ambient_io() {
         assert_eq!(super::smoke().expect("sandboxed Luau"), 42);
+    }
+
+    #[test]
+    fn provider_handler_survives_entry_execution() {
+        let path = std::env::temp_dir().join(format!(
+            "anvil-provider-{}-{}.luau",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("time")
+                .as_nanos()
+        ));
+        std::fs::write(
+            &path,
+            r#"
+function provide(request)
+    return {
+        request_id = request.request_id,
+        items = {
+            { label = "buffer", value = "1", detail = nil, insert_text = nil }
+        }
+    }
+end
+"#,
+        )
+        .expect("write");
+        let lua = run_file(&path, None, None).expect("run plugin");
+        let _ = std::fs::remove_file(path);
+        let response = call_provider(
+            &lua,
+            &json!({
+                "request_id": 4,
+                "handler": "provide",
+                "query": "buf",
+                "limit": 10
+            }),
+        )
+        .expect("provider");
+        assert_eq!(response["request_id"], 4);
+        assert_eq!(response["items"][0]["label"], "buffer");
     }
 
     #[test]

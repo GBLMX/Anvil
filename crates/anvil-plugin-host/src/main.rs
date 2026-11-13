@@ -185,12 +185,16 @@ mod linux {
                 }
             }
         }
-        if let Some(root) = plugin_root.as_deref() {
+        let lua = if let Some(root) = plugin_root.as_deref() {
             let manifest = PluginManifest::load(root).map_err(io::Error::other)?;
             let entry = manifest.entry_path(root).map_err(io::Error::other)?;
-            runtime::run_file(&entry, editor_bridge.take(), activation_command.as_deref())
-                .map_err(|error| io::Error::other(error.to_string()))?;
-        }
+            Some(
+                runtime::run_file(&entry, editor_bridge.take(), activation_command.as_deref())
+                    .map_err(|error| io::Error::other(error.to_string()))?,
+            )
+        } else {
+            None
+        };
 
         if allocate_mb > 0 {
             std::thread::sleep(std::time::Duration::from_millis(100));
@@ -254,7 +258,12 @@ mod linux {
 
         send_hello()?;
         if let Some(mut connection) = editor {
-            watch_editor(&mut connection, gateway.as_mut(), editor_proxy.as_mut())?;
+            watch_editor(
+                &mut connection,
+                gateway.as_mut(),
+                editor_proxy.as_mut(),
+                lua.as_ref(),
+            )?;
             return Ok(0);
         }
         if hold {
@@ -909,6 +918,7 @@ mod linux {
         connection: &mut anvil_ipc::Connection,
         mut gateway: Option<&mut anvil_ipc::GatewayClient>,
         mut editor_proxy: Option<&mut EditorProxy>,
+        lua: Option<&mlua::Lua>,
     ) -> io::Result<()> {
         loop {
             match connection.recv() {
@@ -918,6 +928,7 @@ mod linux {
                         connection,
                         gateway.as_deref_mut(),
                         editor_proxy.as_deref_mut(),
+                        lua,
                         &frame,
                     )?;
                 }
@@ -932,6 +943,7 @@ mod linux {
         connection: &mut anvil_ipc::Connection,
         gateway: Option<&mut anvil_ipc::GatewayClient>,
         editor_proxy: Option<&mut EditorProxy>,
+        lua: Option<&mlua::Lua>,
         frame: &[u8],
     ) -> io::Result<()> {
         let Ok(request) = serde_json::from_slice::<serde_json::Value>(frame) else {
@@ -949,6 +961,25 @@ mod linux {
             .cloned()
             .unwrap_or_else(|| serde_json::json!({}));
         let response = match method {
+            "provider.request" => match lua {
+                Some(lua) => match runtime::call_provider(lua, &params) {
+                    Ok(result) => serde_json::json!({
+                        "jsonrpc": "2.0",
+                        "id": id,
+                        "result": result
+                    }),
+                    Err(message) => serde_json::json!({
+                        "jsonrpc": "2.0",
+                        "id": id,
+                        "error": { "code": -32603, "message": message }
+                    }),
+                },
+                None => serde_json::json!({
+                    "jsonrpc": "2.0",
+                    "id": id,
+                    "error": { "code": -32008, "message": "provider runtime unavailable" }
+                }),
+            },
             "sys.ping" => serde_json::json!({
                 "jsonrpc": "2.0",
                 "id": id,

@@ -287,6 +287,18 @@ impl Model {
                 self.start_dap_attach(std::path::PathBuf::from(program), args);
                 self.file.dirty = true;
             }
+            ("provider-query", argument) => {
+                let (provider_id, query) = argument
+                    .split_once(char::is_whitespace)
+                    .map(|(id, query)| (id.trim(), query.trim()))
+                    .unwrap_or((argument.trim(), ""));
+                if provider_id.is_empty() {
+                    self.status.text = "E: usage: :provider-query <provider-id> [query]".to_owned();
+                } else {
+                    self.query_plugin_provider(provider_id, query);
+                }
+                self.file.dirty = true;
+            }
             ("dap-detach", "") => {
                 self.language.dap.client = None;
                 self.language.dap.attach = None;

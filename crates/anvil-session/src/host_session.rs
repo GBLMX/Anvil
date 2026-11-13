@@ -13,11 +13,21 @@ pub enum HostEvent {
     Pong,
     ExecUnsupported,
     Error(String),
+    Provider {
+        id: u64,
+        result: Result<serde_json::Value, String>,
+    },
     Exited(HostExit),
 }
 
 enum HostCommand {
     Exec,
+    Provider {
+        id: u64,
+        handler: String,
+        query: String,
+        limit: u32,
+    },
 }
 
 pub struct HostSession {
@@ -272,6 +282,28 @@ impl HostSession {
                         }
                         next_id += 1;
                     }
+                    Ok(HostCommand::Provider {
+                        id,
+                        handler,
+                        query,
+                        limit,
+                    }) => {
+                        let result = call(
+                            &mut connection,
+                            id,
+                            "provider.request",
+                            serde_json::json!({
+                                "request_id": id,
+                                "handler": handler,
+                                "query": query,
+                                "limit": limit,
+                            }),
+                        );
+                        thread_pending.fetch_sub(1, Ordering::AcqRel);
+                        if event_tx.send(HostEvent::Provider { id, result }).is_err() {
+                            return;
+                        }
+                    }
                     Err(mpsc::RecvTimeoutError::Timeout) => {}
                     Err(mpsc::RecvTimeoutError::Disconnected) => return,
                 }
@@ -300,6 +332,27 @@ impl HostSession {
         }
         self.pending.fetch_add(1, Ordering::AcqRel);
         if self.commands.send(HostCommand::Exec).is_err() {
+            self.pending.fetch_sub(1, Ordering::AcqRel);
+            return false;
+        }
+        true
+    }
+
+    pub fn provider(&self, id: u64, handler: &str, query: &str, limit: u32) -> bool {
+        if !self.accepting.load(Ordering::Acquire) {
+            return false;
+        }
+        self.pending.fetch_add(1, Ordering::AcqRel);
+        if self
+            .commands
+            .send(HostCommand::Provider {
+                id,
+                handler: handler.to_owned(),
+                query: query.to_owned(),
+                limit,
+            })
+            .is_err()
+        {
             self.pending.fetch_sub(1, Ordering::AcqRel);
             return false;
         }
@@ -399,6 +452,45 @@ fn request(
             let _ = events.send(HostEvent::Error(error.to_string()));
             false
         }
+    }
+}
+
+fn call(
+    connection: &mut Connection,
+    id: u64,
+    method: &str,
+    params: serde_json::Value,
+) -> Result<serde_json::Value, String> {
+    let request = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": method,
+        "params": params,
+    });
+    connection
+        .send(&serde_json::to_vec(&request).map_err(|error| error.to_string())?)
+        .map_err(|error| error.to_string())?;
+    loop {
+        let frame = connection
+            .recv()
+            .map_err(|error| error.to_string())?
+            .ok_or_else(|| "host socket closed".to_owned())?;
+        let response: serde_json::Value =
+            serde_json::from_slice(&frame).map_err(|error| error.to_string())?;
+        if response.get("id").and_then(serde_json::Value::as_u64) != Some(id) {
+            continue;
+        }
+        if let Some(error) = response.get("error") {
+            return Err(error
+                .get("message")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("host provider request failed")
+                .to_owned());
+        }
+        return Ok(response
+            .get("result")
+            .cloned()
+            .unwrap_or(serde_json::Value::Null));
     }
 }
 

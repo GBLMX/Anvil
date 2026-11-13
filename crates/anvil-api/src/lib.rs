@@ -398,12 +398,15 @@ pub enum ProviderKind {
 }
 
 /// Request to register one runtime-plugin provider.
+///
+/// `handler` names a Lua global function invoked with the provider request table.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[ts(export)]
 pub struct RegisterProviderRequest {
     pub id: String,
     pub kind: ProviderKind,
     pub title: String,
+    pub handler: String,
 }
 
 /// Result of registering a runtime-plugin provider.
@@ -753,6 +756,7 @@ mod tests {
             id: "test.picker".to_owned(),
             kind: ProviderKind::Picker,
             title: "Test picker".to_owned(),
+            handler: "provide".to_owned(),
         };
         let decoded: RegisterProviderRequest =
             serde_json::from_str(&serde_json::to_string(&request).unwrap()).unwrap();

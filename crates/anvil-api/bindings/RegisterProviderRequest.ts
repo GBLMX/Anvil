@@ -3,5 +3,7 @@ import type { ProviderKind } from "./ProviderKind";
 
 /**
  * Request to register one runtime-plugin provider.
+ *
+ * `handler` names a Lua global function invoked with the provider request table.
  */
-export type RegisterProviderRequest = { id: string, kind: ProviderKind, title: string, };
+export type RegisterProviderRequest = { id: string, kind: ProviderKind, title: string, handler: string, };

@@ -107,7 +107,8 @@ editor capabilities.
 `editor.register_provider` registers a data-only picker or completion provider.
 The request `id` must use the calling plugin's namespace
 (`<plugin-id>.<provider>`), be at most 128 bytes, and have a non-empty title of
-at most 256 bytes. Only `picker` and `completion` kinds are accepted.
+at most 256 bytes. `handler` names a Lua global function and is limited to
+ASCII identifier characters. Only `picker` and `completion` kinds are accepted.
 
 Registration stores metadata only. It grants no process, filesystem, network,
 formatter, or DAP authority. Disabling or stopping the plugin removes its

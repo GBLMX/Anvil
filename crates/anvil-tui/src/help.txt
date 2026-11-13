@@ -104,6 +104,7 @@ Normal mode
   :breakpoint          toggle a breakpoint on the current line
   :dap-attach [cmd]    attach a DAP adapter; omit cmd for the builtin adapter
   :dap-detach          detach the DAP adapter
+  :provider-query      query a registered plugin provider
   :debug               toggle the debug panel
   :debug-refresh       refresh threads, stack, variables, and watches
   :debug-panel <name>  show threads, stack, variables, or watch

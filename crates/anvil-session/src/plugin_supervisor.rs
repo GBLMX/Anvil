@@ -77,11 +77,22 @@ pub enum SupervisorEvent {
         plugin_id: String,
         message: String,
     },
+    Provider {
+        plugin_id: String,
+        id: u64,
+        result: Result<serde_json::Value, String>,
+    },
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 enum PendingCall {
     Exec,
+    Provider {
+        id: u64,
+        handler: String,
+        query: String,
+        limit: u32,
+    },
 }
 
 struct StartRequest<'a> {
@@ -127,6 +138,7 @@ impl PluginEntry {
 pub(crate) trait ManagedHost {
     fn poll(&mut self) -> Vec<HostEvent>;
     fn exec(&mut self) -> bool;
+    fn provider(&mut self, id: u64, handler: &str, query: &str, limit: u32) -> bool;
     fn has_pending(&self) -> bool;
     fn drain(&mut self, timeout: Duration);
     fn stop(&mut self);
@@ -139,6 +151,10 @@ impl ManagedHost for PluginSession {
 
     fn exec(&mut self) -> bool {
         PluginSession::exec(self)
+    }
+
+    fn provider(&mut self, id: u64, handler: &str, query: &str, limit: u32) -> bool {
+        PluginSession::provider(self, id, handler, query, limit)
     }
 
     fn has_pending(&self) -> bool {
@@ -530,6 +546,50 @@ impl PluginSupervisor {
         }
     }
 
+    pub fn provider(
+        &mut self,
+        plugin_id: &str,
+        id: u64,
+        handler: &str,
+        query: &str,
+        limit: u32,
+    ) -> Result<ExecOutcome, String> {
+        let entry = self
+            .entries
+            .get_mut(plugin_id)
+            .ok_or_else(|| format!("plugin {plugin_id} is not loaded"))?;
+        match entry.state {
+            HostState::Ready => {
+                if entry
+                    .host
+                    .as_mut()
+                    .is_some_and(|host| host.provider(id, handler, query, limit))
+                {
+                    entry.last_activity = Some(Instant::now());
+                    Ok(ExecOutcome::Sent)
+                } else {
+                    Err(format!("plugin {plugin_id} host channel closed"))
+                }
+            }
+            HostState::Registering | HostState::Starting => {
+                if entry.pending.len() >= MAX_PENDING_CALLS {
+                    return Err(format!("plugin {plugin_id} request queue full"));
+                }
+                entry.pending.push_back(PendingCall::Provider {
+                    id,
+                    handler: handler.to_owned(),
+                    query: query.to_owned(),
+                    limit,
+                });
+                Ok(ExecOutcome::Queued)
+            }
+            HostState::Disabled => Err(format!(
+                "plugin {plugin_id} disabled; run :plugin-enable {plugin_id}"
+            )),
+            _ => Err(format!("plugin {plugin_id} is not running")),
+        }
+    }
+
     pub fn exec(&mut self, plugin_id: &str) -> Result<ExecOutcome, String> {
         let entry = self
             .entries
@@ -696,6 +756,16 @@ impl PluginSupervisor {
                         plugin_id: plugin_id.clone(),
                         message: "sys.exec unsupported".to_owned(),
                     }),
+                    HostEvent::Provider { id, result } => {
+                        if let Some(entry) = self.entries.get_mut(&plugin_id) {
+                            entry.last_activity = Some(now);
+                        }
+                        events.push(SupervisorEvent::Provider {
+                            plugin_id: plugin_id.clone(),
+                            id,
+                            result,
+                        });
+                    }
                     HostEvent::Error(error) => {
                         let detail = self.fail_at(&plugin_id, now, error, gateway.as_deref_mut());
                         events.push(SupervisorEvent::State {
@@ -748,6 +818,12 @@ impl PluginSupervisor {
                 .and_then(|entry| entry.host.as_mut())
                 .is_some_and(|host| match call {
                     PendingCall::Exec => host.exec(),
+                    PendingCall::Provider {
+                        id,
+                        handler,
+                        query,
+                        limit,
+                    } => host.provider(id, &handler, &query, limit),
                 });
             if sent {
                 if let Some(entry) = self.entries.get_mut(plugin_id) {
@@ -831,6 +907,7 @@ mod tests {
     struct FakeHostState {
         events: VecDeque<HostEvent>,
         execs: usize,
+        providers: usize,
         pending: usize,
         drains: usize,
         stopped: bool,
@@ -853,6 +930,13 @@ mod tests {
         fn exec(&mut self) -> bool {
             let mut state = self.state.lock().expect("fake host");
             state.execs += 1;
+            state.pending += 1;
+            true
+        }
+
+        fn provider(&mut self, _id: u64, _handler: &str, _query: &str, _limit: u32) -> bool {
+            let mut state = self.state.lock().expect("fake host");
+            state.providers += 1;
             state.pending += 1;
             true
         }
@@ -1005,6 +1089,27 @@ mod tests {
         )));
         assert_eq!(supervisor.state("demo"), HostState::Ready);
         assert_eq!(launcher.state.lock().expect("fake host").execs, 1);
+    }
+
+    #[test]
+    fn queued_provider_is_sent_after_ready() {
+        let (mut supervisor, launcher) = supervisor();
+        let now = Instant::now();
+        start(&mut supervisor, now, "demo").expect("start");
+        assert_eq!(
+            supervisor
+                .provider("demo", 7, "provide", "buf", 10)
+                .expect("queue"),
+            ExecOutcome::Queued
+        );
+        launcher
+            .state
+            .lock()
+            .expect("fake host")
+            .events
+            .push_back(HostEvent::Ready);
+        let _ = supervisor.poll_at(now, None);
+        assert_eq!(launcher.state.lock().expect("fake host").providers, 1);
     }
 
     #[test]

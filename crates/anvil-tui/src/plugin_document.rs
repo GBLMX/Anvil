@@ -375,6 +375,17 @@ mod tests {
         assert_eq!(model.status.text, "plugin status");
     }
 
+    #[test]
+    fn provider_query_unknown_reports_error() {
+        let mut model = Model::new(EditorState::from_text(""), None);
+        model.execute_command("provider-query demo.buffers");
+        assert!(
+            model.status.text.contains("unknown provider"),
+            "{}",
+            model.status.text
+        );
+    }
+
     #[cfg(target_os = "linux")]
     #[test]
     fn plugin_provider_registration_is_namespaced_and_stored() {
@@ -384,7 +395,7 @@ mod tests {
             .handle_editor_request(
                 "demo",
                 "editor.register_provider",
-                serde_json::json!({"id": "demo.buffers", "kind": "picker", "title": "Buffers"}),
+                serde_json::json!({"id": "demo.buffers", "kind": "picker", "title": "Buffers", "handler": "provide"}),
             )
             .expect("register provider");
         assert_eq!(response["provider_id"], "demo.buffers");
@@ -394,7 +405,7 @@ mod tests {
                 .handle_editor_request(
                     "demo",
                     "editor.register_provider",
-                    serde_json::json!({"id": "other.buffers", "kind": "picker", "title": "Buffers"}),
+                    serde_json::json!({"id": "other.buffers", "kind": "picker", "title": "Buffers", "handler": "provide"}),
                 )
                 .is_err()
         );
@@ -403,7 +414,7 @@ mod tests {
                 .handle_editor_request(
                     "demo",
                     "editor.register_provider",
-                    serde_json::json!({"id": "demo.buffers", "kind": "picker", "title": "Buffers"}),
+                    serde_json::json!({"id": "demo.buffers", "kind": "picker", "title": "Buffers", "handler": "provide"}),
                 )
                 .is_err()
         );

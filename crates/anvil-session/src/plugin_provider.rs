@@ -11,6 +11,7 @@ use std::sync::Arc;
 pub enum PluginProviderError {
     InvalidId,
     InvalidTitle,
+    InvalidHandler,
     NamespaceMismatch,
     DuplicateId(ProviderId),
     InvalidQuery,
@@ -25,6 +26,7 @@ impl fmt::Display for PluginProviderError {
         match self {
             Self::InvalidId => formatter.write_str("invalid provider id"),
             Self::InvalidTitle => formatter.write_str("invalid provider title"),
+            Self::InvalidHandler => formatter.write_str("invalid provider handler"),
             Self::NamespaceMismatch => {
                 formatter.write_str("provider id is outside the plugin namespace")
             }
@@ -47,6 +49,7 @@ pub struct PluginProviderRegistration {
     pub plugin_id: Arc<str>,
     pub kind: ProviderKind,
     pub title: String,
+    pub handler: String,
 }
 
 /// Registry of runtime-plugin providers. It stores metadata only; it never
@@ -84,6 +87,16 @@ impl PluginProviderRegistry {
         if title.is_empty() || title.len() > 256 {
             return Err(PluginProviderError::InvalidTitle);
         }
+        let handler = request.handler.trim();
+        if handler.is_empty()
+            || handler.len() > 128
+            || !handler.bytes().enumerate().all(|(index, byte)| {
+                byte == b'_'
+                    || byte.is_ascii_alphanumeric() && (index > 0 || !byte.is_ascii_digit())
+            })
+        {
+            return Err(PluginProviderError::InvalidHandler);
+        }
         if self.entries.iter().any(|entry| entry.id == provider_id) {
             return Err(PluginProviderError::DuplicateId(provider_id));
         }
@@ -92,6 +105,7 @@ impl PluginProviderRegistry {
             plugin_id: Arc::from(plugin_id),
             kind: request.kind,
             title: title.to_owned(),
+            handler: handler.to_owned(),
         };
         self.entries.push(registration.clone());
         Ok(registration)
@@ -198,6 +212,7 @@ mod tests {
             id: id.to_owned(),
             kind: ProviderKind::Picker,
             title: "Buffers".to_owned(),
+            handler: "provide".to_owned(),
         }
     }
 
@@ -246,6 +261,12 @@ mod tests {
         assert_eq!(
             registry.register("debug", empty_title),
             Err(PluginProviderError::InvalidTitle)
+        );
+        let mut bad_handler = request("debug.buffers");
+        bad_handler.handler = "bad-name".to_owned();
+        assert_eq!(
+            registry.register("debug", bad_handler),
+            Err(PluginProviderError::InvalidHandler)
         );
     }
 

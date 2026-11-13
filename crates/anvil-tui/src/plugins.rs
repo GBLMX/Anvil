@@ -391,6 +391,94 @@ impl Model {
     pub(crate) fn enable_plugin(&mut self, _plugin_id: &str) {}
 
     #[cfg(target_os = "linux")]
+    pub(crate) fn query_plugin_provider(&mut self, provider_id: &str, query: &str) {
+        let Some(registration) = self
+            .plugins
+            .plugin_providers
+            .providers()
+            .iter()
+            .find(|provider| provider.id.as_str() == provider_id)
+            .cloned()
+        else {
+            self.status.text = format!("E: unknown provider: {provider_id}");
+            self.file.dirty = true;
+            return;
+        };
+        if !self
+            .plugins
+            .entries
+            .iter()
+            .any(|plugin| plugin.enabled && plugin.manifest.id == registration.plugin_id.as_ref())
+        {
+            self.status.text = format!("E: plugin {} is not enabled", registration.plugin_id);
+            self.file.dirty = true;
+            return;
+        }
+        let request_id =
+            match self
+                .plugins
+                .plugin_provider_requests
+                .start(registration.id.clone(), query, 20)
+            {
+                Ok(id) => id,
+                Err(error) => {
+                    self.status.text = format!("E: provider: {error}");
+                    self.file.dirty = true;
+                    return;
+                }
+            };
+        if !matches!(
+            self.plugins.supervisor.state(&registration.plugin_id),
+            HostState::Ready | HostState::Starting | HostState::Registering
+        ) {
+            let Some(plugin) = self
+                .plugins
+                .entries
+                .iter()
+                .find(|plugin| plugin.manifest.id == registration.plugin_id.as_ref())
+                .cloned()
+            else {
+                self.plugins.plugin_provider_requests.cancel(request_id);
+                return;
+            };
+            let Some(gateway) = self.workspace.gateway.as_mut() else {
+                self.plugins.plugin_provider_requests.cancel(request_id);
+                self.status.text = "E: gateway unavailable".to_owned();
+                self.file.dirty = true;
+                return;
+            };
+            if let Err(error) = self.plugins.supervisor.activate(
+                &registration.plugin_id,
+                &plugin.root,
+                gateway,
+                &self.workspace.path,
+            ) {
+                self.plugins.plugin_provider_requests.cancel(request_id);
+                self.status.text = format!("E: provider: {error}");
+                self.file.dirty = true;
+                return;
+            }
+        }
+        match self.plugins.supervisor.provider(
+            &registration.plugin_id,
+            request_id,
+            &registration.handler,
+            query,
+            20,
+        ) {
+            Ok(_) => self.status.text = format!("provider {provider_id}: querying"),
+            Err(error) => {
+                self.status.text = format!("E: provider: {error}");
+                self.plugins.plugin_provider_requests.cancel(request_id);
+            }
+        }
+        self.file.dirty = true;
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    pub(crate) fn query_plugin_provider(&mut self, _provider_id: &str, _query: &str) {}
+
+    #[cfg(target_os = "linux")]
     pub(crate) fn poll_host(&mut self) {
         let events = self
             .plugins
@@ -430,6 +518,33 @@ impl Model {
                 }
                 SupervisorEvent::Message { plugin_id, message } => {
                     self.status.text = format!("plugin {plugin_id}: {message}");
+                    self.file.dirty = true;
+                }
+                SupervisorEvent::Provider {
+                    plugin_id,
+                    id,
+                    result,
+                } => {
+                    match result.and_then(|value| {
+                        serde_json::from_value::<anvil_api::ProviderResponse>(value)
+                            .map_err(|error| error.to_string())
+                    }) {
+                        Ok(response) => {
+                            match self.plugins.plugin_provider_requests.accept(response) {
+                                Ok(items) => {
+                                    self.status.text = format!(
+                                        "plugin {plugin_id}: {} provider items",
+                                        items.len()
+                                    )
+                                }
+                                Err(error) => self.status.text = format!("E: provider: {error}"),
+                            }
+                        }
+                        Err(error) => {
+                            self.plugins.plugin_provider_requests.cancel(id);
+                            self.status.text = format!("E: provider: {error}");
+                        }
+                    }
                     self.file.dirty = true;
                 }
             }
