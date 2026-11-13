@@ -692,3 +692,123 @@ fn call_hierarchy_item_from_lsp(item: &serde_json::Value) -> Option<CallHierarch
             .unwrap_or(0) as usize,
     })
 }
+
+impl Model {
+    fn apply_workspace_symbols_response(&mut self, result: &serde_json::Value) {
+        let Some(items) = result.as_array() else {
+            self.status.text = "lsp: no workspace symbols".to_owned();
+            self.overlays.lsp_results.workspace_symbols = None;
+            self.close_overlay(OverlayKind::WorkspaceSymbols);
+            return;
+        };
+        let mut parsed = Vec::new();
+        for item in items {
+            let Some(name) = item.get("name").and_then(serde_json::Value::as_str) else {
+                continue;
+            };
+            let Some(location) = item.get("location") else {
+                continue;
+            };
+            let Some(uri) = location.get("uri").and_then(serde_json::Value::as_str) else {
+                continue;
+            };
+            let Some(path) = lsp::uri_to_path(uri) else {
+                continue;
+            };
+            let range = location.get("range").or_else(|| item.get("range"));
+            let Some(start) = range
+                .and_then(|range| range.get("start"))
+                .and_then(serde_json::Value::as_object)
+            else {
+                continue;
+            };
+            let line = start
+                .get("line")
+                .and_then(serde_json::Value::as_u64)
+                .unwrap_or(0) as usize;
+            let character = start
+                .get("character")
+                .and_then(serde_json::Value::as_u64)
+                .unwrap_or(0) as usize;
+            let detail = item
+                .get("containerName")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or_default()
+                .to_owned();
+            parsed.push(WorkspaceSymbolItem {
+                name: name.to_owned(),
+                detail,
+                path,
+                line,
+                character,
+            });
+        }
+        if parsed.is_empty() {
+            self.status.text = "lsp: no workspace symbols".to_owned();
+            self.overlays.lsp_results.workspace_symbols = None;
+            self.close_overlay(OverlayKind::WorkspaceSymbols);
+        } else {
+            self.overlays.lsp_results.workspace_symbols = Some(WorkspaceSymbolState {
+                filtered: (0..parsed.len()).collect(),
+                items: parsed,
+                query: String::new(),
+                selected: 0,
+            });
+            self.push_overlay_if_idle(OverlayKind::WorkspaceSymbols);
+            self.status.text = "workspace symbols".to_owned();
+        }
+    }
+    fn apply_code_action_response(
+        &mut self,
+        result: &serde_json::Value,
+        base: Option<HashMap<PathBuf, u64>>,
+    ) {
+        if result.is_null() {
+            self.status.text = "lsp: no code actions".to_owned();
+            self.overlays.lsp_results.code_actions = None;
+            self.close_overlay(OverlayKind::CodeActions);
+            return;
+        }
+        let Some(items) = result.as_array() else {
+            self.status.text = "E: lsp: invalid code action response".to_owned();
+            return;
+        };
+        let items: Vec<CodeActionItem> = items
+            .iter()
+            .filter_map(|item| {
+                let title = item.get("title")?.as_str()?.to_owned();
+                let mut disabled = item
+                    .get("disabled")
+                    .and_then(|disabled| disabled.get("reason"))
+                    .and_then(serde_json::Value::as_str)
+                    .map(ToOwned::to_owned);
+                let edit = match item.get("edit") {
+                    Some(edit) => match WorkspaceEdit::from_lsp(edit)
+                        .map(|edit| edit.with_base_revisions(base.clone()))
+                    {
+                        Ok(edit) => Some(edit),
+                        Err(error) => {
+                            disabled = Some(format!("invalid edit: {error}"));
+                            None
+                        }
+                    },
+                    None => None,
+                };
+                Some(CodeActionItem {
+                    title,
+                    edit,
+                    disabled,
+                })
+            })
+            .collect();
+        if items.is_empty() {
+            self.status.text = "lsp: no code actions".to_owned();
+            self.overlays.lsp_results.code_actions = None;
+            self.close_overlay(OverlayKind::CodeActions);
+        } else {
+            self.overlays.lsp_results.code_actions = Some(CodeActionState { items, selected: 0 });
+            self.push_overlay_if_idle(OverlayKind::CodeActions);
+            self.status.text = "code actions".to_owned();
+        }
+    }
+}
