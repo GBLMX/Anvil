@@ -1,6 +1,7 @@
 //! TUI state groups and view/editor snapshots.
 
 use super::*;
+use anvil_session::provider::{CancellationToken, PickerEntry};
 
 #[derive(Clone)]
 pub(crate) struct Buffer {
@@ -120,9 +121,10 @@ pub(crate) struct FuzzyState {
 #[derive(Debug, Clone)]
 pub(crate) struct BufferPickerState {
     pub(crate) query: String,
-    pub(crate) entries: Vec<usize>,
+    pub(crate) entries: Vec<PickerEntry>,
     pub(crate) filtered: Vec<usize>,
     pub(crate) selected: usize,
+    pub(crate) cancel: CancellationToken,
 }
 
 #[derive(Debug, Clone, Default)]

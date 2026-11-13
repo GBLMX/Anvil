@@ -2,6 +2,12 @@
 
 use super::*;
 
+use anvil_session::provider::{
+    CancellationToken, PickerBuffer, PickerContext, PickerEntry, PickerQuery, PickerSource,
+    ProviderError, ProviderId, ProviderOrigin, ProviderPriority, ProviderRegistry,
+};
+use serde_json::json;
+use std::sync::Arc;
 impl Model {
     pub(crate) fn snapshot(&self) -> Buffer {
         Buffer {
@@ -58,16 +64,22 @@ impl Model {
     pub(crate) fn open_buffer_picker(&mut self) {
         self.cancel_completion();
         self.ensure_current_buffer();
-        let entries = (0..self.buffers.entries.len()).collect::<Vec<_>>();
+        let context = self.buffer_picker_context();
+        let (cancel, result) = self.query_buffer_picker(&context, "");
+        let entries = result.unwrap_or_else(|error| {
+            self.status.text = format!("E: {error}");
+            Vec::new()
+        });
         let selected = entries
             .iter()
-            .position(|index| *index == self.buffers.active)
+            .position(|entry| entry.value.as_u64() == Some(self.buffers.active as u64))
             .unwrap_or(0);
         self.overlays.buffer_picker = Some(BufferPickerState {
             query: String::new(),
-            filtered: entries.clone(),
+            filtered: (0..entries.len()).collect(),
             entries,
             selected,
+            cancel,
         });
         self.push_overlay(OverlayKind::BufferPicker);
         self.status.text = "buffers".to_owned();
@@ -78,17 +90,21 @@ impl Model {
         let Some(picker) = self.overlays.buffer_picker.as_ref() else {
             return;
         };
-        let query = picker.query.to_lowercase();
-        let entries = picker.entries.clone();
-        let filtered = entries
-            .into_iter()
-            .filter(|index| self.buffer_name(*index).to_lowercase().contains(&query))
-            .collect::<Vec<_>>();
+        let query = picker.query.clone();
+        picker.cancel.cancel();
+        let context = self.buffer_picker_context();
+        let (cancel, result) = self.query_buffer_picker(&context, &query);
+        let entries = result.unwrap_or_else(|error| {
+            self.status.text = format!("E: {error}");
+            Vec::new()
+        });
         let Some(picker) = self.overlays.buffer_picker.as_mut() else {
             return;
         };
-        picker.filtered = filtered;
+        picker.entries = entries;
+        picker.filtered = (0..picker.entries.len()).collect();
         picker.selected = picker.selected.min(picker.filtered.len().saturating_sub(1));
+        picker.cancel = cancel;
         self.file.dirty = true;
     }
 
@@ -104,7 +120,9 @@ impl Model {
     }
 
     pub(crate) fn close_buffer_picker(&mut self) {
-        self.overlays.buffer_picker = None;
+        if let Some(picker) = self.overlays.buffer_picker.take() {
+            picker.cancel.cancel();
+        }
         self.close_overlay(OverlayKind::BufferPicker);
         self.file.dirty = true;
     }
@@ -113,13 +131,69 @@ impl Model {
         let Some(picker) = self.overlays.buffer_picker.take() else {
             return;
         };
+        picker.cancel.cancel();
         self.close_overlay(OverlayKind::BufferPicker);
-        let Some(index) = picker.filtered.get(picker.selected).copied() else {
+        let Some(entry) = picker
+            .filtered
+            .get(picker.selected)
+            .and_then(|index| picker.entries.get(*index))
+        else {
             self.status.text = "no matching buffer".to_owned();
             self.file.dirty = true;
             return;
         };
+        let Some(index) = entry
+            .value
+            .as_u64()
+            .and_then(|value| usize::try_from(value).ok())
+        else {
+            self.status.text = "E: invalid buffer picker value".to_owned();
+            self.file.dirty = true;
+            return;
+        };
         self.select_buffer(index);
+    }
+
+    fn buffer_picker_context(&self) -> PickerContext {
+        PickerContext {
+            root: self.workspace.path.clone(),
+            revision: self.session.editor.revision(),
+            buffers: self
+                .buffers
+                .entries
+                .iter()
+                .enumerate()
+                .map(|(index, buffer)| PickerBuffer {
+                    index,
+                    name: self.buffer_name(index),
+                    active: index == self.buffers.active,
+                    modified: buffer.modified,
+                })
+                .collect(),
+        }
+    }
+
+    fn query_buffer_picker(
+        &self,
+        context: &PickerContext,
+        text: &str,
+    ) -> (CancellationToken, Result<Vec<PickerEntry>, ProviderError>) {
+        let cancel = CancellationToken::new();
+        let registry = buffer_picker_registry();
+        let Some(provider) = registry.providers().into_iter().next() else {
+            return (cancel, Ok(Vec::new()));
+        };
+        let query = PickerQuery {
+            text: text.to_owned(),
+            limit: 512,
+        };
+        let mut entries = Vec::new();
+        let result = provider
+            .provider
+            .query(context, &query, &cancel, &mut |batch| {
+                entries.extend(batch);
+            });
+        (cancel, result.map(|()| entries))
     }
 
     pub(crate) fn load_buffer(&mut self, index: usize) {
@@ -555,4 +629,60 @@ impl Model {
     pub(crate) fn set_read_only(&mut self, read_only: bool) {
         self.file.read_only = read_only;
     }
+}
+
+struct BufferPickerSource;
+
+impl PickerSource for BufferPickerSource {
+    fn id(&self) -> ProviderId {
+        ProviderId::new("builtin.buffers")
+    }
+
+    fn query(
+        &self,
+        context: &PickerContext,
+        query: &PickerQuery,
+        cancel: &CancellationToken,
+        emit: &mut dyn FnMut(Vec<PickerEntry>),
+    ) -> Result<(), ProviderError> {
+        cancel.check()?;
+        let needle = query.text.to_lowercase();
+        let mut entries = Vec::new();
+        for buffer in &context.buffers {
+            if entries.len() >= query.limit {
+                break;
+            }
+            if !needle.is_empty() && !buffer.name.to_lowercase().contains(&needle) {
+                continue;
+            }
+            entries.push(PickerEntry {
+                value: json!(buffer.index),
+                ordinal: buffer.name.to_lowercase(),
+                display: format!(
+                    "{} {:>2} {}{}",
+                    if buffer.active { "*" } else { " " },
+                    buffer.index + 1,
+                    if buffer.modified { "● " } else { "" },
+                    buffer.name
+                ),
+            });
+        }
+        cancel.check()?;
+        emit(entries);
+        Ok(())
+    }
+}
+
+fn buffer_picker_registry() -> ProviderRegistry<dyn PickerSource> {
+    let mut registry = ProviderRegistry::new();
+    let source: Arc<dyn PickerSource> = Arc::new(BufferPickerSource);
+    registry
+        .register(
+            ProviderId::new("builtin.buffers"),
+            ProviderPriority::new(100),
+            ProviderOrigin::Builtin,
+            source,
+        )
+        .expect("builtin buffer picker id is valid");
+    registry
 }

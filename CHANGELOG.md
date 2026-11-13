@@ -23,6 +23,9 @@ post-`0.5.0` feature line.
   provenance, priorities, cancellation tokens, typed errors, and an ordered
   multi-provider registry. This is internal groundwork for the `0.6.0.x`
   provider protocol slices.
+- The buffer picker now runs through the `PickerSource` protocol with the
+  multi-provider registry; behavior is unchanged. This is the first real
+  provider integration.
 - `anvil-distro-standard` adds a `full` feature that enables every official
   module at runtime. `--all-features` selects it; the default `anvil` binary
   remains the standard Git-only composition.

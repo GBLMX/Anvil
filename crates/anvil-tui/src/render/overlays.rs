@@ -125,21 +125,10 @@ pub(crate) fn render_overlays(model: &Model, frame: &mut Frame, area: Rect) {
             } else {
                 theme::panel()
             };
-            let active = *index == model.buffers.active;
-            let modified = model
-                .buffers
-                .entries
-                .get(*index)
-                .is_some_and(|buffer| buffer.modified);
-            let name = model.buffer_name(*index);
-            let line = format!(
-                "{}{} {:>2} {}{}",
-                if selected { "❯" } else { " " },
-                if active { "*" } else { " " },
-                index + 1,
-                if modified { "● " } else { "" },
-                name
-            );
+            let Some(entry) = picker.entries.get(*index) else {
+                continue;
+            };
+            let line = format!("{}{}", if selected { "❯" } else { " " }, entry.display);
             lines.push(Line::styled(
                 truncate_width(&line, popup.width.saturating_sub(2)),
                 style,
