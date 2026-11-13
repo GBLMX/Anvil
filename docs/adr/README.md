@@ -36,6 +36,7 @@ their decision sections.
 | [0027](0027-distribution-composition-crate.md) | Standard distribution composition crate and two consumers | Accepted |
 | [0028](0028-module-contract.md) | Trusted source-level module contract | Accepted |
 | [0029](0029-git-module-extension-points.md) | Git module extension points | Accepted for implementation |
+| [0030](0030-workspace-index-module.md) | Workspace index module extension points | Accepted for implementation |
 
 ## Numbering Rule
 

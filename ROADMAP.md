@@ -71,7 +71,8 @@ signed-index work stay deferred until the polish phase exits.
   `anvil-mod-git`; TUI startup selection and the `official-git` Cargo feature
   are landed; `:git-*` dispatch and completion are gated without the service.
   `official.git` is registered through `ModuleRegistry` and the installed-binary
-  Git parity smoke passes. Next: 0.7.2 workspace index module.
+  Git parity smoke passes. Workspace index extension points are defined
+  (ADR-0030); next: the bounded index implementation and quick-open adapter.
 - Optional TachyonFX-style UI effects: `anvil-tui` only, non-default feature,
   ADR and performance gate required; see the deferred section in
   [docs/0.5.x-plan.md](docs/0.5.x-plan.md). Not before the `0.5.10` baseline.
