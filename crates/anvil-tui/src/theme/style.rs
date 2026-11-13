@@ -174,6 +174,10 @@ pub(crate) fn search_active() -> Style {
 pub(crate) fn current_line() -> Style {
     Style::default().fg(text_color()).bg(surface_alt())
 }
+
+pub(crate) fn current_line_number() -> Style {
+    Style::default().fg(accent()).add_modifier(Modifier::BOLD)
+}
 pub(crate) fn code_block() -> Style {
     Style::default().bg(code_block_bg())
 }

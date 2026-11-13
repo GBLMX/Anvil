@@ -486,7 +486,7 @@ impl Model {
             let number = format!("{display:>digits$} ");
             let mut style = Style::default().fg(theme::muted());
             if Some(line_number) == current {
-                style = theme::current_line();
+                style = theme::current_line_number();
             }
             let marker_style = match marker {
                 '+' => Style::default().fg(theme::success()),
@@ -786,6 +786,16 @@ mod tests {
     }
 
     #[test]
+    fn current_gutter_number_uses_accent() {
+        let mut model = Model::new(EditorState::from_text("a\nb\nc\nd\ne\nf\ng\nh"), None);
+        model.session.editor.set_selection_bytes(8, 8);
+        model.session.cursor = 8;
+        let gutter = model.visible_gutter(8);
+        assert_eq!(gutter[4].spans[1].style.fg, Some(theme::accent()));
+        assert_ne!(gutter[3].spans[1].style.fg, Some(theme::accent()));
+    }
+
+    #[test]
     fn geometry_changes_refresh_soft_wrap_width() {
         let mut model = Model::new(EditorState::from_text(&"x".repeat(200)), None);
         model.config.settings.editor.soft_wrap = true;
@@ -887,11 +897,9 @@ mod tests {
         model.config.settings.editor.soft_wrap = false;
         let rows = model.visible_rows(0, 5);
         assert!(rows.iter().any(|row| matches!(row, DisplayRow::Source(0))));
-        assert!(
-            !rows
-                .iter()
-                .any(|row| matches!(row, DisplayRow::Wrapped { .. }))
-        );
+        assert!(!rows
+            .iter()
+            .any(|row| matches!(row, DisplayRow::Wrapped { .. })));
     }
 }
 
