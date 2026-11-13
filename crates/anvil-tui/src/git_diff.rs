@@ -5,6 +5,7 @@ use crate::file_worker::FileRequest;
 
 #[derive(Debug, Clone)]
 pub(crate) struct GitDiffView {
+    path: PathBuf,
     relative: String,
     staged: bool,
     truncated: bool,
@@ -18,10 +19,11 @@ struct GitDiffHunk {
 }
 
 impl GitDiffView {
-    fn parse(raw: &str, relative: String, staged: bool, truncated: bool) -> Self {
+    fn parse(raw: &str, path: PathBuf, relative: String, staged: bool, truncated: bool) -> Self {
         let lines = raw.lines().collect::<Vec<_>>();
         let Some(first) = lines.iter().position(|line| line.starts_with("@@ ")) else {
             return Self {
+                path,
                 relative,
                 staged,
                 truncated,
@@ -51,6 +53,7 @@ impl GitDiffView {
             start = end;
         }
         Self {
+            path,
             relative,
             staged,
             truncated,
@@ -63,8 +66,9 @@ impl Model {
     pub(crate) fn request_git_diff(&mut self, staged: bool) {
         if self.pager.back.is_some() {
             if let Some(view) = self.git.diff_view.as_ref() {
+                let path = view.path.clone();
                 let relative = view.relative.clone();
-                self.request_diff(relative, staged);
+                self.request_diff(path, relative, staged);
                 return;
             }
             self.status.text = "already viewing a read-only view".to_owned();
@@ -84,17 +88,23 @@ impl Model {
                 return;
             }
         };
-        self.request_diff(relative, staged);
+        self.request_diff(path, relative, staged);
     }
 
-    fn request_diff(&mut self, relative: String, staged: bool) {
-        let Some(worker) = self.workspace.file_worker.as_ref() else {
+    fn request_diff(&mut self, path: PathBuf, relative: String, staged: bool) {
+        if !self.ensure_file_worker() {
+            self.status.text = "E: gateway unavailable".to_owned();
+            self.file.dirty = true;
+            return;
+        }
+        self.git.diff_path = Some(path.clone());
+        self.git.diff_generation = self.git.diff_generation.wrapping_add(1);
+        let generation = self.git.diff_generation;
+        let Some(worker) = self.file_worker_for_path(&path) else {
             self.status.text = "E: file worker unavailable".to_owned();
             self.file.dirty = true;
             return;
         };
-        self.git.diff_generation = self.git.diff_generation.wrapping_add(1);
-        let generation = self.git.diff_generation;
         if let Err(error) = worker.request(FileRequest::GitDiffText {
             relative,
             staged,
@@ -126,7 +136,12 @@ impl Model {
         self.git.diff_pending = None;
         match result {
             Ok((text, truncated)) => {
-                let view = GitDiffView::parse(&text, relative, staged, truncated);
+                let path = self
+                    .git
+                    .diff_path
+                    .clone()
+                    .unwrap_or_else(|| self.workspace.path.clone());
+                let view = GitDiffView::parse(&text, path, relative, staged, truncated);
                 self.git.diff_view = Some(view);
                 let title = if truncated {
                     "Git diff (truncated): :q returns"
@@ -232,13 +247,14 @@ impl Model {
             return;
         };
         let patch = view.hunks[index].patch.clone();
-        let Some(worker) = self.workspace.file_worker.as_ref() else {
+        let path = view.path.clone();
+        self.git.apply_generation = self.git.apply_generation.wrapping_add(1);
+        let generation = self.git.apply_generation;
+        let Some(worker) = self.file_worker_for_path(&path) else {
             self.status.text = "E: file worker unavailable".to_owned();
             self.file.dirty = true;
             return;
         };
-        self.git.apply_generation = self.git.apply_generation.wrapping_add(1);
-        let generation = self.git.apply_generation;
         if let Err(error) = worker.request(FileRequest::GitApplyHunk {
             patch,
             reverse: unstage,
@@ -266,9 +282,10 @@ impl Model {
             Ok(()) => {
                 self.status.text = "git hunk applied".to_owned();
                 if let Some(view) = self.git.diff_view.as_ref() {
+                    let path = view.path.clone();
                     let relative = view.relative.clone();
                     let staged = view.staged;
-                    self.request_diff(relative, staged);
+                    self.request_diff(path, relative, staged);
                 }
             }
             Err(error) => {
@@ -299,13 +316,13 @@ impl Model {
                 return;
             }
         };
-        let Some(worker) = self.workspace.file_worker.as_ref() else {
+        self.git.blame_generation = self.git.blame_generation.wrapping_add(1);
+        let generation = self.git.blame_generation;
+        let Some(worker) = self.file_worker_for_path(&path) else {
             self.status.text = "E: file worker unavailable".to_owned();
             self.file.dirty = true;
             return;
         };
-        self.git.blame_generation = self.git.blame_generation.wrapping_add(1);
-        let generation = self.git.blame_generation;
         if let Err(error) = worker.request(FileRequest::GitBlameText {
             relative,
             generation,
@@ -435,13 +452,13 @@ impl Model {
             self.file.dirty = true;
             return;
         }
-        let Some(worker) = self.workspace.file_worker.as_ref() else {
+        self.git.stage_generation = self.git.stage_generation.wrapping_add(1);
+        let generation = self.git.stage_generation;
+        let Some(worker) = self.file_worker_for_path(&path) else {
             self.status.text = "E: file worker unavailable".to_owned();
             self.file.dirty = true;
             return;
         };
-        self.git.stage_generation = self.git.stage_generation.wrapping_add(1);
-        let generation = self.git.stage_generation;
         if let Err(error) = worker.request(FileRequest::GitConflictStageText {
             relative,
             stage,
@@ -528,13 +545,13 @@ impl Model {
             self.file.dirty = true;
             return;
         }
-        let Some(worker) = self.workspace.file_worker.as_ref() else {
+        self.git.resolve_generation = self.git.resolve_generation.wrapping_add(1);
+        let generation = self.git.resolve_generation;
+        let Some(worker) = self.file_worker_for_path(&path) else {
             self.status.text = "E: file worker unavailable".to_owned();
             self.file.dirty = true;
             return;
         };
-        self.git.resolve_generation = self.git.resolve_generation.wrapping_add(1);
-        let generation = self.git.resolve_generation;
         if let Err(error) = worker.request(FileRequest::GitResolveConflict {
             relative,
             stage,
@@ -615,7 +632,7 @@ index 1111111..2222222 100644
 
     #[test]
     fn parses_hunks_with_file_header_and_view_lines() {
-        let view = GitDiffView::parse(RAW, "a.rs".to_owned(), false, false);
+        let view = GitDiffView::parse(RAW, PathBuf::from("a.rs"), "a.rs".to_owned(), false, false);
         assert_eq!(view.hunks.len(), 2);
         assert_eq!(view.hunks[0].line, 6);
         assert_eq!(view.hunks[1].line, 9);
@@ -630,6 +647,7 @@ index 1111111..2222222 100644
     fn diff_without_hunks_has_no_staging_target() {
         let view = GitDiffView::parse(
             "diff --git a/a.bin b/a.bin\nBinary files differ\n",
+            PathBuf::from("a.bin"),
             "a.bin".to_owned(),
             false,
             false,

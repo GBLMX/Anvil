@@ -40,7 +40,7 @@ impl Model {
             Ok(relative) => relative,
             Err(_) => return,
         };
-        let Some(worker) = self.workspace.file_worker.as_ref() else {
+        let Some(worker) = self.file_worker_for_path(&path) else {
             return;
         };
         if worker

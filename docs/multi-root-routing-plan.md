@@ -4,10 +4,12 @@ Status: phase 1 plus quick-open, project-search, file-tree root nodes, and
 mutation routing landed. Trust, root registration, per-root gateway lifecycle,
 open/save routing, trusted-root quick-open enumeration/preview,
 project-search merge/cancel, secondary-root tree list/expand/watch, and
-same-root create/rename/remove/copy are implemented. Root labels disambiguate
+same-root create/rename/remove/copy are implemented. File-scoped Git
+operations now route through the owning root worker. Root labels disambiguate
 duplicate basenames, untrusted roots are marked and read-only, mutations
 refresh the owning root, stale root results are dropped, and root removal
-cancels a pending project search. Cross-root mutation is rejected.
+cancels a pending project search. Cross-root mutation is rejected. The merged
+Git conflict list and per-root branch state remain primary-root only.
 
 ## 1. Scope
 
@@ -230,19 +232,27 @@ Acceptance:
 
 ## 10. Git
 
-- Route `GitDiff`, `GitDiffText`, `GitApplyHunk`, `GitConflictsText`,
-  `GitConflictStageText`, `GitResolveConflict`, and `GitBlameText` by owning
-  root.
-- Git status/branch state becomes per-root:
-  `BTreeMap<PathBuf, GitRootState>`.
-- Reject conflict stage/resolve operations outside a Git root.
-- Do not merge index operations across roots.
+Landed:
 
-Acceptance:
+- `GitDiff`, `GitDiffText`, `GitApplyHunk`, `GitConflictStageText`,
+  `GitResolveConflict`, and `GitBlameText` route through the owning root
+  worker. Untrusted or missing roots fail instead of falling back to the
+  primary gateway.
+- Gutter marks use the owning root worker.
+- Cross-root index operations are rejected.
+
+Remaining:
+
+- `GitConflictsText` still fans out nowhere; the conflict list is primary-root
+  only and not root-qualified.
+- Branch/status state is still a single primary-root view; per-root branch
+  state (`BTreeMap<PathBuf, GitRootState>`) is not implemented.
+
+Acceptance for the landed slice:
 
 - gutter marks use the owning root
-- conflict list is root-qualified
 - applying a hunk in root B uses root B's gateway
+- conflict stage/resolve in root B uses root B's gateway
 
 ## 11. LSP Boundary
 

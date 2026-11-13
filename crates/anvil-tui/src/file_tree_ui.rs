@@ -170,7 +170,7 @@ impl Model {
         }
     }
 
-    fn file_worker_for_path(&self, path: &Path) -> Option<&FileWorker> {
+    pub(crate) fn file_worker_for_path(&self, path: &Path) -> Option<&FileWorker> {
         match self.secondary_root(path) {
             Some(root) => self.workspace.root_file_workers.get(&root),
             None => self.workspace.file_worker.as_ref(),

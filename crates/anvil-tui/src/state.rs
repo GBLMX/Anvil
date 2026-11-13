@@ -570,6 +570,8 @@ pub(crate) struct GitState {
     pub(crate) diff_due: Option<Instant>,
     /// Latest requested read-only Git diff generation.
     pub(crate) diff_generation: u64,
+    /// Path whose diff is being loaded or displayed.
+    pub(crate) diff_path: Option<PathBuf>,
     /// Pending Git diff generation, if a request is in flight.
     pub(crate) diff_pending: Option<u64>,
     /// Parsed hunks for the active Git diff view.
