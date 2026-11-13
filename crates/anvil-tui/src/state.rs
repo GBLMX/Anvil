@@ -275,7 +275,7 @@ pub(crate) struct WorkspaceState {
     /// Background workers for trusted non-primary workspace roots.
     pub(crate) root_file_workers: BTreeMap<PathBuf, FileWorker>,
     /// Optional trusted Git service installed by the distribution.
-    pub(crate) git_service: Option<std::sync::Arc<dyn anvil_mod_git::GitService>>,
+    pub(crate) git_service: Option<std::sync::Arc<dyn anvil_module::git::GitService>>,
     /// Dirty swap files that must survive a source conflict.
     pub(crate) conflict_swaps: HashMap<PathBuf, PathBuf>,
     /// Paths changed by a multi-file replace whose buffer reload failed.

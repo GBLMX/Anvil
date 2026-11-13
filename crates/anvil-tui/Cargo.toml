@@ -8,7 +8,8 @@ license.workspace = true
 repository.workspace = true
 
 [features]
-default = []
+default = ["official-git"]
+official-git = ["dep:anvil-mod-git"]
 e2e-bench = []
 
 [dependencies]
@@ -28,7 +29,8 @@ anvil-core = { path = "../anvil-core", version = "0.6.0" }
 anvil-editor = { path = "../anvil-editor", version = "0.6.0" }
 anvil-ipc = { path = "../anvil-ipc", version = "0.6.0" }
 anvil-control = { path = "../anvil-control", version = "0.6.0" }
-anvil-mod-git = { path = "../anvil-mod-git", version = "0.6.0" }
+anvil-mod-git = { path = "../anvil-mod-git", version = "0.6.0", optional = true }
+anvil-module = { path = "../anvil-module", version = "0.6.0" }
 anvil-plugin-host = { path = "../anvil-plugin-host", version = "0.6.0" }
 anvil-session = { path = "../anvil-session", version = "0.6.0" }
 serde = { version = "1", features = ["derive"] }

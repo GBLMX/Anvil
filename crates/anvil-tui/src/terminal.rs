@@ -22,6 +22,16 @@ pub fn run_with_workspace_status(
     run_with_input(path, workspace, editor_mode, false, false)
 }
 
+#[cfg(feature = "official-git")]
+fn default_git_service() -> Option<Arc<dyn anvil_module::git::GitService>> {
+    Some(Arc::new(anvil_mod_git::SystemGitService))
+}
+
+#[cfg(not(feature = "official-git"))]
+fn default_git_service() -> Option<Arc<dyn anvil_module::git::GitService>> {
+    None
+}
+
 /// Runs the terminal loop with optional stdin input and read-only mode.
 pub fn run_with_input(
     path: Option<PathBuf>,
@@ -36,7 +46,7 @@ pub fn run_with_input(
         editor_mode,
         read_stdin,
         read_only,
-        Some(Arc::new(anvil_mod_git::SystemGitService)),
+        default_git_service(),
     )
 }
 
@@ -47,7 +57,7 @@ pub fn run_with_input_and_git(
     editor_mode: bool,
     read_stdin: bool,
     read_only: bool,
-    git: Option<Arc<dyn anvil_mod_git::GitService>>,
+    git: Option<Arc<dyn anvil_module::git::GitService>>,
 ) -> io::Result<i32> {
     let stdin_text = if read_stdin || !io::stdin().is_terminal() {
         if !io::stdout().is_terminal() {

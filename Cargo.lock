@@ -128,6 +128,7 @@ name = "anvil-mod-git"
 version = "0.6.0"
 dependencies = [
  "anvil-ipc",
+ "anvil-module",
  "serde_json",
  "tempfile",
 ]
@@ -136,6 +137,7 @@ dependencies = [
 name = "anvil-module"
 version = "0.6.0"
 dependencies = [
+ "anvil-ipc",
  "anvil-session",
 ]
 
@@ -178,6 +180,7 @@ dependencies = [
  "anvil-editor",
  "anvil-ipc",
  "anvil-mod-git",
+ "anvil-module",
  "anvil-plugin-host",
  "anvil-session",
  "crossterm",

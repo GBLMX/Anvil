@@ -16,9 +16,9 @@ mod preview;
 mod protocol;
 mod search;
 mod worker;
-pub(crate) use anvil_mod_git::ResolveConflictError;
-#[cfg(test)]
+#[cfg(all(test, feature = "official-git"))]
 pub(crate) use anvil_mod_git::{parse_git_diff, parse_git_status};
+pub(crate) use anvil_module::git::ResolveConflictError;
 pub(crate) use preview::PreviewData;
 #[cfg(test)]
 pub(crate) use preview::{PREVIEW_MAX_LINES, decode_preview};
@@ -37,14 +37,15 @@ const MAX_REPLACE_BYTES: usize = 16 * 1024 * 1024;
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        FileEvent, FileRequest, FileWorker, PREVIEW_MAX_LINES, decode_preview, parse_git_diff,
-        parse_git_status,
-    };
+    use super::{FileEvent, FileRequest, FileWorker, PREVIEW_MAX_LINES, decode_preview};
+    #[cfg(feature = "official-git")]
+    use super::{parse_git_diff, parse_git_status};
     use anvil_ipc::GatewayClient;
+    #[cfg(feature = "official-git")]
     use std::path::Path;
 
     #[test]
+    #[cfg(feature = "official-git")]
     fn parses_git_hunks_into_line_marks() {
         let output = "@@ -1 +1 @@\n-old\n+new\n@@ -0,0 +4,2 @@\n+one\n+two\n@@ -8,2 +9,0 @@\n";
         assert_eq!(
@@ -217,6 +218,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "official-git")]
     fn parses_git_status_porcelain() {
         let workspace = Path::new("/ws");
         let statuses =

@@ -8,4 +8,5 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
+anvil-ipc = { path = "../anvil-ipc", version = "0.6.0" }
 anvil-session = { path = "../anvil-session", version = "0.6.0" }

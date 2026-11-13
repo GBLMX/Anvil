@@ -8,7 +8,7 @@ use anvil_ipc::DirEntry;
 use super::PreviewData;
 use crate::pipe_locations::PipeLocation;
 
-use anvil_mod_git::ResolveConflictError;
+use anvil_module::git::ResolveConflictError;
 
 /// One file in a project replace preview.
 #[derive(Debug, Clone, PartialEq, Eq)]

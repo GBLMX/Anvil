@@ -2,6 +2,16 @@
 
 use super::*;
 
+#[cfg(feature = "official-git")]
+fn default_git_service() -> Option<std::sync::Arc<dyn anvil_module::git::GitService>> {
+    Some(std::sync::Arc::new(anvil_mod_git::SystemGitService))
+}
+
+#[cfg(not(feature = "official-git"))]
+fn default_git_service() -> Option<std::sync::Arc<dyn anvil_module::git::GitService>> {
+    None
+}
+
 impl Model {
     /// Builds a model from text and an optional source path.
     pub fn new(editor: EditorState, path: Option<PathBuf>) -> Self {
@@ -40,7 +50,7 @@ impl Model {
             workspace: WorkspaceState {
                 path: workspace,
                 roots: workspace_roots,
-                git_service: Some(std::sync::Arc::new(anvil_mod_git::SystemGitService)),
+                git_service: default_git_service(),
                 ..Default::default()
             },
             language: LanguageState::default(),

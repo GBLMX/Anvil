@@ -8,6 +8,8 @@ use std::fmt;
 
 use anvil_session::command::{COMMANDS, CommandId, CommandSpec};
 
+pub mod git;
+
 /// Version of the typed module contract.
 pub const CONTRACT_VERSION: u32 = 1;
 

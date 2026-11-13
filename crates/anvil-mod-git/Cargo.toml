@@ -9,6 +9,7 @@ repository.workspace = true
 
 [dependencies]
 anvil-ipc = { path = "../anvil-ipc", version = "0.6.0" }
+anvil-module = { path = "../anvil-module", version = "0.6.0" }
 
 [dev-dependencies]
 serde_json = "1"

@@ -13,7 +13,7 @@ use anvil_ipc::GatewayClient;
 use super::preview::read_preview;
 use super::search::{apply_project_replace, files, project_replace_preview, project_search};
 use super::{FileEvent, FileRequest, MAX_TREE_WATCH_DIRS, TREE_DEBOUNCE, TREE_POLL_INTERVAL};
-use anvil_mod_git::GitService;
+use anvil_module::git::GitService;
 
 const GIT_UNAVAILABLE: &str = "git module is not installed";
 
@@ -77,8 +77,8 @@ fn resolve_git_conflict(
     client: &mut GatewayClient,
     relative: &str,
     stage: u8,
-) -> Result<(), anvil_mod_git::ResolveConflictError> {
-    git.ok_or_else(|| anvil_mod_git::ResolveConflictError::before_write(GIT_UNAVAILABLE))?
+) -> Result<(), anvil_module::git::ResolveConflictError> {
+    git.ok_or_else(|| anvil_module::git::ResolveConflictError::before_write(GIT_UNAVAILABLE))?
         .resolve_git_conflict(client, relative, stage)
 }
 
@@ -102,11 +102,18 @@ impl FileWorker {
     /// Starts the worker with a dedicated gateway connection.
     #[cfg(test)]
     pub fn start(client: GatewayClient, workspace: PathBuf) -> Self {
-        Self::start_with_git_service(
-            client,
-            workspace,
-            Some(Arc::new(anvil_mod_git::SystemGitService)),
-        )
+        #[cfg(feature = "official-git")]
+        {
+            Self::start_with_git_service(
+                client,
+                workspace,
+                Some(Arc::new(anvil_mod_git::SystemGitService)),
+            )
+        }
+        #[cfg(not(feature = "official-git"))]
+        {
+            Self::start_with_git_service(client, workspace, None)
+        }
     }
 
     pub(crate) fn start_with_git_service(

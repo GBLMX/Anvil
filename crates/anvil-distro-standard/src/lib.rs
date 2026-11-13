@@ -3,7 +3,6 @@ use std::{
     ffi::OsString,
     path::{Path, PathBuf},
     process,
-    sync::Arc,
 };
 
 const USAGE: &str = "\
@@ -137,9 +136,21 @@ where
             {
                 return Ok(0);
             }
+            #[cfg(feature = "official-git")]
             let git = distribution.git.then(|| {
-                Arc::new(anvil_mod_git::SystemGitService) as Arc<dyn anvil_mod_git::GitService>
+                std::sync::Arc::new(anvil_mod_git::SystemGitService)
+                    as std::sync::Arc<dyn anvil_mod_git::GitService>
             });
+            #[cfg(not(feature = "official-git"))]
+            let git = {
+                if distribution.git {
+                    return Err(RunError::Args(
+                        "distribution requires official-git, but the feature is not compiled"
+                            .to_owned(),
+                    ));
+                }
+                None
+            };
             Ok(anvil_tui::run_with_input_and_git(
                 path, workspace, editor, stdin, read_only, git,
             )?)
