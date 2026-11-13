@@ -115,6 +115,11 @@ impl Model {
     }
 
     fn dispatch_ex(&mut self, name: &str, argument: &str) {
+        if name.starts_with("git-") && self.workspace.git_service.is_none() {
+            self.status.text = "E: git module is not installed".to_owned();
+            self.file.dirty = true;
+            return;
+        }
         match (name, argument) {
             ("w", "") => self.queue_effect(Effect::Save),
             ("conflict-recover", "") => self.recover_conflict(),

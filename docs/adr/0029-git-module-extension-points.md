@@ -2,7 +2,7 @@
 
 - Status: Accepted for implementation; helper extraction and `FileWorker`
   service injection, optional startup selection, and the Cargo feature matrix
-  landed
+  landed; command dispatch/completion gating landed
 - Date: 2026-11-13
 - Related: [ADR-0027](0027-distribution-composition-crate.md), [ADR-0028](0028-module-contract.md)
 

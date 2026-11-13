@@ -783,12 +783,37 @@ index 1111111..2222222 100644
     }
 
     #[test]
+    fn git_commands_require_the_git_module() {
+        let mut model = Model::new(EditorState::from_text("x"), Some(PathBuf::from("x.rs")));
+        model.workspace.git_service = None;
+        for command in [
+            "git-diff",
+            "git-blame",
+            "git-conflicts",
+            "git-resolve-ours",
+            "git-hunk-next",
+        ] {
+            model.execute_command(command);
+            assert_eq!(
+                model.status.text, "E: git module is not installed",
+                "{command}"
+            );
+        }
+    }
+
+    #[test]
     fn recognizes_conflict_resolution_commands() {
         let mut model = Model::new(EditorState::from_text("x"), None);
         model.execute_command("git-resolve-ours");
+        #[cfg(feature = "official-git")]
         assert_eq!(model.status.text, "E: no file name");
+        #[cfg(not(feature = "official-git"))]
+        assert_eq!(model.status.text, "E: git module is not installed");
         model.execute_command("git-resolve-theirs!");
+        #[cfg(feature = "official-git")]
         assert_eq!(model.status.text, "E: no file name");
+        #[cfg(not(feature = "official-git"))]
+        assert_eq!(model.status.text, "E: git module is not installed");
     }
 
     #[test]
