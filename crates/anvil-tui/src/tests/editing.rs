@@ -926,6 +926,14 @@ fn auto_pairs_wrap_selection() {
 }
 
 #[test]
+fn dap_auto_without_file_reports_error() {
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.execute_command("dap-attach");
+    assert_eq!(model.status.text, "E: dap auto requires a file");
+    assert!(model.language.dap.attach.is_none());
+}
+
+#[test]
 fn dap_attach_does_not_block_and_reports_failure() {
     let mut model = Model::new(EditorState::from_text(""), None);
     model.execute_command("dap-attach /definitely/not-a-real-adapter");

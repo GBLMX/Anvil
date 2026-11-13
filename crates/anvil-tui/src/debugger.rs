@@ -2,7 +2,10 @@
 
 use super::*;
 use crate::dap::DapClient;
-use anvil_session::provider::{DapAdapterManager, DapAdapterSpec, ProviderId};
+use anvil_session::provider::{
+    DapAdapterManager, DapAdapterProvider, DapAdapterSpec, DapContext, ProviderId, ProviderOrigin,
+    ProviderPriority, RustDapProvider,
+};
 
 impl Model {
     pub(crate) fn start_dap_attach(&mut self, program: PathBuf, args: Vec<String>) {
@@ -29,10 +32,58 @@ impl Model {
                 return;
             }
         };
+        self.spawn_dap_spec(spec);
+    }
+
+    pub(crate) fn start_dap_auto(&mut self) {
+        let Some(path) = self.session.path.as_deref() else {
+            self.status.text = "E: dap auto requires a file".to_owned();
+            self.file.dirty = true;
+            return;
+        };
+        let Some(language_id) = dap_language(path) else {
+            self.status.text = "E: no builtin debug adapter for this file".to_owned();
+            self.file.dirty = true;
+            return;
+        };
+        let workspace = self.workspace.path.clone();
+        let mut manager = DapAdapterManager::new();
+        let provider = std::sync::Arc::new(RustDapProvider);
+        if manager
+            .register(
+                provider.id(),
+                ProviderPriority::new(1),
+                ProviderOrigin::Builtin,
+                provider,
+            )
+            .is_err()
+        {
+            self.status.text = "E: dap provider registration failed".to_owned();
+            self.file.dirty = true;
+            return;
+        }
+        let context = DapContext {
+            path: Some(path),
+            language_id,
+        };
+        match manager.resolve(&context, &workspace) {
+            Ok(Some(spec)) => self.spawn_dap_spec(spec),
+            Ok(None) => {
+                self.status.text = "E: no debug adapter available".to_owned();
+                self.file.dirty = true;
+            }
+            Err(error) => {
+                self.status.text = format!("E: dap adapter: {error}");
+                self.file.dirty = true;
+            }
+        }
+    }
+
+    fn spawn_dap_spec(&mut self, spec: DapAdapterSpec) {
         let display = spec.program.display().to_string();
         let program = spec.program;
         let args = spec.args;
-        let workspace = spec.cwd.unwrap_or(workspace);
+        let workspace = spec.cwd.unwrap_or_else(|| self.workspace.path.clone());
         let (sender, receiver) = std::sync::mpsc::channel();
         std::thread::spawn(move || {
             let result = DapClient::spawn(&program, &args, &workspace)
@@ -163,6 +214,18 @@ impl Model {
         for path in paths {
             self.sync_breakpoints(&path);
         }
+    }
+}
+
+fn dap_language(path: &Path) -> Option<&'static str> {
+    match path
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .map(str::to_ascii_lowercase)
+        .as_deref()
+    {
+        Some("rs") => Some("rust"),
+        _ => None,
     }
 }
 

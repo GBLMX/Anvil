@@ -1,5 +1,6 @@
 //! UI-neutral provider identity, cancellation, and registration.
 
+mod builtin_dap;
 mod cancel;
 mod completion;
 mod dap;
@@ -10,6 +11,7 @@ mod id;
 mod picker;
 mod registry;
 
+pub use builtin_dap::RustDapProvider;
 pub use cancel::CancellationToken;
 pub use completion::{
     CompletionContext, CompletionItem, CompletionKind, CompletionPathEntry, CompletionSource,

@@ -102,7 +102,7 @@ Normal mode
   :lsp-stop           stop the active language server
   :format              format the current document
   :breakpoint          toggle a breakpoint on the current line
-  :dap-attach <cmd>    attach a DAP adapter and sync breakpoints
+  :dap-attach [cmd]    attach a DAP adapter; omit cmd for the builtin adapter
   :dap-detach          detach the DAP adapter
   :debug               toggle the debug panel
   :debug-refresh       refresh threads, stack, variables, and watches

@@ -276,7 +276,7 @@ impl Model {
             ("dap-attach", argument) => {
                 let parts = argument.split_whitespace().collect::<Vec<_>>();
                 let Some(program) = parts.first() else {
-                    self.status.text = "E: usage: :dap-attach <adapter> [args]".to_owned();
+                    self.start_dap_auto();
                     self.file.dirty = true;
                     return;
                 };
