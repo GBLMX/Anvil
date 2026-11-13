@@ -1,10 +1,11 @@
 # Multi-Root File Tree and Search Routing Plan
 
-Status: phase 1 plus quick-open, project-search, file-tree root nodes, and
-mutation routing landed. Trust, root registration, per-root gateway lifecycle,
-open/save routing, trusted-root quick-open enumeration/preview,
-project-search merge/cancel, secondary-root tree list/expand/watch, and
-same-root create/rename/remove/copy are implemented. File-scoped Git
+Status: complete for routed file and Git surfaces. Trust, root registration,
+per-root gateway lifecycle, open/save routing, trusted-root quick-open
+enumeration/preview, project-search merge/cancel, secondary-root tree
+list/expand/watch, same-root create/rename/remove/copy, file-scoped Git
+operations, and root-qualified conflict lists are implemented. LSP remains
+primary-root by design (section 11). File-scoped Git
 operations now route through the owning root worker. Root labels disambiguate
 duplicate basenames, untrusted roots are marked and read-only, mutations
 refresh the owning root, stale root results are dropped, and root removal
