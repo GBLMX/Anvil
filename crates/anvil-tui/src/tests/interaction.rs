@@ -196,6 +196,15 @@ fn keymap_context_prefers_popup_then_command_line_then_tree() {
 }
 
 #[test]
+fn hover_unknown_key_dismisses_and_passes_through() {
+    let mut model = Model::new(EditorState::from_text("alpha"), None);
+    model.overlays.lsp_results.hover = Some("docs".to_owned());
+    handle_event(&mut model, key(KeyCode::Char('i')));
+    assert!(model.overlays.lsp_results.hover.is_none());
+    assert!(matches!(model.ui.input_mode, InputMode::Insert));
+}
+
+#[test]
 fn settings_keys_use_the_action_table() {
     let mut model = Model::new(EditorState::from_text("x"), None);
     model.start_page.welcome = false;

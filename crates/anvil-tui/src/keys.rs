@@ -641,6 +641,26 @@ fn execute_lsp_list_action(model: &mut Model, kind: LspListKind, action: LspList
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum HoverAction {
+    Dismiss,
+    Cancel,
+}
+
+fn hover_action(key: KeyPress) -> HoverAction {
+    if key.code == KeyCode::Esc {
+        HoverAction::Cancel
+    } else {
+        HoverAction::Dismiss
+    }
+}
+
+fn execute_hover_action(model: &mut Model, action: HoverAction) -> bool {
+    model.overlays.lsp_results.hover = None;
+    model.file.dirty = true;
+    matches!(action, HoverAction::Cancel)
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum DiagnosticPeekAction {
     Previous,
     Next,
@@ -1157,13 +1177,11 @@ fn handle_key(model: &mut Model, key: KeyPress) {
         }
     }
     if model.overlays.lsp_results.hover.is_some() {
-        model.overlays.lsp_results.hover = None;
-        model.file.dirty = true;
-        if key.code == KeyCode::Esc {
+        let action = hover_action(key);
+        if execute_hover_action(model, action) {
             return;
         }
     }
-
     if model.ui.diagnostic_peek.is_some() {
         let action = diagnostic_peek_action(key);
         if execute_diagnostic_peek_action(model, action) {
