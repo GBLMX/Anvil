@@ -14,5 +14,6 @@ fn main() {
         usage: USAGE,
         git: false,
         workspace_index: false,
+        desktop: false,
     });
 }

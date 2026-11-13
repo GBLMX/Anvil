@@ -12,6 +12,9 @@ post-`0.5.0` feature line.
   cancelling in-flight index builds on close and falling back to gateway file
   enumeration when the module is absent. The standard edition keeps the feature
   opt-in.
+- The opt-in `official.desktop` module adds `:open-url <http(s)-url>` with a
+  fixed `xdg-open` handoff, strict URL validation, and a bounded opener count.
+  It does not add a general command runner or change gateway `sys.exec` policy.
 - `Alt-1` through `Alt-9` switch directly to the matching open buffer while
   leaving bare digits available as count prefixes.
 - `Space b` and `:buffers` open a filterable buffer picker; `Enter` switches

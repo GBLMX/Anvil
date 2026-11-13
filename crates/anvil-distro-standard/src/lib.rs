@@ -54,6 +54,8 @@ pub struct Distribution {
     pub git: bool,
     /// Whether the optional workspace-index module is part of this composition.
     pub workspace_index: bool,
+    /// Whether the optional desktop URL module is part of this composition.
+    pub desktop: bool,
 }
 
 /// The standard Anvil distribution.
@@ -62,6 +64,7 @@ pub const STANDARD: Distribution = Distribution {
     usage: USAGE,
     git: true,
     workspace_index: false,
+    desktop: false,
 };
 
 #[derive(Debug)]
@@ -160,6 +163,32 @@ fn compose_git(
     Ok(registry.git_service())
 }
 
+#[cfg(feature = "official-desktop")]
+fn compose_desktop(
+    distribution: &Distribution,
+) -> Result<Option<std::sync::Arc<dyn anvil_module::desktop::DesktopService>>, RunError> {
+    if !distribution.desktop {
+        return Ok(None);
+    }
+    let mut registry = anvil_module::ModuleRegistry::new();
+    registry
+        .register(&anvil_mod_desktop::DesktopModule)
+        .map_err(|error| RunError::Args(error.to_string()))?;
+    Ok(registry.desktop_service())
+}
+
+#[cfg(not(feature = "official-desktop"))]
+fn compose_desktop(
+    distribution: &Distribution,
+) -> Result<Option<std::sync::Arc<dyn anvil_module::desktop::DesktopService>>, RunError> {
+    if distribution.desktop {
+        return Err(RunError::Args(
+            "distribution requires official-desktop, but the feature is not compiled".to_owned(),
+        ));
+    }
+    Ok(None)
+}
+
 #[cfg(not(feature = "official-git"))]
 fn compose_git(
     distribution: &Distribution,
@@ -200,14 +229,18 @@ where
             }
             let git = compose_git(distribution)?;
             let workspace_index = compose_workspace_index(distribution)?;
-            Ok(anvil_tui::run_with_services(
+            let desktop = compose_desktop(distribution)?;
+            Ok(anvil_tui::run_with_all_services(
                 path,
                 workspace,
                 editor,
                 stdin,
                 read_only,
-                git,
-                workspace_index,
+                anvil_tui::DistributionServices {
+                    git,
+                    workspace_index,
+                    desktop,
+                },
             )?)
         }
         Err(error) => Err(RunError::Args(error)),
@@ -601,5 +634,27 @@ mod tests {
                 .expect("compose")
                 .is_none()
         );
+    }
+
+    #[cfg(feature = "official-desktop")]
+    #[test]
+    fn opt_in_desktop_registers_the_service() {
+        let with_desktop = Distribution {
+            desktop: true,
+            ..STANDARD
+        };
+        assert!(compose_desktop(&with_desktop).expect("compose").is_some());
+        assert!(compose_desktop(&STANDARD).expect("compose").is_none());
+    }
+
+    #[cfg(not(feature = "official-desktop"))]
+    #[test]
+    fn missing_desktop_feature_is_a_startup_error() {
+        let with_desktop = Distribution {
+            desktop: true,
+            ..STANDARD
+        };
+        assert!(compose_desktop(&with_desktop).is_err());
+        assert!(compose_desktop(&STANDARD).expect("compose").is_none());
     }
 }

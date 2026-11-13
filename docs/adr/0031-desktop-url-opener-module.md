@@ -1,6 +1,6 @@
 # ADR-0031: Desktop URL Opener Module
 
-- Status: Proposed
+- Status: Accepted for implementation; initial URL-opener slice landed
 - Date: 2026-11-13
 - Related: [ADR-0005](0005-exec-policy.md), [ADR-0028](0028-module-contract.md),
   [ADR-0030](0030-workspace-index-module.md)
@@ -94,10 +94,11 @@ The first consumer is an explicit command:
 :open-url <http(s)-url>
 ```
 
-The command is registered like the Git commands: present in the command table
-only when the distribution supplies `DesktopService`. Without the service, it
-reports that the desktop module is not installed and does not attempt a
-fallback opener.
+The command is available in command completion and dispatch only when the
+distribution supplies `DesktopService`, matching the existing Git gating.
+Without the service, it reports that the desktop module is not installed and
+does not attempt a fallback opener. The shared remote-command policy marks it
+admin-only, so `anvil-ctl`/MCP cannot trigger it.
 
 No `gx` mapping, automatic URL detection, plugin-callable endpoint, or
 "open any path" command is added in this slice. Those require a separate
@@ -109,9 +110,9 @@ decision and a clearer capability boundary.
 - `xdg-open` missing or not executable: report the module as unavailable; do
   not try another launcher.
 - Spawn failure: report a bounded error; do not retry automatically.
-- Child exits non-zero: the waiter records failure in diagnostics only; the
-  browser may have handed off successfully, so this is not treated as a
-  security or editing failure.
+- Child exits non-zero: the waiter reaps it and discards the status; the browser
+  may have handed off successfully, so this is not treated as a security or
+  editing failure.
 - The editor remains usable while the opener runs.
 
 ### 7. Testing and gates

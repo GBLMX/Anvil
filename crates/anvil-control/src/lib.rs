@@ -144,6 +144,10 @@ pub const COMMANDS: &[CommandSpec] = &[
         capability: Capability::Edit,
     },
     CommandSpec {
+        name: "open-url",
+        capability: Capability::Admin,
+    },
+    CommandSpec {
         name: "symbols",
         capability: Capability::Read,
     },

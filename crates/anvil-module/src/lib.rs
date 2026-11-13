@@ -9,9 +9,11 @@ use std::sync::Arc;
 
 use anvil_session::command::{COMMANDS, CommandId, CommandSpec};
 
+pub mod desktop;
 pub mod git;
 pub mod workspace_index;
 
+use desktop::DesktopService;
 use git::GitService;
 use workspace_index::WorkspaceIndexService;
 
@@ -163,6 +165,8 @@ pub struct ModuleRegistry {
     git_service_owner: Option<ModuleId>,
     workspace_index_service: Option<Arc<dyn WorkspaceIndexService>>,
     workspace_index_owner: Option<ModuleId>,
+    desktop_service: Option<Arc<dyn DesktopService>>,
+    desktop_service_owner: Option<ModuleId>,
 }
 
 impl ModuleRegistry {
@@ -209,6 +213,10 @@ impl ModuleRegistry {
             if self.workspace_index_owner == Some(id) {
                 self.workspace_index_service = None;
                 self.workspace_index_owner = None;
+            }
+            if self.desktop_service_owner == Some(id) {
+                self.desktop_service = None;
+                self.desktop_service_owner = None;
             }
             return Err(ModuleError::Registration {
                 module: id,
@@ -281,6 +289,32 @@ impl ModuleRegistry {
 
     pub fn workspace_index_service(&self) -> Option<Arc<dyn WorkspaceIndexService>> {
         self.workspace_index_service.clone()
+    }
+
+    /// Register the typed desktop service from inside [`Module::register`].
+    pub fn set_desktop_service(
+        &mut self,
+        service: Arc<dyn DesktopService>,
+    ) -> Result<(), ModuleError> {
+        let Some(module) = self.registering else {
+            return Err(ModuleError::Registration {
+                module: ModuleId::new("unknown"),
+                message: "set_desktop_service is only valid during module registration".to_owned(),
+            });
+        };
+        if self.desktop_service.is_some() {
+            return Err(ModuleError::Registration {
+                module,
+                message: "a desktop service is already registered".to_owned(),
+            });
+        }
+        self.desktop_service = Some(service);
+        self.desktop_service_owner = Some(module);
+        Ok(())
+    }
+
+    pub fn desktop_service(&self) -> Option<Arc<dyn DesktopService>> {
+        self.desktop_service.clone()
     }
 
     pub fn contains(&self, module: ModuleId) -> bool {
@@ -548,5 +582,36 @@ mod tests {
         assert!(registry.register(&Broken).is_err());
         assert!(!registry.contains(ModuleId::new("official.broken")));
         assert_eq!(registry.command_owner("official.broken.run"), None);
+    }
+    struct FakeDesktop;
+
+    impl desktop::DesktopService for FakeDesktop {
+        fn open_url(&self, _url: &str) -> Result<(), desktop::DesktopError> {
+            Ok(())
+        }
+    }
+
+    struct Desktop;
+
+    impl Module for Desktop {
+        fn metadata(&self) -> ModuleMetadata {
+            ModuleMetadata {
+                id: ModuleId::new("official.desktop"),
+                name: "Desktop",
+                contract: ContractRange::current(),
+                commands: &[],
+            }
+        }
+
+        fn register(&self, registry: &mut ModuleRegistry) -> Result<(), ModuleError> {
+            registry.set_desktop_service(Arc::new(FakeDesktop))
+        }
+    }
+
+    #[test]
+    fn registers_the_desktop_service() {
+        let mut registry = ModuleRegistry::new();
+        registry.register(&Desktop).expect("register");
+        assert!(registry.desktop_service().is_some());
     }
 }

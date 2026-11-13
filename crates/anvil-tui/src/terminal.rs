@@ -80,6 +80,41 @@ pub fn run_with_services(
     git: Option<Arc<dyn anvil_module::git::GitService>>,
     workspace_index: Option<Arc<dyn anvil_module::workspace_index::WorkspaceIndexService>>,
 ) -> io::Result<i32> {
+    run_with_all_services(
+        path,
+        workspace,
+        editor_mode,
+        read_stdin,
+        read_only,
+        DistributionServices {
+            git,
+            workspace_index,
+            desktop: None,
+        },
+    )
+}
+
+#[derive(Default, Clone)]
+pub struct DistributionServices {
+    pub git: Option<Arc<dyn anvil_module::git::GitService>>,
+    pub workspace_index: Option<Arc<dyn anvil_module::workspace_index::WorkspaceIndexService>>,
+    pub desktop: Option<Arc<dyn anvil_module::desktop::DesktopService>>,
+}
+
+/// Runs the terminal loop with the full distribution service set.
+pub fn run_with_all_services(
+    path: Option<PathBuf>,
+    workspace: PathBuf,
+    editor_mode: bool,
+    read_stdin: bool,
+    read_only: bool,
+    services: DistributionServices,
+) -> io::Result<i32> {
+    let DistributionServices {
+        git,
+        workspace_index,
+        desktop,
+    } = services;
     let stdin_text = if read_stdin || !io::stdin().is_terminal() {
         if !io::stdout().is_terminal() {
             return Err(io::Error::new(
@@ -117,6 +152,7 @@ pub fn run_with_services(
             let mut model = Model::with_gateway(client, workspace.clone());
             model.workspace.git_service = git.clone();
             model.workspace.workspace_index_service = workspace_index.clone();
+            model.workspace.desktop_service = desktop.clone();
             model.language.lsp.client = Some(lsp_client);
             if stdin_text.is_none()
                 && let Some(path) = path
@@ -131,6 +167,7 @@ pub fn run_with_services(
             let mut model = Model::new(EditorState::from_text(""), None);
             model.workspace.git_service = git.clone();
             model.workspace.workspace_index_service = workspace_index.clone();
+            model.workspace.desktop_service = desktop.clone();
             model.workspace.path = workspace.clone();
             model.reload_icons();
             model.workspace.require_gateway = true;

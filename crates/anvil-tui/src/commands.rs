@@ -120,6 +120,11 @@ impl Model {
             self.file.dirty = true;
             return;
         }
+        if name == "open-url" && self.workspace.desktop_service.is_none() {
+            self.status.text = "E: desktop module is not installed".to_owned();
+            self.file.dirty = true;
+            return;
+        }
         match (name, argument) {
             ("w", "") => self.queue_effect(Effect::Save),
             ("conflict-recover", "") => self.recover_conflict(),
@@ -249,6 +254,24 @@ impl Model {
             ("tree", "") => self.open_tree(),
             ("lsp-stop", "") => self.queue_effect(Effect::LspStop),
             ("format", "") => self.queue_effect(Effect::LspFormat),
+            ("open-url", url) => {
+                if url.is_empty() {
+                    self.status.text = "E: usage: :open-url <http(s)-url>".to_owned();
+                    self.file.dirty = true;
+                    return;
+                }
+                match self
+                    .workspace
+                    .desktop_service
+                    .as_ref()
+                    .expect("desktop service checked before dispatch")
+                    .open_url(url)
+                {
+                    Ok(()) => self.status.text = "opened external URL".to_owned(),
+                    Err(error) => self.status.text = format!("E: {error}"),
+                }
+                self.file.dirty = true;
+            }
             ("breakpoint", "") => self.toggle_breakpoint(),
             ("dap-attach", argument) => {
                 let parts = argument.split_whitespace().collect::<Vec<_>>();
@@ -434,5 +457,51 @@ impl Model {
             return;
         }
         self.close_buffer(number - 1, force);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use anvil_module::desktop::{DesktopError, DesktopService};
+    use std::sync::{Arc, Mutex};
+
+    struct FakeDesktop(Arc<Mutex<Vec<String>>>);
+
+    impl DesktopService for FakeDesktop {
+        fn open_url(&self, url: &str) -> Result<(), DesktopError> {
+            self.0.lock().expect("urls").push(url.to_owned());
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn open_url_requires_the_desktop_module() {
+        let mut model = Model::new(EditorState::from_text(""), None);
+        model.execute_command("open-url https://example.com");
+        assert_eq!(model.status.text, "E: desktop module is not installed");
+    }
+
+    #[test]
+    fn open_url_forwards_the_url_to_the_service() {
+        let urls = Arc::new(Mutex::new(Vec::new()));
+        let mut model = Model::new(EditorState::from_text(""), None);
+        model.workspace.desktop_service = Some(Arc::new(FakeDesktop(Arc::clone(&urls))));
+        model.execute_command("open-url https://example.com/a?x=1");
+        assert_eq!(
+            urls.lock().expect("urls").as_slice(),
+            ["https://example.com/a?x=1"]
+        );
+        assert_eq!(model.status.text, "opened external URL");
+    }
+
+    #[test]
+    fn open_url_requires_an_argument() {
+        let urls = Arc::new(Mutex::new(Vec::new()));
+        let mut model = Model::new(EditorState::from_text(""), None);
+        model.workspace.desktop_service = Some(Arc::new(FakeDesktop(Arc::clone(&urls))));
+        model.execute_command("open-url");
+        assert!(urls.lock().expect("urls").is_empty());
+        assert_eq!(model.status.text, "E: usage: :open-url <http(s)-url>");
     }
 }

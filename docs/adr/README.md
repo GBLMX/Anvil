@@ -37,7 +37,7 @@ their decision sections.
 | [0028](0028-module-contract.md) | Trusted source-level module contract | Accepted |
 | [0029](0029-git-module-extension-points.md) | Git module extension points | Accepted for implementation |
 | [0030](0030-workspace-index-module.md) | Workspace index module extension points | Accepted for implementation |
-| [0031](0031-desktop-url-opener-module.md) | Desktop URL opener module | Proposed |
+| [0031](0031-desktop-url-opener-module.md) | Desktop URL opener module | Accepted for implementation |
 
 ## Numbering Rule
 

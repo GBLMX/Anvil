@@ -90,6 +90,7 @@ name = "anvil-distro-standard"
 version = "0.6.0"
 dependencies = [
  "anvil-control",
+ "anvil-mod-desktop",
  "anvil-mod-git",
  "anvil-mod-workspace-index",
  "anvil-module",
@@ -123,6 +124,14 @@ dependencies = [
  "anvil-control",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "anvil-mod-desktop"
+version = "0.6.0"
+dependencies = [
+ "anvil-module",
+ "tempfile",
 ]
 
 [[package]]

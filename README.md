@@ -137,8 +137,8 @@ This is not a VM or public plugin API.
 the independent second consumer. Official modules are trusted source-level Rust
 crates compiled into the binary. There is no dynamic Rust ABI, runtime module
 loading, or marketplace-installed Rust module. Module contract v1 is frozen;
-the `0.7.1`-`0.7.3` module, workspace-index, and compatibility-gate slices are
-complete.
+the `0.7.1`-`0.7.3` module, workspace-index, and compatibility-gate slices and
+the first `0.7.4` desktop slice are complete.
 
 - `official.git` is part of the default standard composition. `:git-*` dispatch
   and completion are gated off when the Git service is absent.
@@ -146,7 +146,10 @@ complete.
   `official-workspace-index` feature. When a distribution installs it,
   quick-open prefers its bounded index and cancels in-flight builds when the
   picker closes. Without it, quick-open falls back to gateway enumeration.
-- `anvil-distro-minimal` composes neither module.
+- `official.desktop` is opt-in through `official-desktop`. It enables
+  `:open-url <http(s)-url>` with a fixed `xdg-open` handoff and no general
+  command runner.
+- `anvil-distro-minimal` composes none of these modules.
 
 Module compatibility, caps, and deprecation rules are in
 [module compatibility](docs/module-compatibility.md).
@@ -244,6 +247,7 @@ to the selected buffer.
 - [0.7.x official optional Rust modules plan](docs/0.7.x-plan.md)
 - [Module compatibility and deprecation policy](docs/module-compatibility.md)
 - [Module contract](docs/adr/0028-module-contract.md)
+- [Desktop URL opener module](docs/adr/0031-desktop-url-opener-module.md)
 - [Workspace index module extension points](docs/adr/0030-workspace-index-module.md)
 - [External integration and MCP plan](docs/external-integration-plan.md)
 - [Linux platform plan](docs/linux-platform-plan.md)

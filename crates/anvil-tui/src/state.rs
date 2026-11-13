@@ -279,6 +279,8 @@ pub(crate) struct WorkspaceState {
     /// Optional trusted workspace-index service installed by the distribution.
     pub(crate) workspace_index_service:
         Option<std::sync::Arc<dyn anvil_module::workspace_index::WorkspaceIndexService>>,
+    /// Optional trusted desktop URL service installed by the distribution.
+    pub(crate) desktop_service: Option<std::sync::Arc<dyn anvil_module::desktop::DesktopService>>,
     /// Cancellation token for the active quick-open enumeration.
     pub(crate) fuzzy_cancel: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
     /// Dirty swap files that must survive a source conflict.

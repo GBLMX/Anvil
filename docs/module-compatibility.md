@@ -11,6 +11,7 @@ contract.
 | `anvil-module` | 1 | n/a | compiled | compiled | contract and registry |
 | `official.git` | 1 | `official-git` | default | absent | `GitService` |
 | `official.workspace-index` | 1 | `official-workspace-index` | opt-in | absent | `WorkspaceIndexService` |
+| `official.desktop` | 1 | `official-desktop` | opt-in | absent | `DesktopService` |
 
 The matrix records the contract line, not a Rust ABI. Modules are compiled from
 source into the distribution and are rebuilt with the kernel.
@@ -21,7 +22,8 @@ Contract v1 covers:
 
 - `Module`, `ModuleMetadata`, `ModuleId`, and `ContractRange`;
 - `ModuleRegistry` registration, command ownership, and service slots;
-- the `GitService` and `WorkspaceIndexService` extension points.
+- the `GitService`, `WorkspaceIndexService`, and `DesktopService` extension
+  points.
 
 The freeze is source-level. Adding another official module does not change the
 contract; it adds a Cargo feature, a module crate, and a composition call.
@@ -60,3 +62,4 @@ contract; it adds a Cargo feature, a module crate, and a composition call.
 - Independent `anvil-distro-minimal` composition.
 - Module dependency trees must not contain `anvil-tui`.
 - Installed-binary smoke with the opt-in module enabled.
+- Desktop URL validation and fixed-opener argument-boundary tests.

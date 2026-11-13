@@ -20,7 +20,7 @@ pub(crate) struct CommandCompletion {
 }
 
 impl CommandCompletion {
-    fn new(buffer: &str, plugin_ids: &[&str], git: bool) -> Self {
+    fn new(buffer: &str, plugin_ids: &[&str], git: bool, desktop: bool) -> Self {
         let buffer = buffer.trim_start();
         let (command, argument, has_argument) = match buffer.split_once(char::is_whitespace) {
             Some((command, argument)) => (command, argument.trim_start(), true),
@@ -41,7 +41,10 @@ impl CommandCompletion {
                 buffer.to_owned(),
                 anvil_control::COMMANDS
                     .iter()
-                    .filter(|command| git || !command.name.starts_with("git-"))
+                    .filter(|command| {
+                        (git || !command.name.starts_with("git-"))
+                            && (desktop || command.name != "open-url")
+                    })
                     .map(|command| CompletionItem {
                         label: command.name.to_owned(),
                         insert: format!("{} ", command.name),
@@ -134,6 +137,7 @@ impl Model {
             buffer.text(),
             &plugin_ids,
             self.workspace.git_service.is_some(),
+            self.workspace.desktop_service.is_some(),
         );
         self.overlays.command_completion = (!completion.is_empty()).then_some(completion);
     }
@@ -199,39 +203,39 @@ mod tests {
 
     #[test]
     fn completes_exact_command_prefix() {
-        let completion = CommandCompletion::new("theme", &[], true);
+        let completion = CommandCompletion::new("theme", &[], true, true);
         assert_eq!(
             labels(&completion),
             vec!["theme", "theme-auto", "themes", "theme-save"]
         );
         assert_eq!(
-            labels(&CommandCompletion::new("theme ", &[], true)),
+            labels(&CommandCompletion::new("theme ", &[], true, true)),
             theme::names()
         );
     }
     #[test]
     fn completes_command_prefixes() {
-        let completion = CommandCompletion::new("the", &[], true);
+        let completion = CommandCompletion::new("the", &[], true, true);
         assert_eq!(
             labels(&completion),
             vec!["theme", "theme-auto", "themes", "theme-save"]
         );
         assert_eq!(
-            labels(&CommandCompletion::new("set", &[], true)),
+            labels(&CommandCompletion::new("set", &[], true, true)),
             vec!["settings"]
         );
     }
 
     #[test]
     fn completes_theme_arguments() {
-        let completion = CommandCompletion::new("theme so", &[], true);
+        let completion = CommandCompletion::new("theme so", &[], true, true);
         assert_eq!(labels(&completion), vec!["solarized-light"]);
         assert_eq!(completion.selected(), Some("theme solarized-light "));
     }
 
     #[test]
     fn completes_second_auto_theme_argument() {
-        let completion = CommandCompletion::new("theme-auto nord so", &[], true);
+        let completion = CommandCompletion::new("theme-auto nord so", &[], true, true);
         assert_eq!(labels(&completion), vec!["solarized-light"]);
         assert_eq!(
             completion.selected(),
@@ -241,20 +245,20 @@ mod tests {
 
     #[test]
     fn completes_plugin_ids() {
-        let completion = CommandCompletion::new("plugin-enable de", &["demo"], true);
+        let completion = CommandCompletion::new("plugin-enable de", &["demo"], true, true);
         assert_eq!(labels(&completion), vec!["demo"]);
         assert_eq!(completion.selected(), Some("plugin-enable demo "));
     }
 
     #[test]
     fn completion_closes_after_unknown_argument() {
-        let completion = CommandCompletion::new("w file", &[], true);
+        let completion = CommandCompletion::new("w file", &[], true, true);
         assert!(completion.is_empty());
     }
 
     #[test]
     fn completion_covers_every_manifest_command() {
-        let completion = CommandCompletion::new("", &[], true);
+        let completion = CommandCompletion::new("", &[], true, true);
         let labels = labels(&completion);
         for command in anvil_control::COMMANDS {
             assert!(
@@ -265,11 +269,20 @@ mod tests {
         }
     }
     #[test]
+    fn desktop_completion_requires_the_desktop_module() {
+        let with_desktop = CommandCompletion::new("", &[], true, true);
+        assert!(labels(&with_desktop).contains(&"open-url"));
+
+        let without_desktop = CommandCompletion::new("", &[], true, false);
+        assert!(!labels(&without_desktop).contains(&"open-url"));
+    }
+
+    #[test]
     fn git_completions_require_the_git_module() {
-        let with_git = CommandCompletion::new("", &[], true);
+        let with_git = CommandCompletion::new("", &[], true, true);
         assert!(labels(&with_git).contains(&"git-diff"));
 
-        let without_git = CommandCompletion::new("", &[], false);
+        let without_git = CommandCompletion::new("", &[], false, true);
         assert!(
             labels(&without_git)
                 .iter()
