@@ -1,7 +1,8 @@
 //! Data-only registry for runtime-plugin picker and completion providers.
 
 use crate::provider::ProviderId;
-use anvil_api::{ProviderKind, RegisterProviderRequest};
+use anvil_api::{ProviderItem, ProviderKind, ProviderResponse, RegisterProviderRequest};
+use std::collections::BTreeMap;
 use std::fmt;
 use std::sync::Arc;
 
@@ -12,6 +13,11 @@ pub enum PluginProviderError {
     InvalidTitle,
     NamespaceMismatch,
     DuplicateId(ProviderId),
+    InvalidQuery,
+    InvalidLimit,
+    UnknownRequest(u64),
+    TooManyItems,
+    InvalidItem,
 }
 
 impl fmt::Display for PluginProviderError {
@@ -23,6 +29,11 @@ impl fmt::Display for PluginProviderError {
                 formatter.write_str("provider id is outside the plugin namespace")
             }
             Self::DuplicateId(id) => write!(formatter, "duplicate provider id: {id}"),
+            Self::InvalidQuery => formatter.write_str("invalid provider query"),
+            Self::InvalidLimit => formatter.write_str("invalid provider limit"),
+            Self::UnknownRequest(id) => write!(formatter, "unknown provider request: {id}"),
+            Self::TooManyItems => formatter.write_str("too many provider items"),
+            Self::InvalidItem => formatter.write_str("invalid provider item"),
         }
     }
 }
@@ -113,6 +124,71 @@ impl PluginProviderRegistry {
     }
 }
 
+/// Tracks in-flight provider requests; responses are accepted once.
+#[derive(Default)]
+pub struct PluginProviderRequests {
+    next_id: u64,
+    pending: BTreeMap<u64, ProviderId>,
+}
+
+impl PluginProviderRequests {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn start(
+        &mut self,
+        provider: ProviderId,
+        query: &str,
+        limit: u32,
+    ) -> Result<u64, PluginProviderError> {
+        if query.len() > 256 {
+            return Err(PluginProviderError::InvalidQuery);
+        }
+        if limit == 0 || limit > 200 {
+            return Err(PluginProviderError::InvalidLimit);
+        }
+        let id = self.next_id.saturating_add(1).max(1);
+        self.next_id = id;
+        self.pending.insert(id, provider);
+        Ok(id)
+    }
+
+    pub fn cancel(&mut self, request_id: u64) -> Option<ProviderId> {
+        self.pending.remove(&request_id)
+    }
+
+    pub fn cancel_provider(&mut self, provider: &ProviderId) {
+        self.pending.retain(|_, pending| pending != provider);
+    }
+
+    pub fn accept(
+        &mut self,
+        response: ProviderResponse,
+    ) -> Result<Vec<ProviderItem>, PluginProviderError> {
+        if self.pending.remove(&response.request_id).is_none() {
+            return Err(PluginProviderError::UnknownRequest(response.request_id));
+        }
+        if response.items.len() > 200 {
+            return Err(PluginProviderError::TooManyItems);
+        }
+        for item in &response.items {
+            if item.label.is_empty()
+                || item.label.len() > 256
+                || item.detail.as_ref().is_some_and(|value| value.len() > 4096)
+                || item
+                    .insert_text
+                    .as_ref()
+                    .is_some_and(|value| value.len() > 4096)
+                || item.value.as_ref().is_some_and(|value| value.len() > 4096)
+            {
+                return Err(PluginProviderError::InvalidItem);
+            }
+        }
+        Ok(response.items)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -170,6 +246,55 @@ mod tests {
         assert_eq!(
             registry.register("debug", empty_title),
             Err(PluginProviderError::InvalidTitle)
+        );
+    }
+
+    #[test]
+    fn provider_requests_are_single_use_and_bounded() {
+        let mut requests = PluginProviderRequests::new();
+        let provider = ProviderId::new("demo.buffers");
+        let id = requests.start(provider.clone(), "buf", 20).expect("start");
+        let result = requests
+            .accept(ProviderResponse {
+                request_id: id,
+                items: vec![ProviderItem {
+                    label: "buffer".to_owned(),
+                    value: Some("1".to_owned()),
+                    detail: None,
+                    insert_text: None,
+                }],
+            })
+            .expect("accept");
+        assert_eq!(result.len(), 1);
+        assert_eq!(
+            requests.accept(ProviderResponse {
+                request_id: id,
+                items: Vec::new(),
+            }),
+            Err(PluginProviderError::UnknownRequest(id))
+        );
+        assert_eq!(
+            requests.start(provider.clone(), "x", 0),
+            Err(PluginProviderError::InvalidLimit)
+        );
+        assert_eq!(
+            requests.start(provider, &"x".repeat(257), 1),
+            Err(PluginProviderError::InvalidQuery)
+        );
+    }
+
+    #[test]
+    fn cancelling_a_provider_drops_its_requests() {
+        let mut requests = PluginProviderRequests::new();
+        let provider = ProviderId::new("demo.buffers");
+        let id = requests.start(provider.clone(), "", 1).expect("start");
+        requests.cancel_provider(&provider);
+        assert_eq!(
+            requests.accept(ProviderResponse {
+                request_id: id,
+                items: Vec::new(),
+            }),
+            Err(PluginProviderError::UnknownRequest(id))
         );
     }
 }

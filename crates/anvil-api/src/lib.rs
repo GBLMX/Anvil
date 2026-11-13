@@ -425,6 +425,26 @@ pub struct ProviderRequest {
     pub limit: u32,
 }
 
+/// One pinned provider result.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[ts(export)]
+pub struct ProviderItem {
+    pub label: String,
+    pub value: Option<String>,
+    pub detail: Option<String>,
+    pub insert_text: Option<String>,
+}
+
+/// Data-only response from a runtime plugin provider.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[ts(export)]
+pub struct ProviderResponse {
+    #[ts(type = "number")]
+    #[schemars(range(max = 9007199254740991i64))]
+    pub request_id: u64,
+    pub items: Vec<ProviderItem>,
+}
+
 /// Cancel one in-flight runtime-plugin provider request.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[ts(export)]

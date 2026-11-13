@@ -113,6 +113,11 @@ Registration stores metadata only. It grants no process, filesystem, network,
 formatter, or DAP authority. Disabling or stopping the plugin removes its
 providers.
 
+The data-only request path is bounded: `ProviderRequest` queries are at most
+256 bytes, `limit` is 1–200, and `ProviderResponse` accepts at most 200 items
+with bounded label/detail/insert/value fields. A request id is accepted once;
+cancel and plugin shutdown discard pending ids.
+
 ## UI notifications
 
 `ui.notify` pushes a transient notification with `info`, `warning`, or `error`
