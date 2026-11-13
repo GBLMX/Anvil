@@ -1,8 +1,10 @@
 # Anvil Performance Baseline
 
 Status: Phase 0 measurement plan. Numbers are gates, not shipped claims.
-0.1.1 syntax measurements are recorded below; the full gate suite is not yet
-run on the reference machine.
+0.1.1 syntax measurements are recorded below. A local i7-12700H baseline was
+recorded on 2026-11-13 in
+[benchmarks/local-2026-11-13.md](benchmarks/local-2026-11-13.md); the full gate
+suite is still not run on the Ryzen 7 5800X reference machine.
 
 ## 1. Reference machine
 
