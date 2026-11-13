@@ -20,7 +20,6 @@ their decision sections.
 | [0012](0012-plugin-host-isolation.md) | Plugin-host isolation | Proposed |
 | [0013](0013-kernel-distribution-boundary.md) | Rust kernel and distribution boundary | Proposed |
 | [0014](0014-plugin-api-v1-freeze.md) | Plugin API v1 freeze | Accepted |
-| [0014b](0014-plugin-wit-seams.md) | Plugin WIT contract from editor seams | Proposed; number collision, renumber before acceptance |
 | [0015](0015-command-line-completion.md) | Command-line completion and popup | Phase 1 implemented; kernel/plugin completion pending |
 | [0016](0016-render-style-layers.md) | Render style layers | Accepted |
 | [0017](0017-plugin-activation-and-lifecycle.md) | Plugin activation and lifecycle | Accepted |
@@ -41,11 +40,9 @@ their decision sections.
 | [0032](0032-language-tooling-service.md) | Language tooling service slot | Accepted for implementation |
 | [0033](0033-latex-language-provider.md) | LaTeX language provider | Accepted for implementation |
 | [0034](0034-release-signing-authority.md) | Hardware-backed public-release signing; offline YubiKey flow | Proposed; public-release direction selected |
+| [0035](0035-plugin-wit-seams.md) | Plugin WIT contract from editor seams | Proposed |
 
 ## Numbering Rule
 
 - One immutable number per accepted decision.
-- The `0014b` WIT ADR is a known collision: it was written while the v1 freeze
-  ADR took `0014`. It remains proposed. Renumber it to the next free ADR number
-  when accepted or superseded.
 - A new ADR must link the ADRs it supersedes or depends on.

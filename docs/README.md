@@ -100,8 +100,7 @@ Architecture decisions live in [`adr/`](adr/). The canonical status table is
 - [0020 content-addressed plugin store](adr/0020-content-addressed-plugin-store.md)
 - [0021 signed plugin index](adr/0021-signed-plugin-index.md)
 
-Known numbering collision: [0014 plugin WIT seams](adr/0014-plugin-wit-seams.md)
-is proposed and must be renumbered before acceptance.
+- [0035 plugin WIT seams](adr/0035-plugin-wit-seams.md)
 
 ## Benchmarks
 

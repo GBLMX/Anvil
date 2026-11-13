@@ -4,7 +4,7 @@
   plugin polish remain pending
 - Date: 2026-11-01
 - Related: [ADR-0003](0003-idl.md), [ADR-0008](0008-selection-first-interaction.md),
-  [ADR-0014](0014-plugin-wit-seams.md),
+  [ADR-0035](0035-plugin-wit-seams.md),
   [High-frequency command plan](../command-architecture-plan.md)
 
 ## Context
