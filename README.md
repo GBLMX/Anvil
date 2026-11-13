@@ -30,9 +30,9 @@ workspace session restore, dirty-buffer swap
 conflict commands, and a fresh undo stack after restore, horizontal scrolling,
 and dirty-only redraws, insert-mode Tab indentation, a workspace file tree, and a fuzzy file
 finder. Rust, TOML, Go, Bash/Zsh/Brush, Fish, Python, YAML, JSON/JSONC,
-Markdown, Makefile,
-and Dockerfile use Tree-sitter highlighting on a debounced background thread,
-capped at 256 KiB so large files keep plain-text latency.
+Markdown, Makefile, Dockerfile, and LaTeX (`.tex`, `.ltx`, `.sty`, `.cls`)
+use Tree-sitter highlighting on a debounced background thread, capped at
+256 KiB so large files keep plain-text latency.
 Trusted language servers (rust-analyzer, gopls, pyright/pylsp,
 typescript-language-server/vtsls, clangd, jdtls, lua-language-server,
 vscode-json-language-server, yaml-language-server, bash-language-server,
@@ -151,8 +151,8 @@ the `0.7.4` desktop and LaTeX slices are complete.
   `:open-url <http(s)-url>` with a fixed `xdg-open` handoff and no general
   command runner.
 - `official.language-latex` is opt-in through `official-language-latex`. It
-  supplies `texlab` profiles for LaTeX and BibTeX; syntax highlighting is not
-  part of this slice.
+  supplies `texlab` profiles for LaTeX and BibTeX; `.tex`, `.ltx`, `.sty`, and
+  `.cls` also get Tree-sitter highlighting.
 - `anvil-distro-minimal` composes none of these modules.
 
 Module compatibility, caps, and deprecation rules are in

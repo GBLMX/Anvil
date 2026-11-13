@@ -18,7 +18,7 @@ post-`0.5.0` feature line.
 - The module contract adds an additive `LanguageToolingService` slot. Language
   settings prefer a provider spec and fall back to the built-in catalog.
 - The opt-in `official.language-latex` module supplies `texlab` profiles for
-  LaTeX and BibTeX. Syntax highlighting remains a separate slice.
+  LaTeX and BibTeX, and LaTeX documents get Tree-sitter syntax highlighting.
 - `Alt-1` through `Alt-9` switch directly to the matching open buffer while
   leaving bare digits available as count prefixes.
 - `Space b` and `:buffers` open a filterable buffer picker; `Enter` switches
