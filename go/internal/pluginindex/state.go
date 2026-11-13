@@ -243,17 +243,17 @@ func writeAtomic(dir, name string, data []byte) error {
 		return fmt.Errorf("create %s: %w", name, err)
 	}
 	tempName := temp.Name()
-	defer os.Remove(tempName)
+	defer func() { _ = os.Remove(tempName) }()
 	if err := temp.Chmod(cacheFileMode); err != nil {
-		temp.Close()
+		_ = temp.Close()
 		return fmt.Errorf("chmod %s: %w", name, err)
 	}
 	if _, err := temp.Write(data); err != nil {
-		temp.Close()
+		_ = temp.Close()
 		return fmt.Errorf("write %s: %w", name, err)
 	}
 	if err := temp.Sync(); err != nil {
-		temp.Close()
+		_ = temp.Close()
 		return fmt.Errorf("sync %s: %w", name, err)
 	}
 	if err := temp.Close(); err != nil {
