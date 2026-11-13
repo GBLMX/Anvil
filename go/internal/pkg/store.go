@@ -2,7 +2,6 @@ package pkg
 
 import (
 	"crypto/ed25519"
-	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -476,12 +475,7 @@ func (s *Store) InstallPackage(
 	if !ValidPluginID(manifest.ID) {
 		return ManagedPlugin{}, errors.New("invalid plugin id")
 	}
-	manifestJSON, err := json.Marshal(manifest)
-	if err != nil {
-		return ManagedPlugin{}, fmt.Errorf("encode manifest: %w", err)
-	}
-	manifestHash := sha256.Sum256(manifestJSON)
-	manifestHashHex := hex.EncodeToString(manifestHash[:])
+	manifestHashHex := manifest.ManifestHash
 	entry, err := s.EntryPath(digestHex)
 	if err != nil {
 		return ManagedPlugin{}, err

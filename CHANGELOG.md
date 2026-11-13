@@ -330,6 +330,8 @@ post-`0.5.0` feature line.
   GO-2026-6859 in the standard library `net/http` server.
 - Signed plugin indexes and revocation documents now reject an already-expired
   `expires_at` window.
+- Installed plugin manifest hashes now cover the exact `plugin.json` bytes
+  instead of a re-encoded manifest.
 - The file tree now opens the command line on `:`, so commands such as
   `:workspace-remove` work while the tree has focus.
 - Cursor motions, including `j`/`k`, section jumps, `G`, `w`/`b`/`e`, and

@@ -371,10 +371,11 @@ func ensureDir(root *fsroot.Root, name string) error {
 
 // ManifestInfo is the capability-relevant subset of plugin.json.
 type ManifestInfo struct {
-	ID          string   `json:"id"`
-	Version     string   `json:"version"`
-	Entry       string   `json:"entry"`
-	Permissions []string `json:"permissions"`
+	ID           string   `json:"id"`
+	Version      string   `json:"version"`
+	Entry        string   `json:"entry"`
+	Permissions  []string `json:"permissions"`
+	ManifestHash string   `json:"-"`
 }
 
 // InspectArchive reads the root plugin.json without extracting the package.
@@ -419,6 +420,8 @@ func InspectArchive(path string) (ManifestInfo, error) {
 		if err := json.Unmarshal(data, &info); err != nil || info.ID == "" {
 			return ManifestInfo{}, fmt.Errorf("%w: invalid plugin.json", ErrInvalidArchive)
 		}
+		hash := sha256.Sum256(data)
+		info.ManifestHash = hex.EncodeToString(hash[:])
 		return info, nil
 	}
 	return ManifestInfo{}, fmt.Errorf("%w: plugin.json is required", ErrInvalidArchive)

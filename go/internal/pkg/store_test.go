@@ -2,6 +2,7 @@ package pkg
 
 import (
 	"crypto/ed25519"
+	"crypto/sha256"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -138,9 +139,10 @@ func TestStoreInstallPackageIsContentAddressedAndDisabled(t *testing.T) {
 		})
 		_ = os.RemoveAll(store.Root)
 	})
+	manifestJSON := []byte("{\n  \"id\": \"demo\",\n  \"version\": \"1.0.0\",\n  \"entry\": \"main.luau\"\n}")
 	archive, signature, public := signedPackage(t, root, []entry{{
 		name: "plugin.json",
-		data: `{"id":"demo","version":"1.0.0","entry":"main.luau"}`,
+		data: string(manifestJSON),
 	}})
 	digest, err := DigestFile(archive)
 	if err != nil {
@@ -191,6 +193,10 @@ func TestStoreInstallPackageIsContentAddressedAndDisabled(t *testing.T) {
 	}
 	if len(state.Plugins["demo"].Versions) != 1 {
 		t.Fatalf("repeat install added a version: %#v", state.Plugins["demo"])
+	}
+	wantManifestHash := fmt.Sprintf("%x", sha256.Sum256(manifestJSON))
+	if got := state.Plugins["demo"].Versions[0].ManifestHash; got != wantManifestHash {
+		t.Fatalf("manifest hash = %s, want %s", got, wantManifestHash)
 	}
 }
 
