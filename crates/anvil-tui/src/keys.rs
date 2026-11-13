@@ -373,12 +373,12 @@ fn route_context_key(
     contexts: &[KeymapContext],
     key: KeyPress,
     keymap: &crate::keymap::KeymapConfig,
-    mut handler: impl FnMut(ContextAction) -> bool,
+    mut handler: impl FnMut(KeymapContext, ContextAction) -> bool,
 ) -> bool {
-    let Some((_, action)) = resolve_context_binding(contexts, key, keymap) else {
+    let Some((context, action)) = resolve_context_binding(contexts, key, keymap) else {
         return false;
     };
-    handler(action)
+    handler(context, action)
 }
 
 fn dispatch_specific_context_binding(model: &mut Model, key: KeyPress) -> bool {
@@ -391,7 +391,7 @@ fn dispatch_specific_context_binding(model: &mut Model, key: KeyPress) -> bool {
         return false;
     }
     let mut routed = None;
-    if !route_context_key(&contexts, key, &model.config.keymap, |action| {
+    if !route_context_key(&contexts, key, &model.config.keymap, |_, action| {
         routed = Some(action);
         true
     }) {
@@ -1647,26 +1647,35 @@ mod tests {
     }
 
     #[test]
-    fn route_context_key_hands_the_first_match_to_the_handler() {
+    fn route_context_key_uses_the_most_specific_context() {
         let keymap = KeymapConfig::from_toml(
             r#"
 [keymap.contexts.popup]
 x = "view.focus_editor"
+
+[keymap.contexts.editor]
+x = "view.focus_right"
 "#,
         )
         .expect("keymap");
-        let mut routed = false;
+        let mut routed = None;
         let handled = route_context_key(
-            &[KeymapContext::Popup, KeymapContext::Editor],
+            &[KeymapContext::Editor, KeymapContext::Popup],
             press(KeyCode::Char('x')),
             &keymap,
-            |_| {
-                routed = true;
+            |context, action| {
+                routed = Some((context, action));
                 true
             },
         );
         assert!(handled);
-        assert!(routed);
+        assert_eq!(
+            routed,
+            Some((
+                KeymapContext::Popup,
+                ContextAction::Pending(PendingCommand::FocusEditor)
+            ))
+        );
     }
 
     #[test]
@@ -1683,7 +1692,7 @@ x = "view.focus_editor"
             &[KeymapContext::Popup],
             press(KeyCode::Char('z')),
             &keymap,
-            |_| {
+            |_, _| {
                 routed = true;
                 true
             },
