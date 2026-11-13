@@ -212,6 +212,7 @@ dependencies = [
  "anvil-module",
  "anvil-plugin-host",
  "anvil-session",
+ "codebook-tree-sitter-latex",
  "crossterm",
  "nix 0.31.3",
  "ratatui",
@@ -502,6 +503,16 @@ name = "clap_lex"
 version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1c133bc6a41be0d194c306b5506d15e6feeea7b1d6604bd3f8310dfb2ca96486"
+
+[[package]]
+name = "codebook-tree-sitter-latex"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a3ab764ede0961a43ee3121cd8a71dd01d355f836181ebf2ede04f4c24636ca0"
+dependencies = [
+ "cc",
+ "tree-sitter-language",
+]
 
 [[package]]
 name = "compact_str"

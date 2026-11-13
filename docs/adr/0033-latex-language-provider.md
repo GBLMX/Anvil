@@ -1,6 +1,6 @@
 # ADR-0033: LaTeX Language Provider
 
-- Status: Accepted for implementation; initial slice landed
+- Status: Accepted for implementation; provider and syntax highlighting landed
 - Date: 2026-11-13
 - Related: [ADR-0032](0032-language-tooling-service.md)
 
@@ -38,23 +38,34 @@ Root markers: `latexmkrc`, `.latexmkrc`, `Tectonic.toml`, `main.tex`, `.git`.
 
 ### 3. Scope
 
-This slice adds LSP support only. It does not add Tree-sitter LaTeX syntax
-highlighting, a build command, or a PDF preview. Those require separate slices.
+This slice adds the `texlab` launch profile and Tree-sitter syntax
+highlighting. It does not add a build command or PDF preview.
 
 No new process path, gateway permission, or language-server transport is
 introduced.
 
-### 4. Tests
+### 4. Syntax highlighting
+
+The syntax layer uses `codebook-tree-sitter-latex` (MIT) for `.tex`, `.ltx`,
+`.sty`, and `.cls`. The local query highlights comments, sectioning commands,
+inline/display math, labels, citations, and include/package/class commands.
+BibTeX files remain LSP-only.
+
+Highlighting inherits the existing 256 KiB parse cap and background worker
+debounce. Parse failure falls back to plain text.
+
+### 5. Tests
 
 - `.tex`/`.bib` mapping and language ids;
 - unknown extensions return `None`;
 - provider registration;
 - standard feature on/off;
 - fallback to the built-in catalog when the provider returns `None`;
-- module dependency tree contains no `anvil-tui`.
+- module dependency tree contains no `anvil-tui`;
+- LaTeX syntax detection and comment/command/label captures.
 
 ## Consequences
 
 - LaTeX files can use `texlab` without changing the built-in catalog.
 - Feature-free builds behave exactly as before.
-- Full LaTeX editing still needs a syntax/highlighting slice.
+- LaTeX documents now get Tree-sitter highlighting in addition to LSP support.

@@ -108,6 +108,13 @@ static PYTHON: LazyLock<SyntaxLanguage> = LazyLock::new(|| {
         false,
     )
 });
+static LATEX: LazyLock<SyntaxLanguage> = LazyLock::new(|| {
+    SyntaxLanguage::grammar(
+        Language::new(codebook_tree_sitter_latex::LANGUAGE),
+        include_str!("syntax/latex.scm"),
+        false,
+    )
+});
 static TOML: LazyLock<SyntaxLanguage> = LazyLock::new(|| {
     SyntaxLanguage::grammar(
         Language::new(tree_sitter_toml_ng::LANGUAGE),
@@ -875,6 +882,7 @@ fn language_for(path: &Path) -> Option<&'static SyntaxLanguage> {
         "py" => Some(&*PYTHON),
         "toml" => Some(&*TOML),
         "yml" | "yaml" => Some(&*YAML),
+        "tex" | "ltx" | "sty" | "cls" => Some(&*LATEX),
         "md" | "markdown" => Some(&*MARKDOWN),
         _ => None,
     }
@@ -941,6 +949,15 @@ mod tests {
     }
 
     #[test]
+    fn latex_highlights_commands_comments_and_labels() {
+        let source = "% comment\n\\section{Hi}\n$ x^2 $\n\\label{sec:one}\n";
+        let highlights = parse_source(source, Path::new("paper.tex")).expect("parse");
+        assert!(highlights.iter().any(|h| h.class == SyntaxClass::Comment));
+        assert!(highlights.iter().any(|h| h.class == SyntaxClass::Keyword));
+        assert!(highlights.iter().any(|h| h.class == SyntaxClass::Property));
+    }
+
+    #[test]
     fn detects_project_formats_by_extension_and_name() {
         for path in [
             "x.rs",
@@ -958,6 +975,10 @@ mod tests {
             "x.jsonc",
             "x.md",
             "x.markdown",
+            "x.tex",
+            "x.ltx",
+            "x.sty",
+            "x.cls",
             "Makefile",
             "Dockerfile",
             "go.mod",
