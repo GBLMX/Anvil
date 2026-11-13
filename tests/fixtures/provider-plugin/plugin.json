@@ -1,0 +1,8 @@
+{
+  "id": "fixture",
+  "version": "1.0.0",
+  "entry": "main.luau",
+  "api": "1.0.0",
+  "activationEvents": ["onStartup"],
+  "commands": []
+}
