@@ -1,8 +1,9 @@
 //! Editor-side document snapshot and transaction contract for plugins.
 
 use anvil_api::{
-    ApplyEditRequest, ApplyEditResponse, DocumentSnapshot, RegisterCommandRequest,
-    RegisterCommandResponse, SetModeRequest, SetModeResponse,
+    ApplyEditRequest, ApplyEditResponse, DocumentSnapshot, EmptyResponse, NotificationSeverity,
+    NotifyRequest, RegisterCommandRequest, RegisterCommandResponse, SetModeRequest,
+    SetModeResponse, StatusRequest,
 };
 use anvil_session::Session;
 
@@ -75,6 +76,36 @@ impl Model {
                 self.register_plugin_command(request)
                     .map(|command_id| serde_json::json!(RegisterCommandResponse { command_id }))
                     .map_err(|message| (-32000, message))
+            }
+            "ui.notify" => {
+                let request: NotifyRequest =
+                    serde_json::from_value(params).map_err(|error| (-32602, error.to_string()))?;
+                if request.message.is_empty() || request.message.len() > 4096 {
+                    return Err((-32602, "invalid notification message".to_owned()));
+                }
+                let severity = match request.severity {
+                    NotificationSeverity::Info => anvil_session::ui::NotificationSeverity::Info,
+                    NotificationSeverity::Warning => {
+                        anvil_session::ui::NotificationSeverity::Warning
+                    }
+                    NotificationSeverity::Error => anvil_session::ui::NotificationSeverity::Error,
+                    _ => anvil_session::ui::NotificationSeverity::Info,
+                };
+                self.ui
+                    .notifications
+                    .push(severity, "plugin", request.message, 0);
+                self.file.dirty = true;
+                Ok(serde_json::json!(EmptyResponse {}))
+            }
+            "ui.status" => {
+                let request: StatusRequest =
+                    serde_json::from_value(params).map_err(|error| (-32602, error.to_string()))?;
+                if request.message.len() > 1024 {
+                    return Err((-32602, "invalid status message".to_owned()));
+                }
+                self.status.text = request.message;
+                self.file.dirty = true;
+                Ok(serde_json::json!(EmptyResponse {}))
             }
             _ => Err((-32601, format!("method not found: {method}"))),
         }
@@ -262,6 +293,27 @@ mod tests {
                 .map(|command| command.plugin_id.as_str()),
             Some("demo")
         );
+    }
+
+    #[test]
+    fn plugin_notifications_and_status_are_applied() {
+        let mut model = Model::new(EditorState::from_text(""), None);
+        model
+            .handle_editor_request(
+                "ui.notify",
+                serde_json::json!({"message": "hello", "severity": "warning"}),
+            )
+            .expect("notify");
+        let notification = &model.ui.notifications.items()[0];
+        assert_eq!(notification.message, "hello");
+        assert_eq!(
+            notification.severity,
+            anvil_session::ui::NotificationSeverity::Warning
+        );
+        model
+            .handle_editor_request("ui.status", serde_json::json!({"message": "plugin status"}))
+            .expect("status");
+        assert_eq!(model.status.text, "plugin status");
     }
 
     #[cfg(target_os = "linux")]

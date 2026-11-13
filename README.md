@@ -129,7 +129,8 @@ with no grants. `onStartup` requires explicit opt-in via
 `ANVIL_PLUGIN_ALLOW_STARTUP=1`; workspace activation is disabled with
 `ANVIL_PLUGIN_DISABLE_WORKSPACE_ACTIVATION=1`. Manifest-declared `onCommand`
 entries and dynamic `editor.register_command` commands are dispatched from the
-command palette. The optional `LANDLOCK_SCOPE_SIGNAL` layer is pending.
+command palette. Plugins can also call `ui.notify` and `ui.status`. The optional
+`LANDLOCK_SCOPE_SIGNAL` layer is pending.
 This is not a VM or public plugin API.
 
 ## Distribution and modules

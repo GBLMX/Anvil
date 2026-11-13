@@ -125,6 +125,7 @@ fn install_plugin(lua: &Lua, command: Option<&str>) -> Result<()> {
 
 fn install_editor(lua: &Lua, editor: Option<EditorClient>) -> Result<()> {
     let table = lua.create_table()?;
+    let ui = lua.create_table()?;
     if let Some(editor) = editor {
         let editor = Rc::new(RefCell::new(editor));
 
@@ -190,6 +191,32 @@ fn install_editor(lua: &Lua, editor: Option<EditorClient>) -> Result<()> {
                 lua.to_value(&result)
             })?,
         )?;
+
+        let notify_client = Rc::clone(&editor);
+        ui.set(
+            "notify",
+            lua.create_function(move |lua, value: Value| {
+                let params: JsonValue = lua.from_value(value)?;
+                let result = notify_client
+                    .borrow_mut()
+                    .call("ui.notify", params)
+                    .map_err(mlua::Error::RuntimeError)?;
+                lua.to_value(&result)
+            })?,
+        )?;
+
+        let status_client = Rc::clone(&editor);
+        ui.set(
+            "status",
+            lua.create_function(move |lua, value: Value| {
+                let params: JsonValue = lua.from_value(value)?;
+                let result = status_client
+                    .borrow_mut()
+                    .call("ui.status", params)
+                    .map_err(mlua::Error::RuntimeError)?;
+                lua.to_value(&result)
+            })?,
+        )?;
     } else {
         for method in [
             "get_view",
@@ -207,7 +234,18 @@ fn install_editor(lua: &Lua, editor: Option<EditorClient>) -> Result<()> {
                 })?,
             )?;
         }
+        for method in ["notify", "status"] {
+            ui.set(
+                method,
+                lua.create_function(|_, ()| {
+                    Err::<Value, _>(mlua::Error::RuntimeError(
+                        "editor socket unavailable".to_owned(),
+                    ))
+                })?,
+            )?;
+        }
     }
+    lua.globals().set("ui", ui)?;
     lua.globals().set("editor", table)
 }
 

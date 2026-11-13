@@ -82,6 +82,17 @@ one starts the plugin host with that command, exactly like an `onCommand`
 manifest command. Registration itself grants no filesystem, exec, clipboard, or
 editor capabilities.
 
+## UI notifications
+
+`ui.notify` pushes a transient notification with `info`, `warning`, or `error`
+severity. Messages are limited to 4096 bytes and appear with the source
+`plugin`; the existing notification queue deduplicates matching entries and
+keeps the newest 50.
+
+`ui.status` replaces the status-line text for the current interaction. Messages
+are limited to 1024 bytes. Neither method grants focus, overlay, clipboard, or
+filesystem authority.
+
 ## Document transaction
 
 `ApplyEditRequest` carries `buffer_id`, `base_revision`, and non-overlapping

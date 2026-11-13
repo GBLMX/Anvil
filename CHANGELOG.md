@@ -12,6 +12,9 @@ post-`0.5.0` feature line.
   appear in the command palette and can launch their host. Ids are
   plugin-namespaced, duplicate ids are rejected, and the session is capped at
   512 dynamic commands.
+- Plugins can call `ui.notify` and `ui.status` through the Luau bridge.
+  Notifications retain the existing severity, deduplication, and 50-entry cap;
+  status messages are bounded to 1024 bytes.
 - Quick-open can consume the optional `official.workspace-index` service,
   cancelling in-flight index builds on close and falling back to gateway file
   enumeration when the module is absent. The standard edition keeps the feature
