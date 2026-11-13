@@ -328,6 +328,8 @@ post-`0.5.0` feature line.
   now 664 lines.
 
 ### Fixed
+- LSP discovery now also searches the executable directory and common user
+  bin directories, so desktop-launched sessions find tools such as `marksman`.
 - The Go toolchain requirement is now 1.26.11, fixing
   GO-2026-6859 in the standard library `net/http` server.
 - Signed plugin indexes and revocation documents now return

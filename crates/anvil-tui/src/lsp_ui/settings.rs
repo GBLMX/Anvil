@@ -277,16 +277,44 @@ fn builtin_lsp_settings(path: &Path) -> Option<LspSettings> {
 }
 
 fn find_tool(candidates: &[&str]) -> Option<String> {
-    let path = std::env::var_os("PATH")?;
-    for directory in std::env::split_paths(&path) {
+    let directories = tool_search_directories();
+    if let Some(path) = find_tool_in(candidates, &directories) {
+        return Some(path.to_string_lossy().into_owned());
+    }
+    candidates.first().map(|candidate| (*candidate).to_owned())
+}
+
+fn tool_search_directories() -> Vec<PathBuf> {
+    let mut directories = Vec::new();
+    if let Some(path) = std::env::var_os("PATH") {
+        directories.extend(std::env::split_paths(&path));
+    }
+    if let Ok(executable) = std::env::current_exe()
+        && let Some(parent) = executable.parent()
+    {
+        directories.push(parent.to_path_buf());
+    }
+    if let Some(home) = std::env::var_os("HOME") {
+        let home = PathBuf::from(home);
+        directories.extend([
+            home.join(".local/bin"),
+            home.join("bin"),
+            home.join(".cargo/bin"),
+        ]);
+    }
+    directories
+}
+
+fn find_tool_in(candidates: &[&str], directories: &[PathBuf]) -> Option<PathBuf> {
+    for directory in directories {
         for candidate in candidates {
             let path = directory.join(candidate);
             if path.is_file() {
-                return Some(path.to_string_lossy().into_owned());
+                return Some(path);
             }
         }
     }
-    candidates.first().map(|candidate| (*candidate).to_owned())
+    None
 }
 
 fn tsserver_options(tool: &str, source: &Path) -> Option<serde_json::Value> {
@@ -338,6 +366,23 @@ mod tests {
                 }
             })
         }
+    }
+
+    #[test]
+    fn tool_search_falls_back_to_user_bins() {
+        let directory = tempfile::tempdir().expect("tempdir");
+        let tool = directory.path().join("marksman");
+        std::fs::write(&tool, b"test").expect("write tool");
+        let found = find_tool_in(&["marksman"], &[directory.path().to_path_buf()])
+            .expect("tool in fallback directory");
+        assert_eq!(found, tool);
+    }
+
+    #[test]
+    fn tool_search_includes_executable_parent() {
+        let executable = std::env::current_exe().expect("current executable");
+        let parent = executable.parent().expect("executable parent");
+        assert!(tool_search_directories().contains(&parent.to_path_buf()));
     }
 
     #[test]
