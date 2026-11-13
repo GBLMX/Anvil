@@ -15,6 +15,7 @@ impl Model {
         self.ui.focus.split = false;
         self.status.text = "vertical split".to_owned();
         self.sync_watch_paths();
+        self.refresh_wrap_width();
         self.file.dirty = true;
     }
 
@@ -52,6 +53,7 @@ impl Model {
         self.restore_buffer(other.buffer);
         self.ui.focus.split = right;
         self.sync_watch_paths();
+        self.refresh_wrap_width();
         self.status.text = if right { "right pane" } else { "left pane" }.to_owned();
         self.file.dirty = true;
     }
@@ -103,6 +105,7 @@ impl Model {
         self.ui.focus.split = false;
         self.status.text = "split closed".to_owned();
         self.sync_watch_paths();
+        self.refresh_wrap_width();
         self.file.dirty = true;
     }
 

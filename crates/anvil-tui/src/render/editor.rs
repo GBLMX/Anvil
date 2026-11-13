@@ -33,6 +33,16 @@ pub fn view(model: &Model, frame: &mut Frame) {
             )
         }
     };
+    let title = if let Some(split) = &model.buffers.split {
+        let secondary = split
+            .buffer
+            .path
+            .as_ref()
+            .map_or("[no file]", |path| path.to_str().unwrap_or("[no file]"));
+        format!("{title} │ {secondary}")
+    } else {
+        title
+    };
     let debug_revision = std::env::var_os("ANVIL_DEBUG_REV").is_some();
     let title = if debug_revision {
         format!("{title} · rev {}", editor_view.revision)

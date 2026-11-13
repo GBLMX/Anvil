@@ -53,6 +53,7 @@ impl Model {
         }
         self.tree.visible = true;
         self.ui.focus.tree = true;
+        self.refresh_wrap_width();
         self.request_git_status();
         if self.tree.selected.is_none() {
             self.tree.selected = (!self.tree.entries.is_empty()).then_some(0);
@@ -86,6 +87,7 @@ impl Model {
                 Ok(()) => {
                     self.ui.focus.tree = false;
                     self.tree.visible = false;
+                    self.refresh_wrap_width();
                 }
                 Err(error) => self.status.text = format!("E: {error}"),
             }

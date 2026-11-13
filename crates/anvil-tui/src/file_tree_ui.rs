@@ -969,6 +969,7 @@ impl Model {
     pub(crate) fn refresh_tree(&mut self, select: Option<PathBuf>) {
         self.tree.visible = true;
         self.ui.focus.tree = true;
+        self.refresh_wrap_width();
         let refresh_all = select.is_none();
         let secondary = select.as_deref().and_then(|path| self.secondary_root(path));
         if let Some(root) = secondary {

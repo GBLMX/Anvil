@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::theme;
+use ratatui::widgets::Borders;
 
 pub(crate) fn render_pipe_locations(model: &Model, frame: &mut Frame, area: Rect) {
     let rows = usize::from(area.height.saturating_sub(2));
@@ -50,18 +51,13 @@ pub(crate) fn render_pipe_locations(model: &Model, frame: &mut Frame, area: Rect
 }
 
 pub(crate) fn render_split_pane(frame: &mut Frame, area: Rect, buffer: &Buffer, is_active: bool) {
-    let block = panel_block(
-        buffer
-            .path
-            .as_ref()
-            .map_or("[no file]".to_owned(), |path| path.display().to_string()),
-    )
-    .border_style(theme::border(is_active));
+    let block = ratatui::widgets::Block::default()
+        .borders(Borders::LEFT)
+        .border_style(theme::border(is_active));
     let inner = Rect {
         x: area.x + 1,
-        y: area.y + 1,
-        width: area.width.saturating_sub(2),
-        height: area.height.saturating_sub(2),
+        width: area.width.saturating_sub(1),
+        ..area
     };
     frame.render_widget(block, area);
     let total = buffer.editor.index().len_lines();

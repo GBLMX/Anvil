@@ -139,6 +139,7 @@ pub(crate) fn handle_mouse(model: &mut Model, mouse: MouseEvent, width: u16, hei
                         DragKind::Split => {
                             if let Some(inner) = editor_area(model, width, height) {
                                 model.view.split_ratio = split_ratio_at(inner, mouse.column);
+                                model.refresh_wrap_width();
                             }
                         }
                     }

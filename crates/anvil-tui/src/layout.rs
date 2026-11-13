@@ -86,6 +86,12 @@ impl Model {
             .collect()
     }
 
+    pub(crate) fn refresh_wrap_width(&mut self) {
+        if self.config.settings.editor.soft_wrap {
+            self.view.wrap_width = self.wrap_text_width(self.view.viewport_width.saturating_sub(2));
+        }
+    }
+
     pub(crate) fn wrap_text_width(&self, width: u16) -> usize {
         let mut width = width;
         if self.tree.visible && tree_fits(width) {
@@ -771,6 +777,24 @@ mod tests {
         assert_eq!(rendered[1], "efgh");
         assert_eq!(rendered[2], "ij");
         assert_eq!(rendered[3], "next");
+    }
+
+    #[test]
+    fn geometry_changes_refresh_soft_wrap_width() {
+        let mut model = Model::new(EditorState::from_text(&"x".repeat(200)), None);
+        model.config.settings.editor.soft_wrap = true;
+        model.view.viewport_width = 80;
+        model.refresh_wrap_width();
+        let full = model.view.wrap_width;
+        model.split_vertical();
+        assert!(
+            model.view.wrap_width < full,
+            "split width {} was not narrower than full width {}",
+            model.view.wrap_width,
+            full
+        );
+        model.close_split();
+        assert_eq!(model.view.wrap_width, full);
     }
 
     #[test]
