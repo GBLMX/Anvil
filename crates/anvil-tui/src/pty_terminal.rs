@@ -143,7 +143,13 @@ impl PtySession {
             return;
         };
         let group = Pid::from_raw(-pid);
+        #[cfg(target_os = "linux")]
+        let descendants = descendant_pids(pid);
         let _ = kill_signal(group, Signal::SIGHUP);
+        #[cfg(target_os = "linux")]
+        for child in &descendants {
+            let _ = kill_signal(Pid::from_raw(*child), Signal::SIGHUP);
+        }
         for _ in 0..20 {
             if matches!(self.child.try_wait(), Ok(Some(_))) {
                 break;
@@ -151,9 +157,37 @@ impl PtySession {
             std::thread::sleep(std::time::Duration::from_millis(10));
         }
         let _ = kill_signal(group, Signal::SIGKILL);
+        #[cfg(target_os = "linux")]
+        for child in descendants {
+            let _ = kill_signal(Pid::from_raw(child), Signal::SIGKILL);
+        }
         let _ = self.child.kill();
         let _ = self.child.wait();
     }
+}
+
+#[cfg(target_os = "linux")]
+fn descendant_pids(pid: i32) -> Vec<i32> {
+    fn collect(pid: i32, depth: usize, out: &mut Vec<i32>) {
+        if depth >= 32 {
+            return;
+        }
+        let path = format!("/proc/{pid}/task/{pid}/children");
+        let Ok(children) = std::fs::read_to_string(path) else {
+            return;
+        };
+        for child in children
+            .split_whitespace()
+            .filter_map(|child| child.parse::<i32>().ok())
+        {
+            out.push(child);
+            collect(child, depth + 1, out);
+        }
+    }
+
+    let mut descendants = Vec::new();
+    collect(pid, 0, &mut descendants);
+    descendants
 }
 
 impl Drop for PtySession {

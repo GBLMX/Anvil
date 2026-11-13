@@ -160,13 +160,15 @@ fn switching_theme_repaints_backgrounds() {
     let backend = TestBackend::new(40, 8);
     let mut terminal = Terminal::new(backend).expect("terminal");
     terminal.draw(|frame| view(&model, frame)).expect("draw");
+    let expected = theme::bg();
+    assert_ne!(expected, theme::Theme::ANVIL_DARK.bg);
     assert!(
         terminal
             .backend()
             .buffer()
             .content()
             .iter()
-            .any(|cell| cell.bg == ratatui::style::Color::Rgb(253, 246, 227))
+            .any(|cell| cell.bg == expected)
     );
     model.execute_command("theme anvil-dark");
 }
