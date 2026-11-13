@@ -1,12 +1,13 @@
 # Anvil Architecture
 
-Status: current as of 2026-11-11. The editor control plane (`anvil-control`,
+Status: current as of 2026-11-13. The editor control plane (`anvil-control`,
 `anvil-ctl`, protocol v3) and the thin `anvil-mcp` stdio adapter are implemented.
 `0.4.7c-b` cgroup-before-exec limits, host supervision, idle reclaim, and
 seccomp closure are landed. `0.4.9` session extraction and `0.5.x`
 interaction/UI are landed. The official-only plugin distribution path is
 landed: signed layout, installer, bundled fallback, and managed store.
-Marketplace/index work remains planned. See
+The kernel API baseline is accepted in ADR-0037; `anvil-tui` remains outside
+that baseline. Marketplace/index work remains planned. See
 [visual current/future maps](architecture-visual.md).
 
 ## 1. Process model

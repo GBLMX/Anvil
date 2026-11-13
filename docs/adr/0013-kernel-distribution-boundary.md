@@ -1,6 +1,6 @@
 # ADR-0013: Rust Kernel and Distribution Boundary
 
-- Status: Proposed
+- Status: Accepted 2026-11-13; kernel baseline refined by [ADR-0037](0037-kernel-api-baseline.md)
 - Date: 2026-11-01
 - Related: [ADR-0002](0002-go-daemon.md), [ADR-0006](0006-upstream-dependencies.md), [ADR-0008](0008-selection-first-interaction.md)
 

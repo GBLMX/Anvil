@@ -18,7 +18,7 @@ their decision sections.
 | [0010](0010-cursor-and-snapshot-ownership.md) | Core owns coordinates; editor owns snapshots | Accepted |
 | [0011](0011-workspace-chunked-file-io.md) | Workspace-scoped chunked file I/O | Proposed |
 | [0012](0012-plugin-host-isolation.md) | Plugin-host isolation | Proposed |
-| [0013](0013-kernel-distribution-boundary.md) | Rust kernel and distribution boundary | Proposed |
+| [0013](0013-kernel-distribution-boundary.md) | Rust kernel and distribution boundary | Accepted; baseline in ADR-0037 |
 | [0014](0014-plugin-api-v1-freeze.md) | Plugin API v1 freeze | Accepted |
 | [0015](0015-command-line-completion.md) | Command-line completion and popup | Phase 1 implemented; kernel/plugin completion pending |
 | [0016](0016-render-style-layers.md) | Render style layers | Accepted |
@@ -29,7 +29,7 @@ their decision sections.
 | [0021](0021-signed-plugin-index.md) | Signed plugin index, revocations, anti-rollback | Accepted; verifier/cache partial |
 | [0022](0022-core-editing-completion.md) | Core editing completion and semantic ownership | Proposed |
 | [0023](0023-internal-capability-closure.md) | Internal capability closure before public distribution | Proposed |
-| [0024](0024-tui-state-and-domain-boundaries.md) | TUI state composition, page state, and domain boundaries | Proposed |
+| [0024](0024-tui-state-and-domain-boundaries.md) | TUI state composition, page state, and domain boundaries | Partially implemented; further extraction deferred |
 | [0025](0025-lsp-and-language-breadth.md) | LSP surface and language breadth boundaries | Accepted |
 | [0026](0026-persistent-undo-decision.md) | Persistent undo is deferred and gated | Accepted |
 | [0027](0027-distribution-composition-crate.md) | Standard distribution composition crate and two consumers | Accepted |
@@ -42,6 +42,7 @@ their decision sections.
 | [0034](0034-release-signing-authority.md) | Hardware-backed public-release signing; offline YubiKey flow | Proposed; public-release direction selected |
 | [0035](0035-plugin-wit-seams.md) | Plugin WIT contract from editor seams | Proposed |
 | [0036](0036-typst-language-provider.md) | Typst language provider and feature-gated grammar | Accepted for implementation |
+| [0037](0037-kernel-api-baseline.md) | Kernel API baseline during internal polish | Accepted |
 
 ## Numbering Rule
 

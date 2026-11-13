@@ -137,14 +137,24 @@ jobs:
         run: |
           cargo test -p anvil-tui --no-default-features
           cargo test -p anvil-tui --features official-workspace-index
-          cargo check -p anvil-tui --features official-git,official-workspace-index
+          cargo test -p anvil-tui --features official-language-latex
+          cargo test -p anvil-tui --features official-language-typst
+          cargo check -p anvil-tui --features official-git,official-workspace-index,official-language-latex,official-language-typst
           cargo test -p anvil-distro-standard --no-default-features
           cargo test -p anvil-distro-standard --features official-workspace-index
-          cargo test -p anvil-distro-standard --features official-git,official-workspace-index
+          cargo test -p anvil-distro-standard --features official-language-latex
+          cargo test -p anvil-distro-standard --features official-language-typst
+          cargo test -p anvil-distro-standard --features official-git,official-workspace-index,official-language-latex,official-language-typst
           cargo run -q -p anvil-distro-minimal -- --version | grep -q '^anvil-minimal '
-          for package in anvil-mod-git anvil-mod-workspace-index; do
+          for package in anvil-mod-git anvil-mod-workspace-index anvil-mod-desktop anvil-mod-language-latex anvil-mod-language-typst; do
             if cargo tree -p "$package" -e normal --prefix none | grep -q '^anvil-tui '; then
               echo "$package depends on anvil-tui" >&2
+              exit 1
+            fi
+          done
+          for package in anvil-api anvil-core anvil-editor anvil-ipc anvil-session anvil-module anvil-plugin-host; do
+            if cargo tree -p "$package" -e normal --prefix none | grep -q '^anvil-tui '; then
+              echo "kernel package $package depends on anvil-tui" >&2
               exit 1
             fi
           done

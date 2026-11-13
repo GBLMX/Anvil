@@ -1,6 +1,6 @@
 # ADR-0024: TUI State Composition and Domain Boundaries
 
-- Status: Proposed
+- Status: Partially implemented; remaining state/page extraction deferred
 - Date: 2026-11-12
 - Related: [ADR-0013](0013-kernel-distribution-boundary.md), [ADR-0016](0016-render-style-layers.md), [ADR-0022](0022-core-editing-completion.md), [ADR-0023](0023-internal-capability-closure.md)
 
@@ -315,3 +315,13 @@ Phase 1 started on 2026-11-12:
 - `anvil-config`, if extracted, has no `ratatui` or `crossterm` dependency.
 - Full workspace tests, clippy, formatting, and architecture checks pass.
 - No user-visible behavior change is bundled into the state split.
+
+## Implementation decision (2026-11-13)
+
+- `Model` now composes named state groups for session, view, UI, config,
+  workspace, language, Git, buffers, overlays, plugins, runtime, and related
+  domains.
+- Further page/state extraction is deferred. There is no second frontend and
+  no measured ownership failure that justifies another large state refactor.
+- Revisit only when a second frontend, a concrete testability blocker, or a
+  measured build/ownership problem appears.
