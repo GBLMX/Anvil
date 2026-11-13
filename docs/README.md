@@ -53,6 +53,7 @@ Cross-cutting tracks that do not jump the queue:
 | [0.4.x](0.4.x-plan.md) | plugin lifecycle, I/O, session/protocol | landed / rescoped |
 | [0.5.x](0.5.x-plan.md) | modal editing and modern TUI interaction | landed |
 | [Internal polish](internal-polish-plan.md) | P0/P1 feature polish under frozen `0.6.0` | P0 and P1 landed; frozen |
+| [0.6.0.x provider protocols](0.6.0.x-provider-protocol-plan.md) | picker/completion/formatter/test/DAP provider boundaries under frozen `0.6.0` | proposed |
 | [TUI design](tui-design.md) | visual tokens, layout, interaction rhythm, page boundaries | applied to start/settings/debug chrome |
 | [Small features](small-features-plan.md) | Vim-like motions, operators, registers, visual/display polish | proposed |
 | [External integration](external-integration-plan.md) | `$EDITOR`, stdin, pipe locations, control socket, MCP adapter | 1a/1b/2/3, control v3, and MCP landed |
