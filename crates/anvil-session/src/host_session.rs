@@ -54,6 +54,7 @@ impl Drop for SocketCleanup {
 impl HostSession {
     pub(crate) fn start_with_token(
         workspace: &Path,
+        plugin_id: &str,
         token: Token,
         gateway_socket: Option<&Path>,
         editor_socket: Option<&Path>,
@@ -62,6 +63,7 @@ impl HostSession {
         let cgroup_root = Some(cgroup_root()?);
         Self::start_with_host_token(
             workspace,
+            plugin_id,
             &host,
             None,
             cgroup_root,
@@ -75,6 +77,7 @@ impl HostSession {
 
     pub(crate) fn start_with_token_plugin(
         workspace: &Path,
+        plugin_id: &str,
         plugin_root: &Path,
         token: Token,
         gateway_socket: Option<&Path>,
@@ -85,6 +88,7 @@ impl HostSession {
         let cgroup_root = Some(cgroup_root()?);
         Self::start_with_host_token(
             workspace,
+            plugin_id,
             &host,
             None,
             cgroup_root,
@@ -98,6 +102,7 @@ impl HostSession {
 
     pub(crate) fn start_oom_with_token(
         workspace: &Path,
+        plugin_id: &str,
         token: Token,
         gateway_socket: Option<&Path>,
         editor_socket: Option<&Path>,
@@ -106,6 +111,7 @@ impl HostSession {
         let root = cgroup_root()?;
         Self::start_with_host_token(
             workspace,
+            plugin_id,
             &host,
             Some(300),
             Some(root),
@@ -127,6 +133,7 @@ impl HostSession {
     ) -> Result<Self, String> {
         Self::start_with_host_token(
             workspace,
+            "test",
             host,
             allocate_mb,
             cgroup_root,
@@ -141,6 +148,7 @@ impl HostSession {
     #[allow(clippy::too_many_arguments)]
     fn start_with_host_token(
         _workspace: &Path,
+        plugin_id: &str,
         host: &Path,
         allocate_mb: Option<u32>,
         cgroup_root: Option<PathBuf>,
@@ -181,7 +189,12 @@ impl HostSession {
         listener
             .set_nonblocking(true)
             .map_err(|error| error.to_string())?;
-        let mut args = vec!["--socket".to_owned(), socket.display().to_string()];
+        let mut args = vec![
+            "--socket".to_owned(),
+            socket.display().to_string(),
+            "--plugin-id".to_owned(),
+            plugin_id.to_owned(),
+        ];
         if let Some(mb) = allocate_mb {
             args.push("--allocate-mb".to_owned());
             args.push(mb.to_string());

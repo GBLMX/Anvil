@@ -2,7 +2,9 @@
 
 use anvil_ipc::GatewayClient;
 use sha2::{Digest, Sha256};
+use std::collections::HashMap;
 use std::path::Path;
+use std::sync::{Arc, Mutex};
 
 use crate::host_session::{self, HostEvent, HostSession};
 
@@ -12,6 +14,8 @@ pub const DEBUG_PERMISSIONS: &[&str] = &["sys.exec"];
 pub struct PluginSession {
     host: HostSession,
     stopped: bool,
+    token_hash: [u8; 32],
+    identities: Arc<Mutex<HashMap<[u8; 32], String>>>,
 }
 
 impl PluginSession {
@@ -21,6 +25,7 @@ impl PluginSession {
         plugin_id: &str,
         permissions: &[String],
         editor_socket: Option<&Path>,
+        identities: &Arc<Mutex<HashMap<[u8; 32], String>>>,
     ) -> Result<Self, String> {
         Self::start_mode(
             gateway,
@@ -31,6 +36,7 @@ impl PluginSession {
             None,
             None,
             false,
+            identities,
         )
     }
 
@@ -40,6 +46,7 @@ impl PluginSession {
         plugin_id: &str,
         permissions: &[String],
         editor_socket: Option<&Path>,
+        identities: &Arc<Mutex<HashMap<[u8; 32], String>>>,
     ) -> Result<Self, String> {
         Self::start_mode(
             gateway,
@@ -50,9 +57,11 @@ impl PluginSession {
             None,
             None,
             true,
+            identities,
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn start_plugin(
         gateway: &mut GatewayClient,
         workspace: &Path,
@@ -61,6 +70,7 @@ impl PluginSession {
         permissions: &[String],
         editor_socket: Option<&Path>,
         command: Option<&str>,
+        identities: &Arc<Mutex<HashMap<[u8; 32], String>>>,
     ) -> Result<Self, String> {
         Self::start_mode(
             gateway,
@@ -71,6 +81,7 @@ impl PluginSession {
             Some(plugin_root),
             command,
             false,
+            identities,
         )
     }
 
@@ -84,16 +95,28 @@ impl PluginSession {
         plugin_root: Option<&Path>,
         command: Option<&str>,
         oom: bool,
+        identities: &Arc<Mutex<HashMap<[u8; 32], String>>>,
     ) -> Result<Self, String> {
         let token = host_session::new_token();
         let hash = Sha256::digest(token.0);
+        let token_hash: [u8; 32] = hash.into();
         gateway
             .register_plugin(plugin_id, &hash.into(), permissions)
             .map_err(|error| format!("register plugin: {error}"))?;
+        match identities.lock() {
+            Ok(mut identities) => {
+                identities.insert(token_hash, plugin_id.to_owned());
+            }
+            Err(_) => {
+                let _ = gateway.revoke_plugin(plugin_id);
+                return Err("editor identity lock poisoned".to_owned());
+            }
+        }
         let gateway_socket = gateway.socket_path().to_path_buf();
         let host = if oom {
             HostSession::start_oom_with_token(
                 workspace,
+                plugin_id,
                 token,
                 Some(&gateway_socket),
                 editor_socket,
@@ -101,6 +124,7 @@ impl PluginSession {
         } else if let Some(plugin_root) = plugin_root {
             HostSession::start_with_token_plugin(
                 workspace,
+                plugin_id,
                 plugin_root,
                 token,
                 Some(&gateway_socket),
@@ -108,15 +132,26 @@ impl PluginSession {
                 command,
             )
         } else {
-            HostSession::start_with_token(workspace, token, Some(&gateway_socket), editor_socket)
+            HostSession::start_with_token(
+                workspace,
+                plugin_id,
+                token,
+                Some(&gateway_socket),
+                editor_socket,
+            )
         };
         match host {
             Ok(host) => Ok(Self {
                 host,
                 stopped: false,
+                token_hash,
+                identities: Arc::clone(identities),
             }),
             Err(error) => {
                 let _ = gateway.revoke_plugin(plugin_id);
+                if let Ok(mut identities) = identities.lock() {
+                    identities.remove(&token_hash);
+                }
                 Err(error)
             }
         }
@@ -143,12 +178,20 @@ impl PluginSession {
             return;
         }
         self.host.stop();
+        self.revoke_identity();
         self.stopped = true;
+    }
+
+    fn revoke_identity(&self) {
+        if let Ok(mut identities) = self.identities.lock() {
+            identities.remove(&self.token_hash);
+        }
     }
 }
 
 impl Drop for PluginSession {
     fn drop(&mut self) {
         self.host.stop();
+        self.revoke_identity();
     }
 }

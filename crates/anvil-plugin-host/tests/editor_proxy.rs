@@ -71,6 +71,8 @@ fn start_host(
             editor_path.display().to_string(),
             "--editor-timeout-ms".to_owned(),
             timeout_ms.to_string(),
+            "--plugin-id".to_owned(),
+            "test".to_owned(),
         ],
         Token([31; 32]),
     )
@@ -154,6 +156,14 @@ fn fake_editor(
 ) -> thread::JoinHandle<()> {
     thread::spawn(move || {
         let (mut connection, _) = listener.accept().expect("accept editor");
+        let frame = read_frame(&mut connection)
+            .expect("read handshake")
+            .expect("handshake");
+        let hello: serde_json::Value = serde_json::from_slice(&frame).expect("handshake json");
+        assert_eq!(hello["method"], "session.hello");
+        assert_eq!(hello["params"]["plugin_id"], "test");
+        assert_eq!(hello["params"]["api_version"], "1.0.0");
+        assert_eq!(hello["params"]["token"].as_str().map(str::len), Some(64));
         loop {
             let frame = match read_frame(&mut connection) {
                 Ok(Some(frame)) => frame,

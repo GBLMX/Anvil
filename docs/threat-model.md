@@ -163,9 +163,12 @@ pretends to be a plugin.
 
 - Per-session runtime directory with `0700`; socket `0600`.
 - `SO_PEERCRED` to identify the peer process.
-- Per-plugin capability token issued by the editor and registered with the
-  gateway.
+- Per-plugin capability token issued by the editor host runtime. The gateway
+  receives only its SHA-256 verifier; the editor keeps a hash-to-plugin map and
+  accepts `editor.*` only after a matching `session.hello`.
 - Gateway checks token, plugin id, workspace, and requested operation.
+- Editor commands and notifications use the identity proven by the handshake,
+  never a plugin id supplied in request params.
 - One plugin per host process so a compromised host cannot impersonate a sibling.
 
 ### T6. Resource exhaustion

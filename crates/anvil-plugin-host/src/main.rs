@@ -7,6 +7,7 @@ mod runtime;
 #[cfg(target_os = "linux")]
 mod linux {
     use super::*;
+    use anvil_plugin_host::Token;
     use anvil_plugin_host::manifest::PluginManifest;
     use std::time::Duration;
 
@@ -38,6 +39,7 @@ mod linux {
         let mut editor_timeout_ms = 2_000u64;
         let mut gateway_socket = None;
         let mut activation_command = None;
+        let mut plugin_id = "unknown".to_owned();
         let mut args = std::env::args().skip(1);
         while let Some(arg) = args.next() {
             match arg.as_str() {
@@ -78,6 +80,11 @@ mod linux {
                         args.next()
                             .ok_or_else(|| io::Error::other("missing --plugin value"))?,
                     );
+                }
+                "--plugin-id" => {
+                    plugin_id = args
+                        .next()
+                        .ok_or_else(|| io::Error::other("missing --plugin-id value"))?;
                 }
                 "--socket" => {
                     socket = Some(
@@ -139,11 +146,20 @@ mod linux {
             None => None,
         };
         let mut editor_proxy = match editor_socket.as_deref() {
-            Some(path) => Some(EditorProxy::connect(path, editor_timeout_ms)?),
+            Some(path) => Some(EditorProxy::connect(
+                path,
+                editor_timeout_ms,
+                &plugin_id,
+                Token(token),
+            )?),
             None => None,
         };
         let mut editor_bridge = match editor_socket.as_deref() {
-            Some(path) => Some(runtime::EditorClient::connect(std::path::Path::new(path))?),
+            Some(path) => Some(runtime::EditorClient::connect(
+                std::path::Path::new(path),
+                &plugin_id,
+                Token(token),
+            )?),
             None => None,
         };
         unsafe {
@@ -705,6 +721,8 @@ mod linux {
         connection: anvil_ipc::Connection,
         next_id: u64,
         timeout: Duration,
+        plugin_id: String,
+        token: Token,
     }
 
     struct ProxyError {
@@ -712,12 +730,40 @@ mod linux {
         message: String,
     }
 
+    fn hex_token(token: Token) -> String {
+        token.0.iter().map(|byte| format!("{byte:02x}")).collect()
+    }
+
+    fn send_editor_hello(
+        connection: &mut anvil_ipc::Connection,
+        plugin_id: &str,
+        token: Token,
+    ) -> io::Result<()> {
+        let body = serde_json::to_vec(&serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "session.hello",
+            "params": {
+                "plugin_id": plugin_id,
+                "token": hex_token(token),
+                "api_version": "1.0.0"
+            }
+        }))
+        .map_err(|error| io::Error::other(format!("encode editor hello: {error}")))?;
+        connection
+            .send(&body)
+            .map_err(|error| io::Error::other(format!("send editor hello: {error}")))
+    }
+
     impl EditorProxy {
-        fn connect(path: &str, timeout_ms: u64) -> io::Result<Self> {
+        fn connect(path: &str, timeout_ms: u64, plugin_id: &str, token: Token) -> io::Result<Self> {
+            let mut connection = anvil_ipc::Connection::connect(path)?;
+            send_editor_hello(&mut connection, plugin_id, token)?;
             Ok(Self {
-                connection: anvil_ipc::Connection::connect(path)?,
+                connection,
                 next_id: 1,
                 timeout: Duration::from_millis(timeout_ms),
+                plugin_id: plugin_id.to_owned(),
+                token,
             })
         }
 
@@ -735,6 +781,8 @@ mod linux {
                 "id": request_id,
                 "method": method,
                 "params": params,
+                "plugin_id": self.plugin_id,
+                "token": hex_token(self.token),
             });
             let body = serde_json::to_vec(&request)
                 .map_err(|error| ProxyError::internal(format!("encode proxy request: {error}")))?;

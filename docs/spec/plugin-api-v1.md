@@ -18,6 +18,25 @@ size is 8 MiB.
 - `token`: the session token where required
 
 The gateway rejects an unsupported protocol or API version before dispatch.
+
+The editor RPC socket uses the same envelope and a mandatory first
+`session.hello`:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "session.hello",
+  "params": {"plugin_id": "demo", "token": "<64 lowercase hex characters>"}
+}
+```
+
+The token is the per-host capability token delivered out of band. The editor
+compares the SHA-256 digest against the identity registered for that host and
+requires the claimed `plugin_id` to match. A missing, malformed, or mismatched
+handshake closes the connection before dispatch. Later requests carry only
+`id`, `method`, and `params`; the editor uses the handshake identity for
+authorization, command ownership, and notifications.
 Plugin manifests declare `api` as `1`, `1.0`, or `1.0.0`; other lines fail
 before the Luau entry is loaded.
 

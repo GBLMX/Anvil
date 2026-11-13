@@ -343,6 +343,12 @@ post-`0.5.0` feature line.
 - Inlay hints are requested only after the server advertises
   `inlayHintProvider`, avoiding `Method not found` noise from Markdown and
   other servers without that capability.
+- The editor RPC socket now authenticates each host with `session.hello`
+  (`plugin_id` plus the per-host token) before accepting `editor.*` requests.
+  Command registration, source attribution, and notifications use the
+  authenticated identity instead of inferring a plugin from the command id or
+  trusting request parameters. Identity is registered only after gateway
+  registration succeeds and is dropped when the host is reclaimed.
 
 ## [0.6.0] - 2026-11-06
 

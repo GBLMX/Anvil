@@ -7,6 +7,7 @@ use anvil_ipc::GatewayClient;
 use std::collections::{HashMap, VecDeque};
 use std::path::Path;
 use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 pub(crate) const START_TIMEOUT: Duration = Duration::from_secs(2);
@@ -165,6 +166,7 @@ pub(crate) trait HostLauncher {
         permissions: &[String],
         editor_socket: Option<&Path>,
         command: Option<&str>,
+        identities: &Arc<Mutex<HashMap<[u8; 32], String>>>,
     ) -> Result<Box<dyn ManagedHost>, String>;
 }
 
@@ -182,12 +184,18 @@ impl HostLauncher for SystemLauncher {
         permissions: &[String],
         editor_socket: Option<&Path>,
         command: Option<&str>,
+        identities: &Arc<Mutex<HashMap<[u8; 32], String>>>,
     ) -> Result<Box<dyn ManagedHost>, String> {
         let gateway = gateway.ok_or_else(|| "gateway unavailable".to_owned())?;
         let host = match (mode, plugin_root) {
-            (StartMode::Oom, _) => {
-                PluginSession::start_oom(gateway, workspace, plugin_id, permissions, editor_socket)
-            }
+            (StartMode::Oom, _) => PluginSession::start_oom(
+                gateway,
+                workspace,
+                plugin_id,
+                permissions,
+                editor_socket,
+                identities,
+            ),
             (StartMode::Normal, Some(root)) => PluginSession::start_plugin(
                 gateway,
                 workspace,
@@ -196,10 +204,16 @@ impl HostLauncher for SystemLauncher {
                 permissions,
                 editor_socket,
                 command,
+                identities,
             ),
-            (StartMode::Normal, None) => {
-                PluginSession::start(gateway, workspace, plugin_id, permissions, editor_socket)
-            }
+            (StartMode::Normal, None) => PluginSession::start(
+                gateway,
+                workspace,
+                plugin_id,
+                permissions,
+                editor_socket,
+                identities,
+            ),
         }?;
         Ok(Box::new(host))
     }
@@ -212,6 +226,7 @@ pub struct PluginSupervisor {
     editor_tx: Sender<EditorRequest>,
     editor_service: Option<EditorService>,
     editor_requests: Receiver<EditorRequest>,
+    editor_identities: Arc<Mutex<HashMap<[u8; 32], String>>>,
 }
 
 impl Default for PluginSupervisor {
@@ -225,6 +240,7 @@ impl PluginSupervisor {
         let (editor_tx, editor_requests) = mpsc::channel();
         Self {
             launcher: Box::new(SystemLauncher),
+            editor_identities: Arc::new(Mutex::new(HashMap::new())),
             entries: HashMap::new(),
             pending_starts: VecDeque::new(),
             editor_service: None,
@@ -238,6 +254,7 @@ impl PluginSupervisor {
         let (editor_tx, editor_requests) = mpsc::channel();
         Self {
             launcher,
+            editor_identities: Arc::new(Mutex::new(HashMap::new())),
             entries: HashMap::new(),
             pending_starts: VecDeque::new(),
             editor_service: None,
@@ -254,9 +271,19 @@ impl PluginSupervisor {
         self.editor_requests.try_recv().ok()
     }
 
+    #[doc(hidden)]
+    pub fn register_editor_identity(&self, token_hash: [u8; 32], plugin_id: &str) {
+        self.editor_identities
+            .lock()
+            .expect("identities")
+            .insert(token_hash, plugin_id.to_owned());
+    }
+
     pub fn ensure_editor_service(&mut self) {
         if self.editor_service.is_none() {
-            self.editor_service = EditorService::start(self.editor_tx.clone()).ok();
+            self.editor_service =
+                EditorService::start(self.editor_tx.clone(), Arc::clone(&self.editor_identities))
+                    .ok();
         }
     }
 
@@ -407,6 +434,7 @@ impl PluginSupervisor {
             request.permissions,
             editor_socket.as_deref(),
             request.command,
+            &self.editor_identities,
         ) {
             Ok(host) => {
                 let entry = self
@@ -880,6 +908,7 @@ mod tests {
             permissions: &[String],
             _editor_socket: Option<&Path>,
             _command: Option<&str>,
+            _identities: &Arc<Mutex<HashMap<[u8; 32], String>>>,
         ) -> Result<Box<dyn ManagedHost>, String> {
             self.start_impl(
                 gateway,
@@ -906,6 +935,7 @@ mod tests {
             permissions: &[String],
             _editor_socket: Option<&Path>,
             _command: Option<&str>,
+            _identities: &Arc<Mutex<HashMap<[u8; 32], String>>>,
         ) -> Result<Box<dyn ManagedHost>, String> {
             self.0.start_impl(
                 gateway,

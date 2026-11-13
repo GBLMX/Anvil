@@ -109,7 +109,8 @@ candidate and `Enter` accepts it. `Esc` closes the completion list first.
 
 The plugin-host path has a sandboxed host with token-FD delivery,
 `close_range`, `no_new_privs`, Landlock read/no-exec rules, native-ABI seccomp
-with a preconnected editor socket and dangerous-syscall denial, cgroup-before-exec v2 limits with OOM classification,
+with a preconnected editor socket, a plugin-id/token handshake on that socket,
+and dangerous-syscall denial, cgroup-before-exec v2 limits with OOM classification,
 `sys.ping`/`sys.exec` dispatch, and a TUI debug `PluginSession`
 (`:plugin-start`/`:plugin-exec`/`:plugin-stop`/`:plugin-oom`).
 Official release layouts install plugin sources under

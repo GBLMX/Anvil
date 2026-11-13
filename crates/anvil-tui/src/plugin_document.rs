@@ -37,13 +37,15 @@ impl Model {
 
     pub(crate) fn poll_editor_requests(&mut self) {
         while let Some(request) = self.plugins.supervisor.poll_editor_request() {
-            let result = self.handle_editor_request(&request.method, request.params);
+            let result =
+                self.handle_editor_request(&request.plugin_id, &request.method, request.params);
             let _ = request.reply.send(result);
         }
     }
 
     fn handle_editor_request(
         &mut self,
+        plugin_id: &str,
         method: &str,
         params: serde_json::Value,
     ) -> Result<serde_json::Value, (i32, String)> {
@@ -73,7 +75,7 @@ impl Model {
             "editor.register_command" => {
                 let request: RegisterCommandRequest =
                     serde_json::from_value(params).map_err(|error| (-32602, error.to_string()))?;
-                self.register_plugin_command(request)
+                self.register_plugin_command(plugin_id, request)
                     .map(|command_id| serde_json::json!(RegisterCommandResponse { command_id }))
                     .map_err(|message| (-32000, message))
             }
@@ -93,7 +95,7 @@ impl Model {
                 };
                 self.ui
                     .notifications
-                    .push(severity, "plugin", request.message, 0);
+                    .push(severity, plugin_id, request.message, 0);
                 self.file.dirty = true;
                 Ok(serde_json::json!(EmptyResponse {}))
             }
@@ -112,6 +114,7 @@ impl Model {
     }
     fn register_plugin_command(
         &mut self,
+        plugin_id: &str,
         request: RegisterCommandRequest,
     ) -> Result<String, String> {
         let command_id = request.id.trim().to_owned();
@@ -122,16 +125,17 @@ impl Model {
         if title.is_empty() || title.len() > 256 {
             return Err("invalid plugin command title".to_owned());
         }
-        let plugin_id = self
+        if !self
             .plugins
             .entries
             .iter()
-            .filter(|plugin| {
-                plugin.enabled && command_id.starts_with(&format!("{}.", plugin.manifest.id))
-            })
-            .max_by_key(|plugin| plugin.manifest.id.len())
-            .map(|plugin| plugin.manifest.id.clone())
-            .ok_or_else(|| "plugin command id must be namespaced by a loaded plugin".to_owned())?;
+            .any(|plugin| plugin.enabled && plugin.manifest.id == plugin_id)
+        {
+            return Err("plugin is not loaded or enabled".to_owned());
+        }
+        if !command_id.starts_with(&format!("{plugin_id}.")) {
+            return Err("plugin command id must use the caller's namespace".to_owned());
+        }
         if self
             .plugins
             .entries
@@ -147,7 +151,10 @@ impl Model {
         }
         self.plugins.dynamic_commands.insert(
             command_id.clone(),
-            crate::state::DynamicPluginCommand { plugin_id, title },
+            crate::state::DynamicPluginCommand {
+                plugin_id: plugin_id.to_owned(),
+                title,
+            },
         );
         Ok(command_id)
     }
@@ -215,7 +222,14 @@ mod tests {
 
     #[test]
     fn editor_service_round_trips_get_view() {
+        use sha2::{Digest, Sha256};
+
         let mut model = Model::new(EditorState::from_text("abcd"), None);
+        let token = [7u8; 32];
+        model
+            .plugins
+            .supervisor
+            .register_editor_identity(Sha256::digest(token).into(), "test");
         model.plugins.supervisor.ensure_editor_service();
         let path = model
             .plugins
@@ -229,6 +243,17 @@ mod tests {
             connection
                 .set_read_timeout(Some(std::time::Duration::from_secs(1)))
                 .expect("timeout");
+            let hello = serde_json::json!({
+                "jsonrpc": "2.0",
+                "method": "session.hello",
+                "params": {
+                    "plugin_id": "test",
+                    "token": token.iter().map(|byte| format!("{byte:02x}")).collect::<String>()
+                }
+            });
+            connection
+                .send(serde_json::to_string(&hello).expect("hello").as_bytes())
+                .expect("hello");
             connection
                 .send(br#"{"jsonrpc":"2.0","id":1,"method":"editor.get_view","params":{}}"#)
                 .expect("request");
@@ -280,6 +305,7 @@ mod tests {
         model.plugins.entries.push(plugin("demo"));
         let response = model
             .handle_editor_request(
+                "demo",
                 "editor.register_command",
                 serde_json::json!({"id": "demo.run", "title": "Run"}),
             )
@@ -300,20 +326,42 @@ mod tests {
         let mut model = Model::new(EditorState::from_text(""), None);
         model
             .handle_editor_request(
+                "demo",
                 "ui.notify",
                 serde_json::json!({"message": "hello", "severity": "warning"}),
             )
             .expect("notify");
         let notification = &model.ui.notifications.items()[0];
         assert_eq!(notification.message, "hello");
+        assert_eq!(notification.source, "demo");
         assert_eq!(
             notification.severity,
             anvil_session::ui::NotificationSeverity::Warning
         );
         model
-            .handle_editor_request("ui.status", serde_json::json!({"message": "plugin status"}))
+            .handle_editor_request(
+                "demo",
+                "ui.status",
+                serde_json::json!({"message": "plugin status"}),
+            )
             .expect("status");
         assert_eq!(model.status.text, "plugin status");
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn plugin_command_registration_rejects_another_plugin_identity() {
+        let mut model = Model::new(EditorState::from_text(""), None);
+        model.plugins.entries.push(plugin("demo"));
+        assert!(
+            model
+                .handle_editor_request(
+                    "other",
+                    "editor.register_command",
+                    serde_json::json!({"id": "demo.run", "title": "Run"}),
+                )
+                .is_err()
+        );
     }
 
     #[cfg(target_os = "linux")]
@@ -324,6 +372,7 @@ mod tests {
         assert!(
             model
                 .handle_editor_request(
+                    "demo",
                     "editor.register_command",
                     serde_json::json!({"id": "other.run", "title": "Run"}),
                 )

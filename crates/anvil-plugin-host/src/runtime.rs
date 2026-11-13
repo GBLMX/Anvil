@@ -1,6 +1,7 @@
 //! Sandboxed Luau runtime primitives.
 
 use anvil_ipc::Connection;
+use anvil_plugin_host::Token;
 use mlua::{Lua, LuaSerdeExt, Result, Value, Variadic};
 use serde_json::{Value as JsonValue, json};
 use std::cell::RefCell;
@@ -15,10 +16,30 @@ pub(crate) struct EditorClient {
     next_id: u64,
 }
 
+fn hex_token(token: Token) -> String {
+    token.0.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
 impl EditorClient {
-    pub(crate) fn connect(path: &Path) -> std::io::Result<Self> {
-        let connection = Connection::connect(path)?;
+    pub(crate) fn connect(path: &Path, plugin_id: &str, token: Token) -> std::io::Result<Self> {
+        let mut connection = Connection::connect(path)?;
         connection.set_read_timeout(Some(Duration::from_secs(2)))?;
+        let hello = json!({
+            "jsonrpc": "2.0",
+            "method": "session.hello",
+            "params": {
+                "plugin_id": plugin_id,
+                "token": hex_token(token),
+                "api_version": "1.0.0"
+            }
+        });
+        connection
+            .send(
+                serde_json::to_string(&hello)
+                    .map_err(std::io::Error::other)?
+                    .as_bytes(),
+            )
+            .map_err(std::io::Error::other)?;
         Ok(Self {
             connection,
             next_id: 1,
@@ -293,6 +314,9 @@ mod tests {
         let listener = Listener::bind(&socket).expect("listen");
         let server = std::thread::spawn(move || {
             let mut connection = listener.accept().expect("accept");
+            let hello = connection.recv().expect("read").expect("hello");
+            let hello: JsonValue = serde_json::from_slice(&hello).expect("hello json");
+            assert_eq!(hello["method"], "session.hello");
             let frame = connection.recv().expect("read").expect("request");
             let request: JsonValue = serde_json::from_slice(&frame).expect("json");
             assert_eq!(request["method"], "editor.get_view");
@@ -353,7 +377,8 @@ mod tests {
         });
         let fixture =
             Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/editor_bridge/main.luau");
-        let client = EditorClient::connect(&socket).expect("connect editor");
+        let client =
+            EditorClient::connect(&socket, "test", Token([3; 32])).expect("connect editor");
         run_file(&fixture, Some(client), None).expect("run bridge plugin");
         server.join().expect("server");
         let _ = std::fs::remove_file(socket);
@@ -374,6 +399,9 @@ mod tests {
         let listener = Listener::bind(&socket).expect("listen");
         let server = std::thread::spawn(move || {
             let mut connection = listener.accept().expect("accept");
+            let hello = connection.recv().expect("read").expect("hello");
+            let hello: JsonValue = serde_json::from_slice(&hello).expect("hello json");
+            assert_eq!(hello["method"], "session.hello");
             let frame = connection.recv().expect("read").expect("snapshot request");
             let request: JsonValue = serde_json::from_slice(&frame).expect("snapshot json");
             assert_eq!(request["method"], "editor.get_snapshot");
@@ -420,7 +448,8 @@ mod tests {
         });
         let plugin = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../plugins/official/trim-whitespace/main.luau");
-        let client = EditorClient::connect(&socket).expect("connect editor");
+        let client =
+            EditorClient::connect(&socket, "test", Token([3; 32])).expect("connect editor");
         run_file(
             &plugin,
             Some(client),
