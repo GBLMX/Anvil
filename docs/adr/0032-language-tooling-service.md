@@ -1,6 +1,6 @@
 # ADR-0032: Language Tooling Service Slot
 
-- Status: Proposed
+- Status: Accepted for implementation; additive slot and fallback landed
 - Date: 2026-11-13
 - Related: [ADR-0028](0028-module-contract.md), [ADR-0025](0025-lsp-and-language-breadth.md)
 

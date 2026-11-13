@@ -22,8 +22,8 @@ Contract v1 covers:
 
 - `Module`, `ModuleMetadata`, `ModuleId`, and `ContractRange`;
 - `ModuleRegistry` registration, command ownership, and service slots;
-- the `GitService`, `WorkspaceIndexService`, and `DesktopService` extension
-  points.
+- the `GitService`, `WorkspaceIndexService`, `DesktopService`, and
+  `LanguageToolingService` extension points.
 
 The freeze is source-level. Adding another official module does not change the
 contract; it adds a Cargo feature, a module crate, and a composition call.
