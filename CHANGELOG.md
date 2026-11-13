@@ -8,6 +8,10 @@ post-`0.5.0` feature line.
 
 ## [Unreleased]
 ### Added
+- Control sockets are now per workspace: `anvil`, `anvil-ctl`, and `anvil-mcp`
+  select the instance by canonical workspace path instead of one global
+  `control.sock`. File arguments outside the cwd derive their parent as the
+  workspace.
 - `editor.sidebar_percent` and `ANVIL_EDITOR_SIDEBAR_PERCENT` control the file
   tree width as a percentage (10-40%), shared by rendering, wrapping, and mouse
   hit-testing.

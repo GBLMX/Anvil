@@ -289,7 +289,7 @@ pub fn run_with_all_services(
     #[cfg(target_os = "linux")]
     model.activate_current_language();
     let control = if enable_control {
-        match anvil_control::ControlServer::start() {
+        match anvil_control::ControlServer::start_for(&workspace) {
             Ok(server) => Some(server),
             Err(anvil_control::Error::AlreadyRunning) => {
                 return Err(io::Error::new(

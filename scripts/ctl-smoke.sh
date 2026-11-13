@@ -88,7 +88,7 @@ last_code=0
 ctl() {
 	printf '$ anvil-ctl %s\n' "$*" >>"$transcript"
 	set +e
-	last_out="$("$anvil_ctl" "$@" 2>"$root/ctl.err")"
+	last_out="$("$anvil_ctl" --workspace "$workspace" "$@" 2>"$root/ctl.err")"
 	last_code=$?
 	set -e
 	printf '%s\n' "$last_out" >>"$transcript"

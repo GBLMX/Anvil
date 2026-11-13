@@ -4,10 +4,10 @@
 //! typed `anvil-control` request executed by the running TUI actor.
 
 use anvil_control::{
-    COMMANDS, Capability, Client, CommandPolicyError, EditMode, EditRange, Error as ControlError,
-    QueryOptions, validate_remote_command,
+    validate_remote_command, Capability, Client, CommandPolicyError, EditMode, EditRange,
+    Error as ControlError, QueryOptions, COMMANDS,
 };
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use std::{
     io::{self, BufRead, Write},
     path::PathBuf,
@@ -215,7 +215,14 @@ fn command_tool(arguments: &Value) -> Result<Value, String> {
 }
 
 fn client() -> Result<Client, String> {
-    Client::connect_with_timeout(Duration::from_secs(5)).map_err(control_error)
+    Client::connect_for_with_timeout(&workspace()?, Duration::from_secs(5)).map_err(control_error)
+}
+
+fn workspace() -> Result<PathBuf, String> {
+    if let Some(workspace) = std::env::var_os("ANVIL_WORKSPACE") {
+        return Ok(PathBuf::from(workspace));
+    }
+    std::env::current_dir().map_err(|error| format!("workspace unavailable: {error}"))
 }
 
 fn tools_list() -> Vec<Value> {
@@ -284,7 +291,8 @@ const TOOLS: &[ToolSpec] = &[
     ToolSpec {
         name: "anvil_edit",
         capability: Capability::Edit,
-        description: "Replace the buffer, insert at the cursor, or replace a revision-guarded range.",
+        description:
+            "Replace the buffer, insert at the cursor, or replace a revision-guarded range.",
         schema: edit_schema,
     },
     ToolSpec {

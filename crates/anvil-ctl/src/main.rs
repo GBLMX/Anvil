@@ -1,8 +1,12 @@
 use anvil_control::{
-    Client, EditMode, Error as ControlError, QueryOptions, validate_remote_command,
+    validate_remote_command, Client, EditMode, Error as ControlError, QueryOptions,
 };
-use serde_json::{Value, json};
-use std::{path::PathBuf, process, time::Duration};
+use serde_json::{json, Value};
+use std::{
+    path::{Path, PathBuf},
+    process,
+    time::Duration,
+};
 
 const USAGE: &str = "\
 anvil-ctl - control a running Anvil instance
@@ -29,6 +33,7 @@ Commands:
 Options:
   --json              Print one JSON object with ok/data or error
   --timeout-ms <MS>   Socket timeout (default: 5000)
+  --workspace <DIR>   Select the Anvil instance for DIR (default: cwd)
   --spawn             Start Anvil in the current terminal if none is running
   -h, --help          Show this help
 
@@ -36,7 +41,8 @@ Exit codes:
   0 success, 1 internal/local error, 2 usage, 3 no instance,
   4 timeout, 5 editor RPC error
 
-The control socket is $XDG_RUNTIME_DIR/anvil/control.sock.
+The control socket is selected by the canonical workspace path under
+$XDG_RUNTIME_DIR/anvil/.
 ";
 
 #[derive(Debug)]
@@ -44,6 +50,7 @@ struct Options {
     json: bool,
     spawn: bool,
     timeout: Duration,
+    workspace: PathBuf,
     positional: Vec<String>,
 }
 
@@ -157,6 +164,7 @@ impl CliCommand {
     }
 }
 
+#[allow(clippy::result_large_err)]
 fn run() -> Result<(), (Options, CliError)> {
     let options = parse_options().map_err(|error| {
         (
@@ -164,6 +172,7 @@ fn run() -> Result<(), (Options, CliError)> {
                 json: std::env::args().any(|argument| argument == "--json"),
                 spawn: false,
                 timeout: Duration::from_secs(5),
+                workspace: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
                 positional: Vec::new(),
             },
             error,
@@ -269,8 +278,9 @@ fn parse_command(options: &Options) -> Result<CliCommand, CliError> {
     }
 }
 
+#[allow(clippy::result_large_err)]
 fn execute(options: Options, command: CliCommand) -> Result<(), (Options, CliError)> {
-    let mut client = Client::connect_with_timeout(options.timeout)
+    let mut client = Client::connect_for_with_timeout(&options.workspace, options.timeout)
         .map_err(|error| (clone_options(&options), map_error(error)))?;
     if let Err(error) = client.ping() {
         if !options.spawn {
@@ -279,7 +289,7 @@ fn execute(options: Options, command: CliCommand) -> Result<(), (Options, CliErr
                 CliError::no_instance(format!("no running Anvil instance: {error}")),
             ));
         }
-        spawn_anvil().map_err(|error| (clone_options(&options), error))?;
+        spawn_anvil(&options.workspace).map_err(|error| (clone_options(&options), error))?;
     }
     let name = command.name();
     let result = match command {
@@ -319,22 +329,16 @@ fn execute(options: Options, command: CliCommand) -> Result<(), (Options, CliErr
                     read_stdin_text().map_err(|error| (clone_options(&options), error))?
                 }
             };
-            json!(
-                client
-                    .edit(mode, &text)
-                    .map_err(|error| (clone_options(&options), map_error(error)))?
-            )
+            json!(client
+                .edit(mode, &text)
+                .map_err(|error| (clone_options(&options), map_error(error)))?)
         }
-        CliCommand::Query(query) => json!(
-            client
-                .query_with(query)
-                .map_err(|error| (clone_options(&options), map_error(error)))?
-        ),
-        CliCommand::Command(command) => json!(
-            client
-                .exec(&command)
-                .map_err(|error| (clone_options(&options), map_error(error)))?
-        ),
+        CliCommand::Query(query) => json!(client
+            .query_with(query)
+            .map_err(|error| (clone_options(&options), map_error(error)))?),
+        CliCommand::Command(command) => json!(client
+            .exec(&command)
+            .map_err(|error| (clone_options(&options), map_error(error)))?),
         CliCommand::Quit { force } => client
             .quit(force)
             .map_err(|error| (clone_options(&options), map_error(error)))?,
@@ -394,6 +398,8 @@ fn parse_options() -> Result<Options, CliError> {
     let mut json = false;
     let mut spawn = false;
     let mut timeout = Duration::from_secs(5);
+    let mut workspace =
+        std::env::current_dir().map_err(|error| CliError::local(error.to_string()))?;
     let mut positional = Vec::new();
     let mut args = std::env::args().skip(1).peekable();
     while let Some(argument) = args.next() {
@@ -406,8 +412,17 @@ fn parse_options() -> Result<Options, CliError> {
                     .ok_or_else(|| CliError::usage("--timeout-ms requires a value"))?;
                 timeout = parse_timeout(&value)?;
             }
+            "--workspace" => {
+                workspace = PathBuf::from(
+                    args.next()
+                        .ok_or_else(|| CliError::usage("--workspace requires a directory"))?,
+                );
+            }
             value if value.starts_with("--timeout-ms=") => {
                 timeout = parse_timeout(&value["--timeout-ms=".len()..])?;
+            }
+            value if value.starts_with("--workspace=") => {
+                workspace = PathBuf::from(&value["--workspace=".len()..]);
             }
             "-h" | "--help" => positional.push(argument),
             "--force" => positional.push(argument),
@@ -422,6 +437,7 @@ fn parse_options() -> Result<Options, CliError> {
         json,
         spawn,
         timeout,
+        workspace,
         positional,
     })
 }
@@ -500,20 +516,20 @@ fn read_stdin_text() -> Result<String, CliError> {
     Ok(text)
 }
 
-fn spawn_anvil() -> Result<(), CliError> {
+fn spawn_anvil(workspace: &Path) -> Result<(), CliError> {
     use std::io::IsTerminal;
 
     if !std::io::stdin().is_terminal() || !std::io::stdout().is_terminal() {
         return Err(CliError::usage("--spawn requires a terminal"));
     }
-    let workspace = std::env::current_dir().map_err(|error| CliError::local(error.to_string()))?;
     let binary = std::env::var_os("ANVIL_BIN").unwrap_or_else(|| "anvil".into());
     std::process::Command::new(binary)
         .arg("--workspace")
-        .arg(&workspace)
+        .arg(workspace)
         .spawn()
         .map_err(|error| CliError::local(format!("cannot spawn Anvil: {error}")))?;
-    let mut client = Client::connect_with_timeout(Duration::from_secs(5)).map_err(map_error)?;
+    let mut client =
+        Client::connect_for_with_timeout(workspace, Duration::from_secs(5)).map_err(map_error)?;
     for _ in 0..50 {
         std::thread::sleep(Duration::from_millis(100));
         if client.ping().is_ok() {
@@ -547,6 +563,7 @@ fn clone_options(options: &Options) -> Options {
         json: options.json,
         spawn: options.spawn,
         timeout: options.timeout,
+        workspace: options.workspace.clone(),
         positional: options.positional.clone(),
     }
 }
@@ -576,6 +593,7 @@ mod tests {
             json: true,
             spawn: false,
             timeout: Duration::from_secs(1),
+            workspace: PathBuf::from("."),
             positional: positional.iter().map(|value| (*value).to_owned()).collect(),
         }
     }

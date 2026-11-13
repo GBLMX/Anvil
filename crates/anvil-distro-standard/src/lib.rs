@@ -285,30 +285,42 @@ fn forward_to_running(
     path: Option<&Path>,
     read_only: bool,
 ) -> std::io::Result<bool> {
-    let mut client = match anvil_control::Client::connect() {
+    let workspace = workspace
+        .canonicalize()
+        .unwrap_or_else(|_| workspace.to_path_buf());
+    let mut client = match anvil_control::Client::connect_for(&workspace) {
         Ok(client) => client,
         Err(_) => return Ok(false),
     };
     let status = match client.status() {
         Ok(status) => status,
-        Err(_) => return Ok(false),
+        Err(_) => {
+            let mut legacy = match anvil_control::Client::connect() {
+                Ok(client) => client,
+                Err(_) => return Ok(false),
+            };
+            match legacy.status() {
+                Ok(value) => {
+                    let running = value
+                        .workspace
+                        .canonicalize()
+                        .unwrap_or_else(|_| value.workspace.clone());
+                    if running != workspace {
+                        return Ok(false);
+                    }
+                    client = legacy;
+                    value
+                }
+                Err(_) => return Ok(false),
+            }
+        }
     };
-    let workspace = workspace
-        .canonicalize()
-        .unwrap_or_else(|_| workspace.to_path_buf());
     let running = status
         .workspace
         .canonicalize()
         .unwrap_or_else(|_| status.workspace.clone());
     if running != workspace {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::AlreadyExists,
-            format!(
-                "another {} instance is running for {}; use anvil-ctl",
-                distribution.name,
-                running.display()
-            ),
-        ));
+        return Ok(false);
     }
     if read_only {
         return Err(std::io::Error::new(
@@ -419,8 +431,7 @@ where
     }
     let workspace = match workspace {
         Some(workspace) => workspace,
-        None if editor => editor_workspace(path.as_deref())?,
-        None => env::current_dir().map_err(|error| error.to_string())?,
+        None => workspace_for_path(path.as_deref())?,
     };
     Ok(Command::Run {
         workspace,
@@ -431,7 +442,7 @@ where
     })
 }
 
-fn editor_workspace(path: Option<&Path>) -> Result<PathBuf, String> {
+fn workspace_for_path(path: Option<&Path>) -> Result<PathBuf, String> {
     let cwd = env::current_dir().map_err(|error| error.to_string())?;
     let Some(path) = path else {
         return Ok(cwd);
@@ -506,6 +517,29 @@ mod tests {
     }
 
     #[test]
+    fn file_outside_cwd_uses_its_parent_as_workspace() {
+        let directory = tempfile::tempdir().expect("tempdir");
+        let file = directory.path().join("outside.txt");
+        std::fs::write(&file, "text").expect("write");
+        let command = parse_args(args(&[file.to_str().expect("utf-8 path")])).unwrap();
+        let Command::Run {
+            workspace,
+            path,
+            editor,
+            ..
+        } = command
+        else {
+            panic!("expected run command");
+        };
+        assert_eq!(
+            workspace,
+            directory.path().canonicalize().expect("canonical")
+        );
+        assert_eq!(path, Some(file));
+        assert!(!editor);
+    }
+
+    #[test]
     fn parses_stdin_and_read_only() {
         let command = parse_args(args(&["-", "--read-only"])).unwrap();
         let Command::Run {
@@ -526,16 +560,12 @@ mod tests {
 
     #[test]
     fn rejects_stdin_with_a_file_or_editor_mode() {
-        assert!(
-            parse_args(args(&["-", "file.rs"]))
-                .unwrap_err()
-                .contains("mutually exclusive")
-        );
-        assert!(
-            parse_args(args(&["--editor", "-"]))
-                .unwrap_err()
-                .contains("cannot be combined")
-        );
+        assert!(parse_args(args(&["-", "file.rs"]))
+            .unwrap_err()
+            .contains("mutually exclusive"));
+        assert!(parse_args(args(&["--editor", "-"]))
+            .unwrap_err()
+            .contains("cannot be combined"));
     }
 
     #[test]
@@ -641,16 +671,12 @@ mod tests {
             workspace_index: true,
             ..STANDARD
         };
-        assert!(
-            compose_workspace_index(&with_index)
-                .expect("compose")
-                .is_some()
-        );
-        assert!(
-            compose_workspace_index(&STANDARD)
-                .expect("compose")
-                .is_none()
-        );
+        assert!(compose_workspace_index(&with_index)
+            .expect("compose")
+            .is_some());
+        assert!(compose_workspace_index(&STANDARD)
+            .expect("compose")
+            .is_none());
     }
 
     #[cfg(not(feature = "official-workspace-index"))]
@@ -661,11 +687,9 @@ mod tests {
             ..STANDARD
         };
         assert!(compose_workspace_index(&with_index).is_err());
-        assert!(
-            compose_workspace_index(&STANDARD)
-                .expect("compose")
-                .is_none()
-        );
+        assert!(compose_workspace_index(&STANDARD)
+            .expect("compose")
+            .is_none());
     }
 
     #[cfg(feature = "official-desktop")]
@@ -697,16 +721,12 @@ mod tests {
             language_latex: true,
             ..STANDARD
         };
-        assert!(
-            compose_language_tooling(&with_latex)
-                .expect("compose")
-                .is_some()
-        );
-        assert!(
-            compose_language_tooling(&STANDARD)
-                .expect("compose")
-                .is_none()
-        );
+        assert!(compose_language_tooling(&with_latex)
+            .expect("compose")
+            .is_some());
+        assert!(compose_language_tooling(&STANDARD)
+            .expect("compose")
+            .is_none());
     }
 
     #[cfg(not(feature = "official-language-latex"))]
@@ -717,10 +737,8 @@ mod tests {
             ..STANDARD
         };
         assert!(compose_language_tooling(&with_latex).is_err());
-        assert!(
-            compose_language_tooling(&STANDARD)
-                .expect("compose")
-                .is_none()
-        );
+        assert!(compose_language_tooling(&STANDARD)
+            .expect("compose")
+            .is_none());
     }
 }

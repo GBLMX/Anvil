@@ -86,6 +86,7 @@ fi
 mkdir -p "$workspace" "$runtime" "$state"
 printf 'one\ntwo\n' >"$workspace/a.txt"
 export XDG_RUNTIME_DIR="$runtime"
+export ANVIL_WORKSPACE="$workspace"
 export XDG_STATE_HOME="$state"
 export ANVIL_SKIP_TERMINAL_QUERY=1
 export ANVIL_GATEWAY_LOG="$root/gateway.log"
@@ -94,12 +95,12 @@ export TERM="${TERM:-screen-256color}"
 tmux -L "$session" new-session -d -s anvil -x 120 -y 40 \
 	"cd '$workspace' && exec '$anvil_bin' -w '$workspace' a.txt"
 for _ in $(seq 1 100); do
-	if "$anvil_ctl" --json status >/dev/null 2>&1; then
+	if "$anvil_ctl" --workspace "$workspace" --json status >/dev/null 2>&1; then
 		break
 	fi
 	sleep 0.1
 done
-if ! "$anvil_ctl" --json status >/dev/null 2>&1; then
+if ! "$anvil_ctl" --workspace "$workspace" --json status >/dev/null 2>&1; then
 	fail "Anvil control socket did not become ready"
 fi
 

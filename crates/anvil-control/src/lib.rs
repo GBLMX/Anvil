@@ -1,22 +1,27 @@
-//! Stable single-instance control socket for the Anvil TUI.
+//! Workspace-scoped control socket for the Anvil TUI.
 //!
-//! The control socket is separate from the per-session gateway socket. It
-//! accepts framed JSON-RPC requests from `anvil-ctl`, verifies peer credentials,
-//! and forwards editor actions to the running TUI.
+//! One socket and lock pair is created for each canonical workspace under
+//! `$XDG_RUNTIME_DIR/anvil/`. The control socket is separate from the
+//! per-session gateway socket. It accepts framed JSON-RPC requests from
+//! `anvil-ctl`, verifies peer credentials, and forwards editor actions to the
+//! matching TUI.
 
-use anvil_ipc::{JSONRPC_VERSION, Listener, Request, Response, codes, parse_request};
+use anvil_ipc::{codes, parse_request, Listener, Request, Response, JSONRPC_VERSION};
 use rustix::fs::FlockOperation;
 use serde::{Deserialize, Serialize};
-use serde_json::{Value, json};
+use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
 use std::{
     fs::{self, File, OpenOptions},
     io,
-    os::unix::fs::{OpenOptionsExt, PermissionsExt},
+    os::unix::{
+        ffi::OsStrExt,
+        fs::{OpenOptionsExt, PermissionsExt},
+    },
     path::{Path, PathBuf},
     sync::{
-        Arc,
         atomic::{AtomicBool, Ordering},
-        mpsc,
+        mpsc, Arc,
     },
     thread::{self, JoinHandle},
     time::Duration,
@@ -662,18 +667,42 @@ impl From<serde_json::Error> for Error {
     }
 }
 
-/// Stable control socket path under `$XDG_RUNTIME_DIR`.
+/// Stable legacy control socket path under `$XDG_RUNTIME_DIR`.
 pub fn socket_path() -> Result<PathBuf, Error> {
-    let runtime = std::env::var_os("XDG_RUNTIME_DIR")
+    Ok(runtime_dir()?.join("anvil/control.sock"))
+}
+
+/// Control socket path for one canonical workspace.
+pub fn socket_path_for(workspace: &Path) -> Result<PathBuf, Error> {
+    Ok(control_socket_path(&runtime_dir()?, workspace))
+}
+
+fn control_socket_path(runtime: &Path, workspace: &Path) -> PathBuf {
+    let workspace = fs::canonicalize(workspace).unwrap_or_else(|_| workspace.to_path_buf());
+    let hash = Sha256::digest(workspace.as_os_str().as_bytes());
+    let id = hash[..8]
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>();
+    runtime.join("anvil").join(format!("control-{id}.sock"))
+}
+
+fn runtime_dir() -> Result<PathBuf, Error> {
+    std::env::var_os("XDG_RUNTIME_DIR")
         .filter(|value| !value.is_empty())
-        .ok_or_else(|| Error::RuntimeDir("XDG_RUNTIME_DIR is not set".to_owned()))?;
-    Ok(PathBuf::from(runtime).join("anvil/control.sock"))
+        .map(PathBuf::from)
+        .ok_or_else(|| Error::RuntimeDir("XDG_RUNTIME_DIR is not set".to_owned()))
 }
 
 impl ControlServer {
     /// Start the control server at the stable runtime path.
     pub fn start() -> Result<Self, Error> {
         Self::start_at(socket_path()?)
+    }
+
+    /// Start the control server for one workspace.
+    pub fn start_for(workspace: &Path) -> Result<Self, Error> {
+        Self::start_at(socket_path_for(workspace)?)
     }
 
     /// Start the control server at an explicit socket path.
@@ -683,7 +712,7 @@ impl ControlServer {
             .ok_or_else(|| Error::RuntimeDir(format!("{} has no parent", socket.display())))?;
         fs::create_dir_all(parent)?;
         fs::set_permissions(parent, fs::Permissions::from_mode(0o700))?;
-        let lock_path = parent.join("control.lock");
+        let lock_path = socket.with_extension("lock");
         let lock = OpenOptions::new()
             .create(true)
             .truncate(false)
@@ -1020,6 +1049,16 @@ impl Client {
         Self::connect_at(&socket, Duration::from_secs(5))
     }
 
+    /// Connect to the control socket for one workspace.
+    pub fn connect_for(workspace: &Path) -> Result<Self, Error> {
+        Self::connect_for_with_timeout(workspace, Duration::from_secs(5))
+    }
+
+    /// Connect to the control socket for one workspace with an explicit timeout.
+    pub fn connect_for_with_timeout(workspace: &Path, timeout: Duration) -> Result<Self, Error> {
+        Self::connect_at(&socket_path_for(workspace)?, timeout)
+    }
+
     /// Connect to an explicit socket path.
     pub fn connect_at(socket: &Path, timeout: Duration) -> Result<Self, Error> {
         Ok(Self {
@@ -1152,6 +1191,30 @@ mod tests {
 
     fn server_at(path: &Path) -> Result<ControlServer, Error> {
         ControlServer::start_at(path.to_path_buf())
+    }
+
+    #[test]
+    fn workspace_socket_paths_are_stable_and_distinct() {
+        let runtime = Path::new("/run/user/1000");
+        let first = control_socket_path(runtime, Path::new("/tmp/one"));
+        let first_again = control_socket_path(runtime, Path::new("/tmp/one"));
+        let second = control_socket_path(runtime, Path::new("/tmp/two"));
+        assert_eq!(first, first_again);
+        assert_ne!(first, second);
+        assert!(first.to_string_lossy().contains("control-"));
+    }
+
+    #[test]
+    fn explicit_servers_use_distinct_locks() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let first = dir.path().join("a.sock");
+        let second = dir.path().join("b.sock");
+        let first_server = server_at(&first).expect("first server");
+        let second_server = server_at(&second).expect("second server");
+        assert!(first.with_extension("lock").is_file());
+        assert!(second.with_extension("lock").is_file());
+        drop(first_server);
+        drop(second_server);
     }
 
     #[test]

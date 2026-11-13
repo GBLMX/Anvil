@@ -207,11 +207,14 @@ are rejected.
 
 ## Control
 
-`anvil-ctl` controls the running instance through
-`$XDG_RUNTIME_DIR/anvil/control.sock`:
+`anvil-ctl` controls the running instance for one workspace. Each workspace
+gets its own socket under `$XDG_RUNTIME_DIR/anvil/`; `--workspace` selects it
+and defaults to the current directory. `anvil-mcp` uses `ANVIL_WORKSPACE` or
+its own cwd.
 
 ```text
 anvil-ctl status
+anvil-ctl --workspace /path/to/project status
 anvil-ctl --json open src/main.rs +12:3
 anvil-ctl --json edit set $'alpha\nbeta\n'
 printf 'alpha\nbeta\n' | anvil-ctl --json edit set --stdin
