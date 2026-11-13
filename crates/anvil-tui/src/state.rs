@@ -703,6 +703,7 @@ pub(crate) struct CompletionItem {
     pub(crate) snippet: Option<Snippet>,
     pub(crate) detail: String,
     pub(crate) replace: Option<(usize, usize, usize, usize)>,
+    pub(crate) replace_bytes: Option<(usize, usize)>,
     pub(crate) documentation: Option<String>,
     pub(crate) raw: serde_json::Value,
     pub(crate) resolved: bool,

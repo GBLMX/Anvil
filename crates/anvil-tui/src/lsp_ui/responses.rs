@@ -353,6 +353,7 @@ impl Model {
                     snippet,
                     detail,
                     replace,
+                    replace_bytes: None,
                     documentation,
                     raw: item.clone(),
                     resolved: false,

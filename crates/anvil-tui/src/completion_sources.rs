@@ -61,10 +61,15 @@ impl Model {
             let Ok(batch) = provider.provider.complete(&context, &cancel) else {
                 continue;
             };
+            let replace = if provider.id.as_str() == "builtin.paths" {
+                Some((cursor.saturating_sub(path_prefix.len()), cursor))
+            } else {
+                Some((cursor.saturating_sub(prefix.len()), cursor))
+            };
             items.extend(
                 batch
                     .into_iter()
-                    .map(|item| completion_from_provider(provider.id, item)),
+                    .map(|item| completion_from_provider(provider.id, item, replace)),
             );
         }
         items
@@ -120,7 +125,11 @@ impl Model {
     }
 }
 
-fn completion_from_provider(source: &ProviderId, item: ProviderCompletionItem) -> CompletionItem {
+fn completion_from_provider(
+    source: &ProviderId,
+    item: ProviderCompletionItem,
+    replace_bytes: Option<(usize, usize)>,
+) -> CompletionItem {
     let label = item.label;
     let filter_text = item.filter_text.clone().unwrap_or_else(|| label.clone());
     let sort_text = item.sort_text.clone().unwrap_or_else(|| label.clone());
@@ -134,6 +143,7 @@ fn completion_from_provider(source: &ProviderId, item: ProviderCompletionItem) -
         snippet: None,
         detail: item.detail.unwrap_or_default(),
         replace: None,
+        replace_bytes,
         documentation: None,
         raw: serde_json::Value::Null,
         resolved: true,

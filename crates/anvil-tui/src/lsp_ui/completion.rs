@@ -101,9 +101,20 @@ impl Model {
         let label = item.label.clone();
         let insert = item.insert.clone();
         let replace = item.replace;
+        let replace_bytes = item.replace_bytes;
         let mut snippet = item.snippet.clone();
         self.overlays.lsp_results.snippet = None;
-        if let Some((start_line, start_char, end_line, end_char)) = replace {
+        if let Some((start, end)) = replace_bytes {
+            let end = end.max(start);
+            self.session.editor.set_selection_bytes(start, end);
+            self.session.editor.delete(start..end);
+            self.session.editor.insert(start, &insert);
+            self.session.cursor = start + insert.len();
+            self.file.modified = true;
+            if let Some(snippet) = snippet.take() {
+                self.start_snippet(&snippet, start);
+            }
+        } else if let Some((start_line, start_char, end_line, end_char)) = replace {
             let start = self.offset_at_utf16(start_line, start_char);
             let end = self.offset_at_utf16(end_line, end_char).max(start);
             self.session.editor.set_selection_bytes(start, end);

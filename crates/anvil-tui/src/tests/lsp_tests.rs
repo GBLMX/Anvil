@@ -472,12 +472,26 @@ fn path_completion_uses_gateway_directory_entries() {
         .completion
         .as_ref()
         .expect("completion");
-    let item = completion
+    let index = completion
         .items
         .iter()
-        .find(|item| item.label == "./model.rs")
+        .position(|item| item.label == "./model.rs")
         .expect("path item");
-    assert_eq!(item.source.as_str(), "builtin.paths");
+    assert_eq!(completion.items[index].source.as_str(), "builtin.paths");
+    model
+        .overlays
+        .lsp_results
+        .completion
+        .as_mut()
+        .expect("completion")
+        .selected = index;
+    model.apply_completion();
+    let text = model
+        .session
+        .editor
+        .text()
+        .slice(0..model.session.editor.text().len_bytes());
+    assert_eq!(text, "./model.rs");
     drop(session);
 }
 
@@ -492,12 +506,29 @@ fn buffer_words_source_populates_local_completion() {
         .completion
         .as_ref()
         .expect("completion");
-    let item = completion
+    let index = completion
         .items
         .iter()
-        .find(|item| item.label == "value")
+        .position(|item| item.label == "value")
         .expect("buffer word");
-    assert_eq!(item.source.as_str(), "builtin.buffer-words");
+    assert_eq!(
+        completion.items[index].source.as_str(),
+        "builtin.buffer-words"
+    );
+    model
+        .overlays
+        .lsp_results
+        .completion
+        .as_mut()
+        .expect("completion")
+        .selected = index;
+    model.apply_completion();
+    let text = model
+        .session
+        .editor
+        .text()
+        .slice(0..model.session.editor.text().len_bytes());
+    assert_eq!(text, "value value\nvalue");
 }
 
 #[test]
@@ -574,6 +605,7 @@ fn cancelling_completion_drops_pending_response() {
             snippet: None,
             detail: String::new(),
             replace: None,
+            replace_bytes: None,
             documentation: None,
             raw: serde_json::Value::Null,
             resolved: false,
@@ -618,6 +650,7 @@ fn completion_resolve_updates_selected_item() {
             snippet: None,
             detail: String::new(),
             replace: None,
+            replace_bytes: None,
             documentation: None,
             raw: serde_json::json!({"label": "item"}),
             resolved: false,
@@ -669,6 +702,7 @@ fn completion_documentation_is_rendered() {
             snippet: None,
             detail: "detail".to_owned(),
             replace: None,
+            replace_bytes: None,
             documentation: Some("resolved docs".to_owned()),
             raw: serde_json::json!({"label": "item"}),
             resolved: true,
@@ -706,6 +740,7 @@ fn applying_snippet_selects_and_navigates_stops() {
             snippet: Some(snippet),
             detail: String::new(),
             replace: None,
+            replace_bytes: None,
             documentation: None,
             raw: serde_json::Value::Null,
             resolved: true,
@@ -748,6 +783,7 @@ fn mirrored_snippet_edits_apply_to_all_tabstops() {
             snippet: Some(snippet),
             detail: String::new(),
             replace: None,
+            replace_bytes: None,
             documentation: None,
             raw: serde_json::Value::Null,
             resolved: true,
@@ -1886,6 +1922,7 @@ fn completion_char_and_backspace_update_buffer_and_query() {
             snippet: None,
             detail: String::new(),
             replace: None,
+            replace_bytes: None,
             documentation: None,
             raw: serde_json::Value::Null,
             resolved: false,
