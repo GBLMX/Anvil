@@ -1,8 +1,8 @@
 use anvil_core::{TextBuffer, TextDocument};
 use std::collections::{HashMap, VecDeque};
 use std::path::{Path, PathBuf};
-use std::sync::LazyLock;
 use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::LazyLock;
 use std::time::{Duration, Instant};
 use tree_sitter::{Language, Parser, Query, QueryCursor, StreamingIterator};
 
@@ -71,6 +71,13 @@ static RUST: LazyLock<SyntaxLanguage> = LazyLock::new(|| {
         Language::new(tree_sitter_rust::LANGUAGE),
         include_str!("syntax/rust.scm"),
         true,
+    )
+});
+static HTML: LazyLock<SyntaxLanguage> = LazyLock::new(|| {
+    SyntaxLanguage::grammar(
+        Language::new(tree_sitter_html::LANGUAGE),
+        tree_sitter_html::HIGHLIGHTS_QUERY,
+        false,
     )
 });
 static JSON: LazyLock<SyntaxLanguage> = LazyLock::new(|| {
@@ -268,11 +275,10 @@ impl SyntaxCacheStore {
 
     fn check(&self) {
         debug_assert_eq!(self.entries.len(), self.order.len());
-        debug_assert!(
-            self.order
-                .iter()
-                .all(|path| self.entries.contains_key(path))
-        );
+        debug_assert!(self
+            .order
+            .iter()
+            .all(|path| self.entries.contains_key(path)));
         debug_assert_eq!(
             self.order
                 .iter()
@@ -745,6 +751,7 @@ fn language_for_tag(tag: &str) -> Option<&'static SyntaxLanguage> {
         "toml" => Some(&*TOML),
         "yaml" | "yml" => Some(&*YAML),
         "json" | "jsonc" => Some(&*JSON),
+        "html" | "htm" => Some(&*HTML),
         "make" | "makefile" => Some(&*MAKE),
         "dockerfile" | "docker" => Some(&*DOCKERFILE),
         _ => None,
@@ -851,6 +858,7 @@ fn class_for(name: &str) -> Option<SyntaxClass> {
             SyntaxClass::Function
         }
         "type" => SyntaxClass::Type,
+        "tag" => SyntaxClass::Type,
         "property" | "attribute" | "label" => SyntaxClass::Property,
         "constant" | "constant.builtin" | "constant.macro" | "boolean" => SyntaxClass::Constant,
         "heading" => SyntaxClass::Heading,
@@ -876,6 +884,7 @@ fn language_for(path: &Path) -> Option<&'static SyntaxLanguage> {
     match path.extension()?.to_str()? {
         "rs" => Some(&*RUST),
         "json" | "jsonc" => Some(&*JSON),
+        "html" | "htm" => Some(&*HTML),
         "go" => Some(&*GO),
         "sh" | "bash" | "zsh" | "brush" => Some(&*BASH),
         "fish" => Some(&*FISH),
@@ -941,6 +950,25 @@ mod tests {
     }
 
     #[test]
+    fn html_grammar_is_loadable() {
+        let language = Language::new(tree_sitter_html::LANGUAGE);
+        let query = Query::new(&language, tree_sitter_html::HIGHLIGHTS_QUERY);
+        assert!(query.is_ok());
+        let mut parser = Parser::new();
+        assert!(parser.set_language(&language).is_ok());
+    }
+
+    #[test]
+    fn html_highlights_tags_attributes_and_comments() {
+        let source = r#"<div class="x">text</div><!-- note -->"#;
+        let highlights = parse_source(source, Path::new("page.html")).expect("parse");
+        assert!(highlights.iter().any(|h| h.class == SyntaxClass::Type));
+        assert!(highlights.iter().any(|h| h.class == SyntaxClass::Property));
+        assert!(highlights.iter().any(|h| h.class == SyntaxClass::String));
+        assert!(highlights.iter().any(|h| h.class == SyntaxClass::Comment));
+    }
+
+    #[test]
     fn json_highlights_keys_and_constants() {
         let highlights =
             parse_source(r#"{"key": true, "n": 1}"#, Path::new("x.json")).expect("parse");
@@ -973,6 +1001,8 @@ mod tests {
             "x.yaml",
             "x.json",
             "x.jsonc",
+            "x.html",
+            "x.htm",
             "x.md",
             "x.markdown",
             "x.tex",
@@ -1048,11 +1078,9 @@ mod tests {
     fn markdown_frontmatter_and_broken_fences_are_safe() {
         let frontmatter = parse_source("---\ntitle: Anvil\n---\n# Title\n", Path::new("x.md"))
             .expect("frontmatter parse");
-        assert!(
-            frontmatter
-                .iter()
-                .any(|highlight| highlight.class == SyntaxClass::Property)
-        );
+        assert!(frontmatter
+            .iter()
+            .any(|highlight| highlight.class == SyntaxClass::Property));
         let broken =
             parse_source("```rust\nfn main() {\n", Path::new("x.md")).expect("broken fence parse");
         assert!(!broken.is_empty());

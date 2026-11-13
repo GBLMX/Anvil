@@ -30,7 +30,8 @@ workspace session restore, dirty-buffer swap
 conflict commands, and a fresh undo stack after restore, horizontal scrolling,
 and dirty-only redraws, insert-mode Tab indentation, a workspace file tree, and a fuzzy file
 finder. Rust, TOML, Go, Bash/Zsh/Brush, Fish, Python, YAML, JSON/JSONC,
-Markdown, Makefile, Dockerfile, and LaTeX (`.tex`, `.ltx`, `.sty`, `.cls`)
+HTML (`.html`, `.htm`), Markdown, Makefile, Dockerfile, and LaTeX
+(`.tex`, `.ltx`, `.sty`, `.cls`)
 use Tree-sitter highlighting on a debounced background thread, capped at
 256 KiB so large files keep plain-text latency.
 Trusted language servers (rust-analyzer, gopls, pyright/pylsp,

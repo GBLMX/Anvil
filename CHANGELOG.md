@@ -8,6 +8,9 @@ post-`0.5.0` feature line.
 
 ## [Unreleased]
 ### Added
+- HTML and HTM files now use the Tree-sitter HTML grammar for tag, attribute,
+  string, constant, and comment highlighting, with HTML fenced blocks in
+  Markdown.
 - Control sockets are now per workspace: `anvil`, `anvil-ctl`, and `anvil-mcp`
   select the instance by canonical workspace path instead of one global
   `control.sock`. File arguments outside the cwd derive their parent as the
