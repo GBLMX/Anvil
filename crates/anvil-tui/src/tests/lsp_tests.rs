@@ -1264,6 +1264,25 @@ fn diagnostic_peek_merges_same_line_and_restores_focus() {
 }
 
 #[test]
+fn diagnostic_peek_unknown_key_cancels_and_passes_through() {
+    let mut model = Model::new(
+        EditorState::from_text("one"),
+        Some(PathBuf::from("diag.rs")),
+    );
+    model
+        .language
+        .diagnostics
+        .by_path
+        .insert(PathBuf::from("diag.rs"), vec![diagnostic(0, 0, "problem")]);
+    model.jump_diagnostic(true);
+    assert!(model.ui.diagnostic_peek.is_some());
+
+    handle_event(&mut model, key(KeyCode::Char('i')));
+    assert!(model.ui.diagnostic_peek.is_none());
+    assert!(matches!(model.ui.input_mode, InputMode::Insert));
+}
+
+#[test]
 fn diagnostic_peek_clears_on_revision_change() {
     let mut model = Model::new(
         EditorState::from_text("one"),

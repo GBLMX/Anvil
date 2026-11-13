@@ -641,6 +641,48 @@ fn execute_lsp_list_action(model: &mut Model, kind: LspListKind, action: LspList
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum DiagnosticPeekAction {
+    Previous,
+    Next,
+    PagePrevious,
+    PageNext,
+    CodeActions,
+    Close,
+    DismissAndPassThrough,
+}
+
+fn diagnostic_peek_action(key: KeyPress) -> DiagnosticPeekAction {
+    match key.code {
+        KeyCode::Esc => DiagnosticPeekAction::Close,
+        KeyCode::Up => DiagnosticPeekAction::Previous,
+        KeyCode::Down => DiagnosticPeekAction::Next,
+        KeyCode::PageUp => DiagnosticPeekAction::PagePrevious,
+        KeyCode::PageDown => DiagnosticPeekAction::PageNext,
+        KeyCode::Enter => DiagnosticPeekAction::CodeActions,
+        _ => DiagnosticPeekAction::DismissAndPassThrough,
+    }
+}
+
+fn execute_diagnostic_peek_action(model: &mut Model, action: DiagnosticPeekAction) -> bool {
+    match action {
+        DiagnosticPeekAction::Previous => model.scroll_diagnostic_peek(-1),
+        DiagnosticPeekAction::Next => model.scroll_diagnostic_peek(1),
+        DiagnosticPeekAction::PagePrevious => model.scroll_diagnostic_peek(-5),
+        DiagnosticPeekAction::PageNext => model.scroll_diagnostic_peek(5),
+        DiagnosticPeekAction::CodeActions => {
+            model.close_diagnostic_peek();
+            model.request_code_actions();
+        }
+        DiagnosticPeekAction::Close => model.close_diagnostic_peek(),
+        DiagnosticPeekAction::DismissAndPassThrough => {
+            model.close_diagnostic_peek();
+            return false;
+        }
+    }
+    true
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum ThemeBrowserAction {
     Previous,
     Next,
@@ -1123,33 +1165,9 @@ fn handle_key(model: &mut Model, key: KeyPress) {
     }
 
     if model.ui.diagnostic_peek.is_some() {
-        match key.code {
-            KeyCode::Esc => {
-                model.close_diagnostic_peek();
-                return;
-            }
-            KeyCode::Up => {
-                model.scroll_diagnostic_peek(-1);
-                return;
-            }
-            KeyCode::Down => {
-                model.scroll_diagnostic_peek(1);
-                return;
-            }
-            KeyCode::PageUp => {
-                model.scroll_diagnostic_peek(-5);
-                return;
-            }
-            KeyCode::PageDown => {
-                model.scroll_diagnostic_peek(5);
-                return;
-            }
-            KeyCode::Enter => {
-                model.close_diagnostic_peek();
-                model.request_code_actions();
-                return;
-            }
-            _ => model.close_diagnostic_peek(),
+        let action = diagnostic_peek_action(key);
+        if execute_diagnostic_peek_action(model, action) {
+            return;
         }
     }
     if model.overlays.theme_browser.is_some() {
