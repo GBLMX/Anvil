@@ -16,8 +16,9 @@ post-`0.5.0` feature line.
   fixed `xdg-open` handoff, strict URL validation, and a bounded opener count.
   It does not add a general command runner or change gateway `sys.exec` policy.
 - The module contract adds an additive `LanguageToolingService` slot. Language
-  settings prefer a provider spec and fall back to the built-in catalog; no
-  concrete execution provider is selected yet.
+  settings prefer a provider spec and fall back to the built-in catalog.
+- The opt-in `official.language-latex` module supplies `texlab` profiles for
+  LaTeX and BibTeX. Syntax highlighting remains a separate slice.
 - `Alt-1` through `Alt-9` switch directly to the matching open buffer while
   leaving bare digits available as count prefixes.
 - `Space b` and `:buffers` open a filterable buffer picker; `Enter` switches

@@ -36,7 +36,8 @@ capped at 256 KiB so large files keep plain-text latency.
 Trusted language servers (rust-analyzer, gopls, pyright/pylsp,
 typescript-language-server/vtsls, clangd, jdtls, lua-language-server,
 vscode-json-language-server, yaml-language-server, bash-language-server,
-marksman, taplo, vscode-html-language-server, vscode-css-language-server, zls)
+marksman, taplo, vscode-html-language-server, vscode-css-language-server, zls,
+texlab)
 run without the plugin sandbox; diagnostics, completion with resolved
 documentation and snippets (`Ctrl+Space`),
 definition (`gd`), references (`gr`), document highlights (`gh`),
@@ -138,7 +139,7 @@ the independent second consumer. Official modules are trusted source-level Rust
 crates compiled into the binary. There is no dynamic Rust ABI, runtime module
 loading, or marketplace-installed Rust module. Module contract v1 is frozen;
 the `0.7.1`-`0.7.3` module, workspace-index, and compatibility-gate slices and
-the first `0.7.4` desktop slice are complete.
+the `0.7.4` desktop and LaTeX slices are complete.
 
 - `official.git` is part of the default standard composition. `:git-*` dispatch
   and completion are gated off when the Git service is absent.
@@ -149,6 +150,9 @@ the first `0.7.4` desktop slice are complete.
 - `official.desktop` is opt-in through `official-desktop`. It enables
   `:open-url <http(s)-url>` with a fixed `xdg-open` handoff and no general
   command runner.
+- `official.language-latex` is opt-in through `official-language-latex`. It
+  supplies `texlab` profiles for LaTeX and BibTeX; syntax highlighting is not
+  part of this slice.
 - `anvil-distro-minimal` composes none of these modules.
 
 Module compatibility, caps, and deprecation rules are in
@@ -248,6 +252,7 @@ to the selected buffer.
 - [Module compatibility and deprecation policy](docs/module-compatibility.md)
 - [Module contract](docs/adr/0028-module-contract.md)
 - [Desktop URL opener module](docs/adr/0031-desktop-url-opener-module.md)
+- [LaTeX language provider](docs/adr/0033-latex-language-provider.md)
 - [Workspace index module extension points](docs/adr/0030-workspace-index-module.md)
 - [External integration and MCP plan](docs/external-integration-plan.md)
 - [Linux platform plan](docs/linux-platform-plan.md)

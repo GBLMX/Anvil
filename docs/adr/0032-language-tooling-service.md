@@ -2,7 +2,8 @@
 
 - Status: Accepted for implementation; additive slot and fallback landed
 - Date: 2026-11-13
-- Related: [ADR-0028](0028-module-contract.md), [ADR-0025](0025-lsp-and-language-breadth.md)
+- Related: [ADR-0028](0028-module-contract.md), [ADR-0025](0025-lsp-and-language-breadth.md),
+  [ADR-0033](0033-latex-language-provider.md)
 
 ## Context
 
