@@ -216,10 +216,10 @@ Do not silently rewrite a user's existing config.
    - An explicit LIFO overlay stack now owns the command palette, settings,
      buffer picker, fuzzy finder, problems panel, workspace/document symbols,
      references, call hierarchy, code actions, hover, diagnostic peek, theme
-     browser, debug panel, and test explorer: only the top entry consumes keys,
-     and closing restores focus.
-   - Remaining: classify completion, signature help, the location panel, and
-     the read-only pager, then remove the boolean overlay scan from
+     browser, debug panel, test explorer, and completion: only the top entry
+     consumes keys, and closing restores focus.
+   - Remaining: classify signature help, the location panel, and the read-only
+     pager, then remove the boolean overlay scan from
      `active_keymap_contexts`.
 
 3. **Leader — landed**

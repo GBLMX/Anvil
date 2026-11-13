@@ -623,6 +623,7 @@ pub(crate) enum OverlayKind {
     ThemeBrowser,
     DebugPanel,
     TestExplorer,
+    Completion,
 }
 
 impl OverlayKind {

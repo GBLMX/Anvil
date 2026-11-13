@@ -1268,6 +1268,31 @@ fn diagnostic_peek_merges_same_line_and_restores_focus() {
 }
 
 #[test]
+fn hover_response_dismisses_cleanly_from_the_stack() {
+    let mut model = Model::new(EditorState::from_text("alpha"), None);
+    model
+        .language
+        .lsp_requests
+        .pending
+        .insert(17, LspRequestKind::Hover);
+    model.handle_lsp_response(
+        17,
+        serde_json::json!({"contents": {"kind": "plaintext", "value": "docs"}}),
+        None,
+    );
+    assert!(model.overlays.lsp_results.hover.is_some());
+    assert_eq!(model.top_overlay(), Some(OverlayKind::Hover));
+
+    handle_event(&mut model, key(KeyCode::Char('i')));
+    assert!(model.overlays.lsp_results.hover.is_none());
+    assert!(model.overlays.stack.is_empty());
+    assert!(matches!(model.ui.input_mode, InputMode::Insert));
+
+    handle_event(&mut model, key(KeyCode::Esc));
+    assert!(model.overlays.stack.is_empty());
+}
+
+#[test]
 fn diagnostic_peek_unknown_key_cancels_and_passes_through() {
     let mut model = Model::new(
         EditorState::from_text("one"),

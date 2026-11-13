@@ -443,6 +443,7 @@ impl Model {
         });
         self.overlays.lsp_results.completion = None;
         self.overlays.lsp_results.completion_resolve = None;
+        self.close_overlay(OverlayKind::Completion);
     }
 
     pub(crate) fn cancel_code_actions(&mut self) {
@@ -1194,6 +1195,7 @@ impl Model {
         if result.is_null() {
             self.status.text = "lsp: no code actions".to_owned();
             self.overlays.lsp_results.code_actions = None;
+            self.close_overlay(OverlayKind::CodeActions);
             return;
         }
         let Some(items) = result.as_array() else {
@@ -1231,6 +1233,7 @@ impl Model {
         if items.is_empty() {
             self.status.text = "lsp: no code actions".to_owned();
             self.overlays.lsp_results.code_actions = None;
+            self.close_overlay(OverlayKind::CodeActions);
         } else {
             self.overlays.lsp_results.code_actions = Some(CodeActionState { items, selected: 0 });
             self.push_overlay_if_idle(OverlayKind::CodeActions);
@@ -1242,6 +1245,7 @@ impl Model {
         let Some(completion) = self.overlays.lsp_results.completion.take() else {
             return;
         };
+        self.close_overlay(OverlayKind::Completion);
         let Some(item) = completion
             .filtered
             .get(completion.selected)

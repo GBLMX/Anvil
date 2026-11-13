@@ -5,15 +5,19 @@ use super::*;
 impl Model {
     pub(crate) fn clear_lsp_ui(&mut self) {
         self.clear_lsp_requests();
-        self.overlays.lsp_results.completion = None;
+        self.cancel_completion();
         self.close_hover();
         self.close_diagnostic_peek();
         self.overlays.lsp_results.code_actions = None;
+        self.close_overlay(OverlayKind::CodeActions);
         self.overlays.lsp_results.code_lens = None;
         self.overlays.lsp_results.document_symbols = None;
+        self.close_overlay(OverlayKind::DocumentSymbols);
         self.overlays.lsp_results.references = None;
+        self.close_overlay(OverlayKind::References);
         self.overlays.lsp_results.document_highlights = None;
         self.overlays.lsp_results.call_hierarchy = None;
+        self.close_overlay(OverlayKind::CallHierarchy);
         self.overlays.lsp_results.semantic_legend.clear();
     }
 

@@ -140,7 +140,9 @@ impl Model {
         self.close_hover();
         self.close_diagnostic_peek();
         self.overlays.lsp_results.code_actions = None;
+        self.close_overlay(OverlayKind::CodeActions);
         self.overlays.lsp_results.document_symbols = None;
+        self.close_overlay(OverlayKind::DocumentSymbols);
         self.clear_preview();
         let workspace = self.workspace.path.clone();
         let generation = self.overlays.fuzzy_generation.saturating_add(1);

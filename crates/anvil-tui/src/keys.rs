@@ -675,8 +675,7 @@ fn hover_action(key: KeyPress) -> HoverAction {
 }
 
 fn execute_hover_action(model: &mut Model, action: HoverAction) -> bool {
-    model.overlays.lsp_results.hover = None;
-    model.file.dirty = true;
+    model.close_hover();
     matches!(action, HoverAction::Cancel)
 }
 
@@ -1207,6 +1206,12 @@ fn handle_key(model: &mut Model, key: KeyPress) {
                     execute_test_explorer_action(model, action);
                 }
                 return;
+            }
+            OverlayKind::Completion => {
+                let action = completion_action(key, text_input);
+                if execute_completion_action(model, action) {
+                    return;
+                }
             }
         }
     }

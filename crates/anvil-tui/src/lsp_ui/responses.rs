@@ -360,6 +360,7 @@ impl Model {
         if items.is_empty() {
             self.status.text = "lsp: no completions".to_owned();
             self.overlays.lsp_results.completion = None;
+            self.close_overlay(OverlayKind::Completion);
         } else {
             let filtered = (0..items.len()).collect();
             let selected = items.iter().position(|item| item.preselect).unwrap_or(0);
@@ -370,6 +371,7 @@ impl Model {
                 query: String::new(),
                 selected,
             });
+            self.push_overlay_if_idle(OverlayKind::Completion);
             self.status.text = "completion".to_owned();
             self.request_completion_resolve();
         }
@@ -447,6 +449,7 @@ impl Model {
         let Some(items) = result.as_array() else {
             self.status.text = "lsp: no references".to_owned();
             self.overlays.lsp_results.references = None;
+            self.close_overlay(OverlayKind::References);
             return;
         };
         let mut references = Vec::new();
@@ -592,6 +595,7 @@ impl Model {
         let Some(calls) = result.as_array() else {
             self.status.text = "lsp: no calls".to_owned();
             self.overlays.lsp_results.call_hierarchy = None;
+            self.close_overlay(OverlayKind::CallHierarchy);
             return;
         };
         let nested = match direction {
