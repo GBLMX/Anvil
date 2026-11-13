@@ -135,8 +135,9 @@ jobs:
       - name: Check module feature matrix
         if: steps.detect.outputs.present == 'true'
         run: |
-          cargo check -p anvil-tui --no-default-features
-          cargo check -p anvil-tui --features official-workspace-index
+          cargo test -p anvil-tui --no-default-features
+          cargo test -p anvil-tui --features official-workspace-index
+          cargo check -p anvil-tui --features official-git,official-workspace-index
           cargo test -p anvil-distro-standard --no-default-features
           cargo test -p anvil-distro-standard --features official-workspace-index
           cargo test -p anvil-distro-standard --features official-git,official-workspace-index
