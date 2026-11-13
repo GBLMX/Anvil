@@ -4,7 +4,7 @@ use crate::input::KeyPress;
 use crate::keymap::{KeyChord, KeymapConfig, NormalCommand, PendingCommand};
 use anvil_session::ui::CreateKind;
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
-use ratatui::{backend::TestBackend, Terminal};
+use ratatui::{Terminal, backend::TestBackend};
 
 mod buffers;
 mod editing;

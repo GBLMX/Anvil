@@ -162,12 +162,14 @@ fn switching_theme_repaints_backgrounds() {
     terminal.draw(|frame| view(&model, frame)).expect("draw");
     let expected = theme::bg();
     assert_ne!(expected, theme::Theme::ANVIL_DARK.bg);
-    assert!(terminal
-        .backend()
-        .buffer()
-        .content()
-        .iter()
-        .any(|cell| cell.bg == expected));
+    assert!(
+        terminal
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .any(|cell| cell.bg == expected)
+    );
     model.execute_command("theme anvil-dark");
 }
 

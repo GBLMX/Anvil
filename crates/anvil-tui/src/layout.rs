@@ -898,9 +898,11 @@ mod tests {
         model.config.settings.editor.soft_wrap = false;
         let rows = model.visible_rows(0, 5);
         assert!(rows.iter().any(|row| matches!(row, DisplayRow::Source(0))));
-        assert!(!rows
-            .iter()
-            .any(|row| matches!(row, DisplayRow::Wrapped { .. })));
+        assert!(
+            !rows
+                .iter()
+                .any(|row| matches!(row, DisplayRow::Wrapped { .. }))
+        );
     }
 }
 

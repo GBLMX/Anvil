@@ -13,13 +13,13 @@ use std::{
     time::{Duration, Instant, SystemTime},
 };
 
-use anvil_core::{end_word, next_word_start, previous_word_start, TextBuffer};
+use anvil_core::{TextBuffer, end_word, next_word_start, previous_word_start};
 use anvil_editor::EditorState;
 use anvil_ipc::GatewayClient;
+use anvil_session::DocumentSession;
 use anvil_session::effect::{Effect, EffectQueue};
 use anvil_session::keymap::KeymapContext;
 use anvil_session::ui::{InputBuffer, InputMode, Problem, UiState};
-use anvil_session::DocumentSession;
 use crossterm::{
     cursor::SetCursorStyle,
     event::{
@@ -29,15 +29,15 @@ use crossterm::{
     },
     execute,
     terminal::{
-        disable_raw_mode, enable_raw_mode, supports_keyboard_enhancement, EnterAlternateScreen,
-        LeaveAlternateScreen,
+        EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
+        supports_keyboard_enhancement,
     },
 };
 use ratatui::{
+    Terminal,
     backend::CrosstermBackend,
     style::{Modifier, Style},
     text::{Line, Span},
-    Terminal,
 };
 
 mod bracket;
@@ -108,9 +108,9 @@ mod lsp_worker;
 mod model;
 mod readonly;
 mod render;
-use readonly::ReadOnlyState;
 #[cfg(test)]
 use readonly::HELP_TEXT;
+use readonly::ReadOnlyState;
 mod settings;
 mod theme;
 use settings::Settings;
@@ -150,8 +150,8 @@ use lsp_worker::{LspEvent, LspWorker};
 #[cfg(target_os = "linux")]
 use plugin_activation::ActivationEvent;
 pub use terminal::{
-    run, run_with_all_services, run_with_input, run_with_input_and_git, run_with_services,
-    run_with_workspace, run_with_workspace_status, DistributionServices,
+    DistributionServices, run, run_with_all_services, run_with_input, run_with_input_and_git,
+    run_with_services, run_with_workspace, run_with_workspace_status,
 };
 
 const MAX_OPEN_BYTES: usize = 256 * 1024 * 1024;

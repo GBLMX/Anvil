@@ -1,7 +1,7 @@
 use anvil_control::{
-    validate_remote_command, Client, EditMode, Error as ControlError, QueryOptions,
+    Client, EditMode, Error as ControlError, QueryOptions, validate_remote_command,
 };
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::{
     path::{Path, PathBuf},
     process,
@@ -329,16 +329,22 @@ fn execute(options: Options, command: CliCommand) -> Result<(), (Options, CliErr
                     read_stdin_text().map_err(|error| (clone_options(&options), error))?
                 }
             };
-            json!(client
-                .edit(mode, &text)
-                .map_err(|error| (clone_options(&options), map_error(error)))?)
+            json!(
+                client
+                    .edit(mode, &text)
+                    .map_err(|error| (clone_options(&options), map_error(error)))?
+            )
         }
-        CliCommand::Query(query) => json!(client
-            .query_with(query)
-            .map_err(|error| (clone_options(&options), map_error(error)))?),
-        CliCommand::Command(command) => json!(client
-            .exec(&command)
-            .map_err(|error| (clone_options(&options), map_error(error)))?),
+        CliCommand::Query(query) => json!(
+            client
+                .query_with(query)
+                .map_err(|error| (clone_options(&options), map_error(error)))?
+        ),
+        CliCommand::Command(command) => json!(
+            client
+                .exec(&command)
+                .map_err(|error| (clone_options(&options), map_error(error)))?
+        ),
         CliCommand::Quit { force } => client
             .quit(force)
             .map_err(|error| (clone_options(&options), map_error(error)))?,

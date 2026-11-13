@@ -28,7 +28,6 @@ fn help_opens_from_normal_editor_mode() {
     assert!(model.pager.back.is_some());
 }
 
-
 #[test]
 fn dashboard_survives_help_round_trip() {
     let mut model = Model::new(EditorState::from_text(""), None);
@@ -112,7 +111,6 @@ fn active_indent_guide_uses_accent() {
         .count();
     assert_eq!(guides, 2);
 }
-
 
 #[test]
 fn indent_guides_do_not_overwrite_code() {

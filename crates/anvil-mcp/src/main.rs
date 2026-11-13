@@ -4,10 +4,10 @@
 //! typed `anvil-control` request executed by the running TUI actor.
 
 use anvil_control::{
-    validate_remote_command, Capability, Client, CommandPolicyError, EditMode, EditRange,
-    Error as ControlError, QueryOptions, COMMANDS,
+    COMMANDS, Capability, Client, CommandPolicyError, EditMode, EditRange, Error as ControlError,
+    QueryOptions, validate_remote_command,
 };
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::{
     io::{self, BufRead, Write},
     path::PathBuf,
@@ -291,8 +291,7 @@ const TOOLS: &[ToolSpec] = &[
     ToolSpec {
         name: "anvil_edit",
         capability: Capability::Edit,
-        description:
-            "Replace the buffer, insert at the cursor, or replace a revision-guarded range.",
+        description: "Replace the buffer, insert at the cursor, or replace a revision-guarded range.",
         schema: edit_schema,
     },
     ToolSpec {

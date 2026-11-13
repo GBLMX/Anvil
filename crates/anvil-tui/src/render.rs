@@ -6,11 +6,11 @@ use anvil_api::EditorView;
 use anvil_session::ui::CreateKind;
 use anvil_syntax::{Highlight, SyntaxClass};
 use ratatui::{
+    Frame,
     layout::Rect,
     style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, BorderType, Clear, Paragraph},
-    Frame,
 };
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 

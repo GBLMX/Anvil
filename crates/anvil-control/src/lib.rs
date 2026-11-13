@@ -6,10 +6,10 @@
 //! `anvil-ctl`, verifies peer credentials, and forwards editor actions to the
 //! matching TUI.
 
-use anvil_ipc::{codes, parse_request, Listener, Request, Response, JSONRPC_VERSION};
+use anvil_ipc::{JSONRPC_VERSION, Listener, Request, Response, codes, parse_request};
 use rustix::fs::FlockOperation;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use std::{
     fs::{self, File, OpenOptions},
@@ -20,8 +20,9 @@ use std::{
     },
     path::{Path, PathBuf},
     sync::{
+        Arc,
         atomic::{AtomicBool, Ordering},
-        mpsc, Arc,
+        mpsc,
     },
     thread::{self, JoinHandle},
     time::Duration,
