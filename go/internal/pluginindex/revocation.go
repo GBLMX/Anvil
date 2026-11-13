@@ -47,9 +47,7 @@ func LoadRevocations(
 	if document.Schema != "anvil.plugin-revocations" || document.SchemaVersion != 1 {
 		return nil, fmt.Errorf("%w: unsupported revocation schema", ErrInvalidDocument)
 	}
-	if _, _, err := validateWindow(document.IssuedAt, document.ExpiresAt, now); err != nil {
-		return nil, err
-	}
+	_, _, windowErr := validateWindow(document.IssuedAt, document.ExpiresAt, now)
 	if len(document.Entries) > MaxRevocations {
 		return nil, fmt.Errorf("%w: too many revocations", ErrInvalidDocument)
 	}
@@ -75,7 +73,7 @@ func LoadRevocations(
 		}
 		seen[key] = struct{}{}
 	}
-	return &document, nil
+	return &document, windowErr
 }
 
 func validateRevocation(entry RevocationEntry, now time.Time) error {

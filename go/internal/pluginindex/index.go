@@ -52,6 +52,8 @@ var (
 	ErrInvalidSignature = errors.New("invalid document signature")
 	// ErrInvalidDocument reports a malformed or out-of-bounds document.
 	ErrInvalidDocument = errors.New("invalid document")
+	// ErrDocumentExpired reports a valid document past its expires_at.
+	ErrDocumentExpired = errors.New("signed document expired")
 )
 
 // RootKeys maps a key id to a build-time Ed25519 public key.
@@ -193,6 +195,9 @@ func LoadIndex(
 		return nil, fmt.Errorf("%w: index JSON: %v", ErrInvalidDocument, err)
 	}
 	if err := validateIndex(&index, now, allowedHosts); err != nil {
+		if errors.Is(err, ErrDocumentExpired) {
+			return &index, err
+		}
 		return nil, err
 	}
 	return &index, nil
@@ -202,9 +207,7 @@ func validateIndex(index *Index, now time.Time, allowedHosts map[string]bool) er
 	if index.Schema != "anvil.plugin-index" || index.SchemaVersion != 1 {
 		return fmt.Errorf("%w: unsupported index schema", ErrInvalidDocument)
 	}
-	if _, _, err := validateWindow(index.IssuedAt, index.ExpiresAt, now); err != nil {
-		return err
-	}
+	_, _, windowErr := validateWindow(index.IssuedAt, index.ExpiresAt, now)
 	if len(index.Publishers) > MaxIndexPublishers {
 		return fmt.Errorf("%w: too many publishers", ErrInvalidDocument)
 	}
@@ -231,7 +234,7 @@ func validateIndex(index *Index, now time.Time, allowedHosts map[string]bool) er
 		}
 		plugins[plugin.ID] = struct{}{}
 	}
-	return nil
+	return windowErr
 }
 
 func validatePublisher(publisher Publisher) error {
@@ -415,7 +418,7 @@ func validateWindow(issuedRaw, expiresRaw string, now time.Time) (time.Time, tim
 		return time.Time{}, time.Time{}, fmt.Errorf("%w: invalid validity window", ErrInvalidDocument)
 	}
 	if !expires.After(now) {
-		return time.Time{}, time.Time{}, fmt.Errorf("%w: document expired", ErrInvalidDocument)
+		return time.Time{}, time.Time{}, fmt.Errorf("%w: expires_at has passed", ErrDocumentExpired)
 	}
 	return issued, expires, nil
 }

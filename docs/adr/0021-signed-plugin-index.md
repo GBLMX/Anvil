@@ -312,8 +312,9 @@ Anti-rollback rules:
    deliberate deletion by the same user.
 
 `issued_at` may be at most five minutes in the future. A document whose
-`expires_at` has passed remains usable for cached browsing, but new installs
-are disabled and the UI must mark it stale. `expires_at` must not be more than
+`expires_at` has passed is returned by `LoadIndex`/`LoadRevocations` together
+with `ErrDocumentExpired`; callers may use it for cached browsing, but must
+reject new installs and mark it stale. `expires_at` must not be more than
 seven days after `issued_at`.
 
 ### Offline behavior

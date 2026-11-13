@@ -328,8 +328,9 @@ post-`0.5.0` feature line.
 ### Fixed
 - The Go toolchain requirement is now 1.26.11, fixing
   GO-2026-6859 in the standard library `net/http` server.
-- Signed plugin indexes and revocation documents now reject an already-expired
-  `expires_at` window.
+- Signed plugin indexes and revocation documents now return
+  `ErrDocumentExpired` after `expires_at`; the parsed document remains
+  available for stale cached browsing but is rejected for new updates.
 - Installed plugin manifest hashes now cover the exact `plugin.json` bytes
   instead of a re-encoded manifest.
 - Package downloads now enforce an indexed digest, package size, publisher

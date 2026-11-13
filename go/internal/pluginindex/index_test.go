@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -271,8 +272,9 @@ func TestRejectsExpiredIndex(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal index: %v", err)
 	}
-	if _, err := LoadIndex(payload, sign(t, payload, f.private), f.roots, f.now, f.hosts); err == nil || !strings.Contains(err.Error(), "expired") {
-		t.Fatalf("expired index error = %v", err)
+	index, err := LoadIndex(payload, sign(t, payload, f.private), f.roots, f.now, f.hosts)
+	if !errors.Is(err, ErrDocumentExpired) || index == nil || index.Sequence != f.index.Sequence {
+		t.Fatalf("expired index = %#v, error = %v", index, err)
 	}
 }
 
@@ -297,7 +299,8 @@ func TestRejectsExpiredRevocations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal revocations: %v", err)
 	}
-	if _, err := LoadRevocations(payload, sign(t, payload, f.private), f.roots, f.now); err == nil || !strings.Contains(err.Error(), "expired") {
-		t.Fatalf("expired revocations error = %v", err)
+	revocations, err := LoadRevocations(payload, sign(t, payload, f.private), f.roots, f.now)
+	if !errors.Is(err, ErrDocumentExpired) || revocations == nil || revocations.Sequence != f.revocation.Sequence {
+		t.Fatalf("expired revocations = %#v, error = %v", revocations, err)
 	}
 }

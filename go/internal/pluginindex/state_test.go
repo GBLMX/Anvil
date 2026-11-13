@@ -2,9 +2,11 @@ package pluginindex
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestCacheAcceptsAndLoads(t *testing.T) {
@@ -124,5 +126,21 @@ func TestCacheLoadsRevocationsWithoutIndex(t *testing.T) {
 	}
 	if state.Index.Digest != "" {
 		t.Fatalf("unexpected index state: %+v", state.Index)
+	}
+}
+
+func TestCacheSupportsExpiredBrowsing(t *testing.T) {
+	fixture := newFixture(t)
+	cache := Cache{Dir: t.TempDir()}
+	if err := cache.AcceptIndex(&fixture.index, fixture.payload, fixture.signature, fixture.roots, ""); err != nil {
+		t.Fatalf("accept index: %v", err)
+	}
+	_, payload, _, err := cache.Load()
+	if err != nil {
+		t.Fatalf("load cache: %v", err)
+	}
+	index, err := LoadIndex(payload, fixture.signature, fixture.roots, fixture.now.Add(48*time.Hour), fixture.hosts)
+	if !errors.Is(err, ErrDocumentExpired) || index == nil {
+		t.Fatalf("cached browsing = %#v, error = %v", index, err)
 	}
 }

@@ -113,6 +113,10 @@ func (s *Server) packageDownload(req request, state *connectionState) (interface
 			return nil, &rpcError{Code: -32602, Message: err.Error()}
 		}
 	}
+	indexed := params.Digest != "" || params.PackageSize != 0 || params.PublicKey != "" || params.ManifestHash != "" || params.Permissions != nil
+	if indexed && (params.Digest == "" || params.PackageSize <= 0 || params.PublicKey == "") {
+		return nil, &rpcError{Code: -32602, Message: "digest, package_size, and public_key are required for indexed downloads"}
+	}
 	jobID := randomID()
 	notify := func(method string, value any) {
 		state.notify(method, value)
