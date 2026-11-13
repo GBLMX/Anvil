@@ -641,6 +641,129 @@ fn execute_lsp_list_action(model: &mut Model, kind: LspListKind, action: LspList
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ThemeBrowserAction {
+    Previous,
+    Next,
+    Apply,
+    Cancel,
+}
+
+fn theme_browser_action(key: KeyPress) -> Option<ThemeBrowserAction> {
+    match key.code {
+        KeyCode::Esc => Some(ThemeBrowserAction::Cancel),
+        KeyCode::Enter => Some(ThemeBrowserAction::Apply),
+        KeyCode::Up | KeyCode::Char('k') => Some(ThemeBrowserAction::Previous),
+        KeyCode::Down | KeyCode::Char('j') => Some(ThemeBrowserAction::Next),
+        _ => None,
+    }
+}
+
+fn execute_theme_browser_action(model: &mut Model, action: ThemeBrowserAction) {
+    match action {
+        ThemeBrowserAction::Previous => model.move_theme_browser(-1),
+        ThemeBrowserAction::Next => model.move_theme_browser(1),
+        ThemeBrowserAction::Apply => model.apply_theme_browser(),
+        ThemeBrowserAction::Cancel => model.cancel_theme_browser(),
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum DebugPanelAction {
+    Previous,
+    Next,
+    Cycle,
+    Refresh,
+    Cancel,
+}
+
+fn debug_panel_action(key: KeyPress) -> Option<DebugPanelAction> {
+    match key.code {
+        KeyCode::Esc => Some(DebugPanelAction::Cancel),
+        KeyCode::Tab => Some(DebugPanelAction::Cycle),
+        KeyCode::Up | KeyCode::Char('k') => Some(DebugPanelAction::Previous),
+        KeyCode::Down | KeyCode::Char('j') => Some(DebugPanelAction::Next),
+        KeyCode::Char('r') => Some(DebugPanelAction::Refresh),
+        _ => None,
+    }
+}
+
+fn execute_debug_panel_action(model: &mut Model, action: DebugPanelAction) {
+    match action {
+        DebugPanelAction::Previous => model.move_debug_selection(-1),
+        DebugPanelAction::Next => model.move_debug_selection(1),
+        DebugPanelAction::Cycle => model.cycle_debug_panel(),
+        DebugPanelAction::Refresh => model.request_debug_refresh(),
+        DebugPanelAction::Cancel => model.close_debug_panel(),
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum TestExplorerAction {
+    Previous,
+    Next,
+    Jump,
+    Output,
+    Cancel,
+}
+
+fn test_explorer_action(key: KeyPress) -> Option<TestExplorerAction> {
+    match key.code {
+        KeyCode::Esc => Some(TestExplorerAction::Cancel),
+        KeyCode::Up | KeyCode::Char('k') => Some(TestExplorerAction::Previous),
+        KeyCode::Down | KeyCode::Char('j') => Some(TestExplorerAction::Next),
+        KeyCode::Enter => Some(TestExplorerAction::Jump),
+        KeyCode::Char('o') => Some(TestExplorerAction::Output),
+        _ => None,
+    }
+}
+
+fn execute_test_explorer_action(model: &mut Model, action: TestExplorerAction) {
+    match action {
+        TestExplorerAction::Previous => model.move_test_explorer(-1),
+        TestExplorerAction::Next => model.move_test_explorer(1),
+        TestExplorerAction::Jump => model.jump_test_failure(),
+        TestExplorerAction::Output => model.show_task_output(),
+        TestExplorerAction::Cancel => model.close_test_explorer(),
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ProblemsAction {
+    Previous,
+    Next,
+    Jump,
+    Cancel,
+}
+
+fn problems_action(key: KeyPress) -> Option<ProblemsAction> {
+    match key.code {
+        KeyCode::Esc => Some(ProblemsAction::Cancel),
+        KeyCode::Up => Some(ProblemsAction::Previous),
+        KeyCode::Down => Some(ProblemsAction::Next),
+        KeyCode::Enter => Some(ProblemsAction::Jump),
+        _ => None,
+    }
+}
+
+fn execute_problems_action(model: &mut Model, action: ProblemsAction) {
+    match action {
+        ProblemsAction::Previous => {
+            model.ui.problems.move_selection(-1);
+            model.file.dirty = true;
+        }
+        ProblemsAction::Next => {
+            model.ui.problems.move_selection(1);
+            model.file.dirty = true;
+        }
+        ProblemsAction::Jump => model.jump_problem(),
+        ProblemsAction::Cancel => {
+            model.ui.problems.visible = false;
+            model.file.dirty = true;
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum SettingsAction {
     Previous,
     Next,
@@ -1030,98 +1153,27 @@ fn handle_key(model: &mut Model, key: KeyPress) {
         }
     }
     if model.overlays.theme_browser.is_some() {
-        match key.code {
-            KeyCode::Esc => {
-                model.cancel_theme_browser();
-                return;
-            }
-            KeyCode::Enter => {
-                model.apply_theme_browser();
-                return;
-            }
-            KeyCode::Up | KeyCode::Char('k') => {
-                model.move_theme_browser(-1);
-                return;
-            }
-            KeyCode::Down | KeyCode::Char('j') => {
-                model.move_theme_browser(1);
-                return;
-            }
-            _ => {}
+        if let Some(action) = theme_browser_action(key) {
+            execute_theme_browser_action(model, action);
+            return;
         }
     }
     if model.overlays.debug_panel.is_some() {
-        match key.code {
-            KeyCode::Esc => {
-                model.close_debug_panel();
-                return;
-            }
-            KeyCode::Tab => {
-                model.cycle_debug_panel();
-                return;
-            }
-            KeyCode::Up | KeyCode::Char('k') => {
-                model.move_debug_selection(-1);
-                return;
-            }
-            KeyCode::Down | KeyCode::Char('j') => {
-                model.move_debug_selection(1);
-                return;
-            }
-            KeyCode::Char('r') => {
-                model.request_debug_refresh();
-                return;
-            }
-            _ => {}
+        if let Some(action) = debug_panel_action(key) {
+            execute_debug_panel_action(model, action);
         }
+        return;
     }
     if model.overlays.test_explorer.is_some() {
-        match key.code {
-            KeyCode::Esc => {
-                model.close_test_explorer();
-                return;
-            }
-            KeyCode::Up | KeyCode::Char('k') => {
-                model.move_test_explorer(-1);
-                return;
-            }
-            KeyCode::Down | KeyCode::Char('j') => {
-                model.move_test_explorer(1);
-                return;
-            }
-            KeyCode::Enter => {
-                model.jump_test_failure();
-                return;
-            }
-            KeyCode::Char('o') => {
-                model.show_task_output();
-                return;
-            }
-            _ => {}
+        if let Some(action) = test_explorer_action(key) {
+            execute_test_explorer_action(model, action);
         }
+        return;
     }
     if model.ui.problems.visible {
-        match key.code {
-            KeyCode::Esc => {
-                model.ui.problems.visible = false;
-                model.file.dirty = true;
-                return;
-            }
-            KeyCode::Up => {
-                model.ui.problems.move_selection(-1);
-                model.file.dirty = true;
-                return;
-            }
-            KeyCode::Down => {
-                model.ui.problems.move_selection(1);
-                model.file.dirty = true;
-                return;
-            }
-            KeyCode::Enter => {
-                model.jump_problem();
-                return;
-            }
-            _ => {}
+        if let Some(action) = problems_action(key) {
+            execute_problems_action(model, action);
+            return;
         }
     }
     #[cfg(unix)]
