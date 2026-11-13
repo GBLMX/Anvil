@@ -135,6 +135,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "anvil-mod-workspace-index"
+version = "0.6.0"
+dependencies = [
+ "anvil-ipc",
+ "anvil-module",
+]
+
+[[package]]
 name = "anvil-module"
 version = "0.6.0"
 dependencies = [

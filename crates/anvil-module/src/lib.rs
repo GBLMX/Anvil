@@ -10,8 +10,10 @@ use std::sync::Arc;
 use anvil_session::command::{COMMANDS, CommandId, CommandSpec};
 
 pub mod git;
+pub mod workspace_index;
 
 use git::GitService;
+use workspace_index::WorkspaceIndexService;
 
 /// Version of the typed module contract.
 pub const CONTRACT_VERSION: u32 = 1;
@@ -159,6 +161,8 @@ pub struct ModuleRegistry {
     registering: Option<ModuleId>,
     git_service: Option<Arc<dyn GitService>>,
     git_service_owner: Option<ModuleId>,
+    workspace_index_service: Option<Arc<dyn WorkspaceIndexService>>,
+    workspace_index_owner: Option<ModuleId>,
 }
 
 impl ModuleRegistry {
@@ -201,6 +205,10 @@ impl ModuleRegistry {
             if self.git_service_owner == Some(id) {
                 self.git_service = None;
                 self.git_service_owner = None;
+            }
+            if self.workspace_index_owner == Some(id) {
+                self.workspace_index_service = None;
+                self.workspace_index_owner = None;
             }
             return Err(ModuleError::Registration {
                 module: id,
@@ -247,6 +255,32 @@ impl ModuleRegistry {
 
     pub fn git_service(&self) -> Option<Arc<dyn GitService>> {
         self.git_service.clone()
+    }
+
+    pub fn set_workspace_index_service(
+        &mut self,
+        service: Arc<dyn WorkspaceIndexService>,
+    ) -> Result<(), ModuleError> {
+        let Some(module) = self.registering else {
+            return Err(ModuleError::Registration {
+                module: ModuleId::new("unknown"),
+                message: "set_workspace_index_service is only valid during module registration"
+                    .to_owned(),
+            });
+        };
+        if self.workspace_index_service.is_some() {
+            return Err(ModuleError::Registration {
+                module,
+                message: "a workspace index service is already registered".to_owned(),
+            });
+        }
+        self.workspace_index_service = Some(service);
+        self.workspace_index_owner = Some(module);
+        Ok(())
+    }
+
+    pub fn workspace_index_service(&self) -> Option<Arc<dyn WorkspaceIndexService>> {
+        self.workspace_index_service.clone()
     }
 
     pub fn contains(&self, module: ModuleId) -> bool {

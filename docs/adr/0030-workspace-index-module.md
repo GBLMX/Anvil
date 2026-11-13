@@ -1,6 +1,8 @@
 # ADR-0030: Workspace Index Module Extension Points
 
-- Status: Accepted for implementation; bounded in-memory index landed
+- Status: Accepted for implementation; bounded in-memory index, gateway-backed
+  build/search, cancellation/stale tests, and module registration landed;
+  quick-open adapter and Cargo feature remain
 - Date: 2026-11-13
 - Related: [ADR-0028](0028-module-contract.md), [ADR-0029](0029-git-module-extension-points.md)
 

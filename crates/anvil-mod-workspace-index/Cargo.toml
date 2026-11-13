@@ -6,3 +6,7 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+
+[dependencies]
+anvil-ipc = { path = "../anvil-ipc", version = "0.6.0" }
+anvil-module = { path = "../anvil-module", version = "0.6.0" }
