@@ -299,6 +299,19 @@ impl Model {
                 }
                 self.file.dirty = true;
             }
+            ("provider-action", argument) => {
+                let (provider_id, value) = argument
+                    .split_once(char::is_whitespace)
+                    .map(|(id, value)| (id.trim(), value.trim()))
+                    .unwrap_or((argument.trim(), ""));
+                if provider_id.is_empty() {
+                    self.status.text =
+                        "E: usage: :provider-action <provider-id> <value>".to_owned();
+                } else {
+                    self.provider_action(provider_id, value);
+                }
+                self.file.dirty = true;
+            }
             ("dap-detach", "") => {
                 self.language.dap.client = None;
                 self.language.dap.attach = None;

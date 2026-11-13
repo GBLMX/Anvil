@@ -534,6 +534,40 @@ impl Model {
     #[cfg(not(target_os = "linux"))]
     pub(crate) fn query_plugin_provider(&mut self, _provider_id: &str, _query: &str) {}
 
+    pub(crate) fn provider_action(&mut self, provider_id: &str, value: &str) {
+        let Some(registration) = self
+            .plugins
+            .plugin_providers
+            .providers()
+            .iter()
+            .find(|provider| provider.id.as_str() == provider_id)
+            .cloned()
+        else {
+            self.status.text = format!("E: unknown provider: {provider_id}");
+            self.file.dirty = true;
+            return;
+        };
+        let Some(handler) = registration.action_handler.as_deref() else {
+            self.status.text = format!("E: provider {provider_id} has no action handler");
+            self.file.dirty = true;
+            return;
+        };
+        let generation = self.plugins.provider_action_generation.wrapping_add(1);
+        self.plugins.provider_action_generation = generation;
+        match self.plugins.supervisor.provider_action(
+            &registration.plugin_id,
+            generation,
+            handler,
+            value,
+        ) {
+            Ok(_) => self.status.text = format!("provider {provider_id}: action sent"),
+            Err(error) => self.status.text = format!("E: provider action: {error}"),
+        }
+        self.file.dirty = true;
+    }
+    #[cfg(not(target_os = "linux"))]
+    pub(crate) fn query_plugin_provider(&mut self, _provider_id: &str, _query: &str) {}
+
     #[cfg(target_os = "linux")]
     pub(crate) fn poll_host(&mut self) {
         let events = self
@@ -574,6 +608,18 @@ impl Model {
                 }
                 SupervisorEvent::Message { plugin_id, message } => {
                     self.status.text = format!("plugin {plugin_id}: {message}");
+                    self.file.dirty = true;
+                }
+                SupervisorEvent::ProviderAction {
+                    plugin_id, result, ..
+                } => {
+                    match result {
+                        Ok(_) => {
+                            self.status.text =
+                                format!("plugin {plugin_id}: provider action applied")
+                        }
+                        Err(error) => self.status.text = format!("E: provider action: {error}"),
+                    }
                     self.file.dirty = true;
                 }
                 SupervisorEvent::Provider {

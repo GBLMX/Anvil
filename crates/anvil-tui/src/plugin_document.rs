@@ -454,6 +454,13 @@ mod tests {
     }
 
     #[test]
+    fn provider_action_unknown_reports_error() {
+        let mut model = Model::new(EditorState::from_text(""), None);
+        model.execute_command("provider-action demo.buffers item");
+        assert!(model.status.text.contains("unknown provider"));
+    }
+
+    #[test]
     fn provider_query_unknown_reports_error() {
         let mut model = Model::new(EditorState::from_text(""), None);
         model.execute_command("provider-query demo.buffers");

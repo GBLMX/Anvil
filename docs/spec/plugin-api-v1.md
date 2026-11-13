@@ -108,7 +108,9 @@ editor capabilities.
 The request `id` must use the calling plugin's namespace
 (`<plugin-id>.<provider>`), be at most 128 bytes, and have a non-empty title of
 at most 256 bytes. `handler` names a Lua global function and is limited to
-ASCII identifier characters. Only `picker` and `completion` kinds are accepted.
+ASCII identifier characters. `action_handler` is optional metadata for picker
+selection and uses the same identifier rule. Only `picker` and `completion`
+kinds are accepted.
 
 Registration stores metadata only. It grants no process, filesystem, network,
 formatter, or DAP authority. Disabling or stopping the plugin removes its
@@ -118,6 +120,10 @@ The data-only request path is bounded: `ProviderRequest` queries are at most
 256 bytes, `limit` is 1–200, and `ProviderResponse` accepts at most 200 items
 with bounded label/detail/insert/value fields. A request id is accepted once;
 cancel and plugin shutdown discard pending ids.
+
+Picker selection is sent back as `ProviderAction { request_id, provider_id,
+value }` and invokes the registered `action_handler`. The action is data-only;
+the plugin still applies changes through the normal editor RPC methods.
 
 ## UI notifications
 

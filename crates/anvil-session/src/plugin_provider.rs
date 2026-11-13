@@ -12,6 +12,7 @@ pub enum PluginProviderError {
     InvalidId,
     InvalidTitle,
     InvalidHandler,
+    InvalidActionHandler,
     NamespaceMismatch,
     DuplicateId(ProviderId),
     InvalidQuery,
@@ -28,6 +29,7 @@ impl fmt::Display for PluginProviderError {
             Self::InvalidId => formatter.write_str("invalid provider id"),
             Self::InvalidTitle => formatter.write_str("invalid provider title"),
             Self::InvalidHandler => formatter.write_str("invalid provider handler"),
+            Self::InvalidActionHandler => formatter.write_str("invalid provider action handler"),
             Self::NamespaceMismatch => {
                 formatter.write_str("provider id is outside the plugin namespace")
             }
@@ -57,6 +59,7 @@ pub struct PluginProviderRegistration {
     pub kind: ProviderKind,
     pub title: String,
     pub handler: String,
+    pub action_handler: Option<String>,
 }
 
 /// Registry of runtime-plugin providers. It stores metadata only; it never
@@ -95,14 +98,12 @@ impl PluginProviderRegistry {
             return Err(PluginProviderError::InvalidTitle);
         }
         let handler = request.handler.trim();
-        if handler.is_empty()
-            || handler.len() > 128
-            || !handler.bytes().enumerate().all(|(index, byte)| {
-                byte == b'_'
-                    || byte.is_ascii_alphanumeric() && (index > 0 || !byte.is_ascii_digit())
-            })
-        {
+        if !is_handler_identifier(handler) {
             return Err(PluginProviderError::InvalidHandler);
+        }
+        let action_handler = request.action_handler.as_deref().map(str::trim);
+        if action_handler.is_some_and(|handler| !is_handler_identifier(handler)) {
+            return Err(PluginProviderError::InvalidActionHandler);
         }
         if self.entries.iter().any(|entry| entry.id == provider_id) {
             return Err(PluginProviderError::DuplicateId(provider_id));
@@ -113,6 +114,7 @@ impl PluginProviderRegistry {
             kind: request.kind,
             title: title.to_owned(),
             handler: handler.to_owned(),
+            action_handler: action_handler.map(str::to_owned),
         };
         self.entries.push(registration.clone());
         Ok(registration)
@@ -239,6 +241,14 @@ impl PluginProviderRequests {
     }
 }
 
+fn is_handler_identifier(handler: &str) -> bool {
+    !handler.is_empty()
+        && handler.len() <= 128
+        && handler.bytes().enumerate().all(|(index, byte)| {
+            byte == b'_' || byte.is_ascii_alphanumeric() && (index > 0 || !byte.is_ascii_digit())
+        })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -249,6 +259,7 @@ mod tests {
             kind: ProviderKind::Picker,
             title: "Buffers".to_owned(),
             handler: "provide".to_owned(),
+            action_handler: Some("act".to_owned()),
         }
     }
 

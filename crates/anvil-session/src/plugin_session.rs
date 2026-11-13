@@ -169,6 +169,10 @@ impl PluginSession {
         self.host.provider(id, handler, query, limit)
     }
 
+    pub(crate) fn provider_action(&self, id: u64, handler: &str, value: &str) -> bool {
+        self.host.provider_action(id, handler, value)
+    }
+
     pub(crate) fn has_pending(&self) -> bool {
         self.host.has_pending()
     }

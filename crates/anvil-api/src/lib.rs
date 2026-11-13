@@ -407,6 +407,8 @@ pub struct RegisterProviderRequest {
     pub kind: ProviderKind,
     pub title: String,
     pub handler: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub action_handler: Option<String>,
 }
 
 /// Result of registering a runtime-plugin provider.
@@ -446,6 +448,17 @@ pub struct ProviderResponse {
     #[schemars(range(max = 9007199254740991i64))]
     pub request_id: u64,
     pub items: Vec<ProviderItem>,
+}
+
+/// One picker action sent back to a runtime plugin.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[ts(export)]
+pub struct ProviderAction {
+    #[ts(type = "number")]
+    #[schemars(range(max = 9007199254740991i64))]
+    pub request_id: u64,
+    pub provider_id: String,
+    pub value: String,
 }
 
 /// Cancel one in-flight runtime-plugin provider request.
@@ -757,6 +770,7 @@ mod tests {
             kind: ProviderKind::Picker,
             title: "Test picker".to_owned(),
             handler: "provide".to_owned(),
+            action_handler: None,
         };
         let decoded: RegisterProviderRequest =
             serde_json::from_str(&serde_json::to_string(&request).unwrap()).unwrap();

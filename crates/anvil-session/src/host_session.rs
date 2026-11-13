@@ -17,6 +17,10 @@ pub enum HostEvent {
         id: u64,
         result: Result<serde_json::Value, String>,
     },
+    ProviderAction {
+        id: u64,
+        result: Result<serde_json::Value, String>,
+    },
     Exited(HostExit),
 }
 
@@ -27,6 +31,11 @@ enum HostCommand {
         handler: String,
         query: String,
         limit: u32,
+    },
+    ProviderAction {
+        id: u64,
+        handler: String,
+        value: String,
     },
 }
 
@@ -282,6 +291,25 @@ impl HostSession {
                         }
                         next_id += 1;
                     }
+                    Ok(HostCommand::ProviderAction { id, handler, value }) => {
+                        let result = call(
+                            &mut connection,
+                            id,
+                            "provider.action",
+                            serde_json::json!({
+                                "request_id": id,
+                                "handler": handler,
+                                "value": value,
+                            }),
+                        );
+                        thread_pending.fetch_sub(1, Ordering::AcqRel);
+                        if event_tx
+                            .send(HostEvent::ProviderAction { id, result })
+                            .is_err()
+                        {
+                            return;
+                        }
+                    }
                     Ok(HostCommand::Provider {
                         id,
                         handler,
@@ -350,6 +378,26 @@ impl HostSession {
                 handler: handler.to_owned(),
                 query: query.to_owned(),
                 limit,
+            })
+            .is_err()
+        {
+            self.pending.fetch_sub(1, Ordering::AcqRel);
+            return false;
+        }
+        true
+    }
+
+    pub fn provider_action(&self, id: u64, handler: &str, value: &str) -> bool {
+        if !self.accepting.load(Ordering::Acquire) {
+            return false;
+        }
+        self.pending.fetch_add(1, Ordering::AcqRel);
+        if self
+            .commands
+            .send(HostCommand::ProviderAction {
+                id,
+                handler: handler.to_owned(),
+                value: value.to_owned(),
             })
             .is_err()
         {

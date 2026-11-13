@@ -373,6 +373,7 @@ pub(crate) struct PluginState {
     pub(crate) plugin_providers: PluginProviderRegistry,
     pub(crate) plugin_provider_requests: PluginProviderRequests,
     pub(crate) provider_snapshots: BTreeMap<u64, (u64, usize)>,
+    pub(crate) provider_action_generation: u64,
     pub(crate) pkg_install: Option<pkg_install::PkgInstallState>,
 }
 
@@ -394,6 +395,7 @@ impl Default for PluginState {
             plugin_providers: PluginProviderRegistry::new(),
             plugin_provider_requests: PluginProviderRequests::new(),
             provider_snapshots: BTreeMap::new(),
+            provider_action_generation: 0,
             pkg_install: None,
         }
     }

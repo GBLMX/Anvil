@@ -961,7 +961,7 @@ mod linux {
             .cloned()
             .unwrap_or_else(|| serde_json::json!({}));
         let response = match method {
-            "provider.request" => match lua {
+            "provider.request" | "provider.action" => match lua {
                 Some(lua) => match runtime::call_provider(lua, &params) {
                     Ok(result) => serde_json::json!({
                         "jsonrpc": "2.0",

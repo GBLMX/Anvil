@@ -6,4 +6,4 @@ import type { ProviderKind } from "./ProviderKind";
  *
  * `handler` names a Lua global function invoked with the provider request table.
  */
-export type RegisterProviderRequest = { id: string, kind: ProviderKind, title: string, handler: string, };
+export type RegisterProviderRequest = { id: string, kind: ProviderKind, title: string, handler: string, action_handler?: string | null, };

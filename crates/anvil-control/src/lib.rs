@@ -330,6 +330,10 @@ pub const COMMANDS: &[CommandSpec] = &[
         capability: Capability::Admin,
     },
     CommandSpec {
+        name: "provider-action",
+        capability: Capability::Admin,
+    },
+    CommandSpec {
         name: "debug",
         capability: Capability::Read,
     },
