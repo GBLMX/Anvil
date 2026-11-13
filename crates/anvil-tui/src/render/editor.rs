@@ -232,33 +232,23 @@ pub fn view(model: &Model, frame: &mut Frame) {
     }
     let visible_end = (model.view.scroll + usize::from(content.height))
         .min(model.session.editor.index().len_lines());
+    let active_indent = model
+        .current_line()
+        .and_then(|line_number| indentation_columns(model, line_number));
     for line_number in model.view.scroll..visible_end {
-        let Some(start) = model.session.editor.index().line_to_offset(line_number) else {
+        let Some(columns) = indentation_columns(model, line_number) else {
             continue;
-        };
-        let Some(line) = model.session.editor.index().offset_to_line(start) else {
-            continue;
-        };
-        let mut columns = 0;
-        'indent: for chunk in model.session.editor.text().chunks(start..line.end) {
-            for character in chunk.chars() {
-                match character {
-                    ' ' => columns += 1,
-                    '\t' => columns += 4 - columns % 4,
-                    _ => break 'indent,
-                }
-            }
-        }
-        let style = if model.current_line() == Some(line_number) {
-            Style::default().fg(theme::muted())
-        } else {
-            Style::default().fg(theme::dim())
         };
         for level in 1..=columns / 4 {
             let column = level * 4;
             if column >= columns || column < model.view.hscroll {
                 continue;
             }
+            let style = if model.current_line() == Some(line_number) {
+                Style::default().fg(theme::muted())
+            } else {
+                Style::default().fg(theme::dim())
+            };
             let Some(row) = model.row_of_source_line(line_number, usize::from(content.height))
             else {
                 continue;
@@ -275,6 +265,31 @@ pub fn view(model: &Model, frame: &mut Frame) {
                         height: 1,
                     },
                 );
+            }
+        }
+        if let Some(active) = active_indent
+            && active > 0
+            && columns >= active
+        {
+            let column = active - 1;
+            if column >= model.view.hscroll
+                && let Some(row) =
+                    model.row_of_source_line(line_number, usize::from(content.height))
+            {
+                let x =
+                    text_area.x + u16::try_from(column - model.view.hscroll).unwrap_or(u16::MAX);
+                let y = content.y + row as u16;
+                if x < text_area.right() && y < content.bottom() {
+                    frame.render_widget(
+                        Paragraph::new("│").style(Style::default().fg(theme::accent())),
+                        Rect {
+                            x,
+                            y,
+                            width: 1,
+                            height: 1,
+                        },
+                    );
+                }
             }
         }
     }
@@ -378,4 +393,20 @@ pub fn view(model: &Model, frame: &mut Frame) {
         );
     }
     render_overlays(model, frame, area);
+}
+
+fn indentation_columns(model: &Model, line_number: usize) -> Option<usize> {
+    let start = model.session.editor.index().line_to_offset(line_number)?;
+    let line = model.session.editor.index().offset_to_line(start)?;
+    let mut columns = 0;
+    'indent: for chunk in model.session.editor.text().chunks(start..line.end) {
+        for character in chunk.chars() {
+            match character {
+                ' ' => columns += 1,
+                '\t' => columns += 4 - columns % 4,
+                _ => break 'indent,
+            }
+        }
+    }
+    Some(columns)
 }

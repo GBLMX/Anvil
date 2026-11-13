@@ -79,6 +79,32 @@ fn busy_operation_renders_spinner() {
     assert!(rendered.contains("copying"), "{rendered}");
     assert!(rendered.contains("⠋"), "{rendered}");
 }
+#[test]
+fn active_indent_guide_uses_accent() {
+    let mut model = Model::new(
+        EditorState::from_text("        alpha\n        beta\n"),
+        None,
+    );
+    model.session.editor.set_selection_bytes(16, 16);
+    model.session.cursor = 16;
+    let backend = TestBackend::new(40, 8);
+    let mut terminal = Terminal::new(backend).expect("terminal");
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+    let accent = theme::accent();
+    let guides = terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .enumerate()
+        .filter(|(index, cell)| {
+            let x = index % 40;
+            x > 0 && x < 39 && cell.symbol() == "│" && cell.style().fg == Some(accent)
+        })
+        .count();
+    assert_eq!(guides, 2);
+}
+
 
 #[test]
 fn indent_guides_do_not_overwrite_code() {
