@@ -48,8 +48,8 @@ go/internal/               gateway, LSP, fetch, policy, fsroot, execrunner
 docs/                      charter, threat model, ADRs, performance
 ```
 
-Rust is pinned by `rust-toolchain.toml`. Go **1.26.10 or newer** is required;
-CI installs the exact version from the root `go.mod` (currently 1.26.10), while
+Rust is pinned by `rust-toolchain.toml`. Go **1.26.11 or newer** is required;
+CI installs the exact version from the root `go.mod` (currently 1.26.11), while
 local newer toolchains are allowed.
 Do not introduce a new native dependency without an ADR.
 

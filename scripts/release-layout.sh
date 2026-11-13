@@ -3,7 +3,7 @@ set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 out="${1:-"$root/dist/anvil"}"
-go_toolchain="${GOTOOLCHAIN:-go1.26.10}"
+go_toolchain="${GOTOOLCHAIN:-go1.26.11}"
 
 cd "$root"
 

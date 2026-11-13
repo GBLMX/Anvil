@@ -275,7 +275,7 @@ go.mod                 Go module at the repository root
 docs/
 ```
 
-- Rust is pinned by `rust-toolchain.toml`; Go requires 1.26.10 or newer, and
+- Rust is pinned by `rust-toolchain.toml`; Go requires 1.26.11 or newer, and
   CI installs the exact version from the root `go.mod`.
 - `cargo-deny` is a CI gate. Go vulnerability scanning is a CI gate; a Go
   license gate is not implemented yet.

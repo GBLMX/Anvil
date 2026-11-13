@@ -20,7 +20,7 @@ I/O is refused unless `ANVIL_GATEWAY` points at the gateway binary.
 - Linux; Landlock requires Linux 5.13 or newer.
 - Rust 1.88 or newer (the repository pins the toolchain in
   `rust-toolchain.toml`).
-- Go 1.26.10 or newer (the repository pins the version in `go.mod`).
+- Go 1.26.11 or newer (the repository pins the version in `go.mod`).
 - A locale with UTF-8 support.
 
 Language servers are not bundled. Install the servers you want on `PATH`:
@@ -36,8 +36,8 @@ From the repository root:
 
 ```bash
 cargo build --release -p anvil-tui -p anvil-ctl -p anvil-mcp -p anvil-plugin-host
-GOTOOLCHAIN=go1.26.10 go build -o target/release/anvil-gateway ./go/cmd/anvil-gateway
-GOTOOLCHAIN=go1.26.10 go build -o target/release/anvil-exec-runner ./go/cmd/anvil-exec-runner
+GOTOOLCHAIN=go1.26.11 go build -o target/release/anvil-gateway ./go/cmd/anvil-gateway
+GOTOOLCHAIN=go1.26.11 go build -o target/release/anvil-exec-runner ./go/cmd/anvil-exec-runner
 ```
 
 ## Release layout
