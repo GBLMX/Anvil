@@ -30,8 +30,11 @@ impl Model {
             let Ok(client) = session.connect_lsp() else {
                 return false;
             };
-            self.workspace.file_worker =
-                Some(FileWorker::start(client, self.workspace.path.clone()));
+            self.workspace.file_worker = Some(FileWorker::start_with_git_service(
+                client,
+                self.workspace.path.clone(),
+                self.workspace.git_service.clone(),
+            ));
         }
         self.ensure_root_file_workers();
         true
@@ -55,7 +58,13 @@ impl Model {
                 .root_gateways
                 .get_mut(&root)
                 .and_then(|(session, _)| session.connect_lsp().ok())
-                .map(|client| FileWorker::start(client, root.clone()));
+                .map(|client| {
+                    FileWorker::start_with_git_service(
+                        client,
+                        root.clone(),
+                        self.workspace.git_service.clone(),
+                    )
+                });
             if let Some(worker) = worker {
                 self.workspace.root_file_workers.insert(root, worker);
             }

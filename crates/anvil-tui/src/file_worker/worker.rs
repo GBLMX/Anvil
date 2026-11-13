@@ -13,7 +13,84 @@ use anvil_ipc::GatewayClient;
 use super::preview::read_preview;
 use super::search::{apply_project_replace, files, project_replace_preview, project_search};
 use super::{FileEvent, FileRequest, MAX_TREE_WATCH_DIRS, TREE_DEBOUNCE, TREE_POLL_INTERVAL};
-use anvil_mod_git::{GitService, SystemGitService};
+use anvil_mod_git::GitService;
+
+const GIT_UNAVAILABLE: &str = "git module is not installed";
+
+fn git_status(
+    git: Option<&dyn GitService>,
+    client: &mut GatewayClient,
+    root: &Path,
+) -> Result<std::collections::HashMap<PathBuf, char>, String> {
+    git.ok_or_else(|| GIT_UNAVAILABLE.to_owned())?
+        .git_status(client, root)
+}
+
+fn git_diff(
+    git: Option<&dyn GitService>,
+    client: &mut GatewayClient,
+    relative: &str,
+) -> Result<Vec<(usize, char)>, String> {
+    git.ok_or_else(|| GIT_UNAVAILABLE.to_owned())?
+        .git_diff(client, relative)
+}
+
+fn git_diff_text(
+    git: Option<&dyn GitService>,
+    client: &mut GatewayClient,
+    relative: &str,
+    staged: bool,
+) -> Result<(String, bool), String> {
+    git.ok_or_else(|| GIT_UNAVAILABLE.to_owned())?
+        .git_diff_text(client, relative, staged)
+}
+
+fn git_blame_text(
+    git: Option<&dyn GitService>,
+    client: &mut GatewayClient,
+    relative: &str,
+) -> Result<(String, bool), String> {
+    git.ok_or_else(|| GIT_UNAVAILABLE.to_owned())?
+        .git_blame_text(client, relative)
+}
+
+fn git_conflicts_text(
+    git: Option<&dyn GitService>,
+    client: &mut GatewayClient,
+) -> Result<(String, bool), String> {
+    git.ok_or_else(|| GIT_UNAVAILABLE.to_owned())?
+        .git_conflicts_text(client)
+}
+
+fn git_conflict_stage_text(
+    git: Option<&dyn GitService>,
+    client: &mut GatewayClient,
+    relative: &str,
+    stage: u8,
+) -> Result<(String, bool), String> {
+    git.ok_or_else(|| GIT_UNAVAILABLE.to_owned())?
+        .git_conflict_stage_text(client, relative, stage)
+}
+
+fn resolve_git_conflict(
+    git: Option<&dyn GitService>,
+    client: &mut GatewayClient,
+    relative: &str,
+    stage: u8,
+) -> Result<(), anvil_mod_git::ResolveConflictError> {
+    git.ok_or_else(|| anvil_mod_git::ResolveConflictError::before_write(GIT_UNAVAILABLE))?
+        .resolve_git_conflict(client, relative, stage)
+}
+
+fn apply_git_hunk(
+    git: Option<&dyn GitService>,
+    client: &mut GatewayClient,
+    patch: &str,
+    reverse: bool,
+) -> Result<(), String> {
+    git.ok_or_else(|| GIT_UNAVAILABLE.to_owned())?
+        .apply_git_hunk(client, patch, reverse)
+}
 
 /// Owns the background worker and its channels.
 pub struct FileWorker {
@@ -23,16 +100,21 @@ pub struct FileWorker {
 
 impl FileWorker {
     /// Starts the worker with a dedicated gateway connection.
+    #[cfg(test)]
     pub fn start(client: GatewayClient, workspace: PathBuf) -> Self {
-        Self::start_with_git_service(client, workspace, Arc::new(SystemGitService))
+        Self::start_with_git_service(
+            client,
+            workspace,
+            Some(Arc::new(anvil_mod_git::SystemGitService)),
+        )
     }
 
     pub(crate) fn start_with_git_service(
         mut client: GatewayClient,
         workspace: PathBuf,
-        git: Arc<dyn GitService>,
+        git: Option<Arc<dyn GitService>>,
     ) -> Self {
-        let worker_git = Arc::clone(&git);
+        let worker_git = git.clone();
         let (request_sender, requests) = mpsc::channel();
         let (event_sender, events) = mpsc::channel();
         std::thread::spawn(move || {
@@ -155,7 +237,7 @@ impl FileWorker {
                                 generation,
                             },
                             FileRequest::GitStatus { root, generation } => FileEvent::GitStatus {
-                                result: worker_git.git_status(&mut client, &root),
+                                result: git_status(worker_git.as_deref(), &mut client, &root),
                                 generation,
                             },
                             FileRequest::GitDiff {
@@ -165,15 +247,19 @@ impl FileWorker {
                             } => FileEvent::GitDiff {
                                 path,
                                 revision,
-                                result: worker_git.git_diff(&mut client, &relative),
+                                result: git_diff(worker_git.as_deref(), &mut client, &relative),
                             },
                             FileRequest::GitDiffText {
                                 relative,
                                 staged,
                                 generation,
                             } => {
-                                let result =
-                                    worker_git.git_diff_text(&mut client, &relative, staged);
+                                let result = git_diff_text(
+                                    worker_git.as_deref(),
+                                    &mut client,
+                                    &relative,
+                                    staged,
+                                );
                                 FileEvent::GitDiffText {
                                     relative,
                                     staged,
@@ -187,20 +273,29 @@ impl FileWorker {
                                 generation,
                             } => FileEvent::GitApplied {
                                 generation,
-                                result: worker_git.apply_git_hunk(&mut client, &patch, reverse),
+                                result: apply_git_hunk(
+                                    worker_git.as_deref(),
+                                    &mut client,
+                                    &patch,
+                                    reverse,
+                                ),
                             },
                             FileRequest::GitBlameText {
                                 relative,
                                 generation,
                             } => FileEvent::GitBlameText {
                                 generation,
-                                result: worker_git.git_blame_text(&mut client, &relative),
+                                result: git_blame_text(
+                                    worker_git.as_deref(),
+                                    &mut client,
+                                    &relative,
+                                ),
                             },
                             FileRequest::GitConflictsText { root, generation } => {
                                 FileEvent::GitConflictsText {
                                     root,
                                     generation,
-                                    result: worker_git.git_conflicts_text(&mut client),
+                                    result: git_conflicts_text(worker_git.as_deref(), &mut client),
                                 }
                             }
                             FileRequest::Transfer { from, to, copy } => {
@@ -231,7 +326,8 @@ impl FileWorker {
                                 stage,
                                 generation,
                             } => {
-                                let result = worker_git.git_conflict_stage_text(
+                                let result = git_conflict_stage_text(
+                                    worker_git.as_deref(),
                                     &mut client,
                                     &relative,
                                     stage,
@@ -248,8 +344,12 @@ impl FileWorker {
                                 stage,
                                 generation,
                             } => {
-                                let result =
-                                    worker_git.resolve_git_conflict(&mut client, &relative, stage);
+                                let result = resolve_git_conflict(
+                                    worker_git.as_deref(),
+                                    &mut client,
+                                    &relative,
+                                    stage,
+                                );
                                 FileEvent::GitResolveConflict {
                                     relative,
                                     stage,

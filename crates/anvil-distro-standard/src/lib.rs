@@ -3,6 +3,7 @@ use std::{
     ffi::OsString,
     path::{Path, PathBuf},
     process,
+    sync::Arc,
 };
 
 const USAGE: &str = "\
@@ -50,12 +51,15 @@ pub struct Distribution {
     pub name: &'static str,
     /// Help text printed for `--help`.
     pub usage: &'static str,
+    /// Whether the standard Git module is part of this composition.
+    pub git: bool,
 }
 
 /// The standard Anvil distribution.
 pub const STANDARD: Distribution = Distribution {
     name: "anvil",
     usage: USAGE,
+    git: true,
 };
 
 #[derive(Debug)]
@@ -133,8 +137,11 @@ where
             {
                 return Ok(0);
             }
-            Ok(anvil_tui::run_with_input(
-                path, workspace, editor, stdin, read_only,
+            let git = distribution.git.then(|| {
+                Arc::new(anvil_mod_git::SystemGitService) as Arc<dyn anvil_mod_git::GitService>
+            });
+            Ok(anvil_tui::run_with_input_and_git(
+                path, workspace, editor, stdin, read_only, git,
             )?)
         }
         Err(error) => Err(RunError::Args(error)),

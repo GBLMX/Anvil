@@ -2,6 +2,7 @@
 
 use super::*;
 use std::io::{IsTerminal, Read};
+use std::sync::Arc;
 /// Runs the minimal terminal loop in the current directory workspace.
 pub fn run(path: Option<PathBuf>) -> io::Result<()> {
     run_with_workspace(path, std::env::current_dir()?)
@@ -28,6 +29,25 @@ pub fn run_with_input(
     editor_mode: bool,
     read_stdin: bool,
     read_only: bool,
+) -> io::Result<i32> {
+    run_with_input_and_git(
+        path,
+        workspace,
+        editor_mode,
+        read_stdin,
+        read_only,
+        Some(Arc::new(anvil_mod_git::SystemGitService)),
+    )
+}
+
+/// Runs the terminal loop with an explicitly selected Git service.
+pub fn run_with_input_and_git(
+    path: Option<PathBuf>,
+    workspace: PathBuf,
+    editor_mode: bool,
+    read_stdin: bool,
+    read_only: bool,
+    git: Option<Arc<dyn anvil_mod_git::GitService>>,
 ) -> io::Result<i32> {
     let stdin_text = if read_stdin || !io::stdin().is_terminal() {
         if !io::stdout().is_terminal() {
@@ -84,6 +104,7 @@ pub fn run_with_input(
             (model, None)
         }
     };
+    model.workspace.git_service = git;
     model.workspace.gateway_session = session;
     model.set_editor_mode(editor_mode);
     if session_enabled {

@@ -40,6 +40,7 @@ impl Model {
             workspace: WorkspaceState {
                 path: workspace,
                 roots: workspace_roots,
+                git_service: Some(std::sync::Arc::new(anvil_mod_git::SystemGitService)),
                 ..Default::default()
             },
             language: LanguageState::default(),

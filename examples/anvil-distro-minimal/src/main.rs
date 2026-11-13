@@ -12,5 +12,6 @@ fn main() {
     anvil_distro_standard::main(&anvil_distro_standard::Distribution {
         name: "anvil-minimal",
         usage: USAGE,
+        git: false,
     });
 }

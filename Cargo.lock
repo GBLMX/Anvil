@@ -90,6 +90,7 @@ name = "anvil-distro-standard"
 version = "0.6.0"
 dependencies = [
  "anvil-control",
+ "anvil-mod-git",
  "anvil-tui",
  "tempfile",
 ]

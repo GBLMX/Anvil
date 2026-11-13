@@ -148,7 +148,9 @@ use lsp_worker::{LspEvent, LspWorker};
 #[cfg(target_os = "linux")]
 use plugin_activation::ActivationEvent;
 use syntax::SyntaxState;
-pub use terminal::{run, run_with_input, run_with_workspace, run_with_workspace_status};
+pub use terminal::{
+    run, run_with_input, run_with_input_and_git, run_with_workspace, run_with_workspace_status,
+};
 
 const MAX_OPEN_BYTES: usize = 256 * 1024 * 1024;
 const EFFECT_QUEUE_CAPACITY: usize = 32;

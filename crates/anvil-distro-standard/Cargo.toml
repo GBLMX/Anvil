@@ -10,6 +10,7 @@ repository.workspace = true
 [dependencies]
 anvil-tui = { path = "../anvil-tui", version = "0.6.0" }
 anvil-control = { path = "../anvil-control", version = "0.6.0" }
+anvil-mod-git = { path = "../anvil-mod-git", version = "0.6.0" }
 
 [dev-dependencies]
 tempfile = "3"
