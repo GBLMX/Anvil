@@ -257,6 +257,7 @@ crates/
   anvil-core/          text model, commands, snapshots
   anvil-editor/        selection-first editor state and snapshots
   anvil-session/       documents, effects, keymap, plugin lifecycle
+  anvil-module/        trusted source-level module contract and registry
   anvil-ipc/           UDS transport, JSON-RPC framing
   anvil-control/       editor control socket, protocol v3, command manifest
   anvil-ctl/           CLI adapter over the control socket

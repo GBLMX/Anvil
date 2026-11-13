@@ -123,6 +123,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "anvil-module"
+version = "0.6.0"
+dependencies = [
+ "anvil-session",
+]
+
+[[package]]
 name = "anvil-plugin-host"
 version = "0.6.0"
 dependencies = [

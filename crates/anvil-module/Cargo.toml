@@ -1,0 +1,11 @@
+[package]
+name = "anvil-module"
+description = "Typed, source-level module contract for Anvil distributions"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+anvil-session = { path = "../anvil-session", version = "0.6.0" }
