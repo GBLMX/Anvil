@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/GBLMX/Anvil/go/internal/fetch"
@@ -18,10 +19,15 @@ const (
 )
 
 type downloadJob struct {
-	id           string
-	packageURL   string
-	signatureURL string
-	notify       func(string, any)
+	id             string
+	packageURL     string
+	signatureURL   string
+	expectedDigest string
+	expectedSize   int64
+	publisherKey   string
+	manifestHash   string
+	permissions    []string
+	notify         func(string, any)
 }
 
 type downloadQueue struct {
@@ -101,6 +107,10 @@ func (q *downloadQueue) run(ctx context.Context, job downloadJob) {
 		fail(fmt.Errorf("package HTTP status %d", packageResponse.Status))
 		return
 	}
+	if job.expectedSize > 0 && int64(len(packageResponse.Body)) != job.expectedSize {
+		fail(fmt.Errorf("package size %d does not match indexed size %d", len(packageResponse.Body), job.expectedSize))
+		return
+	}
 	job.notify("pkg.progress", map[string]any{
 		"job_id": job.id, "stage": "package", "fraction": 100,
 	})
@@ -148,9 +158,42 @@ func (q *downloadQueue) run(ctx context.Context, job downloadJob) {
 	if manifest.Permissions == nil {
 		manifest.Permissions = []string{}
 	}
+	if job.manifestHash != "" && manifest.ManifestHash != job.manifestHash {
+		fail(fmt.Errorf("manifest hash does not match the signed index"))
+		return
+	}
+	if job.permissions != nil && !samePermissionSet(manifest.Permissions, job.permissions) {
+		fail(fmt.Errorf("manifest permissions do not match the signed index"))
+		return
+	}
 	signature, publicKey, err := pkg.ReadSignatureWithKey(signaturePath)
 	if err != nil {
 		fail(err)
+		return
+	}
+	var publisherKey []byte
+	if job.publisherKey != "" {
+		decoded, err := pkg.DecodePublicKey(job.publisherKey)
+		if err != nil {
+			fail(err)
+			return
+		}
+		publisherKey = decoded
+	}
+	var digest [32]byte
+	if len(publisherKey) > 0 {
+		digest, err = pkg.VerifyFile(packagePath, signaturePath, publisherKey)
+		publicKey = job.publisherKey
+	} else {
+		digest, err = pkg.DigestFile(packagePath)
+	}
+	if err != nil {
+		fail(err)
+		return
+	}
+	digestHex := fmt.Sprintf("%x", digest)
+	if job.expectedDigest != "" && !strings.EqualFold(job.expectedDigest, digestHex) {
+		fail(fmt.Errorf("package digest does not match the signed index"))
 		return
 	}
 	trusted := false
@@ -163,11 +206,6 @@ func (q *downloadQueue) run(ctx context.Context, job downloadJob) {
 			}
 		}
 	}
-	digest, err := pkg.DigestFile(packagePath)
-	if err != nil {
-		fail(err)
-		return
-	}
 	keepDir = true
 	job.notify("pkg.downloaded", map[string]any{
 		"job_id":         job.id,
@@ -177,6 +215,22 @@ func (q *downloadQueue) run(ctx context.Context, job downloadJob) {
 		"public_key":     publicKey,
 		"trusted":        trusted,
 		"signature_len":  len(signature),
-		"digest":         fmt.Sprintf("%x", digest),
+		"digest":         digestHex,
 	})
+}
+
+func samePermissionSet(left, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	seen := make(map[string]struct{}, len(left))
+	for _, permission := range left {
+		seen[permission] = struct{}{}
+	}
+	for _, permission := range right {
+		if _, ok := seen[permission]; !ok {
+			return false
+		}
+	}
+	return true
 }

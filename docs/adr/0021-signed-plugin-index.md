@@ -1,6 +1,6 @@
 # ADR-0021: Signed Plugin Index, Revocations, and Anti-Rollback
 
-- Status: Accepted; gates 1-5 and expiry policy landed; gates 6-7 remain pending
+- Status: Accepted; gates 1-5 and expiry policy landed; gate 6 metadata enforcement landed; index orchestration and gate 7 remain pending
 - Date: 2026-11-07
 - Related: [ADR-0017](0017-plugin-activation-and-lifecycle.md),
   [ADR-0020](0020-content-addressed-plugin-store.md),
@@ -406,8 +406,9 @@ Status: the detached verifier, schema/bounds checks, cache/state atomicity,
 anti-rollback sequence checks, revocation union, and issued/expiry window
 checks are implemented in `go/internal/pluginindex`. The installed-state
 store hashes the exact root `plugin.json` bytes, aligning `manifest_hash`.
-Indexed install integration (gate 6) and release provenance (gate 7) remain
-pending.
+The download queue enforces indexed digest, package size, publisher key,
+manifest hash, and permission set when supplied. The index-to-download
+orchestration and release provenance (gate 7) remain pending.
 
 1. Root-key fixture and detached index-signature verifier with malformed,
    wrong-key, truncated, and trailing-data tests.

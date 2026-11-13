@@ -1,6 +1,7 @@
 package gateway
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,8 +13,13 @@ import (
 )
 
 type pkgDownloadParams struct {
-	URL          string `json:"url"`
-	SignatureURL string `json:"signature_url"`
+	URL          string   `json:"url"`
+	SignatureURL string   `json:"signature_url"`
+	Digest       string   `json:"digest,omitempty"`
+	PackageSize  int64    `json:"package_size,omitempty"`
+	PublicKey    string   `json:"public_key,omitempty"`
+	ManifestHash string   `json:"manifest_hash,omitempty"`
+	Permissions  []string `json:"permissions,omitempty"`
 }
 
 type pkgInstallParams struct {
@@ -76,6 +82,11 @@ func editorRequired(state *connectionState) *rpcError {
 	return nil
 }
 
+func validDigest(value string) bool {
+	raw, err := hex.DecodeString(value)
+	return err == nil && len(raw) == 32 && value == strings.ToLower(value)
+}
+
 func (s *Server) packageDownload(req request, state *connectionState) (interface{}, *rpcError) {
 	if rpcErr := s.requireRole(state, "installer"); rpcErr != nil {
 		return nil, rpcErr
@@ -88,15 +99,34 @@ func (s *Server) packageDownload(req request, state *connectionState) (interface
 	if err := decodeParams(req.Params, &params); err != nil || params.URL == "" || params.SignatureURL == "" {
 		return nil, &rpcError{Code: -32602, Message: "url and signature_url are required"}
 	}
+	if params.Digest != "" && !validDigest(params.Digest) {
+		return nil, &rpcError{Code: -32602, Message: "digest must be 32 lowercase hex bytes"}
+	}
+	if params.ManifestHash != "" && !validDigest(params.ManifestHash) {
+		return nil, &rpcError{Code: -32602, Message: "manifest_hash must be 32 lowercase hex bytes"}
+	}
+	if params.PackageSize < 0 || params.PackageSize > pkg.MaxPackageBytes {
+		return nil, &rpcError{Code: -32602, Message: "package_size is out of bounds"}
+	}
+	if params.PublicKey != "" {
+		if _, err := pkg.DecodePublicKey(params.PublicKey); err != nil {
+			return nil, &rpcError{Code: -32602, Message: err.Error()}
+		}
+	}
 	jobID := randomID()
 	notify := func(method string, value any) {
 		state.notify(method, value)
 	}
 	if err := downloader.submit(downloadJob{
-		id:           jobID,
-		packageURL:   params.URL,
-		signatureURL: params.SignatureURL,
-		notify:       notify,
+		id:             jobID,
+		packageURL:     params.URL,
+		signatureURL:   params.SignatureURL,
+		expectedDigest: params.Digest,
+		expectedSize:   params.PackageSize,
+		publisherKey:   params.PublicKey,
+		manifestHash:   params.ManifestHash,
+		permissions:    params.Permissions,
+		notify:         notify,
 	}); err != nil {
 		return nil, &rpcError{Code: -32008, Message: err.Error()}
 	}

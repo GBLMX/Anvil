@@ -332,6 +332,8 @@ post-`0.5.0` feature line.
   `expires_at` window.
 - Installed plugin manifest hashes now cover the exact `plugin.json` bytes
   instead of a re-encoded manifest.
+- Package downloads now enforce an indexed digest, package size, publisher
+  key, manifest hash, and permission set when those values are supplied.
 - The file tree now opens the command line on `:`, so commands such as
   `:workspace-remove` work while the tree has focus.
 - Cursor motions, including `j`/`k`, section jumps, `G`, `w`/`b`/`e`, and
