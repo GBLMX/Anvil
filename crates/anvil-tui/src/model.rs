@@ -77,8 +77,13 @@ impl Model {
     }
 
     pub(crate) fn reload_config(&mut self) {
+        let project_trusted = self
+            .workspace
+            .roots
+            .primary()
+            .is_some_and(|root| root.trusted);
         let loaded = (|| -> Result<_, String> {
-            let settings = settings::load()?;
+            let settings = settings::load_for_workspace(&self.workspace.path, project_trusted)?;
             let keymap = keymap::KeymapConfig::load_default()?;
             Ok((settings, keymap))
         })();

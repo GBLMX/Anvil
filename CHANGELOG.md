@@ -13,6 +13,8 @@ post-`0.5.0` feature line.
   `kanagawa`, `github-light`, `gruvbox-light`, `one-light`,
   `catppuccin-latte`, `cyberpunk-volt`, `cyberpunk-fury`, and
   `cyberpunk-hot`.
+- Trusted workspaces may add a read-only `.anvil.toml` project settings layer;
+  it merges over the user file but cannot set `[lsp.commands]`.
 - `anvil-syntax` now owns Tree-sitter grammars, highlighting, and scope
   extraction; `anvil-tui` no longer depends on the grammar crates directly.
 - HTML and HTM files now use the Tree-sitter HTML grammar for tag, attribute,

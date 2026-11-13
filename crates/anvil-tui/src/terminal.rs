@@ -231,7 +231,12 @@ pub fn run_with_all_services(
         }
         model.file.dirty = true;
     }
-    match settings::load() {
+    let project_trusted = model
+        .workspace
+        .roots
+        .primary()
+        .is_some_and(|root| root.trusted);
+    match settings::load_for_workspace(&workspace, project_trusted) {
         Ok(settings) => model.apply_settings(settings),
         Err(error) => {
             let message = format!("E: settings: {error}");

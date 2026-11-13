@@ -43,6 +43,7 @@ their decision sections.
 | [0035](0035-plugin-wit-seams.md) | Plugin WIT contract from editor seams | Proposed |
 | [0036](0036-typst-language-provider.md) | Typst language provider and feature-gated grammar | Accepted for implementation |
 | [0037](0037-kernel-api-baseline.md) | Kernel API baseline during internal polish | Accepted |
+| [0038](0038-project-settings-trust.md) | Project settings are trust-gated | Accepted |
 
 ## Numbering Rule
 

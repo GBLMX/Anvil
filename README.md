@@ -103,6 +103,13 @@ json = ["node", "/path/to/vscode-json-language-server", "--stdio"]
 `[lsp.commands]` is keyed by language id. A value may be a command string or
 an argv array; array arguments are passed unchanged.
 
+A trusted workspace may add `.anvil.toml`. Its `theme`, `editor`, `search`,
+`ui`, and `lsp.inlay_hints` values merge over the user file for that
+workspace. Project settings are read-only and cannot set `[lsp.commands]`;
+that table is rejected because it would let a repository select an executable.
+An explicit `ANVIL_SETTINGS` file remains a complete override and disables the
+project layer.
+
 `ANVIL_EDITOR_SCROLL_MARGIN`, `ANVIL_EDITOR_MAX_BUFFERS`,
 `ANVIL_EDITOR_AUTO_SAVE`, `ANVIL_EDITOR_SIDEBAR_PERCENT`,
 `ANVIL_SEARCH_CASE_SENSITIVE`, and `ANVIL_LSP_INLAY_HINTS` override the file

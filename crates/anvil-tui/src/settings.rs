@@ -6,6 +6,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+pub(crate) const PROJECT_SETTINGS: &str = ".anvil.toml";
 pub(crate) const MAX_BYTES: u64 = 64 * 1024;
 pub(crate) const DEFAULT_SCROLL_MARGIN: usize = 3;
 pub(crate) const MAX_SCROLL_MARGIN: usize = 16;
@@ -116,24 +117,100 @@ fn resolve_lsp_command(
     }
 }
 
-pub(crate) fn load() -> Result<Settings, String> {
-    let path = path()?;
-    let settings = load_file_from_path(&path)?;
+/// Load settings for one workspace.
+///
+/// The project layer is read only when its workspace root is trusted. An
+/// explicit `ANVIL_SETTINGS` file is a complete override, matching the
+/// pre-project-layer behavior and keeping tests isolated.
+pub(crate) fn load_for_workspace(
+    workspace: &Path,
+    project_trusted: bool,
+) -> Result<Settings, String> {
+    let user = path()?;
+    let project = if explicit_settings_path().is_some() {
+        None
+    } else {
+        project_layer(workspace, project_trusted)
+    };
+    load_from_layers(Some(&user), project.as_deref())
+}
+
+fn project_layer(workspace: &Path, trusted: bool) -> Option<PathBuf> {
+    trusted.then(|| workspace.join(PROJECT_SETTINGS))
+}
+
+fn load_from_layers(user: Option<&Path>, project: Option<&Path>) -> Result<Settings, String> {
+    let mut merged = toml_edit::DocumentMut::new();
+    let mut layers = Vec::new();
+    for (path, is_project) in [(user, false), (project, true)] {
+        let Some(path) = path else {
+            continue;
+        };
+        if !path.exists() {
+            continue;
+        }
+        let text = read_settings_text(path)?;
+        let document = text
+            .parse::<toml_edit::DocumentMut>()
+            .map_err(|error| format!("{}: invalid settings TOML: {error}", path.display()))?;
+        if is_project {
+            let file: SettingsFile = toml_edit::de::from_str(&text)
+                .map_err(|error| format!("{}: invalid settings TOML: {error}", path.display()))?;
+            if !file.lsp.commands.is_empty() {
+                return Err(format!(
+                    "{}: [lsp.commands] is not allowed in project settings",
+                    path.display()
+                ));
+            }
+        }
+        merge_document(&mut merged, &document);
+        layers.push(path);
+    }
+    let settings = if layers.is_empty() {
+        Settings::default()
+    } else {
+        let names = layers
+            .iter()
+            .map(|path| path.display().to_string())
+            .collect::<Vec<_>>()
+            .join(", ");
+        parse(&merged.to_string()).map_err(|error| format!("{names}: {error}"))?
+    };
     apply_env(settings, |name| std::env::var(name).ok())
 }
 
-pub(crate) fn load_file_from_path(path: &Path) -> Result<Settings, String> {
-    if !path.exists() {
-        return Ok(Settings::default());
-    }
+fn read_settings_text(path: &Path) -> Result<String, String> {
     let metadata =
         fs::metadata(path).map_err(|error| format!("cannot read {}: {error}", path.display()))?;
     if metadata.len() > MAX_BYTES {
         return Err(format!("{} exceeds {} bytes", path.display(), MAX_BYTES));
     }
-    let text = fs::read_to_string(path)
-        .map_err(|error| format!("cannot read {}: {error}", path.display()))?;
-    parse(&text)
+    fs::read_to_string(path).map_err(|error| format!("cannot read {}: {error}", path.display()))
+}
+
+fn merge_document(base: &mut toml_edit::DocumentMut, overlay: &toml_edit::DocumentMut) {
+    merge_table(base.as_table_mut(), overlay.as_table());
+}
+
+fn merge_table(base: &mut toml_edit::Table, overlay: &toml_edit::Table) {
+    for (key, value) in overlay.iter() {
+        match (base.get_mut(key), value) {
+            (Some(toml_edit::Item::Table(base)), toml_edit::Item::Table(overlay)) => {
+                merge_table(base, overlay);
+            }
+            _ => {
+                base.insert(key, value.clone());
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+pub(crate) fn load_file_from_path(path: &Path) -> Result<Settings, String> {
+    if !path.exists() {
+        return Ok(Settings::default());
+    }
+    parse(&read_settings_text(path)?)
 }
 
 pub(crate) fn save(settings: Settings) -> Result<PathBuf, String> {
@@ -371,12 +448,15 @@ fn parse_bool(name: &str, value: &str) -> Result<bool, String> {
     }
 }
 
+fn explicit_settings_path() -> Option<PathBuf> {
+    let explicit = std::env::var_os("ANVIL_SETTINGS")?;
+    let explicit = explicit.to_string_lossy();
+    (!explicit.trim().is_empty()).then(|| PathBuf::from(explicit.into_owned()))
+}
+
 pub(crate) fn path() -> Result<PathBuf, String> {
-    if let Some(explicit) = std::env::var_os("ANVIL_SETTINGS") {
-        let explicit = explicit.to_string_lossy();
-        if !explicit.trim().is_empty() {
-            return Ok(PathBuf::from(explicit.into_owned()));
-        }
+    if let Some(explicit) = explicit_settings_path() {
+        return Ok(explicit);
     }
     if let Some(config) = std::env::var_os("XDG_CONFIG_HOME") {
         let config = config.to_string_lossy();
@@ -515,6 +595,48 @@ mod tests {
         assert_eq!(settings.editor.sidebar_percent, 30);
         assert!(parse("[editor]\nsidebar_percent = 5\n").is_err());
         assert!(parse("[editor]\nsidebar_percent = 41\n").is_err());
+    }
+
+    #[test]
+    fn project_layer_merges_over_user_settings() {
+        let directory = tempfile::tempdir().expect("tempdir");
+        let user = directory.path().join("user.toml");
+        let project = directory.path().join(PROJECT_SETTINGS);
+        fs::write(
+            &user,
+            "[theme]\nname = \"anvil-dark\"\n[editor]\nscroll_margin = 2\nsoft_wrap = false\n",
+        )
+        .expect("user settings");
+        fs::write(
+            &project,
+            "[theme]\nname = \"nord\"\n[editor]\nsoft_wrap = true\n",
+        )
+        .expect("project settings");
+
+        let settings = load_from_layers(Some(&user), Some(&project)).expect("merged settings");
+        assert_eq!(settings.theme, Choice::Fixed("nord"));
+        assert_eq!(settings.editor.scroll_margin, 2);
+        assert!(settings.editor.soft_wrap);
+    }
+
+    #[test]
+    fn project_layer_requires_trust() {
+        let workspace = Path::new("/workspace");
+        assert_eq!(project_layer(workspace, false), None);
+        assert_eq!(
+            project_layer(workspace, true),
+            Some(workspace.join(PROJECT_SETTINGS))
+        );
+    }
+
+    #[test]
+    fn project_layer_rejects_lsp_commands() {
+        let directory = tempfile::tempdir().expect("tempdir");
+        let project = directory.path().join(PROJECT_SETTINGS);
+        fs::write(&project, "[lsp.commands]\nrust = \"/tmp/evil\"\n").expect("project settings");
+
+        let error = load_from_layers(None, Some(&project)).expect_err("lsp commands");
+        assert!(error.contains("[lsp.commands]"), "{error}");
     }
 
     #[test]
