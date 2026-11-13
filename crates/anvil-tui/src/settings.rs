@@ -640,6 +640,29 @@ mod tests {
     }
 
     #[test]
+    fn explicit_settings_replace_the_project_layer() {
+        let _guard = TEST_ENV_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        let directory = tempfile::tempdir().expect("tempdir");
+        let workspace = directory.path().join("workspace");
+        fs::create_dir_all(&workspace).expect("workspace");
+        fs::write(
+            workspace.join(PROJECT_SETTINGS),
+            "[theme]\nname = \"nord\"\n",
+        )
+        .expect("project settings");
+        let explicit = directory.path().join("explicit.toml");
+        fs::write(&explicit, "[theme]\nname = \"omp-kde\"\n").expect("explicit settings");
+
+        unsafe { std::env::set_var("ANVIL_SETTINGS", &explicit) };
+        let result = load_for_workspace(&workspace, true);
+        unsafe { std::env::remove_var("ANVIL_SETTINGS") };
+        let settings = result.expect("explicit settings");
+        assert_eq!(settings.theme, Choice::Fixed("omp-kde"));
+    }
+
+    #[test]
     fn parses_lsp_command_overrides() {
         let (tool, args) = resolve_lsp_command(
             &LspCommandFile::Command("/usr/bin/json-server".to_owned()),
