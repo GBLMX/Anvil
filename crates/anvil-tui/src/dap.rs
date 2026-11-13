@@ -54,13 +54,31 @@ pub struct DapClient {
 
 impl DapClient {
     pub fn spawn(program: &Path, args: &[String], cwd: &Path) -> Result<Self, DapError> {
-        let mut child = Command::new(program)
+        let program = if program.is_absolute() {
+            let program = program.canonicalize().map_err(DapError::Io)?;
+            if !program.is_file() {
+                return Err(DapError::Protocol(
+                    "adapter program is not a file".to_owned(),
+                ));
+            }
+            program
+        } else {
+            program.to_path_buf()
+        };
+        let cwd = cwd.canonicalize().map_err(DapError::Io)?;
+        let mut command = Command::new(program);
+        command
             .args(args)
             .current_dir(cwd)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::null())
-            .spawn()?;
+            .stderr(Stdio::null());
+        #[cfg(unix)]
+        {
+            use std::os::unix::process::CommandExt;
+            command.process_group(0);
+        }
+        let mut child = command.spawn()?;
         let stdin = child
             .stdin
             .take()
@@ -199,6 +217,14 @@ impl DapClient {
     }
 
     pub fn kill(&mut self) {
+        #[cfg(unix)]
+        {
+            use nix::sys::signal::{Signal, killpg};
+            use nix::unistd::Pid;
+            if let Ok(pid) = i32::try_from(self.child.id()) {
+                let _ = killpg(Pid::from_raw(pid), Signal::SIGKILL);
+            }
+        }
         let _ = self.child.kill();
         let _ = self.child.wait();
     }
@@ -287,6 +313,49 @@ mod tests {
             read_frame(&mut reader),
             Err(DapError::Protocol(_))
         ));
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn shutdown_kills_adapter_process_group() {
+        let directory = std::env::temp_dir().join(format!(
+            "anvil-dap-group-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|duration| duration.as_nanos())
+                .unwrap_or_default()
+        ));
+        std::fs::create_dir_all(&directory).expect("create temp dir");
+        let mut client = DapClient::spawn(
+            Path::new("/bin/sh"),
+            &[
+                "-c".to_owned(),
+                "sleep 30 & echo $! > child.pid; wait".to_owned(),
+            ],
+            &directory,
+        )
+        .expect("spawn adapter");
+        let pid_file = directory.join("child.pid");
+        for _ in 0..100 {
+            if pid_file.exists() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        let pid = std::fs::read_to_string(&pid_file).expect("child pid");
+        let proc = PathBuf::from("/proc").join(pid.trim());
+        assert!(proc.exists(), "child did not start");
+        client.kill();
+        for _ in 0..100 {
+            if !proc.exists() {
+                let _ = std::fs::remove_dir_all(directory);
+                return;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        let _ = std::fs::remove_dir_all(directory);
+        panic!("adapter process group survived shutdown");
     }
 
     #[cfg(unix)]

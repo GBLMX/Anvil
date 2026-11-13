@@ -36,6 +36,8 @@ post-`0.5.0` feature line.
   priority fallback, cancellation, and revision-checked replacement.
 - `:format` now prefers bounded `rustfmt`/`gofmt` execution through the file
   worker and falls back to LSP formatting when no external formatter applies.
+- Debug adapters now validate cwd/program paths and kill their process group on
+  shutdown; runtime plugin DAP providers are rejected by the session manager.
 - `anvil-distro-standard` adds a `full` feature that enables every official
   module at runtime. `--all-features` selects it; the default `anvil` binary
   remains the standard Git-only composition.

@@ -29,6 +29,7 @@ impl std::error::Error for ProviderError {}
 pub enum RegistryError {
     InvalidId(crate::provider::ProviderId),
     DuplicateId(crate::provider::ProviderId),
+    UnsupportedOrigin(crate::provider::ProviderOrigin),
 }
 
 impl fmt::Display for RegistryError {
@@ -36,6 +37,9 @@ impl fmt::Display for RegistryError {
         match self {
             Self::InvalidId(id) => write!(formatter, "invalid provider id: {id}"),
             Self::DuplicateId(id) => write!(formatter, "duplicate provider id: {id}"),
+            Self::UnsupportedOrigin(origin) => {
+                write!(formatter, "provider origin is not supported: {origin:?}")
+            }
         }
     }
 }

@@ -2,6 +2,7 @@
 
 mod cancel;
 mod completion;
+mod dap;
 mod error;
 mod exec_format;
 mod format;
@@ -13,6 +14,7 @@ pub use cancel::CancellationToken;
 pub use completion::{
     CompletionContext, CompletionItem, CompletionKind, CompletionPathEntry, CompletionSource,
 };
+pub use dap::{DapAdapterManager, DapAdapterProvider, DapAdapterSpec, DapContext};
 pub use error::{ProviderError, RegistryError};
 pub use exec_format::{ExecFormatter, ExecOutput, ExecV2};
 pub use format::{FormatContext, FormattedText, FormatterKind, FormatterProvider};
