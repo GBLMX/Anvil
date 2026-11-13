@@ -3,6 +3,8 @@ package gateway
 import (
 	"context"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -51,5 +53,22 @@ func TestExecGitApplyAllowedForEditorConnection(t *testing.T) {
 	_, rpcErr := server.exec(context.Background(), request{Params: params}, state)
 	if rpcErr == nil || rpcErr.Code != -32008 {
 		t.Fatalf("editor connection did not reach runner: %#v", rpcErr)
+	}
+}
+
+func TestConfinedDirRejectsSymlinkEscape(t *testing.T) {
+	workspace := t.TempDir()
+	outside := t.TempDir()
+	if err := os.Symlink(outside, filepath.Join(workspace, "escape")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := confinedDir(workspace, "escape"); err == nil {
+		t.Fatal("expected symlink escape rejection")
+	}
+	if err := os.Mkdir(filepath.Join(workspace, "nested"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := confinedDir(workspace, "nested"); err != nil {
+		t.Fatalf("valid cwd rejected: %v", err)
 	}
 }

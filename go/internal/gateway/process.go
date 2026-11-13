@@ -76,6 +76,30 @@ func workspacePath(path string) (string, error) {
 	return clean, nil
 }
 
+func confinedDir(workspace, relative string) (string, error) {
+	clean, err := workspacePath(relative)
+	if err != nil {
+		return "", err
+	}
+	root, err := filepath.EvalSymlinks(workspace)
+	if err != nil {
+		return "", err
+	}
+	candidate, err := filepath.EvalSymlinks(filepath.Join(root, clean))
+	if err != nil {
+		return "", err
+	}
+	rel, err := filepath.Rel(root, candidate)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", fsroot.ErrInvalidPath
+	}
+	info, err := os.Stat(candidate)
+	if err != nil || !info.IsDir() {
+		return "", fsroot.ErrInvalidPath
+	}
+	return candidate, nil
+}
+
 func (s *Server) exec(parent context.Context, req request, state *connectionState) (interface{}, *rpcError) {
 	if rpcErr := s.permissionError(state, "sys.exec"); rpcErr != nil {
 		return nil, rpcErr
@@ -105,16 +129,11 @@ func (s *Server) exec(parent context.Context, req request, state *connectionStat
 	}
 	cwd := s.cfg.Workspace
 	if params.Cwd != "" {
-		clean, err := workspacePath(params.Cwd)
+		resolved, err := confinedDir(s.cfg.Workspace, params.Cwd)
 		if err != nil {
 			return nil, &rpcError{Code: -32602, Message: "invalid params"}
 		}
-		candidate := filepath.Join(s.cfg.Workspace, clean)
-		info, err := os.Stat(candidate)
-		if err != nil || !info.IsDir() {
-			return nil, &rpcError{Code: -32602, Message: "invalid params"}
-		}
-		cwd = candidate
+		cwd = resolved
 	}
 	maxOutput := s.cfg.MaxOutput
 	if params.MaxOutputBytes > 0 && params.MaxOutputBytes < uint64(maxOutput) {
