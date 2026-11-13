@@ -453,6 +453,35 @@ fn gi_and_go_dispatch_call_hierarchy_requests() {
 }
 
 #[test]
+fn path_completion_uses_gateway_directory_entries() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let workspace = dir.path().canonicalize().expect("canonical");
+    let src = workspace.join("src");
+    fs::create_dir(&src).expect("src");
+    fs::write(src.join("main.rs"), "fn main() {}\n").expect("main");
+    fs::write(src.join("model.rs"), "struct Model;\n").expect("model");
+    let (session, gateway, _) = crate::gateway::GatewaySession::start(&workspace).expect("gateway");
+    let mut model = Model::with_gateway(gateway, workspace);
+    model.session.path = Some(src.join("main.rs"));
+    model.session.editor = EditorState::from_text("./mo").into();
+    model.session.cursor = model.session.editor.text().len_bytes();
+    model.request_completion();
+    let completion = model
+        .overlays
+        .lsp_results
+        .completion
+        .as_ref()
+        .expect("completion");
+    let item = completion
+        .items
+        .iter()
+        .find(|item| item.label == "./model.rs")
+        .expect("path item");
+    assert_eq!(item.source.as_str(), "builtin.paths");
+    drop(session);
+}
+
+#[test]
 fn buffer_words_source_populates_local_completion() {
     let mut model = Model::new(EditorState::from_text("value value\nval"), None);
     model.session.cursor = model.session.editor.text().len_bytes();

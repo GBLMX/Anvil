@@ -1,6 +1,13 @@
 use super::{CancellationToken, ProviderError, ProviderId};
 use std::path::Path;
 
+/// One directory entry made available to path completion by the core.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CompletionPathEntry {
+    pub name: String,
+    pub is_dir: bool,
+}
+
 /// Borrowed document context for one completion request.
 pub struct CompletionContext<'a> {
     pub path: Option<&'a Path>,
@@ -9,6 +16,8 @@ pub struct CompletionContext<'a> {
     pub text: &'a str,
     pub cursor: usize,
     pub prefix: &'a str,
+    pub path_prefix: &'a str,
+    pub path_entries: &'a [CompletionPathEntry],
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -105,6 +114,8 @@ mod tests {
             text: "val",
             cursor: 3,
             prefix: "val",
+            path_prefix: "",
+            path_entries: &[],
         };
         let items = provider
             .complete(&context, &CancellationToken::new())
