@@ -21,7 +21,7 @@ their decision sections.
 | [0013](0013-kernel-distribution-boundary.md) | Rust kernel and distribution boundary | Proposed |
 | [0014](0014-plugin-api-v1-freeze.md) | Plugin API v1 freeze | Accepted |
 | [0014b](0014-plugin-wit-seams.md) | Plugin WIT contract from editor seams | Proposed; number collision, renumber before acceptance |
-| [0015](0015-command-line-completion.md) | Command-line completion and popup | Partially implemented; path/buffer and kernel contract pending |
+| [0015](0015-command-line-completion.md) | Command-line completion and popup | Phase 1 implemented; kernel/plugin completion pending |
 | [0016](0016-render-style-layers.md) | Render style layers | Accepted |
 | [0017](0017-plugin-activation-and-lifecycle.md) | Plugin activation and lifecycle | Accepted |
 | [0018](0018-workspace-tree-watch.md) | Workspace tree watching | Accepted |

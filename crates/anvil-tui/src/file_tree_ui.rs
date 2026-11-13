@@ -368,6 +368,9 @@ impl Model {
         for event in events {
             match event {
                 FileEvent::Listed(path, result) => self.handle_tree_listing(path, result),
+                FileEvent::CompletionListed { generation, result } => {
+                    self.handle_path_completion(generation, result);
+                }
                 FileEvent::Files { generation, result } => {
                     self.handle_fuzzy_files(None, generation, result);
                 }

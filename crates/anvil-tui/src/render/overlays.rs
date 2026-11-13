@@ -76,7 +76,9 @@ pub(crate) fn render_overlays(model: &Model, frame: &mut Frame, area: Rect) {
         );
     }
 
-    if let Some(completion) = &model.overlays.command_completion {
+    if let Some(completion) = &model.overlays.command_completion
+        && !completion.filtered().is_empty()
+    {
         let popup = crate::render::command_completion_rect(area, completion.filtered().len());
         frame.render_widget(Clear, popup);
         let visible = popup.height.saturating_sub(2) as usize;

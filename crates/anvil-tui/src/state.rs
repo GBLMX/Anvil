@@ -684,6 +684,7 @@ pub(crate) struct OverlayState {
     pub(crate) debug_panel: Option<debug_panel::DebugPanelState>,
     pub(crate) test_explorer: Option<test_explorer::TestExplorerState>,
     pub(crate) command_completion: Option<CommandCompletion>,
+    pub(crate) completion_generation: u64,
     pub(crate) command_palette_recents: Vec<String>,
     pub(crate) location: LocationPanelState,
     pub(crate) lsp_results: LspResultsState,

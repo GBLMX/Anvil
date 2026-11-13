@@ -1,7 +1,17 @@
 //! Ex command-name and argument completion.
 
 use super::*;
+use crate::file_worker::FileRequest;
 use crate::selection_table::{SelectionItem, SelectionTable};
+
+const PATH_COMMANDS: &[&str] = &[
+    "e",
+    "w",
+    "workspace-add",
+    "workspace-remove",
+    "workspace-trust",
+    "workspace-untrust",
+];
 
 #[derive(Clone, Debug)]
 pub(crate) struct CompletionItem {
@@ -17,6 +27,15 @@ impl SelectionItem for CompletionItem {
 
 pub(crate) struct CommandCompletion {
     table: SelectionTable<CompletionItem>,
+    path: Option<PathCompletion>,
+}
+
+struct PathCompletion {
+    generation: u64,
+    command: String,
+    directory: String,
+    query: String,
+    request_path: PathBuf,
 }
 
 impl CommandCompletion {
@@ -57,7 +76,60 @@ impl CommandCompletion {
         table.refresh_with(|item, query| {
             query.is_empty() || item.label.to_ascii_lowercase().starts_with(query)
         });
-        Self { table }
+        Self { table, path: None }
+    }
+
+    fn pending(path: PathCompletion) -> Self {
+        Self {
+            table: SelectionTable::new(Vec::new()),
+            path: Some(path),
+        }
+    }
+
+    fn is_pending(&self) -> bool {
+        self.path.is_some()
+    }
+
+    fn pending_generation(&self) -> Option<u64> {
+        self.path.as_ref().map(|path| path.generation)
+    }
+
+    fn apply_path_listing(&mut self, entries: Vec<anvil_ipc::DirEntry>) {
+        let Some(path) = self.path.take() else {
+            return;
+        };
+        let mut entries = entries;
+        entries.sort_by(|left, right| left.name.cmp(&right.name));
+        let items = entries
+            .into_iter()
+            .map(|entry| {
+                let label = if entry.is_dir {
+                    format!("{}{}/", path.directory, entry.name)
+                } else {
+                    format!("{}{}", path.directory, entry.name)
+                };
+                CompletionItem {
+                    label: label.clone(),
+                    insert: if entry.is_dir {
+                        format!("{} {label}", path.command)
+                    } else {
+                        format!("{} {label} ", path.command)
+                    },
+                }
+            })
+            .collect();
+        let mut table = SelectionTable::new(items);
+        table.query_mut().push_str(&path.query);
+        table.refresh_with(|item, query| {
+            query.is_empty()
+                || item
+                    .label
+                    .trim_end_matches('/')
+                    .rsplit('/')
+                    .next()
+                    .is_some_and(|name| name.starts_with(query))
+        });
+        self.table = table;
     }
 
     pub(crate) fn is_empty(&self) -> bool {
@@ -124,6 +196,28 @@ impl Model {
             self.overlays.command_completion = None;
             return;
         };
+        let buffer = buffer.text().to_owned();
+        if let Some(mut path) = self.path_completion_request(&buffer) {
+            self.ensure_file_worker();
+            let generation = self.overlays.completion_generation.wrapping_add(1);
+            self.overlays.completion_generation = generation;
+            path.generation = generation;
+            let request = FileRequest::ListCompletion {
+                path: path.request_path.clone(),
+                generation,
+            };
+            if self
+                .workspace
+                .file_worker
+                .as_ref()
+                .is_some_and(|worker| worker.request(request).is_ok())
+            {
+                self.overlays.command_completion = Some(CommandCompletion::pending(path));
+            } else {
+                self.overlays.command_completion = None;
+            }
+            return;
+        }
         #[cfg(target_os = "linux")]
         let plugin_ids = self
             .plugins
@@ -134,7 +228,7 @@ impl Model {
         #[cfg(not(target_os = "linux"))]
         let plugin_ids: Vec<&str> = Vec::new();
         let completion = CommandCompletion::new(
-            buffer.text(),
+            &buffer,
             &plugin_ids,
             self.workspace.git_service.is_some(),
             self.workspace.desktop_service.is_some(),
@@ -142,7 +236,78 @@ impl Model {
         self.overlays.command_completion = (!completion.is_empty()).then_some(completion);
     }
 
+    fn path_completion_request(&self, buffer: &str) -> Option<PathCompletion> {
+        let buffer = buffer.trim_start();
+        let (command, argument, has_argument) = match buffer.split_once(char::is_whitespace) {
+            Some((command, argument)) => (command, argument.trim(), true),
+            None => (buffer, "", false),
+        };
+        if !has_argument || !PATH_COMMANDS.contains(&command) {
+            return None;
+        }
+        let argument = argument.trim();
+        if argument.starts_with('/') || argument.split('/').any(|part| part == "..") {
+            return None;
+        }
+        let (directory, query) = if argument.is_empty() {
+            (String::new(), "")
+        } else if argument.ends_with('/') {
+            (argument.to_owned(), "")
+        } else if let Some((directory, query)) = argument.rsplit_once('/') {
+            (format!("{directory}/"), query)
+        } else {
+            (String::new(), argument)
+        };
+        let relative = directory.trim_end_matches('/');
+        let request_path = if relative.is_empty() {
+            self.workspace.path.clone()
+        } else {
+            self.workspace.path.join(relative)
+        };
+        Some(PathCompletion {
+            generation: 0,
+            command: command.to_owned(),
+            directory,
+            query: query.to_owned(),
+            request_path,
+        })
+    }
+
+    pub(crate) fn handle_path_completion(
+        &mut self,
+        generation: u64,
+        result: Result<Vec<anvil_ipc::DirEntry>, String>,
+    ) {
+        let Some(mut completion) = self.overlays.command_completion.take() else {
+            return;
+        };
+        if completion.pending_generation() != Some(generation) {
+            self.overlays.command_completion = Some(completion);
+            return;
+        }
+        let keep = match result {
+            Ok(entries) => {
+                completion.apply_path_listing(entries);
+                !completion.is_empty()
+            }
+            Err(error) => {
+                self.status.text = format!("E: completion: {error}");
+                false
+            }
+        };
+        self.overlays.command_completion = keep.then_some(completion);
+        self.file.dirty = true;
+    }
+
     pub(crate) fn complete_command_line(&mut self) {
+        if self
+            .overlays
+            .command_completion
+            .as_ref()
+            .is_some_and(CommandCompletion::is_pending)
+        {
+            return;
+        }
         if let Some(completion) = self.overlays.command_completion.take() {
             if let Some(insert) = completion.selected() {
                 self.set_command_line(insert);
@@ -288,5 +453,57 @@ mod tests {
                 .iter()
                 .all(|label| !label.starts_with("git-"))
         );
+    }
+
+    #[test]
+    fn path_completion_filters_directory_entries() {
+        let mut completion = CommandCompletion::pending(PathCompletion {
+            generation: 1,
+            command: "e".to_owned(),
+            directory: "src/".to_owned(),
+            query: "ma".to_owned(),
+            request_path: PathBuf::from("/workspace/src"),
+        });
+        completion.apply_path_listing(vec![
+            anvil_ipc::DirEntry {
+                name: "main".to_owned(),
+                is_dir: true,
+                ino: 1,
+            },
+            anvil_ipc::DirEntry {
+                name: "main.rs".to_owned(),
+                is_dir: false,
+                ino: 2,
+            },
+            anvil_ipc::DirEntry {
+                name: "mod.rs".to_owned(),
+                is_dir: false,
+                ino: 3,
+            },
+        ]);
+        assert_eq!(labels(&completion), vec!["src/main/", "src/main.rs"]);
+        assert_eq!(completion.selected(), Some("e src/main/"));
+    }
+
+    #[test]
+    fn path_completion_rejects_parent_traversal() {
+        let model = Model::new(EditorState::from_text("alpha"), None);
+        assert!(model.path_completion_request("e ../secret").is_none());
+        assert!(model.path_completion_request("e /etc/passwd").is_none());
+    }
+
+    #[test]
+    fn accepting_a_completion_does_not_execute_a_command() {
+        let mut model = Model::new(EditorState::from_text("alpha"), None);
+        model.ui.input_mode = InputMode::CommandLine {
+            buffer: InputBuffer::new("q"),
+        };
+        model.refresh_command_completion();
+        model.complete_command_line();
+        assert!(!model.file.quit);
+        assert!(matches!(
+            &model.ui.input_mode,
+            InputMode::CommandLine { buffer } if buffer.text() == "q "
+        ));
     }
 }

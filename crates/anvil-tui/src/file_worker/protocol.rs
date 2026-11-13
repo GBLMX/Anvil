@@ -30,6 +30,8 @@ pub(crate) struct ProjectReplacePlan {
 pub enum FileRequest {
     /// List one directory.
     List(PathBuf),
+    /// List one directory for command-line path completion.
+    ListCompletion { path: PathBuf, generation: u64 },
     /// Enumerate workspace files with `rg --files`, or a bounded fallback.
     Files {
         hidden: bool,
@@ -111,6 +113,11 @@ pub enum FileRequest {
 pub enum FileEvent {
     /// Directory listing for the requested path.
     Listed(PathBuf, Result<Vec<DirEntry>, String>),
+    /// Directory listing for command-line path completion.
+    CompletionListed {
+        generation: u64,
+        result: Result<Vec<DirEntry>, String>,
+    },
     /// Workspace-relative files in sorted order for one request generation.
     Files {
         generation: u64,

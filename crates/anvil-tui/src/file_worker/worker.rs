@@ -226,6 +226,14 @@ impl FileWorker {
                                     .read_dir(&relative_path(&workspace, &path))
                                     .map_err(|error| error.to_string()),
                             ),
+                            FileRequest::ListCompletion { path, generation } => {
+                                FileEvent::CompletionListed {
+                                    generation,
+                                    result: client
+                                        .read_dir(&relative_path(&workspace, &path))
+                                        .map_err(|error| error.to_string()),
+                                }
+                            }
                             FileRequest::Files {
                                 hidden,
                                 generation,
