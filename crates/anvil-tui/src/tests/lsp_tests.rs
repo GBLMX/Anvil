@@ -452,6 +452,30 @@ fn gi_and_go_dispatch_call_hierarchy_requests() {
 }
 
 #[test]
+fn completion_response_uses_and_closes_the_overlay_stack() {
+    let mut model = Model::new(EditorState::from_text("al"), None);
+    model
+        .language
+        .lsp_requests
+        .pending
+        .insert(19, LspRequestKind::Completion);
+    model.handle_lsp_response(
+        19,
+        serde_json::json!({
+            "isIncomplete": false,
+            "items": [{"label": "alpha", "kind": 3, "insertText": "alpha"}]
+        }),
+        None,
+    );
+    assert!(model.overlays.lsp_results.completion.is_some());
+    assert_eq!(model.top_overlay(), Some(OverlayKind::Completion));
+
+    handle_event(&mut model, key(KeyCode::Esc));
+    assert!(model.overlays.lsp_results.completion.is_none());
+    assert!(model.overlays.stack.is_empty());
+}
+
+#[test]
 fn cancelling_completion_drops_pending_response() {
     let mut model = Model::new(EditorState::from_text("x"), None);
     model.overlays.lsp_results.completion = Some(CompletionState {

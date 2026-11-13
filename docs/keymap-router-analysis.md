@@ -38,7 +38,7 @@ implemented.
 | Config location | `ANVIL_KEYMAP`, XDG config, `~/.config/anvil/keymap.toml`, or `ANVIL_KEYMAP_PRESET` when no file exists | `KeymapConfig::default_path`, `Model::load_keymap_config` |
 | Command contexts | Command registry still classifies `Normal` and `Pending`; routing contexts are separate | `crates/anvil-session/src/command.rs`, `keymap.rs` |
 | Routing | Fixed `if` chain in `handle_key`, with editor/global context lookup in normal mode | `crates/anvil-tui/src/keys.rs` |
-| Popup precedence | Fuzzy, symbols, code actions, completion, hover, diagnostics, then pending leader, then tree, then input modes, then normal | `handle_key` |
+| Popup precedence | The explicit overlay stack top consumes first; configured popup bindings run before its built-in keys | `handle_key`, `overlay_stack.rs` |
 | Space leader | `Space` becomes `Pending(' ')` with a 600 ms deadline; next key is not consumed on expiry | `normal_action`, `begin_pending`, `expire_leader` |
 | Default Space actions | `Space 1` editor, `Space 2` tree, plus `Space e`/`Space f` compatibility aliases | `pending_action` |
 | F-key defaults | None | `normal_action`, `pending_action` |
