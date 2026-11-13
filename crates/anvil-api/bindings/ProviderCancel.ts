@@ -3,4 +3,4 @@
 /**
  * Cancel one in-flight runtime-plugin provider request.
  */
-export type ProviderCancel = { request_id: bigint, };
+export type ProviderCancel = { request_id: number, };

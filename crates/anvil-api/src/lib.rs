@@ -411,6 +411,8 @@ pub struct RegisterProviderResponse {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[ts(export)]
 pub struct ProviderRequest {
+    #[ts(type = "number")]
+    #[schemars(range(max = 9007199254740991i64))]
     pub request_id: u64,
     pub provider_id: String,
     pub query: String,
@@ -421,6 +423,8 @@ pub struct ProviderRequest {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[ts(export)]
 pub struct ProviderCancel {
+    #[ts(type = "number")]
+    #[schemars(range(max = 9007199254740991i64))]
     pub request_id: u64,
 }
 
@@ -738,6 +742,18 @@ mod tests {
             serde_json::to_string(&ProviderCancel { request_id: 7 }).unwrap(),
             r#"{"request_id":7}"#
         );
+        let request_schema = serde_json::to_value(schemars::schema_for!(ProviderRequest)).unwrap();
+        assert_eq!(
+            request_schema["properties"]["request_id"]["maximum"].as_u64(),
+            Some(9_007_199_254_740_991)
+        );
+        let cancel_schema = serde_json::to_value(schemars::schema_for!(ProviderCancel)).unwrap();
+        assert_eq!(
+            cancel_schema["properties"]["request_id"]["maximum"].as_u64(),
+            Some(9_007_199_254_740_991)
+        );
+        assert!(include_str!("../bindings/ProviderRequest.ts").contains("request_id: number"));
+        assert!(include_str!("../bindings/ProviderCancel.ts").contains("request_id: number"));
     }
 
     #[test]

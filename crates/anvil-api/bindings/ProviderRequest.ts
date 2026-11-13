@@ -3,4 +3,4 @@
 /**
  * Data-only request sent to a runtime plugin provider.
  */
-export type ProviderRequest = { request_id: bigint, provider_id: string, query: string, limit: number, };
+export type ProviderRequest = { request_id: number, provider_id: string, query: string, limit: number, };
