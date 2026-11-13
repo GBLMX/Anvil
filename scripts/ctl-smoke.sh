@@ -75,6 +75,7 @@ printf 'one\ntwo\n' >"$workspace/a.txt"
 git -C "$workspace" init -q
 git -C "$workspace" -c user.name=Test -c user.email=test@example.com add a.txt
 git -C "$workspace" -c user.name=Test -c user.email=test@example.com commit -qm init
+base_branch="$(git -C "$workspace" branch --show-current)"
 
 export XDG_RUNTIME_DIR="$runtime"
 export XDG_STATE_HOME="$state"

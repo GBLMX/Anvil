@@ -1,9 +1,8 @@
 # ADR-0029: Git Module Extension Points
 
-- Status: Accepted for implementation; helper extraction and `FileWorker`
-  service injection, optional startup selection, and the Cargo feature matrix
-  landed; command dispatch/completion gating and `official.git` registration
-  landed
+- Status: Implemented for 0.7.1; helper extraction, `FileWorker` service
+  injection, optional startup selection, Cargo feature matrix, command
+  gating, `official.git` registration, and installed-binary parity smoke passed
 - Date: 2026-11-13
 - Related: [ADR-0027](0027-distribution-composition-crate.md), [ADR-0028](0028-module-contract.md)
 
