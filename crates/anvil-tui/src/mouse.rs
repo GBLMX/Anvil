@@ -1,6 +1,7 @@
 //! Pointer state, hit-testing, and mouse gestures.
 
 use super::*;
+use crate::layout::{sidebar_width, tree_fits};
 use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::Rect;
 use unicode_width::UnicodeWidthChar;
@@ -222,8 +223,8 @@ pub(crate) fn hit_test(model: &Model, col: u16, row: u16, width: u16, height: u1
         return Target::Tabs(tab_at(model, col.saturating_sub(inner.x), inner.width));
     }
     let mut editor_inner = inner;
-    if model.tree.visible && editor_inner.width > 50 {
-        let sidebar = sidebar_width(editor_inner);
+    if model.tree.visible && tree_fits(editor_inner.width) {
+        let sidebar = sidebar_width(editor_inner.width);
         if col < editor_inner.x.saturating_add(sidebar) {
             let visible = editor_inner.height.saturating_sub(2) as usize;
             let start = model
@@ -307,14 +308,10 @@ fn content_rect(
     Some((inner, tab_row, breadcrumb_row))
 }
 
-fn sidebar_width(inner: Rect) -> u16 {
-    (inner.width / 5).clamp(18, 40).min(inner.width - 20)
-}
-
 fn editor_area(model: &Model, width: u16, height: u16) -> Option<Rect> {
     let (mut inner, _, _) = content_rect(model, width, height)?;
-    if model.tree.visible && inner.width > 50 {
-        let sidebar = sidebar_width(inner);
+    if model.tree.visible && tree_fits(inner.width) {
+        let sidebar = sidebar_width(inner.width);
         inner.x = inner.x.saturating_add(sidebar);
         inner.width = inner.width.saturating_sub(sidebar);
     }

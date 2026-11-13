@@ -4,6 +4,19 @@ use super::*;
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
+const TREE_MIN_WIDTH: u16 = 60;
+const SIDEBAR_MAX_WIDTH: u16 = 36;
+
+pub(crate) fn sidebar_width(width: u16) -> u16 {
+    (width / 5)
+        .clamp(18, SIDEBAR_MAX_WIDTH)
+        .min(width.saturating_sub(20))
+}
+
+pub(crate) fn tree_fits(width: u16) -> bool {
+    width > TREE_MIN_WIDTH
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum DisplayRow {
     Source(usize),
@@ -75,9 +88,8 @@ impl Model {
 
     pub(crate) fn wrap_text_width(&self, width: u16) -> usize {
         let mut width = width;
-        if self.tree.visible && width > 50 {
-            let sidebar = (width / 5).clamp(18, 40).min(width - 20);
-            width = width.saturating_sub(sidebar);
+        if self.tree.visible && tree_fits(width) {
+            width = width.saturating_sub(sidebar_width(width));
         }
         if self.buffers.split.is_some() {
             let split = width.saturating_mul(self.view.split_ratio.min(100)) / 100;
@@ -777,12 +789,21 @@ mod tests {
     }
 
     #[test]
+    fn sidebar_and_tree_thresholds_are_bounded() {
+        assert_eq!(sidebar_width(80), 18);
+        assert_eq!(sidebar_width(120), 24);
+        assert_eq!(sidebar_width(200), 36);
+        assert!(!tree_fits(60));
+        assert!(tree_fits(61));
+    }
+
+    #[test]
     fn wrap_width_accounts_for_tree_and_split() {
         let mut model = Model::new(EditorState::from_text("x"), None);
         let gutter = usize::from(model.gutter_width());
         assert_eq!(model.wrap_text_width(100), 100 - gutter);
         model.tree.visible = true;
-        let sidebar = (100u16 / 5).clamp(18, 40).min(100 - 20);
+        let sidebar = sidebar_width(100);
         assert_eq!(
             model.wrap_text_width(100),
             usize::from(100 - sidebar) - gutter

@@ -638,18 +638,24 @@ mod tests {
 
     #[test]
     fn environment_errors_are_visible() {
-        assert!(apply_env(Settings::default(), |name| {
-            (name == ENV_SCROLL_MARGIN).then(|| "99".to_owned())
-        })
-        .is_err());
-        assert!(apply_env(Settings::default(), |name| {
-            (name == ENV_MAX_BUFFERS).then(|| "100".to_owned())
-        })
-        .is_err());
-        assert!(apply_env(Settings::default(), |name| {
-            (name == ENV_INLAY_HINTS).then(|| "maybe".to_owned())
-        })
-        .is_err());
+        assert!(
+            apply_env(Settings::default(), |name| {
+                (name == ENV_SCROLL_MARGIN).then(|| "99".to_owned())
+            })
+            .is_err()
+        );
+        assert!(
+            apply_env(Settings::default(), |name| {
+                (name == ENV_MAX_BUFFERS).then(|| "100".to_owned())
+            })
+            .is_err()
+        );
+        assert!(
+            apply_env(Settings::default(), |name| {
+                (name == ENV_INLAY_HINTS).then(|| "maybe".to_owned())
+            })
+            .is_err()
+        );
     }
 
     #[test]

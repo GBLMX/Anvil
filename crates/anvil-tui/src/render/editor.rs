@@ -176,6 +176,29 @@ pub fn view(model: &Model, frame: &mut Frame) {
     if let Some(area) = locations_area {
         content.height = area.y.saturating_sub(content.y);
     }
+    let mut split_area = None;
+    if model.buffers.split.is_some() {
+        let half = content
+            .width
+            .saturating_mul(model.view.split_ratio.min(100))
+            / 100;
+        let left = Rect {
+            width: half,
+            ..content
+        };
+        let right = Rect {
+            x: content.x + half,
+            width: content.width.saturating_sub(half),
+            ..content
+        };
+        if model.ui.focus.split {
+            content = right;
+            split_area = Some(left);
+        } else {
+            content = left;
+            split_area = Some(right);
+        }
+    }
     let gutter_width = model.gutter_width().min(content.width);
     let gutter_area = Rect {
         width: gutter_width,
@@ -334,24 +357,8 @@ pub fn view(model: &Model, frame: &mut Frame) {
             );
         }
     }
-    if let Some(split) = &model.buffers.split {
-        let half = content
-            .width
-            .saturating_mul(model.view.split_ratio.min(100))
-            / 100;
-        let split_area = if model.ui.focus.split {
-            Rect {
-                width: half,
-                ..content
-            }
-        } else {
-            Rect {
-                x: content.x + half,
-                width: content.width.saturating_sub(half),
-                ..content
-            }
-        };
-        render_split_pane(frame, split_area, &split.buffer, model.ui.focus.split);
+    if let (Some(split), Some(area)) = (&model.buffers.split, split_area) {
+        render_split_pane(frame, area, &split.buffer, model.ui.focus.split);
     }
     render_overlays(model, frame, area);
 }
