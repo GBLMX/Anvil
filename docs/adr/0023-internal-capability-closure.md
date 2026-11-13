@@ -100,8 +100,8 @@ A created worker, parsed document, or cached index is not a closed capability.
 
 ### 4. Close plugin/distribution in dependency order
 
-1. Implement dynamic `editor.register_command` and prove one plugin command
-   works without a manifest `onCommand` entry.
+1. Dynamic `editor.register_command` is implemented; plugin commands can run
+   without a manifest `onCommand` entry.
 2. Implement index-to-download integration over the signed cached index.
 3. Implement marketplace browse/detail and indexed install only after dynamic
    commands, signed index, consent, and revocation checks exist.
@@ -231,9 +231,9 @@ acceptable; an invisible one is not.
 - File lifecycle: auto-save and atomic `:config-reload` are implemented.
   External settings file watching remains explicit; persistent undo is still
   rejected for this phase.
-- Plugin distribution: manifest `onCommand` dispatch works; dynamic
-  `editor.register_command` remains pending. Marketplace browse/detail,
-  indexed install, and revocation/provenance UI remain pending.
+- Plugin distribution: manifest and dynamic `editor.register_command`
+  dispatch works. Marketplace browse/detail, indexed install, and
+  revocation/provenance UI remain pending.
 - Plugin sandbox: `LANDLOCK_SCOPE_SIGNAL` is enabled on ABI >= 6; older
   kernels keep seccomp as the primary signal control and report no synthetic
   scope success.

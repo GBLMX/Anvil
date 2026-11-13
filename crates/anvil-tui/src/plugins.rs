@@ -81,20 +81,27 @@ impl Model {
             self.file.dirty = true;
             return;
         }
-        if !plugin
+        let declared = plugin
             .manifest
             .commands
             .iter()
-            .any(|command| command.id == command_id)
-        {
+            .any(|command| command.id == command_id);
+        let dynamic = self
+            .plugins
+            .dynamic_commands
+            .get(command_id)
+            .is_some_and(|command| command.plugin_id == plugin_id);
+        if !declared && !dynamic {
             self.status.text = format!("E: plugin {plugin_id} does not declare {command_id}");
             self.file.dirty = true;
             return;
         }
-        if !plugin_activation::matches(
-            &plugin.manifest.activation_events,
-            &ActivationEvent::Command(command_id.to_owned()),
-        ) {
+        if declared
+            && !plugin_activation::matches(
+                &plugin.manifest.activation_events,
+                &ActivationEvent::Command(command_id.to_owned()),
+            )
+        {
             self.status.text = format!("E: plugin {plugin_id} does not activate on {command_id}");
             self.file.dirty = true;
             return;

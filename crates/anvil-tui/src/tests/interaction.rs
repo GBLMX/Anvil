@@ -518,6 +518,13 @@ fn command_palette_includes_plugin_commands() {
             source: None,
             previous_digest: None,
         });
+    model.plugins.dynamic_commands.insert(
+        "demo.dynamic".to_owned(),
+        crate::state::DynamicPluginCommand {
+            plugin_id: "demo".to_owned(),
+            title: "Dynamic".to_owned(),
+        },
+    );
     model.open_command_palette();
     let item = model
         .overlays
@@ -530,6 +537,17 @@ fn command_palette_includes_plugin_commands() {
         .find(|item| item.id == "demo.trim")
         .expect("plugin command");
     assert_eq!(item.plugin_id.as_deref(), Some("demo"));
+    let dynamic = model
+        .overlays
+        .command_palette
+        .as_ref()
+        .expect("palette")
+        .table
+        .items()
+        .iter()
+        .find(|item| item.id == "demo.dynamic")
+        .expect("dynamic plugin command");
+    assert_eq!(dynamic.plugin_id.as_deref(), Some("demo"));
     model.start_page.welcome = false;
     for character in "demo.trim".chars() {
         handle_event(&mut model, key(KeyCode::Char(character)));

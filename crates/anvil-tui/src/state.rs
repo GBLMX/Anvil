@@ -346,6 +346,12 @@ impl Default for ViewState {
     }
 }
 
+#[cfg(target_os = "linux")]
+pub(crate) struct DynamicPluginCommand {
+    pub(crate) plugin_id: String,
+    pub(crate) title: String,
+}
+
 pub(crate) struct PluginState {
     /// Discovered local plugins.
     #[cfg(target_os = "linux")]
@@ -359,6 +365,8 @@ pub(crate) struct PluginState {
     pub(crate) store_size: u64,
     #[cfg(target_os = "linux")]
     pub(crate) installer: Option<(GatewaySession, GatewayClient)>,
+    #[cfg(target_os = "linux")]
+    pub(crate) dynamic_commands: BTreeMap<String, DynamicPluginCommand>,
     pub(crate) pkg_install: Option<pkg_install::PkgInstallState>,
 }
 
@@ -375,6 +383,8 @@ impl Default for PluginState {
             store_size: 0,
             #[cfg(target_os = "linux")]
             installer: None,
+            #[cfg(target_os = "linux")]
+            dynamic_commands: BTreeMap::new(),
             pkg_install: None,
         }
     }

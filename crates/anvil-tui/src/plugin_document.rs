@@ -1,7 +1,8 @@
 //! Editor-side document snapshot and transaction contract for plugins.
 
 use anvil_api::{
-    ApplyEditRequest, ApplyEditResponse, DocumentSnapshot, SetModeRequest, SetModeResponse,
+    ApplyEditRequest, ApplyEditResponse, DocumentSnapshot, RegisterCommandRequest,
+    RegisterCommandResponse, SetModeRequest, SetModeResponse,
 };
 use anvil_session::Session;
 
@@ -68,8 +69,56 @@ impl Model {
                     })
                     .map_err(|error| (-32009, error))
             }
+            "editor.register_command" => {
+                let request: RegisterCommandRequest =
+                    serde_json::from_value(params).map_err(|error| (-32602, error.to_string()))?;
+                self.register_plugin_command(request)
+                    .map(|command_id| serde_json::json!(RegisterCommandResponse { command_id }))
+                    .map_err(|message| (-32000, message))
+            }
             _ => Err((-32601, format!("method not found: {method}"))),
         }
+    }
+    fn register_plugin_command(
+        &mut self,
+        request: RegisterCommandRequest,
+    ) -> Result<String, String> {
+        let command_id = request.id.trim().to_owned();
+        let title = request.title.trim().to_owned();
+        if command_id.is_empty() || command_id.len() > 128 {
+            return Err("invalid plugin command id".to_owned());
+        }
+        if title.is_empty() || title.len() > 256 {
+            return Err("invalid plugin command title".to_owned());
+        }
+        let plugin_id = self
+            .plugins
+            .entries
+            .iter()
+            .filter(|plugin| {
+                plugin.enabled && command_id.starts_with(&format!("{}.", plugin.manifest.id))
+            })
+            .max_by_key(|plugin| plugin.manifest.id.len())
+            .map(|plugin| plugin.manifest.id.clone())
+            .ok_or_else(|| "plugin command id must be namespaced by a loaded plugin".to_owned())?;
+        if self
+            .plugins
+            .entries
+            .iter()
+            .flat_map(|plugin| plugin.manifest.commands.iter())
+            .any(|command| command.id == command_id)
+            || self.plugins.dynamic_commands.contains_key(&command_id)
+        {
+            return Err(format!("duplicate plugin command: {command_id}"));
+        }
+        if self.plugins.dynamic_commands.len() >= 512 {
+            return Err("too many dynamic plugin commands".to_owned());
+        }
+        self.plugins.dynamic_commands.insert(
+            command_id.clone(),
+            crate::state::DynamicPluginCommand { plugin_id, title },
+        );
+        Ok(command_id)
     }
     fn plugin_buffer_id(&self) -> u64 {
         self.buffers.active as u64 + 1
@@ -172,5 +221,61 @@ mod tests {
             );
             std::thread::sleep(std::time::Duration::from_millis(10));
         }
+    }
+
+    #[cfg(target_os = "linux")]
+    fn plugin(id: &str) -> crate::plugin_discovery::PluginDescriptor {
+        crate::plugin_discovery::PluginDescriptor {
+            root: std::path::PathBuf::from("/tmp"),
+            manifest: anvil_plugin_host::manifest::PluginManifest {
+                id: id.to_owned(),
+                version: "0.1.0".to_owned(),
+                entry: "run.luau".to_owned(),
+                api: "1.0".to_owned(),
+                activation_events: Vec::new(),
+                commands: Vec::new(),
+            },
+            enabled: true,
+            digest: None,
+            source: None,
+            previous_digest: None,
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn plugin_command_registration_is_namespaced_and_stored() {
+        let mut model = Model::new(EditorState::from_text(""), None);
+        model.plugins.entries.push(plugin("demo"));
+        let response = model
+            .handle_editor_request(
+                "editor.register_command",
+                serde_json::json!({"id": "demo.run", "title": "Run"}),
+            )
+            .expect("register");
+        assert_eq!(response["command_id"], "demo.run");
+        assert_eq!(
+            model
+                .plugins
+                .dynamic_commands
+                .get("demo.run")
+                .map(|command| command.plugin_id.as_str()),
+            Some("demo")
+        );
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn plugin_command_registration_rejects_unknown_namespace() {
+        let mut model = Model::new(EditorState::from_text(""), None);
+        model.plugins.entries.push(plugin("demo"));
+        assert!(
+            model
+                .handle_editor_request(
+                    "editor.register_command",
+                    serde_json::json!({"id": "other.run", "title": "Run"}),
+                )
+                .is_err()
+        );
     }
 }

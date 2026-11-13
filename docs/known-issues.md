@@ -9,8 +9,8 @@ in the plans linked below.
 | Area | Limitation | Tracking |
 |---|---|---|
 | Plugin sandbox | `LANDLOCK_SCOPE_SIGNAL` is enabled when Landlock ABI >= 6; older kernels still rely on seccomp as the primary signal control | [threat model T9/T10](threat-model.md), [Linux L1b](linux-platform-plan.md) |
-| Plugin API | v1 is frozen with complete DTOs and a production editor RPC proxy; manifest commands dispatch, while `editor.register_command` remains pending | [0.6.0](0.6.x-plan.md), [ADR-0003](adr/0003-idl.md) |
-| Plugin commands | Manifest `onCommand` events dispatch from the command palette; dynamic `editor.register_command` is still pending | [0.4.x](0.4.x-plan.md), [0.5.x](0.5.x-plan.md) |
+| Plugin API | v1 is frozen with complete DTOs and a production editor RPC proxy; manifest commands and dynamic `editor.register_command` both dispatch | [0.6.0](0.6.x-plan.md), [ADR-0003](adr/0003-idl.md) |
+| Plugin commands | Manifest `onCommand` events and dynamic commands registered through `editor.register_command` dispatch from the command palette | [0.4.x](0.4.x-plan.md), [0.5.x](0.5.x-plan.md) |
 | Distribution | Signed install, bounded download queue, content-addressed store, `pkg.installed`, the enable/disable/uninstall/rollback manager, typed installer `sys.fetch`, official-only release layout/installer, signed index/revocation verifier-cache, anti-rollback state, and signed release artifacts exist; marketplace UI/indexed install/consent/provenance surfaces remain missing | [0.6.x](0.6.x-plan.md) |
 | Performance | Full gate suite has not been run on the reference machine | [performance](performance.md) |
 | Persistence | Session/tab restore, crash recovery, and dirty-swap recovery landed; persistent undo is deliberately rejected for this phase | [0.5.6](0.5.x-plan.md) |

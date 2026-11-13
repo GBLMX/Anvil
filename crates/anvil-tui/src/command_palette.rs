@@ -89,6 +89,39 @@ impl Model {
                 });
             }
         }
+        #[cfg(target_os = "linux")]
+        for (command_id, command) in &self.plugins.dynamic_commands {
+            if items.len() >= 512 {
+                break;
+            }
+            if items.iter().any(|item| item.id == *command_id) {
+                continue;
+            }
+            if !self
+                .plugins
+                .entries
+                .iter()
+                .any(|plugin| plugin.enabled && plugin.manifest.id == command.plugin_id)
+            {
+                continue;
+            }
+            items.push(CommandPaletteItem {
+                id: command_id.clone(),
+                label: format!(
+                    "{} {}",
+                    command.title.escape_default(),
+                    command_id.escape_default()
+                ),
+                title: command.title.escape_default().to_string(),
+                detail: format!(
+                    "{} · plugin {}",
+                    command_id.escape_default(),
+                    command.plugin_id.escape_default()
+                ),
+                plugin_id: Some(command.plugin_id.clone()),
+                theme: None,
+            });
+        }
         self.overlays.command_palette = Some(CommandPaletteState {
             table: SelectionTable::new(items),
             theme_picker: theme_picker::ThemePicker::new(),

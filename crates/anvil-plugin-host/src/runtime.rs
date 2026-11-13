@@ -164,8 +164,40 @@ fn install_editor(lua: &Lua, editor: Option<EditorClient>) -> Result<()> {
                 lua.to_value(&result)
             })?,
         )?;
+
+        let mode_client = Rc::clone(&editor);
+        table.set(
+            "set_mode",
+            lua.create_function(move |lua, value: Value| {
+                let params: JsonValue = lua.from_value(value)?;
+                let result = mode_client
+                    .borrow_mut()
+                    .call("editor.set_mode", params)
+                    .map_err(mlua::Error::RuntimeError)?;
+                lua.to_value(&result)
+            })?,
+        )?;
+
+        let command_client = Rc::clone(&editor);
+        table.set(
+            "register_command",
+            lua.create_function(move |lua, value: Value| {
+                let params: JsonValue = lua.from_value(value)?;
+                let result = command_client
+                    .borrow_mut()
+                    .call("editor.register_command", params)
+                    .map_err(mlua::Error::RuntimeError)?;
+                lua.to_value(&result)
+            })?,
+        )?;
     } else {
-        for method in ["get_view", "get_snapshot", "apply_edit"] {
+        for method in [
+            "get_view",
+            "get_snapshot",
+            "apply_edit",
+            "set_mode",
+            "register_command",
+        ] {
             table.set(
                 method,
                 lua.create_function(|_, ()| {

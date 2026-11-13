@@ -64,6 +64,24 @@ activation. `activationEvents` are limited to `onStartup`, `onCommand:`,
 | `sys.fetch` | `FetchRequest` | `FetchResponse` |
 | `sys.exec` | `ExecRequest` | `ExecResponse` |
 
+## Command registration
+
+`editor.register_command` adds a command to the running editor's command
+palette. The request `id` must be namespaced by the calling plugin id
+(`<plugin-id>.<command>`), be at most 128 bytes, and have a non-empty title of
+at most 256 bytes.
+
+The editor rejects:
+
+- ids that do not match a loaded, enabled plugin;
+- duplicate manifest or dynamic command ids;
+- more than 512 dynamic commands across the session.
+
+Dynamic commands do not need a matching `onCommand:` activation event; invoking
+one starts the plugin host with that command, exactly like an `onCommand`
+manifest command. Registration itself grants no filesystem, exec, clipboard, or
+editor capabilities.
+
 ## Document transaction
 
 `ApplyEditRequest` carries `buffer_id`, `base_revision`, and non-overlapping
