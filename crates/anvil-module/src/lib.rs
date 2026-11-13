@@ -150,7 +150,8 @@ impl std::error::Error for ModuleError {}
 #[derive(Default)]
 pub struct ModuleRegistry {
     modules: BTreeMap<ModuleId, ModuleMetadata>,
-    commands: HashMap<CommandId, ModuleId>,
+    commands: HashMap<CommandId, (&'static CommandSpec, ModuleId)>,
+    registering: Option<ModuleId>,
 }
 
 impl ModuleRegistry {
@@ -178,15 +179,18 @@ impl ModuleRegistry {
             if !pending.insert(spec.id.as_str()) {
                 return Err(ModuleError::DuplicateCommand(spec.id));
             }
-            self.validate_command(id, spec.id)?;
+            self.validate_command(id, spec)?;
         }
         self.modules.insert(id, metadata);
         for spec in metadata.commands {
-            self.commands.insert(spec.id, id);
+            self.commands.insert(spec.id, (spec, id));
         }
-        if let Err(error) = module.register(self) {
+        self.registering = Some(id);
+        let registration = module.register(self);
+        self.registering = None;
+        if let Err(error) = registration {
             self.modules.remove(&id);
-            self.commands.retain(|_, owner| *owner != id);
+            self.commands.retain(|_, (_, owner)| *owner != id);
             return Err(ModuleError::Registration {
                 module: id,
                 message: error.to_string(),
@@ -196,15 +200,18 @@ impl ModuleRegistry {
     }
 
     /// Register an additional command from inside [`Module::register`].
-    pub fn add_command(&mut self, module: ModuleId, command: CommandId) -> Result<(), ModuleError> {
-        if !self.modules.contains_key(&module) {
+    ///
+    /// The owning module is the module currently being registered. A module
+    /// cannot add a command for another module's namespace.
+    pub fn add_command(&mut self, spec: &'static CommandSpec) -> Result<(), ModuleError> {
+        let Some(module) = self.registering else {
             return Err(ModuleError::Registration {
-                module,
-                message: "module is not registered".to_owned(),
+                module: ModuleId::new("unknown"),
+                message: "add_command is only valid during module registration".to_owned(),
             });
-        }
-        self.validate_command(module, command)?;
-        self.commands.insert(command, module);
+        };
+        self.validate_command(module, spec)?;
+        self.commands.insert(spec.id, (spec, module));
         Ok(())
     }
 
@@ -215,14 +222,25 @@ impl ModuleRegistry {
     pub fn command_owner(&self, command: &str) -> Option<ModuleId> {
         self.commands
             .iter()
-            .find_map(|(id, owner)| (id.as_str() == command).then_some(*owner))
+            .find_map(|(id, (_, owner))| (id.as_str() == command).then_some(*owner))
+    }
+
+    pub fn command(&self, command: &str) -> Option<&'static CommandSpec> {
+        self.commands
+            .iter()
+            .find_map(|(id, (spec, _))| (id.as_str() == command).then_some(*spec))
     }
 
     pub fn modules(&self) -> impl Iterator<Item = ModuleId> + '_ {
         self.modules.keys().copied()
     }
 
-    fn validate_command(&self, module: ModuleId, command: CommandId) -> Result<(), ModuleError> {
+    fn validate_command(
+        &self,
+        module: ModuleId,
+        spec: &'static CommandSpec,
+    ) -> Result<(), ModuleError> {
+        let command = spec.id;
         let prefix = format!("{}.", module.0);
         if !command.as_str().starts_with(&prefix) {
             return Err(ModuleError::InvalidCommand {
@@ -231,7 +249,14 @@ impl ModuleRegistry {
                 reason: "command id must start with the module id",
             });
         }
-        if COMMANDS.iter().any(|spec| spec.id == command) {
+        if spec.contexts.is_empty() {
+            return Err(ModuleError::InvalidCommand {
+                module,
+                command,
+                reason: "command must declare at least one context",
+            });
+        }
+        if COMMANDS.iter().any(|kernel| kernel.id == command) {
             return Err(ModuleError::KernelCommand(command));
         }
         if self.commands.contains_key(&command) {
@@ -308,6 +333,67 @@ mod tests {
                 commands: &[],
             }
         }
+    }
+
+    const EXTRA_COMMANDS: &[CommandSpec] = &[CommandSpec {
+        id: CommandId::new("official.extra.run"),
+        contexts: &[CommandContext::Normal, CommandContext::Pending],
+    }];
+
+    struct Extra;
+    impl Module for Extra {
+        fn metadata(&self) -> ModuleMetadata {
+            ModuleMetadata {
+                id: ModuleId::new("official.extra"),
+                name: "Extra",
+                contract: ContractRange::current(),
+                commands: &[],
+            }
+        }
+
+        fn register(&self, registry: &mut ModuleRegistry) -> Result<(), ModuleError> {
+            registry.add_command(&EXTRA_COMMANDS[0])
+        }
+    }
+
+    struct Impostor;
+    impl Module for Impostor {
+        fn metadata(&self) -> ModuleMetadata {
+            ModuleMetadata {
+                id: ModuleId::new("official.impostor"),
+                name: "Impostor",
+                contract: ContractRange::current(),
+                commands: &[],
+            }
+        }
+
+        fn register(&self, registry: &mut ModuleRegistry) -> Result<(), ModuleError> {
+            registry.add_command(&EXTRA_COMMANDS[0])
+        }
+    }
+
+    #[test]
+    fn add_command_keeps_the_spec_and_current_module_owner() {
+        let mut registry = ModuleRegistry::new();
+        registry.register(&Extra).expect("register");
+        let spec = registry.command("official.extra.run").expect("command");
+        assert_eq!(spec.contexts.len(), 2);
+        assert_eq!(
+            registry.command_owner("official.extra.run"),
+            Some(ModuleId::new("official.extra"))
+        );
+
+        let standalone = ModuleRegistry::new();
+        let mut standalone = standalone;
+        assert!(standalone.add_command(&EXTRA_COMMANDS[0]).is_err());
+    }
+
+    #[test]
+    fn add_command_rejects_another_module_namespace_and_rolls_back() {
+        let mut registry = ModuleRegistry::new();
+        assert!(registry.register(&Impostor).is_err());
+        assert!(!registry.contains(ModuleId::new("official.impostor")));
+        assert_eq!(registry.command_owner("official.extra.run"), None);
     }
 
     #[test]
