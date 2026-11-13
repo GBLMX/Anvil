@@ -2,8 +2,8 @@
 
 use anvil_api::{
     ApplyEditRequest, ApplyEditResponse, DocumentSnapshot, EmptyResponse, NotificationSeverity,
-    NotifyRequest, RegisterCommandRequest, RegisterCommandResponse, SetModeRequest,
-    SetModeResponse, StatusRequest,
+    NotifyRequest, RegisterCommandRequest, RegisterCommandResponse, RegisterProviderRequest,
+    RegisterProviderResponse, SetModeRequest, SetModeResponse, StatusRequest,
 };
 use anvil_session::Session;
 
@@ -77,6 +77,13 @@ impl Model {
                     serde_json::from_value(params).map_err(|error| (-32602, error.to_string()))?;
                 self.register_plugin_command(plugin_id, request)
                     .map(|command_id| serde_json::json!(RegisterCommandResponse { command_id }))
+                    .map_err(|message| (-32000, message))
+            }
+            "editor.register_provider" => {
+                let request: RegisterProviderRequest =
+                    serde_json::from_value(params).map_err(|error| (-32602, error.to_string()))?;
+                self.register_plugin_provider(plugin_id, request)
+                    .map(|provider_id| serde_json::json!(RegisterProviderResponse { provider_id }))
                     .map_err(|message| (-32000, message))
             }
             "ui.notify" => {
@@ -158,6 +165,26 @@ impl Model {
         );
         Ok(command_id)
     }
+    fn register_plugin_provider(
+        &mut self,
+        plugin_id: &str,
+        request: RegisterProviderRequest,
+    ) -> Result<String, String> {
+        if !self
+            .plugins
+            .entries
+            .iter()
+            .any(|plugin| plugin.enabled && plugin.manifest.id == plugin_id)
+        {
+            return Err("plugin is not loaded or enabled".to_owned());
+        }
+        self.plugins
+            .plugin_providers
+            .register(plugin_id, request)
+            .map(|registration| registration.id.as_str().to_owned())
+            .map_err(|error| error.to_string())
+    }
+
     fn plugin_buffer_id(&self) -> u64 {
         self.buffers.active as u64 + 1
     }
@@ -346,6 +373,40 @@ mod tests {
             )
             .expect("status");
         assert_eq!(model.status.text, "plugin status");
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn plugin_provider_registration_is_namespaced_and_stored() {
+        let mut model = Model::new(EditorState::from_text(""), None);
+        model.plugins.entries.push(plugin("demo"));
+        let response = model
+            .handle_editor_request(
+                "demo",
+                "editor.register_provider",
+                serde_json::json!({"id": "demo.buffers", "kind": "picker", "title": "Buffers"}),
+            )
+            .expect("register provider");
+        assert_eq!(response["provider_id"], "demo.buffers");
+        assert_eq!(model.plugins.plugin_providers.len(), 1);
+        assert!(
+            model
+                .handle_editor_request(
+                    "demo",
+                    "editor.register_provider",
+                    serde_json::json!({"id": "other.buffers", "kind": "picker", "title": "Buffers"}),
+                )
+                .is_err()
+        );
+        assert!(
+            model
+                .handle_editor_request(
+                    "demo",
+                    "editor.register_provider",
+                    serde_json::json!({"id": "demo.buffers", "kind": "picker", "title": "Buffers"}),
+                )
+                .is_err()
+        );
     }
 
     #[cfg(target_os = "linux")]

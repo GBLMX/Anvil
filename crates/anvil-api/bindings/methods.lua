@@ -6,6 +6,7 @@ local methods = {
   ["editor.set_mode"] = { params = "SetModeRequest", result = "SetModeResponse" },
   ["editor.apply_edit"] = { params = "ApplyEditRequest", result = "ApplyEditResponse" },
   ["editor.register_command"] = { params = "RegisterCommandRequest", result = "RegisterCommandResponse" },
+  ["editor.register_provider"] = { params = "RegisterProviderRequest", result = "RegisterProviderResponse" },
   ["ui.notify"] = { params = "NotifyRequest", result = "EmptyResponse" },
   ["ui.status"] = { params = "StatusRequest", result = "EmptyResponse" },
   ["event.subscribe"] = { params = "EventSubscribeRequest", result = "EventSubscribeResponse" },

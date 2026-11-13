@@ -302,6 +302,9 @@ impl Model {
             Ok(()) => self.status.text = "plugin host stopped".to_owned(),
             Err(error) => self.status.text = format!("E: {error}"),
         }
+        self.plugins
+            .plugin_providers
+            .unregister_plugin(DEBUG_PLUGIN_ID);
         self.file.dirty = true;
     }
 
@@ -331,6 +334,9 @@ impl Model {
             .find(|plugin| plugin.manifest.id == plugin_id)
         {
             plugin.enabled = enabled;
+        }
+        if !enabled {
+            self.plugins.plugin_providers.unregister_plugin(plugin_id);
         }
         Ok(())
     }
@@ -397,6 +403,12 @@ impl Model {
                     state,
                     detail,
                 } => {
+                    if matches!(
+                        state,
+                        HostState::Stopped | HostState::Disabled | HostState::Failed
+                    ) {
+                        self.plugins.plugin_providers.unregister_plugin(&plugin_id);
+                    }
                     self.status.text = match state {
                         HostState::Starting => format!("plugin {plugin_id} starting"),
                         HostState::Ready => format!("plugin {plugin_id} ready"),

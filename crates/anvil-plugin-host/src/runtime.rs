@@ -213,6 +213,19 @@ fn install_editor(lua: &Lua, editor: Option<EditorClient>) -> Result<()> {
             })?,
         )?;
 
+        let provider_client = Rc::clone(&editor);
+        table.set(
+            "register_provider",
+            lua.create_function(move |lua, value: Value| {
+                let params: JsonValue = lua.from_value(value)?;
+                let result = provider_client
+                    .borrow_mut()
+                    .call("editor.register_provider", params)
+                    .map_err(mlua::Error::RuntimeError)?;
+                lua.to_value(&result)
+            })?,
+        )?;
+
         let notify_client = Rc::clone(&editor);
         ui.set(
             "notify",
@@ -245,6 +258,7 @@ fn install_editor(lua: &Lua, editor: Option<EditorClient>) -> Result<()> {
             "apply_edit",
             "set_mode",
             "register_command",
+            "register_provider",
         ] {
             table.set(
                 method,

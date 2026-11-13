@@ -25,6 +25,11 @@
     "result": "RegisterCommandResponse"
   },
   {
+    "name": "editor.register_provider",
+    "params": "RegisterProviderRequest",
+    "result": "RegisterProviderResponse"
+  },
+  {
     "name": "ui.notify",
     "params": "NotifyRequest",
     "result": "EmptyResponse"

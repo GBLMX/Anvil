@@ -1,6 +1,7 @@
 //! TUI state groups and view/editor snapshots.
 
 use super::*;
+use anvil_session::plugin_provider::PluginProviderRegistry;
 use anvil_session::provider::{CancellationToken, PickerEntry, ProviderId};
 
 #[derive(Clone)]
@@ -369,6 +370,7 @@ pub(crate) struct PluginState {
     pub(crate) installer: Option<(GatewaySession, GatewayClient)>,
     #[cfg(target_os = "linux")]
     pub(crate) dynamic_commands: BTreeMap<String, DynamicPluginCommand>,
+    pub(crate) plugin_providers: PluginProviderRegistry,
     pub(crate) pkg_install: Option<pkg_install::PkgInstallState>,
 }
 
@@ -387,6 +389,7 @@ impl Default for PluginState {
             installer: None,
             #[cfg(target_os = "linux")]
             dynamic_commands: BTreeMap::new(),
+            plugin_providers: PluginProviderRegistry::new(),
             pkg_install: None,
         }
     }

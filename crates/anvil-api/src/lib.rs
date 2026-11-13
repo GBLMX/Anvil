@@ -24,6 +24,7 @@ pub mod method {
     pub const EDITOR_SET_MODE: &str = "editor.set_mode";
     pub const EDITOR_APPLY_EDIT: &str = "editor.apply_edit";
     pub const EDITOR_REGISTER_COMMAND: &str = "editor.register_command";
+    pub const EDITOR_REGISTER_PROVIDER: &str = "editor.register_provider";
     pub const UI_NOTIFY: &str = "ui.notify";
     pub const UI_STATUS: &str = "ui.status";
     pub const EVENT_SUBSCRIBE: &str = "event.subscribe";
@@ -84,6 +85,11 @@ pub const METHODS: &[MethodSpec] = &[
         name: method::EDITOR_REGISTER_COMMAND,
         params: MethodType::Named("RegisterCommandRequest"),
         result: MethodType::Named("RegisterCommandResponse"),
+    },
+    MethodSpec {
+        name: method::EDITOR_REGISTER_PROVIDER,
+        params: MethodType::Named("RegisterProviderRequest"),
+        result: MethodType::Named("RegisterProviderResponse"),
     },
     MethodSpec {
         name: method::UI_NOTIFY,
@@ -673,6 +679,7 @@ mod tests {
         assert_eq!(method::EDITOR_GET_SNAPSHOT, "editor.get_snapshot");
         assert_eq!(method::EDITOR_SET_MODE, "editor.set_mode");
         assert_eq!(method::EDITOR_APPLY_EDIT, "editor.apply_edit");
+        assert_eq!(method::EDITOR_REGISTER_PROVIDER, "editor.register_provider");
         assert_eq!(method::SYS_EXEC, "sys.exec");
         assert_eq!(method::SYS_COPY, "sys.copy");
         assert_eq!(method::SYS_REMOVE_ALL, "sys.remove_all");
@@ -686,6 +693,7 @@ mod tests {
             method::EDITOR_SET_MODE,
             method::EDITOR_APPLY_EDIT,
             method::EDITOR_REGISTER_COMMAND,
+            method::EDITOR_REGISTER_PROVIDER,
             method::UI_NOTIFY,
             method::UI_STATUS,
             method::EVENT_SUBSCRIBE,
