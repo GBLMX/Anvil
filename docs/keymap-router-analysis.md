@@ -59,7 +59,7 @@ implemented.
 | No F-key defaults | Landed | No F1-F12 default binding exists. |
 | Ergo default preset | Landed as an additive preset | Built-in Vim-like fallbacks remain underneath. |
 | Vim preset | Landed | `anvil-vim.toml` makes the Vim bindings explicit. |
-| Full context dispatch | Remaining | `file_tree`, `popup`, and `modal` parse but do not route yet. |
+| Full context dispatch | Landed | `file_tree`, `popup`, and `modal` bindings dispatch before built-in keys; covered by interaction tests. |
 | ADR-0020 acceptance tests in `anvil-editor` | Blocked | The router lives in `anvil-tui`; `anvil-editor` has no key event type. |
 
 ## Conflicts and decisions needed
@@ -257,5 +257,6 @@ only, a deadline-based leader, serde-backed contexts, and bundled presets is in
 place. Do not move UI contexts into `anvil-editor`.
 
 The command palette, operation-scoped `ModalLayer`, and shared operator/range
-transaction path are landed. Continue with the ordered context stack for
-popup/tree/modal branches as the next router slice.
+transaction path are landed. The ordered context stack, pure router, and
+popup/tree/modal dispatch are landed; the next router work is full
+modal-stack LIFO focus-restoration coverage.
