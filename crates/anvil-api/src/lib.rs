@@ -10,6 +10,10 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
+mod module;
+
+pub use module::ModuleId;
+
 /// The public plugin API version carried by generated stubs.
 pub const API_VERSION: &str = "1.0.0";
 

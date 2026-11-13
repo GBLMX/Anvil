@@ -173,6 +173,7 @@ dependencies = [
 name = "anvil-module"
 version = "0.6.0"
 dependencies = [
+ "anvil-api",
  "anvil-ipc",
  "anvil-session",
  "serde_json",

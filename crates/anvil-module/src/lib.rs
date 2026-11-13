@@ -7,6 +7,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt;
 use std::sync::Arc;
 
+pub use anvil_api::ModuleId;
 use anvil_session::command::{COMMANDS, CommandId, CommandSpec};
 
 pub mod desktop;
@@ -40,32 +41,6 @@ impl ContractRange {
 
     pub const fn supports(self, version: u32) -> bool {
         self.min <= version && version <= self.max
-    }
-}
-
-/// Stable module identity in `<vendor>.<name>` form.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct ModuleId(&'static str);
-
-impl ModuleId {
-    pub const fn new(id: &'static str) -> Self {
-        Self(id)
-    }
-
-    pub const fn as_str(self) -> &'static str {
-        self.0
-    }
-
-    pub fn is_valid(self) -> bool {
-        let Some((vendor, name)) = self.0.split_once('.') else {
-            return false;
-        };
-        !vendor.is_empty()
-            && !name.is_empty()
-            && !name.contains('.')
-            && vendor.bytes().chain(name.bytes()).all(|byte| {
-                byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'-' | b'_')
-            })
     }
 }
 
@@ -116,13 +91,20 @@ pub enum ModuleError {
 impl fmt::Display for ModuleError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::InvalidId(module) => write!(formatter, "invalid module id: {}", module.0),
+            Self::InvalidId(module) => {
+                write!(formatter, "invalid module id: {}", module.as_str())
+            }
             Self::ContractMismatch { module, required } => write!(
                 formatter,
                 "module {} requires contract {}..={} but this binary provides {}",
-                module.0, required.min, required.max, CONTRACT_VERSION
+                module.as_str(),
+                required.min,
+                required.max,
+                CONTRACT_VERSION
             ),
-            Self::DuplicateModule(module) => write!(formatter, "duplicate module id: {}", module.0),
+            Self::DuplicateModule(module) => {
+                write!(formatter, "duplicate module id: {}", module.as_str())
+            }
             Self::InvalidCommand {
                 module,
                 command,
@@ -130,7 +112,7 @@ impl fmt::Display for ModuleError {
             } => write!(
                 formatter,
                 "module {} command {}: {}",
-                module.0,
+                module.as_str(),
                 command.as_str(),
                 reason
             ),
@@ -148,7 +130,8 @@ impl fmt::Display for ModuleError {
                 write!(
                     formatter,
                     "module {} registration failed: {}",
-                    module.0, message
+                    module.as_str(),
+                    message
                 )
             }
         }
@@ -378,7 +361,7 @@ impl ModuleRegistry {
         spec: &'static CommandSpec,
     ) -> Result<(), ModuleError> {
         let command = spec.id;
-        let prefix = format!("{}.", module.0);
+        let prefix = format!("{}.", module.as_str());
         if !command.as_str().starts_with(&prefix) {
             return Err(ModuleError::InvalidCommand {
                 module,
