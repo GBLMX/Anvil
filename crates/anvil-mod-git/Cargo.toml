@@ -1,0 +1,15 @@
+[package]
+name = "anvil-mod-git"
+description = "Trusted Git service helpers for the Anvil standard distribution"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+anvil-ipc = { path = "../anvil-ipc", version = "0.6.0" }
+
+[dev-dependencies]
+serde_json = "1"
+tempfile = "3"

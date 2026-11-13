@@ -8,6 +8,7 @@ members = [
     "crates/anvil-editor",
     "crates/anvil-ipc",
     "crates/anvil-mcp",
+    "crates/anvil-mod-git",
     "crates/anvil-module",
     "crates/anvil-plugin-host",
     "crates/anvil-session",

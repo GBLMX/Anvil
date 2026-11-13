@@ -1,13 +1,35 @@
-//! Git status, diff, blame, conflict, and hunk helpers.
+//! Trusted Git status, diff, blame, conflict, and hunk helpers.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use anvil_ipc::GatewayClient;
 
-use super::ResolveConflictError;
+/// Failure while resolving a conflict, including whether the working file was
+/// already replaced.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ResolveConflictError {
+    pub message: String,
+    pub working_written: bool,
+}
 
-pub(crate) fn git_status(
+impl ResolveConflictError {
+    pub fn before_write(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+            working_written: false,
+        }
+    }
+
+    pub fn after_write(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+            working_written: true,
+        }
+    }
+}
+
+pub fn git_status(
     client: &mut GatewayClient,
     workspace: &Path,
 ) -> Result<HashMap<PathBuf, char>, String> {
@@ -33,7 +55,7 @@ pub(crate) fn git_status(
     Ok(parse_git_status(&result.stdout, workspace))
 }
 
-pub(crate) fn parse_git_status(output: &str, workspace: &Path) -> HashMap<PathBuf, char> {
+pub fn parse_git_status(output: &str, workspace: &Path) -> HashMap<PathBuf, char> {
     let mut statuses = HashMap::new();
     let mut entries = output
         .split('\0')
@@ -73,10 +95,7 @@ fn git_tool() -> String {
         .unwrap_or_else(|| "/usr/bin/git".to_owned())
 }
 
-pub(crate) fn git_diff(
-    client: &mut GatewayClient,
-    relative: &str,
-) -> Result<Vec<(usize, char)>, String> {
+pub fn git_diff(client: &mut GatewayClient, relative: &str) -> Result<Vec<(usize, char)>, String> {
     let result = client
         .exec(
             &git_tool(),
@@ -105,7 +124,7 @@ pub(crate) fn git_diff(
 
 const MAX_GIT_DIFF_BYTES: usize = 512 * 1024;
 
-pub(crate) fn git_diff_text(
+pub fn git_diff_text(
     client: &mut GatewayClient,
     relative: &str,
     staged: bool,
@@ -148,7 +167,7 @@ pub(crate) fn git_diff_text(
     Ok((text, truncated))
 }
 
-pub(crate) fn git_blame_text(
+pub fn git_blame_text(
     client: &mut GatewayClient,
     relative: &str,
 ) -> Result<(String, bool), String> {
@@ -187,7 +206,7 @@ pub(crate) fn git_blame_text(
     Ok((text, truncated))
 }
 
-pub(crate) fn git_conflicts_text(client: &mut GatewayClient) -> Result<(String, bool), String> {
+pub fn git_conflicts_text(client: &mut GatewayClient) -> Result<(String, bool), String> {
     let result = client
         .exec(
             &git_tool(),
@@ -222,7 +241,7 @@ pub(crate) fn git_conflicts_text(client: &mut GatewayClient) -> Result<(String, 
     Ok((text, truncated))
 }
 
-pub(crate) fn git_conflict_stage_text(
+pub fn git_conflict_stage_text(
     client: &mut GatewayClient,
     relative: &str,
     stage: u8,
@@ -260,7 +279,7 @@ pub(crate) fn git_conflict_stage_text(
     Ok((text, truncated))
 }
 
-pub(crate) fn resolve_git_conflict(
+pub fn resolve_git_conflict(
     client: &mut GatewayClient,
     relative: &str,
     stage: u8,
@@ -315,7 +334,7 @@ pub(crate) fn resolve_git_conflict(
 
 const GIT_HUNK_PATCH: &str = ".anvil-tmp/git-hunk.patch";
 
-pub(crate) fn apply_git_hunk(
+pub fn apply_git_hunk(
     client: &mut GatewayClient,
     patch: &str,
     reverse: bool,
@@ -347,7 +366,7 @@ pub(crate) fn apply_git_hunk(
     Ok(())
 }
 
-pub(crate) fn parse_git_diff(output: &str) -> Vec<(usize, char)> {
+pub fn parse_git_diff(output: &str) -> Vec<(usize, char)> {
     let mut marks = Vec::new();
     for line in output.lines() {
         if !line.starts_with("@@ ") {

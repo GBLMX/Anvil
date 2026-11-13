@@ -12,18 +12,18 @@ use serde_json::Value;
 use crate::pipe_locations::PipeLocation;
 use sha2::{Digest, Sha256};
 
-mod git;
 mod preview;
 mod protocol;
 mod search;
 mod worker;
+pub(crate) use anvil_mod_git::ResolveConflictError;
 #[cfg(test)]
-pub(crate) use git::{parse_git_diff, parse_git_status};
+pub(crate) use anvil_mod_git::{parse_git_diff, parse_git_status};
 pub(crate) use preview::PreviewData;
 #[cfg(test)]
 pub(crate) use preview::{PREVIEW_MAX_LINES, decode_preview};
 pub use protocol::{FileEvent, FileRequest};
-pub(crate) use protocol::{ProjectReplaceFile, ProjectReplacePlan, ResolveConflictError};
+pub(crate) use protocol::{ProjectReplaceFile, ProjectReplacePlan};
 pub use worker::FileWorker;
 
 const FILE_LIMIT: usize = 5000;

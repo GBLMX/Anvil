@@ -7,13 +7,13 @@ use std::time::{Duration, Instant};
 
 use anvil_ipc::GatewayClient;
 
-use super::git::{
-    apply_git_hunk, git_blame_text, git_conflict_stage_text, git_conflicts_text, git_diff,
-    git_diff_text, git_status, resolve_git_conflict,
-};
 use super::preview::read_preview;
 use super::search::{apply_project_replace, files, project_replace_preview, project_search};
 use super::{FileEvent, FileRequest, MAX_TREE_WATCH_DIRS, TREE_DEBOUNCE, TREE_POLL_INTERVAL};
+use anvil_mod_git::{
+    apply_git_hunk, git_blame_text, git_conflict_stage_text, git_conflicts_text, git_diff,
+    git_diff_text, git_status, resolve_git_conflict,
+};
 
 /// Owns the background worker and its channels.
 pub struct FileWorker {

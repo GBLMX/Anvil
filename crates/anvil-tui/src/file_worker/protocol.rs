@@ -8,29 +8,7 @@ use anvil_ipc::DirEntry;
 use super::PreviewData;
 use crate::pipe_locations::PipeLocation;
 
-/// Failure while resolving a conflict, including whether the working file was
-/// already replaced.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct ResolveConflictError {
-    pub(crate) message: String,
-    pub(crate) working_written: bool,
-}
-
-impl ResolveConflictError {
-    pub(crate) fn before_write(message: impl Into<String>) -> Self {
-        Self {
-            message: message.into(),
-            working_written: false,
-        }
-    }
-
-    pub(crate) fn after_write(message: impl Into<String>) -> Self {
-        Self {
-            message: message.into(),
-            working_written: true,
-        }
-    }
-}
+use anvil_mod_git::ResolveConflictError;
 
 /// One file in a project replace preview.
 #[derive(Debug, Clone, PartialEq, Eq)]
