@@ -292,6 +292,15 @@ impl Model {
     #[cfg(not(target_os = "linux"))]
     pub(crate) fn exec_host(&mut self) {}
 
+    pub(crate) fn release_plugin_providers(&mut self, plugin_id: &str) {
+        let removed = self.plugins.plugin_providers.unregister_plugin(plugin_id);
+        for provider in removed {
+            self.plugins
+                .plugin_provider_requests
+                .cancel_provider(&provider);
+        }
+    }
+
     #[cfg(target_os = "linux")]
     pub(crate) fn stop_host(&mut self) {
         match self
@@ -302,9 +311,7 @@ impl Model {
             Ok(()) => self.status.text = "plugin host stopped".to_owned(),
             Err(error) => self.status.text = format!("E: {error}"),
         }
-        self.plugins
-            .plugin_providers
-            .unregister_plugin(DEBUG_PLUGIN_ID);
+        self.release_plugin_providers(DEBUG_PLUGIN_ID);
         self.file.dirty = true;
     }
 
@@ -336,7 +343,7 @@ impl Model {
             plugin.enabled = enabled;
         }
         if !enabled {
-            self.plugins.plugin_providers.unregister_plugin(plugin_id);
+            self.release_plugin_providers(plugin_id);
         }
         Ok(())
     }

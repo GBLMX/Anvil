@@ -375,6 +375,41 @@ mod tests {
         assert_eq!(model.status.text, "plugin status");
     }
 
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn plugin_stop_cancels_pending_provider_requests() {
+        let mut model = Model::new(EditorState::from_text(""), None);
+        model.plugins.entries.push(plugin("demo"));
+        model
+            .handle_editor_request(
+                "demo",
+                "editor.register_provider",
+                serde_json::json!({"id": "demo.buffers", "kind": "picker", "title": "Buffers", "handler": "provide"}),
+            )
+            .expect("register provider");
+        let request_id = model
+            .plugins
+            .plugin_provider_requests
+            .start(
+                anvil_session::provider::ProviderId::new("demo.buffers"),
+                "",
+                1,
+            )
+            .expect("start request");
+        model.release_plugin_providers("demo");
+        assert!(model.plugins.plugin_providers.is_empty());
+        assert!(
+            model
+                .plugins
+                .plugin_provider_requests
+                .accept(anvil_api::ProviderResponse {
+                    request_id,
+                    items: Vec::new(),
+                })
+                .is_err()
+        );
+    }
+
     #[test]
     fn provider_query_unknown_reports_error() {
         let mut model = Model::new(EditorState::from_text(""), None);
