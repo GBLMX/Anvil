@@ -506,6 +506,30 @@ fn replacement_rejects_read_only_help() {
 }
 
 #[test]
+fn conflict_resolution_guards_local_state() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("conflict.txt");
+    fs::write(&path, "text").expect("write");
+    let mut model = Model::open(&path).expect("open");
+
+    model.file.modified = true;
+    model.resolve_git_conflict(2, false);
+    assert!(model.status.text.contains("buffer is modified"));
+    assert!(model.git.resolve_pending.is_none());
+
+    model.file.modified = false;
+    model.show_read_only("body", "status", "title");
+    model.resolve_git_conflict(2, false);
+    assert!(model.status.text.contains("read-only view"));
+    assert!(model.close_help());
+
+    model.git.resolve_pending = Some(77);
+    model.resolve_git_conflict(2, false);
+    assert!(model.status.text.contains("already in progress"));
+    assert_eq!(model.git.resolve_pending, Some(77));
+}
+
+#[test]
 #[cfg(unix)]
 fn open_resolves_symlink_to_canonical_path() {
     let dir = tempfile::tempdir().expect("tempdir");

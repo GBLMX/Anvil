@@ -119,11 +119,14 @@ medium-to-large because above-line rendering requires that display map.
 
 Status: read-only `:git-diff` and `:git-diff --staged`, gutter marks, hunk
 navigation, single-hunk stage/unstage, `:git-blame`, `:git-conflicts`, and
-read-only base/ours/theirs previews landed. Conflict resolution operations remain.
+read-only base/ours/theirs previews landed. Whole-file
+`:git-resolve-ours`/`:git-resolve-theirs` (and `!` variants) land the chosen
+stage and `git add` it; worker tests cover stage validation, write, and staging.
+Both-side and hunk-level conflict resolution are not supported.
 - Keep gutter marks as a derived view, not the only Git surface.
 
-Difficulty: XL. Git index mutations and conflict resolution are data-loss
-surfaces.
+Difficulty: M–L for whole-file resolution. Git index mutations remain a
+data-loss surface.
 
 ### 3.5 File lifecycle
 
@@ -201,12 +204,11 @@ These remain documented, but they do not block internal polish.
 ## 6. Suggested internal order
 
 1. Settings validation/reset/hot-reload boundary.
-2. Git conflict resolution operations.
-3. Auto-save and large/binary/read-only file safety.
-4. Multi-file search and transactional replace.
-5. LSP lifecycle discovery/restart/backoff.
-6. Command registry/effect-queue completion.
-7. P1 adapters only after P0 dogfood.
+2. Auto-save and large/binary/read-only file safety.
+3. Multi-file search and transactional replace.
+4. LSP lifecycle discovery/restart/backoff.
+5. Command registry/effect-queue completion.
+6. P1 adapters only after P0 dogfood.
 
 ## 7. Exit gates
 

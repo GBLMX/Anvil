@@ -396,3 +396,153 @@ pub(crate) fn parse_git_diff(output: &str) -> Vec<(usize, char)> {
     marks.dedup();
     marks
 }
+
+#[cfg(test)]
+mod tests {
+    use super::resolve_git_conflict;
+    use anvil_ipc::GatewayClient;
+    use std::sync::{Arc, Mutex};
+
+    fn resolve_through_mock(
+        stage: u8,
+        stdout: &str,
+        expected_path: &str,
+        expected_data: &str,
+        expected_len: u64,
+    ) {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let workspace = dir.path().to_path_buf();
+        let socket = workspace.join("gateway.sock");
+        let listener = anvil_ipc::Listener::bind(&socket).expect("bind");
+        let requests = Arc::new(Mutex::new(Vec::new()));
+        let server_requests = Arc::clone(&requests);
+        let stdout = stdout.to_owned();
+        let expected_path = expected_path.to_owned();
+        let expected_data = expected_data.to_owned();
+        let server = std::thread::spawn(move || {
+            let mut connection = listener.accept().expect("accept");
+            for _ in 0..4 {
+                let frame = connection.recv().expect("recv").expect("frame");
+                let request: serde_json::Value = serde_json::from_slice(&frame).expect("request");
+                let method = request["method"].as_str().expect("method").to_owned();
+                let params = request["params"].clone();
+                let response = match method.as_str() {
+                    "session.hello" => serde_json::json!({
+                        "jsonrpc": "2.0",
+                        "id": request["id"],
+                        "result": {"ok": true},
+                    }),
+                    "sys.exec" => serde_json::json!({
+                        "jsonrpc": "2.0",
+                        "id": request["id"],
+                        "result": {
+                            "stdout": stdout,
+                            "stderr": "",
+                            "exit_code": 0,
+                            "timed_out": false,
+                            "output_truncated": false,
+                        },
+                    }),
+                    "sys.write_file" => {
+                        assert_eq!(params["path"], expected_path);
+                        assert_eq!(params["offset"], 0);
+                        assert_eq!(params["data"], expected_data);
+                        assert_eq!(params["eof"], true);
+                        serde_json::json!({
+                            "jsonrpc": "2.0",
+                            "id": request["id"],
+                            "result": {"next_offset": expected_len},
+                        })
+                    }
+                    _ => panic!("unexpected method {method}"),
+                };
+                if method != "session.hello" {
+                    server_requests
+                        .lock()
+                        .expect("requests")
+                        .push((method, params));
+                }
+                connection
+                    .send(&serde_json::to_vec(&response).expect("response"))
+                    .expect("send");
+            }
+        });
+
+        let mut client = GatewayClient::connect(&socket, &[15; 32]).expect("client");
+        resolve_git_conflict(&mut client, "conflict.txt", stage).expect("resolve");
+        drop(client);
+        server.join().expect("server");
+        let requests = requests.lock().expect("requests");
+        assert_eq!(requests.len(), 3);
+        assert_eq!(requests[0].0, "sys.exec");
+        assert_eq!(requests[0].1["args"][1], "show");
+        assert_eq!(requests[0].1["args"][2], format!(":{stage}:conflict.txt"));
+        assert_eq!(requests[1].0, "sys.write_file");
+        assert_eq!(requests[2].0, "sys.exec");
+        assert_eq!(requests[2].1["args"][1], "add");
+        assert_eq!(requests[2].1["args"][3], "conflict.txt");
+    }
+
+    #[test]
+    fn resolves_ours_stage_by_writing_and_staging() {
+        resolve_through_mock(2, "ours\n", "conflict.txt", "b3Vycwo=", 5);
+    }
+
+    #[test]
+    fn resolves_theirs_stage_by_writing_and_staging() {
+        resolve_through_mock(3, "theirs\n", "conflict.txt", "dGhlaXJzCg==", 7);
+    }
+    #[test]
+    fn missing_stage_does_not_write_the_working_tree() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let workspace = dir.path().to_path_buf();
+        let socket = workspace.join("gateway.sock");
+        let listener = anvil_ipc::Listener::bind(&socket).expect("bind");
+        let requests = Arc::new(Mutex::new(Vec::new()));
+        let server_requests = Arc::clone(&requests);
+        let server = std::thread::spawn(move || {
+            let mut connection = listener.accept().expect("accept");
+            for _ in 0..2 {
+                let frame = connection.recv().expect("recv").expect("frame");
+                let request: serde_json::Value = serde_json::from_slice(&frame).expect("request");
+                let method = request["method"].as_str().expect("method").to_owned();
+                let response = if method == "session.hello" {
+                    serde_json::json!({
+                        "jsonrpc": "2.0",
+                        "id": request["id"],
+                        "result": {"ok": true},
+                    })
+                } else {
+                    assert_eq!(method, "sys.exec");
+                    server_requests.lock().expect("requests").push(method);
+                    serde_json::json!({
+                        "jsonrpc": "2.0",
+                        "id": request["id"],
+                        "result": {
+                            "stdout": "",
+                            "stderr": "missing stage",
+                            "exit_code": 1,
+                            "timed_out": false,
+                            "output_truncated": false,
+                        },
+                    })
+                };
+                connection
+                    .send(&serde_json::to_vec(&response).expect("response"))
+                    .expect("send");
+            }
+        });
+
+        let mut client = GatewayClient::connect(&socket, &[16; 32]).expect("client");
+        let error =
+            resolve_git_conflict(&mut client, "conflict.txt", 2).expect_err("missing stage");
+        assert!(
+            error.message.contains("missing stage"),
+            "{:?}",
+            error.message
+        );
+        drop(client);
+        server.join().expect("server");
+        assert_eq!(&*requests.lock().expect("requests"), &["sys.exec"]);
+    }
+}
