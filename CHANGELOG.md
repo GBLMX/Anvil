@@ -8,6 +8,9 @@ post-`0.5.0` feature line.
 
 ## [Unreleased]
 ### Added
+- `editor.sidebar_percent` and `ANVIL_EDITOR_SIDEBAR_PERCENT` control the file
+  tree width as a percentage (10-40%), shared by rendering, wrapping, and mouse
+  hit-testing.
 - The desktop entry registers common text and source-code MIME types, so
   Anvil appears in file-manager open-with menus.
 - Plugin commands registered at runtime through `editor.register_command` now
@@ -332,7 +335,7 @@ post-`0.5.0` feature line.
   instead of drawing the second pane over a full-width active editor. Sidebar
   width is shared by rendering, soft wrap, and mouse hit-testing. Panes share
   one title row and a single separator, and soft-wrap width is refreshed when
-  the tree or split geometry changes.
+  the tree or split geometry changes, including closing the tree.
 - LSP discovery now also searches the executable directory and common user
   bin directories, so desktop-launched sessions find tools such as `marksman`.
 - The Go toolchain requirement is now 1.26.11, fixing

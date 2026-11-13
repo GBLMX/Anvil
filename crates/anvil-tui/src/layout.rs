@@ -7,8 +7,10 @@ use unicode_width::UnicodeWidthStr;
 const TREE_MIN_WIDTH: u16 = 60;
 const SIDEBAR_MAX_WIDTH: u16 = 36;
 
-pub(crate) fn sidebar_width(width: u16) -> u16 {
-    (width / 5)
+pub(crate) fn sidebar_width_for(width: u16, percent: u16) -> u16 {
+    width
+        .saturating_mul(percent.min(100))
+        .saturating_div(100)
         .clamp(18, SIDEBAR_MAX_WIDTH)
         .min(width.saturating_sub(20))
 }
@@ -86,6 +88,10 @@ impl Model {
             .collect()
     }
 
+    pub(crate) fn sidebar_width(&self, width: u16) -> u16 {
+        sidebar_width_for(width, self.config.settings.editor.sidebar_percent)
+    }
+
     pub(crate) fn refresh_wrap_width(&mut self) {
         if self.config.settings.editor.soft_wrap {
             self.view.wrap_width = self.wrap_text_width(self.view.viewport_width.saturating_sub(2));
@@ -95,7 +101,7 @@ impl Model {
     pub(crate) fn wrap_text_width(&self, width: u16) -> usize {
         let mut width = width;
         if self.tree.visible && tree_fits(width) {
-            width = width.saturating_sub(sidebar_width(width));
+            width = width.saturating_sub(self.sidebar_width(width));
         }
         if self.buffers.split.is_some() {
             let split = width.saturating_mul(self.view.split_ratio.min(100)) / 100;
@@ -814,9 +820,9 @@ mod tests {
 
     #[test]
     fn sidebar_and_tree_thresholds_are_bounded() {
-        assert_eq!(sidebar_width(80), 18);
-        assert_eq!(sidebar_width(120), 24);
-        assert_eq!(sidebar_width(200), 36);
+        assert_eq!(sidebar_width_for(80, 20), 18);
+        assert_eq!(sidebar_width_for(120, 20), 24);
+        assert_eq!(sidebar_width_for(200, 20), 36);
         assert!(!tree_fits(60));
         assert!(tree_fits(61));
     }
@@ -827,7 +833,7 @@ mod tests {
         let gutter = usize::from(model.gutter_width());
         assert_eq!(model.wrap_text_width(100), 100 - gutter);
         model.tree.visible = true;
-        let sidebar = sidebar_width(100);
+        let sidebar = sidebar_width_for(100, 20);
         assert_eq!(
             model.wrap_text_width(100),
             usize::from(100 - sidebar) - gutter

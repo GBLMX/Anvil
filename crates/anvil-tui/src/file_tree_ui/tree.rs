@@ -7,6 +7,7 @@ impl Model {
         if self.tree.visible && self.ui.focus.tree {
             self.ui.focus.tree = false;
             self.tree.visible = false;
+            self.refresh_wrap_width();
             self.file.dirty = true;
             return;
         }

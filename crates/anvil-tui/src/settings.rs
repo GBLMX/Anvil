@@ -11,12 +11,16 @@ pub(crate) const DEFAULT_SCROLL_MARGIN: usize = 3;
 pub(crate) const MAX_SCROLL_MARGIN: usize = 16;
 pub(crate) const DEFAULT_MAX_BUFFERS: usize = 9;
 pub(crate) const MAX_MAX_BUFFERS: usize = 99;
+pub(crate) const DEFAULT_SIDEBAR_PERCENT: u16 = 20;
+pub(crate) const MIN_SIDEBAR_PERCENT: u16 = 10;
+pub(crate) const MAX_SIDEBAR_PERCENT: u16 = 40;
 
 const ENV_SCROLL_MARGIN: &str = "ANVIL_EDITOR_SCROLL_MARGIN";
 const ENV_AUTO_SAVE: &str = "ANVIL_EDITOR_AUTO_SAVE";
 const ENV_SOFT_WRAP: &str = "ANVIL_EDITOR_SOFT_WRAP";
 const ENV_FORMAT_ON_SAVE: &str = "ANVIL_EDITOR_FORMAT_ON_SAVE";
 const ENV_MAX_BUFFERS: &str = "ANVIL_EDITOR_MAX_BUFFERS";
+const ENV_SIDEBAR_PERCENT: &str = "ANVIL_EDITOR_SIDEBAR_PERCENT";
 const ENV_SEARCH_CASE_SENSITIVE: &str = "ANVIL_SEARCH_CASE_SENSITIVE";
 const ENV_INLAY_HINTS: &str = "ANVIL_LSP_INLAY_HINTS";
 const ENV_REDUCED_MOTION: &str = "ANVIL_REDUCED_MOTION";
@@ -29,6 +33,7 @@ pub(crate) struct EditorSettings {
     pub(crate) auto_save: bool,
     pub(crate) soft_wrap: bool,
     pub(crate) format_on_save: bool,
+    pub(crate) sidebar_percent: u16,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -66,6 +71,7 @@ impl Default for Settings {
                 auto_save: false,
                 soft_wrap: false,
                 format_on_save: false,
+                sidebar_percent: DEFAULT_SIDEBAR_PERCENT,
             },
             search: SearchSettings {
                 case_sensitive: false,
@@ -172,6 +178,7 @@ pub(crate) fn save_to_path(path: &Path, settings: Settings) -> Result<(), String
     editor["auto_save"] = toml_edit::value(settings.editor.auto_save);
     editor["soft_wrap"] = toml_edit::value(settings.editor.soft_wrap);
     editor["format_on_save"] = toml_edit::value(settings.editor.format_on_save);
+    editor["sidebar_percent"] = toml_edit::value(settings.editor.sidebar_percent as i64);
     let search = table_mut(&mut document, "search")?;
     search["case_sensitive"] = toml_edit::value(settings.search.case_sensitive);
     let lsp = table_mut(&mut document, "lsp")?;
@@ -244,6 +251,14 @@ pub(crate) fn parse(text: &str) -> Result<Settings, String> {
     }
     if let Some(format_on_save) = file.editor.format_on_save {
         settings.editor.format_on_save = format_on_save;
+    }
+    if let Some(sidebar_percent) = file.editor.sidebar_percent {
+        if !(MIN_SIDEBAR_PERCENT..=MAX_SIDEBAR_PERCENT).contains(&sidebar_percent) {
+            return Err(format!(
+                "editor.sidebar_percent must be {MIN_SIDEBAR_PERCENT}..={MAX_SIDEBAR_PERCENT}, got {sidebar_percent}"
+            ));
+        }
+        settings.editor.sidebar_percent = sidebar_percent;
     }
     if let Some(case_sensitive) = file.search.case_sensitive {
         settings.search.case_sensitive = case_sensitive;
@@ -320,6 +335,19 @@ fn apply_env(
     if let Some(value) = get(ENV_FORMAT_ON_SAVE) {
         settings.editor.format_on_save = parse_bool(ENV_FORMAT_ON_SAVE, &value)?;
     }
+    if let Some(value) = get(ENV_SIDEBAR_PERCENT) {
+        let percent = value.parse::<u16>().map_err(|_| {
+            format!(
+                "{ENV_SIDEBAR_PERCENT} must be an integer {MIN_SIDEBAR_PERCENT}..={MAX_SIDEBAR_PERCENT}"
+            )
+        })?;
+        if !(MIN_SIDEBAR_PERCENT..=MAX_SIDEBAR_PERCENT).contains(&percent) {
+            return Err(format!(
+                "{ENV_SIDEBAR_PERCENT} must be {MIN_SIDEBAR_PERCENT}..={MAX_SIDEBAR_PERCENT}, got {percent}"
+            ));
+        }
+        settings.editor.sidebar_percent = percent;
+    }
     if let Some(value) = get(ENV_SEARCH_CASE_SENSITIVE) {
         settings.search.case_sensitive = parse_bool(ENV_SEARCH_CASE_SENSITIVE, &value)?;
     }
@@ -387,6 +415,7 @@ struct EditorFile {
     auto_save: Option<bool>,
     soft_wrap: Option<bool>,
     format_on_save: Option<bool>,
+    sidebar_percent: Option<u16>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -463,6 +492,7 @@ mod tests {
                     auto_save: false,
                     soft_wrap: false,
                     format_on_save: false,
+                    sidebar_percent: DEFAULT_SIDEBAR_PERCENT,
                 },
                 search: SearchSettings {
                     case_sensitive: false,
@@ -474,6 +504,14 @@ mod tests {
                 },
             }
         );
+    }
+
+    #[test]
+    fn parses_and_validates_sidebar_percent() {
+        let settings = parse("[editor]\nsidebar_percent = 30\n").expect("sidebar width");
+        assert_eq!(settings.editor.sidebar_percent, 30);
+        assert!(parse("[editor]\nsidebar_percent = 5\n").is_err());
+        assert!(parse("[editor]\nsidebar_percent = 41\n").is_err());
     }
 
     #[test]

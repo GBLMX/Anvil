@@ -2,14 +2,14 @@
 
 use super::*;
 use crate::icon_theme;
-use crate::layout::{sidebar_width, tree_fits};
+use crate::layout::tree_fits;
 use crate::theme;
 
 pub(crate) fn render_tree(model: &Model, frame: &mut Frame, area: Rect) -> Option<Rect> {
     if !model.tree.visible || !tree_fits(area.width) {
         return None;
     }
-    let sidebar_width = sidebar_width(area.width);
+    let sidebar_width = model.sidebar_width(area.width);
     let tree_area = Rect {
         width: sidebar_width,
         ..area
