@@ -14,7 +14,9 @@ use std::path::{Path, PathBuf};
 
 mod responses;
 mod settings;
+#[cfg(test)]
 pub(crate) use settings::lsp_settings;
+pub(crate) use settings::lsp_settings_with_service;
 
 pub(crate) fn expand_snippet(text: &str) -> String {
     let mut output = String::with_capacity(text.len());
@@ -335,7 +337,7 @@ impl Model {
     }
 
     pub(crate) fn notify_lsp_save(&mut self, path: &std::path::Path, text: &str) {
-        let sent = if let Some(key) = Self::lsp_key(path)
+        let sent = if let Some(key) = self.lsp_key(path)
             && let Some(worker) = self.language.lsp.workers.get(&key)
         {
             worker.save(path, text.to_owned()).is_ok()

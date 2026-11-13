@@ -97,7 +97,9 @@ mod search;
 mod search_ui;
 mod splits;
 mod status_line;
+#[cfg(test)]
 use lsp_ui::lsp_settings;
+use lsp_ui::lsp_settings_with_service;
 mod input;
 mod keymap;
 mod keys;

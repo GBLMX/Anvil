@@ -1,16 +1,47 @@
 //! Language-server discovery and per-extension settings.
 
 use std::path::{Path, PathBuf};
+
+use anvil_module::language::{LanguageServerSpec, LanguageToolingService};
+
 pub(crate) struct LspSettings {
     pub(crate) tool: String,
     pub(crate) args: Vec<String>,
     pub(crate) language_id: String,
-    pub(crate) root_markers: Vec<&'static str>,
-    pub(crate) label: &'static str,
+    pub(crate) root_markers: Vec<String>,
+    pub(crate) label: String,
     pub(crate) initialization_options: Option<serde_json::Value>,
 }
 
+impl From<LanguageServerSpec> for LspSettings {
+    fn from(spec: LanguageServerSpec) -> Self {
+        Self {
+            tool: spec.tool,
+            args: spec.args,
+            language_id: spec.language_id,
+            root_markers: spec.root_markers,
+            label: spec.label,
+            initialization_options: spec.initialization_options,
+        }
+    }
+}
+
+#[cfg(test)]
 pub(crate) fn lsp_settings(path: &Path) -> Option<LspSettings> {
+    lsp_settings_with_service(path, None)
+}
+
+pub(crate) fn lsp_settings_with_service(
+    path: &Path,
+    service: Option<&dyn LanguageToolingService>,
+) -> Option<LspSettings> {
+    service
+        .and_then(|service| service.server_for(path))
+        .map(LspSettings::from)
+        .or_else(|| builtin_lsp_settings(path))
+}
+
+fn builtin_lsp_settings(path: &Path) -> Option<LspSettings> {
     let extension = path
         .extension()
         .and_then(|extension| extension.to_str())
@@ -239,8 +270,8 @@ pub(crate) fn lsp_settings(path: &Path) -> Option<LspSettings> {
         tool,
         args,
         language_id: language_id.to_owned(),
-        root_markers,
-        label,
+        root_markers: root_markers.into_iter().map(str::to_owned).collect(),
+        label: label.to_owned(),
         initialization_options,
     })
 }
@@ -285,4 +316,40 @@ fn find_tsserver() -> Option<PathBuf> {
     let tsc = PathBuf::from(tsc).canonicalize().ok()?;
     let candidate = tsc.parent()?.parent()?.join("lib/tsserver.js");
     candidate.is_file().then_some(candidate)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+
+    struct FakeProvider;
+
+    impl LanguageToolingService for FakeProvider {
+        fn server_for(&self, path: &Path) -> Option<LanguageServerSpec> {
+            (path.extension().and_then(|extension| extension.to_str()) == Some("nix")).then(|| {
+                LanguageServerSpec {
+                    tool: "nixd".to_owned(),
+                    args: vec![],
+                    language_id: "nix".to_owned(),
+                    root_markers: vec!["flake.nix".to_owned()],
+                    label: "nixd".to_owned(),
+                    initialization_options: None,
+                }
+            })
+        }
+    }
+
+    #[test]
+    fn service_precedes_builtin_and_falls_back() {
+        let provider = FakeProvider;
+        let nix = lsp_settings_with_service(Path::new("flake.nix"), Some(&provider))
+            .expect("module provider");
+        assert_eq!(nix.tool, "nixd");
+        assert_eq!(nix.language_id, "nix");
+
+        let rust = lsp_settings_with_service(Path::new("src/main.rs"), Some(&provider))
+            .expect("builtin fallback");
+        assert_eq!(rust.language_id, "rust");
+    }
 }

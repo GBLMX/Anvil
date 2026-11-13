@@ -1,7 +1,7 @@
 //! Breadcrumbs, middle ellipsis, and stable status segments.
 
 use super::Model;
-use crate::lsp_ui::lsp_settings;
+use crate::lsp_ui::lsp_settings_with_service;
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -131,12 +131,10 @@ impl Model {
         segments.push(diagnostics);
         if let Some((tool, _)) = &self.language.lsp.config {
             segments.push(format!("lsp {tool}"));
-        } else if self
-            .session
-            .path
-            .as_ref()
-            .is_some_and(|path| lsp_settings(path).is_some())
-        {
+        } else if self.session.path.as_ref().is_some_and(|path| {
+            lsp_settings_with_service(path, self.workspace.language_tooling_service.as_deref())
+                .is_some()
+        }) {
             segments.push("lsp pending".to_owned());
         }
         let selections = self.session.editor.selection_bytes().len();
