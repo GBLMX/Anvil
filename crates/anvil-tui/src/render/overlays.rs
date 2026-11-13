@@ -134,8 +134,16 @@ pub(crate) fn render_overlays(model: &Model, frame: &mut Frame, area: Rect) {
                 style,
             ));
         }
+        let (title, empty) = match picker.mode {
+            crate::state::BufferPickerMode::Buffers => {
+                ("Buffers · Enter switch · Esc close", "no matching buffers")
+            }
+            crate::state::BufferPickerMode::Plugin { .. } => {
+                ("Provider · Enter apply · Esc close", "no matching items")
+            }
+        };
         if picker.filtered.is_empty() {
-            lines.push(Line::styled("no matching buffers", theme::muted()));
+            lines.push(Line::styled(empty, theme::muted()));
         }
         lines.push(Line::styled(
             format!("> {}", picker.query),
@@ -144,9 +152,7 @@ pub(crate) fn render_overlays(model: &Model, frame: &mut Frame, area: Rect) {
         frame.render_widget(
             Paragraph::new(lines)
                 .style(theme::panel())
-                .block(crate::render::focused_panel_block(
-                    "Buffers · Enter switch · Esc close",
-                )),
+                .block(crate::render::focused_panel_block(title)),
             popup,
         );
     }

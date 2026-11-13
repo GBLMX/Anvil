@@ -48,8 +48,8 @@ post-`0.5.0` feature line.
   correlation. Disabling or stopping a plugin now also cancels its pending
   provider requests. Plugin completion results are discarded when the editor
   revision or cursor changed while the host round-trip was in flight; picker
-  merging remains pending. Picker actions can be sent through
-  `:provider-action` to a registered action handler.
+  plugin-picker overlay is reused for plugin results and Enter sends
+  `provider.action` to the registered action handler.
 - `anvil-distro-standard` adds a `full` feature that enables every official
   module at runtime. `--all-features` selects it; the default `anvil` binary
   remains the standard Git-only composition.

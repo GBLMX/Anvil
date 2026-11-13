@@ -430,6 +430,33 @@ mod tests {
     }
 
     #[test]
+    fn plugin_picker_items_open_picker_overlay() {
+        let mut model = Model::new(EditorState::from_text(""), None);
+        model.open_plugin_picker(
+            anvil_session::provider::ProviderId::new("demo.picker"),
+            vec![anvil_api::ProviderItem {
+                label: "buffer".to_owned(),
+                value: Some("1".to_owned()),
+                detail: None,
+                insert_text: None,
+            }],
+        );
+        let picker = model
+            .overlays
+            .buffer_picker
+            .as_ref()
+            .expect("plugin picker");
+        assert!(matches!(
+            picker.mode,
+            crate::state::BufferPickerMode::Plugin { .. }
+        ));
+        assert_eq!(picker.entries[0].display, "buffer");
+        assert_eq!(picker.entries[0].value.as_str(), Some("1"));
+        model.apply_buffer_picker();
+        assert!(model.status.text.contains("unknown provider"));
+    }
+
+    #[test]
     fn plugin_completion_items_install_into_overlay() {
         let mut model = Model::new(EditorState::from_text("buf"), None);
         model.install_plugin_completion(

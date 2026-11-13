@@ -80,9 +80,45 @@ impl Model {
             entries,
             selected,
             cancel,
+            mode: BufferPickerMode::Buffers,
         });
         self.push_overlay(OverlayKind::BufferPicker);
         self.status.text = "buffers".to_owned();
+        self.file.dirty = true;
+    }
+
+    pub(crate) fn open_plugin_picker(
+        &mut self,
+        provider_id: ProviderId,
+        items: Vec<anvil_api::ProviderItem>,
+    ) {
+        if items.is_empty() {
+            self.status.text = "provider returned no items".to_owned();
+            self.file.dirty = true;
+            return;
+        }
+        let entries = items
+            .into_iter()
+            .map(|item| {
+                let display = item.label;
+                let value = item.value.unwrap_or_else(|| display.clone());
+                PickerEntry {
+                    value: serde_json::Value::String(value),
+                    ordinal: display.clone(),
+                    display,
+                }
+            })
+            .collect::<Vec<_>>();
+        self.overlays.buffer_picker = Some(BufferPickerState {
+            query: String::new(),
+            filtered: (0..entries.len()).collect(),
+            entries,
+            selected: 0,
+            cancel: CancellationToken::new(),
+            mode: BufferPickerMode::Plugin { provider_id },
+        });
+        self.push_overlay(OverlayKind::BufferPicker);
+        self.status.text = "provider items".to_owned();
         self.file.dirty = true;
     }
 
@@ -91,6 +127,25 @@ impl Model {
             return;
         };
         let query = picker.query.clone();
+        if matches!(picker.mode, BufferPickerMode::Plugin { .. }) {
+            let needle = query.to_lowercase();
+            let Some(picker) = self.overlays.buffer_picker.as_mut() else {
+                return;
+            };
+            picker.filtered = picker
+                .entries
+                .iter()
+                .enumerate()
+                .filter(|(_, entry)| entry.display.to_lowercase().contains(&needle))
+                .map(|(index, _)| index)
+                .collect();
+            picker.selected = picker.selected.min(picker.filtered.len().saturating_sub(1));
+            self.file.dirty = true;
+            return;
+        }
+        let Some(picker) = self.overlays.buffer_picker.as_ref() else {
+            return;
+        };
         picker.cancel.cancel();
         let context = self.buffer_picker_context();
         let (cancel, result) = self.query_buffer_picker(&context, &query);
@@ -138,10 +193,19 @@ impl Model {
             .get(picker.selected)
             .and_then(|index| picker.entries.get(*index))
         else {
-            self.status.text = "no matching buffer".to_owned();
+            self.status.text = "no matching item".to_owned();
             self.file.dirty = true;
             return;
         };
+        if let BufferPickerMode::Plugin { provider_id } = picker.mode {
+            let Some(value) = entry.value.as_str() else {
+                self.status.text = "E: invalid provider picker value".to_owned();
+                self.file.dirty = true;
+                return;
+            };
+            self.provider_action(provider_id.as_str(), value);
+            return;
+        }
         let Some(index) = entry
             .value
             .as_u64()

@@ -119,13 +119,19 @@ pub(crate) struct FuzzyState {
     pub(crate) selected: usize,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum BufferPickerMode {
+    Buffers,
+    Plugin { provider_id: ProviderId },
+}
+
 pub(crate) struct BufferPickerState {
     pub(crate) query: String,
     pub(crate) entries: Vec<PickerEntry>,
     pub(crate) filtered: Vec<usize>,
     pub(crate) selected: usize,
     pub(crate) cancel: CancellationToken,
+    pub(crate) mode: BufferPickerMode,
 }
 
 #[derive(Debug, Clone, Default)]

@@ -643,28 +643,37 @@ impl Model {
                                 self.file.dirty = true;
                                 return;
                             }
-                            let kind = provider_id.as_ref().and_then(|provider_id| {
+                            let registration = provider_id.as_ref().and_then(|provider_id| {
                                 self.plugins
                                     .plugin_providers
                                     .providers()
                                     .iter()
                                     .find(|provider| &provider.id == provider_id)
-                                    .map(|provider| provider.kind)
+                                    .cloned()
                             });
+                            let kind = registration.as_ref().map(|provider| provider.kind);
                             match self
                                 .plugins
                                 .plugin_provider_requests
                                 .accept_for(id, response)
                             {
                                 Ok(items) => {
-                                    if kind == Some(anvil_api::ProviderKind::Completion)
-                                        && let Some(provider_id) = provider_id.as_ref()
-                                    {
-                                        self.install_plugin_completion(
-                                            provider_id,
-                                            id,
-                                            items.clone(),
-                                        );
+                                    match kind {
+                                        Some(anvil_api::ProviderKind::Completion) => {
+                                            if let Some(provider_id) = provider_id.as_ref() {
+                                                self.install_plugin_completion(
+                                                    provider_id,
+                                                    id,
+                                                    items.clone(),
+                                                );
+                                            }
+                                        }
+                                        Some(anvil_api::ProviderKind::Picker) => {
+                                            if let Some(provider_id) = provider_id {
+                                                self.open_plugin_picker(provider_id, items.clone());
+                                            }
+                                        }
+                                        None => {}
                                     }
                                     self.status.text = format!(
                                         "plugin {plugin_id}: {} provider items",
