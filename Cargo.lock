@@ -79,6 +79,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "anvil-distro-minimal"
+version = "0.6.0"
+dependencies = [
+ "anvil-distro-standard",
+]
+
+[[package]]
+name = "anvil-distro-standard"
+version = "0.6.0"
+dependencies = [
+ "anvil-control",
+ "anvil-tui",
+ "tempfile",
+]
+
+[[package]]
 name = "anvil-editor"
 version = "0.6.0"
 dependencies = [

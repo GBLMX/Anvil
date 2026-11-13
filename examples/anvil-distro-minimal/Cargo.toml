@@ -1,0 +1,15 @@
+[package]
+name = "anvil-distro-minimal"
+description = "Minimal second consumer of the Anvil distribution composition contract"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+anvil-distro-standard = { path = "../../crates/anvil-distro-standard", version = "0.6.0" }
+
+[[bin]]
+name = "anvil-minimal"
+path = "src/main.rs"

@@ -1,5 +1,18 @@
 [workspace]
-members = ["crates/anvil-api", "crates/anvil-control", "crates/anvil-core", "crates/anvil-ctl", "crates/anvil-editor", "crates/anvil-ipc", "crates/anvil-mcp", "crates/anvil-plugin-host", "crates/anvil-session", "crates/anvil-tui"]
+members = [
+    "crates/anvil-api",
+    "crates/anvil-control",
+    "crates/anvil-core",
+    "crates/anvil-ctl",
+    "crates/anvil-distro-standard",
+    "crates/anvil-editor",
+    "crates/anvil-ipc",
+    "crates/anvil-mcp",
+    "crates/anvil-plugin-host",
+    "crates/anvil-session",
+    "crates/anvil-tui",
+    "examples/anvil-distro-minimal",
+]
 resolver = "3"
 
 [workspace.package]

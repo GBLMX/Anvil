@@ -9,7 +9,7 @@ cd "$root"
 
 install -d "$out/bin" "$out/share/anvil/official/plugins"
 
-cargo build --release -p anvil-tui -p anvil-ctl -p anvil-mcp -p anvil-plugin-host
+cargo build --release -p anvil-distro-standard -p anvil-ctl -p anvil-mcp -p anvil-plugin-host
 GOTOOLCHAIN="$go_toolchain" go build -trimpath -buildvcs=false -ldflags='-s -w' -o "$out/bin/anvil-gateway" ./go/cmd/anvil-gateway
 GOTOOLCHAIN="$go_toolchain" go build -trimpath -buildvcs=false -ldflags='-s -w' -o "$out/bin/anvil-exec-runner" ./go/cmd/anvil-exec-runner
 

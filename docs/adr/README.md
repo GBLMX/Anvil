@@ -33,6 +33,7 @@ their decision sections.
 | [0024](0024-tui-state-and-domain-boundaries.md) | TUI state composition, page state, and domain boundaries | Proposed |
 | [0025](0025-lsp-and-language-breadth.md) | LSP surface and language breadth boundaries | Proposed |
 | [0026](0026-persistent-undo-decision.md) | Persistent undo is deferred and gated | Accepted |
+| [0027](0027-distribution-composition-crate.md) | Standard distribution composition crate and two consumers | Accepted |
 
 ## Numbering Rule
 

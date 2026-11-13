@@ -261,7 +261,8 @@ crates/
   anvil-control/       editor control socket, protocol v3, command manifest
   anvil-ctl/           CLI adapter over the control socket
   anvil-plugin-host/   Luau host + sandbox (QuickJS planned)
-  anvil-tui/           terminal frontend
+  anvil-tui/           terminal frontend library
+  anvil-distro-standard/ standard distribution entrypoint and composition
   anvil-mcp/           stdio MCP adapter over anvil-control
 go/
   cmd/anvil-gateway/   gateway entry point

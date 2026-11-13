@@ -63,11 +63,10 @@ signed-index work stay deferred until the polish phase exits.
 
 ## Later
 
-- A standard-edition composition crate and a sample third-party distribution.
 - [0.7.x] Official optional Rust modules: source-level only, feature-gated,
   trusted in-process code; see [docs/0.7.x-plan.md](docs/0.7.x-plan.md).
-  Blocked on `0.4.9`, `0.6.0`, the standard-edition composition crate, and the
-  module two-consumer gate.
+  The composition crate and two-consumer gate are landed (ADR-0027); blocked on
+  the module-contract ADR.
 - Optional TachyonFX-style UI effects: `anvil-tui` only, non-default feature,
   ADR and performance gate required; see the deferred section in
   [docs/0.5.x-plan.md](docs/0.5.x-plan.md). Not before the `0.5.10` baseline.

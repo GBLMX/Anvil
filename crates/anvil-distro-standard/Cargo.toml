@@ -1,0 +1,19 @@
+[package]
+name = "anvil-distro-standard"
+description = "Standard Anvil distribution composition and command-line entrypoint"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+anvil-tui = { path = "../anvil-tui", version = "0.6.0" }
+anvil-control = { path = "../anvil-control", version = "0.6.0" }
+
+[dev-dependencies]
+tempfile = "3"
+
+[[bin]]
+name = "anvil"
+path = "src/main.rs"

@@ -43,6 +43,42 @@ FILE must be inside the selected workspace. Use -- before a file name that
 starts with a dash.
 ";
 
+/// Static composition metadata for one distribution.
+#[derive(Clone, Copy, Debug)]
+pub struct Distribution {
+    /// Process name used in diagnostics and version output.
+    pub name: &'static str,
+    /// Help text printed for `--help`.
+    pub usage: &'static str,
+}
+
+/// The standard Anvil distribution.
+pub const STANDARD: Distribution = Distribution {
+    name: "anvil",
+    usage: USAGE,
+};
+
+#[derive(Debug)]
+enum RunError {
+    Args(String),
+    Io(std::io::Error),
+}
+
+impl std::fmt::Display for RunError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Args(error) => formatter.write_str(error),
+            Self::Io(error) => error.fmt(formatter),
+        }
+    }
+}
+
+impl From<std::io::Error> for RunError {
+    fn from(error: std::io::Error) -> Self {
+        Self::Io(error)
+    }
+}
+
 #[derive(Debug, PartialEq, Eq)]
 enum Command {
     Run {
@@ -56,22 +92,33 @@ enum Command {
     Version,
 }
 
-fn main() {
-    if let Err(error) = run() {
-        eprintln!("anvil: {error}");
-        process::exit(1);
+/// Runs one distribution entrypoint and exits the process with its status.
+pub fn main(distribution: &Distribution) -> ! {
+    match run(distribution, env::args_os().skip(1)) {
+        Ok(code) => process::exit(code),
+        Err(RunError::Args(error)) => {
+            eprintln!("{}: {error}", distribution.name);
+            process::exit(2);
+        }
+        Err(RunError::Io(error)) => {
+            eprintln!("{}: {error}", distribution.name);
+            process::exit(1);
+        }
     }
 }
 
-fn run() -> std::io::Result<()> {
-    match parse_args(env::args_os().skip(1)) {
+fn run<I>(distribution: &Distribution, arguments: I) -> Result<i32, RunError>
+where
+    I: IntoIterator<Item = OsString>,
+{
+    match parse_args(arguments) {
         Ok(Command::Help) => {
-            print!("{USAGE}");
-            Ok(())
+            print!("{}", distribution.usage);
+            Ok(0)
         }
         Ok(Command::Version) => {
-            println!("anvil {}", env!("CARGO_PKG_VERSION"));
-            Ok(())
+            println!("{} {}", distribution.name, env!("CARGO_PKG_VERSION"));
+            Ok(0)
         }
         Ok(Command::Run {
             workspace,
@@ -80,23 +127,22 @@ fn run() -> std::io::Result<()> {
             stdin,
             read_only,
         }) => {
-            if !stdin && !editor && forward_to_running(&workspace, path.as_deref(), read_only)? {
-                return Ok(());
+            if !stdin
+                && !editor
+                && forward_to_running(distribution, &workspace, path.as_deref(), read_only)?
+            {
+                return Ok(0);
             }
-            let code = anvil_tui::run_with_input(path, workspace, editor, stdin, read_only)?;
-            if code != 0 {
-                process::exit(code);
-            }
-            Ok(())
+            Ok(anvil_tui::run_with_input(
+                path, workspace, editor, stdin, read_only,
+            )?)
         }
-        Err(error) => {
-            eprintln!("anvil: {error}");
-            process::exit(2);
-        }
+        Err(error) => Err(RunError::Args(error)),
     }
 }
 
 fn forward_to_running(
+    distribution: &Distribution,
     workspace: &Path,
     path: Option<&Path>,
     read_only: bool,
@@ -120,7 +166,8 @@ fn forward_to_running(
         return Err(std::io::Error::new(
             std::io::ErrorKind::AlreadyExists,
             format!(
-                "another Anvil instance is running for {}; use anvil-ctl",
+                "another {} instance is running for {}; use anvil-ctl",
+                distribution.name,
                 running.display()
             ),
         ));
@@ -128,13 +175,16 @@ fn forward_to_running(
     if read_only {
         return Err(std::io::Error::new(
             std::io::ErrorKind::AlreadyExists,
-            "a writable Anvil instance is already running",
+            format!(
+                "a writable {} instance is already running",
+                distribution.name
+            ),
         ));
     }
     let Some(path) = path else {
         return Err(std::io::Error::new(
             std::io::ErrorKind::AlreadyExists,
-            "another Anvil instance is already running",
+            format!("another {} instance is already running", distribution.name),
         ));
     };
     let absolute = if path.is_absolute() {
@@ -395,9 +445,9 @@ mod tests {
 
     #[test]
     fn help_documents_preview_and_gateway_override() {
-        assert!(USAGE.contains("Space f"));
-        assert!(USAGE.contains("previews"));
-        assert!(USAGE.contains("ANVIL_GATEWAY"));
+        assert!(STANDARD.usage.contains("Space f"));
+        assert!(STANDARD.usage.contains("previews"));
+        assert!(STANDARD.usage.contains("ANVIL_GATEWAY"));
         assert!(USAGE.contains("ANVIL_EDITOR_MAX_BUFFERS"));
         assert!(USAGE.contains("Space b"));
     }
