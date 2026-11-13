@@ -206,12 +206,13 @@ Do not silently rewrite a user's existing config.
    - Legacy normal/pending tables retained.
    - Clear errors for unknown contexts, commands, and duplicates.
 
-2. **Contexts — partial**
-   - Landed: `KeymapContext`, derived context stack, editor/global binding
-     dispatch, direct pending-command context actions.
-   - Remaining: convert every popup/tree/editor branch to the ordered context
-     list; dispatch `file_tree`, `popup`, and `modal` bindings.
-   - Remaining: pure router function tested with a fake handler.
+2. **Contexts — landed**
+   - `KeymapContext`, derived context stack, editor/global binding dispatch,
+     and direct pending-command context actions.
+   - Popup, file-tree, and modal bindings dispatch through the ordered context
+     list before their built-in fallback keys.
+   - `route_context_key` is a pure resolver whose handler is exercised with a
+     fake handler in unit tests.
 
 3. **Leader — landed**
    - 600 ms deadline on the 50 ms loop tick.

@@ -369,6 +369,18 @@ fn dispatch_context_binding(model: &mut Model, context: KeymapContext, key: KeyP
     }
 }
 
+fn route_context_key(
+    contexts: &[KeymapContext],
+    key: KeyPress,
+    keymap: &crate::keymap::KeymapConfig,
+    mut handler: impl FnMut(ContextAction) -> bool,
+) -> bool {
+    let Some((_, action)) = resolve_context_binding(contexts, key, keymap) else {
+        return false;
+    };
+    handler(action)
+}
+
 fn dispatch_specific_context_binding(model: &mut Model, key: KeyPress) -> bool {
     let contexts = model
         .active_keymap_contexts()
@@ -378,7 +390,14 @@ fn dispatch_specific_context_binding(model: &mut Model, key: KeyPress) -> bool {
     if contexts.is_empty() {
         return false;
     }
-    let Some((_, action)) = resolve_context_binding(&contexts, key, &model.config.keymap) else {
+    let mut routed = None;
+    if !route_context_key(&contexts, key, &model.config.keymap, |action| {
+        routed = Some(action);
+        true
+    }) {
+        return false;
+    }
+    let Some(action) = routed else {
         return false;
     };
     model.input.pending = None;
@@ -1614,5 +1633,62 @@ fn handle_key(model: &mut Model, key: KeyPress) {
                 model.sync_visual_selection();
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::event::KeyModifiers;
+    use crate::keymap::KeymapConfig;
+
+    fn press(code: KeyCode) -> KeyPress {
+        KeyPress::from_key(KeyEvent::new(code, KeyModifiers::NONE))
+    }
+
+    #[test]
+    fn route_context_key_hands_the_first_match_to_the_handler() {
+        let keymap = KeymapConfig::from_toml(
+            r#"
+[keymap.contexts.popup]
+x = "view.focus_editor"
+"#,
+        )
+        .expect("keymap");
+        let mut routed = false;
+        let handled = route_context_key(
+            &[KeymapContext::Popup, KeymapContext::Editor],
+            press(KeyCode::Char('x')),
+            &keymap,
+            |_| {
+                routed = true;
+                true
+            },
+        );
+        assert!(handled);
+        assert!(routed);
+    }
+
+    #[test]
+    fn route_context_key_skips_handlers_when_no_binding_matches() {
+        let keymap = KeymapConfig::from_toml(
+            r#"
+[keymap.contexts.popup]
+x = "view.focus_editor"
+"#,
+        )
+        .expect("keymap");
+        let mut routed = false;
+        let handled = route_context_key(
+            &[KeymapContext::Popup],
+            press(KeyCode::Char('z')),
+            &keymap,
+            |_| {
+                routed = true;
+                true
+            },
+        );
+        assert!(!handled);
+        assert!(!routed);
     }
 }
