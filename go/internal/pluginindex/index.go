@@ -414,6 +414,9 @@ func validateWindow(issuedRaw, expiresRaw string, now time.Time) (time.Time, tim
 	if !expires.After(issued) || expires.Sub(issued) > MaxDocumentAge {
 		return time.Time{}, time.Time{}, fmt.Errorf("%w: invalid validity window", ErrInvalidDocument)
 	}
+	if !expires.After(now) {
+		return time.Time{}, time.Time{}, fmt.Errorf("%w: document expired", ErrInvalidDocument)
+	}
 	return issued, expires, nil
 }
 

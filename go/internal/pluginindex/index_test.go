@@ -262,3 +262,42 @@ func TestVerifyRejectsUppercaseSignature(t *testing.T) {
 		t.Fatal("uppercase signature must fail")
 	}
 }
+
+func TestRejectsExpiredIndex(t *testing.T) {
+	f := newFixture(t)
+	f.index.IssuedAt = f.now.Add(-2 * time.Hour).Format(time.RFC3339)
+	f.index.ExpiresAt = f.now.Add(-time.Hour).Format(time.RFC3339)
+	payload, err := json.Marshal(f.index)
+	if err != nil {
+		t.Fatalf("marshal index: %v", err)
+	}
+	if _, err := LoadIndex(payload, sign(t, payload, f.private), f.roots, f.now, f.hosts); err == nil || !strings.Contains(err.Error(), "expired") {
+		t.Fatalf("expired index error = %v", err)
+	}
+}
+
+func TestRejectsFutureIndex(t *testing.T) {
+	f := newFixture(t)
+	f.index.IssuedAt = f.now.Add(MaxFutureSkew + time.Minute).Format(time.RFC3339)
+	f.index.ExpiresAt = f.index.IssuedAt
+	payload, err := json.Marshal(f.index)
+	if err != nil {
+		t.Fatalf("marshal index: %v", err)
+	}
+	if _, err := LoadIndex(payload, sign(t, payload, f.private), f.roots, f.now, f.hosts); err == nil || !strings.Contains(err.Error(), "future") {
+		t.Fatalf("future index error = %v", err)
+	}
+}
+
+func TestRejectsExpiredRevocations(t *testing.T) {
+	f := newFixture(t)
+	f.revocation.IssuedAt = f.now.Add(-2 * time.Hour).Format(time.RFC3339)
+	f.revocation.ExpiresAt = f.now.Add(-time.Hour).Format(time.RFC3339)
+	payload, err := json.Marshal(f.revocation)
+	if err != nil {
+		t.Fatalf("marshal revocations: %v", err)
+	}
+	if _, err := LoadRevocations(payload, sign(t, payload, f.private), f.roots, f.now); err == nil || !strings.Contains(err.Error(), "expired") {
+		t.Fatalf("expired revocations error = %v", err)
+	}
+}
