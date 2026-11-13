@@ -77,8 +77,8 @@ signed-index work stay deferred until the polish phase exits.
   composition, and installed-binary workspace-index smoke are landed. The
   minimal second consumer, module boundary check, compatibility matrix,
   deprecation policy, and contract v1 freeze close 0.7.3. The first 0.7.4
-  slice, opt-in `official.desktop` with `:open-url`, is landed; remaining
-  candidates still need bounded slices.
+  slices, opt-in `official.desktop` and `official.language-latex` (including
+  highlighting), are landed; the remaining candidate pool is optional.
 - Optional TachyonFX-style UI effects: `anvil-tui` only, non-default feature,
   ADR and performance gate required; see the deferred section in
   [docs/0.5.x-plan.md](docs/0.5.x-plan.md). Not before the `0.5.10` baseline.
