@@ -19,6 +19,10 @@ post-`0.5.0` feature line.
 - LaTeX/Typst grammars are now feature-gated in `anvil-syntax`; feature-free
   builds no longer compile them. `official-language-latex` and
   `official-language-typst` enable the corresponding highlighting features.
+- Added the UI-neutral provider foundation in `anvil-session`: provider ids,
+  provenance, priorities, cancellation tokens, typed errors, and an ordered
+  multi-provider registry. This is internal groundwork for the `0.6.0.x`
+  provider protocol slices.
 - `anvil-distro-standard` adds a `full` feature that enables every official
   module at runtime. `--all-features` selects it; the default `anvil` binary
   remains the standard Git-only composition.

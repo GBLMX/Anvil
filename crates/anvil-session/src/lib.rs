@@ -10,6 +10,7 @@ mod host_session;
 pub mod keymap;
 pub mod plugin_session;
 pub mod plugin_supervisor;
+pub mod provider;
 pub mod ui;
 use anvil_api::{ApplyEditRequest, DocumentSnapshot};
 use anvil_core::TextBuffer;
