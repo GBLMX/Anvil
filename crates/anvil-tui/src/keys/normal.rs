@@ -247,7 +247,11 @@ pub(super) fn execute_context_action(model: &mut Model, action: ContextAction, k
     }
 }
 
-pub(super) fn dispatch_context_binding(model: &mut Model, context: KeymapContext, key: KeyPress) -> bool {
+pub(super) fn dispatch_context_binding(
+    model: &mut Model,
+    context: KeymapContext,
+    key: KeyPress,
+) -> bool {
     if let Some((_, action)) = resolve_context_binding(&[context], key, &model.config.keymap) {
         execute_context_action(model, action, key);
         true
@@ -306,4 +310,3 @@ pub(super) fn execute_command_id(model: &mut Model, id: &str, key: KeyPress) -> 
     }
     false
 }
-

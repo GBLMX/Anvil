@@ -1,8 +1,8 @@
 use anvil_core::{TextBuffer, TextDocument};
 use std::collections::{HashMap, VecDeque};
 use std::path::{Path, PathBuf};
-use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::LazyLock;
+use std::sync::mpsc::{self, Receiver, Sender};
 use std::time::{Duration, Instant};
 use tree_sitter::{Language, Parser, Query, QueryCursor, StreamingIterator};
 
@@ -275,10 +275,11 @@ impl SyntaxCacheStore {
 
     fn check(&self) {
         debug_assert_eq!(self.entries.len(), self.order.len());
-        debug_assert!(self
-            .order
-            .iter()
-            .all(|path| self.entries.contains_key(path)));
+        debug_assert!(
+            self.order
+                .iter()
+                .all(|path| self.entries.contains_key(path))
+        );
         debug_assert_eq!(
             self.order
                 .iter()
@@ -1078,9 +1079,11 @@ mod tests {
     fn markdown_frontmatter_and_broken_fences_are_safe() {
         let frontmatter = parse_source("---\ntitle: Anvil\n---\n# Title\n", Path::new("x.md"))
             .expect("frontmatter parse");
-        assert!(frontmatter
-            .iter()
-            .any(|highlight| highlight.class == SyntaxClass::Property));
+        assert!(
+            frontmatter
+                .iter()
+                .any(|highlight| highlight.class == SyntaxClass::Property)
+        );
         let broken =
             parse_source("```rust\nfn main() {\n", Path::new("x.md")).expect("broken fence parse");
         assert!(!broken.is_empty());

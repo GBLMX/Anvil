@@ -136,7 +136,11 @@ pub(super) fn command_palette_action(key: KeyPress, text_input: bool) -> Option<
     }
 }
 
-pub(super) fn execute_command_palette_action(model: &mut Model, action: PickerAction, key: KeyPress) {
+pub(super) fn execute_command_palette_action(
+    model: &mut Model,
+    action: PickerAction,
+    key: KeyPress,
+) {
     match action {
         PickerAction::Next => model.move_command_palette(1),
         PickerAction::Previous => model.move_command_palette(-1),
@@ -220,7 +224,11 @@ pub(super) fn lsp_list_action(key: KeyPress, vi_keys: bool) -> LspListAction {
     }
 }
 
-pub(super) fn execute_lsp_list_action(model: &mut Model, kind: LspListKind, action: LspListAction) -> bool {
+pub(super) fn execute_lsp_list_action(
+    model: &mut Model,
+    kind: LspListKind,
+    action: LspListAction,
+) -> bool {
     match (kind, action) {
         (LspListKind::CallHierarchy, LspListAction::Previous) => model.move_call_hierarchy(-1),
         (LspListKind::CallHierarchy, LspListAction::Next) => model.move_call_hierarchy(1),
@@ -296,7 +304,10 @@ pub(super) fn diagnostic_peek_action(key: KeyPress) -> DiagnosticPeekAction {
     }
 }
 
-pub(super) fn execute_diagnostic_peek_action(model: &mut Model, action: DiagnosticPeekAction) -> bool {
+pub(super) fn execute_diagnostic_peek_action(
+    model: &mut Model,
+    action: DiagnosticPeekAction,
+) -> bool {
     match action {
         DiagnosticPeekAction::Previous => model.scroll_diagnostic_peek(-1),
         DiagnosticPeekAction::Next => model.scroll_diagnostic_peek(1),
@@ -500,7 +511,10 @@ pub(super) fn workspace_symbol_action(key: KeyPress, text_input: bool) -> Worksp
     }
 }
 
-pub(super) fn execute_workspace_symbol_action(model: &mut Model, action: WorkspaceSymbolAction) -> bool {
+pub(super) fn execute_workspace_symbol_action(
+    model: &mut Model,
+    action: WorkspaceSymbolAction,
+) -> bool {
     match action {
         WorkspaceSymbolAction::Previous => model.move_workspace_symbol(-1),
         WorkspaceSymbolAction::Next => model.move_workspace_symbol(1),

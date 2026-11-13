@@ -455,7 +455,6 @@ fn handle_key(model: &mut Model, key: KeyPress) {
         return;
     }
 
-
     match &mut model.ui.input_mode {
         InputMode::Rename { name } => match key.code {
             KeyCode::Esc => {
