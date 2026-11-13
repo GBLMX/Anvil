@@ -250,21 +250,18 @@ fn builtin_lsp_settings(path: &Path) -> Option<LspSettings> {
         ),
         _ => return None,
     };
-    let (tool, args) = std::env::var_os(env)
+    let command = std::env::var_os(env)
         .or_else(|| std::env::var_os("ANVIL_LSP"))
         .and_then(|path| {
             let path = path.to_string_lossy().into_owned();
-            (!path.is_empty()).then_some(path)
+            (!path.is_empty()).then_some((path, args.clone()))
         })
-        .or_else(|| find_tool(&candidates))
-        .map(|tool| {
-            let args = if tool.ends_with("pyright-langserver") {
-                vec!["--stdio".to_owned()]
-            } else {
-                args.clone()
-            };
-            (tool, args)
-        })?;
+        .or_else(|| crate::settings::lsp_command_override(language_id))
+        .or_else(|| find_tool(&candidates).map(|tool| (tool, args.clone())))?;
+    let (tool, mut args) = command;
+    if tool.ends_with("pyright-langserver") && args.is_empty() {
+        args = vec!["--stdio".to_owned()];
+    }
     let initialization_options = tsserver_options(&tool, path);
     Some(LspSettings {
         tool,

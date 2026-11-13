@@ -2,6 +2,7 @@
 
 use crate::theme::{self, Choice};
 use serde::Deserialize;
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -74,6 +75,31 @@ impl Default for Settings {
                 reduced_motion: false,
                 high_contrast: false,
             },
+        }
+    }
+}
+
+pub(crate) fn lsp_command_override(language_id: &str) -> Option<(String, Vec<String>)> {
+    let path = path().ok()?;
+    if !path.exists() {
+        return None;
+    }
+    if fs::metadata(&path).ok()?.len() > MAX_BYTES {
+        return None;
+    }
+    let text = fs::read_to_string(&path).ok()?;
+    let file: SettingsFile = toml_edit::de::from_str(&text).ok()?;
+    resolve_lsp_command(file.lsp.commands.get(language_id)?)
+}
+
+fn resolve_lsp_command(command: &LspCommandFile) -> Option<(String, Vec<String>)> {
+    match command {
+        LspCommandFile::Command(command) => {
+            (!command.trim().is_empty()).then(|| (command.clone(), Vec::new()))
+        }
+        LspCommandFile::Argv(argv) => {
+            let (command, args) = argv.split_first()?;
+            (!command.trim().is_empty()).then(|| (command.clone(), args.to_vec()))
         }
     }
 }
@@ -367,6 +393,14 @@ struct SearchFile {
 #[serde(default, deny_unknown_fields)]
 struct LspFile {
     inlay_hints: Option<bool>,
+    commands: BTreeMap<String, LspCommandFile>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(untagged)]
+enum LspCommandFile {
+    Command(String),
+    Argv(Vec<String>),
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -434,6 +468,25 @@ mod tests {
                 },
             }
         );
+    }
+
+    #[test]
+    fn parses_lsp_command_overrides() {
+        let settings = parse(
+            "[lsp]\ninlay_hints = true\n[lsp.commands]\njson = [\"node\", \"server.js\", \"--stdio\"]\nrust = \"/usr/bin/rust-analyzer\"\n",
+        )
+        .expect("settings with lsp commands");
+        assert!(settings.lsp.inlay_hints);
+        let file: SettingsFile = toml_edit::de::from_str(
+            "[lsp.commands]\njson = [\"node\", \"server.js\", \"--stdio\"]\nrust = \"/usr/bin/rust-analyzer\"\n",
+        )
+        .expect("lsp commands");
+        let (tool, args) = resolve_lsp_command(&file.lsp.commands["json"]).expect("json command");
+        assert_eq!(tool, "node");
+        assert_eq!(args, ["server.js", "--stdio"]);
+        let (tool, args) = resolve_lsp_command(&file.lsp.commands["rust"]).expect("rust command");
+        assert_eq!(tool, "/usr/bin/rust-analyzer");
+        assert!(args.is_empty());
     }
 
     #[test]
@@ -557,24 +610,18 @@ mod tests {
 
     #[test]
     fn environment_errors_are_visible() {
-        assert!(
-            apply_env(Settings::default(), |name| {
-                (name == ENV_SCROLL_MARGIN).then(|| "99".to_owned())
-            })
-            .is_err()
-        );
-        assert!(
-            apply_env(Settings::default(), |name| {
-                (name == ENV_MAX_BUFFERS).then(|| "100".to_owned())
-            })
-            .is_err()
-        );
-        assert!(
-            apply_env(Settings::default(), |name| {
-                (name == ENV_INLAY_HINTS).then(|| "maybe".to_owned())
-            })
-            .is_err()
-        );
+        assert!(apply_env(Settings::default(), |name| {
+            (name == ENV_SCROLL_MARGIN).then(|| "99".to_owned())
+        })
+        .is_err());
+        assert!(apply_env(Settings::default(), |name| {
+            (name == ENV_MAX_BUFFERS).then(|| "100".to_owned())
+        })
+        .is_err());
+        assert!(apply_env(Settings::default(), |name| {
+            (name == ENV_INLAY_HINTS).then(|| "maybe".to_owned())
+        })
+        .is_err());
     }
 
     #[test]

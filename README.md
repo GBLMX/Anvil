@@ -88,7 +88,14 @@ case_sensitive = false
 
 [lsp]
 inlay_hints = true
+
+[lsp.commands]
+# Optional command override; the first argv element is the executable.
+json = ["node", "/path/to/vscode-json-language-server", "--stdio"]
 ```
+
+`[lsp.commands]` is keyed by language id. A value may be a command string or
+an argv array; array arguments are passed unchanged.
 
 `ANVIL_EDITOR_SCROLL_MARGIN`, `ANVIL_EDITOR_MAX_BUFFERS`,
 `ANVIL_EDITOR_AUTO_SAVE`, `ANVIL_SEARCH_CASE_SENSITIVE`, and
