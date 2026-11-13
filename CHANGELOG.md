@@ -32,6 +32,8 @@ post-`0.5.0` feature line.
 - Added `sys.exec.v2` and `ExecRequestV2` for bounded one-shot tools with
   optional workspace-relative cwd, stdin, and output cap. Existing `sys.exec`
   callers are unchanged.
+- Added the UI-neutral `FormatterProvider` protocol and `FormatService` with
+  priority fallback, cancellation, and revision-checked replacement.
 - `anvil-distro-standard` adds a `full` feature that enables every official
   module at runtime. `--all-features` selects it; the default `anvil` binary
   remains the standard Git-only composition.
