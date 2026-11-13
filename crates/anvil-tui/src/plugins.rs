@@ -195,7 +195,9 @@ impl Model {
         let Some(path) = self.session.path.as_ref() else {
             return;
         };
-        let Some(settings) = lsp_settings(path) else {
+        let Some(settings) =
+            lsp_settings_with_service(path, self.workspace.language_tooling_service.as_deref())
+        else {
             return;
         };
         self.activate_plugins(ActivationEvent::Language(settings.language_id.clone()));

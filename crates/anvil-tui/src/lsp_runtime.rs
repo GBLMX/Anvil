@@ -29,8 +29,9 @@ impl Model {
             .and_then(|key| self.language.lsp.workers.get(key))
     }
 
-    pub(crate) fn lsp_key(path: &Path) -> Option<(String, String)> {
-        lsp_settings(path).map(|settings| (settings.tool, settings.language_id))
+    pub(crate) fn lsp_key(&self, path: &Path) -> Option<(String, String)> {
+        lsp_settings_with_service(path, self.workspace.language_tooling_service.as_deref())
+            .map(|settings| (settings.tool, settings.language_id))
     }
 
     pub(crate) fn sync_lsp_active(&mut self) {
@@ -39,7 +40,9 @@ impl Model {
             self.clear_lsp_ui();
             return;
         };
-        let Some(settings) = lsp_settings(&path) else {
+        let Some(settings) =
+            lsp_settings_with_service(&path, self.workspace.language_tooling_service.as_deref())
+        else {
             self.language.lsp.config = None;
             self.clear_lsp_ui();
             return;
@@ -77,7 +80,9 @@ impl Model {
             self.file.dirty = true;
             return;
         };
-        let Some(settings) = lsp_settings(&path) else {
+        let Some(settings) =
+            lsp_settings_with_service(&path, self.workspace.language_tooling_service.as_deref())
+        else {
             self.status.text = format!("E: no language server for {}", path.display());
             self.file.dirty = true;
             return;
@@ -115,11 +120,7 @@ impl Model {
             tool: settings.tool,
             args: settings.args,
             language_id: settings.language_id,
-            root_markers: settings
-                .root_markers
-                .iter()
-                .map(|marker| (*marker).to_owned())
-                .collect(),
+            root_markers: settings.root_markers,
             initialization_options: settings.initialization_options,
         };
         match LspWorker::start(

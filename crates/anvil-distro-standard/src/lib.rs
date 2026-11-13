@@ -240,6 +240,7 @@ where
                     git,
                     workspace_index,
                     desktop,
+                    language_tooling: None,
                 },
             )?)
         }

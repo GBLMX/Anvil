@@ -11,10 +11,12 @@ use anvil_session::command::{COMMANDS, CommandId, CommandSpec};
 
 pub mod desktop;
 pub mod git;
+pub mod language;
 pub mod workspace_index;
 
 use desktop::DesktopService;
 use git::GitService;
+use language::LanguageToolingService;
 use workspace_index::WorkspaceIndexService;
 
 /// Frozen contract version; bump only for a breaking module API change.
@@ -167,6 +169,8 @@ pub struct ModuleRegistry {
     workspace_index_owner: Option<ModuleId>,
     desktop_service: Option<Arc<dyn DesktopService>>,
     desktop_service_owner: Option<ModuleId>,
+    language_tooling_service: Option<Arc<dyn LanguageToolingService>>,
+    language_tooling_owner: Option<ModuleId>,
 }
 
 impl ModuleRegistry {
@@ -217,6 +221,10 @@ impl ModuleRegistry {
             if self.desktop_service_owner == Some(id) {
                 self.desktop_service = None;
                 self.desktop_service_owner = None;
+            }
+            if self.language_tooling_owner == Some(id) {
+                self.language_tooling_service = None;
+                self.language_tooling_owner = None;
             }
             return Err(ModuleError::Registration {
                 module: id,
@@ -315,6 +323,33 @@ impl ModuleRegistry {
 
     pub fn desktop_service(&self) -> Option<Arc<dyn DesktopService>> {
         self.desktop_service.clone()
+    }
+
+    /// Register the typed language-tooling service from inside [`Module::register`].
+    pub fn set_language_tooling_service(
+        &mut self,
+        service: Arc<dyn LanguageToolingService>,
+    ) -> Result<(), ModuleError> {
+        let Some(module) = self.registering else {
+            return Err(ModuleError::Registration {
+                module: ModuleId::new("unknown"),
+                message: "set_language_tooling_service is only valid during module registration"
+                    .to_owned(),
+            });
+        };
+        if self.language_tooling_service.is_some() {
+            return Err(ModuleError::Registration {
+                module,
+                message: "a language-tooling service is already registered".to_owned(),
+            });
+        }
+        self.language_tooling_service = Some(service);
+        self.language_tooling_owner = Some(module);
+        Ok(())
+    }
+
+    pub fn language_tooling_service(&self) -> Option<Arc<dyn LanguageToolingService>> {
+        self.language_tooling_service.clone()
     }
 
     pub fn contains(&self, module: ModuleId) -> bool {
@@ -641,5 +676,37 @@ mod tests {
         let mut registry = ModuleRegistry::new();
         assert!(registry.register(&BrokenDesktop).is_err());
         assert!(registry.desktop_service().is_none());
+    }
+
+    struct FakeLanguageTooling;
+
+    impl language::LanguageToolingService for FakeLanguageTooling {
+        fn server_for(&self, _path: &std::path::Path) -> Option<language::LanguageServerSpec> {
+            None
+        }
+    }
+
+    struct LanguageTooling;
+
+    impl Module for LanguageTooling {
+        fn metadata(&self) -> ModuleMetadata {
+            ModuleMetadata {
+                id: ModuleId::new("official.language-tooling"),
+                name: "Language Tooling",
+                contract: ContractRange::current(),
+                commands: &[],
+            }
+        }
+
+        fn register(&self, registry: &mut ModuleRegistry) -> Result<(), ModuleError> {
+            registry.set_language_tooling_service(Arc::new(FakeLanguageTooling))
+        }
+    }
+
+    #[test]
+    fn registers_the_language_tooling_service() {
+        let mut registry = ModuleRegistry::new();
+        registry.register(&LanguageTooling).expect("register");
+        assert!(registry.language_tooling_service().is_some());
     }
 }
