@@ -93,6 +93,7 @@ impl Model {
             table: SelectionTable::new(items),
             theme_picker: theme_picker::ThemePicker::new(),
         });
+        self.push_overlay(OverlayKind::CommandPalette);
         self.refresh_command_palette();
         self.input.pending = None;
         self.input.leader_deadline = None;
@@ -103,10 +104,12 @@ impl Model {
         if let Some(palette) = self.overlays.command_palette.take() {
             palette.theme_picker.cancel();
         }
+        self.close_overlay(OverlayKind::CommandPalette);
         self.file.dirty = true;
     }
 
     pub(crate) fn commit_theme(&mut self, name: &str) {
+        self.close_overlay(OverlayKind::CommandPalette);
         if let Some(palette) = self.overlays.command_palette.take() {
             self.status.text = match palette.theme_picker.commit(name) {
                 Ok(()) => {

@@ -1119,9 +1119,21 @@ fn handle_key(model: &mut Model, key: KeyPress) {
         }
         return;
     }
-    if model.overlays.command_palette.is_some() {
-        if let Some(action) = command_palette_action(key, text_input) {
-            execute_command_palette_action(model, action, key);
+    if let Some(kind) = model.top_overlay() {
+        if dispatch_specific_context_binding(model, key) {
+            return;
+        }
+        match kind {
+            OverlayKind::CommandPalette => {
+                if let Some(action) = command_palette_action(key, text_input) {
+                    execute_command_palette_action(model, action, key);
+                }
+            }
+            OverlayKind::Settings => {
+                if let Some(action) = settings_action(key) {
+                    execute_settings_action(model, action);
+                }
+            }
         }
         return;
     }
@@ -1171,12 +1183,6 @@ fn handle_key(model: &mut Model, key: KeyPress) {
         if execute_workspace_symbol_action(model, action) {
             return;
         }
-    }
-    if model.overlays.settings_overlay.is_some() {
-        if let Some(action) = settings_action(key) {
-            execute_settings_action(model, action);
-        }
-        return;
     }
     if let Some(kind) = active_lsp_list(model) {
         let action = lsp_list_action(key, kind != LspListKind::CodeActions);

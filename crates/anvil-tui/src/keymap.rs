@@ -715,22 +715,29 @@ impl Model {
         {
             contexts.push(context);
         }
-        let overlay = self.overlays.command_palette.is_some()
-            || self.overlays.fuzzy.is_some()
-            || self.overlays.buffer_picker.is_some()
-            || self.overlays.lsp_results.workspace_symbols.is_some()
-            || self.overlays.lsp_results.document_symbols.is_some()
-            || self.overlays.lsp_results.references.is_some()
-            || self.overlays.lsp_results.call_hierarchy.is_some()
-            || self.overlays.settings_overlay.is_some()
-            || self.overlays.lsp_results.code_actions.is_some()
-            || self.overlays.lsp_results.completion.is_some()
-            || self.overlays.lsp_results.hover.is_some()
-            || self.ui.diagnostic_peek.is_some()
-            || self.ui.problems.visible
-            || self.pager.back.is_some();
-        if overlay && contexts.last() != Some(&KeymapContext::Popup) {
-            contexts.push(KeymapContext::Popup);
+        if let Some(kind) = self.top_overlay() {
+            let context = kind.keymap_context();
+            if contexts.last() != Some(&context) {
+                contexts.push(context);
+            }
+        } else {
+            let overlay = self.overlays.command_palette.is_some()
+                || self.overlays.fuzzy.is_some()
+                || self.overlays.buffer_picker.is_some()
+                || self.overlays.lsp_results.workspace_symbols.is_some()
+                || self.overlays.lsp_results.document_symbols.is_some()
+                || self.overlays.lsp_results.references.is_some()
+                || self.overlays.lsp_results.call_hierarchy.is_some()
+                || self.overlays.settings_overlay.is_some()
+                || self.overlays.lsp_results.code_actions.is_some()
+                || self.overlays.lsp_results.completion.is_some()
+                || self.overlays.lsp_results.hover.is_some()
+                || self.ui.diagnostic_peek.is_some()
+                || self.ui.problems.visible
+                || self.pager.back.is_some();
+            if overlay && contexts.last() != Some(&KeymapContext::Popup) {
+                contexts.push(KeymapContext::Popup);
+            }
         }
         if self.edit.visual_anchor.is_some() {
             contexts.push(KeymapContext::Modal);

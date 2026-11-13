@@ -219,6 +219,7 @@ impl Model {
             opened_theme: active_theme,
             theme_touched: false,
         });
+        self.push_overlay(OverlayKind::Settings);
         self.status.text = "settings".to_owned();
         self.file.dirty = true;
     }
@@ -227,6 +228,7 @@ impl Model {
         if let Some(overlay) = self.overlays.settings_overlay.take() {
             self.apply_settings(overlay.original);
             let _ = theme::apply_choice(overlay.opened_theme, false);
+            self.close_overlay(OverlayKind::Settings);
             self.status.text = "settings cancelled".to_owned();
             self.file.dirty = true;
         }

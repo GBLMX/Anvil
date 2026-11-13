@@ -217,6 +217,57 @@ fn settings_keys_use_the_action_table() {
 }
 
 #[test]
+fn overlay_stack_is_lifo_and_restores_focus() {
+    let mut model = Model::new(EditorState::from_text("alpha"), None);
+    model.start_page.welcome = false;
+    model.ui.focus.tree = true;
+
+    model.open_settings();
+    assert_eq!(model.overlays.stack.len(), 1);
+
+    model.ui.focus.tree = false;
+    model.open_command_palette();
+    assert_eq!(model.overlays.stack.len(), 2);
+    assert_eq!(
+        model.overlays.stack.last().map(|entry| entry.kind),
+        Some(OverlayKind::CommandPalette)
+    );
+
+    model.ui.focus.tree = true;
+    handle_event(&mut model, key(KeyCode::Char('j')));
+    assert_eq!(
+        model
+            .overlays
+            .command_palette
+            .as_ref()
+            .expect("palette")
+            .table
+            .query(),
+        "j"
+    );
+    assert_eq!(
+        model
+            .overlays
+            .settings_overlay
+            .as_ref()
+            .expect("settings")
+            .selected,
+        0
+    );
+
+    handle_event(&mut model, key(KeyCode::Esc));
+    assert!(model.overlays.command_palette.is_none());
+    assert!(model.overlays.settings_overlay.is_some());
+    assert!(!model.ui.focus.tree);
+    assert_eq!(model.overlays.stack.len(), 1);
+
+    handle_event(&mut model, key(KeyCode::Esc));
+    assert!(model.overlays.settings_overlay.is_none());
+    assert!(model.ui.focus.tree);
+    assert!(model.overlays.stack.is_empty());
+}
+
+#[test]
 fn popup_context_bindings_consume_buffer_picker_keys() {
     let mut model = Model::new(EditorState::from_text("alpha"), None);
     model.start_page.welcome = false;

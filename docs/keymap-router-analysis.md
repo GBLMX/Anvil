@@ -206,13 +206,17 @@ Do not silently rewrite a user's existing config.
    - Legacy normal/pending tables retained.
    - Clear errors for unknown contexts, commands, and duplicates.
 
-2. **Contexts — landed**
-   - `KeymapContext`, derived context stack, editor/global binding dispatch,
+2. **Contexts — partial**
+   - `KeymapContext`, derived context list, editor/global binding dispatch,
      and direct pending-command context actions.
    - Popup, file-tree, and modal bindings dispatch through the ordered context
      list before their built-in fallback keys.
    - `route_context_key` is a pure resolver whose handler is exercised with a
      fake handler in unit tests.
+   - An explicit LIFO overlay stack now owns the command palette and settings
+     overlay: only the top entry consumes keys, and closing restores focus.
+   - Remaining: migrate the remaining overlays onto the stack and remove the
+     boolean overlay scan from `active_keymap_contexts`.
 
 3. **Leader — landed**
    - 600 ms deadline on the 50 ms loop tick.
@@ -233,7 +237,9 @@ Do not silently rewrite a user's existing config.
    - Context priority order is asserted directly.
    - Config rejects unknown contexts, duplicate chords, and non-direct
      context commands.
-   - Remaining: full modal-stack LIFO focus-restoration coverage.
+   - Command palette over settings proves only the top overlay consumes and
+     closing restores focus in LIFO order.
+   - Remaining: LIFO coverage for every migrated overlay.
 
 ## Risks
 

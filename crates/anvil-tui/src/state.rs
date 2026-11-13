@@ -606,8 +606,27 @@ pub(crate) struct LanguageState {
     pub(crate) lsp_requests: LspRequestsState,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum OverlayKind {
+    CommandPalette,
+    Settings,
+}
+
+impl OverlayKind {
+    pub(crate) fn keymap_context(self) -> KeymapContext {
+        KeymapContext::Popup
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct OverlayEntry {
+    pub(crate) kind: OverlayKind,
+    pub(crate) focus_before: anvil_session::ui::FocusState,
+}
+
 #[derive(Default)]
 pub(crate) struct OverlayState {
+    pub(crate) stack: Vec<OverlayEntry>,
     pub(crate) command_palette: Option<CommandPaletteState>,
     pub(crate) settings_overlay: Option<SettingsOverlayState>,
     pub(crate) theme_browser: Option<theme_browser::ThemeBrowser>,

@@ -70,6 +70,7 @@ pub mod lsp;
 mod lsp_ui;
 mod modal;
 mod mouse;
+mod overlay_stack;
 mod overlays;
 mod pipe_locations;
 #[cfg(unix)]
