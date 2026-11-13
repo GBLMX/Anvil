@@ -110,6 +110,13 @@ impl anvil_module::Module for DesktopModule {
     }
 }
 
+fn strip_scheme<'a>(url: &'a str, scheme: &str) -> Option<&'a str> {
+    let prefix = url.get(..scheme.len())?;
+    prefix
+        .eq_ignore_ascii_case(scheme)
+        .then(|| &url[scheme.len()..])
+}
+
 fn valid_url(url: &str) -> bool {
     if url.is_empty() || url.len() > MAX_URL_BYTES {
         return false;
@@ -120,11 +127,8 @@ fn valid_url(url: &str) -> bool {
     {
         return false;
     }
-    let rest = if let Some(rest) = url.strip_prefix("https://") {
-        rest
-    } else if let Some(rest) = url.strip_prefix("http://") {
-        rest
-    } else {
+    let rest = strip_scheme(url, "https://").or_else(|| strip_scheme(url, "http://"));
+    let Some(rest) = rest else {
         return false;
     };
     let authority = rest.split(['/', '?', '#']).next().unwrap_or_default();
@@ -175,6 +179,7 @@ mod tests {
         assert!(valid_url("https://example.com"));
         assert!(valid_url("http://127.0.0.1:8080/a?b=c#d"));
         assert!(valid_url("https://[::1]/"));
+        assert!(valid_url("HTTPS://EXAMPLE.COM/Path"));
         assert!(!valid_url(""));
         assert!(!valid_url("file:///tmp/a"));
         assert!(!valid_url("mailto:user@example.com"));

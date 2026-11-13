@@ -614,4 +614,32 @@ mod tests {
         registry.register(&Desktop).expect("register");
         assert!(registry.desktop_service().is_some());
     }
+
+    struct BrokenDesktop;
+
+    impl Module for BrokenDesktop {
+        fn metadata(&self) -> ModuleMetadata {
+            ModuleMetadata {
+                id: ModuleId::new("official.desktop-broken"),
+                name: "Broken Desktop",
+                contract: ContractRange::current(),
+                commands: &[],
+            }
+        }
+
+        fn register(&self, registry: &mut ModuleRegistry) -> Result<(), ModuleError> {
+            registry.set_desktop_service(Arc::new(FakeDesktop))?;
+            Err(ModuleError::Registration {
+                module: ModuleId::new("official.desktop-broken"),
+                message: "no".to_owned(),
+            })
+        }
+    }
+
+    #[test]
+    fn failed_desktop_registration_rolls_back_the_service() {
+        let mut registry = ModuleRegistry::new();
+        assert!(registry.register(&BrokenDesktop).is_err());
+        assert!(registry.desktop_service().is_none());
+    }
 }
