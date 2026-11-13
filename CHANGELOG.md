@@ -330,7 +330,9 @@ post-`0.5.0` feature line.
 ### Fixed
 - Split view now gives the active editor its own half of the available width
   instead of drawing the second pane over a full-width active editor. Sidebar
-  width is shared by rendering, soft wrap, and mouse hit-testing.
+  width is shared by rendering, soft wrap, and mouse hit-testing. Panes share
+  one title row and a single separator, and soft-wrap width is refreshed when
+  the tree or split geometry changes.
 - LSP discovery now also searches the executable directory and common user
   bin directories, so desktop-launched sessions find tools such as `marksman`.
 - The Go toolchain requirement is now 1.26.11, fixing
