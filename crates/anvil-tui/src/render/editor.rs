@@ -368,7 +368,13 @@ pub fn view(model: &Model, frame: &mut Frame) {
         }
     }
     if let (Some(split), Some(area)) = (&model.buffers.split, split_area) {
-        render_split_pane(frame, area, &split.buffer, model.ui.focus.split);
+        render_split_pane(
+            frame,
+            area,
+            &split.buffer,
+            model.ui.focus.split,
+            model.config.settings.editor.soft_wrap,
+        );
     }
     render_overlays(model, frame, area);
 }

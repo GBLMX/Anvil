@@ -3,6 +3,8 @@
 use super::*;
 use crate::theme;
 use ratatui::widgets::Borders;
+use unicode_segmentation::UnicodeSegmentation;
+use unicode_width::UnicodeWidthStr;
 
 pub(crate) fn render_pipe_locations(model: &Model, frame: &mut Frame, area: Rect) {
     let rows = usize::from(area.height.saturating_sub(2));
@@ -50,7 +52,13 @@ pub(crate) fn render_pipe_locations(model: &Model, frame: &mut Frame, area: Rect
     );
 }
 
-pub(crate) fn render_split_pane(frame: &mut Frame, area: Rect, buffer: &Buffer, is_active: bool) {
+pub(crate) fn render_split_pane(
+    frame: &mut Frame,
+    area: Rect,
+    buffer: &Buffer,
+    is_active: bool,
+    soft_wrap: bool,
+) {
     let block = ratatui::widgets::Block::default()
         .borders(Borders::LEFT)
         .border_style(theme::border(is_active));
@@ -62,9 +70,9 @@ pub(crate) fn render_split_pane(frame: &mut Frame, area: Rect, buffer: &Buffer, 
     frame.render_widget(block, area);
     let total = buffer.editor.index().len_lines();
     let digits = total.max(1).to_string().len().max(3);
-    let end = (buffer.scroll + usize::from(inner.height)).min(total);
+    let text_width = usize::from(inner.width.saturating_sub((digits + 1) as u16));
     let mut lines = Vec::new();
-    for line_number in buffer.scroll..end {
+    'lines: for line_number in buffer.scroll..total {
         let Some(start) = buffer.editor.index().line_to_offset(line_number) else {
             break;
         };
@@ -72,21 +80,70 @@ pub(crate) fn render_split_pane(frame: &mut Frame, area: Rect, buffer: &Buffer, 
             break;
         };
         let text = buffer.editor.text().slice(start..line.end);
-        lines.push(Line::from(vec![
-            Span::styled(
-                format!("{:>digits$} ", line_number + 1, digits = digits),
-                Style::default().fg(theme::muted()),
-            ),
-            Span::raw(text),
-        ]));
+        if soft_wrap && text_width > 0 {
+            for (index, (segment_start, segment_end)) in
+                wrap_ranges(&text, text_width).into_iter().enumerate()
+            {
+                let prefix = if index == 0 {
+                    format!("{:>digits$} ", line_number + 1, digits = digits)
+                } else {
+                    " ".repeat(digits + 1)
+                };
+                lines.push(Line::from(vec![
+                    Span::styled(prefix, Style::default().fg(theme::muted())),
+                    Span::raw(text[segment_start..segment_end].to_owned()),
+                ]));
+                if lines.len() >= usize::from(inner.height) {
+                    break 'lines;
+                }
+            }
+        } else {
+            lines.push(Line::from(vec![
+                Span::styled(
+                    format!("{:>digits$} ", line_number + 1, digits = digits),
+                    Style::default().fg(theme::muted()),
+                ),
+                Span::raw(text),
+            ]));
+            if lines.len() >= usize::from(inner.height) {
+                break;
+            }
+        }
     }
     if lines.is_empty() {
         lines.push(Line::raw(""));
     }
+    let hscroll = if soft_wrap {
+        0
+    } else {
+        u16::try_from(buffer.hscroll).unwrap_or(u16::MAX)
+    };
     frame.render_widget(
         Paragraph::new(lines)
             .style(theme::text())
-            .scroll((0, u16::try_from(buffer.hscroll).unwrap_or(u16::MAX))),
+            .scroll((0, hscroll)),
         inner,
     );
+}
+
+fn wrap_ranges(text: &str, width: usize) -> Vec<(usize, usize)> {
+    let width = width.max(1);
+    let mut ranges = Vec::new();
+    let mut start = 0usize;
+    let mut display = 0usize;
+    for (index, grapheme) in text.grapheme_indices(true) {
+        let grapheme_width = if grapheme == "\t" {
+            4
+        } else {
+            UnicodeWidthStr::width(grapheme)
+        };
+        if display > 0 && display + grapheme_width > width {
+            ranges.push((start, index));
+            start = index;
+            display = 0;
+        }
+        display += grapheme_width;
+    }
+    ranges.push((start, text.len()));
+    ranges
 }

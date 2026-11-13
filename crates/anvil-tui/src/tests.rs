@@ -4,7 +4,7 @@ use crate::input::KeyPress;
 use crate::keymap::{KeyChord, KeymapConfig, NormalCommand, PendingCommand};
 use anvil_session::ui::CreateKind;
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
-use ratatui::{Terminal, backend::TestBackend};
+use ratatui::{backend::TestBackend, Terminal};
 
 mod buffers;
 mod editing;
@@ -88,6 +88,29 @@ fn renders_two_split_panes() {
         .map(|cell| cell.symbol())
         .collect::<String>();
     assert!(rendered.matches("alpha").count() >= 2, "{rendered}");
+}
+
+#[test]
+fn split_pane_wraps_long_lines_when_soft_wrap_enabled() {
+    let line = format!("{}TAIL{}", "a".repeat(60), "b".repeat(20));
+    let mut model = Model::new(EditorState::from_text(&line), None);
+    model.config.settings.editor.soft_wrap = true;
+    model.view.viewport_width = 80;
+    model.split_vertical();
+    let backend = TestBackend::new(80, 12);
+    let mut terminal = Terminal::new(backend).expect("terminal");
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+    let rendered = terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect::<String>();
+    assert!(
+        rendered.matches("TAIL").count() >= 2,
+        "split pane did not wrap the long line: {rendered}"
+    );
 }
 
 #[test]
