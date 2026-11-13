@@ -833,10 +833,7 @@ fn execute_problems_action(model: &mut Model, action: ProblemsAction) {
             model.file.dirty = true;
         }
         ProblemsAction::Jump => model.jump_problem(),
-        ProblemsAction::Cancel => {
-            model.ui.problems.visible = false;
-            model.file.dirty = true;
-        }
+        ProblemsAction::Cancel => model.close_problems(),
     }
 }
 
@@ -1139,6 +1136,15 @@ fn handle_key(model: &mut Model, key: KeyPress) {
                 if let Some(action) = picker_action(key, text_input) {
                     execute_fuzzy_action(model, action);
                 }
+            }
+            OverlayKind::Problems => {
+                if let Some(action) = problems_action(key) {
+                    execute_problems_action(model, action);
+                }
+            }
+            OverlayKind::WorkspaceSymbols => {
+                let action = workspace_symbol_action(key, text_input);
+                execute_workspace_symbol_action(model, action);
             }
         }
         return;

@@ -1011,6 +1011,7 @@ fn workspace_symbols_response_filters_and_jumps() {
         .as_ref()
         .expect("symbols");
     assert_eq!(symbols.items.len(), 2);
+    assert_eq!(model.top_overlay(), Some(OverlayKind::WorkspaceSymbols));
     model.filter_workspace_symbols();
     assert_eq!(
         model
@@ -1026,6 +1027,7 @@ fn workspace_symbols_response_filters_and_jumps() {
     model.apply_workspace_symbol();
     assert_eq!(model.session.cursor, 3);
     assert!(model.status.text.contains("alpha"));
+    assert!(model.overlays.stack.is_empty());
 }
 
 #[test]

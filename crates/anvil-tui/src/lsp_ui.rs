@@ -2,9 +2,9 @@
 
 use super::{
     CallHierarchyDirection, CodeActionItem, CodeActionState, CompletionItem, CompletionState,
-    LspRequestKind, Model, ReferenceItem, ReferenceState, SignatureHelpState, SignatureItem,
-    Snippet, SnippetSession, SymbolItem, SymbolState, WorkspaceEdit, WorkspaceSymbolItem,
-    WorkspaceSymbolState,
+    LspRequestKind, Model, OverlayKind, ReferenceItem, ReferenceState, SignatureHelpState,
+    SignatureItem, Snippet, SnippetSession, SymbolItem, SymbolState, WorkspaceEdit,
+    WorkspaceSymbolItem, WorkspaceSymbolState,
 };
 use crate::{lsp, lsp_worker};
 use anvil_core::TextBuffer;
@@ -354,6 +354,7 @@ impl Model {
         self.language.lsp_requests.pending_edit_snapshot.clear();
         self.overlays.lsp_results.signature_help = None;
         self.overlays.lsp_results.workspace_symbols = None;
+        self.close_overlay(OverlayKind::WorkspaceSymbols);
         self.overlays.lsp_results.references = None;
         self.overlays.lsp_results.document_highlights = None;
         self.overlays.lsp_results.call_hierarchy = None;
@@ -832,6 +833,7 @@ impl Model {
             .pending
             .retain(|_, kind| *kind != LspRequestKind::WorkspaceSymbol);
         self.overlays.lsp_results.workspace_symbols = None;
+        self.close_overlay(OverlayKind::WorkspaceSymbols);
         self.prune_edit_requests();
         self.file.dirty = true;
     }
@@ -889,6 +891,7 @@ impl Model {
         let Some(symbols) = self.overlays.lsp_results.workspace_symbols.take() else {
             return;
         };
+        self.close_overlay(OverlayKind::WorkspaceSymbols);
         let Some(symbol) = symbols
             .filtered
             .get(symbols.selected)
@@ -914,6 +917,7 @@ impl Model {
         let Some(items) = result.as_array() else {
             self.status.text = "lsp: no workspace symbols".to_owned();
             self.overlays.lsp_results.workspace_symbols = None;
+            self.close_overlay(OverlayKind::WorkspaceSymbols);
             return;
         };
         let mut parsed = Vec::new();
@@ -961,6 +965,7 @@ impl Model {
         if parsed.is_empty() {
             self.status.text = "lsp: no workspace symbols".to_owned();
             self.overlays.lsp_results.workspace_symbols = None;
+            self.close_overlay(OverlayKind::WorkspaceSymbols);
         } else {
             self.overlays.lsp_results.workspace_symbols = Some(WorkspaceSymbolState {
                 filtered: (0..parsed.len()).collect(),
@@ -968,6 +973,7 @@ impl Model {
                 query: String::new(),
                 selected: 0,
             });
+            self.push_overlay(OverlayKind::WorkspaceSymbols);
             self.status.text = "workspace symbols".to_owned();
         }
     }

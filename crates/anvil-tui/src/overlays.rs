@@ -47,12 +47,31 @@ impl Model {
         self.file.dirty = true;
     }
 
-    pub(crate) fn toggle_problems(&mut self) {
-        self.ui.problems.visible = !self.ui.problems.visible;
+    pub(crate) fn open_problems(&mut self) {
         if self.ui.problems.visible {
-            self.rebuild_problems();
-            self.status.text = format!("problems: {}", self.ui.problems.items.len());
+            return;
         }
+        self.ui.problems.visible = true;
+        self.push_overlay(OverlayKind::Problems);
+        self.file.dirty = true;
+    }
+
+    pub(crate) fn close_problems(&mut self) {
+        if self.ui.problems.visible {
+            self.ui.problems.visible = false;
+            self.close_overlay(OverlayKind::Problems);
+            self.file.dirty = true;
+        }
+    }
+
+    pub(crate) fn toggle_problems(&mut self) {
+        if self.ui.problems.visible {
+            self.close_problems();
+            return;
+        }
+        self.open_problems();
+        self.rebuild_problems();
+        self.status.text = format!("problems: {}", self.ui.problems.items.len());
         self.file.dirty = true;
     }
 
@@ -73,7 +92,7 @@ impl Model {
             self.offset_at_utf16(problem.line as usize, problem.character as usize);
         self.ui.focus.tree = false;
         self.ui.focus.split = false;
-        self.ui.problems.visible = false;
+        self.close_problems();
         self.ui.diagnostic_peek = None;
         self.status.text = format!(
             "{}:{}: {}",

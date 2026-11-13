@@ -81,9 +81,9 @@ impl Model {
             self.overlays.test_explorer = Some(crate::test_explorer::TestExplorerState::new(
                 self.runtime.task_problems.clone(),
             ));
-            self.ui.problems.visible = false;
+            self.close_problems();
         } else if !self.runtime.task_problems.is_empty() {
-            self.ui.problems.visible = true;
+            self.open_problems();
             self.ui.problems.selected = 0;
         }
         let label = if tests { "tests" } else { "task" };

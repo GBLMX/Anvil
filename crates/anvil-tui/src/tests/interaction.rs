@@ -268,6 +268,22 @@ fn overlay_stack_is_lifo_and_restores_focus() {
 }
 
 #[test]
+fn problems_panel_uses_the_overlay_stack() {
+    let mut model = Model::new(EditorState::from_text("alpha"), None);
+    model.start_page.welcome = false;
+    model.ui.focus.tree = true;
+
+    model.toggle_problems();
+    assert!(model.ui.problems.visible);
+    assert_eq!(model.top_overlay(), Some(OverlayKind::Problems));
+
+    handle_event(&mut model, key(KeyCode::Esc));
+    assert!(!model.ui.problems.visible);
+    assert!(model.overlays.stack.is_empty());
+    assert!(model.ui.focus.tree);
+}
+
+#[test]
 fn popup_context_bindings_consume_buffer_picker_keys() {
     let mut model = Model::new(EditorState::from_text("alpha"), None);
     model.start_page.welcome = false;

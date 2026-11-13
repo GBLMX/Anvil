@@ -214,10 +214,11 @@ Do not silently rewrite a user's existing config.
    - `route_context_key` is a pure resolver whose handler is exercised with a
      fake handler in unit tests.
    - An explicit LIFO overlay stack now owns the command palette, settings,
-     buffer picker, and fuzzy finder: only the top entry consumes keys, and
-     closing restores focus.
-   - Remaining: migrate LSP lists/peek, problems, and the pager onto the stack,
-     then remove the boolean overlay scan from `active_keymap_contexts`.
+     buffer picker, fuzzy finder, problems panel, and workspace symbols: only
+     the top entry consumes keys, and closing restores focus.
+   - Remaining: migrate the document-symbol/reference/call-hierarchy/code-action
+     lists, hover, diagnostic peek, and the pager onto the stack, then remove
+     the boolean overlay scan from `active_keymap_contexts`.
 
 3. **Leader — landed**
    - 600 ms deadline on the 50 ms loop tick.

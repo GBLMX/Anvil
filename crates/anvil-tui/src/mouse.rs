@@ -380,8 +380,7 @@ fn close_outside_overlay(model: &mut Model) {
         model.close_diagnostic_peek();
     }
     if model.ui.problems.visible {
-        model.ui.problems.visible = false;
-        model.file.dirty = true;
+        model.close_problems();
     }
     if model.overlays.command_palette.is_some() {
         model.close_command_palette();

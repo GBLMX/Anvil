@@ -612,6 +612,8 @@ pub(crate) enum OverlayKind {
     Settings,
     BufferPicker,
     Fuzzy,
+    Problems,
+    WorkspaceSymbols,
 }
 
 impl OverlayKind {
