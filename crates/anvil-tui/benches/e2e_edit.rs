@@ -44,7 +44,7 @@ fn rust_side(small_path: &Path, large_path: &Path) {
     for _ in 0..SCROLL_SAMPLES {
         let start = Instant::now();
         dispatch_key(&mut model, KeyCode::Char('j'));
-        model.ensure_cursor_visible_for_bench(ROWS - 2, COLS - 2);
+        ensure_visible(&mut model);
         draw(&mut terminal, &model);
         key_times.push(start.elapsed());
     }
@@ -53,7 +53,7 @@ fn rust_side(small_path: &Path, large_path: &Path) {
     let start = Instant::now();
     let mut large = Model::open(large_path).expect("open 100MB");
     let mut terminal = test_terminal();
-    large.ensure_cursor_visible_for_bench(ROWS - 2, COLS - 2);
+    ensure_visible(&mut large);
     draw(&mut terminal, &large);
     report("rust", "open_100MB_first_frame", &[start.elapsed()]);
 
@@ -61,7 +61,7 @@ fn rust_side(small_path: &Path, large_path: &Path) {
     for _ in 0..SCROLL_SAMPLES {
         let start = Instant::now();
         dispatch_key(&mut large, KeyCode::Char('j'));
-        large.ensure_cursor_visible_for_bench(ROWS - 2, COLS - 2);
+        ensure_visible(&mut large);
         draw(&mut terminal, &large);
         scroll_times.push(start.elapsed());
     }
@@ -76,7 +76,7 @@ fn rust_side(small_path: &Path, large_path: &Path) {
         }
         let start = Instant::now();
         dispatch_key(&mut large, KeyCode::Enter);
-        large.ensure_cursor_visible_for_bench(ROWS - 2, COLS - 2);
+        ensure_visible(&mut large);
         draw(&mut terminal, &large);
         let elapsed = start.elapsed();
         if index == 0 {
@@ -194,7 +194,7 @@ fn test_terminal() -> Terminal<TestBackend> {
 fn warm(model: &mut Model, terminal: &mut Terminal<TestBackend>) {
     for _ in 0..5 {
         dispatch_key(model, KeyCode::Char('j'));
-        model.ensure_cursor_visible_for_bench(ROWS - 2, COLS - 2);
+        ensure_visible(model);
         draw(terminal, model);
     }
 }
@@ -205,6 +205,12 @@ fn draw(terminal: &mut Terminal<TestBackend>, model: &Model) {
 
 fn dispatch_key(model: &mut Model, code: KeyCode) {
     model.dispatch(Event::Key(KeyEvent::new(code, KeyModifiers::NONE)));
+}
+
+fn ensure_visible(model: &mut Model) {
+    let height = model.editor_text_height_for_bench(ROWS);
+    let width = model.editor_text_width_for_bench(COLS);
+    model.ensure_cursor_visible_for_bench(height, width);
 }
 
 fn make_text(megabytes: usize, markers: usize) -> String {

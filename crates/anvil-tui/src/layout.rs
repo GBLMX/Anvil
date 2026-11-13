@@ -139,6 +139,18 @@ impl Model {
             .max(1)
     }
 
+    #[cfg(feature = "e2e-bench")]
+    #[doc(hidden)]
+    pub fn editor_text_width_for_bench(&self, viewport_width: u16) -> u16 {
+        self.editor_text_width(viewport_width)
+    }
+
+    #[cfg(feature = "e2e-bench")]
+    #[doc(hidden)]
+    pub fn editor_text_height_for_bench(&self, viewport_height: u16) -> u16 {
+        self.editor_text_height(viewport_height)
+    }
+
     #[cfg(test)]
     pub(crate) fn scroll_display_rows(&mut self, delta: isize, width: u16) {
         if !self.config.settings.editor.soft_wrap {
