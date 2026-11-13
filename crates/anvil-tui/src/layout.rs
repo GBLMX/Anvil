@@ -792,6 +792,7 @@ mod tests {
         model.session.cursor = 8;
         let gutter = model.visible_gutter(8);
         assert_eq!(gutter[4].spans[1].style.fg, Some(theme::accent()));
+        assert_eq!(gutter[4].spans[1].style.bg, Some(theme::surface_alt()));
         assert_ne!(gutter[3].spans[1].style.fg, Some(theme::accent()));
     }
 

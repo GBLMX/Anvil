@@ -176,7 +176,7 @@ pub(crate) fn current_line() -> Style {
 }
 
 pub(crate) fn current_line_number() -> Style {
-    Style::default().fg(accent()).add_modifier(Modifier::BOLD)
+    current_line().fg(accent()).add_modifier(Modifier::BOLD)
 }
 pub(crate) fn code_block() -> Style {
     Style::default().bg(code_block_bg())
