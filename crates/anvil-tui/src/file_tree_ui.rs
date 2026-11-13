@@ -405,9 +405,11 @@ impl Model {
                     generation,
                     result,
                 } => self.handle_git_resolved(relative, stage, generation, result),
-                FileEvent::GitConflictsText { generation, result } => {
-                    self.handle_git_conflicts_text(generation, result)
-                }
+                FileEvent::GitConflictsText {
+                    root,
+                    generation,
+                    result,
+                } => self.handle_git_conflicts_text(root, generation, result),
                 FileEvent::Transferred {
                     from,
                     to,

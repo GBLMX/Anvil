@@ -8,8 +8,9 @@ same-root create/rename/remove/copy are implemented. File-scoped Git
 operations now route through the owning root worker. Root labels disambiguate
 duplicate basenames, untrusted roots are marked and read-only, mutations
 refresh the owning root, stale root results are dropped, and root removal
-cancels a pending project search. Cross-root mutation is rejected. The merged
-Git conflict list and per-root branch state remain primary-root only.
+cancels a pending project search. Cross-root mutation is rejected. File-scoped
+Git operations and the merged conflict list are root-aware; per-root branch
+state remains primary-root only.
 
 ## 1. Scope
 
@@ -239,20 +240,21 @@ Landed:
   worker. Untrusted or missing roots fail instead of falling back to the
   primary gateway.
 - Gutter marks use the owning root worker.
+- `GitConflictsText` fans out to every available root worker; the read-only
+  conflict list waits for all roots and renders one section per root.
 - Cross-root index operations are rejected.
 
 Remaining:
 
-- `GitConflictsText` still fans out nowhere; the conflict list is primary-root
-  only and not root-qualified.
 - Branch/status state is still a single primary-root view; per-root branch
   state (`BTreeMap<PathBuf, GitRootState>`) is not implemented.
 
-Acceptance for the landed slice:
+Acceptance:
 
 - gutter marks use the owning root
 - applying a hunk in root B uses root B's gateway
 - conflict stage/resolve in root B uses root B's gateway
+- conflict list is root-qualified and waits for every root
 
 ## 11. LSP Boundary
 

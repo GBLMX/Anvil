@@ -168,6 +168,8 @@ fn workspace_activation_enabled() -> bool {
     std::env::var_os("ANVIL_PLUGIN_DISABLE_WORKSPACE_ACTIVATION").is_none()
 }
 
+pub(crate) type GitConflictResult = Result<(String, bool), String>;
+
 pub struct Model {
     /// Editor document, source path, cursor, and navigation history.
     pub session: EditorSessionState,

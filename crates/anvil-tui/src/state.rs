@@ -588,6 +588,12 @@ pub(crate) struct GitState {
     pub(crate) conflicts_generation: u64,
     /// Pending Git conflict-list generation, if a request is in flight.
     pub(crate) conflicts_pending: Option<u64>,
+    /// Number of root workers expected to answer the conflict-list request.
+    pub(crate) conflicts_expected: usize,
+    /// Number of root workers that answered the conflict-list request.
+    pub(crate) conflicts_received: usize,
+    /// Root-qualified conflict-list results for the pending generation.
+    pub(crate) conflicts_results: Vec<(PathBuf, GitConflictResult)>,
     /// Latest requested conflict-stage generation.
     pub(crate) stage_generation: u64,
     /// Pending conflict-stage generation, if a request is in flight.

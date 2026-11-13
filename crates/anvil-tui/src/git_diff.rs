@@ -379,55 +379,81 @@ impl Model {
             self.file.dirty = true;
             return;
         }
-        let Some(worker) = self.workspace.file_worker.as_ref() else {
+        let mut roots = Vec::new();
+        if self.workspace.file_worker.is_some() {
+            roots.push(self.workspace.path.clone());
+        }
+        roots.extend(self.workspace.root_file_workers.keys().cloned());
+        if roots.is_empty() {
             self.status.text = "E: file worker unavailable".to_owned();
             self.file.dirty = true;
             return;
-        };
+        }
         self.git.conflicts_generation = self.git.conflicts_generation.wrapping_add(1);
         let generation = self.git.conflicts_generation;
-        if let Err(error) = worker.request(FileRequest::GitConflictsText { generation }) {
-            self.status.text = format!("E: git conflicts: {error}");
-            self.file.dirty = true;
-            return;
+        let mut received = 0usize;
+        let mut results = Vec::new();
+        for root in &roots {
+            let worker = if *root == self.workspace.path {
+                self.workspace.file_worker.as_ref()
+            } else {
+                self.workspace.root_file_workers.get(root)
+            };
+            let Some(worker) = worker else {
+                received += 1;
+                results.push((root.clone(), Err("file worker unavailable".to_owned())));
+                continue;
+            };
+            if let Err(error) = worker.request(FileRequest::GitConflictsText {
+                root: root.clone(),
+                generation,
+            }) {
+                received += 1;
+                results.push((root.clone(), Err(format!("git conflicts: {error}"))));
+            }
         }
         self.git.conflicts_pending = Some(generation);
+        self.git.conflicts_expected = roots.len();
+        self.git.conflicts_received = received;
+        self.git.conflicts_results = results;
         self.status.text = "loading git conflicts...".to_owned();
         self.file.dirty = true;
+        self.finish_git_conflicts();
     }
 
     pub(crate) fn handle_git_conflicts_text(
         &mut self,
+        root: PathBuf,
         generation: u64,
         result: Result<(String, bool), String>,
     ) {
         if self.git.conflicts_pending != Some(generation) {
             return;
         }
-        self.git.conflicts_pending = None;
-        match result {
-            Ok((text, truncated)) => {
-                let title = if truncated {
-                    "Git conflicts (truncated): :q returns"
-                } else {
-                    "Git conflicts: :q returns"
-                };
-                let body = if truncated {
-                    format!("Git conflicts (truncated)\n\n{text}")
-                } else {
-                    format!("Git conflicts\n\n{text}")
-                };
-                self.show_read_only(&body, title, "Git conflicts");
-            }
-            Err(error) => {
-                self.status.text = format!("E: git conflicts: {error}");
-                self.file.dirty = true;
-            }
-        }
+        self.git.conflicts_received = self.git.conflicts_received.saturating_add(1);
+        self.git.conflicts_results.push((root, result));
+        self.finish_git_conflicts();
     }
-}
 
-impl Model {
+    fn finish_git_conflicts(&mut self) {
+        if self.git.conflicts_pending.is_none()
+            || self.git.conflicts_received < self.git.conflicts_expected
+        {
+            return;
+        }
+        self.git.conflicts_pending = None;
+        self.git.conflicts_expected = 0;
+        self.git.conflicts_received = 0;
+        let results = std::mem::take(&mut self.git.conflicts_results);
+        let (body, truncated) = format_git_conflicts(&results);
+        let title = if truncated {
+            "Git conflicts (truncated): :q returns"
+        } else {
+            "Git conflicts: :q returns"
+        };
+        self.show_read_only(&body, title, "Git conflicts");
+    }
+
     pub(crate) fn request_git_conflict_stage(&mut self, stage: u8) {
         if self.pager.back.is_some() {
             self.status.text = "already viewing a read-only view".to_owned();
@@ -613,6 +639,28 @@ impl Model {
     }
 }
 
+fn format_git_conflicts(results: &[(PathBuf, GitConflictResult)]) -> (String, bool) {
+    let mut body = String::from("Git conflicts\n\n");
+    let mut truncated = false;
+    for (root, result) in results {
+        body.push_str(&format!("{}\n", root.display()));
+        match result {
+            Ok((text, was_truncated)) => {
+                truncated |= *was_truncated;
+                body.push_str(text);
+                if !text.ends_with('\n') {
+                    body.push('\n');
+                }
+            }
+            Err(error) => {
+                body.push_str(&format!("E: {error}\n"));
+            }
+        }
+        body.push('\n');
+    }
+    (body, truncated)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -653,6 +701,48 @@ index 1111111..2222222 100644
             false,
         );
         assert!(view.hunks.is_empty());
+    }
+
+    #[test]
+    fn formats_root_qualified_conflict_sections() {
+        let results = vec![
+            (PathBuf::from("/b"), Ok(("M\tb.rs\n".to_owned(), false))),
+            (PathBuf::from("/a"), Ok(("no conflicts\n".to_owned(), true))),
+            (PathBuf::from("/c"), Err("git failed".to_owned())),
+        ];
+        let (body, truncated) = format_git_conflicts(&results);
+        assert!(truncated);
+        assert!(body.contains("/b\nM\tb.rs"), "{body}");
+        assert!(body.contains("/a\nno conflicts"), "{body}");
+        assert!(body.contains("/c\nE: git failed"), "{body}");
+    }
+
+    #[test]
+    fn conflict_response_waits_for_every_root() {
+        let mut model = Model::new(EditorState::from_text("x"), None);
+        model.git.conflicts_pending = Some(9);
+        model.git.conflicts_expected = 2;
+        model.git.conflicts_received = 0;
+
+        model.handle_git_conflicts_text(
+            PathBuf::from("/b"),
+            9,
+            Ok(("M\tb.rs\n".to_owned(), false)),
+        );
+        assert_eq!(model.git.conflicts_pending, Some(9));
+        assert!(model.pager.back.is_none());
+
+        model.handle_git_conflicts_text(
+            PathBuf::from("/a"),
+            9,
+            Ok(("no conflicts\n".to_owned(), false)),
+        );
+        assert!(model.git.conflicts_pending.is_none());
+        assert!(model.pager.back.is_some());
+        let text = model.session.editor.text();
+        let body = text.slice(0..text.len_bytes());
+        assert!(body.contains("/a"), "{body}");
+        assert!(body.contains("/b"), "{body}");
     }
 
     #[test]

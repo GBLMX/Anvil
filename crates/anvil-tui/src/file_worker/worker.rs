@@ -186,8 +186,9 @@ impl FileWorker {
                                 generation,
                                 result: git_blame_text(&mut client, &relative),
                             },
-                            FileRequest::GitConflictsText { generation } => {
+                            FileRequest::GitConflictsText { root, generation } => {
                                 FileEvent::GitConflictsText {
+                                    root,
                                     generation,
                                     result: git_conflicts_text(&mut client),
                                 }

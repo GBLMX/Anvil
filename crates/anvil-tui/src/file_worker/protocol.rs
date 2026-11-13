@@ -78,8 +78,8 @@ pub enum FileRequest {
         reverse: bool,
         generation: u64,
     },
-    /// List unmerged paths in the index.
-    GitConflictsText { generation: u64 },
+    /// List unmerged paths in the index for one workspace root.
+    GitConflictsText { root: PathBuf, generation: u64 },
     /// Read one index stage for a conflicted workspace file.
     GitConflictStageText {
         relative: String,
@@ -169,8 +169,9 @@ pub enum FileEvent {
         generation: u64,
         result: Result<(String, bool), String>,
     },
-    /// Bounded unmerged-path list.
+    /// Bounded unmerged-path list for one workspace root.
     GitConflictsText {
+        root: PathBuf,
         generation: u64,
         result: Result<(String, bool), String>,
     },
