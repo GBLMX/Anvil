@@ -411,6 +411,25 @@ mod tests {
     }
 
     #[test]
+    fn provider_snapshot_must_still_match() {
+        let mut model = Model::new(EditorState::from_text(""), None);
+        let revision = model.session.editor.revision();
+        let cursor = model.session.cursor;
+        model
+            .plugins
+            .provider_snapshots
+            .insert(1, (revision, cursor));
+        assert!(model.take_provider_snapshot(1));
+        assert!(!model.take_provider_snapshot(1));
+        model
+            .plugins
+            .provider_snapshots
+            .insert(2, (revision, cursor));
+        model.session.editor.insert(0, "x");
+        assert!(!model.take_provider_snapshot(2));
+    }
+
+    #[test]
     fn plugin_completion_items_install_into_overlay() {
         let mut model = Model::new(EditorState::from_text("buf"), None);
         model.install_plugin_completion(

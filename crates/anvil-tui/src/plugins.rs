@@ -299,10 +299,24 @@ impl Model {
     pub(crate) fn release_plugin_providers(&mut self, plugin_id: &str) {
         let removed = self.plugins.plugin_providers.unregister_plugin(plugin_id);
         for provider in removed {
-            self.plugins
+            for request_id in self
+                .plugins
                 .plugin_provider_requests
-                .cancel_provider(&provider);
+                .cancel_provider(&provider)
+            {
+                self.plugins.provider_snapshots.remove(&request_id);
+            }
         }
+    }
+
+    fn cancel_provider_request(&mut self, request_id: u64) {
+        self.plugins.plugin_provider_requests.cancel(request_id);
+        self.plugins.provider_snapshots.remove(&request_id);
+    }
+
+    pub(crate) fn take_provider_snapshot(&mut self, request_id: u64) -> bool {
+        self.plugins.provider_snapshots.remove(&request_id)
+            == Some((self.session.editor.revision(), self.session.cursor))
     }
 
     #[cfg(target_os = "linux")]
@@ -465,6 +479,10 @@ impl Model {
                     return;
                 }
             };
+        self.plugins.provider_snapshots.insert(
+            request_id,
+            (self.session.editor.revision(), self.session.cursor),
+        );
         if !matches!(
             self.plugins.supervisor.state(&registration.plugin_id),
             HostState::Ready | HostState::Starting | HostState::Registering
@@ -476,11 +494,11 @@ impl Model {
                 .find(|plugin| plugin.manifest.id == registration.plugin_id.as_ref())
                 .cloned()
             else {
-                self.plugins.plugin_provider_requests.cancel(request_id);
+                self.cancel_provider_request(request_id);
                 return;
             };
             let Some(gateway) = self.workspace.gateway.as_mut() else {
-                self.plugins.plugin_provider_requests.cancel(request_id);
+                self.cancel_provider_request(request_id);
                 self.status.text = "E: gateway unavailable".to_owned();
                 self.file.dirty = true;
                 return;
@@ -491,7 +509,7 @@ impl Model {
                 gateway,
                 &self.workspace.path,
             ) {
-                self.plugins.plugin_provider_requests.cancel(request_id);
+                self.cancel_provider_request(request_id);
                 self.status.text = format!("E: provider: {error}");
                 self.file.dirty = true;
                 return;
@@ -507,7 +525,7 @@ impl Model {
             Ok(_) => self.status.text = format!("provider {provider_id}: querying"),
             Err(error) => {
                 self.status.text = format!("E: provider: {error}");
-                self.plugins.plugin_provider_requests.cancel(request_id);
+                self.cancel_provider_request(request_id);
             }
         }
         self.file.dirty = true;
@@ -573,6 +591,12 @@ impl Model {
                                 .plugin_provider_requests
                                 .provider_for(id)
                                 .cloned();
+                            if !self.take_provider_snapshot(id) {
+                                self.cancel_provider_request(id);
+                                self.status.text = "E: provider: stale buffer snapshot".to_owned();
+                                self.file.dirty = true;
+                                return;
+                            }
                             let kind = provider_id.as_ref().and_then(|provider_id| {
                                 self.plugins
                                     .plugin_providers
@@ -605,7 +629,7 @@ impl Model {
                             }
                         }
                         Err(error) => {
-                            self.plugins.plugin_provider_requests.cancel(id);
+                            self.cancel_provider_request(id);
                             self.status.text = format!("E: provider: {error}");
                         }
                     }

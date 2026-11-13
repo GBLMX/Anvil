@@ -183,8 +183,17 @@ impl PluginProviderRequests {
         self.pending.remove(&request_id)
     }
 
-    pub fn cancel_provider(&mut self, provider: &ProviderId) {
-        self.pending.retain(|_, pending| pending != provider);
+    pub fn cancel_provider(&mut self, provider: &ProviderId) -> Vec<u64> {
+        let mut cancelled = Vec::new();
+        self.pending.retain(|id, pending| {
+            if pending == provider {
+                cancelled.push(*id);
+                false
+            } else {
+                true
+            }
+        });
+        cancelled
     }
 
     pub fn accept(
