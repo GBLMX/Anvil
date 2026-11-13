@@ -141,7 +141,13 @@ jobs:
           cargo test -p anvil-distro-standard --no-default-features
           cargo test -p anvil-distro-standard --features official-workspace-index
           cargo test -p anvil-distro-standard --features official-git,official-workspace-index
-          cargo check -p anvil-distro-minimal
+          cargo run -q -p anvil-distro-minimal -- --version | grep -q '^anvil-minimal '
+          for package in anvil-mod-git anvil-mod-workspace-index; do
+            if cargo tree -p "$package" -e normal --prefix none | grep -q '^anvil-tui '; then
+              echo "$package depends on anvil-tui" >&2
+              exit 1
+            fi
+          done
       - name: Test
         if: steps.detect.outputs.present == 'true'
         run: cargo test --workspace --all-targets

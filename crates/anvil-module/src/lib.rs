@@ -15,7 +15,7 @@ pub mod workspace_index;
 use git::GitService;
 use workspace_index::WorkspaceIndexService;
 
-/// Version of the typed module contract.
+/// Frozen contract version; bump only for a breaking module API change.
 pub const CONTRACT_VERSION: u32 = 1;
 
 /// Inclusive range of module contract versions supported by a module.

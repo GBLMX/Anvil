@@ -1,6 +1,6 @@
 # ADR-0028: Trusted Source-Level Module Contract
 
-- Status: Accepted
+- Status: Accepted; contract v1 frozen for 0.7.3
 - Date: 2026-11-13
 - Related: [ADR-0013](0013-kernel-distribution-boundary.md), [ADR-0027](0027-distribution-composition-crate.md)
 
@@ -71,6 +71,8 @@ third-party module must use its own vendor prefix.
 - Module compatibility is source-level: kernel/module crates use semver and the
   distribution rebuilds modules.
 - No stable Rust ABI promise is made.
+- Contract v1 is frozen for 0.7.3. The supported module matrix and deprecation
+  policy are in [module-compatibility.md](../module-compatibility.md).
 
 ### 5. Lifecycle and failure
 
