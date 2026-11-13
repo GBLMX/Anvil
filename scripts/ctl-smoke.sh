@@ -172,6 +172,34 @@ for _ in $(seq 1 50); do
 done
 assert_contains "$cached" "+staged" "git index"
 expect_ok --json command ':q'
+
+git -C "$workspace" checkout -q -b side
+printf 'theirs\n' >"$workspace/conflict.txt"
+git -C "$workspace" add conflict.txt
+git -C "$workspace" -c user.name=Test -c user.email=test@example.com commit -qm side
+git -C "$workspace" checkout -q "$base_branch"
+printf 'ours\n' >"$workspace/conflict.txt"
+git -C "$workspace" add conflict.txt
+git -C "$workspace" -c user.name=Test -c user.email=test@example.com commit -qm ours
+git -C "$workspace" merge side >/dev/null 2>&1 || true
+
+expect_ok --json open conflict.txt
+expect_ok --json command ':git-conflicts'
+expect_ok --json command ':q'
+expect_ok --json command ':git-resolve-ours'
+unmerged=""
+for _ in $(seq 1 50); do
+	unmerged="$(git -C "$workspace" diff --name-only --diff-filter=U)"
+	[[ -z "$unmerged" ]] && break
+	sleep 0.1
+done
+[[ -z "$unmerged" ]] || fail "git conflict was not resolved"
+[[ "$(cat "$workspace/conflict.txt")" == "ours" ]] || fail "git resolve did not write ours"
+
+expect_ok --json command ':git-blame'
+expect_ok --json command ':q'
+expect_ok --json command ':git-conflicts'
+expect_ok --json command ':q'
 expect_ok --json edit set $'dirty\n'
 
 ctl --json quit
