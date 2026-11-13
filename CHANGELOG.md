@@ -46,7 +46,7 @@ post-`0.5.0` feature line.
   cancellation, and item caps. Runtime plugins now receive picker/completion
   requests through the persistent host Lua runtime with transport-id
   correlation. Disabling or stopping a plugin now also cancels its pending
-  provider requests. Plugin completion results are discarded when the editor
+  provider requests, including queued supervisor calls. Plugin completion results are discarded when the editor
   revision or cursor changed while the host round-trip was in flight; picker
   plugin-picker overlay is reused for plugin results and Enter sends
   `provider.action` to the registered action handler.

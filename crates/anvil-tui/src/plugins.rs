@@ -304,12 +304,14 @@ impl Model {
                 .plugin_provider_requests
                 .cancel_provider(&provider)
             {
+                self.plugins.supervisor.cancel_provider_request(request_id);
                 self.plugins.provider_snapshots.remove(&request_id);
             }
         }
     }
 
     fn cancel_provider_request(&mut self, request_id: u64) {
+        self.plugins.supervisor.cancel_provider_request(request_id);
         self.plugins.plugin_provider_requests.cancel(request_id);
         self.plugins.provider_snapshots.remove(&request_id);
     }

@@ -561,6 +561,21 @@ impl PluginSupervisor {
         }
     }
 
+    /// Removes a queued provider request. In-flight host work cannot be
+    /// aborted because the host control call is synchronous.
+    pub fn cancel_provider_request(&mut self, request_id: u64) {
+        for entry in self.entries.values_mut() {
+            entry.pending.retain(|call| {
+                !matches!(
+                    call,
+                    PendingCall::Provider { id, .. }
+                    | PendingCall::ProviderAction { id, .. }
+                    if *id == request_id
+                )
+            });
+        }
+    }
+
     pub fn provider(
         &mut self,
         plugin_id: &str,
@@ -1164,6 +1179,28 @@ mod tests {
         )));
         assert_eq!(supervisor.state("demo"), HostState::Ready);
         assert_eq!(launcher.state.lock().expect("fake host").execs, 1);
+    }
+
+    #[test]
+    fn cancelling_queued_provider_prevents_send() {
+        let (mut supervisor, launcher) = supervisor();
+        let now = Instant::now();
+        start(&mut supervisor, now, "demo").expect("start");
+        assert_eq!(
+            supervisor
+                .provider("demo", 7, "provide", "buf", 10)
+                .expect("queue"),
+            ExecOutcome::Queued
+        );
+        supervisor.cancel_provider_request(7);
+        launcher
+            .state
+            .lock()
+            .expect("fake host")
+            .events
+            .push_back(HostEvent::Ready);
+        let _ = supervisor.poll_at(now, None);
+        assert_eq!(launcher.state.lock().expect("fake host").providers, 0);
     }
 
     #[test]
