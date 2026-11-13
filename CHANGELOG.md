@@ -15,6 +15,9 @@ post-`0.5.0` feature line.
 - Plugins can call `ui.notify` and `ui.status` through the Luau bridge.
   Notifications retain the existing severity, deduplication, and 50-entry cap;
   status messages are bounded to 1024 bytes.
+- Official plugin packaging accepts `piv:SLOT` signing keys. The SHA-256
+  digest is signed by `yubico-piv-tool` on the YubiKey, and `official.pub` is
+  read from the same PIV slot; the existing PEM path remains unchanged.
 - Quick-open can consume the optional `official.workspace-index` service,
   cancelling in-flight index builds on close and falling back to gateway file
   enumeration when the module is absent. The standard edition keeps the feature

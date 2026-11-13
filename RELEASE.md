@@ -71,6 +71,12 @@ requires two repository secrets containing Ed25519 PEM private keys:
 - `ANVIL_PLUGIN_SIGNING_KEY` signs official plugin packages.
 - `ANVIL_RELEASE_SIGNING_KEY` signs `SHA256SUMS`.
 
+For local hardware-backed signing, point `ANVIL_PLUGIN_SIGNING_KEY` at a PIV
+slot (`piv:9c`) instead of a PEM path. `scripts/package-official-plugin.sh`
+signs the SHA-256 digest through `yubico-piv-tool`; the tool prompts for the PIV
+PIN and touch, and reads the matching public key from the same slot. Set
+`YUBICO_PIV_TOOL` when the binary is not on `PATH`.
+
 It builds `scripts/release-layout.sh`, generates an SPDX JSON SBOM with
 `syft`, creates a tarball, writes `SHA256SUMS`, and signs the exact checksum
 file. GitHub build-provenance attestation is attached to the release tarball.
