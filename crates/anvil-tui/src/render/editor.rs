@@ -137,6 +137,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
     };
     let mode = Span::styled(mode_text, mode_style);
     let block = panel_block(title)
+        .border_style(theme::border(!model.ui.focus.tree && !model.ui.focus.split))
         .title_style(theme::title())
         .title_bottom(Line::from(vec![
             mode,

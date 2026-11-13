@@ -6,11 +6,11 @@ use crate::theme;
 use anvil_api::EditorView;
 use anvil_session::ui::CreateKind;
 use ratatui::{
-    Frame,
     layout::Rect,
     style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, BorderType, Clear, Paragraph},
+    Frame,
 };
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
@@ -29,6 +29,16 @@ pub(crate) use welcome::welcome_recent_at;
 pub(crate) const SPINNER: [&str; 8] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧"];
 
 pub(crate) fn panel_block(title: impl Into<Line<'static>>) -> Block<'static> {
+    let title = title.into();
+    let title = if title.spans.iter().any(|span| !span.content.is_empty()) {
+        let mut spans = Vec::with_capacity(title.spans.len() + 2);
+        spans.push(Span::raw(" "));
+        spans.extend(title.spans);
+        spans.push(Span::raw(" "));
+        Line::from(spans)
+    } else {
+        title
+    };
     Block::bordered()
         .border_type(BorderType::Rounded)
         .border_style(theme::border(false))
@@ -38,7 +48,9 @@ pub(crate) fn panel_block(title: impl Into<Line<'static>>) -> Block<'static> {
 }
 
 pub(crate) fn focused_panel_block(title: impl Into<Line<'static>>) -> Block<'static> {
-    panel_block(title).border_style(theme::border(true))
+    panel_block(title)
+        .border_type(BorderType::Thick)
+        .border_style(theme::border(true))
 }
 
 fn centered_rect(area: Rect, width: u16, height: u16) -> Rect {

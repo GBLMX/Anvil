@@ -141,10 +141,11 @@ pub(crate) fn render_tree(model: &Model, frame: &mut Frame, area: Rect) -> Optio
     } else {
         "Files"
     };
-    let mut tree_block = panel_block(tree_title);
-    if model.ui.focus.tree {
-        tree_block = tree_block.border_style(theme::border(true));
-    }
+    let tree_block = if model.ui.focus.tree {
+        focused_panel_block(tree_title)
+    } else {
+        panel_block(tree_title)
+    };
     frame.render_widget(
         Paragraph::new(lines)
             .style(theme::panel())

@@ -61,6 +61,11 @@ pub(crate) fn render_split_pane(
 ) {
     let block = ratatui::widgets::Block::default()
         .borders(Borders::LEFT)
+        .border_type(if is_active {
+            ratatui::widgets::BorderType::Thick
+        } else {
+            ratatui::widgets::BorderType::Rounded
+        })
         .border_style(theme::border(is_active));
     let inner = Rect {
         x: area.x + 1,

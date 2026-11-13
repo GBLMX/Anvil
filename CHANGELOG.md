@@ -335,6 +335,8 @@ post-`0.5.0` feature line.
   now 664 lines.
 
 ### Fixed
+- Panel borders now use padded titles and rounded corners; the focused panel
+  and active split separator use a heavy border for clearer focus.
 - Split view now gives the active editor its own half of the available width
   instead of drawing the second pane over a full-width active editor. Sidebar
   width is shared by rendering, soft wrap, and mouse hit-testing. Panes share
