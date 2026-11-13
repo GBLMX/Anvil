@@ -206,7 +206,7 @@ Do not silently rewrite a user's existing config.
    - Legacy normal/pending tables retained.
    - Clear errors for unknown contexts, commands, and duplicates.
 
-2. **Contexts — partial**
+2. **Contexts — landed**
    - `KeymapContext`, derived context list, editor/global binding dispatch,
      and direct pending-command context actions.
    - Popup, file-tree, and modal bindings dispatch through the ordered context
@@ -218,9 +218,10 @@ Do not silently rewrite a user's existing config.
      references, call hierarchy, code actions, hover, diagnostic peek, theme
      browser, debug panel, test explorer, and completion: only the top entry
      consumes keys, and closing restores focus.
-   - Remaining: classify signature help, the location panel, and the read-only
-     pager, then remove the boolean overlay scan from
-     `active_keymap_contexts`.
+   - `active_keymap_contexts` no longer scans overlay booleans; the stack is the
+     only source of popup/modal contexts.
+   - Signature help and the location panel are passive render surfaces; the
+     read-only pager remains an editor buffer rather than a modal layer.
 
 3. **Leader — landed**
    - 600 ms deadline on the 50 ms loop tick.

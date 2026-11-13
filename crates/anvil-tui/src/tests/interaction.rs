@@ -151,6 +151,7 @@ fn keymap_context_prefers_popup_then_command_line_then_tree() {
         filtered: vec![0],
         selected: 0,
     });
+    model.push_overlay(OverlayKind::Fuzzy);
     assert_eq!(
         model.active_keymap_contexts(),
         vec![
@@ -160,7 +161,7 @@ fn keymap_context_prefers_popup_then_command_line_then_tree() {
         ]
     );
 
-    model.overlays.fuzzy = None;
+    model.close_fuzzy();
     model.open_buffer_picker();
     assert_eq!(
         model.active_keymap_contexts(),
@@ -370,6 +371,7 @@ fn popup_context_bindings_dispatch_before_popup_keys() {
         }],
         selected: 0,
     });
+    model.push_overlay(OverlayKind::DocumentSymbols);
     model.config.keymap = crate::keymap::KeymapConfig::from_toml(
         r#"
 [keymap.contexts.popup]
