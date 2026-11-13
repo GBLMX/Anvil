@@ -102,20 +102,21 @@ impl CommandCompletion {
         entries.sort_by(|left, right| left.name.cmp(&right.name));
         let items = entries
             .into_iter()
-            .map(|entry| {
+            .filter_map(|entry| {
+                let name = sanitize_path_name(&entry.name)?;
                 let label = if entry.is_dir {
-                    format!("{}{}/", path.directory, entry.name)
+                    format!("{}{name}/", path.directory)
                 } else {
-                    format!("{}{}", path.directory, entry.name)
+                    format!("{}{name}", path.directory)
                 };
-                CompletionItem {
+                Some(CompletionItem {
                     label: label.clone(),
                     insert: if entry.is_dir {
                         format!("{} {label}", path.command)
                     } else {
                         format!("{} {label} ", path.command)
                     },
-                }
+                })
             })
             .collect();
         let mut table = SelectionTable::new(items);
@@ -155,6 +156,14 @@ impl CommandCompletion {
     pub(crate) fn selected_index(&self) -> usize {
         self.table.selected_index()
     }
+}
+
+fn sanitize_path_name(name: &str) -> Option<String> {
+    let sanitized = name
+        .chars()
+        .filter(|character| !character.is_control())
+        .collect::<String>();
+    (!sanitized.is_empty() && sanitized == name).then_some(sanitized)
 }
 
 fn argument_items(
@@ -246,7 +255,10 @@ impl Model {
             return None;
         }
         let argument = argument.trim();
-        if argument.starts_with('/') || argument.split('/').any(|part| part == "..") {
+        if argument.starts_with('/')
+            || argument.split('/').any(|part| part == "..")
+            || argument.chars().any(char::is_control)
+        {
             return None;
         }
         let (directory, query) = if argument.is_empty() {
@@ -483,6 +495,40 @@ mod tests {
         ]);
         assert_eq!(labels(&completion), vec!["src/main/", "src/main.rs"]);
         assert_eq!(completion.selected(), Some("e src/main/"));
+    }
+
+    #[test]
+    fn path_completion_filters_control_characters() {
+        let mut completion = CommandCompletion::pending(PathCompletion {
+            generation: 1,
+            command: "e".to_owned(),
+            directory: "src/".to_owned(),
+            query: String::new(),
+            request_path: PathBuf::from("/workspace/src"),
+        });
+        completion.apply_path_listing(vec![
+            anvil_ipc::DirEntry {
+                name: "safe.rs".to_owned(),
+                is_dir: false,
+                ino: 1,
+            },
+            anvil_ipc::DirEntry {
+                name: "evil\x1b[31m.rs".to_owned(),
+                is_dir: false,
+                ino: 2,
+            },
+            anvil_ipc::DirEntry {
+                name: "bad\nname".to_owned(),
+                is_dir: false,
+                ino: 3,
+            },
+        ]);
+        assert_eq!(labels(&completion), vec!["src/safe.rs"]);
+        assert!(
+            completion
+                .selected()
+                .is_some_and(|value| { !value.chars().any(char::is_control) })
+        );
     }
 
     #[test]

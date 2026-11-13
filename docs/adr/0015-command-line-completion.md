@@ -184,6 +184,8 @@ Current implementation status (2026-11-13): `crates/anvil-tui/src/command_line.r
 implements command-name, `theme`/`theme-auto`, `plugin-enable`, and workspace
 path completion. Path requests use `FileWorker::ListCompletion` and are
 generation-checked, so stale directory results cannot replace newer input.
+Path candidates containing control characters are dropped before label or
+insert construction.
 Command names come from `anvil_control::COMMANDS`. Buffer completion is deferred
 until a `:b` command exists. The Phase 1 exit criteria are met; Phase 2 and
 Phase 3 remain pending.
