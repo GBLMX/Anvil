@@ -70,7 +70,8 @@ signed-index work stay deferred until the polish phase exits.
   (ADR-0029); pure Git helpers and `FileWorker` service injection now live in
   `anvil-mod-git`; TUI startup selection and the `official-git` Cargo feature
   are landed; `:git-*` dispatch and completion are gated without the service.
-  Next: register `official.git` through `ModuleRegistry` and finish parity smoke.
+  `official.git` is registered through `ModuleRegistry`; next is the
+  installed-binary Git parity smoke.
 - Optional TachyonFX-style UI effects: `anvil-tui` only, non-default feature,
   ADR and performance gate required; see the deferred section in
   [docs/0.5.x-plan.md](docs/0.5.x-plan.md). Not before the `0.5.10` baseline.

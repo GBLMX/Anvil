@@ -77,6 +77,30 @@ impl GitService for SystemGitService {
     }
 }
 
+/// The official trusted Git module.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct GitModule;
+
+pub const MODULE_ID: anvil_module::ModuleId = anvil_module::ModuleId::new("official.git");
+
+impl anvil_module::Module for GitModule {
+    fn metadata(&self) -> anvil_module::ModuleMetadata {
+        anvil_module::ModuleMetadata {
+            id: MODULE_ID,
+            name: "Official Git",
+            contract: anvil_module::ContractRange::current(),
+            commands: &[],
+        }
+    }
+
+    fn register(
+        &self,
+        registry: &mut anvil_module::ModuleRegistry,
+    ) -> Result<(), anvil_module::ModuleError> {
+        registry.set_git_service(std::sync::Arc::new(SystemGitService))
+    }
+}
+
 pub fn git_status(
     client: &mut GatewayClient,
     workspace: &Path,
@@ -466,7 +490,7 @@ pub fn parse_git_diff(output: &str) -> Vec<(usize, char)> {
 
 #[cfg(test)]
 mod tests {
-    use super::resolve_git_conflict;
+    use super::{GitModule, MODULE_ID, resolve_git_conflict};
     use anvil_ipc::GatewayClient;
     use std::sync::{Arc, Mutex};
 
@@ -611,5 +635,12 @@ mod tests {
         drop(client);
         server.join().expect("server");
         assert_eq!(&*requests.lock().expect("requests"), &["sys.exec"]);
+    }
+    #[test]
+    fn registers_the_official_git_module_and_service() {
+        let mut registry = anvil_module::ModuleRegistry::new();
+        registry.register(&GitModule).expect("register");
+        assert!(registry.contains(MODULE_ID));
+        assert!(registry.git_service().is_some());
     }
 }

@@ -5,10 +5,13 @@
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt;
+use std::sync::Arc;
 
 use anvil_session::command::{COMMANDS, CommandId, CommandSpec};
 
 pub mod git;
+
+use git::GitService;
 
 /// Version of the typed module contract.
 pub const CONTRACT_VERSION: u32 = 1;
@@ -154,6 +157,8 @@ pub struct ModuleRegistry {
     modules: BTreeMap<ModuleId, ModuleMetadata>,
     commands: HashMap<CommandId, (&'static CommandSpec, ModuleId)>,
     registering: Option<ModuleId>,
+    git_service: Option<Arc<dyn GitService>>,
+    git_service_owner: Option<ModuleId>,
 }
 
 impl ModuleRegistry {
@@ -193,6 +198,10 @@ impl ModuleRegistry {
         if let Err(error) = registration {
             self.modules.remove(&id);
             self.commands.retain(|_, (_, owner)| *owner != id);
+            if self.git_service_owner == Some(id) {
+                self.git_service = None;
+                self.git_service_owner = None;
+            }
             return Err(ModuleError::Registration {
                 module: id,
                 message: error.to_string(),
@@ -215,6 +224,29 @@ impl ModuleRegistry {
         self.validate_command(module, spec)?;
         self.commands.insert(spec.id, (spec, module));
         Ok(())
+    }
+
+    /// Register the typed Git service from inside [`Module::register`].
+    pub fn set_git_service(&mut self, service: Arc<dyn GitService>) -> Result<(), ModuleError> {
+        let Some(module) = self.registering else {
+            return Err(ModuleError::Registration {
+                module: ModuleId::new("unknown"),
+                message: "set_git_service is only valid during module registration".to_owned(),
+            });
+        };
+        if self.git_service.is_some() {
+            return Err(ModuleError::Registration {
+                module,
+                message: "a Git service is already registered".to_owned(),
+            });
+        }
+        self.git_service = Some(service);
+        self.git_service_owner = Some(module);
+        Ok(())
+    }
+
+    pub fn git_service(&self) -> Option<Arc<dyn GitService>> {
+        self.git_service.clone()
     }
 
     pub fn contains(&self, module: ModuleId) -> bool {

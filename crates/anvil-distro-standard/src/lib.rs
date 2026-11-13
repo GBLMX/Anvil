@@ -110,6 +110,32 @@ pub fn main(distribution: &Distribution) -> ! {
     }
 }
 
+#[cfg(feature = "official-git")]
+fn compose_git(
+    distribution: &Distribution,
+) -> Result<Option<std::sync::Arc<dyn anvil_module::git::GitService>>, RunError> {
+    if !distribution.git {
+        return Ok(None);
+    }
+    let mut registry = anvil_module::ModuleRegistry::new();
+    registry
+        .register(&anvil_mod_git::GitModule)
+        .map_err(|error| RunError::Args(error.to_string()))?;
+    Ok(registry.git_service())
+}
+
+#[cfg(not(feature = "official-git"))]
+fn compose_git(
+    distribution: &Distribution,
+) -> Result<Option<std::sync::Arc<dyn anvil_module::git::GitService>>, RunError> {
+    if distribution.git {
+        return Err(RunError::Args(
+            "distribution requires official-git, but the feature is not compiled".to_owned(),
+        ));
+    }
+    Ok(None)
+}
+
 fn run<I>(distribution: &Distribution, arguments: I) -> Result<i32, RunError>
 where
     I: IntoIterator<Item = OsString>,
@@ -136,21 +162,7 @@ where
             {
                 return Ok(0);
             }
-            #[cfg(feature = "official-git")]
-            let git = distribution.git.then(|| {
-                std::sync::Arc::new(anvil_mod_git::SystemGitService)
-                    as std::sync::Arc<dyn anvil_mod_git::GitService>
-            });
-            #[cfg(not(feature = "official-git"))]
-            let git = {
-                if distribution.git {
-                    return Err(RunError::Args(
-                        "distribution requires official-git, but the feature is not compiled"
-                            .to_owned(),
-                    ));
-                }
-                None
-            };
+            let git = compose_git(distribution)?;
             Ok(anvil_tui::run_with_input_and_git(
                 path, workspace, editor, stdin, read_only, git,
             )?)
@@ -492,5 +504,26 @@ mod tests {
     fn rejects_extra_files() {
         let error = parse_args(args(&["one", "two"])).unwrap_err();
         assert!(error.contains("only one file"));
+    }
+    #[cfg(feature = "official-git")]
+    #[test]
+    fn standard_composition_registers_the_git_module() {
+        assert!(compose_git(&STANDARD).expect("compose").is_some());
+        let no_git = Distribution {
+            git: false,
+            ..STANDARD
+        };
+        assert!(compose_git(&no_git).expect("compose").is_none());
+    }
+
+    #[cfg(not(feature = "official-git"))]
+    #[test]
+    fn missing_git_feature_is_a_startup_error() {
+        assert!(compose_git(&STANDARD).is_err());
+        let no_git = Distribution {
+            git: false,
+            ..STANDARD
+        };
+        assert!(compose_git(&no_git).expect("compose").is_none());
     }
 }
