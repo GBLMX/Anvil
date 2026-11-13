@@ -383,6 +383,29 @@ mod tests {
         let conflicts = merge_managed(&mut plugins, managed);
         assert!(conflicts.is_empty());
         assert_eq!(plugins.len(), 1);
+        assert!(plugins[0].enabled);
         assert_eq!(plugins[0].root, PathBuf::from("/store"));
+    }
+
+    #[test]
+    fn disabled_managed_package_still_replaces_bundled_plugin() {
+        let mut plugins = vec![descriptor_with_source(
+            "demo",
+            "/bundled",
+            Some(OFFICIAL_SOURCE),
+            None,
+        )];
+        let mut managed = vec![descriptor_with_source(
+            "demo",
+            "/store",
+            Some(OFFICIAL_SOURCE),
+            Some("digest"),
+        )];
+        managed[0].enabled = false;
+        let conflicts = merge_managed(&mut plugins, managed);
+        assert!(conflicts.is_empty());
+        assert_eq!(plugins.len(), 1);
+        assert_eq!(plugins[0].root, PathBuf::from("/store"));
+        assert!(!plugins[0].enabled);
     }
 }
