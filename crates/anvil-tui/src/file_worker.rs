@@ -415,6 +415,57 @@ mod tests {
         server.join().expect("server");
     }
 
+    #[test]
+    fn format_unavailable_is_not_a_terminal_error() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let workspace = dir.path().to_path_buf();
+        let socket = workspace.join("gateway.sock");
+        let listener = anvil_ipc::Listener::bind(&socket).expect("bind");
+        let server = std::thread::spawn(move || {
+            let mut connection = listener.accept().expect("accept");
+            let frame = connection.recv().expect("recv").expect("frame");
+            let request: serde_json::Value = serde_json::from_slice(&frame).expect("request");
+            assert_eq!(request["method"], "session.hello");
+            let hello = serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": request["id"],
+                "result": {"ok": true},
+            });
+            connection
+                .send(&serde_json::to_vec(&hello).expect("hello"))
+                .expect("send hello");
+            let frame = connection.recv().expect("recv").expect("frame");
+            let request: serde_json::Value = serde_json::from_slice(&frame).expect("request");
+            assert_eq!(request["method"], "sys.exec.v2");
+            let response = serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": request["id"],
+                "error": {"code": -32008, "message": "exec runner unavailable"},
+            });
+            connection
+                .send(&serde_json::to_vec(&response).expect("response"))
+                .expect("send");
+        });
+
+        let client = GatewayClient::connect(&socket, &[20; 32]).expect("client");
+        let worker = FileWorker::start(client, workspace.clone());
+        worker
+            .request(FileRequest::Format {
+                path: workspace.join("src/main.rs"),
+                text: "fn main(){}".to_owned(),
+                language_id: "rust".to_owned(),
+                revision: 1,
+                generation: 2,
+            })
+            .expect("format");
+        let FileEvent::Format { result, .. } = next_event(&worker) else {
+            panic!("expected format");
+        };
+        assert_eq!(result.expect("fallback"), None);
+        drop(worker);
+        server.join().expect("server");
+    }
+
     fn next_event(worker: &FileWorker) -> FileEvent {
         for _ in 0..1000 {
             if let Some(event) = worker.poll().into_iter().next() {

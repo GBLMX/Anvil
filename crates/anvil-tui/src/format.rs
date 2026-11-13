@@ -86,7 +86,9 @@ impl Model {
         }
         match result {
             Ok(None) => {
-                let _ = self.request_formatting();
+                if !self.request_formatting() {
+                    self.status.text = "E: no formatter available".to_owned();
+                }
             }
             Ok(Some(text)) => {
                 if self.session.editor.revision() != revision {

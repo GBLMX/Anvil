@@ -1,6 +1,6 @@
 //! Bounded stdin-to-stdout formatters executed through the gateway.
 
-use anvil_ipc::GatewayClient;
+use anvil_ipc::{ClientError, GatewayClient};
 
 const FORMAT_TIMEOUT_MS: u64 = 5_000;
 const FORMAT_MAX_BYTES: u64 = 8 * 1024 * 1024;
@@ -43,16 +43,23 @@ pub(super) fn format_text(
     let Some((tool, args)) = formatter(language_id) else {
         return Ok(None);
     };
-    let result = client
-        .exec_v2(
-            &tool,
-            &args,
-            None,
-            Some(text),
-            FORMAT_TIMEOUT_MS,
-            Some(FORMAT_MAX_BYTES),
-        )
-        .map_err(|error| error.to_string())?;
+    let result = match client.exec_v2(
+        &tool,
+        &args,
+        None,
+        Some(text),
+        FORMAT_TIMEOUT_MS,
+        Some(FORMAT_MAX_BYTES),
+    ) {
+        Ok(result) => result,
+        Err(ClientError::Rpc {
+            code: -32008 | -32002 | -32001,
+            ..
+        }) => {
+            return Ok(None);
+        }
+        Err(error) => return Err(error.to_string()),
+    };
     if result.timed_out {
         return Err("formatter timed out".to_owned());
     }
