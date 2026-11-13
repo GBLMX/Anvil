@@ -94,6 +94,7 @@ dependencies = [
  "anvil-mod-desktop",
  "anvil-mod-git",
  "anvil-mod-language-latex",
+ "anvil-mod-language-typst",
  "anvil-mod-workspace-index",
  "anvil-module",
  "anvil-tui",
@@ -154,6 +155,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "anvil-mod-language-typst"
+version = "0.6.0"
+dependencies = [
+ "anvil-module",
+]
+
+[[package]]
 name = "anvil-mod-workspace-index"
 version = "0.6.0"
 dependencies = [
@@ -205,6 +213,7 @@ version = "0.6.0"
 dependencies = [
  "anvil-core",
  "codebook-tree-sitter-latex",
+ "codebook-tree-sitter-typst",
  "tree-sitter",
  "tree-sitter-bash",
  "tree-sitter-dockerfile-updated",
@@ -519,6 +528,16 @@ name = "codebook-tree-sitter-latex"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a3ab764ede0961a43ee3121cd8a71dd01d355f836181ebf2ede04f4c24636ca0"
+dependencies = [
+ "cc",
+ "tree-sitter-language",
+]
+
+[[package]]
+name = "codebook-tree-sitter-typst"
+version = "0.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f785ad90ce80edd9e8b3d00890af0bc163e9a2c38f03daa18aede98d343d093"
 dependencies = [
  "cc",
  "tree-sitter-language",

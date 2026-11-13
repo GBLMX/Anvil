@@ -13,6 +13,12 @@ post-`0.5.0` feature line.
 - HTML and HTM files now use the Tree-sitter HTML grammar for tag, attribute,
   string, constant, and comment highlighting, with HTML fenced blocks in
   Markdown.
+- `official.language-typst` adds a `tinymist` LSP profile for `.typ` files and
+  Typst Tree-sitter highlighting through the `typst` syntax feature. It is
+  opt-in through `official-language-typst` and introduces no new process path.
+- LaTeX/Typst grammars are now feature-gated in `anvil-syntax`; feature-free
+  builds no longer compile them. `official-language-latex` and
+  `official-language-typst` enable the corresponding highlighting features.
 - Control sockets are now per workspace: `anvil`, `anvil-ctl`, and `anvil-mcp`
   select the instance by canonical workspace path instead of one global
   `control.sock`. File arguments outside the cwd derive their parent as the

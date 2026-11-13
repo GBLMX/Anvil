@@ -51,6 +51,10 @@ The syntax layer uses `codebook-tree-sitter-latex` (MIT) for `.tex`, `.ltx`,
 inline/display math, labels, citations, and include/package/class commands.
 BibTeX files remain LSP-only.
 
+The grammar is optional: `anvil-syntax/latex` enables it, and the
+`official-language-latex` distribution feature enables both that syntax
+feature and the provider. Feature-free builds do not compile the LaTeX grammar.
+
 Highlighting inherits the existing 256 KiB parse cap and background worker
 debounce. Parse failure falls back to plain text.
 

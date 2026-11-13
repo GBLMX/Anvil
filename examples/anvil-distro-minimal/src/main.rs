@@ -16,5 +16,6 @@ fn main() {
         workspace_index: false,
         desktop: false,
         language_latex: false,
+        language_typst: false,
     });
 }

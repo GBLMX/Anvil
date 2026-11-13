@@ -7,12 +7,18 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 
+[features]
+default = []
+latex = ["dep:codebook-tree-sitter-latex"]
+typst = ["dep:codebook-tree-sitter-typst"]
+
 [dependencies]
 anvil-core = { path = "../anvil-core", version = "0.6.0" }
 tree-sitter = "0.26"
 tree-sitter-json = "0.24"
 tree-sitter-html = "0.23"
-codebook-tree-sitter-latex = "0.6"
+codebook-tree-sitter-latex = { version = "0.6", optional = true }
+codebook-tree-sitter-typst = { version = "0.12", optional = true }
 tree-sitter-rust = "0.24"
 tree-sitter-go = "0.25"
 tree-sitter-bash = "0.25"

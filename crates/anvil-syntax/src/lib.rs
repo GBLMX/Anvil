@@ -115,10 +115,19 @@ static PYTHON: LazyLock<SyntaxLanguage> = LazyLock::new(|| {
         false,
     )
 });
+#[cfg(feature = "latex")]
 static LATEX: LazyLock<SyntaxLanguage> = LazyLock::new(|| {
     SyntaxLanguage::grammar(
         Language::new(codebook_tree_sitter_latex::LANGUAGE),
         include_str!("syntax/latex.scm"),
+        false,
+    )
+});
+#[cfg(feature = "typst")]
+static TYPST: LazyLock<SyntaxLanguage> = LazyLock::new(|| {
+    SyntaxLanguage::grammar(
+        Language::new(codebook_tree_sitter_typst::LANGUAGE),
+        include_str!("syntax/typst.scm"),
         false,
     )
 });
@@ -892,7 +901,10 @@ fn language_for(path: &Path) -> Option<&'static SyntaxLanguage> {
         "py" => Some(&*PYTHON),
         "toml" => Some(&*TOML),
         "yml" | "yaml" => Some(&*YAML),
+        #[cfg(feature = "latex")]
         "tex" | "ltx" | "sty" | "cls" => Some(&*LATEX),
+        #[cfg(feature = "typst")]
+        "typ" => Some(&*TYPST),
         "md" | "markdown" => Some(&*MARKDOWN),
         _ => None,
     }
@@ -977,6 +989,7 @@ mod tests {
         assert!(highlights.iter().any(|h| h.class == SyntaxClass::Constant));
     }
 
+    #[cfg(feature = "latex")]
     #[test]
     fn latex_highlights_commands_comments_and_labels() {
         let source = "% comment\n\\section{Hi}\n$ x^2 $\n\\label{sec:one}\n";
@@ -984,6 +997,16 @@ mod tests {
         assert!(highlights.iter().any(|h| h.class == SyntaxClass::Comment));
         assert!(highlights.iter().any(|h| h.class == SyntaxClass::Keyword));
         assert!(highlights.iter().any(|h| h.class == SyntaxClass::Property));
+    }
+
+    #[cfg(feature = "typst")]
+    #[test]
+    fn typst_highlights_comments_keywords_and_headings() {
+        let source = "// comment\n#let value = 1\n= Heading\n";
+        let highlights = parse_source(source, Path::new("main.typ")).expect("parse");
+        assert!(highlights.iter().any(|h| h.class == SyntaxClass::Comment));
+        assert!(highlights.iter().any(|h| h.class == SyntaxClass::Keyword));
+        assert!(highlights.iter().any(|h| h.class == SyntaxClass::Heading));
     }
 
     #[test]
@@ -1006,16 +1029,22 @@ mod tests {
             "x.htm",
             "x.md",
             "x.markdown",
-            "x.tex",
-            "x.ltx",
-            "x.sty",
-            "x.cls",
             "Makefile",
             "Dockerfile",
             "go.mod",
         ] {
             assert!(language_for(Path::new(path)).is_some(), "{path}");
         }
+        #[cfg(feature = "latex")]
+        for path in ["x.tex", "x.ltx", "x.sty", "x.cls"] {
+            assert!(language_for(Path::new(path)).is_some(), "{path}");
+        }
+        #[cfg(feature = "typst")]
+        assert!(language_for(Path::new("x.typ")).is_some());
+        #[cfg(not(feature = "latex"))]
+        assert!(language_for(Path::new("x.tex")).is_none());
+        #[cfg(not(feature = "typst"))]
+        assert!(language_for(Path::new("x.typ")).is_none());
         assert!(language_for(Path::new("x.unknown")).is_none());
     }
 

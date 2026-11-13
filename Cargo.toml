@@ -11,6 +11,7 @@ members = [
     "crates/anvil-mod-desktop",
     "crates/anvil-mod-git",
     "crates/anvil-mod-language-latex",
+    "crates/anvil-mod-language-typst",
     "crates/anvil-module",
     "crates/anvil-mod-workspace-index",
     "crates/anvil-plugin-host",

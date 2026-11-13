@@ -58,6 +58,8 @@ pub struct Distribution {
     pub desktop: bool,
     /// Whether the optional LaTeX language-tooling module is part of this composition.
     pub language_latex: bool,
+    /// Whether the optional Typst language-tooling module is part of this composition.
+    pub language_typst: bool,
 }
 
 /// The standard Anvil distribution.
@@ -68,6 +70,7 @@ pub const STANDARD: Distribution = Distribution {
     workspace_index: false,
     desktop: false,
     language_latex: false,
+    language_typst: false,
 };
 
 #[derive(Debug)]
@@ -166,31 +169,74 @@ fn compose_git(
     Ok(registry.git_service())
 }
 
-#[cfg(feature = "official-language-latex")]
-fn compose_language_tooling(
-    distribution: &Distribution,
-) -> Result<Option<std::sync::Arc<dyn anvil_module::language::LanguageToolingService>>, RunError> {
-    if !distribution.language_latex {
-        return Ok(None);
+struct LanguageToolingProviders(
+    Vec<std::sync::Arc<dyn anvil_module::language::LanguageToolingService>>,
+);
+
+impl anvil_module::language::LanguageToolingService for LanguageToolingProviders {
+    fn server_for(
+        &self,
+        path: &std::path::Path,
+    ) -> Option<anvil_module::language::LanguageServerSpec> {
+        self.0.iter().find_map(|provider| provider.server_for(path))
     }
+}
+
+#[cfg(feature = "official-language-latex")]
+fn latex_tooling()
+-> Result<std::sync::Arc<dyn anvil_module::language::LanguageToolingService>, RunError> {
     let mut registry = anvil_module::ModuleRegistry::new();
     registry
         .register(&anvil_mod_language_latex::LatexModule)
         .map_err(|error| RunError::Args(error.to_string()))?;
-    Ok(registry.language_tooling_service())
+    registry.language_tooling_service().ok_or_else(|| {
+        RunError::Args("official-language-latex registered no tooling service".to_owned())
+    })
 }
 
 #[cfg(not(feature = "official-language-latex"))]
+fn latex_tooling()
+-> Result<std::sync::Arc<dyn anvil_module::language::LanguageToolingService>, RunError> {
+    Err(RunError::Args(
+        "distribution requires official-language-latex, but the feature is not compiled".to_owned(),
+    ))
+}
+
+#[cfg(feature = "official-language-typst")]
+fn typst_tooling()
+-> Result<std::sync::Arc<dyn anvil_module::language::LanguageToolingService>, RunError> {
+    let mut registry = anvil_module::ModuleRegistry::new();
+    registry
+        .register(&anvil_mod_language_typst::TypstModule)
+        .map_err(|error| RunError::Args(error.to_string()))?;
+    registry.language_tooling_service().ok_or_else(|| {
+        RunError::Args("official-language-typst registered no tooling service".to_owned())
+    })
+}
+
+#[cfg(not(feature = "official-language-typst"))]
+fn typst_tooling()
+-> Result<std::sync::Arc<dyn anvil_module::language::LanguageToolingService>, RunError> {
+    Err(RunError::Args(
+        "distribution requires official-language-typst, but the feature is not compiled".to_owned(),
+    ))
+}
+
 fn compose_language_tooling(
     distribution: &Distribution,
 ) -> Result<Option<std::sync::Arc<dyn anvil_module::language::LanguageToolingService>>, RunError> {
+    let mut providers = Vec::new();
     if distribution.language_latex {
-        return Err(RunError::Args(
-            "distribution requires official-language-latex, but the feature is not compiled"
-                .to_owned(),
-        ));
+        providers.push(latex_tooling()?);
     }
-    Ok(None)
+    if distribution.language_typst {
+        providers.push(typst_tooling()?);
+    }
+    Ok(match providers.len() {
+        0 => None,
+        1 => providers.pop(),
+        _ => Some(std::sync::Arc::new(LanguageToolingProviders(providers))),
+    })
 }
 
 #[cfg(feature = "official-desktop")]
@@ -560,12 +606,16 @@ mod tests {
 
     #[test]
     fn rejects_stdin_with_a_file_or_editor_mode() {
-        assert!(parse_args(args(&["-", "file.rs"]))
-            .unwrap_err()
-            .contains("mutually exclusive"));
-        assert!(parse_args(args(&["--editor", "-"]))
-            .unwrap_err()
-            .contains("cannot be combined"));
+        assert!(
+            parse_args(args(&["-", "file.rs"]))
+                .unwrap_err()
+                .contains("mutually exclusive")
+        );
+        assert!(
+            parse_args(args(&["--editor", "-"]))
+                .unwrap_err()
+                .contains("cannot be combined")
+        );
     }
 
     #[test]
@@ -671,12 +721,16 @@ mod tests {
             workspace_index: true,
             ..STANDARD
         };
-        assert!(compose_workspace_index(&with_index)
-            .expect("compose")
-            .is_some());
-        assert!(compose_workspace_index(&STANDARD)
-            .expect("compose")
-            .is_none());
+        assert!(
+            compose_workspace_index(&with_index)
+                .expect("compose")
+                .is_some()
+        );
+        assert!(
+            compose_workspace_index(&STANDARD)
+                .expect("compose")
+                .is_none()
+        );
     }
 
     #[cfg(not(feature = "official-workspace-index"))]
@@ -687,9 +741,11 @@ mod tests {
             ..STANDARD
         };
         assert!(compose_workspace_index(&with_index).is_err());
-        assert!(compose_workspace_index(&STANDARD)
-            .expect("compose")
-            .is_none());
+        assert!(
+            compose_workspace_index(&STANDARD)
+                .expect("compose")
+                .is_none()
+        );
     }
 
     #[cfg(feature = "official-desktop")]
@@ -721,12 +777,16 @@ mod tests {
             language_latex: true,
             ..STANDARD
         };
-        assert!(compose_language_tooling(&with_latex)
-            .expect("compose")
-            .is_some());
-        assert!(compose_language_tooling(&STANDARD)
-            .expect("compose")
-            .is_none());
+        assert!(
+            compose_language_tooling(&with_latex)
+                .expect("compose")
+                .is_some()
+        );
+        assert!(
+            compose_language_tooling(&STANDARD)
+                .expect("compose")
+                .is_none()
+        );
     }
 
     #[cfg(not(feature = "official-language-latex"))]
@@ -737,8 +797,75 @@ mod tests {
             ..STANDARD
         };
         assert!(compose_language_tooling(&with_latex).is_err());
-        assert!(compose_language_tooling(&STANDARD)
+        assert!(
+            compose_language_tooling(&STANDARD)
+                .expect("compose")
+                .is_none()
+        );
+    }
+
+    #[cfg(feature = "official-language-typst")]
+    #[test]
+    fn opt_in_typst_registers_the_language_tooling_service() {
+        let with_typst = Distribution {
+            language_typst: true,
+            ..STANDARD
+        };
+        assert!(
+            compose_language_tooling(&with_typst)
+                .expect("compose")
+                .is_some()
+        );
+        assert!(
+            compose_language_tooling(&STANDARD)
+                .expect("compose")
+                .is_none()
+        );
+    }
+
+    #[cfg(not(feature = "official-language-typst"))]
+    #[test]
+    fn missing_typst_feature_is_a_startup_error() {
+        let with_typst = Distribution {
+            language_typst: true,
+            ..STANDARD
+        };
+        assert!(compose_language_tooling(&with_typst).is_err());
+        assert!(
+            compose_language_tooling(&STANDARD)
+                .expect("compose")
+                .is_none()
+        );
+    }
+
+    #[cfg(all(
+        feature = "official-language-latex",
+        feature = "official-language-typst"
+    ))]
+    #[test]
+    fn both_language_providers_compose() {
+        use anvil_module::language::LanguageToolingService;
+        let both = Distribution {
+            language_latex: true,
+            language_typst: true,
+            ..STANDARD
+        };
+        let service = compose_language_tooling(&both)
             .expect("compose")
-            .is_none());
+            .expect("service");
+        assert_eq!(
+            service
+                .server_for(std::path::Path::new("paper.tex"))
+                .expect("latex")
+                .tool,
+            "texlab"
+        );
+        assert_eq!(
+            service
+                .server_for(std::path::Path::new("paper.typ"))
+                .expect("typst")
+                .tool,
+            "tinymist"
+        );
     }
 }

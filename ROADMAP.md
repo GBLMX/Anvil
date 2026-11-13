@@ -76,9 +76,10 @@ signed-index work stay deferred until the polish phase exits.
   handling, module registration, quick-open adapter, opt-in feature
   composition, and installed-binary workspace-index smoke are landed. The
   minimal second consumer, module boundary check, compatibility matrix,
-  deprecation policy, and contract v1 freeze close 0.7.3. The first 0.7.4
-  slices, opt-in `official.desktop` and `official.language-latex` (including
-  highlighting), are landed; the remaining candidate pool is optional.
+  deprecation policy, and contract v1 freeze close 0.7.3. The 0.7.4 slices for
+  opt-in `official.desktop`, `official.language-latex`, and
+  `official.language-typst` are landed; optional grammars are feature-gated.
+  The remaining candidate pool is optional and unscoped.
 - Optional TachyonFX-style UI effects: `anvil-tui` only, non-default feature,
   ADR and performance gate required; see the deferred section in
   [docs/0.5.x-plan.md](docs/0.5.x-plan.md). Not before the `0.5.10` baseline.

@@ -11,6 +11,8 @@ repository.workspace = true
 default = ["official-git"]
 official-git = ["dep:anvil-mod-git"]
 official-workspace-index = ["dep:anvil-mod-workspace-index"]
+official-language-latex = ["anvil-syntax/latex"]
+official-language-typst = ["anvil-syntax/typst"]
 e2e-bench = []
 
 [dependencies]

@@ -13,6 +13,7 @@ contract.
 | `official.workspace-index` | 1 | `official-workspace-index` | opt-in | absent | `WorkspaceIndexService` |
 | `official.desktop` | 1 | `official-desktop` | opt-in | absent | `DesktopService` |
 | `official.language-latex` | 1 | `official-language-latex` | opt-in | absent | `LanguageToolingService` |
+| `official.language-typst` | 1 | `official-language-typst` | opt-in | absent | `LanguageToolingService` |
 
 The matrix records the contract line, not a Rust ABI. Modules are compiled from
 source into the distribution and are rebuilt with the kernel.

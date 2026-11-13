@@ -151,7 +151,7 @@ the independent second consumer. Official modules are trusted source-level Rust
 crates compiled into the binary. There is no dynamic Rust ABI, runtime module
 loading, or marketplace-installed Rust module. Module contract v1 is frozen;
 the `0.7.1`-`0.7.3` module, workspace-index, and compatibility-gate slices and
-the `0.7.4` desktop and LaTeX slices are complete.
+the `0.7.4` desktop, LaTeX, and Typst slices are complete.
 
 - `official.git` is part of the default standard composition. `:git-*` dispatch
   and completion are gated off when the Git service is absent.
@@ -164,7 +164,10 @@ the `0.7.4` desktop and LaTeX slices are complete.
   command runner.
 - `official.language-latex` is opt-in through `official-language-latex`. It
   supplies `texlab` profiles for LaTeX and BibTeX; `.tex`, `.ltx`, `.sty`, and
-  `.cls` also get Tree-sitter highlighting.
+  `.cls` get Tree-sitter highlighting through the `latex` syntax feature.
+- `official.language-typst` is opt-in through `official-language-typst`. It
+  supplies a `tinymist` profile for Typst; `.typ` files get Tree-sitter
+  highlighting through the `typst` syntax feature.
 - `anvil-distro-minimal` composes none of these modules.
 
 Module compatibility, caps, and deprecation rules are in
