@@ -41,7 +41,6 @@ mod tests {
     #[cfg(feature = "official-git")]
     use super::{parse_git_diff, parse_git_status};
     use anvil_ipc::GatewayClient;
-    #[cfg(feature = "official-git")]
     use std::path::Path;
 
     #[test]
@@ -386,6 +385,76 @@ mod tests {
                 assert_eq!(result.unwrap_err(), "git module is not installed");
             }
             _ => panic!("expected git status event"),
+        }
+        drop(worker);
+        server.join().expect("server");
+    }
+    #[test]
+    fn files_request_uses_the_workspace_index_service() {
+        use anvil_module::workspace_index::{
+            WorkspaceIndexError, WorkspaceIndexService, WorkspaceIndexSnapshot,
+        };
+        use std::sync::atomic::AtomicBool;
+
+        struct FakeIndex;
+        impl WorkspaceIndexService for FakeIndex {
+            fn build(
+                &self,
+                _client: &mut GatewayClient,
+                _root: &Path,
+                _hidden: bool,
+                generation: u64,
+                _cancel: &AtomicBool,
+            ) -> Result<WorkspaceIndexSnapshot, WorkspaceIndexError> {
+                Ok(WorkspaceIndexSnapshot {
+                    generation,
+                    paths: vec!["indexed.rs".to_owned()],
+                    truncated: false,
+                })
+            }
+
+            fn search(&self, _root: &Path, _query: &str, _limit: usize) -> Vec<String> {
+                Vec::new()
+            }
+        }
+
+        let dir = tempfile::tempdir().expect("tempdir");
+        let workspace = dir.path().to_path_buf();
+        let socket = workspace.join("gateway.sock");
+        let listener = anvil_ipc::Listener::bind(&socket).expect("bind");
+        let server = std::thread::spawn(move || {
+            let mut connection = listener.accept().expect("accept");
+            let frame = connection.recv().expect("recv").expect("frame");
+            let request: serde_json::Value = serde_json::from_slice(&frame).expect("request");
+            let response = serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": request["id"],
+                "result": {"ok": true},
+            });
+            connection
+                .send(&serde_json::to_vec(&response).expect("response"))
+                .expect("send");
+        });
+        let client = GatewayClient::connect(&socket, &[18; 32]).expect("client");
+        let worker = FileWorker::start_with_services(
+            client,
+            workspace.clone(),
+            None,
+            Some(std::sync::Arc::new(FakeIndex)),
+        );
+        worker
+            .request(FileRequest::Files {
+                hidden: false,
+                generation: 4,
+                cancel: std::sync::Arc::new(AtomicBool::new(false)),
+            })
+            .expect("request");
+        match next_event(&worker) {
+            FileEvent::Files { generation, result } => {
+                assert_eq!(generation, 4);
+                assert_eq!(result.unwrap(), vec!["indexed.rs"]);
+            }
+            _ => panic!("expected files event"),
         }
         drop(worker);
         server.join().expect("server");

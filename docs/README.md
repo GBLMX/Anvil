@@ -59,7 +59,7 @@ Cross-cutting tracks that do not jump the queue:
 | [IDE capabilities](ide-capability-plan.md) | LSP depth, search, sessions, Git, adapters | P0 and P1 landed; cross-root follow-up |
 | [Multi-root routing](multi-root-routing-plan.md) | tree, quick open, search, mutations across roots | phase 1 + quick-open/preview/search/tree/mutations landed |
 | [0.6.x](0.6.x-plan.md) | signed packages, download manager, marketplace | signing verifier/cache landed; marketplace blocked on external signing/index inputs |
-| [0.7.x](0.7.x-plan.md) | official optional Rust modules (source-level, trusted) | planned |
+| [0.7.x](0.7.x-plan.md) | official optional Rust modules (source-level, trusted) | Git + workspace-index modules landed; feature matrix builds pass |
 | [Linux platform](linux-platform-plan.md) | seccomp/cgroup, atomic install, watcher measurements | planned |
 | [Command architecture](command-architecture-plan.md) | command registry, keymap trie, effects | registry + effect queue landed; trie/Lua pending |
 | [Keymap configuration](keymap.md) | TOML overrides and key syntax | current |

@@ -13,5 +13,6 @@ fn main() {
         name: "anvil-minimal",
         usage: USAGE,
         git: false,
+        workspace_index: false,
     });
 }

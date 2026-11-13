@@ -59,6 +59,27 @@ pub fn run_with_input_and_git(
     read_only: bool,
     git: Option<Arc<dyn anvil_module::git::GitService>>,
 ) -> io::Result<i32> {
+    run_with_services(
+        path,
+        workspace,
+        editor_mode,
+        read_stdin,
+        read_only,
+        git,
+        None,
+    )
+}
+
+/// Runs the terminal loop with explicitly selected distribution services.
+pub fn run_with_services(
+    path: Option<PathBuf>,
+    workspace: PathBuf,
+    editor_mode: bool,
+    read_stdin: bool,
+    read_only: bool,
+    git: Option<Arc<dyn anvil_module::git::GitService>>,
+    workspace_index: Option<Arc<dyn anvil_module::workspace_index::WorkspaceIndexService>>,
+) -> io::Result<i32> {
     let stdin_text = if read_stdin || !io::stdin().is_terminal() {
         if !io::stdout().is_terminal() {
             return Err(io::Error::new(
@@ -95,6 +116,7 @@ pub fn run_with_input_and_git(
         Ok((session, client, lsp_client)) => {
             let mut model = Model::with_gateway(client, workspace.clone());
             model.workspace.git_service = git.clone();
+            model.workspace.workspace_index_service = workspace_index.clone();
             model.language.lsp.client = Some(lsp_client);
             if stdin_text.is_none()
                 && let Some(path) = path
@@ -108,6 +130,7 @@ pub fn run_with_input_and_git(
         Err(error) => {
             let mut model = Model::new(EditorState::from_text(""), None);
             model.workspace.git_service = git.clone();
+            model.workspace.workspace_index_service = workspace_index.clone();
             model.workspace.path = workspace.clone();
             model.reload_icons();
             model.workspace.require_gateway = true;
@@ -116,9 +139,6 @@ pub fn run_with_input_and_git(
             (model, None)
         }
     };
-    if model.workspace.git_service.is_none() {
-        model.workspace.git_service = git;
-    }
     model.workspace.gateway_session = session;
     model.set_editor_mode(editor_mode);
     if session_enabled {

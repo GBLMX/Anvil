@@ -1,8 +1,9 @@
 # ADR-0030: Workspace Index Module Extension Points
 
 - Status: Accepted for implementation; bounded in-memory index, gateway-backed
-  build/search, cancellation/stale tests, and module registration landed;
-  quick-open adapter and Cargo feature remain
+  build/search, cancellation/stale tests, module registration, and the
+  quick-open adapter landed; opt-in feature builds pass, installed-binary
+  smoke remains
 - Date: 2026-11-13
 - Related: [ADR-0028](0028-module-contract.md), [ADR-0029](0029-git-module-extension-points.md)
 
@@ -123,6 +124,9 @@ runtime module discovery.
    tests.
 4. Wire quick-open to prefer the service and fall back when absent.
 5. Add feature-matrix builds and installed-binary smoke.
+
+Slices 1-4 and the feature-matrix builds in slice 5 are landed; the
+installed-binary smoke remains.
 
 Each slice must leave the existing quick-open path working.
 

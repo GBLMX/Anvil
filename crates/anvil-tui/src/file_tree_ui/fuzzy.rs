@@ -144,6 +144,11 @@ impl Model {
         self.overlays.lsp_results.document_symbols = None;
         self.close_overlay(OverlayKind::DocumentSymbols);
         self.clear_preview();
+        if let Some(cancel) = self.workspace.fuzzy_cancel.take() {
+            cancel.store(true, std::sync::atomic::Ordering::Relaxed);
+        }
+        let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        self.workspace.fuzzy_cancel = Some(cancel.clone());
         let workspace = self.workspace.path.clone();
         let generation = self.overlays.fuzzy_generation.saturating_add(1);
         self.overlays.fuzzy_generation = generation;
@@ -152,12 +157,14 @@ impl Model {
                 let _ = worker.request(FileRequest::Files {
                     hidden: self.tree.show_hidden,
                     generation,
+                    cancel: cancel.clone(),
                 });
             }
             for worker in self.workspace.root_file_workers.values() {
                 let _ = worker.request(FileRequest::Files {
                     hidden: self.tree.show_hidden,
                     generation,
+                    cancel: cancel.clone(),
                 });
             }
             self.overlays.fuzzy = Some(FuzzyState {
@@ -278,6 +285,9 @@ impl Model {
     }
 
     pub(crate) fn close_fuzzy(&mut self) {
+        if let Some(cancel) = self.workspace.fuzzy_cancel.take() {
+            cancel.store(true, std::sync::atomic::Ordering::Relaxed);
+        }
         self.overlays.fuzzy = None;
         self.close_overlay(OverlayKind::Fuzzy);
         self.clear_preview();

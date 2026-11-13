@@ -276,6 +276,11 @@ pub(crate) struct WorkspaceState {
     pub(crate) root_file_workers: BTreeMap<PathBuf, FileWorker>,
     /// Optional trusted Git service installed by the distribution.
     pub(crate) git_service: Option<std::sync::Arc<dyn anvil_module::git::GitService>>,
+    /// Optional trusted workspace-index service installed by the distribution.
+    pub(crate) workspace_index_service:
+        Option<std::sync::Arc<dyn anvil_module::workspace_index::WorkspaceIndexService>>,
+    /// Cancellation token for the active quick-open enumeration.
+    pub(crate) fuzzy_cancel: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
     /// Dirty swap files that must survive a source conflict.
     pub(crate) conflict_swaps: HashMap<PathBuf, PathBuf>,
     /// Paths changed by a multi-file replace whose buffer reload failed.

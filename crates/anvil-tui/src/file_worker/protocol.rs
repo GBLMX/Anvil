@@ -31,7 +31,11 @@ pub enum FileRequest {
     /// List one directory.
     List(PathBuf),
     /// Enumerate workspace files with `rg --files`, or a bounded fallback.
-    Files { hidden: bool, generation: u64 },
+    Files {
+        hidden: bool,
+        generation: u64,
+        cancel: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    },
     /// Run a bounded ripgrep project search.
     ProjectSearch { query: String, generation: u64 },
     /// Read a bounded preview for one workspace-relative file.

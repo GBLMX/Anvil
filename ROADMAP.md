@@ -73,8 +73,8 @@ signed-index work stay deferred until the polish phase exits.
   `official.git` is registered through `ModuleRegistry` and the installed-binary
   Git parity smoke passes. Workspace index extension points are defined
   (ADR-0030); the bounded index, gateway-backed build/search, cancellation/stale
-  handling, and module registration are landed. Next: quick-open adapter and
-  feature matrix.
+  handling, module registration, quick-open adapter, and opt-in feature
+  composition are landed. Remaining: installed-binary workspace-index smoke.
 - Optional TachyonFX-style UI effects: `anvil-tui` only, non-default feature,
   ADR and performance gate required; see the deferred section in
   [docs/0.5.x-plan.md](docs/0.5.x-plan.md). Not before the `0.5.10` baseline.

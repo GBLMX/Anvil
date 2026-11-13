@@ -52,6 +52,8 @@ pub struct Distribution {
     pub usage: &'static str,
     /// Whether the standard Git module is part of this composition.
     pub git: bool,
+    /// Whether the optional workspace-index module is part of this composition.
+    pub workspace_index: bool,
 }
 
 /// The standard Anvil distribution.
@@ -59,6 +61,7 @@ pub const STANDARD: Distribution = Distribution {
     name: "anvil",
     usage: USAGE,
     git: true,
+    workspace_index: false,
 };
 
 #[derive(Debug)]
@@ -108,6 +111,39 @@ pub fn main(distribution: &Distribution) -> ! {
             process::exit(1);
         }
     }
+}
+
+#[cfg(feature = "official-workspace-index")]
+fn compose_workspace_index(
+    distribution: &Distribution,
+) -> Result<
+    Option<std::sync::Arc<dyn anvil_module::workspace_index::WorkspaceIndexService>>,
+    RunError,
+> {
+    if !distribution.workspace_index {
+        return Ok(None);
+    }
+    let mut registry = anvil_module::ModuleRegistry::new();
+    registry
+        .register(&anvil_mod_workspace_index::WorkspaceIndexModule)
+        .map_err(|error| RunError::Args(error.to_string()))?;
+    Ok(registry.workspace_index_service())
+}
+
+#[cfg(not(feature = "official-workspace-index"))]
+fn compose_workspace_index(
+    distribution: &Distribution,
+) -> Result<
+    Option<std::sync::Arc<dyn anvil_module::workspace_index::WorkspaceIndexService>>,
+    RunError,
+> {
+    if distribution.workspace_index {
+        return Err(RunError::Args(
+            "distribution requires official-workspace-index, but the feature is not compiled"
+                .to_owned(),
+        ));
+    }
+    Ok(None)
 }
 
 #[cfg(feature = "official-git")]
@@ -163,8 +199,15 @@ where
                 return Ok(0);
             }
             let git = compose_git(distribution)?;
-            Ok(anvil_tui::run_with_input_and_git(
-                path, workspace, editor, stdin, read_only, git,
+            let workspace_index = compose_workspace_index(distribution)?;
+            Ok(anvil_tui::run_with_services(
+                path,
+                workspace,
+                editor,
+                stdin,
+                read_only,
+                git,
+                workspace_index,
             )?)
         }
         Err(error) => Err(RunError::Args(error)),
@@ -525,5 +568,38 @@ mod tests {
             ..STANDARD
         };
         assert!(compose_git(&no_git).expect("compose").is_none());
+    }
+    #[cfg(feature = "official-workspace-index")]
+    #[test]
+    fn opt_in_workspace_index_registers_the_service() {
+        let with_index = Distribution {
+            workspace_index: true,
+            ..STANDARD
+        };
+        assert!(
+            compose_workspace_index(&with_index)
+                .expect("compose")
+                .is_some()
+        );
+        assert!(
+            compose_workspace_index(&STANDARD)
+                .expect("compose")
+                .is_none()
+        );
+    }
+
+    #[cfg(not(feature = "official-workspace-index"))]
+    #[test]
+    fn missing_workspace_index_feature_is_a_startup_error() {
+        let with_index = Distribution {
+            workspace_index: true,
+            ..STANDARD
+        };
+        assert!(compose_workspace_index(&with_index).is_err());
+        assert!(
+            compose_workspace_index(&STANDARD)
+                .expect("compose")
+                .is_none()
+        );
     }
 }

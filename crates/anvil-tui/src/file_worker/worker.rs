@@ -14,6 +14,7 @@ use super::preview::read_preview;
 use super::search::{apply_project_replace, files, project_replace_preview, project_search};
 use super::{FileEvent, FileRequest, MAX_TREE_WATCH_DIRS, TREE_DEBOUNCE, TREE_POLL_INTERVAL};
 use anvil_module::git::GitService;
+use anvil_module::workspace_index::WorkspaceIndexService;
 
 const GIT_UNAVAILABLE: &str = "git module is not installed";
 
@@ -104,24 +105,36 @@ impl FileWorker {
     pub fn start(client: GatewayClient, workspace: PathBuf) -> Self {
         #[cfg(feature = "official-git")]
         {
-            Self::start_with_git_service(
+            Self::start_with_services(
                 client,
                 workspace,
                 Some(Arc::new(anvil_mod_git::SystemGitService)),
+                None,
             )
         }
         #[cfg(not(feature = "official-git"))]
         {
-            Self::start_with_git_service(client, workspace, None)
+            Self::start_with_services(client, workspace, None, None)
         }
     }
 
+    #[cfg(test)]
     pub(crate) fn start_with_git_service(
-        mut client: GatewayClient,
+        client: GatewayClient,
         workspace: PathBuf,
         git: Option<Arc<dyn GitService>>,
     ) -> Self {
+        Self::start_with_services(client, workspace, git, None)
+    }
+
+    pub(crate) fn start_with_services(
+        mut client: GatewayClient,
+        workspace: PathBuf,
+        git: Option<Arc<dyn GitService>>,
+        index: Option<Arc<dyn WorkspaceIndexService>>,
+    ) -> Self {
         let worker_git = git.clone();
+        let worker_index = index.clone();
         let (request_sender, requests) = mpsc::channel();
         let (event_sender, events) = mpsc::channel();
         std::thread::spawn(move || {
@@ -213,9 +226,20 @@ impl FileWorker {
                                     .read_dir(&relative_path(&workspace, &path))
                                     .map_err(|error| error.to_string()),
                             ),
-                            FileRequest::Files { hidden, generation } => FileEvent::Files {
+                            FileRequest::Files {
+                                hidden,
                                 generation,
-                                result: files(&mut client, &workspace, hidden),
+                                cancel,
+                            } => FileEvent::Files {
+                                generation,
+                                result: if let Some(index) = worker_index.as_deref() {
+                                    index
+                                        .build(&mut client, &workspace, hidden, generation, &cancel)
+                                        .map(|snapshot| snapshot.paths)
+                                        .map_err(|error| error.to_string())
+                                } else {
+                                    files(&mut client, &workspace, hidden)
+                                },
                             },
                             FileRequest::ProjectSearch { query, generation } => {
                                 FileEvent::ProjectSearch {

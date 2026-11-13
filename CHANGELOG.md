@@ -8,6 +8,10 @@ post-`0.5.0` feature line.
 
 ## [Unreleased]
 ### Added
+- Quick-open can consume the optional `official.workspace-index` service,
+  cancelling in-flight index builds on close and falling back to gateway file
+  enumeration when the module is absent. The standard edition keeps the feature
+  opt-in.
 - `Alt-1` through `Alt-9` switch directly to the matching open buffer while
   leaving bare digits available as count prefixes.
 - `Space b` and `:buffers` open a filterable buffer picker; `Enter` switches

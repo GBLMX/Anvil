@@ -91,6 +91,7 @@ version = "0.6.0"
 dependencies = [
  "anvil-control",
  "anvil-mod-git",
+ "anvil-mod-workspace-index",
  "anvil-module",
  "anvil-tui",
  "tempfile",
@@ -189,6 +190,7 @@ dependencies = [
  "anvil-editor",
  "anvil-ipc",
  "anvil-mod-git",
+ "anvil-mod-workspace-index",
  "anvil-module",
  "anvil-plugin-host",
  "anvil-session",
