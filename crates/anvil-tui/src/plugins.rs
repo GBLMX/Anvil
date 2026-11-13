@@ -1,6 +1,10 @@
 //! Plugin discovery, activation, and host lifecycle commands.
 
 use super::*;
+use anvil_api::ProviderItem;
+use anvil_session::provider::{
+    CompletionItem as ProviderCompletionItem, CompletionKind, ProviderId,
+};
 impl Model {
     #[cfg(target_os = "linux")]
     pub(crate) fn list_plugins(&mut self) {
@@ -397,6 +401,33 @@ impl Model {
     #[cfg(not(target_os = "linux"))]
     pub(crate) fn enable_plugin(&mut self, _plugin_id: &str) {}
 
+    pub(crate) fn install_plugin_completion(
+        &mut self,
+        provider_id: &ProviderId,
+        request_id: u64,
+        items: Vec<ProviderItem>,
+    ) {
+        let items = items
+            .into_iter()
+            .map(|item| {
+                let label = item.label;
+                crate::completion_sources::completion_from_provider(
+                    provider_id,
+                    ProviderCompletionItem {
+                        label: label.clone(),
+                        detail: item.detail,
+                        insert_text: item.insert_text.unwrap_or(label),
+                        filter_text: None,
+                        sort_text: None,
+                        kind: CompletionKind::Text,
+                    },
+                    None,
+                )
+            })
+            .collect::<Vec<_>>();
+        self.install_completion(items, request_id);
+    }
+
     #[cfg(target_os = "linux")]
     pub(crate) fn query_plugin_provider(&mut self, provider_id: &str, query: &str) {
         let Some(registration) = self
@@ -537,12 +568,34 @@ impl Model {
                             .map_err(|error| error.to_string())
                     }) {
                         Ok(response) => {
+                            let provider_id = self
+                                .plugins
+                                .plugin_provider_requests
+                                .provider_for(id)
+                                .cloned();
+                            let kind = provider_id.as_ref().and_then(|provider_id| {
+                                self.plugins
+                                    .plugin_providers
+                                    .providers()
+                                    .iter()
+                                    .find(|provider| &provider.id == provider_id)
+                                    .map(|provider| provider.kind)
+                            });
                             match self
                                 .plugins
                                 .plugin_provider_requests
                                 .accept_for(id, response)
                             {
                                 Ok(items) => {
+                                    if kind == Some(anvil_api::ProviderKind::Completion)
+                                        && let Some(provider_id) = provider_id.as_ref()
+                                    {
+                                        self.install_plugin_completion(
+                                            provider_id,
+                                            id,
+                                            items.clone(),
+                                        );
+                                    }
                                     self.status.text = format!(
                                         "plugin {plugin_id}: {} provider items",
                                         items.len()

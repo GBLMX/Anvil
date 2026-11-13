@@ -175,6 +175,10 @@ impl PluginProviderRequests {
         Ok(id)
     }
 
+    pub fn provider_for(&self, request_id: u64) -> Option<&ProviderId> {
+        self.pending.get(&request_id)
+    }
+
     pub fn cancel(&mut self, request_id: u64) -> Option<ProviderId> {
         self.pending.remove(&request_id)
     }

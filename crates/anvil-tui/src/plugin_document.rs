@@ -411,6 +411,30 @@ mod tests {
     }
 
     #[test]
+    fn plugin_completion_items_install_into_overlay() {
+        let mut model = Model::new(EditorState::from_text("buf"), None);
+        model.install_plugin_completion(
+            &anvil_session::provider::ProviderId::new("demo.completion"),
+            7,
+            vec![anvil_api::ProviderItem {
+                label: "buffer".to_owned(),
+                value: None,
+                detail: Some("plugin".to_owned()),
+                insert_text: Some("buffer".to_owned()),
+            }],
+        );
+        let completion = model
+            .overlays
+            .lsp_results
+            .completion
+            .as_ref()
+            .expect("completion");
+        assert_eq!(completion.id, 7);
+        assert_eq!(completion.items[0].label, "buffer");
+        assert_eq!(completion.items[0].insert, "buffer");
+    }
+
+    #[test]
     fn provider_query_unknown_reports_error() {
         let mut model = Model::new(EditorState::from_text(""), None);
         model.execute_command("provider-query demo.buffers");

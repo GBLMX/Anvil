@@ -46,7 +46,8 @@ post-`0.5.0` feature line.
   cancellation, and item caps. Runtime plugins now receive picker/completion
   requests through the persistent host Lua runtime with transport-id
   correlation. Disabling or stopping a plugin now also cancels its pending
-  provider requests; UI merging remains pending.
+  provider requests. Plugin completion results install into the existing
+  completion overlay; picker merging remains pending.
 - `anvil-distro-standard` adds a `full` feature that enables every official
   module at runtime. `--all-features` selects it; the default `anvil` binary
   remains the standard Git-only composition.

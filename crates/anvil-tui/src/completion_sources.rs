@@ -125,7 +125,7 @@ impl Model {
     }
 }
 
-fn completion_from_provider(
+pub(crate) fn completion_from_provider(
     source: &ProviderId,
     item: ProviderCompletionItem,
     replace_bytes: Option<(usize, usize)>,
