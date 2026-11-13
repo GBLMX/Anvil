@@ -1,4 +1,5 @@
 use super::*;
+use anvil_session::provider::ProviderId;
 #[test]
 fn definition_response_moves_cursor() {
     let dir = tempfile::tempdir().expect("tempdir");
@@ -452,6 +453,60 @@ fn gi_and_go_dispatch_call_hierarchy_requests() {
 }
 
 #[test]
+fn buffer_words_source_populates_local_completion() {
+    let mut model = Model::new(EditorState::from_text("value value\nval"), None);
+    model.session.cursor = model.session.editor.text().len_bytes();
+    model.request_completion();
+    let completion = model
+        .overlays
+        .lsp_results
+        .completion
+        .as_ref()
+        .expect("completion");
+    let item = completion
+        .items
+        .iter()
+        .find(|item| item.label == "value")
+        .expect("buffer word");
+    assert_eq!(item.source.as_str(), "builtin.buffer-words");
+}
+
+#[test]
+fn local_and_lsp_completions_merge_without_duplicates() {
+    let mut model = Model::new(EditorState::from_text("value value\nval"), None);
+    model.session.cursor = model.session.editor.text().len_bytes();
+    model.request_completion();
+    model
+        .language
+        .lsp_requests
+        .pending
+        .insert(20, LspRequestKind::Completion);
+    model.handle_lsp_response(
+        20,
+        serde_json::json!({
+            "isIncomplete": false,
+            "items": [
+                {"label": "value", "insertText": "value"},
+                {"label": "lsp_only", "insertText": "lsp_only"}
+            ]
+        }),
+        None,
+    );
+    let completion = model
+        .overlays
+        .lsp_results
+        .completion
+        .as_ref()
+        .expect("completion");
+    let labels: Vec<_> = completion
+        .items
+        .iter()
+        .map(|item| item.label.as_str())
+        .collect();
+    assert_eq!(labels.iter().filter(|label| **label == "value").count(), 1);
+    assert!(labels.contains(&"lsp_only"));
+}
+#[test]
 fn completion_response_uses_and_closes_the_overlay_stack() {
     let mut model = Model::new(EditorState::from_text("al"), None);
     model
@@ -481,6 +536,7 @@ fn cancelling_completion_drops_pending_response() {
     model.overlays.lsp_results.completion = Some(CompletionState {
         id: 9,
         items: vec![CompletionItem {
+            source: ProviderId::new("builtin.test"),
             label: "item".to_owned(),
             filter_text: "item".to_owned(),
             sort_text: "item".to_owned(),
@@ -524,6 +580,7 @@ fn completion_resolve_updates_selected_item() {
     model.overlays.lsp_results.completion = Some(CompletionState {
         id: 9,
         items: vec![CompletionItem {
+            source: ProviderId::new("builtin.test"),
             label: "item".to_owned(),
             filter_text: "item".to_owned(),
             sort_text: "item".to_owned(),
@@ -574,6 +631,7 @@ fn completion_documentation_is_rendered() {
     model.overlays.lsp_results.completion = Some(CompletionState {
         id: 9,
         items: vec![CompletionItem {
+            source: ProviderId::new("builtin.test"),
             label: "item".to_owned(),
             filter_text: "item".to_owned(),
             sort_text: "item".to_owned(),
@@ -610,6 +668,7 @@ fn applying_snippet_selects_and_navigates_stops() {
     model.overlays.lsp_results.completion = Some(CompletionState {
         id: 9,
         items: vec![CompletionItem {
+            source: ProviderId::new("builtin.test"),
             label: "fn".to_owned(),
             filter_text: "fn".to_owned(),
             sort_text: "fn".to_owned(),
@@ -651,6 +710,7 @@ fn mirrored_snippet_edits_apply_to_all_tabstops() {
     model.overlays.lsp_results.completion = Some(CompletionState {
         id: 9,
         items: vec![CompletionItem {
+            source: ProviderId::new("builtin.test"),
             label: "mirror".to_owned(),
             filter_text: "mirror".to_owned(),
             sort_text: "mirror".to_owned(),
@@ -1788,6 +1848,7 @@ fn completion_char_and_backspace_update_buffer_and_query() {
     model.overlays.lsp_results.completion = Some(CompletionState {
         id: 1,
         items: vec![CompletionItem {
+            source: ProviderId::new("builtin.test"),
             label: "item".to_owned(),
             filter_text: "item".to_owned(),
             sort_text: "item".to_owned(),

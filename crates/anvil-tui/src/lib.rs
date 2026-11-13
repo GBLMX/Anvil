@@ -48,6 +48,7 @@ mod command_line;
 mod command_palette;
 mod commands;
 mod comment;
+mod completion_sources;
 mod debug_panel;
 mod debugger;
 mod editing;

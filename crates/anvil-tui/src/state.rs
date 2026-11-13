@@ -1,7 +1,7 @@
 //! TUI state groups and view/editor snapshots.
 
 use super::*;
-use anvil_session::provider::{CancellationToken, PickerEntry};
+use anvil_session::provider::{CancellationToken, PickerEntry, ProviderId};
 
 #[derive(Clone)]
 pub(crate) struct Buffer {
@@ -694,6 +694,7 @@ pub(crate) struct OverlayState {
 
 #[derive(Debug, Clone)]
 pub(crate) struct CompletionItem {
+    pub(crate) source: ProviderId,
     pub(crate) label: String,
     pub(crate) filter_text: String,
     pub(crate) sort_text: String,

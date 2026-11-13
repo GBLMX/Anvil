@@ -22,12 +22,19 @@ impl Model {
         self.close_hover();
         self.close_diagnostic_peek();
         self.cancel_code_actions();
+        let local = self.local_completion_items();
+        let had_local = !local.is_empty();
+        if had_local {
+            self.install_completion(local, 0);
+            self.status.text = "completion".to_owned();
+        }
         let Some(uri) = self
             .session
             .path
             .as_ref()
             .map(|path| lsp_worker::file_uri(path))
         else {
+            self.file.dirty = true;
             return;
         };
         let Some((line, character)) = self.lsp_position() else {
@@ -57,6 +64,9 @@ impl Model {
         let Some(item) = completion.items.get(index) else {
             return;
         };
+        if item.source.as_str() != "builtin.lsp" {
+            return;
+        }
         if item.resolved
             || self
                 .overlays

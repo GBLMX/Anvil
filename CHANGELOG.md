@@ -26,6 +26,9 @@ post-`0.5.0` feature line.
 - The buffer picker now runs through the `PickerSource` protocol with the
   multi-provider registry; behavior is unchanged. This is the first real
   provider integration.
+- Completion now carries a source id; LSP items are tagged `builtin.lsp`, and
+  a `builtin.buffer-words` completion source merges local buffer words with LSP
+  results without duplicating items.
 - `anvil-distro-standard` adds a `full` feature that enables every official
   module at runtime. `--all-features` selects it; the default `anvil` binary
   remains the standard Git-only composition.

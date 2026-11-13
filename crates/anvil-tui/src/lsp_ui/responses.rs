@@ -285,7 +285,7 @@ impl Model {
             self.status.text = "E: lsp: invalid completion response".to_owned();
             return;
         };
-        let mut items: Vec<CompletionItem> = items
+        let items: Vec<CompletionItem> = items
             .iter()
             .take(2000)
             .filter_map(|item| {
@@ -344,6 +344,7 @@ impl Model {
                         ))
                     });
                 Some(CompletionItem {
+                    source: anvil_session::provider::ProviderId::new("builtin.lsp"),
                     label,
                     filter_text,
                     sort_text,
@@ -358,6 +359,23 @@ impl Model {
                 })
             })
             .collect();
+        let mut merged = self
+            .overlays
+            .lsp_results
+            .completion
+            .take()
+            .map(|completion| completion.items)
+            .unwrap_or_default();
+        for item in items {
+            if merged
+                .iter()
+                .any(|existing| existing.label == item.label && existing.insert == item.insert)
+            {
+                continue;
+            }
+            merged.push(item);
+        }
+        let mut items = merged;
         items.sort_by(|left, right| {
             left.sort_text
                 .cmp(&right.sort_text)
