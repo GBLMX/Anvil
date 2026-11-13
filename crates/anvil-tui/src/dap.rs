@@ -320,12 +320,9 @@ mod tests {
         if !Path::new("/usr/bin/lldb-dap").is_file() {
             return;
         }
-        let mut client = DapClient::spawn(
-            Path::new("/usr/bin/lldb-dap"),
-            &[],
-            Path::new("/home/gblmx/src/github.com/GBLMX/Anvil"),
-        )
-        .expect("spawn");
+        let mut client =
+            DapClient::spawn(Path::new("/usr/bin/lldb-dap"), &[], &std::env::temp_dir())
+                .expect("spawn");
         let sequence = client.initialize().expect("initialize");
         let response = client.wait_response(sequence).expect("response");
         assert_eq!(response["command"], "initialize");
