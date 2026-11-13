@@ -295,14 +295,24 @@ fn tool_search_directories() -> Vec<PathBuf> {
         directories.push(parent.to_path_buf());
     }
     if let Some(home) = std::env::var_os("HOME") {
-        let home = PathBuf::from(home);
-        directories.extend([
-            home.join(".local/bin"),
-            home.join("bin"),
-            home.join(".cargo/bin"),
-        ]);
+        directories.extend(user_tool_directories(Path::new(&home)));
     }
     directories
+}
+
+fn user_tool_directories(home: &Path) -> Vec<PathBuf> {
+    [
+        ".local/bin",
+        "bin",
+        ".cargo/bin",
+        "go/bin",
+        ".local/share/vite-plus/bin",
+        ".local/share/mise/shims",
+        ".bun/bin",
+    ]
+    .into_iter()
+    .map(|relative| home.join(relative))
+    .collect()
 }
 
 fn find_tool_in(candidates: &[&str], directories: &[PathBuf]) -> Option<PathBuf> {
@@ -376,6 +386,15 @@ mod tests {
         let found = find_tool_in(&["marksman"], &[directory.path().to_path_buf()])
             .expect("tool in fallback directory");
         assert_eq!(found, tool);
+    }
+
+    #[test]
+    fn user_tool_directories_include_common_installers() {
+        let home = Path::new("/home/test");
+        let directories = user_tool_directories(home);
+        assert!(directories.contains(&home.join("go/bin")));
+        assert!(directories.contains(&home.join(".local/share/vite-plus/bin")));
+        assert!(directories.contains(&home.join(".local/share/mise/shims")));
     }
 
     #[test]
