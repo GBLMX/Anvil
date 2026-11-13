@@ -17,8 +17,19 @@ const DRAIN_TIMEOUT: Duration = Duration::from_millis(100);
 /// OSC 11 is only read when terminal queries are enabled. A missing or
 /// unparseable response returns `None` so the caller can fall back to
 /// `COLORFGBG` or the dark default.
+pub(crate) fn terminal_queries_disabled() -> bool {
+    terminal_queries_disabled_for(
+        std::env::var_os("ANVIL_SKIP_TERMINAL_QUERY").is_some(),
+        std::env::var_os("TERM").as_deref(),
+    )
+}
+
+fn terminal_queries_disabled_for(skip: bool, term: Option<&std::ffi::OsStr>) -> bool {
+    skip || term.is_some_and(|term| term == "dumb")
+}
+
 pub(crate) fn query_is_light() -> Option<bool> {
-    if std::env::var_os("ANVIL_SKIP_TERMINAL_QUERY").is_some() {
+    if terminal_queries_disabled() {
         return None;
     }
     #[cfg(unix)]
@@ -139,5 +150,21 @@ mod tests {
         assert_eq!(parse_is_light(b""), None);
         assert_eq!(parse_is_light(b"\x1b]11;rgb:zz/00/00\x07"), None);
         assert_eq!(parse_is_light(b"\x1b]11;rgb:ffff/0000\x07"), None);
+    }
+
+    #[test]
+    fn dumb_terminals_and_explicit_skips_disable_queries() {
+        use super::terminal_queries_disabled_for;
+        use std::ffi::OsStr;
+
+        assert!(terminal_queries_disabled_for(true, None));
+        assert!(terminal_queries_disabled_for(
+            false,
+            Some(OsStr::new("dumb"))
+        ));
+        assert!(!terminal_queries_disabled_for(
+            false,
+            Some(OsStr::new("xterm-256color"))
+        ));
     }
 }

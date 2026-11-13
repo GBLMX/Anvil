@@ -375,7 +375,7 @@ struct TerminalSession {
 impl TerminalSession {
     fn start() -> io::Result<Self> {
         enable_raw_mode()?;
-        let supported = if std::env::var_os("ANVIL_SKIP_TERMINAL_QUERY").is_some() {
+        let supported = if crate::terminal_background::terminal_queries_disabled() {
             false
         } else {
             supports_keyboard_enhancement().unwrap_or(false)
