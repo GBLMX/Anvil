@@ -352,4 +352,40 @@ mod tests {
         }
         panic!("worker event timed out");
     }
+    #[test]
+    fn worker_without_git_service_reports_unavailable() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let workspace = dir.path().to_path_buf();
+        let socket = workspace.join("gateway.sock");
+        let listener = anvil_ipc::Listener::bind(&socket).expect("bind");
+        let server = std::thread::spawn(move || {
+            let mut connection = listener.accept().expect("accept");
+            let frame = connection.recv().expect("recv").expect("frame");
+            let request: serde_json::Value = serde_json::from_slice(&frame).expect("request");
+            let response = serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": request["id"],
+                "result": {"ok": true},
+            });
+            connection
+                .send(&serde_json::to_vec(&response).expect("response"))
+                .expect("send");
+        });
+        let client = GatewayClient::connect(&socket, &[17; 32]).expect("client");
+        let worker = FileWorker::start_with_git_service(client, workspace.clone(), None);
+        worker
+            .request(FileRequest::GitStatus {
+                root: workspace,
+                generation: 1,
+            })
+            .expect("request");
+        match next_event(&worker) {
+            FileEvent::GitStatus { result, .. } => {
+                assert_eq!(result.unwrap_err(), "git module is not installed");
+            }
+            _ => panic!("expected git status event"),
+        }
+        drop(worker);
+        server.join().expect("server");
+    }
 }

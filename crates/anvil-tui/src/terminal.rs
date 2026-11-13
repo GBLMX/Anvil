@@ -84,6 +84,7 @@ pub fn run_with_input_and_git(
     let (mut model, session) = match GatewaySession::start(&workspace) {
         Ok((session, client, lsp_client)) => {
             let mut model = Model::with_gateway(client, workspace.clone());
+            model.workspace.git_service = git.clone();
             model.language.lsp.client = Some(lsp_client);
             if stdin_text.is_none()
                 && let Some(path) = path
@@ -96,6 +97,7 @@ pub fn run_with_input_and_git(
         }
         Err(error) => {
             let mut model = Model::new(EditorState::from_text(""), None);
+            model.workspace.git_service = git.clone();
             model.workspace.path = workspace.clone();
             model.reload_icons();
             model.workspace.require_gateway = true;
@@ -104,7 +106,9 @@ pub fn run_with_input_and_git(
             (model, None)
         }
     };
-    model.workspace.git_service = git;
+    if model.workspace.git_service.is_none() {
+        model.workspace.git_service = git;
+    }
     model.workspace.gateway_session = session;
     model.set_editor_mode(editor_mode);
     if session_enabled {
