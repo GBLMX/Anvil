@@ -65,7 +65,11 @@ Language servers are not bundled; install them on `PATH`.
 
 Built-in semantic themes are `anvil-dark`, `tokyonight`, `omp-kde`,
 `helix-base16`, `one-dark`, `gruvbox-dark`, `nord`, `catppuccin-mocha`, and
-`solarized-light`. Use `:theme` to list them.
+`solarized-light`. The boxpigma family adds `boxpigma`, `dracula`, `gruvbox`,
+`solarized`, `tokyo-night`, `catppuccin`, `monokai`, `rose-pine`, `kanagawa`,
+`github-light`, `gruvbox-light`, `one-light`, `catppuccin-latte`,
+`cyberpunk-volt`, `cyberpunk-fury`, and `cyberpunk-hot`. Use `:theme` to list
+them.
 `:theme <name>` and `:theme-auto [dark] [light]` switch and persist to
 `$XDG_CONFIG_HOME/anvil/settings.toml` (override with `ANVIL_SETTINGS`);
 `:theme-save` re-saves the runtime choice explicitly.

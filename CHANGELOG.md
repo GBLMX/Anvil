@@ -8,6 +8,11 @@ post-`0.5.0` feature line.
 
 ## [Unreleased]
 ### Added
+- Imported the boxpigma theme family: `boxpigma`, `dracula`, `gruvbox`,
+  `solarized`, `tokyo-night`, `catppuccin`, `monokai`, `rose-pine`,
+  `kanagawa`, `github-light`, `gruvbox-light`, `one-light`,
+  `catppuccin-latte`, `cyberpunk-volt`, `cyberpunk-fury`, and
+  `cyberpunk-hot`.
 - `anvil-syntax` now owns Tree-sitter grammars, highlighting, and scope
   extraction; `anvil-tui` no longer depends on the grammar crates directly.
 - HTML and HTM files now use the Tree-sitter HTML grammar for tag, attribute,

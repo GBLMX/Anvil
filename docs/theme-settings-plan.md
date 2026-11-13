@@ -148,6 +148,7 @@ Initial set:
 |---|---|---|
 | `anvil-dark` | dark | Current palette, default |
 | `tokyonight` | dark | Tokyo Night, shared Yazi/Helix palette |
+| `cyberpunk-volt` | dark | Imported from boxpigma: cyan text, pink accent, lime muted |
 | `omp-kde` | dark | omp KDE CachyOS palette |
 | `helix-base16` | dark | Helix base16 default dark, adapted for AA |
 | `one-dark` | dark | One Dark family |
@@ -155,6 +156,12 @@ Initial set:
 | `nord` | dark | Cool blue-gray |
 | `catppuccin-mocha` | dark | Mocha palette |
 | `solarized-light` | light | Light counterpart |
+- The boxpigma family: `boxpigma`, `dracula`, `gruvbox`, `solarized`,
+  `tokyo-night`, `catppuccin`, `monokai`, `rose-pine`, `kanagawa`,
+  `github-light`, `gruvbox-light`, `one-light`, `catppuccin-latte`,
+  `cyberpunk-volt`, `cyberpunk-fury`, and `cyberpunk-hot`.
+  Boxpigma colors below the 4.5:1 text threshold are lifted toward the
+  foreground instead of being imported verbatim.
 
 Each theme must pass the existing WCAG-AA contrast test for normal text and
 the status/syntax tokens used on their own backgrounds.
@@ -241,9 +248,8 @@ command-palette theme rows, preview, and cancel restore landed.
   auto light/dark fallback.
 
 ### 6.3 Built-in palette set
-Status: done. Nine built-ins land: `anvil-dark`, `tokyonight`, `omp-kde`,
-`helix-base16`, `one-dark`, `gruvbox-dark`, `nord`, `catppuccin-mocha`, and
-`solarized-light`.
+Status: done. Twenty-five built-ins land: the ten core palettes plus fifteen
+additional boxpigma palettes.
 
 - Add `one-dark`, `gruvbox-dark`, `nord`, `catppuccin-mocha`,
   `solarized-light`.

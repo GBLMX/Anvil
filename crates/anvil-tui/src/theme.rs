@@ -547,7 +547,31 @@ mod tests {
 
     #[test]
     fn lists_modern_builtins() {
-        for name in ["tokyonight", "omp-kde", "helix-base16"] {
+        for name in ["tokyonight", "omp-kde", "helix-base16", "cyberpunk-volt"] {
+            assert!(names().contains(&name), "{name}");
+        }
+    }
+
+    #[test]
+    fn lists_boxpigma_themes() {
+        for name in [
+            "boxpigma",
+            "dracula",
+            "gruvbox",
+            "solarized",
+            "tokyo-night",
+            "catppuccin",
+            "monokai",
+            "rose-pine",
+            "kanagawa",
+            "github-light",
+            "gruvbox-light",
+            "one-light",
+            "catppuccin-latte",
+            "cyberpunk-volt",
+            "cyberpunk-fury",
+            "cyberpunk-hot",
+        ] {
             assert!(names().contains(&name), "{name}");
         }
     }

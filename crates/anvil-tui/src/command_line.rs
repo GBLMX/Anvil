@@ -406,14 +406,14 @@ mod tests {
     #[test]
     fn completes_theme_arguments() {
         let completion = CommandCompletion::new("theme so", &[], true, true);
-        assert_eq!(labels(&completion), vec!["solarized-light"]);
+        assert_eq!(labels(&completion), vec!["solarized-light", "solarized"]);
         assert_eq!(completion.selected(), Some("theme solarized-light "));
     }
 
     #[test]
     fn completes_second_auto_theme_argument() {
         let completion = CommandCompletion::new("theme-auto nord so", &[], true, true);
-        assert_eq!(labels(&completion), vec!["solarized-light"]);
+        assert_eq!(labels(&completion), vec!["solarized-light", "solarized"]);
         assert_eq!(
             completion.selected(),
             Some("theme-auto nord solarized-light ")
