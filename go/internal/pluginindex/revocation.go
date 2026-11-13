@@ -3,6 +3,7 @@ package pluginindex
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -72,6 +73,9 @@ func LoadRevocations(
 			return nil, fmt.Errorf("%w: duplicate revocation entry", ErrInvalidDocument)
 		}
 		seen[key] = struct{}{}
+	}
+	if windowErr != nil && !errors.Is(windowErr, ErrDocumentExpired) {
+		return nil, windowErr
 	}
 	return &document, windowErr
 }

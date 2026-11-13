@@ -304,3 +304,17 @@ func TestRejectsExpiredRevocations(t *testing.T) {
 		t.Fatalf("expired revocations = %#v, error = %v", revocations, err)
 	}
 }
+
+func TestRejectsFutureRevocations(t *testing.T) {
+	f := newFixture(t)
+	f.revocation.IssuedAt = f.now.Add(MaxFutureSkew + time.Minute).Format(time.RFC3339)
+	f.revocation.ExpiresAt = f.now.Add(MaxFutureSkew + time.Hour).Format(time.RFC3339)
+	payload, err := json.Marshal(f.revocation)
+	if err != nil {
+		t.Fatalf("marshal revocations: %v", err)
+	}
+	revocations, err := LoadRevocations(payload, sign(t, payload, f.private), f.roots, f.now)
+	if err == nil || revocations != nil {
+		t.Fatalf("future revocations = %#v, error = %v", revocations, err)
+	}
+}
