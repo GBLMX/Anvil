@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="resources/icons/com.github.GBLMX.Anvil.png" alt="Anvil desktop icon" width="96" height="96">
+</p>
+
 # Anvil
 
 Anvil is a Linux-first terminal editor. The project targets a reusable Rust
