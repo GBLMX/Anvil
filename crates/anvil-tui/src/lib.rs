@@ -43,7 +43,6 @@ use ratatui::{
 mod bracket;
 mod breadcrumbs;
 mod buffer;
-mod clipboard;
 mod command_line;
 mod command_palette;
 mod commands;

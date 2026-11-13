@@ -15,6 +15,8 @@ post-`0.5.0` feature line.
   `cyberpunk-hot`.
 - Trusted workspaces may add a read-only `.anvil.toml` project settings layer;
   it merges over the user file but cannot set `[lsp.commands]`.
+- Added the std-only `anvil-platform` crate with a `Clipboard` trait, a
+  Wayland/X11 system backend, and `MemoryClipboard`; the TUI now uses it.
 - `anvil-syntax` now owns Tree-sitter grammars, highlighting, and scope
   extraction; `anvil-tui` no longer depends on the grammar crates directly.
 - HTML and HTM files now use the Tree-sitter HTML grammar for tag, attribute,

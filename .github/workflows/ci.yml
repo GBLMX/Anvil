@@ -153,7 +153,7 @@ jobs:
               exit 1
             fi
           done
-          for package in anvil-api anvil-core anvil-editor anvil-ipc anvil-session anvil-module anvil-plugin-host; do
+          for package in anvil-api anvil-core anvil-editor anvil-ipc anvil-platform anvil-session anvil-module anvil-plugin-host; do
             if cargo tree -p "$package" -e normal --prefix none | grep -q '^anvil-tui '; then
               echo "kernel package $package depends on anvil-tui" >&2
               exit 1

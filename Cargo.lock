@@ -180,6 +180,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "anvil-platform"
+version = "0.6.0"
+
+[[package]]
 name = "anvil-plugin-host"
 version = "0.6.0"
 dependencies = [
@@ -242,6 +246,7 @@ dependencies = [
  "anvil-mod-git",
  "anvil-mod-workspace-index",
  "anvil-module",
+ "anvil-platform",
  "anvil-plugin-host",
  "anvil-session",
  "anvil-syntax",

@@ -1,4 +1,5 @@
 use super::*;
+use anvil_platform::clipboard::{Clipboard as _, SystemClipboard};
 
 impl Model {
     pub(crate) fn insert_auto_pair(&mut self, character: char) {
@@ -279,7 +280,7 @@ impl Model {
         match register {
             '_' => {}
             '+' => {
-                if let Err(error) = clipboard::copy(text) {
+                if let Err(error) = SystemClipboard.set_text(text) {
                     self.status.text = format!("E: {error}");
                     self.file.dirty = true;
                 }
@@ -299,8 +300,13 @@ impl Model {
                 return;
             }
             let text = if register == '+' {
-                match clipboard::paste() {
-                    Ok(text) => text,
+                match SystemClipboard.get_text() {
+                    Ok(Some(text)) => text,
+                    Ok(None) => {
+                        self.status.text = "E: clipboard is empty".to_owned();
+                        self.file.dirty = true;
+                        return;
+                    }
                     Err(error) => {
                         self.status.text = format!("E: {error}");
                         self.file.dirty = true;
