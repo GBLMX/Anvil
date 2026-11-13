@@ -68,6 +68,9 @@ pub const CURSOR_FILE_END: CommandId = CommandId::new("cursor.file_end");
 pub const CHANGE_INNER_WORD: CommandId = CommandId::new("editor.change_inner_word");
 pub const CHANGE_INNER_QUOTE: CommandId = CommandId::new("editor.change_inner_quote");
 pub const DEFINITION: CommandId = CommandId::new("lsp.definition");
+pub const DECLARATION: CommandId = CommandId::new("lsp.declaration");
+pub const TYPE_DEFINITION: CommandId = CommandId::new("lsp.type_definition");
+pub const IMPLEMENTATION: CommandId = CommandId::new("lsp.implementation");
 pub const REFERENCES: CommandId = CommandId::new("lsp.references");
 pub const DOCUMENT_HIGHLIGHT: CommandId = CommandId::new("lsp.document_highlight");
 pub const INCOMING_CALLS: CommandId = CommandId::new("lsp.incoming_calls");
@@ -144,6 +147,9 @@ pub const COMMANDS: &[CommandSpec] = &[
     spec(CHANGE_INNER_WORD, PENDING),
     spec(CHANGE_INNER_QUOTE, PENDING),
     spec(DEFINITION, PENDING),
+    spec(DECLARATION, PENDING),
+    spec(TYPE_DEFINITION, PENDING),
+    spec(IMPLEMENTATION, PENDING),
     spec(REFERENCES, PENDING),
     spec(DOCUMENT_HIGHLIGHT, PENDING),
     spec(INCOMING_CALLS, PENDING),

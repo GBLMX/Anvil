@@ -21,6 +21,12 @@ pub enum Effect {
     LspSignatureHelp(char),
     /// Request definition.
     LspDefinition,
+    /// Request declaration.
+    LspDeclaration,
+    /// Request type definition.
+    LspTypeDefinition,
+    /// Request implementation.
+    LspImplementation,
     /// Request references at the cursor.
     LspReferences,
     /// Request document highlights at the cursor.

@@ -12,6 +12,8 @@ post-`0.5.0` feature line.
   appear in the command palette and can launch their host. Ids are
   plugin-namespaced, duplicate ids are rejected, and the session is capped at
   512 dynamic commands.
+- LSP navigation adds declaration (`gD`), type definition (`gy`), and
+  implementation (`gI`) alongside definition (`gd`).
 - Plugins can call `ui.notify` and `ui.status` through the Luau bridge.
   Notifications retain the existing severity, deduplication, and 50-entry cap;
   status messages are bounded to 1024 bytes.

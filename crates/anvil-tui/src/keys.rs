@@ -168,6 +168,9 @@ fn execute_pending_command(
         }
         PendingCommand::ChangeInnerQuote(quote) => model.change_inner_quote(quote),
         PendingCommand::Definition => model.queue_effect(Effect::LspDefinition),
+        PendingCommand::Declaration => model.queue_effect(Effect::LspDeclaration),
+        PendingCommand::TypeDefinition => model.queue_effect(Effect::LspTypeDefinition),
+        PendingCommand::Implementation => model.queue_effect(Effect::LspImplementation),
         PendingCommand::References => model.queue_effect(Effect::LspReferences),
         PendingCommand::DocumentHighlight => {
             model.queue_effect(Effect::LspDocumentHighlights);

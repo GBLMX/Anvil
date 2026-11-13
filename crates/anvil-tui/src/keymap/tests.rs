@@ -125,6 +125,18 @@ fn pending_g_resolves_navigation_commands() {
         Some(PendingCommand::Definition)
     );
     assert_eq!(
+        pending_action('g', key(KeyCode::Char('D'), KeyModifiers::NONE), false),
+        Some(PendingCommand::Declaration)
+    );
+    assert_eq!(
+        pending_action('g', key(KeyCode::Char('y'), KeyModifiers::NONE), false),
+        Some(PendingCommand::TypeDefinition)
+    );
+    assert_eq!(
+        pending_action('g', key(KeyCode::Char('I'), KeyModifiers::NONE), false),
+        Some(PendingCommand::Implementation)
+    );
+    assert_eq!(
         pending_action('g', key(KeyCode::Char('r'), KeyModifiers::NONE), false),
         Some(PendingCommand::References)
     );

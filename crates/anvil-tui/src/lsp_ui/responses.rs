@@ -216,7 +216,14 @@ impl Model {
             LspRequestKind::CompletionResolve => {
                 self.apply_completion_resolve_response(id, &result);
             }
-            LspRequestKind::Definition => self.apply_definition_response(&result),
+            LspRequestKind::Definition => self.apply_goto_response(&result, "definition"),
+            LspRequestKind::Declaration => self.apply_goto_response(&result, "declaration"),
+            LspRequestKind::TypeDefinition => {
+                self.apply_goto_response(&result, "type definition");
+            }
+            LspRequestKind::Implementation => {
+                self.apply_goto_response(&result, "implementation");
+            }
             LspRequestKind::References => self.apply_references_response(&result),
             LspRequestKind::DocumentHighlight => self.apply_document_highlights_response(&result),
             LspRequestKind::CallHierarchyPrepare(direction) => {
@@ -403,7 +410,12 @@ impl Model {
         self.file.dirty = true;
     }
 
+    #[cfg(test)]
     pub(crate) fn apply_definition_response(&mut self, result: &serde_json::Value) {
+        self.apply_goto_response(result, "definition");
+    }
+
+    pub(crate) fn apply_goto_response(&mut self, result: &serde_json::Value, label: &str) {
         let location = result
             .as_array()
             .and_then(|locations| locations.first())
@@ -413,11 +425,11 @@ impl Model {
             .or_else(|| location.get("targetUri"))
             .and_then(serde_json::Value::as_str)
         else {
-            self.status.text = "lsp: no definition".to_owned();
+            self.status.text = format!("lsp: no {label}");
             return;
         };
         let Some(path) = lsp::uri_to_path(uri) else {
-            self.status.text = "E: lsp: invalid definition URI".to_owned();
+            self.status.text = format!("E: lsp: invalid {label} URI");
             return;
         };
         let range = location
@@ -442,7 +454,7 @@ impl Model {
             }
         }
         self.session.cursor = self.offset_at_utf16(line, character);
-        self.status.text = format!("definition {}", path.display());
+        self.status.text = format!("{label} {}", path.display());
     }
 
     pub(crate) fn apply_references_response(&mut self, result: &serde_json::Value) {

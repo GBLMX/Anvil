@@ -531,6 +531,38 @@ impl Model {
     }
 
     pub(crate) fn request_definition(&mut self) {
+        self.request_goto(
+            LspRequestKind::Definition,
+            "textDocument/definition",
+            "definition",
+        );
+    }
+
+    pub(crate) fn request_declaration(&mut self) {
+        self.request_goto(
+            LspRequestKind::Declaration,
+            "textDocument/declaration",
+            "declaration",
+        );
+    }
+
+    pub(crate) fn request_type_definition(&mut self) {
+        self.request_goto(
+            LspRequestKind::TypeDefinition,
+            "textDocument/typeDefinition",
+            "type definition",
+        );
+    }
+
+    pub(crate) fn request_implementation(&mut self) {
+        self.request_goto(
+            LspRequestKind::Implementation,
+            "textDocument/implementation",
+            "implementation",
+        );
+    }
+
+    fn request_goto(&mut self, kind: LspRequestKind, method: &str, label: &str) {
         self.cancel_completion();
         self.close_diagnostic_peek();
         self.cancel_code_actions();
@@ -549,12 +581,8 @@ impl Model {
             "textDocument": {"uri": uri},
             "position": {"line": line, "character": character}
         });
-        if self.send_lsp_request(
-            LspRequestKind::Definition,
-            "textDocument/definition",
-            params,
-        ) {
-            self.status.text = "definition".to_owned();
+        if self.send_lsp_request(kind, method, params) {
+            self.status.text = label.to_owned();
         }
         self.file.dirty = true;
     }

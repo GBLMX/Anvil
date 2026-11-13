@@ -196,10 +196,10 @@ numbers would trade predictable editing for unverified highlighting.
 - `cargo test --workspace --no-fail-fast`, clippy, fmt, architecture checks,
   and a TUI smoke test pass for each slice.
 
-## Implementation status (2026-11-12)
+## Implementation status (2026-11-13)
 
 - The advertised LSP surface above is implemented, including code lens.
-- Missing goto variants: declaration, type definition, and implementation.
+- Goto variants are complete: definition (`gd`), declaration (`gD`), type definition (`gy`), and implementation (`gI`).
 - Tree-sitter is a compile-time allowlist of the twelve families listed above.
 - Highlighting stops above 256 KiB.
 - LSP is primary-root-only.

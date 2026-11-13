@@ -373,6 +373,9 @@ impl Model {
                 Effect::LspCompletion => self.request_completion(),
                 Effect::LspSignatureHelp(trigger) => self.request_signature_help(trigger),
                 Effect::LspDefinition => self.request_definition(),
+                Effect::LspDeclaration => self.request_declaration(),
+                Effect::LspTypeDefinition => self.request_type_definition(),
+                Effect::LspImplementation => self.request_implementation(),
                 Effect::LspReferences => self.request_references(),
                 Effect::LspDocumentHighlights => self.request_document_highlights(),
                 Effect::LspIncomingCalls => {

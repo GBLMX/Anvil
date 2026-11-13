@@ -32,6 +32,7 @@ Normal mode
                       selected file previews beside the list when wide and
                       below it when narrow; icons mark file types
   gd                  go to definition
+  gD / gy / gI        declaration / type definition / implementation
   gr                  list references and jump on Enter
   gh                  highlight symbol uses in the current buffer
   gi / go             list incoming / outgoing calls
