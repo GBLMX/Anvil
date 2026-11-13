@@ -71,5 +71,8 @@ debounce. Parse failure falls back to plain text.
 ## Consequences
 
 - LaTeX files can use `texlab` without changing the built-in catalog.
-- Feature-free builds behave exactly as before.
-- LaTeX documents now get Tree-sitter highlighting in addition to LSP support.
+- Feature-free builds no longer compile the LaTeX grammar or highlight `.tex`;
+  both the provider and grammar are opt-in through `official-language-latex`
+  and `anvil-syntax/latex`.
+- With that feature enabled, LaTeX documents get Tree-sitter highlighting in
+  addition to LSP support.
