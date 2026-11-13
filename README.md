@@ -10,8 +10,10 @@ The official standard edition is one composition; third-party distributions
 can compose the kernel with their own UI and trusted Rust code. Runtime plugins
 remain untrusted and sandboxed.
 
-Status: **0.6.0 frozen for long-term internal polish; no public release or
-tag during this phase**. See [internal polish plan](docs/internal-polish-plan.md).
+Status: **`0.6.0` remains the frozen workspace/release version while the
+`0.7.x` optional-module line is developed in-tree; no public release or tag
+during this phase**. See [internal polish plan](docs/internal-polish-plan.md)
+and the [0.7.x module plan](docs/0.7.x-plan.md).
 Development uses Rust from `rust-toolchain.toml` and Go **1.26.10 or newer**;
 CI installs the exact Go version from the root `go.mod`. The ratatui editor now
 includes insert
@@ -129,6 +131,26 @@ entries are dispatched from the command palette; `editor.register_command` is
 still pending. The optional `LANDLOCK_SCOPE_SIGNAL` layer is also pending.
 This is not a VM or public plugin API.
 
+## Distribution and modules
+
+`anvil-distro-standard` owns the process entrypoint; `anvil-distro-minimal` is
+the independent second consumer. Official modules are trusted source-level Rust
+crates compiled into the binary. There is no dynamic Rust ABI, runtime module
+loading, or marketplace-installed Rust module. Module contract v1 is frozen;
+the `0.7.1`-`0.7.3` module, workspace-index, and compatibility-gate slices are
+complete.
+
+- `official.git` is part of the default standard composition. `:git-*` dispatch
+  and completion are gated off when the Git service is absent.
+- `official.workspace-index` is opt-in through the
+  `official-workspace-index` feature. When a distribution installs it,
+  quick-open prefers its bounded index and cancels in-flight builds when the
+  picker closes. Without it, quick-open falls back to gateway enumeration.
+- `anvil-distro-minimal` composes neither module.
+
+Module compatibility, caps, and deprecation rules are in
+[module compatibility](docs/module-compatibility.md).
+
 Phase 0 still consists of the `anvil-api` contracts, `anvil-core` PieceTable,
 `anvil-editor` snapshots, `anvil-ipc` framing/JSON-RPC/Unix transport, and the
 Go gateway with `openat2`, Landlock/seccomp exec sandboxing, SSRF-constrained
@@ -220,6 +242,9 @@ to the selected buffer.
 - [0.5.x interaction and UI plan](docs/0.5.x-plan.md)
 - [0.6.x distribution and marketplace plan](docs/0.6.x-plan.md)
 - [0.7.x official optional Rust modules plan](docs/0.7.x-plan.md)
+- [Module compatibility and deprecation policy](docs/module-compatibility.md)
+- [Module contract](docs/adr/0028-module-contract.md)
+- [Workspace index module extension points](docs/adr/0030-workspace-index-module.md)
 - [External integration and MCP plan](docs/external-integration-plan.md)
 - [Linux platform plan](docs/linux-platform-plan.md)
 - [Keymap configuration](docs/keymap.md)
@@ -288,6 +313,11 @@ to the selected buffer.
 - The plugin host is a real process/sandbox boundary. cgroup v2 limits are
   applied before `execve`; a missing delegated cgroup2 root fails closed rather
   than running without the promised limits.
+- Official Rust modules are source-level, feature-gated, and registered through
+  a typed `ModuleRegistry`; contract v1 is frozen. Modules receive no ambient
+  plugin capability, cannot shadow kernel commands, and may not depend on
+  `anvil-tui` internals. See
+  [module contract](docs/adr/0028-module-contract.md).
 - The native editor/API interaction model is selection-first. The current TUI
   exposes that core through a Vim-like keymap implemented in Rust. Normal,
   operator-pending, and editor/global context bindings can be remapped through
