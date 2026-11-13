@@ -298,6 +298,32 @@ impl Model {
         }
         line + 1
     }
+
+    pub(crate) fn previous_visible_line(&self, line: usize) -> Option<usize> {
+        if line == 0 {
+            return None;
+        }
+        let mut candidate = line - 1;
+        while self.is_line_hidden(candidate) {
+            let start = self
+                .overlays
+                .lsp_results
+                .folds
+                .iter()
+                .filter(|fold| {
+                    self.overlays.lsp_results.folded.contains(&fold.start)
+                        && fold.start <= candidate
+                        && candidate <= fold.end
+                })
+                .map(|fold| fold.start)
+                .min()?;
+            if start >= candidate {
+                return None;
+            }
+            candidate = start;
+        }
+        Some(candidate)
+    }
 }
 
 #[cfg(test)]
@@ -379,5 +405,104 @@ mod tests {
         model.apply_folding_response(&serde_json::json!([]));
         assert!(model.overlays.lsp_results.folds.is_empty());
         assert!(!model.folds_fresh());
+    }
+
+    #[test]
+    fn vertical_motion_skips_a_closed_fold_without_opening_it() {
+        let mut model = folded_model();
+        model.overlays.lsp_results.folded.insert(1);
+        model.move_line(1);
+        assert_eq!(model.current_line(), Some(1));
+        model.move_line(1);
+        assert_eq!(model.current_line(), Some(5));
+        assert!(model.overlays.lsp_results.folded.contains(&1));
+        model.ensure_cursor_visible(6, 80);
+        assert!(model.overlays.lsp_results.folded.contains(&1));
+        model.move_line(-1);
+        assert_eq!(model.current_line(), Some(1));
+        model.move_line(-1);
+        assert_eq!(model.current_line(), Some(0));
+    }
+
+    #[test]
+    fn jump_to_file_end_stays_on_the_visible_fold_header() {
+        let mut model = folded_model();
+        model
+            .overlays
+            .lsp_results
+            .folds
+            .push(FoldRange { start: 10, end: 11 });
+        model.overlays.lsp_results.folded.insert(10);
+        model.move_file_end();
+        assert_eq!(model.current_line(), Some(10));
+        assert!(model.overlays.lsp_results.folded.contains(&10));
+    }
+
+    #[test]
+    fn nested_closed_folds_move_between_outer_visible_lines() {
+        let mut model = folded_model();
+        model.overlays.lsp_results.folds = vec![
+            FoldRange { start: 1, end: 10 },
+            FoldRange { start: 3, end: 5 },
+        ];
+        model.overlays.lsp_results.folded = [1, 3].into_iter().collect();
+        model.move_line(1);
+        assert_eq!(model.current_line(), Some(1));
+        model.move_line(1);
+        assert_eq!(model.current_line(), Some(11));
+        model.move_line(-1);
+        assert_eq!(model.current_line(), Some(1));
+        assert_eq!(model.overlays.lsp_results.folded.len(), 2);
+    }
+
+    #[test]
+    fn counted_motion_clamps_at_visible_boundaries() {
+        let mut model = folded_model();
+        model.overlays.lsp_results.folded.insert(1);
+        model.move_line(2);
+        assert_eq!(model.current_line(), Some(5));
+        model.move_line(100);
+        assert_eq!(model.current_line(), Some(11));
+        model.move_line(-100);
+        assert_eq!(model.current_line(), Some(0));
+        assert!(model.overlays.lsp_results.folded.contains(&1));
+    }
+
+    #[test]
+    fn word_motion_skips_closed_fold_without_opening_it() {
+        let mut model = folded_model();
+        model.overlays.lsp_results.folded.insert(1);
+        model.session.cursor = model.offset_at_utf16(1, 0);
+        model.move_words(WordMotion::NextStart);
+        assert_eq!(model.current_line(), Some(5));
+        model.move_words(WordMotion::PreviousStart);
+        assert_eq!(model.current_line(), Some(1));
+        assert!(model.overlays.lsp_results.folded.contains(&1));
+    }
+
+    #[test]
+    fn char_motion_skips_closed_fold_without_opening_it() {
+        let mut model = folded_model();
+        model.overlays.lsp_results.folded.insert(1);
+        model.session.cursor = model.offset_at_utf16(1, 0);
+        model.move_end();
+        model.move_char(1);
+        assert_eq!(model.current_line(), Some(5));
+        model.move_char(-1);
+        assert_eq!(model.current_line(), Some(1));
+        assert!(model.overlays.lsp_results.folded.contains(&1));
+    }
+
+    #[test]
+    fn word_end_skips_closed_fold_without_opening_it() {
+        let mut model = Model::new(crate::EditorState::from_text("a\n\n2\n3\n"), None);
+        model.overlays.lsp_results.folds = vec![FoldRange { start: 1, end: 2 }];
+        model.overlays.lsp_results.fold_revision = Some(model.session.editor.revision());
+        model.overlays.lsp_results.folded.insert(1);
+        model.session.cursor = model.offset_at_utf16(0, 0);
+        model.move_end();
+        model.move_words(WordMotion::End);
+        assert_eq!(model.current_line(), Some(3));
+        assert!(model.overlays.lsp_results.folded.contains(&1));
     }
 }

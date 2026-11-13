@@ -17,19 +17,67 @@ impl Model {
         else {
             return;
         };
-        let target = position.line as isize + delta;
-        if target < 0 {
-            return;
+        let total = self.session.editor.index().len_lines();
+        let mut target = position.line;
+        for _ in 0..delta.unsigned_abs() {
+            if delta > 0 {
+                let next = self.next_visible_line(target);
+                if next >= total {
+                    break;
+                }
+                target = self.first_visible_line(next);
+            } else {
+                let Some(previous) = self.previous_visible_line(target) else {
+                    break;
+                };
+                target = previous;
+            }
         }
         let Some(offset) = self.session.editor.index().offset_at_display_column(
             self.session.editor.text(),
-            target as usize,
+            target,
             position.display_column,
         ) else {
             return;
         };
         self.set_caret(offset);
         self.file.dirty = true;
+    }
+
+    pub(crate) fn visible_motion_offset(
+        &self,
+        offset: usize,
+        forward: bool,
+        at_line_end: bool,
+    ) -> Option<usize> {
+        let position = self
+            .session
+            .editor
+            .index()
+            .position(self.session.editor.text(), offset)?;
+        if !self.is_line_hidden(position.line) {
+            return Some(offset);
+        }
+        if forward {
+            let next = self.next_visible_line(position.line);
+            if next >= self.session.editor.index().len_lines() {
+                return None;
+            }
+            let line = self.first_visible_line(next);
+            self.session.editor.index().offset_at_display_column(
+                self.session.editor.text(),
+                line,
+                0,
+            )
+        } else {
+            let line = self.previous_visible_line(position.line)?;
+            let start = self.session.editor.index().line_to_offset(line)?;
+            self.session
+                .editor
+                .index()
+                .offset_to_line(start)
+                .map(|range| if at_line_end { range.end } else { range.start })
+        }
     }
 
     pub(crate) fn move_file_end(&mut self) {
@@ -47,6 +95,14 @@ impl Model {
             last_line
         } else {
             (count - 1).min(last_line)
+        };
+        let line = if self.is_line_hidden(line) {
+            let Some(previous) = self.previous_visible_line(line) else {
+                return;
+            };
+            previous
+        } else {
+            line
         };
         let Some(offset) = self.session.editor.index().offset_at_display_column(
             self.session.editor.text(),
@@ -76,7 +132,9 @@ impl Model {
                 .editor
                 .next_grapheme_boundary(self.session.cursor)
         };
-        if let Some(offset) = next {
+        if let Some(offset) = next
+            && let Some(offset) = self.visible_motion_offset(offset, delta >= 0, delta < 0)
+        {
             self.set_caret(offset);
             self.file.dirty = true;
         }
@@ -134,6 +192,22 @@ impl Model {
                 line = previous;
             }
         }
+        let line = if self.is_line_hidden(line) {
+            if forward {
+                let next = self.next_visible_line(line);
+                if next >= lines {
+                    return;
+                }
+                self.first_visible_line(next)
+            } else {
+                let Some(previous) = self.previous_visible_line(line) else {
+                    return;
+                };
+                previous
+            }
+        } else {
+            line
+        };
         let Some(offset) = self.session.editor.index().offset_at_display_column(
             self.session.editor.text(),
             line,

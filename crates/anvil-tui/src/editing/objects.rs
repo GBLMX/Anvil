@@ -16,6 +16,13 @@ impl Model {
             if target == self.session.cursor {
                 break;
             }
+            let forward = !matches!(motion, WordMotion::PreviousStart);
+            let Some(target) = self.visible_motion_offset(target, forward, false) else {
+                break;
+            };
+            if target == self.session.cursor {
+                break;
+            }
             self.session.cursor = target;
             self.file.dirty = true;
         }

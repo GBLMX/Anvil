@@ -323,6 +323,10 @@ post-`0.5.0` feature line.
 ### Fixed
 - The file tree now opens the command line on `:`, so commands such as
   `:workspace-remove` work while the tree has focus.
+- Cursor motions, including `j`/`k`, section jumps, `G`, `w`/`b`/`e`, and
+  `h`/`l`, now skip closed folds instead of landing on hidden lines and forcing
+  the fold open. Nested folds move between their outermost visible rows, and
+  count motions preserve the same folds.
 - Settings edits no longer replace the active `ANVIL_THEME`; theme changes are
   applied only when the settings theme value changes, cancel restores the
   active theme, and unrelated saves keep the file theme.
