@@ -418,8 +418,8 @@ impl SyntaxState {
         self.cached.insert(cache);
     }
 
-    #[cfg(test)]
-    pub(crate) fn fill_cache_for_test(&mut self) {
+    #[doc(hidden)]
+    pub fn fill_cache_for_test(&mut self) {
         for index in 0..CACHE_LIMIT + 4 {
             self.remember(SyntaxCache {
                 revision: 0,

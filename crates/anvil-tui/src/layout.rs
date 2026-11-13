@@ -445,7 +445,7 @@ impl Model {
             .highlights()
             .iter()
             .any(|highlight| {
-                highlight.class == syntax::SyntaxClass::CodeBlock
+                highlight.class == anvil_syntax::SyntaxClass::CodeBlock
                     && highlight.start < line_end
                     && highlight.end > start
             })

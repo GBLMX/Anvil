@@ -256,6 +256,7 @@ crates/
   anvil-api/           public Rust types, schema, generated stubs
   anvil-core/          text model, commands, snapshots
   anvil-editor/        selection-first editor state and snapshots
+  anvil-syntax/        Tree-sitter grammars, highlighting, and scopes
   anvil-session/       documents, effects, keymap, plugin lifecycle
   anvil-module/        trusted source-level module contract and registry
   anvil-mod-git/       trusted Git helpers for the official git module

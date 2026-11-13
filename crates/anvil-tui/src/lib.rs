@@ -13,13 +13,13 @@ use std::{
     time::{Duration, Instant, SystemTime},
 };
 
-use anvil_core::{TextBuffer, end_word, next_word_start, previous_word_start};
+use anvil_core::{end_word, next_word_start, previous_word_start, TextBuffer};
 use anvil_editor::EditorState;
 use anvil_ipc::GatewayClient;
-use anvil_session::DocumentSession;
 use anvil_session::effect::{Effect, EffectQueue};
 use anvil_session::keymap::KeymapContext;
 use anvil_session::ui::{InputBuffer, InputMode, Problem, UiState};
+use anvil_session::DocumentSession;
 use crossterm::{
     cursor::SetCursorStyle,
     event::{
@@ -29,15 +29,15 @@ use crossterm::{
     },
     execute,
     terminal::{
-        EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
-        supports_keyboard_enhancement,
+        disable_raw_mode, enable_raw_mode, supports_keyboard_enhancement, EnterAlternateScreen,
+        LeaveAlternateScreen,
     },
 };
 use ratatui::{
-    Terminal,
     backend::CrosstermBackend,
     style::{Modifier, Style},
     text::{Line, Span},
+    Terminal,
 };
 
 mod bracket;
@@ -108,9 +108,9 @@ mod lsp_worker;
 mod model;
 mod readonly;
 mod render;
+use readonly::ReadOnlyState;
 #[cfg(test)]
 use readonly::HELP_TEXT;
-use readonly::ReadOnlyState;
 mod settings;
 mod theme;
 use settings::Settings;
@@ -129,7 +129,6 @@ use render::{
     utf16_to_byte,
 };
 mod layout;
-mod syntax;
 mod task_runner;
 mod task_ui;
 mod terminal;
@@ -143,16 +142,16 @@ use anvil_session::plugin_session::{DEBUG_PERMISSIONS, DEBUG_PLUGIN_ID};
 use anvil_session::plugin_supervisor::{
     ExecOutcome, HostState, PluginSupervisor, StartMode, StartOutcome, SupervisorEvent,
 };
+use anvil_syntax::SyntaxState;
 use file_worker::FileWorker;
 use gateway::GatewaySession;
 use lsp_worker::LspConfig;
 use lsp_worker::{LspEvent, LspWorker};
 #[cfg(target_os = "linux")]
 use plugin_activation::ActivationEvent;
-use syntax::SyntaxState;
 pub use terminal::{
-    DistributionServices, run, run_with_all_services, run_with_input, run_with_input_and_git,
-    run_with_services, run_with_workspace, run_with_workspace_status,
+    run, run_with_all_services, run_with_input, run_with_input_and_git, run_with_services,
+    run_with_workspace, run_with_workspace_status, DistributionServices,
 };
 
 const MAX_OPEN_BYTES: usize = 256 * 1024 * 1024;

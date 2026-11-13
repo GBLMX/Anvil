@@ -8,6 +8,8 @@ post-`0.5.0` feature line.
 
 ## [Unreleased]
 ### Added
+- `anvil-syntax` now owns Tree-sitter grammars, highlighting, and scope
+  extraction; `anvil-tui` no longer depends on the grammar crates directly.
 - HTML and HTM files now use the Tree-sitter HTML grammar for tag, attribute,
   string, constant, and comment highlighting, with HTML fenced blocks in
   Markdown.

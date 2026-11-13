@@ -1,10 +1,10 @@
 //! Ratatui rendering for the editor, tree, completion, and hover overlays.
 
 use super::*;
-use crate::syntax::{Highlight, SyntaxClass};
 use crate::theme;
 use anvil_api::EditorView;
 use anvil_session::ui::CreateKind;
+use anvil_syntax::{Highlight, SyntaxClass};
 use ratatui::{
     layout::Rect,
     style::{Modifier, Style},

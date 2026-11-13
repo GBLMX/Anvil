@@ -14,7 +14,7 @@ pub(crate) struct Buffer {
     pub(crate) visual_anchor: Option<usize>,
     pub(crate) visual_line: bool,
     pub(crate) search_query: String,
-    pub(crate) syntax: crate::syntax::SyntaxCache,
+    pub(crate) syntax: anvil_syntax::SyntaxCache,
 }
 
 pub(crate) struct Pane {

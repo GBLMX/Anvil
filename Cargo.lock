@@ -200,29 +200,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "anvil-tui"
+name = "anvil-syntax"
 version = "0.6.0"
 dependencies = [
- "anvil-api",
- "anvil-control",
  "anvil-core",
- "anvil-editor",
- "anvil-ipc",
- "anvil-mod-git",
- "anvil-mod-workspace-index",
- "anvil-module",
- "anvil-plugin-host",
- "anvil-session",
  "codebook-tree-sitter-latex",
- "crossterm",
- "nix 0.31.3",
- "ratatui",
- "regex",
- "serde",
- "serde_json",
- "sha2 0.11.1",
- "tempfile",
- "toml_edit",
  "tree-sitter",
  "tree-sitter-bash",
  "tree-sitter-dockerfile-updated",
@@ -236,6 +218,32 @@ dependencies = [
  "tree-sitter-rust",
  "tree-sitter-toml-ng",
  "tree-sitter-yaml",
+]
+
+[[package]]
+name = "anvil-tui"
+version = "0.6.0"
+dependencies = [
+ "anvil-api",
+ "anvil-control",
+ "anvil-core",
+ "anvil-editor",
+ "anvil-ipc",
+ "anvil-mod-git",
+ "anvil-mod-workspace-index",
+ "anvil-module",
+ "anvil-plugin-host",
+ "anvil-session",
+ "anvil-syntax",
+ "crossterm",
+ "nix 0.31.3",
+ "ratatui",
+ "regex",
+ "serde",
+ "serde_json",
+ "sha2 0.11.1",
+ "tempfile",
+ "toml_edit",
  "unicode-segmentation",
  "unicode-width",
 ]

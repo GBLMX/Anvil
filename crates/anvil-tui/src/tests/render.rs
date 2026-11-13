@@ -11,7 +11,7 @@ fn markdown_fenced_code_renders_a_full_width_background() {
             .borrow()
             .highlights()
             .iter()
-            .any(|highlight| highlight.class == syntax::SyntaxClass::CodeBlock)
+            .any(|highlight| highlight.class == anvil_syntax::SyntaxClass::CodeBlock)
         {
             break;
         }
@@ -49,7 +49,7 @@ fn fenced_code_background_reaches_right_edge_when_hscrolled() {
             .borrow()
             .highlights()
             .iter()
-            .any(|highlight| highlight.class == syntax::SyntaxClass::CodeBlock)
+            .any(|highlight| highlight.class == anvil_syntax::SyntaxClass::CodeBlock)
         {
             break;
         }
@@ -73,7 +73,7 @@ fn cursorline_overlays_fenced_code_background() {
             .borrow()
             .highlights()
             .iter()
-            .any(|highlight| highlight.class == syntax::SyntaxClass::CodeBlock)
+            .any(|highlight| highlight.class == anvil_syntax::SyntaxClass::CodeBlock)
         {
             break;
         }
@@ -135,7 +135,7 @@ fn search_background_overlays_fenced_code_background() {
             .borrow()
             .highlights()
             .iter()
-            .any(|highlight| highlight.class == syntax::SyntaxClass::CodeBlock)
+            .any(|highlight| highlight.class == anvil_syntax::SyntaxClass::CodeBlock)
         {
             break;
         }
@@ -162,14 +162,12 @@ fn switching_theme_repaints_backgrounds() {
     terminal.draw(|frame| view(&model, frame)).expect("draw");
     let expected = theme::bg();
     assert_ne!(expected, theme::Theme::ANVIL_DARK.bg);
-    assert!(
-        terminal
-            .backend()
-            .buffer()
-            .content()
-            .iter()
-            .any(|cell| cell.bg == expected)
-    );
+    assert!(terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .any(|cell| cell.bg == expected));
     model.execute_command("theme anvil-dark");
 }
 
@@ -540,10 +538,10 @@ fn stale_syntax_boundaries_are_clamped_to_char_boundaries() {
         &mut spans,
         "👩",
         0,
-        &[crate::syntax::Highlight {
+        &[anvil_syntax::Highlight {
             start: 2,
             end: 4,
-            class: crate::syntax::SyntaxClass::Keyword,
+            class: anvil_syntax::SyntaxClass::Keyword,
         }],
     );
     let rendered = spans

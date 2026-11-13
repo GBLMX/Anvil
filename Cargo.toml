@@ -15,6 +15,7 @@ members = [
     "crates/anvil-mod-workspace-index",
     "crates/anvil-plugin-host",
     "crates/anvil-session",
+    "crates/anvil-syntax",
     "crates/anvil-tui",
     "examples/anvil-distro-minimal",
 ]
