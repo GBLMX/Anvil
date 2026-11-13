@@ -1,6 +1,7 @@
 # ADR-0029: Git Module Extension Points
 
-- Status: Accepted for implementation; helper extraction landed
+- Status: Accepted for implementation; helper extraction and `FileWorker`
+  service injection landed
 - Date: 2026-11-13
 - Related: [ADR-0027](0027-distribution-composition-crate.md), [ADR-0028](0028-module-contract.md)
 

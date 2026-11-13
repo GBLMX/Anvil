@@ -67,8 +67,8 @@ signed-index work stay deferred until the polish phase exits.
   trusted in-process code; see [docs/0.7.x-plan.md](docs/0.7.x-plan.md).
   Composition and two-consumer gate are landed (ADR-0027); the module contract
   and registry are landed (ADR-0028); Git extension points are defined
-  (ADR-0029); pure Git helpers now live in `anvil-mod-git`. Next: service
-  routing and the optional feature matrix.
+  (ADR-0029); pure Git helpers and `FileWorker` service injection now live in
+  `anvil-mod-git`. Next: optional feature gating and TUI startup selection.
 - Optional TachyonFX-style UI effects: `anvil-tui` only, non-default feature,
   ADR and performance gate required; see the deferred section in
   [docs/0.5.x-plan.md](docs/0.5.x-plan.md). Not before the `0.5.10` baseline.

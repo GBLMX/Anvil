@@ -29,6 +29,127 @@ impl ResolveConflictError {
     }
 }
 
+/// UI-neutral Git operations consumed by the file worker.
+pub trait GitService: Send + Sync {
+    fn git_status(
+        &self,
+        client: &mut GatewayClient,
+        root: &Path,
+    ) -> Result<HashMap<PathBuf, char>, String>;
+
+    fn git_diff(
+        &self,
+        client: &mut GatewayClient,
+        relative: &str,
+    ) -> Result<Vec<(usize, char)>, String>;
+
+    fn git_diff_text(
+        &self,
+        client: &mut GatewayClient,
+        relative: &str,
+        staged: bool,
+    ) -> Result<(String, bool), String>;
+
+    fn git_blame_text(
+        &self,
+        client: &mut GatewayClient,
+        relative: &str,
+    ) -> Result<(String, bool), String>;
+
+    fn git_conflicts_text(&self, client: &mut GatewayClient) -> Result<(String, bool), String>;
+
+    fn git_conflict_stage_text(
+        &self,
+        client: &mut GatewayClient,
+        relative: &str,
+        stage: u8,
+    ) -> Result<(String, bool), String>;
+
+    fn resolve_git_conflict(
+        &self,
+        client: &mut GatewayClient,
+        relative: &str,
+        stage: u8,
+    ) -> Result<(), ResolveConflictError>;
+
+    fn apply_git_hunk(
+        &self,
+        client: &mut GatewayClient,
+        patch: &str,
+        reverse: bool,
+    ) -> Result<(), String>;
+}
+
+/// Gateway-backed Git service used by the standard edition.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct SystemGitService;
+
+impl GitService for SystemGitService {
+    fn git_status(
+        &self,
+        client: &mut GatewayClient,
+        root: &Path,
+    ) -> Result<HashMap<PathBuf, char>, String> {
+        git_status(client, root)
+    }
+
+    fn git_diff(
+        &self,
+        client: &mut GatewayClient,
+        relative: &str,
+    ) -> Result<Vec<(usize, char)>, String> {
+        git_diff(client, relative)
+    }
+
+    fn git_diff_text(
+        &self,
+        client: &mut GatewayClient,
+        relative: &str,
+        staged: bool,
+    ) -> Result<(String, bool), String> {
+        git_diff_text(client, relative, staged)
+    }
+
+    fn git_blame_text(
+        &self,
+        client: &mut GatewayClient,
+        relative: &str,
+    ) -> Result<(String, bool), String> {
+        git_blame_text(client, relative)
+    }
+
+    fn git_conflicts_text(&self, client: &mut GatewayClient) -> Result<(String, bool), String> {
+        git_conflicts_text(client)
+    }
+
+    fn git_conflict_stage_text(
+        &self,
+        client: &mut GatewayClient,
+        relative: &str,
+        stage: u8,
+    ) -> Result<(String, bool), String> {
+        git_conflict_stage_text(client, relative, stage)
+    }
+
+    fn resolve_git_conflict(
+        &self,
+        client: &mut GatewayClient,
+        relative: &str,
+        stage: u8,
+    ) -> Result<(), ResolveConflictError> {
+        resolve_git_conflict(client, relative, stage)
+    }
+
+    fn apply_git_hunk(
+        &self,
+        client: &mut GatewayClient,
+        patch: &str,
+        reverse: bool,
+    ) -> Result<(), String> {
+        apply_git_hunk(client, patch, reverse)
+    }
+}
+
 pub fn git_status(
     client: &mut GatewayClient,
     workspace: &Path,

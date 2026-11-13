@@ -2,7 +2,10 @@
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::{
+    Arc,
+    mpsc::{self, Receiver, Sender},
+};
 use std::time::{Duration, Instant};
 
 use anvil_ipc::GatewayClient;
@@ -10,10 +13,7 @@ use anvil_ipc::GatewayClient;
 use super::preview::read_preview;
 use super::search::{apply_project_replace, files, project_replace_preview, project_search};
 use super::{FileEvent, FileRequest, MAX_TREE_WATCH_DIRS, TREE_DEBOUNCE, TREE_POLL_INTERVAL};
-use anvil_mod_git::{
-    apply_git_hunk, git_blame_text, git_conflict_stage_text, git_conflicts_text, git_diff,
-    git_diff_text, git_status, resolve_git_conflict,
-};
+use anvil_mod_git::{GitService, SystemGitService};
 
 /// Owns the background worker and its channels.
 pub struct FileWorker {
@@ -23,7 +23,16 @@ pub struct FileWorker {
 
 impl FileWorker {
     /// Starts the worker with a dedicated gateway connection.
-    pub fn start(mut client: GatewayClient, workspace: PathBuf) -> Self {
+    pub fn start(client: GatewayClient, workspace: PathBuf) -> Self {
+        Self::start_with_git_service(client, workspace, Arc::new(SystemGitService))
+    }
+
+    pub(crate) fn start_with_git_service(
+        mut client: GatewayClient,
+        workspace: PathBuf,
+        git: Arc<dyn GitService>,
+    ) -> Self {
+        let worker_git = Arc::clone(&git);
         let (request_sender, requests) = mpsc::channel();
         let (event_sender, events) = mpsc::channel();
         std::thread::spawn(move || {
@@ -146,7 +155,7 @@ impl FileWorker {
                                 generation,
                             },
                             FileRequest::GitStatus { root, generation } => FileEvent::GitStatus {
-                                result: git_status(&mut client, &root),
+                                result: worker_git.git_status(&mut client, &root),
                                 generation,
                             },
                             FileRequest::GitDiff {
@@ -156,14 +165,15 @@ impl FileWorker {
                             } => FileEvent::GitDiff {
                                 path,
                                 revision,
-                                result: git_diff(&mut client, &relative),
+                                result: worker_git.git_diff(&mut client, &relative),
                             },
                             FileRequest::GitDiffText {
                                 relative,
                                 staged,
                                 generation,
                             } => {
-                                let result = git_diff_text(&mut client, &relative, staged);
+                                let result =
+                                    worker_git.git_diff_text(&mut client, &relative, staged);
                                 FileEvent::GitDiffText {
                                     relative,
                                     staged,
@@ -177,20 +187,20 @@ impl FileWorker {
                                 generation,
                             } => FileEvent::GitApplied {
                                 generation,
-                                result: apply_git_hunk(&mut client, &patch, reverse),
+                                result: worker_git.apply_git_hunk(&mut client, &patch, reverse),
                             },
                             FileRequest::GitBlameText {
                                 relative,
                                 generation,
                             } => FileEvent::GitBlameText {
                                 generation,
-                                result: git_blame_text(&mut client, &relative),
+                                result: worker_git.git_blame_text(&mut client, &relative),
                             },
                             FileRequest::GitConflictsText { root, generation } => {
                                 FileEvent::GitConflictsText {
                                     root,
                                     generation,
-                                    result: git_conflicts_text(&mut client),
+                                    result: worker_git.git_conflicts_text(&mut client),
                                 }
                             }
                             FileRequest::Transfer { from, to, copy } => {
@@ -221,7 +231,11 @@ impl FileWorker {
                                 stage,
                                 generation,
                             } => {
-                                let result = git_conflict_stage_text(&mut client, &relative, stage);
+                                let result = worker_git.git_conflict_stage_text(
+                                    &mut client,
+                                    &relative,
+                                    stage,
+                                );
                                 FileEvent::GitConflictStageText {
                                     relative,
                                     stage,
@@ -234,7 +248,8 @@ impl FileWorker {
                                 stage,
                                 generation,
                             } => {
-                                let result = resolve_git_conflict(&mut client, &relative, stage);
+                                let result =
+                                    worker_git.resolve_git_conflict(&mut client, &relative, stage);
                                 FileEvent::GitResolveConflict {
                                     relative,
                                     stage,
