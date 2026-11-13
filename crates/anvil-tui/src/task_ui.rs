@@ -35,7 +35,7 @@ impl Model {
         self.runtime.task_problems.clear();
         self.runtime.task_output = None;
         self.runtime.task_is_tests = tests;
-        self.overlays.test_explorer = None;
+        self.close_test_explorer();
         self.rebuild_problems();
         self.runtime.task_worker = Some(TaskWorker::start(
             command.to_owned(),
@@ -81,6 +81,7 @@ impl Model {
             self.overlays.test_explorer = Some(crate::test_explorer::TestExplorerState::new(
                 self.runtime.task_problems.clone(),
             ));
+            self.push_overlay_if_idle(OverlayKind::TestExplorer);
             self.close_problems();
         } else if !self.runtime.task_problems.is_empty() {
             self.open_problems();

@@ -137,8 +137,8 @@ impl Model {
     pub(crate) fn start_fuzzy(&mut self) {
         self.cancel_completion();
         self.clear_lsp_requests();
-        self.overlays.lsp_results.hover = None;
-        self.ui.diagnostic_peek = None;
+        self.close_hover();
+        self.close_diagnostic_peek();
         self.overlays.lsp_results.code_actions = None;
         self.overlays.lsp_results.document_symbols = None;
         self.clear_preview();

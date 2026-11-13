@@ -264,7 +264,7 @@ impl Model {
     pub(crate) fn jump_diagnostic(&mut self, forward: bool) {
         self.cancel_completion();
         self.cancel_code_actions();
-        self.overlays.lsp_results.hover = None;
+        self.close_hover();
         let Some(path) = self.session.path.clone() else {
             self.status.text = "E: no file".to_owned();
             self.file.dirty = true;
@@ -356,8 +356,10 @@ impl Model {
         self.overlays.lsp_results.workspace_symbols = None;
         self.close_overlay(OverlayKind::WorkspaceSymbols);
         self.overlays.lsp_results.references = None;
+        self.close_overlay(OverlayKind::References);
         self.overlays.lsp_results.document_highlights = None;
         self.overlays.lsp_results.call_hierarchy = None;
+        self.close_overlay(OverlayKind::CallHierarchy);
         self.clear_folds();
         self.clear_semantic_tokens();
         self.overlays.lsp_results.inlay_hints.clear();
@@ -381,8 +383,8 @@ impl Model {
         self.cancel_code_actions();
         self.cancel_document_symbols();
         self.cancel_signature_help();
-        self.overlays.lsp_results.hover = None;
-        self.ui.diagnostic_peek = None;
+        self.close_hover();
+        self.close_diagnostic_peek();
         let Some(uri) = self
             .session
             .path
@@ -425,6 +427,13 @@ impl Model {
             .retain(|id, _| pending.contains(id));
     }
 
+    pub(crate) fn close_hover(&mut self) {
+        if self.overlays.lsp_results.hover.take().is_some() {
+            self.close_overlay(OverlayKind::Hover);
+            self.file.dirty = true;
+        }
+    }
+
     pub(crate) fn cancel_completion(&mut self) {
         self.language.lsp_requests.pending.retain(|_, kind| {
             !matches!(
@@ -445,7 +454,9 @@ impl Model {
         });
         self.prune_edit_requests();
         self.overlays.lsp_results.code_actions = None;
+        self.close_overlay(OverlayKind::CodeActions);
         self.overlays.lsp_results.document_symbols = None;
+        self.close_overlay(OverlayKind::DocumentSymbols);
         self.file.dirty = true;
     }
 
@@ -457,8 +468,8 @@ impl Model {
 
     pub(crate) fn request_completion(&mut self) {
         self.cancel_completion();
-        self.overlays.lsp_results.hover = None;
-        self.ui.diagnostic_peek = None;
+        self.close_hover();
+        self.close_diagnostic_peek();
         self.cancel_code_actions();
         let Some(uri) = self
             .session
@@ -518,7 +529,7 @@ impl Model {
 
     pub(crate) fn request_definition(&mut self) {
         self.cancel_completion();
-        self.ui.diagnostic_peek = None;
+        self.close_diagnostic_peek();
         self.cancel_code_actions();
         let Some(uri) = self
             .session
@@ -551,8 +562,8 @@ impl Model {
         self.cancel_document_symbols();
         self.cancel_workspace_symbols();
         self.cancel_references();
-        self.overlays.lsp_results.hover = None;
-        self.ui.diagnostic_peek = None;
+        self.close_hover();
+        self.close_diagnostic_peek();
         let Some(uri) = self
             .session
             .path
@@ -583,8 +594,8 @@ impl Model {
         self.cancel_completion();
         self.cancel_code_actions();
         self.cancel_document_highlights();
-        self.overlays.lsp_results.hover = None;
-        self.ui.diagnostic_peek = None;
+        self.close_hover();
+        self.close_diagnostic_peek();
         let Some(uri) = self
             .session
             .path
@@ -625,8 +636,8 @@ impl Model {
         self.cancel_code_actions();
         self.cancel_document_highlights();
         self.cancel_call_hierarchy();
-        self.overlays.lsp_results.hover = None;
-        self.ui.diagnostic_peek = None;
+        self.close_hover();
+        self.close_diagnostic_peek();
         let Some(uri) = self
             .session
             .path
@@ -686,12 +697,13 @@ impl Model {
         });
         self.prune_edit_requests();
         self.overlays.lsp_results.call_hierarchy = None;
+        self.close_overlay(OverlayKind::CallHierarchy);
         self.file.dirty = true;
     }
 
     pub(crate) fn request_hover(&mut self) {
         self.cancel_completion();
-        self.ui.diagnostic_peek = None;
+        self.close_diagnostic_peek();
         self.cancel_code_actions();
         let Some(uri) = self
             .session
@@ -717,8 +729,8 @@ impl Model {
     pub(crate) fn start_rename(&mut self) {
         self.cancel_completion();
         self.cancel_code_actions();
-        self.overlays.lsp_results.hover = None;
-        self.ui.diagnostic_peek = None;
+        self.close_hover();
+        self.close_diagnostic_peek();
         self.ui.input_mode = InputMode::Rename {
             name: String::new(),
         };
@@ -757,8 +769,8 @@ impl Model {
     pub(crate) fn request_code_actions(&mut self) {
         self.cancel_completion();
         self.cancel_code_actions();
-        self.overlays.lsp_results.hover = None;
-        self.ui.diagnostic_peek = None;
+        self.close_hover();
+        self.close_diagnostic_peek();
         let Some(path) = self.session.path.clone() else {
             return;
         };
@@ -815,6 +827,7 @@ impl Model {
             .pending
             .retain(|_, kind| *kind != LspRequestKind::References);
         self.overlays.lsp_results.references = None;
+        self.close_overlay(OverlayKind::References);
         self.file.dirty = true;
     }
 
@@ -824,6 +837,7 @@ impl Model {
             .pending
             .retain(|_, kind| *kind != LspRequestKind::DocumentSymbol);
         self.overlays.lsp_results.document_symbols = None;
+        self.close_overlay(OverlayKind::DocumentSymbols);
         self.file.dirty = true;
     }
 
@@ -843,8 +857,8 @@ impl Model {
         self.cancel_code_actions();
         self.cancel_document_symbols();
         self.cancel_workspace_symbols();
-        self.overlays.lsp_results.hover = None;
-        self.ui.diagnostic_peek = None;
+        self.close_hover();
+        self.close_diagnostic_peek();
         let Some(path) = self.session.path.as_ref() else {
             return;
         };
@@ -973,7 +987,7 @@ impl Model {
                 query: String::new(),
                 selected: 0,
             });
-            self.push_overlay(OverlayKind::WorkspaceSymbols);
+            self.push_overlay_if_idle(OverlayKind::WorkspaceSymbols);
             self.status.text = "workspace symbols".to_owned();
         }
     }
@@ -982,8 +996,8 @@ impl Model {
         self.cancel_completion();
         self.cancel_code_actions();
         self.cancel_document_symbols();
-        self.overlays.lsp_results.hover = None;
-        self.ui.diagnostic_peek = None;
+        self.close_hover();
+        self.close_diagnostic_peek();
         let Some(uri) = self
             .session
             .path
@@ -1017,6 +1031,7 @@ impl Model {
         let Some(symbols) = self.overlays.lsp_results.document_symbols.take() else {
             return;
         };
+        self.close_overlay(OverlayKind::DocumentSymbols);
         let Some(symbol) = symbols.items.get(symbols.selected).cloned() else {
             return;
         };
@@ -1040,6 +1055,7 @@ impl Model {
         let Some(references) = self.overlays.lsp_results.references.take() else {
             return;
         };
+        self.close_overlay(OverlayKind::References);
         let Some(reference) = references.items.get(references.selected).cloned() else {
             return;
         };
@@ -1074,6 +1090,7 @@ impl Model {
         let Some(calls) = self.overlays.lsp_results.call_hierarchy.take() else {
             return;
         };
+        self.close_overlay(OverlayKind::CallHierarchy);
         let Some(item) = calls.items.get(calls.selected).cloned() else {
             return;
         };
@@ -1103,8 +1120,8 @@ impl Model {
             .pending
             .retain(|_, kind| *kind != LspRequestKind::Formatting);
         self.prune_edit_requests();
-        self.overlays.lsp_results.hover = None;
-        self.ui.diagnostic_peek = None;
+        self.close_hover();
+        self.close_diagnostic_peek();
         let Some(path) = self.session.path.clone() else {
             return false;
         };
@@ -1152,6 +1169,7 @@ impl Model {
         let Some(actions) = self.overlays.lsp_results.code_actions.take() else {
             return;
         };
+        self.close_overlay(OverlayKind::CodeActions);
         let Some(item) = actions.items.get(actions.selected) else {
             return;
         };
@@ -1215,6 +1233,7 @@ impl Model {
             self.overlays.lsp_results.code_actions = None;
         } else {
             self.overlays.lsp_results.code_actions = Some(CodeActionState { items, selected: 0 });
+            self.push_overlay_if_idle(OverlayKind::CodeActions);
             self.status.text = "code actions".to_owned();
         }
     }

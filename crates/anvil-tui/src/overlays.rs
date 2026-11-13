@@ -52,7 +52,7 @@ impl Model {
             return;
         }
         self.ui.problems.visible = true;
-        self.push_overlay(OverlayKind::Problems);
+        self.push_overlay_if_idle(OverlayKind::Problems);
         self.file.dirty = true;
     }
 
@@ -93,7 +93,7 @@ impl Model {
         self.ui.focus.tree = false;
         self.ui.focus.split = false;
         self.close_problems();
-        self.ui.diagnostic_peek = None;
+        self.close_diagnostic_peek();
         self.status.text = format!(
             "{}:{}: {}",
             problem.path.display(),
@@ -135,6 +135,7 @@ impl Model {
             line_count,
             scroll: 0,
         });
+        self.push_overlay(OverlayKind::DiagnosticPeek);
         self.file.dirty = true;
         true
     }
@@ -142,6 +143,7 @@ impl Model {
     pub(crate) fn close_diagnostic_peek(&mut self) {
         if let Some(peek) = self.ui.diagnostic_peek.take() {
             self.ui.focus = peek.focus;
+            self.close_overlay(OverlayKind::DiagnosticPeek);
             self.file.dirty = true;
         }
     }
@@ -163,8 +165,7 @@ impl Model {
                 || peek.revision != self.session.editor.revision()
         });
         if stale {
-            self.ui.diagnostic_peek = None;
-            self.file.dirty = true;
+            self.close_diagnostic_peek();
         }
     }
 }

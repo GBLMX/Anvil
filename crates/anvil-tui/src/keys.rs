@@ -595,6 +595,11 @@ enum LspListAction {
     CancelAndPassThrough,
 }
 
+fn run_lsp_list_action(model: &mut Model, kind: LspListKind, key: KeyPress) -> bool {
+    let action = lsp_list_action(key, kind != LspListKind::CodeActions);
+    execute_lsp_list_action(model, kind, action)
+}
+
 fn active_lsp_list(model: &Model) -> Option<LspListKind> {
     if model.overlays.lsp_results.call_hierarchy.is_some() {
         Some(LspListKind::CallHierarchy)
@@ -1121,33 +1126,89 @@ fn handle_key(model: &mut Model, key: KeyPress) {
                 if let Some(action) = command_palette_action(key, text_input) {
                     execute_command_palette_action(model, action, key);
                 }
+                return;
             }
             OverlayKind::Settings => {
                 if let Some(action) = settings_action(key) {
                     execute_settings_action(model, action);
                 }
+                return;
             }
             OverlayKind::BufferPicker => {
                 if let Some(action) = picker_action(key, text_input) {
                     execute_buffer_picker_action(model, action);
                 }
+                return;
             }
             OverlayKind::Fuzzy => {
                 if let Some(action) = picker_action(key, text_input) {
                     execute_fuzzy_action(model, action);
                 }
+                return;
             }
             OverlayKind::Problems => {
                 if let Some(action) = problems_action(key) {
                     execute_problems_action(model, action);
                 }
+                return;
             }
             OverlayKind::WorkspaceSymbols => {
                 let action = workspace_symbol_action(key, text_input);
-                execute_workspace_symbol_action(model, action);
+                if execute_workspace_symbol_action(model, action) {
+                    return;
+                }
+            }
+            OverlayKind::DocumentSymbols => {
+                if run_lsp_list_action(model, LspListKind::DocumentSymbols, key) {
+                    return;
+                }
+            }
+            OverlayKind::References => {
+                if run_lsp_list_action(model, LspListKind::References, key) {
+                    return;
+                }
+            }
+            OverlayKind::CallHierarchy => {
+                if run_lsp_list_action(model, LspListKind::CallHierarchy, key) {
+                    return;
+                }
+            }
+            OverlayKind::CodeActions => {
+                if run_lsp_list_action(model, LspListKind::CodeActions, key) {
+                    return;
+                }
+            }
+            OverlayKind::DiagnosticPeek => {
+                let action = diagnostic_peek_action(key);
+                if execute_diagnostic_peek_action(model, action) {
+                    return;
+                }
+            }
+            OverlayKind::Hover => {
+                let action = hover_action(key);
+                if execute_hover_action(model, action) {
+                    return;
+                }
+            }
+            OverlayKind::ThemeBrowser => {
+                if let Some(action) = theme_browser_action(key) {
+                    execute_theme_browser_action(model, action);
+                    return;
+                }
+            }
+            OverlayKind::DebugPanel => {
+                if let Some(action) = debug_panel_action(key) {
+                    execute_debug_panel_action(model, action);
+                }
+                return;
+            }
+            OverlayKind::TestExplorer => {
+                if let Some(action) = test_explorer_action(key) {
+                    execute_test_explorer_action(model, action);
+                }
+                return;
             }
         }
-        return;
     }
 
     if dispatch_specific_context_binding(model, key) {

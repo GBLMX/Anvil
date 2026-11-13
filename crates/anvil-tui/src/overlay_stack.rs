@@ -16,6 +16,12 @@ impl Model {
         self.file.dirty = true;
     }
 
+    pub(crate) fn push_overlay_if_idle(&mut self, kind: OverlayKind) {
+        if self.top_overlay().is_none() {
+            self.push_overlay(kind);
+        }
+    }
+
     pub(crate) fn close_overlay(&mut self, kind: OverlayKind) -> bool {
         let Some(index) = self
             .overlays

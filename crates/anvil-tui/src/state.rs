@@ -614,6 +614,15 @@ pub(crate) enum OverlayKind {
     Fuzzy,
     Problems,
     WorkspaceSymbols,
+    DocumentSymbols,
+    References,
+    CallHierarchy,
+    CodeActions,
+    DiagnosticPeek,
+    Hover,
+    ThemeBrowser,
+    DebugPanel,
+    TestExplorer,
 }
 
 impl OverlayKind {

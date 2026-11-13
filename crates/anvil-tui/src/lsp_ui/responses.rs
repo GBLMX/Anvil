@@ -13,14 +13,17 @@ impl Model {
         let Some(items) = result.as_array() else {
             self.status.text = "lsp: no document symbols".to_owned();
             self.overlays.lsp_results.document_symbols = None;
+            self.close_overlay(OverlayKind::DocumentSymbols);
             return;
         };
         let items = symbols_from_lsp(items);
         if items.is_empty() {
             self.status.text = "lsp: no document symbols".to_owned();
             self.overlays.lsp_results.document_symbols = None;
+            self.close_overlay(OverlayKind::DocumentSymbols);
         } else {
             self.overlays.lsp_results.document_symbols = Some(SymbolState { items, selected: 0 });
+            self.push_overlay_if_idle(OverlayKind::DocumentSymbols);
             self.status.text = "document symbols".to_owned();
         }
     }
@@ -492,12 +495,14 @@ impl Model {
         if references.is_empty() {
             self.status.text = "lsp: no references".to_owned();
             self.overlays.lsp_results.references = None;
+            self.close_overlay(OverlayKind::References);
         } else {
             let count = references.len();
             self.overlays.lsp_results.references = Some(ReferenceState {
                 items: references,
                 selected: 0,
             });
+            self.push_overlay_if_idle(OverlayKind::References);
             self.status.text = format!("references: {count}");
         }
     }
@@ -619,6 +624,7 @@ impl Model {
         if items.is_empty() {
             self.status.text = "lsp: no calls".to_owned();
             self.overlays.lsp_results.call_hierarchy = None;
+            self.close_overlay(OverlayKind::CallHierarchy);
         } else {
             let count = items.len();
             let label = match direction {
@@ -631,6 +637,7 @@ impl Model {
                 items,
                 selected: 0,
             });
+            self.push_overlay_if_idle(OverlayKind::CallHierarchy);
         }
     }
 
@@ -644,6 +651,7 @@ impl Model {
             self.status.text = "lsp: no hover".to_owned();
         } else {
             self.overlays.lsp_results.hover = Some(text);
+            self.push_overlay_if_idle(OverlayKind::Hover);
             self.status.text = "hover".to_owned();
         }
     }

@@ -6,8 +6,8 @@ impl Model {
     pub(crate) fn clear_lsp_ui(&mut self) {
         self.clear_lsp_requests();
         self.overlays.lsp_results.completion = None;
-        self.overlays.lsp_results.hover = None;
-        self.ui.diagnostic_peek = None;
+        self.close_hover();
+        self.close_diagnostic_peek();
         self.overlays.lsp_results.code_actions = None;
         self.overlays.lsp_results.code_lens = None;
         self.overlays.lsp_results.document_symbols = None;

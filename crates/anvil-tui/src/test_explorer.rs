@@ -51,6 +51,7 @@ impl Model {
 
     pub(crate) fn close_test_explorer(&mut self) {
         self.overlays.test_explorer = None;
+        self.close_overlay(OverlayKind::TestExplorer);
         self.file.dirty = true;
     }
 
@@ -77,8 +78,8 @@ impl Model {
             self.offset_at_utf16(problem.line as usize, problem.character as usize);
         self.ui.focus.tree = false;
         self.ui.focus.split = false;
-        self.overlays.test_explorer = None;
-        self.ui.diagnostic_peek = None;
+        self.close_test_explorer();
+        self.close_diagnostic_peek();
         self.status.text = format!(
             "{}:{}: {}",
             problem.path.display(),

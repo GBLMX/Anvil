@@ -657,6 +657,7 @@ fn debug_panel_keys_cycle_and_close() {
     let mut model = Model::new(EditorState::from_text("alpha"), None);
     model.execute_command("debug");
     assert!(model.overlays.debug_panel.is_some());
+    assert_eq!(model.top_overlay(), Some(OverlayKind::DebugPanel));
     handle_event(&mut model, key(KeyCode::Tab));
     assert_eq!(
         model.overlays.debug_panel.as_ref().map(|panel| panel.kind),
@@ -664,6 +665,7 @@ fn debug_panel_keys_cycle_and_close() {
     );
     handle_event(&mut model, key(KeyCode::Esc));
     assert!(model.overlays.debug_panel.is_none());
+    assert!(model.overlays.stack.is_empty());
 }
 
 #[test]

@@ -58,8 +58,10 @@ fn references_populate_and_jump_to_selection() {
         references.items[1].path,
         other.canonicalize().expect("other")
     );
+    assert_eq!(model.top_overlay(), Some(OverlayKind::References));
     model.move_reference(1);
     model.apply_reference();
+    assert!(model.overlays.stack.is_empty());
     assert_eq!(
         model.session.path.as_deref(),
         Some(other.canonicalize().expect("other").as_path())

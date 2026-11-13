@@ -268,6 +268,18 @@ fn overlay_stack_is_lifo_and_restores_focus() {
 }
 
 #[test]
+fn theme_browser_uses_the_overlay_stack() {
+    let mut model = Model::new(EditorState::from_text("alpha"), None);
+    model.start_page.welcome = false;
+    model.open_theme_browser();
+    assert_eq!(model.top_overlay(), Some(OverlayKind::ThemeBrowser));
+
+    handle_event(&mut model, key(KeyCode::Esc));
+    assert!(model.overlays.theme_browser.is_none());
+    assert!(model.overlays.stack.is_empty());
+}
+
+#[test]
 fn problems_panel_uses_the_overlay_stack() {
     let mut model = Model::new(EditorState::from_text("alpha"), None);
     model.start_page.welcome = false;

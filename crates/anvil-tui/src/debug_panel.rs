@@ -120,12 +120,13 @@ impl DebugPanelState {
 impl Model {
     pub(crate) fn toggle_debug_panel(&mut self) {
         if self.overlays.debug_panel.is_some() {
-            self.overlays.debug_panel = None;
+            self.close_debug_panel();
             self.status.text = "debug panel closed".to_owned();
             self.file.dirty = true;
             return;
         }
         self.overlays.debug_panel = Some(DebugPanelState::default());
+        self.push_overlay(OverlayKind::DebugPanel);
         self.status.text = "debug panel".to_owned();
         self.file.dirty = true;
         self.request_debug_refresh();
@@ -182,6 +183,7 @@ impl Model {
 
     pub(crate) fn close_debug_panel(&mut self) {
         self.overlays.debug_panel = None;
+        self.close_overlay(OverlayKind::DebugPanel);
         self.file.dirty = true;
     }
 

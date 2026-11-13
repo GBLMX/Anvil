@@ -23,6 +23,7 @@ impl Model {
             original: theme::choice(),
             selected,
         });
+        self.push_overlay(OverlayKind::ThemeBrowser);
         self.status.text = "themes · Enter apply · Esc cancel".to_owned();
         self.file.dirty = true;
     }
@@ -49,6 +50,7 @@ impl Model {
         let Some(browser) = self.overlays.theme_browser.take() else {
             return;
         };
+        self.close_overlay(OverlayKind::ThemeBrowser);
         let names = theme::names();
         let Some(name) = names.get(browser.selected) else {
             return;
@@ -67,6 +69,7 @@ impl Model {
         let Some(browser) = self.overlays.theme_browser.take() else {
             return;
         };
+        self.close_overlay(OverlayKind::ThemeBrowser);
         let _ = theme::apply_choice(browser.original, false);
         self.status.text = "theme preview cancelled".to_owned();
         self.file.dirty = true;
