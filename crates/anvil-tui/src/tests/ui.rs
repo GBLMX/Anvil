@@ -20,6 +20,14 @@ fn renders_start_dashboard_for_an_empty_launch() {
     assert!(!model.start_page.welcome);
     assert!(matches!(model.ui.input_mode, InputMode::Insert));
 }
+#[test]
+fn help_opens_from_normal_editor_mode() {
+    let mut model = Model::new(EditorState::from_text("text"), None);
+    model.start_page.welcome = false;
+    handle_event(&mut model, key(KeyCode::Char('?')));
+    assert!(model.pager.back.is_some());
+}
+
 
 #[test]
 fn dashboard_survives_help_round_trip() {

@@ -338,6 +338,8 @@ post-`0.5.0` feature line.
   now 664 lines.
 
 ### Fixed
+- `?` opens the help page from normal editor mode, not only the start
+  dashboard.
 - Panel borders now use padded titles and rounded corners; the focused panel
   and active split separator use a heavy border for clearer focus. The current
   line number uses the accent color and bold weight on the same current-line

@@ -1331,6 +1331,11 @@ fn handle_key(model: &mut Model, key: KeyPress) {
         dispatch_context_binding(model, KeymapContext::Global, key);
         return;
     }
+    if model.ui.input_mode == InputMode::Normal && key.code == KeyCode::Char('?') {
+        model.show_help();
+        return;
+    }
+
 
     match &mut model.ui.input_mode {
         InputMode::Rename { name } => match key.code {
