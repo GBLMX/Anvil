@@ -8,6 +8,8 @@ post-`0.5.0` feature line.
 
 ## [Unreleased]
 ### Added
+- The desktop entry registers common text and source-code MIME types, so
+  Anvil appears in file-manager open-with menus.
 - Plugin commands registered at runtime through `editor.register_command` now
   appear in the command palette and can launch their host. Ids are
   plugin-namespaced, duplicate ids are rejected, and the session is capped at

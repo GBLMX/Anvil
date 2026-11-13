@@ -8,6 +8,7 @@ Exec=@BINDIR@/anvil %F
 TryExec=@BINDIR@/anvil
 Icon=com.github.GBLMX.Anvil
 Terminal=true
+MimeType=text/plain;text/markdown;text/x-markdown;application/json;application/x-yaml;text/x-yaml;application/toml;text/x-rust;text/x-go;text/x-csrc;text/x-chdr;text/x-c++src;text/x-c++hdr;text/x-python;text/x-shellscript;application/x-shellscript;text/x-lua;text/x-typescript;application/javascript;text/css;text/html;text/xml;application/xml;text/x-diff;text/x-log;text/x-makefile;text/x-cmake;text/x-java;text/x-kotlin;text/x-ruby;text/x-php;text/x-perl;text/x-tex;text/x-nix;
 Categories=Utility;TextEditor;
 Keywords=editor;text;terminal;rust;
 StartupNotify=false
