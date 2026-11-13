@@ -144,7 +144,8 @@ jobs:
           cargo test -p anvil-distro-standard --features official-workspace-index
           cargo test -p anvil-distro-standard --features official-language-latex
           cargo test -p anvil-distro-standard --features official-language-typst
-          cargo test -p anvil-distro-standard --features official-git,official-workspace-index,official-language-latex,official-language-typst
+          cargo test -p anvil-distro-standard --features official-desktop
+          cargo test -p anvil-distro-standard --all-features
           cargo run -q -p anvil-distro-minimal -- --version | grep -q '^anvil-minimal '
           for package in anvil-mod-git anvil-mod-workspace-index anvil-mod-desktop anvil-mod-language-latex anvil-mod-language-typst; do
             if cargo tree -p "$package" -e normal --prefix none | grep -q '^anvil-tui '; then
