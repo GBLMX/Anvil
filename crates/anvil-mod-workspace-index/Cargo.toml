@@ -1,0 +1,8 @@
+[package]
+name = "anvil-mod-workspace-index"
+description = "Bounded in-memory workspace index for the Anvil workspace-index module"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
