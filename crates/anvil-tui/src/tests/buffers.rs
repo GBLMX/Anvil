@@ -150,6 +150,7 @@ fn buffer_picker_filters_and_switches() {
     model.open_path(&second).expect("open second");
     model.open_path(&third).expect("open third");
     model.open_buffer_picker();
+    assert_eq!(model.top_overlay(), Some(OverlayKind::BufferPicker));
     assert_eq!(
         model
             .overlays
@@ -186,6 +187,7 @@ fn buffer_picker_filters_and_switches() {
     assert_eq!(picker.filtered.len(), 1);
     handle_event(&mut model, key(KeyCode::Enter));
     assert!(model.overlays.buffer_picker.is_none());
+    assert!(model.overlays.stack.is_empty());
     assert_eq!(model.session.path.as_ref(), Some(&second));
 }
 
@@ -199,6 +201,9 @@ fn buffer_picker_opens_from_space_b_and_buffers_command() {
 
     command(&mut model, "buffers");
     assert!(model.overlays.buffer_picker.is_some());
+    assert_eq!(model.top_overlay(), Some(OverlayKind::BufferPicker));
+    model.close_buffer_picker();
+    assert!(model.overlays.stack.is_empty());
 }
 
 #[test]

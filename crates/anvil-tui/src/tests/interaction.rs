@@ -662,6 +662,7 @@ fn fuzzy_filters_workspace_files() {
     let mut model = Model::new(EditorState::from_text(""), None);
     model.workspace.path = dir.path().to_path_buf();
     model.start_fuzzy();
+    assert_eq!(model.top_overlay(), Some(OverlayKind::Fuzzy));
     let fuzzy = model.overlays.fuzzy.as_mut().expect("fuzzy");
     fuzzy.query = "main".to_owned();
     model.fuzzy_refresh();
@@ -669,6 +670,8 @@ fn fuzzy_filters_workspace_files() {
         model.overlays.fuzzy.as_ref().expect("fuzzy").filtered.len(),
         1
     );
+    model.close_fuzzy();
+    assert!(model.overlays.stack.is_empty());
 }
 #[test]
 fn stale_preview_results_are_discarded() {

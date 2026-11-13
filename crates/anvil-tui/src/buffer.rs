@@ -69,6 +69,7 @@ impl Model {
             entries,
             selected,
         });
+        self.push_overlay(OverlayKind::BufferPicker);
         self.status.text = "buffers".to_owned();
         self.file.dirty = true;
     }
@@ -104,6 +105,7 @@ impl Model {
 
     pub(crate) fn close_buffer_picker(&mut self) {
         self.overlays.buffer_picker = None;
+        self.close_overlay(OverlayKind::BufferPicker);
         self.file.dirty = true;
     }
 
@@ -111,6 +113,7 @@ impl Model {
         let Some(picker) = self.overlays.buffer_picker.take() else {
             return;
         };
+        self.close_overlay(OverlayKind::BufferPicker);
         let Some(index) = picker.filtered.get(picker.selected).copied() else {
             self.status.text = "no matching buffer".to_owned();
             self.file.dirty = true;

@@ -453,11 +453,7 @@ fn execute_fuzzy_action(model: &mut Model, action: PickerAction) {
         PickerAction::Next => model.fuzzy_move(1),
         PickerAction::Previous => model.fuzzy_move(-1),
         PickerAction::Accept => model.fuzzy_open(),
-        PickerAction::Cancel => {
-            model.overlays.fuzzy = None;
-            model.clear_preview();
-            model.file.dirty = true;
-        }
+        PickerAction::Cancel => model.close_fuzzy(),
         PickerAction::PopQuery => {
             if let Some(fuzzy) = model.overlays.fuzzy.as_mut() {
                 fuzzy.query.pop();
@@ -1132,6 +1128,16 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             OverlayKind::Settings => {
                 if let Some(action) = settings_action(key) {
                     execute_settings_action(model, action);
+                }
+            }
+            OverlayKind::BufferPicker => {
+                if let Some(action) = picker_action(key, text_input) {
+                    execute_buffer_picker_action(model, action);
+                }
+            }
+            OverlayKind::Fuzzy => {
+                if let Some(action) = picker_action(key, text_input) {
+                    execute_fuzzy_action(model, action);
                 }
             }
         }

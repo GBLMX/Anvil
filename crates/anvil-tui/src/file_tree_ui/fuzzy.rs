@@ -1,6 +1,7 @@
 //! Fuzzy file finder and preview state.
 
 use super::*;
+use crate::OverlayKind;
 
 impl Model {
     pub(crate) fn clear_preview(&mut self) {
@@ -164,6 +165,7 @@ impl Model {
                 filtered: Vec::new(),
                 selected: 0,
             });
+            self.push_overlay(OverlayKind::Fuzzy);
             self.status.text = "loading files".to_owned();
             self.file.dirty = true;
             return;
@@ -183,6 +185,7 @@ impl Model {
             filtered,
             selected: 0,
         });
+        self.push_overlay(OverlayKind::Fuzzy);
         self.request_preview();
         self.file.dirty = true;
     }
@@ -272,10 +275,18 @@ impl Model {
         self.file.dirty = true;
     }
 
+    pub(crate) fn close_fuzzy(&mut self) {
+        self.overlays.fuzzy = None;
+        self.close_overlay(OverlayKind::Fuzzy);
+        self.clear_preview();
+        self.file.dirty = true;
+    }
+
     pub(crate) fn fuzzy_open(&mut self) {
         let Some(fuzzy) = self.overlays.fuzzy.take() else {
             return;
         };
+        self.close_overlay(OverlayKind::Fuzzy);
         self.clear_preview();
         let Some(index) = fuzzy.filtered.get(fuzzy.selected) else {
             self.file.dirty = true;

@@ -387,9 +387,7 @@ fn close_outside_overlay(model: &mut Model) {
         model.close_command_palette();
     }
     if model.overlays.fuzzy.is_some() {
-        model.overlays.fuzzy = None;
-        model.clear_preview();
-        model.file.dirty = true;
+        model.close_fuzzy();
     }
     if model.overlays.lsp_results.code_actions.is_some() {
         model.cancel_code_actions();

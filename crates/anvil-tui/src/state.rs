@@ -610,6 +610,8 @@ pub(crate) struct LanguageState {
 pub(crate) enum OverlayKind {
     CommandPalette,
     Settings,
+    BufferPicker,
+    Fuzzy,
 }
 
 impl OverlayKind {

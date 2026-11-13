@@ -161,6 +161,7 @@ impl Model {
             entries,
             selected: 0,
         });
+        self.push_overlay(OverlayKind::Fuzzy);
         self.status.text = "recent files".to_owned();
         self.request_preview();
         self.file.dirty = true;
