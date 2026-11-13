@@ -14,6 +14,13 @@ official-workspace-index = ["anvil-tui/official-workspace-index", "dep:anvil-mod
 official-desktop = ["dep:anvil-mod-desktop"]
 official-language-latex = ["anvil-tui/official-language-latex", "dep:anvil-mod-language-latex"]
 official-language-typst = ["anvil-tui/official-language-typst", "dep:anvil-mod-language-typst"]
+full = [
+    "official-git",
+    "official-workspace-index",
+    "official-desktop",
+    "official-language-latex",
+    "official-language-typst",
+]
 
 [dependencies]
 anvil-tui = { path = "../anvil-tui", version = "0.6.0", default-features = false }

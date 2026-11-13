@@ -73,6 +73,17 @@ pub const STANDARD: Distribution = Distribution {
     language_typst: false,
 };
 
+/// The full Anvil distribution, enabling every official module.
+pub const FULL: Distribution = Distribution {
+    name: "anvil",
+    usage: USAGE,
+    git: true,
+    workspace_index: true,
+    desktop: true,
+    language_latex: true,
+    language_typst: true,
+};
+
 #[derive(Debug)]
 enum RunError {
     Args(String),
@@ -867,5 +878,18 @@ mod tests {
                 .tool,
             "tinymist"
         );
+    }
+
+    #[cfg(feature = "full")]
+    #[test]
+    fn full_distribution_enables_every_module() {
+        assert!(FULL.git);
+        assert!(FULL.workspace_index);
+        assert!(FULL.desktop);
+        assert!(FULL.language_latex);
+        assert!(FULL.language_typst);
+        assert!(compose_workspace_index(&FULL).expect("index").is_some());
+        assert!(compose_desktop(&FULL).expect("desktop").is_some());
+        assert!(compose_language_tooling(&FULL).expect("language").is_some());
     }
 }

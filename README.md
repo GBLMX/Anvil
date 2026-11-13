@@ -153,6 +153,10 @@ loading, or marketplace-installed Rust module. Module contract v1 is frozen;
 the `0.7.1`-`0.7.3` module, workspace-index, and compatibility-gate slices and
 the `0.7.4` desktop, LaTeX, and Typst slices are complete.
 
+The `full` Cargo feature enables every official module at runtime; building
+with `--all-features` selects it. The default `anvil` binary remains the
+standard Git-only composition unless `full` is selected.
+
 - `official.git` is part of the default standard composition. `:git-*` dispatch
   and completion are gated off when the Git service is absent.
 - `official.workspace-index` is opt-in through the

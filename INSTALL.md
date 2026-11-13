@@ -40,6 +40,16 @@ GOTOOLCHAIN=go1.26.11 go build -o target/release/anvil-gateway ./go/cmd/anvil-ga
 GOTOOLCHAIN=go1.26.11 go build -o target/release/anvil-exec-runner ./go/cmd/anvil-exec-runner
 ```
 
+The default `anvil` composition is standard/Git-only. For a local full build
+that activates every official module at runtime:
+
+```bash
+cargo build --release -p anvil-distro-standard --features full \
+  -p anvil-ctl -p anvil-mcp -p anvil-plugin-host
+```
+
+`--all-features` also selects the full distribution.
+
 ## Release layout
 
 Build a self-contained layout with the binaries and official plugin sources:

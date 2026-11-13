@@ -19,6 +19,9 @@ post-`0.5.0` feature line.
 - LaTeX/Typst grammars are now feature-gated in `anvil-syntax`; feature-free
   builds no longer compile them. `official-language-latex` and
   `official-language-typst` enable the corresponding highlighting features.
+- `anvil-distro-standard` adds a `full` feature that enables every official
+  module at runtime. `--all-features` selects it; the default `anvil` binary
+  remains the standard Git-only composition.
 - Control sockets are now per workspace: `anvil`, `anvil-ctl`, and `anvil-mcp`
   select the instance by canonical workspace path instead of one global
   `control.sock`. File arguments outside the cwd derive their parent as the
