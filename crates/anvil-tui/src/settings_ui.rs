@@ -440,6 +440,37 @@ mod tests {
     }
 
     #[test]
+    fn settings_theme_row_saves_choice() {
+        let directory =
+            std::env::temp_dir().join(format!("anvil-settings-theme-{}", std::process::id()));
+        let path = directory.join("settings.toml");
+        unsafe { std::env::set_var("ANVIL_SETTINGS", &path) };
+        let mut model = Model::new(crate::EditorState::from_text("x"), None);
+        model.open_settings();
+        for _ in 0..9 {
+            model.move_settings(1);
+        }
+        model.adjust_settings(1);
+        let expected = model
+            .overlays
+            .settings_overlay
+            .as_ref()
+            .expect("overlay")
+            .theme;
+        assert_ne!(expected, theme::Choice::Fixed("anvil-dark"));
+        model.save_settings();
+        assert_eq!(model.config.settings.theme, expected);
+        assert_eq!(
+            settings::load_file_from_path(&path)
+                .expect("settings")
+                .theme,
+            expected
+        );
+        unsafe { std::env::remove_var("ANVIL_SETTINGS") };
+        std::fs::remove_dir_all(directory).expect("cleanup");
+    }
+
+    #[test]
     fn settings_edits_preserve_active_startup_theme() {
         theme::set_startup_theme("nord").expect("active theme");
         let mut model = Model::new(crate::EditorState::from_text("x"), None);

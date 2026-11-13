@@ -455,7 +455,10 @@ pub(crate) fn render_overlays(model: &Model, frame: &mut Frame, area: Rect) {
     if let Some(overlay) = &model.overlays.settings_overlay {
         let popup = crate::settings_ui::rect(area);
         frame.render_widget(Clear, popup);
-        frame.render_widget(crate::render::focused_panel_block("Settings"), popup);
+        frame.render_widget(
+            crate::render::focused_panel_block("Settings · s save · Esc cancel"),
+            popup,
+        );
         let inner = Rect {
             x: popup.x + 2,
             y: popup.y + 1,
@@ -489,7 +492,7 @@ pub(crate) fn render_overlays(model: &Model, frame: &mut Frame, area: Rect) {
         );
         let body = Rect {
             y: inner.y + 2,
-            height: inner.height.saturating_sub(4),
+            height: inner.height.saturating_sub(5),
             ..inner
         };
         let sidebar_width = (inner.width / 5).clamp(18, 24);
@@ -563,6 +566,18 @@ pub(crate) fn render_overlays(model: &Model, frame: &mut Frame, area: Rect) {
             .style(theme::panel())
             .block(panel_block("Values")),
             content,
+        );
+        let keys = Rect {
+            y: inner.y + inner.height.saturating_sub(2),
+            height: 1,
+            ..inner
+        };
+        frame.render_widget(
+            Paragraph::new(Line::styled(
+                "↑/↓ or j/k select · ←/→ or h/l change · r reset · s save · Esc cancel",
+                theme::panel().fg(theme::dim()),
+            )),
+            keys,
         );
         let description = Rect {
             y: inner.y + inner.height.saturating_sub(1),

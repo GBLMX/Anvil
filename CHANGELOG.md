@@ -380,6 +380,8 @@ post-`0.5.0` feature line.
   now 664 lines.
 
 ### Fixed
+- The settings overlay now shows its key bindings, including `s` to save and
+  `Esc` to cancel, so theme changes are not silently discarded.
 - `?` opens the help page from normal editor mode, not only the start
   dashboard.
 - Panel borders now use padded titles and rounded corners; the focused panel
