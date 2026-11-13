@@ -1004,6 +1004,9 @@ fn command_palette_previews_and_applies_themes() {
 
 #[test]
 fn theme_auto_and_save_persist_choice() {
+    let _guard = crate::settings::TEST_ENV_LOCK
+        .lock()
+        .unwrap_or_else(|error| error.into_inner());
     let directory = std::env::temp_dir().join(format!("anvil-theme-{}", std::process::id()));
     std::fs::create_dir_all(&directory).expect("temp dir");
     let path = directory.join("settings.toml");

@@ -441,6 +441,9 @@ mod tests {
 
     #[test]
     fn settings_theme_row_saves_choice() {
+        let _guard = crate::settings::TEST_ENV_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         let directory =
             std::env::temp_dir().join(format!("anvil-settings-theme-{}", std::process::id()));
         let path = directory.join("settings.toml");
