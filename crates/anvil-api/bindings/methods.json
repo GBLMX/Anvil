@@ -78,5 +78,10 @@
     "name": "sys.exec",
     "params": "ExecRequest",
     "result": "ExecResponse"
+  },
+  {
+    "name": "sys.exec.v2",
+    "params": "ExecRequestV2",
+    "result": "ExecResponse"
   }
 ]

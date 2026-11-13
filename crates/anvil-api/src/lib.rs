@@ -35,6 +35,7 @@ pub mod method {
     pub const SYS_REMOVE_ALL: &str = "sys.remove_all";
     pub const SYS_FETCH: &str = "sys.fetch";
     pub const SYS_EXEC: &str = "sys.exec";
+    pub const SYS_EXEC_V2: &str = "sys.exec.v2";
 }
 
 /// A method parameter/result type in the catalog.
@@ -137,6 +138,11 @@ pub const METHODS: &[MethodSpec] = &[
     MethodSpec {
         name: method::SYS_EXEC,
         params: MethodType::Named("ExecRequest"),
+        result: MethodType::Named("ExecResponse"),
+    },
+    MethodSpec {
+        name: method::SYS_EXEC_V2,
+        params: MethodType::Named("ExecRequestV2"),
         result: MethodType::Named("ExecResponse"),
     },
 ];
@@ -498,6 +504,24 @@ pub struct ExecRequest {
     pub timeout_ms: u64,
 }
 
+/// Bounded one-shot exec request with stdin and an optional workspace-relative cwd.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[ts(export)]
+pub struct ExecRequestV2 {
+    pub tool: String,
+    pub args: Vec<String>,
+    pub cwd: Option<String>,
+    #[schemars(length(max = 4194304))]
+    pub stdin: Option<String>,
+    #[ts(type = "number")]
+    #[schemars(range(max = 9007199254740991i64))]
+    pub timeout_ms: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    #[schemars(range(max = 9007199254740991i64))]
+    pub max_output_bytes: Option<u64>,
+}
+
 /// Sandboxed process result.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[ts(export)]
@@ -627,6 +651,7 @@ mod tests {
             method::SYS_REMOVE_ALL,
             method::SYS_FETCH,
             method::SYS_EXEC,
+            method::SYS_EXEC_V2,
         ];
         assert_eq!(METHODS.len(), names.len());
         for name in names {

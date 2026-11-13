@@ -388,30 +388,36 @@ impl GatewayClient {
                 "timeout_ms": timeout_ms,
             }),
         )?;
-        Ok(ExecResult {
-            stdout: result
-                .get("stdout")
-                .and_then(serde_json::Value::as_str)
-                .ok_or(ClientError::Protocol("exec stdout"))?
-                .to_owned(),
-            stderr: result
-                .get("stderr")
-                .and_then(serde_json::Value::as_str)
-                .ok_or(ClientError::Protocol("exec stderr"))?
-                .to_owned(),
-            exit_code: result
-                .get("exit_code")
-                .and_then(serde_json::Value::as_i64)
-                .ok_or(ClientError::Protocol("exec exit_code"))?,
-            timed_out: result
-                .get("timed_out")
-                .and_then(serde_json::Value::as_bool)
-                .ok_or(ClientError::Protocol("exec timed_out"))?,
-            output_truncated: result
-                .get("output_truncated")
-                .and_then(serde_json::Value::as_bool)
-                .ok_or(ClientError::Protocol("exec output_truncated"))?,
-        })
+        parse_exec_result(&result)
+    }
+
+    /// Run one allowlisted tool with optional workspace-relative cwd, stdin,
+    /// and an output cap.
+    pub fn exec_v2(
+        &mut self,
+        tool: &str,
+        args: &[String],
+        cwd: Option<&str>,
+        stdin: Option<&str>,
+        timeout_ms: u64,
+        max_output_bytes: Option<u64>,
+    ) -> Result<ExecResult, ClientError> {
+        let mut params = serde_json::json!({
+            "tool": tool,
+            "args": args,
+            "timeout_ms": timeout_ms,
+        });
+        if let Some(cwd) = cwd {
+            params["cwd"] = serde_json::Value::String(cwd.to_owned());
+        }
+        if let Some(stdin) = stdin {
+            params["stdin"] = serde_json::Value::String(stdin.to_owned());
+        }
+        if let Some(max_output_bytes) = max_output_bytes {
+            params["max_output_bytes"] = serde_json::Value::from(max_output_bytes);
+        }
+        let result = self.request("sys.exec.v2", params)?;
+        parse_exec_result(&result)
     }
 
     /// Perform one bounded, allowlisted HTTP fetch through the gateway.
@@ -829,6 +835,33 @@ impl GatewayClient {
         self.connection.send(&serde_json::to_vec(&request)?)?;
         Ok(id)
     }
+}
+
+fn parse_exec_result(result: &serde_json::Value) -> Result<ExecResult, ClientError> {
+    Ok(ExecResult {
+        stdout: result
+            .get("stdout")
+            .and_then(serde_json::Value::as_str)
+            .ok_or(ClientError::Protocol("exec stdout"))?
+            .to_owned(),
+        stderr: result
+            .get("stderr")
+            .and_then(serde_json::Value::as_str)
+            .ok_or(ClientError::Protocol("exec stderr"))?
+            .to_owned(),
+        exit_code: result
+            .get("exit_code")
+            .and_then(serde_json::Value::as_i64)
+            .ok_or(ClientError::Protocol("exec exit_code"))?,
+        timed_out: result
+            .get("timed_out")
+            .and_then(serde_json::Value::as_bool)
+            .ok_or(ClientError::Protocol("exec timed_out"))?,
+        output_truncated: result
+            .get("output_truncated")
+            .and_then(serde_json::Value::as_bool)
+            .ok_or(ClientError::Protocol("exec output_truncated"))?,
+    })
 }
 
 fn parse_binary_frame(frame: &[u8]) -> Result<(u64, u64, ReadChunk), ClientError> {

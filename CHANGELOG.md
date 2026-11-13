@@ -29,6 +29,9 @@ post-`0.5.0` feature line.
 - Completion now carries a source id; LSP items are tagged `builtin.lsp`,
   while `builtin.buffer-words` and `builtin.paths` provide local buffer and
   gateway-enumerated path candidates. Results merge without duplicates.
+- Added `sys.exec.v2` and `ExecRequestV2` for bounded one-shot tools with
+  optional workspace-relative cwd, stdin, and output cap. Existing `sys.exec`
+  callers are unchanged.
 - `anvil-distro-standard` adds a `full` feature that enables every official
   module at runtime. `--all-features` selects it; the default `anvil` binary
   remains the standard Git-only composition.

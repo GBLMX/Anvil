@@ -903,3 +903,31 @@ func TestListenSweepsPersistedRevocations(t *testing.T) {
 		t.Fatal("revoked plugin stayed enabled after gateway startup")
 	}
 }
+
+func TestSysExecV2ForwardsStdin(t *testing.T) {
+	runner := filepath.Join(t.TempDir(), "runner")
+	if err := os.WriteFile(runner, []byte("#!/bin/sh\ncat\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	socket := startGateway(t, []string{"sys.exec"}, runner)
+	conn := dialGateway(t, socket)
+	if response := sendRequest(t, conn, "hello-1", "session.hello", helloRequestParams(testToken)); response.Error != nil {
+		t.Fatalf("handshake error: %+v", response.Error)
+	}
+	response := sendRequest(t, conn, "exec-v2", "sys.exec.v2", map[string]interface{}{
+		"tool":       "/usr/bin/rg",
+		"args":       []string{"-n", "foo", "README.md"},
+		"stdin":      "completion text",
+		"timeout_ms": 1000,
+	})
+	if response.Error != nil {
+		t.Fatalf("exec error: %+v", response.Error)
+	}
+	result, ok := response.Result.(map[string]interface{})
+	if !ok {
+		t.Fatalf("result = %#v", response.Result)
+	}
+	if result["stdout"] != "completion text" {
+		t.Fatalf("stdout = %q", result["stdout"])
+	}
+}

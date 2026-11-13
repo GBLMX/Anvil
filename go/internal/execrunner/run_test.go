@@ -96,3 +96,33 @@ func TestRunCapturesExitCode(t *testing.T) {
 		t.Fatalf("exit code = %d, want 7", result.ExitCode)
 	}
 }
+
+func TestRunFeedsStdin(t *testing.T) {
+	result, err := Run(context.Background(), ProcessConfig{
+		Path:  "/bin/sh",
+		Args:  []string{"-c", "cat"},
+		Env:   []string{"PATH=/usr/bin:/bin"},
+		Stdin: []byte("hello from completion"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(result.Stdout) != "hello from completion" {
+		t.Fatalf("stdin was not forwarded: %q", result.Stdout)
+	}
+}
+
+func TestRunUsesWorkingDirectory(t *testing.T) {
+	dir := t.TempDir()
+	result, err := Run(context.Background(), ProcessConfig{
+		Path: "/bin/pwd",
+		Env:  []string{"PATH=/usr/bin:/bin"},
+		Dir:  dir,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(result.Stdout) != dir+"\n" {
+		t.Fatalf("cwd = %q, want %q", result.Stdout, dir)
+	}
+}

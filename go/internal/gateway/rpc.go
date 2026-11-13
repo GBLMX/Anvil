@@ -147,6 +147,8 @@ func (s *Server) dispatch(ctx context.Context, req request, state *connectionSta
 		return s.hello(req, state)
 	case "sys.exec":
 		return s.exec(ctx, req, state)
+	case "sys.exec.v2":
+		return s.exec(ctx, req, state)
 	case "sys.fetch":
 		return s.fetch(ctx, req, state)
 	case "pkg.download":

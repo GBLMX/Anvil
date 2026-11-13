@@ -23,6 +23,7 @@ type ProcessConfig struct {
 	Args      []string
 	Env       []string
 	Dir       string
+	Stdin     []byte
 	Timeout   time.Duration
 	MaxOutput int
 }
@@ -60,6 +61,9 @@ func Run(ctx context.Context, cfg ProcessConfig) (ProcessResult, error) {
 		cmd.Env = cfg.Env
 	}
 	cmd.Dir = cfg.Dir
+	if len(cfg.Stdin) > 0 {
+		cmd.Stdin = bytes.NewReader(cfg.Stdin)
+	}
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true, Pdeathsig: syscall.SIGKILL}
 	cmd.WaitDelay = 2 * time.Second
 

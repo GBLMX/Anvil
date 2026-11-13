@@ -13,9 +13,12 @@ import (
 )
 
 type execParams struct {
-	Tool      string   `json:"tool"`
-	Args      []string `json:"args"`
-	TimeoutMS uint64   `json:"timeout_ms"`
+	Tool           string   `json:"tool"`
+	Args           []string `json:"args"`
+	Cwd            string   `json:"cwd"`
+	Stdin          string   `json:"stdin"`
+	TimeoutMS      uint64   `json:"timeout_ms"`
+	MaxOutputBytes uint64   `json:"max_output_bytes"`
 }
 
 type fetchParams struct {
@@ -97,6 +100,26 @@ func (s *Server) exec(parent context.Context, req request, state *connectionStat
 			timeout = requested
 		}
 	}
+	if len(params.Stdin) > 4<<20 {
+		return nil, &rpcError{Code: -32602, Message: "invalid params"}
+	}
+	cwd := s.cfg.Workspace
+	if params.Cwd != "" {
+		clean, err := workspacePath(params.Cwd)
+		if err != nil {
+			return nil, &rpcError{Code: -32602, Message: "invalid params"}
+		}
+		candidate := filepath.Join(s.cfg.Workspace, clean)
+		info, err := os.Stat(candidate)
+		if err != nil || !info.IsDir() {
+			return nil, &rpcError{Code: -32602, Message: "invalid params"}
+		}
+		cwd = candidate
+	}
+	maxOutput := s.cfg.MaxOutput
+	if params.MaxOutputBytes > 0 && params.MaxOutputBytes < uint64(maxOutput) {
+		maxOutput = int(params.MaxOutputBytes)
+	}
 	ctx, cancel := context.WithTimeout(parent, timeout)
 	defer cancel()
 	home, _ := os.UserHomeDir()
@@ -147,9 +170,10 @@ func (s *Server) exec(parent context.Context, req request, state *connectionStat
 		Path:      s.cfg.ExecRunner,
 		Args:      args,
 		Env:       env,
-		Dir:       s.cfg.Workspace,
+		Dir:       cwd,
+		Stdin:     []byte(params.Stdin),
 		Timeout:   timeout,
-		MaxOutput: s.cfg.MaxOutput,
+		MaxOutput: maxOutput,
 	})
 	if err != nil {
 		return nil, &rpcError{Code: -32008, Message: "exec unavailable"}

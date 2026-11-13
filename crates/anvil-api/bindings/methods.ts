@@ -17,4 +17,5 @@ export const METHODS = {
   "sys.remove_all": { params: "PathRequest", result: "EmptyResponse" },
   "sys.fetch": { params: "FetchRequest", result: "FetchResponse" },
   "sys.exec": { params: "ExecRequest", result: "ExecResponse" },
+  "sys.exec.v2": { params: "ExecRequestV2", result: "ExecResponse" },
 } as const;
