@@ -1,6 +1,6 @@
 # ADR-0025: LSP Surface and Language Breadth
 
-- Status: Proposed
+- Status: Accepted 2026-11-13; implementation audited after the 0.5.x and 0.7.4 slices
 - Date: 2026-11-12
 - Related: [ADR-0008](0008-selection-first-interaction.md), [ADR-0010](0010-cursor-and-snapshot-ownership.md), [ADR-0013](0013-kernel-distribution-boundary.md), [ADR-0022](0022-core-editing-completion.md), [ADR-0023](0023-internal-capability-closure.md), [ADR-0024](0024-tui-state-and-domain-boundaries.md)
 
@@ -18,13 +18,11 @@ itself. Two separate boundaries need an explicit decision:
 - which LSP requests Anvil advertises and tests;
 - which languages Anvil highlights without runtime configuration.
 
-The current implementation has real gaps. It has no
-`textDocument/declaration`, `textDocument/typeDefinition`, or
-`textDocument/implementation` request, so it cannot offer Helix-style
-declaration/type-definition/implementation navigation. Language highlighting is
-a compile-time Tree-sitter allowlist, not a runtime grammar registry. Files over
-256 KiB intentionally fall back to plain text. LSP is also primary-root-only;
-multi-root routing exists, but per-root LSP does not.
+The original gaps around declaration, type definition, and implementation
+navigation are closed. Language highlighting is a compile-time Tree-sitter
+allowlist, not a runtime grammar registry. Files over 256 KiB intentionally
+fall back to plain text. LSP is also primary-root-only; multi-root routing
+exists, but per-root LSP does not.
 
 These are product boundaries, not missing modules. Calling Anvil "Helix-level
 LSP" or "multi-language" without stating them would overstate the editor.
@@ -37,7 +35,8 @@ The supported request kinds are:
 
 - completion and completion resolve;
 - semantic tokens, inlay hints, and code lens;
-- definition, references, document highlights, and call hierarchy;
+- definition, declaration, type definition, implementation, references,
+  document highlights, and call hierarchy;
 - hover, signature help, rename, and code actions;
 - formatting, document symbols, workspace symbols, and sticky symbols;
 - folding ranges and `workspace/executeCommand`.
@@ -48,13 +47,10 @@ handling.
 
 The following are explicitly **not advertised** until implemented:
 
-- `textDocument/declaration`;
-- `textDocument/typeDefinition`;
-- `textDocument/implementation`;
 - document links, document colors, inline values, and linked editing ranges.
 
-Anvil does not claim Helix parity for those requests. Adding one is a bounded
-LSP slice, not a documentation change.
+Anvil does not claim full Helix parity. Adding one of the remaining requests is
+a bounded LSP slice, not a documentation change.
 
 ### 2. Every LSP addition must preserve the same invariants
 
@@ -79,14 +75,15 @@ ADR-0010 still apply.
 
 ### 3. Language breadth is a curated Tree-sitter allowlist
 
-Syntax highlighting is compiled into `anvil-tui` through explicit
-`tree-sitter-*` dependencies and queries. The current families are Rust, Go,
+Syntax highlighting is compiled into `anvil-syntax` through explicit
+`tree-sitter-*` dependencies and queries. The base families are Rust, Go,
 Bash/Zsh/Brush, Fish, Python, TOML, YAML, JSON/JSONC, Markdown, Makefile,
-Dockerfile, and `go.mod`.
+Dockerfile, HTML, and `go.mod`. LaTeX and Typst grammars are optional
+`anvil-syntax` features enabled by their language-provider modules.
 
 Adding a language requires:
 
-- an explicit Cargo dependency and query file;
+- an explicit Cargo dependency, feature gate, and query file;
 - a language id/path mapping;
 - highlighter tests for the new family;
 - a binary-size and startup review;
@@ -126,9 +123,9 @@ Per-root LSP requires its own ADR and measurements.
 
 ### 6. Helix remains a capability reference, not a target
 
-Helix is useful for identifying omissions such as the missing goto variants.
-It is not a keymap or behavior target. Selection-first semantics and the
-Vim-like TUI adapter remain unchanged.
+Helix is useful for identifying omissions in the request surface. It is not a
+keymap or behavior target. Selection-first semantics and the Vim-like TUI
+adapter remain unchanged.
 
 ## Consequences
 
@@ -144,8 +141,8 @@ Positive:
 
 Negative:
 
-- Anvil will look narrower than Helix on declaration/type-definition/
-  implementation navigation until those slices land.
+- Anvil still does not advertise document links, document colors, inline
+  values, or linked editing ranges.
 - Adding a language is a source change and a binary-size decision, not a user
   configuration change.
 - Large files intentionally lose syntax highlighting.
@@ -200,7 +197,8 @@ numbers would trade predictable editing for unverified highlighting.
 
 - The advertised LSP surface above is implemented, including code lens.
 - Goto variants are complete: definition (`gd`), declaration (`gD`), type definition (`gy`), and implementation (`gI`).
-- Tree-sitter is a compile-time allowlist of the twelve families listed above.
+- Tree-sitter is a compile-time allowlist; LaTeX and Typst grammars are
+  optional features.
 - Highlighting stops above 256 KiB.
 - LSP is primary-root-only.
 - Language servers are external trusted tools and are not bundled.
