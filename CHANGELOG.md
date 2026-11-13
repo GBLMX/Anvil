@@ -359,6 +359,9 @@ post-`0.5.0` feature line.
 ### Changed
 - Version frozen at `0.6.0` for long-term internal polish; no release tags or
   public releases during this phase.
+- Cursor visibility now uses the rendered text viewport instead of the full
+  terminal, and indent guides reuse one visible-row projection per frame. This
+  removes scroll jumps and repeated row layout on large files.
 - Split TUI runtime/layout/plugin, renderer, LSP settings/responses, and tree
   navigation/mutations/fuzzy modules; split TUI tests by domain; split gateway
   handlers into `rpc.go`, `fs.go`, `lsp.go`, and `process.go`. No behavior

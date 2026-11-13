@@ -230,6 +230,21 @@ pub fn view(model: &Model, frame: &mut Frame) {
     if let Some(area) = locations_area {
         render_pipe_locations(model, frame, area);
     }
+    let visible_rows = model.visible_rows(model.view.scroll, usize::from(content.height));
+    let mut source_rows = HashMap::new();
+    for (row, display_row) in visible_rows.iter().enumerate() {
+        match display_row {
+            crate::layout::DisplayRow::Source(line) => {
+                source_rows.insert(*line, row);
+            }
+            crate::layout::DisplayRow::Wrapped {
+                line, first: true, ..
+            } => {
+                source_rows.insert(*line, row);
+            }
+            _ => {}
+        }
+    }
     let visible_end = (model.view.scroll + usize::from(content.height))
         .min(model.session.editor.index().len_lines());
     let active_indent = model
@@ -249,8 +264,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
             } else {
                 Style::default().fg(theme::dim())
             };
-            let Some(row) = model.row_of_source_line(line_number, usize::from(content.height))
-            else {
+            let Some(&row) = source_rows.get(&line_number) else {
                 continue;
             };
             let x = text_area.x + (column - model.view.hscroll) as u16;
@@ -273,8 +287,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
         {
             let column = active - 1;
             if column >= model.view.hscroll
-                && let Some(row) =
-                    model.row_of_source_line(line_number, usize::from(content.height))
+                && let Some(&row) = source_rows.get(&line_number)
             {
                 let x =
                     text_area.x + u16::try_from(column - model.view.hscroll).unwrap_or(u16::MAX);

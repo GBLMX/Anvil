@@ -337,7 +337,9 @@ pub fn run_with_all_services(
         model.view.viewport_width = size.width;
         #[cfg(unix)]
         model.resize_terminal();
-        model.ensure_cursor_visible(size.height.saturating_sub(2), size.width.saturating_sub(2));
+        let text_height = model.editor_text_height(size.height);
+        let text_width = model.editor_text_width(size.width);
+        model.ensure_cursor_visible(text_height, text_width);
         model.tick_status();
         model.poll_icons();
         model.poll_dap_attach();

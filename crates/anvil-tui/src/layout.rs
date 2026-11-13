@@ -1,6 +1,7 @@
 //! Viewport, gutter, and visible-line layout.
 
 use super::*;
+use ratatui::layout::Rect;
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
@@ -112,6 +113,30 @@ impl Model {
             };
         }
         usize::from(width.saturating_sub(self.gutter_width()).max(1))
+    }
+
+    pub(crate) fn editor_text_width(&self, viewport_width: u16) -> u16 {
+        u16::try_from(self.wrap_text_width(viewport_width.saturating_sub(2))).unwrap_or(u16::MAX)
+    }
+
+    pub(crate) fn editor_text_height(&self, viewport_height: u16) -> u16 {
+        let mut height = viewport_height.saturating_sub(2);
+        if !self.start_page.welcome && (self.buffers.entries.len() > 1 || self.pager.back.is_some())
+        {
+            height = height.saturating_sub(1);
+        }
+        let inner = Rect {
+            x: 0,
+            y: 0,
+            width: 1,
+            height,
+        };
+        if crate::breadcrumbs::visible(self, inner) {
+            height = height.saturating_sub(1);
+        }
+        height
+            .saturating_sub(crate::pipe_locations::panel_height(self, height))
+            .max(1)
     }
 
     #[cfg(test)]
@@ -812,6 +837,18 @@ mod tests {
         );
         model.close_split();
         assert_eq!(model.view.wrap_width, full);
+    }
+
+    #[test]
+    fn editor_text_geometry_matches_rendered_chrome() {
+        let mut model = Model::new(EditorState::from_text("a"), None);
+        model.start_page.welcome = false;
+        model.session.path = Some(PathBuf::from("a"));
+        assert_eq!(
+            model.editor_text_width(100),
+            u16::try_from(model.wrap_text_width(98)).expect("width")
+        );
+        assert_eq!(model.editor_text_height(20), 17);
     }
 
     #[test]
