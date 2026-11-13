@@ -315,6 +315,22 @@ mod tests {
         ));
     }
 
+    #[test]
+    fn lldb_dap_initializes() {
+        if !Path::new("/usr/bin/lldb-dap").is_file() {
+            return;
+        }
+        let mut client = DapClient::spawn(
+            Path::new("/usr/bin/lldb-dap"),
+            &[],
+            Path::new("/home/gblmx/src/github.com/GBLMX/Anvil"),
+        )
+        .expect("spawn");
+        let sequence = client.initialize().expect("initialize");
+        let response = client.wait_response(sequence).expect("response");
+        assert_eq!(response["command"], "initialize");
+    }
+
     #[cfg(target_os = "linux")]
     #[test]
     fn shutdown_kills_adapter_process_group() {

@@ -934,6 +934,37 @@ fn dap_auto_without_file_reports_error() {
 }
 
 #[test]
+fn dap_auto_attaches_builtin_rust_adapter() {
+    if !std::path::Path::new("/usr/bin/lldb-dap").is_file() {
+        return;
+    }
+    let directory = std::env::temp_dir().join(format!(
+        "anvil-dap-auto-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|duration| duration.as_nanos())
+            .unwrap_or_default()
+    ));
+    std::fs::create_dir_all(&directory).expect("create temp dir");
+    let path = directory.join("main.rs");
+    std::fs::write(&path, "fn main() {}\n").expect("write source");
+    let mut model = Model::new(EditorState::from_text("fn main() {}\n"), Some(path));
+    model.execute_command("dap-attach");
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while model.language.dap.attach.is_some() && std::time::Instant::now() < deadline {
+        model.poll_dap_attach();
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    assert!(
+        model.language.dap.client.is_some(),
+        "status={}",
+        model.status.text
+    );
+    let _ = std::fs::remove_dir_all(directory);
+}
+
+#[test]
 fn dap_attach_does_not_block_and_reports_failure() {
     let mut model = Model::new(EditorState::from_text(""), None);
     model.execute_command("dap-attach /definitely/not-a-real-adapter");
