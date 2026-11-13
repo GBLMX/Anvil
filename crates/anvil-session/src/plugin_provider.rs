@@ -17,6 +17,7 @@ pub enum PluginProviderError {
     InvalidQuery,
     InvalidLimit,
     UnknownRequest(u64),
+    MismatchedRequest { expected: u64, actual: u64 },
     TooManyItems,
     InvalidItem,
 }
@@ -34,6 +35,12 @@ impl fmt::Display for PluginProviderError {
             Self::InvalidQuery => formatter.write_str("invalid provider query"),
             Self::InvalidLimit => formatter.write_str("invalid provider limit"),
             Self::UnknownRequest(id) => write!(formatter, "unknown provider request: {id}"),
+            Self::MismatchedRequest { expected, actual } => {
+                write!(
+                    formatter,
+                    "provider response id {actual} does not match request {expected}"
+                )
+            }
             Self::TooManyItems => formatter.write_str("too many provider items"),
             Self::InvalidItem => formatter.write_str("invalid provider item"),
         }
@@ -180,8 +187,24 @@ impl PluginProviderRequests {
         &mut self,
         response: ProviderResponse,
     ) -> Result<Vec<ProviderItem>, PluginProviderError> {
-        if self.pending.remove(&response.request_id).is_none() {
-            return Err(PluginProviderError::UnknownRequest(response.request_id));
+        self.accept_for(response.request_id, response)
+    }
+
+    /// Accepts a response only when its payload id matches the transport id.
+    pub fn accept_for(
+        &mut self,
+        request_id: u64,
+        response: ProviderResponse,
+    ) -> Result<Vec<ProviderItem>, PluginProviderError> {
+        if response.request_id != request_id {
+            self.cancel(request_id);
+            return Err(PluginProviderError::MismatchedRequest {
+                expected: request_id,
+                actual: response.request_id,
+            });
+        }
+        if self.pending.remove(&request_id).is_none() {
+            return Err(PluginProviderError::UnknownRequest(request_id));
         }
         if response.items.len() > 200 {
             return Err(PluginProviderError::TooManyItems);
@@ -301,6 +324,37 @@ mod tests {
         assert_eq!(
             requests.start(provider, &"x".repeat(257), 1),
             Err(PluginProviderError::InvalidQuery)
+        );
+    }
+
+    #[test]
+    fn mismatched_response_id_cancels_request() {
+        let mut requests = PluginProviderRequests::new();
+        let id = requests
+            .start(ProviderId::new("demo.buffers"), "", 1)
+            .expect("start");
+        assert_eq!(
+            requests.accept_for(
+                id,
+                ProviderResponse {
+                    request_id: id + 1,
+                    items: Vec::new(),
+                },
+            ),
+            Err(PluginProviderError::MismatchedRequest {
+                expected: id,
+                actual: id + 1,
+            })
+        );
+        assert_eq!(
+            requests.accept_for(
+                id,
+                ProviderResponse {
+                    request_id: id,
+                    items: Vec::new(),
+                },
+            ),
+            Err(PluginProviderError::UnknownRequest(id))
         );
     }
 

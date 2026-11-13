@@ -44,7 +44,8 @@ post-`0.5.0` feature line.
   completion providers, with namespace, duplicate-id, and plugin cleanup checks.
 - Added a bounded provider request state machine with single-use request ids,
   cancellation, and item caps. Runtime plugins now receive picker/completion
-  requests through the persistent host Lua runtime; UI merging remains pending.
+  requests through the persistent host Lua runtime with transport-id
+  correlation; UI merging remains pending.
 - `anvil-distro-standard` adds a `full` feature that enables every official
   module at runtime. `--all-features` selects it; the default `anvil` binary
   remains the standard Git-only composition.

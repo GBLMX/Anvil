@@ -530,7 +530,11 @@ impl Model {
                             .map_err(|error| error.to_string())
                     }) {
                         Ok(response) => {
-                            match self.plugins.plugin_provider_requests.accept(response) {
+                            match self
+                                .plugins
+                                .plugin_provider_requests
+                                .accept_for(id, response)
+                            {
                                 Ok(items) => {
                                     self.status.text = format!(
                                         "plugin {plugin_id}: {} provider items",
