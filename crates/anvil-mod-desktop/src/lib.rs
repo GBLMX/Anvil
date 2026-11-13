@@ -163,6 +163,20 @@ mod tests {
         path
     }
 
+    fn open_with_retry(service: &SystemDesktopService, url: &str) -> Result<(), DesktopError> {
+        let deadline = Instant::now() + Duration::from_secs(2);
+        loop {
+            match service.open_url(url) {
+                Err(DesktopError::Spawn(error))
+                    if error.contains("Text file busy") && Instant::now() < deadline =>
+                {
+                    std::thread::sleep(Duration::from_millis(10));
+                }
+                result => return result,
+            }
+        }
+    }
+
     fn wait_for(path: &Path) -> String {
         let deadline = Instant::now() + Duration::from_secs(2);
         while Instant::now() < deadline {
@@ -200,7 +214,7 @@ mod tests {
         let program = script(dir.path(), "printf '%s\\n' \"$1\" > \"$0.args\"");
         let service = SystemDesktopService::with_program(program);
         let url = "https://example.com/a?x=1&y=$HOME;echo";
-        service.open_url(url).expect("open");
+        open_with_retry(&service, url).expect("open");
         assert_eq!(wait_for(&args), format!("{url}\n"));
     }
 
@@ -224,7 +238,7 @@ mod tests {
         let program = script(dir.path(), "sleep 0.4");
         let service = SystemDesktopService::with_program(program);
         for _ in 0..MAX_IN_FLIGHT {
-            service.open_url("https://example.com").expect("within cap");
+            open_with_retry(&service, "https://example.com").expect("within cap");
         }
         assert!(matches!(
             service.open_url("https://example.com"),
