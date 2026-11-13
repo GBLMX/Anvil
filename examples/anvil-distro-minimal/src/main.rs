@@ -15,5 +15,6 @@ fn main() {
         git: false,
         workspace_index: false,
         desktop: false,
+        language_latex: false,
     });
 }

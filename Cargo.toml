@@ -10,6 +10,7 @@ members = [
     "crates/anvil-mcp",
     "crates/anvil-mod-desktop",
     "crates/anvil-mod-git",
+    "crates/anvil-mod-language-latex",
     "crates/anvil-module",
     "crates/anvil-mod-workspace-index",
     "crates/anvil-plugin-host",

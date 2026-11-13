@@ -92,6 +92,7 @@ dependencies = [
  "anvil-control",
  "anvil-mod-desktop",
  "anvil-mod-git",
+ "anvil-mod-language-latex",
  "anvil-mod-workspace-index",
  "anvil-module",
  "anvil-tui",
@@ -142,6 +143,13 @@ dependencies = [
  "anvil-module",
  "serde_json",
  "tempfile",
+]
+
+[[package]]
+name = "anvil-mod-language-latex"
+version = "0.6.0"
+dependencies = [
+ "anvil-module",
 ]
 
 [[package]]

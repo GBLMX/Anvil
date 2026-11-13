@@ -56,6 +56,8 @@ pub struct Distribution {
     pub workspace_index: bool,
     /// Whether the optional desktop URL module is part of this composition.
     pub desktop: bool,
+    /// Whether the optional LaTeX language-tooling module is part of this composition.
+    pub language_latex: bool,
 }
 
 /// The standard Anvil distribution.
@@ -65,6 +67,7 @@ pub const STANDARD: Distribution = Distribution {
     git: true,
     workspace_index: false,
     desktop: false,
+    language_latex: false,
 };
 
 #[derive(Debug)]
@@ -163,6 +166,33 @@ fn compose_git(
     Ok(registry.git_service())
 }
 
+#[cfg(feature = "official-language-latex")]
+fn compose_language_tooling(
+    distribution: &Distribution,
+) -> Result<Option<std::sync::Arc<dyn anvil_module::language::LanguageToolingService>>, RunError> {
+    if !distribution.language_latex {
+        return Ok(None);
+    }
+    let mut registry = anvil_module::ModuleRegistry::new();
+    registry
+        .register(&anvil_mod_language_latex::LatexModule)
+        .map_err(|error| RunError::Args(error.to_string()))?;
+    Ok(registry.language_tooling_service())
+}
+
+#[cfg(not(feature = "official-language-latex"))]
+fn compose_language_tooling(
+    distribution: &Distribution,
+) -> Result<Option<std::sync::Arc<dyn anvil_module::language::LanguageToolingService>>, RunError> {
+    if distribution.language_latex {
+        return Err(RunError::Args(
+            "distribution requires official-language-latex, but the feature is not compiled"
+                .to_owned(),
+        ));
+    }
+    Ok(None)
+}
+
 #[cfg(feature = "official-desktop")]
 fn compose_desktop(
     distribution: &Distribution,
@@ -230,6 +260,7 @@ where
             let git = compose_git(distribution)?;
             let workspace_index = compose_workspace_index(distribution)?;
             let desktop = compose_desktop(distribution)?;
+            let language_tooling = compose_language_tooling(distribution)?;
             Ok(anvil_tui::run_with_all_services(
                 path,
                 workspace,
@@ -240,7 +271,7 @@ where
                     git,
                     workspace_index,
                     desktop,
-                    language_tooling: None,
+                    language_tooling,
                 },
             )?)
         }
@@ -657,5 +688,39 @@ mod tests {
         };
         assert!(compose_desktop(&with_desktop).is_err());
         assert!(compose_desktop(&STANDARD).expect("compose").is_none());
+    }
+
+    #[cfg(feature = "official-language-latex")]
+    #[test]
+    fn opt_in_latex_registers_the_language_tooling_service() {
+        let with_latex = Distribution {
+            language_latex: true,
+            ..STANDARD
+        };
+        assert!(
+            compose_language_tooling(&with_latex)
+                .expect("compose")
+                .is_some()
+        );
+        assert!(
+            compose_language_tooling(&STANDARD)
+                .expect("compose")
+                .is_none()
+        );
+    }
+
+    #[cfg(not(feature = "official-language-latex"))]
+    #[test]
+    fn missing_latex_feature_is_a_startup_error() {
+        let with_latex = Distribution {
+            language_latex: true,
+            ..STANDARD
+        };
+        assert!(compose_language_tooling(&with_latex).is_err());
+        assert!(
+            compose_language_tooling(&STANDARD)
+                .expect("compose")
+                .is_none()
+        );
     }
 }

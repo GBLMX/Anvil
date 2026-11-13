@@ -39,6 +39,7 @@ their decision sections.
 | [0030](0030-workspace-index-module.md) | Workspace index module extension points | Accepted for implementation |
 | [0031](0031-desktop-url-opener-module.md) | Desktop URL opener module | Accepted for implementation |
 | [0032](0032-language-tooling-service.md) | Language tooling service slot | Accepted for implementation |
+| [0033](0033-latex-language-provider.md) | LaTeX language provider | Accepted for implementation |
 
 ## Numbering Rule
 
