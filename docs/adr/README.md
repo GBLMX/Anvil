@@ -41,6 +41,7 @@ their decision sections.
 | [0033](0033-latex-language-provider.md) | LaTeX language provider | Accepted for implementation |
 | [0034](0034-release-signing-authority.md) | Hardware-backed public-release signing; offline YubiKey flow | Proposed; public-release direction selected |
 | [0035](0035-plugin-wit-seams.md) | Plugin WIT contract from editor seams | Proposed |
+| [0036](0036-typst-language-provider.md) | Typst language provider and feature-gated grammar | Accepted for implementation |
 
 ## Numbering Rule
 
