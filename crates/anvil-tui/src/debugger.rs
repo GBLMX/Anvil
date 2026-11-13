@@ -2,11 +2,37 @@
 
 use super::*;
 use crate::dap::DapClient;
+use anvil_session::provider::{DapAdapterManager, DapAdapterSpec, ProviderId};
 
 impl Model {
     pub(crate) fn start_dap_attach(&mut self, program: PathBuf, args: Vec<String>) {
         let workspace = self.workspace.path.clone();
-        let display = program.display().to_string();
+        let Some(program) = resolve_adapter_program(&program) else {
+            self.status.text = format!("E: dap adapter not found: {}", program.display());
+            self.file.dirty = true;
+            return;
+        };
+        let spec = match DapAdapterManager::validate(
+            DapAdapterSpec {
+                id: ProviderId::new("builtin.explicit"),
+                program,
+                args,
+                language_id: "explicit".to_owned(),
+                cwd: Some(workspace.clone()),
+            },
+            &workspace,
+        ) {
+            Ok(spec) => spec,
+            Err(error) => {
+                self.status.text = format!("E: dap adapter: {error}");
+                self.file.dirty = true;
+                return;
+            }
+        };
+        let display = spec.program.display().to_string();
+        let program = spec.program;
+        let args = spec.args;
+        let workspace = spec.cwd.unwrap_or(workspace);
         let (sender, receiver) = std::sync::mpsc::channel();
         std::thread::spawn(move || {
             let result = DapClient::spawn(&program, &args, &workspace)
@@ -138,4 +164,14 @@ impl Model {
             self.sync_breakpoints(&path);
         }
     }
+}
+
+fn resolve_adapter_program(program: &Path) -> Option<PathBuf> {
+    if program.is_absolute() {
+        return program.is_file().then(|| program.to_path_buf());
+    }
+    let path = std::env::var_os("PATH")?;
+    std::env::split_paths(&path)
+        .map(|directory| directory.join(program))
+        .find(|candidate| candidate.is_file())
 }

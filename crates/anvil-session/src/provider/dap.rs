@@ -14,6 +14,7 @@ pub struct DapContext<'a> {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DapAdapterSpec {
     pub id: ProviderId,
+    /// Absolute adapter executable path. Providers must not rely on PATH.
     pub program: PathBuf,
     pub args: Vec<String>,
     pub language_id: String,
@@ -84,6 +85,14 @@ impl DapAdapterManager {
                 "adapter language does not match request".to_owned(),
             ));
         }
+        Self::validate(spec, workspace).map(Some)
+    }
+
+    /// Validates one adapter spec, including workspace-confined cwd.
+    pub fn validate(
+        spec: DapAdapterSpec,
+        workspace: &Path,
+    ) -> Result<DapAdapterSpec, ProviderError> {
         let program = spec.program.canonicalize().map_err(|_| {
             ProviderError::InvalidData("adapter program is not executable".to_owned())
         })?;
@@ -112,11 +121,11 @@ impl DapAdapterManager {
                 "adapter cwd escapes the workspace".to_owned(),
             ));
         }
-        Ok(Some(DapAdapterSpec {
+        Ok(DapAdapterSpec {
             program,
             cwd: Some(cwd),
             ..spec
-        }))
+        })
     }
 }
 
@@ -192,6 +201,19 @@ mod tests {
             )
             .expect_err("plugin adapter");
         assert!(matches!(error, RegistryError::UnsupportedOrigin(_)));
+    }
+
+    #[test]
+    fn bare_program_path_is_rejected() {
+        let workspace = std::env::temp_dir();
+        let mut spec = spec(&workspace);
+        spec.program = PathBuf::from("sh");
+        assert_eq!(
+            DapAdapterManager::validate(spec, &workspace),
+            Err(ProviderError::InvalidData(
+                "adapter program is not executable".to_owned()
+            ))
+        );
     }
 
     #[test]
