@@ -382,6 +382,48 @@ pub struct RegisterCommandResponse {
     pub command_id: String,
 }
 
+/// Provider capability exposed by a runtime plugin.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+pub enum ProviderKind {
+    Picker,
+    Completion,
+}
+
+/// Request to register one runtime-plugin provider.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[ts(export)]
+pub struct RegisterProviderRequest {
+    pub id: String,
+    pub kind: ProviderKind,
+    pub title: String,
+}
+
+/// Result of registering a runtime-plugin provider.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[ts(export)]
+pub struct RegisterProviderResponse {
+    pub provider_id: String,
+}
+
+/// Data-only request sent to a runtime plugin provider.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[ts(export)]
+pub struct ProviderRequest {
+    pub request_id: u64,
+    pub provider_id: String,
+    pub query: String,
+    pub limit: u32,
+}
+
+/// Cancel one in-flight runtime-plugin provider request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[ts(export)]
+pub struct ProviderCancel {
+    pub request_id: u64,
+}
+
 /// Notification severity.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[ts(export)]
@@ -671,6 +713,31 @@ mod tests {
             .expect("exec method");
         assert_eq!(exec.params, MethodType::Named("ExecRequest"));
         assert_eq!(exec.result, MethodType::Named("ExecResponse"));
+    }
+
+    #[test]
+    fn provider_contracts_round_trip() {
+        let request = RegisterProviderRequest {
+            id: "test.picker".to_owned(),
+            kind: ProviderKind::Picker,
+            title: "Test picker".to_owned(),
+        };
+        let decoded: RegisterProviderRequest =
+            serde_json::from_str(&serde_json::to_string(&request).unwrap()).unwrap();
+        assert_eq!(decoded, request);
+        let provider_request = ProviderRequest {
+            request_id: 7,
+            provider_id: "test.picker".to_owned(),
+            query: "buf".to_owned(),
+            limit: 100,
+        };
+        let decoded: ProviderRequest =
+            serde_json::from_str(&serde_json::to_string(&provider_request).unwrap()).unwrap();
+        assert_eq!(decoded, provider_request);
+        assert_eq!(
+            serde_json::to_string(&ProviderCancel { request_id: 7 }).unwrap(),
+            r#"{"request_id":7}"#
+        );
     }
 
     #[test]
