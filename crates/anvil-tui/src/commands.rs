@@ -390,7 +390,7 @@ impl Model {
                 Effect::LspWorkspaceSymbols => self.request_workspace_symbols(),
                 Effect::LspRename(name) => self.request_rename(&name),
                 Effect::LspFormat => {
-                    let _ = self.request_formatting();
+                    let _ = self.request_format();
                 }
                 Effect::TreeCreate {
                     directory,

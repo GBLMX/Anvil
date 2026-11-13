@@ -56,6 +56,7 @@ mod file_io;
 mod file_tree_ui;
 mod file_worker;
 mod folding;
+mod format;
 mod jump;
 mod sticky;
 use folding::{FoldAction, FoldRange};

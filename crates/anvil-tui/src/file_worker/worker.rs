@@ -275,6 +275,22 @@ impl FileWorker {
                                 path,
                                 generation,
                             },
+                            FileRequest::Format {
+                                path,
+                                text,
+                                language_id,
+                                revision,
+                                generation,
+                            } => FileEvent::Format {
+                                result: super::format::format_text(
+                                    &mut client,
+                                    &language_id,
+                                    &text,
+                                ),
+                                path,
+                                revision,
+                                generation,
+                            },
                             FileRequest::GitStatus { root, generation } => FileEvent::GitStatus {
                                 result: git_status(worker_git.as_deref(), &mut client, &root),
                                 generation,

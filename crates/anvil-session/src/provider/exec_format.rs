@@ -27,6 +27,7 @@ pub trait ExecV2: Send + Sync {
 /// A stdin-to-stdout formatter backed by one allowlisted exec tool.
 pub struct ExecFormatter {
     id: ProviderId,
+    language_id: String,
     tool: String,
     args: Vec<String>,
     cwd: Option<String>,
@@ -39,6 +40,7 @@ impl ExecFormatter {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         id: ProviderId,
+        language_id: impl Into<String>,
         tool: impl Into<String>,
         args: Vec<String>,
         cwd: Option<String>,
@@ -48,6 +50,7 @@ impl ExecFormatter {
     ) -> Self {
         Self {
             id,
+            language_id: language_id.into(),
             tool: tool.into(),
             args,
             cwd,
@@ -61,6 +64,10 @@ impl ExecFormatter {
 impl FormatterProvider for ExecFormatter {
     fn id(&self) -> ProviderId {
         self.id.clone()
+    }
+
+    fn is_available(&self, context: &FormatContext<'_>) -> bool {
+        context.language_id == self.language_id
     }
 
     fn format(
@@ -122,6 +129,7 @@ mod tests {
     fn formatter(output: ExecOutput) -> ExecFormatter {
         ExecFormatter::new(
             ProviderId::new("test.exec"),
+            "rust",
             "rustfmt",
             vec!["--emit".to_owned(), "stdout".to_owned()],
             None,
@@ -156,6 +164,19 @@ mod tests {
             .format(&context(), &CancellationToken::new())
             .expect("format");
         assert_eq!(formatted.as_deref(), Some("fn main() {}\n"));
+    }
+
+    #[test]
+    fn formatter_is_language_scoped() {
+        let formatter = formatter(output("formatted", 0));
+        let go = FormatContext {
+            path: Some(Path::new("main.go")),
+            language_id: "go",
+            revision: 1,
+            text: "package main",
+        };
+        assert!(!formatter.is_available(&go));
+        assert!(formatter.is_available(&context()));
     }
 
     #[test]

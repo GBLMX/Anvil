@@ -34,6 +34,8 @@ post-`0.5.0` feature line.
   callers are unchanged.
 - Added the UI-neutral `FormatterProvider` protocol and `FormatService` with
   priority fallback, cancellation, and revision-checked replacement.
+- `:format` now prefers bounded `rustfmt`/`gofmt` execution through the file
+  worker and falls back to LSP formatting when no external formatter applies.
 - `anvil-distro-standard` adds a `full` feature that enables every official
   module at runtime. `--all-features` selects it; the default `anvil` binary
   remains the standard Git-only composition.

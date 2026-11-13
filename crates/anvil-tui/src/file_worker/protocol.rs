@@ -42,6 +42,14 @@ pub enum FileRequest {
     ProjectSearch { query: String, generation: u64 },
     /// Read a bounded preview for one workspace-relative file.
     Preview { path: String, generation: u64 },
+    /// Format one buffer through a bounded stdin-to-stdout tool.
+    Format {
+        path: PathBuf,
+        text: String,
+        language_id: String,
+        revision: u64,
+        generation: u64,
+    },
     /// Read workspace git status for tree decorations.
     GitStatus { root: PathBuf, generation: u64 },
     /// Compare one workspace file with HEAD for gutter marks.
@@ -134,6 +142,13 @@ pub enum FileEvent {
         path: String,
         generation: u64,
         result: Result<PreviewData, String>,
+    },
+    /// Formatted buffer text, or `None` when no formatter exists for the language.
+    Format {
+        path: PathBuf,
+        revision: u64,
+        generation: u64,
+        result: Result<Option<String>, String>,
     },
     /// Git gutter marks keyed by zero-based line.
     GitDiff {

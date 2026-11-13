@@ -26,6 +26,10 @@ func AllowedTool(path string) (string, error) {
 		return "fd", nil
 	case "/usr/bin/git", "/bin/git":
 		return "git", nil
+	case "/usr/bin/rustfmt", "/bin/rustfmt", "/usr/local/bin/rustfmt":
+		return "rustfmt", nil
+	case "/usr/bin/gofmt", "/bin/gofmt", "/usr/local/bin/gofmt":
+		return "gofmt", nil
 	default:
 		if filepath.Base(clean) == "rust-analyzer" {
 			return "rust-analyzer", nil
@@ -47,6 +51,17 @@ func Validate(tool string, args []string) error {
 		return validateFd(args)
 	case "git":
 		return validateGit(args)
+	case "rustfmt":
+		if len(args) == 4 && args[0] == "--emit" && args[1] == "stdout" &&
+			args[2] == "--edition" && args[3] == "2024" {
+			return nil
+		}
+		return ErrInvalidArgs
+	case "gofmt":
+		if len(args) == 0 {
+			return nil
+		}
+		return ErrInvalidArgs
 	case "rust-analyzer":
 		if len(args) == 0 || (len(args) == 1 && args[0] == "--stdio") {
 			return nil

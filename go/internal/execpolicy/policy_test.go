@@ -142,3 +142,24 @@ func TestValidatesGitConflictResolution(t *testing.T) {
 		}
 	}
 }
+
+func TestValidatesFormatterArgs(t *testing.T) {
+	if err := Validate("/usr/bin/rustfmt", []string{"--emit", "stdout", "--edition", "2024"}); err != nil {
+		t.Fatalf("rustfmt: %v", err)
+	}
+	if err := Validate("/usr/bin/gofmt", nil); err != nil {
+		t.Fatalf("gofmt: %v", err)
+	}
+	for _, args := range [][]string{
+		{"--emit", "files", "--edition", "2024"},
+		{"--config-path", "rustfmt.toml"},
+		{"--emit", "stdout", "--edition", "2021"},
+	} {
+		if err := Validate("/usr/bin/rustfmt", args); !errors.Is(err, ErrInvalidArgs) {
+			t.Fatalf("rustfmt %v: got %v", args, err)
+		}
+	}
+	if err := Validate("/usr/bin/gofmt", []string{"-w"}); !errors.Is(err, ErrInvalidArgs) {
+		t.Fatalf("gofmt -w: got %v", err)
+	}
+}

@@ -12,6 +12,7 @@ use serde_json::Value;
 use crate::pipe_locations::PipeLocation;
 use sha2::{Digest, Sha256};
 
+mod format;
 mod preview;
 mod protocol;
 mod search;
@@ -340,6 +341,76 @@ mod tests {
         let preview = result.expect("preview result");
         assert_eq!(preview.lines, ["hello", "world", ""]);
         assert!(!preview.truncated);
+        drop(worker);
+        server.join().expect("server");
+    }
+
+    #[test]
+    fn formats_rust_through_exec_v2() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let workspace = dir.path().to_path_buf();
+        let socket = workspace.join("gateway.sock");
+        let listener = anvil_ipc::Listener::bind(&socket).expect("bind");
+        let server = std::thread::spawn(move || {
+            let mut connection = listener.accept().expect("accept");
+            let frame = connection.recv().expect("recv").expect("frame");
+            let request: serde_json::Value = serde_json::from_slice(&frame).expect("request");
+            assert_eq!(request["method"], "session.hello");
+            let hello = serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": request["id"],
+                "result": {"ok": true},
+            });
+            connection
+                .send(&serde_json::to_vec(&hello).expect("hello"))
+                .expect("send hello");
+
+            let frame = connection.recv().expect("recv").expect("frame");
+            let request: serde_json::Value = serde_json::from_slice(&frame).expect("request");
+            assert_eq!(request["method"], "sys.exec.v2");
+            assert_eq!(request["params"]["stdin"], "fn main(){}");
+            let response = serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": request["id"],
+                "result": {
+                    "stdout": "fn main() {}\n",
+                    "stderr": "",
+                    "exit_code": 0,
+                    "timed_out": false,
+                    "output_truncated": false,
+                },
+            });
+            connection
+                .send(&serde_json::to_vec(&response).expect("response"))
+                .expect("send");
+        });
+
+        let client = GatewayClient::connect(&socket, &[19; 32]).expect("client");
+        let worker = FileWorker::start(client, workspace.clone());
+        worker
+            .request(FileRequest::Format {
+                path: workspace.join("src/main.rs"),
+                text: "fn main(){}".to_owned(),
+                language_id: "rust".to_owned(),
+                revision: 3,
+                generation: 9,
+            })
+            .expect("format");
+        let FileEvent::Format {
+            revision,
+            generation,
+            result,
+            ..
+        } = next_event(&worker)
+        else {
+            panic!("expected format");
+        };
+        assert_eq!(revision, 3);
+        assert_eq!(generation, 9);
+        assert_eq!(
+            result.expect("format result").as_deref(),
+            Some("fn main() {}\n")
+        );
         drop(worker);
         server.join().expect("server");
     }

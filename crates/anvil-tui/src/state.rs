@@ -453,6 +453,10 @@ pub struct FileState {
     pub(crate) read_only: bool,
     /// Whether the process was started as an external editor.
     pub(crate) editor_mode: bool,
+    /// Monotonic external formatter request id.
+    pub(crate) format_generation: u64,
+    /// In-flight external formatter request.
+    pub(crate) format_pending: Option<u64>,
     /// Process exit code accumulated by editor-mode failures or `:cq`.
     pub(crate) exit_code: i32,
 }

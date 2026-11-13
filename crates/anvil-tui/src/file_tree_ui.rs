@@ -393,6 +393,12 @@ impl Model {
                     generation,
                     result,
                 } => self.handle_preview(path, generation, result),
+                FileEvent::Format {
+                    path,
+                    revision,
+                    generation,
+                    result,
+                } => self.handle_format(path, revision, generation, result),
                 FileEvent::GitDiff {
                     path,
                     revision,
@@ -518,6 +524,12 @@ impl Model {
                         let absolute = root.join(path).to_string_lossy().into_owned();
                         self.handle_preview(absolute, generation, result);
                     }
+                    FileEvent::Format {
+                        path,
+                        revision,
+                        generation,
+                        result,
+                    } => self.handle_format(path, revision, generation, result),
                     FileEvent::ProjectSearch {
                         query,
                         generation,
