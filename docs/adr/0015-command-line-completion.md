@@ -1,6 +1,8 @@
 # ADR-0015: Command-Line Completion and Popup
 
-- Status: Proposed; planning only, no implementation in this change
+- Status: Partially implemented; TUI command-name/theme/plugin-id completion
+  landed, path/buffer completion and the kernel completion contract remain
+  pending
 - Date: 2026-11-01
 - Related: [ADR-0003](0003-idl.md), [ADR-0008](0008-selection-first-interaction.md),
   [ADR-0014](0014-plugin-wit-seams.md),
@@ -166,17 +168,25 @@ No plugin can intercept the key path or execute arbitrary code on Tab.
 
 ### Phase 1: TUI MVP
 
-- [ ] Add `CompletionState` beside `InputMode::CommandLine`.
-- [ ] Add command-name completion for the currently implemented command list.
+- [x] Store completion beside `InputMode::CommandLine`
+  (`overlays.command_completion`).
+- [x] Add command-name completion for the currently implemented command list.
 - [ ] Add workspace path completion through the existing workspace reader.
 - [ ] Add open-buffer completion only when the `:b` command exists.
-- [ ] Render a bounded `ratatui` list above the command line.
-- [ ] Wire Tab, Shift-Tab, Enter, Esc, and Backspace.
-- [ ] Add tests for cycling, wrapping, editing, cancellation, and execution.
-- [ ] Verify no candidate triggers a command side effect.
+- [x] Render a bounded `ratatui` list above the command line.
+- [x] Wire Tab, Shift-Tab, Enter, Esc, and Backspace.
+- [x] Add tests for cycling, wrapping, editing, cancellation, and execution.
+- [ ] Add an explicit test that accepting a candidate never executes a command.
 
 Exit criteria: `:` completion works for command names and paths, is usable in
 an 80×24 terminal, and never blocks the input loop.
+
+Current implementation status (2026-11-13): `crates/anvil-tui/src/command_line.rs`
+implements command-name completion, `theme`/`theme-auto` argument completion,
+`plugin-enable` id completion, popup rendering/navigation, and query updates.
+Command names come from `anvil_control::COMMANDS`. Path completion, buffer
+completion, and the no-side-effect test remain; the Phase 1 exit criteria are
+therefore not fully met.
 
 ### Phase 2: Kernel contract
 
