@@ -79,7 +79,10 @@ impl Default for Settings {
     }
 }
 
-pub(crate) fn lsp_command_override(language_id: &str) -> Option<(String, Vec<String>)> {
+pub(crate) fn lsp_command_override(
+    language_id: &str,
+    default_args: &[String],
+) -> Option<(String, Vec<String>)> {
     let path = path().ok()?;
     if !path.exists() {
         return None;
@@ -89,13 +92,16 @@ pub(crate) fn lsp_command_override(language_id: &str) -> Option<(String, Vec<Str
     }
     let text = fs::read_to_string(&path).ok()?;
     let file: SettingsFile = toml_edit::de::from_str(&text).ok()?;
-    resolve_lsp_command(file.lsp.commands.get(language_id)?)
+    resolve_lsp_command(file.lsp.commands.get(language_id)?, default_args)
 }
 
-fn resolve_lsp_command(command: &LspCommandFile) -> Option<(String, Vec<String>)> {
+fn resolve_lsp_command(
+    command: &LspCommandFile,
+    default_args: &[String],
+) -> Option<(String, Vec<String>)> {
     match command {
         LspCommandFile::Command(command) => {
-            (!command.trim().is_empty()).then(|| (command.clone(), Vec::new()))
+            (!command.trim().is_empty()).then(|| (command.clone(), default_args.to_vec()))
         }
         LspCommandFile::Argv(argv) => {
             let (command, args) = argv.split_first()?;
@@ -472,6 +478,14 @@ mod tests {
 
     #[test]
     fn parses_lsp_command_overrides() {
+        let (tool, args) = resolve_lsp_command(
+            &LspCommandFile::Command("/usr/bin/json-server".to_owned()),
+            &["--stdio".to_owned()],
+        )
+        .expect("string command");
+        assert_eq!(tool, "/usr/bin/json-server");
+        assert_eq!(args, ["--stdio"]);
+
         let settings = parse(
             "[lsp]\ninlay_hints = true\n[lsp.commands]\njson = [\"node\", \"server.js\", \"--stdio\"]\nrust = \"/usr/bin/rust-analyzer\"\n",
         )
@@ -481,12 +495,26 @@ mod tests {
             "[lsp.commands]\njson = [\"node\", \"server.js\", \"--stdio\"]\nrust = \"/usr/bin/rust-analyzer\"\n",
         )
         .expect("lsp commands");
-        let (tool, args) = resolve_lsp_command(&file.lsp.commands["json"]).expect("json command");
+        let (tool, args) =
+            resolve_lsp_command(&file.lsp.commands["json"], &[]).expect("json command");
         assert_eq!(tool, "node");
         assert_eq!(args, ["server.js", "--stdio"]);
-        let (tool, args) = resolve_lsp_command(&file.lsp.commands["rust"]).expect("rust command");
+        let (tool, args) = resolve_lsp_command(&file.lsp.commands["rust"], &["--stdio".to_owned()])
+            .expect("rust command");
         assert_eq!(tool, "/usr/bin/rust-analyzer");
-        assert!(args.is_empty());
+        assert_eq!(args, ["--stdio"]);
+    }
+
+    #[test]
+    fn string_json_override_keeps_builtin_stdio_args() {
+        let file: SettingsFile = toml_edit::de::from_str(
+            "[lsp.commands]\njson = \"/usr/bin/vscode-json-language-server\"\n",
+        )
+        .expect("json command");
+        let (tool, args) = resolve_lsp_command(&file.lsp.commands["json"], &["--stdio".to_owned()])
+            .expect("json command");
+        assert_eq!(tool, "/usr/bin/vscode-json-language-server");
+        assert_eq!(args, ["--stdio"]);
     }
 
     #[test]

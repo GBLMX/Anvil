@@ -256,7 +256,7 @@ fn builtin_lsp_settings(path: &Path) -> Option<LspSettings> {
             let path = path.to_string_lossy().into_owned();
             (!path.is_empty()).then_some((path, args.clone()))
         })
-        .or_else(|| crate::settings::lsp_command_override(language_id))
+        .or_else(|| crate::settings::lsp_command_override(language_id, &args))
         .or_else(|| find_tool(&candidates).map(|tool| (tool, args.clone())))?;
     let (tool, mut args) = command;
     if tool.ends_with("pyright-langserver") && args.is_empty() {
