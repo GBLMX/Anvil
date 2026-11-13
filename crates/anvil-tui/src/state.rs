@@ -604,8 +604,8 @@ pub(crate) struct GitState {
     pub(crate) resolve_path: Option<PathBuf>,
     /// Pending conflict-resolution generation, if a request is in flight.
     pub(crate) resolve_pending: Option<u64>,
-    pub(crate) branch: Option<String>,
-    pub(crate) branch_checked: bool,
+    /// Lazily detected branch name per workspace root.
+    pub(crate) branches: BTreeMap<PathBuf, Option<String>>,
 }
 
 #[derive(Default)]

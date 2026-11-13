@@ -9,8 +9,8 @@ operations now route through the owning root worker. Root labels disambiguate
 duplicate basenames, untrusted roots are marked and read-only, mutations
 refresh the owning root, stale root results are dropped, and root removal
 cancels a pending project search. Cross-root mutation is rejected. File-scoped
-Git operations and the merged conflict list are root-aware; per-root branch
-state remains primary-root only.
+Git operations, the merged conflict list, per-root status marks, and lazy
+per-root branch detection are root-aware.
 
 ## 1. Scope
 
@@ -242,12 +242,9 @@ Landed:
 - Gutter marks use the owning root worker.
 - `GitConflictsText` fans out to every available root worker; the read-only
   conflict list waits for all roots and renders one section per root.
+- Git status marks are keyed by absolute path; branch names are detected lazily
+  per owning root (`GitState.branches`).
 - Cross-root index operations are rejected.
-
-Remaining:
-
-- Branch/status state is still a single primary-root view; per-root branch
-  state (`BTreeMap<PathBuf, GitRootState>`) is not implemented.
 
 Acceptance:
 
@@ -255,6 +252,7 @@ Acceptance:
 - applying a hunk in root B uses root B's gateway
 - conflict stage/resolve in root B uses root B's gateway
 - conflict list is root-qualified and waits for every root
+- status line shows the branch of the buffer's owning root
 
 ## 11. LSP Boundary
 

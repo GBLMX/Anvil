@@ -15,9 +15,10 @@ const STATUS_SEPARATOR: &str = " · ";
 impl Model {
     pub(crate) fn tick_status(&mut self) {
         self.prune_diagnostic_peek();
-        if !self.git.branch_checked {
-            self.git.branch_checked = true;
-            self.git.branch = detect_git_branch(&self.workspace.path);
+        let root = self.branch_root();
+        if let std::collections::btree_map::Entry::Vacant(entry) = self.git.branches.entry(root) {
+            let branch = detect_git_branch(entry.key());
+            entry.insert(branch);
             self.file.dirty = true;
         }
         if self.language.diagnostics.path != self.session.path {
@@ -85,6 +86,15 @@ impl Model {
         breadcrumb_with_symbol(&path, symbol.as_deref(), width)
     }
 
+    fn branch_root(&self) -> PathBuf {
+        self.session
+            .path
+            .as_deref()
+            .and_then(|path| self.workspace.roots.owning_root(path))
+            .map(|root| root.path.clone())
+            .unwrap_or_else(|| self.workspace.path.clone())
+    }
+
     pub(crate) fn status_text(&self, width: usize) -> String {
         let width = width.max(1);
         if width == 1 {
@@ -101,7 +111,12 @@ impl Model {
         if self.file.modified {
             segments.push("●".to_owned());
         }
-        if let Some(branch) = &self.git.branch {
+        if let Some(branch) = self
+            .git
+            .branches
+            .get(&self.branch_root())
+            .and_then(Option::as_ref)
+        {
             segments.push(branch.clone());
         }
         let diagnostics = if self.language.diagnostics.count_pending.is_some() {
@@ -378,6 +393,36 @@ mod tests {
         model.workspace.path = PathBuf::from("/ws");
         model.session.path = Some(PathBuf::from("/ws/src/main.rs"));
         assert_eq!(model.breadcrumb_text(80), "src/main.rs");
+    }
+
+    #[test]
+    fn status_branch_uses_the_buffer_owning_root() {
+        let primary = tempfile::tempdir().expect("primary");
+        let secondary = tempfile::tempdir().expect("secondary");
+        let primary_root = primary.path().canonicalize().expect("primary canonical");
+        let secondary_root = secondary
+            .path()
+            .canonicalize()
+            .expect("secondary canonical");
+        let mut model = Model::new(EditorState::from_text("alpha"), None);
+        model.workspace.path = primary_root.clone();
+        model
+            .workspace
+            .roots
+            .add(&secondary_root, true)
+            .expect("secondary root");
+        model.session.path = Some(secondary_root.join("main.rs"));
+        model
+            .git
+            .branches
+            .insert(primary_root, Some("primary-branch".to_owned()));
+        model
+            .git
+            .branches
+            .insert(secondary_root, Some("secondary-branch".to_owned()));
+        let text = model.status_text(200);
+        assert!(text.contains("secondary-branch"), "{text}");
+        assert!(!text.contains("primary-branch"), "{text}");
     }
 
     #[test]
