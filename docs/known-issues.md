@@ -16,6 +16,9 @@ in the plans linked below.
 | Persistence | Session/tab restore, crash recovery, and dirty-swap recovery landed; persistent undo is deliberately rejected for this phase | [0.5.6](0.5.x-plan.md) |
 | Configuration | Settings/keymap/theme schemas and explicit `:config-reload` landed; file watching is not enabled | [0.5.x](0.5.x-plan.md) |
 | LSP | Language servers are not bundled; discovery, restart, and lifecycle are managed by the editor | [INSTALL](../INSTALL.md) |
+| Formatting | External formatters are stdin-to-stdout only (`rustfmt`, `gofmt`); in-place and temp-file modes are unsupported, and format-on-save still uses LSP | [0.6.0.x provider plan](0.6.0.x-provider-protocol-plan.md) |
+| DAP | Debug adapters are a trusted direct-spawn exception; runtime plugin DAP providers are rejected and there is no generic process/stdio broker | [ADR-0037](adr/0037-kernel-api-baseline.md), [0.6.0.x provider plan](0.6.0.x-provider-protocol-plan.md) |
+| Plugin providers | Runtime plugins may provide picker/completion only; formatter/DAP providers are not allowed and results remain data-only | [0.6.0.x provider plan](0.6.0.x-provider-protocol-plan.md) |
 | Release | Signed release workflow, SHA256SUMS, SPDX SBOM, and provenance attestation landed; production signing keys remain external release secrets | [0.6.1](0.6.x-plan.md), [RELEASE](../RELEASE.md) |
 
 
