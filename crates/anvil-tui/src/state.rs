@@ -600,6 +600,8 @@ pub(crate) struct GitState {
     pub(crate) stage_pending: Option<u64>,
     /// Latest requested conflict-resolution generation.
     pub(crate) resolve_generation: u64,
+    /// Path whose conflict is being resolved.
+    pub(crate) resolve_path: Option<PathBuf>,
     /// Pending conflict-resolution generation, if a request is in flight.
     pub(crate) resolve_pending: Option<u64>,
     pub(crate) branch: Option<String>,

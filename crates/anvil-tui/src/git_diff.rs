@@ -571,6 +571,7 @@ impl Model {
             self.file.dirty = true;
             return;
         }
+        self.git.resolve_path = Some(path.clone());
         self.git.resolve_generation = self.git.resolve_generation.wrapping_add(1);
         let generation = self.git.resolve_generation;
         let Some(worker) = self.file_worker_for_path(&path) else {
@@ -603,22 +604,23 @@ impl Model {
             return;
         }
         self.git.resolve_pending = None;
+        let path = self
+            .git
+            .resolve_path
+            .take()
+            .unwrap_or_else(|| self.workspace.path.join(&relative));
         match result {
-            Ok(()) => {
-                let path = self.workspace.path.join(&relative);
-                match self.reload_external(&path) {
-                    Ok(()) => {
-                        let name = if stage == 2 { "ours" } else { "theirs" };
-                        self.status.text = format!("resolved {relative} using {name}");
-                    }
-                    Err(error) => {
-                        self.status.text = format!("E: conflict resolved, reload failed: {error}");
-                    }
+            Ok(()) => match self.reload_external(&path) {
+                Ok(()) => {
+                    let name = if stage == 2 { "ours" } else { "theirs" };
+                    self.status.text = format!("resolved {relative} using {name}");
                 }
-            }
+                Err(error) => {
+                    self.status.text = format!("E: conflict resolved, reload failed: {error}");
+                }
+            },
             Err(error) => {
                 if error.working_written {
-                    let path = self.workspace.path.join(&relative);
                     let reload = self.reload_external(&path);
                     self.status.text = match reload {
                         Ok(()) => format!(
@@ -743,6 +745,41 @@ index 1111111..2222222 100644
         let body = text.slice(0..text.len_bytes());
         assert!(body.contains("/a"), "{body}");
         assert!(body.contains("/b"), "{body}");
+    }
+
+    #[test]
+    fn secondary_conflict_resolve_reloads_the_owning_root() {
+        let primary = tempfile::tempdir().expect("primary");
+        let secondary = tempfile::tempdir().expect("secondary");
+        let primary_root = primary.path().canonicalize().expect("primary canonical");
+        let secondary_root = secondary
+            .path()
+            .canonicalize()
+            .expect("secondary canonical");
+        let primary_file = primary_root.join("conflict.txt");
+        let secondary_file = secondary_root.join("conflict.txt");
+        std::fs::write(&primary_file, "primary").expect("primary file");
+        std::fs::write(&secondary_file, "resolved secondary").expect("secondary file");
+
+        let mut model = Model::new(
+            EditorState::from_text("old secondary"),
+            Some(secondary_file.clone()),
+        );
+        model.workspace.path = primary_root;
+        model.git.resolve_pending = Some(5);
+        model.git.resolve_path = Some(secondary_file);
+
+        model.handle_git_resolved("conflict.txt".to_owned(), 2, 5, Ok(()));
+        assert!(
+            model.status.text.contains("resolved conflict.txt"),
+            "{}",
+            model.status.text
+        );
+        assert!(model.status.text.contains("ours"));
+        assert_eq!(
+            model.session.editor.text().slice(0..18),
+            "resolved secondary"
+        );
     }
 
     #[test]
