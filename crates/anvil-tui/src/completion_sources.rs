@@ -7,20 +7,87 @@ use anvil_session::provider::{
 };
 use std::sync::Arc;
 
+#[derive(Debug, Clone)]
+pub(crate) struct CompletionAdditionalEdit {
+    pub(crate) start_line: usize,
+    pub(crate) start_character: usize,
+    pub(crate) end_line: usize,
+    pub(crate) end_character: usize,
+    pub(crate) new_text: String,
+}
+
+pub(crate) fn completion_additional_edits(
+    raw: &serde_json::Value,
+) -> Vec<CompletionAdditionalEdit> {
+    raw.get("additionalTextEdits")
+        .and_then(serde_json::Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|edit| {
+            let start = edit.pointer("/range/start")?;
+            let end = edit.pointer("/range/end")?;
+            Some(CompletionAdditionalEdit {
+                start_line: start.get("line")?.as_u64()? as usize,
+                start_character: start.get("character")?.as_u64()? as usize,
+                end_line: end.get("line")?.as_u64()? as usize,
+                end_character: end.get("character")?.as_u64()? as usize,
+                new_text: edit.get("newText")?.as_str()?.to_owned(),
+            })
+        })
+        .collect()
+}
+
+pub(crate) fn completion_auto_import(raw: &serde_json::Value) -> Option<String> {
+    completion_additional_edits(raw)
+        .into_iter()
+        .map(|edit| edit.new_text.trim().to_owned())
+        .find(|text| !text.is_empty())
+}
+
+pub(crate) fn clean_completion_documentation(text: &str) -> String {
+    let mut lines = Vec::new();
+    let mut previous_blank = false;
+    for line in text.lines() {
+        let trimmed = line.trim();
+        if trimmed == "---" || trimmed.starts_with("```") {
+            continue;
+        }
+        if trimmed.is_empty() {
+            if previous_blank {
+                continue;
+            }
+            previous_blank = true;
+        } else {
+            previous_blank = false;
+        }
+        lines.push(line);
+    }
+    while lines.first().is_some_and(|line| line.trim().is_empty()) {
+        lines.remove(0);
+    }
+    while lines.last().is_some_and(|line| line.trim().is_empty()) {
+        lines.pop();
+    }
+    lines.join("\n")
+}
+
 impl Model {
     pub(crate) fn install_completion(&mut self, items: Vec<CompletionItem>) {
         if items.is_empty() {
             return;
         }
+        let text = self.session.editor.text();
+        let query = completion_prefix(&text.slice(0..text.len_bytes()), self.session.cursor);
         let filtered = (0..items.len()).collect();
         let selected = items.iter().position(|item| item.preselect).unwrap_or(0);
         self.overlays.lsp_results.completion = Some(CompletionState {
             items,
             filtered,
-            query: String::new(),
+            query,
             selected,
         });
         self.push_overlay_if_idle(OverlayKind::Completion);
+        self.filter_completion();
     }
 
     pub(crate) fn local_completion_items(&mut self) -> Vec<CompletionItem> {
@@ -149,7 +216,7 @@ pub(crate) fn completion_from_provider(
     }
 }
 
-fn completion_prefix(text: &str, cursor: usize) -> String {
+pub(crate) fn completion_prefix(text: &str, cursor: usize) -> String {
     let mut start = cursor;
     for (index, character) in text[..cursor].char_indices().rev() {
         if character.is_alphanumeric() || character == '_' {
@@ -285,4 +352,18 @@ fn completion_source_registry() -> ProviderRegistry<dyn CompletionSource> {
         )
         .expect("builtin path completion id is valid");
     registry
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn completion_documentation_strips_fences_and_collapses_blanks() {
+        let text = "```python\nclass Protocol\n```\n\n---\n\nA typing protocol.\n\n";
+        assert_eq!(
+            clean_completion_documentation(text),
+            "class Protocol\n\nA typing protocol."
+        );
+    }
 }

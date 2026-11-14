@@ -1997,3 +1997,46 @@ fn diagnostic_ranges_handle_cjk_utf16_columns() {
     );
     assert_eq!(model.diagnostic_ranges(0, 0, text.len()), vec![(2, 4)]);
 }
+
+#[test]
+fn completion_applies_additional_import_edit() {
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.start_page.welcome = false;
+    model.overlays.lsp_results.completion = Some(CompletionState {
+        items: vec![CompletionItem {
+            source: ProviderId::new("builtin.lsp"),
+            label: "Protocol".to_owned(),
+            filter_text: "Protocol".to_owned(),
+            sort_text: "Protocol".to_owned(),
+            preselect: true,
+            insert: "Protocol".to_owned(),
+            snippet: None,
+            detail: "class Protocol".to_owned(),
+            replace: None,
+            replace_bytes: None,
+            documentation: None,
+            raw: serde_json::json!({
+                "kind": 7,
+                "additionalTextEdits": [{
+                    "range": {
+                        "start": {"line": 0, "character": 0},
+                        "end": {"line": 0, "character": 0}
+                    },
+                    "newText": "from typing import Protocol\n"
+                }]
+            }),
+            resolved: true,
+        }],
+        filtered: vec![0],
+        query: String::new(),
+        selected: 0,
+    });
+    model.apply_completion();
+    let text = model.session.editor.text();
+    let text = text.slice(0..text.len_bytes());
+    assert_eq!(text, "from typing import Protocol\nProtocol");
+    assert_eq!(
+        model.session.cursor,
+        "from typing import Protocol\nProtocol".len()
+    );
+}

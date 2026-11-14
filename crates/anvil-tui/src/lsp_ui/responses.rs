@@ -388,17 +388,22 @@ impl Model {
             self.overlays.lsp_results.completion = None;
             self.close_overlay(OverlayKind::Completion);
         } else {
+            let text = self.session.editor.text();
+            let query = crate::completion_sources::completion_prefix(
+                &text.slice(0..text.len_bytes()),
+                self.session.cursor,
+            );
             let filtered = (0..items.len()).collect();
             let selected = items.iter().position(|item| item.preselect).unwrap_or(0);
             self.overlays.lsp_results.completion = Some(CompletionState {
                 items,
                 filtered,
-                query: String::new(),
+                query,
                 selected,
             });
             self.push_overlay_if_idle(OverlayKind::Completion);
             self.status.text = "completion".to_owned();
-            self.request_completion_resolve();
+            self.filter_completion();
         }
     }
 
@@ -423,7 +428,13 @@ impl Model {
         if let Some(detail) = result.get("detail").and_then(serde_json::Value::as_str) {
             item.detail = detail.to_owned();
         }
-        item.raw = result.clone();
+        let mut raw = result.clone();
+        if raw.get("additionalTextEdits").is_none()
+            && let Some(edits) = item.raw.get("additionalTextEdits").cloned()
+        {
+            raw["additionalTextEdits"] = edits;
+        }
+        item.raw = raw;
         item.resolved = true;
         self.file.dirty = true;
     }

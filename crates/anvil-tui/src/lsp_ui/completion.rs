@@ -99,6 +99,7 @@ impl Model {
             return;
         };
         let label = item.label.clone();
+        let additional = crate::completion_sources::completion_additional_edits(&item.raw);
         let insert = item.insert.clone();
         let replace = item.replace;
         let replace_bytes = item.replace_bytes;
@@ -139,8 +140,45 @@ impl Model {
                 self.start_snippet(&snippet, start);
             }
         }
+        self.apply_additional_completion_edits(&additional);
         self.status.text = format!("completed {label}");
         self.file.dirty = true;
+    }
+
+    fn apply_additional_completion_edits(
+        &mut self,
+        edits: &[crate::completion_sources::CompletionAdditionalEdit],
+    ) {
+        let mut ranges: Vec<(usize, usize, String)> = edits
+            .iter()
+            .map(|edit| {
+                let start = self.offset_at_utf16(edit.start_line, edit.start_character);
+                let end = self
+                    .offset_at_utf16(edit.end_line, edit.end_character)
+                    .max(start);
+                (start, end, edit.new_text.clone())
+            })
+            .collect();
+        ranges.sort_by_key(|(start, end, _)| (*start, *end));
+        for (start, end, text) in ranges.into_iter().rev() {
+            let deleted = end.saturating_sub(start);
+            let delta = text.len() as isize - deleted as isize;
+            let cursor = self.session.cursor;
+            self.session.editor.set_selection_bytes(start, end);
+            self.session.editor.delete(start..end);
+            self.session.editor.insert(start, &text);
+            if let Some(snippet) = self.overlays.lsp_results.snippet.as_mut() {
+                snippet.adjust_delete(start, end);
+                snippet.adjust_insert(start, text.len());
+            }
+            if start <= cursor {
+                self.session.cursor = if end <= cursor {
+                    (cursor as isize + delta).max(0) as usize
+                } else {
+                    start + text.len()
+                };
+            }
+        }
     }
     fn start_snippet(&mut self, snippet: &Snippet, base: usize) {
         self.overlays.lsp_results.snippet = SnippetSession::new(snippet.offset_stops(base));
@@ -223,21 +261,54 @@ impl Model {
     pub(crate) fn filter_completion(&mut self) {
         if let Some(completion) = self.overlays.lsp_results.completion.as_mut() {
             let query = completion.query.to_lowercase();
-            completion.filtered = completion
-                .items
+            let items = &completion.items;
+            let mut filtered = completion
+                .filtered
                 .iter()
-                .enumerate()
-                .filter(|(_, item)| item.filter_text.to_lowercase().contains(&query))
-                .map(|(index, _)| index)
-                .collect();
+                .copied()
+                .filter(|index| items[*index].filter_text.to_lowercase().contains(&query))
+                .collect::<Vec<_>>();
+            filtered.sort_by(|left, right| {
+                let left_item = &items[*left];
+                let right_item = &items[*right];
+                let left_prefix =
+                    !query.is_empty() && left_item.filter_text.to_lowercase().starts_with(&query);
+                let right_prefix =
+                    !query.is_empty() && right_item.filter_text.to_lowercase().starts_with(&query);
+                right_prefix
+                    .cmp(&left_prefix)
+                    .then_with(|| {
+                        if left_prefix {
+                            left_item
+                                .label
+                                .chars()
+                                .count()
+                                .cmp(&right_item.label.chars().count())
+                        } else {
+                            std::cmp::Ordering::Equal
+                        }
+                    })
+                    .then_with(|| left_item.sort_text.cmp(&right_item.sort_text))
+                    .then_with(|| left_item.label.cmp(&right_item.label))
+            });
+            completion.filtered = filtered;
             let preferred = if query.is_empty() {
                 completion
                     .filtered
                     .iter()
-                    .position(|index| completion.items[*index].preselect)
+                    .position(|index| items[*index].preselect)
                     .unwrap_or(0)
             } else {
-                0
+                completion
+                    .filtered
+                    .iter()
+                    .position(|index| items[*index].preselect)
+                    .or_else(|| {
+                        completion.filtered.iter().position(|index| {
+                            items[*index].filter_text.to_lowercase().starts_with(&query)
+                        })
+                    })
+                    .unwrap_or(0)
             };
             completion.selected = preferred.min(completion.filtered.len().saturating_sub(1));
             self.file.dirty = true;

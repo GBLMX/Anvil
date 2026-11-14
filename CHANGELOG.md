@@ -14,8 +14,10 @@ post-`0.5.0` feature line.
 - Buffer tabs and the buffer picker now show file-type icons; picker paths are
   workspace-relative instead of absolute.
 - The status line adds the current file icon plus read-only and missing-file
-  indicators. The completion popup now has kind badges, documentation,
-  selection-aware scrolling, counts, and key hints.
+  indicators. The completion popup now filters against the current prefix,
+  ranks prefix matches first, uses right-aligned kind labels, a scrollbar, and
+  a side details panel for documentation or auto-imports; accepting an
+  auto-import completion applies the LSP additional text edit.
 - Character selections now render a Helix-style selection background, a
   warning-colored primary anchor bar, and a block cursor at the selection head.
 - Implemented the existing `event.subscribe` v1 method. The editor now

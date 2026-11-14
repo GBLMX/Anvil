@@ -603,7 +603,7 @@ fn completion_popup_shows_kind_docs_and_footer() {
         .map(|cell| cell.symbol())
         .collect::<String>();
     assert!(rendered.contains("Completion · 1/1"), "{rendered}");
-    assert!(rendered.contains("fn"), "{rendered}");
+    assert!(rendered.contains("function"), "{rendered}");
     assert!(rendered.contains("println"), "{rendered}");
     assert!(rendered.contains("Print to standard output."), "{rendered}");
     assert!(rendered.contains("Enter/Tab accept"), "{rendered}");
@@ -1020,4 +1020,55 @@ fn command_palette_renders_title_detail_and_footer() {
     assert!(rendered.contains("Commands ·"), "{rendered}");
     assert!(rendered.contains("Enter run"), "{rendered}");
     assert!(rendered.contains("normal"), "{rendered}");
+}
+
+#[test]
+fn completion_popup_shows_auto_import_panel() {
+    let mut model = Model::new(EditorState::from_text("Pro"), None);
+    model.start_page.welcome = false;
+    model.overlays.lsp_results.completion = Some(crate::state::CompletionState {
+        items: vec![crate::state::CompletionItem {
+            source: anvil_session::provider::ProviderId::new("builtin.lsp"),
+            label: "Protocol".to_owned(),
+            filter_text: "Protocol".to_owned(),
+            sort_text: "Protocol".to_owned(),
+            preselect: true,
+            insert: "Protocol".to_owned(),
+            snippet: None,
+            detail: "class Protocol".to_owned(),
+            replace: None,
+            replace_bytes: None,
+            documentation: None,
+            raw: serde_json::json!({
+                "kind": 7,
+                "additionalTextEdits": [{
+                    "range": {
+                        "start": {"line": 0, "character": 0},
+                        "end": {"line": 0, "character": 0}
+                    },
+                    "newText": "from typing import Protocol\n"
+                }]
+            }),
+            resolved: true,
+        }],
+        filtered: vec![0],
+        query: "Pro".to_owned(),
+        selected: 0,
+    });
+    let backend = TestBackend::new(100, 24);
+    let mut terminal = Terminal::new(backend).expect("terminal");
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+    let rendered = terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect::<String>();
+    assert!(rendered.contains("Auto-import"), "{rendered}");
+    assert!(
+        rendered.contains("from typing import Protocol"),
+        "{rendered}"
+    );
+    assert!(rendered.contains("class"), "{rendered}");
 }

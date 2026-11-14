@@ -3,43 +3,43 @@
 use super::*;
 use crate::CallHierarchyDirection;
 
-fn completion_kind_badge(item: &crate::state::CompletionItem) -> &'static str {
+fn completion_kind_label(item: &crate::state::CompletionItem) -> &'static str {
     let kind = item
         .raw
         .get("kind")
         .and_then(serde_json::Value::as_u64)
         .unwrap_or(0);
     match kind {
-        1 => "txt",
-        2 => "mth",
-        3 => "fn",
-        4 => "new",
-        5 => "fld",
-        6 => "var",
-        7 => "cls",
-        8 => "ifc",
-        9 => "mod",
-        10 => "prp",
-        11 => "unt",
-        12 => "val",
-        13 => "enm",
-        14 => "kw",
-        15 => "snp",
-        16 => "col",
-        17 => "fil",
-        18 => "ref",
-        19 => "dir",
-        20 => "em",
-        21 => "cst",
-        22 => "str",
-        23 => "evt",
-        24 => "op",
-        25 => "typ",
+        1 => "text",
+        2 => "method",
+        3 => "function",
+        4 => "constructor",
+        5 => "field",
+        6 => "variable",
+        7 => "class",
+        8 => "interface",
+        9 => "module",
+        10 => "property",
+        11 => "unit",
+        12 => "value",
+        13 => "enum",
+        14 => "keyword",
+        15 => "snippet",
+        16 => "color",
+        17 => "file",
+        18 => "reference",
+        19 => "folder",
+        20 => "enum member",
+        21 => "constant",
+        22 => "struct",
+        23 => "event",
+        24 => "operator",
+        25 => "type parameter",
         _ => match item.source.as_str() {
-            "builtin.buffer-words" => "buf",
-            "builtin.paths" => "pth",
+            "builtin.buffer-words" => "text",
+            "builtin.paths" => "path",
             "builtin.lsp" => "lsp",
-            _ => "ext",
+            _ => "text",
         },
     }
 }
@@ -795,24 +795,63 @@ pub(crate) fn render_overlays(model: &Model, frame: &mut Frame, area: Rect) {
         );
     }
     if let Some(completion) = &model.overlays.lsp_results.completion {
-        let documentation = completion
+        let selected_item = completion
             .filtered
             .get(completion.selected)
-            .and_then(|index| completion.items.get(*index))
-            .and_then(|item| item.documentation.as_deref())
-            .and_then(|text| text.lines().next())
-            .map(str::trim)
-            .filter(|text| !text.is_empty())
-            .map(str::to_owned);
+            .and_then(|index| completion.items.get(*index));
+        let auto_import = selected_item
+            .and_then(|item| crate::completion_sources::completion_auto_import(&item.raw));
+        let detail_panel = auto_import.map(|text| ("Auto-import", text)).or_else(|| {
+            selected_item.and_then(|item| {
+                let mut body = item.detail.clone();
+                if let Some(documentation) = &item.documentation {
+                    let documentation =
+                        crate::completion_sources::clean_completion_documentation(documentation);
+                    if !documentation.is_empty() {
+                        if !body.is_empty() {
+                            body.push_str("\n\n");
+                        }
+                        body.push_str(&documentation);
+                    }
+                }
+                (!body.trim().is_empty()).then_some(("Details", body))
+            })
+        });
+        let side_width = if detail_panel.is_some() && area.width >= 80 {
+            (area.width * 2 / 5).max(30)
+        } else {
+            0
+        };
+        let gap = u16::from(side_width > 0);
+        let max_total = area.width.saturating_sub(2);
+        let desired_list = (area.width * 2 / 5).max(44);
+        let total_width = (desired_list + gap + side_width).min(max_total);
+        let width = if side_width == 0 {
+            total_width
+        } else {
+            total_width.saturating_sub(side_width + gap)
+        };
+        let documentation = if side_width == 0 {
+            selected_item
+                .and_then(|item| item.documentation.as_deref())
+                .and_then(|text| text.lines().next())
+                .map(str::trim)
+                .filter(|text| !text.is_empty())
+                .map(str::to_owned)
+        } else {
+            None
+        };
         let extra = u16::from(documentation.is_some());
-        let width = (area.width * 2 / 5)
-            .max(44)
-            .min(area.width.saturating_sub(2));
+        let detail_height = detail_panel
+            .as_ref()
+            .map(|(_, body)| body.lines().count() as u16 + 2)
+            .unwrap_or(0);
         let height = (completion.filtered.len() as u16 + 3 + extra)
+            .max(detail_height)
             .min(15)
             .min(area.height.saturating_sub(2));
         let popup = Rect {
-            x: area.x + (area.width.saturating_sub(width)) / 2,
+            x: area.x + (area.width.saturating_sub(total_width)) / 2,
             y: area.y + (area.height.saturating_sub(height)) / 2,
             width,
             height,
@@ -822,6 +861,8 @@ pub(crate) fn render_overlays(model: &Model, frame: &mut Frame, area: Rect) {
         let start = completion
             .selected
             .saturating_sub(visible.saturating_sub(1));
+        let has_scrollbar = completion.filtered.len() > visible;
+        let inner_width = usize::from(width.saturating_sub(2 + u16::from(has_scrollbar)));
         let mut lines = Vec::new();
         for (row, index) in completion
             .filtered
@@ -837,23 +878,23 @@ pub(crate) fn render_overlays(model: &Model, frame: &mut Frame, area: Rect) {
             } else {
                 theme::panel()
             };
-            let detail_style = if selected_row {
-                style
-            } else {
-                style.fg(theme::muted())
-            };
-            let mut spans = vec![
+            let kind = completion_kind_label(item);
+            let kind_width = unicode_width::UnicodeWidthStr::width(kind);
+            let label_max = inner_width.saturating_sub(2 + kind_width + 2).max(1);
+            let label = crate::render::truncate_width(
+                &item.label,
+                u16::try_from(label_max).unwrap_or(u16::MAX),
+            );
+            let label_width = unicode_width::UnicodeWidthStr::width(label.as_str());
+            let padding = inner_width
+                .saturating_sub(2 + label_width + kind_width)
+                .max(1);
+            lines.push(Line::from(vec![
                 Span::styled(if selected_row { "❯ " } else { "  " }, style),
-                Span::styled(
-                    format!("{:<3} ", completion_kind_badge(item)),
-                    style.fg(theme::accent()),
-                ),
-                Span::styled(item.label.clone(), style),
-            ];
-            if !item.detail.is_empty() {
-                spans.push(Span::styled(format!("  {}", item.detail), detail_style));
-            }
-            lines.push(Line::from(spans));
+                Span::styled(label, style),
+                Span::styled(" ".repeat(padding), style),
+                Span::styled(kind, style.fg(theme::muted())),
+            ]));
         }
         if let Some(documentation) = documentation {
             lines.push(Line::styled(
@@ -879,6 +920,44 @@ pub(crate) fn render_overlays(model: &Model, frame: &mut Frame, area: Rect) {
                 ))),
             popup,
         );
+        if has_scrollbar {
+            let mut state = ratatui::widgets::ScrollbarState::new(completion.filtered.len())
+                .position(start)
+                .viewport_content_length(visible);
+            frame.render_stateful_widget(
+                ratatui::widgets::Scrollbar::new(
+                    ratatui::widgets::ScrollbarOrientation::VerticalRight,
+                )
+                .style(theme::panel().fg(theme::border_color()))
+                .thumb_style(theme::panel().fg(theme::accent())),
+                Rect {
+                    x: popup.right().saturating_sub(1),
+                    y: popup.y.saturating_add(1),
+                    width: 1,
+                    height: popup.height.saturating_sub(2),
+                },
+                &mut state,
+            );
+        }
+        if let Some((title, body)) = detail_panel {
+            let side = Rect {
+                x: popup.x.saturating_add(width).saturating_add(gap),
+                y: popup.y,
+                width: side_width,
+                height,
+            };
+            frame.render_widget(Clear, side);
+            frame.render_widget(
+                Paragraph::new(body)
+                    .style(theme::panel())
+                    .wrap(ratatui::widgets::Wrap { trim: false })
+                    .block(crate::render::panel_block(Line::styled(
+                        title,
+                        theme::panel().fg(theme::accent()),
+                    ))),
+                side,
+            );
+        }
     }
     if let Some(hover) = &model.overlays.lsp_results.hover {
         let width = (area.width * 3 / 5)
