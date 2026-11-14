@@ -1,6 +1,7 @@
 //! TUI state groups and view/editor snapshots.
 
 use super::*;
+use anvil_lsp_client as lsp;
 use anvil_session::plugin_provider::{PluginProviderRegistry, PluginProviderRequests};
 use anvil_session::provider::{CancellationToken, PickerEntry, ProviderId};
 
@@ -318,7 +319,7 @@ pub(crate) struct ProjectState {
     /// First project-search worker error for the pending generation.
     pub(crate) search_error: Option<String>,
     /// Pending reviewed project replace plan.
-    pub(crate) replace_plan: Option<file_worker::ProjectReplacePlan>,
+    pub(crate) replace_plan: Option<anvil_workspace::ProjectReplacePlan>,
     /// Latest requested project-replace generation.
     pub(crate) replace_generation: u64,
     /// Pending project-replace generation, if a request is in flight.

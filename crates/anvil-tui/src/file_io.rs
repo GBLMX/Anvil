@@ -332,7 +332,7 @@ impl Model {
         paths.sort();
         paths.dedup();
         if let Some(worker) = self.workspace.file_worker.as_ref() {
-            let _ = worker.request(crate::file_worker::FileRequest::Watch(paths));
+            let _ = worker.request(anvil_workspace::FileRequest::Watch(paths));
         }
     }
 

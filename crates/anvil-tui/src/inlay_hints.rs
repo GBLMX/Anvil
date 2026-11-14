@@ -1,8 +1,8 @@
 //! LSP inlay hints cached for the visible viewport.
 
 use super::*;
-use crate::lsp_worker;
 use crate::theme;
+use anvil_lsp_client::file_uri;
 
 impl Model {
     pub(crate) fn poll_inlay_hints(&mut self, height: u16) {
@@ -52,7 +52,7 @@ impl Model {
             self.overlays.lsp_results.inlay_hints.clear();
         }
         let params = serde_json::json!({
-            "textDocument": {"uri": lsp_worker::file_uri(&path)},
+            "textDocument": {"uri": file_uri(&path)},
             "range": {
                 "start": {"line": start, "character": 0},
                 "end": {"line": end, "character": 0}

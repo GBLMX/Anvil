@@ -1,4 +1,5 @@
 use super::*;
+use anvil_lsp_client as lsp;
 #[test]
 fn idle_events_do_not_request_a_redraw() {
     let mut model = Model::new(EditorState::from_text("a\nb"), None);

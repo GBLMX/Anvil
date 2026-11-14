@@ -6,24 +6,24 @@ use std::path::PathBuf;
 use anvil_ipc::DirEntry;
 
 use super::PreviewData;
-use crate::pipe_locations::PipeLocation;
+use crate::PipeLocation;
 
 use anvil_module::git::ResolveConflictError;
 
 /// One file in a project replace preview.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct ProjectReplaceFile {
-    pub(crate) relative: String,
-    pub(crate) matches: usize,
-    pub(crate) hash: [u8; 32],
+pub struct ProjectReplaceFile {
+    pub relative: String,
+    pub matches: usize,
+    pub hash: [u8; 32],
 }
 
 /// A reviewable project replace plan.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct ProjectReplacePlan {
-    pub(crate) old: String,
-    pub(crate) new: String,
-    pub(crate) files: Vec<ProjectReplaceFile>,
+pub struct ProjectReplacePlan {
+    pub old: String,
+    pub new: String,
+    pub files: Vec<ProjectReplaceFile>,
 }
 
 /// A background file-tree request.
@@ -221,6 +221,8 @@ pub enum FileEvent {
     TreeChanged { paths: Vec<PathBuf> },
     /// Directory watching is unsupported or failed; the tree is stale.
     TreeWatchUnavailable(String),
+    /// A result exceeded the worker byte budget and was not delivered.
+    Oversized { message: String },
     /// Listings for a generation-scoped tree refresh.
     TreeSnapshot {
         generation: u64,

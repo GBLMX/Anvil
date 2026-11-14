@@ -1,0 +1,11 @@
+[package]
+name = "anvil-process"
+description = "Single-owner child process groups for Anvil"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[target.'cfg(unix)'.dependencies]
+nix = { version = "0.31", features = ["process", "signal"] }

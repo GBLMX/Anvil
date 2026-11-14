@@ -97,7 +97,7 @@ impl Model {
             self.status.text = "lsp: no formatting changes".to_owned();
             return;
         }
-        let uri = lsp_worker::file_uri(path);
+        let uri = anvil_lsp_client::file_uri(path);
         let changes = serde_json::json!({"changes": {uri: result.clone()}});
         match WorkspaceEdit::from_lsp(&changes)
             .map(|edit| edit.with_base_revisions(base))

@@ -9,13 +9,7 @@ pub(crate) const MAX_LOCATIONS: usize = 10_000;
 pub(crate) const MAX_PARSED_LINES: usize = 100_000;
 pub(crate) const MAX_VISIBLE_LOCATIONS: usize = 8;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct PipeLocation {
-    pub path: String,
-    pub line: usize,
-    pub column: usize,
-    pub message: String,
-}
+pub(crate) use anvil_workspace::PipeLocation;
 
 pub(crate) fn parse(text: &str) -> Vec<PipeLocation> {
     let mut locations = Vec::new();

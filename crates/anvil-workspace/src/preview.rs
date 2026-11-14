@@ -5,15 +5,15 @@ use std::time::{Duration, Instant};
 use anvil_ipc::GatewayClient;
 
 pub(crate) const PREVIEW_MAX_BYTES: usize = 64 * 1024;
-pub(crate) const PREVIEW_MAX_LINES: usize = 200;
+pub const PREVIEW_MAX_LINES: usize = 200;
 const PREVIEW_TIMEOUT: Duration = Duration::from_millis(500);
 const PREVIEW_CHUNK: usize = 16 * 1024;
 
 /// Bounded text preview returned by the worker.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct PreviewData {
-    pub(crate) lines: Vec<String>,
-    pub(crate) truncated: bool,
+pub struct PreviewData {
+    pub lines: Vec<String>,
+    pub truncated: bool,
 }
 
 pub(super) fn read_preview(client: &mut GatewayClient, path: &str) -> Result<PreviewData, String> {

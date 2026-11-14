@@ -6,7 +6,7 @@
 //! document versions and editor revisions are checked before any mutation.
 
 use super::*;
-use crate::lsp;
+use anvil_lsp_client as lsp;
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};

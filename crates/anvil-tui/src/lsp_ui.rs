@@ -6,8 +6,8 @@ use super::{
     SignatureItem, Snippet, SnippetSession, SymbolItem, SymbolState, WorkspaceEdit,
     WorkspaceSymbolItem, WorkspaceSymbolState,
 };
-use crate::{lsp, lsp_worker};
 use anvil_core::TextBuffer;
+use anvil_lsp_client as lsp;
 use anvil_session::ui::InputMode;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -142,7 +142,7 @@ impl Model {
             .position(self.session.editor.text(), self.session.cursor)
             .map(|position| position.line)
             .unwrap_or(0);
-        let primary: Vec<&crate::lsp::Diagnostic> = if diagnostics
+        let primary: Vec<&anvil_lsp_client::Diagnostic> = if diagnostics
             .iter()
             .any(|diagnostic| diagnostic.severity.is_some())
         {
@@ -244,7 +244,7 @@ impl Model {
             .session
             .path
             .as_ref()
-            .map(|path| lsp_worker::file_uri(path))
+            .map(|path| anvil_lsp_client::file_uri(path))
         else {
             return;
         };
@@ -344,7 +344,7 @@ impl Model {
             .session
             .path
             .as_ref()
-            .map(|path| lsp_worker::file_uri(path))
+            .map(|path| anvil_lsp_client::file_uri(path))
         else {
             return;
         };
@@ -373,7 +373,7 @@ impl Model {
             .session
             .path
             .as_ref()
-            .map(|path| lsp_worker::file_uri(path))
+            .map(|path| anvil_lsp_client::file_uri(path))
         else {
             return;
         };
@@ -405,7 +405,7 @@ impl Model {
             .session
             .path
             .as_ref()
-            .map(|path| lsp_worker::file_uri(path))
+            .map(|path| anvil_lsp_client::file_uri(path))
         else {
             return;
         };
@@ -447,7 +447,7 @@ impl Model {
             .session
             .path
             .as_ref()
-            .map(|path| lsp_worker::file_uri(path))
+            .map(|path| anvil_lsp_client::file_uri(path))
         else {
             return;
         };
@@ -514,7 +514,7 @@ impl Model {
             .session
             .path
             .as_ref()
-            .map(|path| lsp_worker::file_uri(path))
+            .map(|path| anvil_lsp_client::file_uri(path))
         else {
             return;
         };
@@ -553,7 +553,7 @@ impl Model {
             .session
             .path
             .as_ref()
-            .map(|path| lsp_worker::file_uri(path))
+            .map(|path| anvil_lsp_client::file_uri(path))
         else {
             return;
         };
@@ -579,7 +579,7 @@ impl Model {
         let Some(path) = self.session.path.clone() else {
             return;
         };
-        let uri = lsp_worker::file_uri(&path);
+        let uri = anvil_lsp_client::file_uri(&path);
         let Some((line, _character)) = self.lsp_position() else {
             return;
         };
@@ -671,7 +671,7 @@ impl Model {
         let Some(path) = self.session.path.clone() else {
             return false;
         };
-        let uri = lsp_worker::file_uri(&path);
+        let uri = anvil_lsp_client::file_uri(&path);
         let params = serde_json::json!({
             "textDocument": {"uri": uri},
             "options": {"tabSize": 4, "insertSpaces": true}

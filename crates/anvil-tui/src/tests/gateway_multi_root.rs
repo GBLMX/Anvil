@@ -119,7 +119,7 @@ fn secondary_root_tree_lists_and_opens_through_owning_gateway() {
 
 #[test]
 fn git_worker_routes_by_owning_root() {
-    use crate::file_worker::FileWorker;
+    use anvil_workspace::FileWorker;
 
     fn serve_handshake(
         listener: anvil_ipc::Listener,

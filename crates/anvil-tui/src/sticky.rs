@@ -40,7 +40,7 @@ impl Model {
         }
         self.overlays.lsp_results.sticky_checked_at = Some(Instant::now());
         let params = serde_json::json!({
-            "textDocument": {"uri": crate::lsp_worker::file_uri(&path)},
+            "textDocument": {"uri": anvil_lsp_client::file_uri(&path)},
         });
         self.overlays.lsp_results.sticky_pending = self.send_lsp_request(
             LspRequestKind::StickySymbols,

@@ -1,4 +1,5 @@
 use super::*;
+use anvil_lsp_client as lsp;
 #[test]
 fn markdown_fenced_code_renders_a_full_width_background() {
     let mut model = Model::new(EditorState::from_text("```rust\nfn main() {}\n```\n"), None);

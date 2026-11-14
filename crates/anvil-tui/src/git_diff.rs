@@ -1,7 +1,7 @@
 //! Read-only Git diff view with hunk selection and index staging.
 
 use super::*;
-use crate::file_worker::FileRequest;
+use anvil_workspace::{FileRequest, ResolveConflictError};
 
 #[derive(Debug, Clone)]
 pub(crate) struct GitDiffView {
@@ -598,7 +598,7 @@ impl Model {
         relative: String,
         stage: u8,
         generation: u64,
-        result: Result<(), crate::file_worker::ResolveConflictError>,
+        result: Result<(), ResolveConflictError>,
     ) {
         if self.git.resolve_pending != Some(generation) {
             return;
@@ -833,7 +833,7 @@ index 1111111..2222222 100644
             "a.txt".to_owned(),
             2,
             7,
-            Err(crate::file_worker::ResolveConflictError {
+            Err(ResolveConflictError {
                 message: "git add failed".to_owned(),
                 working_written: true,
             }),

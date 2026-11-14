@@ -129,6 +129,9 @@ jobs:
       - name: Lint
         if: steps.detect.outputs.present == 'true'
         run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: Check architecture boundaries
+        if: steps.detect.outputs.present == 'true'
+        run: scripts/architecture-check.sh
       - name: Check TUI benchmark
         if: steps.detect.outputs.present == 'true'
         run: cargo clippy -p anvil-tui --all-targets --features e2e-bench -- -D warnings

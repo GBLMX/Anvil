@@ -1,8 +1,8 @@
 //! Reviewable literal replace across workspace files.
 
 use super::*;
-use crate::file_worker::{FileRequest, ProjectReplacePlan};
 use crate::pipe_locations::PipeLocation;
+use anvil_workspace::{FileRequest, ProjectReplacePlan};
 
 impl Model {
     pub(crate) fn preview_project_replace(&mut self, spec: &str) {
@@ -188,8 +188,8 @@ impl Model {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::file_worker::ProjectReplaceFile;
     use anvil_editor::EditorState;
+    use anvil_workspace::ProjectReplaceFile;
 
     fn plan() -> ProjectReplacePlan {
         ProjectReplacePlan {

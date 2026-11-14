@@ -190,6 +190,10 @@ impl Connection {
         read_frame(&mut self.stream)
     }
 
+    /// Clone the underlying stream for an interrupt/shutdown watchdog.
+    pub fn try_clone_stream(&self) -> io::Result<UnixStream> {
+        self.stream.try_clone()
+    }
     /// Set the read timeout for subsequent `recv` calls.
     pub fn set_read_timeout(&self, timeout: Option<Duration>) -> io::Result<()> {
         self.stream.set_read_timeout(timeout)

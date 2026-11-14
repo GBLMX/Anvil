@@ -1,27 +1,23 @@
 //! PTY-backed shell session owned by the editor process.
 
+use anvil_process::{ProcessSpec, ProcessTask};
 use nix::{
     errno::Errno,
     libc,
     pty::openpty,
-    sys::signal::{Signal, kill as kill_signal},
-    unistd::{Pid, read, setsid, write},
+    unistd::{read, setsid, write},
 };
 use std::{
     io,
-    os::{
-        fd::{AsRawFd, OwnedFd},
-        unix::process::CommandExt,
-    },
+    os::fd::{AsRawFd, OwnedFd},
     path::Path,
-    process::{Child, Command, Stdio},
 };
 
 pub(crate) const MAX_TERMINAL_OUTPUT: usize = 256 * 1024;
 
 pub(crate) struct PtySession {
     master: OwnedFd,
-    child: Child,
+    process: ProcessTask,
     shell: String,
 }
 
@@ -34,17 +30,14 @@ impl PtySession {
     ) -> io::Result<Self> {
         let pty = openpty(None, None).map_err(errno)?;
         let slave_fd = pty.slave.as_raw_fd();
-        let mut command = Command::new(program);
-        command
-            .current_dir(workspace)
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null());
-        unsafe {
-            command.pre_exec(move || {
-                if setsid().is_err() {
-                    return Err(io::Error::last_os_error());
-                }
+        let spec = ProcessSpec::new(program)
+            .cwd(workspace)
+            .own_process_group(false);
+        let process = ProcessTask::spawn_with(spec, move || {
+            if setsid().is_err() {
+                return Err(io::Error::last_os_error());
+            }
+            unsafe {
                 if libc::ioctl(slave_fd, libc::TIOCSCTTY, 0) < 0 {
                     return Err(io::Error::last_os_error());
                 }
@@ -53,10 +46,9 @@ impl PtySession {
                         return Err(io::Error::last_os_error());
                     }
                 }
-                Ok(())
-            });
-        }
-        let child = command.spawn()?;
+            }
+            Ok(())
+        })?;
         drop(pty.slave);
         let flags = unsafe { libc::fcntl(pty.master.as_raw_fd(), libc::F_GETFL) };
         if flags < 0 {
@@ -74,7 +66,7 @@ impl PtySession {
         }
         let session = Self {
             master: pty.master,
-            child,
+            process,
             shell: program.to_owned(),
         };
         session.resize(columns, rows)?;
@@ -86,7 +78,7 @@ impl PtySession {
     }
 
     pub(crate) fn pid(&self) -> u32 {
-        self.child.id()
+        self.process.pid()
     }
 
     pub(crate) fn write_all(&mut self, bytes: &[u8]) -> io::Result<()> {
@@ -133,42 +125,29 @@ impl PtySession {
     }
 
     pub(crate) fn try_wait(&mut self) -> io::Result<Option<std::process::ExitStatus>> {
-        self.child.try_wait()
+        if let Some(status) = self.process.try_wait()? {
+            return Ok(Some(status));
+        }
+        Ok(self.process.last_status())
     }
 
     pub(crate) fn kill(&mut self) {
-        let Ok(pid) = i32::try_from(self.child.id()) else {
-            let _ = self.child.kill();
-            let _ = self.child.wait();
-            return;
-        };
-        let group = Pid::from_raw(-pid);
         #[cfg(target_os = "linux")]
-        let descendants = descendant_pids(pid);
-        let _ = kill_signal(group, Signal::SIGHUP);
-        #[cfg(target_os = "linux")]
-        for child in &descendants {
-            let _ = kill_signal(Pid::from_raw(*child), Signal::SIGHUP);
+        if self.process.last_status().is_none() {
+            kill_descendants(self.process.pid());
         }
-        for _ in 0..20 {
-            if matches!(self.child.try_wait(), Ok(Some(_))) {
-                break;
-            }
-            std::thread::sleep(std::time::Duration::from_millis(10));
-        }
-        let _ = kill_signal(group, Signal::SIGKILL);
-        #[cfg(target_os = "linux")]
-        for child in descendants {
-            let _ = kill_signal(Pid::from_raw(child), Signal::SIGKILL);
-        }
-        let _ = self.child.kill();
-        let _ = self.child.wait();
+        let _ = self.process.kill();
     }
 }
 
+impl Drop for PtySession {
+    fn drop(&mut self) {
+        self.kill();
+    }
+}
 #[cfg(target_os = "linux")]
-fn descendant_pids(pid: i32) -> Vec<i32> {
-    fn collect(pid: i32, depth: usize, out: &mut Vec<i32>) {
+fn kill_descendants(pid: u32) {
+    fn collect(pid: u32, depth: usize, out: &mut Vec<u32>) {
         if depth >= 32 {
             return;
         }
@@ -178,7 +157,7 @@ fn descendant_pids(pid: i32) -> Vec<i32> {
         };
         for child in children
             .split_whitespace()
-            .filter_map(|child| child.parse::<i32>().ok())
+            .filter_map(|child| child.parse::<u32>().ok())
         {
             out.push(child);
             collect(child, depth + 1, out);
@@ -187,12 +166,8 @@ fn descendant_pids(pid: i32) -> Vec<i32> {
 
     let mut descendants = Vec::new();
     collect(pid, 0, &mut descendants);
-    descendants
-}
-
-impl Drop for PtySession {
-    fn drop(&mut self) {
-        self.kill();
+    for child in descendants.into_iter().rev() {
+        let _ = unsafe { libc::kill(child as i32, libc::SIGKILL) };
     }
 }
 

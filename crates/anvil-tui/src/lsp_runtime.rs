@@ -390,7 +390,9 @@ impl Model {
         self.language.lsp.retries.clear();
         self.clear_lsp_ui();
         self.workspace.gateway = None;
-        self.workspace.gateway_session = None;
+        if let Some(mut session) = self.workspace.gateway_session.take() {
+            session.shutdown_gracefully(std::time::Duration::from_millis(250));
+        }
         match GatewaySession::start(&self.workspace.path) {
             Ok((session, client, lsp_client)) => {
                 self.workspace.gateway_session = Some(session);

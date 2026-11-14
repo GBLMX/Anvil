@@ -1,8 +1,9 @@
 use super::*;
-use crate::file_worker::PreviewData;
 use crate::input::KeyPress;
 use crate::keymap::{KeyChord, KeymapConfig, NormalCommand, PendingCommand};
+use anvil_lsp_client::{Diagnostic, Position, Range};
 use anvil_session::ui::CreateKind;
+use anvil_workspace::PreviewData;
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::{Terminal, backend::TestBackend};
 
@@ -58,11 +59,11 @@ fn command(model: &mut Model, text: &str) {
     handle_event(model, key(KeyCode::Enter));
 }
 
-fn diagnostic(line: u32, character: u32, message: &str) -> crate::lsp::Diagnostic {
-    crate::lsp::Diagnostic {
-        range: crate::lsp::Range {
-            start: crate::lsp::Position { line, character },
-            end: crate::lsp::Position {
+fn diagnostic(line: u32, character: u32, message: &str) -> Diagnostic {
+    Diagnostic {
+        range: Range {
+            start: Position { line, character },
+            end: Position {
                 line,
                 character: character + 1,
             },

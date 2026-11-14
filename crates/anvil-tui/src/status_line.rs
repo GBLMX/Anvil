@@ -292,8 +292,8 @@ fn detect_git_branch(workspace: &Path) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::lsp;
     use anvil_editor::EditorState;
+    use anvil_lsp_client as lsp;
 
     #[test]
     fn middle_ellipsis_keeps_the_filename() {

@@ -1,7 +1,8 @@
 //! LSP semantic tokens and theme mapping.
 
 use super::*;
-use crate::{lsp_worker, theme};
+use crate::theme;
+use anvil_lsp_client::file_uri;
 
 impl Model {
     pub(crate) fn request_semantic_tokens(&mut self) {
@@ -17,7 +18,7 @@ impl Model {
             return;
         };
         let params = serde_json::json!({
-            "textDocument": {"uri": lsp_worker::file_uri(&path)}
+            "textDocument": {"uri": file_uri(&path)}
         });
         if self.send_lsp_request(
             LspRequestKind::SemanticTokens,

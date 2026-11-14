@@ -1,7 +1,7 @@
 //! LSP folding ranges, folded-line visibility, and fold commands.
 
 use super::*;
-use crate::lsp_worker;
+use anvil_lsp_client::file_uri;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct FoldRange {
@@ -26,7 +26,7 @@ impl Model {
             return;
         };
         let params = serde_json::json!({
-            "textDocument": {"uri": lsp_worker::file_uri(&path)}
+            "textDocument": {"uri": file_uri(&path)}
         });
         if self.send_lsp_request(
             LspRequestKind::FoldingRange,

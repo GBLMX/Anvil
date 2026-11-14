@@ -1,11 +1,12 @@
 //! Minimal Debug Adapter Protocol client for a separate adapter process.
 
+use anvil_process::{ProcessSpec, ProcessTask};
 use serde_json::{Value, json};
 use std::{
     collections::VecDeque,
     io::{BufRead, BufReader, Write},
     path::{Path, PathBuf},
-    process::{Child, ChildStdin, ChildStdout, Command, Stdio},
+    process::{ChildStdin, ChildStdout},
 };
 
 pub const MAX_DAP_MESSAGE: usize = 8 * 1024 * 1024;
@@ -44,7 +45,7 @@ impl From<serde_json::Error> for DapError {
 }
 
 pub struct DapClient {
-    child: Child,
+    process: ProcessTask,
     stdin: ChildStdin,
     stdout: BufReader<ChildStdout>,
     next_seq: i64,
@@ -66,29 +67,20 @@ impl DapClient {
             program.to_path_buf()
         };
         let cwd = cwd.canonicalize().map_err(DapError::Io)?;
-        let mut command = Command::new(program);
-        command
-            .args(args)
-            .current_dir(cwd)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::null());
-        #[cfg(unix)]
-        {
-            use std::os::unix::process::CommandExt;
-            command.process_group(0);
-        }
-        let mut child = command.spawn()?;
-        let stdin = child
-            .stdin
-            .take()
+        let spec = ProcessSpec::new(program)
+            .args(args.iter().cloned())
+            .cwd(cwd)
+            .stdin(true)
+            .stdout(true);
+        let mut process = ProcessTask::spawn(spec)?;
+        let stdin = process
+            .take_stdin()
             .ok_or_else(|| DapError::Protocol("missing adapter stdin".to_owned()))?;
-        let stdout = child
-            .stdout
-            .take()
+        let stdout = process
+            .take_stdout()
             .ok_or_else(|| DapError::Protocol("missing adapter stdout".to_owned()))?;
         Ok(Self {
-            child,
+            process,
             stdin,
             stdout: BufReader::new(stdout),
             next_seq: 1,
@@ -98,7 +90,7 @@ impl DapClient {
     }
 
     pub fn pid(&self) -> u32 {
-        self.child.id()
+        self.process.pid()
     }
 
     pub fn set_adapter_id(&mut self, adapter_id: impl Into<String>) {
@@ -217,16 +209,7 @@ impl DapClient {
     }
 
     pub fn kill(&mut self) {
-        #[cfg(unix)]
-        {
-            use nix::sys::signal::{Signal, killpg};
-            use nix::unistd::Pid;
-            if let Ok(pid) = i32::try_from(self.child.id()) {
-                let _ = killpg(Pid::from_raw(pid), Signal::SIGKILL);
-            }
-        }
-        let _ = self.child.kill();
-        let _ = self.child.wait();
+        let _ = self.process.kill();
     }
 }
 

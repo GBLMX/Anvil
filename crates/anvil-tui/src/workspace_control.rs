@@ -41,7 +41,10 @@ impl Model {
         };
         if !trusted {
             self.stop_root_file_worker(&canonical);
-            self.workspace.root_gateways.remove(&canonical);
+            if let Some((mut session, client)) = self.workspace.root_gateways.remove(&canonical) {
+                drop(client);
+                session.shutdown_gracefully(std::time::Duration::from_millis(250));
+            }
             match self.workspace.roots.set_trusted(&canonical, false) {
                 Ok(()) => {
                     self.status.text = format!(
@@ -89,7 +92,11 @@ impl Model {
         match self.workspace.roots.remove(&canonical) {
             Ok(()) => {
                 self.stop_root_file_worker(&canonical);
-                self.workspace.root_gateways.remove(&canonical);
+                if let Some((mut session, client)) = self.workspace.root_gateways.remove(&canonical)
+                {
+                    drop(client);
+                    session.shutdown_gracefully(std::time::Duration::from_millis(250));
+                }
                 self.tree
                     .entries
                     .retain(|entry| !entry.path.starts_with(&canonical));

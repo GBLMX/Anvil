@@ -50,12 +50,10 @@ impl Model {
     }
 
     pub(crate) fn poll_task(&mut self) {
-        let Some(event) = self
-            .runtime
-            .task_worker
-            .as_ref()
-            .and_then(TaskWorker::try_recv)
-        else {
+        let Some(worker) = self.runtime.task_worker.as_mut() else {
+            return;
+        };
+        let Some(event) = worker.try_recv() else {
             return;
         };
         self.runtime.task_worker = None;

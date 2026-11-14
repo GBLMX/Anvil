@@ -3,20 +3,29 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::{
-    Arc,
-    mpsc::{self, Receiver, Sender},
+    Arc, Mutex,
+    mpsc::{self, SyncSender},
 };
 use std::time::{Duration, Instant};
 
-use anvil_ipc::GatewayClient;
+use anvil_ipc::{DirEntry, GatewayClient};
+use anvil_task::{DataError, TaskContext, TaskEvent as TaskGroupEvent, TaskGroup, TaskGroupConfig};
 
-use super::preview::read_preview;
+use super::preview::{PreviewData, read_preview};
 use super::search::{apply_project_replace, files, project_replace_preview, project_search};
-use super::{FileEvent, FileRequest, MAX_TREE_WATCH_DIRS, TREE_DEBOUNCE, TREE_POLL_INTERVAL};
+use super::{
+    FileEvent, FileRequest, MAX_TREE_WATCH_DIRS, ProjectReplacePlan, TREE_DEBOUNCE,
+    TREE_POLL_INTERVAL,
+};
+use crate::PipeLocation;
 use anvil_module::git::GitService;
 use anvil_module::workspace_index::WorkspaceIndexService;
 
 const GIT_UNAVAILABLE: &str = "git module is not installed";
+const FILE_WORKER_REQUEST_CAPACITY: usize = 256;
+const FILE_WORKER_EVENT_CAPACITY: usize = 1024;
+const FILE_WORKER_POLL_EVENTS: usize = 256;
+const FILE_WORKER_SHUTDOWN: Duration = Duration::from_millis(250);
 
 fn git_status(
     git: Option<&dyn GitService>,
@@ -93,15 +102,15 @@ fn apply_git_hunk(
         .apply_git_hunk(client, patch, reverse)
 }
 
-/// Owns the background worker and its channels.
+/// Owns the background worker and its bounded channels.
 pub struct FileWorker {
-    requests: Sender<FileRequest>,
-    events: Receiver<FileEvent>,
+    requests: SyncSender<FileRequest>,
+    group: Option<Mutex<TaskGroup<FileEvent>>>,
+    interrupt: Option<std::os::unix::net::UnixStream>,
 }
 
 impl FileWorker {
     /// Starts the worker with a dedicated gateway connection.
-    #[cfg(test)]
     pub fn start(client: GatewayClient, workspace: PathBuf) -> Self {
         #[cfg(feature = "official-git")]
         {
@@ -127,7 +136,7 @@ impl FileWorker {
         Self::start_with_services(client, workspace, git, None)
     }
 
-    pub(crate) fn start_with_services(
+    pub fn start_with_services(
         mut client: GatewayClient,
         workspace: PathBuf,
         git: Option<Arc<dyn GitService>>,
@@ -135,9 +144,16 @@ impl FileWorker {
     ) -> Self {
         let worker_git = git.clone();
         let worker_index = index.clone();
-        let (request_sender, requests) = mpsc::channel();
-        let (event_sender, events) = mpsc::channel();
-        std::thread::spawn(move || {
+        let (request_sender, requests) = mpsc::sync_channel(FILE_WORKER_REQUEST_CAPACITY);
+        let config = TaskGroupConfig {
+            global_data_event_capacity: FILE_WORKER_EVENT_CAPACITY,
+            per_task_capacity: FILE_WORKER_EVENT_CAPACITY,
+            max_events_per_poll: FILE_WORKER_POLL_EVENTS,
+            ..TaskGroupConfig::default()
+        };
+        let interrupt = client.try_clone_stream().ok();
+        let mut group = TaskGroup::with_config(config);
+        let spawn = group.spawn("file worker", move |context| {
             let mut watched: BTreeMap<PathBuf, Option<(u64, i64)>> = BTreeMap::new();
             let mut watched_dirs: BTreeMap<PathBuf, Option<(i64, i64)>> = BTreeMap::new();
             let mut pending: BTreeMap<PathBuf, Instant> = BTreeMap::new();
@@ -145,6 +161,9 @@ impl FileWorker {
             let mut next_poll = Instant::now();
             let mut next_tree_poll = Instant::now();
             loop {
+                if context.is_cancelled() {
+                    break;
+                }
                 match requests.recv_timeout(Duration::from_millis(50)) {
                     Ok(request) => {
                         let event = match request {
@@ -184,9 +203,7 @@ impl FileWorker {
                                 next_tree_poll = Instant::now() + TREE_POLL_INTERVAL;
                                 if !available
                                     && let Some(error) = watch_error
-                                    && event_sender
-                                        .send(FileEvent::TreeWatchUnavailable(error))
-                                        .is_err()
+                                    && !send_event(&context, FileEvent::TreeWatchUnavailable(error))
                                 {
                                     break;
                                 }
@@ -419,7 +436,7 @@ impl FileWorker {
                                 path,
                             },
                         };
-                        if event_sender.send(event).is_err() {
+                        if !send_event(&context, event) {
                             break;
                         }
                     }
@@ -440,11 +457,8 @@ impl FileWorker {
                         for path in &ready {
                             pending_dirs.remove(path);
                         }
-                        if event_sender
-                            .send(FileEvent::TreeChanged { paths: ready })
-                            .is_err()
-                        {
-                            return;
+                        if !send_event(&context, FileEvent::TreeChanged { paths: ready }) {
+                            break;
                         }
                     }
                     next_tree_poll = now + TREE_POLL_INTERVAL;
@@ -462,32 +476,300 @@ impl FileWorker {
                     .collect();
                 for path in ready {
                     pending.remove(&path);
-                    if event_sender
-                        .send(FileEvent::ExternalChanged { path })
-                        .is_err()
-                    {
-                        return;
+                    if !send_event(&context, FileEvent::ExternalChanged { path }) {
+                        break;
                     }
                 }
                 next_poll = now + Duration::from_millis(100);
             }
+            Ok(())
         });
+        let group = match spawn {
+            Ok(_) => Some(Mutex::new(group)),
+            Err(_) => None,
+        };
         Self {
             requests: request_sender,
-            events,
+            group,
+            interrupt,
         }
     }
 
     /// Queues one request without blocking the caller.
     pub fn request(&self, request: FileRequest) -> Result<(), String> {
-        self.requests
-            .send(request)
-            .map_err(|_| "file worker stopped".to_owned())
+        match self.requests.try_send(request) {
+            Ok(()) => Ok(()),
+            Err(mpsc::TrySendError::Full(_)) => Err("file worker busy".to_owned()),
+            Err(mpsc::TrySendError::Disconnected(_)) => Err("file worker stopped".to_owned()),
+        }
     }
 
     /// Drains completed events.
     pub fn poll(&self) -> Vec<FileEvent> {
-        self.events.try_iter().collect()
+        let Some(group) = self.group.as_ref() else {
+            return Vec::new();
+        };
+        let mut group = group
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        group
+            .poll()
+            .events
+            .into_iter()
+            .filter_map(|event| match event {
+                TaskGroupEvent::Data { data, .. } => Some(data),
+                _ => None,
+            })
+            .collect()
+    }
+}
+
+impl Drop for FileWorker {
+    fn drop(&mut self) {
+        if let Some(interrupt) = &self.interrupt {
+            let _ = interrupt.shutdown(std::net::Shutdown::Both);
+        }
+        let Some(group) = self.group.as_mut() else {
+            return;
+        };
+        let group = group
+            .get_mut()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let _ = group.shutdown(FILE_WORKER_SHUTDOWN);
+    }
+}
+
+fn file_event_cost(event: &FileEvent) -> usize {
+    let mut bytes = std::mem::size_of_val(event);
+    match event {
+        FileEvent::Listed(path, result) => {
+            add_bytes(&mut bytes, path.as_os_str().len());
+            add_bytes(
+                &mut bytes,
+                result_bytes(result, |entries| dir_entries_bytes(entries)),
+            );
+        }
+        FileEvent::CompletionListed { result, .. } => {
+            add_bytes(
+                &mut bytes,
+                result_bytes(result, |entries| dir_entries_bytes(entries)),
+            );
+        }
+        FileEvent::Files { result, .. } => {
+            add_bytes(
+                &mut bytes,
+                result_bytes(result, |values| string_vec_bytes(values)),
+            );
+        }
+        FileEvent::ProjectSearch { query, result, .. } => {
+            add_bytes(&mut bytes, query.len());
+            add_bytes(
+                &mut bytes,
+                result_bytes(result, |(locations, _)| {
+                    locations
+                        .iter()
+                        .map(|location| {
+                            location.path.len()
+                                + location.message.len()
+                                + std::mem::size_of::<PipeLocation>()
+                        })
+                        .sum()
+                }),
+            );
+        }
+        FileEvent::Preview { path, result, .. } => {
+            add_bytes(&mut bytes, path.len());
+            add_bytes(&mut bytes, result_bytes(result, preview_bytes));
+        }
+        FileEvent::Format { path, result, .. } => {
+            add_bytes(&mut bytes, path.as_os_str().len());
+            add_bytes(
+                &mut bytes,
+                result_bytes(result, |text| text.as_ref().map_or(0, String::len)),
+            );
+        }
+        FileEvent::GitDiff { path, result, .. } => {
+            add_bytes(&mut bytes, path.as_os_str().len());
+            add_bytes(
+                &mut bytes,
+                result_bytes(result, |marks| {
+                    marks.len() * std::mem::size_of::<(usize, char)>()
+                }),
+            );
+        }
+        FileEvent::GitDiffText {
+            relative, result, ..
+        } => {
+            add_bytes(&mut bytes, relative.len());
+            add_bytes(&mut bytes, result_bytes(result, text_pair_bytes));
+        }
+        FileEvent::GitApplied { result, .. } | FileEvent::ProjectReplaceApplied { result, .. } => {
+            add_bytes(&mut bytes, error_result_bytes(result));
+        }
+        FileEvent::GitBlameText { result, .. } => {
+            add_bytes(&mut bytes, result_bytes(result, text_pair_bytes));
+        }
+        FileEvent::GitConflictsText { root, result, .. } => {
+            add_bytes(&mut bytes, root.as_os_str().len());
+            add_bytes(&mut bytes, result_bytes(result, text_pair_bytes));
+        }
+        FileEvent::GitConflictStageText {
+            relative, result, ..
+        } => {
+            add_bytes(&mut bytes, relative.len());
+            add_bytes(&mut bytes, result_bytes(result, text_pair_bytes));
+        }
+        FileEvent::GitResolveConflict {
+            relative, result, ..
+        } => {
+            add_bytes(&mut bytes, relative.len());
+            add_bytes(&mut bytes, std::mem::size_of_val(result));
+        }
+        FileEvent::ProjectReplacePreview { result, .. } => {
+            add_bytes(&mut bytes, result_bytes(result, plan_bytes));
+        }
+        FileEvent::Transferred {
+            from, to, result, ..
+        } => {
+            add_bytes(&mut bytes, from.as_os_str().len() + to.as_os_str().len());
+            add_bytes(&mut bytes, error_result_bytes(result));
+        }
+        FileEvent::Removed { path, result } => {
+            add_bytes(&mut bytes, path.as_os_str().len());
+            add_bytes(&mut bytes, error_result_bytes(result));
+        }
+        FileEvent::ExternalChanged { path } => {
+            add_bytes(&mut bytes, path.as_os_str().len());
+        }
+        FileEvent::TreeChanged { paths } => {
+            add_bytes(
+                &mut bytes,
+                paths
+                    .iter()
+                    .map(|path| path.as_os_str().len() + std::mem::size_of::<PathBuf>())
+                    .sum(),
+            );
+        }
+        FileEvent::TreeWatchUnavailable(message) | FileEvent::Oversized { message } => {
+            add_bytes(&mut bytes, message.len());
+        }
+        FileEvent::TreeSnapshot { listings, .. } => {
+            add_bytes(
+                &mut bytes,
+                listings
+                    .iter()
+                    .map(|(path, result)| {
+                        path.as_os_str().len()
+                            + std::mem::size_of::<(PathBuf, Result<Vec<DirEntry>, String>)>()
+                            + result_bytes(result, |entries| dir_entries_bytes(entries))
+                    })
+                    .sum(),
+            );
+        }
+        FileEvent::GitStatus { result, .. } => {
+            add_bytes(
+                &mut bytes,
+                result_bytes(result, |statuses| {
+                    statuses
+                        .keys()
+                        .map(|path| path.as_os_str().len() + std::mem::size_of::<(PathBuf, char)>())
+                        .sum()
+                }),
+            );
+        }
+    }
+    bytes
+}
+
+fn add_bytes(total: &mut usize, extra: usize) {
+    *total = total.saturating_add(extra);
+}
+
+fn result_bytes<T>(result: &Result<T, String>, used: impl FnOnce(&T) -> usize) -> usize {
+    match result {
+        Ok(value) => used(value),
+        Err(error) => error.len(),
+    }
+}
+
+fn error_result_bytes(result: &Result<(), String>) -> usize {
+    result.as_ref().err().map_or(0, String::len)
+}
+
+fn text_pair_bytes(value: &(String, bool)) -> usize {
+    value.0.len()
+}
+
+fn string_vec_bytes(values: &[String]) -> usize {
+    values
+        .iter()
+        .map(|value| value.len() + std::mem::size_of::<String>())
+        .sum()
+}
+
+fn dir_entries_bytes(entries: &[DirEntry]) -> usize {
+    entries
+        .iter()
+        .map(|entry| entry.name.len() + std::mem::size_of::<DirEntry>())
+        .sum()
+}
+
+fn preview_bytes(preview: &PreviewData) -> usize {
+    preview
+        .lines
+        .iter()
+        .map(|line| line.len() + std::mem::size_of::<String>())
+        .sum()
+}
+
+fn plan_bytes(plan: &ProjectReplacePlan) -> usize {
+    plan.old.len()
+        + plan.new.len()
+        + plan
+            .files
+            .iter()
+            .map(|file| {
+                file.relative.len()
+                    + file.hash.len()
+                    + std::mem::size_of::<super::ProjectReplaceFile>()
+            })
+            .sum::<usize>()
+}
+fn send_event(context: &TaskContext<FileEvent>, event: FileEvent) -> bool {
+    let bytes = file_event_cost(&event);
+    if bytes > context.data_byte_capacity() {
+        let message = format!(
+            "file worker event exceeded {} byte budget",
+            context.data_byte_capacity()
+        );
+        return send_event_inner(context, FileEvent::Oversized { message }, None);
+    }
+    send_event_inner(context, event, Some(bytes))
+}
+
+fn send_event_inner(
+    context: &TaskContext<FileEvent>,
+    mut event: FileEvent,
+    cost: Option<usize>,
+) -> bool {
+    loop {
+        if context.is_cancelled() {
+            return false;
+        }
+        let result = match cost {
+            Some(bytes) => context.send_data_with_cost(event, bytes),
+            None => context.send_data(event),
+        };
+        match result {
+            Ok(()) => return true,
+            Err(DataError::Closed(_)) => return false,
+            Err(DataError::TaskFull(returned))
+            | Err(DataError::GlobalFull(returned))
+            | Err(DataError::GlobalBytesFull(returned)) => {
+                event = returned;
+                std::thread::sleep(Duration::from_millis(1));
+            }
+        }
     }
 }
 
@@ -539,4 +821,68 @@ fn poll_watched_dirs(
         }
     }
     changed
+}
+
+#[cfg(test)]
+mod cost_tests {
+    use super::*;
+
+    #[test]
+    fn event_cost_includes_heap_payload() {
+        let short = FileEvent::ExternalChanged {
+            path: PathBuf::from("a"),
+        };
+        let long = FileEvent::TreeChanged {
+            paths: vec![PathBuf::from("x".repeat(4096))],
+        };
+        assert!(file_event_cost(&long) > file_event_cost(&short));
+        assert!(
+            file_event_cost(&FileEvent::GitApplied {
+                generation: 0,
+                result: Err("x".repeat(4096)),
+            }) > std::mem::size_of::<FileEvent>()
+        );
+    }
+
+    #[test]
+    fn oversized_event_is_reported_without_stopping() {
+        let config = TaskGroupConfig {
+            global_data_event_capacity: 8,
+            global_data_byte_capacity: 1,
+            per_task_capacity: 8,
+            ..TaskGroupConfig::default()
+        };
+        let mut group = TaskGroup::<FileEvent>::with_config(config);
+        group
+            .spawn("overflow", |context| {
+                if !send_event(
+                    &context,
+                    FileEvent::ExternalChanged {
+                        path: PathBuf::from("x"),
+                    },
+                ) {
+                    return Err("oversized event was not reported".to_owned());
+                }
+                Ok(())
+            })
+            .expect("spawn");
+        let mut saw_oversized = false;
+        for _ in 0..100 {
+            let batch = group.poll();
+            saw_oversized = batch.events.iter().any(|event| {
+                matches!(
+                    event,
+                    TaskGroupEvent::Data {
+                        data: FileEvent::Oversized { .. },
+                        ..
+                    }
+                )
+            });
+            if saw_oversized {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        assert!(saw_oversized);
+    }
 }

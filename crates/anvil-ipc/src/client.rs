@@ -166,6 +166,11 @@ impl GatewayClient {
         &self.socket
     }
 
+    /// Clone the underlying Unix stream for an interrupt/shutdown watchdog.
+    pub fn try_clone_stream(&self) -> std::io::Result<std::os::unix::net::UnixStream> {
+        self.connection.try_clone_stream()
+    }
+
     /// Forward one JSON-RPC method through the authenticated gateway session.
     pub fn call(
         &mut self,

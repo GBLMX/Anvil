@@ -8,6 +8,31 @@ post-`0.5.0` feature line.
 
 ## [Unreleased]
 ### Added
+- Added the std-only `anvil-task` crate with one bounded `TaskGroup` owner
+  per background workload. It owns threads, coalesces progress, enforces
+  live-task, per-task event, global event, and global byte limits, reports
+  final states and leaked task ids, and shuts down with a timeout. The first
+  migration slice, both short-lived TUI workers, and the LSP worker use it;
+  LSP diagnostics are coalesced by path, and overflowed LSP responses return
+  explicit errors. Oversized file results are reported as an `Oversized`
+  event instead of stopping the worker, and `FileWorker`
+  closes a cloned gateway stream on drop to interrupt blocked I/O.
+- Added `anvil-process` with one `ProcessTask` owner per child process group.
+  It supports piped stdio, process-group termination, graceful shutdown, and
+  reaping; the DAP client and PTY shell use it. The plugin host retains its
+  cgroup/pidfd owner so cgroup placement and cgroup kill happen before exec.
+- Model teardown now stops task, file, LSP, DAP, and PTY workers before
+  dropping gateway clients. `GatewaySession::shutdown_gracefully` sends
+  `SIGTERM`, waits for exit, removes the socket once, and falls back to
+  kill-and-wait after 250 ms.
+- Added `scripts/architecture-check.sh` and a CI gate that rejects new raw
+  production threads, new unbounded `mpsc::channel()` sites, and forbidden
+  kernel/platform dependencies. Existing legacy sites use an explicit
+  allowlist that shrinks as migration proceeds.
+- Extracted `anvil-lsp-client` and `anvil-workspace` from `anvil-tui`.
+  The LSP transport/worker and workspace file/search/preview/format services
+  now have independent crate boundaries; TUI callers import them directly and
+  the old local shim modules are removed.
 - Imported the boxpigma theme family: `boxpigma`, `dracula`, `gruvbox`,
   `solarized`, `tokyo-night`, `catppuccin`, `monokai`, `rose-pine`,
   `kanagawa`, `github-light`, `gruvbox-light`, `one-light`,

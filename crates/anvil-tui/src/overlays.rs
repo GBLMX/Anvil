@@ -1,6 +1,7 @@
 //! Notification, progress, problem, and diagnostic-peek state transitions.
 
 use super::*;
+use anvil_lsp_client as lsp;
 use anvil_session::ui::{DiagnosticPeek, NotificationSeverity, PeekDiagnostic, Problem};
 use std::time::{SystemTime, UNIX_EPOCH};
 

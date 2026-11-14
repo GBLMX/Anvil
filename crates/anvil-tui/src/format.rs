@@ -1,9 +1,9 @@
 //! External formatter request path; LSP formatting remains the fallback.
 
 use super::*;
-use crate::file_worker::FileRequest;
 use anvil_session::format::FormatService;
 use anvil_session::provider::{FormattedText, ProviderId};
+use anvil_workspace::FileRequest;
 
 fn formatter_language(path: &Path) -> Option<&'static str> {
     match path

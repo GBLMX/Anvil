@@ -149,13 +149,12 @@ impl Model {
 }
 
 fn lsp_uri(path: &std::path::Path) -> String {
-    crate::lsp_worker::file_uri(path)
+    anvil_lsp_client::file_uri(path)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::lsp_worker;
     use anvil_editor::EditorState;
     use std::path::PathBuf;
 
@@ -191,7 +190,7 @@ mod tests {
         assert_eq!(state.items[0].arguments, serde_json::json!([1]));
         assert_eq!(state.items[3].title, "Ignored");
         assert_eq!(
-            lsp_worker::file_uri(std::path::Path::new("main.rs")),
+            anvil_lsp_client::file_uri(std::path::Path::new("main.rs")),
             lsp_uri(std::path::Path::new("main.rs"))
         );
     }

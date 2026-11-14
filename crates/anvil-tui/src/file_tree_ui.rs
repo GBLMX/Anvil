@@ -1,9 +1,9 @@
 //! Workspace tree and fuzzy file finder state.
 
 use super::{FuzzyState, Model, PreviewState, TreeEntry};
-use crate::file_worker::{FileEvent, FileRequest, FileWorker, MAX_TREE_WATCH_DIRS, PreviewData};
 use anvil_ipc::DirEntry;
 use anvil_session::ui::{CreateKind, InputMode};
+use anvil_workspace::{FileEvent, FileRequest, FileWorker, MAX_TREE_WATCH_DIRS, PreviewData};
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
@@ -486,6 +486,10 @@ impl Model {
                     self.tree.stale = true;
                     self.status.text = format!("E: tree watcher: {error}");
                 }
+                FileEvent::Oversized { message } => {
+                    self.tree.stale = true;
+                    self.status.text = format!("E: file worker: {message}");
+                }
                 FileEvent::TreeSnapshot {
                     generation,
                     listings,
@@ -545,6 +549,10 @@ impl Model {
                     FileEvent::TreeWatchUnavailable(error) => {
                         self.tree.stale = true;
                         self.status.text = format!("E: tree watcher: {error}");
+                    }
+                    FileEvent::Oversized { message } => {
+                        self.tree.stale = true;
+                        self.status.text = format!("E: file worker: {message}");
                     }
                     _ => {}
                 }

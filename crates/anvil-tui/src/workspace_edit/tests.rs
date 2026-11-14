@@ -1,9 +1,8 @@
 use super::*;
-use crate::lsp_worker;
 use std::fs;
 
 fn uri(path: &Path) -> String {
-    lsp_worker::file_uri(path)
+    anvil_lsp_client::file_uri(path)
 }
 
 fn open(dir: &tempfile::TempDir) -> Model {

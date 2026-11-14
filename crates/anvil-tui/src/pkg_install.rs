@@ -43,13 +43,20 @@ pub(crate) enum PkgInstallState {
 }
 
 impl Model {
+    pub(crate) fn stop_installer(&mut self) {
+        if let Some((mut session, client)) = self.plugins.installer.take() {
+            drop(client);
+            session.shutdown_gracefully(std::time::Duration::from_millis(250));
+        }
+    }
+
     pub(crate) fn start_pkg_install(&mut self, url: &str) {
         let Some(host) = url_host(url) else {
             self.status.text = "E: pkg install requires an https URL".to_owned();
             self.file.dirty = true;
             return;
         };
-        self.plugins.installer = None;
+        self.stop_installer();
         match GatewaySession::start_installer(&self.workspace.path, &host) {
             Ok((session, client)) => self.plugins.installer = Some((session, client)),
             Err(error) => {
@@ -90,7 +97,7 @@ impl Model {
         signature_path: &str,
         public_key: &str,
     ) {
-        self.plugins.installer = None;
+        self.stop_installer();
         match GatewaySession::start_local_installer(&self.workspace.path) {
             Ok((session, client)) => self.plugins.installer = Some((session, client)),
             Err(error) => {
@@ -324,7 +331,7 @@ impl Model {
                     .unwrap_or_default()
                     .to_owned();
                 self.plugins.pkg_install = None;
-                self.plugins.installer = None;
+                self.stop_installer();
                 let installed =
                     format!("plugin installed: {plugin_id}; run :plugin-enable {plugin_id}");
                 self.status.text = installed.clone();
@@ -386,7 +393,7 @@ impl Model {
             self.ui.progress.finish(progress);
         }
         self.plugins.pkg_install = None;
-        self.plugins.installer = None;
+        self.stop_installer();
         self.file.dirty = true;
     }
 
@@ -412,7 +419,7 @@ impl Model {
             self.ui.progress.finish(progress);
         }
         self.plugins.pkg_install = None;
-        self.plugins.installer = None;
+        self.stop_installer();
         self.status.text = format!("E: pkg: {message}");
         self.file.dirty = true;
     }

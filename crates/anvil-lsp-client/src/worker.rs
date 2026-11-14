@@ -1,13 +1,20 @@
 use crate::lsp::{Diagnostic, publish_diagnostics};
 use anvil_ipc::GatewayClient;
+use anvil_task::{DataError, TaskContext, TaskEvent as TaskGroupEvent, TaskGroup, TaskGroupConfig};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::{
+    Arc, Mutex,
+    mpsc::{self, SyncSender},
+};
 use std::time::Duration;
 
 const POLL_INTERVAL: Duration = Duration::from_millis(50);
 const INITIALIZE_ID: u64 = 1;
+const LSP_COMMAND_CAPACITY: usize = 1024;
+const LSP_EVENT_CAPACITY: usize = 1024;
+const LSP_SHUTDOWN: Duration = Duration::from_millis(250);
 
 #[derive(Debug)]
 pub enum LspEvent {
@@ -55,8 +62,10 @@ pub struct LspConfig {
 }
 
 pub struct LspWorker {
-    events: Receiver<LspEvent>,
-    commands: Sender<LspCommand>,
+    events: Mutex<TaskGroup<LspEvent>>,
+    commands: SyncSender<LspCommand>,
+    diagnostics: Arc<Mutex<HashMap<PathBuf, Vec<Diagnostic>>>>,
+    overflow_responses: Arc<Mutex<HashMap<u64, String>>>,
 }
 
 impl LspWorker {
@@ -67,8 +76,7 @@ impl LspWorker {
         path: PathBuf,
         text: String,
     ) -> Result<Self, String> {
-        let (sender, events) = mpsc::channel();
-        let (command_sender, commands) = mpsc::channel();
+        let (command_sender, commands) = mpsc::sync_channel(LSP_COMMAND_CAPACITY);
         let LspConfig {
             tool,
             args,
@@ -76,10 +84,25 @@ impl LspWorker {
             root_markers,
             initialization_options,
         } = config;
-        std::thread::spawn(move || {
+        let group_config = TaskGroupConfig {
+            global_data_event_capacity: LSP_EVENT_CAPACITY,
+            per_task_capacity: LSP_EVENT_CAPACITY,
+            max_events_per_poll: 256,
+            ..TaskGroupConfig::default()
+        };
+        let diagnostics = Arc::new(Mutex::new(HashMap::new()));
+        let worker_diagnostics = Arc::clone(&diagnostics);
+        let overflow_responses = Arc::new(Mutex::new(HashMap::new()));
+        let worker_overflow = Arc::clone(&overflow_responses);
+        let mut group = TaskGroup::with_config(group_config);
+        let spawn = group.spawn("lsp", move |context| {
             if let Err(error) = client.lsp_start(&tool, &args) {
-                let _ = sender.send(LspEvent::Error(error.to_string()));
-                return;
+                let _ = send_lsp_event(
+                    &context,
+                    &worker_overflow,
+                    LspEvent::Error(error.to_string()),
+                );
+                return Ok(());
             }
             let uri = file_uri(&path);
             let root = project_root(&workspace, &path, &root_markers);
@@ -140,22 +163,30 @@ impl LspWorker {
                 initialize["params"]["initializationOptions"] = options;
             }
             if let Err(error) = send(&mut client, &initialize) {
-                let _ = sender.send(LspEvent::Crashed(error));
-                return;
+                let _ = send_lsp_event(&context, &worker_overflow, LspEvent::Crashed(error));
+                return Ok(());
             }
             let (inlay_hints, semantic_token_types, server_info) =
                 match wait_initialize(&mut client) {
                     Ok(capabilities) => capabilities,
                     Err(error) => {
-                        let _ = sender.send(LspEvent::StartupError(error));
-                        return;
+                        let _ = send_lsp_event(
+                            &context,
+                            &worker_overflow,
+                            LspEvent::StartupError(error),
+                        );
+                        return Ok(());
                     }
                 };
-            let _ = sender.send(LspEvent::Capabilities {
-                inlay_hints,
-                semantic_token_types,
-                server_info,
-            });
+            let _ = send_lsp_event(
+                &context,
+                &worker_overflow,
+                LspEvent::Capabilities {
+                    inlay_hints,
+                    semantic_token_types,
+                    server_info,
+                },
+            );
             let initialized = serde_json::json!({
                 "jsonrpc": "2.0",
                 "method": "initialized",
@@ -175,8 +206,8 @@ impl LspWorker {
                 }
             });
             if let Err(error) = send(&mut client, &did_open) {
-                let _ = sender.send(LspEvent::Crashed(error));
-                return;
+                let _ = send_lsp_event(&context, &worker_overflow, LspEvent::Crashed(error));
+                return Ok(());
             }
             let did_save = serde_json::json!({
                 "jsonrpc": "2.0",
@@ -187,6 +218,9 @@ impl LspWorker {
             let mut documents = HashMap::new();
             documents.insert(path.clone(), 1_u64);
             loop {
+                if context.is_cancelled() {
+                    return Ok(());
+                }
                 while let Ok(command) = commands.try_recv() {
                     let result = match command {
                         LspCommand::Sync { path, text } => {
@@ -216,33 +250,50 @@ impl LspWorker {
                         ),
                     };
                     if let Err(error) = result {
-                        let _ = sender.send(LspEvent::Crashed(error));
-                        return;
+                        let _ =
+                            send_lsp_event(&context, &worker_overflow, LspEvent::Crashed(error));
+                        return Ok(());
                     }
                 }
                 match client.wait_readable(POLL_INTERVAL) {
                     Ok(true) => {}
                     Ok(false) => continue,
                     Err(error) => {
-                        let _ = sender.send(LspEvent::Crashed(error.to_string()));
-                        return;
+                        let _ = send_lsp_event(
+                            &context,
+                            &worker_overflow,
+                            LspEvent::Crashed(error.to_string()),
+                        );
+                        return Ok(());
                     }
                 }
                 let message = match client.recv_notification() {
                     Ok(Some(message)) => message,
                     Ok(None) => {
-                        let _ = sender.send(LspEvent::Crashed("gateway closed".to_owned()));
-                        return;
+                        let _ = send_lsp_event(
+                            &context,
+                            &worker_overflow,
+                            LspEvent::Crashed("gateway closed".to_owned()),
+                        );
+                        return Ok(());
                     }
                     Err(error) => {
-                        let _ = sender.send(LspEvent::Crashed(error.to_string()));
-                        return;
+                        let _ = send_lsp_event(
+                            &context,
+                            &worker_overflow,
+                            LspEvent::Crashed(error.to_string()),
+                        );
+                        return Ok(());
                     }
                 };
                 match message.method.as_str() {
                     "lsp.crashed" => {
-                        let _ = sender.send(LspEvent::Crashed(message.params.to_string()));
-                        return;
+                        let _ = send_lsp_event(
+                            &context,
+                            &worker_overflow,
+                            LspEvent::Crashed(message.params.to_string()),
+                        );
+                        return Ok(());
                     }
                     "lsp.stderr" => {
                         let line = message
@@ -250,7 +301,11 @@ impl LspWorker {
                             .get("message")
                             .and_then(|value| value.as_str())
                             .unwrap_or_default();
-                        let _ = sender.send(LspEvent::Log(line.to_owned()));
+                        let _ = send_lsp_event(
+                            &context,
+                            &worker_overflow,
+                            LspEvent::Log(line.to_owned()),
+                        );
                     }
                     "lsp.message" => {
                         let Some(data) = message.params.get("data") else {
@@ -265,61 +320,144 @@ impl LspWorker {
                                 .and_then(Value::as_str)
                                 .map(ToOwned::to_owned);
                             let result = data.get("result").cloned().unwrap_or(Value::Null);
-                            let _ = sender.send(LspEvent::Response { id, result, error });
+                            let _ = send_lsp_event(
+                                &context,
+                                &worker_overflow,
+                                LspEvent::Response { id, result, error },
+                            );
                             continue;
                         }
                         match answer_server_request(&mut client, data) {
                             Ok(true) => continue,
                             Ok(false) => {}
                             Err(error) => {
-                                let _ = sender.send(LspEvent::Crashed(error));
-                                return;
+                                let _ = send_lsp_event(
+                                    &context,
+                                    &worker_overflow,
+                                    LspEvent::Crashed(error),
+                                );
+                                return Ok(());
                             }
                         }
                         if let Some((path, diagnostics)) = publish_diagnostics(data) {
-                            let _ = sender.send(LspEvent::Diagnostics(path, diagnostics));
+                            if let Ok(mut latest) = worker_diagnostics.lock() {
+                                latest.insert(path, diagnostics);
+                            }
                         }
                     }
                     _ => {}
                 }
             }
         });
-        Ok(Self {
-            events,
-            commands: command_sender,
-        })
+        match spawn {
+            Ok(_) => Ok(Self {
+                events: Mutex::new(group),
+                commands: command_sender,
+                diagnostics,
+                overflow_responses,
+            }),
+            Err(error) => Err(format!("lsp thread failed: {error}")),
+        }
     }
 
     pub fn sync(&self, path: &Path, text: String) -> Result<(), String> {
-        self.commands
-            .send(LspCommand::Sync {
-                path: path.to_path_buf(),
-                text,
-            })
-            .map_err(|_| "lsp worker stopped".to_owned())
+        self.send_command(LspCommand::Sync {
+            path: path.to_path_buf(),
+            text,
+        })
     }
 
     pub fn save(&self, path: &Path, text: String) -> Result<(), String> {
-        self.commands
-            .send(LspCommand::Save {
-                path: path.to_path_buf(),
-                text,
-            })
-            .map_err(|_| "lsp worker stopped".to_owned())
+        self.send_command(LspCommand::Save {
+            path: path.to_path_buf(),
+            text,
+        })
     }
 
     pub fn request(&self, id: u64, method: &str, params: Value) -> Result<(), String> {
-        self.commands
-            .send(LspCommand::Request {
-                id,
-                method: method.to_owned(),
-                params,
-            })
-            .map_err(|_| "lsp worker stopped".to_owned())
+        self.send_command(LspCommand::Request {
+            id,
+            method: method.to_owned(),
+            params,
+        })
     }
 
     pub fn poll(&self) -> Vec<LspEvent> {
-        self.events.try_iter().collect()
+        let mut events = Vec::new();
+        if let Ok(mut diagnostics) = self.diagnostics.lock() {
+            events.extend(
+                diagnostics
+                    .drain()
+                    .map(|(path, diagnostics)| LspEvent::Diagnostics(path, diagnostics)),
+            );
+        }
+        if let Ok(mut overflow) = self.overflow_responses.lock() {
+            events.extend(overflow.drain().map(|(id, error)| LspEvent::Response {
+                id,
+                result: Value::Null,
+                error: Some(error),
+            }));
+        }
+        if let Ok(mut group) = self.events.lock() {
+            events.extend(
+                group
+                    .poll()
+                    .events
+                    .into_iter()
+                    .filter_map(|event| match event {
+                        TaskGroupEvent::Data { data, .. } => Some(data),
+                        _ => None,
+                    }),
+            );
+        }
+        events
+    }
+
+    fn send_command(&self, command: LspCommand) -> Result<(), String> {
+        match self.commands.try_send(command) {
+            Ok(()) => Ok(()),
+            Err(mpsc::TrySendError::Full(_)) => Err("lsp worker busy".to_owned()),
+            Err(mpsc::TrySendError::Disconnected(_)) => Err("lsp worker stopped".to_owned()),
+        }
+    }
+}
+
+impl Drop for LspWorker {
+    fn drop(&mut self) {
+        let group = self
+            .events
+            .get_mut()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let _ = group.shutdown(LSP_SHUTDOWN);
+    }
+}
+
+fn send_lsp_event(
+    context: &TaskContext<LspEvent>,
+    overflow: &Mutex<HashMap<u64, String>>,
+    mut event: LspEvent,
+) -> bool {
+    loop {
+        if context.is_cancelled() {
+            return false;
+        }
+        match context.send_data(event) {
+            Ok(()) => return true,
+            Err(DataError::Closed(_)) => return false,
+            Err(DataError::TaskFull(returned))
+            | Err(DataError::GlobalFull(returned))
+            | Err(DataError::GlobalBytesFull(returned)) => {
+                if let LspEvent::Response { id, .. } = &returned {
+                    if let Ok(mut overflow) = overflow.lock() {
+                        overflow.insert(*id, "lsp event queue full".to_owned());
+                        return true;
+                    }
+                    return false;
+                }
+                event = returned;
+                std::thread::sleep(Duration::from_millis(1));
+            }
+        }
     }
 }
 
@@ -405,7 +543,7 @@ fn project_root(
     root
 }
 
-pub(crate) fn file_uri(path: &std::path::Path) -> String {
+pub fn file_uri(path: &std::path::Path) -> String {
     let mut absolute = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
     if absolute.is_relative() {
         if let Ok(current) = std::env::current_dir() {
@@ -502,6 +640,53 @@ mod tests {
     use anvil_ipc::{Connection, JSONRPC_VERSION, Listener, Request, Response};
     use serde_json::json;
     use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn response_overflow_is_explicit() {
+        let config = TaskGroupConfig {
+            global_data_event_capacity: 1,
+            per_task_capacity: 1,
+            ..TaskGroupConfig::default()
+        };
+        let mut group = TaskGroup::<LspEvent>::with_config(config);
+        let overflow = Arc::new(Mutex::new(HashMap::new()));
+        let task_overflow = Arc::clone(&overflow);
+        let id = group
+            .spawn("overflow", move |context| {
+                let _ = send_lsp_event(
+                    &context,
+                    &task_overflow,
+                    LspEvent::Response {
+                        id: 1,
+                        result: Value::Null,
+                        error: None,
+                    },
+                );
+                let _ = send_lsp_event(
+                    &context,
+                    &task_overflow,
+                    LspEvent::Response {
+                        id: 2,
+                        result: Value::Null,
+                        error: None,
+                    },
+                );
+                Ok(())
+            })
+            .expect("spawn");
+        for _ in 0..100 {
+            let _ = group.poll();
+            if group
+                .state(id)
+                .is_some_and(anvil_task::TaskState::is_terminal)
+            {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        assert!(overflow.lock().expect("overflow").contains_key(&2));
+        group.shutdown(Duration::from_millis(100));
+    }
 
     fn receive(connection: &mut Connection) -> Request {
         let frame = connection.recv().expect("frame").expect("body");

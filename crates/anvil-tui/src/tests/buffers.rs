@@ -366,7 +366,7 @@ fn promoting_reloaded_background_rebuilds_syntax() {
     let mut model = Model::open(&first).expect("open");
     let edit = crate::workspace_edit::WorkspaceEdit::from_lsp(&serde_json::json!({
         "changes": {
-            crate::lsp_worker::file_uri(&second): [{
+            anvil_lsp_client::file_uri(&second): [{
                 "range": {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 0}},
                 "newText": " "
             }]

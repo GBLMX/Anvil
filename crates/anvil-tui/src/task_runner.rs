@@ -1,11 +1,13 @@
 //! Bounded background task execution and compiler-style problem parsing.
 
+use anvil_task::{
+    CancelToken, DataError, TaskEvent as TaskGroupEvent, TaskGroup, TaskGroupConfig, TaskState,
+};
 use regex::Regex;
 use std::{
     io::Read,
     path::{Path, PathBuf},
     process::{Command, Stdio},
-    sync::mpsc::{self, Receiver},
     thread,
     time::{Duration, Instant},
 };
@@ -38,29 +40,118 @@ pub(crate) enum TaskEvent {
 }
 
 pub(crate) struct TaskWorker {
-    receiver: Receiver<TaskEvent>,
+    group: Option<TaskGroup<TaskResult>>,
+    command: String,
+    terminal: Option<TaskEvent>,
 }
 
 impl TaskWorker {
     pub(crate) fn start(command: String, workspace: PathBuf) -> Self {
-        let (sender, receiver) = mpsc::channel();
-        thread::spawn(move || {
-            let result = run_task(&command, &workspace);
-            let _ = sender.send(TaskEvent::Finished(result));
+        let config = TaskGroupConfig {
+            global_data_event_capacity: 4,
+            per_task_capacity: 4,
+            max_events_per_poll: 4,
+            ..TaskGroupConfig::default()
+        };
+        let mut group = TaskGroup::with_config(config);
+        let task_command = command.clone();
+        let spawn = group.spawn("task runner", move |context| {
+            let result = run_task_with_cancel(
+                &task_command,
+                &workspace,
+                TASK_TIMEOUT,
+                context.cancel_token(),
+            );
+            match context.send_data(result) {
+                Ok(()) | Err(DataError::Closed(_)) => Ok(()),
+                Err(error) => Err(format!("task result delivery failed: {error:?}")),
+            }
         });
-        Self { receiver }
+        match spawn {
+            Ok(_) => Self {
+                group: Some(group),
+                command,
+                terminal: None,
+            },
+            Err(error) => Self {
+                group: None,
+                command: command.clone(),
+                terminal: Some(TaskEvent::Finished(failed_task_result(
+                    &command,
+                    format!("task spawn failed: {error}"),
+                ))),
+            },
+        }
     }
 
-    pub(crate) fn try_recv(&self) -> Option<TaskEvent> {
-        self.receiver.try_recv().ok()
+    pub(crate) fn try_recv(&mut self) -> Option<TaskEvent> {
+        if let Some(event) = self.terminal.take() {
+            return Some(event);
+        }
+        let group = self.group.as_mut()?;
+        let batch = group.poll();
+        let mut terminal = None;
+        for event in batch.events {
+            match event {
+                TaskGroupEvent::Data { data, .. } => return Some(TaskEvent::Finished(data)),
+                TaskGroupEvent::State { state, .. }
+                    if state.is_terminal() && state != TaskState::Finished =>
+                {
+                    terminal = Some(state);
+                }
+                _ => {}
+            }
+        }
+        terminal.map(|state| TaskEvent::Finished(self.result_for_state(state)))
+    }
+
+    fn result_for_state(&self, state: TaskState) -> TaskResult {
+        let output = match state {
+            TaskState::Panicked(message) => format!("task panicked: {message}"),
+            TaskState::Failed(error) => format!("task failed: {error}"),
+            TaskState::Cancelled => "task cancelled".to_owned(),
+            TaskState::Leaked => "task leaked during shutdown".to_owned(),
+            TaskState::Running | TaskState::Finished => "task finished without a result".to_owned(),
+        };
+        failed_task_result(&self.command, output)
     }
 }
 
+impl Drop for TaskWorker {
+    fn drop(&mut self) {
+        if let Some(group) = self.group.as_mut() {
+            let _ = group.shutdown(Duration::from_millis(100));
+        }
+    }
+}
+
+fn failed_task_result(command: &str, output: String) -> TaskResult {
+    TaskResult {
+        command: command.to_owned(),
+        exit_code: None,
+        output,
+        truncated: false,
+        timed_out: false,
+        problems: Vec::new(),
+    }
+}
+
+#[cfg(test)]
 fn run_task(command: &str, workspace: &Path) -> TaskResult {
     run_task_with_timeout(command, workspace, TASK_TIMEOUT)
 }
 
+#[cfg(test)]
 fn run_task_with_timeout(command: &str, workspace: &Path, timeout: Duration) -> TaskResult {
+    run_task_with_cancel(command, workspace, timeout, &CancelToken::new())
+}
+
+fn run_task_with_cancel(
+    command: &str,
+    workspace: &Path,
+    timeout: Duration,
+    cancel: &CancelToken,
+) -> TaskResult {
     let mut process = shell_command(command);
     process
         .current_dir(workspace)
@@ -75,14 +166,7 @@ fn run_task_with_timeout(command: &str, workspace: &Path, timeout: Duration) -> 
     let mut child = match process.spawn() {
         Ok(child) => child,
         Err(error) => {
-            return TaskResult {
-                command: command.to_owned(),
-                exit_code: None,
-                output: format!("task spawn failed: {error}"),
-                truncated: false,
-                timed_out: false,
-                problems: Vec::new(),
-            };
+            return failed_task_result(command, format!("task spawn failed: {error}"));
         }
     };
     let stdout = child.stdout.take().map(spawn_reader);
@@ -90,11 +174,18 @@ fn run_task_with_timeout(command: &str, workspace: &Path, timeout: Duration) -> 
     let task_id = child.id();
     let deadline = Instant::now() + timeout;
     let mut timed_out = false;
+    let mut cancelled = false;
     let status = loop {
         match child.try_wait() {
             Ok(Some(status)) => break Some(status),
             Ok(None) => {}
             Err(_) => break None,
+        }
+        if cancel.is_cancelled() {
+            let _ = child.kill();
+            kill_task_group(task_id);
+            cancelled = true;
+            break child.wait().ok();
         }
         if Instant::now() >= deadline {
             let _ = child.kill();
@@ -113,6 +204,9 @@ fn run_task_with_timeout(command: &str, workspace: &Path, timeout: Duration) -> 
     if output.len() > MAX_TASK_OUTPUT {
         output.truncate(MAX_TASK_OUTPUT);
         truncated = true;
+    }
+    if cancelled && output.is_empty() {
+        output.push_str("task cancelled");
     }
     let problems = parse_problems(&output, workspace);
     TaskResult {
@@ -299,6 +393,28 @@ mod tests {
         let result = run_task("head -c 1048576 /dev/zero | tr '\\0' x", Path::new("/tmp"));
         assert!(result.truncated);
         assert_eq!(result.output.len(), MAX_TASK_OUTPUT);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn worker_delivers_result_and_cancels_on_drop() {
+        let mut worker = TaskWorker::start("printf worker-ok".to_owned(), PathBuf::from("/tmp"));
+        let deadline = Instant::now() + Duration::from_secs(3);
+        let result = loop {
+            if let Some(TaskEvent::Finished(result)) = worker.try_recv() {
+                break result;
+            }
+            assert!(Instant::now() < deadline, "worker did not finish");
+            thread::sleep(Duration::from_millis(10));
+        };
+        assert_eq!(result.exit_code, Some(0));
+        assert_eq!(result.output, "worker-ok");
+        drop(worker);
+
+        let started = Instant::now();
+        let worker = TaskWorker::start("sleep 30".to_owned(), PathBuf::from("/tmp"));
+        drop(worker);
+        assert!(started.elapsed() < Duration::from_secs(2));
     }
 }
 

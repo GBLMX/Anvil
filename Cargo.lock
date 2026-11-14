@@ -121,6 +121,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "anvil-lsp-client"
+version = "0.6.0"
+dependencies = [
+ "anvil-ipc",
+ "anvil-task",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "anvil-mcp"
 version = "0.6.0"
 dependencies = [
@@ -198,6 +208,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "anvil-process"
+version = "0.6.0"
+dependencies = [
+ "nix 0.31.3",
+]
+
+[[package]]
 name = "anvil-session"
 version = "0.6.0"
 dependencies = [
@@ -235,6 +252,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "anvil-task"
+version = "0.6.0"
+
+[[package]]
 name = "anvil-tui"
 version = "0.6.0"
 dependencies = [
@@ -243,14 +264,18 @@ dependencies = [
  "anvil-core",
  "anvil-editor",
  "anvil-ipc",
+ "anvil-lsp-client",
  "anvil-mod-git",
  "anvil-mod-workspace-index",
  "anvil-module",
  "anvil-platform",
  "anvil-plugin-host",
+ "anvil-process",
  "anvil-session",
  "anvil-syntax",
+ "anvil-task",
  "anvil-tui-kit",
+ "anvil-workspace",
  "crossterm",
  "nix 0.31.3",
  "ratatui",
@@ -270,6 +295,19 @@ version = "0.6.0"
 dependencies = [
  "crossterm",
  "ratatui",
+]
+
+[[package]]
+name = "anvil-workspace"
+version = "0.6.0"
+dependencies = [
+ "anvil-ipc",
+ "anvil-mod-git",
+ "anvil-module",
+ "anvil-task",
+ "serde_json",
+ "sha2 0.11.1",
+ "tempfile",
 ]
 
 [[package]]

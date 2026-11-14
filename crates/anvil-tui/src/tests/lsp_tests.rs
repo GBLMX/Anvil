@@ -1,4 +1,5 @@
 use super::*;
+use anvil_lsp_client as lsp;
 use anvil_session::provider::ProviderId;
 #[test]
 fn definition_response_moves_cursor() {
@@ -6,7 +7,7 @@ fn definition_response_moves_cursor() {
     let path = dir.path().join("main.rs");
     fs::write(&path, "fn foo() {}\nfn main() { foo(); }\n").expect("write");
     let mut model = Model::open(&path).expect("open");
-    let uri = lsp_worker::file_uri(&path);
+    let uri = anvil_lsp_client::file_uri(&path);
     model.apply_definition_response(&serde_json::json!([{
         "targetUri": uri,
         "targetSelectionRange": {
@@ -29,8 +30,8 @@ fn references_populate_and_jump_to_selection() {
     fs::write(&main, "fn main() {}\n").expect("main");
     fs::write(&other, "fn target() {}\n").expect("other");
     let mut model = Model::open(&main).expect("open");
-    let main_uri = lsp_worker::file_uri(&main);
-    let other_uri = lsp_worker::file_uri(&other);
+    let main_uri = anvil_lsp_client::file_uri(&main);
+    let other_uri = anvil_lsp_client::file_uri(&other);
     model.apply_references_response(&serde_json::json!([
         {
             "uri": other_uri,
@@ -80,7 +81,7 @@ fn switching_buffers_clears_references() {
     fs::write(&second, "fn second() {}\n").expect("second");
     let mut model = Model::open(&first).expect("open");
     model.open_path(&second).expect("second open");
-    let uri = lsp_worker::file_uri(&second);
+    let uri = anvil_lsp_client::file_uri(&second);
     model.apply_references_response(&serde_json::json!([{
         "uri": uri,
         "range": {
@@ -93,7 +94,7 @@ fn switching_buffers_clears_references() {
         &serde_json::json!([{
             "from": {
                 "name": "second",
-                "uri": lsp_worker::file_uri(&second),
+                "uri": anvil_lsp_client::file_uri(&second),
                 "selectionRange": {
                     "start": {"line": 0, "character": 3},
                     "end": {"line": 0, "character": 9}
@@ -164,7 +165,7 @@ fn incoming_calls_populate_and_jump() {
     fs::write(&main, "fn main() {}\n").expect("main");
     fs::write(&caller, "fn caller() {}\n").expect("caller");
     let mut model = Model::open(&main).expect("open");
-    let caller_uri = lsp_worker::file_uri(&caller);
+    let caller_uri = anvil_lsp_client::file_uri(&caller);
     model.apply_call_hierarchy_calls_response(
         &serde_json::json!([{
             "from": {
@@ -203,7 +204,7 @@ fn outgoing_calls_parse_to_item() {
         &serde_json::json!([{
             "to": {
                 "name": "callee",
-                "uri": lsp_worker::file_uri(target),
+                "uri": anvil_lsp_client::file_uri(target),
                 "selectionRange": {
                     "start": {"line": 0, "character": 3},
                     "end": {"line": 0, "character": 9}
@@ -817,7 +818,7 @@ fn rename_response_applies_workspace_edit() {
     let file = dir.path().join("rename.rs");
     fs::write(&file, "foo").expect("file");
     let mut model = Model::open(&file).expect("open");
-    let uri = lsp_worker::file_uri(&file);
+    let uri = anvil_lsp_client::file_uri(&file);
     model
         .language
         .lsp_requests
@@ -845,7 +846,7 @@ fn code_action_response_applies_workspace_edit() {
     let file = dir.path().join("action.rs");
     fs::write(&file, "bad").expect("file");
     let mut model = Model::open(&file).expect("open");
-    let uri = lsp_worker::file_uri(&file);
+    let uri = anvil_lsp_client::file_uri(&file);
     model
         .language
         .lsp_requests
@@ -892,7 +893,7 @@ fn gopls_code_action_response_applies_organize_imports() {
     let file = dir.path().join("main.go");
     fs::write(&file, "package main\n\nimport \"fmt\"\n\nfunc main() {}\n").expect("file");
     let mut model = Model::open(&file).expect("open");
-    let uri = lsp_worker::file_uri(&file);
+    let uri = anvil_lsp_client::file_uri(&file);
     model
         .language
         .lsp_requests
@@ -1121,7 +1122,7 @@ fn workspace_symbols_response_filters_and_jumps() {
     let file = dir.path().join("symbols.rs");
     fs::write(&file, "fn alpha() {}\n").expect("file");
     let mut model = Model::open(&file).expect("open");
-    let uri = lsp_worker::file_uri(&file);
+    let uri = anvil_lsp_client::file_uri(&file);
     model
         .language
         .lsp_requests
@@ -1254,7 +1255,7 @@ fn rename_response_for_inactive_path_is_ignored() {
     fs::write(&first, "fn first(){}").expect("first");
     let mut model = Model::open(&first).expect("open");
     let first_path = model.session.path.clone().expect("first path");
-    let uri = lsp_worker::file_uri(&first_path);
+    let uri = anvil_lsp_client::file_uri(&first_path);
     model
         .language
         .lsp_requests
@@ -1626,7 +1627,7 @@ fn rename_response_rejects_a_stale_inactive_buffer_snapshot() {
         .lsp_requests
         .pending
         .insert(17, LspRequestKind::Rename);
-    let first_uri = lsp_worker::file_uri(&first);
+    let first_uri = anvil_lsp_client::file_uri(&first);
     model.handle_lsp_response(
         17,
         serde_json::json!({
@@ -1663,7 +1664,7 @@ fn rename_response_rejects_a_stale_document_version() {
         18,
         serde_json::json!({
             "documentChanges": [{
-                "textDocument": {"uri": lsp_worker::file_uri(&path), "version": 2},
+                "textDocument": {"uri": anvil_lsp_client::file_uri(&path), "version": 2},
                 "edits": [{
                     "range": {
                         "start": {"line": 0, "character": 0},
@@ -1740,7 +1741,7 @@ fn definition_jump_back_and_forward_round_trip() {
     let mut model = Model::open(&main).expect("open");
     let main = main.canonicalize().expect("main");
     let other = other.canonicalize().expect("other");
-    let uri = lsp_worker::file_uri(&other);
+    let uri = anvil_lsp_client::file_uri(&other);
 
     model.apply_definition_response(&serde_json::json!([{
         "targetUri": uri,
@@ -1780,7 +1781,7 @@ fn jump_back_from_help_returns_to_history_target() {
     fs::write(&other, "fn target() {}\n").expect("other");
     let mut model = Model::open(&main).expect("open");
     let main = main.canonicalize().expect("main");
-    let uri = lsp_worker::file_uri(&other);
+    let uri = anvil_lsp_client::file_uri(&other);
 
     model.apply_definition_response(&serde_json::json!([{
         "targetUri": uri,
@@ -1810,7 +1811,7 @@ fn jump_back_refuses_to_discard_a_dirty_unnamed_buffer() {
     fs::write(&main, "fn main() {}\n").expect("main");
     fs::write(&other, "fn target() {}\n").expect("other");
     let mut model = Model::open(&main).expect("open");
-    let uri = lsp_worker::file_uri(&other);
+    let uri = anvil_lsp_client::file_uri(&other);
 
     model.apply_definition_response(&serde_json::json!([{
         "targetUri": uri,

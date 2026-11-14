@@ -9,7 +9,6 @@ use std::time::Duration;
 use anvil_ipc::GatewayClient;
 use serde_json::Value;
 
-use crate::pipe_locations::PipeLocation;
 use sha2::{Digest, Sha256};
 
 mod format;
@@ -19,19 +18,31 @@ mod search;
 mod worker;
 #[cfg(all(test, feature = "official-git"))]
 pub(crate) use anvil_mod_git::{parse_git_diff, parse_git_status};
-pub(crate) use anvil_module::git::ResolveConflictError;
-pub(crate) use preview::PreviewData;
+pub use anvil_module::git::ResolveConflictError;
+pub use preview::PreviewData;
 #[cfg(test)]
 pub(crate) use preview::{PREVIEW_MAX_LINES, decode_preview};
-pub use protocol::{FileEvent, FileRequest};
-pub(crate) use protocol::{ProjectReplaceFile, ProjectReplacePlan};
+pub use protocol::{FileEvent, FileRequest, ProjectReplaceFile, ProjectReplacePlan};
 pub use worker::FileWorker;
 
+/// One file location parsed from project search output.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PipeLocation {
+    /// Workspace-relative or absolute path.
+    pub path: String,
+    /// One-based line.
+    pub line: usize,
+    /// One-based column.
+    pub column: usize,
+    /// Diagnostic or match text.
+    pub message: String,
+}
+
 const FILE_LIMIT: usize = 5000;
-pub(crate) const MAX_TREE_WATCH_DIRS: usize = 256;
+pub const MAX_TREE_WATCH_DIRS: usize = 256;
 const TREE_POLL_INTERVAL: Duration = Duration::from_millis(500);
 const TREE_DEBOUNCE: Duration = Duration::from_millis(500);
-pub(crate) const MAX_PROJECT_RESULTS: usize = 500;
+pub const MAX_PROJECT_RESULTS: usize = 500;
 const MAX_REPLACE_FILES: usize = 100;
 const MAX_REPLACE_FILE_BYTES: usize = 4 * 1024 * 1024;
 const MAX_REPLACE_BYTES: usize = 16 * 1024 * 1024;
@@ -115,6 +126,40 @@ mod tests {
             methods.lock().expect("methods").as_slice(),
             ["session.hello", "sys.copy", "sys.remove_all"]
         );
+    }
+
+    #[test]
+    fn drop_interrupts_blocked_gateway_request() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let workspace = dir.path().to_path_buf();
+        let socket = workspace.join("gateway.sock");
+        let listener = anvil_ipc::Listener::bind(&socket).expect("bind");
+        let server = std::thread::spawn(move || {
+            let mut connection = listener.accept().expect("accept");
+            let frame = connection.recv().expect("recv").expect("frame");
+            let request: serde_json::Value = serde_json::from_slice(&frame).expect("request");
+            let response = serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": request["id"],
+                "result": {"ok": true},
+            });
+            connection
+                .send(&serde_json::to_vec(&response).expect("response"))
+                .expect("send");
+            let _ = connection.recv();
+            while let Ok(Some(_)) = connection.recv() {}
+        });
+        let client = GatewayClient::connect(&socket, &[3; 32]).expect("client");
+        let worker = FileWorker::start(client, workspace.clone());
+        worker
+            .request(FileRequest::List(workspace))
+            .expect("list request");
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        let started = std::time::Instant::now();
+        drop(worker);
+        assert!(started.elapsed() < std::time::Duration::from_secs(2));
+        server.join().expect("server");
+        let _ = std::fs::remove_file(socket);
     }
 
     #[test]

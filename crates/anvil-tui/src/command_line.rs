@@ -1,8 +1,8 @@
 //! Ex command-name and argument completion.
 
 use super::*;
-use crate::file_worker::FileRequest;
 use anvil_tui_kit::{SelectionItem, SelectionTable};
+use anvil_workspace::FileRequest;
 
 const PATH_COMMANDS: &[&str] = &[
     "e",

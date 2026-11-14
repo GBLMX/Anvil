@@ -38,7 +38,6 @@ mod debugger;
 mod editing;
 mod file_io;
 mod file_tree_ui;
-mod file_worker;
 mod folding;
 mod format;
 mod jump;
@@ -52,7 +51,6 @@ use command_line::CommandCompletion;
 mod code_lens;
 pub mod dap;
 mod inlay_hints;
-pub mod lsp;
 mod lsp_ui;
 mod modal;
 mod mouse;
@@ -89,7 +87,6 @@ mod input;
 mod keymap;
 mod keys;
 mod lsp_runtime;
-mod lsp_worker;
 mod model;
 mod readonly;
 mod render;
@@ -121,6 +118,7 @@ mod terminal_background;
 #[cfg(unix)]
 mod terminal_control;
 mod test_explorer;
+use anvil_lsp_client::{LspConfig, LspEvent, LspWorker};
 #[cfg(target_os = "linux")]
 use anvil_session::plugin_session::{DEBUG_PERMISSIONS, DEBUG_PLUGIN_ID};
 #[cfg(target_os = "linux")]
@@ -128,10 +126,8 @@ use anvil_session::plugin_supervisor::{
     ExecOutcome, HostState, PluginSupervisor, StartMode, StartOutcome, SupervisorEvent,
 };
 use anvil_syntax::SyntaxState;
-use file_worker::FileWorker;
+use anvil_workspace::FileWorker;
 use gateway::GatewaySession;
-use lsp_worker::LspConfig;
-use lsp_worker::{LspEvent, LspWorker};
 #[cfg(target_os = "linux")]
 use plugin_activation::ActivationEvent;
 pub use terminal::{

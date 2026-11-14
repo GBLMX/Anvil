@@ -1,8 +1,8 @@
 //! Model-side incremental search and replace transitions.
 
 use super::*;
-use crate::file_worker::{FileRequest, MAX_PROJECT_RESULTS};
 use crate::search::{MAX_SEARCH_MATCHES, find_matches_limited};
+use anvil_workspace::{FileRequest, MAX_PROJECT_RESULTS};
 
 impl Model {
     pub(crate) fn begin_search(&mut self) {

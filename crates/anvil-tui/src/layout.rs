@@ -958,7 +958,7 @@ mod tests {
 #[cfg(test)]
 mod inline_diagnostic_tests {
     use super::*;
-    use crate::lsp::{Diagnostic, Position, Range};
+    use anvil_lsp_client::{Diagnostic, Position, Range};
 
     #[test]
     fn appends_highest_severity_diagnostic_to_the_line_end() {

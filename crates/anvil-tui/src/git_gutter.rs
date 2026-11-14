@@ -1,7 +1,7 @@
 //! Asynchronous Git gutter state.
 
 use super::*;
-use crate::file_worker::FileRequest;
+use anvil_workspace::FileRequest;
 
 impl Model {
     pub(crate) fn poll_git(&mut self) {

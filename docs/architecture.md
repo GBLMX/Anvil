@@ -259,6 +259,10 @@ crates/
   anvil-editor/        selection-first editor state and snapshots
   anvil-syntax/        Tree-sitter grammars, highlighting, and scopes
   anvil-session/       documents, effects, keymap, plugin lifecycle
+  anvil-task/          bounded task groups, cancellation, and event delivery
+  anvil-process/       single-owner child process groups and shutdown
+  anvil-lsp-client/    LSP transport, diagnostics, and supervised worker
+  anvil-workspace/     workspace file worker, search, preview, and formatting
   anvil-module/        trusted source-level module contract and registry
   anvil-mod-git/       trusted Git helpers for the official git module
   anvil-mod-workspace-index/ bounded in-memory workspace index module

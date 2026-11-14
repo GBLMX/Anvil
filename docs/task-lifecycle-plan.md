@@ -1,6 +1,10 @@
 # Task Lifecycle Plan
 
-Status: proposed
+Status: Slice 1 core landed in `crates/anvil-task`; `TaskWorker`, `FileWorker`,
+and `LspWorker` migrated; DAP and PTY migrated to `ProcessTask`; gateway
+shutdown is graceful with a kill fallback; the plugin host keeps its
+cgroup/pidfd owner because it needs cgroup placement and cgroup kill before
+exec.
 Target: keep the Rust editor on blocking threads and channels; no Tokio in the
 editor, TUI, or plugin path.
 
@@ -68,6 +72,7 @@ struct TaskGroup {
     states: HashMap<TaskId, TaskState>,       // authoritative
     dirty_states: BTreeSet<TaskId>,
     mailboxes: HashMap<TaskId, BoundedMailbox>,
+    data_budget: Arc<GlobalDataBudget>,        // shared by all mailboxes
     progress: HashMap<TaskId, ProgressState>, // latest only
     order: Vec<TaskId>,
     next_task: usize,
@@ -77,14 +82,21 @@ struct TaskGroup {
 
 ```rust
 struct TaskGroupConfig {
-    global_event_capacity: usize, // default 1024
-    per_task_capacity: usize,     // default 256
-    max_events_per_poll: usize,   // default 256
-    poll_time_budget: Duration,   // default 2 ms
+    max_tasks: usize,                   // default 64
+    global_data_event_capacity: usize,  // default 1024
+    global_data_byte_capacity: usize,   // default 16 MiB
+    per_task_capacity: usize,           // default 256
+    max_events_per_poll: usize,         // default 256
+    poll_time_budget: Duration,         // default 2 ms
 }
 ```
 
-A task has a bounded mailbox; the group has a global cap. `poll` drains
+A task has a bounded mailbox; every mailbox shares one
+`GlobalDataBudget`, so `N tasks × per_task_capacity` cannot exceed
+`global_data_event_capacity`, and queued payload bytes cannot exceed
+`global_data_byte_capacity`. Push reserves from both budgets; a failed
+reservation returns the data to the caller as `TaskFull`, `GlobalFull`, or
+`GlobalBytesFull`. `spawn` refuses work beyond `max_tasks`. `poll` drains
 lifecycle state changes first, then progress, then data in round-robin order.
 
 ## 4. Event Classes
@@ -150,45 +162,22 @@ Rules:
 
 ## 7. Shutdown Order
 
-### Phase 1 order
+### Current order
 
-```text
+Model teardown follows this order:
+
 1. stop accepting new commands
-2. cancel TUI-dependent workers
-3. cancel LSP/DAP/PTY/file workers
-4. close gateway client/socket
-5. stop plugin hosts
-6. join TaskGroup tasks with timeouts
-7. GatewaySession::stop (sole owner in phase 1)
-```
+2. stop TUI task and PTY workers
+3. drop file, LSP, and DAP workers
+4. stop plugin hosts and revoke their grants
+5. drop gateway clients
+6. call `GatewaySession::shutdown_gracefully(250ms)` for the primary, root,
+   and installer gateways
+7. remaining `TaskGroup` and PTY drops use their own timeouts
 
-Phase 1 does not promise a graceful gateway shutdown. The current
-`GatewaySession::stop` path is:
-
-```text
-Child::kill
-Child::wait
-remove socket
-```
-
-It is immediate kill, not close-then-wait. The plan must not describe it as a
-graceful close until Slice 5 implements that behavior.
-
-### Target order after Slice 5
-
-```text
-1. stop accepting new commands
-2. cancel TUI-dependent workers
-3. cancel LSP/DAP/PTY/file workers
-4. close gateway client/socket and start graceful shutdown
-5. wait for gateway exit with a timeout
-6. kill the gateway process group if the timeout expires
-7. stop plugin hosts
-8. join TaskGroup tasks with timeouts
-```
-
-The graceful-close sequence, timeout, and kill fallback are required Slice 5
-work with their own tests. They are not assumed behavior of phase 1.
+Gateway shutdown sends `SIGTERM`, waits for exit, and only falls back to
+kill-and-wait when the timeout expires. The socket path is removed once.
+`Drop` remains a kill-based safety net for ungraceful teardown.
 
 ## 8. Gateway Boundary
 
@@ -200,20 +189,12 @@ socket path
 tokens
 ```
 
-TaskGroup observes gateway state, but does not own it:
+`TaskGroup` neither owns nor observes the gateway. Model teardown cancels
+workers, drops gateway clients, and then calls `shutdown_gracefully`; the
+`GatewaySession` remains the sole owner of the child and socket.
 
-```text
-GatewayStarting
-GatewayReady
-GatewayExited
-GatewayFailed
-```
+Slice 5 implementation:
 
-For phase 1, the TUI keeps `gateway_session: Option<GatewaySession>` and calls
-the existing `stop` path. That path currently kills immediately; no graceful
-close is claimed.
-
-Slice 5 adds:
 
 ```text
 GatewaySession::shutdown_gracefully(timeout)
@@ -294,14 +275,12 @@ Acceptance:
 - request overflow policy;
 - restart with state notification.
 
-### Slice 5: gateway observation and graceful shutdown
+### Slice 5: gateway graceful shutdown
 
-- add read-only gateway state;
-- use it from TaskGroup/UI;
+- keep `Child` and socket ownership in `GatewaySession`;
 - implement `GatewaySession::shutdown_gracefully(timeout)`;
-- close the client/socket before waiting;
+- close gateway clients before waiting;
 - wait for exit, then kill and wait as fallback;
-- do not transfer Child ownership in this slice;
 - keep `Drop` as the kill-based safety net.
 
 Acceptance:
@@ -314,20 +293,28 @@ Acceptance:
 ## 11. Tests
 
 ```text
-[ ] lifecycle final state survives full mailbox
-[ ] ten thousand progress updates produce one notification
-[ ] LSP data overflow fails the request explicitly
-[ ] file watcher overflow becomes one Rescan
-[ ] a noisy task does not starve another task
-[ ] poll budget stops and resumes next tick
-[ ] shutdown with a full queue still joins
-[ ] process task timeout kills its group
-[ ] unresponsive thread is reported as Leaked
-[ ] gateway is stopped exactly once
-[ ] gateway graceful close waits for exit before fallback
-[ ] gateway timeout fallback kills and waits
-[ ] gateway socket is removed exactly once
-[ ] a TaskGroup cannot spawn a second gateway owner
+[x] lifecycle final state survives full mailbox
+[x] ten thousand progress updates produce one notification
+[x] per-task and global data capacities are both enforced
+[x] max tasks rejects excess spawns
+[x] global byte budget rejects oversized events
+[x] file worker event costs include heap payload
+[x] oversized file event becomes one Oversized notification
+[x] LSP command and event queues are bounded
+[x] LSP diagnostics are coalesced by path
+[x] LSP data overflow fails the request explicitly
+[x] tree watch cap is reported by the tree model
+[x] a noisy task does not starve another task
+[x] poll budget stops and resumes next tick
+[x] file worker drop interrupts blocked gateway I/O
+[x] shutdown with a full queue still joins
+[x] process task timeout kills its group
+[x] unresponsive thread is reported as Leaked
+[x] gateway is stopped exactly once
+[x] gateway graceful close waits for exit before fallback
+[x] gateway timeout fallback kills and waits
+[x] gateway socket is removed exactly once
+[x] GatewaySession is the sole gateway owner
 ```
 
 ## 12. Acceptance

@@ -82,7 +82,7 @@ impl Model {
             .session
             .path
             .as_ref()
-            .map(|path| lsp_worker::file_uri(path))
+            .map(|path| anvil_lsp_client::file_uri(path))
         else {
             return;
         };

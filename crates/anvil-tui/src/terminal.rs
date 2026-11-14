@@ -468,9 +468,32 @@ fn reopen_tty_stdin() -> io::Result<()> {
 #[cfg(target_os = "linux")]
 impl Drop for Model {
     fn drop(&mut self) {
+        self.runtime.task_worker = None;
+        #[cfg(unix)]
+        {
+            self.runtime.terminal = None;
+        }
+        self.workspace.file_worker = None;
+        self.workspace.root_file_workers.clear();
+        self.language.lsp.workers.clear();
+        self.language.lsp.client = None;
+        self.language.dap.client = None;
+        self.language.dap.attach = None;
+        self.language.dap.request = None;
         self.plugins
             .supervisor
             .shutdown(self.workspace.gateway.as_mut());
+        self.workspace.gateway = None;
+        let timeout = std::time::Duration::from_millis(250);
+        if let Some(mut session) = self.workspace.gateway_session.take() {
+            session.shutdown_gracefully(timeout);
+        }
+        let gateways = std::mem::take(&mut self.workspace.root_gateways);
+        for (_, (mut session, client)) in gateways {
+            drop(client);
+            session.shutdown_gracefully(timeout);
+        }
+        self.stop_installer();
     }
 }
 
