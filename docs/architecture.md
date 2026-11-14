@@ -227,8 +227,11 @@ save, undo/redo, Git hunk staging, session output, and forced quit.
   accepts only `select`; unknown modes are rejected.
 - Rendering covers only visible lines; syntax highlighting is incremental and
   viewport-scoped.
-- Byte, char, grapheme, and display-cell coordinates are explicit in the API.
-  The editor owns conversions; plugins must not reimplement Unicode width rules.
+- Byte, UTF-16, Unicode scalar, grapheme-cluster, and display-cell coordinates
+  are converted only by `LineIndex`. Editor mutations validate UTF-8
+  boundaries; LSP, plugin, and workspace edits commit through one
+  revision-checked transaction. The editor owns conversions; plugins must not
+  reimplement Unicode width rules.
 
 ## 5. Ferriso: reference, not a v1 runtime dependency
 
