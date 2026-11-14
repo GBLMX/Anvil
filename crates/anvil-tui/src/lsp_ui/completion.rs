@@ -107,20 +107,29 @@ impl Model {
         self.overlays.lsp_results.snippet = None;
         if let Some((start, end)) = replace_bytes {
             let end = end.max(start);
-            self.session.editor.set_selection_bytes(start, end);
-            self.session.editor.delete(start..end);
-            self.session.editor.insert(start, &insert);
+            if !self.apply_completion_transaction(start, end, &insert) {
+                return;
+            }
             self.session.cursor = start + insert.len();
             self.file.modified = true;
             if let Some(snippet) = snippet.take() {
                 self.start_snippet(&snippet, start);
             }
         } else if let Some((start_line, start_char, end_line, end_char)) = replace {
-            let start = self.offset_at_utf16(start_line, start_char);
-            let end = self.offset_at_utf16(end_line, end_char).max(start);
-            self.session.editor.set_selection_bytes(start, end);
-            self.session.editor.delete(start..end);
-            self.session.editor.insert(start, &insert);
+            let (Some(start), Some(end)) = (
+                self.try_offset_at_utf16(start_line, start_char),
+                self.try_offset_at_utf16(end_line, end_char),
+            ) else {
+                self.status.text = "E: invalid completion edit range".to_owned();
+                return;
+            };
+            if start > end {
+                self.status.text = "E: invalid completion edit range".to_owned();
+                return;
+            }
+            if !self.apply_completion_transaction(start, end, &insert) {
+                return;
+            }
             self.session.cursor = start + insert.len();
             self.file.modified = true;
             if let Some(snippet) = snippet.take() {
@@ -140,33 +149,61 @@ impl Model {
                 self.start_snippet(&snippet, start);
             }
         }
-        self.apply_additional_completion_edits(&additional);
+        if !self.apply_additional_completion_edits(&additional) {
+            return;
+        }
         self.status.text = format!("completed {label}");
         self.file.dirty = true;
+    }
+
+    fn apply_completion_transaction(&mut self, start: usize, end: usize, text: &str) -> bool {
+        let revision = self.session.editor.revision();
+        match self
+            .session
+            .editor
+            .apply_transaction_at(revision, vec![(start..end, text.to_owned())])
+        {
+            Ok(_) => true,
+            Err(error) => {
+                self.status.text = format!("E: completion edit: {error}");
+                false
+            }
+        }
     }
 
     fn apply_additional_completion_edits(
         &mut self,
         edits: &[crate::completion_sources::CompletionAdditionalEdit],
-    ) {
-        let mut ranges: Vec<(usize, usize, String)> = edits
-            .iter()
-            .map(|edit| {
-                let start = self.offset_at_utf16(edit.start_line, edit.start_character);
-                let end = self
-                    .offset_at_utf16(edit.end_line, edit.end_character)
-                    .max(start);
-                (start, end, edit.new_text.clone())
-            })
-            .collect();
+    ) -> bool {
+        let mut ranges = Vec::with_capacity(edits.len());
+        for edit in edits {
+            let (Some(start), Some(end)) = (
+                self.try_offset_at_utf16(edit.start_line, edit.start_character),
+                self.try_offset_at_utf16(edit.end_line, edit.end_character),
+            ) else {
+                self.status.text = "E: invalid completion edit range".to_owned();
+                return false;
+            };
+            if start > end {
+                self.status.text = "E: invalid completion edit range".to_owned();
+                return false;
+            }
+            ranges.push((start, end, edit.new_text.clone()));
+        }
         ranges.sort_by_key(|(start, end, _)| (*start, *end));
+        for pair in ranges.windows(2) {
+            if pair[0].1 > pair[1].0 {
+                self.status.text = "E: overlapping completion edits".to_owned();
+                return false;
+            }
+        }
         for (start, end, text) in ranges.into_iter().rev() {
             let deleted = end.saturating_sub(start);
             let delta = text.len() as isize - deleted as isize;
             let cursor = self.session.cursor;
-            self.session.editor.set_selection_bytes(start, end);
-            self.session.editor.delete(start..end);
-            self.session.editor.insert(start, &text);
+            if !self.apply_completion_transaction(start, end, &text) {
+                return false;
+            }
             if let Some(snippet) = self.overlays.lsp_results.snippet.as_mut() {
                 snippet.adjust_delete(start, end);
                 snippet.adjust_insert(start, text.len());
@@ -179,6 +216,7 @@ impl Model {
                 };
             }
         }
+        true
     }
     fn start_snippet(&mut self, snippet: &Snippet, base: usize) {
         self.overlays.lsp_results.snippet = SnippetSession::new(snippet.offset_stops(base));

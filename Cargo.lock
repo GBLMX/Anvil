@@ -108,6 +108,7 @@ dependencies = [
  "anvil-api",
  "anvil-core",
  "criterion",
+ "proptest",
  "regex",
  "unicode-segmentation",
 ]

@@ -283,6 +283,25 @@ fn rejects_overlapping_changes_without_modifying_text() {
 }
 
 #[test]
+fn rejects_positions_inside_a_surrogate_pair() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let file = dir.path().join("file.rs");
+    fs::write(&file, "a🦀b").expect("file");
+    let mut model = Model::open(&file).expect("open");
+    let workspace_edit = WorkspaceEdit::from_lsp(&serde_json::json!({
+        "changes": {
+            uri(&file): [{
+                "range": {"start": {"line": 0, "character": 2}, "end": {"line": 0, "character": 3}},
+                "newText": "x"
+            }]
+        }
+    }))
+    .expect("parse");
+    assert!(workspace_edit.apply(&mut model).is_err());
+    assert_eq!(model.session.editor.text().slice(0..6), "a🦀b");
+}
+
+#[test]
 fn rejects_stale_lsp_document_version() {
     let dir = tempfile::tempdir().expect("tempdir");
     let mut model = open(&dir);

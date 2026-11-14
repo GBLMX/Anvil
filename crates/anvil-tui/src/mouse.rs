@@ -4,7 +4,6 @@ use super::*;
 use crate::layout::tree_fits;
 use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::Rect;
-use unicode_width::UnicodeWidthChar;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum PointerState {
@@ -527,38 +526,11 @@ fn edge_scroll(model: &mut Model, row: u16, height: u16) {
 }
 
 fn offset_for_position(model: &Model, line: usize, column: usize) -> usize {
-    let Some(line_range) = model
-        .session
-        .editor
+    let editor = &model.session.editor;
+    editor
         .index()
-        .line_to_offset(line)
-        .and_then(|offset| model.session.editor.line_range_at(offset))
-    else {
-        return model
-            .session
-            .cursor
-            .min(model.session.editor.text().len_bytes());
-    };
-    let text = model.session.editor.text().slice(line_range.clone());
-    let mut display = 0;
-    for (offset, character) in text.char_indices() {
-        let width = if character == '\t' {
-            4 - display % 4
-        } else {
-            character.width().unwrap_or(0)
-        };
-        if display + width > column {
-            return line_range.start
-                + offset
-                + if column < display + width.div_ceil(2) {
-                    0
-                } else {
-                    character.len_utf8()
-                };
-        }
-        display += width;
-    }
-    line_range.start + text.trim_end_matches('\n').len()
+        .offset_at_display_column_rounded(editor.text(), line, column)
+        .unwrap_or_else(|| model.session.cursor.min(editor.text().len_bytes()))
 }
 
 fn split_ratio_at(inner: Rect, col: u16) -> u16 {
@@ -587,4 +559,27 @@ fn tab_at(model: &Model, offset: u16, _width: u16) -> usize {
         used = used.saturating_add(label_width + 1);
     }
     model.buffers.active
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use anvil_editor::EditorState;
+
+    #[test]
+    fn pointer_snaps_to_grapheme_boundaries() {
+        let model = Model::new(EditorState::from_text("a👨‍👩‍👧‍👦b"), None);
+        let emoji_end = model
+            .session
+            .editor
+            .next_grapheme_boundary(1)
+            .expect("emoji boundary");
+        assert_eq!(offset_for_position(&model, 0, 2), 1);
+        assert_eq!(offset_for_position(&model, 0, 5), emoji_end);
+        assert_eq!(offset_for_position(&model, 0, 9), emoji_end);
+        for column in 0..=12 {
+            let offset = offset_for_position(&model, 0, column);
+            assert!(model.session.editor.text().is_char_boundary(offset));
+        }
+    }
 }

@@ -458,10 +458,16 @@ impl EditorState {
             .sum()
     }
 
-    /// Inserts text and updates the line index and selections.
-    pub fn insert(&mut self, at: usize, text: &str) {
+    /// Inserts text after validating the byte offset.
+    ///
+    /// Returns `false` without mutating when `at` is out of bounds or inside a
+    /// UTF-8 scalar.
+    pub fn insert(&mut self, at: usize, text: &str) -> bool {
+        if at > self.text.len_bytes() || !self.text.is_char_boundary(at) {
+            return false;
+        }
         if text.is_empty() {
-            return;
+            return true;
         }
         let before = self.selections.clone();
         self.apply_insert(at, text);
@@ -473,12 +479,23 @@ impl EditorState {
             },
             before,
         );
+        true
     }
 
-    /// Deletes a byte range and updates the line index and selections.
-    pub fn delete(&mut self, range: Range<usize>) {
+    /// Deletes a byte range after validating both endpoints.
+    ///
+    /// Returns `false` without mutating when the range is inverted, out of
+    /// bounds, or inside a UTF-8 scalar.
+    pub fn delete(&mut self, range: Range<usize>) -> bool {
+        if range.start > range.end
+            || range.end > self.text.len_bytes()
+            || !self.text.is_char_boundary(range.start)
+            || !self.text.is_char_boundary(range.end)
+        {
+            return false;
+        }
         if range.start == range.end {
-            return;
+            return true;
         }
         let text = self.text.slice(range.clone());
         let before = self.selections.clone();
@@ -491,6 +508,7 @@ impl EditorState {
             },
             before,
         );
+        true
     }
 
     /// Applies non-overlapping edits as one undoable transaction.

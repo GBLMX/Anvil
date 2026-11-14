@@ -45,14 +45,18 @@ fn stress(edits: usize) {
         let at = (next(&mut seed) as usize) % len;
         let op = next(&mut seed) % 10;
         match op {
-            0..=6 => state.insert(at, "x"),
+            0..=6 => {
+                state.insert(at, "x");
+            }
             7..=8 => {
                 let end = (at + 1).min(len);
                 if at < end {
                     state.delete(at..end);
                 }
             }
-            _ => state.insert(at, "x\n"),
+            _ => {
+                state.insert(at, "x\n");
+            }
         }
         assert_eq!(
             state.index().len_lines(),

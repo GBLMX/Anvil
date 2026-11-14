@@ -150,6 +150,10 @@ pub(crate) fn matching_bracket(
     cursor: usize,
     path: Option<&Path>,
 ) -> Option<(usize, usize)> {
+    if cursor > text.len() {
+        return None;
+    }
+    let cursor = floor_char_boundary(text, cursor);
     let (target, character) = bracket_at(text, cursor)?;
     let (open, close) = bracket_pair(character)?;
     let line_start = text[..target].rfind('\n').map_or(0, |offset| offset + 1);
@@ -337,5 +341,17 @@ mod tests {
     #[test]
     fn unmatched_bracket_returns_none() {
         assert_eq!(matching_bracket("(a", 0, Some(Path::new("main.rs"))), None);
+    }
+    #[test]
+    fn cursor_inside_codepoint_snaps_without_panicking() {
+        let text = "(a)🦀";
+        assert_eq!(
+            matching_bracket(text, text.len() - 1, Some(Path::new("main.rs"))),
+            Some((0, 2))
+        );
+        assert_eq!(
+            matching_bracket(text, text.len() + 1, Some(Path::new("main.rs"))),
+            None
+        );
     }
 }

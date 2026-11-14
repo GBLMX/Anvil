@@ -530,9 +530,21 @@ fn apply_text_edits(
 ) -> Result<(), String> {
     let mut ranges = Vec::with_capacity(edits.len());
     for edit in edits {
-        let start = offset_at_utf16(state, edit.range.start.line, edit.range.start.character)
+        let start = state
+            .index()
+            .offset_at_utf16(
+                state.text(),
+                edit.range.start.line as usize,
+                edit.range.start.character as usize,
+            )
             .ok_or_else(|| format!("invalid edit start in {}", path.display()))?;
-        let end = offset_at_utf16(state, edit.range.end.line, edit.range.end.character)
+        let end = state
+            .index()
+            .offset_at_utf16(
+                state.text(),
+                edit.range.end.line as usize,
+                edit.range.end.character as usize,
+            )
             .ok_or_else(|| format!("invalid edit end in {}", path.display()))?;
         if start > end {
             return Err(format!("invalid edit range in {}", path.display()));
@@ -545,40 +557,31 @@ fn apply_text_edits(
             return Err(format!("overlapping edits in {}", path.display()));
         }
     }
-    for (start, end, text) in ranges.into_iter().rev() {
+    if let Some(&(start, end, _)) = ranges.first() {
         state.set_selection_bytes(start, end);
-        state.delete(start..end);
-        state.insert(start, &text);
     }
-    Ok(())
-}
-
-fn offset_at_utf16(editor: &EditorState, line: u32, character: u32) -> Option<usize> {
-    let line = line as usize;
-    let start = editor.index().line_to_offset(line)?;
-    let end = editor
-        .index()
-        .offset_to_line(start)
-        .map(|position| position.end)?;
-    let text = editor.text().slice(start..end);
-    let mut units = 0;
-    for (offset, codepoint) in text.char_indices() {
-        if units >= character as usize {
-            return Some(start + offset);
-        }
-        units += codepoint.len_utf16();
-    }
-    Some(end)
+    state
+        .apply_transaction_at(
+            state.revision(),
+            ranges
+                .into_iter()
+                .map(|(start, end, text)| (start..end, text))
+                .collect(),
+        )
+        .map(|_| ())
+        .map_err(|error| format!("invalid edit transaction in {}: {error}", path.display()))
 }
 
 fn commit_states(model: &mut Model, prepared: HashMap<PathBuf, EditorState>) {
     for (path, state) in prepared {
+        let cursor = state
+            .selection_bytes()
+            .first()
+            .map(|(_, head)| *head)
+            .unwrap_or(0);
         if model.session.path.as_ref() == Some(&path) {
             model.session.editor = state.into();
-            model.session.cursor = model
-                .session
-                .cursor
-                .min(model.session.editor.text().len_bytes());
+            model.session.cursor = cursor;
             model.file.modified = true;
             model.syntax_cache.highlights.borrow_mut().invalidate();
             if let Some(buffer) = model
@@ -599,10 +602,12 @@ fn commit_states(model: &mut Model, prepared: HashMap<PathBuf, EditorState>) {
             .find(|buffer| buffer.path.as_ref() == Some(&path))
         {
             buffer.editor = state.into();
+            buffer.cursor = cursor;
             buffer.modified = true;
             buffer.syntax = Default::default();
         } else if let Some(buffer) = model.buffers.background.get_mut(&path) {
             buffer.editor = state.into();
+            buffer.cursor = cursor;
             buffer.modified = true;
             buffer.syntax = Default::default();
         } else {

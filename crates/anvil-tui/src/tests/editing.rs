@@ -1400,3 +1400,35 @@ fn down_over_cjk_and_tab_lines_keeps_bracket_lookup_safe() {
     assert!(text.is_char_boundary(model.session.cursor));
     let _ = model.bracket_pair();
 }
+
+#[test]
+fn vertical_motion_keeps_grapheme_clusters_whole() {
+    let text = "abc\n👨‍👩‍👧‍👦\nabc";
+    let mut model = Model::new(EditorState::from_text(text), None);
+    let emoji = text.find('👨').expect("emoji");
+    let emoji_end = model
+        .session
+        .editor
+        .next_grapheme_boundary(emoji)
+        .expect("emoji end");
+
+    model.session.cursor = 1;
+    model.move_line(1);
+    assert_eq!(model.session.cursor, emoji_end);
+    assert!(text.is_char_boundary(model.session.cursor));
+
+    model.move_line(1);
+    assert!(text.is_char_boundary(model.session.cursor));
+    assert_eq!(
+        model
+            .session
+            .editor
+            .index()
+            .offset_to_line(model.session.cursor),
+        Some(anvil_core::LinePosition {
+            line: 2,
+            start: emoji_end + 1,
+            end: text.len(),
+        })
+    );
+}

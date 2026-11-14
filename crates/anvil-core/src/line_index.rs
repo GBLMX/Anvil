@@ -23,7 +23,14 @@ const COLUMN_CHECKPOINT_BYTES: usize = 16 * 1024;
 struct ColumnCheckpoint {
     byte: usize,
     grapheme: usize,
+    scalar: usize,
     display: usize,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum ColumnBias {
+    Right,
+    Nearest,
 }
 
 #[derive(Debug, Clone)]
@@ -74,6 +81,8 @@ pub struct Position {
     pub line: usize,
     /// Zero-based grapheme-cluster column.
     pub grapheme_column: usize,
+    /// Zero-based Unicode scalar column.
+    pub char_column: usize,
     /// Zero-based terminal display-cell column.
     pub display_column: usize,
 }
@@ -299,17 +308,19 @@ impl LineIndex {
             return None;
         }
         let line = self.offset_to_line(offset)?;
-        let (grapheme_column, display_column) =
+        let (grapheme_column, char_column, display_column) =
             if let Some(checkpoint) = self.column_checkpoint(line.start, offset) {
                 let prefix = buffer.slice(line.start + checkpoint.byte..offset);
                 (
                     checkpoint.grapheme + prefix.graphemes(true).count(),
+                    checkpoint.scalar + prefix.chars().count(),
                     checkpoint.display + display_width_from(&prefix, checkpoint.display),
                 )
             } else {
                 let prefix = buffer.slice(line.start..offset);
                 (
                     prefix.graphemes(true).count(),
+                    prefix.chars().count(),
                     display_width_from(&prefix, 0),
                 )
             };
@@ -317,6 +328,7 @@ impl LineIndex {
             byte_offset: offset,
             line: line.line,
             grapheme_column,
+            char_column,
             display_column,
         })
     }
@@ -339,12 +351,91 @@ impl LineIndex {
         Some(line.end)
     }
 
+    /// Returns the byte offset at a Unicode scalar column.
+    pub fn offset_at_char<B: TextBuffer>(
+        &self,
+        buffer: &B,
+        line: usize,
+        column: usize,
+    ) -> Option<usize> {
+        let start = self.line_to_offset(line)?;
+        let line = self.offset_to_line(start)?;
+        let text = buffer.slice(start..line.end);
+        for (index, (byte, _)) in text.char_indices().enumerate() {
+            if index == column {
+                return Some(start + byte);
+            }
+        }
+        (column >= text.chars().count()).then_some(line.end)
+    }
+
+    /// Returns the byte offset at a UTF-16 column.
+    ///
+    /// Returns `None` for an invalid line, a column beyond the line, or a
+    /// column inside a surrogate pair.
+    pub fn offset_at_utf16<B: TextBuffer>(
+        &self,
+        buffer: &B,
+        line: usize,
+        column: usize,
+    ) -> Option<usize> {
+        let start = self.line_to_offset(line)?;
+        let line = self.offset_to_line(start)?;
+        let text = buffer.slice(start..line.end);
+        let mut units = 0;
+        for (byte, character) in text.char_indices() {
+            if units == column {
+                return Some(start + byte);
+            }
+            let next = units + character.len_utf16();
+            if column < next {
+                return None;
+            }
+            units = next;
+        }
+        (units == column).then_some(line.end)
+    }
+
+    /// UTF-16 column for a byte offset.
+    pub fn utf16_column<B: TextBuffer>(&self, buffer: &B, offset: usize) -> Option<usize> {
+        if offset > buffer.len_bytes() || !buffer.is_char_boundary(offset) {
+            return None;
+        }
+        let line = self.offset_to_line(offset)?;
+        let prefix = buffer.slice(line.start..offset);
+        Some(prefix.chars().map(char::len_utf16).sum())
+    }
+
     /// Returns the byte offset at a terminal display column.
+    ///
+    /// The result is always a grapheme-cluster boundary. Columns inside a wide
+    /// cluster resolve to its trailing boundary; use
+    /// [`Self::offset_at_display_column_rounded`] for pointer hit testing.
     pub fn offset_at_display_column<B: TextBuffer>(
         &self,
         buffer: &B,
         line: usize,
         column: usize,
+    ) -> Option<usize> {
+        self.offset_at_display_column_with_bias(buffer, line, column, ColumnBias::Right)
+    }
+
+    /// Returns the nearest grapheme boundary for a pointer display column.
+    pub fn offset_at_display_column_rounded<B: TextBuffer>(
+        &self,
+        buffer: &B,
+        line: usize,
+        column: usize,
+    ) -> Option<usize> {
+        self.offset_at_display_column_with_bias(buffer, line, column, ColumnBias::Nearest)
+    }
+
+    fn offset_at_display_column_with_bias<B: TextBuffer>(
+        &self,
+        buffer: &B,
+        line: usize,
+        column: usize,
+        bias: ColumnBias,
     ) -> Option<usize> {
         let start = self.line_to_offset(line)?;
         let line = self.offset_to_line(start)?;
@@ -364,11 +455,24 @@ impl LineIndex {
                 (start, 0, line.end)
             };
         let text = buffer.slice(scan_start..scan_end);
-        for (byte, character) in text.char_indices() {
+        for (byte, cluster) in text.grapheme_indices(true) {
             if width >= column {
                 return Some(scan_start + byte);
             }
-            width += display_char_width(character, width);
+            let next = width + display_width_from(cluster, width);
+            if column < next {
+                return Some(match bias {
+                    ColumnBias::Right => scan_start + byte + cluster.len(),
+                    ColumnBias::Nearest => {
+                        if column - width < next - column {
+                            scan_start + byte
+                        } else {
+                            scan_start + byte + cluster.len()
+                        }
+                    }
+                });
+            }
+            width = next;
         }
         Some(line.end)
     }
@@ -726,6 +830,7 @@ fn build_line_columns(text: &str, start: usize, end: usize) -> LineColumns {
     let slice = &text[start..end];
     let mut checkpoints = Vec::new();
     let mut grapheme = 0;
+    let mut scalar = 0;
     let mut display = 0;
     let mut next_checkpoint = 0;
     let ascii = slice.is_ascii();
@@ -734,6 +839,7 @@ fn build_line_columns(text: &str, start: usize, end: usize) -> LineColumns {
             checkpoints.push(ColumnCheckpoint {
                 byte,
                 grapheme: byte,
+                scalar: byte,
                 display: byte,
             });
         }
@@ -743,6 +849,7 @@ fn build_line_columns(text: &str, start: usize, end: usize) -> LineColumns {
                 checkpoints.push(ColumnCheckpoint {
                     byte,
                     grapheme,
+                    scalar,
                     display,
                 });
                 next_checkpoint = (byte / COLUMN_CHECKPOINT_BYTES + 1) * COLUMN_CHECKPOINT_BYTES;
@@ -754,6 +861,7 @@ fn build_line_columns(text: &str, start: usize, end: usize) -> LineColumns {
             } else {
                 1
             };
+            scalar += 1;
             grapheme += 1;
         }
     } else {
@@ -762,12 +870,14 @@ fn build_line_columns(text: &str, start: usize, end: usize) -> LineColumns {
                 checkpoints.push(ColumnCheckpoint {
                     byte,
                     grapheme,
+                    scalar,
                     display,
                 });
                 next_checkpoint = (byte / COLUMN_CHECKPOINT_BYTES + 1) * COLUMN_CHECKPOINT_BYTES;
             }
             for character in cluster.chars() {
                 display += display_char_width(character, display);
+                scalar += 1;
             }
             grapheme += 1;
         }
@@ -832,6 +942,52 @@ mod tests {
         let index = LineIndex::from_text(&text);
         assert_eq!(index.len_lines(), 3_000_001);
         assert_eq!(index.line_to_offset(3_000_000), Some(6_000_000));
+    }
+
+    #[test]
+    fn scalar_utf16_and_display_columns_round_trip() {
+        let buffer = PieceTable::from_text("a🦀b");
+        let index = LineIndex::from_buffer(&buffer);
+        let position = index.position(&buffer, 5).expect("after crab");
+        assert_eq!(position.char_column, 2);
+        assert_eq!(position.grapheme_column, 2);
+        assert_eq!(index.offset_at_char(&buffer, 0, 2), Some(5));
+        assert_eq!(index.utf16_column(&buffer, 5), Some(3));
+        assert_eq!(index.offset_at_utf16(&buffer, 0, 1), Some(1));
+        assert_eq!(index.offset_at_utf16(&buffer, 0, 2), None);
+        assert_eq!(index.offset_at_utf16(&buffer, 0, 3), Some(5));
+        assert_eq!(index.offset_at_utf16(&buffer, 0, 4), Some(6));
+        assert_eq!(index.offset_at_utf16(&buffer, 0, 5), None);
+    }
+
+    #[test]
+    fn display_columns_never_split_grapheme_clusters() {
+        let buffer = PieceTable::from_text("a👨‍👩‍👧‍👦b");
+        let index = LineIndex::from_buffer(&buffer);
+        let emoji_end = index.next_grapheme_boundary(&buffer, 1).expect("emoji end");
+        assert_eq!(index.offset_at_display_column(&buffer, 0, 1), Some(1));
+        assert_eq!(
+            index.offset_at_display_column(&buffer, 0, 2),
+            Some(emoji_end)
+        );
+        assert_eq!(
+            index.offset_at_display_column_rounded(&buffer, 0, 1),
+            Some(1)
+        );
+        assert_eq!(
+            index.offset_at_display_column_rounded(&buffer, 0, 2),
+            Some(1)
+        );
+        assert_eq!(
+            index.offset_at_display_column_rounded(&buffer, 0, 5),
+            Some(emoji_end)
+        );
+        for column in 0..=4 {
+            let offset = index
+                .offset_at_display_column_rounded(&buffer, 0, column)
+                .expect("rounded display column");
+            assert!(buffer.is_char_boundary(offset));
+        }
     }
 
     #[test]

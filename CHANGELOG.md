@@ -18,6 +18,11 @@ post-`0.5.0` feature line.
   ranks prefix matches first, uses right-aligned kind labels, a scrollbar, and
   a side details panel for documentation or auto-imports; accepting an
   auto-import completion applies the LSP additional text edit.
+- Unified byte, scalar, grapheme, display-cell, and UTF-16 conversion in the
+  line index. Editor mutations now reject invalid UTF-8 boundaries, LSP and
+  workspace edits apply as one revision-checked transaction, and vertical
+  movement, pointer hit testing, and bracket matching snap to cluster
+  boundaries. Added randomized Unicode action-sequence property tests.
 - Character selections now render a Helix-style selection background, a
   warning-colored primary anchor bar, and a block cursor at the selection head.
 - Implemented the existing `event.subscribe` v1 method. The editor now

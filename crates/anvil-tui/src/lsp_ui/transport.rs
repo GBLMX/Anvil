@@ -1,26 +1,16 @@
 use super::*;
 
 impl Model {
-    pub(crate) fn offset_at_utf16(&self, line: usize, character: usize) -> usize {
-        let Some(start) = self.session.editor.index().line_to_offset(line) else {
-            return self.session.editor.text().len_bytes();
-        };
-        let end = self
-            .session
+    pub(crate) fn try_offset_at_utf16(&self, line: usize, character: usize) -> Option<usize> {
+        self.session
             .editor
             .index()
-            .offset_to_line(start)
-            .map(|position| position.end)
-            .unwrap_or(start);
-        let text = self.session.editor.text().slice(start..end);
-        let mut units = 0;
-        for (offset, codepoint) in text.char_indices() {
-            if units >= character {
-                return start + offset;
-            }
-            units += codepoint.len_utf16();
-        }
-        end
+            .offset_at_utf16(self.session.editor.text(), line, character)
+    }
+
+    pub(crate) fn offset_at_utf16(&self, line: usize, character: usize) -> usize {
+        self.try_offset_at_utf16(line, character)
+            .unwrap_or(self.session.editor.text().len_bytes())
     }
     pub(super) fn lsp_position(&self) -> Option<(u64, u64)> {
         let position = self
@@ -28,13 +18,11 @@ impl Model {
             .editor
             .index()
             .position(self.session.editor.text(), self.session.cursor)?;
-        let line_start = self.session.editor.index().line_to_offset(position.line)?;
-        let prefix = self
+        let character = self
             .session
             .editor
-            .text()
-            .slice(line_start..self.session.cursor);
-        let character = prefix.chars().map(char::len_utf16).sum::<usize>();
+            .index()
+            .utf16_column(self.session.editor.text(), self.session.cursor)?;
         Some((position.line as u64, character as u64))
     }
     pub(crate) fn send_lsp_request(
