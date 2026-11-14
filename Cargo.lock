@@ -250,6 +250,7 @@ dependencies = [
  "anvil-plugin-host",
  "anvil-session",
  "anvil-syntax",
+ "anvil-tui-kit",
  "crossterm",
  "nix 0.31.3",
  "ratatui",
@@ -261,6 +262,14 @@ dependencies = [
  "toml_edit",
  "unicode-segmentation",
  "unicode-width",
+]
+
+[[package]]
+name = "anvil-tui-kit"
+version = "0.6.0"
+dependencies = [
+ "crossterm",
+ "ratatui",
 ]
 
 [[package]]

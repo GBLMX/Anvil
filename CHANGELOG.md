@@ -365,6 +365,9 @@ post-`0.5.0` feature line.
 - The theme browser now scrolls its list to keep the selected theme visible
   with the keyboard or mouse wheel; previously the last themes were clipped
   below the panel.
+- Extracted `TerminalSession` and `SelectionTable` into the reusable
+  `anvil-tui-kit` crate; terminal startup now restores focus and mouse capture
+  correctly when a later setup step fails.
 - Split TUI runtime/layout/plugin, renderer, LSP settings/responses, and tree
   navigation/mutations/fuzzy modules; split TUI tests by domain; split gateway
   handlers into `rpc.go`, `fs.go`, `lsp.go`, and `process.go`. No behavior

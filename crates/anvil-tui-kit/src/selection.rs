@@ -3,12 +3,15 @@
 //! The table deliberately has no preview or activation policy. Callers own
 //! what selecting an item means.
 
-pub(crate) trait SelectionItem {
+/// One row in a [`SelectionTable`].
+pub trait SelectionItem {
+    /// Text matched by the default filter.
     fn label(&self) -> &str;
 }
 
+/// A stable item list with a filtered view and one selected row.
 #[derive(Debug, Clone)]
-pub(crate) struct SelectionTable<T> {
+pub struct SelectionTable<T> {
     query: String,
     items: Vec<T>,
     filtered: Vec<usize>,
@@ -16,7 +19,8 @@ pub(crate) struct SelectionTable<T> {
 }
 
 impl<T: SelectionItem> SelectionTable<T> {
-    pub(crate) fn new(items: Vec<T>) -> Self {
+    /// Create a table over `items` with no active filter.
+    pub fn new(items: Vec<T>) -> Self {
         Self {
             query: String::new(),
             filtered: (0..items.len()).collect(),
@@ -25,41 +29,50 @@ impl<T: SelectionItem> SelectionTable<T> {
         }
     }
 
-    pub(crate) fn query(&self) -> &str {
+    /// Current filter query.
+    pub fn query(&self) -> &str {
         &self.query
     }
 
-    pub(crate) fn query_mut(&mut self) -> &mut String {
+    /// Mutable filter query.
+    pub fn query_mut(&mut self) -> &mut String {
         &mut self.query
     }
 
-    pub(crate) fn items(&self) -> &[T] {
+    /// Full item list, in stable source order.
+    pub fn items(&self) -> &[T] {
         &self.items
     }
 
-    pub(crate) fn filtered(&self) -> &[usize] {
+    /// Indices of the items matching the current filter.
+    pub fn filtered(&self) -> &[usize] {
         &self.filtered
     }
 
-    pub(crate) fn selected_index(&self) -> usize {
+    /// Position of the selected row in the filtered view.
+    pub fn selected_index(&self) -> usize {
         self.selected
     }
 
-    pub(crate) fn selected(&self) -> Option<&T> {
+    /// Selected source item, or `None` when the filtered view is empty.
+    pub fn selected(&self) -> Option<&T> {
         self.items.get(*self.filtered.get(self.selected)?)
     }
 
-    pub(crate) fn is_empty(&self) -> bool {
+    /// Whether the filtered view has no rows.
+    pub fn is_empty(&self) -> bool {
         self.filtered.is_empty()
     }
 
-    pub(crate) fn refresh(&mut self) {
+    /// Recompute the filtered view using the default label match.
+    pub fn refresh(&mut self) {
         self.refresh_with(|item, query| {
             query.is_empty() || item.label().to_ascii_lowercase().contains(query)
         });
     }
 
-    pub(crate) fn refresh_with(&mut self, matches: impl Fn(&T, &str) -> bool) {
+    /// Recompute the filtered view using `matches` and a lowercased query.
+    pub fn refresh_with(&mut self, matches: impl Fn(&T, &str) -> bool) {
         let query = self.query.to_ascii_lowercase();
         self.filtered = self
             .items
@@ -71,12 +84,14 @@ impl<T: SelectionItem> SelectionTable<T> {
         self.selected = self.selected.min(self.filtered.len().saturating_sub(1));
     }
 
-    pub(crate) fn sort_filtered_by(&mut self, key: impl Fn(&T) -> usize) {
+    /// Reorder the filtered view without reordering the source list.
+    pub fn sort_filtered_by(&mut self, key: impl Fn(&T) -> usize) {
         let items = &self.items;
         self.filtered.sort_by_key(|index| key(&items[*index]));
     }
 
-    pub(crate) fn move_by(&mut self, delta: isize) {
+    /// Move the selected row by `delta`, clamped to the filtered view.
+    pub fn move_by(&mut self, delta: isize) {
         if self.filtered.is_empty() {
             return;
         }

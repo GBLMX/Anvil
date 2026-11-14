@@ -6,8 +6,7 @@
 use std::{
     cell::RefCell,
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
-    fs,
-    io::{self, Stdout},
+    fs, io,
     path::{Path, PathBuf},
     sync::mpsc,
     time::{Duration, Instant, SystemTime},
@@ -20,22 +19,8 @@ use anvil_session::DocumentSession;
 use anvil_session::effect::{Effect, EffectQueue};
 use anvil_session::keymap::KeymapContext;
 use anvil_session::ui::{InputBuffer, InputMode, Problem, UiState};
-use crossterm::{
-    cursor::SetCursorStyle,
-    event::{
-        self, DisableBracketedPaste, DisableFocusChange, DisableMouseCapture, EnableBracketedPaste,
-        EnableFocusChange, EnableMouseCapture, Event, KeyEvent, KeyboardEnhancementFlags,
-        PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags,
-    },
-    execute,
-    terminal::{
-        EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
-        supports_keyboard_enhancement,
-    },
-};
+use crossterm::event::{self, Event, KeyEvent};
 use ratatui::{
-    Terminal,
-    backend::CrosstermBackend,
     style::{Modifier, Style},
     text::{Line, Span},
 };
@@ -78,13 +63,12 @@ mod pipe_locations;
 pub mod pty_terminal;
 mod recents;
 mod remote;
-mod selection_table;
 mod session;
 mod theme_browser;
 mod theme_picker;
 mod workspace_control;
 pub mod workspace_roots;
-use selection_table::{SelectionItem, SelectionTable};
+use anvil_tui_kit::{SelectionItem, SelectionTable};
 mod pkg_install;
 mod plugin_activation;
 mod plugin_discovery;

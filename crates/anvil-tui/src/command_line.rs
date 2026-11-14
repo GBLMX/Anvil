@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::file_worker::FileRequest;
-use crate::selection_table::{SelectionItem, SelectionTable};
+use anvil_tui_kit::{SelectionItem, SelectionTable};
 
 const PATH_COMMANDS: &[&str] = &[
     "e",

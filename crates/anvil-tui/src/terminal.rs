@@ -1,6 +1,7 @@
 //! Terminal lifecycle and the main event loop.
 
 use super::*;
+use anvil_tui_kit::{TerminalOptions, TerminalSession};
 use std::io::{IsTerminal, Read};
 use std::sync::Arc;
 /// Runs the minimal terminal loop in the current directory workspace.
@@ -318,7 +319,9 @@ pub fn run_with_all_services(
         None
     };
     let model_ready = start.elapsed();
-    let mut terminal = TerminalSession::start()?;
+    let mut terminal = TerminalSession::start_with(TerminalOptions {
+        keyboard_enhancement: !crate::terminal_background::terminal_queries_disabled(),
+    })?;
     let terminal_ready = start.elapsed();
     let mut first_draw = true;
     let mut last_session_revision = model.session.editor.revision();
@@ -332,7 +335,7 @@ pub fn run_with_all_services(
             terminal.set_cursor_shape(wants_bar)?;
             insert_cursor = Some(wants_bar);
         }
-        let size = terminal.terminal.size()?;
+        let size = terminal.terminal().size()?;
         model.view.viewport_height = size.height;
         model.view.viewport_width = size.width;
         #[cfg(unix)]
@@ -355,7 +358,7 @@ pub fn run_with_all_services(
         }
         model.tick_search();
         if model.file.dirty {
-            terminal.terminal.draw(|frame| view(&model, frame))?;
+            terminal.terminal().draw(|frame| view(&model, frame))?;
             model.file.dirty = false;
             if first_draw {
                 first_draw = false;
@@ -468,105 +471,6 @@ impl Drop for Model {
         self.plugins
             .supervisor
             .shutdown(self.workspace.gateway.as_mut());
-    }
-}
-
-struct TerminalSession {
-    terminal: Terminal<CrosstermBackend<Stdout>>,
-    keyboard_enhancement: bool,
-}
-
-impl TerminalSession {
-    fn start() -> io::Result<Self> {
-        enable_raw_mode()?;
-        let supported = if crate::terminal_background::terminal_queries_disabled() {
-            false
-        } else {
-            supports_keyboard_enhancement().unwrap_or(false)
-        };
-        let mut stdout = io::stdout();
-        if let Err(error) = execute!(stdout, EnterAlternateScreen) {
-            let _ = disable_raw_mode();
-            return Err(error);
-        }
-        if let Err(error) = execute!(stdout, EnableBracketedPaste) {
-            let _ = execute!(stdout, DisableBracketedPaste, LeaveAlternateScreen);
-            let _ = disable_raw_mode();
-            return Err(error);
-        }
-        if let Err(error) = execute!(stdout, EnableFocusChange) {
-            let _ = execute!(
-                stdout,
-                DisableFocusChange,
-                DisableBracketedPaste,
-                LeaveAlternateScreen
-            );
-            let _ = disable_raw_mode();
-            return Err(error);
-        }
-        if let Err(error) = execute!(stdout, EnableMouseCapture) {
-            let _ = execute!(stdout, DisableBracketedPaste, LeaveAlternateScreen);
-            let _ = disable_raw_mode();
-            return Err(error);
-        }
-        let keyboard_enhancement = supported
-            && execute!(
-                stdout,
-                PushKeyboardEnhancementFlags(
-                    KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
-                        | KeyboardEnhancementFlags::REPORT_EVENT_TYPES,
-                )
-            )
-            .is_ok();
-        let backend = CrosstermBackend::new(stdout);
-        match Terminal::new(backend) {
-            Ok(terminal) => Ok(Self {
-                terminal,
-                keyboard_enhancement,
-            }),
-            Err(error) => {
-                if keyboard_enhancement {
-                    let _ = execute!(io::stdout(), PopKeyboardEnhancementFlags);
-                }
-                let _ = execute!(
-                    io::stdout(),
-                    LeaveAlternateScreen,
-                    DisableBracketedPaste,
-                    DisableFocusChange
-                );
-                let _ = disable_raw_mode();
-                Err(error)
-            }
-        }
-    }
-}
-
-impl TerminalSession {
-    fn set_cursor_shape(&mut self, insert: bool) -> io::Result<()> {
-        let style = if insert {
-            SetCursorStyle::SteadyBar
-        } else {
-            SetCursorStyle::SteadyBlock
-        };
-        crossterm::execute!(self.terminal.backend_mut(), style)
-    }
-}
-
-impl Drop for TerminalSession {
-    fn drop(&mut self) {
-        if self.keyboard_enhancement {
-            let _ = execute!(self.terminal.backend_mut(), PopKeyboardEnhancementFlags);
-        }
-        let _ = execute!(
-            self.terminal.backend_mut(),
-            DisableMouseCapture,
-            DisableFocusChange,
-            DisableBracketedPaste,
-            SetCursorStyle::DefaultUserShape,
-            LeaveAlternateScreen
-        );
-        let _ = disable_raw_mode();
-        let _ = self.terminal.show_cursor();
     }
 }
 
