@@ -1,14 +1,15 @@
-# Lua Plugin Mouse, Overlay, and Dependency-Graph Plan
+# Lua Plugin Tactical Interaction Plan
 
 Status: proposed. The plugin API is frozen at `1.0.0`; these additions require
-an additive `1.1.0` contract and a new ADR. The two target plugins are:
+an additive `1.1.0` contract and a new ADR. The three target plugins are:
 
 - RTS-style rectangle mouse selection that installs multiple cursors.
 - Tactical Graph: a force-directed workspace dependency overlay.
+- Alert System: debounced visual/terminal-bell warnings for new errors.
 
-They are **not** pure-Lua features today. The Lua code should own the state
-machine, layout, and policy; the editor must own coordinate mapping, selection
-validation, overlay compositing, and dependency extraction.
+They are **not** pure-Lua features today. Lua owns the state machine, layout,
+and alert policy; the editor owns coordinate mapping, selection validation,
+overlay compositing, diagnostics summaries, and dependency extraction.
 
 ## 1. Goals
 
@@ -21,7 +22,9 @@ validation, overlay compositing, and dependency extraction.
 - Install multiple selections atomically from plugin-requested byte ranges.
 - Expose a bounded workspace dependency graph backed by the workspace index,
   not the gateway.
-- Implement both features as Lua plugins with no core graph/layout algorithm.
+- Deliver debounced diagnostics summaries and a core-owned alert/bell primitive.
+- Implement all three features as Lua plugins with no core graph/layout
+  algorithm.
 
 ## 2. Non-goals
 
@@ -29,6 +32,10 @@ validation, overlay compositing, and dependency extraction.
 - Global mouse subscriptions or plugins receiving mouse events without capture.
 - Letting plugins construct `TextPosition` values from raw line/column numbers.
 - A dependency analyzer in the gateway or plugin host.
+- A new inotify watcher implementation; graph refresh consumes bounded
+  workspace-change events from the existing watcher path.
+- Arbitrary audio playback or plugins drawing outside the editor content area.
+  Alerts use a core-owned visual cue and optional terminal bell.
 - Remote/network graph sources.
 - macOS/Windows behavior in this slice.
 
@@ -42,6 +49,9 @@ validation, overlay compositing, and dependency extraction.
 | `ui.draw_highlight` | Absent |
 | `ui.render_canvas` | Absent |
 | `workspace.get_file_dependencies` | Absent; gateway is not a semantic graph provider |
+| `lsp.diagnostics_updated` | Diagnostics are internal `LspEvent`s; no plugin event subscription |
+| `ui.alert` / `ui.bell` | Absent; no terminal flash/bell primitive for plugins |
+| incremental file watching | FileWorker polls signatures; no inotify stream |
 
 The current plugin dispatcher supports only `editor.get_view`,
 `editor.get_snapshot`, `editor.set_mode`, `editor.apply_edit`,
@@ -174,6 +184,43 @@ Rules:
   current buffer unchanged; validation failures are typed RPC errors.
 - Capability: `workspace.open`.
 
+### 4.7 Diagnostics events and alert primitives
+
+```text
+event.subscribe
+  allowed event: diagnostics.changed
+  payload: { root: string, path: string, generation: u64,
+             error_count: u32, warning_count: u32,
+             first_error: Option<string> }
+
+workspace.graph_changed
+  payload: { root: string, generation: u64, truncated: bool }
+
+ui.alert
+  request:  { severity: "warning" | "error", message: string, ttl_ms: u32 }
+  response: {}
+
+ui.bell
+  request:  {}
+  response: {}
+```
+
+Rules:
+
+- The proposal's `lsp.diagnostics_updated` is exposed under the single name
+  `diagnostics.changed`; do not add both aliases.
+- Diagnostics are coalesced per path before the event; `first_error` is
+  truncated to 512 bytes. Full diagnostic payloads are not pushed to plugins.
+- The Alert plugin tracks transitions and applies its own debounce window; LSP
+  storms must not create a notification per publish.
+- `ui.alert` is a core-owned visual cue inside the editor frame. It cannot draw
+  outside the editor content area or replace the status/command line.
+- `ui.bell` is the terminal BEL only. No arbitrary audio process or OSC sound
+  sequence is exposed.
+- `workspace.graph_changed` comes from the existing bounded workspace watcher;
+  this plan does not add an inotify dependency.
+- Capabilities: `diagnostics.read`, `ui.alert`, `ui.bell`.
+
 ## 5. Deliverable slices
 
 ### Slice 1: plugin event transport
@@ -249,6 +296,8 @@ selections; cancel/undo have no side effects.
   workspace-relative path.
 - Compute Fruchterman-Reingold layout in a Lua coroutine with an iteration cap.
 - Render sparse `●`/`─`/`│` cells through one overlay.
+- Bresenham rasterization stays in Lua; the core only validates and composites
+  the resulting sparse cells.
 - Mouse hover updates a small highlight; right-drag/scroll update view state.
 - Enter calls `workspace.open_file` for the selected node. On success the core
   opens it and the plugin removes the overlay; on a validation/open error the
@@ -258,10 +307,25 @@ Acceptance: 80x24 overlay renders; graph remains responsive at the configured
 node cap; no per-frame full-screen payload; plugin stop removes the overlay;
 Enter never opens a path outside the node's trusted root.
 
+### Slice 9: Alert System plugin
+
+- Subscribe to coalesced `diagnostics.changed` summaries per path.
+- Track new versus repeated errors with a bounded per-path debounce; do not
+  alert on unchanged diagnostics.
+- Call `ui.alert` for the visual cue, optionally `ui.bell` when enabled, and
+  mark the corresponding graph node red when Tactical Graph is open.
+- No LSP error text is written to the terminal outside the core alert/status
+  surfaces.
+
+Acceptance: an LSP storm produces at most one alert per path/debounce window;
+an unchanged republish produces none; the bell is opt-in; plugin stop clears
+its alerts and graph markers; no arbitrary audio process is started.
+
 ## 6. Security and bounds
 
 - New capabilities: `editor.mouse_capture`, `ui.highlights`,
-  `ui.overlay`, `workspace.graph`, `workspace.open`.
+  `ui.overlay`, `ui.alert`, `ui.bell`, `workspace.graph`, `workspace.open`,
+  `diagnostics.read`.
 - Capabilities are declared in the manifest and approved before activation.
 - Plugins cannot write status/command-line rows, raw ANSI, or outside overlay
   bounds.
@@ -283,22 +347,26 @@ Enter never opens a path outside the node's trusted root.
   rate limits.
 - Graph: trusted-root confinement, stale generation, node/edge truncation,
   response size.
+- Diagnostics: coalescing per path, first-error truncation, unchanged
+  republish produces no alert, storm/debounce behavior, opt-in bell.
 - Open file: relative path happy path, absolute path, `..`, symlink escape,
   untrusted root, deleted file, and oversized/binary policy; no shell or
   `sys.exec` path.
-- TUI smoke for both plugins; `cargo test --workspace`, clippy, fmt, plugin
-  host smoke, and real gateway TUI smoke.
+- TUI smoke for all three plugins; `cargo test --workspace`, clippy, fmt,
+  plugin host smoke, and real gateway TUI smoke.
 - Performance: input-to-highlight latency, overlay patch frame cost, and no
   editor-frame regression against the temporary reference baseline.
 
 ## 8. Exit criteria
 
 - API 1.1.0 is additive, documented, and generated bindings are committed.
-- Both plugins work in a real TUI through the control/MCP-capable host.
+- All three plugins work in a real TUI through the control/MCP-capable host.
 - Mouse capture, highlight, overlay, and selection limits have tests.
 - No new gateway dependency-analysis RPC exists.
 - `workspace.open_file` is confined to a trusted root and covered by
   traversal, symlink, and policy tests.
+- Diagnostics alerts are coalesced/debounced and use only core alert/bell
+  primitives; no arbitrary audio or full-screen flash exists.
 - No status/command-line spoofing or unbounded allocation is possible.
 - Normal editing, existing multi-cursor behavior, and plugin API 1.0.0 remain
   unchanged.
