@@ -1,16 +1,19 @@
 # Anvil Performance Baseline
 
 Status: Phase 0 measurement plan. Numbers are gates, not shipped claims.
-0.1.1 syntax measurements are recorded below. A local i7-12700H baseline was
-recorded on 2026-11-13 in
-[benchmarks/local-2026-11-13.md](benchmarks/local-2026-11-13.md); the full gate
-suite is still not run on the Ryzen 7 5800X reference machine.
+The temporary reference machine is the local i7-12700H workstation; its first
+automated baseline is recorded in
+[benchmarks/reference-2026-11-14-local-i7.md](benchmarks/reference-2026-11-14-local-i7.md).
+A 64 GiB machine is planned; replacing the reference invalidates every
+absolute number and requires a fresh baseline.
 
-## 1. Reference machine
+## 1. Reference machine (temporary)
 
-- CPU: Ryzen 7 5800X, fixed performance governor
-- RAM: 32 GB
-- OS: Arch Linux, kernel 5.13+ for untrusted plugins
+- CPU: Intel Core i7-12700H, 6 P-cores + 8 E-cores, 20 threads
+- RAM: 15 GiB
+- OS: Arch Linux, kernel 7.3.4-1-cachyos
+- CPU affinity: P-cores `0-11`; E-cores `12-19` excluded
+- Governor: `powersave` (not switched; documented limitation)
 - Terminal: Kitty with keyboard protocol enabled
 - Build: release, LTO, stripped; no debug assertions
 - Filesystem: local NVMe; page cache state recorded
@@ -26,7 +29,7 @@ Performance is re-run at dependency boundaries, not after every commit.
 |---|---|
 | Documentation/plan-only change | None |
 | `0.4.6b` activation work | Targeted: `first_frame_plugin`, host start, startup activation on/off |
-| Before `0.4.7` | Reference-machine full baseline (currently missing) |
+| Before `0.4.7` | Reference-machine full baseline: `benchmarks/reference-2026-11-14-local-i7.md` |
 | `0.4.7` resource/security | Targeted: plugin start, reload, OOM, process/cgroup cleanup |
 | `0.4.8` plugin I/O | Targeted: UDS round trip, `sys.read_file`, `sys.fetch`, `sys.exec` |
 | `0.4.9` session/protocol | Full hot path: first frame, 1/10/100 MB open, edit, scroll, key-to-screen |
@@ -189,12 +192,12 @@ every revision reparsed on the UI thread. Parsing now runs on a debounced
 background worker with stale spans retained; files over 256 KiB intentionally
 skip highlighting.
 
-## 3.2 0.3.0 local spot checks (not gates)
+## 3.2 0.3.0 pre-switch spot checks (not gates)
 
-These numbers were collected on an i7-12700H development workstation, not the
-Ryzen 7 5800X reference machine. They are spot checks, not release-gate
-evidence. Several scenarios intentionally have fewer than the required 30
-samples and are marked as single-run or observed-max values.
+These numbers were collected before the i7-12700H was designated as the
+temporary reference machine. They remain spot checks, not full-gate evidence.
+Several scenarios intentionally have fewer than the required 30 samples and are
+marked as single-run or observed-max values.
 
 | Scenario | n | Observation | Interpretation |
 |---|---:|---:|---|
@@ -212,9 +215,8 @@ samples and are marked as single-run or observed-max values.
 
 `BenchmarkReadResponseEncoding` measured **12.25 ms mean** for a large
 JSON/base64 read response on this workstation. It is a Go benchmark mean, not
-a UDS round-trip p99, and it has not been rerun on the reference machine with
-the required sample count. Treat it as an unverified performance risk, not a
-P1 gate failure.
+a UDS round-trip p99. It was re-recorded in the temporary reference baseline,
+but remains a mean, not the required p99 gate.
 
 The TUI's normal file path uses binary frames; `BenchmarkReadFileChunk`
 measured 0.81 ms on the same machine. Large `sys.read_file` consumers should

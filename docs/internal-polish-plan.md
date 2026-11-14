@@ -218,7 +218,9 @@ Internal polish ends only when all are true:
 - No known P0 data-loss, corruption, or security issue is open.
 - Session restore/crash recovery has destructive-failure tests.
 - Settings, LSP, Git, and file lifecycle have failure/cancellation tests.
-- Performance baseline is re-run on the reference machine.
+- Performance baseline is re-run on the reference machine; the current
+  i7-12700H is temporary and its numbers must be re-baselined when the planned
+  64 GiB host replaces it.
 - Release layout, installer, plugin bootstrap, and release-signing dry run are
   verified with production-like keys.
 - The next public version number is chosen explicitly; the frozen-version check

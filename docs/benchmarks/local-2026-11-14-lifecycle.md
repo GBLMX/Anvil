@@ -1,8 +1,8 @@
 # Local Lifecycle Re-run — 2026-11-14
 
-Status: local workstation run. This is **not** the Ryzen 7 5800X reference
-machine and does not satisfy the reference-machine exit gate. It records the
-post-lifecycle measurement so the local baseline can detect regressions.
+Status: targeted run on the temporary i7-12700H reference. The full baseline
+is `reference-2026-11-14-local-i7.md`; this file remains the lifecycle-specific
+comparison.
 
 ## Machine
 
@@ -60,5 +60,5 @@ Pinned run #2:
 | PTY search 100 MB | 19.854 ms | 22.145 ms | 22.145 ms | 10 |
 
 All non-key scenarios are at or below the 2026-11-13 local baseline. Native
-key p50 is unchanged, while p95 and p99 are 3–8% above baseline. This file is
-not reference-machine gate evidence.
+key p50 is unchanged; p95 and p99 are 3–8% above the pre-switch baseline.
+This is targeted reference evidence, not the full baseline.

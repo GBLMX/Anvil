@@ -12,7 +12,7 @@ in the plans linked below.
 | Plugin API | v1 is frozen with complete DTOs and a production editor RPC proxy; manifest commands and dynamic `editor.register_command` both dispatch | [0.6.0](0.6.x-plan.md), [ADR-0003](adr/0003-idl.md) |
 | Plugin commands | Manifest `onCommand` events and dynamic commands registered through `editor.register_command` dispatch from the command palette | [0.4.x](0.4.x-plan.md), [0.5.x](0.5.x-plan.md) |
 | Distribution | Signed install, bounded download queue, content-addressed store, `pkg.installed`, the enable/disable/uninstall/rollback manager, typed installer `sys.fetch`, official-only release layout/installer, signed index/revocation verifier-cache, anti-rollback state, and signed release artifacts exist; marketplace UI/indexed install/consent/provenance surfaces remain missing | [0.6.x](0.6.x-plan.md) |
-| Performance | Full gate suite has not been run on the reference machine | [performance](performance.md) |
+| Performance | Temporary i7-12700H reference baseline is recorded; the planned 64 GiB replacement requires a fresh baseline | [performance](performance.md) |
 | Persistence | Session/tab restore, crash recovery, and dirty-swap recovery landed; persistent undo is deliberately rejected for this phase | [0.5.6](0.5.x-plan.md) |
 | Configuration | Settings/keymap/theme schemas and explicit `:config-reload` landed; file watching is not enabled | [0.5.x](0.5.x-plan.md) |
 | LSP | Language servers are not bundled; discovery, restart, and lifecycle are managed by the editor | [INSTALL](../INSTALL.md) |
