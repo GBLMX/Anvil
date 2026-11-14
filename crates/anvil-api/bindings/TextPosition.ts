@@ -4,11 +4,12 @@
  * A position in the document.
  *
  * All indices are zero-based. `byte_offset` is a UTF-8 byte offset;
- * `grapheme_column` counts extended grapheme clusters; `display_column`
- * counts terminal cells and accounts for wide characters. The editor owns the
- * conversions and guarantees the fields describe the same cursor position.
- * Plugins receive positions from `editor.get_view`; construction stays
- * editor-owned until a future `set_selection` contract validates it.
+ * `char_column` counts Unicode scalars; `grapheme_column` counts extended
+ * grapheme clusters; `display_column` counts terminal cells and accounts for
+ * wide characters. The editor owns the conversions and guarantees the fields
+ * describe the same cursor position. Plugins receive positions from
+ * `editor.get_view`; construction stays editor-owned until a future
+ * `set_selection` contract validates it.
  */
 export type TextPosition = { 
 /**
@@ -19,6 +20,10 @@ byte_offset: number,
  * Zero-based line number.
  */
 line: number, 
+/**
+ * Zero-based Unicode scalar column.
+ */
+char_column: number, 
 /**
  * Zero-based grapheme-cluster column.
  */

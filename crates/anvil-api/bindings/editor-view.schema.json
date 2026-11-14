@@ -29,12 +29,18 @@
       "type": "object"
     },
     "TextPosition": {
-      "description": "A position in the document.\n\nAll indices are zero-based. `byte_offset` is a UTF-8 byte offset;\n`grapheme_column` counts extended grapheme clusters; `display_column`\ncounts terminal cells and accounts for wide characters. The editor owns the\nconversions and guarantees the fields describe the same cursor position.\nPlugins receive positions from `editor.get_view`; construction stays\neditor-owned until a future `set_selection` contract validates it.",
+      "description": "A position in the document.\n\nAll indices are zero-based. `byte_offset` is a UTF-8 byte offset;\n`char_column` counts Unicode scalars; `grapheme_column` counts extended\ngrapheme clusters; `display_column` counts terminal cells and accounts for\nwide characters. The editor owns the conversions and guarantees the fields\ndescribe the same cursor position. Plugins receive positions from\n`editor.get_view`; construction stays editor-owned until a future\n`set_selection` contract validates it.",
       "properties": {
         "byte_offset": {
           "description": "UTF-8 byte offset from the start of the document.",
           "format": "uint64",
           "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "char_column": {
+          "description": "Zero-based Unicode scalar column.",
+          "format": "uint32",
           "minimum": 0,
           "type": "integer"
         },
@@ -60,6 +66,7 @@
       "required": [
         "byte_offset",
         "line",
+        "char_column",
         "grapheme_column",
         "display_column"
       ],

@@ -730,6 +730,7 @@ impl EditorState {
             return TextPosition {
                 byte_offset: 0,
                 line: 0,
+                char_column: 0,
                 grapheme_column: 0,
                 display_column: 0,
             };
@@ -737,6 +738,7 @@ impl EditorState {
         TextPosition {
             byte_offset: position.byte_offset as u64,
             line: position.line as u32,
+            char_column: position.char_column as u32,
             grapheme_column: position.grapheme_column as u32,
             display_column: position.display_column as u32,
         }

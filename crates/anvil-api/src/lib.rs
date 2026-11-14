@@ -223,11 +223,12 @@ pub enum InteractionMode {
 /// A position in the document.
 ///
 /// All indices are zero-based. `byte_offset` is a UTF-8 byte offset;
-/// `grapheme_column` counts extended grapheme clusters; `display_column`
-/// counts terminal cells and accounts for wide characters. The editor owns the
-/// conversions and guarantees the fields describe the same cursor position.
-/// Plugins receive positions from `editor.get_view`; construction stays
-/// editor-owned until a future `set_selection` contract validates it.
+/// `char_column` counts Unicode scalars; `grapheme_column` counts extended
+/// grapheme clusters; `display_column` counts terminal cells and accounts for
+/// wide characters. The editor owns the conversions and guarantees the fields
+/// describe the same cursor position. Plugins receive positions from
+/// `editor.get_view`; construction stays editor-owned until a future
+/// `set_selection` contract validates it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[ts(export)]
 pub struct TextPosition {
@@ -237,6 +238,8 @@ pub struct TextPosition {
     pub byte_offset: u64,
     /// Zero-based line number.
     pub line: u32,
+    /// Zero-based Unicode scalar column.
+    pub char_column: u32,
     /// Zero-based grapheme-cluster column.
     pub grapheme_column: u32,
     /// Zero-based terminal display-cell column.
@@ -629,6 +632,7 @@ mod tests {
         TextPosition {
             byte_offset: 12,
             line: 1,
+            char_column: 3,
             grapheme_column: 4,
             display_column: 6,
         }

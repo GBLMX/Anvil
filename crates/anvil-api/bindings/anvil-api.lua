@@ -133,6 +133,7 @@
 
 ---@class TextPosition
 ---@field byte_offset integer
+---@field char_column integer
 ---@field display_column integer
 ---@field grapheme_column integer
 ---@field line integer
