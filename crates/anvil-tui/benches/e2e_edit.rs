@@ -22,7 +22,7 @@ use ratatui::{Terminal, backend::TestBackend};
 
 const ROWS: u16 = 40;
 const COLS: u16 = 120;
-const SCROLL_SAMPLES: usize = 30;
+const LATENCY_SAMPLES: usize = 30;
 const SEARCH_MARKERS: usize = 11;
 
 fn main() {
@@ -41,7 +41,7 @@ fn rust_side(small_path: &Path, large_path: &Path) {
     let mut model = Model::open(small_path).expect("open small");
     let mut terminal = test_terminal();
     warm(&mut model, &mut terminal);
-    for _ in 0..SCROLL_SAMPLES {
+    for _ in 0..LATENCY_SAMPLES {
         let start = Instant::now();
         dispatch_key(&mut model, KeyCode::Char('j'));
         ensure_visible(&mut model);
@@ -58,7 +58,7 @@ fn rust_side(small_path: &Path, large_path: &Path) {
     report("rust", "open_100MB_first_frame", &[start.elapsed()]);
 
     let mut scroll_times = Vec::new();
-    for _ in 0..SCROLL_SAMPLES {
+    for _ in 0..LATENCY_SAMPLES {
         let start = Instant::now();
         dispatch_key(&mut large, KeyCode::Char('j'));
         ensure_visible(&mut large);
@@ -126,7 +126,7 @@ fn pty_side(workspace: &Path, small_path: &Path, large_path: &Path) {
         for character in "甲乙丙丁戊己庚辛壬癸子丑寅卯辰巳午未申酉"
             .chars()
             .cycle()
-            .take(SCROLL_SAMPLES)
+            .take(LATENCY_SAMPLES)
         {
             let bytes = character.to_string().into_bytes();
             let start = Instant::now();
@@ -149,7 +149,7 @@ fn pty_side(workspace: &Path, small_path: &Path, large_path: &Path) {
             session.send(b"j").expect("send warmup j");
         }
         session.drain();
-        for _ in 0..SCROLL_SAMPLES {
+        for _ in 0..LATENCY_SAMPLES {
             let start = Instant::now();
             session.send(b"j").expect("send j");
             session
