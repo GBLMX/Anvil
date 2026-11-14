@@ -13,6 +13,8 @@ Status: index for current architecture, plans, ADRs, and resolved bug records.
 - [Threat model](threat-model.md) — adversaries, mitigations, invariants
 - [Internal polish plan](internal-polish-plan.md) — frozen `0.6.0` phase
 - [Performance baseline](performance.md) — gates and re-run triggers
+- [Task lifecycle plan](task-lifecycle-plan.md) — bounded background tasks,
+  cancellation, and single-owner shutdown
 
 ## Delivery hierarchy
 
