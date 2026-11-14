@@ -22,7 +22,7 @@ use ratatui::{Terminal, backend::TestBackend};
 
 const ROWS: u16 = 40;
 const COLS: u16 = 120;
-const SCROLL_SAMPLES: usize = 20;
+const SCROLL_SAMPLES: usize = 30;
 const SEARCH_MARKERS: usize = 11;
 
 fn main() {
@@ -123,7 +123,11 @@ fn pty_side(workspace: &Path, small_path: &Path, large_path: &Path) {
             .expect("small first frame");
         session.send(b"i").expect("send insert");
         session.drain();
-        for character in "甲乙丙丁戊己庚辛壬癸子丑寅卯辰巳午未申酉".chars() {
+        for character in "甲乙丙丁戊己庚辛壬癸子丑寅卯辰巳午未申酉"
+            .chars()
+            .cycle()
+            .take(SCROLL_SAMPLES)
+        {
             let bytes = character.to_string().into_bytes();
             let start = Instant::now();
             session.send(&bytes).expect("send key");
