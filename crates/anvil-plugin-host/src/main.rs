@@ -9,7 +9,10 @@ mod linux {
     use super::*;
     use anvil_plugin_host::Token;
     use anvil_plugin_host::manifest::PluginManifest;
+    use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::Duration;
+
+    static HANDLER_ERRORS: AtomicU64 = AtomicU64::new(0);
 
     pub fn main() -> ExitCode {
         match run() {
@@ -960,6 +963,30 @@ mod linux {
             .get("params")
             .cloned()
             .unwrap_or_else(|| serde_json::json!({}));
+        if method == "host.event" {
+            if let Some(lua) = lua {
+                if let Err(error) = runtime::call_event(lua, &params) {
+                    HANDLER_ERRORS.fetch_add(1, Ordering::Relaxed);
+                    eprintln!("host.event: {error}");
+                }
+            }
+            return Ok(());
+        }
+        if method == "host.event_stats" {
+            let response = serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": id,
+                "result": {
+                    "handler_errors": HANDLER_ERRORS.load(Ordering::Relaxed)
+                }
+            });
+            let body = serde_json::to_vec(&response)
+                .map_err(|error| io::Error::other(format!("encode rpc response: {error}")))?;
+            connection
+                .send(&body)
+                .map_err(|error| io::Error::other(format!("send rpc response: {error}")))?;
+            return Ok(());
+        }
         let response = match method {
             "provider.request" | "provider.action" => match lua {
                 Some(lua) => match runtime::call_provider(lua, &params) {

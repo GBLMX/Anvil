@@ -1,9 +1,10 @@
 //! Editor-side document snapshot and transaction contract for plugins.
 
 use anvil_api::{
-    ApplyEditRequest, ApplyEditResponse, DocumentSnapshot, EmptyResponse, NotificationSeverity,
-    NotifyRequest, RegisterCommandRequest, RegisterCommandResponse, RegisterProviderRequest,
-    RegisterProviderResponse, SetModeRequest, SetModeResponse, StatusRequest,
+    ApplyEditRequest, ApplyEditResponse, DocumentSnapshot, EmptyResponse, EventSubscribeRequest,
+    EventSubscribeResponse, NotificationSeverity, NotifyRequest, RegisterCommandRequest,
+    RegisterCommandResponse, RegisterProviderRequest, RegisterProviderResponse, SetModeRequest,
+    SetModeResponse, StatusRequest,
 };
 use anvil_session::Session;
 
@@ -58,6 +59,17 @@ impl Model {
                 self.session.editor.set_interaction_mode(request.mode);
                 self.file.dirty = true;
                 Ok(serde_json::json!(SetModeResponse { mode: request.mode }))
+            }
+            "event.subscribe" => {
+                let request: EventSubscribeRequest =
+                    serde_json::from_value(params).map_err(|error| (-32602, error.to_string()))?;
+                self.plugins
+                    .supervisor
+                    .subscribe(plugin_id, request.events)
+                    .map(|subscription_id| {
+                        serde_json::json!(EventSubscribeResponse { subscription_id })
+                    })
+                    .map_err(|(kind, message)| (kind.code(), message))
             }
             "editor.apply_edit" => {
                 let request: ApplyEditRequest =
@@ -346,6 +358,20 @@ mod tests {
                 .map(|command| command.plugin_id.as_str()),
             Some("demo")
         );
+    }
+
+    #[test]
+    fn event_subscribe_rejects_unloaded_plugins() {
+        let mut model = Model::new(EditorState::from_text(""), None);
+        let (code, message) = model
+            .handle_editor_request(
+                "demo",
+                "event.subscribe",
+                serde_json::json!({"events": ["diagnostics.changed"]}),
+            )
+            .expect_err("plugin is not loaded");
+        assert_eq!(code, -32007);
+        assert!(message.contains("not loaded"));
     }
 
     #[test]

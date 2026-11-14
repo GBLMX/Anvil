@@ -224,6 +224,7 @@ dependencies = [
  "anvil-ipc",
  "anvil-plugin-host",
  "nix 0.31.3",
+ "serde",
  "serde_json",
  "sha2 0.11.1",
  "unicode-segmentation",

@@ -1,6 +1,15 @@
 //! LSP worker lifecycle, event polling, and diagnostic helpers.
 
 use super::*;
+use anvil_session::plugin_events::{DiagnosticsChanged, PluginEvent};
+
+fn truncate_event_text(text: &str, max: usize) -> String {
+    let mut end = max.min(text.len());
+    while !text.is_char_boundary(end) {
+        end -= 1;
+    }
+    text[..end].to_owned()
+}
 
 impl Model {
     pub(crate) fn clear_lsp_ui(&mut self) {
@@ -186,7 +195,35 @@ impl Model {
                 }
             }
             LspEvent::Diagnostics(path, diagnostics) => {
+                let path_text = path.display().to_string();
+                let root_text = self.workspace.path.display().to_string();
+                let error_count = diagnostics
+                    .iter()
+                    .filter(|diagnostic| diagnostic.severity == Some(1))
+                    .count() as u32;
+                let warning_count = diagnostics
+                    .iter()
+                    .filter(|diagnostic| diagnostic.severity == Some(2))
+                    .count() as u32;
+                let first_error: Option<String> = diagnostics
+                    .iter()
+                    .find(|diagnostic| diagnostic.severity == Some(1))
+                    .map(|diagnostic| truncate_event_text(&diagnostic.message, 512));
                 self.language.diagnostics.by_path.insert(path, diagnostics);
+                self.language.diagnostics.generation =
+                    self.language.diagnostics.generation.saturating_add(1);
+                let payload = DiagnosticsChanged {
+                    root: root_text,
+                    path: path_text,
+                    generation: self.language.diagnostics.generation,
+                    error_count,
+                    warning_count,
+                    first_error,
+                };
+                self.plugins.supervisor.publish_event(
+                    PluginEvent::DiagnosticsChanged,
+                    &serde_json::to_value(payload).expect("diagnostics event serializes"),
+                );
                 self.status.text = format!(
                     "lsp diagnostics: {}",
                     self.language
@@ -196,7 +233,6 @@ impl Model {
                         .map(Vec::len)
                         .sum::<usize>()
                 );
-                self.rebuild_problems();
                 if active
                     && !self.overlays.lsp_results.semantic_legend.is_empty()
                     && self.overlays.lsp_results.semantic_revision
@@ -405,5 +441,22 @@ impl Model {
             }
         }
         self.file.dirty = true;
+    }
+}
+
+#[cfg(test)]
+mod event_text_tests {
+    use super::truncate_event_text;
+
+    #[test]
+    fn truncation_respects_byte_limit_and_utf8_boundaries() {
+        let ascii = "a".repeat(600);
+        assert_eq!(truncate_event_text(&ascii, 512).len(), 512);
+
+        let multibyte = "é".repeat(300);
+        let truncated = truncate_event_text(&multibyte, 512);
+        assert!(truncated.len() <= 512);
+        assert!(truncated.is_char_boundary(truncated.len()));
+        assert_eq!(truncated.chars().count(), 256);
     }
 }

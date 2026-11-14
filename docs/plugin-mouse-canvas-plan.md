@@ -44,19 +44,19 @@ overlay compositing, diagnostics summaries, and dependency extraction.
 | Proposed API | Current state |
 |---|---|
 | `event.mouse` | Rust TUI handles crossterm mouse events in `keys/mod.rs`; no plugin event channel |
-| `event.subscribe` | Declared in bindings, but `plugin_document.rs` has no dispatcher |
+| `event.subscribe` | Implemented for `diagnostics.changed`; bounded event payloads carry monotonic subscription sequences |
 | `editor.set_multi_cursors` | Internal multi-cursor exists; no plugin method |
 | `ui.draw_highlight` | Absent |
 | `ui.render_canvas` | Absent |
 | `workspace.get_file_dependencies` | Absent; gateway is not a semantic graph provider |
-| `lsp.diagnostics_updated` | Diagnostics are internal `LspEvent`s; no plugin event subscription |
+| `lsp.diagnostics_updated` | Covered by `event.subscribe` via `diagnostics.changed`; no separate diagnostics API |
 | `ui.alert` / `ui.bell` | Absent; no terminal flash/bell primitive for plugins |
 | incremental file watching | FileWorker polls signatures; no inotify stream |
 
-The current plugin dispatcher supports only `editor.get_view`,
+The current plugin dispatcher supports `editor.get_view`,
 `editor.get_snapshot`, `editor.set_mode`, `editor.apply_edit`,
-`editor.register_command`, `editor.register_provider`, `ui.notify`, and
-`ui.status`.
+`editor.register_command`, `editor.register_provider`, `ui.notify`,
+`ui.status`, and `event.subscribe`.
 
 ## 4. Contract changes (API 1.1.0)
 

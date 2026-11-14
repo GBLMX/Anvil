@@ -8,6 +8,17 @@ post-`0.5.0` feature line.
 
 ## [Unreleased]
 ### Added
+- Implemented the existing `event.subscribe` v1 method. The editor now
+  publishes `host.event` notifications through the plugin host, and
+  `diagnostics.changed` delivers coalesced path/generation/count/first-error
+  snapshots with monotonic per-subscription sequences.
+  Subscription count and pending delivery are bounded per plugin.
+  Event definitions and payloads are registry-backed, the host command/event
+  queues are bounded, and the first event for a subscription is buffered
+  until Lua registers its handler.
+  Event delivery coalesces queued `diagnostics.changed` values by path, exposes
+  per-plugin delivered/dropped/handler-error stats, and includes a
+  subscribe-to-Lua-to-ui.status end-to-end test.
 - Added the std-only `anvil-task` crate with one bounded `TaskGroup` owner
   per background workload. It owns threads, coalesces progress, enforces
   live-task, per-task event, global event, and global byte limits, reports

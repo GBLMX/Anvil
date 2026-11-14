@@ -84,6 +84,45 @@ activation. `activationEvents` are limited to `onStartup`, `onCommand:`,
 | `sys.fetch` | `FetchRequest` | `FetchResponse` |
 | `sys.exec` | `ExecRequest` | `ExecResponse` |
 
+## Events
+
+`event.subscribe` returns a subscription id. The editor delivers matching
+events as `host.event` notifications, not responses:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "host.event",
+  "params": {
+    "subscription_id": 1,
+    "event": "diagnostics.changed",
+    "sequence": 1,
+    "payload": {
+      "root": "/workspace",
+      "path": "src/main.rs",
+      "generation": 4,
+      "error_count": 1,
+      "warning_count": 2,
+      "first_error": "expected expression"
+    }
+  }
+}
+```
+
+`sequence` is monotonic per subscription. Unknown event names are rejected.
+`first_error` is capped at 512 UTF-8 bytes. At most 64 subscriptions are
+allowed per plugin, and at most 128 events can wait for delivery to one plugin.
+
+Events that arrive before the Lua handler is registered keep the latest event
+per subscription and are delivered once after registration. Stale or replayed
+sequences are dropped. Delivery and drop counters are exposed by the session
+event bus.
+
+Queued deliveries are capped at 128 per plugin host. Events using
+`LatestByKey` replace the queued value for the same subscription and key;
+`diagnostics.changed` coalesces by path. `handler_errors` is available through
+the host's `host.event_stats` request and is aggregated per plugin.
+
 ## Command registration
 
 `editor.register_command` adds a command to the running editor's command

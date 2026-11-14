@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
-use crate::host_session::{self, HostEvent, HostSession};
+use crate::host_session::{self, HostEvent, HostSession, SendOutcome};
 
 pub const DEBUG_PLUGIN_ID: &str = "debug";
 pub const DEBUG_PERMISSIONS: &[&str] = &["sys.exec"];
@@ -161,15 +161,29 @@ impl PluginSession {
         self.host.poll()
     }
 
-    pub(crate) fn exec(&self) -> bool {
+    pub(crate) fn exec(&self) -> SendOutcome {
         self.host.exec()
     }
 
-    pub(crate) fn provider(&self, id: u64, handler: &str, query: &str, limit: u32) -> bool {
+    pub(crate) fn event(
+        &self,
+        subscription_id: u64,
+        event: &str,
+        sequence: u64,
+        payload: serde_json::Value,
+    ) -> bool {
+        self.host.event(subscription_id, event, sequence, payload)
+    }
+
+    pub(crate) fn event_stats(&self) -> bool {
+        self.host.event_stats()
+    }
+
+    pub(crate) fn provider(&self, id: u64, handler: &str, query: &str, limit: u32) -> SendOutcome {
         self.host.provider(id, handler, query, limit)
     }
 
-    pub(crate) fn provider_action(&self, id: u64, handler: &str, value: &str) -> bool {
+    pub(crate) fn provider_action(&self, id: u64, handler: &str, value: &str) -> SendOutcome {
         self.host.provider_action(id, handler, value)
     }
 

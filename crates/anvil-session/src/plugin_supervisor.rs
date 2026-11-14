@@ -1,8 +1,10 @@
 //! Single-flight plugin host supervision and bounded failure handling.
 
 use crate::editor_service::{EditorRequest, EditorService};
-use crate::host_session::HostEvent;
+use crate::host_session::{HostEvent, SendOutcome};
+use crate::plugin_events::{Delivery, PluginEvent, PluginEventBus};
 use crate::plugin_session::PluginSession;
+use anvil_api::ApiError;
 use anvil_ipc::GatewayClient;
 use std::collections::{HashMap, VecDeque};
 use std::path::Path;
@@ -147,9 +149,17 @@ impl PluginEntry {
 
 pub(crate) trait ManagedHost {
     fn poll(&mut self) -> Vec<HostEvent>;
-    fn exec(&mut self) -> bool;
-    fn provider(&mut self, id: u64, handler: &str, query: &str, limit: u32) -> bool;
-    fn provider_action(&mut self, id: u64, handler: &str, value: &str) -> bool;
+    fn exec(&mut self) -> SendOutcome;
+    fn event(
+        &mut self,
+        subscription_id: u64,
+        event: &str,
+        sequence: u64,
+        payload: serde_json::Value,
+    ) -> bool;
+    fn event_stats(&mut self) -> bool;
+    fn provider(&mut self, id: u64, handler: &str, query: &str, limit: u32) -> SendOutcome;
+    fn provider_action(&mut self, id: u64, handler: &str, value: &str) -> SendOutcome;
     fn has_pending(&self) -> bool;
     fn drain(&mut self, timeout: Duration);
     fn stop(&mut self);
@@ -160,15 +170,29 @@ impl ManagedHost for PluginSession {
         PluginSession::poll(self)
     }
 
-    fn exec(&mut self) -> bool {
+    fn exec(&mut self) -> SendOutcome {
         PluginSession::exec(self)
     }
 
-    fn provider(&mut self, id: u64, handler: &str, query: &str, limit: u32) -> bool {
+    fn event(
+        &mut self,
+        subscription_id: u64,
+        event: &str,
+        sequence: u64,
+        payload: serde_json::Value,
+    ) -> bool {
+        PluginSession::event(self, subscription_id, event, sequence, payload)
+    }
+
+    fn event_stats(&mut self) -> bool {
+        PluginSession::event_stats(self)
+    }
+
+    fn provider(&mut self, id: u64, handler: &str, query: &str, limit: u32) -> SendOutcome {
         PluginSession::provider(self, id, handler, query, limit)
     }
 
-    fn provider_action(&mut self, id: u64, handler: &str, value: &str) -> bool {
+    fn provider_action(&mut self, id: u64, handler: &str, value: &str) -> SendOutcome {
         PluginSession::provider_action(self, id, handler, value)
     }
 
@@ -258,6 +282,7 @@ pub struct PluginSupervisor {
     editor_service: Option<EditorService>,
     editor_requests: Receiver<EditorRequest>,
     editor_identities: Arc<Mutex<HashMap<[u8; 32], String>>>,
+    events: PluginEventBus,
 }
 
 impl Default for PluginSupervisor {
@@ -277,6 +302,7 @@ impl PluginSupervisor {
             editor_service: None,
             editor_tx,
             editor_requests,
+            events: PluginEventBus::default(),
         }
     }
 
@@ -291,6 +317,7 @@ impl PluginSupervisor {
             editor_service: None,
             editor_tx,
             editor_requests,
+            events: PluginEventBus::default(),
         }
     }
 
@@ -300,6 +327,77 @@ impl PluginSupervisor {
 
     pub fn poll_editor_request(&self) -> Option<EditorRequest> {
         self.editor_requests.try_recv().ok()
+    }
+
+    pub fn subscribe(
+        &mut self,
+        plugin_id: &str,
+        events: Vec<String>,
+    ) -> Result<u64, (ApiError, String)> {
+        let entry = self.entries.get(plugin_id).ok_or_else(|| {
+            (
+                ApiError::NotFound,
+                format!("plugin {plugin_id} is not loaded"),
+            )
+        })?;
+        if !matches!(entry.state, HostState::Starting | HostState::Ready) {
+            return Err((
+                ApiError::Unavailable,
+                format!("plugin {plugin_id} is not running"),
+            ));
+        }
+        self.events.subscribe(plugin_id, &events)
+    }
+
+    pub fn unsubscribe(&mut self, plugin_id: &str, subscription_id: u64) -> bool {
+        self.events.unsubscribe(plugin_id, subscription_id)
+    }
+
+    pub fn publish_event(&mut self, event: PluginEvent, payload: &serde_json::Value) -> usize {
+        self.events.enqueue(event, payload)
+    }
+
+    pub(crate) fn flush_events(&mut self) -> usize {
+        let deliveries = self.events.take_deliveries();
+        let mut delivered = 0;
+        for Delivery {
+            plugin_id,
+            subscription_id,
+            event,
+            sequence,
+            payload,
+        } in deliveries
+        {
+            let ok = self
+                .entries
+                .get_mut(&plugin_id)
+                .and_then(|entry| entry.host.as_mut())
+                .is_some_and(|host| host.event(subscription_id, event.name(), sequence, payload));
+            self.events.record_delivery(&plugin_id, ok);
+            if ok {
+                delivered += 1;
+            }
+        }
+        delivered
+    }
+
+    pub fn event_stats(&self) -> crate::plugin_events::EventStats {
+        self.events.stats()
+    }
+
+    pub fn request_event_stats(&mut self, plugin_id: &str) -> Result<(), String> {
+        let entry = self
+            .entries
+            .get_mut(plugin_id)
+            .ok_or_else(|| format!("plugin {plugin_id} is not loaded"))?;
+        if entry.state != HostState::Ready {
+            return Err(format!("plugin {plugin_id} is not ready"));
+        }
+        if entry.host.as_mut().is_some_and(|host| host.event_stats()) {
+            Ok(())
+        } else {
+            Err(format!("plugin {plugin_id} host event stats unavailable"))
+        }
     }
 
     #[doc(hidden)]
@@ -548,6 +646,7 @@ impl PluginSupervisor {
                 host.stop();
             }
             entry.state = HostState::Stopped;
+            self.events.remove_plugin(&plugin_id);
             entry.last_activity = None;
             entry.pending.clear();
             if let Some(gateway) = gateway.as_deref_mut() {
@@ -590,15 +689,27 @@ impl PluginSupervisor {
             .ok_or_else(|| format!("plugin {plugin_id} is not loaded"))?;
         match entry.state {
             HostState::Ready => {
-                if entry
-                    .host
-                    .as_mut()
-                    .is_some_and(|host| host.provider(id, handler, query, limit))
-                {
-                    entry.last_activity = Some(Instant::now());
-                    Ok(ExecOutcome::Sent)
-                } else {
-                    Err(format!("plugin {plugin_id} host channel closed"))
+                let outcome = entry.host.as_mut().map_or(SendOutcome::Closed, |host| {
+                    host.provider(id, handler, query, limit)
+                });
+                match outcome {
+                    SendOutcome::Sent => {
+                        entry.last_activity = Some(Instant::now());
+                        Ok(ExecOutcome::Sent)
+                    }
+                    SendOutcome::Full => {
+                        if entry.pending.len() >= MAX_PENDING_CALLS {
+                            return Err(format!("plugin {plugin_id} request queue full"));
+                        }
+                        entry.pending.push_back(PendingCall::Provider {
+                            id,
+                            handler: handler.to_owned(),
+                            query: query.to_owned(),
+                            limit,
+                        });
+                        Ok(ExecOutcome::Queued)
+                    }
+                    SendOutcome::Closed => Err(format!("plugin {plugin_id} host channel closed")),
                 }
             }
             HostState::Registering | HostState::Starting => {
@@ -633,15 +744,26 @@ impl PluginSupervisor {
             .ok_or_else(|| format!("plugin {plugin_id} is not loaded"))?;
         match entry.state {
             HostState::Ready => {
-                if entry
-                    .host
-                    .as_mut()
-                    .is_some_and(|host| host.provider_action(id, handler, value))
-                {
-                    entry.last_activity = Some(Instant::now());
-                    Ok(ExecOutcome::Sent)
-                } else {
-                    Err(format!("plugin {plugin_id} host channel closed"))
+                let outcome = entry.host.as_mut().map_or(SendOutcome::Closed, |host| {
+                    host.provider_action(id, handler, value)
+                });
+                match outcome {
+                    SendOutcome::Sent => {
+                        entry.last_activity = Some(Instant::now());
+                        Ok(ExecOutcome::Sent)
+                    }
+                    SendOutcome::Full => {
+                        if entry.pending.len() >= MAX_PENDING_CALLS {
+                            return Err(format!("plugin {plugin_id} request queue full"));
+                        }
+                        entry.pending.push_back(PendingCall::ProviderAction {
+                            id,
+                            handler: handler.to_owned(),
+                            value: value.to_owned(),
+                        });
+                        Ok(ExecOutcome::Queued)
+                    }
+                    SendOutcome::Closed => Err(format!("plugin {plugin_id} host channel closed")),
                 }
             }
             HostState::Registering | HostState::Starting => {
@@ -669,11 +791,23 @@ impl PluginSupervisor {
             .ok_or_else(|| format!("plugin {plugin_id} is not loaded"))?;
         match entry.state {
             HostState::Ready => {
-                if entry.host.as_mut().is_some_and(|host| host.exec()) {
-                    entry.last_activity = Some(Instant::now());
-                    Ok(ExecOutcome::Sent)
-                } else {
-                    Err(format!("plugin {plugin_id} host channel closed"))
+                let outcome = entry
+                    .host
+                    .as_mut()
+                    .map_or(SendOutcome::Closed, |host| host.exec());
+                match outcome {
+                    SendOutcome::Sent => {
+                        entry.last_activity = Some(Instant::now());
+                        Ok(ExecOutcome::Sent)
+                    }
+                    SendOutcome::Full => {
+                        if entry.pending.len() >= MAX_PENDING_CALLS {
+                            return Err(format!("plugin {plugin_id} request queue full"));
+                        }
+                        entry.pending.push_back(PendingCall::Exec);
+                        Ok(ExecOutcome::Queued)
+                    }
+                    SendOutcome::Closed => Err(format!("plugin {plugin_id} host channel closed")),
                 }
             }
             HostState::Registering | HostState::Starting => {
@@ -729,6 +863,7 @@ impl PluginSupervisor {
             let _ = gateway.revoke_plugin(plugin_id);
         }
         entry.state = HostState::Stopped;
+        self.events.remove_plugin(plugin_id);
         entry.started_at = None;
         entry.last_activity = None;
         entry.retry_at = None;
@@ -769,6 +904,7 @@ impl PluginSupervisor {
     ) -> Vec<SupervisorEvent> {
         let ids = self.entries.keys().cloned().collect::<Vec<_>>();
         let mut events = Vec::new();
+        self.flush_events();
         for plugin_id in ids {
             if let Some(entry) = self.entries.get(&plugin_id)
                 && entry.state == HostState::Starting
@@ -857,6 +993,13 @@ impl PluginSupervisor {
                         });
                         break;
                     }
+                    HostEvent::EventStats(errors) => {
+                        self.events.record_handler_errors(&plugin_id, errors);
+                        events.push(SupervisorEvent::Message {
+                            plugin_id: plugin_id.clone(),
+                            message: format!("event handler errors: {errors}"),
+                        });
+                    }
                     HostEvent::Exited(exit) => {
                         let detail = self.fail_at(
                             &plugin_id,
@@ -894,35 +1037,46 @@ impl PluginSupervisor {
             else {
                 return;
             };
-            let sent = self
+            let outcome = self
                 .entries
                 .get_mut(plugin_id)
                 .and_then(|entry| entry.host.as_mut())
-                .is_some_and(|host| match call {
+                .map_or(SendOutcome::Closed, |host| match &call {
                     PendingCall::Exec => host.exec(),
                     PendingCall::Provider {
                         id,
                         handler,
                         query,
                         limit,
-                    } => host.provider(id, &handler, &query, limit),
+                    } => host.provider(*id, handler, query, *limit),
                     PendingCall::ProviderAction { id, handler, value } => {
-                        host.provider_action(id, &handler, &value)
+                        host.provider_action(*id, handler, value)
                     }
                 });
-            if sent {
-                if let Some(entry) = self.entries.get_mut(plugin_id) {
-                    entry.last_activity = Some(now);
+            match outcome {
+                SendOutcome::Sent => {
+                    if let Some(entry) = self.entries.get_mut(plugin_id) {
+                        entry.last_activity = Some(now);
+                    }
+                    continue;
                 }
-                continue;
+                SendOutcome::Full => {
+                    if let Some(entry) = self.entries.get_mut(plugin_id) {
+                        entry.pending.push_front(call);
+                    }
+                    return;
+                }
+                SendOutcome::Closed => {
+                    let detail =
+                        self.fail_at(plugin_id, now, "host channel closed".to_owned(), gateway);
+                    events.push(SupervisorEvent::State {
+                        plugin_id: plugin_id.to_owned(),
+                        state: self.state(plugin_id),
+                        detail: Some(detail),
+                    });
+                    return;
+                }
             }
-            let detail = self.fail_at(plugin_id, now, "host channel closed".to_owned(), gateway);
-            events.push(SupervisorEvent::State {
-                plugin_id: plugin_id.to_owned(),
-                state: self.state(plugin_id),
-                detail: Some(detail),
-            });
-            return;
         }
     }
 
@@ -944,6 +1098,7 @@ impl PluginSupervisor {
             let _ = gateway.revoke_plugin(plugin_id);
         }
         entry.pending.clear();
+        self.events.remove_plugin(plugin_id);
         entry.started_at = None;
         entry.last_activity = None;
         entry
@@ -985,6 +1140,7 @@ impl Drop for PluginSupervisor {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::plugin_events::MAX_SUBSCRIPTIONS;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::{Arc, Mutex};
 
@@ -996,6 +1152,8 @@ mod tests {
         pending: usize,
         drains: usize,
         stopped: bool,
+        send_full: bool,
+        deliveries: Vec<(u64, String, u64, serde_json::Value)>,
     }
 
     struct FakeHost {
@@ -1012,23 +1170,53 @@ mod tests {
                 .collect()
         }
 
-        fn exec(&mut self) -> bool {
+        fn exec(&mut self) -> SendOutcome {
             let mut state = self.state.lock().expect("fake host");
+            if state.send_full {
+                return SendOutcome::Full;
+            }
             state.execs += 1;
             state.pending += 1;
+            SendOutcome::Sent
+        }
+
+        fn event(
+            &mut self,
+            subscription_id: u64,
+            event: &str,
+            sequence: u64,
+            payload: serde_json::Value,
+        ) -> bool {
+            self.state.lock().expect("fake host").deliveries.push((
+                subscription_id,
+                event.to_owned(),
+                sequence,
+                payload,
+            ));
             true
         }
 
-        fn provider(&mut self, _id: u64, _handler: &str, _query: &str, _limit: u32) -> bool {
+        fn event_stats(&mut self) -> bool {
+            true
+        }
+
+        fn provider(&mut self, _id: u64, _handler: &str, _query: &str, _limit: u32) -> SendOutcome {
             let mut state = self.state.lock().expect("fake host");
+            if state.send_full {
+                return SendOutcome::Full;
+            }
             state.providers += 1;
             state.pending += 1;
-            true
+            SendOutcome::Sent
         }
 
-        fn provider_action(&mut self, _id: u64, _handler: &str, _value: &str) -> bool {
-            self.state.lock().expect("fake host").pending += 1;
-            true
+        fn provider_action(&mut self, _id: u64, _handler: &str, _value: &str) -> SendOutcome {
+            let mut state = self.state.lock().expect("fake host");
+            if state.send_full {
+                return SendOutcome::Full;
+            }
+            state.pending += 1;
+            SendOutcome::Sent
         }
 
         fn has_pending(&self) -> bool {
@@ -1179,6 +1367,111 @@ mod tests {
         )));
         assert_eq!(supervisor.state("demo"), HostState::Ready);
         assert_eq!(launcher.state.lock().expect("fake host").execs, 1);
+    }
+
+    #[test]
+    fn full_command_queue_stays_ready_and_requeues() {
+        let (mut supervisor, launcher) = supervisor();
+        let now = Instant::now();
+        start(&mut supervisor, now, "demo").expect("start");
+        launcher
+            .state
+            .lock()
+            .expect("fake host")
+            .events
+            .push_back(HostEvent::Ready);
+        supervisor.poll_at(now, None);
+        launcher.state.lock().expect("fake host").send_full = true;
+        assert_eq!(
+            supervisor.exec("demo").expect("queue full is transient"),
+            ExecOutcome::Queued
+        );
+        assert_eq!(supervisor.state("demo"), HostState::Ready);
+        supervisor.poll_at(now, None);
+        assert_eq!(supervisor.state("demo"), HostState::Ready);
+        assert_eq!(
+            supervisor.entries.get("demo").expect("entry").pending.len(),
+            1
+        );
+    }
+
+    #[test]
+    fn event_subscription_delivers_sequences_and_unsubscribes() {
+        let (mut supervisor, launcher) = supervisor();
+        let now = Instant::now();
+        start(&mut supervisor, now, "demo").expect("start");
+        assert!(
+            supervisor
+                .subscribe("demo", vec!["editor.mouse".to_owned()])
+                .is_err()
+        );
+        let subscription = supervisor
+            .subscribe("demo", vec!["diagnostics.changed".to_owned()])
+            .expect("subscribe");
+        let first = serde_json::json!({ "path": "src/main.rs", "generation": 3 });
+        let second = serde_json::json!({ "path": "src/lib.rs", "generation": 4 });
+        assert_eq!(
+            supervisor.publish_event(PluginEvent::DiagnosticsChanged, &first),
+            1
+        );
+        assert_eq!(
+            supervisor.publish_event(PluginEvent::DiagnosticsChanged, &second),
+            1
+        );
+        assert_eq!(supervisor.flush_events(), 2);
+        {
+            let state = launcher.state.lock().expect("fake host");
+            assert_eq!(state.deliveries.len(), 2);
+            assert_eq!(state.deliveries[0].0, subscription);
+            assert_eq!(state.deliveries[0].1, "diagnostics.changed");
+            assert_eq!(state.deliveries[0].2, 1);
+            assert_eq!(state.deliveries[1].2, 2);
+            assert_eq!(state.deliveries[1].3, second);
+        }
+        let stats = supervisor.event_stats();
+        assert_eq!(stats.delivered, 2);
+        assert_eq!(stats.dropped, 0);
+        assert!(supervisor.unsubscribe("demo", subscription));
+        assert_eq!(
+            supervisor.publish_event(PluginEvent::DiagnosticsChanged, &first),
+            0
+        );
+    }
+
+    #[test]
+    fn event_handler_errors_are_recorded_per_plugin() {
+        let (mut supervisor, launcher) = supervisor();
+        let now = Instant::now();
+        start(&mut supervisor, now, "demo").expect("start");
+        launcher
+            .state
+            .lock()
+            .expect("fake host")
+            .events
+            .push_back(HostEvent::EventStats(3));
+        supervisor.poll_at(now, None);
+        let stats = supervisor.event_stats();
+        assert_eq!(stats.handler_errors, 3);
+        assert_eq!(
+            stats.plugins.get("demo").map(|stats| stats.handler_errors),
+            Some(3)
+        );
+    }
+
+    #[test]
+    fn subscription_limit_is_bounded() {
+        let (mut supervisor, _) = supervisor();
+        let now = Instant::now();
+        start(&mut supervisor, now, "demo").expect("start");
+        for _ in 0..MAX_SUBSCRIPTIONS {
+            supervisor
+                .subscribe("demo", vec!["diagnostics.changed".to_owned()])
+                .expect("subscribe");
+        }
+        let (kind, _) = supervisor
+            .subscribe("demo", vec!["diagnostics.changed".to_owned()])
+            .expect_err("subscription limit");
+        assert_eq!(kind, ApiError::LimitExceeded);
     }
 
     #[test]

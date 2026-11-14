@@ -138,6 +138,67 @@ pub(crate) fn call_provider(
     lua.from_value(result).map_err(|error| error.to_string())
 }
 
+pub(crate) fn call_event(lua: &Lua, params: &JsonValue) -> std::result::Result<(), String> {
+    let subscription_id = params
+        .get("subscription_id")
+        .and_then(JsonValue::as_u64)
+        .ok_or_else(|| "missing subscription id".to_owned())?;
+    let sequence = params
+        .get("sequence")
+        .and_then(JsonValue::as_u64)
+        .unwrap_or_default();
+    let sequences: mlua::Table = lua
+        .globals()
+        .get("__anvil_event_sequences")
+        .map_err(|error| error.to_string())?;
+    if sequences
+        .get::<u64>(subscription_id)
+        .is_ok_and(|last| sequence <= last)
+    {
+        return Ok(());
+    }
+    sequences
+        .set(subscription_id, sequence)
+        .map_err(|error| error.to_string())?;
+    let handlers: mlua::Table = lua
+        .globals()
+        .get("__anvil_event_handlers")
+        .map_err(|error| error.to_string())?;
+    let Ok(handler) = handlers.get::<mlua::Function>(subscription_id) else {
+        let pending: mlua::Table = lua
+            .globals()
+            .get("__anvil_event_pending")
+            .map_err(|error| error.to_string())?;
+        pending
+            .set(
+                subscription_id,
+                lua.to_value(params).map_err(|error| error.to_string())?,
+            )
+            .map_err(|error| error.to_string())?;
+        return Ok(());
+    };
+    let event = lua.to_value(params).map_err(|error| error.to_string())?;
+    handler
+        .call::<()>(event)
+        .map_err(|error| format!("event handler {subscription_id}: {error}"))
+}
+
+fn deliver_pending_event(lua: &Lua, subscription_id: u64, handler: &mlua::Function) {
+    let Ok(pending) = lua.globals().get::<mlua::Table>("__anvil_event_pending") else {
+        return;
+    };
+    let Ok(event) = pending.get::<Value>(subscription_id) else {
+        return;
+    };
+    if matches!(event, Value::Nil) {
+        return;
+    }
+    let _ = pending.set(subscription_id, Value::Nil);
+    if let Err(error) = handler.call::<()>(event) {
+        eprintln!("host.event: pending handler {subscription_id}: {error}");
+    }
+}
+
 fn install_print(lua: &Lua) -> Result<()> {
     let print = lua.create_function(|lua, values: Variadic<Value>| {
         let mut output = String::new();
@@ -167,6 +228,14 @@ fn install_plugin(lua: &Lua, command: Option<&str>) -> Result<()> {
 fn install_editor(lua: &Lua, editor: Option<EditorClient>) -> Result<()> {
     let table = lua.create_table()?;
     let ui = lua.create_table()?;
+    let event_handlers = lua.create_table()?;
+    lua.globals()
+        .set("__anvil_event_handlers", &event_handlers)?;
+    let event_pending = lua.create_table()?;
+    lua.globals().set("__anvil_event_pending", &event_pending)?;
+    let event_sequences = lua.create_table()?;
+    lua.globals()
+        .set("__anvil_event_sequences", &event_sequences)?;
     if let Some(editor) = editor {
         let editor = Rc::new(RefCell::new(editor));
 
@@ -246,6 +315,29 @@ fn install_editor(lua: &Lua, editor: Option<EditorClient>) -> Result<()> {
             })?,
         )?;
 
+        let subscribe_client = Rc::clone(&editor);
+        let subscribe_handlers = event_handlers.clone();
+        table.set(
+            "subscribe",
+            lua.create_function(move |lua, (events, handler): (Value, mlua::Function)| {
+                let events: JsonValue = lua.from_value(events)?;
+                let result = subscribe_client
+                    .borrow_mut()
+                    .call("event.subscribe", json!({ "events": events }))
+                    .map_err(mlua::Error::RuntimeError)?;
+                let subscription_id = result
+                    .get("subscription_id")
+                    .and_then(JsonValue::as_u64)
+                    .ok_or_else(|| {
+                        mlua::Error::RuntimeError("missing subscription id".to_owned())
+                    })?;
+                let pending_handler = handler.clone();
+                subscribe_handlers.set(subscription_id, handler)?;
+                deliver_pending_event(lua, subscription_id, &pending_handler);
+                Ok(subscription_id)
+            })?,
+        )?;
+
         let notify_client = Rc::clone(&editor);
         ui.set(
             "notify",
@@ -279,6 +371,7 @@ fn install_editor(lua: &Lua, editor: Option<EditorClient>) -> Result<()> {
             "set_mode",
             "register_command",
             "register_provider",
+            "subscribe",
         ] {
             table.set(
                 method,
@@ -371,6 +464,216 @@ end
         .expect("provider");
         assert_eq!(response["request_id"], 4);
         assert_eq!(response["items"][0]["label"], "buffer");
+    }
+
+    #[test]
+    fn event_handler_receives_payload() {
+        let path = std::env::temp_dir().join(format!(
+            "anvil-event-{}-{}.luau",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("time")
+                .as_nanos()
+        ));
+        std::fs::write(
+            &path,
+            r#"
+__anvil_event_handlers[7] = function(event)
+    received = event.payload.generation
+end
+"#,
+        )
+        .expect("write");
+        let lua = run_file(&path, None, None).expect("run plugin");
+        let _ = std::fs::remove_file(path);
+        call_event(
+            &lua,
+            &json!({
+                "subscription_id": 7,
+                "event": "diagnostics.changed",
+                "sequence": 1,
+                "payload": { "generation": 9 }
+            }),
+        )
+        .expect("event");
+        let received: u64 = lua.globals().get("received").expect("received");
+        assert_eq!(received, 9);
+    }
+
+    #[test]
+    fn handler_error_does_not_break_later_delivery() {
+        let path = std::env::temp_dir().join(format!(
+            "anvil-handler-error-{}-{}.luau",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("time")
+                .as_nanos()
+        ));
+        std::fs::write(
+            &path,
+            r#"
+__anvil_event_handlers[7] = function()
+    error("boom")
+end
+"#,
+        )
+        .expect("write");
+        let lua = run_file(&path, None, None).expect("run plugin");
+        let _ = std::fs::remove_file(path);
+        assert!(
+            call_event(
+                &lua,
+                &json!({
+                    "subscription_id": 7,
+                    "event": "diagnostics.changed",
+                    "sequence": 1,
+                    "payload": {}
+                }),
+            )
+            .is_err()
+        );
+        lua.load(
+            "__anvil_event_handlers[7] = function(event) received = event.payload.generation end",
+        )
+        .exec()
+        .expect("replace handler");
+        call_event(
+            &lua,
+            &json!({
+                "subscription_id": 7,
+                "event": "diagnostics.changed",
+                "sequence": 2,
+                "payload": { "generation": 12 }
+            }),
+        )
+        .expect("later event");
+        let received: u64 = lua.globals().get("received").expect("received");
+        assert_eq!(received, 12);
+    }
+
+    #[test]
+    fn subscribe_event_reaches_lua_and_status() {
+        use anvil_ipc::Listener;
+
+        let socket = std::env::temp_dir().join(format!(
+            "anvil-subscribe-status-{}-{}.sock",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("time")
+                .as_nanos()
+        ));
+        let listener = Listener::bind(&socket).expect("listen");
+        let server = std::thread::spawn(move || {
+            let mut connection = listener.accept().expect("accept");
+            let hello = connection.recv().expect("read").expect("hello");
+            let hello: JsonValue = serde_json::from_slice(&hello).expect("hello json");
+            assert_eq!(hello["method"], "session.hello");
+            let frame = connection.recv().expect("read").expect("subscribe");
+            let request: JsonValue = serde_json::from_slice(&frame).expect("subscribe json");
+            assert_eq!(request["method"], "event.subscribe");
+            let response = json!({
+                "jsonrpc": "2.0",
+                "id": request["id"],
+                "result": { "subscription_id": 7 }
+            });
+            connection
+                .send(
+                    serde_json::to_string(&response)
+                        .expect("subscribe response")
+                        .as_bytes(),
+                )
+                .expect("send subscribe");
+            let frame = connection.recv().expect("read").expect("status");
+            let request: JsonValue = serde_json::from_slice(&frame).expect("status json");
+            assert_eq!(request["method"], "ui.status");
+            assert_eq!(request["params"]["message"], "got 42");
+            let response = json!({
+                "jsonrpc": "2.0",
+                "id": request["id"],
+                "result": {}
+            });
+            connection
+                .send(
+                    serde_json::to_string(&response)
+                        .expect("status response")
+                        .as_bytes(),
+                )
+                .expect("send status");
+        });
+        let path = std::env::temp_dir().join(format!(
+            "anvil-subscribe-status-{}-{}.luau",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("time")
+                .as_nanos()
+        ));
+        std::fs::write(
+            &path,
+            r#"
+editor.subscribe({"diagnostics.changed"}, function(event)
+    ui.status({message = "got " .. tostring(event.payload.generation)})
+end)
+"#,
+        )
+        .expect("write");
+        let client =
+            EditorClient::connect(&socket, "test", Token([4; 32])).expect("connect editor");
+        let lua = run_file(&path, Some(client), None).expect("run plugin");
+        let _ = std::fs::remove_file(path);
+        call_event(
+            &lua,
+            &json!({
+                "subscription_id": 7,
+                "event": "diagnostics.changed",
+                "sequence": 1,
+                "payload": { "generation": 42 }
+            }),
+        )
+        .expect("event");
+        server.join().expect("server");
+        let _ = std::fs::remove_file(socket);
+    }
+
+    #[test]
+    fn pending_event_is_delivered_after_handler_registration() {
+        let path = std::env::temp_dir().join(format!(
+            "anvil-pending-{}-{}.luau",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("time")
+                .as_nanos()
+        ));
+        std::fs::write(&path, "return").expect("write");
+        let lua = run_file(&path, None, None).expect("run plugin");
+        let _ = std::fs::remove_file(path);
+        call_event(
+            &lua,
+            &json!({
+                "subscription_id": 7,
+                "event": "diagnostics.changed",
+                "sequence": 1,
+                "payload": { "generation": 11 }
+            }),
+        )
+        .expect("buffer event");
+        lua.load(
+            "__anvil_event_handlers[7] = function(event) received = event.payload.generation end",
+        )
+        .exec()
+        .expect("register handler");
+        let handlers: mlua::Table = lua
+            .globals()
+            .get("__anvil_event_handlers")
+            .expect("handlers");
+        let handler: mlua::Function = handlers.get(7).expect("handler");
+        deliver_pending_event(&lua, 7, &handler);
+        let received: u64 = lua.globals().get("received").expect("received");
+        assert_eq!(received, 11);
     }
 
     #[test]

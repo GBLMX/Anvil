@@ -205,6 +205,7 @@ pub(crate) struct DiagnosticsState {
     pub(crate) count_shown: usize,
     pub(crate) count_pending: Option<(usize, Instant)>,
     pub(crate) path: Option<PathBuf>,
+    pub(crate) generation: u64,
 }
 
 #[derive(Default)]

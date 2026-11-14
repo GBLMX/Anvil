@@ -1,6 +1,10 @@
 # ADR-0039: Plugin Event Transport and Interaction Boundary
 
 - Status: Proposed
+- Implementation: `event.subscribe`, `host.event`, and `diagnostics.changed`
+  landed with a typed registry, bounded command/event queues, delivery stats,
+  sequence rejection, and latest-event buffering before handler registration.
+  Other event families remain proposed.
 - Date: 2026-11-14
 - Related: [ADR-0003](0003-idl.md), [ADR-0012](0012-plugin-host-isolation.md),
   [ADR-0014](0014-plugin-api-v1-freeze.md),

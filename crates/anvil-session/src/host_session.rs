@@ -4,9 +4,19 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::mpsc::{self, Receiver, SyncSender, TrySendError};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+const MAX_QUEUED_EVENTS: usize = 64;
+const MAX_PENDING_COMMANDS: usize = 128;
+const MAX_QUEUED_HOST_EVENTS: usize = 128;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum SendOutcome {
+    Sent,
+    Full,
+    Closed,
+}
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum HostEvent {
     Ready,
@@ -21,6 +31,7 @@ pub enum HostEvent {
         id: u64,
         result: Result<serde_json::Value, String>,
     },
+    EventStats(u64),
     Exited(HostExit),
 }
 
@@ -37,14 +48,22 @@ enum HostCommand {
         handler: String,
         value: String,
     },
+    Event {
+        subscription_id: u64,
+        event: String,
+        sequence: u64,
+        payload: serde_json::Value,
+    },
+    EventStats,
 }
 
 pub struct HostSession {
     host: HostProcess,
-    commands: Sender<HostCommand>,
+    commands: SyncSender<HostCommand>,
     events: Receiver<HostEvent>,
     alive: Arc<AtomicBool>,
     pending: Arc<AtomicUsize>,
+    queued_events: Arc<AtomicUsize>,
     accepting: Arc<AtomicBool>,
     socket: PathBuf,
     exited: bool,
@@ -239,12 +258,14 @@ impl HostSession {
             None => spawn(host, &args, token),
         }
         .map_err(|error| format!("spawn host: {error}"))?;
-        let (command_tx, command_rx) = mpsc::channel();
-        let (event_tx, event_rx) = mpsc::channel();
+        let (command_tx, command_rx) = mpsc::sync_channel(MAX_PENDING_COMMANDS);
+        let (event_tx, event_rx) = mpsc::sync_channel(MAX_QUEUED_HOST_EVENTS);
         let alive = Arc::new(AtomicBool::new(true));
         let pending = Arc::new(AtomicUsize::new(0));
+        let queued_events = Arc::new(AtomicUsize::new(0));
         let accepting = Arc::new(AtomicBool::new(true));
         let thread_alive = Arc::clone(&alive);
+        let thread_queued_events = Arc::clone(&queued_events);
         let thread_pending = Arc::clone(&pending);
         std::thread::spawn(move || {
             let mut connection = loop {
@@ -257,12 +278,13 @@ impl HostSession {
                         std::thread::sleep(Duration::from_millis(10));
                     }
                     Err(error) => {
-                        let _ = event_tx.send(HostEvent::Error(format!("host accept: {error}")));
+                        let _ =
+                            event_tx.try_send(HostEvent::Error(format!("host accept: {error}")));
                         return;
                     }
                 }
             };
-            let _ = event_tx.send(HostEvent::Ready);
+            let _ = event_tx.try_send(HostEvent::Ready);
             let _ = connection.set_read_timeout(Some(Duration::from_secs(2)));
             let mut next_id = 1u64;
             if !request(
@@ -303,10 +325,7 @@ impl HostSession {
                             }),
                         );
                         thread_pending.fetch_sub(1, Ordering::AcqRel);
-                        if event_tx
-                            .send(HostEvent::ProviderAction { id, result })
-                            .is_err()
-                        {
+                        if !send_host_result(&event_tx, HostEvent::ProviderAction { id, result }) {
                             return;
                         }
                     }
@@ -328,7 +347,49 @@ impl HostSession {
                             }),
                         );
                         thread_pending.fetch_sub(1, Ordering::AcqRel);
-                        if event_tx.send(HostEvent::Provider { id, result }).is_err() {
+                        if !send_host_result(&event_tx, HostEvent::Provider { id, result }) {
+                            return;
+                        }
+                    }
+                    Ok(HostCommand::Event {
+                        subscription_id,
+                        event,
+                        sequence,
+                        payload,
+                    }) => {
+                        thread_queued_events.fetch_sub(1, Ordering::AcqRel);
+                        let body = serde_json::to_vec(&event_frame(
+                            subscription_id,
+                            &event,
+                            sequence,
+                            payload,
+                        ))
+                        .map_err(|error| io::Error::other(format!("encode host.event: {error}")));
+                        let body = match body {
+                            Ok(body) => body,
+                            Err(_) => return,
+                        };
+                        if connection.send(&body).is_err() {
+                            return;
+                        }
+                    }
+                    Ok(HostCommand::EventStats) => {
+                        let result = call(
+                            &mut connection,
+                            next_id,
+                            "host.event_stats",
+                            serde_json::json!({}),
+                        );
+                        next_id += 1;
+                        let errors = result
+                            .ok()
+                            .and_then(|value| {
+                                value
+                                    .get("handler_errors")
+                                    .and_then(serde_json::Value::as_u64)
+                            })
+                            .unwrap_or(0);
+                        if !send_host_result(&event_tx, HostEvent::EventStats(errors)) {
                             return;
                         }
                     }
@@ -343,6 +404,7 @@ impl HostSession {
             events: event_rx,
             alive,
             pending,
+            queued_events,
             accepting,
             socket: cleanup.keep(),
             exited: false,
@@ -354,57 +416,101 @@ impl HostSession {
         self.host.id()
     }
 
-    pub fn exec(&self) -> bool {
+    pub fn exec(&self) -> SendOutcome {
+        if !self.accepting.load(Ordering::Acquire) {
+            return SendOutcome::Closed;
+        }
+        self.pending.fetch_add(1, Ordering::AcqRel);
+        let outcome = match self.commands.try_send(HostCommand::Exec) {
+            Ok(()) => SendOutcome::Sent,
+            Err(TrySendError::Full(_)) => SendOutcome::Full,
+            Err(TrySendError::Disconnected(_)) => SendOutcome::Closed,
+        };
+        if outcome != SendOutcome::Sent {
+            self.pending.fetch_sub(1, Ordering::AcqRel);
+        }
+        outcome
+    }
+
+    pub fn event(
+        &self,
+        subscription_id: u64,
+        event: &str,
+        sequence: u64,
+        payload: serde_json::Value,
+    ) -> bool {
         if !self.accepting.load(Ordering::Acquire) {
             return false;
         }
-        self.pending.fetch_add(1, Ordering::AcqRel);
-        if self.commands.send(HostCommand::Exec).is_err() {
-            self.pending.fetch_sub(1, Ordering::AcqRel);
+        let reserved = self
+            .queued_events
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |queued| {
+                (queued < MAX_QUEUED_EVENTS).then_some(queued + 1)
+            })
+            .is_ok();
+        if !reserved {
+            return false;
+        }
+        if self
+            .commands
+            .try_send(HostCommand::Event {
+                subscription_id,
+                event: event.to_owned(),
+                sequence,
+                payload,
+            })
+            .is_err()
+        {
+            self.queued_events.fetch_sub(1, Ordering::AcqRel);
             return false;
         }
         true
     }
 
-    pub fn provider(&self, id: u64, handler: &str, query: &str, limit: u32) -> bool {
-        if !self.accepting.load(Ordering::Acquire) {
-            return false;
-        }
-        self.pending.fetch_add(1, Ordering::AcqRel);
-        if self
-            .commands
-            .send(HostCommand::Provider {
-                id,
-                handler: handler.to_owned(),
-                query: query.to_owned(),
-                limit,
-            })
-            .is_err()
-        {
-            self.pending.fetch_sub(1, Ordering::AcqRel);
-            return false;
-        }
-        true
+    pub fn event_stats(&self) -> bool {
+        self.accepting.load(Ordering::Acquire)
+            && self.commands.try_send(HostCommand::EventStats).is_ok()
     }
 
-    pub fn provider_action(&self, id: u64, handler: &str, value: &str) -> bool {
+    pub fn provider(&self, id: u64, handler: &str, query: &str, limit: u32) -> SendOutcome {
         if !self.accepting.load(Ordering::Acquire) {
-            return false;
+            return SendOutcome::Closed;
         }
         self.pending.fetch_add(1, Ordering::AcqRel);
-        if self
-            .commands
-            .send(HostCommand::ProviderAction {
-                id,
-                handler: handler.to_owned(),
-                value: value.to_owned(),
-            })
-            .is_err()
-        {
+        let outcome = match self.commands.try_send(HostCommand::Provider {
+            id,
+            handler: handler.to_owned(),
+            query: query.to_owned(),
+            limit,
+        }) {
+            Ok(()) => SendOutcome::Sent,
+            Err(TrySendError::Full(_)) => SendOutcome::Full,
+            Err(TrySendError::Disconnected(_)) => SendOutcome::Closed,
+        };
+        if outcome != SendOutcome::Sent {
             self.pending.fetch_sub(1, Ordering::AcqRel);
-            return false;
         }
-        true
+        outcome
+    }
+
+    pub fn provider_action(&self, id: u64, handler: &str, value: &str) -> SendOutcome {
+        if !self.accepting.load(Ordering::Acquire) {
+            return SendOutcome::Closed;
+        }
+        self.pending.fetch_add(1, Ordering::AcqRel);
+        let outcome = match self.commands.try_send(HostCommand::ProviderAction {
+            id,
+            handler: handler.to_owned(),
+            value: value.to_owned(),
+        }) {
+            Ok(()) => SendOutcome::Sent,
+            Err(TrySendError::Full(_)) => SendOutcome::Full,
+            Err(TrySendError::Disconnected(_)) => SendOutcome::Closed,
+        };
+        if outcome != SendOutcome::Sent {
+            self.pending.fetch_sub(1, Ordering::AcqRel);
+        }
+        outcome
     }
 
     pub fn has_pending(&self) -> bool {
@@ -447,11 +553,18 @@ impl Drop for HostSession {
     }
 }
 
+fn send_host_result(events: &SyncSender<HostEvent>, event: HostEvent) -> bool {
+    match events.try_send(event) {
+        Ok(()) | Err(TrySendError::Full(_)) => true,
+        Err(TrySendError::Disconnected(_)) => false,
+    }
+}
+
 fn request(
     connection: &mut Connection,
     id: u64,
     method: &str,
-    events: &Sender<HostEvent>,
+    events: &SyncSender<HostEvent>,
     alive: &AtomicBool,
 ) -> bool {
     let request = serde_json::json!({
@@ -462,42 +575,42 @@ fn request(
     let body = match serde_json::to_vec(&request) {
         Ok(body) => body,
         Err(error) => {
-            let _ = events.send(HostEvent::Error(error.to_string()));
+            let _ = events.try_send(HostEvent::Error(error.to_string()));
             return false;
         }
     };
     if let Err(error) = connection.send(&body) {
-        let _ = events.send(HostEvent::Error(error.to_string()));
+        let _ = events.try_send(HostEvent::Error(error.to_string()));
         return false;
     }
     match connection.recv() {
         Ok(Some(frame)) => match serde_json::from_slice::<serde_json::Value>(&frame) {
             Ok(response) if !response_matches_id(&response, id) => {
-                let _ = events.send(HostEvent::Error("host RPC id mismatch".to_owned()));
+                let _ = events.try_send(HostEvent::Error("host RPC id mismatch".to_owned()));
                 false
             }
             Ok(response) if response.get("result").is_some() => {
-                let _ = events.send(HostEvent::Pong);
+                let _ = events.try_send(HostEvent::Pong);
                 true
             }
             Ok(response) if response.get("error").is_some() => {
-                let _ = events.send(HostEvent::ExecUnsupported);
+                let _ = events.try_send(HostEvent::ExecUnsupported);
                 true
             }
             Ok(_) => true,
             Err(error) => {
-                let _ = events.send(HostEvent::Error(error.to_string()));
+                let _ = events.try_send(HostEvent::Error(error.to_string()));
                 false
             }
         },
         Ok(None) => false,
         Err(FrameError::Io(io::ErrorKind::TimedOut | io::ErrorKind::WouldBlock)) => {
-            let _ = events.send(HostEvent::Error("host RPC timeout".to_owned()));
+            let _ = events.try_send(HostEvent::Error("host RPC timeout".to_owned()));
             alive.store(false, Ordering::Relaxed);
             false
         }
         Err(error) => {
-            let _ = events.send(HostEvent::Error(error.to_string()));
+            let _ = events.try_send(HostEvent::Error(error.to_string()));
             false
         }
     }
@@ -540,6 +653,24 @@ fn call(
             .cloned()
             .unwrap_or(serde_json::Value::Null));
     }
+}
+
+fn event_frame(
+    subscription_id: u64,
+    event: &str,
+    sequence: u64,
+    payload: serde_json::Value,
+) -> serde_json::Value {
+    serde_json::json!({
+        "jsonrpc": "2.0",
+        "method": "host.event",
+        "params": {
+            "subscription_id": subscription_id,
+            "event": event,
+            "sequence": sequence,
+            "payload": payload,
+        }
+    })
 }
 
 fn response_matches_id(response: &serde_json::Value, id: u64) -> bool {
@@ -600,6 +731,91 @@ mod tests {
             &serde_json::json!({"jsonrpc": "2.0", "result": {}}),
             7
         ));
+    }
+
+    #[test]
+    fn host_event_frame_is_a_notification() {
+        let frame = event_frame(
+            7,
+            "diagnostics.changed",
+            3,
+            serde_json::json!({"generation": 9}),
+        );
+        assert_eq!(frame["method"], "host.event");
+        assert!(frame.get("id").is_none());
+        assert_eq!(frame["params"]["subscription_id"], 7);
+        assert_eq!(frame["params"]["event"], "diagnostics.changed");
+        assert_eq!(frame["params"]["sequence"], 3);
+        assert_eq!(frame["params"]["payload"]["generation"], 9);
+    }
+
+    #[test]
+    fn host_event_is_written_to_the_control_socket() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = std::env::temp_dir().join(format!(
+            "anvil-event-frame-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map(|time| time.as_nanos())
+                .unwrap_or_default()
+        ));
+        std::fs::create_dir_all(&dir).expect("temp dir");
+        let script = dir.join("host.sh");
+        std::fs::write(&script, "#!/bin/sh\nsleep 5\n").expect("script");
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).expect("chmod");
+        let session = HostSession::start_with_host(Path::new("."), &script, None, None, None)
+            .expect("start host");
+        let deadline = std::time::Instant::now() + Duration::from_secs(2);
+        let mut connection = loop {
+            match Connection::connect(&session.socket) {
+                Ok(connection) => break connection,
+                Err(_) => {
+                    assert!(
+                        std::time::Instant::now() < deadline,
+                        "host socket was not ready"
+                    );
+                    std::thread::sleep(Duration::from_millis(10));
+                }
+            }
+        };
+        connection
+            .set_read_timeout(Some(Duration::from_secs(2)))
+            .expect("timeout");
+        let ping = connection.recv().expect("read ping").expect("ping frame");
+        let ping: serde_json::Value = serde_json::from_slice(&ping).expect("ping json");
+        assert_eq!(ping["method"], "sys.ping");
+        let response = serde_json::to_vec(&serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": ping["id"].clone(),
+            "result": "pong",
+        }))
+        .expect("response");
+        connection.send(&response).expect("send pong");
+        assert!(session.event(
+            7,
+            "diagnostics.changed",
+            3,
+            serde_json::json!({ "generation": 9 }),
+        ));
+        let frame = connection.recv().expect("read event").expect("event frame");
+        let frame: serde_json::Value = serde_json::from_slice(&frame).expect("event json");
+        assert_eq!(frame["method"], "host.event");
+        assert!(frame.get("id").is_none());
+        assert_eq!(frame["params"]["subscription_id"], 7);
+        assert_eq!(frame["params"]["payload"]["generation"], 9);
+        drop(session);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn full_host_event_queue_drops_without_closing() {
+        let (events, receiver) = mpsc::sync_channel(1);
+        events.try_send(HostEvent::Pong).expect("prime queue");
+        assert!(send_host_result(&events, HostEvent::Ready));
+        drop(receiver);
+        assert!(!send_host_result(&events, HostEvent::Ready));
     }
 
     #[test]
@@ -742,7 +958,10 @@ mod tests {
         let args_path = PathBuf::from(format!("{}.args", script.display()));
         let deadline = std::time::Instant::now() + Duration::from_secs(2);
         let args = loop {
-            if let Ok(args) = std::fs::read_to_string(&args_path) {
+            if let Ok(args) = std::fs::read_to_string(&args_path)
+                && args.contains("--editor-socket")
+                && args.contains(editor_socket.to_string_lossy().as_ref())
+            {
                 break args;
             }
             assert!(
@@ -756,6 +975,50 @@ mod tests {
             args.contains(editor_socket.to_string_lossy().as_ref()),
             "{args}"
         );
+        drop(session);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn event_queue_rejects_overflow_without_blocking() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = std::env::temp_dir().join(format!(
+            "anvil-event-queue-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map(|time| time.as_nanos())
+                .unwrap_or_default()
+        ));
+        std::fs::create_dir_all(&dir).expect("temp dir");
+        let script = dir.join("host.sh");
+        std::fs::write(&script, "#!/bin/sh\nsleep 5\n").expect("script");
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).expect("chmod");
+        let session = HostSession::start_with_host(Path::new("."), &script, None, None, None)
+            .expect("start host");
+        let started = std::time::Instant::now();
+        for index in 0..MAX_QUEUED_EVENTS {
+            assert!(
+                session.event(
+                    index as u64,
+                    "diagnostics.changed",
+                    index as u64,
+                    serde_json::json!({ "generation": index }),
+                ),
+                "event {index} should fit"
+            );
+        }
+        assert!(
+            !session.event(
+                MAX_QUEUED_EVENTS as u64,
+                "diagnostics.changed",
+                MAX_QUEUED_EVENTS as u64,
+                serde_json::json!({}),
+            ),
+            "overflowing event should be rejected"
+        );
+        assert!(started.elapsed() < Duration::from_secs(1));
         drop(session);
         let _ = std::fs::remove_dir_all(dir);
     }
