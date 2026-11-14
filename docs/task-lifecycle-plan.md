@@ -150,6 +150,8 @@ Rules:
 
 ## 7. Shutdown Order
 
+### Phase 1 order
+
 ```text
 1. stop accepting new commands
 2. cancel TUI-dependent workers
@@ -157,12 +159,36 @@ Rules:
 4. close gateway client/socket
 5. stop plugin hosts
 6. join TaskGroup tasks with timeouts
-7. drop/stop GatewaySession (sole owner in phase 1)
+7. GatewaySession::stop (sole owner in phase 1)
 ```
 
-The gateway gets a graceful close first. If it does not exit within the
-timeout, the gateway owner escalates to process-group kill. The gateway's
-internal goroutines remain Go's responsibility.
+Phase 1 does not promise a graceful gateway shutdown. The current
+`GatewaySession::stop` path is:
+
+```text
+Child::kill
+Child::wait
+remove socket
+```
+
+It is immediate kill, not close-then-wait. The plan must not describe it as a
+graceful close until Slice 5 implements that behavior.
+
+### Target order after Slice 5
+
+```text
+1. stop accepting new commands
+2. cancel TUI-dependent workers
+3. cancel LSP/DAP/PTY/file workers
+4. close gateway client/socket and start graceful shutdown
+5. wait for gateway exit with a timeout
+6. kill the gateway process group if the timeout expires
+7. stop plugin hosts
+8. join TaskGroup tasks with timeouts
+```
+
+The graceful-close sequence, timeout, and kill fallback are required Slice 5
+work with their own tests. They are not assumed behavior of phase 1.
 
 ## 8. Gateway Boundary
 
@@ -183,9 +209,23 @@ GatewayExited
 GatewayFailed
 ```
 
-For the first slice, the TUI keeps `gateway_session: Option<GatewaySession>`
-and calls its existing stop path. A later ownership handoff must be a dedicated
-change, not a parallel ProcessTask.
+For phase 1, the TUI keeps `gateway_session: Option<GatewaySession>` and calls
+the existing `stop` path. That path currently kills immediately; no graceful
+close is claimed.
+
+Slice 5 adds:
+
+```text
+GatewaySession::shutdown_gracefully(timeout)
+  close client/socket
+  request/allow the Go process to exit
+  wait with timeout
+  kill + wait as fallback
+```
+
+`Drop` remains a kill-based safety net until the ownership handoff is complete.
+A later ownership handoff must be a dedicated change, not a parallel
+ProcessTask.
 
 ## 9. Failure and Restart
 
@@ -254,11 +294,22 @@ Acceptance:
 - request overflow policy;
 - restart with state notification.
 
-### Slice 5: gateway observation
+### Slice 5: gateway observation and graceful shutdown
 
 - add read-only gateway state;
 - use it from TaskGroup/UI;
-- do not transfer ownership yet.
+- implement `GatewaySession::shutdown_gracefully(timeout)`;
+- close the client/socket before waiting;
+- wait for exit, then kill and wait as fallback;
+- do not transfer Child ownership in this slice;
+- keep `Drop` as the kill-based safety net.
+
+Acceptance:
+
+- graceful exit within the timeout is observed and does not call kill;
+- timeout expiry falls back to kill and wait;
+- gateway socket is removed exactly once;
+- the gateway is stopped exactly once.
 
 ## 11. Tests
 
@@ -273,6 +324,9 @@ Acceptance:
 [ ] process task timeout kills its group
 [ ] unresponsive thread is reported as Leaked
 [ ] gateway is stopped exactly once
+[ ] gateway graceful close waits for exit before fallback
+[ ] gateway timeout fallback kills and waits
+[ ] gateway socket is removed exactly once
 [ ] a TaskGroup cannot spawn a second gateway owner
 ```
 
@@ -283,6 +337,8 @@ The slice is complete only when:
 - all task handles are owned;
 - no unbounded event `mpsc::channel` remains in the migrated path;
 - every task exposes a final state;
+- if graceful gateway shutdown is claimed, close/timeout/kill fallback is
+  implemented and tested, not only documented;
 - shutdown order and timeout are tested;
 - gateway has exactly one shutdown owner;
 - full workspace tests, clippy, and fmt pass.
