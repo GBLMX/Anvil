@@ -101,7 +101,7 @@ jobs:
             -out SHA256SUMS.sig
 
       - name: Attest build provenance
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: ${{ runner.temp }}/anvil-*-linux-x86_64.tar.gz
 
