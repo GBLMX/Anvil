@@ -154,6 +154,26 @@ Rules:
 - Limits: 4096 nodes, 16384 edges, 1 MiB response; truncation is explicit.
 - No file contents are returned; only path identity, label, and edges.
 
+### 4.6 Open file from the workspace
+
+```text
+workspace.open_file
+  request:  { root: string, path: string }
+  response: { opened: bool }
+```
+
+Rules:
+
+- `root` must identify an existing trusted workspace root.
+- `path` is workspace-relative; absolute paths, `..`, NUL bytes, and symlink
+  escapes are rejected. The core canonicalizes through the existing
+  workspace/file-worker path.
+- Only regular text/binary-previewable files are opened; the core uses its
+  existing open path, preview policy, and size limits. No shell or `sys.exec`.
+- The response is `opened: false` only when the core deliberately leaves the
+  current buffer unchanged; validation failures are typed RPC errors.
+- Capability: `workspace.open`.
+
 ## 5. Deliverable slices
 
 ### Slice 1: plugin event transport
@@ -203,10 +223,13 @@ command-line rows remain core-owned; invalid/oversized patches are rejected.
 ### Slice 6: dependency graph
 
 - Add the workspace-index graph provider and `workspace.get_dependencies`.
+- Add `workspace.open_file` with trusted-root confinement and the existing
+  open/preview/size policy.
 - Cache by root + generation; invalidate on workspace changes.
 
 Acceptance: nodes/edges stay inside the trusted root; a large workspace returns
-`truncated`; stale generations are rejected; no gateway RPC is added.
+`truncated`; stale generations are rejected; open-file rejects traversal,
+absolute paths, symlink escape, and untrusted roots; no gateway RPC is added.
 
 ### Slice 7: RTS multiple-cursor plugin
 
@@ -222,19 +245,23 @@ selections; cancel/undo have no side effects.
 
 ### Slice 8: Tactical Graph plugin
 
-- Fetch one bounded graph snapshot.
+- Fetch one bounded graph snapshot; nodes carry a trusted root and a
+  workspace-relative path.
 - Compute Fruchterman-Reingold layout in a Lua coroutine with an iteration cap.
 - Render sparse `●`/`─`/`│` cells through one overlay.
-- Mouse hover updates a small highlight; right-drag/scroll update view state;
-  Enter invokes an editor-owned open-file command.
+- Mouse hover updates a small highlight; right-drag/scroll update view state.
+- Enter calls `workspace.open_file` for the selected node. On success the core
+  opens it and the plugin removes the overlay; on a validation/open error the
+  overlay stays open and an error notification is shown.
 
 Acceptance: 80x24 overlay renders; graph remains responsive at the configured
-node cap; no per-frame full-screen payload; plugin stop removes the overlay.
+node cap; no per-frame full-screen payload; plugin stop removes the overlay;
+Enter never opens a path outside the node's trusted root.
 
 ## 6. Security and bounds
 
 - New capabilities: `editor.mouse_capture`, `ui.highlights`,
-  `ui.overlay`, `workspace.graph`.
+  `ui.overlay`, `workspace.graph`, `workspace.open`.
 - Capabilities are declared in the manifest and approved before activation.
 - Plugins cannot write status/command-line rows, raw ANSI, or outside overlay
   bounds.
@@ -256,6 +283,9 @@ node cap; no per-frame full-screen payload; plugin stop removes the overlay.
   rate limits.
 - Graph: trusted-root confinement, stale generation, node/edge truncation,
   response size.
+- Open file: relative path happy path, absolute path, `..`, symlink escape,
+  untrusted root, deleted file, and oversized/binary policy; no shell or
+  `sys.exec` path.
 - TUI smoke for both plugins; `cargo test --workspace`, clippy, fmt, plugin
   host smoke, and real gateway TUI smoke.
 - Performance: input-to-highlight latency, overlay patch frame cost, and no
@@ -267,6 +297,8 @@ node cap; no per-frame full-screen payload; plugin stop removes the overlay.
 - Both plugins work in a real TUI through the control/MCP-capable host.
 - Mouse capture, highlight, overlay, and selection limits have tests.
 - No new gateway dependency-analysis RPC exists.
+- `workspace.open_file` is confined to a trusted root and covered by
+  traversal, symlink, and policy tests.
 - No status/command-line spoofing or unbounded allocation is possible.
 - Normal editing, existing multi-cursor behavior, and plugin API 1.0.0 remain
   unchanged.
