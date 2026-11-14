@@ -57,6 +57,7 @@ Cross-cutting tracks that do not jump the queue:
 | [Internal polish](internal-polish-plan.md) | P0/P1 feature polish under frozen `0.6.0` | P0 and P1 landed; frozen |
 | [Task lifecycle](task-lifecycle-plan.md) | bounded background tasks, cancellation, shutdown | Slice 1 core in `anvil-task`; `TaskWorker`, `FileWorker`, `LspWorker` migrated |
 | [0.6.0.x provider protocols](0.6.0.x-provider-protocol-plan.md) | picker/completion/formatter/test/DAP provider boundaries under frozen `0.6.0` | 0.6.0.1–0.6.0.7 landed |
+| [Plugin mouse/canvas](plugin-mouse-canvas-plan.md) | scoped mouse capture, highlights, multi-selection, sparse overlays, dependency graph | proposed; API 1.1.0 |
 | [TUI design](tui-design.md) | visual tokens, layout, interaction rhythm, page boundaries | applied to start/settings/debug chrome |
 | [Small features](small-features-plan.md) | Vim-like motions, operators, registers, visual/display polish | proposed |
 | [External integration](external-integration-plan.md) | `$EDITOR`, stdin, pipe locations, control socket, MCP adapter | 1a/1b/2/3, control v3, and MCP landed |
