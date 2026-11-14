@@ -92,6 +92,15 @@ pub(crate) fn rect(area: ratatui::layout::Rect) -> ratatui::layout::Rect {
     }
 }
 
+fn list_start(selected: usize, len: usize, visible: usize) -> usize {
+    if len == 0 || visible == 0 {
+        return 0;
+    }
+    selected
+        .saturating_sub(visible.saturating_sub(1))
+        .min(len.saturating_sub(visible))
+}
+
 pub(crate) fn render(model: &Model, frame: &mut ratatui::Frame, area: ratatui::layout::Rect) {
     let Some(browser) = &model.overlays.theme_browser else {
         return;
@@ -112,8 +121,10 @@ pub(crate) fn render(model: &Model, frame: &mut ratatui::Frame, area: ratatui::l
         width: popup.width.saturating_sub(left_width + gap),
         ..popup
     };
-    let mut rows = Vec::new();
-    for (index, name) in names.iter().enumerate() {
+    let visible = usize::from(left.height.saturating_sub(2)).max(1);
+    let start = list_start(browser.selected, names.len(), visible);
+    let mut rows = Vec::with_capacity(visible.min(names.len()));
+    for (index, name) in names.iter().enumerate().skip(start).take(visible) {
         let style = if index == browser.selected {
             theme::selected()
         } else {
@@ -181,6 +192,40 @@ mod tests {
         model.move_theme_browser(1);
         model.apply_theme_browser();
         assert_ne!(theme::name(), "anvil-dark");
+        theme::set_startup_theme("anvil-dark").expect("reset");
+    }
+
+    #[test]
+    fn theme_list_scrolls_to_selection() {
+        assert_eq!(list_start(0, 25, 20), 0);
+        assert_eq!(list_start(19, 25, 20), 0);
+        assert_eq!(list_start(20, 25, 20), 1);
+        assert_eq!(list_start(24, 25, 20), 5);
+    }
+
+    #[test]
+    fn theme_browser_renders_the_selected_tail() {
+        theme::set_startup_theme("anvil-dark").expect("reset");
+        let mut model = Model::new(EditorState::from_text("x"), None);
+        model.open_theme_browser();
+        model.move_theme_browser(theme::names().len() as isize);
+        let last = *theme::names().last().expect("theme");
+        let mut terminal =
+            ratatui::Terminal::new(ratatui::backend::TestBackend::new(120, 40)).expect("terminal");
+        terminal
+            .draw(|frame| crate::view(&model, frame))
+            .expect("draw");
+        let rendered = terminal
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .map(|cell| cell.symbol())
+            .collect::<String>();
+        assert!(
+            rendered.contains(last),
+            "{last} was clipped from the theme list"
+        );
         theme::set_startup_theme("anvil-dark").expect("reset");
     }
 }
