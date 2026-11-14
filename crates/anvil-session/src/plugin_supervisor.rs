@@ -8,7 +8,7 @@ use anvil_api::ApiError;
 use anvil_ipc::GatewayClient;
 use std::collections::{HashMap, VecDeque};
 use std::path::Path;
-use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::mpsc::{self, Receiver, SyncSender};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -18,6 +18,11 @@ pub(crate) const IDLE_TIMEOUT: Duration = Duration::from_secs(60);
 const MAX_RUNNING_HOSTS: usize = 8;
 const MAX_QUEUED_STARTS: usize = 8;
 const MAX_PENDING_CALLS: usize = 32;
+
+/// Editor RPC requests the UI thread may have queued before the endpoint
+/// answers new ones with "queue full" instead of growing without bound.
+const MAX_QUEUED_EDITOR_REQUESTS: usize = 16;
+
 const MAX_FAILURES: usize = 3;
 const FAILURE_WINDOW: Duration = Duration::from_secs(60);
 
@@ -278,7 +283,7 @@ pub struct PluginSupervisor {
     launcher: Box<dyn HostLauncher>,
     entries: HashMap<String, PluginEntry>,
     pending_starts: VecDeque<PendingStart>,
-    editor_tx: Sender<EditorRequest>,
+    editor_tx: SyncSender<EditorRequest>,
     editor_service: Option<EditorService>,
     editor_requests: Receiver<EditorRequest>,
     editor_identities: Arc<Mutex<HashMap<[u8; 32], String>>>,
@@ -293,7 +298,7 @@ impl Default for PluginSupervisor {
 
 impl PluginSupervisor {
     pub fn new() -> Self {
-        let (editor_tx, editor_requests) = mpsc::channel();
+        let (editor_tx, editor_requests) = mpsc::sync_channel(MAX_QUEUED_EDITOR_REQUESTS);
         Self {
             launcher: Box::new(SystemLauncher),
             editor_identities: Arc::new(Mutex::new(HashMap::new())),
@@ -308,7 +313,7 @@ impl PluginSupervisor {
 
     #[cfg(test)]
     fn with_launcher(launcher: Box<dyn HostLauncher>) -> Self {
-        let (editor_tx, editor_requests) = mpsc::channel();
+        let (editor_tx, editor_requests) = mpsc::sync_channel(MAX_QUEUED_EDITOR_REQUESTS);
         Self {
             launcher,
             editor_identities: Arc::new(Mutex::new(HashMap::new())),

@@ -420,7 +420,7 @@ impl Model {
     pub(crate) fn install_plugin_completion(
         &mut self,
         provider_id: &ProviderId,
-        request_id: u64,
+
         items: Vec<ProviderItem>,
     ) {
         let items = items
@@ -441,7 +441,7 @@ impl Model {
                 )
             })
             .collect::<Vec<_>>();
-        self.install_completion(items, request_id);
+        self.install_completion(items);
     }
 
     #[cfg(target_os = "linux")]
@@ -665,7 +665,6 @@ impl Model {
                                             if let Some(provider_id) = provider_id.as_ref() {
                                                 self.install_plugin_completion(
                                                     provider_id,
-                                                    id,
                                                     items.clone(),
                                                 );
                                             }

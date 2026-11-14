@@ -5,6 +5,10 @@ use std::{collections::HashMap, fmt, ops::Range, sync::Arc};
 use anvil_api::{EditorView, InteractionMode, Selection, TextPosition, Viewport};
 use anvil_core::{LineIndex, TextBuffer, TextDocument};
 
+pub mod comment;
+pub mod search;
+pub mod snippet;
+
 /// Default viewport until the TUI supplies the terminal size.
 /// One frontend-neutral macro step.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -944,6 +948,14 @@ mod tests {
         let mut state = EditorState::from_text("abcdef");
         assert!(!state.apply_transaction(vec![(0..4, "x".to_owned()), (3..6, "y".to_owned())]));
         assert_eq!(state.text().slice(0..6), "abcdef");
+        assert_eq!(state.undo_depth(), 0);
+    }
+
+    #[test]
+    fn transaction_rejects_non_boundary_ranges() {
+        let mut state = EditorState::from_text("安装");
+        assert!(!state.apply_transaction(vec![(1..4, "x".to_owned())]));
+        assert_eq!(state.text().slice(0..6), "安装");
         assert_eq!(state.undo_depth(), 0);
     }
 

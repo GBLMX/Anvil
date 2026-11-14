@@ -247,6 +247,24 @@ mod tests {
     }
 
     #[test]
+    fn non_boundary_transaction_is_rejected_without_mutation() {
+        let mut model = Model::new(EditorState::from_text("安装"), None);
+        let snapshot = model.plugin_snapshot();
+        let request = ApplyEditRequest {
+            buffer_id: snapshot.buffer_id,
+            base_revision: snapshot.revision,
+            edits: vec![DocumentEdit {
+                range: TextRange { start: 1, end: 4 },
+                text: "X".to_owned(),
+            }],
+        };
+        assert!(model.apply_plugin_edit(request).is_err());
+        assert_eq!(model.session.editor.text().slice(0..6), "安装");
+        assert_eq!(model.plugin_snapshot().revision, snapshot.revision);
+        assert!(model.status.text.contains("invalid edit"));
+    }
+
+    #[test]
     fn wrong_buffer_is_rejected() {
         let mut model = Model::new(EditorState::from_text("abcd"), None);
         let snapshot = model.plugin_snapshot();
@@ -487,7 +505,6 @@ mod tests {
         let mut model = Model::new(EditorState::from_text("buf"), None);
         model.install_plugin_completion(
             &anvil_session::provider::ProviderId::new("demo.completion"),
-            7,
             vec![anvil_api::ProviderItem {
                 label: "buffer".to_owned(),
                 value: None,
@@ -501,7 +518,7 @@ mod tests {
             .completion
             .as_ref()
             .expect("completion");
-        assert_eq!(completion.id, 7);
+
         assert_eq!(completion.items[0].label, "buffer");
         assert_eq!(completion.items[0].insert, "buffer");
     }

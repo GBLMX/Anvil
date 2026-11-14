@@ -25,7 +25,7 @@ impl Model {
         let local = self.local_completion_items();
         let had_local = !local.is_empty();
         if had_local {
-            self.install_completion(local, 0);
+            self.install_completion(local);
             self.status.text = "completion".to_owned();
         }
         let Some(uri) = self
@@ -177,7 +177,7 @@ impl Model {
         let Some(mut session) = self.overlays.lsp_results.snippet.take() else {
             return false;
         };
-        if session.next().is_some() {
+        if session.next_stop().is_some() {
             let ranges = session.mirror_ranges();
             self.overlays.lsp_results.snippet = Some(session);
             self.select_snippet_groups(ranges);

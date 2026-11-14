@@ -10,6 +10,8 @@ repository.workspace = true
 [dependencies]
 anvil-api = { path = "../anvil-api", version = "0.6.0" }
 anvil-core = { path = "../anvil-core", version = "0.6.0" }
+regex = "1"
+unicode-segmentation = "1"
 
 [dev-dependencies]
 criterion = "0.8"

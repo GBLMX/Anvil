@@ -1,8 +1,8 @@
 # ADR-0024: TUI State Composition and Domain Boundaries
 
-- Status: Partially implemented; remaining state/page extraction deferred
+- Status: Partially implemented; primitive extraction in ADR-0041; remaining state/page extraction deferred
 - Date: 2026-11-12
-- Related: [ADR-0013](0013-kernel-distribution-boundary.md), [ADR-0016](0016-render-style-layers.md), [ADR-0022](0022-core-editing-completion.md), [ADR-0023](0023-internal-capability-closure.md)
+- Related: [ADR-0013](0013-kernel-distribution-boundary.md), [ADR-0016](0016-render-style-layers.md), [ADR-0022](0022-core-editing-completion.md), [ADR-0023](0023-internal-capability-closure.md), [ADR-0041](0041-tui-primitive-extraction.md)
 
 ## Context
 
@@ -303,6 +303,32 @@ Phase 1 started on 2026-11-12:
 - Existing behavior is unchanged; tests access the composed state explicitly.
 - `Model` now has 23 top-level fields, each a state group rather than a
   feature field.
+
+## Implementation correction (2026-11-14)
+
+Do not mechanically move every `impl Model` method into a page/state type.
+The current tree has 66 `impl Model` blocks and 555 methods. A field-reach
+classification found:
+
+- 168 methods touch at most one top-level state group;
+- 387 methods touch more than one group.
+
+The second set is cross-domain orchestration, not page-local state. For
+example, `apply_settings` updates `config`, `search`, `overlays`, `status`, and
+`file`, and applies theme state. Moving it to `impl SettingsOverlayState` would
+require new accessors or a forwarding shim for every field.
+
+Rules for the next slice:
+
+1. Move only methods that read/write one state group and do not call
+   cross-domain helpers.
+2. Keep cross-domain methods on `Model`, or move them to a controller with an
+   explicit borrowed context such as
+   `SettingsContext<'a> { config, search, overlays, status, file }`.
+3. Move page renderers only when their inputs are named view/state fields; do
+   not pass `&Model` through a renamed wrapper.
+4. Do not extract a crate until the target type has no `impl Model` dependency
+   and no cross-domain method.
 
 
 ## Acceptance

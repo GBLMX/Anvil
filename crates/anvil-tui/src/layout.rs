@@ -549,6 +549,15 @@ impl Model {
         let text = self.session.editor.text();
         let visible = self.visible_rows(self.view.scroll, usize::from(height));
         let current = self.current_line();
+        let selections = self.session.editor.selection_bytes();
+        let cursor_range = {
+            let head = self.session.cursor;
+            self.session
+                .editor
+                .next_grapheme_boundary(head)
+                .filter(|end| *end > head)
+                .map(|end| (head, end))
+        };
 
         let diagnostic_lines = self.diagnostic_lines();
         let bracket_pair = self.bracket_pair();
@@ -631,6 +640,22 @@ impl Model {
                 }
             };
             let mut spans = Vec::new();
+            let mut selection_ranges = selections
+                .iter()
+                .filter_map(|&(anchor, head)| {
+                    let range_start = anchor.min(head);
+                    let range_end = anchor.max(head);
+                    (range_start < range_end
+                        && range_start < render_end
+                        && range_end > render_start)
+                        .then_some((range_start.max(render_start), range_end.min(render_end)))
+                })
+                .collect::<Vec<_>>();
+            selection_ranges.sort_unstable_by_key(|range| range.0);
+            let line_cursor = cursor_range.and_then(|(start, end)| {
+                (start >= render_start && start < render_end)
+                    .then_some((start, end.min(render_end)))
+            });
             let mut base = render_start;
             let search_ranges: Vec<(usize, usize)> = self
                 .search
@@ -658,6 +683,13 @@ impl Model {
                 push_syntax_spans(&mut spans, chunk, base, highlights);
                 base += chunk.len();
             }
+            if !selection_ranges.is_empty() {
+                crate::render::apply_selection_highlights(
+                    &mut spans,
+                    render_start,
+                    &selection_ranges,
+                );
+            }
             if !semantic_ranges.is_empty() {
                 apply_semantic_tokens(&mut spans, render_start, &semantic_ranges);
             }
@@ -674,6 +706,9 @@ impl Model {
                     &search_ranges,
                     self.session.cursor,
                 );
+            }
+            if let Some(range) = line_cursor {
+                crate::render::apply_cursor_highlight(&mut spans, render_start, range);
             }
             if spans.is_empty() {
                 spans.push(Span::raw(""));

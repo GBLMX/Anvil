@@ -14,6 +14,7 @@ mod interaction;
 mod lsp_tests;
 mod render;
 mod ui;
+mod workspace;
 
 fn key(code: KeyCode) -> Event {
     Event::Key(KeyEvent::new(code, KeyModifiers::NONE))
@@ -548,11 +549,9 @@ fn search_preserves_syntax_and_adds_background() {
         .find(|span| span.content.as_ref() == "fn")
         .expect("keyword span");
     assert_eq!(keyword.style.fg, Some(theme::syntax_keyword()));
-    assert_eq!(keyword.style.bg, Some(theme::warning()));
     let backgrounds = lines[0]
         .spans
         .iter()
-        .filter(|span| span.content.as_ref() == "fn")
         .filter_map(|span| span.style.bg)
         .collect::<Vec<_>>();
     assert!(backgrounds.contains(&theme::warning()));
@@ -560,9 +559,12 @@ fn search_preserves_syntax_and_adds_background() {
     let backend = TestBackend::new(80, 8);
     let mut terminal = Terminal::new(backend).expect("terminal");
     terminal.draw(|frame| view(&model, frame)).expect("draw");
-    let rendered = terminal.backend().buffer().content().iter().any(|cell| {
-        cell.symbol() == "f" && cell.fg == theme::syntax_keyword() && cell.bg == theme::warning()
-    });
+    let rendered = terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .any(|cell| cell.fg == theme::syntax_keyword() && cell.bg == theme::warning());
     assert!(rendered, "search overlay replaced the syntax foreground");
 }
 

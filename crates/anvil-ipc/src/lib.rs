@@ -12,7 +12,7 @@ use std::{
         net::{UnixListener, UnixStream},
     },
     path::{Path, PathBuf},
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 mod envelope;
@@ -32,6 +32,8 @@ pub enum FrameError {
     TruncatedBody,
     /// The header declared a body larger than [`MAX_FRAME_LEN`].
     TooLarge(u32),
+    /// The frame did not arrive before the caller-provided deadline.
+    Timeout,
     /// The underlying stream failed.
     Io(io::ErrorKind),
     /// A zero-length body is not a valid JSON-RPC frame.
@@ -44,6 +46,7 @@ impl std::fmt::Display for FrameError {
             Self::TruncatedHeader => write!(formatter, "truncated frame header"),
             Self::TruncatedBody => write!(formatter, "truncated frame body"),
             Self::Io(kind) => write!(formatter, "frame I/O failed: {kind:?}"),
+            Self::Timeout => write!(formatter, "frame deadline exceeded"),
             Self::TooLarge(length) => write!(formatter, "frame length {length} exceeds maximum"),
             Self::Empty => write!(formatter, "empty frame"),
         }
@@ -190,6 +193,63 @@ impl Connection {
         read_frame(&mut self.stream)
     }
 
+    /// Receive one frame with an absolute whole-frame deadline.
+    pub fn recv_deadline(&mut self, deadline: Instant) -> Result<Option<Vec<u8>>, FrameError> {
+        let mut header = [0u8; 4];
+        let mut read = 0;
+        while read < header.len() {
+            self.arm_read_deadline(deadline)?;
+            match self.stream.read(&mut header[read..]) {
+                Ok(0) if read == 0 => return Ok(None),
+                Ok(0) => return Err(FrameError::TruncatedHeader),
+                Ok(count) => read += count,
+                Err(error) if error.kind() == io::ErrorKind::Interrupted => {}
+                Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
+                    if Instant::now() >= deadline {
+                        return Err(FrameError::Timeout);
+                    }
+                }
+                Err(error) => return Err(io_error(error)),
+            }
+        }
+        let length = u32::from_be_bytes(header);
+        if length == 0 {
+            return Err(FrameError::Empty);
+        }
+        if length > MAX_FRAME_LEN {
+            return Err(FrameError::TooLarge(length));
+        }
+        let mut body = vec![0u8; length as usize];
+        let mut read = 0;
+        while read < body.len() {
+            self.arm_read_deadline(deadline)?;
+            match self.stream.read(&mut body[read..]) {
+                Ok(0) => return Err(FrameError::TruncatedBody),
+                Ok(count) => read += count,
+                Err(error) if error.kind() == io::ErrorKind::Interrupted => {}
+                Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
+                    if Instant::now() >= deadline {
+                        return Err(FrameError::Timeout);
+                    }
+                }
+                Err(error) => return Err(io_error(error)),
+            }
+        }
+        Ok(Some(body))
+    }
+
+    fn arm_read_deadline(&self, deadline: Instant) -> Result<(), FrameError> {
+        let remaining = deadline
+            .checked_duration_since(Instant::now())
+            .ok_or(FrameError::Timeout)?;
+        if remaining.is_zero() {
+            return Err(FrameError::Timeout);
+        }
+        self.stream
+            .set_read_timeout(Some(remaining))
+            .map_err(io_error)
+    }
+
     /// Clone the underlying stream for an interrupt/shutdown watchdog.
     pub fn try_clone_stream(&self) -> io::Result<UnixStream> {
         self.stream.try_clone()
@@ -197,6 +257,11 @@ impl Connection {
     /// Set the read timeout for subsequent `recv` calls.
     pub fn set_read_timeout(&self, timeout: Option<Duration>) -> io::Result<()> {
         self.stream.set_read_timeout(timeout)
+    }
+
+    /// Set the write timeout for subsequent `send` calls.
+    pub fn set_write_timeout(&self, timeout: Option<Duration>) -> io::Result<()> {
+        self.stream.set_write_timeout(timeout)
     }
 
     /// Wait until a complete frame may be readable.
@@ -265,6 +330,17 @@ mod tests {
             read_frame(&mut header),
             Err(FrameError::TooLarge(oversized))
         );
+    }
+
+    #[test]
+    fn recv_deadline_rejects_dribbled_header() {
+        let (client, mut peer) = UnixStream::pair().expect("pair");
+        let mut connection = Connection { stream: client };
+        peer.write_all(&[0]).expect("partial header");
+        let started = std::time::Instant::now();
+        let result = connection.recv_deadline(started + Duration::from_millis(50));
+        assert_eq!(result, Err(FrameError::Timeout));
+        assert!(started.elapsed() < Duration::from_secs(1));
     }
 
     #[test]

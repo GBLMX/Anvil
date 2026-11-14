@@ -108,6 +108,8 @@ dependencies = [
  "anvil-api",
  "anvil-core",
  "criterion",
+ "regex",
+ "unicode-segmentation",
 ]
 
 [[package]]
@@ -276,6 +278,7 @@ dependencies = [
  "anvil-syntax",
  "anvil-task",
  "anvil-tui-kit",
+ "anvil-tui-theme",
  "anvil-workspace",
  "crossterm",
  "nix 0.31.3",
@@ -296,6 +299,16 @@ version = "0.6.0"
 dependencies = [
  "crossterm",
  "ratatui",
+]
+
+[[package]]
+name = "anvil-tui-theme"
+version = "0.6.0"
+dependencies = [
+ "ratatui",
+ "serde",
+ "tempfile",
+ "toml_edit",
 ]
 
 [[package]]

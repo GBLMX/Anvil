@@ -95,6 +95,17 @@ impl Model {
             .unwrap_or_else(|| self.workspace.path.clone())
     }
 
+    fn status_file_icon(&self) -> Option<String> {
+        let path = self.session.path.as_ref()?;
+        let name = path.file_name()?.to_string_lossy();
+        let icon =
+            crate::icon_theme::icon_for(&name).unwrap_or_else(crate::icon_theme::default_file_icon);
+        self.appearance
+            .icons
+            .icon_text(icon, self.appearance.ascii_icons)
+            .map(|text| text.trim_end().to_owned())
+    }
+
     pub(crate) fn status_text(&self, width: usize) -> String {
         let width = width.max(1);
         if width == 1 {
@@ -104,12 +115,26 @@ impl Model {
         if !self.status.text.is_empty() {
             segments.push(self.status.text.clone());
         }
-        segments.push(middle_ellipsis(
+        let icon = self.status_file_icon();
+        let icon_width = icon.as_deref().map(UnicodeWidthStr::width).unwrap_or(0);
+        let path = middle_ellipsis(
             &self.relative_path_text(),
-            width.saturating_sub(3).min(32),
-        ));
+            width
+                .saturating_sub(3 + icon_width + usize::from(icon.is_some()))
+                .min(32),
+        );
+        segments.push(match icon {
+            Some(icon) => format!("{icon} {path}"),
+            None => path,
+        });
         if self.file.modified {
             segments.push("●".to_owned());
+        }
+        if self.file.missing {
+            segments.push("missing".to_owned());
+        }
+        if self.file.read_only {
+            segments.push("RO".to_owned());
         }
         if let Some(branch) = self
             .git

@@ -17,7 +17,7 @@ Checked in order:
 
 A missing file keeps the default keymap. `ANVIL_KEYMAP` is intended for an
 explicit path and for tests. `ANVIL_KEYMAP_PRESET` selects a bundled preset by
-name (`ergo` or `vim`).
+name (`ergo`, `vim`, or `helix`).
 
 ## Format
 
@@ -63,11 +63,13 @@ popup/modal built-ins consume first and do not fall back to global bindings.
 
 ## Presets
 
-Two bundled presets are available:
+Three bundled presets are available:
 
 - `anvil-ergo.toml` (`ergo`, also `default`): the ergonomic Space leader with
   `Space 1/2/3` and the compatibility aliases.
 - `anvil-vim.toml` (`vim`): explicit Vim-style normal bindings.
+- `anvil-helix.toml` (`helix`): adds `Space h` references, `Space k` hover,
+  `Space c` line comments, and `Space ?` command palette.
 
 Bundled presets do not bind F1–F12. A keymap file selects a preset with the
 top-level `preset` key and can override any of its bindings in the normal,
@@ -142,6 +144,8 @@ cursor.up
 editor.change_inner_word
 editor.change_inner_quote
 lsp.definition
+lsp.hover
+editor.toggle_comment
 navigation.change_back
 navigation.change_forward
 diagnostics.next

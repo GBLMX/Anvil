@@ -18,6 +18,46 @@ fn space_leader_focuses_editor_and_tree() {
 }
 
 #[test]
+fn helix_preset_space_c_toggles_comment() {
+    let mut model = Model::new(
+        EditorState::from_text("one\n"),
+        Some(PathBuf::from("test.rs")),
+    );
+    model.config.keymap = crate::keymap::KeymapConfig::from_preset("helix").expect("helix preset");
+    for key_code in [KeyCode::Char(' '), KeyCode::Char('c')] {
+        handle_event(&mut model, key(key_code));
+    }
+    assert_eq!(model.session.editor.text().slice(0..6), "// one");
+}
+
+#[test]
+fn helix_preset_space_question_opens_palette() {
+    let mut model = Model::new(EditorState::from_text("alpha"), None);
+    model.config.keymap = crate::keymap::KeymapConfig::from_preset("helix").expect("helix preset");
+    for key_code in [KeyCode::Char(' '), KeyCode::Char('?')] {
+        handle_event(&mut model, key(key_code));
+    }
+    assert!(model.overlays.command_palette.is_some());
+}
+
+#[test]
+fn helix_preset_space_h_and_k_dispatch_lsp_requests() {
+    let mut model = Model::new(
+        EditorState::from_text("alpha"),
+        Some(PathBuf::from("test.rs")),
+    );
+    model.config.keymap = crate::keymap::KeymapConfig::from_preset("helix").expect("helix preset");
+    for key_code in [KeyCode::Char(' '), KeyCode::Char('k')] {
+        handle_event(&mut model, key(key_code));
+    }
+    assert!(model.status.text.contains("lsp is not running"));
+    for key_code in [KeyCode::Char(' '), KeyCode::Char('h')] {
+        handle_event(&mut model, key(key_code));
+    }
+    assert!(model.status.text.contains("lsp is not running"));
+}
+
+#[test]
 fn space_leader_expires_without_consuming_next_key() {
     let mut model = Model::new(EditorState::from_text("alpha\nbeta"), None);
     handle_event(&mut model, key(KeyCode::Char(' ')));

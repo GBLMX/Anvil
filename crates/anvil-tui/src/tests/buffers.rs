@@ -739,6 +739,59 @@ fn buffer_bar_shows_dirty_missing_and_read_only_states() {
 }
 
 #[test]
+fn buffer_bar_shows_file_type_icons() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let rust = dir.path().join("first.rs");
+    let text = dir.path().join("second.txt");
+    fs::write(&rust, "fn main() {}").expect("write rust");
+    fs::write(&text, "text").expect("write text");
+    let mut model = Model::open(&rust).expect("open rust");
+    model.open_path(&text).expect("open text");
+    model.appearance.ascii_icons = true;
+
+    let backend = TestBackend::new(80, 12);
+    let mut terminal = Terminal::new(backend).expect("terminal");
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+    let rendered = terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect::<String>();
+    assert!(rendered.contains("[rs] first.rs"), "{rendered}");
+    assert!(rendered.contains("[ ] second.txt"), "{rendered}");
+}
+
+#[test]
+fn buffer_picker_shows_file_type_icons() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let rust = dir.path().join("first.rs");
+    let text = dir.path().join("second.txt");
+    fs::write(&rust, "fn main() {}").expect("write rust");
+    fs::write(&text, "text").expect("write text");
+    let mut model = Model::open(&rust).expect("open rust");
+    model.open_path(&text).expect("open text");
+    model.appearance.ascii_icons = true;
+    model.open_buffer_picker();
+
+    let backend = TestBackend::new(80, 20);
+    let mut terminal = Terminal::new(backend).expect("terminal");
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+    let rendered = terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect::<String>();
+    assert!(rendered.contains("[rs]"), "{rendered}");
+    assert!(rendered.contains("[ ]"), "{rendered}");
+    assert!(rendered.contains("first.rs"), "{rendered}");
+    assert!(rendered.contains("second.txt"), "{rendered}");
+}
+
+#[test]
 fn buffer_bar_scrolls_to_many_buffers() {
     let dir = tempfile::tempdir().expect("tempdir");
     let mut model: Option<Model> = None;

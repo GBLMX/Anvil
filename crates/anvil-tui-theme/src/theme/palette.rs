@@ -54,7 +54,7 @@ macro_rules! boxpigma_theme {
 }
 
 impl Theme {
-    pub(crate) const ANVIL_DARK: Self = Self {
+    pub const ANVIL_DARK: Self = Self {
         name: "anvil-dark",
         bg: Color::Rgb(13, 17, 23),
         surface: Color::Rgb(22, 27, 34),
@@ -90,7 +90,7 @@ impl Theme {
         status_modes: [None; 7],
     };
 
-    pub(crate) const TOKYO_NIGHT: Self = Self {
+    pub const TOKYO_NIGHT: Self = Self {
         name: "tokyonight",
         bg: Color::Rgb(26, 27, 38),
         surface: Color::Rgb(31, 35, 53),
@@ -126,7 +126,7 @@ impl Theme {
         status_modes: [None; 7],
     };
 
-    pub(crate) const OMP_KDE: Self = Self {
+    pub const OMP_KDE: Self = Self {
         name: "omp-kde",
         bg: Color::Rgb(22, 25, 37),
         surface: Color::Rgb(30, 34, 51),
@@ -163,7 +163,7 @@ impl Theme {
     };
 
     /// Imported from boxpigma's built-in `cyberpunk-volt` palette.
-    pub(crate) const CYBERPUNK_VOLT: Self = Self {
+    pub const CYBERPUNK_VOLT: Self = Self {
         name: "cyberpunk-volt",
         bg: Color::Rgb(8, 12, 20),
         surface: Color::Rgb(17, 24, 39),
@@ -199,7 +199,7 @@ impl Theme {
         status_modes: [None; 7],
     };
 
-    pub(crate) const HELIX_BASE16: Self = Self {
+    pub const HELIX_BASE16: Self = Self {
         name: "helix-base16",
         bg: Color::Rgb(24, 24, 24),
         surface: Color::Rgb(40, 40, 40),
@@ -235,7 +235,7 @@ impl Theme {
         status_modes: [None; 7],
     };
 
-    pub(crate) const ONE_DARK: Self = Self {
+    pub const ONE_DARK: Self = Self {
         name: "one-dark",
         bg: Color::Rgb(40, 44, 52),
         surface: Color::Rgb(33, 37, 43),
@@ -271,7 +271,7 @@ impl Theme {
         status_modes: [None; 7],
     };
 
-    pub(crate) const SOLARIZED_LIGHT: Self = Self {
+    pub const SOLARIZED_LIGHT: Self = Self {
         name: "solarized-light",
         bg: Color::Rgb(253, 246, 227),
         surface: Color::Rgb(238, 232, 213),
@@ -307,7 +307,7 @@ impl Theme {
         status_modes: [None; 7],
     };
 
-    pub(crate) const GRUVBOX_DARK: Self = Self {
+    pub const GRUVBOX_DARK: Self = Self {
         name: "gruvbox-dark",
         bg: Color::Rgb(40, 40, 40),
         surface: Color::Rgb(50, 48, 47),
@@ -343,7 +343,7 @@ impl Theme {
         status_modes: [None; 7],
     };
 
-    pub(crate) const NORD: Self = Self {
+    pub const NORD: Self = Self {
         name: "nord",
         bg: Color::Rgb(46, 52, 64),
         surface: Color::Rgb(59, 66, 82),
@@ -379,7 +379,7 @@ impl Theme {
         status_modes: [None; 7],
     };
 
-    pub(crate) const CATPPUCCIN_MOCHA: Self = Self {
+    pub const CATPPUCCIN_MOCHA: Self = Self {
         name: "catppuccin-mocha",
         bg: Color::Rgb(30, 30, 46),
         surface: Color::Rgb(24, 24, 37),
@@ -416,7 +416,7 @@ impl Theme {
     };
 }
 
-pub(crate) const BUILTINS: &[Theme] = &[
+pub const BUILTINS: &[Theme] = &[
     Theme::ANVIL_DARK,
     Theme::TOKYO_NIGHT,
     Theme::CYBERPUNK_VOLT,

@@ -56,6 +56,7 @@ pub(super) fn execute_pending_command(
         PendingCommand::TypeDefinition => model.queue_effect(Effect::LspTypeDefinition),
         PendingCommand::Implementation => model.queue_effect(Effect::LspImplementation),
         PendingCommand::References => model.queue_effect(Effect::LspReferences),
+        PendingCommand::Hover => model.queue_effect(Effect::LspHover),
         PendingCommand::DocumentHighlight => {
             model.queue_effect(Effect::LspDocumentHighlights);
         }
@@ -131,6 +132,7 @@ pub(super) fn execute_pending_command(
             let _ = model.take_count();
             model.queue_effect(Effect::LspFormat);
         }
+        PendingCommand::ToggleComment => model.toggle_comment(),
         PendingCommand::ChangeWord(motion) => {
             let _ = model.take_count();
             model.change_word(motion);

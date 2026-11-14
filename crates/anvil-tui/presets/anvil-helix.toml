@@ -1,0 +1,10 @@
+# Optional Helix-compatible Space leader.
+#
+# Built-in motions, operators, and existing Space bindings remain available.
+# This preset only adds the Helix aliases whose commands are implemented.
+
+[keymap.pending." "]
+h = "lsp.references"
+k = "lsp.hover"
+c = "editor.toggle_comment"
+"?" = "command_palette.open"

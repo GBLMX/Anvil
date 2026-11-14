@@ -513,6 +513,145 @@ fn status_bar_renders_path_diagnostics_and_position() {
 }
 
 #[test]
+fn status_bar_shows_file_icon_and_read_only() {
+    let mut model = Model::new(EditorState::from_text("x"), None);
+    model.start_page.welcome = false;
+    model.workspace.path = PathBuf::from("/ws");
+    model.session.path = Some(PathBuf::from("/ws/src/main.rs"));
+    model.appearance.ascii_icons = true;
+    model.set_read_only(true);
+
+    let backend = TestBackend::new(80, 20);
+    let mut terminal = Terminal::new(backend).expect("terminal");
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+    let rendered = terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect::<String>();
+    assert!(rendered.contains("[rs] src/main.rs"), "{rendered}");
+    assert!(rendered.contains("RO"), "{rendered}");
+}
+
+#[test]
+fn character_selection_renders_background_and_cursor_block() {
+    let text = "vscode-css-language-server, and/or";
+    let mut model = Model::new(EditorState::from_text(text), None);
+    model.start_page.welcome = false;
+    assert!(model.session.editor.set_selection_bytes(0, 26));
+    model.session.cursor = 26;
+
+    let backend = TestBackend::new(80, 8);
+    let mut terminal = Terminal::new(backend).expect("terminal");
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+    let cells = terminal.backend().buffer().content();
+    assert!(
+        cells
+            .iter()
+            .any(|cell| cell.symbol() == "v" && cell.bg == theme::selection()),
+        "selected text missing selection background"
+    );
+    assert!(
+        cells
+            .iter()
+            .any(|cell| cell.symbol() == "," && cell.bg == theme::warning()),
+        "cursor head missing block highlight"
+    );
+    assert!(
+        cells
+            .iter()
+            .any(|cell| cell.symbol() == "│" && cell.fg == theme::warning()),
+        "primary selection anchor missing"
+    );
+}
+
+#[test]
+fn completion_popup_shows_kind_docs_and_footer() {
+    let mut model = Model::new(EditorState::from_text("pr"), None);
+    model.start_page.welcome = false;
+    model.overlays.lsp_results.completion = Some(crate::state::CompletionState {
+        items: vec![crate::state::CompletionItem {
+            source: anvil_session::provider::ProviderId::new("builtin.lsp"),
+            label: "println".to_owned(),
+            filter_text: "println".to_owned(),
+            sort_text: "println".to_owned(),
+            preselect: true,
+            insert: "println!()".to_owned(),
+            snippet: None,
+            detail: "macro".to_owned(),
+            replace: None,
+            replace_bytes: None,
+            documentation: Some("Print to standard output.".to_owned()),
+            raw: serde_json::json!({"kind": 3}),
+            resolved: true,
+        }],
+        filtered: vec![0],
+        query: "pr".to_owned(),
+        selected: 0,
+    });
+
+    let backend = TestBackend::new(100, 24);
+    let mut terminal = Terminal::new(backend).expect("terminal");
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+    let rendered = terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect::<String>();
+    assert!(rendered.contains("Completion · 1/1"), "{rendered}");
+    assert!(rendered.contains("fn"), "{rendered}");
+    assert!(rendered.contains("println"), "{rendered}");
+    assert!(rendered.contains("Print to standard output."), "{rendered}");
+    assert!(rendered.contains("Enter/Tab accept"), "{rendered}");
+}
+
+#[test]
+fn completion_popup_scrolls_to_selected_item() {
+    let item = |index: usize| crate::state::CompletionItem {
+        source: anvil_session::provider::ProviderId::new("builtin.lsp"),
+        label: format!("item{index:02}"),
+        filter_text: format!("item{index:02}"),
+        sort_text: format!("item{index:02}"),
+        preselect: false,
+        insert: format!("item{index:02}"),
+        snippet: None,
+        detail: String::new(),
+        replace: None,
+        replace_bytes: None,
+        documentation: None,
+        raw: serde_json::json!({"kind": 6}),
+        resolved: true,
+    };
+    let items = (0..20).map(item).collect::<Vec<_>>();
+    let filtered = (0..items.len()).collect();
+    let mut model = Model::new(EditorState::from_text("it"), None);
+    model.start_page.welcome = false;
+    model.overlays.lsp_results.completion = Some(crate::state::CompletionState {
+        items,
+        filtered,
+        query: "it".to_owned(),
+        selected: 15,
+    });
+
+    let backend = TestBackend::new(100, 24);
+    let mut terminal = Terminal::new(backend).expect("terminal");
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+    let rendered = terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect::<String>();
+    assert!(rendered.contains("item15"), "{rendered}");
+    assert!(!rendered.contains("item00"), "{rendered}");
+}
+
+#[test]
 fn read_only_mode_renders_in_the_title() {
     let mut model = Model::new(EditorState::from_text("x"), None);
     model.start_page.welcome = false;

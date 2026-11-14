@@ -1,15 +1,114 @@
 //! Minimal Debug Adapter Protocol client for a separate adapter process.
 
-use anvil_process::{ProcessSpec, ProcessTask};
+use anvil_process::{ProcessSpec, ProcessTask, kill_process_group};
 use serde_json::{Value, json};
 use std::{
     collections::VecDeque,
     io::{BufRead, BufReader, Write},
     path::{Path, PathBuf},
     process::{ChildStdin, ChildStdout},
+    sync::{
+        Arc,
+        atomic::{AtomicBool, AtomicU32, Ordering},
+    },
 };
 
 pub const MAX_DAP_MESSAGE: usize = 8 * 1024 * 1024;
+
+/// Upper bound for adapter messages buffered while waiting for a response.
+///
+/// Adapter events (output, stopped, terminated, …) are not consumed by the
+/// current panels, so the queue drops its oldest entry instead of growing for
+/// the lifetime of the session.
+pub const MAX_DAP_EVENTS: usize = 256;
+
+/// Cross-thread kill switch for one adapter process group.
+///
+/// The worker that owns the [`DapClient`] registers its pid here; the UI thread
+/// signals the group without touching the client, which unblocks a worker stuck
+/// reading a hung adapter. The owner still reaps the child on drop.
+#[derive(Clone, Debug, Default)]
+pub struct DapCancel {
+    pid: Arc<AtomicU32>,
+    cancelled: Arc<AtomicBool>,
+}
+
+impl DapCancel {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Record the adapter process-group leader so [`Self::cancel`] can reach it.
+    ///
+    /// Kills immediately when cancellation already happened, closing the race
+    /// with a cancel issued before the adapter finished spawning.
+    pub fn set_pid(&self, pid: u32) {
+        self.pid.store(pid, Ordering::SeqCst);
+        if self.cancelled.load(Ordering::SeqCst) {
+            kill_process_group(pid);
+        }
+    }
+
+    pub fn pid(&self) -> u32 {
+        self.pid.load(Ordering::SeqCst)
+    }
+
+    /// Kill the adapter process group. Safe to call more than once.
+    pub fn cancel(&self) {
+        self.cancelled.store(true, Ordering::SeqCst);
+        let pid = self.pid.load(Ordering::SeqCst);
+        if pid != 0 {
+            kill_process_group(pid);
+        }
+    }
+
+    pub fn is_cancelled(&self) -> bool {
+        self.cancelled.load(Ordering::SeqCst)
+    }
+}
+
+/// Bounded lifecycle for a DAP worker thread.
+///
+/// Dropping the worker kills the adapter process group and joins the thread, so
+/// timed-out or superseded work cannot leave a stuck thread behind.
+pub struct DapWorker {
+    cancel: DapCancel,
+    handle: Option<std::thread::JoinHandle<()>>,
+}
+
+impl DapWorker {
+    pub fn new(cancel: DapCancel, handle: std::thread::JoinHandle<()>) -> Self {
+        Self {
+            cancel,
+            handle: Some(handle),
+        }
+    }
+
+    /// Pid registered by the worker so far (`0` before the adapter spawns).
+    pub fn pid(&self) -> u32 {
+        self.cancel.pid()
+    }
+
+    /// Join a worker that already delivered its result without killing the
+    /// adapter it handed back to the caller.
+    pub fn finish(mut self) {
+        if let Some(handle) = self.handle.take() {
+            let _ = handle.join();
+        }
+    }
+}
+
+impl Drop for DapWorker {
+    fn drop(&mut self) {
+        let Some(handle) = self.handle.take() else {
+            return;
+        };
+        if !handle.is_finished() {
+            self.cancel.cancel();
+        }
+        let _ = handle.join();
+    }
+}
 
 #[derive(Debug)]
 pub enum DapError {
@@ -87,6 +186,23 @@ impl DapClient {
             events: VecDeque::new(),
             adapter_id: "anvil".to_owned(),
         })
+    }
+
+    /// Spawn and register the pid with `cancel` so another thread can kill a
+    /// hung adapter. Cancellation requested between spawn and registration is
+    /// still honoured by [`DapCancel::set_pid`].
+    pub fn spawn_cancellable(
+        program: &Path,
+        args: &[String],
+        cwd: &Path,
+        cancel: &DapCancel,
+    ) -> Result<Self, DapError> {
+        let client = Self::spawn(program, args, cwd)?;
+        cancel.set_pid(client.pid());
+        if cancel.is_cancelled() {
+            return Err(DapError::Protocol("dap attach cancelled".to_owned()));
+        }
+        Ok(client)
     }
 
     pub fn pid(&self) -> u32 {
@@ -193,7 +309,7 @@ impl DapClient {
                 }
                 return Ok(message);
             }
-            self.events.push_back(message);
+            queue_event(&mut self.events, message);
         }
     }
 
@@ -208,9 +324,23 @@ impl DapClient {
         self.events.pop_front()
     }
 
+    /// Number of adapter messages buffered behind the current request.
+    pub fn queued_events(&self) -> usize {
+        self.events.len()
+    }
+
     pub fn kill(&mut self) {
         let _ = self.process.kill();
     }
+}
+
+/// Buffer one adapter message, dropping the oldest once [`MAX_DAP_EVENTS`] is
+/// reached so a chatty adapter cannot grow memory without bound.
+fn queue_event(events: &mut VecDeque<Value>, message: Value) {
+    if events.len() >= MAX_DAP_EVENTS {
+        events.pop_front();
+    }
+    events.push_back(message);
 }
 
 impl Drop for DapClient {
@@ -296,6 +426,89 @@ mod tests {
             read_frame(&mut reader),
             Err(DapError::Protocol(_))
         ));
+    }
+
+    #[test]
+    fn event_queue_drops_oldest_when_full() {
+        let mut events = VecDeque::new();
+        for seq in 0..(MAX_DAP_EVENTS + 10) {
+            queue_event(&mut events, json!({ "seq": seq }));
+        }
+        assert_eq!(events.len(), MAX_DAP_EVENTS);
+        assert_eq!(events.front().expect("front")["seq"], json!(10));
+        assert_eq!(
+            events.back().expect("back")["seq"],
+            json!(MAX_DAP_EVENTS + 9)
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn waiting_for_response_keeps_unsolicited_events_bounded() {
+        let directory = test_directory("anvil-dap-events");
+        let adapter = directory.join("adapter.py");
+        std::fs::write(
+            &adapter,
+            r#"import json, sys
+def send(message):
+    data = json.dumps(message).encode()
+    sys.stdout.buffer.write(f"Content-Length: {len(data)}\r\n\r\n".encode() + data)
+    sys.stdout.buffer.flush()
+while True:
+    headers = {}
+    while True:
+        line = sys.stdin.buffer.readline()
+        if not line:
+            sys.exit(0)
+        if line in (b"\r\n", b"\n"):
+            break
+        key, value = line.decode().split(":", 1)
+        headers[key.lower()] = value.strip()
+    request = json.loads(sys.stdin.buffer.read(int(headers["content-length"])))
+    for seq in range(1, 301):
+        send({"seq": seq, "type": "event", "event": "output", "body": {}})
+    send({
+        "seq": 999,
+        "type": "response",
+        "request_seq": request["seq"],
+        "success": True,
+        "command": request["command"],
+        "body": {},
+    })
+"#,
+        )
+        .expect("write adapter");
+        let mut client = DapClient::spawn(
+            Path::new("python3"),
+            &[adapter.display().to_string()],
+            &directory,
+        )
+        .expect("spawn adapter");
+        let sequence = client.initialize().expect("initialize");
+        let response = client.wait_response(sequence).expect("initialize response");
+        assert_eq!(response["command"], "initialize");
+        assert_eq!(client.queued_events(), MAX_DAP_EVENTS);
+        // The oldest 44 of the 300 unsolicited events were dropped.
+        assert_eq!(
+            client.try_take_event().expect("queued event")["seq"],
+            json!(45)
+        );
+        client.kill();
+        let _ = std::fs::remove_dir_all(directory);
+    }
+
+    #[cfg(unix)]
+    fn test_directory(prefix: &str) -> std::path::PathBuf {
+        let directory = std::env::temp_dir().join(format!(
+            "{prefix}-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|duration| duration.as_nanos())
+                .unwrap_or_default()
+        ));
+        std::fs::create_dir_all(&directory).expect("create temp dir");
+        directory
     }
 
     #[test]

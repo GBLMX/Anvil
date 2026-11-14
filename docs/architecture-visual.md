@@ -85,6 +85,8 @@ flowchart TB
 | Component | Trust | Responsibility |
 |---|---|---|
 | `anvil-tui` | trusted | buffer, input, UI, command state, plugin activation |
+| `anvil-tui-kit` | trusted | terminal lifecycle, selection, key normalization |
+| `anvil-tui-theme` | trusted | semantic themes and palettes |
 | `anvil-gateway` | trusted | per-session policy and I/O |
 | `anvil-exec-runner` | trusted | sandboxed `rg` / `fd` launch |
 | LSP process | trusted | `-no-sandbox-lsp`, separate from plugin-host |

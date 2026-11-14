@@ -8,28 +8,28 @@ use std::{
 use unicode_segmentation::GraphemeCursor;
 
 const SEARCH_DEBOUNCE: Duration = Duration::from_millis(50);
-pub(crate) const MAX_SEARCH_MATCHES: usize = 10_000;
+pub const MAX_SEARCH_MATCHES: usize = 10_000;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub(crate) struct SearchOptions {
-    pub(crate) case_sensitive: bool,
-    pub(crate) whole_word: bool,
-    pub(crate) regex: bool,
+pub struct SearchOptions {
+    pub case_sensitive: bool,
+    pub whole_word: bool,
+    pub regex: bool,
 }
 
 #[derive(Debug, Clone, Default)]
-pub(crate) struct SearchState {
-    pub(crate) options: SearchOptions,
-    pub(crate) matches: Vec<Range<usize>>,
-    pub(crate) current: usize,
-    pub(crate) error: Option<String>,
-    pub(crate) truncated: bool,
+pub struct SearchState {
+    pub options: SearchOptions,
+    pub matches: Vec<Range<usize>>,
+    pub current: usize,
+    pub error: Option<String>,
+    pub truncated: bool,
     origin: Option<(usize, Vec<(usize, usize)>)>,
-    pub(crate) due: Option<Instant>,
+    pub due: Option<Instant>,
 }
 
 impl SearchState {
-    pub(crate) fn begin(&mut self, cursor: usize, selections: Vec<(usize, usize)>) {
+    pub fn begin(&mut self, cursor: usize, selections: Vec<(usize, usize)>) {
         self.origin = Some((cursor, selections));
         self.matches.clear();
         self.current = 0;
@@ -38,11 +38,11 @@ impl SearchState {
         self.due = None;
     }
 
-    pub(crate) fn schedule(&mut self) {
+    pub fn schedule(&mut self) {
         self.due = Some(Instant::now() + SEARCH_DEBOUNCE);
     }
 
-    pub(crate) fn take_due(&mut self) -> bool {
+    pub fn take_due(&mut self) -> bool {
         let Some(due) = self.due else {
             return false;
         };
@@ -53,7 +53,7 @@ impl SearchState {
         true
     }
 
-    pub(crate) fn restore_origin(&mut self) -> Option<(usize, Vec<(usize, usize)>)> {
+    pub fn restore_origin(&mut self) -> Option<(usize, Vec<(usize, usize)>)> {
         self.due = None;
         self.error = None;
         self.truncated = false;
@@ -61,7 +61,7 @@ impl SearchState {
         self.origin.take()
     }
 
-    pub(crate) fn reset_for_buffer(&mut self) {
+    pub fn reset_for_buffer(&mut self) {
         self.matches.clear();
         self.current = 0;
         self.error = None;
@@ -70,13 +70,13 @@ impl SearchState {
         self.origin = None;
     }
 
-    pub(crate) fn selected(&self) -> Option<&Range<usize>> {
+    pub fn selected(&self) -> Option<&Range<usize>> {
         self.matches.get(self.current)
     }
 }
 
 #[cfg(test)]
-pub(crate) fn find_matches(
+pub fn find_matches(
     text: &str,
     query: &str,
     options: SearchOptions,
@@ -84,7 +84,7 @@ pub(crate) fn find_matches(
     find_matches_limited(text, query, options, usize::MAX).map(|(matches, _)| matches)
 }
 
-pub(crate) fn find_matches_limited(
+pub fn find_matches_limited(
     text: &str,
     query: &str,
     options: SearchOptions,

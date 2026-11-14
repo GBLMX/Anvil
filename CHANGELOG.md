@@ -8,6 +8,16 @@ post-`0.5.0` feature line.
 
 ## [Unreleased]
 ### Added
+- Added the opt-in `helix` keymap preset with `Space h` references,
+  `Space k` hover, `Space c` line comments, and `Space ?` command palette.
+  Hover and line-comment commands now share the Normal and Pending contexts.
+- Buffer tabs and the buffer picker now show file-type icons; picker paths are
+  workspace-relative instead of absolute.
+- The status line adds the current file icon plus read-only and missing-file
+  indicators. The completion popup now has kind badges, documentation,
+  selection-aware scrolling, counts, and key hints.
+- Character selections now render a Helix-style selection background, a
+  warning-colored primary anchor bar, and a block cursor at the selection head.
 - Implemented the existing `event.subscribe` v1 method. The editor now
   publishes `host.event` notifications through the plugin host, and
   `diagnostics.changed` delivers coalesced path/generation/count/first-error
@@ -404,6 +414,11 @@ post-`0.5.0` feature line.
 - Extracted `TerminalSession` and `SelectionTable` into the reusable
   `anvil-tui-kit` crate; terminal startup now restores focus and mouse capture
   correctly when a later setup step fails.
+- Extracted semantic themes into `anvil-tui-theme`; text search, snippets, and
+  line comments into `anvil-editor`; workspace-root routing into
+  `anvil-workspace`; and terminal key normalization into `anvil-tui-kit`.
+  Compatibility re-exports keep existing paths working; `Model`, dispatch, and
+  rendering stay in `anvil-tui`.
 - Split TUI runtime/layout/plugin, renderer, LSP settings/responses, and tree
   navigation/mutations/fuzzy modules; split TUI tests by domain; split gateway
   handlers into `rpc.go`, `fs.go`, `lsp.go`, and `process.go`. No behavior
@@ -434,6 +449,30 @@ post-`0.5.0` feature line.
   now 664 lines.
 
 ### Fixed
+- Plugin hosts no longer forward raw terminal control sequences: `print`,
+  `host.event` handler failures, and Lua load/runtime errors all pass through
+  one escaping sink that renders ESC/C0/C1 as `\xNN` and caps each line at
+  8 KiB. Seccomp now requires `CLONE_THREAD` for `clone`, denies `fork`,
+  `vfork`, and process-style clone flags, and reports `clone3` as `ENOSYS` so
+  glibc still falls back to `clone` for normal thread creation.
+  `HostProcess::terminate` falls back to the process group when the pidfd
+  signal fails and reaps with a 2 s bound, and the spawn `pre_exec` path no
+  longer allocates.
+- The control server now bounds concurrent client threads, keeps socket write
+  timeouts and whole-frame deadlines on accepted and client streams, and maps
+  frame timeouts to a typed control timeout instead of a generic I/O error.
+- Editor service connections have an admission cap, handshake and per-frame
+  deadlines, and a bounded request queue; the plugin host reconnects after an
+  idle close without replaying mutating editor calls. Host RPC rounds use a
+  30 s deadline and skip stale response ids instead of failing the session.
+- DAP attach and refresh results carry a generation token so stale workers
+  cannot replace a newer client; concurrent attaches are rejected, unsolicited
+  events are capped, and timed-out attach/refresh workers kill the adapter
+  process group before being joined.
+- The Helix preset fallback binds `Space 3` to the right split instead of
+  leaving it unbound.
+- Bracket lookup and caret motion clamp to UTF-8 character boundaries,
+  fixing a crash on CJK lines when pressing Down near multibyte text.
 - The settings overlay now shows its key bindings, including `s` to save and
   `Esc` to cancel, so theme changes are not silently discarded.
 - `?` opens the help page from normal editor mode, not only the start

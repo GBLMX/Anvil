@@ -201,6 +201,15 @@ impl ProcessTask {
     }
 }
 
+/// Signal-kill the process group led by `pid` without owning its `Child`.
+///
+/// Callers that own the child still reap it (for example by dropping their
+/// [`ProcessTask`]); this helper exists for supervisors that need to unblock a
+/// reader inside another thread.
+pub fn kill_process_group(pid: u32) {
+    kill_group(pid);
+}
+
 impl Drop for ProcessTask {
     fn drop(&mut self) {
         let _ = self.kill();

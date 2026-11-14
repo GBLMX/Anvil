@@ -595,7 +595,6 @@ fn completion_response_uses_and_closes_the_overlay_stack() {
 fn cancelling_completion_drops_pending_response() {
     let mut model = Model::new(EditorState::from_text("x"), None);
     model.overlays.lsp_results.completion = Some(CompletionState {
-        id: 9,
         items: vec![CompletionItem {
             source: ProviderId::new("builtin.test"),
             label: "item".to_owned(),
@@ -640,7 +639,6 @@ fn cancelling_completion_drops_pending_response() {
 fn completion_resolve_updates_selected_item() {
     let mut model = Model::new(EditorState::from_text("x"), None);
     model.overlays.lsp_results.completion = Some(CompletionState {
-        id: 9,
         items: vec![CompletionItem {
             source: ProviderId::new("builtin.test"),
             label: "item".to_owned(),
@@ -692,7 +690,6 @@ fn completion_resolve_updates_selected_item() {
 fn completion_documentation_is_rendered() {
     let mut model = Model::new(EditorState::from_text("x"), None);
     model.overlays.lsp_results.completion = Some(CompletionState {
-        id: 9,
         items: vec![CompletionItem {
             source: ProviderId::new("builtin.test"),
             label: "item".to_owned(),
@@ -730,7 +727,6 @@ fn applying_snippet_selects_and_navigates_stops() {
     let mut model = Model::new(EditorState::from_text(""), None);
     let snippet = crate::snippet::parse("fn ${1:name}(${2:args}) $0").expect("snippet");
     model.overlays.lsp_results.completion = Some(CompletionState {
-        id: 9,
         items: vec![CompletionItem {
             source: ProviderId::new("builtin.test"),
             label: "fn".to_owned(),
@@ -773,7 +769,6 @@ fn mirrored_snippet_edits_apply_to_all_tabstops() {
     let mut model = Model::new(EditorState::from_text(""), None);
     let snippet = crate::snippet::parse("${1:name} + ${1:name}").expect("snippet");
     model.overlays.lsp_results.completion = Some(CompletionState {
-        id: 9,
         items: vec![CompletionItem {
             source: ProviderId::new("builtin.test"),
             label: "mirror".to_owned(),
@@ -1895,7 +1890,6 @@ fn completion_unknown_key_cancels_and_passes_through() {
     model.ui.input_mode = InputMode::Insert;
     model.session.cursor = 1;
     model.overlays.lsp_results.completion = Some(CompletionState {
-        id: 1,
         items: Vec::new(),
         filtered: Vec::new(),
         query: String::new(),
@@ -1912,7 +1906,6 @@ fn completion_char_and_backspace_update_buffer_and_query() {
     let mut model = Model::new(EditorState::from_text("x"), None);
     model.ui.input_mode = InputMode::Insert;
     model.overlays.lsp_results.completion = Some(CompletionState {
-        id: 1,
         items: vec![CompletionItem {
             source: ProviderId::new("builtin.test"),
             label: "item".to_owned(),
@@ -1975,4 +1968,31 @@ fn completion_char_and_backspace_update_buffer_and_query() {
 
     handle_event(&mut model, key(KeyCode::Tab));
     assert!(model.overlays.lsp_results.completion.is_none());
+}
+
+#[test]
+fn diagnostic_ranges_handle_cjk_utf16_columns() {
+    let text = "安装布局";
+    let path = PathBuf::from("cjk.rs");
+    let mut model = Model::new(EditorState::from_text(text), Some(path.clone()));
+    model.language.diagnostics.by_path.insert(
+        path,
+        vec![lsp::Diagnostic {
+            range: lsp::Range {
+                start: lsp::Position {
+                    line: 0,
+                    character: 1,
+                },
+                end: lsp::Position {
+                    line: 0,
+                    character: 2,
+                },
+            },
+            severity: Some(1),
+            message: "error".to_owned(),
+            source: Some("test".to_owned()),
+            extra: serde_json::Map::new(),
+        }],
+    );
+    assert_eq!(model.diagnostic_ranges(0, 0, text.len()), vec![(2, 4)]);
 }

@@ -2,14 +2,14 @@
 
 use super::*;
 
-pub(crate) fn color_is_light(color: Color) -> bool {
+pub fn color_is_light(color: Color) -> bool {
     let Some((red, green, blue)) = color_rgb(color) else {
         return false;
     };
     (299 * u32::from(red) + 587 * u32::from(green) + 114 * u32::from(blue)) / 1000 > 128
 }
 
-pub(crate) fn color_rgb(color: Color) -> Option<(u8, u8, u8)> {
+pub fn color_rgb(color: Color) -> Option<(u8, u8, u8)> {
     match color {
         Color::Rgb(red, green, blue) => Some((red, green, blue)),
         Color::Indexed(index) => Some(indexed_rgb(index)),
@@ -33,7 +33,7 @@ pub(crate) fn color_rgb(color: Color) -> Option<(u8, u8, u8)> {
     }
 }
 
-pub(crate) fn indexed_rgb(index: u8) -> (u8, u8, u8) {
+pub fn indexed_rgb(index: u8) -> (u8, u8, u8) {
     const ANSI: [(u8, u8, u8); 16] = [
         (0, 0, 0),
         (128, 0, 0),
@@ -68,7 +68,7 @@ pub(crate) fn indexed_rgb(index: u8) -> (u8, u8, u8) {
     )
 }
 
-pub(crate) fn quantize_theme(theme: &Theme) -> Theme {
+pub fn quantize_theme(theme: &Theme) -> Theme {
     let mut theme = *theme;
     for color in [
         &mut theme.bg,
@@ -115,7 +115,7 @@ pub(crate) fn quantize_theme(theme: &Theme) -> Theme {
     theme
 }
 
-pub(crate) fn quantize_color(color: Color) -> Color {
+pub fn quantize_color(color: Color) -> Color {
     match color {
         Color::Rgb(red, green, blue) => Color::Indexed(nearest_ansi_256(red, green, blue)),
         other => other,

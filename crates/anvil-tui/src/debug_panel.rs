@@ -1,7 +1,7 @@
 //! Debug adapter panels for threads, stack frames, variables, and watches.
 
 use super::*;
-use crate::dap::DapClient;
+use crate::dap::{DapCancel, DapClient, DapWorker};
 use ratatui::{
     Frame,
     layout::Rect,
@@ -96,6 +96,10 @@ pub(crate) struct DebugSnapshot {
     pub(crate) variables: Vec<DebugVariable>,
     pub(crate) watches: Vec<DebugWatch>,
 }
+
+/// How long a panel refresh may keep a request in flight before the adapter's
+/// process group is killed.
+const DAP_REFRESH_TIMEOUT: Duration = Duration::from_secs(5);
 
 impl DebugPanelState {
     fn selected_len(&self) -> usize {
@@ -226,6 +230,9 @@ impl Model {
     }
 
     pub(crate) fn request_debug_refresh(&mut self) {
+        if self.language.dap.request.is_some() {
+            return;
+        }
         let Some(client) = self.language.dap.client.take() else {
             self.status.text = "E: no debug adapter; use :dap-attach".to_owned();
             self.file.dirty = true;
@@ -235,10 +242,6 @@ impl Model {
             self.language.dap.client = Some(client);
             return;
         };
-        if self.language.dap.request.is_some() {
-            self.language.dap.client = Some(client);
-            return;
-        }
         let selection = DebugSelection {
             thread: panel.selected_thread,
             frame: panel.selected_frame,
@@ -249,29 +252,58 @@ impl Model {
                 .map(|watch| watch.expression.clone())
                 .collect(),
         };
+        let generation = self.language.dap.generation;
+        let cancel = DapCancel::new();
+        cancel.set_pid(client.pid());
         let (sender, receiver) = std::sync::mpsc::channel();
-        std::thread::spawn(move || {
-            let mut client = client;
-            let result = snapshot(&mut client, &selection).map_err(|error| error.to_string());
-            let _ = sender.send((client, result));
-        });
-        self.language.dap.request = Some(receiver);
-        self.language.dap.request_started = Some(Instant::now());
-        if let Some(panel) = self.overlays.debug_panel.as_mut() {
-            panel.pending = true;
+        let worker = std::thread::Builder::new()
+            .name("anvil-dap-refresh".to_owned())
+            .spawn(move || {
+                let mut client = client;
+                let result = snapshot(&mut client, &selection).map_err(|error| error.to_string());
+                let _ = sender.send((generation, client, result));
+            });
+        match worker {
+            Ok(handle) => {
+                self.language.dap.request_worker = Some(DapWorker::new(cancel, handle));
+                self.language.dap.request = Some(receiver);
+                self.language.dap.request_started = Some(Instant::now());
+                if let Some(panel) = self.overlays.debug_panel.as_mut() {
+                    panel.pending = true;
+                }
+                self.status.text = "debug refresh…".to_owned();
+            }
+            Err(error) => {
+                self.status.text = format!("E: dap refresh worker: {error}");
+            }
         }
-        self.status.text = "debug refresh…".to_owned();
         self.file.dirty = true;
     }
 
     pub(crate) fn poll_debug_request(&mut self) {
-        let Some(receiver) = self.language.dap.request.as_ref() else {
+        let received = self
+            .language
+            .dap
+            .request
+            .as_ref()
+            .map(std::sync::mpsc::Receiver::try_recv);
+        let Some(received) = received else {
             return;
         };
-        match receiver.try_recv() {
-            Ok((client, result)) => {
+        match received {
+            Ok((generation, client, result)) => {
+                let worker = self.language.dap.request_worker.take();
                 self.language.dap.request = None;
                 self.language.dap.request_started = None;
+                if let Some(worker) = worker {
+                    worker.finish();
+                }
+                if generation != self.language.dap.generation {
+                    // Result from an adapter this session already detached from;
+                    // dropping the client kills its process group and the current
+                    // client (if any) is left untouched.
+                    return;
+                }
                 self.language.dap.client = Some(client);
                 match result {
                     Ok(snapshot) => {
@@ -291,8 +323,10 @@ impl Model {
                 self.file.dirty = true;
             }
             Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                let worker = self.language.dap.request_worker.take();
                 self.language.dap.request = None;
                 self.language.dap.request_started = None;
+                drop(worker);
                 if let Some(panel) = self.overlays.debug_panel.as_mut() {
                     panel.pending = false;
                 }
@@ -304,14 +338,18 @@ impl Model {
                     .language
                     .dap
                     .request_started
-                    .is_some_and(|started| started.elapsed() >= Duration::from_secs(5))
+                    .is_some_and(|started| started.elapsed() >= DAP_REFRESH_TIMEOUT)
                 {
+                    // Dropping the worker kills the hung adapter's process group
+                    // and joins the thread before reporting the timeout.
+                    let worker = self.language.dap.request_worker.take();
                     self.language.dap.request = None;
                     self.language.dap.request_started = None;
+                    drop(worker);
                     if let Some(panel) = self.overlays.debug_panel.as_mut() {
                         panel.pending = false;
                     }
-                    self.status.text = "E: debug refresh timed out".to_owned();
+                    self.status.text = "E: debug refresh timed out; adapter stopped".to_owned();
                     self.file.dirty = true;
                 }
             }

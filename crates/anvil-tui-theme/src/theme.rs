@@ -10,53 +10,53 @@ use std::time::{Duration, Instant, SystemTime};
 use ratatui::style::{Color, Modifier, Style};
 
 mod color;
-pub(crate) use color::*;
+pub use color::*;
 mod style;
-pub(crate) use style::*;
+pub use style::*;
 mod custom;
 use custom::{CustomTheme, parse_theme_file};
 mod palette;
 use palette::BUILTINS;
 
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct Theme {
-    pub(crate) name: &'static str,
-    pub(crate) bg: Color,
-    pub(crate) surface: Color,
-    pub(crate) surface_alt: Color,
-    pub(crate) code_block_bg: Color,
-    pub(crate) border: Color,
-    pub(crate) text: Color,
-    pub(crate) muted: Color,
-    pub(crate) dim: Color,
-    pub(crate) accent: Color,
-    pub(crate) selection: Color,
-    pub(crate) success: Color,
-    pub(crate) warning: Color,
-    pub(crate) error: Color,
-    pub(crate) magenta: Color,
-    pub(crate) white: Color,
-    pub(crate) syntax_keyword: Color,
-    pub(crate) syntax_string: Color,
-    pub(crate) syntax_comment: Color,
-    pub(crate) syntax_number: Color,
-    pub(crate) syntax_function: Color,
-    pub(crate) syntax_type: Color,
-    pub(crate) syntax_property: Color,
-    pub(crate) syntax_constant: Color,
-    pub(crate) syntax_heading: Color,
-    pub(crate) syntax_link: Color,
-    pub(crate) syntax_code: Color,
-    pub(crate) syntax_emphasis: Color,
-    pub(crate) syntax_list: Color,
-    pub(crate) syntax_quote: Color,
-    pub(crate) syntax_table: Color,
-    pub(crate) syntax_modifiers: [Modifier; 15],
-    pub(crate) status_modes: [Option<Style>; 7],
+pub struct Theme {
+    pub name: &'static str,
+    pub bg: Color,
+    pub surface: Color,
+    pub surface_alt: Color,
+    pub code_block_bg: Color,
+    pub border: Color,
+    pub text: Color,
+    pub muted: Color,
+    pub dim: Color,
+    pub accent: Color,
+    pub selection: Color,
+    pub success: Color,
+    pub warning: Color,
+    pub error: Color,
+    pub magenta: Color,
+    pub white: Color,
+    pub syntax_keyword: Color,
+    pub syntax_string: Color,
+    pub syntax_comment: Color,
+    pub syntax_number: Color,
+    pub syntax_function: Color,
+    pub syntax_type: Color,
+    pub syntax_property: Color,
+    pub syntax_constant: Color,
+    pub syntax_heading: Color,
+    pub syntax_link: Color,
+    pub syntax_code: Color,
+    pub syntax_emphasis: Color,
+    pub syntax_list: Color,
+    pub syntax_quote: Color,
+    pub syntax_table: Color,
+    pub syntax_modifiers: [Modifier; 15],
+    pub status_modes: [Option<Style>; 7],
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum Choice {
+pub enum Choice {
     Fixed(&'static str),
     Auto {
         dark: &'static str,
@@ -94,14 +94,14 @@ fn theme_dir() -> Option<PathBuf> {
     std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".config/anvil/themes"))
 }
 
-pub(crate) fn load_custom_themes() -> Result<(), String> {
+pub fn load_custom_themes() -> Result<(), String> {
     let Some(directory) = theme_dir() else {
         return Ok(());
     };
     load_custom_themes_from(&directory)
 }
 
-pub(crate) fn load_custom_themes_from(directory: &Path) -> Result<(), String> {
+pub fn load_custom_themes_from(directory: &Path) -> Result<(), String> {
     let old = CUSTOM.with(|custom| custom.borrow().clone());
     let mut paths = Vec::new();
     if let Ok(entries) = fs::read_dir(directory) {
@@ -243,7 +243,7 @@ fn theme_signature(directory: &Path) -> Option<SystemTime> {
     signature
 }
 
-pub(crate) fn reload_custom_if_changed() -> Result<bool, String> {
+pub fn reload_custom_if_changed() -> Result<bool, String> {
     let now = Instant::now();
     let should_check = LAST_RELOAD_CHECK.with(|last| {
         let due = last
@@ -309,15 +309,15 @@ fn resolve(name: &str) -> Result<&'static Theme, String> {
     ))
 }
 
-pub(crate) fn canonical(name: &str) -> Result<&'static str, String> {
+pub fn canonical(name: &str) -> Result<&'static str, String> {
     resolve(name).map(|theme| theme.name)
 }
 
-pub(crate) fn init_color_support() {
+pub fn init_color_support() {
     refresh_active();
 }
 
-pub(crate) fn set_high_contrast(enabled: bool) {
+pub fn set_high_contrast(enabled: bool) {
     HIGH_CONTRAST.with(|value| value.set(enabled));
     refresh_active();
 }
@@ -356,7 +356,7 @@ fn high_contrast_theme(theme: &Theme) -> Theme {
     theme
 }
 
-pub(crate) fn set_background_is_light(value: Option<bool>) {
+pub fn set_background_is_light(value: Option<bool>) {
     BACKGROUND_IS_LIGHT.with(|background| background.set(value));
 }
 
@@ -375,7 +375,7 @@ fn terminal_is_light() -> bool {
         .is_some_and(|background| background >= 8)
 }
 
-pub(crate) fn apply_choice(choice: Choice, runtime: bool) -> Result<(), String> {
+pub fn apply_choice(choice: Choice, runtime: bool) -> Result<(), String> {
     let (dark, light, selected) = match choice {
         Choice::Fixed(name) => {
             let theme = resolve(name)?;
@@ -403,7 +403,7 @@ pub(crate) fn apply_choice(choice: Choice, runtime: bool) -> Result<(), String> 
     Ok(())
 }
 
-pub(crate) fn names() -> Vec<&'static str> {
+pub fn names() -> Vec<&'static str> {
     let mut names = BUILTINS.iter().map(|theme| theme.name).collect::<Vec<_>>();
     CUSTOM.with(|custom| {
         names.extend(custom.borrow().iter().map(|theme| theme.theme.name));
@@ -411,33 +411,33 @@ pub(crate) fn names() -> Vec<&'static str> {
     names
 }
 
-pub(crate) fn name() -> &'static str {
+pub fn name() -> &'static str {
     active().name
 }
 
-pub(crate) fn choice() -> Choice {
+pub fn choice() -> Choice {
     CHOICE.with(|choice| *choice.borrow())
 }
 
-pub(crate) fn runtime_choice() -> Option<Choice> {
+pub fn runtime_choice() -> Option<Choice> {
     RUNTIME.with(|choice| *choice.borrow())
 }
 
-pub(crate) fn auto_mapping() -> (&'static str, &'static str) {
+pub fn auto_mapping() -> (&'static str, &'static str) {
     AUTO.with(Cell::get)
 }
 
-pub(crate) fn set_theme(name: &str) -> Result<(), String> {
+pub fn set_theme(name: &str) -> Result<(), String> {
     let theme = resolve(name)?;
     apply_choice(Choice::Fixed(theme.name), true)
 }
 
-pub(crate) fn set_startup_theme(name: &str) -> Result<(), String> {
+pub fn set_startup_theme(name: &str) -> Result<(), String> {
     let theme = resolve(name)?;
     apply_choice(Choice::Fixed(theme.name), false)
 }
 
-pub(crate) fn set_auto(dark: &str, light: &str) -> Result<(), String> {
+pub fn set_auto(dark: &str, light: &str) -> Result<(), String> {
     let dark = resolve(dark)?;
     let light = resolve(light)?;
     apply_choice(

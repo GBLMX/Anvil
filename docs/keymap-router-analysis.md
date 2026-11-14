@@ -43,7 +43,7 @@ implemented.
 | Default Space actions | `Space 1` editor, `Space 2` tree, plus `Space e`/`Space f` compatibility aliases | `pending_action` |
 | F-key defaults | None | `normal_action`, `pending_action` |
 | F-key user bindings | Supported and schema-validated | `parse_key_name`, keymap tests |
-| Presets | `anvil-ergo.toml` and `anvil-vim.toml` bundled under `crates/anvil-tui/presets` | `KeymapConfig::from_preset` |
+| Presets | `anvil-ergo.toml`, `anvil-vim.toml`, and `anvil-helix.toml` bundled under `crates/anvil-tui/presets` | `KeymapConfig::from_preset` |
 | ADR file | No `docs/adr/0020-*` file exists | `docs/adr` |
 
 ## Requirement gaps
@@ -182,12 +182,15 @@ command registry remains in `anvil-session`.
 
 ### 6. Presets
 
-Two additive presets are shipped:
+Three additive presets are shipped:
 
 - `crates/anvil-tui/presets/anvil-ergo.toml`: ergonomic Space leader, no
   F-keys; also selected by `preset = "ergo"` or `"default"`.
 - `crates/anvil-tui/presets/anvil-vim.toml`: explicit Vim-style normal
   bindings; selected by `preset = "vim"`.
+- `crates/anvil-tui/presets/anvil-helix.toml`: Helix Space aliases for
+  references, hover, line comments, and the command palette; selected by
+  `preset = "helix"`.
 
 The built-in fallback remains underneath, so presets cannot remove a default
 binding yet. Preset selection precedence:

@@ -716,18 +716,22 @@ impl PickerSource for BufferPickerSource {
             if entries.len() >= query.limit {
                 break;
             }
-            if !needle.is_empty() && !buffer.name.to_lowercase().contains(&needle) {
+            let name = std::path::Path::new(&buffer.name)
+                .strip_prefix(&context.root)
+                .map(|path| path.display().to_string())
+                .unwrap_or_else(|_| buffer.name.clone());
+            if !needle.is_empty() && !name.to_lowercase().contains(&needle) {
                 continue;
             }
             entries.push(PickerEntry {
                 value: json!(buffer.index),
-                ordinal: buffer.name.to_lowercase(),
+                ordinal: name.to_lowercase(),
                 display: format!(
                     "{} {:>2} {}{}",
                     if buffer.active { "*" } else { " " },
                     buffer.index + 1,
                     if buffer.modified { "● " } else { "" },
-                    buffer.name
+                    name
                 ),
             });
         }

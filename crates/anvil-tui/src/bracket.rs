@@ -256,8 +256,15 @@ impl Model {
         let text = self.session.editor.text();
         let length = text.len_bytes();
         let cursor = self.session.cursor;
+        if !text.is_char_boundary(cursor) {
+            return false;
+        }
+        let mut end = cursor.saturating_add(4).min(length);
+        while end > cursor && !text.is_char_boundary(end) {
+            end -= 1;
+        }
         if text
-            .slice(cursor..cursor.saturating_add(4).min(length))
+            .slice(cursor..end)
             .chars()
             .next()
             .is_some_and(bracket::is_bracket)

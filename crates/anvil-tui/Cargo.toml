@@ -32,6 +32,7 @@ anvil-session = { path = "../anvil-session", version = "0.6.0" }
 anvil-task = { path = "../anvil-task", version = "0.6.0" }
 anvil-workspace = { path = "../anvil-workspace", version = "0.6.0", default-features = false }
 anvil-tui-kit = { path = "../anvil-tui-kit", version = "0.6.0" }
+anvil-tui-theme = { path = "../anvil-tui-theme", version = "0.6.0" }
 anvil-syntax = { path = "../anvil-syntax", version = "0.6.0" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

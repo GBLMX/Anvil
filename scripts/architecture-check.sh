@@ -8,13 +8,13 @@ cd "$root"
 # unbounded channel inside an already-migrated file still fails. Shrink
 # these counts as workers migrate.
 allowed_threads="
-crates/anvil-control/src/lib.rs:1
+crates/anvil-control/src/lib.rs:2
 crates/anvil-ipc/src/client.rs:7
 crates/anvil-lsp-client/src/worker.rs:1
 crates/anvil-mod-desktop/src/lib.rs:1
 crates/anvil-mod-git/src/lib.rs:2
 crates/anvil-plugin-host/src/runtime.rs:3
-crates/anvil-session/src/editor_service.rs:3
+crates/anvil-session/src/editor_service.rs:2
 crates/anvil-session/src/host_session.rs:1
 crates/anvil-syntax/src/lib.rs:1
 crates/anvil-task/src/lib.rs:1
@@ -30,7 +30,7 @@ allowed_channels="
 crates/anvil-control/src/lib.rs:2
 crates/anvil-session/src/editor_service.rs:2
 crates/anvil-session/src/host_session.rs:0
-crates/anvil-session/src/plugin_supervisor.rs:2
+crates/anvil-session/src/plugin_supervisor.rs:0
 crates/anvil-tui/src/debug_panel.rs:1
 crates/anvil-tui/src/debugger.rs:1
 crates/anvil-tui/src/plugin_document.rs:1

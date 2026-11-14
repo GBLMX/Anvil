@@ -313,9 +313,7 @@ impl Model {
                 self.file.dirty = true;
             }
             ("dap-detach", "") => {
-                self.language.dap.client = None;
-                self.language.dap.attach = None;
-                self.language.dap.attach_started = None;
+                self.detach_dap();
                 self.status.text = "debug adapter detached".to_owned();
                 self.file.dirty = true;
             }

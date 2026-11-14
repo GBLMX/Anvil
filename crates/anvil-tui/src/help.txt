@@ -31,6 +31,11 @@ Normal mode
   Space f             fuzzy file finder; type to filter, Enter opens
                       selected file previews beside the list when wide and
                       below it when narrow; icons mark file types
+  Helix preset only:
+  Space h             list references
+  Space k             hover documentation
+  Space c             toggle line comment
+  Space ?             open the command palette
   gd                  go to definition
   gD / gy / gI        declaration / type definition / implementation
   gr                  list references and jump on Enter

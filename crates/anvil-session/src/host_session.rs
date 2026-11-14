@@ -5,11 +5,30 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::{self, Receiver, SyncSender, TrySendError};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 const MAX_QUEUED_EVENTS: usize = 64;
 const MAX_PENDING_COMMANDS: usize = 128;
 const MAX_QUEUED_HOST_EVENTS: usize = 128;
+
+/// Absolute deadline for one host RPC round trip.
+///
+/// Provider calls can legitimately take seconds on slow file systems, so the
+/// former two-second socket timeout killed healthy sessions. The deadline still
+/// bounds a wedged host and, unlike a socket read timeout, it covers a peer that
+/// dribbles a frame.
+const HOST_RPC_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// Bound on one control-socket write so a host that stops reading cannot block
+/// the worker thread (and therefore `stop`) forever.
+const HOST_WRITE_TIMEOUT: Duration = Duration::from_secs(2);
+
+/// First id used for control requests (`sys.ping`, `sys.exec`, event stats).
+///
+/// Provider calls use ids minted by the supervisor. Starting control ids far
+/// above that range keeps a late provider response from ever matching the next
+/// control request, even after a provider call timed out.
+const CONTROL_ID_BASE: u64 = 1 << 62;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum SendOutcome {
@@ -66,6 +85,7 @@ pub struct HostSession {
     queued_events: Arc<AtomicUsize>,
     accepting: Arc<AtomicBool>,
     socket: PathBuf,
+    worker: Option<std::thread::JoinHandle<()>>,
     exited: bool,
 }
 
@@ -267,7 +287,7 @@ impl HostSession {
         let thread_alive = Arc::clone(&alive);
         let thread_queued_events = Arc::clone(&queued_events);
         let thread_pending = Arc::clone(&pending);
-        std::thread::spawn(move || {
+        let worker = std::thread::spawn(move || {
             let mut connection = loop {
                 if !thread_alive.load(Ordering::Relaxed) {
                     return;
@@ -285,8 +305,9 @@ impl HostSession {
                 }
             };
             let _ = event_tx.try_send(HostEvent::Ready);
-            let _ = connection.set_read_timeout(Some(Duration::from_secs(2)));
-            let mut next_id = 1u64;
+            let _ = connection.set_read_timeout(Some(HOST_RPC_TIMEOUT));
+            let _ = connection.set_write_timeout(Some(HOST_WRITE_TIMEOUT));
+            let mut next_id = CONTROL_ID_BASE;
             if !request(
                 &mut connection,
                 next_id,
@@ -323,6 +344,7 @@ impl HostSession {
                                 "handler": handler,
                                 "value": value,
                             }),
+                            &thread_alive,
                         );
                         thread_pending.fetch_sub(1, Ordering::AcqRel);
                         if !send_host_result(&event_tx, HostEvent::ProviderAction { id, result }) {
@@ -345,6 +367,7 @@ impl HostSession {
                                 "query": query,
                                 "limit": limit,
                             }),
+                            &thread_alive,
                         );
                         thread_pending.fetch_sub(1, Ordering::AcqRel);
                         if !send_host_result(&event_tx, HostEvent::Provider { id, result }) {
@@ -379,6 +402,7 @@ impl HostSession {
                             next_id,
                             "host.event_stats",
                             serde_json::json!({}),
+                            &thread_alive,
                         );
                         next_id += 1;
                         let errors = result
@@ -407,6 +431,7 @@ impl HostSession {
             queued_events,
             accepting,
             socket: cleanup.keep(),
+            worker: Some(worker),
             exited: false,
         })
     }
@@ -543,6 +568,12 @@ impl HostSession {
         self.accepting.store(false, Ordering::Release);
         self.alive.store(false, Ordering::Relaxed);
         self.host.terminate();
+        if let Some(worker) = self.worker.take() {
+            // Bounded: the worker re-checks `alive` every 100ms and its socket
+            // reads and writes carry deadlines, so terminating the host makes
+            // the join return instead of detaching a thread that read forever.
+            let _ = worker.join();
+        }
         let _ = std::fs::remove_file(&self.socket);
     }
 }
@@ -567,6 +598,17 @@ fn request(
     events: &SyncSender<HostEvent>,
     alive: &AtomicBool,
 ) -> bool {
+    request_with_timeout(connection, id, method, events, alive, HOST_RPC_TIMEOUT)
+}
+
+fn request_with_timeout(
+    connection: &mut Connection,
+    id: u64,
+    method: &str,
+    events: &SyncSender<HostEvent>,
+    alive: &AtomicBool,
+    timeout: Duration,
+) -> bool {
     let request = serde_json::json!({
         "jsonrpc": "2.0",
         "id": id,
@@ -583,35 +625,42 @@ fn request(
         let _ = events.try_send(HostEvent::Error(error.to_string()));
         return false;
     }
-    match connection.recv() {
-        Ok(Some(frame)) => match serde_json::from_slice::<serde_json::Value>(&frame) {
-            Ok(response) if !response_matches_id(&response, id) => {
-                let _ = events.try_send(HostEvent::Error("host RPC id mismatch".to_owned()));
-                false
+    let deadline = Instant::now() + timeout;
+    loop {
+        match connection.recv_deadline(deadline) {
+            Ok(Some(frame)) => {
+                let response = match serde_json::from_slice::<serde_json::Value>(&frame) {
+                    Ok(response) => response,
+                    Err(error) => {
+                        let _ = events.try_send(HostEvent::Error(error.to_string()));
+                        return false;
+                    }
+                };
+                if !response_matches_id(&response, id) {
+                    // A late or stale response belongs to an earlier request and
+                    // must not be mistaken for this one.
+                    continue;
+                }
+                if response.get("result").is_some() {
+                    let _ = events.try_send(HostEvent::Pong);
+                    return true;
+                }
+                if response.get("error").is_some() {
+                    let _ = events.try_send(HostEvent::ExecUnsupported);
+                    return true;
+                }
+                return true;
             }
-            Ok(response) if response.get("result").is_some() => {
-                let _ = events.try_send(HostEvent::Pong);
-                true
+            Ok(None) => return false,
+            Err(error) if rpc_timeout(&error) => {
+                let _ = events.try_send(HostEvent::Error("host RPC timeout".to_owned()));
+                alive.store(false, Ordering::Relaxed);
+                return false;
             }
-            Ok(response) if response.get("error").is_some() => {
-                let _ = events.try_send(HostEvent::ExecUnsupported);
-                true
-            }
-            Ok(_) => true,
             Err(error) => {
                 let _ = events.try_send(HostEvent::Error(error.to_string()));
-                false
+                return false;
             }
-        },
-        Ok(None) => false,
-        Err(FrameError::Io(io::ErrorKind::TimedOut | io::ErrorKind::WouldBlock)) => {
-            let _ = events.try_send(HostEvent::Error("host RPC timeout".to_owned()));
-            alive.store(false, Ordering::Relaxed);
-            false
-        }
-        Err(error) => {
-            let _ = events.try_send(HostEvent::Error(error.to_string()));
-            false
         }
     }
 }
@@ -621,6 +670,18 @@ fn call(
     id: u64,
     method: &str,
     params: serde_json::Value,
+    alive: &AtomicBool,
+) -> Result<serde_json::Value, String> {
+    call_with_timeout(connection, id, method, params, alive, HOST_RPC_TIMEOUT)
+}
+
+fn call_with_timeout(
+    connection: &mut Connection,
+    id: u64,
+    method: &str,
+    params: serde_json::Value,
+    alive: &AtomicBool,
+    timeout: Duration,
 ) -> Result<serde_json::Value, String> {
     let request = serde_json::json!({
         "jsonrpc": "2.0",
@@ -631,14 +692,31 @@ fn call(
     connection
         .send(&serde_json::to_vec(&request).map_err(|error| error.to_string())?)
         .map_err(|error| error.to_string())?;
+    let deadline = Instant::now() + timeout;
     loop {
-        let frame = connection
-            .recv()
-            .map_err(|error| error.to_string())?
-            .ok_or_else(|| "host socket closed".to_owned())?;
-        let response: serde_json::Value =
-            serde_json::from_slice(&frame).map_err(|error| error.to_string())?;
-        if response.get("id").and_then(serde_json::Value::as_u64) != Some(id) {
+        let frame = match connection.recv_deadline(deadline) {
+            Ok(Some(frame)) => frame,
+            Ok(None) => {
+                alive.store(false, Ordering::Relaxed);
+                return Err("host socket closed".to_owned());
+            }
+            // A slow provider call is reported without poisoning the session;
+            // the supervisor decides whether to retry or restart the host.
+            Err(error) if rpc_timeout(&error) => return Err("host RPC timeout".to_owned()),
+            Err(error) => {
+                alive.store(false, Ordering::Relaxed);
+                return Err(error.to_string());
+            }
+        };
+        let response: serde_json::Value = match serde_json::from_slice(&frame) {
+            Ok(response) => response,
+            Err(error) => {
+                alive.store(false, Ordering::Relaxed);
+                return Err(error.to_string());
+            }
+        };
+        if !response_matches_id(&response, id) {
+            // Late responses for earlier calls stay out of this result.
             continue;
         }
         if let Some(error) = response.get("error") {
@@ -653,6 +731,13 @@ fn call(
             .cloned()
             .unwrap_or(serde_json::Value::Null));
     }
+}
+
+fn rpc_timeout(error: &FrameError) -> bool {
+    matches!(
+        error,
+        FrameError::Timeout | FrameError::Io(io::ErrorKind::TimedOut | io::ErrorKind::WouldBlock)
+    )
 }
 
 fn event_frame(
@@ -716,6 +801,137 @@ pub(crate) fn new_token() -> Token {
 mod tests {
     use super::*;
     use nix::libc;
+
+    fn control_pair() -> (Connection, Connection, PathBuf) {
+        let path = std::env::temp_dir().join(format!(
+            "anvil-host-rpc-{}-{}.sock",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map(|time| time.as_nanos())
+                .unwrap_or_default()
+        ));
+        let listener = Listener::bind(&path).expect("bind");
+        let client = Connection::connect(&path).expect("connect");
+        let server = listener.accept().expect("accept");
+        (client, server, path)
+    }
+
+    fn frame(value: serde_json::Value) -> Vec<u8> {
+        serde_json::to_vec(&value).expect("frame")
+    }
+
+    #[test]
+    fn request_skips_a_stale_response_id() {
+        let (mut client, mut server, path) = control_pair();
+        let (events, received) = mpsc::sync_channel(4);
+        let alive = AtomicBool::new(true);
+        // A late provider response (low id) arrives before the control reply.
+        server
+            .send(&frame(serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": 6,
+                "result": { "stale": true },
+            })))
+            .expect("stale response");
+        // The control channel reply for this request.
+        server
+            .send(&frame(serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": CONTROL_ID_BASE,
+                "result": "pong",
+            })))
+            .expect("matching response");
+        assert!(request(
+            &mut client,
+            CONTROL_ID_BASE,
+            "sys.ping",
+            &events,
+            &alive
+        ));
+        assert!(alive.load(Ordering::Relaxed));
+        assert_eq!(received.try_recv(), Ok(HostEvent::Pong));
+        assert!(
+            received.try_recv().is_err(),
+            "a stale response must not answer the request"
+        );
+        drop(server);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn request_deadline_stops_the_control_channel() {
+        let (mut client, server, path) = control_pair();
+        let (events, received) = mpsc::sync_channel(4);
+        let alive = AtomicBool::new(true);
+        let started = Instant::now();
+        assert!(!request_with_timeout(
+            &mut client,
+            1,
+            "sys.ping",
+            &events,
+            &alive,
+            Duration::from_millis(50),
+        ));
+        assert!(started.elapsed() >= Duration::from_millis(50));
+        assert!(!alive.load(Ordering::Relaxed));
+        assert!(matches!(
+            received.try_recv(),
+            Ok(HostEvent::Error(message)) if message.contains("timeout")
+        ));
+        drop(server);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn slow_call_timeout_does_not_kill_the_session() {
+        let (mut client, mut server, path) = control_pair();
+        let alive = AtomicBool::new(true);
+        let error = call_with_timeout(
+            &mut client,
+            1,
+            "provider.request",
+            serde_json::json!({}),
+            &alive,
+            Duration::from_millis(50),
+        )
+        .expect_err("slow call times out");
+        assert!(error.contains("timeout"), "{error}");
+        assert!(
+            alive.load(Ordering::Relaxed),
+            "a slow provider call must not kill the session"
+        );
+
+        // The timed-out response and the next response both arrive before the
+        // next request is read; the stale id must be skipped, not returned.
+        server
+            .send(&frame(serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": 1,
+                "result": { "late": true },
+            })))
+            .expect("late response");
+        server
+            .send(&frame(serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": 2,
+                "result": { "ok": true },
+            })))
+            .expect("response");
+        let result = call_with_timeout(
+            &mut client,
+            2,
+            "provider.request",
+            serde_json::json!({}),
+            &alive,
+            Duration::from_secs(2),
+        )
+        .expect("healthy call after a slow one");
+        assert_eq!(result["ok"], true);
+        assert!(alive.load(Ordering::Relaxed));
+        drop(server);
+        let _ = std::fs::remove_file(path);
+    }
 
     #[test]
     fn host_responses_must_match_the_request_id() {

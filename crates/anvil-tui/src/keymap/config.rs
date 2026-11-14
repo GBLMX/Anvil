@@ -5,6 +5,7 @@ use serde::Deserialize;
 
 pub(crate) const ANVIL_ERGO_PRESET: &str = include_str!("../../presets/anvil-ergo.toml");
 pub(crate) const ANVIL_VIM_PRESET: &str = include_str!("../../presets/anvil-vim.toml");
+pub(crate) const ANVIL_HELIX_PRESET: &str = include_str!("../../presets/anvil-helix.toml");
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(crate) struct KeyChord {
@@ -289,9 +290,10 @@ impl KeymapConfig {
         let text = match normalized.as_str() {
             "default" | "ergo" | "anvil-default" | "anvil-ergo" => ANVIL_ERGO_PRESET,
             "vim" | "anvil-vim" => ANVIL_VIM_PRESET,
+            "helix" | "anvil-helix" => ANVIL_HELIX_PRESET,
             _ => {
                 return Err(format!(
-                    "unknown keymap preset {name:?}; available presets: ergo, vim"
+                    "unknown keymap preset {name:?}; available presets: ergo, vim, helix"
                 ));
             }
         };

@@ -23,6 +23,7 @@ members = [
     "crates/anvil-workspace",
     "crates/anvil-syntax",
     "crates/anvil-tui",
+    "crates/anvil-tui-theme",
     "crates/anvil-tui-kit",
     "examples/anvil-distro-minimal",
 ]

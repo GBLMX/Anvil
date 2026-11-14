@@ -1,27 +1,27 @@
 //! LSP snippet parsing and tabstop navigation.
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct SnippetStop {
-    pub(crate) index: usize,
-    pub(crate) start: usize,
-    pub(crate) end: usize,
+pub struct SnippetStop {
+    pub index: usize,
+    pub start: usize,
+    pub end: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct Snippet {
-    pub(crate) text: String,
-    pub(crate) stops: Vec<SnippetStop>,
+pub struct Snippet {
+    pub text: String,
+    pub stops: Vec<SnippetStop>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct SnippetSession {
+pub struct SnippetSession {
     stops: Vec<SnippetStop>,
     groups: Vec<usize>,
     current: usize,
 }
 
 impl Snippet {
-    pub(crate) fn offset_stops(&self, base: usize) -> Vec<SnippetStop> {
+    pub fn offset_stops(&self, base: usize) -> Vec<SnippetStop> {
         self.stops
             .iter()
             .map(|stop| SnippetStop {
@@ -34,7 +34,7 @@ impl Snippet {
 }
 
 impl SnippetSession {
-    pub(crate) fn new(mut stops: Vec<SnippetStop>) -> Option<Self> {
+    pub fn new(mut stops: Vec<SnippetStop>) -> Option<Self> {
         if stops.is_empty() {
             return None;
         }
@@ -62,23 +62,23 @@ impl SnippetSession {
         &self.stops[start..end]
     }
 
-    pub(crate) fn current(&self) -> Option<(usize, usize)> {
+    pub fn current(&self) -> Option<(usize, usize)> {
         self.current_group()
             .first()
             .map(|stop| (stop.start, stop.end))
     }
 
-    pub(crate) fn mirrors(&self) -> impl Iterator<Item = (usize, usize)> + '_ {
+    pub fn mirrors(&self) -> impl Iterator<Item = (usize, usize)> + '_ {
         self.current_group()
             .iter()
             .map(|stop| (stop.start, stop.end))
     }
 
-    pub(crate) fn mirror_ranges(&self) -> Vec<(usize, usize)> {
+    pub fn mirror_ranges(&self) -> Vec<(usize, usize)> {
         self.mirrors().collect()
     }
 
-    pub(crate) fn matches_ranges(&self, ranges: &[(usize, usize)]) -> bool {
+    pub fn matches_ranges(&self, ranges: &[(usize, usize)]) -> bool {
         let mut expected = self.mirror_ranges();
         expected.sort_unstable();
         let mut actual = ranges
@@ -89,7 +89,7 @@ impl SnippetSession {
         expected == actual
     }
 
-    pub(crate) fn replace_current_with_carets(&mut self, old: &[(usize, usize)], carets: &[usize]) {
+    pub fn replace_current_with_carets(&mut self, old: &[(usize, usize)], carets: &[usize]) {
         let start = self.groups[self.current];
         let end = self
             .groups
@@ -132,7 +132,7 @@ impl SnippetSession {
             offset.saturating_sub(usize::try_from(-delta).unwrap_or(usize::MAX))
         }
     }
-    pub(crate) fn next(&mut self) -> Option<(usize, usize)> {
+    pub fn next_stop(&mut self) -> Option<(usize, usize)> {
         if self.current + 1 >= self.groups.len() {
             return None;
         }
@@ -140,7 +140,7 @@ impl SnippetSession {
         self.current()
     }
 
-    pub(crate) fn previous(&mut self) -> Option<(usize, usize)> {
+    pub fn previous(&mut self) -> Option<(usize, usize)> {
         if self.current == 0 {
             return None;
         }
@@ -148,7 +148,7 @@ impl SnippetSession {
         self.current()
     }
 
-    pub(crate) fn adjust_insert(&mut self, at: usize, length: usize) {
+    pub fn adjust_insert(&mut self, at: usize, length: usize) {
         for stop in &mut self.stops {
             if stop.start >= at {
                 stop.start = stop.start.saturating_add(length);
@@ -159,7 +159,7 @@ impl SnippetSession {
         }
     }
 
-    pub(crate) fn adjust_delete(&mut self, start: usize, end: usize) {
+    pub fn adjust_delete(&mut self, start: usize, end: usize) {
         let length = end.saturating_sub(start);
         for stop in &mut self.stops {
             if stop.end <= start {
@@ -176,7 +176,7 @@ impl SnippetSession {
     }
 }
 
-pub(crate) fn parse(text: &str) -> Result<Snippet, String> {
+pub fn parse(text: &str) -> Result<Snippet, String> {
     let mut output = String::with_capacity(text.len());
     let mut stops = Vec::new();
     let mut chars = text.char_indices().peekable();
@@ -353,8 +353,8 @@ mod tests {
             session.mirrors().collect::<Vec<_>>(),
             vec![(3, 7), (10, 14)]
         );
-        assert_eq!(session.next(), Some((20, 21)));
-        assert_eq!(session.next(), None);
+        assert_eq!(session.next_stop(), Some((20, 21)));
+        assert_eq!(session.next_stop(), None);
         assert_eq!(session.previous(), Some((3, 7)));
         session.adjust_insert(3, 1);
         assert_eq!(session.current(), Some((4, 8)));
@@ -380,8 +380,8 @@ mod tests {
         ])
         .expect("session");
         assert_eq!(session.current(), Some((3, 4)));
-        assert_eq!(session.next(), Some((8, 10)));
-        assert_eq!(session.next(), None);
+        assert_eq!(session.next_stop(), Some((8, 10)));
+        assert_eq!(session.next_stop(), None);
         assert_eq!(session.previous(), Some((3, 4)));
         session.adjust_insert(3, 2);
         assert_eq!(session.current(), Some((5, 6)));

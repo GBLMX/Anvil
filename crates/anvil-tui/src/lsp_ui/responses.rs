@@ -212,7 +212,7 @@ impl Model {
             return;
         }
         match kind {
-            LspRequestKind::Completion => self.apply_completion_response(id, &result),
+            LspRequestKind::Completion => self.apply_completion_response(&result),
             LspRequestKind::CompletionResolve => {
                 self.apply_completion_resolve_response(id, &result);
             }
@@ -276,7 +276,7 @@ impl Model {
         self.file.dirty = true;
     }
 
-    fn apply_completion_response(&mut self, id: u64, result: &serde_json::Value) {
+    fn apply_completion_response(&mut self, result: &serde_json::Value) {
         let items = result
             .get("items")
             .and_then(serde_json::Value::as_array)
@@ -391,7 +391,6 @@ impl Model {
             let filtered = (0..items.len()).collect();
             let selected = items.iter().position(|item| item.preselect).unwrap_or(0);
             self.overlays.lsp_results.completion = Some(CompletionState {
-                id,
                 items,
                 filtered,
                 query: String::new(),

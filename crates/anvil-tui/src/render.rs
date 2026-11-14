@@ -8,7 +8,7 @@ use anvil_syntax::{Highlight, SyntaxClass};
 use ratatui::{
     Frame,
     layout::Rect,
-    style::{Modifier, Style},
+    style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, BorderType, Clear, Paragraph},
 };
@@ -153,9 +153,18 @@ pub(crate) fn rect_contains(rect: Rect, col: u16, row: u16) -> bool {
     col >= rect.x && col < rect.x + rect.width && row >= rect.y && row < rect.y + rect.height
 }
 
+struct BufferTab {
+    label: String,
+    style: Style,
+    icon: Option<(String, Color)>,
+    width: usize,
+}
+
 fn buffer_bar_line(model: &Model, width: u16) -> Line<'static> {
     let width = usize::from(width);
-    let mut tabs: Vec<(String, Style)> = model
+    let ascii_icons = model.appearance.ascii_icons;
+    let icons = &model.appearance.icons;
+    let mut tabs: Vec<BufferTab> = model
         .buffers
         .entries
         .iter()
@@ -173,27 +182,63 @@ fn buffer_bar_line(model: &Model, width: u16) -> Line<'static> {
             } else {
                 ""
             };
-            (format!(" {name}{marker} "), theme::panel())
+            let label = format!("{name}{marker} ");
+            let icon = buffer
+                .path
+                .as_deref()
+                .and_then(|path| path.file_name())
+                .and_then(|name| {
+                    let icon = icon_theme::icon_for(&name.to_string_lossy())
+                        .unwrap_or_else(icon_theme::default_file_icon);
+                    let text = icons.icon_text(icon, ascii_icons)?.trim_end().to_owned();
+                    let color = if buffer.missing {
+                        theme::dim()
+                    } else {
+                        (icon.color)()
+                    };
+                    Some((text, color))
+                });
+            let icon_width = icon
+                .as_ref()
+                .map(|(text, _)| UnicodeWidthStr::width(text.as_str()))
+                .unwrap_or(0);
+            let width = 1
+                + UnicodeWidthStr::width(label.as_str())
+                + icon_width
+                + usize::from(icon.is_some());
+            BufferTab {
+                label,
+                style: theme::panel(),
+                icon,
+                width,
+            }
         })
         .collect();
     let mut active = model.buffers.active.min(tabs.len().saturating_sub(1));
     if model.pager.back.is_some() {
         let name = model.pager.title.as_deref().unwrap_or("help");
-        tabs.push((format!(" [{name}] RO "), theme::selected()));
+        let label = format!("[{name}] RO ");
+        let width = 1 + UnicodeWidthStr::width(label.as_str());
+        tabs.push(BufferTab {
+            label,
+            style: theme::selected(),
+            icon: None,
+            width,
+        });
         active = tabs.len() - 1;
     }
     if tabs.is_empty() {
         return Line::default();
     }
-    tabs[active].1 = theme::selected();
-    let tab_width = |index: usize| UnicodeWidthStr::width(tabs[index].0.as_str());
+    tabs[active].style = theme::selected();
+    let tab_width = |tab: &BufferTab| tab.width;
     let mut start = active;
     let mut end = active + 1;
-    let mut used = tab_width(active);
+    let mut used = tab_width(&tabs[active]);
     while used < width {
         let mut progressed = false;
         if end < tabs.len() {
-            let next = tab_width(end) + 1;
+            let next = tab_width(&tabs[end]) + 1;
             if used + next <= width {
                 used += next;
                 end += 1;
@@ -201,7 +246,7 @@ fn buffer_bar_line(model: &Model, width: u16) -> Line<'static> {
             }
         }
         if start > 0 {
-            let next = tab_width(start - 1) + 1;
+            let next = tab_width(&tabs[start - 1]) + 1;
             if used + next <= width {
                 used += next;
                 start -= 1;
@@ -216,16 +261,27 @@ fn buffer_bar_line(model: &Model, width: u16) -> Line<'static> {
     if start > 0 {
         spans.push(Span::styled("‹", theme::panel().fg(theme::muted())));
     }
-    for (index, (label, style)) in tabs.iter().enumerate().take(end).skip(start) {
+    for (index, tab) in tabs.iter().enumerate().take(end).skip(start) {
         if index > start {
             spans.push(Span::styled("│", theme::panel().fg(theme::border_color())));
         }
-        let label = if UnicodeWidthStr::width(label.as_str()) > width {
-            crate::status_line::middle_ellipsis(label, width)
+        let icon_width = tab
+            .icon
+            .as_ref()
+            .map(|(text, _)| UnicodeWidthStr::width(text.as_str()))
+            .unwrap_or(0);
+        spans.push(Span::styled(" ", tab.style));
+        if let Some((text, color)) = &tab.icon {
+            spans.push(Span::styled(text.clone(), tab.style.fg(*color)));
+            spans.push(Span::styled(" ", tab.style));
+        }
+        let label_width = width.saturating_sub(1 + icon_width + usize::from(tab.icon.is_some()));
+        let label = if UnicodeWidthStr::width(tab.label.as_str()) > label_width {
+            crate::status_line::middle_ellipsis(&tab.label, label_width)
         } else {
-            label.clone()
+            tab.label.clone()
         };
-        spans.push(Span::styled(label, *style));
+        spans.push(Span::styled(label, tab.style));
     }
     if end < tabs.len() {
         spans.push(Span::styled("›", theme::panel().fg(theme::muted())));
@@ -539,6 +595,35 @@ fn previous_char_boundary(text: &str, mut local: usize) -> usize {
     local
 }
 
+/// Applies selection backgrounds without replacing syntax foregrounds.
+pub(crate) fn apply_selection_highlights<'a>(
+    spans: &mut Vec<Span<'a>>,
+    line_start: usize,
+    ranges: &[(usize, usize)],
+) {
+    apply_overlay_ranges(
+        spans,
+        line_start,
+        ranges,
+        |range| range,
+        |_| Style::default().bg(theme::selection()),
+    );
+}
+
+/// Applies the primary cursor block over one grapheme.
+pub(crate) fn apply_cursor_highlight<'a>(
+    spans: &mut Vec<Span<'a>>,
+    line_start: usize,
+    range: (usize, usize),
+) {
+    apply_overlay_ranges(
+        spans,
+        line_start,
+        &[range],
+        |range| range,
+        |_| Style::default().fg(theme::surface()).bg(theme::warning()),
+    );
+}
 /// Applies search backgrounds without replacing existing syntax foregrounds.
 pub(crate) fn apply_search_highlights<'a>(
     spans: &mut Vec<Span<'a>>,

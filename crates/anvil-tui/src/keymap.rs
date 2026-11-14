@@ -318,6 +318,7 @@ pub(crate) enum PendingCommand {
     TypeDefinition,
     Implementation,
     References,
+    Hover,
     DocumentHighlight,
     IncomingCalls,
     OutgoingCalls,
@@ -344,6 +345,7 @@ pub(crate) enum PendingCommand {
     DocumentSymbols,
     WorkspaceSymbols,
     Formatting,
+    ToggleComment,
     ChangeWord(WordMotion),
     ChangeLines,
     DeleteLines,
@@ -367,6 +369,7 @@ impl PendingCommand {
             TypeDefinition => Some(command::TYPE_DEFINITION),
             Implementation => Some(command::IMPLEMENTATION),
             References => Some(command::REFERENCES),
+            Hover => Some(command::HOVER),
             DocumentHighlight => Some(command::DOCUMENT_HIGHLIGHT),
             IncomingCalls => Some(command::INCOMING_CALLS),
             OutgoingCalls => Some(command::OUTGOING_CALLS),
@@ -390,6 +393,7 @@ impl PendingCommand {
             DocumentSymbols => Some(command::DOCUMENT_SYMBOLS),
             WorkspaceSymbols => Some(command::WORKSPACE_SYMBOLS),
             Formatting => Some(command::FORMAT),
+            ToggleComment => Some(command::TOGGLE_COMMENT),
             ChangeWord(WordMotion::NextStart) => Some(command::CHANGE_WORD_NEXT),
             ChangeWord(WordMotion::End) => Some(command::CHANGE_WORD_END),
             ChangeWord(WordMotion::PreviousStart) => Some(command::CHANGE_WORD_PREVIOUS),
@@ -511,6 +515,8 @@ impl PendingCommand {
                 | Self::DocumentSymbols
                 | Self::WorkspaceSymbols
                 | Self::Formatting
+                | Self::Hover
+                | Self::ToggleComment
                 | Self::ChangeWord(_)
                 | Self::DeleteLines
                 | Self::YankLines
@@ -528,6 +534,7 @@ impl PendingCommand {
             "lsp.type_definition" => Self::TypeDefinition,
             "lsp.implementation" => Self::Implementation,
             "lsp.references" => Self::References,
+            "lsp.hover" => Self::Hover,
             "lsp.document_highlight" => Self::DocumentHighlight,
             "lsp.incoming_calls" => Self::IncomingCalls,
             "lsp.outgoing_calls" => Self::OutgoingCalls,
@@ -551,6 +558,7 @@ impl PendingCommand {
             "lsp.document_symbols" => Self::DocumentSymbols,
             "lsp.workspace_symbols" => Self::WorkspaceSymbols,
             "lsp.format" => Self::Formatting,
+            "editor.toggle_comment" => Self::ToggleComment,
             "editor.change_word_next" => Self::ChangeWord(WordMotion::NextStart),
             "editor.change_word_end" => Self::ChangeWord(WordMotion::End),
             "editor.change_word_previous" => Self::ChangeWord(WordMotion::PreviousStart),
@@ -675,6 +683,7 @@ pub(crate) fn pending_action(
         ('w', KeyCode::Char('h')) => Some(PendingCommand::FocusSplit(false)),
         (' ', KeyCode::Char('1')) => Some(PendingCommand::FocusEditor),
         (' ', KeyCode::Char('2')) => Some(PendingCommand::OpenTree),
+        (' ', KeyCode::Char('3')) => Some(PendingCommand::FocusSplit(true)),
         ('w', KeyCode::Char('l')) => Some(PendingCommand::FocusSplit(true)),
         ('w', KeyCode::Char('q')) => Some(PendingCommand::CloseSplit),
         (' ', KeyCode::Char('e')) => Some(PendingCommand::OpenTree),

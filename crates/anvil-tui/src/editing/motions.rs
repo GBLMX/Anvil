@@ -278,6 +278,11 @@ impl Model {
         if let Some(session) = self.edit.insert_session.as_mut() {
             session.valid = false;
         }
+        let text = self.session.editor.text();
+        let mut offset = offset.min(text.len_bytes());
+        while offset > 0 && !text.is_char_boundary(offset) {
+            offset -= 1;
+        }
         self.session.cursor = offset;
         if self.session.editor.selection_bytes().len() <= 1 {
             self.session.editor.set_selection_bytes(offset, offset);

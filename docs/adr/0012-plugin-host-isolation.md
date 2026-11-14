@@ -41,7 +41,22 @@ Applied before plugin VM initialization:
   `socketpair` allow only `AF_UNIX`; other domains return `EPERM`, so TCP/UDP
   cannot be created. Non-native ABIs and x32 (`nr & 0x4000_0000`) are
   rejected. UDS stream operations remain allowed.
-  Broader namespace/mount/ptrace filtering is pending.
+  Broader namespace/mount/ptrace filtering is pending, except for the clone
+  policy below.
+- seccomp clone policy: only thread-style clones pass. A clone without
+  `CLONE_THREAD` is rejected, so `fork`/`vfork`-like process creation cannot
+  escape through `clone`; `SYS_fork` and `SYS_vfork` are denied where the
+  architecture defines them (aarch64 has neither). `CLONE_PARENT`,
+  `CLONE_PTRACE`, `CLONE_UNTRACED`, `CLONE_VFORK`, `CLONE_PIDFD`, and all
+  namespace flags are denied. `CLONE_FS` and the other flags glibc sets for
+  `pthread_create` stay allowed so the Luau runtime keeps normal thread
+  creation. `clone3` returns `ENOSYS` (not `EPERM`) so glibc falls back to
+  `clone`; the syscall itself remains unusable.
+- Host stderr is terminal output, not a log file. Untrusted plugin text only
+  reaches it through one escaping sink: ESC and every C0/C1 control character
+  except `\n` and `\t` is rendered as `\xNN`, and each line is capped at 8 KiB.
+  This covers `print`, `host.event` handler errors, and Lua load/runtime
+  errors, so a plugin cannot emit ANSI/OSC sequences to the editor terminal.
 - Landlock handles `EXECUTE`; no path is granted execute after startup.
 - RLIMIT/cgroup pids, memory, fds, and output caps. cgroup setup verifies the
   cgroup2 superblock and opens existing control files without creating them.

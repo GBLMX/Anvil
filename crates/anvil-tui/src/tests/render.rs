@@ -89,7 +89,8 @@ fn cursorline_overlays_fenced_code_background() {
         .iter()
         .position(|cell| cell.symbol() == "f")
         .expect("code text");
-    assert_eq!(buffer.content()[keyword].bg, theme::surface_alt());
+    assert_eq!(buffer.content()[keyword + 1].symbol(), "n");
+    assert_eq!(buffer.content()[keyword + 1].bg, theme::surface_alt());
 }
 
 #[test]

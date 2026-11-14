@@ -26,6 +26,7 @@ pub struct CommandSpec {
 }
 
 const NORMAL: &[CommandContext] = &[CommandContext::Normal];
+const NORMAL_PENDING: &[CommandContext] = &[CommandContext::Normal, CommandContext::Pending];
 const PENDING: &[CommandContext] = &[CommandContext::Pending];
 
 pub const COLLAPSE_SELECTIONS: CommandId = CommandId::new("editor.collapse_selections");
@@ -109,7 +110,7 @@ pub const YANK_WORDS_PREVIOUS: CommandId = CommandId::new("editor.yank_words_pre
 
 pub const COMMANDS: &[CommandSpec] = &[
     spec(COLLAPSE_SELECTIONS, NORMAL),
-    spec(HOVER, NORMAL),
+    spec(HOVER, NORMAL_PENDING),
     spec(MACRO_RECORD, NORMAL),
     spec(MACRO_REPLAY, NORMAL),
     spec(SPLIT_LINES, NORMAL),
@@ -130,7 +131,7 @@ pub const COMMANDS: &[CommandSpec] = &[
     spec(UNDO, NORMAL),
     spec(REDO, NORMAL),
     spec(REPEAT_CHANGE, NORMAL),
-    spec(TOGGLE_COMMENT, NORMAL),
+    spec(TOGGLE_COMMENT, NORMAL_PENDING),
     spec(MATCH_BRACKET, NORMAL),
     spec(LINE_START, NORMAL),
     spec(JUMP_BACK, NORMAL),
@@ -223,5 +224,11 @@ mod tests {
                 spec.id.as_str()
             );
         }
+    }
+
+    #[test]
+    fn hover_and_comment_are_registered_for_pending() {
+        assert!(is_registered(HOVER, CommandContext::Pending));
+        assert!(is_registered(TOGGLE_COMMENT, CommandContext::Pending));
     }
 }

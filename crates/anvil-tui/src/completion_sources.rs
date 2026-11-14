@@ -8,14 +8,13 @@ use anvil_session::provider::{
 use std::sync::Arc;
 
 impl Model {
-    pub(crate) fn install_completion(&mut self, items: Vec<CompletionItem>, id: u64) {
+    pub(crate) fn install_completion(&mut self, items: Vec<CompletionItem>) {
         if items.is_empty() {
             return;
         }
         let filtered = (0..items.len()).collect();
         let selected = items.iter().position(|item| item.preselect).unwrap_or(0);
         self.overlays.lsp_results.completion = Some(CompletionState {
-            id,
             items,
             filtered,
             query: String::new(),

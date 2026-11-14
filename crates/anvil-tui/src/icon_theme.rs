@@ -8,10 +8,10 @@ use std::fs;
 use std::path::Path;
 use unicode_width::UnicodeWidthStr;
 
-pub(crate) const MAX_ICON_CONFIG_BYTES: u64 = 64 * 1024;
+pub const MAX_ICON_CONFIG_BYTES: u64 = 64 * 1024;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub(crate) enum IconKind {
+pub enum IconKind {
     Rust,
     Go,
     Python,
@@ -31,13 +31,13 @@ pub(crate) enum IconKind {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct Icon {
-    pub(crate) kind: IconKind,
-    pub(crate) color: fn() -> Color,
+pub struct Icon {
+    pub kind: IconKind,
+    pub color: fn() -> Color,
 }
 
 #[derive(Clone, Debug, Default)]
-pub(crate) struct IconTheme {
+pub struct IconTheme {
     overrides: HashMap<IconKind, String>,
 }
 
@@ -211,7 +211,7 @@ const EXTENSIONS: &[(&str, Icon)] = &[
     ),
 ];
 
-pub(crate) fn icon_for(path: &str) -> Option<Icon> {
+pub fn icon_for(path: &str) -> Option<Icon> {
     let name = path.rsplit('/').next().unwrap_or(path);
     if let Some(rule) = RULES.iter().find(|rule| rule.name == name) {
         return Some(rule.icon);
@@ -223,14 +223,14 @@ pub(crate) fn icon_for(path: &str) -> Option<Icon> {
         .map(|(_, icon)| *icon)
 }
 
-pub(crate) fn default_file_icon() -> Icon {
+pub fn default_file_icon() -> Icon {
     Icon {
         kind: IconKind::DefaultFile,
         color: theme::text_color,
     }
 }
 
-pub(crate) fn folder_icon(expanded: bool) -> Icon {
+pub fn folder_icon(expanded: bool) -> Icon {
     Icon {
         kind: if expanded {
             IconKind::FolderOpen
@@ -241,7 +241,7 @@ pub(crate) fn folder_icon(expanded: bool) -> Icon {
     }
 }
 
-pub(crate) fn nerd_glyph(kind: IconKind) -> &'static str {
+pub fn nerd_glyph(kind: IconKind) -> &'static str {
     match kind {
         IconKind::Rust => "\u{e7a8}",
         IconKind::Go => "\u{e627}",
@@ -262,7 +262,7 @@ pub(crate) fn nerd_glyph(kind: IconKind) -> &'static str {
     }
 }
 
-pub(crate) fn ascii_glyph(kind: IconKind) -> &'static str {
+pub fn ascii_glyph(kind: IconKind) -> &'static str {
     match kind {
         IconKind::Rust => "[rs]",
         IconKind::Go => "[go]",
@@ -284,17 +284,17 @@ pub(crate) fn ascii_glyph(kind: IconKind) -> &'static str {
 }
 
 impl IconTheme {
-    pub(crate) fn config_path(workspace: &Path) -> std::path::PathBuf {
+    pub fn config_path(workspace: &Path) -> std::path::PathBuf {
         workspace.join(".anvil.toml")
     }
 
-    pub(crate) fn config_mtime(workspace: &Path) -> Option<std::time::SystemTime> {
+    pub fn config_mtime(workspace: &Path) -> Option<std::time::SystemTime> {
         fs::metadata(Self::config_path(workspace))
             .ok()
             .and_then(|metadata| metadata.modified().ok())
     }
 
-    pub(crate) fn load(workspace: &Path) -> Self {
+    pub fn load(workspace: &Path) -> Self {
         let Ok(metadata) = fs::metadata(workspace.join(".anvil.toml")) else {
             return Self::default();
         };
@@ -321,7 +321,7 @@ impl IconTheme {
         Self { overrides }
     }
 
-    pub(crate) fn glyph(&self, icon: Icon, ascii: bool) -> &str {
+    pub fn glyph(&self, icon: Icon, ascii: bool) -> &str {
         if ascii {
             return ascii_glyph(icon.kind);
         }
@@ -331,7 +331,7 @@ impl IconTheme {
             .unwrap_or_else(|| nerd_glyph(icon.kind))
     }
 
-    pub(crate) fn icon_text(&self, icon: Icon, ascii: bool) -> Option<String> {
+    pub fn icon_text(&self, icon: Icon, ascii: bool) -> Option<String> {
         let glyph = self.glyph(icon, ascii);
         if ascii {
             return Some(format!("{glyph} "));
@@ -367,22 +367,22 @@ fn icon_kind(key: &str) -> Option<IconKind> {
 }
 
 #[cfg(test)]
-pub(crate) fn icon_text_with(icon: Icon, ascii: bool) -> Option<String> {
+pub fn icon_text_with(icon: Icon, ascii: bool) -> Option<String> {
     IconTheme::default().icon_text(icon, ascii)
 }
 
-pub(crate) fn ascii_mode() -> bool {
+pub fn ascii_mode() -> bool {
     std::env::var_os("ANVIL_ASCII_MODE").is_some_and(|value| value == "1")
 }
 
 impl crate::Model {
-    pub(crate) fn reload_icons(&mut self) {
+    pub fn reload_icons(&mut self) {
         self.appearance.icons = IconTheme::load(&self.workspace.path);
         self.appearance.icons_mtime = IconTheme::config_mtime(&self.workspace.path);
         self.appearance.icons_checked_at = Some(std::time::Instant::now());
     }
 
-    pub(crate) fn poll_icons(&mut self) {
+    pub fn poll_icons(&mut self) {
         let due = self
             .appearance
             .icons_checked_at

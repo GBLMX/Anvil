@@ -14,6 +14,7 @@ use sha2::{Digest, Sha256};
 mod format;
 mod preview;
 mod protocol;
+pub mod roots;
 mod search;
 mod worker;
 #[cfg(all(test, feature = "official-git"))]

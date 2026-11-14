@@ -119,6 +119,14 @@ fn pending_operators_resolve_chords() {
 }
 
 #[test]
+fn fallback_space_three_focuses_right_split() {
+    assert_eq!(
+        pending_action(' ', key(KeyCode::Char('3'), KeyModifiers::NONE), false),
+        Some(PendingCommand::FocusSplit(true))
+    );
+}
+
+#[test]
 fn pending_g_resolves_navigation_commands() {
     assert_eq!(
         pending_action('g', key(KeyCode::Char('d'), KeyModifiers::NONE), false),
@@ -476,7 +484,7 @@ x = "not.a.command"
 
 #[test]
 fn bundled_presets_parse_without_function_keys() {
-    for name in ["ergo", "vim"] {
+    for name in ["ergo", "vim", "helix"] {
         let config = KeymapConfig::from_preset(name).expect("bundled preset parses");
         assert!(
             config
@@ -499,6 +507,45 @@ fn bundled_presets_parse_without_function_keys() {
                 .flatten()
                 .all(|(chord, _)| !matches!(chord.code, KeyCode::F(_))),
             "{name} context bindings contain an F-key"
+        );
+    }
+}
+
+#[test]
+fn helix_preset_maps_space_aliases() {
+    let config = KeymapConfig::from_preset("helix").expect("helix preset parses");
+    for (character, expected) in [
+        ('h', PendingCommand::References),
+        ('k', PendingCommand::Hover),
+        ('c', PendingCommand::ToggleComment),
+        ('?', PendingCommand::CommandPalette),
+    ] {
+        assert_eq!(
+            resolve_pending(
+                ' ',
+                key(KeyCode::Char(character), KeyModifiers::NONE),
+                false,
+                &config,
+            ),
+            Some(expected),
+            "Space {character}"
+        );
+    }
+}
+
+#[test]
+fn helix_aliases_are_opt_in() {
+    let config = KeymapConfig::default();
+    for character in ['h', 'k', 'c', '?'] {
+        assert_eq!(
+            resolve_pending(
+                ' ',
+                key(KeyCode::Char(character), KeyModifiers::NONE),
+                false,
+                &config,
+            ),
+            None,
+            "Space {character} must require the helix preset"
         );
     }
 }

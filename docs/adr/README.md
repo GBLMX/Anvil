@@ -29,7 +29,7 @@ their decision sections.
 | [0021](0021-signed-plugin-index.md) | Signed plugin index, revocations, anti-rollback | Accepted; verifier/cache partial |
 | [0022](0022-core-editing-completion.md) | Core editing completion and semantic ownership | Proposed |
 | [0023](0023-internal-capability-closure.md) | Internal capability closure before public distribution | Proposed |
-| [0024](0024-tui-state-and-domain-boundaries.md) | TUI state composition, page state, and domain boundaries | Partially implemented; further extraction deferred |
+| [0024](0024-tui-state-and-domain-boundaries.md) | TUI state composition, page state, and domain boundaries | Partially implemented; primitives split in ADR-0041 |
 | [0025](0025-lsp-and-language-breadth.md) | LSP surface and language breadth boundaries | Accepted |
 | [0026](0026-persistent-undo-decision.md) | Persistent undo is deferred and gated | Accepted |
 | [0027](0027-distribution-composition-crate.md) | Standard distribution composition crate and two consumers | Accepted |
@@ -45,6 +45,8 @@ their decision sections.
 | [0037](0037-kernel-api-baseline.md) | Kernel API baseline during internal polish | Accepted |
 | [0038](0038-project-settings-trust.md) | Project settings are trust-gated | Accepted |
 | [0039](0039-plugin-event-transport.md) | Plugin event transport and interaction boundary | Proposed |
+| [0040](0040-helix-keymap-compatibility.md) | Helix-compatible keymap preset and shared command contexts | Accepted |
+| [0041](0041-tui-primitive-extraction.md) | TUI primitive extraction | Accepted |
 
 ## Numbering Rule
 

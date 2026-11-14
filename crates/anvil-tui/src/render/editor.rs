@@ -369,6 +369,33 @@ pub fn view(model: &Model, frame: &mut Frame) {
             }
         }
     }
+    if let Some(selection) = editor_view.selections.first()
+        && selection.anchor != selection.head
+        && selection.anchor.display_column == 0
+    {
+        let line = selection.anchor.line as usize;
+        if line >= model.view.scroll
+            && let Some(row) = model.row_of_position(
+                line,
+                selection.anchor.display_column as usize,
+                usize::from(content.height),
+            )
+        {
+            let x = text_area.x.saturating_sub(1);
+            let y = content.y + row as u16;
+            if x >= content.x && y < content.bottom() {
+                frame.render_widget(
+                    Paragraph::new("│").style(Style::default().fg(theme::warning())),
+                    Rect {
+                        x,
+                        y,
+                        width: 1,
+                        height: 1,
+                    },
+                );
+            }
+        }
+    }
     for selection in editor_view.selections.iter().skip(1) {
         let line = selection.head.line as usize;
         let column = selection.head.display_column as usize;

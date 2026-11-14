@@ -983,6 +983,259 @@ fn dap_attach_does_not_block_and_reports_failure() {
     assert!(model.status.text.contains("dap"), "{}", model.status.text);
 }
 
+#[cfg(unix)]
+fn idle_dap_client() -> (crate::dap::DapClient, tempfile::TempDir) {
+    let directory = tempfile::tempdir().expect("tempdir");
+    let client = crate::dap::DapClient::spawn(
+        std::path::Path::new("sleep"),
+        &["30".to_owned()],
+        directory.path(),
+    )
+    .expect("spawn idle adapter");
+    (client, directory)
+}
+
+#[cfg(target_os = "linux")]
+fn wait_for_process_exit(pid: u32) {
+    let proc = std::path::PathBuf::from(format!("/proc/{pid}"));
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+    while proc.exists() {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "adapter process {pid} survived cleanup"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+}
+
+#[test]
+fn dap_attach_rejects_second_attach_while_starting() {
+    let mut model = Model::new(EditorState::from_text(""), None);
+    let (_sender, receiver) = std::sync::mpsc::sync_channel(1);
+    model.language.dap.attach = Some(receiver);
+    model.execute_command("dap-attach /bin/sh");
+    assert_eq!(model.status.text, "E: dap attach already in progress");
+    assert!(model.language.dap.attach_worker.is_none());
+}
+
+#[cfg(unix)]
+#[test]
+fn dap_attach_rejects_while_client_is_attached_and_detach_reaps_adapter() {
+    let (client, _directory) = idle_dap_client();
+    let pid = client.pid();
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.language.dap.client = Some(client);
+    model.language.dap.generation = 1;
+    model.execute_command("dap-attach /bin/sh");
+    assert_eq!(
+        model.status.text,
+        "E: debug adapter already attached; use :dap-detach"
+    );
+    assert_eq!(
+        model.language.dap.client.as_ref().expect("client").pid(),
+        pid
+    );
+    model.execute_command("dap-detach");
+    assert!(model.language.dap.client.is_none());
+    assert_ne!(model.language.dap.generation, 1);
+    #[cfg(target_os = "linux")]
+    wait_for_process_exit(pid);
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn dap_attach_timeout_kills_adapter_process_group() {
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.execute_command("dap-attach sleep 30");
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+    let pid = loop {
+        let pid = model
+            .language
+            .dap
+            .attach_worker
+            .as_ref()
+            .map(crate::dap::DapWorker::pid)
+            .unwrap_or(0);
+        if pid != 0 {
+            break pid;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "adapter pid was never registered"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    };
+    // Pretend the attach has been waiting past its deadline.
+    model.language.dap.attach_started =
+        Some(std::time::Instant::now() - std::time::Duration::from_secs(6));
+    model.poll_dap_attach();
+    assert!(model.language.dap.attach.is_none());
+    assert!(model.language.dap.attach_worker.is_none());
+    assert!(
+        model.status.text.contains("timed out"),
+        "{}",
+        model.status.text
+    );
+    wait_for_process_exit(pid);
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn dap_refresh_timeout_kills_hung_adapter() {
+    let directory = tempfile::tempdir().expect("tempdir");
+    let adapter = directory.path().join("hanging_adapter.py");
+    std::fs::write(
+        &adapter,
+        r#"import json, sys, time
+def send(message):
+    data = json.dumps(message).encode()
+    sys.stdout.buffer.write(f"Content-Length: {len(data)}\r\n\r\n".encode() + data)
+    sys.stdout.buffer.flush()
+while True:
+    headers = {}
+    while True:
+        line = sys.stdin.buffer.readline()
+        if not line:
+            sys.exit(0)
+        if line in (b"\r\n", b"\n"):
+            break
+        key, value = line.decode().split(":", 1)
+        headers[key.lower()] = value.strip()
+    request = json.loads(sys.stdin.buffer.read(int(headers["content-length"])))
+    if request["command"] != "initialize":
+        time.sleep(60)
+    send({
+        "seq": 1,
+        "type": "response",
+        "request_seq": request["seq"],
+        "success": True,
+        "command": request["command"],
+        "body": {},
+    })
+"#,
+    )
+    .expect("write adapter");
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.execute_command(&format!("dap-attach python3 {}", adapter.display()));
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while model.language.dap.client.is_none() && std::time::Instant::now() < deadline {
+        model.poll_dap_attach();
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    let pid = model
+        .language
+        .dap
+        .client
+        .as_ref()
+        .expect("adapter attached")
+        .pid();
+    model.toggle_debug_panel();
+    assert!(model.language.dap.request_worker.is_some());
+    model.language.dap.request_started =
+        Some(std::time::Instant::now() - std::time::Duration::from_secs(6));
+    model.poll_debug_request();
+    assert!(model.language.dap.request.is_none());
+    assert!(model.language.dap.request_worker.is_none());
+    assert!(model.language.dap.client.is_none());
+    assert!(
+        model.status.text.contains("timed out"),
+        "{}",
+        model.status.text
+    );
+    wait_for_process_exit(pid);
+}
+
+#[cfg(unix)]
+#[test]
+fn stale_refresh_result_does_not_replace_newer_client() {
+    use crate::debug_panel::{DebugSnapshot, DebugThread};
+    let (stale_client, _stale_directory) = idle_dap_client();
+    let stale_pid = stale_client.pid();
+    let (current_client, _current_directory) = idle_dap_client();
+    let current_pid = current_client.pid();
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.language.dap.generation = 7;
+    model.language.dap.client = Some(current_client);
+    model.overlays.debug_panel = Some(crate::debug_panel::DebugPanelState::default());
+    let (sender, receiver) = std::sync::mpsc::sync_channel(1);
+    sender
+        .send((
+            6,
+            stale_client,
+            Ok(DebugSnapshot {
+                threads: vec![DebugThread {
+                    id: 9,
+                    name: "stale".to_owned(),
+                }],
+                frames: Vec::new(),
+                scopes: Vec::new(),
+                variables: Vec::new(),
+                watches: Vec::new(),
+            }),
+        ))
+        .expect("send stale refresh");
+    model.language.dap.request = Some(receiver);
+    model.language.dap.request_started = Some(std::time::Instant::now());
+    model.poll_debug_request();
+    assert!(model.language.dap.request.is_none());
+    assert_eq!(
+        model.language.dap.client.as_ref().expect("client").pid(),
+        current_pid
+    );
+    assert!(
+        model
+            .overlays
+            .debug_panel
+            .as_ref()
+            .expect("panel")
+            .threads
+            .is_empty()
+    );
+    assert_ne!(model.status.text, "debug state refreshed");
+    #[cfg(target_os = "linux")]
+    wait_for_process_exit(stale_pid);
+}
+
+#[cfg(unix)]
+#[test]
+fn refresh_result_restores_client_for_matching_generation() {
+    use crate::debug_panel::{DebugSnapshot, DebugThread};
+    let (client, _directory) = idle_dap_client();
+    let pid = client.pid();
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.language.dap.generation = 4;
+    model.overlays.debug_panel = Some(crate::debug_panel::DebugPanelState::default());
+    let (sender, receiver) = std::sync::mpsc::sync_channel(1);
+    sender
+        .send((
+            4,
+            client,
+            Ok(DebugSnapshot {
+                threads: vec![DebugThread {
+                    id: 1,
+                    name: "main".to_owned(),
+                }],
+                frames: Vec::new(),
+                scopes: Vec::new(),
+                variables: Vec::new(),
+                watches: Vec::new(),
+            }),
+        ))
+        .expect("send refresh");
+    model.language.dap.request = Some(receiver);
+    model.language.dap.request_started = Some(std::time::Instant::now());
+    model.poll_debug_request();
+    assert_eq!(
+        model.language.dap.client.as_ref().expect("client").pid(),
+        pid
+    );
+    assert_eq!(
+        model.overlays.debug_panel.as_ref().expect("panel").threads[0].name,
+        "main"
+    );
+    assert_eq!(model.status.text, "debug state refreshed");
+}
+
 #[test]
 fn za_zm_zr_fold_keys_work_through_dispatch() {
     let mut model = Model::new(
@@ -1101,4 +1354,49 @@ fn repeated_missing_prefix_keeps_pending() {
     handle_event(&mut model, ctrl(KeyCode::Char('w')));
     handle_event(&mut model, key(KeyCode::Char('w')));
     assert_eq!(model.input.pending, Some('w'));
+}
+
+#[test]
+fn bracket_lookup_ignores_mid_codepoint_cursor() {
+    let text = "# 安装布局（版本化 + 原子切换）：\n";
+    let mut model = Model::new(EditorState::from_text(text), None);
+    model.session.cursor = text.find('换').expect("换") + 1;
+    assert!(!text.is_char_boundary(model.session.cursor));
+    assert!(model.bracket_pair().is_none());
+}
+
+#[test]
+fn bracket_lookup_does_not_slice_past_codepoint() {
+    let text = "# 安装布局（版本化 + 原子切换）：\n";
+    let mut model = Model::new(EditorState::from_text(text), None);
+    model.session.cursor = 0;
+    assert!(model.bracket_pair().is_none());
+}
+
+#[test]
+fn down_over_cjk_and_tab_lines_keeps_bracket_lookup_safe() {
+    let text = "# 安装布局（版本化 + 原子切换）：\n\t版本化\n末尾\n";
+    let mut model = Model::new(EditorState::from_text(text), None);
+
+    model.session.cursor = 0;
+    handle_event(&mut model, key(KeyCode::Down));
+    assert!(text.is_char_boundary(model.session.cursor));
+    let _ = model.bracket_pair();
+
+    let cjk_start = text.find("# 安装").expect("cjk start");
+    model.session.cursor = cjk_start;
+    let _ = model.bracket_pair();
+
+    let cjk_end = text.find('\n').expect("cjk end");
+    model.session.cursor = cjk_end;
+    let _ = model.bracket_pair();
+
+    model.session.cursor = text.find('\t').expect("tab");
+    let _ = model.bracket_pair();
+
+    model.session.cursor = text.find("版本化").expect("cjk line");
+    let _ = model.bracket_pair();
+    model.move_end();
+    assert!(text.is_char_boundary(model.session.cursor));
+    let _ = model.bracket_pair();
 }

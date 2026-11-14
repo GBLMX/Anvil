@@ -7,8 +7,8 @@ mod runtime;
 #[cfg(target_os = "linux")]
 mod linux {
     use super::*;
-    use anvil_plugin_host::Token;
     use anvil_plugin_host::manifest::PluginManifest;
+    use anvil_plugin_host::{Token, write_plugin_stderr};
     use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::Duration;
 
@@ -18,7 +18,7 @@ mod linux {
         match run() {
             Ok(code) => ExitCode::from(code),
             Err(error) => {
-                let _ = writeln!(io::stderr(), "plugin-host: {error}");
+                write_plugin_stderr("plugin-host: ", &error.to_string());
                 ExitCode::FAILURE
             }
         }
@@ -183,7 +183,7 @@ mod linux {
                 Ok(42) => return Ok(0),
                 Ok(_) => return Ok(31),
                 Err(error) => {
-                    let _ = writeln!(io::stderr(), "luau smoke failed: {error}");
+                    write_plugin_stderr("luau smoke failed: ", &error.to_string());
                     return Ok(32);
                 }
             }
@@ -313,9 +313,12 @@ mod linux {
         if !denied(unsafe { libc::unshare(libc::CLONE_NEWNS) }) {
             return 47;
         }
-        if !denied(unsafe {
-            libc::syscall(libc::SYS_clone3, std::ptr::null::<u8>(), 0) as libc::c_int
-        }) {
+        // `clone3` must report ENOSYS, not EPERM, so glibc's thread creation
+        // falls back to `clone`. The syscall itself stays denied.
+        let clone3 = unsafe {
+            libc::syscall(libc::SYS_clone3, std::ptr::null::<u8>(), 0usize) as libc::c_int
+        };
+        if clone3 != -1 || io::Error::last_os_error().raw_os_error() != Some(libc::ENOSYS) {
             return 48;
         }
         if std::process::Command::new("/bin/sh")
@@ -345,6 +348,8 @@ mod linux {
                     0,
                 ) as libc::c_int
             };
+            // SAFETY: `pidfd` is a descriptor opened just above and is closed
+            // exactly once here.
             unsafe {
                 libc::close(pidfd as libc::c_int);
             }
@@ -352,7 +357,84 @@ mod linux {
                 return 52;
             }
         }
+        // Fork-style syscalls must be denied outright where the architecture
+        // keeps dedicated syscalls (aarch64 has neither; its `fork` is a plain
+        // process-style clone, denied below).
+        #[cfg(target_arch = "x86_64")]
+        {
+            // SAFETY: `syscall` is a raw syscall; a denied call has no effect.
+            let forked = unsafe { libc::syscall(libc::SYS_fork) };
+            if forked == 0 {
+                // The filter did not deny fork; never continue in the child.
+                unsafe { libc::_exit(53) };
+            }
+            if !denied(forked as libc::c_int) {
+                return 53;
+            }
+            // SAFETY: `syscall` is a raw syscall; a denied call has no effect.
+            let forked = unsafe { libc::syscall(libc::SYS_vfork) };
+            if forked == 0 {
+                // The filter did not deny vfork; never continue in the child.
+                unsafe { libc::_exit(54) };
+            }
+            if !denied(forked as libc::c_int) {
+                return 54;
+            }
+        }
+        // A process-style clone (no CLONE_THREAD) is a fork/vfork equivalent.
+        // SAFETY: `clone` gets a flags word, a null stack, and null tid/tls
+        // pointers; the filter must reject it before the kernel acts.
+        let cloned = unsafe {
+            libc::syscall(
+                libc::SYS_clone,
+                libc::SIGCHLD as libc::c_ulong,
+                std::ptr::null::<u8>(),
+                std::ptr::null::<u8>(),
+                std::ptr::null::<u8>(),
+                0usize,
+            )
+        };
+        if cloned == 0 {
+            // The filter did not deny the clone; never continue in the child.
+            unsafe { libc::_exit(55) };
+        }
+        if !denied(cloned as libc::c_int) {
+            return 55;
+        }
+        // Normal thread creation must keep working; the clone filter only
+        // admits `CLONE_THREAD` clones.
+        if !thread_creation_allowed() {
+            return 56;
+        }
         0
+    }
+
+    extern "C" fn thread_probe(_: *mut libc::c_void) -> *mut libc::c_void {
+        std::ptr::null_mut()
+    }
+
+    /// Creates and joins one pthread, proving the clone filter leaves normal
+    /// thread creation (what the Luau runtime relies on) intact.
+    fn thread_creation_allowed() -> bool {
+        let mut thread = std::mem::MaybeUninit::<libc::pthread_t>::uninit();
+        // SAFETY: `pthread_create` writes the thread id into `thread`; the start
+        // routine has the required C ABI and ignores its argument.
+        let created = unsafe {
+            libc::pthread_create(
+                thread.as_mut_ptr(),
+                std::ptr::null(),
+                thread_probe,
+                std::ptr::null_mut(),
+            )
+        };
+        if created != 0 {
+            return false;
+        }
+        // SAFETY: `pthread_create` returned 0, so `thread` is initialized.
+        let thread = unsafe { thread.assume_init() };
+        // SAFETY: `thread` is a joinable thread created above; its return value
+        // is not used.
+        unsafe { libc::pthread_join(thread, std::ptr::null_mut()) == 0 }
     }
 
     fn read_token(fd: i32) -> io::Result<[u8; 32]> {
@@ -568,6 +650,27 @@ mod linux {
     const ARG2: u32 = 32;
     const F_SETOWN_EX: u32 = 15;
     const F_SETSIG: u32 = 10;
+    /// `CLONE_NEWTIME` has no `libc` constant on all supported versions.
+    const CLONE_NEWTIME: u32 = 0x0000_0080;
+    /// `CLONE_PIDFD` has no `libc` constant on all supported versions.
+    const CLONE_PIDFD: u32 = 0x0000_1000;
+    /// Clone flags denied for every plugin clone, including thread-style ones.
+    ///
+    /// `CLONE_FS` is deliberately absent: glibc sets it for `pthread_create`,
+    /// and a clone without `CLONE_THREAD` is already rejected separately.
+    const CLONE_FORBIDDEN: u32 = CLONE_NEWTIME
+        | CLONE_PIDFD
+        | libc::CLONE_PTRACE as u32
+        | libc::CLONE_VFORK as u32
+        | libc::CLONE_PARENT as u32
+        | libc::CLONE_UNTRACED as u32
+        | libc::CLONE_NEWNS as u32
+        | libc::CLONE_NEWCGROUP as u32
+        | libc::CLONE_NEWUTS as u32
+        | libc::CLONE_NEWIPC as u32
+        | libc::CLONE_NEWUSER as u32
+        | libc::CLONE_NEWPID as u32
+        | libc::CLONE_NEWNET as u32;
 
     fn apply_seccomp() -> io::Result<()> {
         #[cfg(target_arch = "x86_64")]
@@ -620,14 +723,37 @@ mod linux {
             libc::SYS_perf_event_open,
             libc::SYS_userfaultfd,
             libc::SYS_keyctl,
-            libc::SYS_clone3,
             libc::SYS_socket,
             libc::SYS_socketpair,
             libc::SYS_connect,
         ] {
             deny_syscall(&mut filter, nr);
         }
-        deny_arg0_mask(&mut filter, libc::SYS_clone, 0x7e02_0080, ARG0);
+        // `clone3` reports ENOSYS instead of EPERM so glibc's `pthread_create`
+        // (which probes clone3 first) falls back to `clone`. The syscall stays
+        // denied.
+        deny_syscall_errno(&mut filter, libc::SYS_clone3, libc::ENOSYS);
+        push(&mut filter, BPF_LD | BPF_W | BPF_ABS, NR);
+        // Only thread-style clones are allowed: a clone without `CLONE_THREAD`
+        // is a fork/vfork equivalent.
+        require_arg0_flag(
+            &mut filter,
+            libc::SYS_clone,
+            libc::CLONE_THREAD as u32,
+            ARG0,
+        );
+        push(&mut filter, BPF_LD | BPF_W | BPF_ABS, NR);
+        // Namespace creation, pidfd, vfork, ptrace and untraced-parent flags
+        // stay out of reach even for thread-style clones.
+        deny_arg0_mask(&mut filter, libc::SYS_clone, CLONE_FORBIDDEN, ARG0);
+        push(&mut filter, BPF_LD | BPF_W | BPF_ABS, NR);
+        // x86_64 keeps dedicated fork/vfork syscalls; aarch64 has neither, and
+        // its glibc `fork` is a process-style clone denied above.
+        #[cfg(target_arch = "x86_64")]
+        {
+            deny_syscall(&mut filter, libc::SYS_fork);
+            deny_syscall(&mut filter, libc::SYS_vfork);
+        }
         push(&mut filter, BPF_LD | BPF_W | BPF_ABS, NR);
         deny_fcntl(&mut filter, libc::SYS_fcntl, ARG1, ARG2);
         push(&mut filter, BPF_LD | BPF_W | BPF_ABS, NR);
@@ -638,6 +764,8 @@ mod linux {
             len: filter.len() as u16,
             filter: filter.as_ptr(),
         };
+        // SAFETY: the filter bytecode lives in `filter`, which outlives the
+        // `prctl` call, and `SockFprog` matches the kernel's expected layout.
         let result =
             unsafe { libc::prctl(libc::PR_SET_SECCOMP, libc::SECCOMP_MODE_FILTER, &program) };
         if result != 0 {
@@ -664,8 +792,29 @@ mod linux {
     }
 
     fn deny_syscall(filter: &mut Vec<SockFilter>, nr: libc::c_long) {
+        deny_syscall_errno(filter, nr, libc::EPERM);
+    }
+
+    /// Denies `nr` with `errno` instead of the default EPERM.
+    fn deny_syscall_errno(filter: &mut Vec<SockFilter>, nr: libc::c_long, errno: libc::c_int) {
         jump(filter, BPF_JMP | BPF_JEQ | BPF_K, nr as u32, 0, 1);
+        ret(filter, SECCOMP_RET_ERRNO | errno as u32);
+    }
+
+    /// Denies `nr` unless `flag` is set in the argument at `arg0_offset`.
+    fn require_arg0_flag(
+        filter: &mut Vec<SockFilter>,
+        nr: libc::c_long,
+        flag: u32,
+        arg0_offset: u32,
+    ) {
+        let start = filter.len();
+        jump(filter, BPF_JMP | BPF_JEQ | BPF_K, nr as u32, 0, 0);
+        push(filter, BPF_LD | BPF_W | BPF_ABS, arg0_offset);
+        jump(filter, BPF_JMP | BPF_JSET | BPF_K, flag, 1, 0);
         ret(filter, SECCOMP_RET_ERRNO | libc::EPERM as u32);
+        let end = filter.len();
+        filter[start].jf = (end - start - 1) as u8;
     }
 
     fn deny_arg0_mask(filter: &mut Vec<SockFilter>, nr: libc::c_long, mask: u32, arg0_offset: u32) {
@@ -967,7 +1116,7 @@ mod linux {
             if let Some(lua) = lua {
                 if let Err(error) = runtime::call_event(lua, &params) {
                     HANDLER_ERRORS.fetch_add(1, Ordering::Relaxed);
-                    eprintln!("host.event: {error}");
+                    write_plugin_stderr("host.event: ", &error);
                 }
             }
             return Ok(());

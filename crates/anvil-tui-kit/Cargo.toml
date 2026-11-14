@@ -1,6 +1,6 @@
 [package]
 name = "anvil-tui-kit"
-description = "Reusable terminal lifecycle and selection primitives for Anvil frontends"
+description = "Reusable terminal lifecycle, selection, and key primitives for Anvil frontends"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

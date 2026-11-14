@@ -3,15 +3,15 @@
 use std::ops::Range;
 use std::path::Path;
 
-pub(crate) const MAX_COMMENT_LINES: usize = 10_000;
+pub const MAX_COMMENT_LINES: usize = 10_000;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct CommentStyle {
+pub struct CommentStyle {
     pub line: &'static str,
 }
 
 /// Returns the line-comment marker for a supported file type.
-pub(crate) fn comment_style(path: &Path) -> Option<CommentStyle> {
+pub fn comment_style(path: &Path) -> Option<CommentStyle> {
     let name = path.file_name()?.to_str()?;
     if name == "go.mod" {
         return Some(CommentStyle { line: "//" });
@@ -34,7 +34,7 @@ pub(crate) fn comment_style(path: &Path) -> Option<CommentStyle> {
 /// A line is considered commented when its content after indentation starts
 /// with the marker. Empty or whitespace-only lines do not decide the toggle
 /// direction and are left untouched when removing.
-pub(crate) fn toggle_edits(
+pub fn toggle_edits(
     text: &str,
     lines: &[Range<usize>],
     marker: &str,

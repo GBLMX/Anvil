@@ -1,10 +1,12 @@
 # Anvil Architecture
 
-Status: current as of 2026-11-13. The editor control plane (`anvil-control`,
+Status: current as of 2026-11-14. The editor control plane (`anvil-control`,
 `anvil-ctl`, protocol v3) and the thin `anvil-mcp` stdio adapter are implemented.
-`0.4.7c-b` cgroup-before-exec limits, host supervision, idle reclaim, and
-seccomp closure are landed. `0.4.9` session extraction and `0.5.x`
-interaction/UI are landed. The official-only plugin distribution path is
+The cgroup-before-exec, host supervision, idle reclaim, and seccomp closure
+are landed, as are the bounded control/session/DAP/plugin-host failure paths.
+`0.4.9` session extraction and `0.5.x` interaction/UI are landed. TUI theme,
+text-search, snippet, comment, workspace-root, and key-input primitives are
+split out under ADR-0041. The official-only plugin distribution path is
 landed: signed layout, installer, bundled fallback, and managed store.
 The kernel API baseline is accepted in ADR-0037; `anvil-tui` remains outside
 that baseline. Marketplace/index work remains planned. See
@@ -256,13 +258,13 @@ yet.
 crates/
   anvil-api/           public Rust types, schema, generated stubs
   anvil-core/          text model, commands, snapshots
-  anvil-editor/        selection-first editor state and snapshots
+  anvil-editor/        editor state, snapshots, text search, snippets, comments
   anvil-syntax/        Tree-sitter grammars, highlighting, and scopes
   anvil-session/       documents, effects, keymap, plugin lifecycle
   anvil-task/          bounded task groups, cancellation, and event delivery
   anvil-process/       single-owner child process groups and shutdown
   anvil-lsp-client/    LSP transport, diagnostics, and supervised worker
-  anvil-workspace/     workspace file worker, search, preview, and formatting
+  anvil-workspace/     workspace roots, file worker, search, preview, formatting
   anvil-module/        trusted source-level module contract and registry
   anvil-mod-git/       trusted Git helpers for the official git module
   anvil-mod-workspace-index/ bounded in-memory workspace index module
@@ -270,8 +272,9 @@ crates/
   anvil-control/       editor control socket, protocol v3, command manifest
   anvil-ctl/           CLI adapter over the control socket
   anvil-plugin-host/   Luau host + sandbox (QuickJS planned)
-  anvil-tui/           terminal frontend library
-  anvil-distro-standard/ standard distribution entrypoint and composition
+  anvil-tui/           terminal application shell and model composition
+  anvil-tui-kit/       terminal lifecycle, selection, and key normalization
+  anvil-tui-theme/     semantic terminal themes
   anvil-mcp/           stdio MCP adapter over anvil-control
 go/
   cmd/anvil-gateway/   gateway entry point

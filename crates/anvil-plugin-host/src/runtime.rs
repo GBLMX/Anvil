@@ -1,7 +1,7 @@
 //! Sandboxed Luau runtime primitives.
 
 use anvil_ipc::Connection;
-use anvil_plugin_host::Token;
+use anvil_plugin_host::{Token, write_plugin_line, write_plugin_stderr};
 use mlua::{Lua, LuaSerdeExt, Result, Value, Variadic};
 use serde_json::{Value as JsonValue, json};
 use std::cell::RefCell;
@@ -14,39 +14,55 @@ use std::time::Duration;
 pub(crate) struct EditorClient {
     connection: Connection,
     next_id: u64,
+    path: std::path::PathBuf,
+    plugin_id: String,
+    token: [u8; 32],
 }
 
-fn hex_token(token: Token) -> String {
-    token.0.iter().map(|byte| format!("{byte:02x}")).collect()
+enum CallError {
+    Transport(String),
+    Rpc(String),
+}
+
+fn hex_token(token: [u8; 32]) -> String {
+    token.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
 impl EditorClient {
     pub(crate) fn connect(path: &Path, plugin_id: &str, token: Token) -> std::io::Result<Self> {
-        let mut connection = Connection::connect(path)?;
-        connection.set_read_timeout(Some(Duration::from_secs(2)))?;
-        let hello = json!({
-            "jsonrpc": "2.0",
-            "method": "session.hello",
-            "params": {
-                "plugin_id": plugin_id,
-                "token": hex_token(token),
-                "api_version": "1.0.0"
-            }
-        });
-        connection
-            .send(
-                serde_json::to_string(&hello)
-                    .map_err(std::io::Error::other)?
-                    .as_bytes(),
-            )
-            .map_err(std::io::Error::other)?;
+        let connection = open_connection(path, plugin_id, token.0)?;
         Ok(Self {
             connection,
             next_id: 1,
+            path: path.to_path_buf(),
+            plugin_id: plugin_id.to_owned(),
+            token: token.0,
         })
     }
 
     fn call(&mut self, method: &str, params: JsonValue) -> std::result::Result<JsonValue, String> {
+        match self.request(method, params.clone()) {
+            Ok(value) => Ok(value),
+            Err(CallError::Rpc(message)) => Err(message),
+            Err(CallError::Transport(first)) => {
+                self.connection = open_connection(&self.path, &self.plugin_id, self.token)
+                    .map_err(|error| format!("{first}; reconnect failed: {error}"))?;
+                if is_retryable(method) {
+                    self.request(method, params).map_err(|error| match error {
+                        CallError::Transport(message) | CallError::Rpc(message) => message,
+                    })
+                } else {
+                    Err(first)
+                }
+            }
+        }
+    }
+
+    fn request(
+        &mut self,
+        method: &str,
+        params: JsonValue,
+    ) -> std::result::Result<JsonValue, CallError> {
         let id = self.next_id;
         self.next_id = self.next_id.saturating_add(1);
         let request = json!({
@@ -58,31 +74,59 @@ impl EditorClient {
         self.connection
             .send(
                 serde_json::to_string(&request)
-                    .map_err(|error| error.to_string())?
+                    .map_err(|error| CallError::Transport(error.to_string()))?
                     .as_bytes(),
             )
-            .map_err(|error| error.to_string())?;
+            .map_err(|error| CallError::Transport(error.to_string()))?;
         loop {
             let frame = self
                 .connection
                 .recv()
-                .map_err(|error| error.to_string())?
-                .ok_or_else(|| "editor socket closed".to_owned())?;
-            let response: JsonValue =
-                serde_json::from_slice(&frame).map_err(|error| error.to_string())?;
+                .map_err(|error| CallError::Transport(error.to_string()))?
+                .ok_or_else(|| CallError::Transport("editor socket closed".to_owned()))?;
+            let response: JsonValue = serde_json::from_slice(&frame)
+                .map_err(|error| CallError::Transport(error.to_string()))?;
             if response.get("id") != Some(&json!(id)) {
                 continue;
             }
             if let Some(error) = response.get("error") {
-                return Err(error
-                    .get("message")
-                    .and_then(JsonValue::as_str)
-                    .unwrap_or("editor RPC failed")
-                    .to_owned());
+                return Err(CallError::Rpc(
+                    error
+                        .get("message")
+                        .and_then(JsonValue::as_str)
+                        .unwrap_or("editor RPC failed")
+                        .to_owned(),
+                ));
             }
             return Ok(response.get("result").cloned().unwrap_or(JsonValue::Null));
         }
     }
+}
+
+fn is_retryable(method: &str) -> bool {
+    matches!(method, "editor.get_view" | "editor.get_snapshot")
+}
+
+fn open_connection(path: &Path, plugin_id: &str, token: [u8; 32]) -> std::io::Result<Connection> {
+    let mut connection = Connection::connect(path)?;
+    connection.set_read_timeout(Some(Duration::from_secs(2)))?;
+    let hello = json!({
+        "jsonrpc": "2.0",
+        "method": "session.hello",
+        "params": {
+            "plugin_id": plugin_id,
+            "token": hex_token(token),
+            "api_version": "1.0.0"
+        }
+    });
+    connection
+        .send(
+            serde_json::to_string(&hello)
+                .map_err(std::io::Error::other)?
+                .as_bytes(),
+        )
+        .map_err(std::io::Error::other)?;
+    Ok(connection)
 }
 
 /// Initializes Luau with its sandbox enabled and runs a deterministic check.
@@ -195,12 +239,24 @@ fn deliver_pending_event(lua: &Lua, subscription_id: u64, handler: &mlua::Functi
     }
     let _ = pending.set(subscription_id, Value::Nil);
     if let Err(error) = handler.call::<()>(event) {
-        eprintln!("host.event: pending handler {subscription_id}: {error}");
+        let message = format!("pending handler {subscription_id}: {error}");
+        write_plugin_stderr("host.event: ", &message);
     }
 }
 
+/// Installs `print` so plugin output can never emit raw terminal control
+/// sequences: output is escaped and capped before it reaches stderr.
 fn install_print(lua: &Lua) -> Result<()> {
-    let print = lua.create_function(|lua, values: Variadic<Value>| {
+    install_print_with(lua, |line| {
+        let _ = std::io::stderr().lock().write_all(line);
+    })
+}
+
+/// Installs `print` with an injectable sink, so tests can capture what a plugin
+/// actually emits.
+fn install_print_with(lua: &Lua, emit: impl Fn(&[u8]) + 'static) -> Result<()> {
+    let emit = Rc::new(emit);
+    let print = lua.create_function(move |lua, values: Variadic<Value>| {
         let mut output = String::new();
         for (index, value) in values.into_iter().enumerate() {
             if index > 0 {
@@ -213,7 +269,9 @@ fn install_print(lua: &Lua) -> Result<()> {
                 output.push_str(&debug);
             }
         }
-        let _ = writeln!(std::io::stderr(), "{output}");
+        let mut escaped = Vec::with_capacity(output.len() + 1);
+        let _ = write_plugin_line(&mut escaped, &output);
+        emit(&escaped);
         Ok(())
     })?;
     lua.globals().set("print", print)
@@ -424,6 +482,118 @@ mod tests {
     #[test]
     fn luau_sandbox_runs_without_ambient_io() {
         assert_eq!(super::smoke().expect("sandboxed Luau"), 42);
+    }
+
+    #[test]
+    fn print_never_reaches_captured_sink_raw() {
+        let lua = Lua::new();
+        let captured = Rc::new(RefCell::new(Vec::new()));
+        let sink = Rc::clone(&captured);
+        install_print_with(&lua, move |line| sink.borrow_mut().extend_from_slice(line))
+            .expect("install print");
+        lua.load(r#"print("start " .. string.char(27) .. "]0;owned" .. string.char(7) .. " end")"#)
+            .exec()
+            .expect("run print");
+        let captured = captured.borrow();
+        assert!(!captured.contains(&0x1b), "raw ESC reached output");
+        assert!(!captured.contains(&0x07), "raw BEL reached output");
+        let text = String::from_utf8(captured.clone()).expect("utf8");
+        assert!(text.ends_with('\n'), "{text:?}");
+        assert!(text.contains(r"\x1b]0;owned\x07"), "{text:?}");
+    }
+
+    #[test]
+    fn editor_client_reconnects_after_peer_close() {
+        use anvil_ipc::Listener;
+
+        let socket = std::env::temp_dir().join(format!(
+            "anvil-editor-reconnect-{}-{}.sock",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("time")
+                .as_nanos()
+        ));
+        let listener = Listener::bind(&socket).expect("listen");
+        std::thread::scope(|scope| {
+            scope.spawn(move || {
+                let mut first = listener.accept().expect("first accept");
+                let hello = first.recv().expect("hello").expect("first hello");
+                let hello: JsonValue = serde_json::from_slice(&hello).expect("hello json");
+                assert_eq!(hello["method"], "session.hello");
+                drop(first);
+
+                let mut second = listener.accept().expect("second accept");
+                let hello = second.recv().expect("hello").expect("second hello");
+                let hello: JsonValue = serde_json::from_slice(&hello).expect("hello json");
+                assert_eq!(hello["method"], "session.hello");
+                let frame = second.recv().expect("request").expect("request frame");
+                let request: JsonValue = serde_json::from_slice(&frame).expect("request json");
+                assert_eq!(request["method"], "editor.get_view");
+                second
+                    .send(
+                        serde_json::to_string(&json!({
+                            "jsonrpc": "2.0",
+                            "id": request["id"],
+                            "result": "reconnected"
+                        }))
+                        .expect("response")
+                        .as_bytes(),
+                    )
+                    .expect("send response");
+            });
+            let mut client =
+                EditorClient::connect(&socket, "test", Token([6; 32])).expect("connect editor");
+            let value = client
+                .call("editor.get_view", json!({}))
+                .expect("reconnected call");
+            assert_eq!(value, json!("reconnected"));
+        });
+        let _ = std::fs::remove_file(socket);
+    }
+
+    #[test]
+    fn editor_client_does_not_replay_mutations_after_reconnect() {
+        use anvil_ipc::Listener;
+
+        let socket = std::env::temp_dir().join(format!(
+            "anvil-editor-no-replay-{}-{}.sock",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("time")
+                .as_nanos()
+        ));
+        let listener = Listener::bind(&socket).expect("listen");
+        std::thread::scope(|scope| {
+            scope.spawn(move || {
+                let mut first = listener.accept().expect("first accept");
+                let hello = first.recv().expect("hello").expect("first hello");
+                let hello: JsonValue = serde_json::from_slice(&hello).expect("hello json");
+                assert_eq!(hello["method"], "session.hello");
+                drop(first);
+
+                let mut second = listener.accept().expect("second accept");
+                let hello = second.recv().expect("hello").expect("second hello");
+                let hello: JsonValue = serde_json::from_slice(&hello).expect("hello json");
+                assert_eq!(hello["method"], "session.hello");
+                second
+                    .set_read_timeout(Some(Duration::from_millis(100)))
+                    .expect("read timeout");
+                assert!(
+                    !matches!(second.recv(), Ok(Some(_))),
+                    "mutating request was replayed after reconnect"
+                );
+            });
+            let mut client =
+                EditorClient::connect(&socket, "test", Token([7; 32])).expect("connect editor");
+            assert!(
+                client
+                    .call("editor.apply_edit", json!({ "text": "duplicate" }))
+                    .is_err()
+            );
+        });
+        let _ = std::fs::remove_file(socket);
     }
 
     #[test]

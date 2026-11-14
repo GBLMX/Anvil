@@ -21,11 +21,11 @@ use std::{
     path::{Path, PathBuf},
     sync::{
         Arc,
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicUsize, Ordering},
         mpsc,
     },
     thread::{self, JoinHandle},
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 /// Protocol version reported by the control server.
@@ -34,6 +34,8 @@ pub const PROTOCOL_VERSION: &str = "3";
 /// Control methods advertised by this protocol version.
 pub const CAPABILITIES: &[&str] = &["status", "open", "save", "edit", "query", "exec", "quit"];
 
+const MAX_CONTROL_CONNECTIONS: usize = 8;
+const CONTROL_IO_TIMEOUT: Duration = Duration::from_secs(5);
 /// Coarse authority required by an editor command.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -616,6 +618,14 @@ pub struct ControlCall {
     pub reply: mpsc::Sender<ControlReply>,
 }
 
+struct ConnectionSlot(Arc<AtomicUsize>);
+
+impl Drop for ConnectionSlot {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::AcqRel);
+    }
+}
+
 /// A control socket, lock, and server thread.
 #[derive(Debug)]
 pub struct ControlServer {
@@ -666,7 +676,10 @@ impl From<io::Error> for Error {
 
 impl From<anvil_ipc::FrameError> for Error {
     fn from(error: anvil_ipc::FrameError) -> Self {
-        Self::Frame(error)
+        match error {
+            anvil_ipc::FrameError::Timeout => Self::Timeout,
+            error => Self::Frame(error),
+        }
     }
 }
 
@@ -750,7 +763,10 @@ impl ControlServer {
         let (sender, receiver) = mpsc::channel();
         let shutdown = Arc::new(AtomicBool::new(false));
         let thread_shutdown = Arc::clone(&shutdown);
-        let thread = thread::spawn(move || accept_loop(listener, sender, thread_shutdown));
+        let active = Arc::new(AtomicUsize::new(0));
+        let thread_active = Arc::clone(&active);
+        let thread =
+            thread::spawn(move || accept_loop(listener, sender, thread_shutdown, thread_active));
         Ok(Self {
             path: socket,
             receiver,
@@ -781,20 +797,48 @@ impl Drop for ControlServer {
     }
 }
 
-fn accept_loop(listener: Listener, sender: mpsc::Sender<ControlCall>, shutdown: Arc<AtomicBool>) {
+fn accept_loop(
+    listener: Listener,
+    sender: mpsc::Sender<ControlCall>,
+    shutdown: Arc<AtomicBool>,
+    active: Arc<AtomicUsize>,
+) {
     while !shutdown.load(Ordering::Relaxed) {
         match listener.accept() {
-            Ok(connection) => handle_connection(connection, &sender),
+            Ok(connection) => {
+                let admitted = active
+                    .fetch_update(Ordering::AcqRel, Ordering::Acquire, |count| {
+                        (count < MAX_CONTROL_CONNECTIONS).then_some(count + 1)
+                    })
+                    .is_ok();
+                if !admitted {
+                    continue;
+                }
+                let slot = ConnectionSlot(Arc::clone(&active));
+                let sender = sender.clone();
+                let _ = thread::Builder::new()
+                    .name("anvil-control-connection".to_owned())
+                    .spawn(move || {
+                        let _slot = slot;
+                        handle_connection(connection, &sender);
+                    });
+            }
             Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
                 thread::sleep(Duration::from_millis(20));
             }
-            Err(_) => break,
+            Err(_) => {
+                if shutdown.load(Ordering::Relaxed) {
+                    break;
+                }
+                thread::sleep(Duration::from_millis(20));
+            }
         }
     }
 }
 
 fn handle_connection(mut connection: anvil_ipc::Connection, sender: &mpsc::Sender<ControlCall>) {
-    let _ = connection.set_read_timeout(Some(Duration::from_secs(5)));
+    let _ = connection.set_write_timeout(Some(CONTROL_IO_TIMEOUT));
+    let deadline = Instant::now() + CONTROL_IO_TIMEOUT;
     let uid = match connection.peer_credentials() {
         Ok(credentials) => credentials.uid,
         Err(_) => {
@@ -816,7 +860,7 @@ fn handle_connection(mut connection: anvil_ipc::Connection, sender: &mpsc::Sende
         );
         return;
     }
-    let Ok(Some(frame)) = connection.recv() else {
+    let Ok(Some(frame)) = connection.recv_deadline(deadline) else {
         return;
     };
     let request = match parse_request(std::str::from_utf8(&frame).unwrap_or_default()) {
@@ -1169,9 +1213,10 @@ impl Client {
         };
         let body = serde_json::to_vec(&request)?;
         let mut connection = anvil_ipc::Connection::connect(&self.socket)?;
-        connection.set_read_timeout(Some(self.timeout))?;
+        connection.set_write_timeout(Some(self.timeout))?;
+        let deadline = Instant::now() + self.timeout;
         connection.send(&body)?;
-        let Some(frame) = connection.recv()? else {
+        let Some(frame) = connection.recv_deadline(deadline)? else {
             return Err(Error::Protocol("control server closed the connection"));
         };
         let response: Response = serde_json::from_slice(&frame)?;
@@ -1196,7 +1241,9 @@ impl Client {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Write;
     use std::os::unix::fs::PermissionsExt;
+    use std::os::unix::net::UnixStream;
 
     fn server_at(path: &Path) -> Result<ControlServer, Error> {
         ControlServer::start_at(path.to_path_buf())
@@ -1255,6 +1302,34 @@ mod tests {
         client.ping().expect("ping");
         drop(server);
         assert!(!socket.exists());
+    }
+
+    #[test]
+    fn slow_client_does_not_block_ping_or_shutdown() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let socket = dir.path().join("anvil/control.sock");
+        let server = server_at(&socket).expect("server");
+        let mut slow = UnixStream::connect(&socket).expect("slow connect");
+        slow.write_all(&[0]).expect("partial frame");
+        std::thread::sleep(Duration::from_millis(100));
+
+        let mut client = Client::connect_at(&socket, Duration::from_secs(1)).expect("client");
+        let started = std::time::Instant::now();
+        client.ping().expect("ping while slow client is open");
+        assert!(started.elapsed() < Duration::from_secs(1));
+
+        let started = std::time::Instant::now();
+        drop(server);
+        assert!(started.elapsed() < Duration::from_secs(1));
+        assert!(!socket.exists());
+    }
+
+    #[test]
+    fn frame_timeout_maps_to_control_timeout() {
+        assert!(matches!(
+            Error::from(anvil_ipc::FrameError::Timeout),
+            Error::Timeout
+        ));
     }
 
     #[test]

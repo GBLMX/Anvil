@@ -3,6 +3,47 @@
 use super::*;
 use crate::CallHierarchyDirection;
 
+fn completion_kind_badge(item: &crate::state::CompletionItem) -> &'static str {
+    let kind = item
+        .raw
+        .get("kind")
+        .and_then(serde_json::Value::as_u64)
+        .unwrap_or(0);
+    match kind {
+        1 => "txt",
+        2 => "mth",
+        3 => "fn",
+        4 => "new",
+        5 => "fld",
+        6 => "var",
+        7 => "cls",
+        8 => "ifc",
+        9 => "mod",
+        10 => "prp",
+        11 => "unt",
+        12 => "val",
+        13 => "enm",
+        14 => "kw",
+        15 => "snp",
+        16 => "col",
+        17 => "fil",
+        18 => "ref",
+        19 => "dir",
+        20 => "em",
+        21 => "cst",
+        22 => "str",
+        23 => "evt",
+        24 => "op",
+        25 => "typ",
+        _ => match item.source.as_str() {
+            "builtin.buffer-words" => "buf",
+            "builtin.paths" => "pth",
+            "builtin.lsp" => "lsp",
+            _ => "ext",
+        },
+    }
+}
+
 pub(crate) fn render_overlays(model: &Model, frame: &mut Frame, area: Rect) {
     if let Some(palette) = &model.overlays.command_palette {
         let popup = command_palette_rect(area);
@@ -128,11 +169,49 @@ pub(crate) fn render_overlays(model: &Model, frame: &mut Frame, area: Rect) {
             let Some(entry) = picker.entries.get(*index) else {
                 continue;
             };
-            let line = format!("{}{}", if selected { "❯" } else { " " }, entry.display);
-            lines.push(Line::styled(
-                truncate_width(&line, popup.width.saturating_sub(2)),
+            let icon = if matches!(picker.mode, crate::state::BufferPickerMode::Buffers) {
+                entry
+                    .value
+                    .as_u64()
+                    .and_then(|index| usize::try_from(index).ok())
+                    .and_then(|index| model.buffers.entries.get(index))
+                    .and_then(|buffer| {
+                        let name = buffer.path.as_deref()?.file_name()?;
+                        let icon = icon_theme::icon_for(&name.to_string_lossy())
+                            .unwrap_or_else(icon_theme::default_file_icon);
+                        let text = model
+                            .appearance
+                            .icons
+                            .icon_text(icon, model.appearance.ascii_icons)?
+                            .trim_end()
+                            .to_owned();
+                        let color = if buffer.missing {
+                            theme::dim()
+                        } else {
+                            (icon.color)()
+                        };
+                        Some((text, color))
+                    })
+            } else {
+                None
+            };
+            let icon_width = icon
+                .as_ref()
+                .map(|(text, _)| UnicodeWidthStr::width(text.as_str()))
+                .unwrap_or(0);
+            let max_width = popup.width.saturating_sub(2) as usize;
+            let display_width =
+                max_width.saturating_sub(2 + icon_width + usize::from(icon.is_some())) as u16;
+            let mut spans = vec![Span::styled(if selected { "❯ " } else { "  " }, style)];
+            if let Some((text, color)) = icon {
+                spans.push(Span::styled(text, style.fg(color)));
+                spans.push(Span::styled(" ", style));
+            }
+            spans.push(Span::styled(
+                truncate_width(&entry.display, display_width),
                 style,
             ));
+            lines.push(Line::from(spans));
         }
         let (title, empty) = match picker.mode {
             crate::state::BufferPickerMode::Buffers => {
@@ -727,9 +806,9 @@ pub(crate) fn render_overlays(model: &Model, frame: &mut Frame, area: Rect) {
             .map(str::to_owned);
         let extra = u16::from(documentation.is_some());
         let width = (area.width * 2 / 5)
-            .max(36)
+            .max(44)
             .min(area.width.saturating_sub(2));
-        let height = (completion.filtered.len() as u16 + 2 + extra)
+        let height = (completion.filtered.len() as u16 + 3 + extra)
             .min(15)
             .min(area.height.saturating_sub(2));
         let popup = Rect {
@@ -739,25 +818,42 @@ pub(crate) fn render_overlays(model: &Model, frame: &mut Frame, area: Rect) {
             height,
         };
         frame.render_widget(Clear, popup);
+        let visible = height.saturating_sub(3 + extra) as usize;
+        let start = completion
+            .selected
+            .saturating_sub(visible.saturating_sub(1));
         let mut lines = Vec::new();
         for (row, index) in completion
             .filtered
             .iter()
-            .take(height.saturating_sub(2 + extra) as usize)
+            .skip(start)
+            .take(visible)
             .enumerate()
         {
             let item = &completion.items[*index];
-            let text = if item.detail.is_empty() {
-                item.label.clone()
-            } else {
-                format!("{}  {}", item.label, item.detail)
-            };
-            let style = if row == completion.selected {
+            let selected_row = start + row == completion.selected;
+            let style = if selected_row {
                 theme::selected()
             } else {
                 theme::panel()
             };
-            lines.push(Line::styled(text, style));
+            let detail_style = if selected_row {
+                style
+            } else {
+                style.fg(theme::muted())
+            };
+            let mut spans = vec![
+                Span::styled(if selected_row { "❯ " } else { "  " }, style),
+                Span::styled(
+                    format!("{:<3} ", completion_kind_badge(item)),
+                    style.fg(theme::accent()),
+                ),
+                Span::styled(item.label.clone(), style),
+            ];
+            if !item.detail.is_empty() {
+                spans.push(Span::styled(format!("  {}", item.detail), detail_style));
+            }
+            lines.push(Line::from(spans));
         }
         if let Some(documentation) = documentation {
             lines.push(Line::styled(
@@ -765,12 +861,21 @@ pub(crate) fn render_overlays(model: &Model, frame: &mut Frame, area: Rect) {
                 theme::panel().fg(theme::muted()),
             ));
         }
+        lines.push(Line::styled(
+            format!(
+                " {}/{} · Enter/Tab accept · ↑/↓ move · Esc",
+                completion.selected.saturating_add(1),
+                completion.filtered.len()
+            ),
+            theme::panel().fg(theme::muted()),
+        ));
         frame.render_widget(
             Paragraph::new(lines)
                 .style(theme::panel())
                 .block(crate::render::focused_panel_block(format!(
-                    "Completion #{}",
-                    completion.id
+                    "Completion · {}/{}",
+                    completion.selected.saturating_add(1),
+                    completion.filtered.len()
                 ))),
             popup,
         );

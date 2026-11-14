@@ -184,19 +184,29 @@ impl Default for LocationPanelState {
     }
 }
 
+/// Result of one asynchronous adapter attach, tagged with its generation.
+pub(crate) type DapAttachMessage = (u64, Result<crate::dap::DapClient, String>);
+
+/// Result of one asynchronous panel refresh, tagged with its generation.
+pub(crate) type DapRefreshMessage = (
+    u64,
+    crate::dap::DapClient,
+    Result<debug_panel::DebugSnapshot, String>,
+);
+
 #[derive(Default)]
 pub(crate) struct DapState {
     pub(crate) breakpoints: HashMap<PathBuf, BTreeSet<u32>>,
     pub(crate) client: Option<crate::dap::DapClient>,
-    pub(crate) attach: Option<mpsc::Receiver<Result<crate::dap::DapClient, String>>>,
+    /// Bumped on every attach and detach. Workers echo it back so a late result
+    /// cannot replace a newer client or revive a detached one.
+    pub(crate) generation: u64,
+    pub(crate) attach: Option<mpsc::Receiver<DapAttachMessage>>,
     pub(crate) attach_started: Option<Instant>,
-    pub(crate) request: Option<
-        mpsc::Receiver<(
-            crate::dap::DapClient,
-            Result<debug_panel::DebugSnapshot, String>,
-        )>,
-    >,
+    pub(crate) attach_worker: Option<crate::dap::DapWorker>,
+    pub(crate) request: Option<mpsc::Receiver<DapRefreshMessage>>,
     pub(crate) request_started: Option<Instant>,
+    pub(crate) request_worker: Option<crate::dap::DapWorker>,
 }
 
 #[derive(Default)]
@@ -732,7 +742,6 @@ pub(crate) struct CompletionItem {
 
 #[derive(Debug, Clone)]
 pub(crate) struct CompletionState {
-    pub(crate) id: u64,
     pub(crate) items: Vec<CompletionItem>,
     pub(crate) filtered: Vec<usize>,
     pub(crate) query: String,

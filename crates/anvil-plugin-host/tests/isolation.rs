@@ -2,7 +2,7 @@
 
 use anvil_ipc::{read_frame, write_frame};
 use anvil_plugin_host::{Cgroup, Token, spawn, spawn_in_cgroup};
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Read, Write};
 use std::os::unix::net::UnixListener;
 use std::path::Path;
 use std::process::{Command, Stdio};
@@ -374,4 +374,180 @@ fn editor_kill_9_reaps_held_host() {
         }
         std::thread::sleep(Duration::from_millis(20));
     }
+}
+
+fn plugin_root(entry: &str) -> std::path::PathBuf {
+    let root = std::env::temp_dir().join(format!(
+        "anvil-plugin-output-{}-{}",
+        std::process::id(),
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("time")
+            .as_nanos()
+    ));
+    std::fs::create_dir_all(&root).expect("plugin root");
+    std::fs::write(root.join("run.luau"), entry).expect("entry");
+    std::fs::write(
+        root.join("plugin.json"),
+        br#"{"id":"demo","version":"0.1.0","entry":"run.luau","activation_events":["onStartup"],"commands":[{"id":"demo.run","title":"Run"}]}"#,
+    )
+    .expect("manifest");
+    root
+}
+
+/// Host process with a captured stderr so plugin output can be audited.
+struct CapturedHost {
+    child: std::process::Child,
+    stderr: std::process::ChildStderr,
+}
+
+impl CapturedHost {
+    fn spawn(args: &[String], token: [u8; 32]) -> Self {
+        use std::os::fd::FromRawFd;
+        use std::os::unix::process::CommandExt;
+
+        let mut pipe = [0; 2];
+        // SAFETY: `pipe2` writes exactly two descriptors into `pipe`.
+        assert_eq!(
+            unsafe { libc::pipe2(pipe.as_mut_ptr(), libc::O_CLOEXEC) },
+            0
+        );
+        let (read_fd, write_fd) = (pipe[0], pipe[1]);
+        let mut command = Command::new(host_bin());
+        command
+            .args(args)
+            .arg("--token-fd")
+            .arg("3")
+            .env_clear()
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::piped());
+        // SAFETY: the closure runs in the forked child before exec and only
+        // calls async-signal-safe `dup2`.
+        unsafe {
+            command.pre_exec(move || {
+                if libc::dup2(read_fd, 3) < 0 {
+                    return Err(std::io::Error::last_os_error());
+                }
+                Ok(())
+            });
+        }
+        let mut child = command.spawn().expect("spawn host");
+        // SAFETY: the child inherited `read_fd`; the parent closes its copy.
+        unsafe {
+            libc::close(read_fd);
+        }
+        // SAFETY: `write_fd` is an owned pipe descriptor; `File` owns it now.
+        let mut writer = unsafe { std::fs::File::from_raw_fd(write_fd) };
+        writer.write_all(&token).expect("write token");
+        drop(writer);
+        let stderr = child.stderr.take().expect("stderr");
+        Self { child, stderr }
+    }
+
+    fn finish(mut self) -> (std::process::ExitStatus, String) {
+        let status = self.child.wait().expect("wait host");
+        let mut stderr = String::new();
+        self.stderr
+            .read_to_string(&mut stderr)
+            .expect("read stderr");
+        (status, stderr)
+    }
+}
+
+fn assert_no_raw_controls(stderr: &str) {
+    assert!(
+        !stderr.contains('\u{1b}'),
+        "raw ESC reached stderr: {stderr:?}"
+    );
+    assert!(
+        !stderr.contains('\u{7}'),
+        "raw BEL reached stderr: {stderr:?}"
+    );
+}
+
+#[test]
+fn plugin_print_cannot_emit_osc_to_stderr() {
+    let root = plugin_root(
+        r#"print("marker " .. string.char(27) .. "]0;owned" .. string.char(7) .. " end")"#,
+    );
+    let args = ["--plugin".to_owned(), root.display().to_string()];
+    let (status, stderr) = CapturedHost::spawn(&args, [42; 32]).finish();
+    let _ = std::fs::remove_dir_all(root);
+    assert!(status.success(), "host failed: {stderr:?}");
+    assert_no_raw_controls(&stderr);
+    assert!(stderr.contains(r"\x1b]0;owned\x07"), "{stderr:?}");
+}
+
+#[test]
+fn plugin_load_error_cannot_emit_osc_to_stderr() {
+    let root = plugin_root(
+        r#"error("boom " .. string.char(27) .. "]0;owned" .. string.char(7) .. " end")"#,
+    );
+    let args = ["--plugin".to_owned(), root.display().to_string()];
+    let (status, stderr) = CapturedHost::spawn(&args, [43; 32]).finish();
+    let _ = std::fs::remove_dir_all(root);
+    assert!(!status.success(), "plugin load should fail");
+    assert!(stderr.contains("plugin-host: "), "{stderr:?}");
+    assert_no_raw_controls(&stderr);
+    assert!(stderr.contains(r"\x1b]0;owned\x07"), "{stderr:?}");
+}
+
+#[test]
+fn host_event_handler_error_cannot_emit_osc_to_stderr() {
+    let socket = std::env::temp_dir().join(format!(
+        "anvil-event-esc-{}-{}.sock",
+        std::process::id(),
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("time")
+            .as_nanos()
+    ));
+    let _ = std::fs::remove_file(&socket);
+    let listener = UnixListener::bind(&socket).expect("bind uds");
+    let root = plugin_root(
+        r#"__anvil_event_handlers[7] = function()
+    error("boom " .. string.char(27) .. "]0;owned" .. string.char(7) .. " end")
+end"#,
+    );
+    let args = [
+        "--plugin".to_owned(),
+        root.display().to_string(),
+        "--socket".to_owned(),
+        socket.display().to_string(),
+    ];
+    let host = CapturedHost::spawn(&args, [44; 32]);
+    let mut editor = listener.accept().expect("accept editor").0;
+    write_frame(
+        &mut editor,
+        br#"{"jsonrpc":"2.0","method":"host.event","params":{"subscription_id":7,"sequence":1,"event":"test","payload":{}}}"#,
+    )
+    .expect("write event");
+    editor
+        .shutdown(std::net::Shutdown::Write)
+        .expect("shutdown editor");
+    let (status, stderr) = host.finish();
+    let _ = std::fs::remove_dir_all(root);
+    let _ = std::fs::remove_file(&socket);
+    assert!(status.success(), "host failed: {stderr:?}");
+    assert!(stderr.contains("host.event: "), "{stderr:?}");
+    assert_no_raw_controls(&stderr);
+    assert!(stderr.contains(r"\x1b]0;owned\x07"), "{stderr:?}");
+}
+
+#[test]
+fn terminate_kills_held_host_without_blocking() {
+    let mut host = spawn(host_bin(), &["--hold".to_owned()], Token([16; 32])).expect("spawn host");
+    let pid = host.id();
+    let started = Instant::now();
+    host.terminate();
+    assert!(
+        started.elapsed() < Duration::from_secs(2),
+        "terminate blocked for {:?}",
+        started.elapsed()
+    );
+    assert!(
+        !Path::new(&format!("/proc/{pid}")).exists(),
+        "host {pid} survived terminate"
+    );
 }

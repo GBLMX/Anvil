@@ -1,9 +1,11 @@
 //! Reusable TUI primitives shared by Anvil frontends.
 //!
 //! This crate owns interaction-state pieces that do not depend on Anvil's
-//! editor model: the terminal lifecycle and a filtered selection table.
-//! Application-specific overlays and mouse routing stay in the frontend.
+//! editor model: the terminal lifecycle, a filtered selection table, and
+//! terminal key normalization. Application-specific overlays and mouse routing
+//! stay in the frontend.
 
+pub mod input;
 pub mod selection;
 pub mod terminal;
 

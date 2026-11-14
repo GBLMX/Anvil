@@ -5,37 +5,37 @@ use std::ops::Deref;
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
 /// Whether an event should be dispatched as an editing action.
-pub(crate) fn is_action_key(key: &KeyEvent) -> bool {
+pub fn is_action_key(key: &KeyEvent) -> bool {
     matches!(key.kind, KeyEventKind::Press | KeyEventKind::Repeat)
 }
 
 /// A terminal key with the modifier queries used by dispatch.
 #[derive(Clone, Copy)]
-pub(crate) struct KeyPress(KeyEvent);
+pub struct KeyPress(KeyEvent);
 
 impl KeyPress {
-    pub(crate) fn from_key(key: KeyEvent) -> Self {
+    pub fn from_key(key: KeyEvent) -> Self {
         Self(key)
     }
 
-    pub(crate) fn event(self) -> KeyEvent {
+    pub fn event(self) -> KeyEvent {
         self.0
     }
 
-    pub(crate) fn ctrl(self) -> bool {
+    pub fn ctrl(self) -> bool {
         self.0.modifiers.contains(KeyModifiers::CONTROL)
     }
 
-    pub(crate) fn alt(self) -> bool {
+    pub fn alt(self) -> bool {
         self.0.modifiers.contains(KeyModifiers::ALT)
     }
 
-    pub(crate) fn super_key(self) -> bool {
+    pub fn super_key(self) -> bool {
         self.0.modifiers.contains(KeyModifiers::SUPER)
     }
 
     /// Plain or shifted character input, excluding command modifiers.
-    pub(crate) fn text_input(self) -> bool {
+    pub fn text_input(self) -> bool {
         !self.ctrl() && !self.alt() && !self.super_key()
     }
 
@@ -43,7 +43,7 @@ impl KeyPress {
     ///
     /// Terminals disagree on whether Alt-modified letters arrive uppercase or
     /// lowercase; command matching deliberately folds that difference.
-    pub(crate) fn command_char(self) -> Option<char> {
+    pub fn command_char(self) -> Option<char> {
         match self.0.code {
             KeyCode::Char(character) if self.alt() => Some(character.to_ascii_lowercase()),
             KeyCode::Char(character) => Some(character),

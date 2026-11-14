@@ -64,10 +64,10 @@ struct StyleSpec {
 }
 
 #[derive(Clone)]
-pub(crate) struct CustomTheme {
-    pub(crate) path: PathBuf,
-    pub(crate) source: String,
-    pub(crate) theme: &'static Theme,
+pub struct CustomTheme {
+    pub path: PathBuf,
+    pub source: String,
+    pub theme: &'static Theme,
 }
 
 fn style_modifiers(spec: &StyleSpec) -> Modifier {
@@ -107,7 +107,7 @@ fn apply_status_style(
     Ok(())
 }
 
-pub(crate) fn parse_theme_file(path: &Path, source: &str) -> Result<Theme, String> {
+pub fn parse_theme_file(path: &Path, source: &str) -> Result<Theme, String> {
     let file: ThemeFile = toml_edit::de::from_str(source)
         .map_err(|error| format!("invalid theme TOML {}: {error}", path.display()))?;
     let Some(name) = path.file_stem().and_then(|name| name.to_str()) else {
