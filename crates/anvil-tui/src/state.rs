@@ -445,6 +445,25 @@ pub(crate) struct EditSessionState {
     pub(crate) insert_session: Option<InsertSession>,
 }
 
+impl EditSessionState {
+    pub(crate) fn capture_insert(&mut self, text: &str) {
+        if let Some(session) = self.insert_session.as_mut() {
+            session.text.push_str(text);
+        }
+    }
+
+    pub(crate) fn trim_insert(&mut self, at_end: bool) {
+        let Some(session) = self.insert_session.as_mut() else {
+            return;
+        };
+        if !at_end {
+            session.valid = false;
+            return;
+        }
+        let _ = session.text.pop();
+    }
+}
+
 #[derive(Default)]
 pub struct StatusState {
     /// Short status line.

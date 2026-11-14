@@ -1104,7 +1104,7 @@ fn command_line_paste_does_not_embed_newlines() {
 fn moved_insert_session_does_not_poison_last_change() {
     let mut model = Model::new(EditorState::from_text("abc"), None);
     model.begin_insert(InsertOrigin::InsertHere);
-    model.capture_insert("x");
+    model.edit.capture_insert("x");
     model.move_char(-1);
     model.finish_insert_session();
     assert!(model.edit.last_change.is_none());

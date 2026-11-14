@@ -14,12 +14,6 @@ impl Model {
         self.file.dirty = true;
     }
 
-    pub(crate) fn capture_insert(&mut self, text: &str) {
-        if let Some(session) = self.edit.insert_session.as_mut() {
-            session.text.push_str(text);
-        }
-    }
-
     pub(crate) fn finish_insert_session(&mut self) {
         self.overlays.lsp_results.snippet = None;
         let Some(session) = self.edit.insert_session.take() else {
@@ -71,17 +65,6 @@ impl Model {
             },
         };
         self.edit.last_change = Some(last);
-    }
-
-    pub(crate) fn trim_insert_session(&mut self, at_end: bool) {
-        let Some(session) = self.edit.insert_session.as_mut() else {
-            return;
-        };
-        if !at_end {
-            session.valid = false;
-            return;
-        }
-        let _ = session.text.pop();
     }
 
     pub(crate) fn repeat_last_change(&mut self, count: usize) {

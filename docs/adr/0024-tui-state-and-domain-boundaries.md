@@ -307,16 +307,22 @@ Phase 1 started on 2026-11-12:
 ## Implementation correction (2026-11-14)
 
 Do not mechanically move every `impl Model` method into a page/state type.
-The current tree has 66 `impl Model` blocks and 555 methods. A field-reach
-classification found:
+A brace-aware, whitespace-tolerant scan of the current tree found 66
+`impl Model` blocks and 617 methods:
 
-- 168 methods touch at most one top-level state group;
-- 387 methods touch more than one group.
+- 192 methods read/write at most one top-level state group;
+- 425 methods read/write more than one group.
 
 The second set is cross-domain orchestration, not page-local state. For
 example, `apply_settings` updates `config`, `search`, `overlays`, `status`, and
 `file`, and applies theme state. Moving it to `impl SettingsOverlayState` would
-require new accessors or a forwarding shim for every field.
+require new accessors or a forwarding shim for every field. The same field
+scan also shows `root_label` belongs to `workspace`, `semantic_style` belongs
+to `overlays`, and `valid_tree_name` is a static helper with no state owner.
+
+The first verified slice moved `capture_insert` and `trim_insert` from
+`impl Model` to `impl EditSessionState` (617 → 615 methods, 192 → 190
+single-owner methods). Both only touch `Model.edit`.
 
 Rules for the next slice:
 

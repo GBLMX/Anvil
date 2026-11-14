@@ -91,7 +91,7 @@ impl Model {
                     self.sync_cursor_from_selection();
                 }
                 self.file.modified = true;
-                self.capture_insert(text);
+                self.edit.capture_insert(text);
             }
             self.maybe_request_signature_help(text);
             self.file.dirty = true;
@@ -103,7 +103,7 @@ impl Model {
         self.session.editor.insert(self.session.cursor, text);
         self.session.cursor += text.len();
         self.file.modified = true;
-        self.capture_insert(text);
+        self.edit.capture_insert(text);
         self.maybe_request_signature_help(text);
         self.file.dirty = true;
     }
@@ -456,7 +456,7 @@ impl Model {
             session.valid && self.session.cursor == session.start + session.text.len()
         });
         if self.delete_selections(false) {
-            self.trim_insert_session(false);
+            self.edit.trim_insert(false);
             return;
         }
         let Some(start) = self
@@ -478,7 +478,7 @@ impl Model {
         self.session.editor.delete(start..self.session.cursor);
         self.session.cursor = start;
         self.file.modified = true;
-        self.trim_insert_session(at_insert_end);
+        self.edit.trim_insert(at_insert_end);
     }
 
     pub(crate) fn delete_forward(&mut self) {
