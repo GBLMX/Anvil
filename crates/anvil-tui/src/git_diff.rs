@@ -80,7 +80,7 @@ impl Model {
             self.file.dirty = true;
             return;
         };
-        let relative = match self.relative_path(&path) {
+        let relative = match self.workspace.relative_path(&path) {
             Ok(relative) => relative,
             Err(error) => {
                 self.status.text = format!("E: {error}");
@@ -308,7 +308,7 @@ impl Model {
             self.file.dirty = true;
             return;
         };
-        let relative = match self.relative_path(&path) {
+        let relative = match self.workspace.relative_path(&path) {
             Ok(relative) => relative,
             Err(error) => {
                 self.status.text = format!("E: {error}");
@@ -465,7 +465,7 @@ impl Model {
             self.file.dirty = true;
             return;
         };
-        let relative = match self.relative_path(&path) {
+        let relative = match self.workspace.relative_path(&path) {
             Ok(relative) => relative,
             Err(error) => {
                 self.status.text = format!("E: {error}");
@@ -558,7 +558,7 @@ impl Model {
             self.file.dirty = true;
             return;
         }
-        let relative = match self.relative_path(&path) {
+        let relative = match self.workspace.relative_path(&path) {
             Ok(relative) => relative,
             Err(error) => {
                 self.status.text = format!("E: {error}");

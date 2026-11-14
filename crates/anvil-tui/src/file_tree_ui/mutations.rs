@@ -96,7 +96,7 @@ impl Model {
         let target_directory = if directory.is_empty() {
             self.workspace.path.clone()
         } else {
-            match self.absolute_path(Path::new(directory)) {
+            match self.workspace.absolute_path(Path::new(directory)) {
                 Ok(path)
                     if path.starts_with(&self.workspace.path)
                         || self.secondary_root(&path).is_some() =>

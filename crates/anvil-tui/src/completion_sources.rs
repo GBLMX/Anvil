@@ -95,7 +95,7 @@ impl Model {
         let relative = if directory == self.workspace.path {
             ".".to_owned()
         } else {
-            let Ok(relative) = self.relative_path(&directory) else {
+            let Ok(relative) = self.workspace.relative_path(&directory) else {
                 return Vec::new();
             };
             relative

@@ -248,7 +248,7 @@ impl Model {
                 }
             }
         } else {
-            let path = match self.absolute_path(Path::new(&location.path)) {
+            let path = match self.workspace.absolute_path(Path::new(&location.path)) {
                 Ok(path) => path,
                 Err(error) => {
                     self.status.text = format!("E: {error}");

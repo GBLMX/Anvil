@@ -60,6 +60,7 @@ impl Model {
             ));
         }
         let absolute = self
+            .workspace
             .absolute_path(path)
             .map_err(|error| RpcError::new(codes::INVALID_PARAMS, error))?;
         if !absolute.starts_with(&self.workspace.path) {
@@ -144,6 +145,7 @@ impl Model {
         let saved = match path {
             Some(path) => {
                 let absolute = self
+                    .workspace
                     .absolute_path(path)
                     .map_err(|error| RpcError::new(codes::INVALID_PARAMS, error))?;
                 if !absolute.starts_with(&self.workspace.path) {

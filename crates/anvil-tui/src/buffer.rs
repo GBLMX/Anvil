@@ -505,7 +505,7 @@ impl Model {
         if self.pager.back.is_some() {
             let _ = self.close_help();
         }
-        let path = match self.absolute_path(Path::new(path)) {
+        let path = match self.workspace.absolute_path(Path::new(path)) {
             Ok(path) => path,
             Err(error) => {
                 self.status.text = format!("E: {error}");

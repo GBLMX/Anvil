@@ -36,7 +36,7 @@ impl Model {
         if now < due || !self.ensure_file_worker() {
             return;
         }
-        let relative = match self.relative_path(&path) {
+        let relative = match self.workspace.relative_path(&path) {
             Ok(relative) => relative,
             Err(_) => return,
         };

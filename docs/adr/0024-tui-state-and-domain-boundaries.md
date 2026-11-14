@@ -324,6 +324,13 @@ The first verified slice moved `capture_insert` and `trim_insert` from
 `impl Model` to `impl EditSessionState` (617 → 615 methods, 192 → 190
 single-owner methods). Both only touch `Model.edit`.
 
+The second slice moved `absolute_path`, `relative_path`, `root_relative`,
+`gateway_for_root`, `mutation_relatives`, and `reject_cross_root` from
+`impl Model` to `impl WorkspaceState` (615 → 609 methods, 190 → 184
+single-owner methods). `rename_path` and `copy_path` remain on `Model` because
+they orchestrate workspace state and file operations; their internal calls now
+go through `self.workspace`.
+
 Rules for the next slice:
 
 1. Move only methods that read/write one state group and do not call

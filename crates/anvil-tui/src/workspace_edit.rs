@@ -448,7 +448,7 @@ fn path_kind(model: &mut Model, path: &Path) -> Result<PathKind, String> {
             Err(error) => Err(error.to_string()),
         };
     }
-    let relative = model.relative_path(path)?;
+    let relative = model.workspace.relative_path(path)?;
     let gateway = model
         .workspace
         .gateway
