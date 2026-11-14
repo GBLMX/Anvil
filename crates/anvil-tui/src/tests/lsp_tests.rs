@@ -453,6 +453,7 @@ fn gi_and_go_dispatch_call_hierarchy_requests() {
     assert_eq!(model.status.text, "E: lsp is not running");
 }
 
+#[ignore = "requires anvil-gateway"]
 #[test]
 fn path_completion_uses_gateway_directory_entries() {
     let dir = tempfile::tempdir().expect("tempdir");
