@@ -107,6 +107,7 @@ Architecture decisions live in [`adr/`](adr/). The canonical status table is
 - [0021 signed plugin index](adr/0021-signed-plugin-index.md)
 
 - [0035 plugin WIT seams](adr/0035-plugin-wit-seams.md)
+- [0039 plugin event transport](adr/0039-plugin-event-transport.md)
 
 ## Benchmarks
 

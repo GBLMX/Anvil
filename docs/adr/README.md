@@ -44,6 +44,7 @@ their decision sections.
 | [0036](0036-typst-language-provider.md) | Typst language provider and feature-gated grammar | Accepted for implementation |
 | [0037](0037-kernel-api-baseline.md) | Kernel API baseline during internal polish | Accepted |
 | [0038](0038-project-settings-trust.md) | Project settings are trust-gated | Accepted |
+| [0039](0039-plugin-event-transport.md) | Plugin event transport and interaction boundary | Proposed |
 
 ## Numbering Rule
 
