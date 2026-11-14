@@ -383,7 +383,9 @@ impl Model {
         let Some(diagnostics) = self.language.diagnostics.by_path.get(path) else {
             return Vec::new();
         };
-        let line = self.session.editor.text().slice(line_start..line_end);
+        let editor = &self.session.editor;
+        let index = editor.index();
+        let buffer = editor.text();
         diagnostics
             .iter()
             .filter_map(|diagnostic| {
@@ -392,22 +394,26 @@ impl Model {
                 {
                     return None;
                 }
-                let start_units = if diagnostic.range.start.line as usize == line_number {
-                    diagnostic.range.start.character as usize
+                let start = if diagnostic.range.start.line as usize == line_number {
+                    index.offset_at_utf16(
+                        buffer,
+                        line_number,
+                        diagnostic.range.start.character as usize,
+                    )?
                 } else {
-                    0
+                    line_start
                 };
-                let end_units = if diagnostic.range.end.line as usize == line_number {
-                    diagnostic.range.end.character as usize
+                let end = if diagnostic.range.end.line as usize == line_number {
+                    index.offset_at_utf16(
+                        buffer,
+                        line_number,
+                        diagnostic.range.end.character as usize,
+                    )?
                 } else {
-                    line.chars().map(char::len_utf16).sum()
+                    line_end
                 };
-                let start_byte = utf16_to_byte(&line, start_units);
-                let end_byte = utf16_to_byte(&line, end_units)
-                    .max(start_byte + 1)
-                    .min(line.len());
-                let start = display_column(&line[..start_byte]);
-                let end = display_column(&line[..end_byte]).max(start + 1);
+                let start = index.position(buffer, start)?.display_column;
+                let end = index.position(buffer, end)?.display_column.max(start + 1);
                 Some((start, end))
             })
             .collect()

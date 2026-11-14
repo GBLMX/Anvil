@@ -596,8 +596,12 @@ impl Model {
             .offset_to_line(line_start)
             .map(|position| position.end)
             .unwrap_or(line_start);
-        let line_text = self.session.editor.text().slice(line_start..line_end);
-        let line_units = line_text.chars().map(char::len_utf16).sum::<usize>();
+        let line_units = self
+            .session
+            .editor
+            .index()
+            .utf16_column(self.session.editor.text(), line_end)
+            .unwrap_or(0);
         let diagnostics = self
             .language
             .diagnostics

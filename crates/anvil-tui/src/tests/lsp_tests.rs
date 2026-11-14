@@ -1999,6 +1999,35 @@ fn diagnostic_ranges_handle_cjk_utf16_columns() {
 }
 
 #[test]
+fn diagnostic_ranges_snap_emoji_and_drop_invalid_utf16_columns() {
+    let text = "a😀b";
+    let path = PathBuf::from("emoji.rs");
+    let mut model = Model::new(EditorState::from_text(text), Some(path.clone()));
+    let diagnostic = |start, end| lsp::Diagnostic {
+        range: lsp::Range {
+            start: lsp::Position {
+                line: 0,
+                character: start,
+            },
+            end: lsp::Position {
+                line: 0,
+                character: end,
+            },
+        },
+        severity: Some(1),
+        message: "error".to_owned(),
+        source: Some("test".to_owned()),
+        extra: serde_json::Map::new(),
+    };
+    model
+        .language
+        .diagnostics
+        .by_path
+        .insert(path, vec![diagnostic(1, 3), diagnostic(2, 3)]);
+    assert_eq!(model.diagnostic_ranges(0, 0, text.len()), vec![(1, 3)]);
+}
+
+#[test]
 fn completion_applies_additional_import_edit() {
     let mut model = Model::new(EditorState::from_text(""), None);
     model.start_page.welcome = false;

@@ -448,30 +448,6 @@ fn diagnostic_peek_lines(peek: &anvil_session::ui::DiagnosticPeek) -> Vec<Line<'
     lines
 }
 
-pub(crate) fn utf16_to_byte(text: &str, units: usize) -> usize {
-    let mut seen = 0;
-    for (byte, character) in text.char_indices() {
-        if seen >= units {
-            return byte;
-        }
-        seen += character.len_utf16();
-    }
-    text.len()
-}
-
-pub(crate) fn display_column(text: &str) -> usize {
-    let mut column = 0;
-    for character in text.chars() {
-        if character == '\t' {
-            column += 4 - column % 4;
-        } else if character == '\r' || character.is_control() {
-        } else {
-            column += character.width().unwrap_or(0);
-        }
-    }
-    column
-}
-
 pub(crate) fn apply_diagnostic_underlines(spans: &mut Vec<Span<'_>>, ranges: &[(usize, usize)]) {
     if ranges.is_empty() {
         return;

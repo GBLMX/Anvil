@@ -1033,6 +1033,19 @@ mod tests {
     }
 
     #[test]
+    fn snapshot_positions_include_char_columns() {
+        let text = "a🦀b";
+        let mut state = EditorState::from_text(text);
+        assert!(state.set_selection_bytes(5, 5));
+        let view = state.snapshot().view();
+        let head = view.selections[0].head;
+        assert_eq!(head.byte_offset, 5);
+        assert_eq!(head.char_column, 2);
+        assert_eq!(head.grapheme_column, 2);
+        assert_eq!(head.display_column, 3);
+    }
+
+    #[test]
     fn snapshot_shares_cow_storage() {
         let state = EditorState::from_text("a\nb");
         let snapshot = state.snapshot();

@@ -584,14 +584,6 @@ fn utf16_offset_maps_through_emoji() {
 }
 
 #[test]
-fn utf16_columns_map_through_emoji() {
-    let text = "a😀b";
-    assert_eq!(utf16_to_byte(text, 1), 1);
-    assert_eq!(utf16_to_byte(text, 3), 5);
-    assert_eq!(utf16_to_byte(text, 4), 6);
-}
-
-#[test]
 fn navigation_preserves_modified_buffer() {
     let dir = tempfile::tempdir().expect("tempdir");
     let first = dir.path().join("first.txt");

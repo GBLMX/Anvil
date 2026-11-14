@@ -107,8 +107,7 @@ pub(crate) use keys::handle_event;
 pub use render::view;
 use render::{
     apply_bracket_highlights, apply_diagnostic_underlines, apply_document_highlights,
-    apply_search_highlights, apply_semantic_tokens, display_column, expand_tabs, push_syntax_spans,
-    utf16_to_byte,
+    apply_search_highlights, apply_semantic_tokens, expand_tabs, push_syntax_spans,
 };
 mod layout;
 mod task_runner;
