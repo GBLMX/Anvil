@@ -133,6 +133,10 @@ ui.patch_overlay
               cells: [{ x, y, char, style }] }
 ui.destroy_overlay
   request:  { overlay_id: string }
+ui.draw_lines
+  request:  { overlay_id: string, generation: u64,
+              lines: [{ x1: u16, y1: u16, x2: u16, y2: u16,
+                        style: string }] }
 ```
 
 Rules:
@@ -143,26 +147,42 @@ Rules:
   Styles come from a small name set mapped to theme colors.
 - Limits: 4096 cells per overlay, 256 cells per patch, 60 patches/second,
   generation monotonic, plugin-owned cleanup.
+- `ui.draw_lines` is rendered by the core with clipping and Bresenham
+  rasterization. It is a renderer only: no graph/layout algorithm runs in the
+  core. Limits: 512 segments, 2048 cells per segment, and the same 60 Hz
+  generation/rate bound.
 - The core owns invalidation and z-order. Canvas overlays are composited under
   notifications and command-line popups.
 
-### 4.5 Dependency graph
+### 4.5 In-memory dependency graph
 
 ```text
 workspace.get_dependencies
   request:  { root: string }
-  response: { generation: u64, nodes: [{ id, label, path }],
+  response: { generation: u64, nodes: [{ id, label, path, lines }],
               edges: [{ from, to }], truncated: bool }
 ```
 
+`workspace.graph_changed` is the corresponding subscription event (section
+4.7).
+
 Rules:
 
-- Served by the workspace index service, not the gateway and not `sys.exec`.
+- The authoritative source is the in-memory workspace graph projection fed by
+  session buffer revisions; a disk save is not required to refresh the graph.
+- The initial graph is seeded from the workspace index; open buffers replace
+  the indexed view immediately. Filesystem watching is reconciliation only.
+- Dependency extraction is a trusted workspace/session service using explicit
+  language providers (Tree-sitter/import parsing). LSP diagnostics are not a
+  generic dependency source.
+- Debounce/coalesce per root (target 50 ms), assign a monotonic generation, and
+  publish deltas. The parser may reparse a changed buffer, but must not rescan
+  the whole workspace on every keystroke.
 - Paths must stay inside the requested trusted root.
-- Initial provider is workspace-index extraction; language-specific providers
-  must be explicit and registered, not guessed.
-- Limits: 4096 nodes, 16384 edges, 1 MiB response; truncation is explicit.
-- No file contents are returned; only path identity, label, and edges.
+- Limits: 4096 nodes, 16384 edges, 1 MiB full snapshot; deltas are bounded to
+  256 nodes, 4096 edges, and 256 KiB. Truncation is explicit.
+- No file contents are returned; only path identity, label, line count, and
+  edges. No gateway or `sys.exec` involvement.
 
 ### 4.6 Open file from the workspace
 
@@ -188,13 +208,16 @@ Rules:
 
 ```text
 event.subscribe
-  allowed event: diagnostics.changed
-  payload: { root: string, path: string, generation: u64,
-             error_count: u32, warning_count: u32,
-             first_error: Option<string> }
-
-workspace.graph_changed
-  payload: { root: string, generation: u64, truncated: bool }
+  allowed events: diagnostics.changed, workspace.graph_changed
+  diagnostics.changed payload:
+    { root: string, path: string, generation: u64,
+      error_count: u32, warning_count: u32,
+      first_error: Option<string> }
+  workspace.graph_changed payload:
+    { root: string, generation: u64,
+      changed_nodes: [{ id, label, path, lines }],
+      changed_edges: [{ from, to }],
+      removed_paths: [string], truncated: bool }
 
 ui.alert
   request:  { severity: "warning" | "error", message: string, ttl_ms: u32 }
@@ -211,15 +234,19 @@ Rules:
   `diagnostics.changed`; do not add both aliases.
 - Diagnostics are coalesced per path before the event; `first_error` is
   truncated to 512 bytes. Full diagnostic payloads are not pushed to plugins.
+- The Graph plugin subscribes to `diagnostics.changed` and owns its red node
+  markers. The Alert plugin owns only `ui.alert`/`ui.bell`; plugins never
+  mutate another plugin's overlay or graph state.
 - The Alert plugin tracks transitions and applies its own debounce window; LSP
   storms must not create a notification per publish.
 - `ui.alert` is a core-owned visual cue inside the editor frame. It cannot draw
   outside the editor content area or replace the status/command line.
 - `ui.bell` is the terminal BEL only. No arbitrary audio process or OSC sound
   sequence is exposed.
-- `workspace.graph_changed` comes from the existing bounded workspace watcher;
-  this plan does not add an inotify dependency.
-- Capabilities: `diagnostics.read`, `ui.alert`, `ui.bell`.
+- `workspace.graph_changed` comes from the in-memory projection and does not
+  require a save; watcher events are reconciliation only. This plan does not
+  add an inotify dependency.
+- Capabilities: `diagnostics.read`, `ui.alert`, `ui.bell`, `workspace.graph`.
 
 ## 5. Deliverable slices
 
@@ -259,24 +286,31 @@ Acceptance: valid ranges create the expected selections; stale, invalid, and
 overlapping ranges are rejected without mutating state; undo restores the prior
 selection set.
 
-### Slice 5: sparse canvas overlay
+### Slice 5: sparse canvas overlay and lines
 
 - Implement create/patch/destroy with bounds, cell, rate, and style limits.
-- Add snapshot/diff tests and a real TUI smoke.
+- Implement `ui.draw_lines` with core clipping/Bresenham and segment/cell caps;
+  no graph algorithm is added to the core.
+- Add snapshot/diff and line-clipping tests plus a real TUI smoke.
 
 Acceptance: a plugin can draw an 80x24 graph within limits; status line and
-command-line rows remain core-owned; invalid/oversized patches are rejected.
+command-line rows remain core-owned; invalid/oversized patches and line
+segments are rejected.
 
 ### Slice 6: dependency graph
 
-- Add the workspace-index graph provider and `workspace.get_dependencies`.
+- Add the session-buffer graph projection and `workspace.get_dependencies`.
+- Trigger extraction from buffer revisions, coalesce per root, and publish
+  generation deltas through `workspace.graph_changed`; no save required.
+- Seed initially from the workspace index; watcher events are reconciliation.
 - Add `workspace.open_file` with trusted-root confinement and the existing
   open/preview/size policy.
-- Cache by root + generation; invalidate on workspace changes.
+- Cache by root + generation; reject stale generations.
 
-Acceptance: nodes/edges stay inside the trusted root; a large workspace returns
-`truncated`; stale generations are rejected; open-file rejects traversal,
-absolute paths, symlink escape, and untrusted roots; no gateway RPC is added.
+Acceptance: typing an import into an unsaved buffer adds the edge without
+Ctrl+S; deleting it removes the edge; 1000+ nodes coalesce without an event
+storm; stale generations are rejected; open-file rejects traversal, absolute
+paths, symlink escape, and untrusted roots; no gateway RPC is added.
 
 ### Slice 7: RTS multiple-cursor plugin
 
@@ -292,19 +326,23 @@ selections; cancel/undo have no side effects.
 
 ### Slice 8: Tactical Graph plugin
 
-- Fetch one bounded graph snapshot; nodes carry a trusted root and a
-  workspace-relative path.
-- Compute Fruchterman-Reingold layout in a Lua coroutine with an iteration cap.
-- Render sparse `●`/`─`/`│` cells through one overlay.
-- Bresenham rasterization stays in Lua; the core only validates and composites
-  the resulting sparse cells.
+- Fetch one bounded graph snapshot; subscribe to
+  `workspace.graph_changed` and `diagnostics.changed`.
+- Apply deltas to its own local graph; latest generation wins, stale events are
+  dropped. The graph plugin owns red diagnostic markers.
+- Compute Fruchterman-Reingold layout in a Lua coroutine with an iteration cap;
+  layout runs on the latest snapshot only.
+- Render nodes with sparse `●` cells and edges with `ui.draw_lines`; core
+  Bresenham/clipping only, no graph algorithm in the core.
 - Mouse hover updates a small highlight; right-drag/scroll update view state.
 - Enter calls `workspace.open_file` for the selected node. On success the core
   opens it and the plugin removes the overlay; on a validation/open error the
   overlay stays open and an error notification is shown.
 
-Acceptance: 80x24 overlay renders; graph remains responsive at the configured
-node cap; no per-frame full-screen payload; plugin stop removes the overlay;
+Acceptance: an unsaved import edit produces a graph delta and a new edge without
+Ctrl+S; deleting it removes the edge; 80x24 overlay renders; red dots come only
+from this plugin's diagnostics subscription; graph remains responsive while
+typing; no per-frame full-screen payload; plugin stop removes the overlay;
 Enter never opens a path outside the node's trusted root.
 
 ### Slice 9: Alert System plugin
@@ -312,14 +350,16 @@ Enter never opens a path outside the node's trusted root.
 - Subscribe to coalesced `diagnostics.changed` summaries per path.
 - Track new versus repeated errors with a bounded per-path debounce; do not
   alert on unchanged diagnostics.
-- Call `ui.alert` for the visual cue, optionally `ui.bell` when enabled, and
-  mark the corresponding graph node red when Tactical Graph is open.
+- Call `ui.alert` for the visual cue and optionally `ui.bell` when enabled.
+- The Alert plugin does not mutate the graph overlay. The Graph plugin owns
+  red dots via its own `diagnostics.changed` subscription.
 - No LSP error text is written to the terminal outside the core alert/status
   surfaces.
 
 Acceptance: an LSP storm produces at most one alert per path/debounce window;
 an unchanged republish produces none; the bell is opt-in; plugin stop clears
-its alerts and graph markers; no arbitrary audio process is started.
+its alerts; the Alert plugin never mutates another plugin's overlay; no
+arbitrary audio process is started.
 
 ## 6. Security and bounds
 
@@ -344,24 +384,32 @@ its alerts and graph markers; no arbitrary audio process is started.
 - Selection validation: stale revision, UTF-8 boundary, out-of-range, duplicate,
   overlap, 4096 limit, undo/redo.
 - Highlight/overlay: clipping, TTL, stale generation, plugin cleanup, cell and
-  rate limits.
+  rate limits; `ui.draw_lines` clipping/Bresenham bounds and segment cap.
 - Graph: trusted-root confinement, stale generation, node/edge truncation,
-  response size.
+  response size; unsaved buffer edit adds/removes edges; 1000+ node/typing
+  coalescing; no save required.
 - Diagnostics: coalescing per path, first-error truncation, unchanged
   republish produces no alert, storm/debounce behavior, opt-in bell.
+- Ownership: Graph subscribes to diagnostics and owns red dots; Alert only
+  calls `ui.alert`/`ui.bell`; no cross-plugin overlay mutation.
 - Open file: relative path happy path, absolute path, `..`, symlink escape,
   untrusted root, deleted file, and oversized/binary policy; no shell or
   `sys.exec` path.
 - TUI smoke for all three plugins; `cargo test --workspace`, clippy, fmt,
   plugin host smoke, and real gateway TUI smoke.
 - Performance: input-to-highlight latency, overlay patch frame cost, and no
-  editor-frame regression against the temporary reference baseline.
+  editor-frame regression against the temporary reference baseline; typing
+  remains responsive while 1000+ node layout runs.
 
 ## 8. Exit criteria
 
 - API 1.1.0 is additive, documented, and generated bindings are committed.
 - All three plugins work in a real TUI through the control/MCP-capable host.
 - Mouse capture, highlight, overlay, and selection limits have tests.
+- Unsaved buffer edits update the graph via `workspace.graph_changed` without
+  a save; 1000+ node updates coalesce and keep typing responsive.
+- Graph owns red diagnostic dots; Alert owns only `ui.alert`/`ui.bell`; no
+  cross-plugin overlay mutation exists.
 - No new gateway dependency-analysis RPC exists.
 - `workspace.open_file` is confined to a trusted root and covered by
   traversal, symlink, and policy tests.
