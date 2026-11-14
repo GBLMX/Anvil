@@ -413,6 +413,12 @@ impl CapturedHost {
             0
         );
         let (read_fd, write_fd) = (pipe[0], pipe[1]);
+        // Fill the pipe before spawning; the host may read and exit immediately
+        // after exec, so writing after `spawn` can race with its fd close.
+        // SAFETY: `write_fd` is an owned pipe descriptor; `File` owns it now.
+        let mut writer = unsafe { std::fs::File::from_raw_fd(write_fd) };
+        writer.write_all(&token).expect("write token");
+        drop(writer);
         let mut command = Command::new(host_bin());
         command
             .args(args)
@@ -423,10 +429,16 @@ impl CapturedHost {
             .stdout(Stdio::null())
             .stderr(Stdio::piped());
         // SAFETY: the closure runs in the forked child before exec and only
-        // calls async-signal-safe `dup2`.
+        // calls async-signal-safe `dup2` / `fcntl`.
         unsafe {
             command.pre_exec(move || {
                 if libc::dup2(read_fd, 3) < 0 {
+                    return Err(std::io::Error::last_os_error());
+                }
+                // `read_fd` may already be 3; dup2(3, 3) is a no-op and leaves
+                // the pipe's O_CLOEXEC flag set, which would close the token fd
+                // before exec.
+                if libc::fcntl(3, libc::F_SETFD, 0) < 0 {
                     return Err(std::io::Error::last_os_error());
                 }
                 Ok(())
@@ -437,10 +449,6 @@ impl CapturedHost {
         unsafe {
             libc::close(read_fd);
         }
-        // SAFETY: `write_fd` is an owned pipe descriptor; `File` owns it now.
-        let mut writer = unsafe { std::fs::File::from_raw_fd(write_fd) };
-        writer.write_all(&token).expect("write token");
-        drop(writer);
         let stderr = child.stderr.take().expect("stderr");
         Self { child, stderr }
     }
