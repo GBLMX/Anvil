@@ -58,7 +58,7 @@ Event envelope:
 ```json
 {
   "jsonrpc": "2.0",
-  "method": "event.notify",
+  "method": "host.event",
   "params": {
     "subscription_id": 7,
     "event": "diagnostics.changed",
@@ -70,6 +70,10 @@ Event envelope:
 
 Rules:
 
+- `host.event` is an editor/proxy-to-plugin-host notification only. It is a
+  host-internal method, excluded from the plugin-callable method catalog.
+  A plugin-originated `host.event` is rejected with `METHOD_NOT_FOUND`; it is
+  never relayed back through the proxy.
 - The event name is from a static allowlist; unknown names are rejected.
 - `sequence` is monotonic per subscription. Stale/replayed sequences are
   dropped.
@@ -118,8 +122,9 @@ exclusive `editor.begin_mouse_capture` lease from the same plugin command.
   gates and generated bindings.
 - Breaking changes or removal require a new major contract, not silent edits to
   v1 DTOs.
-- The method catalog, Rust DTOs, JSON Schema, TypeScript, Luau, and dispatcher
-  parity are verified in CI.
+- The plugin method catalog, Rust DTOs, JSON Schema, TypeScript, Luau, and
+  dispatcher parity are verified in CI. `host.event` is deliberately absent
+  from the plugin-callable catalog and has its own host-internal handler.
 
 ### 6. Backpressure and lifecycle
 
@@ -169,6 +174,9 @@ Negative:
 ## Verification
 
 - Method-catalog/dispatcher parity tests for every v1 method.
+- Direction test: editor→host `host.event` is delivered; plugin-originated
+  `host.event` returns `METHOD_NOT_FOUND` and is never relayed; the method is
+  absent from the plugin-callable catalog.
 - Subscription test: one event delivered once; unknown event rejected; stale
   sequence dropped; plugin stop removes the subscription.
 - Overflow test: high-frequency diagnostics/graph events coalesce without
