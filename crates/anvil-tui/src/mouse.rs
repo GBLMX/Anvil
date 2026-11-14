@@ -51,6 +51,19 @@ pub(crate) fn handle_mouse(model: &mut Model, mouse: MouseEvent, width: u16, hei
         height,
     };
     if overlay_open(model) {
+        if model.overlays.theme_browser.is_some() {
+            match mouse.kind {
+                MouseEventKind::ScrollUp => {
+                    model.move_theme_browser(-1);
+                    return true;
+                }
+                MouseEventKind::ScrollDown => {
+                    model.move_theme_browser(1);
+                    return true;
+                }
+                _ => {}
+            }
+        }
         if mouse.kind == MouseEventKind::Down(MouseButton::Left) {
             if model.overlays.settings_overlay.is_some()
                 && let Some(row) = crate::settings_ui::hit(area, mouse.column, mouse.row)

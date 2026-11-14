@@ -204,6 +204,43 @@ mod tests {
     }
 
     #[test]
+    fn mouse_wheel_moves_theme_selection() {
+        theme::set_startup_theme("anvil-dark").expect("reset");
+        let mut model = Model::new(EditorState::from_text("x"), None);
+        model.open_theme_browser();
+        let selected = |model: &Model| {
+            model
+                .overlays
+                .theme_browser
+                .as_ref()
+                .expect("theme browser")
+                .selected
+        };
+        let before = selected(&model);
+        let scroll = |kind| crossterm::event::MouseEvent {
+            kind,
+            column: 0,
+            row: 0,
+            modifiers: crossterm::event::KeyModifiers::NONE,
+        };
+        assert!(crate::mouse::handle_mouse(
+            &mut model,
+            scroll(crossterm::event::MouseEventKind::ScrollDown),
+            120,
+            40,
+        ));
+        assert_eq!(selected(&model), before + 1);
+        assert!(crate::mouse::handle_mouse(
+            &mut model,
+            scroll(crossterm::event::MouseEventKind::ScrollUp),
+            120,
+            40,
+        ));
+        assert_eq!(selected(&model), before);
+        theme::set_startup_theme("anvil-dark").expect("reset");
+    }
+
+    #[test]
     fn theme_browser_renders_the_selected_tail() {
         theme::set_startup_theme("anvil-dark").expect("reset");
         let mut model = Model::new(EditorState::from_text("x"), None);
