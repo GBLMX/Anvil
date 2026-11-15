@@ -36,3 +36,20 @@ project file is then reported as ignored with that reason.
 ignored project files with their reason. A parse failure is reported as an
 error containing the file path and parser location; it does not silently
 replace the failure with defaults.
+
+## Export and import
+
+`:settings-export <path>` writes the currently effective typed settings to a
+portable TOML file. Paths are resolved relative to the workspace unless
+absolute.
+
+`:settings-import <path>` validates the file, writes it to the user settings
+path (`ANVIL_SETTINGS` or `$XDG_CONFIG_HOME/anvil/settings.toml`), and runs the
+same reload as `:config-reload`. Environment overrides still apply after
+import, and `:settings` shows the resulting origin for each field. The imported
+file is normalized: comments and unknown keys are preserved only when the
+target file already contains them, matching `:settings` saves.
+
+Export includes effective values, including any active environment overrides.
+To move settings between machines without carrying environment-specific values,
+unset `ANVIL_*` overrides before exporting.

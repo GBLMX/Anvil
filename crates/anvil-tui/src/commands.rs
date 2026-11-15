@@ -179,6 +179,8 @@ impl Model {
             ("help", "start" | "getting-started" | "onboarding") => self.show_onboarding_help(),
             ("help", "") => self.show_help(),
             ("settings", "") => self.open_settings(),
+            ("settings-export", argument) => self.export_settings(argument),
+            ("settings-import", argument) => self.import_settings(argument),
             ("themes", "") => self.open_theme_browser(),
             ("theme", argument) => {
                 if argument.is_empty() || argument == "list" {

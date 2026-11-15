@@ -400,7 +400,7 @@ mod tests {
         );
         assert_eq!(
             labels(&CommandCompletion::new("set", &[], true, true)),
-            vec!["settings"]
+            vec!["settings", "settings-export", "settings-import"]
         );
     }
 

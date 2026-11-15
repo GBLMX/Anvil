@@ -419,7 +419,6 @@ fn merge_table(base: &mut toml_edit::Table, overlay: &toml_edit::Table) {
     }
 }
 
-#[cfg(test)]
 pub(crate) fn load_file_from_path(path: &Path) -> Result<Settings, String> {
     if !path.exists() {
         return Ok(Settings::default());
@@ -748,6 +747,76 @@ struct UiFile {
 }
 
 impl crate::Model {
+    pub(crate) fn export_settings(&mut self, argument: &str) {
+        let argument = argument.trim();
+        if argument.is_empty() {
+            self.status.text = "E: usage: :settings-export <path>".to_owned();
+            self.file.dirty = true;
+            return;
+        }
+        let path = match self.workspace.absolute_path(Path::new(argument)) {
+            Ok(path) => path,
+            Err(error) => {
+                self.status.text = format!("E: settings-export: {error}");
+                self.file.dirty = true;
+                return;
+            }
+        };
+        match save_to_path(&path, self.config.settings) {
+            Ok(()) => {
+                self.status.text = format!("settings exported: {}", path.display());
+            }
+            Err(error) => self.status.text = format!("E: settings-export: {error}"),
+        }
+        self.file.dirty = true;
+    }
+
+    pub(crate) fn import_settings(&mut self, argument: &str) {
+        let argument = argument.trim();
+        if argument.is_empty() {
+            self.status.text = "E: usage: :settings-import <path>".to_owned();
+            self.file.dirty = true;
+            return;
+        }
+        let source = match self.workspace.absolute_path(Path::new(argument)) {
+            Ok(path) => path,
+            Err(error) => {
+                self.status.text = format!("E: settings-import: {error}");
+                self.file.dirty = true;
+                return;
+            }
+        };
+        if !source.is_file() {
+            self.status.text = format!("E: settings-import: {} is not a file", source.display());
+            self.file.dirty = true;
+            return;
+        }
+        let imported = match load_file_from_path(&source) {
+            Ok(settings) => settings,
+            Err(error) => {
+                self.status.text = format!("E: settings-import: {error}");
+                self.file.dirty = true;
+                return;
+            }
+        };
+        let target = match save(imported) {
+            Ok(path) => path,
+            Err(error) => {
+                self.status.text = format!("E: settings-import: {error}");
+                self.file.dirty = true;
+                return;
+            }
+        };
+        self.reload_config();
+        let reload_status = self.status.text.clone();
+        self.status.text = format!(
+            "settings imported: {} -> {}; {reload_status}",
+            source.display(),
+            target.display()
+        );
+        self.file.dirty = true;
+    }
+
     pub(crate) fn apply_settings(&mut self, settings: Settings) {
         let theme_changed = self.config.settings.theme != settings.theme;
         let watch_changed =
@@ -820,6 +889,70 @@ mod tests {
                 },
             }
         );
+    }
+
+    #[test]
+    fn settings_export_and_import_round_trip() {
+        let _guard = TEST_ENV_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        let directory = tempfile::tempdir().expect("tempdir");
+        let workspace = directory.path().join("workspace");
+        fs::create_dir_all(&workspace).expect("workspace");
+        let previous_settings = std::env::var_os("ANVIL_SETTINGS");
+        let previous_config = std::env::var_os("XDG_CONFIG_HOME");
+        unsafe {
+            std::env::remove_var("ANVIL_SETTINGS");
+            std::env::set_var("XDG_CONFIG_HOME", directory.path().join("config"));
+        }
+        let mut model = crate::Model::new(crate::EditorState::from_text(""), None);
+        model.workspace.path = workspace.clone();
+        model.workspace.roots =
+            crate::workspace_roots::WorkspaceRoots::new(&workspace).expect("roots");
+        model.config.settings.editor.scroll_margin = 6;
+        model.config.settings.editor.soft_wrap = true;
+
+        model.execute_command("settings-export export.toml");
+        let exported = workspace.join("export.toml");
+        assert!(
+            model.status.text.contains("settings exported"),
+            "{}",
+            model.status.text
+        );
+        let parsed = parse(&fs::read_to_string(&exported).expect("export")).expect("valid export");
+        assert_eq!(parsed.editor.scroll_margin, 6);
+        assert!(parsed.editor.soft_wrap);
+
+        let imported = directory.path().join("import.toml");
+        fs::write(
+            &imported,
+            "[editor]\nscroll_margin = 9\nsoft_wrap = false\n[search]\ncase_sensitive = true\n",
+        )
+        .expect("import source");
+        model.execute_command(&format!("settings-import {}", imported.display()));
+        assert_eq!(model.config.settings.editor.scroll_margin, 9);
+        assert!(!model.config.settings.editor.soft_wrap);
+        assert!(model.config.settings.search.case_sensitive);
+        assert!(
+            model.status.text.contains("settings imported"),
+            "{}",
+            model.status.text
+        );
+        assert!(
+            directory
+                .path()
+                .join("config/anvil/settings.toml")
+                .is_file()
+        );
+
+        match previous_settings {
+            Some(value) => unsafe { std::env::set_var("ANVIL_SETTINGS", value) },
+            None => unsafe { std::env::remove_var("ANVIL_SETTINGS") },
+        }
+        match previous_config {
+            Some(value) => unsafe { std::env::set_var("XDG_CONFIG_HOME", value) },
+            None => unsafe { std::env::remove_var("XDG_CONFIG_HOME") },
+        }
     }
 
     #[test]

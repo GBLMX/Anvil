@@ -133,6 +133,14 @@ pub const COMMANDS: &[CommandSpec] = &[
         capability: Capability::Admin,
     },
     CommandSpec {
+        name: "settings-export",
+        capability: Capability::Admin,
+    },
+    CommandSpec {
+        name: "settings-import",
+        capability: Capability::Admin,
+    },
+    CommandSpec {
         name: "theme",
         capability: Capability::Admin,
     },
