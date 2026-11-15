@@ -36,6 +36,8 @@ enum ColumnBias {
 #[derive(Debug, Clone)]
 struct LineColumns {
     line_start: usize,
+    ascii: bool,
+    has_tabs: bool,
     checkpoints: Vec<ColumnCheckpoint>,
 }
 
@@ -295,7 +297,6 @@ impl LineIndex {
         &mut self,
         buffer: &B,
         line_start: usize,
-        line_end: usize,
         at: usize,
         text: &str,
     ) {
@@ -312,7 +313,11 @@ impl LineIndex {
             }
             return;
         };
-        if text.contains('\t') || buffer.slice(at..line_end + delta).contains('\t') {
+        let safe = self.columns[index].ascii
+            && !self.columns[index].has_tabs
+            && text.is_ascii()
+            && !text.as_bytes().contains(&b'\t');
+        if !safe {
             self.columns.remove(index);
         } else {
             let relative = at - line_start;
@@ -578,9 +583,7 @@ impl LineIndex {
                 self.len = new_len;
                 if let Some(line) = line {
                     let inserted = buffer.slice(old_len..new_len);
-                    self.update_columns_after_insert(
-                        buffer, line.start, line.end, old_len, &inserted,
-                    );
+                    self.update_columns_after_insert(buffer, line.start, old_len, &inserted);
                 }
                 return;
             }
@@ -662,7 +665,7 @@ impl LineIndex {
         let chunk = self.chunk_for_line(line.line);
         let base = self.bases[chunk];
         let delta = text.len();
-        self.update_columns_after_insert(buffer, line.start, line.end, at, text);
+        self.update_columns_after_insert(buffer, line.start, at, text);
         self.len = buffer.len_bytes();
         self.ends[chunk] = self.ends[chunk].saturating_add(delta);
         for index in chunk + 1..self.starts.len() {
@@ -918,6 +921,7 @@ fn build_line_columns(text: &str, start: usize, end: usize) -> LineColumns {
     let mut display = 0;
     let mut next_checkpoint = 0;
     let ascii = slice.is_ascii();
+    let has_tabs = slice.as_bytes().contains(&b'\t');
     if ascii && slice.bytes().all(|byte| (0x20..0x7f).contains(&byte)) {
         for byte in (0..slice.len()).step_by(COLUMN_CHECKPOINT_BYTES) {
             checkpoints.push(ColumnCheckpoint {
@@ -968,6 +972,8 @@ fn build_line_columns(text: &str, start: usize, end: usize) -> LineColumns {
     }
     LineColumns {
         line_start: start,
+        ascii,
+        has_tabs,
         checkpoints,
     }
 }
@@ -1272,6 +1278,18 @@ mod tests {
         assert!(index.columns_for_line(0).is_none());
         let position = index.position(&buffer, 25_001).expect("position");
         assert_eq!(position.display_column, 25_001);
+        assert_index_matches(&buffer, &index);
+    }
+
+    #[test]
+    fn column_cache_invalidates_for_unicode_insert() {
+        let mut buffer = PieceTable::from_text(&"x".repeat(100_000));
+        let mut index = LineIndex::from_buffer(&buffer);
+        assert!(index.columns_for_line(0).is_some());
+        buffer.insert(50_000, "\u{0301}");
+        index.apply_insert(&buffer, 50_000, "\u{0301}");
+        assert!(index.columns_for_line(0).is_none());
+        assert!(index.position(&buffer, 50_002).is_some());
         assert_index_matches(&buffer, &index);
     }
 }
