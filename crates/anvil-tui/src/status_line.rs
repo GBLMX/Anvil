@@ -11,12 +11,38 @@ use std::{
 use unicode_width::UnicodeWidthStr;
 
 const DIAGNOSTIC_STABLE: Duration = Duration::from_millis(200);
+const STATUS_MESSAGE_TTL: Duration = Duration::from_secs(8);
+const INFO_NOTIFICATION_TTL_MS: u64 = 4_000;
+const WARNING_NOTIFICATION_TTL_MS: u64 = 8_000;
+const ERROR_NOTIFICATION_TTL_MS: u64 = 12_000;
 const STATUS_SEPARATOR: &str = " · ";
 
 impl Model {
     pub(crate) fn tick_status(&mut self) {
         self.prune_diagnostic_peek();
         let root = self.branch_root();
+        let message = self.status.text.clone();
+        if message != self.status.text_seen {
+            self.status.text_seen = message;
+            self.status.text_at = (!self.status.text.is_empty()).then_some(Instant::now());
+        } else if self
+            .status
+            .text_at
+            .is_some_and(|at| at.elapsed() >= STATUS_MESSAGE_TTL)
+        {
+            self.status.text.clear();
+            self.status.text_seen.clear();
+            self.status.text_at = None;
+            self.file.dirty = true;
+        }
+        if self.ui.notifications.expire(
+            crate::now_millis(),
+            INFO_NOTIFICATION_TTL_MS,
+            WARNING_NOTIFICATION_TTL_MS,
+            ERROR_NOTIFICATION_TTL_MS,
+        ) {
+            self.file.dirty = true;
+        }
         if let std::collections::btree_map::Entry::Vacant(entry) = self.git.branches.entry(root) {
             let branch = detect_git_branch(entry.key());
             entry.insert(branch);
@@ -154,17 +180,20 @@ impl Model {
         if width == 1 {
             return "…".to_owned();
         }
-        let mut segments = Vec::new();
-        if !self.status.text.is_empty() {
-            segments.push(self.status.text.clone());
-        }
+        let diagnostics = if self.language.diagnostics.count_pending.is_some() {
+            format!(
+                "diag [{} {}]",
+                self.spinner_glyph(),
+                self.language.diagnostics.count_shown
+            )
+        } else {
+            format!("diag {}", self.language.diagnostics.count_shown)
+        };
+        let mut segments = vec![diagnostics];
         let icon = self.status_file_icon();
-        let icon_width = icon.as_deref().map(UnicodeWidthStr::width).unwrap_or(0);
         let path = middle_ellipsis(
             &self.relative_path_text(),
-            width
-                .saturating_sub(3 + icon_width + usize::from(icon.is_some()))
-                .min(32),
+            width.saturating_sub(50).clamp(12, 32),
         );
         segments.push(match icon {
             Some(icon) => format!("{icon} {path}"),
@@ -177,28 +206,15 @@ impl Model {
             segments.push("missing".to_owned());
         }
         if self.file.read_only {
-            segments.push("RO".to_owned());
+            segments.push("[RO]".to_owned());
         }
-        if let Some(branch) = self
-            .git
-            .branches
-            .get(&self.branch_root())
-            .and_then(Option::as_ref)
-        {
-            segments.push(branch.clone());
-        }
-        let diagnostics = if self.language.diagnostics.count_pending.is_some() {
-            format!(
-                "diag [{} {}]",
-                self.spinner_glyph(),
-                self.language.diagnostics.count_shown
-            )
-        } else {
-            format!("diag {}", self.language.diagnostics.count_shown)
-        };
-        segments.push(diagnostics);
+
         if let Some(segment) = self.lsp_status_segment() {
-            segments.push(segment);
+            if width < 80 {
+                segments.push("lsp".to_owned());
+            } else {
+                segments.push(segment);
+            }
         }
         let selections = self.session.editor.selection_bytes().len();
         if selections > 1 {
@@ -215,6 +231,14 @@ impl Model {
                 position.line + 1,
                 position.grapheme_column + 1
             ));
+        }
+        if let Some(branch) = self
+            .git
+            .branches
+            .get(&self.branch_root())
+            .and_then(Option::as_ref)
+        {
+            segments.push(branch.clone());
         }
         fit_segments(&segments, width)
     }
@@ -434,6 +458,23 @@ mod tests {
             let text = model.status_text(width);
             assert!(UnicodeWidthStr::width(text.as_str()) <= width);
         }
+        let text = model.status_text(200);
+        assert!(!text.contains("saved"), "{text}");
+        assert!(text.starts_with("diag"), "{text}");
+        model.status.text = format!("E: {}", "failure ".repeat(40));
+        let text = model.status_text(40);
+        assert!(!text.contains("failure"), "{text}");
+        assert!(text.contains("diag"), "{text}");
+    }
+
+    #[test]
+    fn stale_status_messages_expire() {
+        let mut model = Model::new(EditorState::from_text("alpha"), None);
+        model.status.text = "saved".to_owned();
+        model.status.text_seen = "saved".to_owned();
+        model.status.text_at = Some(Instant::now() - STATUS_MESSAGE_TTL);
+        model.tick_status();
+        assert!(model.status.text.is_empty());
     }
 
     #[test]

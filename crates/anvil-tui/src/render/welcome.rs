@@ -20,7 +20,7 @@ pub(crate) fn welcome_recent_at(
         height: height.saturating_sub(2),
     };
     let panel_width = area.width.saturating_sub(4).clamp(12, 92).min(area.width);
-    let panel_height = area.height.saturating_sub(2).clamp(4, 28).min(area.height);
+    let panel_height = area.height.saturating_sub(2).clamp(4, 22).min(area.height);
     let panel = Rect {
         x: area.x + area.width.saturating_sub(panel_width) / 2,
         y: area.y + area.height.saturating_sub(panel_height) / 2,
@@ -55,7 +55,7 @@ pub(crate) fn welcome_recent_at(
 
 pub(crate) fn render_welcome(frame: &mut Frame, area: Rect, model: &Model) {
     let width = area.width.saturating_sub(4).clamp(12, 92).min(area.width);
-    let height = area.height.saturating_sub(2).clamp(4, 28).min(area.height);
+    let height = area.height.saturating_sub(2).clamp(4, 22).min(area.height);
     let panel = Rect {
         x: area.x + area.width.saturating_sub(width) / 2,
         y: area.y + area.height.saturating_sub(height) / 2,
@@ -127,6 +127,10 @@ fn welcome_actions(model: &Model, width: usize) -> Vec<Line<'static>> {
             ),
         ]),
         Line::styled("selection-first terminal editor", muted),
+        Line::styled(
+            "─".repeat(width.saturating_sub(2).min(34)),
+            theme::panel().fg(theme::dim()),
+        ),
         Line::styled("", theme::panel()),
         Line::from(vec![
             Span::styled(format!(" {:<8}", "i"), key),
@@ -143,6 +147,10 @@ fn welcome_actions(model: &Model, width: usize) -> Vec<Line<'static>> {
         Line::from(vec![
             Span::styled(format!(" {:<8}", "Space b"), key),
             Span::raw("buffers"),
+        ]),
+        Line::from(vec![
+            Span::styled(format!(" {:<8}", "Space p"), key),
+            Span::raw("commands"),
         ]),
         Line::from(vec![
             Span::styled(format!(" {:<8}", "r"), key),
@@ -174,7 +182,7 @@ fn welcome_recent(model: &Model, width: usize, limit: usize) -> Vec<Line<'static
     let files = model.openable_recent_files();
     let mut lines = vec![Line::styled("FILES", dim), Line::styled("", theme::panel())];
     if files.is_empty() {
-        lines.push(Line::styled("no recent files in this workspace", muted));
+        lines.push(Line::styled("no recent files · Space f", muted));
     } else {
         for path in files.iter().take(limit) {
             let display = path
@@ -199,7 +207,7 @@ fn welcome_recent(model: &Model, width: usize, limit: usize) -> Vec<Line<'static
     lines.push(Line::styled("", theme::panel()));
     let workspaces = model.recent.workspaces.iter().take(3).collect::<Vec<_>>();
     if workspaces.is_empty() {
-        lines.push(Line::styled("no recent workspaces", muted));
+        lines.push(Line::styled("no recent workspaces · r", muted));
     } else {
         for workspace in workspaces {
             let name = workspace

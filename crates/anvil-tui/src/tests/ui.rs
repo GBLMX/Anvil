@@ -333,6 +333,51 @@ fn tree_renders_ascii_icon_fallback() {
 }
 
 #[test]
+fn tree_header_keeps_status_states_and_focus_style() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    fs::write(dir.path().join("main.rs"), "").expect("file");
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.workspace.path = dir.path().to_path_buf();
+    model.start_page.welcome = false;
+    model.open_tree();
+    model.ui.focus.tree = true;
+    let backend = TestBackend::new(80, 12);
+    let mut terminal = Terminal::new(backend).expect("terminal");
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+    let header = terminal
+        .backend()
+        .buffer()
+        .cell((2, 1))
+        .expect("tree header cell");
+    assert_eq!(header.fg, crate::theme::accent());
+
+    let render = |model: &Model| {
+        let backend = TestBackend::new(80, 12);
+        let mut terminal = Terminal::new(backend).expect("terminal");
+        terminal.draw(|frame| view(model, frame)).expect("draw");
+        terminal
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .map(|cell| cell.symbol())
+            .collect::<String>()
+    };
+    model.tree.stale = true;
+    assert!(render(&model).contains("Files · stale"));
+    model.tree.stale = false;
+    model.tree.watch_limited = true;
+    assert!(render(&model).contains("Files · watch"));
+    model.tree.watch_limited = false;
+    model.tree.show_hidden = true;
+    assert!(render(&model).contains("Files · hidden"));
+    model.tree.show_hidden = false;
+    let rendered = render(&model);
+    assert!(rendered.contains("Files"));
+    assert!(!rendered.contains("┏ Files"), "{rendered}");
+}
+
+#[test]
 fn tree_selection_scrolls_into_view() {
     let dir = tempfile::tempdir().expect("tempdir");
     for index in 0..20 {
@@ -477,7 +522,8 @@ fn notification_progress_and_problems_render_without_focus_change() {
             .collect::<String>()
     };
     let rendered = render(&model);
-    assert!(rendered.contains("Notifications"), "{rendered}");
+    assert!(rendered.contains("test: hello"), "{rendered}");
+    assert!(!rendered.contains("Notifications"), "{rendered}");
     assert!(rendered.contains("Progress"), "{rendered}");
     assert!(rendered.contains("Problems"), "{rendered}");
     assert_eq!(model.ui.focus, focus);
@@ -981,14 +1027,17 @@ fn welcome_recent_rows_are_clickable() {
     model.workspace.roots =
         crate::workspace_roots::WorkspaceRoots::new(&model.workspace.path).expect("roots");
     model.record_recent_file(&path);
+    let recent_row = (0..30)
+        .find(|row| crate::render::welcome_recent_at(&model, 35, *row, 80, 30) == Some(0))
+        .expect("clickable recent row");
     assert_eq!(
-        crate::mouse::hit_test(&model, 35, 5, 80, 30),
+        crate::mouse::hit_test(&model, 35, recent_row, 80, 30),
         crate::mouse::Target::WelcomeRecent(0)
     );
     let click = crossterm::event::MouseEvent {
         kind: crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left),
         column: 35,
-        row: 5,
+        row: recent_row,
         modifiers: crossterm::event::KeyModifiers::NONE,
     };
     assert!(crate::mouse::handle_mouse(&mut model, click, 80, 30));
@@ -1024,7 +1073,9 @@ fn settings_page_renders_tabs_sections_values_and_description() {
 #[test]
 fn command_palette_renders_title_detail_and_footer() {
     let mut model = Model::new(EditorState::from_text("alpha"), None);
+    model.remember_command("editor.undo");
     model.open_command_palette();
+    model.move_command_palette(1);
     let backend = TestBackend::new(120, 40);
     let mut terminal = Terminal::new(backend).expect("terminal");
     terminal.draw(|frame| view(&model, frame)).expect("draw");
@@ -1038,6 +1089,12 @@ fn command_palette_renders_title_detail_and_footer() {
     assert!(rendered.contains("Commands ·"), "{rendered}");
     assert!(rendered.contains("Enter run"), "{rendered}");
     assert!(rendered.contains("normal"), "{rendered}");
+    assert!(rendered.contains("editor:"), "{rendered}");
+    assert!(rendered.contains("↺"), "{rendered}");
+    assert!(
+        model.config.keymap.key_for_command("editor.undo").is_some(),
+        "expected a direct key hint for editor.undo"
+    );
 }
 
 #[test]

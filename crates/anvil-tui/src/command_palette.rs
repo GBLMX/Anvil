@@ -23,6 +23,7 @@ fn command_title(id: &str) -> String {
 
 impl Model {
     pub(crate) fn open_command_palette(&mut self) {
+        let recents = self.overlays.command_palette_recents.clone();
         let mut items = command::COMMANDS
             .iter()
             .filter(|spec| crate::keymap::executable_command(spec.id.as_str()))
@@ -37,11 +38,15 @@ impl Model {
                 let id = spec.id.as_str();
                 let title = command_title(id);
                 let detail = format!("{id} · {}", contexts.join("+"));
+                let group = id.split('.').next().unwrap_or("other").to_owned();
                 CommandPaletteItem {
                     id: id.to_owned(),
-                    label: format!("{title} {id}"),
+                    label: format!("{group} {title} {id}"),
                     title,
                     detail,
+                    group,
+                    key: self.config.keymap.key_for_command(id),
+                    recent: recents.iter().any(|recent| recent == id),
                     plugin_id: None,
                     theme: None,
                 }
@@ -55,9 +60,14 @@ impl Model {
             };
             items.push(CommandPaletteItem {
                 id: format!("theme.{name}"),
-                label: format!("Theme {name}{current}"),
+                label: format!("theme Theme {name}{current}"),
                 title: format!("Theme: {name}"),
                 detail: current.trim().to_owned(),
+                group: "theme".to_owned(),
+                key: None,
+                recent: recents
+                    .iter()
+                    .any(|recent| recent == &format!("theme.{name}")),
                 plugin_id: None,
                 theme: Some(name),
             });
@@ -84,6 +94,9 @@ impl Model {
                         command.id.escape_default(),
                         plugin.manifest.id.escape_default()
                     ),
+                    group: "plugin".to_owned(),
+                    key: None,
+                    recent: false,
                     plugin_id: Some(plugin.manifest.id.clone()),
                     theme: None,
                 });
@@ -118,6 +131,9 @@ impl Model {
                     command_id.escape_default(),
                     command.plugin_id.escape_default()
                 ),
+                group: "plugin".to_owned(),
+                key: None,
+                recent: false,
                 plugin_id: Some(command.plugin_id.clone()),
                 theme: None,
             });

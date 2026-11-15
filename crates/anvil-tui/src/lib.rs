@@ -86,6 +86,7 @@ use lsp_ui::lsp_settings_with_service;
 mod keymap;
 mod keys;
 mod lsp_runtime;
+mod message;
 mod model;
 mod readonly;
 mod render;
@@ -203,3 +204,10 @@ pub struct Model {
 
 #[cfg(test)]
 mod tests;
+
+pub(crate) fn now_millis() -> u64 {
+    SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_millis() as u64)
+        .unwrap_or(0)
+}

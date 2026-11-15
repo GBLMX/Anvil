@@ -767,5 +767,47 @@ impl Model {
     }
 }
 
+pub(crate) fn default_key_hint(id: &str) -> Option<&'static str> {
+    Some(match id {
+        "editor.collapse_selections" => "Esc",
+        "lsp.hover" => "K",
+        "macro.record" => "q",
+        "macro.replay" => "@",
+        "selection.split_lines" => "Alt-s",
+        "selection.word_occurrences" => "s",
+        "selection.extend_up" => "Alt-c",
+        "selection.extend_down" => "C",
+        "editor.insert_here" => "i",
+        "command_line.open" => ":",
+        "search.open" => "/",
+        "editor.append" => "a",
+        "editor.append_line_end" => "A",
+        "editor.open_below" => "o",
+        "editor.open_above" => "O",
+        "search.next" => "n",
+        "search.previous" => "N",
+        "editor.delete_forward" => "x",
+        "editor.put" => "p",
+        "editor.undo" => "u",
+        "editor.redo" => "Ctrl-r",
+        "editor.repeat_change" => ".",
+        "editor.toggle_comment" => "Ctrl-_",
+        "navigation.match_bracket" => "%",
+        "navigation.jump_back" => "Alt-o",
+        "navigation.jump_forward" => "Alt-i",
+        "cursor.file_end" => "G",
+        "cursor.line_start" => "0/Home",
+        "cursor.line_end" => "End",
+        "cursor.word_next" => "w",
+        "cursor.word_previous" => "b",
+        "cursor.word_end" => "e",
+        "cursor.left" => "h/Left",
+        "cursor.right" => "l/Right",
+        "cursor.down" => "j/Down",
+        "cursor.up" => "k/Up",
+        _ => return None,
+    })
+}
+
 #[cfg(test)]
 mod tests;

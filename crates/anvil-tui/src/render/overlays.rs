@@ -93,20 +93,32 @@ pub(crate) fn render_overlays(model: &Model, frame: &mut Frame, area: Rect) {
             };
             let item = &palette.table.items()[*index];
             let title = truncate_width(
-                &item.title,
-                (popup.width.saturating_sub(4) as usize).min(30) as u16,
+                &format!("{}: {}", item.group, item.title),
+                (popup.width.saturating_sub(6) as usize).min(28) as u16,
             );
-            let detail = truncate_width(&item.detail, detail_width as u16);
+            let detail = item.key.as_ref().map_or_else(
+                || item.detail.clone(),
+                |key| format!("{key} · {}", item.detail),
+            );
+            let detail = truncate_width(&detail, detail_width as u16);
+            let marker = if selected_row {
+                "❯ "
+            } else if item.recent {
+                "↺ "
+            } else {
+                "  "
+            };
             lines.push(Line::from(vec![
-                Span::styled(if selected_row { "❯ " } else { "  " }, style),
+                Span::styled(marker, style),
                 Span::styled(
-                    format!("{title:<30}"),
+                    format!("{title:<28}"),
                     if selected_row {
                         style
                     } else {
                         style.fg(theme::text_color())
                     },
                 ),
+                Span::raw("  "),
                 Span::styled(
                     detail,
                     if selected_row {
@@ -336,26 +348,6 @@ pub(crate) fn render_overlays(model: &Model, frame: &mut Frame, area: Rect) {
                 preview_area,
             );
         }
-    }
-    let notifications = notification_lines(model);
-    if !notifications.is_empty() {
-        let width = (area.width / 2).max(24).min(area.width.saturating_sub(2));
-        let height = (notifications.len() as u16 + 2)
-            .min(7)
-            .min(area.height.saturating_sub(2));
-        let popup = Rect {
-            x: area.x + area.width.saturating_sub(width + 1),
-            y: area.y + 1,
-            width,
-            height,
-        };
-        frame.render_widget(Clear, popup);
-        frame.render_widget(
-            Paragraph::new(notifications)
-                .style(theme::panel())
-                .block(panel_block("Notifications")),
-            popup,
-        );
     }
     let progress = progress_lines(model);
     if !progress.is_empty() {

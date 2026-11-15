@@ -584,3 +584,23 @@ fn wheel_scrolls_the_pane_under_the_pointer() {
         1
     );
 }
+
+#[test]
+fn message_band_reserves_space_and_blocks_editor_hits() {
+    let mut model = Model::new(EditorState::from_text("x"), None);
+    model.start_page.welcome = false;
+    model.notify(
+        anvil_session::ui::NotificationSeverity::Info,
+        "test",
+        "hello",
+    );
+    assert_eq!(model.editor_text_height(20), 17);
+    assert_eq!(
+        crate::mouse::hit_test(&model, 2, 18, 80, 20),
+        crate::mouse::Target::Outside
+    );
+    assert!(matches!(
+        crate::mouse::hit_test(&model, 2, 17, 80, 20),
+        crate::mouse::Target::Editor { .. }
+    ));
+}

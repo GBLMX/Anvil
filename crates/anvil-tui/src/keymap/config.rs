@@ -440,6 +440,19 @@ impl KeymapConfig {
         self.normal.get(&KeyChord::from_key(key)).copied()
     }
 
+    pub(crate) fn key_for_command(&self, id: &str) -> Option<String> {
+        let mut keys = self
+            .normal
+            .iter()
+            .filter(|(_, command)| command.id().is_some_and(|command| command.as_str() == id))
+            .map(|(chord, _)| chord.label())
+            .collect::<Vec<_>>();
+        keys.sort();
+        keys.into_iter()
+            .next()
+            .or_else(|| super::default_key_hint(id).map(str::to_owned))
+    }
+
     fn context_binding(&self, context: KeymapContext, key: KeyPress) -> Option<ContextAction> {
         let chord = KeyChord::from_key(key);
         self.contexts

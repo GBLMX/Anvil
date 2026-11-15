@@ -3,7 +3,6 @@
 use super::*;
 use anvil_lsp_client as lsp;
 use anvil_session::ui::{DiagnosticPeek, NotificationSeverity, PeekDiagnostic, Problem};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 impl Model {
     pub(crate) fn notify(
@@ -209,9 +208,3 @@ fn diagnostic_code(diagnostic: &lsp::Diagnostic) -> Option<String> {
     })
 }
 
-fn now_millis() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|duration| duration.as_millis() as u64)
-        .unwrap_or(0)
-}

@@ -224,9 +224,13 @@ pub(crate) fn hit_test(model: &Model, col: u16, row: u16, width: u16, height: u1
         return crate::render::welcome_recent_at(model, col, row, width, height)
             .map_or(Target::Outside, Target::WelcomeRecent);
     }
-    let Some((inner, tab_row, breadcrumb_row)) = content_rect(model, width, height) else {
+    let Some((inner, tab_row, breadcrumb_row, message_area)) = content_rect(model, width, height)
+    else {
         return Target::Outside;
     };
+    if message_area.is_some_and(|area| row >= area.y && row < area.bottom()) {
+        return Target::Outside;
+    }
     if let Some(area) = breadcrumb_row
         && row == area.y
     {
@@ -239,7 +243,10 @@ pub(crate) fn hit_test(model: &Model, col: u16, row: u16, width: u16, height: u1
     if model.tree.visible && tree_fits(editor_inner.width) {
         let sidebar = model.sidebar_width(editor_inner.width);
         if col < editor_inner.x.saturating_add(sidebar) {
-            let visible = editor_inner.height.saturating_sub(2) as usize;
+            if row == editor_inner.y {
+                return Target::Outside;
+            }
+            let visible = editor_inner.height.saturating_sub(1) as usize;
             let start = model
                 .tree
                 .selected
@@ -287,11 +294,9 @@ pub(crate) fn hit_test(model: &Model, col: u16, row: u16, width: u16, height: u1
     Target::Editor { side, line, column }
 }
 
-fn content_rect(
-    model: &Model,
-    width: u16,
-    height: u16,
-) -> Option<(Rect, Option<u16>, Option<Rect>)> {
+type ContentRects = (Rect, Option<u16>, Option<Rect>, Option<Rect>);
+
+fn content_rect(model: &Model, width: u16, height: u16) -> Option<ContentRects> {
     if model.start_page.welcome {
         return None;
     }
@@ -318,11 +323,18 @@ fn content_rect(
     } else {
         None
     };
-    Some((inner, tab_row, breadcrumb_row))
+    let message_height = crate::message::height(model, inner.height);
+    let message_area = (message_height > 0).then(|| Rect {
+        y: inner.y + inner.height.saturating_sub(message_height),
+        height: message_height,
+        ..inner
+    });
+    inner.height = inner.height.saturating_sub(message_height);
+    Some((inner, tab_row, breadcrumb_row, message_area))
 }
 
 fn editor_area(model: &Model, width: u16, height: u16) -> Option<Rect> {
-    let (mut inner, _, _) = content_rect(model, width, height)?;
+    let (mut inner, _, _, _) = content_rect(model, width, height)?;
     if model.tree.visible && tree_fits(inner.width) {
         let sidebar = model.sidebar_width(inner.width);
         inner.x = inner.x.saturating_add(sidebar);

@@ -221,6 +221,26 @@ impl NotificationQueue {
         });
     }
 
+    /// Drops notifications older than their severity TTL.
+    pub fn expire(
+        &mut self,
+        now: u64,
+        info_ttl_ms: u64,
+        warning_ttl_ms: u64,
+        error_ttl_ms: u64,
+    ) -> bool {
+        let before = self.items.len();
+        self.items.retain(|notification| {
+            let ttl = match notification.severity {
+                NotificationSeverity::Info => info_ttl_ms,
+                NotificationSeverity::Warning => warning_ttl_ms,
+                NotificationSeverity::Error => error_ttl_ms,
+            };
+            now.saturating_sub(notification.timestamp) < ttl
+        });
+        before != self.items.len()
+    }
+
     pub fn items(&self) -> &[Notification] {
         &self.items
     }
@@ -393,6 +413,20 @@ mod tests {
         }
         assert_eq!(queue.items().len(), NOTIFICATION_CAPACITY);
         assert_eq!(queue.items().last().expect("last").message, "message 49");
+    }
+
+    #[test]
+    fn notifications_expire_by_severity() {
+        let mut queue = NotificationQueue::default();
+        queue.push(NotificationSeverity::Info, "test", "info", 1_000);
+        queue.push(NotificationSeverity::Warning, "test", "warning", 1_000);
+        queue.push(NotificationSeverity::Error, "test", "error", 1_000);
+        assert!(queue.expire(5_000, 4_000, 8_000, 12_000));
+        assert_eq!(queue.items().len(), 2);
+        assert_eq!(queue.items()[0].message, "warning");
+        assert_eq!(queue.items()[1].message, "error");
+        assert!(queue.expire(13_000, 4_000, 8_000, 12_000));
+        assert!(queue.items().is_empty());
     }
 
     #[test]

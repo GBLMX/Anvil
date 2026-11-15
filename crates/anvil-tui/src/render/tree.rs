@@ -14,8 +14,17 @@ pub(crate) fn render_tree(model: &Model, frame: &mut Frame, area: Rect) -> Optio
         width: sidebar_width,
         ..area
     };
+    let header_area = Rect {
+        height: tree_area.height.min(1),
+        ..tree_area
+    };
+    let list_area = Rect {
+        y: tree_area.y.saturating_add(header_area.height),
+        height: tree_area.height.saturating_sub(header_area.height),
+        ..tree_area
+    };
     let mut lines = Vec::new();
-    let visible_height = tree_area.height.saturating_sub(2) as usize;
+    let visible_height = list_area.height as usize;
     let start = model
         .tree
         .selected
@@ -141,17 +150,18 @@ pub(crate) fn render_tree(model: &Model, frame: &mut Frame, area: Rect) -> Optio
     } else {
         "Files"
     };
-    let tree_block = if model.ui.focus.tree {
-        focused_panel_block(tree_title)
+    let title_style = if model.ui.focus.tree {
+        theme::title().fg(theme::accent())
     } else {
-        panel_block(tree_title)
+        theme::panel().fg(theme::muted())
     };
     frame.render_widget(
-        Paragraph::new(lines)
-            .style(theme::panel())
-            .block(tree_block),
-        tree_area,
+        Paragraph::new(Line::styled(format!(" {tree_title}"), title_style)).style(theme::panel()),
+        header_area,
     );
+    if list_area.height > 0 {
+        frame.render_widget(Paragraph::new(lines).style(theme::panel()), list_area);
+    }
     Some(Rect {
         x: area.x + sidebar_width,
         width: area.width.saturating_sub(sidebar_width),

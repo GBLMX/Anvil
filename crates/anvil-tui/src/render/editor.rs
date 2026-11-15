@@ -8,38 +8,31 @@ pub fn view(model: &Model, frame: &mut Frame) {
     let title = if model.pager.back.is_some() {
         format!("[{}]", model.pager.title.as_deref().unwrap_or("help"))
     } else {
-        let name = if model.file.stdin_buffer {
-            "[stdin]".to_owned()
+        let workspace = model
+            .workspace
+            .path
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_else(|| model.workspace.path.display().to_string());
+        let workspace = if model.file.stdin_buffer {
+            " · stdin".to_owned()
+        } else if workspace.eq_ignore_ascii_case("anvil") {
+            String::new()
         } else {
-            model.breadcrumb_text(usize::from(area.width).saturating_sub(6))
-        };
-        let name = if model.file.modified {
-            format!("[+] {name}")
-        } else {
-            name
-        };
-        let name = if model.file.read_only {
-            format!("{name} [RO]")
-        } else {
-            name
+            format!(" · {workspace}")
         };
         if model.buffers.entries.is_empty() {
-            name
+            format!("Anvil{workspace}")
         } else {
             format!(
-                "[{}/{}] {name}",
+                "[{}/{}] Anvil{workspace}",
                 model.buffers.active + 1,
                 model.buffers.entries.len()
             )
         }
     };
-    let title = if let Some(split) = &model.buffers.split {
-        let secondary = split
-            .buffer
-            .path
-            .as_ref()
-            .map_or("[no file]", |path| path.to_str().unwrap_or("[no file]"));
-        format!("{title} │ {secondary}")
+    let title = if model.buffers.split.is_some() {
+        format!("{title} · split")
     } else {
         title
     };
@@ -102,11 +95,6 @@ pub fn view(model: &Model, frame: &mut Frame) {
             theme::accent(),
             model.status_text(usize::from(area.width).saturating_sub(7)),
         ),
-    };
-    let status = if let Some(busy) = &model.status.busy {
-        format!("{} {busy}…", model.spinner_glyph())
-    } else {
-        status
     };
 
     let status_cursor = match &model.ui.input_mode {
@@ -174,6 +162,16 @@ pub fn view(model: &Model, frame: &mut Frame) {
         crate::breadcrumbs::render(model, frame, breadcrumb);
         inner.y = inner.y.saturating_add(1);
         inner.height = inner.height.saturating_sub(1);
+    }
+    let message_height = crate::message::height(model, inner.height);
+    let message_area = Rect {
+        y: inner.y + inner.height.saturating_sub(message_height),
+        height: message_height,
+        ..inner
+    };
+    inner.height = inner.height.saturating_sub(message_height);
+    if message_height > 0 {
+        crate::message::render(model, frame, message_area);
     }
     let mut content = inner;
     if model.start_page.welcome {

@@ -134,6 +134,7 @@ impl Model {
         if crate::breadcrumbs::visible(self, inner) {
             height = height.saturating_sub(1);
         }
+        height = height.saturating_sub(crate::message::height(self, height));
         height
             .saturating_sub(crate::pipe_locations::panel_height(self, height))
             .max(1)

@@ -289,38 +289,6 @@ fn buffer_bar_line(model: &Model, width: u16) -> Line<'static> {
     Line::from(spans)
 }
 
-fn notification_lines(model: &Model) -> Vec<Line<'static>> {
-    model
-        .ui
-        .notifications
-        .items()
-        .iter()
-        .rev()
-        .take(5)
-        .map(|notification| {
-            let (marker, color) = match notification.severity {
-                anvil_session::ui::NotificationSeverity::Error => ("!", theme::error()),
-                anvil_session::ui::NotificationSeverity::Warning => (
-                    if icon_theme::ascii_mode() { "!" } else { "▲" },
-                    theme::warning(),
-                ),
-                anvil_session::ui::NotificationSeverity::Info => ("i", theme::accent()),
-            };
-            let suffix = if notification.count > 1 {
-                format!(" ×{}", notification.count)
-            } else {
-                String::new()
-            };
-            Line::styled(
-                format!(
-                    "{marker} {}: {}{suffix}",
-                    notification.source, notification.message
-                ),
-                theme::panel().fg(color),
-            )
-        })
-        .collect()
-}
 
 fn progress_lines(model: &Model) -> Vec<Line<'static>> {
     model

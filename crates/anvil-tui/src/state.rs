@@ -150,6 +150,9 @@ pub(crate) struct CommandPaletteItem {
     pub(crate) label: String,
     pub(crate) title: String,
     pub(crate) detail: String,
+    pub(crate) group: String,
+    pub(crate) key: Option<String>,
+    pub(crate) recent: bool,
     pub(crate) plugin_id: Option<String>,
     pub(crate) theme: Option<&'static str>,
 }
@@ -554,6 +557,9 @@ impl EditSessionState {
 pub struct StatusState {
     /// Short status line.
     pub(crate) text: String,
+    /// Last observed message, used to timestamp direct `text` writes.
+    pub(crate) text_seen: String,
+    pub(crate) text_at: Option<Instant>,
     /// Background file operation label, if any.
     pub(crate) busy: Option<String>,
     pub(crate) busy_progress: Option<u64>,
