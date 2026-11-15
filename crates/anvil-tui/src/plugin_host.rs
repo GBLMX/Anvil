@@ -51,7 +51,7 @@ impl HostSpawner for SystemHostSpawner {
             args.push(command.to_owned());
         }
         let process = spawn_in_cgroup(&host, &args, Token(start.token.0), cgroup)
-            .map_err(|error| error.to_string())?;
+            .map_err(|error| format!("spawn host: {error}"))?;
         Ok(Box::new(SystemHostProcess(process)))
     }
 }

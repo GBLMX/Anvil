@@ -127,9 +127,7 @@ impl HostSession {
         listener
             .set_nonblocking(true)
             .map_err(|error| error.to_string())?;
-        let process = spawner
-            .spawn(&start, &socket)
-            .map_err(|error| format!("spawn host: {error}"))?;
+        let process = spawner.spawn(&start, &socket)?;
         let (command_tx, command_rx) = mpsc::sync_channel(MAX_PENDING_COMMANDS);
         let (event_tx, event_rx) = mpsc::sync_channel(MAX_QUEUED_HOST_EVENTS);
         let alive = Arc::new(AtomicBool::new(true));
@@ -698,7 +696,7 @@ impl HostSpawner for TestSpawner {
             Some(cgroup) => anvil_plugin_host::spawn_in_cgroup(&self.host, &args, token, cgroup),
             None => anvil_plugin_host::spawn(&self.host, &args, token),
         }
-        .map_err(|error| error.to_string())?;
+        .map_err(|error| format!("spawn host: {error}"))?;
         Ok(Box::new(TestProcess(process)))
     }
 }
