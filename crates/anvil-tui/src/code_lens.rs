@@ -24,7 +24,7 @@ pub(crate) struct CodeLensState {
 
 impl Model {
     pub(crate) fn code_lens_items_for_line(&self, line: usize) -> Vec<(usize, &CodeLensItem)> {
-        let Some(state) = &self.overlays.lsp_results.code_lens else {
+        let Some(state) = &self.language.code_lens else {
             return Vec::new();
         };
         state
@@ -37,8 +37,7 @@ impl Model {
 
     pub(crate) fn execute_code_lens(&mut self, index: usize) {
         let Some(lens) = self
-            .overlays
-            .lsp_results
+            .language
             .code_lens
             .as_ref()
             .and_then(|state| state.items.get(index))
@@ -63,7 +62,7 @@ impl Model {
         self.language
             .lsp_requests
             .cancel(|kind| kind == LspRequestKind::CodeLens);
-        self.overlays.lsp_results.code_lens = None;
+        self.language.code_lens = None;
         let Some(uri) = self.session.path.as_ref().map(|path| lsp_uri(path)) else {
             return;
         };
@@ -82,7 +81,7 @@ impl Model {
         revision: Option<u64>,
     ) {
         let Some(items) = result.as_array() else {
-            self.overlays.lsp_results.code_lens = None;
+            self.language.code_lens = None;
             self.status.text = "lsp: invalid code lens response".to_owned();
             self.file.dirty = true;
             return;
@@ -129,7 +128,7 @@ impl Model {
         }
         lenses.sort_by_key(|lens| lens.line);
         let revision = revision.unwrap_or_else(|| self.session.editor.revision());
-        self.overlays.lsp_results.code_lens = Some(CodeLensState {
+        self.language.code_lens = Some(CodeLensState {
             revision,
             items: lenses.clone(),
         });
@@ -173,12 +172,7 @@ mod tests {
             ]),
             None,
         );
-        let state = model
-            .overlays
-            .lsp_results
-            .code_lens
-            .as_ref()
-            .expect("code lens");
+        let state = model.language.code_lens.as_ref().expect("code lens");
         assert_eq!(state.items.len(), 4);
         assert_eq!(state.items[0].title, "Run");
         assert_eq!(state.items[0].command.as_deref(), Some("run"));
@@ -206,16 +200,7 @@ mod tests {
             ]),
             None,
         );
-        assert_eq!(
-            model
-                .overlays
-                .lsp_results
-                .code_lens
-                .as_ref()
-                .expect("lens")
-                .revision,
-            0
-        );
+        assert_eq!(model.language.code_lens.as_ref().expect("lens").revision, 0);
         model.insert_text("x");
         assert_eq!(model.code_lens_items_for_line(0).len(), 1);
     }
@@ -225,7 +210,7 @@ mod tests {
         use crate::layout::DisplayRow;
 
         let mut model = Model::new(EditorState::from_text("a\nb\nc\n"), None);
-        model.overlays.lsp_results.code_lens = Some(CodeLensState {
+        model.language.code_lens = Some(CodeLensState {
             revision: model.session.editor.revision(),
             items: (0..5)
                 .map(|index| CodeLensItem {
@@ -261,7 +246,7 @@ mod tests {
             EditorState::from_text("a\nb\nc\nd\ne\nf\ng\nh\ni\nj\n"),
             None,
         );
-        model.overlays.lsp_results.code_lens = Some(CodeLensState {
+        model.language.code_lens = Some(CodeLensState {
             revision: model.session.editor.revision(),
             items: (0..30)
                 .map(|index| CodeLensItem {
@@ -289,7 +274,7 @@ mod tests {
         use ratatui::{Terminal, backend::TestBackend};
 
         let mut model = Model::new(EditorState::from_text("fn main() {}\n"), None);
-        model.overlays.lsp_results.code_lens = Some(CodeLensState {
+        model.language.code_lens = Some(CodeLensState {
             revision: model.session.editor.revision(),
             items: vec![CodeLensItem {
                 line: 0,
@@ -317,7 +302,7 @@ mod tests {
     #[test]
     fn code_lens_rows_are_mouse_targets() {
         let mut model = Model::new(EditorState::from_text("fn main() {}\n"), None);
-        model.overlays.lsp_results.code_lens = Some(CodeLensState {
+        model.language.code_lens = Some(CodeLensState {
             revision: model.session.editor.revision(),
             items: vec![CodeLensItem {
                 line: 0,

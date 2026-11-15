@@ -307,9 +307,7 @@ impl Model {
             .editor
             .scroll_margin
             .min(height.saturating_sub(1) / 2);
-        if self.overlays.lsp_results.code_lens.is_some()
-            && self.row_of_source_line(line, height).is_none()
-        {
+        if self.language.code_lens.is_some() && self.row_of_source_line(line, height).is_none() {
             self.view.scroll = line;
             self.view.scroll_subrow = 0;
         }

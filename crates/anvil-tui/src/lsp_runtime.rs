@@ -37,7 +37,7 @@ impl Model {
         self.close_diagnostic_peek();
         self.overlays.lsp_results.code_actions = None;
         self.close_overlay(OverlayKind::CodeActions);
-        self.overlays.lsp_results.code_lens = None;
+        self.language.code_lens = None;
         self.overlays.lsp_results.document_symbols = None;
         self.close_overlay(OverlayKind::DocumentSymbols);
         self.overlays.lsp_results.references = None;

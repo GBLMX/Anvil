@@ -493,7 +493,6 @@ impl LspRequestsState {
 pub(crate) struct LspResultsState {
     pub(crate) completion: Option<CompletionState>,
     pub(crate) completion_resolve: Option<(u64, usize)>,
-    pub(crate) code_lens: Option<code_lens::CodeLensState>,
     pub(crate) snippet: Option<SnippetSession>,
     pub(crate) semantic_legend: Vec<String>,
     pub(crate) semantic_tokens: Vec<SemanticToken>,
@@ -1005,6 +1004,7 @@ pub(crate) struct LanguageState {
     pub(crate) lsp: LspTransportState,
     pub(crate) lsp_requests: LspRequestsState,
     pub(crate) inlay_hints: InlayHintsState,
+    pub(crate) code_lens: Option<code_lens::CodeLensState>,
 }
 pub(crate) enum LspPollEffect {
     Event {

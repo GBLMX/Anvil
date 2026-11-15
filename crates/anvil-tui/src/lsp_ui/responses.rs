@@ -144,7 +144,7 @@ impl Model {
         };
         if let Some(error) = error {
             if request.kind == LspRequestKind::CodeLens {
-                self.overlays.lsp_results.code_lens = None;
+                self.language.code_lens = None;
                 self.file.dirty = true;
                 return;
             }
