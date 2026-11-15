@@ -241,6 +241,10 @@ pub const COMMANDS: &[CommandSpec] = &[
         capability: Capability::Read,
     },
     CommandSpec {
+        name: "plugin-inventory",
+        capability: Capability::Read,
+    },
+    CommandSpec {
         name: "plugin-oom",
         capability: Capability::Admin,
     },

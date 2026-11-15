@@ -34,6 +34,36 @@ impl Model {
         self.file.dirty = true;
     }
 
+    pub(crate) fn show_plugin_inventory(&mut self) {
+        #[cfg(target_os = "linux")]
+        if let Err(error) = self.load_plugins() {
+            self.status.text = format!("E: plugin inventory: {error}");
+            self.file.dirty = true;
+            return;
+        }
+        let text = self.plugin_inventory_text();
+        self.show_read_only(&text, "Plugins: :q returns", "plugins");
+        self.file.dirty = true;
+    }
+
+    fn plugin_inventory_text(&self) -> String {
+        let mut text = format!(
+            "{} installed plugin(s)\n\n",
+            self.runtime.plugins.entries.len()
+        );
+        for plugin in &self.runtime.plugins.entries {
+            text.push_str(&format!(
+                "{} {} enabled={} source={} digest={}\n",
+                plugin.manifest.id,
+                plugin.manifest.version,
+                plugin.enabled,
+                plugin.source.as_deref().unwrap_or("local"),
+                plugin.digest.as_deref().unwrap_or("bundled")
+            ));
+        }
+        text
+    }
+
     pub(crate) fn move_plugin_manager(&mut self, delta: isize) {
         let Some(manager) = self.runtime.plugins.manager.as_mut() else {
             return;
@@ -379,6 +409,17 @@ mod tests {
         assert!(rendered.contains("1.2.3"), "{rendered}");
         assert!(rendered.contains("Enabled"), "{rendered}");
         assert!(rendered.contains("2.0 MiB"), "{rendered}");
+    }
+
+    #[test]
+    fn inventory_text_reports_identity_source_and_digest() {
+        let model = model();
+        let text = model.plugin_inventory_text();
+        assert!(text.contains("demo.plugin"), "{text}");
+        assert!(text.contains("1.2.3"), "{text}");
+        assert!(text.contains("source=local-file"), "{text}");
+        assert!(text.contains("digest=0123456789abcdef"), "{text}");
+        assert!(text.contains("enabled=true"), "{text}");
     }
 
     #[test]

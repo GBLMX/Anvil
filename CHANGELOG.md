@@ -10,6 +10,8 @@ post-`0.5.0` feature line.
 ### Added
 - Added `anvil modules [--json]`, a read-only view of the compiled-in modules,
   contract range, command count, and source; no marketplace or network access.
+- Added `:plugin-inventory`, a read-only installed-plugin page with id, version,
+  enabled state, source, and digest; `:plugin-list` remains the mutable manager.
 - Comment toggling now covers C/C++/C#/Java/Kotlin/Swift, SQL/Lua, Ruby/PHP,
   common dotfiles, CRLF files, and rejects overlapping, out-of-bounds, and
   unsupported marker input instead of producing ambiguous edits.

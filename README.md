@@ -244,6 +244,8 @@ schema version 1 with stable module ids, enabled state, feature name, contract,
 and source. It is read-only and does not contact a marketplace. Only modules
 compiled into the binary appear: a default build lists `official.git`, while a
 `full` build also lists workspace index, desktop, LaTeX, and Typst.
+Runtime plugins are separate: `:plugin-inventory` is the read-only installed
+plugin view, while `:plugin-list` opens the mutable manager.
 
 `FILE` must be inside the selected workspace. `--editor` is intended for
 `$EDITOR`-style invocations; `:cq` exits 1 and a failed save keeps the final

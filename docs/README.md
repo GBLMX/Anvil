@@ -124,6 +124,8 @@ Historical plans are records, not current schedules:
 - [Keymap routing analysis](keymap-router-analysis.md) — preset and routing notes
 - [Module compatibility](module-compatibility.md) — contract v1 matrix and
   deprecation policy
+- [Module inventory](modules.md) — `anvil modules` JSON contract and installed
+  plugin view
 - [TUI design](tui-design.md) — visual tokens, layout, and interaction rhythm
 - [Threat model](threat-model.md) — trust boundaries and failure modes
 - [Known issues](known-issues.md) — resolved regressions and current limits

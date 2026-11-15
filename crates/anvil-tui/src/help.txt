@@ -136,6 +136,7 @@ Normal mode
   :recent-workspaces   list recently opened workspaces
   :plugin-start       start the debug plugin host
   :plugin-list        open installed-plugin manager (enable/uninstall/rollback)
+  :plugin-inventory   read-only list of installed plugins, versions, and source
   :plugin-oom         start host with a 300 MB allocation probe
   :plugin-exec        exercise sys.exec (returns unsupported)
   :plugin-stop        stop the plugin host

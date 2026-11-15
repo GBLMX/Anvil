@@ -333,6 +333,7 @@ impl Model {
             ("symbols", "") => self.queue_effect(Effect::LspDocumentSymbols),
             ("plugin-start", "") => self.queue_effect(Effect::PluginStart),
             ("plugin-list", "") => self.queue_effect(Effect::PluginList),
+            ("plugin-inventory", "") => self.show_plugin_inventory(),
             ("plugin-oom", "") => self.queue_effect(Effect::PluginOom),
             ("plugin-exec", "") => self.queue_effect(Effect::PluginExec),
             ("plugin-stop", "") => self.queue_effect(Effect::PluginStop),
