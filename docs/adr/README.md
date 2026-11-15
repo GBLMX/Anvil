@@ -53,3 +53,40 @@ their decision sections.
 
 - One immutable number per accepted decision.
 - A new ADR must link the ADRs it supersedes or depends on.
+
+## Versioning Rule
+
+ADR identity and ADR revision are separate:
+
+- The file name (`0042-selection-first-session-frontend.md`) and number
+  (`ADR-0042`) are immutable.
+- New and revised ADRs carry `- Version: x.y.z`.
+- ADRs without a `Version` field are legacy entries at `1.0.0`.
+- A new ADR starts at `1.0.0`.
+
+This policy applies from 2026-11-15. Earlier revisions remain `1.0.0` until
+their next substantive update.
+
+Bump rules:
+
+| Change | Version |
+|---|---|
+| Initial accepted decision | `1.0.0` |
+| Implementation/status/boundary update without changing the decision | `1.1.0` |
+| Wording, links, or formatting | `1.1.1` |
+| In-place re-acceptance of the same decision | `2.0.0`; discouraged |
+
+Supersession never bumps the old ADR's major version. The old ADR keeps its
+`1.x.y` version and becomes `Superseded by ADR-NNNN`; the replacement ADR
+starts at `1.0.0`.
+
+Version axes are independent:
+
+| Axis | Example | Meaning |
+|---|---|---|
+| Product version | `0.6.0` | workspace/Cargo version |
+| Plan slice | `0.6.0.1` | internal planning label, not semver |
+| ADR version | `1.0.0` | one ADR document/decision revision |
+
+`0.6.0.x` labels are not releases and not semver tags. Do not treat a four-part
+planning label as a Cargo or ADR version.
