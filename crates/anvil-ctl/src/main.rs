@@ -5,7 +5,7 @@ use serde_json::{Value, json};
 use std::{
     path::{Path, PathBuf},
     process,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 const USAGE: &str = "\
@@ -290,7 +290,8 @@ fn execute(options: Options, command: CliCommand) -> Result<(), (Options, CliErr
                 CliError::no_instance(format!("no running Anvil instance: {error}")),
             ));
         }
-        spawn_anvil(&options.workspace).map_err(|error| (clone_options(&options), error))?;
+        spawn_anvil(&options.workspace, options.timeout)
+            .map_err(|error| (clone_options(&options), error))?;
     }
     let name = command.name();
     let result = match command {
@@ -516,42 +517,68 @@ fn parse_line_number(value: &str) -> Result<usize, CliError> {
     Ok(line)
 }
 
-fn read_stdin_text() -> Result<String, CliError> {
-    use std::io::Read;
+const MAX_STDIN_BYTES: usize = 4 * 1024 * 1024;
 
+fn read_stdin_text() -> Result<String, CliError> {
+    read_stdin_text_from(std::io::stdin().lock())
+}
+
+fn read_stdin_text_from<R: std::io::Read>(reader: R) -> Result<String, CliError> {
+    use std::io::Read;
     let mut text = String::new();
-    std::io::stdin()
+    reader
+        .take(MAX_STDIN_BYTES as u64 + 1)
         .read_to_string(&mut text)
         .map_err(|error| CliError::local(format!("stdin: {error}")))?;
-    if text.len() > 4 * 1024 * 1024 {
+    if text.len() > MAX_STDIN_BYTES {
         return Err(CliError::usage("stdin edit exceeds 4 MiB"));
     }
     Ok(text)
 }
 
-fn spawn_anvil(workspace: &Path) -> Result<(), CliError> {
+fn spawn_anvil(workspace: &Path, timeout: Duration) -> Result<(), CliError> {
     use std::io::IsTerminal;
 
     if !std::io::stdin().is_terminal() || !std::io::stdout().is_terminal() {
         return Err(CliError::usage("--spawn requires a terminal"));
     }
     let binary = std::env::var_os("ANVIL_BIN").unwrap_or_else(|| "anvil".into());
-    std::process::Command::new(binary)
+    let mut child = std::process::Command::new(binary)
         .arg("--workspace")
         .arg(workspace)
         .spawn()
         .map_err(|error| CliError::local(format!("cannot spawn Anvil: {error}")))?;
-    let mut client =
-        Client::connect_for_with_timeout(workspace, Duration::from_secs(5)).map_err(map_error)?;
-    for _ in 0..50 {
-        std::thread::sleep(Duration::from_millis(100));
-        if client.ping().is_ok() {
+    let deadline = Instant::now() + timeout;
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                return Err(CliError::no_instance(format!(
+                    "spawned Anvil exited prematurely: {status}"
+                )));
+            }
+            Ok(None) => {}
+            Err(error) => {
+                return Err(CliError::local(format!(
+                    "cannot inspect spawned Anvil: {error}"
+                )));
+            }
+        }
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
+            break;
+        }
+        let attempt = remaining.min(Duration::from_millis(100));
+        if let Ok(mut client) = Client::connect_for_with_timeout(workspace, attempt)
+            && client.ping().is_ok()
+        {
             return Ok(());
         }
+        std::thread::sleep(Duration::from_millis(50).min(remaining));
     }
-    Err(CliError::no_instance(
-        "spawned Anvil did not start its control socket",
-    ))
+    Err(CliError::no_instance(format!(
+        "spawned Anvil did not start its control socket within {} ms",
+        timeout.as_millis()
+    )))
 }
 
 fn map_error(error: ControlError) -> CliError {
@@ -584,6 +611,7 @@ fn clone_options(options: &Options) -> Options {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Cursor;
 
     #[test]
     fn parses_locations() {
@@ -599,6 +627,8 @@ mod tests {
         assert_eq!(parse_timeout("25").unwrap(), Duration::from_millis(25));
         assert!(parse_timeout("0").is_err());
         assert!(parse_timeout("no").is_err());
+        assert!(parse_timeout("abc").is_err());
+        assert!(parse_timeout("-1").is_err());
     }
 
     fn options(positional: &[&str]) -> Options {
@@ -618,6 +648,14 @@ mod tests {
         assert!(parse_command(&options(&["edit", "replace", "x"])).is_err());
         assert!(parse_command(&options(&["command", ":pkg", "install"])).is_err());
         assert!(parse_command(&options(&["command", ":git-diff"])).is_ok());
+        assert!(parse_command(&options(&["status", "open", "file.rs"])).is_err());
+        assert!(matches!(
+            parse_command(&options(&["edit", "set", " "])).unwrap(),
+            CliCommand::Edit {
+                mode: EditMode::Set,
+                text: EditText::Inline(text),
+            } if text == " "
+        ));
         assert!(matches!(
             parse_command(&options(&["edit", "set", "--stdin"])).unwrap(),
             CliCommand::Edit {
@@ -629,6 +667,19 @@ mod tests {
             parse_command(&options(&["quit", "--force"])).unwrap(),
             CliCommand::Quit { force: true }
         ));
+    }
+
+    #[test]
+    fn limits_stdin_payload_before_reading_unbounded_data() {
+        let exact = vec![b'a'; MAX_STDIN_BYTES];
+        assert_eq!(
+            read_stdin_text_from(Cursor::new(exact))
+                .expect("exact limit")
+                .len(),
+            MAX_STDIN_BYTES
+        );
+        let over = vec![b'a'; MAX_STDIN_BYTES + 1];
+        assert!(read_stdin_text_from(Cursor::new(over)).is_err());
     }
 
     #[test]

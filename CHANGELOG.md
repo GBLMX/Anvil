@@ -553,6 +553,9 @@ post-`0.5.0` feature line.
   now 664 lines.
 
 ### Fixed
+- `anvil-ctl` now caps `--stdin` reads at 4 MiB plus one byte, detects a
+  prematurely exited `--spawn` child instead of waiting the full timeout, and
+  honors `--timeout-ms` for the actual control request read/write.
 - Plugin hosts no longer forward raw terminal control sequences: `print`,
   `host.event` handler failures, and Lua load/runtime errors all pass through
   one escaping sink that renders ESC/C0/C1 as `\xNN` and caps each line at

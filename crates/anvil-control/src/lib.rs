@@ -1299,7 +1299,7 @@ mod tests {
     use super::*;
     use std::io::Write;
     use std::os::unix::fs::PermissionsExt;
-    use std::os::unix::net::UnixStream;
+    use std::os::unix::net::{UnixListener, UnixStream};
 
     fn server_at(path: &Path) -> Result<ControlServer, Error> {
         ControlServer::start_at(path.to_path_buf())
@@ -1411,6 +1411,24 @@ mod tests {
             Error::from(anvil_ipc::FrameError::Timeout),
             Error::Timeout
         ));
+    }
+
+    #[test]
+    fn request_honors_configured_timeout() {
+        let directory = tempfile::tempdir().expect("tempdir");
+        let socket = directory.path().join("control.sock");
+        let listener = UnixListener::bind(&socket).expect("bind");
+        std::thread::scope(|scope| {
+            scope.spawn(move || {
+                let _connection = listener.accept().expect("accept");
+                std::thread::sleep(Duration::from_millis(300));
+            });
+            let mut client =
+                Client::connect_at(&socket, Duration::from_millis(50)).expect("client");
+            let started = std::time::Instant::now();
+            assert!(matches!(client.ping(), Err(Error::Timeout)));
+            assert!(started.elapsed() < Duration::from_secs(1));
+        });
     }
 
     #[test]
