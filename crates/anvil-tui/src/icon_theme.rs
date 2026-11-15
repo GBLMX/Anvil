@@ -39,6 +39,7 @@ pub struct Icon {
 #[derive(Clone, Debug, Default)]
 pub struct IconTheme {
     overrides: HashMap<IconKind, String>,
+    warnings: Vec<String>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -294,31 +295,46 @@ impl IconTheme {
             .and_then(|metadata| metadata.modified().ok())
     }
 
-    pub fn load(workspace: &Path) -> Self {
-        let Ok(metadata) = fs::metadata(workspace.join(".anvil.toml")) else {
-            return Self::default();
+    pub fn load(workspace: &Path) -> Result<Self, String> {
+        let path = Self::config_path(workspace);
+        let metadata = match fs::metadata(&path) {
+            Ok(metadata) => metadata,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                return Ok(Self::default());
+            }
+            Err(error) => return Err(format!("{}: {error}", path.display())),
         };
         if metadata.len() > MAX_ICON_CONFIG_BYTES {
-            return Self::default();
+            return Err(format!(
+                "{}: icon config exceeds {} bytes",
+                path.display(),
+                MAX_ICON_CONFIG_BYTES
+            ));
         }
-        let Ok(text) = fs::read_to_string(workspace.join(".anvil.toml")) else {
-            return Self::default();
-        };
-        let Ok(file) = toml_edit::de::from_str::<AnvilFile>(&text) else {
-            return Self::default();
-        };
+        let text =
+            fs::read_to_string(&path).map_err(|error| format!("{}: {error}", path.display()))?;
+        let file = toml_edit::de::from_str::<AnvilFile>(&text)
+            .map_err(|error| format!("{}: invalid icon TOML: {error}", path.display()))?;
         let mut overrides = HashMap::new();
+        let mut warnings = Vec::new();
         for (key, value) in file.ui.icons {
             let Some(kind) = icon_kind(&key) else {
                 continue;
             };
             let width = UnicodeWidthStr::width(value.as_str());
-            if width == 0 {
+            if width == 0 || width > 2 {
+                warnings.push(format!(
+                    "{}: ui.icons.{key} has display width {width}; expected 1 or 2",
+                    path.display()
+                ));
                 continue;
             }
             overrides.insert(kind, value);
         }
-        Self { overrides }
+        Ok(Self {
+            overrides,
+            warnings,
+        })
     }
 
     pub fn glyph(&self, icon: Icon, ascii: bool) -> &str {
@@ -376,10 +392,34 @@ pub fn ascii_mode() -> bool {
 }
 
 impl crate::Model {
-    pub fn reload_icons(&mut self) {
-        self.appearance.icons = IconTheme::load(&self.workspace.path);
-        self.appearance.icons_mtime = IconTheme::config_mtime(&self.workspace.path);
+    fn apply_icon_load(&mut self, modified: Option<std::time::SystemTime>) {
+        match IconTheme::load(&self.workspace.path) {
+            Ok(icons) => {
+                if let Some(warning) = icons.warnings.first() {
+                    self.notify(
+                        anvil_session::ui::NotificationSeverity::Warning,
+                        "icons",
+                        warning.clone(),
+                    );
+                }
+                self.appearance.icons = icons;
+            }
+            Err(error) => {
+                self.notify(
+                    anvil_session::ui::NotificationSeverity::Warning,
+                    "icons",
+                    error,
+                );
+            }
+        }
+        self.appearance.icons_mtime = modified;
         self.appearance.icons_checked_at = Some(std::time::Instant::now());
+        self.file.dirty = true;
+    }
+
+    pub fn reload_icons(&mut self) {
+        let modified = IconTheme::config_mtime(&self.workspace.path);
+        self.apply_icon_load(modified);
     }
 
     pub fn poll_icons(&mut self) {
@@ -395,9 +435,7 @@ impl crate::Model {
         if modified == self.appearance.icons_mtime {
             return;
         }
-        self.appearance.icons = IconTheme::load(&self.workspace.path);
-        self.appearance.icons_mtime = modified;
-        self.file.dirty = true;
+        self.apply_icon_load(modified);
     }
 }
 
@@ -442,6 +480,7 @@ mod tests {
 
         let override_theme = IconTheme {
             overrides: HashMap::from([(IconKind::DefaultFile, "界".to_owned())]),
+            warnings: Vec::new(),
         };
         let wide = override_theme
             .icon_text(default_file_icon(), false)
@@ -498,12 +537,60 @@ mod tests {
             "[ui.icons]\nrust = \"🦀\"\ndefault_file = \"📄\"\ntoml = \"\"\n",
         )
         .expect("write");
-        let theme = IconTheme::load(directory.path());
+        let theme = IconTheme::load(directory.path()).expect("load");
         assert_eq!(theme.glyph(icon_for("x.rs").expect("rust"), false), "🦀");
         assert_eq!(theme.glyph(default_file_icon(), false), "📄");
         assert_eq!(
             theme.glyph(icon_for("x.toml").expect("toml"), false),
             "\u{e6b2}"
+        );
+    }
+
+    #[test]
+    fn wide_icon_overrides_are_ignored_with_warning() {
+        let directory = tempfile::tempdir().expect("tempdir");
+        fs::write(
+            directory.path().join(".anvil.toml"),
+            "[ui.icons]\nrust = \"测A\"\n",
+        )
+        .expect("write");
+        let theme = IconTheme::load(directory.path()).expect("load");
+        assert_eq!(
+            theme.glyph(icon_for("x.rs").expect("rust"), false),
+            nerd_glyph(IconKind::Rust)
+        );
+        assert!(!theme.warnings.is_empty());
+    }
+
+    #[test]
+    fn invalid_icon_file_keeps_previous_overrides() {
+        let directory = tempfile::tempdir().expect("tempdir");
+        let config = directory.path().join(".anvil.toml");
+        fs::write(&config, "[ui.icons]\nrust = \"A\"\n").expect("write");
+        let mut model = crate::Model::new(crate::EditorState::from_text(""), None);
+        model.workspace.path = directory.path().to_path_buf();
+        model.reload_icons();
+        assert_eq!(
+            model
+                .appearance
+                .icons
+                .glyph(icon_for("x.rs").expect("rust"), false),
+            "A"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(5));
+        fs::write(&config, "[ui.icons\nrust = \"B\"\n").expect("write");
+        model.appearance.icons_checked_at = None;
+        model.poll_icons();
+        assert_eq!(
+            model
+                .appearance
+                .icons
+                .glyph(icon_for("x.rs").expect("rust"), false),
+            "A"
+        );
+        assert!(
+            format!("{:?}", model.ui.notifications).contains("icons"),
+            "missing icon warning"
         );
     }
 }

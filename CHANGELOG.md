@@ -513,6 +513,9 @@ post-`0.5.0` feature line.
 - Custom theme color errors now degrade only the affected field, keep loading
   sibling files, and surface file/field context in status and the theme browser;
   high-contrast text selection now uses WCAG relative luminance.
+- Project `[ui.icons]` tables no longer invalidate settings, invalid icon files
+  keep the last valid overrides with a warning, and glyph overrides wider than
+  two cells are rejected in favor of the built-in icon.
 - The editor chrome now uses one persistent frame; the file tree keeps its
   stale/watch-limit/hidden header states without a nested border. Transient
   status and notifications share an auto-expiring bottom message band, while

@@ -744,6 +744,8 @@ enum LspCommandFile {
 struct UiFile {
     reduced_motion: Option<bool>,
     high_contrast: Option<bool>,
+    #[allow(dead_code)]
+    icons: BTreeMap<String, serde::de::IgnoredAny>,
 }
 
 impl crate::Model {
@@ -982,6 +984,21 @@ mod tests {
         let settings = load_from_layers(Some(&user), Some(&project)).expect("merged settings");
         assert_eq!(settings.theme, Choice::Fixed("nord"));
         assert_eq!(settings.editor.scroll_margin, 2);
+        assert!(settings.editor.soft_wrap);
+    }
+
+    #[test]
+    fn project_icon_table_does_not_block_settings() {
+        let directory = tempfile::tempdir().expect("tempdir");
+        let user = directory.path().join("user.toml");
+        let project = directory.path().join(PROJECT_SETTINGS);
+        fs::write(&user, "[theme]\nname = \"anvil-dark\"\n").expect("user settings");
+        fs::write(
+            &project,
+            "[ui.icons]\nrust = \"A\"\n[editor]\nsoft_wrap = true\n",
+        )
+        .expect("project settings");
+        let settings = load_from_layers(Some(&user), Some(&project)).expect("settings");
         assert!(settings.editor.soft_wrap);
     }
 
