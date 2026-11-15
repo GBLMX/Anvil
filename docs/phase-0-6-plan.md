@@ -1,6 +1,8 @@
 # Phase 0.6 Plan: Security and Host Boundaries
 
-Status: in progress. Phase 0.5 is complete.
+Status: closed; historical record. Phase 0.5 is complete; exec sandbox,
+fetch policy, gateway routing, and plugin-host isolation landed. Later
+hardening is tracked by the Linux platform plan and the relevant ADRs.
 
 ## Order
 
