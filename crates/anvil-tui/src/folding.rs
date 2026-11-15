@@ -19,9 +19,7 @@ impl Model {
     pub(crate) fn request_folding_ranges(&mut self, action: Option<FoldAction>) {
         self.language
             .lsp_requests
-            .pending
-            .retain(|_, kind| *kind != LspRequestKind::FoldingRange);
-        self.prune_edit_requests();
+            .cancel(|kind| kind == LspRequestKind::FoldingRange);
         let Some(path) = self.session.path.clone() else {
             return;
         };
@@ -44,8 +42,7 @@ impl Model {
     pub(crate) fn clear_folds(&mut self) {
         self.language
             .lsp_requests
-            .pending
-            .retain(|_, kind| *kind != LspRequestKind::FoldingRange);
+            .cancel(|kind| kind == LspRequestKind::FoldingRange);
         self.overlays.lsp_results.folds.clear();
         self.overlays.lsp_results.folded.clear();
         self.overlays.lsp_results.fold_revision = None;

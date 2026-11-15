@@ -2,8 +2,8 @@ use super::*;
 
 impl Model {
     pub(crate) fn cancel_completion(&mut self) {
-        self.language.lsp_requests.pending.retain(|_, kind| {
-            !matches!(
+        self.language.lsp_requests.cancel(|kind| {
+            matches!(
                 kind,
                 LspRequestKind::Completion | LspRequestKind::CompletionResolve
             )
@@ -77,7 +77,7 @@ impl Model {
             return;
         }
         let raw = item.raw.clone();
-        let id = self.language.lsp_requests.next_request;
+        let id = self.language.lsp_requests.peek_request_id();
         if self.send_lsp_request(
             LspRequestKind::CompletionResolve,
             "completionItem/resolve",

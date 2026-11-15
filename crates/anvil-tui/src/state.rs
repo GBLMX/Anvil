@@ -308,6 +308,187 @@ pub(crate) struct LspRequestsState {
     pub(crate) suppress_format_on_save: bool,
 }
 
+/// A sent LSP request plus the edit state its response must still match.
+#[derive(Debug, Clone)]
+pub(crate) struct PendingRequest {
+    pub(crate) kind: LspRequestKind,
+    pub(crate) edit_revision: Option<u64>,
+    pub(crate) edit_path: Option<PathBuf>,
+    pub(crate) edit_snapshot: Option<HashMap<PathBuf, u64>>,
+}
+
+impl PendingRequest {
+    /// Captures the edit state a response is checked against, when `kind` needs it.
+    pub(crate) fn capture(
+        kind: LspRequestKind,
+        revision: u64,
+        path: PathBuf,
+        snapshot: impl FnOnce() -> HashMap<PathBuf, u64>,
+    ) -> Self {
+        if !LspRequestsState::tracks_edit(kind) {
+            return Self {
+                kind,
+                edit_revision: None,
+                edit_path: None,
+                edit_snapshot: None,
+            };
+        }
+        Self {
+            kind,
+            edit_revision: Some(revision),
+            edit_path: Some(path),
+            edit_snapshot: Some(snapshot()),
+        }
+    }
+}
+
+/// Why a response no longer describes the live editor.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum StaleResponse {
+    /// The buffer was edited after the request was sent.
+    EditRevision,
+    /// The requested buffer is no longer the active one.
+    InactiveBuffer,
+}
+
+impl LspRequestsState {
+    /// Requests whose edit metadata is captured when they are sent.
+    fn tracks_edit(kind: LspRequestKind) -> bool {
+        matches!(
+            kind,
+            LspRequestKind::Rename
+                | LspRequestKind::CodeAction
+                | LspRequestKind::Formatting
+                | LspRequestKind::SignatureHelp
+                | LspRequestKind::DocumentHighlight
+                | LspRequestKind::CallHierarchyPrepare(_)
+                | LspRequestKind::CallHierarchyIncoming
+                | LspRequestKind::CallHierarchyOutgoing
+                | LspRequestKind::FoldingRange
+                | LspRequestKind::SemanticTokens
+                | LspRequestKind::CodeLens
+                | LspRequestKind::StickySymbols
+        )
+    }
+
+    /// Requests rejected when the buffer was edited after sending. CodeLens is
+    /// excluded because it carries its revision to the response handler instead.
+    fn rejects_stale_edit(kind: LspRequestKind) -> bool {
+        Self::tracks_edit(kind) && kind != LspRequestKind::CodeLens
+    }
+
+    /// Next request id that will be allocated.
+    pub(crate) fn peek_request_id(&self) -> u64 {
+        self.next_request
+    }
+
+    /// Allocates a request id even when the request then fails to send.
+    pub(crate) fn reserve_request_id(&mut self) -> u64 {
+        let id = self.next_request;
+        self.next_request += 1;
+        id
+    }
+
+    /// Records the document version announced to the server for `path`.
+    pub(crate) fn record_version(&mut self, path: &Path) {
+        if let Some(version) = self.versions.get_mut(path) {
+            *version += 1;
+        } else {
+            self.versions.insert(path.to_path_buf(), 1);
+        }
+    }
+
+    /// Tracks a sent request and the edit metadata captured with it.
+    pub(crate) fn track(&mut self, id: u64, request: PendingRequest) {
+        self.pending.insert(id, request.kind);
+        if let Some(revision) = request.edit_revision {
+            self.pending_edit_revision.insert(id, revision);
+        }
+        if let Some(path) = request.edit_path {
+            self.pending_edit_path.insert(id, path);
+        }
+        if let Some(snapshot) = request.edit_snapshot {
+            self.pending_edit_snapshot.insert(id, snapshot);
+        }
+    }
+
+    /// Removes and returns the request `id` identified, if still pending.
+    pub(crate) fn take_response(&mut self, id: u64) -> Option<PendingRequest> {
+        let kind = self.pending.remove(&id)?;
+        Some(PendingRequest {
+            kind,
+            edit_revision: self.pending_edit_revision.remove(&id),
+            edit_path: self.pending_edit_path.remove(&id),
+            edit_snapshot: self.pending_edit_snapshot.remove(&id),
+        })
+    }
+
+    /// Classifies `request` against the live editor revision and active path.
+    pub(crate) fn stale_reason(
+        &self,
+        request: &PendingRequest,
+        revision: u64,
+        active_path: Option<&Path>,
+    ) -> Option<StaleResponse> {
+        if Self::rejects_stale_edit(request.kind)
+            && request.edit_revision.is_some_and(|sent| sent != revision)
+        {
+            return Some(StaleResponse::EditRevision);
+        }
+        if Self::tracks_edit(request.kind)
+            && request
+                .edit_path
+                .as_deref()
+                .is_some_and(|sent| active_path != Some(sent))
+        {
+            return Some(StaleResponse::InactiveBuffer);
+        }
+        None
+    }
+
+    /// Drops edit metadata for requests that are no longer pending.
+    pub(crate) fn prune_orphaned_edit_metadata(&mut self) {
+        let pending = &self.pending;
+        self.pending_edit_revision
+            .retain(|id, _| pending.contains_key(id));
+        self.pending_edit_path
+            .retain(|id, _| pending.contains_key(id));
+        self.pending_edit_snapshot
+            .retain(|id, _| pending.contains_key(id));
+    }
+
+    /// Cancels matching requests and drops the metadata they carried.
+    pub(crate) fn cancel(&mut self, matches_kind: impl Fn(LspRequestKind) -> bool) {
+        self.pending.retain(|_, kind| !matches_kind(*kind));
+        self.prune_orphaned_edit_metadata();
+    }
+
+    /// Forgets every tracked request.
+    pub(crate) fn clear(&mut self) {
+        self.pending.clear();
+        self.pending_edit_revision.clear();
+        self.pending_edit_path.clear();
+        self.pending_edit_snapshot.clear();
+    }
+
+    /// Whether a format-on-save round trip must be skipped right now.
+    pub(crate) fn format_on_save_blocked(&self) -> bool {
+        self.suppress_format_on_save || self.format_on_save_pending
+    }
+
+    pub(crate) fn format_on_save_pending(&self) -> bool {
+        self.format_on_save_pending
+    }
+
+    pub(crate) fn set_format_on_save_pending(&mut self, pending: bool) {
+        self.format_on_save_pending = pending;
+    }
+
+    pub(crate) fn set_suppress_format_on_save(&mut self, suppress: bool) {
+        self.suppress_format_on_save = suppress;
+    }
+}
+
 #[derive(Default)]
 pub(crate) struct LspResultsState {
     pub(crate) completion: Option<CompletionState>,
@@ -1064,4 +1245,121 @@ pub(crate) struct TreeEntry {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum ModalLayer {
     Surround,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn request(kind: LspRequestKind, revision: u64, path: &str) -> PendingRequest {
+        PendingRequest::capture(kind, revision, PathBuf::from(path), || {
+            HashMap::from([(PathBuf::from(path), revision)])
+        })
+    }
+
+    #[test]
+    fn peeking_request_ids_does_not_consume_them() {
+        let mut state = LspRequestsState::default();
+        assert_eq!(state.peek_request_id(), 0);
+        assert_eq!(state.reserve_request_id(), 0);
+        assert_eq!(state.peek_request_id(), 1);
+        assert_eq!(state.reserve_request_id(), 1);
+    }
+
+    #[test]
+    fn tracks_edit_metadata_only_for_edit_requests() {
+        let mut state = LspRequestsState::default();
+        let format = state.reserve_request_id();
+        state.track(format, request(LspRequestKind::Formatting, 2, "a.rs"));
+        assert_eq!(
+            state.pending.get(&format),
+            Some(&LspRequestKind::Formatting)
+        );
+        assert_eq!(state.pending_edit_revision.get(&format), Some(&2));
+        assert_eq!(
+            state.pending_edit_path.get(&format),
+            Some(&PathBuf::from("a.rs"))
+        );
+        assert_eq!(
+            state
+                .pending_edit_snapshot
+                .get(&format)
+                .and_then(|snapshot| snapshot.get(&PathBuf::from("a.rs"))),
+            Some(&2)
+        );
+
+        let hover = state.reserve_request_id();
+        state.track(hover, request(LspRequestKind::Hover, 3, "a.rs"));
+        assert_eq!(state.pending.get(&hover), Some(&LspRequestKind::Hover));
+        assert!(!state.pending_edit_revision.contains_key(&hover));
+        assert!(!state.pending_edit_path.contains_key(&hover));
+        assert!(!state.pending_edit_snapshot.contains_key(&hover));
+    }
+
+    #[test]
+    fn classifies_stale_responses_against_live_edit_state() {
+        let mut state = LspRequestsState::default();
+        let id = state.reserve_request_id();
+        state.track(id, request(LspRequestKind::Formatting, 1, "a.rs"));
+        let tracked = state.take_response(id).expect("tracked");
+        let path = PathBuf::from("a.rs");
+        assert_eq!(
+            state.stale_reason(&tracked, 2, Some(path.as_path())),
+            Some(StaleResponse::EditRevision)
+        );
+        assert_eq!(
+            state.stale_reason(&tracked, 1, Some(Path::new("b.rs"))),
+            Some(StaleResponse::InactiveBuffer)
+        );
+        assert_eq!(state.stale_reason(&tracked, 1, Some(path.as_path())), None);
+        assert!(state.pending.is_empty());
+        assert!(state.pending_edit_path.is_empty());
+    }
+
+    #[test]
+    fn code_lens_survives_edits_but_not_a_buffer_switch() {
+        let mut state = LspRequestsState::default();
+        let id = state.reserve_request_id();
+        state.track(id, request(LspRequestKind::CodeLens, 1, "a.rs"));
+        let tracked = state.take_response(id).expect("tracked");
+        assert_eq!(
+            state.stale_reason(&tracked, 2, Some(Path::new("a.rs"))),
+            None
+        );
+        assert_eq!(
+            state.stale_reason(&tracked, 1, Some(Path::new("b.rs"))),
+            Some(StaleResponse::InactiveBuffer)
+        );
+    }
+
+    #[test]
+    fn cancelling_drops_pending_requests_and_their_edit_metadata() {
+        let mut state = LspRequestsState::default();
+        let format = state.reserve_request_id();
+        state.track(format, request(LspRequestKind::Formatting, 1, "a.rs"));
+        let rename = state.reserve_request_id();
+        state.track(rename, request(LspRequestKind::Rename, 1, "a.rs"));
+        state.cancel(|kind| kind == LspRequestKind::Formatting);
+        assert!(!state.pending.contains_key(&format));
+        assert!(!state.pending_edit_revision.contains_key(&format));
+        assert!(!state.pending_edit_path.contains_key(&format));
+        assert!(!state.pending_edit_snapshot.contains_key(&format));
+        assert!(state.pending_edit_path.contains_key(&rename));
+
+        state.clear();
+        assert!(state.pending.is_empty());
+        assert!(state.pending_edit_revision.is_empty());
+        assert!(state.pending_edit_path.is_empty());
+        assert!(state.pending_edit_snapshot.is_empty());
+    }
+
+    #[test]
+    fn recording_a_document_version_starts_at_one_and_increments() {
+        let mut state = LspRequestsState::default();
+        let path = PathBuf::from("a.rs");
+        state.record_version(&path);
+        assert_eq!(state.versions.get(&path), Some(&1));
+        state.record_version(&path);
+        assert_eq!(state.versions.get(&path), Some(&2));
+    }
 }

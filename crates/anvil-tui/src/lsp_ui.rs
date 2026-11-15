@@ -2,9 +2,9 @@
 
 use super::{
     CallHierarchyDirection, CodeActionCommand, CodeActionItem, CodeActionState, CompletionItem,
-    CompletionState, LspRequestKind, Model, OverlayKind, ReferenceItem, ReferenceState,
-    SignatureHelpState, SignatureItem, Snippet, SnippetSession, SymbolItem, SymbolState,
-    WorkspaceEdit, WorkspaceSymbolItem, WorkspaceSymbolState,
+    CompletionState, LspRequestKind, Model, OverlayKind, PendingRequest, ReferenceItem,
+    ReferenceState, SignatureHelpState, SignatureItem, Snippet, SnippetSession, StaleResponse,
+    SymbolItem, SymbolState, WorkspaceEdit, WorkspaceSymbolItem, WorkspaceSymbolState,
 };
 use anvil_core::TextBuffer;
 use anvil_lsp_client as lsp;
@@ -196,15 +196,12 @@ impl Model {
             false
         };
         if sent {
-            self.record_lsp_version(path);
+            self.language.lsp_requests.record_version(path);
         }
     }
 
     pub(crate) fn clear_lsp_requests(&mut self) {
-        self.language.lsp_requests.pending.clear();
-        self.language.lsp_requests.pending_edit_revision.clear();
-        self.language.lsp_requests.pending_edit_path.clear();
-        self.language.lsp_requests.pending_edit_snapshot.clear();
+        self.language.lsp_requests.clear();
         self.overlays.lsp_results.signature_help = None;
         self.overlays.lsp_results.workspace_symbols = None;
         self.close_overlay(OverlayKind::WorkspaceSymbols);
@@ -224,10 +221,8 @@ impl Model {
     pub(crate) fn cancel_signature_help(&mut self) {
         self.language
             .lsp_requests
-            .pending
-            .retain(|_, kind| *kind != LspRequestKind::SignatureHelp);
+            .cancel(|kind| kind == LspRequestKind::SignatureHelp);
         self.overlays.lsp_results.signature_help = None;
-        self.prune_edit_requests();
         self.file.dirty = true;
     }
 
@@ -264,22 +259,6 @@ impl Model {
         self.file.dirty = true;
     }
 
-    pub(crate) fn prune_edit_requests(&mut self) {
-        let pending: Vec<u64> = self.language.lsp_requests.pending.keys().copied().collect();
-        self.language
-            .lsp_requests
-            .pending_edit_revision
-            .retain(|id, _| pending.contains(id));
-        self.language
-            .lsp_requests
-            .pending_edit_path
-            .retain(|id, _| pending.contains(id));
-        self.language
-            .lsp_requests
-            .pending_edit_snapshot
-            .retain(|id, _| pending.contains(id));
-    }
-
     pub(crate) fn close_hover(&mut self) {
         if self.overlays.lsp_results.hover.take().is_some() {
             self.close_overlay(OverlayKind::Hover);
@@ -288,13 +267,12 @@ impl Model {
     }
 
     pub(crate) fn cancel_code_actions(&mut self) {
-        self.language.lsp_requests.pending.retain(|_, kind| {
-            !matches!(
+        self.language.lsp_requests.cancel(|kind| {
+            matches!(
                 kind,
                 LspRequestKind::CodeAction | LspRequestKind::DocumentSymbol
             )
         });
-        self.prune_edit_requests();
         self.overlays.lsp_results.code_actions = None;
         self.close_overlay(OverlayKind::CodeActions);
         self.overlays.lsp_results.document_symbols = None;
@@ -427,9 +405,7 @@ impl Model {
     pub(crate) fn cancel_document_highlights(&mut self) {
         self.language
             .lsp_requests
-            .pending
-            .retain(|_, kind| *kind != LspRequestKind::DocumentHighlight);
-        self.prune_edit_requests();
+            .cancel(|kind| kind == LspRequestKind::DocumentHighlight);
         self.overlays.lsp_results.document_highlights = None;
         self.file.dirty = true;
     }
@@ -490,15 +466,14 @@ impl Model {
     }
 
     pub(crate) fn cancel_call_hierarchy(&mut self) {
-        self.language.lsp_requests.pending.retain(|_, kind| {
-            !matches!(
+        self.language.lsp_requests.cancel(|kind| {
+            matches!(
                 kind,
                 LspRequestKind::CallHierarchyPrepare(_)
                     | LspRequestKind::CallHierarchyIncoming
                     | LspRequestKind::CallHierarchyOutgoing
             )
         });
-        self.prune_edit_requests();
         self.overlays.lsp_results.call_hierarchy = None;
         self.close_overlay(OverlayKind::CallHierarchy);
         self.file.dirty = true;
@@ -631,8 +606,7 @@ impl Model {
     pub(crate) fn cancel_references(&mut self) {
         self.language
             .lsp_requests
-            .pending
-            .retain(|_, kind| *kind != LspRequestKind::References);
+            .cancel(|kind| kind == LspRequestKind::References);
         self.overlays.lsp_results.references = None;
         self.close_overlay(OverlayKind::References);
         self.file.dirty = true;
@@ -641,8 +615,7 @@ impl Model {
     pub(crate) fn cancel_document_symbols(&mut self) {
         self.language
             .lsp_requests
-            .pending
-            .retain(|_, kind| *kind != LspRequestKind::DocumentSymbol);
+            .cancel(|kind| kind == LspRequestKind::DocumentSymbol);
         self.overlays.lsp_results.document_symbols = None;
         self.close_overlay(OverlayKind::DocumentSymbols);
         self.file.dirty = true;
@@ -651,11 +624,9 @@ impl Model {
     pub(crate) fn cancel_workspace_symbols(&mut self) {
         self.language
             .lsp_requests
-            .pending
-            .retain(|_, kind| *kind != LspRequestKind::WorkspaceSymbol);
+            .cancel(|kind| kind == LspRequestKind::WorkspaceSymbol);
         self.overlays.lsp_results.workspace_symbols = None;
         self.close_overlay(OverlayKind::WorkspaceSymbols);
-        self.prune_edit_requests();
         self.file.dirty = true;
     }
 
@@ -665,9 +636,7 @@ impl Model {
         self.cancel_document_symbols();
         self.language
             .lsp_requests
-            .pending
-            .retain(|_, kind| *kind != LspRequestKind::Formatting);
-        self.prune_edit_requests();
+            .cancel(|kind| kind == LspRequestKind::Formatting);
         self.close_hover();
         self.close_diagnostic_peek();
         let Some(path) = self.session.path.clone() else {
@@ -692,14 +661,13 @@ impl Model {
 
     pub(crate) fn request_format_after_save(&mut self) {
         if !self.config.settings.editor.format_on_save
-            || self.language.lsp_requests.suppress_format_on_save
-            || self.language.lsp_requests.format_on_save_pending
+            || self.language.lsp_requests.format_on_save_blocked()
             || self.active_lsp_worker().is_none()
         {
             return;
         }
         if self.request_formatting() {
-            self.language.lsp_requests.format_on_save_pending = true;
+            self.language.lsp_requests.set_format_on_save_pending(true);
         }
     }
 

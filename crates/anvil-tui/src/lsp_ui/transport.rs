@@ -36,8 +36,7 @@ impl Model {
             self.file.dirty = true;
             return false;
         };
-        let id = self.language.lsp_requests.next_request;
-        self.language.lsp_requests.next_request += 1;
+        let id = self.language.lsp_requests.reserve_request_id();
         if self.active_lsp_worker().is_none() {
             self.status.text = "E: lsp is not running".to_owned();
             self.file.dirty = true;
@@ -63,35 +62,10 @@ impl Model {
             self.file.dirty = true;
             return false;
         }
-        self.language.lsp_requests.pending.insert(id, kind);
-        if matches!(
-            kind,
-            LspRequestKind::Rename
-                | LspRequestKind::CodeAction
-                | LspRequestKind::Formatting
-                | LspRequestKind::SignatureHelp
-                | LspRequestKind::DocumentHighlight
-                | LspRequestKind::CallHierarchyPrepare(_)
-                | LspRequestKind::CallHierarchyIncoming
-                | LspRequestKind::CallHierarchyOutgoing
-                | LspRequestKind::FoldingRange
-                | LspRequestKind::SemanticTokens
-                | LspRequestKind::CodeLens
-                | LspRequestKind::StickySymbols
-        ) {
-            self.language
-                .lsp_requests
-                .pending_edit_revision
-                .insert(id, self.session.editor.revision());
-            self.language
-                .lsp_requests
-                .pending_edit_path
-                .insert(id, path);
-            self.language
-                .lsp_requests
-                .pending_edit_snapshot
-                .insert(id, self.buffer_revisions());
-        }
+        let request = PendingRequest::capture(kind, self.session.editor.revision(), path, || {
+            self.buffer_revisions()
+        });
+        self.language.lsp_requests.track(id, request);
         true
     }
     pub(crate) fn sync_lsp_document(&mut self, path: &Path, text: String) -> Result<(), String> {
@@ -99,18 +73,8 @@ impl Model {
             return Err("lsp is not running".to_owned());
         };
         worker.sync(path, text)?;
-        self.record_lsp_version(path);
+        self.language.lsp_requests.record_version(path);
         Ok(())
-    }
-    pub(super) fn record_lsp_version(&mut self, path: &Path) {
-        if let Some(version) = self.language.lsp_requests.versions.get_mut(path) {
-            *version += 1;
-        } else {
-            self.language
-                .lsp_requests
-                .versions
-                .insert(path.to_path_buf(), 1);
-        }
     }
     pub(crate) fn buffer_revisions(&self) -> HashMap<PathBuf, u64> {
         let mut revisions = HashMap::new();

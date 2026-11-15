@@ -62,8 +62,7 @@ impl Model {
     pub(crate) fn request_code_lens(&mut self) {
         self.language
             .lsp_requests
-            .pending
-            .retain(|_, kind| *kind != LspRequestKind::CodeLens);
+            .cancel(|kind| kind == LspRequestKind::CodeLens);
         self.overlays.lsp_results.code_lens = None;
         let Some(uri) = self.session.path.as_ref().map(|path| lsp_uri(path)) else {
             return;

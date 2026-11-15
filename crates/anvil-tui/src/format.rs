@@ -28,9 +28,8 @@ impl Model {
         };
         self.language
             .lsp_requests
-            .pending
-            .retain(|_, kind| *kind != LspRequestKind::Formatting);
-        self.language.lsp_requests.format_on_save_pending = false;
+            .cancel(|kind| kind == LspRequestKind::Formatting);
+        self.language.lsp_requests.set_format_on_save_pending(false);
         if !self.ensure_file_worker() {
             return self.request_formatting();
         }

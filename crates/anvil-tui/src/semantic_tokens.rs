@@ -11,9 +11,7 @@ impl Model {
         }
         self.language
             .lsp_requests
-            .pending
-            .retain(|_, kind| *kind != LspRequestKind::SemanticTokens);
-        self.prune_edit_requests();
+            .cancel(|kind| kind == LspRequestKind::SemanticTokens);
         let Some(path) = self.session.path.clone() else {
             return;
         };
@@ -92,8 +90,7 @@ impl Model {
     pub(crate) fn clear_semantic_tokens(&mut self) {
         self.language
             .lsp_requests
-            .pending
-            .retain(|_, kind| *kind != LspRequestKind::SemanticTokens);
+            .cancel(|kind| kind == LspRequestKind::SemanticTokens);
         self.overlays.lsp_results.semantic_tokens.clear();
         self.overlays.lsp_results.semantic_revision = None;
     }

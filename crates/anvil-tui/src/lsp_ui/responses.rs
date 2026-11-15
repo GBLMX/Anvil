@@ -110,21 +110,23 @@ impl Model {
 
     fn clear_format_on_save(&mut self, kind: LspRequestKind) {
         if kind == LspRequestKind::Formatting {
-            self.language.lsp_requests.format_on_save_pending = false;
+            self.language.lsp_requests.set_format_on_save_pending(false);
         }
     }
 
     fn finish_format_on_save(&mut self) {
-        if !self.language.lsp_requests.format_on_save_pending {
+        if !self.language.lsp_requests.format_on_save_pending() {
             return;
         }
-        self.language.lsp_requests.format_on_save_pending = false;
+        self.language.lsp_requests.set_format_on_save_pending(false);
         if !self.file.modified {
             return;
         }
-        self.language.lsp_requests.suppress_format_on_save = true;
+        self.language.lsp_requests.set_suppress_format_on_save(true);
         let saved = self.save();
-        self.language.lsp_requests.suppress_format_on_save = false;
+        self.language
+            .lsp_requests
+            .set_suppress_format_on_save(false);
         if saved {
             self.status.text = "formatted and saved".to_owned();
             self.file.dirty = true;
@@ -137,80 +139,52 @@ impl Model {
         result: serde_json::Value,
         error: Option<String>,
     ) {
-        let Some(kind) = self.language.lsp_requests.pending.remove(&id) else {
+        let Some(request) = self.language.lsp_requests.take_response(id) else {
             return;
         };
-        let edit_revision = self.language.lsp_requests.pending_edit_revision.remove(&id);
-        let edit_path = self.language.lsp_requests.pending_edit_path.remove(&id);
-        let edit_snapshot = self.language.lsp_requests.pending_edit_snapshot.remove(&id);
         if let Some(error) = error {
-            if kind == LspRequestKind::CodeLens {
+            if request.kind == LspRequestKind::CodeLens {
                 self.overlays.lsp_results.code_lens = None;
                 self.file.dirty = true;
                 return;
             }
-            if kind == LspRequestKind::CompletionResolve {
+            if request.kind == LspRequestKind::CompletionResolve {
                 self.overlays.lsp_results.completion_resolve = None;
             }
-            if kind == LspRequestKind::StickySymbols {
+            if request.kind == LspRequestKind::StickySymbols {
                 self.overlays.lsp_results.sticky_pending = false;
                 self.file.dirty = true;
                 return;
             }
-            self.clear_format_on_save(kind);
-            self.status.text = format!("E: lsp {kind:?}: {error}");
+            self.clear_format_on_save(request.kind);
+            self.status.text = format!("E: lsp {:?}: {error}", request.kind);
             self.file.dirty = true;
             return;
         }
-        if matches!(
-            kind,
-            LspRequestKind::Rename
-                | LspRequestKind::CodeAction
-                | LspRequestKind::Formatting
-                | LspRequestKind::SignatureHelp
-                | LspRequestKind::DocumentHighlight
-                | LspRequestKind::CallHierarchyPrepare(_)
-                | LspRequestKind::CallHierarchyIncoming
-                | LspRequestKind::CallHierarchyOutgoing
-                | LspRequestKind::FoldingRange
-                | LspRequestKind::SemanticTokens
-                | LspRequestKind::StickySymbols
-        ) && edit_revision.is_some_and(|revision| revision != self.session.editor.revision())
-        {
-            if kind == LspRequestKind::StickySymbols {
+        if let Some(reason) = self.language.lsp_requests.stale_reason(
+            &request,
+            self.session.editor.revision(),
+            self.session.path.as_deref(),
+        ) {
+            if request.kind == LspRequestKind::StickySymbols {
                 self.overlays.lsp_results.sticky_pending = false;
             }
-            self.clear_format_on_save(kind);
-            self.status.text = "lsp: stale edit response ignored".to_owned();
+            self.clear_format_on_save(request.kind);
+            self.status.text = match reason {
+                StaleResponse::EditRevision => "lsp: stale edit response ignored".to_owned(),
+                StaleResponse::InactiveBuffer => {
+                    "lsp: edit response for inactive buffer".to_owned()
+                }
+            };
             self.file.dirty = true;
             return;
         }
-        if matches!(
+        let PendingRequest {
             kind,
-            LspRequestKind::Rename
-                | LspRequestKind::CodeAction
-                | LspRequestKind::Formatting
-                | LspRequestKind::SignatureHelp
-                | LspRequestKind::DocumentHighlight
-                | LspRequestKind::CallHierarchyPrepare(_)
-                | LspRequestKind::CallHierarchyIncoming
-                | LspRequestKind::CallHierarchyOutgoing
-                | LspRequestKind::FoldingRange
-                | LspRequestKind::SemanticTokens
-                | LspRequestKind::CodeLens
-                | LspRequestKind::StickySymbols
-        ) && edit_path
-            .as_ref()
-            .is_some_and(|path| self.session.path.as_ref() != Some(path))
-        {
-            if kind == LspRequestKind::StickySymbols {
-                self.overlays.lsp_results.sticky_pending = false;
-            }
-            self.clear_format_on_save(kind);
-            self.status.text = "lsp: edit response for inactive buffer".to_owned();
-            self.file.dirty = true;
-            return;
-        }
+            edit_revision,
+            edit_path,
+            edit_snapshot,
+        } = request;
         match kind {
             LspRequestKind::Completion => self.apply_completion_response(&result),
             LspRequestKind::CompletionResolve => {

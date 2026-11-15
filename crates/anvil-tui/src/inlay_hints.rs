@@ -58,7 +58,7 @@ impl Model {
                 "end": {"line": end, "character": 0}
             }
         });
-        let id = self.language.lsp_requests.next_request;
+        let id = self.language.lsp_requests.peek_request_id();
         if self.send_lsp_request(LspRequestKind::InlayHint, "textDocument/inlayHint", params) {
             self.overlays.lsp_results.inlay_pending = Some((id, path, revision, start, end));
             self.overlays.lsp_results.inlay_checked = Some(signature);
