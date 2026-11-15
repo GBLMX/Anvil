@@ -61,21 +61,23 @@ gateway internals beyond the versioned protocol.
 
 - Generated bindings: `cargo run -p anvil-api --example export_bindings`, then
   `git diff --exit-code -- crates/anvil-api/bindings`.
-- Public surface snapshot: `bash scripts/api-surface-check.sh`. The committed
-  hash is `docs/api-surface.sha256`; a deliberate API change must update it in
-  the same change.
+- Public surface snapshot: `bash scripts/api-surface-check.sh` hashes every
+  normalized `pub` declaration, including signatures, fields, and variants.
+  The committed hash is `docs/api-surface.sha256`; a deliberate API change
+  must update it in the same change.
 - Dependency direction: `scripts/architecture-check.sh`.
-- Release-time semver check: run `cargo semver-checks check-release` when the
-  tool is available; it is not installed by the repository.
+- Semver: PR CI runs `cargo-semver-checks`. Locally, install the pinned
+  checker and run `cargo semver-checks check-release --baseline-rev origin/main`.
 
 ## Known pending refactors
 
-- `anvil-editor` exposes typed `try_*` methods alongside the legacy `bool`
-  wrappers; callers are migrating before the wrappers are deprecated.
-- `anvil-control::CommandSpec` still stores a string name rather than the
-  session `CommandId`.
-- `anvil-ipc::FrameError::Io` preserves the I/O kind and message, not the full
-  `io::Error` source.
+- `anvil-editor` exposes typed `try_*` methods; legacy `bool` wrappers on
+  `EditorState` and `DocumentSession` are deprecated for one compatibility
+  cycle.
+- `anvil-control::CommandSpec` keeps its wire name for string dispatch and
+  exposes a typed `ControlCommandId` for manifest checks.
+- `anvil-ipc::FrameError::Io` preserves the I/O kind; the full `io::Error`
+  source and message are not retained.
 - Plugin API 1.1 and module contract v2 are separate ADR tracks. They must not
   change v1 behavior in place.
 - Module contract v1 keeps one service per kind. Multi-provider composition is

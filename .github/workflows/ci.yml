@@ -18,6 +18,16 @@ jobs:
       - name: Check API surface snapshot
         run: bash scripts/api-surface-check.sh
 
+  semver:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Check public API semver
+        uses: obi1kenobi/cargo-semver-checks-action@v2
+
   bindings:
     runs-on: ubuntu-latest
     steps:

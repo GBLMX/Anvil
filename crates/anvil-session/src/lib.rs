@@ -82,8 +82,9 @@ impl DocumentSession {
         self.editor
     }
 
+    #[deprecated(since = "0.6.0", note = "use try_set_selection_bytes")]
     pub fn set_selection_bytes(&mut self, anchor: usize, head: usize) -> bool {
-        self.editor.set_selection_bytes(anchor, head)
+        self.editor.try_set_selection_bytes(anchor, head).is_ok()
     }
 
     pub fn try_set_selection_bytes(
@@ -94,8 +95,9 @@ impl DocumentSession {
         self.editor.try_set_selection_bytes(anchor, head)
     }
 
+    #[deprecated(since = "0.6.0", note = "use try_set_selections_bytes")]
     pub fn set_selections_bytes(&mut self, selections: Vec<(usize, usize)>) -> bool {
-        self.editor.set_selections_bytes(selections)
+        self.editor.try_set_selections_bytes(selections).is_ok()
     }
 
     pub fn try_set_selections_bytes(
@@ -105,24 +107,27 @@ impl DocumentSession {
         self.editor.try_set_selections_bytes(selections)
     }
 
+    #[deprecated(since = "0.6.0", note = "use try_insert")]
     pub fn insert(&mut self, at: usize, text: &str) -> bool {
-        self.editor.insert(at, text)
+        self.editor.try_insert(at, text).is_ok()
     }
 
     pub fn try_insert(&mut self, at: usize, text: &str) -> Result<(), EditError> {
         self.editor.try_insert(at, text)
     }
 
+    #[deprecated(since = "0.6.0", note = "use try_delete")]
     pub fn delete(&mut self, range: Range<usize>) -> bool {
-        self.editor.delete(range)
+        self.editor.try_delete(range).is_ok()
     }
 
     pub fn try_delete(&mut self, range: Range<usize>) -> Result<(), EditError> {
         self.editor.try_delete(range)
     }
 
+    #[deprecated(since = "0.6.0", note = "use try_apply_transaction")]
     pub fn apply_transaction(&mut self, edits: Vec<(Range<usize>, String)>) -> bool {
-        self.editor.apply_transaction(edits)
+        self.editor.try_apply_transaction(edits).is_ok()
     }
 
     pub fn try_apply_transaction(

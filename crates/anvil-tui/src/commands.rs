@@ -76,15 +76,16 @@ impl Model {
             .into_iter()
             .map(|range| (range, new.to_owned()))
             .collect();
-        if !self.session.editor.apply_transaction(edits) {
+        if self.session.editor.try_apply_transaction(edits).is_err() {
             self.status.text = "E: substitution failed".to_owned();
             self.file.dirty = true;
             return;
         }
         self.session.cursor = first.min(self.session.editor.text().len_bytes());
-        self.session
+        let _ = self
+            .session
             .editor
-            .set_selection_bytes(self.session.cursor, self.session.cursor);
+            .try_set_selection_bytes(self.session.cursor, self.session.cursor);
         self.file.modified = true;
         self.file.dirty = true;
         self.status.text = format!("{count} replacements applied");
@@ -114,7 +115,7 @@ impl Model {
         self.drain_effects();
     }
 
-    fn dispatch_ex(&mut self, name: &str, argument: &str) {
+    pub(crate) fn dispatch_ex(&mut self, name: &str, argument: &str) {
         if name.starts_with("git-") && self.workspace.git_service.is_none() {
             self.status.text = "E: git module is not installed".to_owned();
             self.file.dirty = true;

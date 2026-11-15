@@ -179,26 +179,29 @@ impl Model {
     }
 
     fn replace_now(&mut self, range: std::ops::Range<usize>, text: &str) {
-        self.session
+        let _ = self
+            .session
             .editor
-            .set_selection_bytes(range.start, range.end);
-        self.session.editor.delete(range.clone());
+            .try_set_selection_bytes(range.start, range.end);
+        let _ = self.session.editor.try_delete(range.clone());
         if !text.is_empty() {
-            self.session.editor.insert(range.start, text);
+            let _ = self.session.editor.try_insert(range.start, text);
         }
         self.session.cursor = range.start + text.len();
-        self.session
+        let _ = self
+            .session
             .editor
-            .set_selection_bytes(self.session.cursor, self.session.cursor);
+            .try_set_selection_bytes(self.session.cursor, self.session.cursor);
         self.file.modified = true;
         self.file.dirty = true;
     }
 
     fn insert_now(&mut self, text: &str) {
-        self.session
+        let _ = self
+            .session
             .editor
-            .set_selection_bytes(self.session.cursor, self.session.cursor);
-        self.session.editor.insert(self.session.cursor, text);
+            .try_set_selection_bytes(self.session.cursor, self.session.cursor);
+        let _ = self.session.editor.try_insert(self.session.cursor, text);
         self.session.cursor += text.len();
         self.file.modified = true;
         self.file.dirty = true;

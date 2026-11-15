@@ -734,7 +734,7 @@ fn ctrl_slash_toggles_comments_and_undoes_once() {
         EditorState::from_text("one\n  two\n"),
         Some(PathBuf::from("test.rs")),
     );
-    assert!(model.session.editor.set_selection_bytes(0, 10));
+    assert!(model.session.editor.try_set_selection_bytes(0, 10).is_ok());
     handle_event(&mut model, ctrl(KeyCode::Char('/')));
     assert_eq!(
         model.session.editor.text().slice(0..16),
@@ -810,7 +810,8 @@ fn comment_empty_buffer_preserves_carets_after_prefix() {
         model
             .session
             .editor
-            .set_selections_bytes(vec![(0, 0), (0, 0)])
+            .try_set_selections_bytes(vec![(0, 0), (0, 0)])
+            .is_ok()
     );
 
     handle_event(&mut model, ctrl(KeyCode::Char('/')));
@@ -887,10 +888,10 @@ fn soft_wrap_preserves_scroll_margin() {
     model.config.settings.editor.soft_wrap = true;
     model.view.scroll = 0;
     model.session.cursor = model.offset_at_utf16(1, 0);
-    model
+    let _ = model
         .session
         .editor
-        .set_selection_bytes(model.session.cursor, model.session.cursor);
+        .try_set_selection_bytes(model.session.cursor, model.session.cursor);
     model.ensure_cursor_visible(5, 80);
     assert_eq!(model.view.scroll, 0);
 }
@@ -920,7 +921,7 @@ fn auto_pairs_insert_skip_and_backspace() {
 #[test]
 fn auto_pairs_wrap_selection() {
     let mut model = Model::new(EditorState::from_text("word"), None);
-    model.session.editor.set_selection_bytes(0, 4);
+    let _ = model.session.editor.try_set_selection_bytes(0, 4);
     model.ui.input_mode = InputMode::Insert;
     handle_event(&mut model, key(KeyCode::Char('(')));
     assert_eq!(model.session.editor.text().slice(0..6), "(word)");

@@ -43,7 +43,7 @@ impl Model {
     pub(crate) fn cancel_search(&mut self) {
         if let Some((cursor, selections)) = self.search.state.restore_origin() {
             self.session.cursor = cursor;
-            self.session.editor.set_selections_bytes(selections);
+            let _ = self.session.editor.try_set_selections_bytes(selections);
         }
         self.search.query.clear();
         self.ui.input_mode = InputMode::Normal;
@@ -79,7 +79,7 @@ impl Model {
                     .iter()
                     .map(|range| (range.start, range.end))
                     .collect();
-                self.session.editor.set_selections_bytes(selections);
+                let _ = self.session.editor.try_set_selections_bytes(selections);
                 self.search.state.matches = matches;
                 self.search.state.current = current;
                 self.search.state.error = None;
@@ -171,10 +171,11 @@ impl Model {
             self.file.dirty = true;
             return false;
         };
-        if !self
+        if self
             .session
             .editor
-            .apply_transaction(vec![(range, replacement.to_owned())])
+            .try_apply_transaction(vec![(range, replacement.to_owned())])
+            .is_err()
         {
             self.status.text = "E: replacement failed".to_owned();
             self.file.dirty = true;
@@ -211,7 +212,7 @@ impl Model {
             .cloned()
             .map(|range| (range, replacement.to_owned()))
             .collect();
-        if !self.session.editor.apply_transaction(edits) {
+        if self.session.editor.try_apply_transaction(edits).is_err() {
             self.status.text = "E: replacement failed".to_owned();
             self.file.dirty = true;
             return false;

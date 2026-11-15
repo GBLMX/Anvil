@@ -95,7 +95,7 @@ fn main() {
         edit_samples,
         EditorState::from_text(&text),
         |state| {
-            state.insert(midpoint, "x");
+            let _ = state.try_insert(midpoint, "x");
         },
     );
     measure_edits(
@@ -103,21 +103,21 @@ fn main() {
         edit_samples,
         EditorState::from_text(&text),
         |state| {
-            state.insert(midpoint, &split_paste);
+            let _ = state.try_insert(midpoint, &split_paste);
         },
     );
     measure_edits_fresh("A3_merge_delete", edit_samples, &text, |state| {
         let len = state.text().len_bytes();
         let start = (len / 2).min(len.saturating_sub(1));
         let end = (start + 80_000).min(len);
-        state.delete(start..end);
+        let _ = state.try_delete(start..end);
     });
     measure_edits(
         "A4_paste_10k_lines",
         edit_samples,
         EditorState::from_text(&text),
         |state| {
-            state.insert(midpoint, &pasted);
+            let _ = state.try_insert(midpoint, &pasted);
         },
     );
     measure_edits(
@@ -126,7 +126,7 @@ fn main() {
         EditorState::from_text(&text),
         |state| {
             let end = state.text().len_bytes();
-            state.insert(end, "x");
+            let _ = state.try_insert(end, "x");
         },
     );
 
@@ -138,7 +138,7 @@ fn main() {
     measure_views("C1_single_caret_view", view_samples, &snapshot);
 
     let mut selected = base.clone();
-    selected.set_selections_bytes((0..100).map(|index| (index, index)).collect());
+    let _ = selected.try_set_selections_bytes((0..100).map(|index| (index, index)).collect());
     let selected_snapshot = selected.snapshot();
     measure_views("C2_100_selections_view", view_samples, &selected_snapshot);
 

@@ -228,6 +228,7 @@ impl EditorState {
     }
 
     /// Sets one selection using byte offsets.
+    #[deprecated(since = "0.6.0", note = "use try_set_selection_bytes")]
     pub fn set_selection_bytes(&mut self, anchor: usize, head: usize) -> bool {
         self.try_set_selection_bytes(anchor, head).is_ok()
     }
@@ -245,6 +246,7 @@ impl EditorState {
     }
 
     /// Replaces all selections using byte offsets.
+    #[deprecated(since = "0.6.0", note = "use try_set_selections_bytes")]
     pub fn set_selections_bytes(&mut self, selections: Vec<(usize, usize)>) -> bool {
         self.try_set_selections_bytes(selections).is_ok()
     }
@@ -498,8 +500,8 @@ impl EditorState {
         }
         let text = std::mem::take(&mut self.yank);
         let end = at + text.len();
-        self.set_selection_bytes(at, at);
-        self.insert(at, &text);
+        let _ = self.try_set_selection_bytes(at, at);
+        let _ = self.try_insert(at, &text);
         self.yank = text;
         Some(at..end)
     }
@@ -537,6 +539,7 @@ impl EditorState {
     ///
     /// Returns `false` without mutating when `at` is out of bounds or inside a
     /// UTF-8 scalar.
+    #[deprecated(since = "0.6.0", note = "use try_insert")]
     pub fn insert(&mut self, at: usize, text: &str) -> bool {
         self.try_insert(at, text).is_ok()
     }
@@ -565,6 +568,7 @@ impl EditorState {
     ///
     /// Returns `false` without mutating when the range is inverted, out of
     /// bounds, or inside a UTF-8 scalar.
+    #[deprecated(since = "0.6.0", note = "use try_delete")]
     pub fn delete(&mut self, range: Range<usize>) -> bool {
         self.try_delete(range).is_ok()
     }
@@ -602,6 +606,7 @@ impl EditorState {
     ///
     /// Ranges are applied from the end of the document toward the start so
     /// later edits never shift earlier byte offsets.
+    #[deprecated(since = "0.6.0", note = "use try_apply_transaction")]
     pub fn apply_transaction(&mut self, edits: Vec<(Range<usize>, String)>) -> bool {
         self.try_apply_transaction(edits).is_ok()
     }
@@ -676,7 +681,7 @@ impl EditorState {
                 actual: self.revision,
             });
         }
-        if !self.apply_transaction(edits) {
+        if self.try_apply_transaction(edits).is_err() {
             return Err(ApplyEditError::InvalidEdit);
         }
         Ok(self.revision)
@@ -704,7 +709,7 @@ impl EditorState {
                 (start..end, text.to_owned())
             })
             .collect();
-        self.apply_transaction(edits)
+        self.try_apply_transaction(edits).is_ok()
     }
 
     fn insert_carets_batch(&mut self, text: &str) -> bool {
@@ -714,7 +719,7 @@ impl EditorState {
                 .iter()
                 .map(|(caret, _)| (*caret..*caret, text.to_owned()))
                 .collect();
-            return self.apply_transaction(edits);
+            return self.try_apply_transaction(edits).is_ok();
         }
         let mut edits: Vec<(usize, String)> = before
             .iter()
@@ -960,8 +965,8 @@ mod tests {
     #[test]
     fn insert_shifts_selection_and_updates_index() {
         let mut state = EditorState::from_text("abc");
-        assert!(state.set_selection_bytes(1, 1));
-        state.insert(0, "x\n");
+        assert!(state.try_set_selection_bytes(1, 1).is_ok());
+        let _ = state.try_insert(0, "x\n");
         assert_eq!(state.revision(), 1);
         let (anchor, head) = state.selection_bytes()[0];
         assert_eq!((anchor, head), (3, 3));
@@ -973,8 +978,8 @@ mod tests {
     #[test]
     fn delete_clamps_selection_into_range() {
         let mut state = EditorState::from_text("abcdef");
-        assert!(state.set_selection_bytes(1, 5));
-        state.delete(0..3);
+        assert!(state.try_set_selection_bytes(1, 5).is_ok());
+        let _ = state.try_delete(0..3);
         assert_eq!(state.selection_bytes(), vec![(0, 2)]);
         assert_eq!(state.snapshot().view().selections[0].head.byte_offset, 2);
     }
@@ -982,7 +987,11 @@ mod tests {
     #[test]
     fn transaction_replaces_all_selections_atomically() {
         let mut state = EditorState::from_text("foo foo foo");
-        assert!(state.set_selections_bytes(vec![(0, 3), (4, 7), (8, 11)]));
+        assert!(
+            state
+                .try_set_selections_bytes(vec![(0, 3), (4, 7), (8, 11)])
+                .is_ok()
+        );
         assert!(state.insert_at_selections("bar"));
         assert_eq!(state.text().slice(0..11), "bar bar bar");
         assert_eq!(state.undo_depth(), 1);
@@ -997,7 +1006,7 @@ mod tests {
     #[test]
     fn caret_batch_insert_matches_text_selection_and_undo() {
         let mut state = EditorState::from_text("abc");
-        assert!(state.set_selections_bytes(vec![(1, 1), (3, 3)]));
+        assert!(state.try_set_selections_bytes(vec![(1, 1), (3, 3)]).is_ok());
         assert!(state.insert_at_selections("X"));
         assert_eq!(state.text().slice(0..5), "aXbcX");
         assert_eq!(state.selection_bytes(), vec![(2, 2), (5, 5)]);
@@ -1027,11 +1036,11 @@ mod tests {
             .collect();
 
         let mut legacy = EditorState::from_text(TEXT);
-        assert!(legacy.set_selections_bytes(selections.clone()));
-        assert!(legacy.apply_transaction(edits));
+        assert!(legacy.try_set_selections_bytes(selections.clone()).is_ok());
+        assert!(legacy.try_apply_transaction(edits).is_ok());
 
         let mut batched = EditorState::from_text(TEXT);
-        assert!(batched.set_selections_bytes(selections.clone()));
+        assert!(batched.try_set_selections_bytes(selections.clone()).is_ok());
         assert!(batched.insert_at_selections(INSERT));
 
         let expected_len = TEXT.len() + selections.len() * INSERT.len();
@@ -1064,7 +1073,11 @@ mod tests {
     #[test]
     fn transaction_rejects_overlapping_ranges() {
         let mut state = EditorState::from_text("abcdef");
-        assert!(!state.apply_transaction(vec![(0..4, "x".to_owned()), (3..6, "y".to_owned())]));
+        assert!(
+            state
+                .try_apply_transaction(vec![(0..4, "x".to_owned()), (3..6, "y".to_owned())])
+                .is_err()
+        );
         assert_eq!(state.text().slice(0..6), "abcdef");
         assert_eq!(state.undo_depth(), 0);
     }
@@ -1072,7 +1085,11 @@ mod tests {
     #[test]
     fn transaction_rejects_non_boundary_ranges() {
         let mut state = EditorState::from_text("安装");
-        assert!(!state.apply_transaction(vec![(1..4, "x".to_owned())]));
+        assert!(
+            state
+                .try_apply_transaction(vec![(1..4, "x".to_owned())])
+                .is_err()
+        );
         assert_eq!(state.text().slice(0..6), "安装");
         assert_eq!(state.undo_depth(), 0);
     }
@@ -1135,8 +1152,8 @@ mod tests {
     #[test]
     fn undo_redo_restore_selection() {
         let mut state = EditorState::from_text("abc");
-        assert!(state.set_selection_bytes(1, 1));
-        state.insert(0, "x\n");
+        assert!(state.try_set_selection_bytes(1, 1).is_ok());
+        let _ = state.try_insert(0, "x\n");
         assert_eq!(state.revision(), 1);
         assert!(state.undo());
         assert_eq!(state.text().slice(0..3), "abc");
@@ -1151,8 +1168,8 @@ mod tests {
     #[test]
     fn delete_undo_restores_removed_text() {
         let mut state = EditorState::from_text("abcdef");
-        assert!(state.set_selection_bytes(1, 4));
-        state.delete(2..5);
+        assert!(state.try_set_selection_bytes(1, 4).is_ok());
+        let _ = state.try_delete(2..5);
         assert!(state.undo());
         assert_eq!(state.text().slice(0..6), "abcdef");
         assert_eq!(state.selection_bytes(), vec![(1, 4)]);
@@ -1171,7 +1188,7 @@ mod tests {
     fn snapshot_positions_include_char_columns() {
         let text = "a🦀b";
         let mut state = EditorState::from_text(text);
-        assert!(state.set_selection_bytes(5, 5));
+        assert!(state.try_set_selection_bytes(5, 5).is_ok());
         let view = state.snapshot().view();
         let head = view.selections[0].head;
         assert_eq!(head.byte_offset, 5);

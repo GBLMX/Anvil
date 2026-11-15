@@ -296,9 +296,10 @@ impl Model {
         } else {
             open
         };
-        self.session
+        let _ = self
+            .session
             .editor
-            .set_selection_bytes(self.session.cursor, self.session.cursor);
+            .try_set_selection_bytes(self.session.cursor, self.session.cursor);
         self.status.text = "matched bracket".to_owned();
         self.file.dirty = true;
     }

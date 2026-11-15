@@ -199,8 +199,9 @@ impl Model {
                 let changed = self
                     .session
                     .editor
-                    .apply_transaction(vec![(0..end, text.to_owned())]);
-                self.session.editor.set_selection_bytes(0, 0);
+                    .try_apply_transaction(vec![(0..end, text.to_owned())])
+                    .is_ok();
+                let _ = self.session.editor.try_set_selection_bytes(0, 0);
                 self.session.cursor = 0;
                 self.view.scroll = 0;
                 self.view.hscroll = 0;
@@ -263,8 +264,9 @@ impl Model {
                 let changed = self
                     .session
                     .editor
-                    .apply_transaction(vec![(start..end, text.to_owned())]);
-                self.session.editor.set_selection_bytes(start, start);
+                    .try_apply_transaction(vec![(start..end, text.to_owned())])
+                    .is_ok();
+                let _ = self.session.editor.try_set_selection_bytes(start, start);
                 self.session.cursor = start;
                 if changed {
                     self.file.modified = true;

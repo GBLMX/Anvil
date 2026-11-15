@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use std::{
+    fmt,
     fs::{self, File, OpenOptions},
     io,
     os::unix::{
@@ -62,11 +63,33 @@ pub enum EditMode {
     Replace,
 }
 
+/// Stable identifier for one manifest command.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ControlCommandId(&'static str);
+
+impl ControlCommandId {
+    pub const fn as_str(self) -> &'static str {
+        self.0
+    }
+}
+
+impl fmt::Display for ControlCommandId {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(self.0)
+    }
+}
+
 /// One editor command and the authority it requires.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CommandSpec {
     pub name: &'static str,
     pub capability: Capability,
+}
+
+impl CommandSpec {
+    pub const fn id(&self) -> ControlCommandId {
+        ControlCommandId(self.name)
+    }
 }
 
 /// Shared command manifest for execution, completion, CLI checks, and MCP.
@@ -421,7 +444,7 @@ pub const COMMANDS: &[CommandSpec] = &[
 pub fn command_capability(name: &str) -> Option<Capability> {
     COMMANDS
         .iter()
-        .find(|command| command.name == name)
+        .find(|command| command.id().as_str() == name)
         .map(|command| command.capability)
 }
 
@@ -1395,6 +1418,10 @@ mod tests {
         let mut names = std::collections::HashSet::new();
         for command in COMMANDS {
             assert!(names.insert(command.name), "duplicate {}", command.name);
+            assert_eq!(
+                command_capability(command.id().as_str()),
+                Some(command.capability)
+            );
         }
         assert_eq!(command_capability("pkg"), Some(Capability::Admin));
         assert_eq!(command_capability("git-diff"), Some(Capability::Git));

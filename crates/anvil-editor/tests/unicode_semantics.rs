@@ -136,12 +136,12 @@ proptest! {
             match action {
                 Action::Insert { at, text: insert } => {
                     let at = boundary(&current, at);
-                    prop_assert!(state.insert(at, &insert));
+                    prop_assert!(state.try_insert(at, &insert).is_ok());
                 }
                 Action::Delete { start, end } => {
                     let start = boundary(&current, start);
                     let end = boundary(&current, end).max(start);
-                    prop_assert!(state.delete(start..end));
+                    prop_assert!(state.try_delete(start..end).is_ok());
                 }
                 Action::Transaction { at, text: insert } => {
                     let at = boundary(&current, at);
@@ -171,9 +171,9 @@ fn invalid_edits_return_errors_without_panicking() {
     let original = state.text().slice(0..state.text().len_bytes());
     let revision = state.revision();
 
-    assert!(!state.insert(2, "x"));
-    assert!(!state.delete(1..2));
-    assert!(!state.set_selection_bytes(2, 2));
+    assert!(state.try_insert(2, "x").is_err());
+    assert!(state.try_delete(1..2).is_err());
+    assert!(state.try_set_selection_bytes(2, 2).is_err());
     assert!(matches!(
         state.apply_transaction_at(revision, vec![(2..2, "x".to_owned())]),
         Err(ApplyEditError::InvalidEdit)
@@ -188,7 +188,7 @@ fn invalid_edits_return_errors_without_panicking() {
     assert_eq!(state.text().slice(0..state.text().len_bytes()), original);
     assert_eq!(state.revision(), revision);
 
-    assert!(state.insert(1, "x"));
-    assert!(state.delete(1..2));
+    assert!(state.try_insert(1, "x").is_ok());
+    assert!(state.try_delete(1..2).is_ok());
     assert_eq!(state.text().slice(0..state.text().len_bytes()), "aé🦀b");
 }

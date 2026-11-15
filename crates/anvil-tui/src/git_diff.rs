@@ -203,7 +203,7 @@ impl Model {
         let line = view.hunks[index].line;
         if let Some(offset) = self.session.editor.index().line_to_offset(line) {
             self.session.cursor = offset;
-            self.session.editor.set_selection_bytes(offset, offset);
+            let _ = self.session.editor.try_set_selection_bytes(offset, offset);
             self.status.text = format!("git hunk {}/{}", index + 1, view.hunks.len());
             self.file.dirty = true;
         }

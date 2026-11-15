@@ -32,7 +32,7 @@ fn editor_benches(criterion: &mut Criterion) {
         bencher.iter_batched(
             || base.clone(),
             |mut state| {
-                state.insert(midpoint, "x");
+                let _ = state.try_insert(midpoint, "x");
                 black_box(state.revision())
             },
             BatchSize::LargeInput,
@@ -42,7 +42,7 @@ fn editor_benches(criterion: &mut Criterion) {
         bencher.iter_batched(
             || base.clone(),
             |mut state| {
-                state.insert(midpoint, &split_paste);
+                let _ = state.try_insert(midpoint, &split_paste);
                 black_box(state.index().chunk_count())
             },
             BatchSize::LargeInput,
@@ -52,7 +52,7 @@ fn editor_benches(criterion: &mut Criterion) {
         bencher.iter_batched(
             || base.clone(),
             |mut state| {
-                state.delete(midpoint..midpoint + 80_000);
+                let _ = state.try_delete(midpoint..midpoint + 80_000);
                 black_box(state.index().chunk_count())
             },
             BatchSize::LargeInput,
@@ -62,7 +62,7 @@ fn editor_benches(criterion: &mut Criterion) {
         bencher.iter_batched(
             || base.clone(),
             |mut state| {
-                state.insert(midpoint, &pasted);
+                let _ = state.try_insert(midpoint, &pasted);
                 black_box(state.index().chunk_count())
             },
             BatchSize::LargeInput,
@@ -73,7 +73,7 @@ fn editor_benches(criterion: &mut Criterion) {
             || base.clone(),
             |mut state| {
                 let end = state.text().len_bytes();
-                state.insert(end, "x");
+                let _ = state.try_insert(end, "x");
                 black_box(state.revision())
             },
             BatchSize::LargeInput,
@@ -149,7 +149,7 @@ fn editor_benches(criterion: &mut Criterion) {
                 bencher.iter_batched(
                     || {
                         let mut state = base.clone();
-                        assert!(state.set_selections_bytes(positions.clone()));
+                        assert!(state.try_set_selections_bytes(positions.clone()).is_ok());
                         state
                     },
                     |mut state| {
@@ -171,7 +171,7 @@ fn editor_benches(criterion: &mut Criterion) {
                 bencher.iter_batched(
                     || base.clone(),
                     |mut state| {
-                        black_box(state.apply_transaction(edits.clone()));
+                        black_box(state.try_apply_transaction(edits.clone()).is_ok());
                         black_box(state.selection_bytes().len())
                     },
                     BatchSize::LargeInput,
@@ -193,7 +193,7 @@ fn editor_benches(criterion: &mut Criterion) {
     });
 
     let mut selected = base.clone();
-    selected.set_selections_bytes((0..100).map(|index| (index, index)).collect());
+    let _ = selected.try_set_selections_bytes((0..100).map(|index| (index, index)).collect());
     let selected_snapshot = selected.snapshot();
     group.bench_function("C2_100_selections_10k_views", |bencher| {
         bencher.iter(|| {

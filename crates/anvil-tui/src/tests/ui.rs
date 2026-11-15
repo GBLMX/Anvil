@@ -92,7 +92,7 @@ fn active_indent_guide_uses_accent() {
         EditorState::from_text("        alpha\n        beta\n"),
         None,
     );
-    model.session.editor.set_selection_bytes(16, 16);
+    let _ = model.session.editor.try_set_selection_bytes(16, 16);
     model.session.cursor = 16;
     let backend = TestBackend::new(40, 8);
     let mut terminal = Terminal::new(backend).expect("terminal");
@@ -586,7 +586,7 @@ fn character_selection_renders_background_and_cursor_block() {
     let text = "vscode-css-language-server, and/or";
     let mut model = Model::new(EditorState::from_text(text), None);
     model.start_page.welcome = false;
-    assert!(model.session.editor.set_selection_bytes(0, 26));
+    assert!(model.session.editor.try_set_selection_bytes(0, 26).is_ok());
     model.session.cursor = 26;
 
     let backend = TestBackend::new(80, 8);

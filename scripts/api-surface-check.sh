@@ -14,19 +14,11 @@ crates=(
     crates/anvil-editor/src
 )
 
-actual="$(
-    grep -RhoE \
-        '^[[:space:]]*pub(\([^)]*\))?[[:space:]]+(struct|enum|trait|fn|const|type|mod|use)[[:space:]]+[A-Za-z_][A-Za-z0-9_]*' \
-        --include='*.rs' "${crates[@]}" \
-        | sed 's/^[[:space:]]*//' \
-        | sort -u \
-        | sha256sum \
-        | cut -d' ' -f1
-)"
+actual="$(python3 scripts/api_surface.py "${crates[@]}")"
 expected="$(tr -d '[:space:]' < "$snapshot")"
 
 if [ "$actual" != "$expected" ]; then
-    echo "api-surface: public kernel surface changed" >&2
+    echo "api-surface: public kernel declarations changed" >&2
     echo "review the change and update $snapshot deliberately" >&2
     echo "expected $expected, found $actual" >&2
     exit 1

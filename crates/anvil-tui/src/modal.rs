@@ -38,7 +38,7 @@ impl Model {
             edits.push((end..end, close.to_string()));
             edits.push((start..start, open.to_string()));
         }
-        if edits.is_empty() || !self.session.editor.apply_transaction(edits) {
+        if edits.is_empty() || self.session.editor.try_apply_transaction(edits).is_err() {
             self.cancel_modal_layer();
             return;
         }

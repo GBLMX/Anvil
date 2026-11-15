@@ -1281,7 +1281,7 @@ fn stale_formatting_response_is_ignored() {
         .lsp_requests
         .pending_edit_revision
         .insert(15, model.session.editor.revision());
-    model.session.editor.insert(0, "x");
+    let _ = model.session.editor.try_insert(0, "x");
     model.handle_lsp_response(
         15,
         serde_json::json!([{
@@ -1524,7 +1524,7 @@ fn diagnostic_peek_clears_on_revision_change() {
         .insert(PathBuf::from("diag.rs"), vec![diagnostic(0, 0, "first")]);
     model.jump_diagnostic(true);
     assert!(model.ui.diagnostic_peek.is_some());
-    model.session.editor.insert(0, "x");
+    let _ = model.session.editor.try_insert(0, "x");
     model.tick_status();
     assert!(model.ui.diagnostic_peek.is_none());
 }
@@ -1666,7 +1666,7 @@ fn rename_response_rejects_a_stale_inactive_buffer_snapshot() {
         .find(|buffer| buffer.path.as_ref() == Some(&second_path))
         .expect("second buffer");
     base.insert(second_path.clone(), second_buffer.editor.revision());
-    second_buffer.editor.insert(0, "stale");
+    let _ = second_buffer.editor.try_insert(0, "stale");
     model
         .language
         .lsp_requests

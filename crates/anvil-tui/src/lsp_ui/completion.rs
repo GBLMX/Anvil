@@ -235,7 +235,7 @@ impl Model {
             return;
         };
         let mirrors = ranges.len();
-        self.session.editor.set_selections_bytes(ranges);
+        let _ = self.session.editor.try_set_selections_bytes(ranges);
         self.session.cursor = start;
         if mirrors > 1 {
             self.status.text = format!("snippet stop ({mirrors} mirrors)");
@@ -244,7 +244,7 @@ impl Model {
     }
     fn select_snippet_groups(&mut self, ranges: Vec<(usize, usize)>) {
         if let Some((start, _)) = ranges.first().copied() {
-            self.session.editor.set_selections_bytes(ranges);
+            let _ = self.session.editor.try_set_selections_bytes(ranges);
             self.session.cursor = start;
             self.file.dirty = true;
         }
@@ -264,7 +264,7 @@ impl Model {
             .map(|(_, end)| end)
             .unwrap_or(self.session.cursor);
         self.session.cursor = end;
-        self.session.editor.set_selection_bytes(end, end);
+        let _ = self.session.editor.try_set_selection_bytes(end, end);
         self.file.dirty = true;
         true
     }

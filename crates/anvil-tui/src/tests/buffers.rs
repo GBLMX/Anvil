@@ -1387,7 +1387,8 @@ fn multi_cursor_insert_is_one_undo_group() {
         model
             .session
             .editor
-            .set_selections_bytes(vec![(0, 0), (3, 3)])
+            .try_set_selections_bytes(vec![(0, 0), (3, 3)])
+            .is_ok()
     );
     model.insert_text("X");
     assert_eq!(model.session.editor.text().slice(0..7), "Xab\nXcd");
@@ -1783,10 +1784,10 @@ fn toggles_breakpoint_gutter_marker() {
     fs::write(&path, "one\ntwo\n").expect("write");
     let mut model = Model::open(&path).expect("open");
     model.session.cursor = model.offset_at_utf16(1, 0);
-    model
+    let _ = model
         .session
         .editor
-        .set_selection_bytes(model.session.cursor, model.session.cursor);
+        .try_set_selection_bytes(model.session.cursor, model.session.cursor);
     model.toggle_breakpoint();
     assert!(model.breakpoint_marker(&path, 1));
     let gutter = model

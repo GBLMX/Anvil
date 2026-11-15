@@ -543,7 +543,7 @@ mod tests {
             .plugins
             .provider_snapshots
             .insert(2, (revision, cursor));
-        model.session.editor.insert(0, "x");
+        let _ = model.session.editor.try_insert(0, "x");
         assert!(!model.take_provider_snapshot(2));
     }
 

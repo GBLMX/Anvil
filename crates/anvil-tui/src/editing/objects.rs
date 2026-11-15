@@ -40,10 +40,11 @@ impl Model {
             return;
         };
         let deleted = self.session.editor.text().slice(range.clone());
-        self.session
+        let _ = self
+            .session
             .editor
-            .set_selection_bytes(range.start, range.end);
-        self.session.editor.delete(range.clone());
+            .try_set_selection_bytes(range.start, range.end);
+        let _ = self.session.editor.try_delete(range.clone());
         if let Some(register) = self.input.register.take() {
             self.record_register_text(register, &deleted);
         }
@@ -63,10 +64,11 @@ impl Model {
             return;
         };
         let deleted = self.session.editor.text().slice(range.clone());
-        self.session
+        let _ = self
+            .session
             .editor
-            .set_selection_bytes(range.start, range.end);
-        self.session.editor.delete(range.clone());
+            .try_set_selection_bytes(range.start, range.end);
+        let _ = self.session.editor.try_delete(range.clone());
         if let Some(register) = self.input.register.take() {
             self.record_register_text(register, &deleted);
         }
@@ -86,10 +88,11 @@ impl Model {
             return;
         };
         let deleted = self.session.editor.text().slice(range.clone());
-        self.session
+        let _ = self
+            .session
             .editor
-            .set_selection_bytes(range.start, range.end);
-        self.session.editor.delete(range.clone());
+            .try_set_selection_bytes(range.start, range.end);
+        let _ = self.session.editor.try_delete(range.clone());
         if let Some(register) = self.input.register.take() {
             self.record_register_text(register, &deleted);
         }
@@ -187,20 +190,26 @@ impl Model {
         match operator {
             'y' => {
                 let cursor = self.session.cursor;
-                self.session
+                let _ = self
+                    .session
                     .editor
-                    .set_selection_bytes(range.start, range.end);
+                    .try_set_selection_bytes(range.start, range.end);
                 if self.session.editor.yank(range) {
                     self.record_register();
                 }
-                let _ = self.session.editor.set_selection_bytes(cursor, cursor);
+                let _ = self
+                    .session
+                    .editor
+                    .try_set_selection_bytes(cursor, cursor)
+                    .is_ok();
             }
             'c' => {
                 let deleted = self.session.editor.text().slice(range.clone());
-                self.session
+                let _ = self
+                    .session
                     .editor
-                    .set_selection_bytes(range.start, range.end);
-                self.session.editor.delete(range.clone());
+                    .try_set_selection_bytes(range.start, range.end);
+                let _ = self.session.editor.try_delete(range.clone());
                 self.session.cursor = range.start;
                 if let Some(register) = self.input.register.take() {
                     self.record_register_text(register, &deleted);
@@ -210,10 +219,11 @@ impl Model {
             }
             'd' => {
                 let deleted = self.session.editor.text().slice(range.clone());
-                self.session
+                let _ = self
+                    .session
                     .editor
-                    .set_selection_bytes(range.start, range.end);
-                self.session.editor.delete(range.clone());
+                    .try_set_selection_bytes(range.start, range.end);
+                let _ = self.session.editor.try_delete(range.clone());
                 self.session.cursor = range.start;
                 if let Some(register) = self.input.register.take() {
                     self.record_register_text(register, &deleted);
@@ -367,10 +377,11 @@ impl Model {
                 break;
             };
             deleted.push_str(&self.session.editor.text().slice(range.clone()));
-            self.session
+            let _ = self
+                .session
                 .editor
-                .set_selection_bytes(range.start, range.end);
-            self.session.editor.delete(range.clone());
+                .try_set_selection_bytes(range.start, range.end);
+            let _ = self.session.editor.try_delete(range.clone());
             self.session.cursor = range.start;
             self.file.modified = true;
         }
@@ -394,13 +405,18 @@ impl Model {
             return;
         };
         let cursor = self.session.cursor;
-        self.session
+        let _ = self
+            .session
             .editor
-            .set_selection_bytes(range.start, range.end);
+            .try_set_selection_bytes(range.start, range.end);
         if self.session.editor.yank(range) {
             self.record_register();
         }
-        let _ = self.session.editor.set_selection_bytes(cursor, cursor);
+        let _ = self
+            .session
+            .editor
+            .try_set_selection_bytes(cursor, cursor)
+            .is_ok();
         self.file.dirty = true;
     }
 }

@@ -874,7 +874,7 @@ mod tests {
     #[test]
     fn current_gutter_number_uses_accent() {
         let mut model = Model::new(EditorState::from_text("a\nb\nc\nd\ne\nf\ng\nh"), None);
-        model.session.editor.set_selection_bytes(8, 8);
+        let _ = model.session.editor.try_set_selection_bytes(8, 8);
         model.session.cursor = 8;
         let gutter = model.visible_gutter(8);
         assert_eq!(gutter[4].spans[1].style.fg, Some(theme::accent()));
@@ -918,7 +918,7 @@ mod tests {
         model.config.settings.editor.soft_wrap = true;
         model.view.wrap_width = 4;
         model.session.cursor = 9;
-        model.session.editor.set_selection_bytes(9, 9);
+        let _ = model.session.editor.try_set_selection_bytes(9, 9);
         model.ensure_cursor_visible(2, 5);
         assert!(
             model.view.scroll_subrow > 0,

@@ -83,7 +83,7 @@ impl Model {
                     if let Some(snippet) = self.overlays.lsp_results.snippet.as_mut() {
                         snippet.replace_current_with_carets(&old_selections, &carets);
                     }
-                    self.session.editor.set_selections_bytes(
+                    let _ = self.session.editor.try_set_selections_bytes(
                         carets.iter().map(|caret| (*caret, *caret)).collect(),
                     );
                     self.session.cursor = carets.first().copied().unwrap_or(self.session.cursor);
@@ -97,10 +97,11 @@ impl Model {
             self.file.dirty = true;
             return;
         }
-        self.session
+        let _ = self
+            .session
             .editor
-            .set_selection_bytes(self.session.cursor, self.session.cursor);
-        self.session.editor.insert(self.session.cursor, text);
+            .try_set_selection_bytes(self.session.cursor, self.session.cursor);
+        let _ = self.session.editor.try_insert(self.session.cursor, text);
         self.session.cursor += text.len();
         self.file.modified = true;
         self.edit.capture_insert(text);
@@ -182,8 +183,8 @@ impl Model {
             return;
         };
         let deleted = self.session.editor.text().slice(start..last.end);
-        self.session.editor.set_selection_bytes(start, last.end);
-        self.session.editor.delete(start..last.end);
+        let _ = self.session.editor.try_set_selection_bytes(start, last.end);
+        let _ = self.session.editor.try_delete(start..last.end);
         self.session.cursor = start;
         self.edit.last_change = Some(LastChange::DeleteLines { count });
         if let Some(register) = self.input.register.take() {
@@ -227,8 +228,8 @@ impl Model {
             end -= 1;
         }
         let deleted = self.session.editor.text().slice(start..end);
-        self.session.editor.set_selection_bytes(start, end);
-        self.session.editor.delete(start..end);
+        let _ = self.session.editor.try_set_selection_bytes(start, end);
+        let _ = self.session.editor.try_delete(start..end);
         self.session.cursor = start;
         if let Some(register) = self.input.register.take() {
             self.record_register_text(register, &deleted);
@@ -326,10 +327,11 @@ impl Model {
                 };
                 text
             };
-            self.session
+            let _ = self
+                .session
                 .editor
-                .set_selection_bytes(self.session.cursor, self.session.cursor);
-            self.session.editor.insert(self.session.cursor, &text);
+                .try_set_selection_bytes(self.session.cursor, self.session.cursor);
+            let _ = self.session.editor.try_insert(self.session.cursor, &text);
             self.session.cursor += text.len();
             self.file.modified = true;
             self.file.dirty = true;
@@ -441,8 +443,8 @@ impl Model {
                             .editor
                             .next_grapheme_boundary(self.session.cursor)
                             .unwrap_or(self.session.cursor);
-                        self.session.editor.set_selection_bytes(previous, end);
-                        self.session.editor.delete(previous..end);
+                        let _ = self.session.editor.try_set_selection_bytes(previous, end);
+                        let _ = self.session.editor.try_delete(previous..end);
                         self.session.cursor = previous;
                         self.file.modified = true;
                         self.file.dirty = true;
@@ -472,10 +474,11 @@ impl Model {
         if let Some(snippet) = self.overlays.lsp_results.snippet.as_mut() {
             snippet.adjust_delete(start, self.session.cursor);
         }
-        self.session
+        let _ = self
+            .session
             .editor
-            .set_selection_bytes(start, self.session.cursor);
-        self.session.editor.delete(start..self.session.cursor);
+            .try_set_selection_bytes(start, self.session.cursor);
+        let _ = self.session.editor.try_delete(start..self.session.cursor);
         self.session.cursor = start;
         self.file.modified = true;
         self.edit.trim_insert(at_insert_end);
@@ -502,10 +505,11 @@ impl Model {
         if let Some(snippet) = self.overlays.lsp_results.snippet.as_mut() {
             snippet.adjust_delete(self.session.cursor, end);
         }
-        self.session
+        let _ = self
+            .session
             .editor
-            .set_selection_bytes(self.session.cursor, end);
-        self.session.editor.delete(self.session.cursor..end);
+            .try_set_selection_bytes(self.session.cursor, end);
+        let _ = self.session.editor.try_delete(self.session.cursor..end);
         self.file.modified = true;
         self.file.dirty = true;
     }
@@ -556,7 +560,7 @@ impl Model {
                 edits.push((start..end, String::new()));
             }
         }
-        if edits.is_empty() || !self.session.editor.apply_transaction(edits) {
+        if edits.is_empty() || self.session.editor.try_apply_transaction(edits).is_err() {
             return false;
         }
         if mirror_delete {
@@ -570,9 +574,10 @@ impl Model {
             if let Some(snippet) = self.overlays.lsp_results.snippet.as_mut() {
                 snippet.replace_current_with_carets(&old_selections, &carets);
             }
-            self.session
+            let _ = self
+                .session
                 .editor
-                .set_selections_bytes(carets.iter().map(|caret| (*caret, *caret)).collect());
+                .try_set_selections_bytes(carets.iter().map(|caret| (*caret, *caret)).collect());
             self.session.cursor = carets.first().copied().unwrap_or(self.session.cursor);
         } else {
             self.sync_cursor_from_selection();

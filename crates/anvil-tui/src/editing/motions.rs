@@ -285,7 +285,7 @@ impl Model {
         }
         self.session.cursor = offset;
         if self.session.editor.selection_bytes().len() <= 1 {
-            self.session.editor.set_selection_bytes(offset, offset);
+            let _ = self.session.editor.try_set_selection_bytes(offset, offset);
         }
     }
 

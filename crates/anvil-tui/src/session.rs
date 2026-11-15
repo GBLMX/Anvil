@@ -223,7 +223,7 @@ impl Model {
         self.session.cursor = 0;
         self.view.scroll = 0;
         self.view.hscroll = 0;
-        self.session.editor.set_selection_bytes(0, 0);
+        let _ = self.session.editor.try_set_selection_bytes(0, 0);
         self.file.modified = true;
         self.file.missing = false;
         self.workspace.conflict_swaps.remove(&path);

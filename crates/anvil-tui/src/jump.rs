@@ -85,9 +85,10 @@ impl Model {
         }
         let length = self.session.editor.text().len_bytes();
         self.session.cursor = entry.cursor.min(length);
-        self.session
+        let _ = self
+            .session
             .editor
-            .set_selection_bytes(self.session.cursor, self.session.cursor);
+            .try_set_selection_bytes(self.session.cursor, self.session.cursor);
         self.file.dirty = true;
         true
     }

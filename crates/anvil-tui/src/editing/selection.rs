@@ -39,7 +39,13 @@ impl Model {
                 selections.push((offset, match_end));
             }
         }
-        if selections.is_empty() || !self.session.editor.set_selections_bytes(selections) {
+        if selections.is_empty()
+            || self
+                .session
+                .editor
+                .try_set_selections_bytes(selections)
+                .is_err()
+        {
             return;
         }
         self.session.cursor = self
@@ -73,7 +79,13 @@ impl Model {
         }
         carets.sort_unstable();
         carets.dedup();
-        if carets.len() < 2 || !self.session.editor.set_selections_bytes(carets) {
+        if carets.len() < 2
+            || self
+                .session
+                .editor
+                .try_set_selections_bytes(carets)
+                .is_err()
+        {
             self.status.text = "E: no lines to split".to_owned();
             self.file.dirty = true;
             return;
@@ -123,7 +135,12 @@ impl Model {
         selections.push((target_offset, target_offset));
         selections.sort_unstable();
         selections.dedup();
-        if !self.session.editor.set_selections_bytes(selections) {
+        if self
+            .session
+            .editor
+            .try_set_selections_bytes(selections)
+            .is_err()
+        {
             return;
         }
         self.session.cursor = target_offset;
@@ -137,9 +154,10 @@ impl Model {
             return;
         }
         self.sync_cursor_from_selection();
-        self.session
+        let _ = self
+            .session
             .editor
-            .set_selection_bytes(self.session.cursor, self.session.cursor);
+            .try_set_selection_bytes(self.session.cursor, self.session.cursor);
         self.status.text = "cursors merged".to_owned();
         self.file.dirty = true;
     }
@@ -153,9 +171,10 @@ impl Model {
 
     pub(crate) fn exit_visual(&mut self) {
         self.edit.visual_anchor = None;
-        self.session
+        let _ = self
+            .session
             .editor
-            .set_selection_bytes(self.session.cursor, self.session.cursor);
+            .try_set_selection_bytes(self.session.cursor, self.session.cursor);
         self.file.dirty = true;
     }
 
@@ -198,7 +217,7 @@ impl Model {
             (start, end)
         };
         if start < end {
-            self.session.editor.set_selection_bytes(start, end);
+            let _ = self.session.editor.try_set_selection_bytes(start, end);
         }
     }
 
@@ -281,7 +300,7 @@ impl Model {
             return;
         };
         let count = lines.len();
-        if !self.session.editor.apply_transaction(edits) {
+        if self.session.editor.try_apply_transaction(edits).is_err() {
             self.status.text = "E: comment: edit failed".to_owned();
             self.file.dirty = true;
             return;

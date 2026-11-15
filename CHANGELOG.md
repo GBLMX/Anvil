@@ -26,10 +26,12 @@ post-`0.5.0` feature line.
   explicit methods, and plugin/format application uses guarded session helpers.
 - `anvil-control` clients now return typed `OpenResult`, `SaveResult`, and
   `QuitResult` DTOs instead of raw JSON values.
+- `anvil-control` exposes `ControlCommandId` and verifies manifest commands
+  against capability lookup and TUI dispatch.
 - `anvil-editor` now exposes additive `PositionError`/`EditError` types and
   `try_*` mutation methods; `anvil-session` mirrors the fallible surface.
-- `FrameError::Io` preserves both the I/O kind and message instead of only the
-  error kind.
+- `DocumentSession` boolean mutation wrappers are deprecated; the TUI now
+  calls the fallible `try_*` methods directly.
 - Added the API surface snapshot gate and [API 1.1 ADR](docs/adr/0043-plugin-api-1-1.md);
   the existing plugin v1 contract remains unchanged.
 - Buffer tabs and the buffer picker now show file-type icons; picker paths are

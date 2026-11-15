@@ -84,7 +84,7 @@ pub(crate) fn handle_mouse(model: &mut Model, mouse: MouseEvent, width: u16, hei
                     focus_editor_side(model, side);
                     let offset = offset_for_position(model, line, column);
                     model.session.cursor = offset;
-                    model.session.editor.set_selection_bytes(offset, offset);
+                    let _ = model.session.editor.try_set_selection_bytes(offset, offset);
                     model.view.pointer = PointerState::Pressed(DragKind::Editor { anchor: offset });
                     model.file.dirty = true;
                 }
@@ -144,7 +144,7 @@ pub(crate) fn handle_mouse(model: &mut Model, mouse: MouseEvent, width: u16, hei
                                 editor_position_at(model, mouse.column, mouse.row, width, height)
                             {
                                 let head = offset_for_position(model, line, column);
-                                model.session.editor.set_selection_bytes(anchor, head);
+                                let _ = model.session.editor.try_set_selection_bytes(anchor, head);
                                 model.session.cursor = head;
                             }
                         }

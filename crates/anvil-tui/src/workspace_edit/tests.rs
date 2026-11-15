@@ -358,7 +358,7 @@ fn rejects_stale_buffer_snapshot_before_any_change() {
     }))
     .expect("parse")
     .with_base_revisions(Some(base));
-    model.session.editor.insert(0, "stale");
+    let _ = model.session.editor.try_insert(0, "stale");
     assert!(workspace_edit.apply(&mut model).is_err());
     assert_eq!(model.session.editor.text().slice(0..8), "staleabc");
 }
@@ -394,7 +394,7 @@ fn refuses_to_delete_a_modified_buffer() {
     let dir = tempfile::tempdir().expect("tempdir");
     let mut model = open(&dir);
     let path = model.session.path.clone().expect("path");
-    model.session.editor.insert(0, "x");
+    let _ = model.session.editor.try_insert(0, "x");
     model.file.modified = true;
     let workspace_edit = WorkspaceEdit::from_lsp(&serde_json::json!({
         "documentChanges": [{"kind": "delete", "uri": uri(&path)}]

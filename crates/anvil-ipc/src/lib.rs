@@ -35,10 +35,7 @@ pub enum FrameError {
     /// The frame did not arrive before the caller-provided deadline.
     Timeout,
     /// The underlying stream failed.
-    Io {
-        kind: io::ErrorKind,
-        message: String,
-    },
+    Io(io::ErrorKind),
     /// A zero-length body is not a valid JSON-RPC frame.
     Empty,
 }
@@ -48,9 +45,7 @@ impl std::fmt::Display for FrameError {
         match self {
             Self::TruncatedHeader => write!(formatter, "truncated frame header"),
             Self::TruncatedBody => write!(formatter, "truncated frame body"),
-            Self::Io { kind, message } => {
-                write!(formatter, "frame I/O failed ({kind:?}): {message}")
-            }
+            Self::Io(kind) => write!(formatter, "frame I/O failed ({kind:?})"),
             Self::Timeout => write!(formatter, "frame deadline exceeded"),
             Self::TooLarge(length) => write!(formatter, "frame length {length} exceeds maximum"),
             Self::Empty => write!(formatter, "empty frame"),
@@ -112,10 +107,7 @@ pub fn write_frame<W: Write>(writer: &mut W, body: &[u8]) -> Result<(), FrameErr
 }
 
 fn io_error(error: io::Error) -> FrameError {
-    FrameError::Io {
-        kind: error.kind(),
-        message: error.to_string(),
-    }
+    FrameError::Io(error.kind())
 }
 
 /// A Unix socket listener for framed connections.
@@ -364,7 +356,7 @@ mod tests {
     }
 
     #[test]
-    fn preserves_io_error_context() {
+    fn preserves_io_error_kind() {
         struct Failing;
 
         impl Read for Failing {
@@ -375,10 +367,7 @@ mod tests {
 
         assert_eq!(
             read_frame(&mut Failing),
-            Err(FrameError::Io {
-                kind: io::ErrorKind::ConnectionReset,
-                message: "reset".to_owned(),
-            })
+            Err(FrameError::Io(io::ErrorKind::ConnectionReset))
         );
     }
 

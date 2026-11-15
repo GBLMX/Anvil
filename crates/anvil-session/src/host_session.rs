@@ -610,11 +610,7 @@ fn call_with_timeout(
 fn rpc_timeout(error: &FrameError) -> bool {
     matches!(
         error,
-        FrameError::Timeout
-            | FrameError::Io {
-                kind: io::ErrorKind::TimedOut | io::ErrorKind::WouldBlock,
-                ..
-            }
+        FrameError::Timeout | FrameError::Io(io::ErrorKind::TimedOut | io::ErrorKind::WouldBlock)
     )
 }
 

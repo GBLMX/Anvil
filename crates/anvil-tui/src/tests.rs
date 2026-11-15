@@ -267,7 +267,7 @@ fn select_word_occurrences_selects_all_as_one_undo() {
 #[test]
 fn split_selection_lines_creates_one_caret_per_line() {
     let mut model = Model::new(EditorState::from_text("one\ntwo\nthree"), None);
-    assert!(model.session.editor.set_selection_bytes(0, 7));
+    assert!(model.session.editor.try_set_selection_bytes(0, 7).is_ok());
     model.split_selection_lines();
     assert_eq!(model.session.editor.selection_bytes().len(), 2);
 }
@@ -597,4 +597,19 @@ fn navigation_preserves_modified_buffer() {
     model.switch_buffer(-1);
     assert_eq!(model.session.editor.text().slice(0..6), "Xfirst");
     assert!(model.file.modified);
+}
+
+#[test]
+fn control_manifest_commands_have_handlers() {
+    let mut model = Model::new(EditorState::from_text("x"), None);
+    model.start_page.welcome = false;
+    for command in anvil_control::COMMANDS {
+        model.status.text.clear();
+        model.dispatch_ex(command.id().as_str(), "");
+        assert!(
+            !model.status.text.starts_with("E: unknown command"),
+            "missing handler for {}",
+            command.id()
+        );
+    }
 }

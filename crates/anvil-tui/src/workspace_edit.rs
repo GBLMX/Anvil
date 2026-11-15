@@ -693,7 +693,7 @@ fn apply_text_edits(
         }
     }
     if let Some(&(start, end, _)) = ranges.first() {
-        state.set_selection_bytes(start, end);
+        let _ = state.try_set_selection_bytes(start, end);
     }
     state
         .apply_transaction_at(
