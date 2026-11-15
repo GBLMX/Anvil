@@ -1,31 +1,56 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#2563eb"/>
-      <stop offset="1" stop-color="#7c3aed"/>
+      <stop offset="0" stop-color="#070b14"/>
+      <stop offset="0.52" stop-color="#0d1730"/>
+      <stop offset="1" stop-color="#1b1235"/>
     </linearGradient>
+    <linearGradient id="ring" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#38bdf8"/>
+      <stop offset="0.52" stop-color="#8b5cf6"/>
+      <stop offset="1" stop-color="#f59e0b"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.46" r="0.58">
+      <stop offset="0" stop-color="#38bdf8" stop-opacity="0.34"/>
+      <stop offset="0.55" stop-color="#8b5cf6" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#8b5cf6" stop-opacity="0"/>
+    </radialGradient>
     <linearGradient id="steel" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#ffffff"/>
-      <stop offset="0.55" stop-color="#e2e8f0"/>
-      <stop offset="1" stop-color="#aab8cc"/>
+      <stop offset="0" stop-color="#f8fafc"/>
+      <stop offset="0.52" stop-color="#cbd5e1"/>
+      <stop offset="1" stop-color="#64748b"/>
     </linearGradient>
-    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#fbbf24"/>
-      <stop offset="1" stop-color="#f97316"/>
+    <linearGradient id="face" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="0.58" stop-color="#bae6fd"/>
+      <stop offset="1" stop-color="#94a3b8"/>
+    </linearGradient>
+    <linearGradient id="amber" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#fde68a"/>
+      <stop offset="0.55" stop-color="#fbbf24"/>
+      <stop offset="1" stop-color="#fb7185"/>
     </linearGradient>
   </defs>
 
-  <rect x="8" y="8" width="240" height="240" rx="52" fill="url(#bg)" stroke="#c4b5fd" stroke-width="3"/>
+  <rect x="6" y="6" width="244" height="244" rx="54" fill="url(#bg)"/>
+  <rect x="7.5" y="7.5" width="241" height="241" rx="52.5" fill="none" stroke="url(#ring)" stroke-width="3"/>
+  <rect x="13" y="13" width="230" height="230" rx="47" fill="none" stroke="#ffffff" stroke-opacity="0.07" stroke-width="1.5"/>
+  <ellipse cx="128" cy="128" rx="104" ry="88" fill="url(#glow)"/>
 
-  <ellipse cx="128" cy="203" rx="72" ry="9" fill="#000" opacity="0.35"/>
+  <g transform="translate(120 128) scale(1.10) translate(-128 -138)">
+  <ellipse cx="128" cy="202" rx="68" ry="8" fill="#020617" opacity="0.72"/>
+  <ellipse cx="128" cy="200" rx="50" ry="4" fill="#38bdf8" opacity="0.16"/>
 
   <path d="M50 84H166C190 84 208 92 226 108L180 112H160V120H152V148H184V166H192V186H64V166H72V148H104V120H96V112H50Z" fill="url(#steel)"/>
   <path d="M50 84H166C190 84 208 92 226 108L210 109C194 99 181 96 166 96H50Z" fill="#fff" opacity="0.85"/>
   <path d="M64 166H192V174H64Z" fill="#7f8ea6" opacity="0.55"/>
 
-  <path d="M76 92L90 100L76 108" fill="none" stroke="#0b0f16" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
-  <rect x="98" y="104" width="18" height="5" rx="2.5" fill="#0b0f16"/>
+  <path d="M118 162L130 168L118 174" fill="none" stroke="#0b1220" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="137" y="170" width="14" height="4" rx="2" fill="#0b1220"/>
 
-  <rect x="72" y="178" width="112" height="6" rx="3" fill="url(#accent)"/>
-  <circle cx="196" cy="181" r="3" fill="#fbbf24"/>
+  <rect x="72" y="195" width="112" height="5" rx="2.5" fill="url(#amber)"/>
+  <circle cx="196" cy="197.5" r="3.5" fill="#fbbf24"/>
+  <circle cx="210" cy="104" r="4" fill="#38bdf8" opacity="0.9"/>
+  <circle cx="219" cy="96" r="2.5" fill="#a78bfa" opacity="0.9"/>
+  </g>
 </svg>

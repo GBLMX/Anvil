@@ -428,6 +428,10 @@ post-`0.5.0` feature line.
   the status line keeps stable diagnostics/file/LSP/position segments. The
   start dashboard is denser, and the command palette shows category groups,
   recent markers, and direct key hints.
+- Refined the Anvil desktop icon and rebuilt the default `anvil-dark` theme
+  around its deep-navy, steel, cyan, violet, and amber palette. Syntax colors
+  now use stronger hue separation and targeted bold/italic/underline
+  modifiers while keeping WCAG-AA contrast.
 - Version frozen at `0.6.0` for long-term internal polish; no release tags or
   public releases during this phase.
 - Cursor visibility now uses the rendered text viewport instead of the full
