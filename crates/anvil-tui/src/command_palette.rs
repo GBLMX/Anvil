@@ -3,6 +3,8 @@
 use super::*;
 use anvil_session::command::{self, CommandContext};
 
+const RECENTS_LIMIT: usize = 10;
+
 fn command_title(id: &str) -> String {
     id.split(['.', '_'])
         .filter(|part| !part.is_empty())
@@ -19,6 +21,47 @@ fn command_title(id: &str) -> String {
         })
         .collect::<Vec<_>>()
         .join(" ")
+}
+
+impl CommandPaletteState {
+    /// Selected non-theme row as the command id and owning plugin.
+    pub(crate) fn selected_command(&self) -> Option<(String, Option<String>)> {
+        self.table
+            .selected()
+            .filter(|item| item.theme.is_none())
+            .map(|item| (item.id.clone(), item.plugin_id.clone()))
+    }
+
+    /// Theme carried by the selected row, if it is a theme entry.
+    pub(crate) fn selected_theme(&self) -> Option<&'static str> {
+        self.table.selected().and_then(|item| item.theme)
+    }
+
+    /// Move the selected row `delta` places, clamped to the filtered view.
+    pub(crate) fn move_selection(&mut self, delta: isize) {
+        self.table.move_by(delta);
+    }
+
+    /// Recompute the filtered rows; an empty query keeps recents first.
+    pub(crate) fn refresh(&mut self, recents: &[String]) {
+        let empty_query = self.table.query().is_empty();
+        self.table.refresh();
+        if empty_query {
+            self.table.sort_filtered_by(|item| {
+                recents
+                    .iter()
+                    .position(|id| id == &item.id)
+                    .unwrap_or(usize::MAX)
+            });
+        }
+    }
+
+    /// Record `id` as the most recent command, deduplicated and capped.
+    pub(crate) fn remember_command(recents: &mut Vec<String>, id: &str) {
+        recents.retain(|recent| recent != id);
+        recents.insert(0, id.to_owned());
+        recents.truncate(RECENTS_LIMIT);
+    }
 }
 
 impl Model {
@@ -176,16 +219,7 @@ impl Model {
         let Some(palette) = self.overlays.command_palette.as_mut() else {
             return;
         };
-        let empty_query = palette.table.query().is_empty();
-        palette.table.refresh();
-        if empty_query {
-            palette.table.sort_filtered_by(|item| {
-                recents
-                    .iter()
-                    .position(|id| id == &item.id)
-                    .unwrap_or(usize::MAX)
-            });
-        }
+        palette.refresh(&recents);
         self.preview_selected_theme();
         self.file.dirty = true;
     }
@@ -194,27 +228,17 @@ impl Model {
         let Some(palette) = self.overlays.command_palette.as_mut() else {
             return;
         };
-        palette.table.move_by(delta);
+        palette.move_selection(delta);
         self.preview_selected_theme();
         self.file.dirty = true;
     }
 
     pub(crate) fn selected_command(&self) -> Option<(String, Option<String>)> {
-        let palette = self.overlays.command_palette.as_ref()?;
-        palette
-            .table
-            .selected()
-            .filter(|item| item.theme.is_none())
-            .map(|item| (item.id.clone(), item.plugin_id.clone()))
+        self.overlays.command_palette.as_ref()?.selected_command()
     }
 
     pub(crate) fn selected_theme(&self) -> Option<&'static str> {
-        self.overlays
-            .command_palette
-            .as_ref()?
-            .table
-            .selected()
-            .and_then(|item| item.theme)
+        self.overlays.command_palette.as_ref()?.selected_theme()
     }
 
     fn preview_selected_theme(&mut self) {
@@ -226,12 +250,160 @@ impl Model {
     }
 
     pub(crate) fn remember_command(&mut self, id: &str) {
-        self.overlays
-            .command_palette_recents
-            .retain(|recent| recent != id);
-        self.overlays
-            .command_palette_recents
-            .insert(0, id.to_owned());
-        self.overlays.command_palette_recents.truncate(10);
+        CommandPaletteState::remember_command(&mut self.overlays.command_palette_recents, id);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn item(id: &str, theme: Option<&'static str>) -> CommandPaletteItem {
+        CommandPaletteItem {
+            id: id.to_owned(),
+            label: id.to_owned(),
+            title: id.to_owned(),
+            detail: String::new(),
+            group: "test".to_owned(),
+            key: None,
+            recent: false,
+            plugin_id: None,
+            theme,
+        }
+    }
+
+    fn command(id: &str) -> CommandPaletteItem {
+        item(id, None)
+    }
+
+    fn palette(items: Vec<CommandPaletteItem>) -> CommandPaletteState {
+        CommandPaletteState {
+            table: SelectionTable::new(items),
+            theme_picker: theme_picker::ThemePicker::new(),
+        }
+    }
+
+    #[test]
+    fn selected_access_separates_commands_and_themes() {
+        let mut palette = palette(vec![
+            item("theme.nord", Some("nord")),
+            command("editor.undo"),
+        ]);
+        assert_eq!(palette.selected_theme(), Some("nord"));
+        assert_eq!(palette.selected_command(), None);
+
+        palette.move_selection(1);
+        assert_eq!(palette.selected_theme(), None);
+        assert_eq!(
+            palette.selected_command(),
+            Some(("editor.undo".to_owned(), None))
+        );
+    }
+
+    #[test]
+    fn selected_command_carries_the_plugin_id() {
+        let mut plugin = command("demo.hello");
+        plugin.plugin_id = Some("demo".to_owned());
+        let palette = palette(vec![plugin]);
+        assert_eq!(
+            palette.selected_command(),
+            Some(("demo.hello".to_owned(), Some("demo".to_owned())))
+        );
+    }
+
+    #[test]
+    fn move_selection_clamps_to_the_filtered_view() {
+        let mut palette = palette(vec![
+            command("editor.a"),
+            command("editor.b"),
+            command("editor.c"),
+        ]);
+        palette.move_selection(9);
+        assert_eq!(
+            palette.selected_command().map(|(id, _)| id),
+            Some("editor.c".to_owned())
+        );
+        palette.move_selection(-9);
+        assert_eq!(
+            palette.selected_command().map(|(id, _)| id),
+            Some("editor.a".to_owned())
+        );
+    }
+
+    #[test]
+    fn move_selection_ignores_an_empty_filtered_view() {
+        let mut palette = palette(vec![command("editor.undo")]);
+        palette.table.query_mut().push_str("missing");
+        palette.refresh(&[]);
+        assert!(palette.table.is_empty());
+
+        palette.move_selection(1);
+        assert_eq!(palette.selected_command(), None);
+        assert_eq!(palette.selected_theme(), None);
+    }
+
+    #[test]
+    fn refresh_orders_recents_first_for_an_empty_query() {
+        let mut palette = palette(vec![
+            command("editor.undo"),
+            command("editor.redo"),
+            command("editor.save"),
+        ]);
+        palette.refresh(&[
+            "editor.save".to_owned(),
+            "editor.undo".to_owned(),
+            "editor.missing".to_owned(),
+        ]);
+        assert_eq!(palette.table.filtered(), &[2, 0, 1]);
+        assert_eq!(
+            palette.selected_command().map(|(id, _)| id),
+            Some("editor.save".to_owned())
+        );
+    }
+
+    #[test]
+    fn refresh_keeps_source_order_for_a_non_empty_query() {
+        let mut palette = palette(vec![
+            command("editor.undo"),
+            command("editor.redo"),
+            command("editor.save"),
+        ]);
+        palette.table.query_mut().push_str("editor");
+        palette.refresh(&["editor.save".to_owned()]);
+        assert_eq!(palette.table.filtered(), &[0, 1, 2]);
+    }
+
+    #[test]
+    fn empty_query_refresh_without_recents_keeps_source_order() {
+        let mut palette = palette(vec![command("editor.b"), command("editor.a")]);
+        palette.refresh(&[]);
+        assert_eq!(palette.table.filtered(), &[0, 1]);
+        assert_eq!(
+            palette.selected_command().map(|(id, _)| id),
+            Some("editor.b".to_owned())
+        );
+    }
+
+    #[test]
+    fn remember_command_dedupes_to_the_front() {
+        let mut recents = Vec::new();
+        for id in ["editor.a", "editor.b", "editor.c"] {
+            CommandPaletteState::remember_command(&mut recents, id);
+        }
+        assert_eq!(recents, ["editor.c", "editor.b", "editor.a"]);
+
+        CommandPaletteState::remember_command(&mut recents, "editor.a");
+        assert_eq!(recents, ["editor.a", "editor.c", "editor.b"]);
+    }
+
+    #[test]
+    fn remember_command_caps_the_recency_list() {
+        let mut recents = Vec::new();
+        for index in 0..RECENTS_LIMIT + 5 {
+            CommandPaletteState::remember_command(&mut recents, &format!("command.{index}"));
+        }
+        assert_eq!(recents.len(), RECENTS_LIMIT);
+        assert_eq!(recents.first().map(String::as_str), Some("command.14"));
+        assert_eq!(recents.last().map(String::as_str), Some("command.5"));
     }
 }

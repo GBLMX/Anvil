@@ -2,6 +2,11 @@
 
 use super::*;
 use crate::settings::{self, Settings};
+use ratatui::{
+    Frame,
+    layout::Rect,
+    widgets::{Clear, Paragraph},
+};
 
 pub(crate) const SETTINGS_ROWS: usize = 10;
 
@@ -291,6 +296,153 @@ pub(crate) fn hit(area: ratatui::layout::Rect, col: u16, row: u16) -> Option<usi
     None
 }
 
+/// Paints the settings page from page state alone.
+///
+/// Returns `false` when the popup is too small to hold the page; the caller
+/// stops rendering the remaining overlays, matching the previous inline
+/// early-return.
+pub(crate) fn render(overlay: &SettingsOverlayState, frame: &mut Frame, area: Rect) -> bool {
+    let popup = rect(area);
+    frame.render_widget(Clear, popup);
+    frame.render_widget(
+        crate::render::focused_panel_block("Settings · s save · Esc cancel"),
+        popup,
+    );
+    let inner = Rect {
+        x: popup.x + 2,
+        y: popup.y + 1,
+        width: popup.width.saturating_sub(4),
+        height: popup.height.saturating_sub(2),
+    };
+    if inner.width < 20 || inner.height < 6 {
+        return false;
+    }
+    let group = SettingsOverlayState::group(overlay.selected);
+    let active_tab = SettingsOverlayState::tab(overlay.selected);
+    let tab_style = |name| {
+        if name == active_tab {
+            theme::panel()
+                .fg(theme::accent())
+                .add_modifier(Modifier::BOLD)
+        } else {
+            theme::panel().fg(theme::dim())
+        }
+    };
+    let tabs = Line::from(vec![
+        Span::styled(" Editor ", tab_style("Editor")),
+        Span::styled("│", theme::panel().fg(theme::border_color())),
+        Span::styled(" Interface ", tab_style("Interface")),
+        Span::styled("│", theme::panel().fg(theme::border_color())),
+        Span::styled(" Language ", tab_style("Language")),
+    ]);
+    frame.render_widget(
+        Paragraph::new(tabs).style(theme::panel()),
+        Rect { height: 1, ..inner },
+    );
+    let body = Rect {
+        y: inner.y + 2,
+        height: inner.height.saturating_sub(5),
+        ..inner
+    };
+    let sidebar_width = (inner.width / 5).clamp(18, 24);
+    let sidebar = Rect {
+        width: sidebar_width,
+        ..body
+    };
+    let content = Rect {
+        x: body.x + sidebar_width,
+        width: body.width.saturating_sub(sidebar_width),
+        ..body
+    };
+    let mut sidebar_lines = Vec::new();
+    for name in ["Editor", "Search", "LSP", "Accessibility", "Appearance"] {
+        let style = if name == group {
+            theme::selected()
+        } else {
+            theme::panel().fg(theme::muted())
+        };
+        sidebar_lines.push(Line::styled(format!("  {name}"), style));
+    }
+    frame.render_widget(
+        Paragraph::new(sidebar_lines)
+            .style(theme::panel())
+            .block(crate::render::panel_block("Sections")),
+        sidebar,
+    );
+    let mut lines = Vec::new();
+    let mut rendered_group = "";
+    for row in 0..SETTINGS_ROWS {
+        let next = SettingsOverlayState::group(row);
+        if next != rendered_group {
+            rendered_group = next;
+            lines.push(Line::styled(
+                rendered_group.to_ascii_uppercase(),
+                theme::panel().fg(theme::dim()).add_modifier(Modifier::BOLD),
+            ));
+        }
+        let marker = if overlay.changed(row) { "*" } else { " " };
+        let label = SettingsOverlayState::label(row);
+        let value = overlay.value(row);
+        let style = if row == overlay.selected {
+            theme::selected()
+        } else {
+            theme::panel()
+        };
+        let value_style = if row == overlay.selected {
+            style
+        } else {
+            theme::panel().fg(theme::warning())
+        };
+        lines.push(Line::from(vec![
+            Span::styled(format!("{marker} {label:<27} "), style),
+            Span::styled(value, value_style),
+        ]));
+    }
+    let visible = body.height.saturating_sub(2) as usize;
+    let start = overlay
+        .selected
+        .saturating_add(SETTINGS_ROWS / 2)
+        .saturating_sub(visible)
+        .min(lines.len().saturating_sub(visible));
+    frame.render_widget(
+        Paragraph::new(
+            lines
+                .into_iter()
+                .skip(start)
+                .take(visible)
+                .collect::<Vec<_>>(),
+        )
+        .style(theme::panel())
+        .block(crate::render::panel_block("Values")),
+        content,
+    );
+    let keys = Rect {
+        y: inner.y + inner.height.saturating_sub(2),
+        height: 1,
+        ..inner
+    };
+    frame.render_widget(
+        Paragraph::new(Line::styled(
+            "↑/↓ or j/k select · ←/→ or h/l change · r reset · s save · Esc cancel",
+            theme::panel().fg(theme::dim()),
+        )),
+        keys,
+    );
+    let description = Rect {
+        y: inner.y + inner.height.saturating_sub(1),
+        height: 1,
+        ..inner
+    };
+    frame.render_widget(
+        Paragraph::new(Line::styled(
+            SettingsOverlayState::description(overlay.selected),
+            theme::panel().fg(theme::muted()),
+        )),
+        description,
+    );
+    true
+}
+
 impl Model {
     pub(crate) fn select_settings_row(&mut self, selected: usize) {
         if let Some(overlay) = self.overlays.settings_overlay.as_mut() {
@@ -405,197 +557,4 @@ impl Model {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn settings_hit_test_maps_tabs_and_sections() {
-        let area = ratatui::layout::Rect {
-            x: 0,
-            y: 0,
-            width: 100,
-            height: 30,
-        };
-        let popup = rect(area);
-        let inner_y = popup.y + 1;
-        assert_eq!(hit(area, popup.x + 4, inner_y), Some(0));
-        assert_eq!(hit(area, popup.x + 14, inner_y), Some(5));
-        assert_eq!(hit(area, popup.x + 25, inner_y), Some(7));
-        let body_y = inner_y + 2;
-        let sidebar_x = popup.x + 3;
-        assert_eq!(hit(area, sidebar_x, body_y + 1), Some(0));
-        assert_eq!(hit(area, sidebar_x, body_y + 2), Some(5));
-        assert_eq!(hit(area, sidebar_x, body_y + 3), Some(6));
-        assert_eq!(hit(area, sidebar_x, body_y + 4), Some(7));
-        assert_eq!(hit(area, sidebar_x, body_y + 5), Some(9));
-    }
-
-    #[test]
-    fn settings_tabs_map_every_group() {
-        assert_eq!(SettingsOverlayState::tab(0), "Editor");
-        assert_eq!(SettingsOverlayState::tab(4), "Editor");
-        assert_eq!(SettingsOverlayState::tab(5), "Language");
-        assert_eq!(SettingsOverlayState::tab(6), "Language");
-        assert_eq!(SettingsOverlayState::tab(7), "Interface");
-        assert_eq!(SettingsOverlayState::tab(9), "Interface");
-        assert_eq!(SettingsOverlayState::group(9), "Appearance");
-    }
-
-    #[test]
-    fn overlay_edits_apply_and_cancel_restores() {
-        let mut model = Model::new(crate::EditorState::from_text("x"), None);
-        model.open_settings();
-        assert!(model.overlays.settings_overlay.is_some());
-        model.adjust_settings(1);
-        assert_eq!(model.config.settings.editor.scroll_margin, 4);
-        assert!(
-            model
-                .overlays
-                .settings_overlay
-                .as_ref()
-                .expect("overlay")
-                .changed(0)
-        );
-        model.move_settings(1);
-        model.adjust_settings(1);
-        assert!(model.config.settings.editor.auto_save);
-        model.reset_settings_row();
-        assert!(!model.config.settings.editor.auto_save);
-        model.move_settings(1);
-        model.adjust_settings(1);
-        assert!(model.config.settings.editor.soft_wrap);
-        model.reset_settings_row();
-        assert!(!model.config.settings.editor.soft_wrap);
-        model.move_settings(1);
-        model.adjust_settings(1);
-        assert!(model.config.settings.editor.format_on_save);
-        model.reset_settings_row();
-        assert!(!model.config.settings.editor.format_on_save);
-        model.move_settings(1);
-        model.adjust_settings(1);
-        assert_eq!(model.config.settings.editor.max_buffers, 10);
-        model.reset_settings_row();
-        assert_eq!(model.config.settings.editor.max_buffers, 9);
-        model.move_settings(1);
-        model.adjust_settings(1);
-        assert!(model.config.settings.search.case_sensitive);
-        model.reset_settings_row();
-        assert!(!model.config.settings.search.case_sensitive);
-        model.move_settings(1);
-        model.adjust_settings(1);
-        assert!(!model.config.settings.lsp.inlay_hints);
-        model.reset_settings_row();
-        assert!(model.config.settings.lsp.inlay_hints);
-        model.move_settings(1);
-        model.adjust_settings(1);
-        assert!(model.config.settings.ui.reduced_motion);
-        model.reset_settings_row();
-        assert!(!model.config.settings.ui.reduced_motion);
-        model.move_settings(1);
-        model.adjust_settings(1);
-        assert!(model.config.settings.ui.high_contrast);
-        model.reset_settings_row();
-        assert!(!model.config.settings.ui.high_contrast);
-        model.cancel_settings();
-        assert!(model.overlays.settings_overlay.is_none());
-        assert_eq!(model.config.settings, Settings::default());
-    }
-
-    #[test]
-    fn settings_theme_row_saves_choice() {
-        let _guard = crate::settings::TEST_ENV_LOCK
-            .lock()
-            .unwrap_or_else(|error| error.into_inner());
-        let directory =
-            std::env::temp_dir().join(format!("anvil-settings-theme-{}", std::process::id()));
-        let path = directory.join("settings.toml");
-        unsafe { std::env::set_var("ANVIL_SETTINGS", &path) };
-        let mut model = Model::new(crate::EditorState::from_text("x"), None);
-        model.open_settings();
-        for _ in 0..9 {
-            model.move_settings(1);
-        }
-        model.adjust_settings(1);
-        let expected = model
-            .overlays
-            .settings_overlay
-            .as_ref()
-            .expect("overlay")
-            .theme;
-        assert_ne!(expected, theme::Choice::Fixed("anvil-dark"));
-        model.save_settings();
-        assert_eq!(model.config.settings.theme, expected);
-        assert_eq!(
-            settings::load_file_from_path(&path)
-                .expect("settings")
-                .theme,
-            expected
-        );
-        unsafe { std::env::remove_var("ANVIL_SETTINGS") };
-        std::fs::remove_dir_all(directory).expect("cleanup");
-    }
-
-    #[test]
-    fn settings_edits_preserve_active_startup_theme() {
-        theme::set_startup_theme("nord").expect("active theme");
-        let mut model = Model::new(crate::EditorState::from_text("x"), None);
-        model.open_settings();
-        model.adjust_settings(1);
-        assert_eq!(model.config.settings.editor.scroll_margin, 4);
-        assert_eq!(theme::name(), "nord");
-        model.cancel_settings();
-        assert_eq!(theme::name(), "nord");
-        theme::set_startup_theme("anvil-dark").expect("reset theme");
-    }
-
-    #[test]
-    fn theme_row_cycles_builtins_and_resets() {
-        let first = theme::Choice::Fixed("anvil-dark");
-        let next = cycle_theme(first, 1);
-        assert_ne!(next, first);
-        assert_eq!(cycle_theme(next, -1), first);
-        assert_eq!(
-            cycle_theme(
-                theme::Choice::Auto {
-                    dark: "anvil-dark",
-                    light: "solarized-light",
-                },
-                1,
-            ),
-            first
-        );
-        assert_eq!(theme_label(first), "anvil-dark");
-    }
-
-    #[test]
-    fn settings_state_owns_draft_and_theme_actions() {
-        let defaults = Settings::default();
-        let mut state = SettingsOverlayState {
-            selected: 0,
-            original: defaults,
-            draft: defaults,
-            theme: theme::Choice::Fixed("anvil-dark"),
-            opened_theme: theme::Choice::Fixed("anvil-dark"),
-            theme_touched: false,
-        };
-        match state.adjust(1).expect("draft change") {
-            SettingsChange::Apply(settings) => {
-                assert_eq!(
-                    settings.editor.scroll_margin,
-                    defaults.editor.scroll_margin + 1
-                );
-            }
-            SettingsChange::Theme(_) => panic!("expected draft change"),
-        }
-        state.select(9);
-        match state.adjust(1).expect("theme change") {
-            SettingsChange::Theme(choice) => assert_ne!(choice, defaults.theme),
-            SettingsChange::Apply(_) => panic!("expected theme change"),
-        }
-        assert!(state.theme_touched);
-        match state.reset().expect("theme reset") {
-            SettingsChange::Theme(choice) => assert_eq!(choice, defaults.theme),
-            SettingsChange::Apply(_) => panic!("expected theme reset"),
-        }
-    }
-}
+mod tests;
