@@ -9,15 +9,15 @@ fn snapshot_keeps_expansion_missing_from_listing() {
     fs::create_dir(&src).expect("src");
     let mut model = Model::new(EditorState::from_text(""), None);
     model.workspace.path = workspace.clone();
-    model.tree.entries = vec![TreeEntry {
+    model.workspace.tree.entries = vec![TreeEntry {
         path: src.clone(),
         depth: 0,
         is_dir: true,
         ino: 0,
         expanded: true,
     }];
-    model.tree.selected = Some(0);
-    model.tree.refresh_generation = 1;
+    model.workspace.tree.selected = Some(0);
+    model.workspace.tree.refresh_generation = 1;
     model.apply_tree_snapshot(
         1,
         vec![(
@@ -31,6 +31,7 @@ fn snapshot_keeps_expansion_missing_from_listing() {
     );
     assert!(
         model
+            .workspace
             .tree
             .entries
             .iter()
@@ -44,15 +45,15 @@ fn snapshot_follows_external_rename_by_inode() {
     let workspace = dir.path().to_path_buf();
     let mut model = Model::new(EditorState::from_text(""), None);
     model.workspace.path = workspace.clone();
-    model.tree.entries = vec![TreeEntry {
+    model.workspace.tree.entries = vec![TreeEntry {
         path: workspace.join("old.rs"),
         depth: 0,
         is_dir: false,
         ino: 42,
         expanded: false,
     }];
-    model.tree.selected = Some(0);
-    model.tree.refresh_generation = 1;
+    model.workspace.tree.selected = Some(0);
+    model.workspace.tree.refresh_generation = 1;
     model.apply_tree_snapshot(
         1,
         vec![(
@@ -64,8 +65,11 @@ fn snapshot_follows_external_rename_by_inode() {
             }]),
         )],
     );
-    let selected = model.tree.selected.expect("selection");
-    assert_eq!(model.tree.entries[selected].path, workspace.join("new.rs"));
+    let selected = model.workspace.tree.selected.expect("selection");
+    assert_eq!(
+        model.workspace.tree.entries[selected].path,
+        workspace.join("new.rs")
+    );
 }
 
 #[test]
@@ -74,24 +78,24 @@ fn git_status_merges_primary_and_secondary_roots() {
     let primary = dir.path().join("primary.rs");
     let secondary = dir.path().join("secondary.rs");
     let mut model = Model::new(EditorState::from_text(""), None);
-    model.git.status_pending = Some(7);
-    model.git.status_expected = 2;
-    model.git.status_received = 0;
-    model.git.status.clear();
+    model.workspace.git.status_pending = Some(7);
+    model.workspace.git.status_expected = 2;
+    model.workspace.git.status_received = 0;
+    model.workspace.git.status.clear();
 
     model.handle_git_status(
         7,
         Ok(std::collections::HashMap::from([(secondary.clone(), 'M')])),
     );
-    assert_eq!(model.git.status_pending, Some(7));
+    assert_eq!(model.workspace.git.status_pending, Some(7));
 
     model.handle_git_status(
         7,
         Ok(std::collections::HashMap::from([(primary.clone(), 'A')])),
     );
-    assert_eq!(model.git.status_pending, None);
-    assert_eq!(model.git.status.get(&primary), Some(&'A'));
-    assert_eq!(model.git.status.get(&secondary), Some(&'M'));
+    assert_eq!(model.workspace.git.status_pending, None);
+    assert_eq!(model.workspace.git.status.get(&primary), Some(&'A'));
+    assert_eq!(model.workspace.git.status.get(&secondary), Some(&'M'));
 }
 
 #[test]
@@ -109,22 +113,24 @@ fn untrusted_root_cannot_expand() {
     model.workspace.roots.add(&root, false).expect("add root");
     model.open_tree();
     let index = model
+        .workspace
         .tree
         .entries
         .iter()
         .position(|entry| entry.path == root)
         .expect("root node");
-    model.tree.selected = Some(index);
+    model.workspace.tree.selected = Some(index);
     model.tree_toggle();
     assert!(
         !model
+            .workspace
             .tree
             .entries
             .iter()
             .any(|entry| entry.path == root.join("secret.rs"))
     );
     assert!(model.status.text.contains("untrusted workspace root"));
-    let entry = &model.tree.entries[index];
+    let entry = &model.workspace.tree.entries[index];
     assert!(model.tree_entry_untrusted(entry));
     assert!(model.tree_entry_label(entry).contains("[untrusted]"));
 }
@@ -185,15 +191,17 @@ fn primary_refresh_preserves_expanded_secondary_root() {
     model.workspace.roots.add(&root, true).expect("add root");
     model.open_tree();
     let root_index = model
+        .workspace
         .tree
         .entries
         .iter()
         .position(|entry| entry.path == root)
         .expect("root node");
-    model.tree.selected = Some(root_index);
+    model.workspace.tree.selected = Some(root_index);
     model.tree_toggle();
     assert!(
         model
+            .workspace
             .tree
             .entries
             .iter()
@@ -202,9 +210,17 @@ fn primary_refresh_preserves_expanded_secondary_root() {
 
     model.refresh_tree(None);
 
-    assert!(model.tree.entries.iter().any(|entry| entry.path == root));
     assert!(
         model
+            .workspace
+            .tree
+            .entries
+            .iter()
+            .any(|entry| entry.path == root)
+    );
+    assert!(
+        model
+            .workspace
             .tree
             .entries
             .iter()
@@ -212,6 +228,7 @@ fn primary_refresh_preserves_expanded_secondary_root() {
     );
     assert!(
         model
+            .workspace
             .tree
             .entries
             .iter()
@@ -240,7 +257,7 @@ fn secondary_refresh_preserves_pending_selection() {
         .roots
         .add(&secondary, true)
         .expect("secondary");
-    model.tree.entries = vec![
+    model.workspace.tree.entries = vec![
         TreeEntry {
             path: secondary.clone(),
             depth: 0,
@@ -256,12 +273,12 @@ fn secondary_refresh_preserves_pending_selection() {
             expanded: true,
         },
     ];
-    model.tree.pending_select = Some(target.clone());
+    model.workspace.tree.pending_select = Some(target.clone());
 
     model.refresh_root_tree(&secondary);
 
-    let selected = model.tree.selected.expect("selection");
-    assert_eq!(model.tree.entries[selected].path, target);
+    let selected = model.workspace.tree.selected.expect("selection");
+    assert_eq!(model.workspace.tree.entries[selected].path, target);
 }
 
 #[test]
@@ -270,7 +287,7 @@ fn tree_watch_cap_is_reported() {
     let mut model = Model::new(EditorState::from_text(""), None);
     model.workspace.path = dir.path().to_path_buf();
     let workspace = model.workspace.path.clone();
-    model.tree.entries = (0..MAX_TREE_WATCH_DIRS + 1)
+    model.workspace.tree.entries = (0..MAX_TREE_WATCH_DIRS + 1)
         .map(|index| TreeEntry {
             path: workspace.join(format!("d{index}")),
             depth: 0,
@@ -280,6 +297,6 @@ fn tree_watch_cap_is_reported() {
         })
         .collect();
     model.sync_tree_watches();
-    assert!(model.tree.watch_limited);
+    assert!(model.workspace.tree.watch_limited);
     assert!(model.status.text.contains("watch limit"));
 }

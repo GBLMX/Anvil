@@ -121,7 +121,7 @@ pub(super) fn execute_file_tree_action(model: &mut Model, action: FileTreeAction
         FileTreeAction::PendingLeader => model.begin_pending(' '),
         FileTreeAction::Cancel => {
             model.ui.focus.tree = false;
-            model.tree.visible = false;
+            model.workspace.tree.visible = false;
             model.refresh_wrap_width();
             model.file.dirty = true;
         }

@@ -524,6 +524,10 @@ pub(crate) struct WorkspaceState {
     pub(crate) roots: workspace_roots::WorkspaceRoots,
     /// Recent workspaces, files, and quick-open ranking.
     pub(crate) recent: RecentState,
+    /// Workspace tree view and refresh state.
+    pub(crate) tree: TreeState,
+    /// Git workspace, request, and view state.
+    pub(crate) git: GitState,
     /// Gateway client used for file I/O when present.
     pub(crate) gateway: Option<GatewayClient>,
     /// Owning child/socket for the current gateway client.

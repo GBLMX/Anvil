@@ -10,7 +10,7 @@ impl Model {
         }
         let directory = self.tree_target_directory();
         self.ui.focus.tree = false;
-        self.tree.visible = true;
+        self.workspace.tree.visible = true;
         self.ui.input_mode = InputMode::Create {
             directory,
             name: String::new(),
@@ -23,10 +23,10 @@ impl Model {
         if self.tree_busy() {
             return;
         }
-        let Some(index) = self.tree.selected else {
+        let Some(index) = self.workspace.tree.selected else {
             return;
         };
-        let Some(entry) = self.tree.entries.get(index) else {
+        let Some(entry) = self.workspace.tree.entries.get(index) else {
             return;
         };
         let Some(name) = entry.path.file_name().and_then(|name| name.to_str()) else {
@@ -46,10 +46,10 @@ impl Model {
         if self.tree_busy() {
             return;
         }
-        let Some(index) = self.tree.selected else {
+        let Some(index) = self.workspace.tree.selected else {
             return;
         };
-        let Some(entry) = self.tree.entries.get(index) else {
+        let Some(entry) = self.workspace.tree.entries.get(index) else {
             return;
         };
         if self.path_is_open(&entry.path) {
@@ -68,10 +68,10 @@ impl Model {
         if self.tree_busy() {
             return;
         }
-        let Some(index) = self.tree.selected else {
+        let Some(index) = self.workspace.tree.selected else {
             return;
         };
-        let Some(entry) = self.tree.entries.get(index) else {
+        let Some(entry) = self.workspace.tree.entries.get(index) else {
             return;
         };
         if copy && entry.is_dir {

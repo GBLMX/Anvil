@@ -419,8 +419,8 @@ impl Model {
                 self.file.stdin_buffer = false;
                 self.file.modified = false;
                 self.file.missing = false;
-                self.git.diff_checked = None;
-                self.git.diff_due = Some(Instant::now());
+                self.workspace.git.diff_checked = None;
+                self.workspace.git.diff_due = Some(Instant::now());
                 self.sync_lsp_active();
                 self.notify_lsp_save(&path, &text);
                 self.sync_watch_paths();

@@ -6,7 +6,7 @@ use crate::layout::tree_fits;
 use crate::theme;
 
 pub(crate) fn render_tree(model: &Model, frame: &mut Frame, area: Rect) -> Option<Rect> {
-    if !model.tree.visible || !tree_fits(area.width) {
+    if !model.workspace.tree.visible || !tree_fits(area.width) {
         return None;
     }
     let sidebar_width = model.sidebar_width(area.width);
@@ -26,12 +26,14 @@ pub(crate) fn render_tree(model: &Model, frame: &mut Frame, area: Rect) -> Optio
     let mut lines = Vec::new();
     let visible_height = list_area.height as usize;
     let start = model
+        .workspace
         .tree
         .selected
         .unwrap_or(0)
         .saturating_sub(visible_height.saturating_sub(1));
     let ascii_icons = model.appearance.ascii_icons;
     for (index, entry) in model
+        .workspace
         .tree
         .entries
         .iter()
@@ -57,7 +59,7 @@ pub(crate) fn render_tree(model: &Model, frame: &mut Frame, area: Rect) -> Optio
         } else {
             ""
         };
-        let style = if model.tree.selected == Some(index) {
+        let style = if model.workspace.tree.selected == Some(index) {
             theme::selected()
         } else if untrusted {
             theme::panel().fg(theme::dim())
@@ -93,9 +95,9 @@ pub(crate) fn render_tree(model: &Model, frame: &mut Frame, area: Rect) -> Optio
             ));
         }
         let git_marker = if entry.is_dir {
-            tree_rollup_git(model, &model.tree.entries, index)
+            tree_rollup_git(model, &model.workspace.tree.entries, index)
         } else {
-            model.git.status.get(&entry.path).copied()
+            model.workspace.git.status.get(&entry.path).copied()
         };
         if let Some(marker) = git_marker {
             let color = match marker {
@@ -111,7 +113,7 @@ pub(crate) fn render_tree(model: &Model, frame: &mut Frame, area: Rect) -> Optio
             ));
         }
         let diagnostic_severity = if entry.is_dir {
-            tree_rollup_diagnostic(model, &model.tree.entries, index)
+            tree_rollup_diagnostic(model, &model.workspace.tree.entries, index)
         } else {
             model
                 .language
@@ -141,11 +143,11 @@ pub(crate) fn render_tree(model: &Model, frame: &mut Frame, area: Rect) -> Optio
     if lines.is_empty() {
         lines.push(Line::styled("empty", theme::panel().fg(theme::muted())));
     }
-    let tree_title = if model.tree.stale {
+    let tree_title = if model.workspace.tree.stale {
         "Files · stale"
-    } else if model.tree.watch_limited {
+    } else if model.workspace.tree.watch_limited {
         "Files · watch limit"
-    } else if model.tree.show_hidden {
+    } else if model.workspace.tree.show_hidden {
         "Files · hidden"
     } else {
         "Files"
@@ -176,7 +178,7 @@ fn tree_rollup_git(model: &Model, entries: &[TreeEntry], index: usize) -> Option
         if child.depth <= depth {
             break;
         }
-        if let Some(next) = model.git.status.get(&child.path)
+        if let Some(next) = model.workspace.git.status.get(&child.path)
             && git_priority(*next) > marker.map_or(0, git_priority)
         {
             marker = Some(*next);

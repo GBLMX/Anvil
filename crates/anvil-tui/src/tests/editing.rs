@@ -516,7 +516,7 @@ fn conflict_resolution_guards_local_state() {
     model.file.modified = true;
     model.resolve_git_conflict(2, false);
     assert!(model.status.text.contains("buffer is modified"));
-    assert!(model.git.resolve_pending.is_none());
+    assert!(model.workspace.git.resolve_pending.is_none());
 
     model.file.modified = false;
     model.show_read_only("body", "status", "title");
@@ -524,10 +524,10 @@ fn conflict_resolution_guards_local_state() {
     assert!(model.status.text.contains("read-only view"));
     assert!(model.close_help());
 
-    model.git.resolve_pending = Some(77);
+    model.workspace.git.resolve_pending = Some(77);
     model.resolve_git_conflict(2, false);
     assert!(model.status.text.contains("already in progress"));
-    assert_eq!(model.git.resolve_pending, Some(77));
+    assert_eq!(model.workspace.git.resolve_pending, Some(77));
 }
 
 #[test]

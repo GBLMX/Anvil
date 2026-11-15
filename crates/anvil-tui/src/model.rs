@@ -59,9 +59,6 @@ impl Model {
                 ..Default::default()
             },
             language: LanguageState::default(),
-            git: GitState::default(),
-
-            tree: TreeState::default(),
             overlays: OverlayState::default(),
             appearance: AppearanceState {
                 ascii_icons: icon_theme::ascii_mode(),
@@ -243,10 +240,10 @@ impl Model {
     }
 
     pub(crate) fn clear_git_gutter(&mut self) {
-        self.git.marks.clear();
-        self.git.diff_request = None;
-        self.git.diff_checked = None;
-        self.git.diff_due = None;
+        self.workspace.git.marks.clear();
+        self.workspace.git.diff_request = None;
+        self.workspace.git.diff_checked = None;
+        self.workspace.git.diff_due = None;
     }
 
     pub fn poll_syntax(&mut self) {

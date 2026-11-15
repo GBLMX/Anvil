@@ -97,16 +97,18 @@ impl Model {
                     drop(client);
                     session.shutdown_gracefully(std::time::Duration::from_millis(250));
                 }
-                self.tree
+                self.workspace
+                    .tree
                     .entries
                     .retain(|entry| !entry.path.starts_with(&canonical));
-                self.tree.pending_select = None;
+                self.workspace.tree.pending_select = None;
                 if self
+                    .workspace
                     .tree
                     .selected
-                    .is_some_and(|selected| selected >= self.tree.entries.len())
+                    .is_some_and(|selected| selected >= self.workspace.tree.entries.len())
                 {
-                    self.tree.selected = self.tree.entries.len().checked_sub(1);
+                    self.workspace.tree.selected = self.workspace.tree.entries.len().checked_sub(1);
                 }
                 if self
                     .overlays
@@ -123,7 +125,8 @@ impl Model {
                         .retain(|entry| !Path::new(entry).starts_with(&canonical));
                 }
                 self.fuzzy_refresh();
-                self.git
+                self.workspace
+                    .git
                     .status
                     .retain(|path, _| !path.starts_with(&canonical));
                 self.status.text = format!("workspace root removed: {}", canonical.display());
@@ -206,7 +209,7 @@ mod trust_tests {
             .expect("add root");
         let kept = model.workspace.path.join("keep.rs");
         let dropped = secondary.join("drop.rs");
-        model.tree.entries = vec![
+        model.workspace.tree.entries = vec![
             TreeEntry {
                 path: kept.clone(),
                 depth: 0,
@@ -222,7 +225,7 @@ mod trust_tests {
                 expanded: false,
             },
         ];
-        model.tree.selected = Some(1);
+        model.workspace.tree.selected = Some(1);
         model.overlays.fuzzy = Some(FuzzyState {
             generation: 1,
             query: String::new(),
@@ -231,7 +234,7 @@ mod trust_tests {
             selected: 0,
         });
         model.overlays.preview.path = Some(dropped.to_string_lossy().into_owned());
-        model.git.status.insert(dropped.clone(), 'M');
+        model.workspace.git.status.insert(dropped.clone(), 'M');
 
         model.remove_workspace_root(secondary.to_str().expect("utf8"));
 
@@ -243,8 +246,15 @@ mod trust_tests {
                 .iter()
                 .any(|root| root.path == secondary)
         );
-        assert!(model.tree.entries.iter().all(|entry| entry.path == kept));
-        assert_eq!(model.tree.selected, Some(0));
+        assert!(
+            model
+                .workspace
+                .tree
+                .entries
+                .iter()
+                .all(|entry| entry.path == kept)
+        );
+        assert_eq!(model.workspace.tree.selected, Some(0));
         assert!(
             model
                 .overlays
@@ -253,6 +263,6 @@ mod trust_tests {
                 .is_none_or(|fuzzy| fuzzy.entries.is_empty())
         );
         assert!(model.overlays.preview.path.is_none());
-        assert!(model.git.status.is_empty());
+        assert!(model.workspace.git.status.is_empty());
     }
 }

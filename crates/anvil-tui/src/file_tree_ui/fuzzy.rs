@@ -155,14 +155,14 @@ impl Model {
         if self.ensure_file_worker() {
             if let Some(worker) = self.workspace.file_worker.as_ref() {
                 let _ = worker.request(FileRequest::Files {
-                    hidden: self.tree.show_hidden,
+                    hidden: self.workspace.tree.show_hidden,
                     generation,
                     cancel: cancel.clone(),
                 });
             }
             for worker in self.workspace.root_file_workers.values() {
                 let _ = worker.request(FileRequest::Files {
-                    hidden: self.tree.show_hidden,
+                    hidden: self.workspace.tree.show_hidden,
                     generation,
                     cancel: cancel.clone(),
                 });

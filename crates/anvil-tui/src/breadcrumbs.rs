@@ -64,21 +64,22 @@ impl Model {
         let Some(path) = self.session.path.clone() else {
             return;
         };
-        if !self.tree.visible {
+        if !self.workspace.tree.visible {
             self.open_tree();
         } else {
             self.ui.focus.tree = true;
             self.ui.focus.split = false;
         }
         if let Some(index) = self
+            .workspace
             .tree
             .entries
             .iter()
             .position(|entry| entry.path == path)
         {
-            self.tree.selected = Some(index);
+            self.workspace.tree.selected = Some(index);
         } else {
-            self.tree.pending_select = Some(path);
+            self.workspace.tree.pending_select = Some(path);
         }
         self.status.text = "breadcrumb path".to_owned();
         self.file.dirty = true;

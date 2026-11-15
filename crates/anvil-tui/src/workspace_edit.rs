@@ -399,7 +399,7 @@ impl WorkspaceEdit {
             .iter()
             .any(|operation| !matches!(operation, Operation::Text { .. }))
         {
-            model.tree.stale = true;
+            model.workspace.tree.stale = true;
             model.sync_watch_paths();
             model.file.dirty = true;
         }

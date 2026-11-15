@@ -213,8 +213,8 @@ impl Model {
                     .highlights
                     .borrow_mut()
                     .switch_path(self.session.path.as_deref(), false);
-                self.git.diff_checked = None;
-                self.git.diff_due = Some(Instant::now());
+                self.workspace.git.diff_checked = None;
+                self.workspace.git.diff_due = Some(Instant::now());
                 self.sync_lsp_active();
                 self.status.text = "remote edit: set".to_owned();
             }
@@ -276,8 +276,8 @@ impl Model {
                     .highlights
                     .borrow_mut()
                     .switch_path(self.session.path.as_deref(), false);
-                self.git.diff_checked = None;
-                self.git.diff_due = Some(Instant::now());
+                self.workspace.git.diff_checked = None;
+                self.workspace.git.diff_due = Some(Instant::now());
                 self.sync_lsp_active();
                 self.status.text = "remote edit: replace".to_owned();
             }

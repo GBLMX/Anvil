@@ -34,7 +34,7 @@ impl Model {
         if self.buffers.split.is_none() {
             if right {
                 self.focus_editor();
-            } else if self.tree.visible {
+            } else if self.workspace.tree.visible {
                 self.ui.focus.tree = true;
                 self.ui.focus.split = false;
                 self.file.dirty = true;

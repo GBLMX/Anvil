@@ -49,11 +49,13 @@ fn secondary_root_tree_lists_and_opens_through_owning_gateway() {
     model.open_tree();
     wait_until(&mut model, |model| {
         model
+            .workspace
             .tree
             .entries
             .iter()
             .any(|entry| entry.path == primary_root.join("main.rs"))
             && model
+                .workspace
                 .tree
                 .entries
                 .iter()
@@ -61,15 +63,17 @@ fn secondary_root_tree_lists_and_opens_through_owning_gateway() {
     });
 
     let index = model
+        .workspace
         .tree
         .entries
         .iter()
         .position(|entry| entry.path == secondary_root)
         .expect("secondary root node");
-    model.tree.selected = Some(index);
+    model.workspace.tree.selected = Some(index);
     model.tree_toggle();
     wait_until(&mut model, |model| {
         model
+            .workspace
             .tree
             .entries
             .iter()

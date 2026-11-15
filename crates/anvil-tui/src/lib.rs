@@ -183,10 +183,6 @@ pub struct Model {
     workspace: WorkspaceState,
     /// Language services and debugger runtime.
     language: LanguageState,
-    /// Git workspace, request, and view state.
-    git: GitState,
-    /// Workspace tree view and refresh state.
-    tree: TreeState,
     overlays: OverlayState,
     /// Icon and theme persistence state.
     appearance: AppearanceState,

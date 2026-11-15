@@ -139,6 +139,7 @@ fn tree_visibility_toggles_hidden_directories() {
     model.open_tree();
     assert!(
         model
+            .workspace
             .tree
             .entries
             .iter()
@@ -146,6 +147,7 @@ fn tree_visibility_toggles_hidden_directories() {
     );
     assert!(
         !model
+            .workspace
             .tree
             .entries
             .iter()
@@ -154,6 +156,7 @@ fn tree_visibility_toggles_hidden_directories() {
     model.toggle_hidden();
     assert!(
         model
+            .workspace
             .tree
             .entries
             .iter()
@@ -292,7 +295,7 @@ fn tree_shows_modified_and_diagnostic_markers() {
         .diagnostics
         .by_path
         .insert(path.clone(), vec![diagnostic(0, 0, "broken")]);
-    model.git.status.insert(path.clone(), 'M');
+    model.workspace.git.status.insert(path.clone(), 'M');
 
     let backend = TestBackend::new(80, 12);
     let mut terminal = Terminal::new(backend).expect("terminal");
@@ -363,15 +366,15 @@ fn tree_header_keeps_status_states_and_focus_style() {
             .map(|cell| cell.symbol())
             .collect::<String>()
     };
-    model.tree.stale = true;
+    model.workspace.tree.stale = true;
     assert!(render(&model).contains("Files · stale"));
-    model.tree.stale = false;
-    model.tree.watch_limited = true;
+    model.workspace.tree.stale = false;
+    model.workspace.tree.watch_limited = true;
     assert!(render(&model).contains("Files · watch"));
-    model.tree.watch_limited = false;
-    model.tree.show_hidden = true;
+    model.workspace.tree.watch_limited = false;
+    model.workspace.tree.show_hidden = true;
     assert!(render(&model).contains("Files · hidden"));
-    model.tree.show_hidden = false;
+    model.workspace.tree.show_hidden = false;
     let rendered = render(&model);
     assert!(rendered.contains("Files"));
     assert!(!rendered.contains("┏ Files"), "{rendered}");
@@ -387,7 +390,7 @@ fn tree_selection_scrolls_into_view() {
     model.workspace.path = dir.path().to_path_buf();
     model.start_page.welcome = false;
     model.open_tree();
-    model.tree.selected = Some(19);
+    model.workspace.tree.selected = Some(19);
 
     let backend = TestBackend::new(80, 12);
     let mut terminal = Terminal::new(backend).expect("terminal");
@@ -790,8 +793,8 @@ fn tree_rolls_up_child_git_and_diagnostics_to_directory() {
     let file = directory.join("main.rs");
     let mut model = Model::new(EditorState::from_text(""), None);
     model.start_page.welcome = false;
-    model.tree.visible = true;
-    model.tree.entries = vec![
+    model.workspace.tree.visible = true;
+    model.workspace.tree.entries = vec![
         TreeEntry {
             path: directory.clone(),
             depth: 0,
@@ -807,8 +810,8 @@ fn tree_rolls_up_child_git_and_diagnostics_to_directory() {
             expanded: false,
         },
     ];
-    model.tree.selected = Some(0);
-    model.git.status.insert(file.clone(), 'M');
+    model.workspace.tree.selected = Some(0);
+    model.workspace.git.status.insert(file.clone(), 'M');
     model
         .language
         .diagnostics
@@ -932,12 +935,13 @@ fn breadcrumb_row_routes_path_clicks() {
         modifiers: crossterm::event::KeyModifiers::NONE,
     };
     assert!(crate::mouse::handle_mouse(&mut model, click, 80, 24));
-    assert!(model.tree.visible);
+    assert!(model.workspace.tree.visible);
     assert_eq!(
         model
+            .workspace
             .tree
             .entries
-            .get(model.tree.selected.unwrap_or(0))
+            .get(model.workspace.tree.selected.unwrap_or(0))
             .map(|entry| &entry.path),
         Some(&path)
     );

@@ -43,7 +43,9 @@ impl Model {
         ) {
             self.file.dirty = true;
         }
-        if let std::collections::btree_map::Entry::Vacant(entry) = self.git.branches.entry(root) {
+        if let std::collections::btree_map::Entry::Vacant(entry) =
+            self.workspace.git.branches.entry(root)
+        {
             let branch = detect_git_branch(entry.key());
             entry.insert(branch);
             self.file.dirty = true;
@@ -233,6 +235,7 @@ impl Model {
             ));
         }
         if let Some(branch) = self
+            .workspace
             .git
             .branches
             .get(&self.branch_root())
@@ -597,10 +600,12 @@ mod tests {
             .expect("secondary root");
         model.session.path = Some(secondary_root.join("main.rs"));
         model
+            .workspace
             .git
             .branches
             .insert(primary_root, Some("primary-branch".to_owned()));
         model
+            .workspace
             .git
             .branches
             .insert(secondary_root, Some("secondary-branch".to_owned()));

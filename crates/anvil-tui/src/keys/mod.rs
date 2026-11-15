@@ -488,7 +488,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
         } => match key.code {
             KeyCode::Esc => {
                 model.ui.input_mode = InputMode::Normal;
-                model.ui.focus.tree = model.tree.visible;
+                model.ui.focus.tree = model.workspace.tree.visible;
                 model.file.dirty = true;
             }
             KeyCode::Enter => {
@@ -515,7 +515,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
         InputMode::RenameEntry { path, name } => match key.code {
             KeyCode::Esc => {
                 model.ui.input_mode = InputMode::Normal;
-                model.ui.focus.tree = model.tree.visible;
+                model.ui.focus.tree = model.workspace.tree.visible;
                 model.file.dirty = true;
             }
             KeyCode::Enter => {
@@ -541,7 +541,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
         } => match key.code {
             KeyCode::Esc => {
                 model.ui.input_mode = InputMode::Normal;
-                model.ui.focus.tree = model.tree.visible;
+                model.ui.focus.tree = model.workspace.tree.visible;
                 model.status.text = "transfer cancelled".to_owned();
                 model.file.dirty = true;
             }
@@ -604,7 +604,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             }
             KeyCode::Esc | KeyCode::Char('n') | KeyCode::Char('N') => {
                 model.ui.input_mode = InputMode::Normal;
-                model.ui.focus.tree = model.tree.visible;
+                model.ui.focus.tree = model.workspace.tree.visible;
                 model.status.text = "delete cancelled".to_owned();
                 model.file.dirty = true;
             }

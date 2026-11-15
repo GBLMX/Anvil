@@ -87,14 +87,14 @@ impl Model {
             .lsp_requests
             .versions
             .retain(|path, _| path != from && !path.starts_with(from));
-        self.git.diff_checked = None;
-        self.git.marks.clear();
+        self.workspace.git.diff_checked = None;
+        self.workspace.git.marks.clear();
         self.clear_lsp_ui();
         self.syntax_cache
             .highlights
             .borrow_mut()
             .switch_path(self.session.path.as_deref(), true);
-        self.tree.stale = true;
+        self.workspace.tree.stale = true;
         self.sync_watch_paths();
         self.file.dirty = true;
     }
@@ -126,7 +126,7 @@ impl Model {
         self.buffers
             .background
             .retain(|path, _| !affected(Some(path)));
-        self.tree.stale = true;
+        self.workspace.tree.stale = true;
         self.sync_watch_paths();
         self.file.dirty = true;
     }

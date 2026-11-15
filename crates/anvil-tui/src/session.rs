@@ -88,8 +88,8 @@ pub(crate) fn restore(model: &mut Model, workspace: &Path) -> Result<bool, Strin
         .active
         .min(model.buffers.entries.len().saturating_sub(1));
     model.view.split_ratio = state.split_ratio.min(100);
-    model.tree.visible = state.tree_visible;
-    model.tree.show_hidden = state.show_hidden;
+    model.workspace.tree.visible = state.tree_visible;
+    model.workspace.tree.show_hidden = state.show_hidden;
     let index = model.buffers.active;
     model.load_buffer(index);
     model.overlays.lsp_results.folded = state.folded.into_iter().collect();
@@ -355,8 +355,8 @@ pub(crate) fn save(model: &mut Model, workspace: &Path) -> Result<(), String> {
         split,
         split_focus: model.ui.focus.split,
         split_ratio: model.view.split_ratio,
-        tree_visible: model.tree.visible,
-        show_hidden: model.tree.show_hidden,
+        tree_visible: model.workspace.tree.visible,
+        show_hidden: model.workspace.tree.show_hidden,
         folded: model.overlays.lsp_results.folded.iter().copied().collect(),
     };
     let data = serde_json::to_vec(&state).map_err(|error| error.to_string())?;

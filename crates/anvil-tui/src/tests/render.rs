@@ -303,7 +303,7 @@ fn tree_visible_drag_keeps_editor_origin() {
     let mut model = Model::new(EditorState::from_text("abc\ndef"), None);
     model.view.viewport_width = 80;
     model.view.viewport_height = 12;
-    model.tree.visible = true;
+    model.workspace.tree.visible = true;
     let press = crossterm::event::MouseEvent {
         kind: crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left),
         column: 20,
@@ -327,7 +327,7 @@ fn tree_visible_split_resize_uses_editor_width() {
     let mut model = Model::new(EditorState::from_text("abc"), None);
     model.view.viewport_width = 80;
     model.view.viewport_height = 12;
-    model.tree.visible = true;
+    model.workspace.tree.visible = true;
     model.split_vertical();
     let press = crossterm::event::MouseEvent {
         kind: crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left),
@@ -403,7 +403,7 @@ fn long_line_render_stays_bounded() {
 #[test]
 fn hit_test_extreme_dimensions_do_not_overflow() {
     let mut model = Model::new(EditorState::from_text("abc"), None);
-    model.tree.visible = true;
+    model.workspace.tree.visible = true;
     model.split_vertical();
     for (width, height) in [(0, 0), (1, 1), (2, 2), (u16::MAX, u16::MAX)] {
         let _ = mouse_hit_boundary(&model, 0, 0, width, height);

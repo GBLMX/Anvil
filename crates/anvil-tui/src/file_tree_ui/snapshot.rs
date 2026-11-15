@@ -2,7 +2,8 @@ use super::*;
 
 impl Model {
     pub(super) fn expanded_tree_paths(&self) -> BTreeSet<PathBuf> {
-        self.tree
+        self.workspace
+            .tree
             .entries
             .iter()
             .filter(|entry| entry.is_dir && entry.expanded)
@@ -48,13 +49,13 @@ impl Model {
                 limited = true;
             }
         }
-        if limited && !self.tree.watch_limited {
+        if limited && !self.workspace.tree.watch_limited {
             self.status.text =
                 format!("tree watch limit reached ({MAX_TREE_WATCH_DIRS}); auto-refresh limited");
         }
-        self.tree.watch_limited = limited;
+        self.workspace.tree.watch_limited = limited;
         if !self.ensure_file_worker() {
-            self.tree.stale = true;
+            self.workspace.tree.stale = true;
             return;
         }
         let mut sent = 0usize;
@@ -76,15 +77,15 @@ impl Model {
                 sent += 1;
             }
         }
-        self.tree.stale = sent < expected;
+        self.workspace.tree.stale = sent < expected;
     }
 
     pub(super) fn request_tree_refresh(&mut self, select: Option<PathBuf>) {
         if select.is_some() {
-            self.tree.pending_select = select;
+            self.workspace.tree.pending_select = select;
         }
-        if self.tree.refresh_in_flight {
-            self.tree.refresh_queued = true;
+        if self.workspace.tree.refresh_in_flight {
+            self.workspace.tree.refresh_queued = true;
             return;
         }
         let expanded = self
@@ -93,8 +94,9 @@ impl Model {
             .filter(|path| path.starts_with(&self.workspace.path))
             .collect();
         if self.ensure_file_worker() {
-            self.tree.refresh_generation = self.tree.refresh_generation.wrapping_add(1);
-            let generation = self.tree.refresh_generation;
+            self.workspace.tree.refresh_generation =
+                self.workspace.tree.refresh_generation.wrapping_add(1);
+            let generation = self.workspace.tree.refresh_generation;
             let request = FileRequest::TreeSnapshot {
                 generation,
                 root: self.workspace.path.clone(),
@@ -105,8 +107,8 @@ impl Model {
                 .file_worker
                 .as_ref()
                 .is_some_and(|worker| worker.request(request).is_ok());
-            self.tree.refresh_in_flight = sent;
-            self.tree.stale = !sent;
+            self.workspace.tree.refresh_in_flight = sent;
+            self.workspace.tree.stale = !sent;
             return;
         }
         self.rebuild_tree_from_disk();
@@ -130,8 +132,9 @@ impl Model {
                 listings.push((path, Ok(entries)));
             }
         }
-        self.tree.refresh_generation = self.tree.refresh_generation.wrapping_add(1);
-        let generation = self.tree.refresh_generation;
+        self.workspace.tree.refresh_generation =
+            self.workspace.tree.refresh_generation.wrapping_add(1);
+        let generation = self.workspace.tree.refresh_generation;
         self.apply_tree_snapshot(generation, listings);
     }
 
@@ -148,7 +151,7 @@ impl Model {
         };
         let mut needs_listing = false;
         for entry in entries {
-            if !self.tree.entry_visible(&entry.name, entry.is_dir) {
+            if !self.workspace.tree.entry_visible(&entry.name, entry.is_dir) {
                 continue;
             }
             let path = directory.join(&entry.name);
@@ -208,35 +211,37 @@ impl Model {
         generation: u64,
         listings: Vec<(PathBuf, Result<Vec<DirEntry>, String>)>,
     ) {
-        if generation != self.tree.refresh_generation {
+        if generation != self.workspace.tree.refresh_generation {
             return;
         }
-        self.tree.refresh_in_flight = false;
+        self.workspace.tree.refresh_in_flight = false;
         let previous = self
+            .workspace
             .tree
             .selected
-            .and_then(|index| self.tree.entries.get(index));
+            .and_then(|index| self.workspace.tree.entries.get(index));
         let previous_path = previous.map(|entry| entry.path.clone());
         let previous_ino = previous.map(|entry| entry.ino).filter(|ino| *ino != 0);
-        let previous_index = self.tree.selected;
+        let previous_index = self.workspace.tree.selected;
         let expanded = self.expanded_tree_paths();
         let listings: BTreeMap<_, _> = listings.into_iter().collect();
         match listings.get(&self.workspace.path) {
             None => {
                 self.status.text = "E: tree: missing root listing".to_owned();
-                self.tree.stale = true;
+                self.workspace.tree.stale = true;
                 self.finish_tree_refresh();
                 return;
             }
             Some(Err(error)) => {
                 self.status.text = format!("E: tree: {error}");
-                self.tree.stale = true;
+                self.workspace.tree.stale = true;
                 self.finish_tree_refresh();
                 return;
             }
             Some(Ok(_)) => {}
         }
         let preserved = self
+            .workspace
             .tree
             .entries
             .iter()
@@ -247,18 +252,18 @@ impl Model {
         let needs_listing =
             self.build_tree_entries(&self.workspace.path, 0, &listings, &expanded, &mut tree);
         tree.extend(preserved);
-        let target = self.tree.pending_select.take().or(previous_path);
-        self.tree.entries = tree;
+        let target = self.workspace.tree.pending_select.take().or(previous_path);
+        self.workspace.tree.entries = tree;
         self.ensure_root_tree_nodes();
-        self.tree.selected = Self::select_tree_path(
-            &self.tree.entries,
+        self.workspace.tree.selected = Self::select_tree_path(
+            &self.workspace.tree.entries,
             target.as_deref(),
             previous_index,
             previous_ino,
         );
-        self.tree.stale = false;
+        self.workspace.tree.stale = false;
         if needs_listing {
-            self.tree.refresh_queued = true;
+            self.workspace.tree.refresh_queued = true;
         }
         self.sync_tree_watches();
         self.request_git_status();
@@ -266,20 +271,20 @@ impl Model {
     }
 
     pub(super) fn finish_tree_refresh(&mut self) {
-        if self.tree.refresh_queued {
-            self.tree.refresh_queued = false;
+        if self.workspace.tree.refresh_queued {
+            self.workspace.tree.refresh_queued = false;
             self.refresh_tree_background();
         }
     }
 
     pub(crate) fn refresh_tree(&mut self, select: Option<PathBuf>) {
-        self.tree.visible = true;
+        self.workspace.tree.visible = true;
         self.ui.focus.tree = true;
         self.refresh_wrap_width();
         let refresh_all = select.is_none();
         let secondary = select.as_deref().and_then(|path| self.secondary_root(path));
         if let Some(root) = secondary {
-            self.tree.pending_select = select;
+            self.workspace.tree.pending_select = select;
             self.refresh_root_tree(&root);
         } else {
             self.request_tree_refresh(select);

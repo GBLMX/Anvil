@@ -316,7 +316,7 @@ pub(crate) fn render_overlays(model: &Model, frame: &mut Frame, area: Rect) {
             Paragraph::new(lines)
                 .style(theme::panel())
                 .block(crate::render::focused_panel_block(
-                    if model.tree.show_hidden {
+                    if model.workspace.tree.show_hidden {
                         "Files · hidden"
                     } else {
                         "Files"

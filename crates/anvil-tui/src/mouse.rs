@@ -91,8 +91,8 @@ pub(crate) fn handle_mouse(model: &mut Model, mouse: MouseEvent, width: u16, hei
                 Target::Tree(index) => {
                     model.ui.focus.tree = true;
                     model.ui.focus.split = false;
-                    if index < model.tree.entries.len() {
-                        model.tree.selected = Some(index);
+                    if index < model.workspace.tree.entries.len() {
+                        model.workspace.tree.selected = Some(index);
                     }
                     model.file.dirty = true;
                 }
@@ -241,7 +241,7 @@ pub(crate) fn hit_test(model: &Model, col: u16, row: u16, width: u16, height: u1
         return Target::Tabs(tab_at(model, col.saturating_sub(inner.x), inner.width));
     }
     let mut editor_inner = inner;
-    if model.tree.visible && tree_fits(editor_inner.width) {
+    if model.workspace.tree.visible && tree_fits(editor_inner.width) {
         let sidebar = model.sidebar_width(editor_inner.width);
         if col < editor_inner.x.saturating_add(sidebar) {
             if row == editor_inner.y {
@@ -249,6 +249,7 @@ pub(crate) fn hit_test(model: &Model, col: u16, row: u16, width: u16, height: u1
             }
             let visible = editor_inner.height.saturating_sub(1) as usize;
             let start = model
+                .workspace
                 .tree
                 .selected
                 .unwrap_or(0)
@@ -336,7 +337,7 @@ fn content_rect(model: &Model, width: u16, height: u16) -> Option<ContentRects> 
 
 fn editor_area(model: &Model, width: u16, height: u16) -> Option<Rect> {
     let (mut inner, _, _, _) = content_rect(model, width, height)?;
-    if model.tree.visible && tree_fits(inner.width) {
+    if model.workspace.tree.visible && tree_fits(inner.width) {
         let sidebar = model.sidebar_width(inner.width);
         inner.x = inner.x.saturating_add(sidebar);
         inner.width = inner.width.saturating_sub(sidebar);

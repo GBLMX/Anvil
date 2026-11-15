@@ -65,7 +65,7 @@ impl GitDiffView {
 impl Model {
     pub(crate) fn request_git_diff(&mut self, staged: bool) {
         if self.pager.back.is_some() {
-            if let Some(view) = self.git.diff_view.as_ref() {
+            if let Some(view) = self.workspace.git.diff_view.as_ref() {
                 let path = view.path.clone();
                 let relative = view.relative.clone();
                 self.request_diff(path, relative, staged);
@@ -97,9 +97,9 @@ impl Model {
             self.file.dirty = true;
             return;
         }
-        self.git.diff_path = Some(path.clone());
-        self.git.diff_generation = self.git.diff_generation.wrapping_add(1);
-        let generation = self.git.diff_generation;
+        self.workspace.git.diff_path = Some(path.clone());
+        self.workspace.git.diff_generation = self.workspace.git.diff_generation.wrapping_add(1);
+        let generation = self.workspace.git.diff_generation;
         let Some(worker) = self.file_worker_for_path(&path) else {
             self.status.text = "E: file worker unavailable".to_owned();
             self.file.dirty = true;
@@ -114,7 +114,7 @@ impl Model {
             self.file.dirty = true;
             return;
         }
-        self.git.diff_pending = Some(generation);
+        self.workspace.git.diff_pending = Some(generation);
         self.status.text = if staged {
             "loading staged git diff...".to_owned()
         } else {
@@ -130,19 +130,20 @@ impl Model {
         generation: u64,
         result: Result<(String, bool), String>,
     ) {
-        if self.git.diff_pending != Some(generation) {
+        if self.workspace.git.diff_pending != Some(generation) {
             return;
         }
-        self.git.diff_pending = None;
+        self.workspace.git.diff_pending = None;
         match result {
             Ok((text, truncated)) => {
                 let path = self
+                    .workspace
                     .git
                     .diff_path
                     .clone()
                     .unwrap_or_else(|| self.workspace.path.clone());
                 let view = GitDiffView::parse(&text, path, relative, staged, truncated);
-                self.git.diff_view = Some(view);
+                self.workspace.git.diff_view = Some(view);
                 let title = if truncated {
                     "Git diff (truncated): :q returns"
                 } else {
@@ -155,7 +156,7 @@ impl Model {
                 };
                 let body = format!("{header}\n\n{text}");
                 if self.pager.back.is_some() && self.pager.title.as_deref() != Some("Git diff") {
-                    self.git.diff_view = None;
+                    self.workspace.git.diff_view = None;
                     return;
                 }
                 self.replace_read_only(&body, title, "Git diff");
@@ -168,7 +169,7 @@ impl Model {
     }
 
     pub(crate) fn move_git_hunk(&mut self, forward: bool) {
-        let Some(view) = self.git.diff_view.as_ref() else {
+        let Some(view) = self.workspace.git.diff_view.as_ref() else {
             self.status.text = "E: not viewing a git diff".to_owned();
             self.file.dirty = true;
             return;
@@ -210,7 +211,7 @@ impl Model {
     }
 
     pub(crate) fn apply_current_hunk(&mut self, unstage: bool) {
-        let Some(view) = self.git.diff_view.as_ref() else {
+        let Some(view) = self.workspace.git.diff_view.as_ref() else {
             self.status.text = "E: not viewing a git diff".to_owned();
             self.file.dirty = true;
             return;
@@ -248,8 +249,8 @@ impl Model {
         };
         let patch = view.hunks[index].patch.clone();
         let path = view.path.clone();
-        self.git.apply_generation = self.git.apply_generation.wrapping_add(1);
-        let generation = self.git.apply_generation;
+        self.workspace.git.apply_generation = self.workspace.git.apply_generation.wrapping_add(1);
+        let generation = self.workspace.git.apply_generation;
         let Some(worker) = self.file_worker_for_path(&path) else {
             self.status.text = "E: file worker unavailable".to_owned();
             self.file.dirty = true;
@@ -264,7 +265,7 @@ impl Model {
             self.file.dirty = true;
             return;
         }
-        self.git.apply_pending = Some(generation);
+        self.workspace.git.apply_pending = Some(generation);
         self.status.text = if unstage {
             "unstaging hunk...".to_owned()
         } else {
@@ -274,14 +275,14 @@ impl Model {
     }
 
     pub(crate) fn handle_git_applied(&mut self, generation: u64, result: Result<(), String>) {
-        if self.git.apply_pending != Some(generation) {
+        if self.workspace.git.apply_pending != Some(generation) {
             return;
         }
-        self.git.apply_pending = None;
+        self.workspace.git.apply_pending = None;
         match result {
             Ok(()) => {
                 self.status.text = "git hunk applied".to_owned();
-                if let Some(view) = self.git.diff_view.as_ref() {
+                if let Some(view) = self.workspace.git.diff_view.as_ref() {
                     let path = view.path.clone();
                     let relative = view.relative.clone();
                     let staged = view.staged;
@@ -316,8 +317,8 @@ impl Model {
                 return;
             }
         };
-        self.git.blame_generation = self.git.blame_generation.wrapping_add(1);
-        let generation = self.git.blame_generation;
+        self.workspace.git.blame_generation = self.workspace.git.blame_generation.wrapping_add(1);
+        let generation = self.workspace.git.blame_generation;
         let Some(worker) = self.file_worker_for_path(&path) else {
             self.status.text = "E: file worker unavailable".to_owned();
             self.file.dirty = true;
@@ -331,7 +332,7 @@ impl Model {
             self.file.dirty = true;
             return;
         }
-        self.git.blame_pending = Some(generation);
+        self.workspace.git.blame_pending = Some(generation);
         self.status.text = "loading git blame...".to_owned();
         self.file.dirty = true;
     }
@@ -341,10 +342,10 @@ impl Model {
         generation: u64,
         result: Result<(String, bool), String>,
     ) {
-        if self.git.blame_pending != Some(generation) {
+        if self.workspace.git.blame_pending != Some(generation) {
             return;
         }
-        self.git.blame_pending = None;
+        self.workspace.git.blame_pending = None;
         match result {
             Ok((text, truncated)) => {
                 let title = if truncated {
@@ -389,8 +390,9 @@ impl Model {
             self.file.dirty = true;
             return;
         }
-        self.git.conflicts_generation = self.git.conflicts_generation.wrapping_add(1);
-        let generation = self.git.conflicts_generation;
+        self.workspace.git.conflicts_generation =
+            self.workspace.git.conflicts_generation.wrapping_add(1);
+        let generation = self.workspace.git.conflicts_generation;
         let mut received = 0usize;
         let mut results = Vec::new();
         for root in &roots {
@@ -412,10 +414,10 @@ impl Model {
                 results.push((root.clone(), Err(format!("git conflicts: {error}"))));
             }
         }
-        self.git.conflicts_pending = Some(generation);
-        self.git.conflicts_expected = roots.len();
-        self.git.conflicts_received = received;
-        self.git.conflicts_results = results;
+        self.workspace.git.conflicts_pending = Some(generation);
+        self.workspace.git.conflicts_expected = roots.len();
+        self.workspace.git.conflicts_received = received;
+        self.workspace.git.conflicts_results = results;
         self.status.text = "loading git conflicts...".to_owned();
         self.file.dirty = true;
         self.finish_git_conflicts();
@@ -427,24 +429,25 @@ impl Model {
         generation: u64,
         result: Result<(String, bool), String>,
     ) {
-        if self.git.conflicts_pending != Some(generation) {
+        if self.workspace.git.conflicts_pending != Some(generation) {
             return;
         }
-        self.git.conflicts_received = self.git.conflicts_received.saturating_add(1);
-        self.git.conflicts_results.push((root, result));
+        self.workspace.git.conflicts_received =
+            self.workspace.git.conflicts_received.saturating_add(1);
+        self.workspace.git.conflicts_results.push((root, result));
         self.finish_git_conflicts();
     }
 
     fn finish_git_conflicts(&mut self) {
-        if self.git.conflicts_pending.is_none()
-            || self.git.conflicts_received < self.git.conflicts_expected
+        if self.workspace.git.conflicts_pending.is_none()
+            || self.workspace.git.conflicts_received < self.workspace.git.conflicts_expected
         {
             return;
         }
-        self.git.conflicts_pending = None;
-        self.git.conflicts_expected = 0;
-        self.git.conflicts_received = 0;
-        let results = std::mem::take(&mut self.git.conflicts_results);
+        self.workspace.git.conflicts_pending = None;
+        self.workspace.git.conflicts_expected = 0;
+        self.workspace.git.conflicts_received = 0;
+        let results = std::mem::take(&mut self.workspace.git.conflicts_results);
         let (body, truncated) = format_git_conflicts(&results);
         let title = if truncated {
             "Git conflicts (truncated): :q returns"
@@ -478,8 +481,8 @@ impl Model {
             self.file.dirty = true;
             return;
         }
-        self.git.stage_generation = self.git.stage_generation.wrapping_add(1);
-        let generation = self.git.stage_generation;
+        self.workspace.git.stage_generation = self.workspace.git.stage_generation.wrapping_add(1);
+        let generation = self.workspace.git.stage_generation;
         let Some(worker) = self.file_worker_for_path(&path) else {
             self.status.text = "E: file worker unavailable".to_owned();
             self.file.dirty = true;
@@ -494,7 +497,7 @@ impl Model {
             self.file.dirty = true;
             return;
         }
-        self.git.stage_pending = Some(generation);
+        self.workspace.git.stage_pending = Some(generation);
         self.status.text = "loading conflict stage...".to_owned();
         self.file.dirty = true;
     }
@@ -506,10 +509,10 @@ impl Model {
         generation: u64,
         result: Result<(String, bool), String>,
     ) {
-        if self.git.stage_pending != Some(generation) {
+        if self.workspace.git.stage_pending != Some(generation) {
             return;
         }
-        self.git.stage_pending = None;
+        self.workspace.git.stage_pending = None;
         let name = match stage {
             1 => "base",
             2 => "ours",
@@ -553,7 +556,7 @@ impl Model {
             self.file.dirty = true;
             return;
         }
-        if self.git.resolve_pending.is_some() {
+        if self.workspace.git.resolve_pending.is_some() {
             self.status.text = "E: conflict resolution already in progress".to_owned();
             self.file.dirty = true;
             return;
@@ -571,9 +574,10 @@ impl Model {
             self.file.dirty = true;
             return;
         }
-        self.git.resolve_path = Some(path.clone());
-        self.git.resolve_generation = self.git.resolve_generation.wrapping_add(1);
-        let generation = self.git.resolve_generation;
+        self.workspace.git.resolve_path = Some(path.clone());
+        self.workspace.git.resolve_generation =
+            self.workspace.git.resolve_generation.wrapping_add(1);
+        let generation = self.workspace.git.resolve_generation;
         let Some(worker) = self.file_worker_for_path(&path) else {
             self.status.text = "E: file worker unavailable".to_owned();
             self.file.dirty = true;
@@ -588,7 +592,7 @@ impl Model {
             self.file.dirty = true;
             return;
         }
-        self.git.resolve_pending = Some(generation);
+        self.workspace.git.resolve_pending = Some(generation);
         self.status.text = "resolving conflict...".to_owned();
         self.file.dirty = true;
     }
@@ -600,11 +604,12 @@ impl Model {
         generation: u64,
         result: Result<(), ResolveConflictError>,
     ) {
-        if self.git.resolve_pending != Some(generation) {
+        if self.workspace.git.resolve_pending != Some(generation) {
             return;
         }
-        self.git.resolve_pending = None;
+        self.workspace.git.resolve_pending = None;
         let path = self
+            .workspace
             .git
             .resolve_path
             .take()
@@ -722,16 +727,16 @@ index 1111111..2222222 100644
     #[test]
     fn conflict_response_waits_for_every_root() {
         let mut model = Model::new(EditorState::from_text("x"), None);
-        model.git.conflicts_pending = Some(9);
-        model.git.conflicts_expected = 2;
-        model.git.conflicts_received = 0;
+        model.workspace.git.conflicts_pending = Some(9);
+        model.workspace.git.conflicts_expected = 2;
+        model.workspace.git.conflicts_received = 0;
 
         model.handle_git_conflicts_text(
             PathBuf::from("/b"),
             9,
             Ok(("M\tb.rs\n".to_owned(), false)),
         );
-        assert_eq!(model.git.conflicts_pending, Some(9));
+        assert_eq!(model.workspace.git.conflicts_pending, Some(9));
         assert!(model.pager.back.is_none());
 
         model.handle_git_conflicts_text(
@@ -739,7 +744,7 @@ index 1111111..2222222 100644
             9,
             Ok(("no conflicts\n".to_owned(), false)),
         );
-        assert!(model.git.conflicts_pending.is_none());
+        assert!(model.workspace.git.conflicts_pending.is_none());
         assert!(model.pager.back.is_some());
         let text = model.session.editor.text();
         let body = text.slice(0..text.len_bytes());
@@ -766,8 +771,8 @@ index 1111111..2222222 100644
             Some(secondary_file.clone()),
         );
         model.workspace.path = primary_root;
-        model.git.resolve_pending = Some(5);
-        model.git.resolve_path = Some(secondary_file);
+        model.workspace.git.resolve_pending = Some(5);
+        model.workspace.git.resolve_path = Some(secondary_file);
 
         model.handle_git_resolved("conflict.txt".to_owned(), 2, 5, Ok(()));
         assert!(
@@ -828,7 +833,7 @@ index 1111111..2222222 100644
             Some(path),
         );
         model.workspace.path = workspace;
-        model.git.resolve_pending = Some(7);
+        model.workspace.git.resolve_pending = Some(7);
         model.handle_git_resolved(
             "a.txt".to_owned(),
             2,
