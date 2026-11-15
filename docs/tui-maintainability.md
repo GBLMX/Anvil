@@ -11,7 +11,7 @@ file count or crate count as a goal.
 | Metric | Baseline |
 |---|---:|
 | Rust source files | 102 |
-| Source lines | 47,859 |
+| Source lines | 47,886 |
 | Normal dependencies | 30 |
 | `impl Model` blocks | 66 |
 | Files containing `impl Model` | 61 |
@@ -19,9 +19,10 @@ file count or crate count as a goal.
 | `Model::new` constructions | 431 |
 | Files over 800 lines | 15 |
 
-`TUI_LOC` is informational because feature work can change it. The structural
-metrics are budgets: new page state should not add another `impl Model` or
-another full-`Model` test construction.
+File counts and LOC are informational: a page split may add files while
+reducing coupling. The budgets are dependency count, `impl Model` count,
+`&mut Model` method count, full-`Model` test construction count, and files over
+800 lines.
 
 ## Commands
 

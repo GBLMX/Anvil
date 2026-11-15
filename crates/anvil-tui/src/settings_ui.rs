@@ -35,6 +35,14 @@ pub(crate) enum SettingsChange {
     Theme(theme::Choice),
 }
 
+pub(crate) enum SettingsAction {
+    Select(usize),
+    Move(isize),
+    CycleTab(bool),
+    Adjust(isize),
+    Reset,
+}
+
 impl SettingsOverlayState {
     pub(crate) fn label(index: usize) -> &'static str {
         match index {
@@ -192,6 +200,25 @@ impl SettingsOverlayState {
         }
         Some(SettingsChange::Apply(self.draft))
     }
+
+    pub(crate) fn update(&mut self, action: SettingsAction) -> Option<SettingsChange> {
+        match action {
+            SettingsAction::Select(selected) => {
+                self.select(selected);
+                None
+            }
+            SettingsAction::Move(delta) => {
+                self.move_selection(delta);
+                None
+            }
+            SettingsAction::CycleTab(backwards) => {
+                self.cycle_tab(backwards);
+                None
+            }
+            SettingsAction::Adjust(delta) => self.adjust(delta),
+            SettingsAction::Reset => self.reset(),
+        }
+    }
 }
 fn theme_label(choice: theme::Choice) -> String {
     match choice {
@@ -267,14 +294,14 @@ pub(crate) fn hit(area: ratatui::layout::Rect, col: u16, row: u16) -> Option<usi
 impl Model {
     pub(crate) fn select_settings_row(&mut self, selected: usize) {
         if let Some(overlay) = self.overlays.settings_overlay.as_mut() {
-            overlay.select(selected);
+            overlay.update(SettingsAction::Select(selected));
             self.file.dirty = true;
         }
     }
 
     pub(crate) fn cycle_settings_tab(&mut self, backwards: bool) {
         if let Some(overlay) = self.overlays.settings_overlay.as_mut() {
-            overlay.cycle_tab(backwards);
+            overlay.update(SettingsAction::CycleTab(backwards));
             self.file.dirty = true;
         }
     }
@@ -309,7 +336,7 @@ impl Model {
 
     pub(crate) fn move_settings(&mut self, delta: isize) {
         if let Some(overlay) = self.overlays.settings_overlay.as_mut() {
-            overlay.move_selection(delta);
+            overlay.update(SettingsAction::Move(delta));
             self.file.dirty = true;
         }
     }
@@ -318,7 +345,7 @@ impl Model {
         let Some(mut overlay) = self.overlays.settings_overlay.take() else {
             return;
         };
-        let Some(change) = overlay.adjust(delta) else {
+        let Some(change) = overlay.update(SettingsAction::Adjust(delta)) else {
             self.overlays.settings_overlay = Some(overlay);
             return;
         };
@@ -336,7 +363,7 @@ impl Model {
         let Some(mut overlay) = self.overlays.settings_overlay.take() else {
             return;
         };
-        let Some(change) = overlay.reset() else {
+        let Some(change) = overlay.update(SettingsAction::Reset) else {
             self.overlays.settings_overlay = Some(overlay);
             return;
         };

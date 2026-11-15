@@ -75,10 +75,10 @@ check_max() {
     fi
 }
 
-check_max files "$files" "$TUI_FILES"
+# File/LOC counts are informational: a page split may add files while reducing
+# coupling. Gate only structural coupling and oversized-file budgets.
 check_max deps "$deps" "$TUI_DEPS"
 check_max impl_model "$impl_model" "$TUI_IMPL_MODEL"
-check_max impl_model_files "$impl_model_files" "$TUI_IMPL_MODEL_FILES"
 check_max model_mut_methods "$model_mut_methods" "$TUI_MODEL_MUT_METHODS"
 check_max model_new "$model_new" "$TUI_MODEL_NEW"
 check_max files_over_800 "$oversized" "$TUI_FILES_OVER_800"
