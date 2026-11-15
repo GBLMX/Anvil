@@ -45,6 +45,21 @@ environment preserves it.
 `btop` looking correct is not evidence that its terminal detection succeeded:
 it has explicit truecolor configuration and can force the profile.
 
+## Control socket runtime directory
+
+The workspace control socket normally lives under
+`$XDG_RUNTIME_DIR/anvil/`. SSH sessions and root shells may not provide
+`XDG_RUNTIME_DIR`; Anvil falls back to:
+
+```text
+~/.local/state/anvil/runtime/anvil/
+```
+
+and creates the private socket directory with mode `0700`. `anvil-ctl` uses the
+same resolution, so both sides still meet without exporting
+`XDG_RUNTIME_DIR` manually.
+
+
 
 ## Findings
 

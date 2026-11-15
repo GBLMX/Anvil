@@ -1,7 +1,8 @@
 //! Workspace-scoped control socket for the Anvil TUI.
 //!
 //! One socket and lock pair is created for each canonical workspace under
-//! `$XDG_RUNTIME_DIR/anvil/`. The control socket is separate from the
+//! `$XDG_RUNTIME_DIR/anvil/`, or `~/.local/state/anvil/runtime/anvil/` when
+//! `XDG_RUNTIME_DIR` is unset. The control socket is separate from the
 //! per-session gateway socket. It accepts framed JSON-RPC requests from
 //! `anvil-ctl`, verifies peer credentials, and forwards editor actions to the
 //! matching TUI.
@@ -12,6 +13,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use std::{
+    ffi::OsString,
     fmt,
     fs::{self, File, OpenOptions},
     io,
@@ -753,10 +755,22 @@ fn control_socket_path(runtime: &Path, workspace: &Path) -> PathBuf {
 }
 
 fn runtime_dir() -> Result<PathBuf, Error> {
-    std::env::var_os("XDG_RUNTIME_DIR")
-        .filter(|value| !value.is_empty())
-        .map(PathBuf::from)
-        .ok_or_else(|| Error::RuntimeDir("XDG_RUNTIME_DIR is not set".to_owned()))
+    runtime_dir_from(
+        std::env::var_os("XDG_RUNTIME_DIR"),
+        std::env::var_os("HOME"),
+    )
+}
+
+fn runtime_dir_from(runtime: Option<OsString>, home: Option<OsString>) -> Result<PathBuf, Error> {
+    if let Some(path) = runtime.filter(|value| !value.is_empty()) {
+        return Ok(PathBuf::from(path));
+    }
+    if let Some(home) = home.filter(|value| !value.is_empty()) {
+        return Ok(PathBuf::from(home).join(".local/state/anvil/runtime"));
+    }
+    Err(Error::RuntimeDir(
+        "XDG_RUNTIME_DIR is not set and HOME is unavailable".to_owned(),
+    ))
 }
 
 impl ControlServer {
@@ -1288,6 +1302,31 @@ mod tests {
         assert_eq!(first, first_again);
         assert_ne!(first, second);
         assert!(first.to_string_lossy().contains("control-"));
+    }
+
+    #[test]
+    fn runtime_dir_prefers_xdg_then_home() {
+        assert_eq!(
+            runtime_dir_from(
+                Some(OsString::from("/run/user/1000")),
+                Some(OsString::from("/home/user")),
+            )
+            .expect("xdg"),
+            PathBuf::from("/run/user/1000")
+        );
+        assert_eq!(
+            runtime_dir_from(None, Some(OsString::from("/home/user"))).expect("home fallback"),
+            PathBuf::from("/home/user/.local/state/anvil/runtime")
+        );
+        assert_eq!(
+            runtime_dir_from(Some(OsString::new()), Some(OsString::from("/home/user")))
+                .expect("empty xdg"),
+            PathBuf::from("/home/user/.local/state/anvil/runtime")
+        );
+        assert!(matches!(
+            runtime_dir_from(None, None),
+            Err(Error::RuntimeDir(_))
+        ));
     }
 
     #[test]

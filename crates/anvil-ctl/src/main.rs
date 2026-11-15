@@ -42,7 +42,8 @@ Exit codes:
   4 timeout, 5 editor RPC error
 
 The control socket is selected by the canonical workspace path under
-$XDG_RUNTIME_DIR/anvil/.
+$XDG_RUNTIME_DIR/anvil/, or ~/.local/state/anvil/runtime/anvil/ when
+XDG_RUNTIME_DIR is unset.
 ";
 
 #[derive(Debug)]
