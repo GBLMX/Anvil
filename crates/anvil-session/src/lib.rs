@@ -8,6 +8,7 @@ pub mod editor_service;
 pub mod effect;
 pub mod format;
 mod host_session;
+pub mod jump;
 pub mod keymap;
 pub mod plugin_events;
 pub mod plugin_provider;
