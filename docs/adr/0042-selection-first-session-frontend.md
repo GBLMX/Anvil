@@ -109,9 +109,15 @@ terminal input state.
 
 It must not depend on `anvil-tui`, ratatui, crossterm, or rendering state.
 It also must not depend on concrete `anvil-lsp-client`, task-runner, DAP, or
-gateway transport types; those are adapter services behind the session's
-effect/result contracts. This keeps the ADR-0037 kernel baseline from growing
-new transport dependencies.
+`anvil_ipc::GatewayClient` implementations; those are adapter services behind
+the session's effect/result contracts. The `anvil-ipc` wire codec and DTOs are
+allowed because they are protocol contracts, not transport ownership. This
+keeps the ADR-0037 kernel baseline from growing new transport dependencies.
+
+Migration debt: `plugin_session.rs` and `plugin_supervisor.rs` currently use
+`anvil_ipc::GatewayClient` directly. That usage is temporary; it must be
+replaced by a session-owned port or moved behind the service layer before the
+session API is frozen.
 
 `DocumentSession` is a frontend-neutral wrapper around `EditorState`; it is not
 a second editor kernel.
@@ -171,7 +177,7 @@ anvil-tui -> anvil-session
 anvil-tui -> anvil-lsp-client / anvil-task / gateway transport / DAP adapter
 anvil-session -> anvil-editor / anvil-core
 anvil-editor -> anvil-core
-anvil-session -> anvil-api / anvil-ipc / module service contracts
+anvil-session -> anvil-api / anvil-ipc wire contracts / module service contracts
 future anvil-services -> concrete LSP / task / DAP / gateway adapters
 ```
 
@@ -182,7 +188,7 @@ anvil-core -> anvil-editor
 anvil-editor -> anvil-session
 anvil-editor -> anvil-tui
 anvil-session -> anvil-tui
-anvil-session -> anvil-lsp-client / anvil-task / DAP transport / gateway transport
+anvil-session -> anvil-lsp-client / anvil-task / DAP transport / anvil_ipc::GatewayClient
 kernel crate -> anvil-tui
 module -> anvil-tui
 ```
