@@ -66,3 +66,6 @@ Compiled distribution modules are separate from runtime plugins. Use
 `:plugin-inventory` for a read-only page listing installed plugin IDs,
 versions, enabled state, source, and digest. `:plugin-list` opens the mutable
 manager with enable/disable, uninstall, and rollback actions.
+
+For a plugin without a package digest, the inventory shows `digest=bundled`
+only when its source is `official`; local plugins show `digest=none`.

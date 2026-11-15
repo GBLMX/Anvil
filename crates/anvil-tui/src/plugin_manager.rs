@@ -52,13 +52,15 @@ impl Model {
             self.runtime.plugins.entries.len()
         );
         for plugin in &self.runtime.plugins.entries {
+            let source = plugin.source.as_deref().unwrap_or("local");
+            let digest = match plugin.digest.as_deref() {
+                Some(digest) => digest,
+                None if source == "official" => "bundled",
+                None => "none",
+            };
             text.push_str(&format!(
                 "{} {} enabled={} source={} digest={}\n",
-                plugin.manifest.id,
-                plugin.manifest.version,
-                plugin.enabled,
-                plugin.source.as_deref().unwrap_or("local"),
-                plugin.digest.as_deref().unwrap_or("bundled")
+                plugin.manifest.id, plugin.manifest.version, plugin.enabled, source, digest
             ));
         }
         text
@@ -420,6 +422,32 @@ mod tests {
         assert!(text.contains("source=local-file"), "{text}");
         assert!(text.contains("digest=0123456789abcdef"), "{text}");
         assert!(text.contains("enabled=true"), "{text}");
+    }
+
+    #[test]
+    fn inventory_text_does_not_call_local_plugins_bundled() {
+        let mut model = model();
+        let mut local = model.runtime.plugins.entries[0].clone();
+        local.manifest.id = "local.plugin".to_owned();
+        local.source = None;
+        local.digest = None;
+        let mut official = local.clone();
+        official.manifest.id = "official.plugin".to_owned();
+        official.source = Some("official".to_owned());
+        model.runtime.plugins.entries = vec![local, official];
+
+        let text = model.plugin_inventory_text();
+        assert!(
+            text.lines()
+                .any(|line| line.contains("local.plugin")
+                    && line.contains("source=local digest=none")),
+            "{text}"
+        );
+        assert!(
+            text.lines().any(|line| line.contains("official.plugin")
+                && line.contains("source=official digest=bundled")),
+            "{text}"
+        );
     }
 
     #[test]
