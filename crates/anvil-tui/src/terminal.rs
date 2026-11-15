@@ -4,6 +4,23 @@ use super::*;
 use anvil_tui_kit::{TerminalOptions, TerminalSession};
 use std::io::{IsTerminal, Read};
 use std::sync::Arc;
+
+fn poll_background(model: &mut Model) {
+    model.poll_host();
+    model.poll_pkg_notifications();
+    model.poll_syntax();
+    model.poll_lsp();
+    model.poll_file_worker();
+    model.poll_task();
+    #[cfg(unix)]
+    model.poll_terminal();
+}
+
+fn poll_presentation(model: &mut Model, height: u16) {
+    model.poll_inlay_hints(height);
+    model.poll_git();
+}
+
 /// Runs the minimal terminal loop in the current directory workspace.
 pub fn run(path: Option<PathBuf>) -> io::Result<()> {
     run_with_workspace(path, std::env::current_dir()?)
@@ -372,14 +389,7 @@ pub fn run_with_all_services(
                 }
             }
         }
-        model.poll_host();
-        model.poll_pkg_notifications();
-        model.poll_syntax();
-        model.poll_lsp();
-        model.poll_file_worker();
-        model.poll_task();
-        #[cfg(unix)]
-        model.poll_terminal();
+        poll_background(&mut model);
         if let Some(control) = &control {
             while let Ok(call) = control.try_recv() {
                 let reply = model.handle_control(call.request);
@@ -390,8 +400,7 @@ pub fn run_with_all_services(
             model.status.spinner = model.status.spinner.wrapping_add(1);
             model.file.dirty = true;
         }
-        model.poll_inlay_hints(size.height.saturating_sub(2));
-        model.poll_git();
+        poll_presentation(&mut model, size.height.saturating_sub(2));
         model.expire_leader();
         if event::poll(std::time::Duration::from_millis(50))? {
             handle_event(&mut model, event::read()?);

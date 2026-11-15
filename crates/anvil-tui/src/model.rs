@@ -244,7 +244,6 @@ impl Model {
         self.workspace.git.diff_checked = None;
         self.workspace.git.diff_due = None;
     }
-
     pub fn poll_syntax(&mut self) {
         let text = self.session.editor.text();
         let revision = self.session.editor.revision();
