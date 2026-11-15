@@ -575,6 +575,8 @@ fn spawn_anvil(workspace: &Path, timeout: Duration) -> Result<(), CliError> {
         }
         std::thread::sleep(Duration::from_millis(50).min(remaining));
     }
+    let _ = child.kill();
+    let _ = child.wait();
     Err(CliError::no_instance(format!(
         "spawned Anvil did not start its control socket within {} ms",
         timeout.as_millis()
