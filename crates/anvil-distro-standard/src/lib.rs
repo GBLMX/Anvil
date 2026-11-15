@@ -1596,6 +1596,7 @@ mod tests {
             }
         );
         assert!(parse_args(args(&["doctor", "--profile", "broken"])).is_err());
+        assert!(parse_args(args(&["doctor", "--profile"])).is_err());
         assert!(parse_args(args(&["doctor", "--wat"])).is_err());
         assert_eq!(
             parse_args(args(&["doctor", "--help"])).unwrap(),
@@ -1614,7 +1615,10 @@ mod tests {
         )];
         let output = doctor_json(&STANDARD, DoctorProfile::Installed, &checks, false);
         assert!(output.contains("\"schema_version\":1"));
-        assert!(output.contains("\"anvil_version\":\"0.6.0\""));
+        assert!(output.contains(&format!(
+            "\"anvil_version\":\"{}\"",
+            env!("CARGO_PKG_VERSION")
+        )));
         assert!(output.contains("\"profile\":\"installed\""));
         assert!(output.contains("\"distribution\":\"anvil\""));
         assert!(output.contains("\"ok\":false"));

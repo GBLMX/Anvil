@@ -58,6 +58,7 @@ jobs:
       - name: Verify shipped installer
         env:
           XDG_DATA_HOME: ${{ runner.temp }}/verify-data
+          LANG: C.UTF-8
         run: |
           test -x "$RUNNER_TEMP/layout/install.sh"
           "$RUNNER_TEMP/layout/install.sh" "$RUNNER_TEMP/verify-prefix"

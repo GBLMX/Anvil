@@ -24,8 +24,8 @@ and terminal environment before the TUI starts.
 | `anvil-mcp` | no | warn |
 | `locale` | yes, UTF-8 | error |
 | `truecolor` | no | warn |
-| `runtime-dir` | no, HOME fallback exists | warn |
-| `config` | no | warn; explicitly set but missing is error |
+| `runtime-dir` | no, HOME fallback exists | warn on fallback; error if the path is not a directory or no HOME |
+| `config` | no | warn when defaults are used; error if an explicit path is missing or no config root resolves |
 | `landlock` | Landlock or seccomp | error only when neither is available |
 | `lsp` | no | warn when no supported server is on `PATH` |
 
