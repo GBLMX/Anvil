@@ -81,8 +81,6 @@ mod search_ui;
 mod splits;
 mod status_line;
 pub(crate) use anvil_tui_kit::input;
-#[cfg(test)]
-use lsp_ui::lsp_settings;
 use lsp_ui::lsp_settings_with_service;
 mod keymap;
 mod keys;

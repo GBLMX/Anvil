@@ -5,11 +5,6 @@ use std::path::Path;
 use anvil_lsp_client::LspSettings;
 use anvil_module::language::LanguageToolingService;
 
-#[cfg(test)]
-pub(crate) fn lsp_settings(path: &Path) -> Option<LspSettings> {
-    anvil_lsp_client::lsp_settings(path)
-}
-
 pub(crate) fn lsp_settings_with_service(
     path: &Path,
     service: Option<&dyn LanguageToolingService>,

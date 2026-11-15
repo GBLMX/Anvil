@@ -17,8 +17,6 @@ mod responses;
 mod settings;
 mod symbols;
 mod transport;
-#[cfg(test)]
-pub(crate) use settings::lsp_settings;
 pub(crate) use settings::lsp_settings_with_service;
 
 pub(crate) fn expand_snippet(text: &str) -> String {

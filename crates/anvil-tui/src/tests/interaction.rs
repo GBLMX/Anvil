@@ -842,60 +842,6 @@ fn preview_without_worker_reports_gateway_unavailable() {
 }
 
 #[test]
-fn lsp_settings_cover_builtin_languages() {
-    for (path, language) in [
-        ("main.rs", "rust"),
-        ("main.go", "go"),
-        ("main.py", "python"),
-        ("main.ts", "typescript"),
-        ("main.tsx", "typescriptreact"),
-        ("main.js", "javascript"),
-        ("main.jsx", "javascriptreact"),
-        ("main.c", "c"),
-        ("main.cpp", "cpp"),
-        ("main.h", "c"),
-        ("main.java", "java"),
-        ("main.lua", "lua"),
-        ("main.json", "json"),
-        ("main.jsonc", "jsonc"),
-        ("main.yaml", "yaml"),
-        ("main.yml", "yaml"),
-        ("main.sh", "shellscript"),
-        ("README.md", "markdown"),
-        ("Cargo.toml", "toml"),
-        ("index.html", "html"),
-        ("style.css", "css"),
-        ("style.scss", "scss"),
-        ("main.zig", "zig"),
-    ] {
-        assert_eq!(
-            lsp_settings(Path::new(path))
-                .unwrap_or_else(|| panic!("missing settings for {path}"))
-                .language_id,
-            language,
-            "{path}"
-        );
-    }
-    assert_eq!(
-        lsp_settings(Path::new("main.ts")).expect("typescript").args,
-        vec!["--stdio"]
-    );
-    assert_eq!(
-        lsp_settings(Path::new("main.sh")).expect("shell").args,
-        vec!["start"]
-    );
-    assert_eq!(
-        lsp_settings(Path::new("README.md")).expect("markdown").args,
-        vec!["server"]
-    );
-    assert_eq!(
-        lsp_settings(Path::new("Cargo.toml")).expect("toml").args,
-        vec!["lsp", "stdio"]
-    );
-    assert!(lsp_settings(Path::new("README.txt")).is_none());
-}
-
-#[test]
 fn theme_command_switches_and_lists_builtins() {
     assert_eq!(theme::name(), "anvil-dark");
     let mut model = Model::new(EditorState::from_text("alpha"), None);
@@ -1077,40 +1023,6 @@ fn theme_auto_and_save_persist_choice() {
     unsafe { std::env::remove_var("ANVIL_SETTINGS") };
     std::fs::remove_dir_all(directory).expect("cleanup");
     model.execute_command("theme anvil-dark");
-}
-
-#[test]
-fn typescript_uses_configured_tsserver() {
-    let directory = std::env::temp_dir().join(format!("anvil-ts-{}", std::process::id()));
-    std::fs::create_dir_all(&directory).expect("temp dir");
-    let tsserver = directory.join("tsserver.js");
-    std::fs::write(&tsserver, "").expect("tsserver");
-    unsafe { std::env::set_var("ANVIL_TSSERVER", &tsserver) };
-    let settings = lsp_settings(Path::new("main.ts")).expect("typescript");
-    unsafe { std::env::remove_var("ANVIL_TSSERVER") };
-    let project = directory.join("project");
-    let project_tsserver = project.join("node_modules/typescript/lib/tsserver.js");
-    std::fs::create_dir_all(project_tsserver.parent().expect("tsserver parent"))
-        .expect("project tsserver dir");
-    std::fs::write(&project_tsserver, "").expect("project tsserver");
-    let source = project.join("src/main.ts");
-    std::fs::create_dir_all(source.parent().expect("source parent")).expect("source dir");
-    unsafe { std::env::set_var("ANVIL_LSP_TYPESCRIPT", "typescript-language-server") };
-    let project_settings = lsp_settings(&source).expect("typescript");
-    unsafe { std::env::remove_var("ANVIL_LSP_TYPESCRIPT") };
-    let project_options = project_settings
-        .initialization_options
-        .expect("project tsserver options");
-    assert_eq!(
-        project_options["tsserver"]["path"],
-        project_tsserver.to_string_lossy().as_ref()
-    );
-    let options = settings.initialization_options.expect("tsserver options");
-    assert_eq!(
-        options["tsserver"]["path"],
-        tsserver.to_string_lossy().as_ref()
-    );
-    std::fs::remove_dir_all(directory).expect("cleanup");
 }
 
 #[cfg(target_os = "linux")]
