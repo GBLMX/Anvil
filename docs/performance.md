@@ -387,3 +387,24 @@ The rows above are the pre-fix boundary run. After the 0.5.10 changes:
 The RSS gate must be read as render-only allocation. A 100 MB in-memory
 PieceTable already consumes 207.5 MB before rendering, so a total process RSS
 below 50 MB is impossible without a different storage model.
+
+## 9. Large-workspace gates
+
+`scripts/perf-gates.py` creates a 100,000-file workspace, a 256-directory tree,
+and a 1 GiB log, then measures the release binary through a PTY. Run it with:
+
+```bash
+python3 scripts/perf-gates.py --binary target/release/anvil
+```
+
+| Scenario | Gate | 2026-11-16 i7-12700H |
+|---|---:|---:|
+| Startup in 100k-file workspace | p50 <= 100 ms | 23 ms |
+| Project search, 100k files | p50 <= 2 s | 161 ms |
+| 256-directory tree open | p50 <= 1 s | 102 ms |
+| 1 GiB log rejection | p50 <= 2 s | 28 ms |
+
+The 1 GiB file is rejected by the explicit 256 MiB open limit; the gate checks
+that rejection is immediate and diagnostic instead of attempting an unbounded
+read. The 100k search scan is handled by `rg` through the gateway and is not a
+recursive in-process directory walk.
