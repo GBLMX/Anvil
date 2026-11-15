@@ -522,6 +522,8 @@ pub(crate) struct WorkspaceState {
     /// Workspace root used to resolve all file paths.
     pub(crate) path: PathBuf,
     pub(crate) roots: workspace_roots::WorkspaceRoots,
+    /// Recent workspaces, files, and quick-open ranking.
+    pub(crate) recent: RecentState,
     /// Gateway client used for file I/O when present.
     pub(crate) gateway: Option<GatewayClient>,
     /// Owning child/socket for the current gateway client.

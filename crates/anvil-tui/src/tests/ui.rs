@@ -946,12 +946,12 @@ fn breadcrumb_row_routes_path_clicks() {
 #[test]
 fn recent_files_and_workspaces_are_bounded_and_deduplicated() {
     let mut model = Model::new(EditorState::from_text(""), None);
-    model.recent.persist = false;
+    model.workspace.recent.persist = false;
     model.record_recent_workspace(Path::new("/ws/one"));
     model.record_recent_workspace(Path::new("/ws/two"));
     model.record_recent_workspace(Path::new("/ws/one"));
     assert_eq!(
-        model.recent.workspaces,
+        model.workspace.recent.workspaces,
         vec![PathBuf::from("/ws/one"), PathBuf::from("/ws/two")]
     );
     let workspace = tempfile::tempdir().expect("workspace");
@@ -962,8 +962,11 @@ fn recent_files_and_workspaces_are_bounded_and_deduplicated() {
         model.record_recent_file(&model.workspace.path.join(format!("{index}.rs")));
     }
     model.record_recent_file(Path::new("/outside/ignored.rs"));
-    assert_eq!(model.recent.files.len(), 20);
-    assert_eq!(model.recent.files[0], PathBuf::from("/outside/ignored.rs"));
+    assert_eq!(model.workspace.recent.files.len(), 20);
+    assert_eq!(
+        model.workspace.recent.files[0],
+        PathBuf::from("/outside/ignored.rs")
+    );
     model.open_recent_files();
     let entries = &model.overlays.fuzzy.as_ref().expect("fuzzy").entries;
     assert_eq!(entries.len(), 19);

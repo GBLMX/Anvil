@@ -6,21 +6,21 @@ pub(crate) use anvil_session::recents::{Recents, load};
 
 impl Model {
     pub(crate) fn install_recents(&mut self, recents: Recents) {
-        self.recent.install(recents);
+        self.workspace.recent.install(recents);
     }
 
     pub(crate) fn record_recent_workspace(&mut self, workspace: &Path) {
-        self.recent.record_workspace(workspace);
-        self.recent.save();
+        self.workspace.recent.record_workspace(workspace);
+        self.workspace.recent.save();
     }
 
     pub(crate) fn record_recent_file(&mut self, path: &Path) {
-        self.recent.record_file(path);
-        self.recent.save();
+        self.workspace.recent.record_file(path);
+        self.workspace.recent.save();
     }
 
     pub(crate) fn openable_recent_files(&self) -> Vec<PathBuf> {
-        self.recent.openable_files(&self.workspace.roots)
+        self.workspace.recent.openable_files(&self.workspace.roots)
     }
 
     pub(crate) fn open_recent_files(&mut self) {
@@ -64,12 +64,13 @@ impl Model {
     }
 
     pub(crate) fn show_recent_workspaces(&mut self) {
-        if self.recent.workspaces.is_empty() {
+        if self.workspace.recent.workspaces.is_empty() {
             self.status.text = "no recent workspaces".to_owned();
         } else {
             self.status.text = format!(
                 "recent: {}",
-                self.recent
+                self.workspace
+                    .recent
                     .workspaces
                     .iter()
                     .map(|path| path.display().to_string())

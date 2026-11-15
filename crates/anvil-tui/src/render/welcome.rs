@@ -193,7 +193,13 @@ fn welcome_recent(model: &Model, width: usize, limit: usize) -> Vec<Line<'static
     lines.push(Line::styled("", theme::panel()));
     lines.push(Line::styled("WORKSPACES", dim));
     lines.push(Line::styled("", theme::panel()));
-    let workspaces = model.recent.workspaces.iter().take(3).collect::<Vec<_>>();
+    let workspaces = model
+        .workspace
+        .recent
+        .workspaces
+        .iter()
+        .take(3)
+        .collect::<Vec<_>>();
     if workspaces.is_empty() {
         lines.push(Line::styled("no recent workspaces · r", muted));
     } else {

@@ -185,8 +185,6 @@ pub struct Model {
     language: LanguageState,
     /// Git workspace, request, and view state.
     git: GitState,
-    /// Recent workspaces, files, and quick-open ranking.
-    recent: RecentState,
     /// Workspace tree view and refresh state.
     tree: TreeState,
     overlays: OverlayState,

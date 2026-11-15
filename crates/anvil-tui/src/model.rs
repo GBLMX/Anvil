@@ -52,14 +52,15 @@ impl Model {
                 path: workspace,
                 roots: workspace_roots,
                 git_service: default_git_service(),
+                recent: RecentState {
+                    persist: !cfg!(test),
+                    ..Default::default()
+                },
                 ..Default::default()
             },
             language: LanguageState::default(),
             git: GitState::default(),
-            recent: RecentState {
-                persist: !cfg!(test),
-                ..Default::default()
-            },
+
             tree: TreeState::default(),
             overlays: OverlayState::default(),
             appearance: AppearanceState {
