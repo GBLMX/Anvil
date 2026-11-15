@@ -207,4 +207,3 @@ fn diagnostic_code(diagnostic: &lsp::Diagnostic) -> Option<String> {
             .or_else(|| code.as_i64().map(|code| code.to_string()))
     })
 }
-

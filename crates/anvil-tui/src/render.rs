@@ -289,7 +289,6 @@ fn buffer_bar_line(model: &Model, width: u16) -> Line<'static> {
     Line::from(spans)
 }
 
-
 fn progress_lines(model: &Model) -> Vec<Line<'static>> {
     model
         .ui
