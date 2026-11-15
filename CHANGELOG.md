@@ -429,9 +429,8 @@ post-`0.5.0` feature line.
   start dashboard is denser, and the command palette shows category groups,
   recent markers, and direct key hints.
 - Rebuilt the default `anvil-dark` theme with a deep-navy, steel, cyan,
-  violet, and amber palette. Syntax colors
-  now use stronger hue separation and targeted bold/italic/underline
-  modifiers while keeping WCAG-AA contrast.
+  violet, and amber palette. Syntax colors now use stronger hue separation
+  and targeted bold/italic/underline modifiers while keeping WCAG-AA contrast.
 - Version frozen at `0.6.0` for long-term internal polish; no release tags or
   public releases during this phase.
 - Cursor visibility now uses the rendered text viewport instead of the full
