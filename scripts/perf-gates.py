@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Measure large-workspace startup, search, rejection, and tree gates."""
+"""Measure large-workspace startup, search, tree, watch, and size gates."""
 
 from __future__ import annotations
 
@@ -150,7 +150,70 @@ def make_workspace(root: Path) -> dict[str, Path]:
             piece = block[: min(remaining, len(block))]
             handle.write(piece)
             remaining -= len(piece)
-    return {"big": big, "tree": tree, "large": large}
+    watch = root / "watch"
+    watch.mkdir()
+    (watch / "main.txt").write_text("initial\n")
+    return {"big": big, "tree": tree, "large": large, "watch": watch}
+
+
+def polling_watch_latency(binary: Path, workspace: Path, timeout: float) -> float:
+    target = workspace / "main.txt"
+    state = Path(tempfile.mkdtemp(prefix="anvil-perf-watch."))
+    (state / "run").mkdir(parents=True)
+    process, master = spawn(binary, workspace, target, state)
+    try:
+        elapsed, output = read_until(master, b"main.txt", timeout)
+        if elapsed is None:
+            raise RuntimeError(f"watch startup missing; tail={output[-400:]!r}")
+        start = time.monotonic()
+        target.write_text("changed on disk\n")
+        elapsed, output = read_until(master, b"reloaded", 5.0)
+        if elapsed is None:
+            raise RuntimeError(f"polling did not reload; tail={output[-400:]!r}")
+        return time.monotonic() - start
+    finally:
+        try:
+            os.write(master, b":q!\r")
+        except OSError:
+            pass
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait()
+        try:
+            os.close(master)
+        except OSError:
+            pass
+        shutil.rmtree(state, ignore_errors=True)
+
+
+def inotify_kernel_latency(path: Path) -> float | None:
+    try:
+        import ctypes
+        import select
+
+        libc = ctypes.CDLL("libc.so.6", use_errno=True)
+        libc.inotify_init1.restype = ctypes.c_int
+        fd = libc.inotify_init1(os.O_NONBLOCK | os.O_CLOEXEC)
+        if fd < 0:
+            return None
+        try:
+            watch = libc.inotify_add_watch(
+                fd, os.fsencode(path), 0x00000002 | 0x00000008
+            )
+            if watch < 0:
+                return None
+            start = time.monotonic()
+            path.write_text("kernel event\n")
+            if not select.select([fd], [], [], 5.0)[0]:
+                return None
+            os.read(fd, 4096)
+            return time.monotonic() - start
+        finally:
+            os.close(fd)
+    except OSError:
+        return None
 
 
 def main() -> int:
@@ -213,12 +276,24 @@ def main() -> int:
             except RuntimeError as error:
                 print(f"1 GB rejection failed: {error}", file=sys.stderr)
                 return 1
+            try:
+                scenarios.setdefault("watch_poll_ms", []).append(
+                    polling_watch_latency(binary, fixtures["watch"], args.timeout)
+                )
+            except RuntimeError as error:
+                print(f"polling watch failed: {error}", file=sys.stderr)
+                return 1
+            kernel = inotify_kernel_latency(fixtures["watch"] / "main.txt")
+            if kernel is not None:
+                scenarios.setdefault("inotify_kernel_ms", []).append(kernel)
 
         gates = {
             "startup_100k_ms": 100.0,
             "search_100k_ms": 2000.0,
             "tree_256_ms": 1000.0,
             "reject_1gb_ms": 2000.0,
+            "watch_poll_ms": 1500.0,
+            "inotify_kernel_ms": 50.0,
         }
         result = {}
         failed = False

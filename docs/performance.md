@@ -403,6 +403,16 @@ python3 scripts/perf-gates.py --binary target/release/anvil
 | Project search, 100k files | p50 <= 2 s | 161 ms |
 | 256-directory tree open | p50 <= 1 s | 102 ms |
 | 1 GiB log rejection | p50 <= 2 s | 28 ms |
+| Clean-buffer external reload (polling) | p50 <= 1.5 s | 710 ms |
+| Kernel inotify event latency | p50 <= 50 ms | 0.05 ms |
+
+The watcher baseline is end-to-end: write a clean open file, then wait for the
+`reloaded` status. Polling adds the 100 ms stat interval and the 500 ms
+stability debounce, so 710 ms is expected rather than a stall. The kernel
+inotify latency is measured directly with `inotify_init1`; inotify is not
+integrated because the current polling watcher also works through the gateway
+and has no recursive native watcher to replace. Any inotify slice must keep the
+same bounded watch set, debounce, and stale-tree fallback.
 
 The 1 GiB file is rejected by the explicit 256 MiB open limit; the gate checks
 that rejection is immediate and diagnostic instead of attempting an unbounded
