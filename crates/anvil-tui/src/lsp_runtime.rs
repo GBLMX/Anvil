@@ -11,6 +11,23 @@ fn truncate_event_text(text: &str, max: usize) -> String {
     text[..end].to_owned()
 }
 
+fn inactive_lsp_keys(
+    keys: Vec<(String, String)>,
+    desired: Option<&(String, String)>,
+) -> Vec<(String, String)> {
+    keys.into_iter()
+        .filter(|key| desired != Some(key))
+        .collect()
+}
+
+fn diagnostic_code(diagnostic: &anvil_lsp_client::Diagnostic) -> Option<String> {
+    diagnostic.extra.get("code").and_then(|code| match code {
+        serde_json::Value::String(code) if !code.trim().is_empty() => Some(code.clone()),
+        serde_json::Value::Number(code) => Some(code.to_string()),
+        _ => None,
+    })
+}
+
 impl Model {
     pub(crate) fn clear_lsp_ui(&mut self) {
         self.clear_lsp_requests();
@@ -30,6 +47,33 @@ impl Model {
         self.overlays.lsp_results.semantic_legend.clear();
     }
 
+    fn retain_lsp_worker(&mut self, desired: Option<&(String, String)>) {
+        let keys = self.language.lsp.workers.keys().cloned().collect();
+        for key in inactive_lsp_keys(keys, desired) {
+            self.language.lsp.workers.remove(&key);
+            self.language.lsp.retries.remove(&key);
+            self.overlays.lsp_results.inlay_support.remove(&key);
+        }
+        if self
+            .language
+            .lsp
+            .config
+            .as_ref()
+            .is_some_and(|key| desired != Some(key))
+        {
+            self.language.lsp.config = None;
+        }
+        if self
+            .language
+            .lsp
+            .retry
+            .as_ref()
+            .is_some_and(|(key, _)| desired != Some(key))
+        {
+            self.language.lsp.retry = None;
+        }
+    }
+
     pub(crate) fn active_lsp_worker(&self) -> Option<&LspWorker> {
         self.language
             .lsp
@@ -46,6 +90,7 @@ impl Model {
     pub(crate) fn sync_lsp_active(&mut self) {
         let Some(path) = self.session.path.clone() else {
             self.language.lsp.config = None;
+            self.retain_lsp_worker(None);
             self.clear_lsp_ui();
             return;
         };
@@ -53,11 +98,13 @@ impl Model {
             lsp_settings_with_service(&path, self.workspace.language_tooling_service.as_deref())
         else {
             self.language.lsp.config = None;
+            self.retain_lsp_worker(None);
             self.clear_lsp_ui();
             return;
         };
         self.activate_plugins(ActivationEvent::Language(settings.language_id.clone()));
         let desired = (settings.tool.clone(), settings.language_id.clone());
+        self.retain_lsp_worker(Some(&desired));
         if !self.language.lsp.workers.contains_key(&desired) {
             self.start_lsp();
             if self.active_lsp_worker().is_some() {
@@ -97,6 +144,7 @@ impl Model {
             return;
         };
         let desired = (settings.tool.clone(), settings.language_id.clone());
+        self.retain_lsp_worker(Some(&desired));
         if self.language.lsp.workers.contains_key(&desired) {
             self.language.lsp.config = Some(desired.clone());
             self.clear_lsp_ui();
@@ -363,11 +411,16 @@ impl Model {
                     && diagnostic.range.end.line as usize >= line_number
             })
             .min_by_key(|diagnostic| diagnostic.severity.unwrap_or(99))?;
-        let message = diagnostic
+        let mut message = diagnostic
             .message
             .split_whitespace()
             .collect::<Vec<_>>()
             .join(" ");
+        if let Some(code) = diagnostic_code(diagnostic)
+            && !code.is_empty()
+        {
+            message = format!("[{code}] {message}");
+        }
         (!message.is_empty()).then_some((message, diagnostic.severity.unwrap_or(3)))
     }
 
@@ -464,5 +517,19 @@ mod event_text_tests {
         assert!(truncated.len() <= 512);
         assert!(truncated.is_char_boundary(truncated.len()));
         assert_eq!(truncated.chars().count(), 256);
+    }
+}
+
+#[cfg(test)]
+mod worker_selection_tests {
+    use super::inactive_lsp_keys;
+
+    #[test]
+    fn switching_language_selects_only_the_active_worker() {
+        let rust = ("rust-analyzer".to_owned(), "rust".to_owned());
+        let go = ("gopls".to_owned(), "go".to_owned());
+        let keys = vec![rust.clone(), go.clone()];
+        assert_eq!(inactive_lsp_keys(keys.clone(), Some(&go)), vec![rust]);
+        assert_eq!(inactive_lsp_keys(keys.clone(), None), keys);
     }
 }

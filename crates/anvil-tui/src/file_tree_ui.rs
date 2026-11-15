@@ -18,13 +18,6 @@ mod tests;
 mod tree;
 
 impl Model {
-    fn tree_entry_visible(&self, name: &str, is_dir: bool) -> bool {
-        !is_dir
-            || self.tree.show_hidden
-            || !name.starts_with('.')
-            || matches!(name, ".github" | ".cargo")
-    }
-
     pub(crate) fn ensure_file_worker(&mut self) -> bool {
         if self.workspace.file_worker.is_none() {
             let Some(session) = self.workspace.gateway_session.as_mut() else {
@@ -90,41 +83,6 @@ impl Model {
             .filter(|root| root.path != self.workspace.path)
             .map(|root| root.path.clone())
     }
-    pub(crate) fn root_label(&self, root: &Path) -> String {
-        let name = root
-            .file_name()
-            .map(|name| name.to_string_lossy().into_owned())
-            .unwrap_or_else(|| root.display().to_string());
-        let duplicates = self
-            .workspace
-            .roots
-            .list()
-            .iter()
-            .filter(|candidate| candidate.path.file_name() == root.file_name())
-            .count();
-        if duplicates <= 1 {
-            return name;
-        }
-        let Some(parent) = root.parent().and_then(Path::file_name) else {
-            return root.display().to_string();
-        };
-        let short = format!("{}/{}", parent.to_string_lossy(), name);
-        let short_duplicates = self
-            .workspace
-            .roots
-            .list()
-            .iter()
-            .filter(|candidate| {
-                candidate.path.file_name() == root.file_name()
-                    && candidate.path.parent().and_then(Path::file_name) == Some(parent)
-            })
-            .count();
-        if short_duplicates > 1 {
-            root.display().to_string()
-        } else {
-            short
-        }
-    }
 
     pub(crate) fn tree_entry_untrusted(&self, entry: &TreeEntry) -> bool {
         entry.depth == 0
@@ -153,7 +111,7 @@ impl Model {
                 .map(|name| name.to_string_lossy().into_owned())
                 .unwrap_or_default();
         }
-        let label = self.root_label(&entry.path);
+        let label = self.workspace.root_label(&entry.path);
         if self.tree_entry_untrusted(entry) {
             format!("[untrusted] {label}")
         } else {
@@ -227,7 +185,7 @@ impl Model {
         };
         let entries: Vec<DirEntry> = entries
             .into_iter()
-            .filter(|entry| self.tree_entry_visible(&entry.name, entry.is_dir))
+            .filter(|entry| self.tree.entry_visible(&entry.name, entry.is_dir))
             .collect();
         let expanded = self
             .tree
@@ -648,7 +606,7 @@ impl Model {
             } else if let Ok(entries) = self.tree_entries(&workspace) {
                 self.tree.entries = entries
                     .into_iter()
-                    .filter(|entry| self.tree_entry_visible(&entry.name, entry.is_dir))
+                    .filter(|entry| self.tree.entry_visible(&entry.name, entry.is_dir))
                     .map(|entry| TreeEntry {
                         path: workspace.join(entry.name),
                         depth: 0,
@@ -669,15 +627,6 @@ impl Model {
         self.sync_tree_watches();
         self.request_git_status();
         self.file.dirty = true;
-    }
-
-    fn valid_tree_name(name: &str) -> bool {
-        !name.is_empty()
-            && name != "."
-            && name != ".."
-            && !name.contains('/')
-            && !name.contains('\\')
-            && !name.chars().any(char::is_control)
     }
 
     fn tree_target_directory(&self) -> PathBuf {

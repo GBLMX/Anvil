@@ -1,17 +1,19 @@
 # ADR-0032: Language Tooling Service Slot
 
-- Status: Accepted for implementation; additive slot and fallback landed
+- Status: Implemented; built-in catalog and module provider resolution live in
+  `anvil-lsp-client`
 - Date: 2026-11-13
 - Related: [ADR-0028](0028-module-contract.md), [ADR-0025](0025-lsp-and-language-breadth.md),
   [ADR-0033](0033-latex-language-provider.md)
 
 ## Context
 
-`anvil-tui` discovers language servers from a built-in extension table. A
-distribution module may need to add a tooling provider without forking that
-table or forcing every distribution to carry the same language set. The first
-`0.7.4` desktop slice showed the module pattern; this ADR proposes the next
-additive extension point without selecting a product module.
+`anvil-lsp-client` owns built-in language-server discovery. `anvil-tui` only
+binds its settings-file command override into that catalog. A distribution
+module may need to add a tooling provider without forking the catalog or
+forcing every distribution to carry the same language set. The first `0.7.4`
+desktop slice showed the module pattern; this ADR proposes the next additive
+extension point without selecting a product module.
 
 The LSP worker still owns process startup and lifecycle. A provider only
 describes a launch profile; it must not open a second process path or bypass the

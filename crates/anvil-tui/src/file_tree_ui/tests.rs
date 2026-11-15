@@ -155,9 +155,9 @@ fn root_labels_disambiguate_duplicate_basenames() {
         .add(&unique, true)
         .expect("unique root");
 
-    assert_eq!(model.root_label(&first), "a/repo");
-    assert_eq!(model.root_label(&second), "b/repo");
-    assert_eq!(model.root_label(&unique), "unique");
+    assert_eq!(model.workspace.root_label(&first), "a/repo");
+    assert_eq!(model.workspace.root_label(&second), "b/repo");
+    assert_eq!(model.workspace.root_label(&unique), "unique");
 }
 
 #[test]

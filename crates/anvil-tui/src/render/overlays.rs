@@ -44,6 +44,27 @@ fn completion_kind_label(item: &crate::state::CompletionItem) -> &'static str {
     }
 }
 
+fn completion_label_spans(label: &str, query: &str, style: Style) -> Vec<Span<'static>> {
+    let prefix_chars = query.chars().count();
+    if prefix_chars == 0 {
+        return vec![Span::styled(label.to_owned(), style)];
+    }
+    let split = label
+        .char_indices()
+        .nth(prefix_chars)
+        .map_or(label.len(), |(index, _)| index);
+    if label[..split].to_lowercase() != query.to_lowercase() {
+        return vec![Span::styled(label.to_owned(), style)];
+    }
+    vec![
+        Span::styled(
+            label[..split].to_owned(),
+            style.fg(theme::accent()).add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(label[split..].to_owned(), style),
+    ]
+}
+
 pub(crate) fn render_overlays(model: &Model, frame: &mut Frame, area: Rect) {
     if let Some(palette) = &model.overlays.command_palette {
         let popup = command_palette_rect(area);
@@ -889,12 +910,11 @@ pub(crate) fn render_overlays(model: &Model, frame: &mut Frame, area: Rect) {
             let padding = inner_width
                 .saturating_sub(2 + label_width + kind_width)
                 .max(1);
-            lines.push(Line::from(vec![
-                Span::styled(if selected_row { "❯ " } else { "  " }, style),
-                Span::styled(label, style),
-                Span::styled(" ".repeat(padding), style),
-                Span::styled(kind, style.fg(theme::muted())),
-            ]));
+            let mut spans = vec![Span::styled(if selected_row { "❯ " } else { "  " }, style)];
+            spans.extend(completion_label_spans(&label, &completion.query, style));
+            spans.push(Span::styled(" ".repeat(padding), style));
+            spans.push(Span::styled(kind, style.fg(theme::muted())));
+            lines.push(Line::from(spans));
         }
         if let Some(documentation) = documentation {
             lines.push(Line::styled(

@@ -1,6 +1,7 @@
 //! Tree create, rename, transfer, and delete operations.
 
 use super::*;
+use anvil_workspace::valid_file_name;
 
 impl Model {
     pub(crate) fn begin_tree_create(&mut self, kind: CreateKind) {
@@ -222,7 +223,7 @@ impl Model {
             return;
         }
         let name = name.trim().to_owned();
-        if !Self::valid_tree_name(&name) {
+        if !valid_file_name(&name) {
             self.status.text = "E: invalid entry name".to_owned();
             self.file.dirty = true;
             return;
@@ -269,7 +270,7 @@ impl Model {
             return;
         }
         let name = name.trim().to_owned();
-        if !Self::valid_tree_name(&name) {
+        if !valid_file_name(&name) {
             self.status.text = "E: invalid entry name".to_owned();
             self.file.dirty = true;
             return;

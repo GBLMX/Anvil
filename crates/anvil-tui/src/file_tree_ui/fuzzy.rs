@@ -18,7 +18,7 @@ impl Model {
             .find(|root| path.starts_with(root))
             && let Ok(relative) = path.strip_prefix(root)
         {
-            let name = self.root_label(root);
+            let name = self.workspace.root_label(root);
             return format!("{name}/{}", relative.display());
         }
         entry.to_owned()

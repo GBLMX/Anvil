@@ -313,6 +313,42 @@ pub(crate) struct WorkspaceState {
     pub(crate) stale_paths: HashSet<PathBuf>,
 }
 
+impl WorkspaceState {
+    pub(crate) fn root_label(&self, root: &Path) -> String {
+        let name = root
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_else(|| root.display().to_string());
+        let duplicates = self
+            .roots
+            .list()
+            .iter()
+            .filter(|candidate| candidate.path.file_name() == root.file_name())
+            .count();
+        if duplicates <= 1 {
+            return name;
+        }
+        let Some(parent) = root.parent().and_then(Path::file_name) else {
+            return root.display().to_string();
+        };
+        let short = format!("{}/{}", parent.to_string_lossy(), name);
+        let short_duplicates = self
+            .roots
+            .list()
+            .iter()
+            .filter(|candidate| {
+                candidate.path.file_name() == root.file_name()
+                    && candidate.path.parent().and_then(Path::file_name) == Some(parent)
+            })
+            .count();
+        if short_duplicates > 1 {
+            root.display().to_string()
+        } else {
+            short
+        }
+    }
+}
+
 #[derive(Default)]
 pub(crate) struct ProjectState {
     /// Latest requested project-search generation.
@@ -620,6 +656,15 @@ pub(crate) struct TreeState {
     pub(crate) refresh_queued: bool,
     pub(crate) refresh_generation: u64,
     pub(crate) show_hidden: bool,
+}
+
+impl TreeState {
+    pub(crate) fn entry_visible(&self, name: &str, is_dir: bool) -> bool {
+        !is_dir
+            || self.show_hidden
+            || !name.starts_with('.')
+            || matches!(name, ".github" | ".cargo")
+    }
 }
 
 #[derive(Default)]

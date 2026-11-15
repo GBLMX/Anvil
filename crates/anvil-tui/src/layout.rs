@@ -1033,7 +1033,10 @@ mod inline_diagnostic_tests {
                     severity: Some(1),
                     message: "cannot find value `x`".to_owned(),
                     source: None,
-                    extra: serde_json::Map::new(),
+                    extra: serde_json::Map::from_iter([(
+                        "code".to_owned(),
+                        serde_json::json!("E0425"),
+                    )]),
                 },
             ],
         );
@@ -1048,7 +1051,7 @@ mod inline_diagnostic_tests {
             })
             .collect::<String>();
         assert!(
-            rendered.starts_with("let x  cannot find value `x`"),
+            rendered.starts_with("let x  [E0425] cannot find value `x`"),
             "{rendered}"
         );
         assert!(!rendered.contains("unused variable"), "{rendered}");

@@ -1,6 +1,6 @@
 [package]
 name = "anvil-lsp-client"
-description = "LSP transport, diagnostics, and supervised worker for Anvil"
+description = "LSP discovery, transport, diagnostics, and supervised worker for Anvil"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -10,5 +10,9 @@ repository.workspace = true
 [dependencies]
 anvil-ipc = { path = "../anvil-ipc", version = "0.6.0" }
 anvil-task = { path = "../anvil-task", version = "0.6.0" }
+anvil-module = { path = "../anvil-module", version = "0.6.0" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+
+[dev-dependencies]
+tempfile = "3"

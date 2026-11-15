@@ -607,6 +607,24 @@ fn completion_popup_shows_kind_docs_and_footer() {
     assert!(rendered.contains("println"), "{rendered}");
     assert!(rendered.contains("Print to standard output."), "{rendered}");
     assert!(rendered.contains("Enter/Tab accept"), "{rendered}");
+    let cells = terminal.backend().buffer().content();
+    let prefix = cells
+        .windows(7)
+        .position(|window| {
+            window
+                .iter()
+                .map(|cell| cell.symbol())
+                .eq(["p", "r", "i", "n", "t", "l", "n"])
+        })
+        .expect("completion label start");
+    assert_eq!(cells[prefix].fg, theme::accent());
+    let suffix = cells
+        .iter()
+        .skip(prefix + 2)
+        .position(|cell| cell.symbol() == "i")
+        .map(|index| prefix + 2 + index)
+        .expect("completion label suffix");
+    assert_ne!(cells[suffix].fg, theme::accent());
 }
 
 #[test]

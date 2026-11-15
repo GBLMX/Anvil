@@ -317,8 +317,8 @@ The second set is cross-domain orchestration, not page-local state. For
 example, `apply_settings` updates `config`, `search`, `overlays`, `status`, and
 `file`, and applies theme state. Moving it to `impl SettingsOverlayState` would
 require new accessors or a forwarding shim for every field. The same field
-scan also shows `root_label` belongs to `workspace`, `semantic_style` belongs
-to `overlays`, and `valid_tree_name` is a static helper with no state owner.
+scan also identified `root_label` as workspace-owned, `semantic_style` as
+overlay-owned, and `valid_tree_name` as a portable-file-name rule.
 
 The first verified slice moved `capture_insert` and `trim_insert` from
 `impl Model` to `impl EditSessionState` (617 → 615 methods, 192 → 190
@@ -330,6 +330,12 @@ The second slice moved `absolute_path`, `relative_path`, `root_relative`,
 single-owner methods). `rename_path` and `copy_path` remain on `Model` because
 they orchestrate workspace state and file operations; their internal calls now
 go through `self.workspace`.
+
+The third slice moved `root_label` to `impl WorkspaceState`, tree visibility
+to `impl TreeState`, and portable file-name validation to
+`anvil-workspace::valid_file_name`. The language-server catalog moved to
+`anvil-lsp-client`; the TUI retains only the settings override binding and
+single-active-worker lifecycle.
 
 Rules for the next slice:
 

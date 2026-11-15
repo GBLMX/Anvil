@@ -48,9 +48,21 @@ const MAX_REPLACE_FILES: usize = 100;
 const MAX_REPLACE_FILE_BYTES: usize = 4 * 1024 * 1024;
 const MAX_REPLACE_BYTES: usize = 16 * 1024 * 1024;
 
+/// Whether `name` is a single portable file or directory name.
+pub fn valid_file_name(name: &str) -> bool {
+    !name.is_empty()
+        && name != "."
+        && name != ".."
+        && !name.contains('/')
+        && !name.contains('\\')
+        && !name.chars().any(char::is_control)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{FileEvent, FileRequest, FileWorker, PREVIEW_MAX_LINES, decode_preview};
+    use super::{
+        FileEvent, FileRequest, FileWorker, PREVIEW_MAX_LINES, decode_preview, valid_file_name,
+    };
     #[cfg(feature = "official-git")]
     use super::{parse_git_diff, parse_git_status};
     use anvil_ipc::GatewayClient;
@@ -626,5 +638,14 @@ mod tests {
         }
         drop(worker);
         server.join().expect("server");
+    }
+
+    #[test]
+    fn rejects_portable_name_separators() {
+        assert!(valid_file_name("main.rs"));
+        assert!(valid_file_name(".github"));
+        for name in ["", ".", "..", "a/b", "a\\b", "a\0b"] {
+            assert!(!valid_file_name(name), "{name:?}");
+        }
     }
 }

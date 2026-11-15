@@ -148,7 +148,7 @@ impl Model {
         };
         let mut needs_listing = false;
         for entry in entries {
-            if !self.tree_entry_visible(&entry.name, entry.is_dir) {
+            if !self.tree.entry_visible(&entry.name, entry.is_dir) {
                 continue;
             }
             let path = directory.join(&entry.name);

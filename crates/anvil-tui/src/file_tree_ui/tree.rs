@@ -35,7 +35,7 @@ impl Model {
                     Ok(entries) => {
                         self.tree.entries = entries
                             .into_iter()
-                            .filter(|entry| self.tree_entry_visible(&entry.name, entry.is_dir))
+                            .filter(|entry| self.tree.entry_visible(&entry.name, entry.is_dir))
                             .map(|entry| TreeEntry {
                                 path: workspace.join(entry.name),
                                 depth: 0,
@@ -128,7 +128,7 @@ impl Model {
                         self.tree.entries[index].expanded = true;
                         let children: Vec<TreeEntry> = children
                             .into_iter()
-                            .filter(|child| self.tree_entry_visible(&child.name, child.is_dir))
+                            .filter(|child| self.tree.entry_visible(&child.name, child.is_dir))
                             .map(|child| TreeEntry {
                                 path: entry.path.join(child.name),
                                 depth: entry.depth + 1,
@@ -185,7 +185,7 @@ impl Model {
         }
         let entries = self.tree_entries(directory)?;
         for entry in entries {
-            if !self.tree_entry_visible(&entry.name, entry.is_dir) {
+            if !self.tree.entry_visible(&entry.name, entry.is_dir) {
                 continue;
             }
             let relative = if prefix.is_empty() {

@@ -23,6 +23,12 @@ post-`0.5.0` feature line.
   workspace edits apply as one revision-checked transaction, and vertical
   movement, pointer hit testing, and bracket matching snap to cluster
   boundaries. Added randomized Unicode action-sequence property tests.
+- Moved built-in language-server discovery into `anvil-lsp-client`, leaving
+  only the settings-file override binding in the TUI. The single active LSP
+  worker is retained across language switches; clangd and jdtls remain
+  on-demand defaults. Completion labels highlight the matched prefix, inline
+  diagnostics include LSP codes, workspace root labels and file-name
+  validation moved to their domain owners.
 - Character selections now render a Helix-style selection background, a
   warning-colored primary anchor bar, and a block cursor at the selection head.
 - Implemented the existing `event.subscribe` v1 method. The editor now
