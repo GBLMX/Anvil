@@ -140,6 +140,19 @@ impl Model {
             .max(1)
     }
 
+    pub(crate) fn welcome_area(&self, width: u16, height: u16) -> Rect {
+        let mut area = Rect {
+            x: 1,
+            y: 1,
+            width: width.saturating_sub(2),
+            height: height.saturating_sub(2),
+        };
+        area.height = area
+            .height
+            .saturating_sub(crate::message::height(self, area.height));
+        area
+    }
+
     #[cfg(feature = "e2e-bench")]
     #[doc(hidden)]
     pub fn editor_text_width_for_bench(&self, viewport_width: u16) -> u16 {

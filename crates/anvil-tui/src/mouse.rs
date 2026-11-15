@@ -221,7 +221,8 @@ pub(crate) fn hit_test(model: &Model, col: u16, row: u16, width: u16, height: u1
         return Target::Outside;
     }
     if model.start_page.welcome {
-        return crate::render::welcome_recent_at(model, col, row, width, height)
+        let area = model.welcome_area(width, height);
+        return crate::render::welcome_recent_at(model, col, row, area)
             .map_or(Target::Outside, Target::WelcomeRecent);
     }
     let Some((inner, tab_row, breadcrumb_row, message_area)) = content_rect(model, width, height)

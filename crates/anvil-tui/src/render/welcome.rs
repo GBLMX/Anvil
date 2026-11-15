@@ -3,22 +3,10 @@
 use super::*;
 use crate::theme;
 
-pub(crate) fn welcome_recent_at(
-    model: &Model,
-    column: u16,
-    row: u16,
-    width: u16,
-    height: u16,
-) -> Option<usize> {
+pub(crate) fn welcome_recent_at(model: &Model, column: u16, row: u16, area: Rect) -> Option<usize> {
     if !model.start_page.welcome {
         return None;
     }
-    let area = Rect {
-        x: 1,
-        y: 1,
-        width: width.saturating_sub(2),
-        height: height.saturating_sub(2),
-    };
     let panel_width = area.width.saturating_sub(4).clamp(12, 92).min(area.width);
     let panel_height = area.height.saturating_sub(2).clamp(4, 22).min(area.height);
     let panel = Rect {

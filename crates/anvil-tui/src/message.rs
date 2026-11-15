@@ -16,11 +16,7 @@ struct Message {
 }
 
 pub(crate) fn height(model: &Model, available: u16) -> u16 {
-    let rows = if matches!(model.ui.input_mode, InputMode::Normal) {
-        messages(model).len()
-    } else {
-        notification_messages(model).len()
-    };
+    let rows = messages(model).len();
     u16::try_from(rows.min(MAX_MESSAGE_ROWS))
         .unwrap_or(0)
         .min(available.saturating_sub(1))
@@ -48,28 +44,26 @@ pub(crate) fn render(model: &Model, frame: &mut Frame, area: Rect) {
 
 fn messages(model: &Model) -> Vec<Message> {
     let mut messages = Vec::new();
-    if matches!(model.ui.input_mode, InputMode::Normal) {
-        if let Some(busy) = &model.status.busy {
-            messages.push(Message {
-                marker: model.spinner_glyph(),
-                color: theme::accent(),
-                text: format!("{busy}…"),
-            });
-        } else if !model.status.text.is_empty() {
-            let text = model.status.text.clone();
-            let (marker, color) = if text.starts_with("E:") {
-                ("!", theme::error())
-            } else if text.starts_with("W:") {
-                ("▲", theme::warning())
-            } else {
-                ("·", theme::muted())
-            };
-            messages.push(Message {
-                marker,
-                color,
-                text,
-            });
-        }
+    if let Some(busy) = &model.status.busy {
+        messages.push(Message {
+            marker: model.spinner_glyph(),
+            color: theme::accent(),
+            text: format!("{busy}…"),
+        });
+    } else if matches!(model.ui.input_mode, InputMode::Normal) && !model.status.text.is_empty() {
+        let text = model.status.text.clone();
+        let (marker, color) = if text.starts_with("E:") {
+            ("!", theme::error())
+        } else if text.starts_with("W:") {
+            ("▲", theme::warning())
+        } else {
+            ("·", theme::muted())
+        };
+        messages.push(Message {
+            marker,
+            color,
+            text,
+        });
     }
     let remaining = MAX_MESSAGE_ROWS.saturating_sub(messages.len());
     messages.extend(notification_messages(model).into_iter().take(remaining));
@@ -127,6 +121,14 @@ mod tests {
     fn transient_status_messages_use_the_band() {
         let mut model = Model::new(EditorState::from_text("x"), None);
         model.status.text = "E: boom".to_owned();
+        assert_eq!(height(&model, 20), 1);
+    }
+
+    #[test]
+    fn busy_state_remains_visible_outside_normal_mode() {
+        let mut model = Model::new(EditorState::from_text("x"), None);
+        model.ui.input_mode = InputMode::Insert;
+        model.status.busy = Some("copy".to_owned());
         assert_eq!(height(&model, 20), 1);
     }
 }

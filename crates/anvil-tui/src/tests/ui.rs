@@ -1027,8 +1027,14 @@ fn welcome_recent_rows_are_clickable() {
     model.workspace.roots =
         crate::workspace_roots::WorkspaceRoots::new(&model.workspace.path).expect("roots");
     model.record_recent_file(&path);
+    model.notify(
+        anvil_session::ui::NotificationSeverity::Info,
+        "test",
+        "hello",
+    );
+    let area = model.welcome_area(80, 30);
     let recent_row = (0..30)
-        .find(|row| crate::render::welcome_recent_at(&model, 35, *row, 80, 30) == Some(0))
+        .find(|row| crate::render::welcome_recent_at(&model, 35, *row, area) == Some(0))
         .expect("clickable recent row");
     assert_eq!(
         crate::mouse::hit_test(&model, 35, recent_row, 80, 30),
