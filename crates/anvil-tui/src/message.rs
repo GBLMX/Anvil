@@ -15,6 +15,14 @@ struct Message {
     text: String,
 }
 
+fn warning_marker() -> &'static str {
+    warning_marker_for(crate::icon_theme::ascii_mode())
+}
+
+fn warning_marker_for(ascii: bool) -> &'static str {
+    if ascii { "!" } else { "▲" }
+}
+
 pub(crate) fn height(model: &Model, available: u16) -> u16 {
     let rows = messages(model).len();
     u16::try_from(rows.min(MAX_MESSAGE_ROWS))
@@ -55,7 +63,7 @@ fn messages(model: &Model) -> Vec<Message> {
         let (marker, color) = if text.starts_with("E:") {
             ("!", theme::error())
         } else if text.starts_with("W:") {
-            ("▲", theme::warning())
+            (warning_marker(), theme::warning())
         } else {
             ("·", theme::muted())
         };
@@ -81,7 +89,7 @@ fn notification_messages(model: &Model) -> Vec<Message> {
         .map(|notification| {
             let (marker, color) = match notification.severity {
                 NotificationSeverity::Error => ("!", theme::error()),
-                NotificationSeverity::Warning => ("▲", theme::warning()),
+                NotificationSeverity::Warning => (warning_marker(), theme::warning()),
                 NotificationSeverity::Info => ("i", theme::accent()),
             };
             let suffix = if notification.count > 1 {
@@ -102,6 +110,12 @@ fn notification_messages(model: &Model) -> Vec<Message> {
 mod tests {
     use super::*;
     use anvil_editor::EditorState;
+
+    #[test]
+    fn warning_marker_has_ascii_fallback() {
+        assert_eq!(warning_marker_for(true), "!");
+        assert_eq!(warning_marker_for(false), "▲");
+    }
 
     #[test]
     fn caps_rows_and_reserves_content() {
