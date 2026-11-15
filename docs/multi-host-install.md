@@ -31,6 +31,13 @@ Anvil already supports an explicit override:
 ANVIL_TRUECOLOR=1 anvil --workspace /path/to/project
 ```
 
+The same choice can be passed on the command line:
+
+```bash
+anvil --truecolor=always --workspace /path/to/project
+anvil --truecolor=never --workspace /path/to/project
+```
+
 `ANVIL_TRUECOLOR=0` forces 256-color quantization. Without the override,
 `COLORTERM=truecolor` or `COLORTERM=24bit` is honored when the SSH/tmux
 environment preserves it.

@@ -189,6 +189,9 @@ same user as the editor.
 | `ANVIL_TRUECOLOR` | `1`/`true` forces 24-bit RGB; `0` forces the 256-color fallback |
 | `COLORTERM` | `truecolor`/`24bit` enables RGB detection when the terminal forwards it |
 
+The equivalent CLI override is `--truecolor=always`, `--truecolor=never`, or
+`--truecolor=auto`.
+
 ## Uninstall
 
 ```bash

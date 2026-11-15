@@ -16,6 +16,7 @@ Options:
   --editor              External-editor mode; allows one explicit file outside
                         the cwd by using its parent as the default workspace
   --read-only           Reject mutating commands
+  --truecolor[=MODE]    auto, always, or never; overrides SSH color detection
   -h, --help             Show this help and exit
   -V, --version          Show the version and exit
   --                     Treat the next argument as FILE
@@ -24,6 +25,7 @@ Environment:
   ANVIL_GATEWAY          Explicit path to anvil-gateway
   ANVIL_RG               Explicit ripgrep path for fuzzy file listing
   ANVIL_THEME            Startup theme by name; :theme lists built-ins
+  ANVIL_TRUECOLOR       Force 24-bit RGB (1) or 256-color fallback (0)
   ANVIL_SETTINGS         Explicit settings.toml path
   ANVIL_EDITOR_SCROLL_MARGIN  Viewport scroll margin (0-16)
   ANVIL_EDITOR_MAX_BUFFERS  Maximum foreground buffers (1-99)
@@ -111,6 +113,7 @@ enum Command {
         editor: bool,
         stdin: bool,
         read_only: bool,
+        truecolor: Option<bool>,
     },
     Help,
     Version,
@@ -294,12 +297,16 @@ where
             editor,
             stdin,
             read_only,
+            truecolor,
         }) => {
             if !stdin
                 && !editor
                 && forward_to_running(distribution, &workspace, path.as_deref(), read_only)?
             {
                 return Ok(0);
+            }
+            if let Some(enabled) = truecolor {
+                unsafe { env::set_var("ANVIL_TRUECOLOR", if enabled { "1" } else { "0" }) };
             }
             let git = compose_git(distribution)?;
             let workspace_index = compose_workspace_index(distribution)?;
@@ -395,6 +402,7 @@ where
     let mut editor = false;
     let mut stdin = false;
     let mut read_only = false;
+    let mut truecolor = None;
 
     while let Some(argument) = arguments.next() {
         if argument == "--help" || argument == "-h" {
@@ -409,6 +417,22 @@ where
         }
         if argument == "--read-only" {
             read_only = true;
+            continue;
+        }
+        if argument == "--truecolor" {
+            truecolor = Some(true);
+            continue;
+        }
+        if let Some(value) = argument
+            .to_str()
+            .and_then(|value| value.strip_prefix("--truecolor="))
+        {
+            truecolor = match value.to_ascii_lowercase().as_str() {
+                "auto" => None,
+                "always" | "true" | "1" | "on" => Some(true),
+                "never" | "false" | "0" | "off" => Some(false),
+                _ => return Err(format!("invalid --truecolor mode: {value}")),
+            };
             continue;
         }
         if argument == "-" {
@@ -464,6 +488,7 @@ where
         editor,
         stdin,
         read_only,
+        truecolor,
     })
 }
 
@@ -507,6 +532,7 @@ mod tests {
                 editor: false,
                 stdin: false,
                 read_only: false,
+                truecolor: None,
             }
         );
     }
@@ -522,7 +548,35 @@ mod tests {
                 editor: false,
                 stdin: false,
                 read_only: false,
+                truecolor: None,
             }
+        );
+    }
+
+    #[test]
+    fn parses_truecolor_modes() {
+        let Command::Run { truecolor, .. } = parse_args(args(&["--truecolor=always"])).unwrap()
+        else {
+            panic!("expected run command");
+        };
+        assert_eq!(truecolor, Some(true));
+
+        let Command::Run { truecolor, .. } = parse_args(args(&["--truecolor=never"])).unwrap()
+        else {
+            panic!("expected run command");
+        };
+        assert_eq!(truecolor, Some(false));
+
+        let Command::Run { truecolor, .. } = parse_args(args(&["--truecolor=auto"])).unwrap()
+        else {
+            panic!("expected run command");
+        };
+        assert_eq!(truecolor, None);
+
+        assert!(
+            parse_args(args(&["--truecolor=sometimes"]))
+                .unwrap_err()
+                .contains("invalid --truecolor mode")
         );
     }
 
@@ -537,6 +591,7 @@ mod tests {
                 editor: false,
                 stdin: false,
                 read_only: false,
+                truecolor: None,
             }
         );
     }
@@ -630,6 +685,7 @@ mod tests {
                 editor: true,
                 stdin: false,
                 read_only: false,
+                truecolor: None,
             }
         );
     }
