@@ -2145,3 +2145,20 @@ fn lsp_status_command_reports_server_details() {
     assert!(text.contains("root /ws (primary)"), "{text}");
     assert!(text.contains("server clangd 18"), "{text}");
 }
+
+#[test]
+fn close_clears_pending_sync_only_for_the_closed_path() {
+    let mut model = Model::new(EditorState::from_text("fn main() {}\n"), None);
+    let first = PathBuf::from("/ws/first.rs");
+    let second = PathBuf::from("/ws/second.rs");
+    model.language.lsp.pending_sync = Some((first.clone(), "first".to_owned()));
+    model.close_lsp_document(&first);
+    assert!(model.language.lsp.pending_sync.is_none());
+
+    model.language.lsp.pending_sync = Some((second.clone(), "second".to_owned()));
+    model.close_lsp_document(&first);
+    assert_eq!(
+        model.language.lsp.pending_sync,
+        Some((second, "second".to_owned()))
+    );
+}

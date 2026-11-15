@@ -220,6 +220,15 @@ impl Model {
     }
 
     pub(crate) fn close_lsp_document(&mut self, path: &Path) {
+        if self
+            .language
+            .lsp
+            .pending_sync
+            .as_ref()
+            .is_some_and(|(pending, _)| pending == path)
+        {
+            self.language.lsp.pending_sync = None;
+        }
         for worker in self.language.lsp.workers.values() {
             let _ = worker.close(path);
         }
