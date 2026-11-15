@@ -18,10 +18,13 @@ impl Model {
 
     /// Applies one plugin transaction against the active buffer.
     pub fn apply_plugin_edit(&mut self, request: ApplyEditRequest) -> Result<u64, String> {
-        if self.pager.back.is_some() {
-            self.status.text = "E: editor is showing a read-only view".to_owned();
-            self.file.dirty = true;
-            return Err("editor is showing a read-only view".to_owned());
+        if self.reject_read_only() {
+            let reason = if self.pager.back.is_some() {
+                "editor is showing a read-only view"
+            } else {
+                "read-only buffer"
+            };
+            return Err(reason.to_owned());
         }
         let buffer_id = self.buffers.active_id.get();
         let count = request.edits.len();
@@ -327,6 +330,25 @@ mod tests {
             .expect_err("read-only page must reject edits");
         assert!(error.contains("read-only view"), "{error}");
         assert!(model.pager.back.is_some());
+    }
+
+    #[test]
+    fn plugin_edits_are_rejected_on_a_read_only_buffer() {
+        let mut model = Model::new(EditorState::from_text("abcd"), None);
+        let buffer_id = model.plugin_snapshot().buffer_id;
+        model.file.read_only = true;
+        let error = model
+            .apply_plugin_edit(ApplyEditRequest {
+                buffer_id,
+                base_revision: model.session.editor.revision(),
+                edits: vec![DocumentEdit {
+                    range: TextRange { start: 0, end: 1 },
+                    text: "X".to_owned(),
+                }],
+            })
+            .expect_err("read-only buffer must reject edits");
+        assert!(error.contains("read-only buffer"), "{error}");
+        assert_eq!(model.session.editor.text().slice(0..4), "abcd");
     }
 
     #[test]

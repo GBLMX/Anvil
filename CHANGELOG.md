@@ -17,10 +17,11 @@ post-`0.5.0` feature line.
   for distributions that enable multiple language providers.
 - Buffers now carry a stable, monotonically allocated identity; plugin snapshots
   and edits reject requests after the active buffer changes or while a read-only
-  page is shown.
+  page or buffer is active.
 - Workspace edits now stage resource operations, keep rollback backups for
   create/rename/delete, and restore completed files when a later operation
-  fails. Project replace rolls back failed writes in reverse order.
+  fails. Read-only buffers reject workspace edits, and project replace rolls
+  back failed writes in reverse order.
 - Buffer tabs and the buffer picker now show file-type icons; picker paths are
   workspace-relative instead of absolute.
 - The status line adds the current file icon plus read-only and missing-file

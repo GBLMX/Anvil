@@ -523,3 +523,29 @@ fn workspace_text_edit_is_one_undo_group() {
     assert_eq!(model.session.editor.text().slice(0..3), "abc");
     assert_eq!(model.session.editor.undo_depth(), 0);
 }
+
+#[test]
+fn read_only_active_buffer_rejects_workspace_edits() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("file.txt");
+    fs::write(&path, "abc").expect("file");
+    let mut model = Model::open(&path).expect("open");
+    model.file.read_only = true;
+    let workspace_edit = WorkspaceEdit::from_lsp(&serde_json::json!({
+        "changes": {
+            uri(&path): [{
+                "range": {
+                    "start": {"line": 0, "character": 0},
+                    "end": {"line": 0, "character": 1}
+                },
+                "newText": "x"
+            }]
+        }
+    }))
+    .expect("parse");
+    let error = workspace_edit
+        .apply(&mut model)
+        .expect_err("read-only edit");
+    assert!(error.contains("read-only"), "{error}");
+    assert_eq!(model.session.editor.text().slice(0..3), "abc");
+}

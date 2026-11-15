@@ -96,6 +96,11 @@ impl WorkspaceEdit {
     }
 
     pub(crate) fn apply(&self, model: &mut Model) -> Result<(), String> {
+        if model.file.read_only {
+            model.status.text = "E: read-only buffer".to_owned();
+            model.file.dirty = true;
+            return Err("read-only buffer".to_owned());
+        }
         self.check_revisions(model)?;
         let prepared = self.prepare(model)?;
         self.apply_resources(model)?;
