@@ -406,7 +406,9 @@ pub(crate) fn render_overlays(model: &Model, frame: &mut Frame, area: Rect) {
         );
     }
     crate::test_explorer::render(model, frame, area);
-    crate::theme_browser::render(model, frame, area);
+    if let Some(browser) = &model.overlays.theme_browser {
+        crate::theme_browser::render(browser, frame, area);
+    }
     crate::debug_panel::render(model, frame, area);
     if let Some(peek) = &model.ui.diagnostic_peek {
         let width = (area.width * 2 / 3)

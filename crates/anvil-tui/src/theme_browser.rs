@@ -9,20 +9,46 @@ pub(crate) struct ThemeBrowser {
     pub(crate) selected: usize,
 }
 
-impl Model {
-    pub(crate) fn open_theme_browser(&mut self) {
-        if self.overlays.theme_browser.is_some() {
-            return;
-        }
+impl ThemeBrowser {
+    pub(crate) fn new() -> Self {
         let names = theme::names();
         let selected = names
             .iter()
             .position(|name| *name == theme::name())
             .unwrap_or(0);
-        self.overlays.theme_browser = Some(ThemeBrowser {
+        Self {
             original: theme::choice(),
             selected,
-        });
+        }
+    }
+
+    pub(crate) fn move_selection(&mut self, delta: isize) -> Option<&'static str> {
+        let names = theme::names();
+        if names.is_empty() {
+            return None;
+        }
+        self.selected = self
+            .selected
+            .saturating_add_signed(delta)
+            .min(names.len() - 1);
+        names.get(self.selected).copied()
+    }
+
+    pub(crate) fn selected_name(&self) -> Option<&'static str> {
+        theme::names().get(self.selected).copied()
+    }
+
+    pub(crate) fn original(&self) -> Choice {
+        self.original
+    }
+}
+
+impl Model {
+    pub(crate) fn open_theme_browser(&mut self) {
+        if self.overlays.theme_browser.is_some() {
+            return;
+        }
+        self.overlays.theme_browser = Some(ThemeBrowser::new());
         self.push_overlay(OverlayKind::ThemeBrowser);
         self.status.text = "themes · Enter apply · Esc cancel".to_owned();
         self.file.dirty = true;
@@ -32,15 +58,7 @@ impl Model {
         let Some(browser) = self.overlays.theme_browser.as_mut() else {
             return;
         };
-        let names = theme::names();
-        if names.is_empty() {
-            return;
-        }
-        browser.selected = browser
-            .selected
-            .saturating_add_signed(delta)
-            .min(names.len() - 1);
-        if let Some(name) = names.get(browser.selected) {
+        if let Some(name) = browser.move_selection(delta) {
             let _ = theme::apply_choice(Choice::Fixed(name), false);
         }
         self.file.dirty = true;
@@ -51,8 +69,7 @@ impl Model {
             return;
         };
         self.close_overlay(OverlayKind::ThemeBrowser);
-        let names = theme::names();
-        let Some(name) = names.get(browser.selected) else {
+        let Some(name) = browser.selected_name() else {
             return;
         };
         self.status.text = match theme::set_theme(name) {
@@ -70,7 +87,7 @@ impl Model {
             return;
         };
         self.close_overlay(OverlayKind::ThemeBrowser);
-        let _ = theme::apply_choice(browser.original, false);
+        let _ = theme::apply_choice(browser.original(), false);
         self.status.text = "theme preview cancelled".to_owned();
         self.file.dirty = true;
     }
@@ -101,10 +118,11 @@ fn list_start(selected: usize, len: usize, visible: usize) -> usize {
         .min(len.saturating_sub(visible))
 }
 
-pub(crate) fn render(model: &Model, frame: &mut ratatui::Frame, area: ratatui::layout::Rect) {
-    let Some(browser) = &model.overlays.theme_browser else {
-        return;
-    };
+pub(crate) fn render(
+    browser: &ThemeBrowser,
+    frame: &mut ratatui::Frame,
+    area: ratatui::layout::Rect,
+) {
     let names = theme::names();
     let popup = rect(area);
     frame.render_widget(ratatui::widgets::Clear, popup);
@@ -264,5 +282,16 @@ mod tests {
             "{last} was clipped from the theme list"
         );
         theme::set_startup_theme("anvil-dark").expect("reset");
+    }
+
+    #[test]
+    fn theme_browser_state_owns_selection_and_original() {
+        theme::set_startup_theme("anvil-dark").expect("reset");
+        let mut browser = ThemeBrowser::new();
+        let original = browser.original();
+        assert_eq!(browser.selected_name(), Some("anvil-dark"));
+        let next = browser.move_selection(1).expect("next theme");
+        assert_eq!(browser.selected_name(), Some(next));
+        assert_eq!(browser.original(), original);
     }
 }
