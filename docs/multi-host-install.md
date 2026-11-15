@@ -19,6 +19,26 @@ The Debian and Ubuntu hosts are terminal-only. Verification used a TUI inside
 `tmux` plus `anvil-ctl`; this is **remote TUI over SSH/tmux**, not a headless
 editor service.
 
+## Truecolor over SSH
+
+SSH does not reliably forward `COLORTERM`. A server-side process commonly sees
+`TERM=xterm-256color` and no `COLORTERM`, so automatic detection legitimately
+falls back to 256 colors even when the local terminal is 24-bit capable.
+
+Anvil already supports an explicit override:
+
+```bash
+ANVIL_TRUECOLOR=1 anvil --workspace /path/to/project
+```
+
+`ANVIL_TRUECOLOR=0` forces 256-color quantization. Without the override,
+`COLORTERM=truecolor` or `COLORTERM=24bit` is honored when the SSH/tmux
+environment preserves it.
+
+`btop` looking correct is not evidence that its terminal detection succeeded:
+it has explicit truecolor configuration and can force the profile.
+
+
 ## Findings
 
 ### 1. Build-host ISA leaks into release artifacts

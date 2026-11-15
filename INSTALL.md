@@ -186,6 +186,8 @@ same user as the editor.
 | `ANVIL_BUNDLED_PLUGIN_DIR` | Explicit bundled official plugin directory |
 | `ANVIL_PLUGIN_DIR` | Directory whose child directories contain `plugin.json` |
 | `ANVIL_CGROUP_ROOT` | Explicit delegated cgroup v2 root for plugin hosts |
+| `ANVIL_TRUECOLOR` | `1`/`true` forces 24-bit RGB; `0` forces the 256-color fallback |
+| `COLORTERM` | `truecolor`/`24bit` enables RGB detection when the terminal forwards it |
 
 ## Uninstall
 
