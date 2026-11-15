@@ -9,7 +9,7 @@ use std::sync::{
 use std::time::{Duration, Instant};
 
 use anvil_ipc::{DirEntry, GatewayClient};
-use anvil_task::{DataError, TaskContext, TaskEvent as TaskGroupEvent, TaskGroup, TaskGroupConfig};
+use anvil_task::{TaskContext, TaskEvent as TaskGroupEvent, TaskGroup, TaskGroupConfig};
 
 use super::preview::{PreviewData, read_preview};
 use super::search::{apply_project_replace, files, project_replace_preview, project_search};
@@ -764,27 +764,14 @@ fn send_event(context: &TaskContext<FileEvent>, event: FileEvent) -> bool {
 
 fn send_event_inner(
     context: &TaskContext<FileEvent>,
-    mut event: FileEvent,
+    event: FileEvent,
     cost: Option<usize>,
 ) -> bool {
-    loop {
-        if context.is_cancelled() {
-            return false;
-        }
-        let result = match cost {
-            Some(bytes) => context.send_data_with_cost(event, bytes),
-            None => context.send_data(event),
-        };
-        match result {
-            Ok(()) => return true,
-            Err(DataError::Closed(_)) => return false,
-            Err(DataError::TaskFull(returned))
-            | Err(DataError::GlobalFull(returned))
-            | Err(DataError::GlobalBytesFull(returned)) => {
-                event = returned;
-                std::thread::sleep(Duration::from_millis(1));
-            }
-        }
+    match cost {
+        Some(bytes) => context
+            .send_data_with_cost_backpressure(event, bytes)
+            .is_ok(),
+        None => context.send_data_backpressure(event).is_ok(),
     }
 }
 

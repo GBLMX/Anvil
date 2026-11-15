@@ -62,7 +62,7 @@ impl TaskWorker {
                 TASK_TIMEOUT,
                 context.cancel_token(),
             );
-            match context.send_data(result) {
+            match context.send_data_backpressure(result) {
                 Ok(()) | Err(DataError::Closed(_)) => Ok(()),
                 Err(error) => Err(format!("task result delivery failed: {error:?}")),
             }

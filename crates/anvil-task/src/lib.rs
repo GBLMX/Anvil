@@ -6,7 +6,7 @@
 
 use std::{
     any::Any,
-    collections::{BTreeMap, VecDeque},
+    collections::VecDeque,
     fmt, io,
     panic::{AssertUnwindSafe, catch_unwind},
     sync::{
@@ -83,6 +83,39 @@ pub struct Progress {
     pub total: Option<u64>,
     /// Optional human-readable detail.
     pub message: Option<String>,
+}
+
+struct ProgressSlot {
+    value: Mutex<Option<Progress>>,
+    dirty: AtomicBool,
+}
+
+impl ProgressSlot {
+    fn new() -> Self {
+        Self {
+            value: Mutex::new(None),
+            dirty: AtomicBool::new(false),
+        }
+    }
+
+    fn set(&self, progress: Progress) {
+        if let Ok(mut value) = self.value.lock() {
+            *value = Some(progress);
+            self.dirty.store(true, Ordering::Release);
+        }
+    }
+
+    fn take(&self) -> Option<Progress> {
+        let mut value = self.value.lock().ok()?;
+        if !self.dirty.swap(false, Ordering::AcqRel) {
+            return None;
+        }
+        value.take()
+    }
+
+    fn is_pending(&self) -> bool {
+        self.dirty.load(Ordering::Acquire)
+    }
 }
 
 /// One event produced by a task or by lifecycle reconciliation.
@@ -330,7 +363,7 @@ impl<D> Drop for DataMailbox<D> {
 pub struct TaskContext<D> {
     id: TaskId,
     cancel: CancelToken,
-    progress: Arc<Mutex<BTreeMap<TaskId, Progress>>>,
+    progress: Arc<ProgressSlot>,
     mailbox: Arc<DataMailbox<D>>,
     data_byte_capacity: usize,
 }
@@ -353,9 +386,7 @@ impl<D> TaskContext<D> {
 
     /// Publish the latest progress; older values are replaced.
     pub fn report_progress(&self, progress: Progress) {
-        if let Ok(mut progress_map) = self.progress.lock() {
-            progress_map.insert(self.id, progress);
-        }
+        self.progress.set(progress);
     }
 
     /// Queue one bounded data event.
@@ -371,6 +402,52 @@ impl<D> TaskContext<D> {
     pub fn send_data_with_cost(&self, data: D, bytes: usize) -> Result<(), DataError<D>> {
         self.mailbox.try_push_with_cost(data, bytes)
     }
+
+    /// Queue one data event, waiting while a bounded queue is full.
+    ///
+    /// Cancellation returns [`DataError::Closed`] with the payload. The wait is
+    /// a 1 ms sleep rather than a spin loop; callers that need a different
+    /// policy should use [`TaskContext::send_data`] directly.
+    pub fn send_data_backpressure(&self, mut data: D) -> Result<(), DataError<D>> {
+        loop {
+            if self.is_cancelled() {
+                return Err(DataError::Closed(data));
+            }
+            match self.send_data(data) {
+                Ok(()) => return Ok(()),
+                Err(DataError::Closed(returned)) => return Err(DataError::Closed(returned)),
+                Err(DataError::TaskFull(returned))
+                | Err(DataError::GlobalFull(returned))
+                | Err(DataError::GlobalBytesFull(returned)) => {
+                    data = returned;
+                    thread::sleep(Duration::from_millis(1));
+                }
+            }
+        }
+    }
+
+    /// Queue one byte-charged data event, waiting while a bounded queue is full.
+    pub fn send_data_with_cost_backpressure(
+        &self,
+        mut data: D,
+        bytes: usize,
+    ) -> Result<(), DataError<D>> {
+        loop {
+            if self.is_cancelled() {
+                return Err(DataError::Closed(data));
+            }
+            match self.send_data_with_cost(data, bytes) {
+                Ok(()) => return Ok(()),
+                Err(DataError::Closed(returned)) => return Err(DataError::Closed(returned)),
+                Err(DataError::TaskFull(returned))
+                | Err(DataError::GlobalFull(returned))
+                | Err(DataError::GlobalBytesFull(returned)) => {
+                    data = returned;
+                    thread::sleep(Duration::from_millis(1));
+                }
+            }
+        }
+    }
 }
 
 struct TaskOutcome {
@@ -382,6 +459,7 @@ struct TaskEntry<D> {
     id: TaskId,
     cancel: CancelToken,
     mailbox: Arc<DataMailbox<D>>,
+    progress: Arc<ProgressSlot>,
     handle: Option<JoinHandle<TaskOutcome>>,
     state: TaskState,
     state_reported: bool,
@@ -389,11 +467,17 @@ struct TaskEntry<D> {
 }
 
 impl<D> TaskEntry<D> {
-    fn new(id: TaskId, cancel: CancelToken, mailbox: Arc<DataMailbox<D>>) -> Self {
+    fn new(
+        id: TaskId,
+        cancel: CancelToken,
+        mailbox: Arc<DataMailbox<D>>,
+        progress: Arc<ProgressSlot>,
+    ) -> Self {
         Self {
             id,
             cancel,
             mailbox,
+            progress,
             handle: None,
             state: TaskState::Running,
             state_reported: false,
@@ -406,7 +490,6 @@ impl<D> TaskEntry<D> {
 pub struct TaskGroup<D> {
     next_id: u64,
     entries: Vec<TaskEntry<D>>,
-    progress: Arc<Mutex<BTreeMap<TaskId, Progress>>>,
     budget: Arc<GlobalDataBudget>,
     config: TaskGroupConfig,
     next_task: usize,
@@ -424,7 +507,6 @@ impl<D: Send + 'static> TaskGroup<D> {
         Self {
             next_id: 1,
             entries: Vec::new(),
-            progress: Arc::new(Mutex::new(BTreeMap::new())),
             budget: Arc::new(GlobalDataBudget::new(
                 config.global_data_event_capacity,
                 config.global_data_byte_capacity,
@@ -460,10 +542,11 @@ impl<D: Send + 'static> TaskGroup<D> {
             self.config.per_task_capacity,
             Arc::clone(&self.budget),
         ));
+        let progress = Arc::new(ProgressSlot::new());
         let context = TaskContext {
             id,
             cancel: cancel.clone(),
-            progress: Arc::clone(&self.progress),
+            progress: Arc::clone(&progress),
             mailbox: Arc::clone(&mailbox),
             data_byte_capacity: self.config.global_data_byte_capacity,
         };
@@ -487,7 +570,7 @@ impl<D: Send + 'static> TaskGroup<D> {
                 }
             })
             .map_err(SpawnError::Thread)?;
-        let mut entry = TaskEntry::new(id, cancel, mailbox);
+        let mut entry = TaskEntry::new(id, cancel, mailbox, progress);
         entry.handle = Some(handle);
         self.entries.push(entry);
         Ok(id)
@@ -559,14 +642,15 @@ impl<D: Send + 'static> TaskGroup<D> {
             }
         }
 
-        if events.len() < self.config.max_events_per_poll {
-            if let Ok(mut progress) = self.progress.lock() {
-                while events.len() < self.config.max_events_per_poll {
-                    let Some((id, progress)) = progress.pop_first() else {
-                        break;
-                    };
-                    events.push(TaskEvent::Progress { id, progress });
-                }
+        for entry in &self.entries {
+            if events.len() >= self.config.max_events_per_poll {
+                break;
+            }
+            if let Some(progress) = entry.progress.take() {
+                events.push(TaskEvent::Progress {
+                    id: entry.id,
+                    progress,
+                });
             }
         }
 
@@ -664,7 +748,7 @@ impl<D: Send + 'static> TaskGroup<D> {
             .iter()
             .any(|entry| !entry.state_reported && entry.state.is_terminal())
             || self.entries.iter().any(|entry| entry.mailbox.len() > 0)
-            || self.progress.lock().map(|p| !p.is_empty()).unwrap_or(false)
+            || self.entries.iter().any(|entry| entry.progress.is_pending())
     }
 }
 
@@ -674,15 +758,33 @@ impl<D: Send + 'static> Default for TaskGroup<D> {
     }
 }
 
-/// Dropping a group cancels and closes its tasks. Threads that do not observe
-/// cancellation are detached; call [`TaskGroup::shutdown`] to join them.
+/// Dropping a group requests cancellation and closes its tasks. Threads that
+/// are still running are detached and marked leaked; call
+/// [`TaskGroup::shutdown`] when a bounded join is required. Debug builds emit
+/// a warning for detached running tasks so missing shutdown calls are visible.
 impl<D> Drop for TaskGroup<D> {
     fn drop(&mut self) {
+        let running = self
+            .entries
+            .iter()
+            .filter(|entry| {
+                entry
+                    .handle
+                    .as_ref()
+                    .is_some_and(|handle| !handle.is_finished())
+            })
+            .count();
         for entry in &mut self.entries {
             entry.cancel.cancel();
             entry.mailbox.close();
             entry.handle = None;
             entry.state = TaskState::Leaked;
+        }
+        #[cfg(debug_assertions)]
+        if running > 0 {
+            eprintln!(
+                "anvil-task: TaskGroup dropped with {running} running task(s); call shutdown()"
+            );
         }
     }
 }
@@ -819,6 +921,43 @@ mod tests {
         assert_eq!(progress_events, 1);
         group.cancel(id);
         wait_terminals(&mut group, &[id]);
+    }
+
+    #[test]
+    fn backpressure_waits_for_consumer() {
+        let config = TaskGroupConfig {
+            per_task_capacity: 1,
+            global_data_event_capacity: 8,
+            ..TaskGroupConfig::default()
+        };
+        let mut group = TaskGroup::<&'static str>::with_config(config);
+        let id = group
+            .spawn("backpressure", |context| {
+                context
+                    .send_data_backpressure("one")
+                    .map_err(|error| format!("{error:?}"))?;
+                context
+                    .send_data_backpressure("two")
+                    .map_err(|error| format!("{error:?}"))?;
+                Ok(())
+            })
+            .expect("spawn");
+        let mut received = Vec::new();
+        for _ in 0..2_000 {
+            for event in group.poll().events {
+                if let TaskEvent::Data { id: event_id, data } = event
+                    && event_id == id
+                {
+                    received.push(data);
+                }
+            }
+            if received.len() == 2 {
+                break;
+            }
+            thread::sleep(Duration::from_millis(1));
+        }
+        assert_eq!(received, vec!["one", "two"]);
+        group.shutdown(Duration::from_millis(100));
     }
 
     #[test]
