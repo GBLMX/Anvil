@@ -508,11 +508,13 @@ impl Model {
                 }
                 FileEvent::TreeWatchUnavailable(error) => {
                     self.workspace.tree.stale = true;
-                    self.status.text = format!("E: tree watcher: {error}");
+                    self.status.text =
+                        format!("E: tree watcher: {error}; tree is stale, :tree-refresh retries");
                 }
                 FileEvent::Oversized { message } => {
                     self.workspace.tree.stale = true;
-                    self.status.text = format!("E: file worker: {message}");
+                    self.status.text =
+                        format!("E: file worker: {message}; tree is stale, :tree-refresh retries");
                 }
                 FileEvent::TreeSnapshot {
                     generation,
@@ -560,11 +562,13 @@ impl Model {
                 FileEvent::TreeChanged { .. } => self.refresh_root_tree(&root),
                 FileEvent::TreeWatchUnavailable(error) => {
                     self.workspace.tree.stale = true;
-                    self.status.text = format!("E: tree watcher: {error}");
+                    self.status.text =
+                        format!("E: tree watcher: {error}; tree is stale, :tree-refresh retries");
                 }
                 FileEvent::Oversized { message } => {
                     self.workspace.tree.stale = true;
-                    self.status.text = format!("E: file worker: {message}");
+                    self.status.text =
+                        format!("E: file worker: {message}; tree is stale, :tree-refresh retries");
                 }
                 _ => {}
             }

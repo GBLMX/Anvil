@@ -44,6 +44,9 @@ post-`0.5.0` feature line.
   `workspace/executeCommand`, including actions that also carry a workspace
   edit. Sessions now fail restore on unreadable files, unreadable swap files,
   or a missing dirty swap instead of opening an empty buffer.
+- Switching language servers now stops the previous gateway-supervised process
+  before the replacement starts; failed starts name the missing server and
+  point at `[lsp.commands]`.
 - `anvil-module` now exposes a reusable `LanguageToolingProviders` composition
   for distributions that enable multiple language providers.
 - Buffers now carry a stable, monotonically allocated identity; plugin snapshots

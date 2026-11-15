@@ -290,13 +290,15 @@ in the plans linked below.
     switching restarted the server and dropped the previous session.
 - Resolution:
   - `sync_lsp_active` starts a missing worker for the current file.
-  - Workers are keyed by `(tool, language_id)` and reused across buffers.
-  - Switching Rust ↔ Go keeps both workers alive; diagnostics stay keyed by
-    path.
+  - Workers are keyed by `(tool, language_id)` and reused while active.
+  - Switching to a different language stops the previous gateway-supervised
+    process before starting the replacement; diagnostics stay keyed by path.
+  - Cancellation sends `lsp.stop`; the process exits even when the server does
+    not terminate on stdin close.
   - Crash restart is bounded per language.
 - Acceptance:
   - Buffer switches do not spawn duplicate workers for the same language.
-  - Switching languages does not stop the other language server.
+  - Switching languages leaves exactly one active language-server process.
   - A crashed server follows the existing bounded restart policy.
 
 ### BUG-008: External file changes are not watched

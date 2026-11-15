@@ -124,7 +124,10 @@ impl Model {
         let Some(settings) =
             lsp_settings_with_service(&path, self.workspace.language_tooling_service.as_deref())
         else {
-            self.status.text = format!("E: no language server for {}", path.display());
+            self.status.text = format!(
+                "E: no language server for {}; run anvil doctor or configure [lsp.commands]",
+                path.display()
+            );
             self.file.dirty = true;
             return;
         };
@@ -230,7 +233,10 @@ impl Model {
         let Some(settings) =
             lsp_settings_with_service(&path, self.workspace.language_tooling_service.as_deref())
         else {
-            self.status.text = format!("E: no language server for {}", path.display());
+            self.status.text = format!(
+                "E: no language server for {}; run anvil doctor or configure [lsp.commands]",
+                path.display()
+            );
             self.file.dirty = true;
             return;
         };
@@ -320,7 +326,10 @@ impl Model {
                 };
             }
             Err(error) => {
-                let message = format!("lsp start: {error}");
+                let message = format!(
+                    "lsp start: {error}; install {} or configure [lsp.commands]",
+                    settings.label
+                );
                 self.language.lsp.status.insert(
                     desired.clone(),
                     LspStatus::Failed {

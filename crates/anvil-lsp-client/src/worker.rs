@@ -229,6 +229,7 @@ impl LspWorker {
             documents.insert(path.clone(), 1_u64);
             loop {
                 if context.is_cancelled() {
+                    let _ = client.lsp_stop();
                     return Ok(());
                 }
                 while let Ok(command) = commands.try_recv() {
