@@ -596,6 +596,15 @@ impl WorkspaceState {
         }
     }
 
+    pub(crate) fn set_watch_enabled(&mut self, enabled: bool) {
+        if let Some(worker) = &self.file_worker {
+            let _ = worker.request(anvil_workspace::FileRequest::SetWatchEnabled(enabled));
+        }
+        for worker in self.root_file_workers.values() {
+            let _ = worker.request(anvil_workspace::FileRequest::SetWatchEnabled(enabled));
+        }
+    }
+
     pub(crate) fn poll(&mut self) -> WorkspacePoll {
         let file_events = self
             .file_worker

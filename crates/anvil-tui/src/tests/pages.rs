@@ -72,7 +72,7 @@ fn settings_theme_row_saves_choice() {
     unsafe { std::env::set_var("ANVIL_SETTINGS", &path) };
     let mut model = Model::new(crate::EditorState::from_text("x"), None);
     model.open_settings();
-    for _ in 0..9 {
+    for _ in 0..10 {
         model.move_settings(1);
     }
     model.adjust_settings(1);

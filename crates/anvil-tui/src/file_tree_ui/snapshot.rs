@@ -12,6 +12,11 @@ impl Model {
     }
 
     pub(crate) fn sync_tree_watches(&mut self) {
+        if !self.config.settings.editor.file_watching {
+            self.workspace.tree.watch_limited = false;
+            self.workspace.tree.stale = false;
+            return;
+        }
         let workspace = self.workspace.path.clone();
         let mut directories: BTreeMap<PathBuf, Vec<PathBuf>> = BTreeMap::new();
         directories
@@ -27,6 +32,9 @@ impl Model {
             }
         }
         for path in self.expanded_tree_paths() {
+            if !self.watchable_tree_dir(&path) {
+                continue;
+            }
             if path.starts_with(&workspace) {
                 directories.entry(workspace.clone()).or_default().push(path);
             } else if let Some(root) = self.secondary_root(&path)
@@ -78,6 +86,19 @@ impl Model {
             }
         }
         self.workspace.tree.stale = sent < expected;
+    }
+
+    pub(crate) fn watchable_tree_dir(&self, path: &Path) -> bool {
+        let base = self
+            .workspace
+            .roots
+            .owning_root(path)
+            .map(|root| root.path.as_path())
+            .unwrap_or(&self.workspace.path);
+        let relative = path.strip_prefix(base).unwrap_or(path);
+        !relative
+            .components()
+            .any(|component| matches!(component.as_os_str().to_str(), Some(".git" | "target")))
     }
 
     pub(super) fn request_tree_refresh(&mut self, select: Option<PathBuf>) {

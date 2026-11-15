@@ -16,7 +16,7 @@ in the plans linked below.
 | Persistence | Session/tab restore, crash recovery, and dirty-swap recovery landed; persistent undo is deliberately rejected for this phase | [0.5.6](0.5.x-plan.md) |
 | Save metadata | Saves use temp-file + `fsync` + rename, but the replacement inode does not preserve owner, group, ACLs, xattrs, or hard links | [ADR-0023](adr/0023-internal-capability-closure.md) |
 | Project replace | Preview hashes every file; apply re-reads and hash-checks before sequential writes. A write failure rolls back in reverse order, but rollback failure is reported and cross-file atomicity is not guaranteed | [search.rs](../crates/anvil-workspace/src/search.rs) |
-| Configuration | Settings/keymap/theme schemas and explicit `:config-reload` landed; file watching is not enabled | [0.5.x](0.5.x-plan.md) |
+| Configuration | Settings/keymap/theme schemas and explicit `:config-reload` landed; gateway-polled file watching covers open buffers, the visible tree, and Git metadata, with an `editor.file_watching` switch | [ADR-0018](adr/0018-workspace-tree-watch.md), [0.5.x](0.5.x-plan.md) |
 | LSP | Language servers are not bundled; discovery, restart, and lifecycle are managed by the editor | [INSTALL](../INSTALL.md) |
 | Formatting | External formatters are stdin-to-stdout only (`rustfmt`, `gofmt`); in-place and temp-file modes are unsupported, and format-on-save still uses LSP | [0.6.0.x provider plan](0.6.0.x-provider-protocol-plan.md) |
 | DAP | Debug adapters are a trusted direct-spawn exception; runtime plugin DAP providers are rejected and there is no generic process/stdio broker | [ADR-0037](adr/0037-kernel-api-baseline.md), [0.6.0.x provider plan](0.6.0.x-provider-protocol-plan.md) |
@@ -318,6 +318,17 @@ in the plans linked below.
     with `fs.read` and the existing `openat2` boundary.
   - `FileWorker::WatchDirs` watches the root and expanded directories, debounces
     bursts into one `TreeChanged`, and caps the set at 256 directories.
+  - Tree watching skips `.git` and `target`; open buffers remain watched even in
+  generated directories. Git-enabled distributions watch `.git/HEAD` and
+  `.git/index` explicitly so checkout/pull refreshes Git status without
+  scanning the workspace; distributions without a Git service install neither
+  those watches nor status refreshes.
+  - `editor.file_watching` /
+    `ANVIL_EDITOR_FILE_WATCHING` disables polling and clears the worker watch
+    sets. The setting is exposed in `:settings`.
+  - External deletion closes the LSP document with `textDocument/didClose` and
+    marks the buffer missing; active clean buffers resync with `didOpen`/
+    `didChange` after a reload.
   - Tree snapshots are generation-scoped and preserve selected/expanded state;
     background refreshes do not steal focus. Missing watcher support marks the
     tree stale. See

@@ -45,6 +45,9 @@ pub enum LspCommand {
         path: PathBuf,
         text: String,
     },
+    Close {
+        path: PathBuf,
+    },
     Request {
         id: u64,
         method: String,
@@ -246,6 +249,9 @@ impl LspWorker {
                                     )
                                 })
                         }
+                        LspCommand::Close { path } => {
+                            close_document(&mut client, &mut documents, &path)
+                        }
                         LspCommand::Request { id, method, params } => send(
                             &mut client,
                             &serde_json::json!({
@@ -379,6 +385,12 @@ impl LspWorker {
         self.send_command(LspCommand::Save {
             path: path.to_path_buf(),
             text,
+        })
+    }
+
+    pub fn close(&self, path: &Path) -> Result<(), String> {
+        self.send_command(LspCommand::Close {
+            path: path.to_path_buf(),
         })
     }
 
@@ -527,6 +539,24 @@ fn sync_document(
             }),
         )
     }
+}
+
+fn close_document(
+    client: &mut GatewayClient,
+    documents: &mut HashMap<PathBuf, u64>,
+    path: &Path,
+) -> Result<(), String> {
+    if documents.remove(path).is_none() {
+        return Ok(());
+    }
+    send(
+        client,
+        &serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didClose",
+            "params": {"textDocument": {"uri": file_uri(path)}}
+        }),
+    )
 }
 
 fn project_root(
@@ -713,6 +743,40 @@ mod tests {
         let uri = file_uri(&path);
         assert!(uri.starts_with("file:///"), "{uri}");
         assert!(uri.ends_with("a%20b%23c.rs"), "{uri}");
+    }
+
+    #[test]
+    fn close_document_removes_only_the_requested_document() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let socket = dir.path().join("gateway.sock");
+        let listener = Listener::bind(&socket).expect("bind");
+        std::thread::scope(|scope| {
+            scope.spawn(move || {
+                let mut connection = listener.accept().expect("accept");
+                let hello = receive(&mut connection);
+                respond(&mut connection, hello.id.as_deref().expect("id"));
+                let request = receive(&mut connection);
+                assert_eq!(request.method, "lsp.send");
+                let message = &request.params["data"];
+                assert_eq!(message["method"], "textDocument/didClose");
+                assert!(
+                    message["params"]["textDocument"]["uri"]
+                        .as_str()
+                        .is_some_and(|uri| uri.ends_with("a.rs"))
+                );
+                respond(&mut connection, request.id.as_deref().expect("id"));
+                while let Ok(Some(_)) = connection.recv() {}
+            });
+            let mut client = GatewayClient::connect(&socket, &[1; 32]).expect("client");
+            let path = PathBuf::from("/tmp/a.rs");
+            let background = PathBuf::from("/tmp/b.rs");
+            let mut documents = HashMap::from([(path.clone(), 1_u64), (background.clone(), 2)]);
+            close_document(&mut client, &mut documents, &path).expect("close");
+            assert!(!documents.contains_key(&path));
+            assert_eq!(documents.get(&background), Some(&2));
+            close_document(&mut client, &mut documents, &path).expect("already closed");
+            drop(client);
+        });
     }
 
     #[test]

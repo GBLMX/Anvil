@@ -33,7 +33,7 @@ Tokio runtime, no in-process plugin UI, and no embedded WebView.
 | Problems | bounded panel and jumps landed | — |
 | Session | buffer/cursor/layout restore and crash backup landed | — |
 | Git | diff, hunk staging, blame, conflict previews, and resolution operations landed | — |
-| Settings | typed registry, overlay, validation, reset, changed markers, and explicit `:config-reload` landed | file watching is out of scope |
+| Settings | typed registry, overlay, validation, reset, changed markers, explicit `:config-reload`, and gateway-polled file watching (open buffers, visible tree, Git metadata) landed; `editor.file_watching` toggles polling | — |
 
 Remaining P0: none for the internal-polish phase. Cross-root file tree/search
 remains the P1 follow-up tracked in

@@ -26,12 +26,16 @@ impl Model {
             let Ok(client) = session.connect_lsp() else {
                 return false;
             };
-            self.workspace.file_worker = Some(FileWorker::start_with_services(
+            let worker = FileWorker::start_with_services(
                 client,
                 self.workspace.path.clone(),
                 self.workspace.git_service.clone(),
                 self.workspace.workspace_index_service.clone(),
+            );
+            let _ = worker.request(FileRequest::SetWatchEnabled(
+                self.config.settings.editor.file_watching,
             ));
+            self.workspace.file_worker = Some(worker);
         }
         self.ensure_root_file_workers();
         true
@@ -64,6 +68,9 @@ impl Model {
                     )
                 });
             if let Some(worker) = worker {
+                let _ = worker.request(FileRequest::SetWatchEnabled(
+                    self.config.settings.editor.file_watching,
+                ));
                 self.workspace.root_file_workers.insert(root, worker);
             }
         }
@@ -270,6 +277,9 @@ impl Model {
     }
 
     pub(crate) fn request_git_status(&mut self) {
+        if self.workspace.git_service.is_none() {
+            return;
+        }
         self.workspace.git.status_generation = self.workspace.git.status_generation.wrapping_add(1);
         let generation = self.workspace.git.status_generation;
         let mut expected = 0usize;
@@ -496,6 +506,7 @@ impl Model {
                 FileEvent::GitStatus {
                     generation, result, ..
                 } => self.handle_git_status(generation, result),
+                FileEvent::ExternalChanged { path } => self.handle_external_change(path),
                 FileEvent::TreeChanged { .. } => self.refresh_root_tree(&root),
                 FileEvent::TreeWatchUnavailable(error) => {
                     self.workspace.tree.stale = true;

@@ -156,6 +156,7 @@ impl FileWorker {
         let spawn = group.spawn("file worker", move |context| {
             let mut watched: BTreeMap<PathBuf, Option<(u64, i64)>> = BTreeMap::new();
             let mut watched_dirs: BTreeMap<PathBuf, Option<(i64, i64)>> = BTreeMap::new();
+            let mut watch_enabled = true;
             let mut pending: BTreeMap<PathBuf, Instant> = BTreeMap::new();
             let mut pending_dirs: BTreeMap<PathBuf, Instant> = BTreeMap::new();
             let mut next_poll = Instant::now();
@@ -167,7 +168,17 @@ impl FileWorker {
                 match requests.recv_timeout(Duration::from_millis(50)) {
                     Ok(request) => {
                         let event = match request {
-                            FileRequest::Watch(paths) => {
+                            FileRequest::SetWatchEnabled(enabled) => {
+                                watch_enabled = enabled;
+                                if !watch_enabled {
+                                    watched.clear();
+                                    watched_dirs.clear();
+                                    pending.clear();
+                                    pending_dirs.clear();
+                                }
+                                continue;
+                            }
+                            FileRequest::Watch(paths) if watch_enabled => {
                                 watched.clear();
                                 for path in paths {
                                     let stat = client
@@ -180,7 +191,7 @@ impl FileWorker {
                                 next_poll = Instant::now() + Duration::from_millis(100);
                                 continue;
                             }
-                            FileRequest::WatchDirs(paths) => {
+                            FileRequest::WatchDirs(paths) if watch_enabled => {
                                 watched_dirs.clear();
                                 let mut available = false;
                                 let mut watch_error = None;
@@ -209,6 +220,7 @@ impl FileWorker {
                                 }
                                 continue;
                             }
+                            FileRequest::Watch(_) | FileRequest::WatchDirs(_) => continue,
                             FileRequest::TreeSnapshot {
                                 generation,
                                 root,
@@ -444,6 +456,9 @@ impl FileWorker {
                     Err(mpsc::RecvTimeoutError::Disconnected) => break,
                 }
                 let now = Instant::now();
+                if !watch_enabled {
+                    continue;
+                }
                 if now >= next_tree_poll {
                     for path in poll_watched_dirs(&mut client, &workspace, &mut watched_dirs) {
                         pending_dirs.insert(path, now);

@@ -94,6 +94,8 @@ pub enum FileRequest {
     },
     /// Delete one workspace entry or directory tree.
     RemoveAll(PathBuf),
+    /// Enable or disable both the open-buffer and directory watch sets.
+    SetWatchEnabled(bool),
     /// Replace the workspace-tree directory watch set.
     WatchDirs(Vec<PathBuf>),
     /// Capture root and expanded directory listings for a tree refresh.

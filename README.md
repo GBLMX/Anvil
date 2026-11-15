@@ -87,6 +87,7 @@ name = "anvil-dark"
 scroll_margin = 3
 max_buffers = 9
 auto_save = false
+file_watching = true
 sidebar_percent = 20
 
 [search]
@@ -111,9 +112,9 @@ An explicit `ANVIL_SETTINGS` file remains a complete override and disables the
 project layer.
 
 `ANVIL_EDITOR_SCROLL_MARGIN`, `ANVIL_EDITOR_MAX_BUFFERS`,
-`ANVIL_EDITOR_AUTO_SAVE`, `ANVIL_EDITOR_SIDEBAR_PERCENT`,
-`ANVIL_SEARCH_CASE_SENSITIVE`, and `ANVIL_LSP_INLAY_HINTS` override the file
-for the current process.
+`ANVIL_EDITOR_AUTO_SAVE`, `ANVIL_EDITOR_FILE_WATCHING`,
+`ANVIL_EDITOR_SIDEBAR_PERCENT`, `ANVIL_SEARCH_CASE_SENSITIVE`, and
+`ANVIL_LSP_INLAY_HINTS` override the file for the current process.
 `:settings` opens the minimal overlay: `j`/`k` select, `h`/`l` or `Enter`
 adjust, `r` resets the row, `s` saves, and `Esc` cancels. The Appearance
 section includes the active theme row.
@@ -121,8 +122,14 @@ Auto-save is off by default; when enabled it writes the active named buffer
 on buffer switch/close, split focus/close changes, opening another file, focus
 loss, and `:q`. Insert/search/rename input modes are eligible; only
 confirmation prompts and modal overlays are excluded.
-External file edits are read at startup; `:config-reload` applies settings,
-keymap, and theme changes without restarting. File watching is not enabled.
+External edits are watched through the gateway in bounded watch sets: open
+buffers, the visible tree, and (when the distribution provides Git)
+`.git/HEAD`/`.git/index`. Clean buffers reload, dirty buffers prompt with
+`y/N`, tree changes refresh Git status, and external
+deletion closes the LSP document and marks the buffer missing. `:config-reload`
+also applies settings, keymap, and theme changes without restarting. Set
+`[editor] file_watching = false` or `ANVIL_EDITOR_FILE_WATCHING=0` to disable
+polling; the tree then relies on explicit refresh and buffer opens.
 
 At the `:` prompt, `Tab` completes Ex command names, `:theme` /
 `:theme-auto` arguments, and `:plugin-enable` IDs; `Up`/`Down` selects a

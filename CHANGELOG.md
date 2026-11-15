@@ -11,6 +11,16 @@ post-`0.5.0` feature line.
 - `anvil-core` caches `PieceTable` length, uses O(1) end-insert/append paths,
   scans word motions over chunk streams once, and preserves/updates line-column
   checkpoints across edits.
+- Workspace watching now covers open buffers, visible tree directories, and
+  (when Git is provided by the distribution) `.git/HEAD`/`.git/index`.
+  External clean edits reload and resync LSP, dirty edits still require
+  confirmation, deletions send `textDocument/didClose`, and `.git`/`target`
+  tree watches are ignored. Git metadata watches and status refreshes are
+  enabled only when the distribution provides Git. `[editor] file_watching`
+  and `ANVIL_EDITOR_FILE_WATCHING` provide the disable switch.
+- `anvil-distro-minimal` now declares `ConfigContract::SharedTui`; it reuses
+  the TUI settings/theme/keymap parser instead of implying a second
+  `anvil-config` consumer.
 - Added shared pending contexts for hover and line comments.
 - Command-based LSP code actions now dispatch through
   `workspace/executeCommand`, including actions that also carry a workspace

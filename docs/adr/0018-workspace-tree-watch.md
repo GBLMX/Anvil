@@ -83,3 +83,23 @@ retains the correct expansion set.
   remains bounded and the UI stays responsive instead of refreshing per event.
 - A full expanded-tree snapshot is sent per refresh. The watch cap bounds this
   work; affected-subtree-only snapshots are a future optimization.
+
+## Implementation status (2026-11-15)
+
+The watcher remains gateway-polled and bounded; there is still no inotify
+daemon or per-file thread.
+
+- Open buffers and the visible tree share the existing `FileWorker` watch
+  loop. Git-enabled distributions also watch `.git/HEAD`/`.git/index`; a
+  distribution without a Git service installs neither those watches nor Git
+  status refreshes.
+- Visible-tree watches skip `.git` and `target`. Open buffers inside generated
+  directories remain watched because the user explicitly opened them.
+- A `.git` metadata event refreshes Git status for every trusted root when the
+  Git service is installed.
+- Clean buffer reloads resynchronize the active LSP document. External deletion
+  sends `textDocument/didClose` before marking the buffer missing.
+- `editor.file_watching=false` or `ANVIL_EDITOR_FILE_WATCHING=0` clears both
+  watch sets and stops polling. The setting is available in `:settings`.
+- The event queue remains the bounded `TaskGroup` queue; a full queue reports
+  `Oversized`/backpressure instead of growing without limit.

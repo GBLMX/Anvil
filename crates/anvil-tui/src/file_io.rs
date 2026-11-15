@@ -213,36 +213,92 @@ impl Model {
     }
 
     pub(crate) fn sync_watch_paths(&mut self) {
+        if !self.config.settings.editor.file_watching {
+            return;
+        }
         if !self.ensure_file_worker() {
             return;
         }
-        let mut paths = Vec::new();
+        let mut open_paths = Vec::new();
         if let Some(path) = &self.session.path {
-            paths.push(path.clone());
+            open_paths.push(path.clone());
         }
         for buffer in &self.buffers.entries {
             if let Some(path) = &buffer.path {
-                paths.push(path.clone());
+                open_paths.push(path.clone());
             }
         }
         for buffer in self.buffers.background.values() {
             if let Some(path) = &buffer.path {
-                paths.push(path.clone());
+                open_paths.push(path.clone());
             }
         }
         if let Some(pane) = &self.buffers.split
             && let Some(path) = &pane.buffer.path
         {
-            paths.push(path.clone());
+            open_paths.push(path.clone());
         }
-        paths.sort();
-        paths.dedup();
+        open_paths.sort();
+        open_paths.dedup();
+
+        let mut primary = open_paths
+            .iter()
+            .filter(|path| path.starts_with(&self.workspace.path))
+            .cloned()
+            .collect::<Vec<_>>();
+        if self.workspace.git_service.is_some() {
+            primary.extend(Self::git_metadata_paths(&self.workspace.path));
+        }
+        primary.sort();
+        primary.dedup();
         if let Some(worker) = self.workspace.file_worker.as_ref() {
+            let _ = worker.request(anvil_workspace::FileRequest::Watch(primary));
+        }
+
+        for (root, worker) in &self.workspace.root_file_workers {
+            let mut paths = open_paths
+                .iter()
+                .filter(|path| path.starts_with(root))
+                .cloned()
+                .collect::<Vec<_>>();
+            if self.workspace.git_service.is_some() {
+                paths.extend(Self::git_metadata_paths(root));
+            }
+            paths.sort();
+            paths.dedup();
             let _ = worker.request(anvil_workspace::FileRequest::Watch(paths));
         }
     }
 
+    fn is_git_metadata(path: &Path) -> bool {
+        matches!(
+            path.file_name().and_then(|name| name.to_str()),
+            Some("HEAD" | "index")
+        ) && path
+            .parent()
+            .and_then(Path::file_name)
+            .is_some_and(|name| name == ".git")
+    }
+
+    fn git_metadata_paths(root: &Path) -> Vec<PathBuf> {
+        let git = root.join(".git");
+        if !git.is_dir() {
+            return Vec::new();
+        }
+        ["HEAD", "index"]
+            .into_iter()
+            .map(|name| git.join(name))
+            .filter(|path| path.is_file())
+            .collect()
+    }
+
     pub(crate) fn handle_external_change(&mut self, path: PathBuf) {
+        if Self::is_git_metadata(&path) {
+            if self.workspace.git_service.is_some() {
+                self.request_git_status();
+            }
+            return;
+        }
         let modified = if self.session.path.as_ref() == Some(&path) {
             self.file.modified
         } else if let Some(buffer) = self
@@ -297,6 +353,7 @@ impl Model {
     }
 
     pub(crate) fn reload_external(&mut self, path: &Path) -> Result<(), String> {
+        self.close_lsp_document(path);
         let text = match self.read_file(path) {
             Ok(text) => text,
             Err(error) => {

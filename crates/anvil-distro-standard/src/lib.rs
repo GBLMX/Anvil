@@ -43,6 +43,16 @@ FILE must be inside the selected workspace. Use -- before a file name that
 starts with a dash.
 ";
 
+/// Where a distribution obtains its startup configuration.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ConfigContract {
+    /// Reuse the TUI settings, theme, and keymap loaders unchanged.
+    ///
+    /// This is a composition consumer, not a second parser. It does not
+    /// justify extracting an `anvil-config` crate.
+    SharedTui,
+}
+
 /// Static composition metadata for one distribution.
 #[derive(Clone, Copy, Debug)]
 pub struct Distribution {
@@ -60,10 +70,13 @@ pub struct Distribution {
     pub language_latex: bool,
     /// Whether the optional Typst language-tooling module is part of this composition.
     pub language_typst: bool,
+    /// Configuration consumed by this distribution.
+    pub config: ConfigContract,
 }
 
 /// The standard Anvil distribution.
 pub const STANDARD: Distribution = Distribution {
+    config: ConfigContract::SharedTui,
     name: "anvil",
     usage: USAGE,
     git: true,
@@ -75,6 +88,7 @@ pub const STANDARD: Distribution = Distribution {
 
 /// The full Anvil distribution, enabling every official module.
 pub const FULL: Distribution = Distribution {
+    config: ConfigContract::SharedTui,
     name: "anvil",
     usage: USAGE,
     git: true,

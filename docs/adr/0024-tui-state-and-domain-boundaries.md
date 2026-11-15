@@ -157,13 +157,45 @@ Candidate order:
 
 | Candidate | Extract when |
 |---|---|
-| `anvil-config` | settings schema/serialization and neutral palette/key tokens need a non-TUI consumer; no ratatui/crossterm types |
+| `anvil-config` | a non-TUI consumer needs the same settings/theme/keymap values, or a second settings/precedence parser exists; no ratatui/crossterm types |
 | `anvil-git` | diff/blame/conflict/hunk logic is reused outside the TUI |
 | `anvil-lsp-client` | transport/request routing is needed by another frontend |
 | `anvil-task` | task runner/problem matcher is reused by MCP or headless mode |
 | `anvil-terminal` | only if a non-TUI consumer needs the PTY session |
 | `anvil-ui` | only when a second frontend needs shared view models |
 | `anvil-app` | only when composition duplication is measured across frontends |
+
+### 5.1 Distribution composition is not a config consumer
+
+`anvil-distro-minimal` is a second **distribution composition**, not a second
+configuration implementation. It calls the same
+`anvil_distro_standard::main` entrypoint and therefore loads the same
+`anvil-tui` settings, theme, and keymap. Its `Distribution.config` value is
+`ConfigContract::SharedTui`, and
+`examples/anvil-distro-minimal/tests/version.rs` asserts that contract.
+
+The shared read-only values are:
+
+- workspace root: CLI `--workspace`, otherwise the opened file's parent/cwd;
+- settings: user file, trusted project `.anvil.toml`, then environment
+  overrides; an explicit `ANVIL_SETTINGS` replaces the project layer;
+- theme: the settings choice, with `ANVIL_THEME` as the startup override;
+- keymap: `keymap.toml`, parsed by the TUI adapter.
+
+`anvil-distro-minimal` does not read any of these itself. It delegates to the
+same entrypoint, so there is one parser and one precedence implementation.
+This resolves the ambiguity in the old "second consumer" rule:
+
+- Adding another TUI distribution does **not** trigger `anvil-config`.
+- A non-TUI frontend that must read `workspace root`, theme selection, or
+  settings precedence does trigger it.
+- A second settings parser or a second precedence implementation outside
+  `anvil-tui` does trigger it.
+- A neutral palette/key token that must cross the TUI boundary does trigger it.
+
+Until one of those conditions is true, `anvil-config` stays unextracted. The
+minimal distribution has no independent read-only config API to maintain, and
+it must not grow one by copying `settings.rs`.
 
 Do not create `anvil-app` now. The TUI remains the composition root for the
 current product.

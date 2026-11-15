@@ -8,7 +8,7 @@ use ratatui::{
     widgets::{Clear, Paragraph},
 };
 
-pub(crate) const SETTINGS_ROWS: usize = 10;
+pub(crate) const SETTINGS_ROWS: usize = 11;
 
 pub(crate) fn rect(area: ratatui::layout::Rect) -> ratatui::layout::Rect {
     let width = (area.width * 9 / 10)
@@ -60,6 +60,7 @@ impl SettingsOverlayState {
             6 => "lsp.inlay_hints",
             7 => "ui.reduced_motion",
             8 => "ui.high_contrast",
+            9 => "editor.file_watching",
             _ => "theme.name",
         }
     }
@@ -75,13 +76,14 @@ impl SettingsOverlayState {
             6 => "Request and render language-server inlay hints.",
             7 => "Freeze spinners and avoid continuous animation.",
             8 => "Increase text, muted, and border contrast for the active theme.",
+            9 => "Reload buffers, tree, Git, and LSP state on external changes.",
             _ => "Select the semantic palette used by the TUI.",
         }
     }
 
     pub(crate) fn group(index: usize) -> &'static str {
         match index {
-            0..=4 => "Editor",
+            0..=4 | 9 => "Editor",
             5 => "Search",
             6 => "LSP",
             7..=8 => "Accessibility",
@@ -98,7 +100,7 @@ impl SettingsOverlayState {
     }
 
     pub(crate) fn value(&self, index: usize) -> String {
-        if index == 9 {
+        if index == 10 {
             return theme_label(self.theme);
         }
         Self::value_from(&self.draft, index)
@@ -115,12 +117,13 @@ impl SettingsOverlayState {
             6 => settings.lsp.inlay_hints.to_string(),
             7 => settings.ui.reduced_motion.to_string(),
             8 => settings.ui.high_contrast.to_string(),
+            9 => settings.editor.file_watching.to_string(),
             _ => theme_label(settings.theme),
         }
     }
 
     pub(crate) fn changed(&self, index: usize) -> bool {
-        if index == 9 {
+        if index == 10 {
             return self.theme_touched;
         }
         self.value(index) != Self::value_from(&self.original, index)
@@ -152,7 +155,7 @@ impl SettingsOverlayState {
     }
 
     pub(crate) fn adjust(&mut self, delta: isize) -> Option<SettingsChange> {
-        if self.selected == 9 {
+        if self.selected == 10 {
             self.theme = cycle_theme(self.theme, delta);
             self.theme_touched = true;
             return Some(SettingsChange::Theme(self.theme));
@@ -179,6 +182,7 @@ impl SettingsOverlayState {
             5 => draft.search.case_sensitive = !draft.search.case_sensitive,
             6 => draft.lsp.inlay_hints = !draft.lsp.inlay_hints,
             7 => draft.ui.reduced_motion = !draft.ui.reduced_motion,
+            9 => draft.editor.file_watching = !draft.editor.file_watching,
             _ => draft.ui.high_contrast = !draft.ui.high_contrast,
         }
         self.draft = draft;
@@ -187,7 +191,7 @@ impl SettingsOverlayState {
 
     pub(crate) fn reset(&mut self) -> Option<SettingsChange> {
         let defaults = Settings::default();
-        if self.selected == 9 {
+        if self.selected == 10 {
             self.theme = defaults.theme;
             self.theme_touched = true;
             return Some(SettingsChange::Theme(self.theme));
@@ -201,6 +205,7 @@ impl SettingsOverlayState {
             5 => self.draft.search.case_sensitive = defaults.search.case_sensitive,
             6 => self.draft.lsp.inlay_hints = defaults.lsp.inlay_hints,
             7 => self.draft.ui.reduced_motion = defaults.ui.reduced_motion,
+            9 => self.draft.editor.file_watching = defaults.editor.file_watching,
             _ => self.draft.ui.high_contrast = defaults.ui.high_contrast,
         }
         Some(SettingsChange::Apply(self.draft))

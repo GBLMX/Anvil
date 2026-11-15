@@ -20,6 +20,7 @@ const ENV_SCROLL_MARGIN: &str = "ANVIL_EDITOR_SCROLL_MARGIN";
 const ENV_AUTO_SAVE: &str = "ANVIL_EDITOR_AUTO_SAVE";
 const ENV_SOFT_WRAP: &str = "ANVIL_EDITOR_SOFT_WRAP";
 const ENV_FORMAT_ON_SAVE: &str = "ANVIL_EDITOR_FORMAT_ON_SAVE";
+const ENV_FILE_WATCHING: &str = "ANVIL_EDITOR_FILE_WATCHING";
 const ENV_MAX_BUFFERS: &str = "ANVIL_EDITOR_MAX_BUFFERS";
 const ENV_SIDEBAR_PERCENT: &str = "ANVIL_EDITOR_SIDEBAR_PERCENT";
 const ENV_SEARCH_CASE_SENSITIVE: &str = "ANVIL_SEARCH_CASE_SENSITIVE";
@@ -34,6 +35,7 @@ pub(crate) struct EditorSettings {
     pub(crate) auto_save: bool,
     pub(crate) soft_wrap: bool,
     pub(crate) format_on_save: bool,
+    pub(crate) file_watching: bool,
     pub(crate) sidebar_percent: u16,
 }
 
@@ -72,6 +74,7 @@ impl Default for Settings {
                 auto_save: false,
                 soft_wrap: false,
                 format_on_save: false,
+                file_watching: true,
                 sidebar_percent: DEFAULT_SIDEBAR_PERCENT,
             },
             search: SearchSettings {
@@ -255,6 +258,7 @@ pub(crate) fn save_to_path(path: &Path, settings: Settings) -> Result<(), String
     editor["auto_save"] = toml_edit::value(settings.editor.auto_save);
     editor["soft_wrap"] = toml_edit::value(settings.editor.soft_wrap);
     editor["format_on_save"] = toml_edit::value(settings.editor.format_on_save);
+    editor["file_watching"] = toml_edit::value(settings.editor.file_watching);
     editor["sidebar_percent"] = toml_edit::value(settings.editor.sidebar_percent as i64);
     let search = table_mut(&mut document, "search")?;
     search["case_sensitive"] = toml_edit::value(settings.search.case_sensitive);
@@ -337,6 +341,9 @@ pub(crate) fn parse(text: &str) -> Result<Settings, String> {
         }
         settings.editor.sidebar_percent = sidebar_percent;
     }
+    if let Some(file_watching) = file.editor.file_watching {
+        settings.editor.file_watching = file_watching;
+    }
     if let Some(case_sensitive) = file.search.case_sensitive {
         settings.search.case_sensitive = case_sensitive;
     }
@@ -411,6 +418,9 @@ fn apply_env(
     }
     if let Some(value) = get(ENV_FORMAT_ON_SAVE) {
         settings.editor.format_on_save = parse_bool(ENV_FORMAT_ON_SAVE, &value)?;
+    }
+    if let Some(value) = get(ENV_FILE_WATCHING) {
+        settings.editor.file_watching = parse_bool(ENV_FILE_WATCHING, &value)?;
     }
     if let Some(value) = get(ENV_SIDEBAR_PERCENT) {
         let percent = value.parse::<u16>().map_err(|_| {
@@ -495,6 +505,7 @@ struct EditorFile {
     auto_save: Option<bool>,
     soft_wrap: Option<bool>,
     format_on_save: Option<bool>,
+    file_watching: Option<bool>,
     sidebar_percent: Option<u16>,
 }
 
@@ -528,6 +539,8 @@ struct UiFile {
 impl crate::Model {
     pub(crate) fn apply_settings(&mut self, settings: Settings) {
         let theme_changed = self.config.settings.theme != settings.theme;
+        let watch_changed =
+            self.config.settings.editor.file_watching != settings.editor.file_watching;
         self.config.settings = settings;
         self.search.state.options.case_sensitive = settings.search.case_sensitive;
         self.language.inlay_hints.hints.clear();
@@ -539,6 +552,14 @@ impl crate::Model {
             }
         }
         theme::set_high_contrast(settings.ui.high_contrast);
+        if watch_changed {
+            self.workspace
+                .set_watch_enabled(settings.editor.file_watching);
+            if settings.editor.file_watching {
+                self.sync_watch_paths();
+                self.sync_tree_watches();
+            }
+        }
         self.file.dirty = true;
     }
 
@@ -575,6 +596,7 @@ mod tests {
                     auto_save: false,
                     soft_wrap: false,
                     format_on_save: false,
+                    file_watching: true,
                     sidebar_percent: DEFAULT_SIDEBAR_PERCENT,
                 },
                 search: SearchSettings {
@@ -717,6 +739,17 @@ mod tests {
         assert!(settings.editor.format_on_save);
         assert!(settings.search.case_sensitive);
         assert!(!settings.lsp.inlay_hints);
+    }
+
+    #[test]
+    fn parses_file_watching_and_env_override() {
+        let settings = parse("[editor]\nfile_watching = false\n").expect("file watching");
+        assert!(!settings.editor.file_watching);
+        let settings = apply_env(settings, |name| {
+            (name == ENV_FILE_WATCHING).then(|| "true".to_owned())
+        })
+        .expect("env");
+        assert!(settings.editor.file_watching);
     }
 
     #[test]

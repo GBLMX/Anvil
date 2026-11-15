@@ -224,6 +224,51 @@ mod tests {
     }
 
     #[test]
+    fn disabled_watcher_stops_polling_and_clears_watches() {
+        use std::sync::{Arc, Mutex};
+
+        let dir = tempfile::tempdir().expect("tempdir");
+        let workspace = dir.path().to_path_buf();
+        let socket = workspace.join("gateway.sock");
+        let listener = anvil_ipc::Listener::bind(&socket).expect("bind");
+        let stat_calls = Arc::new(Mutex::new(0usize));
+        std::thread::scope(|scope| {
+            let server_calls = Arc::clone(&stat_calls);
+            scope.spawn(move || {
+                let mut connection = listener.accept().expect("accept");
+                while let Ok(Some(frame)) = connection.recv() {
+                    let request: serde_json::Value =
+                        serde_json::from_slice(&frame).expect("request");
+                    if request["method"] == "sys.stat" {
+                        *server_calls.lock().expect("calls") += 1;
+                    }
+                    let response = serde_json::json!({
+                        "jsonrpc": "2.0",
+                        "id": request["id"],
+                        "result": {"size": 1, "modified_ns": 1},
+                    });
+                    connection
+                        .send(&serde_json::to_vec(&response).expect("response"))
+                        .expect("send");
+                }
+            });
+
+            let client = GatewayClient::connect(&socket, &[12; 32]).expect("client");
+            let worker = FileWorker::start(client, workspace.clone());
+            worker
+                .request(FileRequest::SetWatchEnabled(false))
+                .expect("disable");
+            worker
+                .request(FileRequest::Watch(vec![workspace.join("watched.txt")]))
+                .expect("watch");
+            std::thread::sleep(std::time::Duration::from_millis(250));
+            assert!(worker.poll().is_empty());
+            assert_eq!(*stat_calls.lock().expect("calls"), 0);
+            drop(worker);
+        });
+    }
+
+    #[test]
     fn tree_watch_coalesces_directory_changes() {
         use std::collections::BTreeMap as TestMap;
 

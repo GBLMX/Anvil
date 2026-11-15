@@ -215,6 +215,12 @@ impl Model {
         }
     }
 
+    pub(crate) fn close_lsp_document(&mut self, path: &Path) {
+        for worker in self.language.lsp.workers.values() {
+            let _ = worker.close(path);
+        }
+    }
+
     pub(crate) fn start_lsp(&mut self) {
         let Some(path) = self.session.path.clone() else {
             self.status.text = "E: lsp requires an open file".to_owned();

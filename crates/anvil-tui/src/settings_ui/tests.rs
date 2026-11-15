@@ -29,8 +29,9 @@ fn settings_tabs_map_every_group() {
     assert_eq!(SettingsOverlayState::tab(5), "Language");
     assert_eq!(SettingsOverlayState::tab(6), "Language");
     assert_eq!(SettingsOverlayState::tab(7), "Interface");
-    assert_eq!(SettingsOverlayState::tab(9), "Interface");
-    assert_eq!(SettingsOverlayState::group(9), "Appearance");
+    assert_eq!(SettingsOverlayState::tab(9), "Editor");
+    assert_eq!(SettingsOverlayState::tab(10), "Interface");
+    assert_eq!(SettingsOverlayState::group(10), "Appearance");
 }
 
 #[test]
@@ -72,7 +73,7 @@ fn settings_state_owns_draft_and_theme_actions() {
         }
         SettingsChange::Theme(_) => panic!("expected draft change"),
     }
-    state.select(9);
+    state.select(10);
     match state.adjust(1).expect("theme change") {
         SettingsChange::Theme(choice) => assert_ne!(choice, defaults.theme),
         SettingsChange::Apply(_) => panic!("expected theme change"),

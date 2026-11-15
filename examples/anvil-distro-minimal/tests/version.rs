@@ -10,3 +10,11 @@ fn minimal_binary_reports_its_own_distribution_name() {
         format!("anvil-minimal {}", env!("CARGO_PKG_VERSION"))
     );
 }
+
+#[test]
+fn minimal_distribution_consumes_the_shared_tui_config() {
+    assert_eq!(
+        anvil_distro_minimal::DISTRIBUTION.config,
+        anvil_distro_standard::ConfigContract::SharedTui
+    );
+}

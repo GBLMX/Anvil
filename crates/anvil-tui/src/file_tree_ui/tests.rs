@@ -2,6 +2,18 @@ use super::*;
 use crate::EditorState;
 
 #[test]
+fn watched_tree_excludes_git_and_target_directories() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let workspace = dir.path().to_path_buf();
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.workspace.path = workspace.clone();
+    model.workspace.roots = anvil_workspace::roots::WorkspaceRoots::new(&workspace).expect("roots");
+    assert!(model.watchable_tree_dir(&workspace));
+    assert!(model.watchable_tree_dir(&workspace.join("src")));
+    assert!(!model.watchable_tree_dir(&workspace.join(".git")));
+    assert!(!model.watchable_tree_dir(&workspace.join("target/debug")));
+}
+#[test]
 fn snapshot_keeps_expansion_missing_from_listing() {
     let dir = tempfile::tempdir().expect("tempdir");
     let workspace = dir.path().to_path_buf();
