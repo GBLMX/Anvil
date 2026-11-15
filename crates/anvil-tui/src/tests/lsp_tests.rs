@@ -2069,3 +2069,25 @@ fn completion_applies_additional_import_edit() {
         "from typing import Protocol\nProtocol".len()
     );
 }
+
+#[test]
+fn lsp_status_command_reports_server_details() {
+    let mut model = Model::new(
+        EditorState::from_text("int main(void) { return 0; }\n"),
+        Some(PathBuf::from("/ws/main.c")),
+    );
+    model.workspace.path = PathBuf::from("/ws");
+    let key = model.lsp_key(Path::new("/ws/main.c")).expect("lsp key");
+    model.language.lsp.status.insert(
+        key,
+        LspStatus::Running {
+            root: PathBuf::from("/ws"),
+            server_info: Some("clangd 18".to_owned()),
+        },
+    );
+    model.execute_command("lsp-status");
+    let text = &model.status.text;
+    assert!(text.contains("lsp clangd (c) running"), "{text}");
+    assert!(text.contains("root /ws"), "{text}");
+    assert!(text.contains("server clangd 18"), "{text}");
+}

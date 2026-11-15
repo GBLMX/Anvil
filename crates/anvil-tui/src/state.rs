@@ -218,6 +218,51 @@ pub(crate) struct DiagnosticsState {
     pub(crate) generation: u64,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum LspStatus {
+    Starting {
+        root: PathBuf,
+    },
+    Running {
+        root: PathBuf,
+        server_info: Option<String>,
+    },
+    Restarting {
+        root: PathBuf,
+        error: String,
+        attempt: u8,
+    },
+    Failed {
+        root: PathBuf,
+        error: String,
+    },
+    Stopped {
+        root: PathBuf,
+    },
+}
+
+impl LspStatus {
+    pub(crate) fn root(&self) -> &Path {
+        match self {
+            Self::Starting { root }
+            | Self::Running { root, .. }
+            | Self::Restarting { root, .. }
+            | Self::Failed { root, .. }
+            | Self::Stopped { root } => root,
+        }
+    }
+
+    pub(crate) fn label(&self) -> &'static str {
+        match self {
+            Self::Starting { .. } => "starting",
+            Self::Running { .. } => "running",
+            Self::Restarting { .. } => "restarting",
+            Self::Failed { .. } => "failed",
+            Self::Stopped { .. } => "stopped",
+        }
+    }
+}
+
 #[derive(Default)]
 pub(crate) struct LspTransportState {
     pub(crate) client: Option<GatewayClient>,
@@ -225,6 +270,7 @@ pub(crate) struct LspTransportState {
     pub(crate) config: Option<(String, String)>,
     pub(crate) retries: HashMap<(String, String), u8>,
     pub(crate) retry: Option<((String, String), Instant)>,
+    pub(crate) status: HashMap<(String, String), LspStatus>,
 }
 
 #[derive(Default)]

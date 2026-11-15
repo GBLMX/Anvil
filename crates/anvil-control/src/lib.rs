@@ -144,6 +144,10 @@ pub const COMMANDS: &[CommandSpec] = &[
         capability: Capability::Admin,
     },
     CommandSpec {
+        name: "lsp-status",
+        capability: Capability::Read,
+    },
+    CommandSpec {
         name: "tree",
         capability: Capability::Read,
     },
@@ -1391,6 +1395,7 @@ mod tests {
         }
         assert_eq!(command_capability("pkg"), Some(Capability::Admin));
         assert_eq!(command_capability("git-diff"), Some(Capability::Git));
+        assert_eq!(command_capability("lsp-status"), Some(Capability::Read));
         assert_eq!(capability_for_command("%s/a/b/"), Some(Capability::Edit));
         assert!(!Capability::Admin.is_remote_allowed());
     }

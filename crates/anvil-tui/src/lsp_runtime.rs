@@ -52,7 +52,13 @@ impl Model {
         for key in inactive_lsp_keys(keys, desired) {
             self.language.lsp.workers.remove(&key);
             self.language.lsp.retries.remove(&key);
+            self.language.lsp.status.remove(&key);
             self.overlays.lsp_results.inlay_support.remove(&key);
+        }
+        let status_keys = self.language.lsp.status.keys().cloned().collect();
+        for key in inactive_lsp_keys(status_keys, desired) {
+            self.language.lsp.status.remove(&key);
+            self.language.lsp.retries.remove(&key);
         }
         if self
             .language
@@ -85,6 +91,75 @@ impl Model {
     pub(crate) fn lsp_key(&self, path: &Path) -> Option<(String, String)> {
         lsp_settings_with_service(path, self.workspace.language_tooling_service.as_deref())
             .map(|settings| (settings.tool, settings.language_id))
+    }
+
+    fn lsp_status_root(&self, key: &(String, String)) -> PathBuf {
+        self.language
+            .lsp
+            .status
+            .get(key)
+            .map(|status| status.root().to_path_buf())
+            .or_else(|| {
+                self.language
+                    .lsp
+                    .workers
+                    .get(key)
+                    .map(|worker| worker.root().to_path_buf())
+            })
+            .unwrap_or_else(|| self.workspace.path.clone())
+    }
+
+    pub(crate) fn show_lsp_status(&mut self) {
+        let Some(path) = self.session.path.clone() else {
+            self.status.text = "E: lsp requires an open file".to_owned();
+            self.file.dirty = true;
+            return;
+        };
+        let Some(settings) =
+            lsp_settings_with_service(&path, self.workspace.language_tooling_service.as_deref())
+        else {
+            self.status.text = format!("E: no language server for {}", path.display());
+            self.file.dirty = true;
+            return;
+        };
+        let key = (settings.tool, settings.language_id);
+        let status = self.language.lsp.status.get(&key);
+        let root = self.lsp_status_root(&key);
+        let state = status.map(LspStatus::label).unwrap_or_else(|| {
+            if self.language.lsp.workers.contains_key(&key) {
+                "starting"
+            } else {
+                "pending"
+            }
+        });
+        let retries = self.language.lsp.retries.get(&key).copied().unwrap_or(0);
+        let markers = if settings.root_markers.is_empty() {
+            "-".to_owned()
+        } else {
+            settings.root_markers.join(",")
+        };
+        let mut detail = format!(
+            "lsp {} ({}) {state} · root {}",
+            settings.label,
+            key.1,
+            root.display()
+        );
+        if let Some(LspStatus::Running { server_info, .. }) = status
+            && let Some(server_info) = server_info
+        {
+            detail.push_str(&format!(" · server {server_info}"));
+        }
+        if let Some(error) = match status {
+            Some(LspStatus::Failed { error, .. } | LspStatus::Restarting { error, .. }) => {
+                Some(error.as_str())
+            }
+            _ => None,
+        } {
+            detail.push_str(&format!(" · {error}"));
+        }
+        detail.push_str(&format!(" · retries {retries} · markers {markers}"));
+        self.status.text = detail;
+        self.file.dirty = true;
     }
 
     pub(crate) fn sync_lsp_active(&mut self) {
@@ -147,6 +222,19 @@ impl Model {
         self.retain_lsp_worker(Some(&desired));
         if self.language.lsp.workers.contains_key(&desired) {
             self.language.lsp.config = Some(desired.clone());
+            if !self.language.lsp.status.contains_key(&desired) {
+                let root = self
+                    .language
+                    .lsp
+                    .workers
+                    .get(&desired)
+                    .map(|worker| worker.root().to_path_buf())
+                    .unwrap_or_else(|| self.workspace.path.clone());
+                self.language
+                    .lsp
+                    .status
+                    .insert(desired.clone(), LspStatus::Starting { root });
+            }
             self.clear_lsp_ui();
             let text = self
                 .session
@@ -164,6 +252,13 @@ impl Model {
                 .as_mut()
                 .and_then(|session| session.connect_lsp().ok())
         }) else {
+            self.language.lsp.status.insert(
+                desired,
+                LspStatus::Failed {
+                    root: self.workspace.path.clone(),
+                    error: "lsp gateway connection unavailable".to_owned(),
+                },
+            );
             self.status.text = "E: lsp gateway connection unavailable".to_owned();
             self.file.dirty = true;
             return;
@@ -189,7 +284,12 @@ impl Model {
         ) {
             Ok(worker) => {
                 self.language.lsp.config = Some(desired.clone());
+                let root = worker.root().to_path_buf();
                 self.language.lsp.workers.insert(desired.clone(), worker);
+                self.language
+                    .lsp
+                    .status
+                    .insert(desired.clone(), LspStatus::Starting { root });
                 self.language.lsp_requests.versions.insert(path.clone(), 1);
                 self.language.lsp.retries.entry(desired).or_insert(0);
                 self.clear_lsp_ui();
@@ -199,15 +299,30 @@ impl Model {
                     format!("{} starting", settings.label)
                 };
             }
-            Err(error) => self.status.text = format!("E: lsp start: {error}"),
+            Err(error) => {
+                let message = format!("lsp start: {error}");
+                self.language.lsp.status.insert(
+                    desired.clone(),
+                    LspStatus::Failed {
+                        root: self.workspace.path.clone(),
+                        error: message.clone(),
+                    },
+                );
+                self.status.text = format!("E: {message}");
+            }
         }
         self.file.dirty = true;
     }
 
     pub(crate) fn stop_lsp(&mut self) {
         if let Some(key) = self.language.lsp.config.take() {
+            let root = self.lsp_status_root(&key);
             self.language.lsp.workers.remove(&key);
             self.language.lsp.retries.remove(&key);
+            self.language
+                .lsp
+                .status
+                .insert(key.clone(), LspStatus::Stopped { root });
             self.overlays.lsp_results.inlay_support.remove(&key);
         }
         self.clear_lsp_ui();
@@ -225,6 +340,14 @@ impl Model {
             } => {
                 self.language.lsp.retries.remove(key);
                 self.language.lsp.retry = None;
+                let root = self.lsp_status_root(key);
+                self.language.lsp.status.insert(
+                    key.clone(),
+                    LspStatus::Running {
+                        root,
+                        server_info: server_info.clone(),
+                    },
+                );
                 self.overlays
                     .lsp_results
                     .inlay_support
@@ -290,6 +413,7 @@ impl Model {
                 }
             }
             LspEvent::Crashed(error) => {
+                let root = self.lsp_status_root(key);
                 self.language.lsp.workers.remove(key);
                 if active {
                     self.language.lsp.config = None;
@@ -299,7 +423,7 @@ impl Model {
                         *retries += 1;
                         *retries
                     };
-                    if retries <= 3 {
+                    let status = if retries <= 3 {
                         let delay_ms = 250u64 << (retries.saturating_sub(1).min(3));
                         self.language.lsp.retry = Some((
                             key.clone(),
@@ -307,6 +431,11 @@ impl Model {
                         ));
                         self.status.text =
                             format!("lsp crashed; restarting in {delay_ms}ms ({retries}/3)");
+                        LspStatus::Restarting {
+                            root,
+                            error: error.clone(),
+                            attempt: retries,
+                        }
                     } else {
                         self.status.text = format!("E: lsp crashed: {error}");
                         self.notify(
@@ -314,33 +443,57 @@ impl Model {
                             "lsp",
                             format!("crashed: {error}"),
                         );
-                    }
+                        LspStatus::Failed { root, error }
+                    };
+                    self.language.lsp.status.insert(key.clone(), status);
+                } else {
+                    self.language.lsp.status.remove(key);
+                    self.language.lsp.retries.remove(key);
                 }
             }
             LspEvent::Response { id, result, error } => {
                 self.handle_lsp_response(id, result, error);
             }
             LspEvent::StartupError(error) => {
+                let root = self.lsp_status_root(key);
                 self.language.lsp.workers.remove(key);
                 if active {
                     self.language.lsp.config = None;
                     self.clear_lsp_ui();
+                    self.language.lsp.status.insert(
+                        key.clone(),
+                        LspStatus::Failed {
+                            root,
+                            error: error.clone(),
+                        },
+                    );
                     self.status.text = format!("E: lsp startup failed: {error}");
                     self.notify(
                         anvil_session::ui::NotificationSeverity::Error,
                         "lsp",
                         format!("startup failed: {error}"),
                     );
+                } else {
+                    self.language.lsp.status.remove(key);
                 }
             }
             LspEvent::Error(error) => {
+                let root = self.lsp_status_root(key);
+                self.language.lsp.workers.remove(key);
                 if active {
-                    self.status.text = format!("E: lsp: {error}");
-                    self.notify(
-                        anvil_session::ui::NotificationSeverity::Error,
-                        "lsp",
-                        error.clone(),
+                    self.language.lsp.config = None;
+                    self.clear_lsp_ui();
+                    self.language.lsp.status.insert(
+                        key.clone(),
+                        LspStatus::Failed {
+                            root,
+                            error: error.clone(),
+                        },
                     );
+                    self.status.text = format!("E: lsp: {error}");
+                    self.notify(anvil_session::ui::NotificationSeverity::Error, "lsp", error);
+                } else {
+                    self.language.lsp.status.remove(key);
                 }
             }
             LspEvent::Log(line) => {
@@ -531,5 +684,117 @@ mod worker_selection_tests {
         let keys = vec![rust.clone(), go.clone()];
         assert_eq!(inactive_lsp_keys(keys.clone(), Some(&go)), vec![rust]);
         assert_eq!(inactive_lsp_keys(keys.clone(), None), keys);
+    }
+}
+
+#[cfg(test)]
+mod status_tests {
+    use super::*;
+    use anvil_editor::EditorState;
+
+    #[test]
+    fn capabilities_and_crash_update_the_status_snapshot() {
+        let mut model = Model::new(
+            EditorState::from_text(""),
+            Some(PathBuf::from("/ws/main.c")),
+        );
+        model.workspace.path = PathBuf::from("/ws");
+        let key = ("clangd".to_owned(), "c".to_owned());
+        model.language.lsp.config = Some(key.clone());
+        model.language.lsp.status.insert(
+            key.clone(),
+            LspStatus::Starting {
+                root: PathBuf::from("/ws"),
+            },
+        );
+
+        model.handle_lsp_event(
+            &key,
+            LspEvent::Capabilities {
+                inlay_hints: true,
+                semantic_token_types: Vec::new(),
+                server_info: Some("clangd 18".to_owned()),
+            },
+        );
+        assert!(matches!(
+            model.language.lsp.status.get(&key),
+            Some(LspStatus::Running {
+                server_info: Some(info),
+                ..
+            }) if info == "clangd 18"
+        ));
+
+        model.handle_lsp_event(&key, LspEvent::Crashed("boom".to_owned()));
+        assert!(model.language.lsp.config.is_none());
+        assert!(matches!(
+            model.language.lsp.status.get(&key),
+            Some(LspStatus::Restarting { attempt: 1, .. })
+        ));
+        assert!(
+            model.status.text.contains("restarting"),
+            "{}",
+            model.status.text
+        );
+    }
+
+    #[test]
+    fn stopping_records_a_visible_state() {
+        let mut model = Model::new(
+            EditorState::from_text(""),
+            Some(PathBuf::from("/ws/main.c")),
+        );
+        model.workspace.path = PathBuf::from("/ws");
+        let key = ("clangd".to_owned(), "c".to_owned());
+        model.language.lsp.config = Some(key.clone());
+        model.language.lsp.status.insert(
+            key.clone(),
+            LspStatus::Running {
+                root: PathBuf::from("/ws"),
+                server_info: None,
+            },
+        );
+        model.stop_lsp();
+        assert!(matches!(
+            model.language.lsp.status.get(&key),
+            Some(LspStatus::Stopped { .. })
+        ));
+    }
+
+    #[test]
+    fn startup_failure_records_failed_state() {
+        let mut model = Model::new(
+            EditorState::from_text(""),
+            Some(PathBuf::from("/ws/main.c")),
+        );
+        model.workspace.path = PathBuf::from("/ws");
+        let key = ("clangd".to_owned(), "c".to_owned());
+        model.language.lsp.config = Some(key.clone());
+        model.language.lsp.status.insert(
+            key.clone(),
+            LspStatus::Starting {
+                root: PathBuf::from("/ws"),
+            },
+        );
+        model.handle_lsp_event(&key, LspEvent::StartupError("no server".to_owned()));
+        assert!(model.language.lsp.config.is_none());
+        assert!(matches!(
+            model.language.lsp.status.get(&key),
+            Some(LspStatus::Failed { error, .. }) if error == "no server"
+        ));
+    }
+
+    #[test]
+    fn missing_gateway_records_failed_state() {
+        let mut model = Model::new(
+            EditorState::from_text(""),
+            Some(PathBuf::from("/ws/main.c")),
+        );
+        model.workspace.path = PathBuf::from("/ws");
+        let key = model.lsp_key(Path::new("/ws/main.c")).expect("lsp key");
+        model.start_lsp();
+        assert!(matches!(
+            model.language.lsp.status.get(&key),
+            Some(LspStatus::Failed { error, .. }) if error.contains("gateway")
+        ));
     }
 }

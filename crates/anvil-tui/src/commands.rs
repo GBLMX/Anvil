@@ -251,6 +251,7 @@ impl Model {
             }
             ("reconnect", "") => self.queue_effect(Effect::ReconnectGateway),
             ("lsp-start", "") => self.queue_effect(Effect::LspStart),
+            ("lsp-status", "") => self.show_lsp_status(),
             ("tree", "") => self.open_tree(),
             ("lsp-stop", "") => self.queue_effect(Effect::LspStop),
             ("format", "") => self.queue_effect(Effect::LspFormat),

@@ -66,9 +66,15 @@ pub struct LspWorker {
     commands: SyncSender<LspCommand>,
     diagnostics: Arc<Mutex<HashMap<PathBuf, Vec<Diagnostic>>>>,
     overflow_responses: Arc<Mutex<HashMap<u64, String>>>,
+    root: PathBuf,
 }
 
 impl LspWorker {
+    /// Returns the project root used for the initialize handshake.
+    pub fn root(&self) -> &Path {
+        &self.root
+    }
+
     pub fn start(
         mut client: GatewayClient,
         config: LspConfig,
@@ -84,6 +90,8 @@ impl LspWorker {
             root_markers,
             initialization_options,
         } = config;
+        let root = project_root(&workspace, &path, &root_markers);
+        let worker_root = root.clone();
         let group_config = TaskGroupConfig {
             global_data_event_capacity: LSP_EVENT_CAPACITY,
             per_task_capacity: LSP_EVENT_CAPACITY,
@@ -105,7 +113,6 @@ impl LspWorker {
                 return Ok(());
             }
             let uri = file_uri(&path);
-            let root = project_root(&workspace, &path, &root_markers);
             let mut initialize = serde_json::json!({
                 "jsonrpc": "2.0",
                 "id": INITIALIZE_ID,
@@ -355,6 +362,7 @@ impl LspWorker {
                 commands: command_sender,
                 diagnostics,
                 overflow_responses,
+                root: worker_root,
             }),
             Err(error) => Err(format!("lsp thread failed: {error}")),
         }
@@ -799,6 +807,7 @@ mod tests {
             "fn main() {}".to_owned(),
         )
         .expect("worker");
+        assert_eq!(worker.root(), Path::new("/tmp"));
         let deadline = Instant::now() + Duration::from_secs(2);
         loop {
             for event in worker.poll() {

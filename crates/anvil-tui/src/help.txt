@@ -104,6 +104,7 @@ Normal mode
   :replace-project-apply apply the reviewed replace plan
   :replace-project-cancel discard the replace preview
   :lsp-start          ensure the detected language server is active
+  :lsp-status         show the detected server, root, state, and server info
   :lsp-stop           stop the active language server
   :format              format the current document
   :breakpoint          toggle a breakpoint on the current line

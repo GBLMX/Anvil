@@ -32,6 +32,9 @@ post-`0.5.0` feature line.
 - Added a manual real-server switching smoke for clangd, jdtls,
   rust-analyzer, and gopls with explicit skip when binaries are absent, plus a
   deterministic fake-gateway worker lifecycle and bounded-drop test in CI.
+- Added `:lsp-status` with tool, root, markers, retries, and server info. The
+  status bar now persists starting/running/restarting/failed/stopped state and
+  clears stale worker state on language switches.
 - Character selections now render a Helix-style selection background, a
   warning-colored primary anchor bar, and a block cursor at the selection head.
 - Implemented the existing `event.subscribe` v1 method. The editor now

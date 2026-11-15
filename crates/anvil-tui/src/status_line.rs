@@ -2,6 +2,7 @@
 
 use super::Model;
 use crate::lsp_ui::lsp_settings_with_service;
+use crate::state::LspStatus;
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -106,6 +107,40 @@ impl Model {
             .map(|text| text.trim_end().to_owned())
     }
 
+    fn lsp_status_segment(&self) -> Option<String> {
+        let configured = self.language.lsp.config.is_some();
+        let settings = self.session.path.as_ref().and_then(|path| {
+            lsp_settings_with_service(path, self.workspace.language_tooling_service.as_deref())
+        });
+        let key = self.language.lsp.config.clone().or_else(|| {
+            settings
+                .as_ref()
+                .map(|settings| (settings.tool.clone(), settings.language_id.clone()))
+        })?;
+        let label = settings
+            .as_ref()
+            .filter(|settings| settings.tool == key.0 && settings.language_id == key.1)
+            .map(|settings| settings.label.clone())
+            .unwrap_or_else(|| {
+                Path::new(&key.0)
+                    .file_name()
+                    .map(|name| name.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| key.0.clone())
+            });
+        let suffix = match self.language.lsp.status.get(&key) {
+            Some(LspStatus::Starting { .. }) => ":starting",
+            Some(LspStatus::Running { .. }) => "",
+            Some(LspStatus::Restarting { attempt, .. }) => {
+                return Some(format!("lsp {label}:restarting({attempt}/3)"));
+            }
+            Some(LspStatus::Failed { .. }) => ":failed",
+            Some(LspStatus::Stopped { .. }) => ":stopped",
+            None if configured => "",
+            None => return Some("lsp pending".to_owned()),
+        };
+        Some(format!("lsp {label}{suffix}"))
+    }
+
     pub(crate) fn status_text(&self, width: usize) -> String {
         let width = width.max(1);
         if width == 1 {
@@ -154,13 +189,8 @@ impl Model {
             format!("diag {}", self.language.diagnostics.count_shown)
         };
         segments.push(diagnostics);
-        if let Some((tool, _)) = &self.language.lsp.config {
-            segments.push(format!("lsp {tool}"));
-        } else if self.session.path.as_ref().is_some_and(|path| {
-            lsp_settings_with_service(path, self.workspace.language_tooling_service.as_deref())
-                .is_some()
-        }) {
-            segments.push("lsp pending".to_owned());
+        if let Some(segment) = self.lsp_status_segment() {
+            segments.push(segment);
         }
         let selections = self.session.editor.selection_bytes().len();
         if selections > 1 {
@@ -396,6 +426,66 @@ mod tests {
             let text = model.status_text(width);
             assert!(UnicodeWidthStr::width(text.as_str()) <= width);
         }
+    }
+
+    #[test]
+    fn lsp_status_segment_reflects_lifecycle() {
+        let mut model = Model::new(EditorState::from_text("alpha"), None);
+        model.workspace.path = PathBuf::from("/ws");
+        model.session.path = Some(PathBuf::from("/ws/main.c"));
+        let key = model.lsp_key(Path::new("/ws/main.c")).expect("lsp key");
+        let root = PathBuf::from("/ws");
+
+        assert_eq!(model.lsp_status_segment().as_deref(), Some("lsp pending"));
+        model
+            .language
+            .lsp
+            .status
+            .insert(key.clone(), LspStatus::Starting { root: root.clone() });
+        assert_eq!(
+            model.lsp_status_segment().as_deref(),
+            Some("lsp clangd:starting")
+        );
+        model.language.lsp.status.insert(
+            key.clone(),
+            LspStatus::Running {
+                root: root.clone(),
+                server_info: Some("clangd 18".to_owned()),
+            },
+        );
+        assert_eq!(model.lsp_status_segment().as_deref(), Some("lsp clangd"));
+        model.language.lsp.status.insert(
+            key.clone(),
+            LspStatus::Restarting {
+                root: root.clone(),
+                error: "gone".to_owned(),
+                attempt: 2,
+            },
+        );
+        assert_eq!(
+            model.lsp_status_segment().as_deref(),
+            Some("lsp clangd:restarting(2/3)")
+        );
+        model.language.lsp.status.insert(
+            key.clone(),
+            LspStatus::Failed {
+                root: root.clone(),
+                error: "gone".to_owned(),
+            },
+        );
+        assert_eq!(
+            model.lsp_status_segment().as_deref(),
+            Some("lsp clangd:failed")
+        );
+        model
+            .language
+            .lsp
+            .status
+            .insert(key.clone(), LspStatus::Stopped { root });
+        assert_eq!(
+            model.lsp_status_segment().as_deref(),
+            Some("lsp clangd:stopped")
+        );
     }
 
     #[test]
