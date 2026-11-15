@@ -467,46 +467,45 @@ impl Model {
             self.file.dirty = true;
         }
         for (root, event) in poll.root_events {
-                match event {
-                    FileEvent::Files { generation, result } => {
-                        self.handle_fuzzy_files(Some(root.clone()), generation, result);
-                    }
-                    FileEvent::Preview {
-                        path,
-                        generation,
-                        result,
-                    } => {
-                        let absolute = root.join(path).to_string_lossy().into_owned();
-                        self.handle_preview(absolute, generation, result);
-                    }
-                    FileEvent::Format {
-                        path,
-                        revision,
-                        generation,
-                        result,
-                    } => self.handle_format(path, revision, generation, result),
-                    FileEvent::ProjectSearch {
-                        query,
-                        generation,
-                        result,
-                    } => {
-                        self.handle_project_search(Some(root.clone()), query, generation, result);
-                    }
-                    FileEvent::Listed(path, result) => self.handle_tree_listing(path, result),
-                    FileEvent::GitStatus {
-                        generation, result, ..
-                    } => self.handle_git_status(generation, result),
-                    FileEvent::TreeChanged { .. } => self.refresh_root_tree(&root),
-                    FileEvent::TreeWatchUnavailable(error) => {
-                        self.workspace.tree.stale = true;
-                        self.status.text = format!("E: tree watcher: {error}");
-                    }
-                    FileEvent::Oversized { message } => {
-                        self.workspace.tree.stale = true;
-                        self.status.text = format!("E: file worker: {message}");
-                    }
-                    _ => {}
+            match event {
+                FileEvent::Files { generation, result } => {
+                    self.handle_fuzzy_files(Some(root.clone()), generation, result);
                 }
+                FileEvent::Preview {
+                    path,
+                    generation,
+                    result,
+                } => {
+                    let absolute = root.join(path).to_string_lossy().into_owned();
+                    self.handle_preview(absolute, generation, result);
+                }
+                FileEvent::Format {
+                    path,
+                    revision,
+                    generation,
+                    result,
+                } => self.handle_format(path, revision, generation, result),
+                FileEvent::ProjectSearch {
+                    query,
+                    generation,
+                    result,
+                } => {
+                    self.handle_project_search(Some(root.clone()), query, generation, result);
+                }
+                FileEvent::Listed(path, result) => self.handle_tree_listing(path, result),
+                FileEvent::GitStatus {
+                    generation, result, ..
+                } => self.handle_git_status(generation, result),
+                FileEvent::TreeChanged { .. } => self.refresh_root_tree(&root),
+                FileEvent::TreeWatchUnavailable(error) => {
+                    self.workspace.tree.stale = true;
+                    self.status.text = format!("E: tree watcher: {error}");
+                }
+                FileEvent::Oversized { message } => {
+                    self.workspace.tree.stale = true;
+                    self.status.text = format!("E: file worker: {message}");
+                }
+                _ => {}
             }
         }
     }
