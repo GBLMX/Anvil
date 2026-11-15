@@ -7,6 +7,7 @@ cd "$root"
 snapshot="docs/api-surface.sha256"
 crates=(
     crates/anvil-api/src
+    crates/anvil-core/src
     crates/anvil-ipc/src
     crates/anvil-control/src
     crates/anvil-module/src

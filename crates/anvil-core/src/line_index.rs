@@ -291,6 +291,82 @@ impl LineIndex {
             .map(|index| &self.columns[index])
     }
 
+    fn update_columns_after_insert<B: TextBuffer>(
+        &mut self,
+        buffer: &B,
+        line_start: usize,
+        line_end: usize,
+        at: usize,
+        text: &str,
+    ) {
+        let delta = text.len();
+        let Some(index) = self
+            .columns
+            .binary_search_by_key(&line_start, |columns| columns.line_start)
+            .ok()
+        else {
+            for columns in &mut self.columns {
+                if columns.line_start > line_start {
+                    columns.line_start += delta;
+                }
+            }
+            return;
+        };
+        if text.contains('\t') || buffer.slice(at..line_end + delta).contains('\t') {
+            self.columns.remove(index);
+        } else {
+            let relative = at - line_start;
+            let columns = &mut self.columns[index];
+            let checkpoint_index = columns
+                .checkpoints
+                .partition_point(|checkpoint| checkpoint.byte < relative)
+                .saturating_sub(1);
+            let (prefix_start, prefix_display) = columns
+                .checkpoints
+                .get(checkpoint_index)
+                .map_or((line_start, 0), |checkpoint| {
+                    (line_start + checkpoint.byte, checkpoint.display)
+                });
+            let prefix = buffer.slice(prefix_start..at);
+            let insertion_display = prefix_display + display_width_from(&prefix, prefix_display);
+            let inserted_display = display_width_from(text, insertion_display);
+            let graphemes = text.graphemes(true).count();
+            let scalars = text.chars().count();
+            let mut checkpoints = Vec::with_capacity(columns.checkpoints.len() + 1);
+            for checkpoint in &columns.checkpoints {
+                if checkpoint.byte < relative {
+                    checkpoints.push(*checkpoint);
+                } else {
+                    if checkpoint.byte == relative {
+                        checkpoints.push(*checkpoint);
+                    }
+                    checkpoints.push(ColumnCheckpoint {
+                        byte: checkpoint.byte + delta,
+                        grapheme: checkpoint.grapheme + graphemes,
+                        scalar: checkpoint.scalar + scalars,
+                        display: checkpoint.display + inserted_display,
+                    });
+                }
+            }
+            columns.checkpoints = checkpoints;
+        }
+        for columns in &mut self.columns {
+            if columns.line_start > line_start {
+                columns.line_start += delta;
+            }
+        }
+    }
+
+    fn invalidate_columns(&mut self, start: usize, end: usize, delta: isize) {
+        self.columns
+            .retain(|columns| columns.line_start < start || columns.line_start >= end);
+        for columns in &mut self.columns {
+            if columns.line_start >= end {
+                columns.line_start = add_delta(columns.line_start, delta);
+            }
+        }
+    }
+
     fn column_checkpoint(&self, line_start: usize, byte: usize) -> Option<ColumnCheckpoint> {
         let columns = self.columns_for_line(line_start)?;
         let relative = byte.saturating_sub(line_start);
@@ -483,7 +559,6 @@ impl LineIndex {
     pub fn apply_edit<B: TextBuffer>(&mut self, buffer: &B, range: Range<usize>) {
         let new_len = buffer.len_bytes();
         assert!(range.start <= range.end && range.end <= self.len);
-        self.columns.clear();
         if new_len == 0 || self.starts.is_empty() {
             *self = Self::from_buffer(buffer);
             return;
@@ -496,9 +571,17 @@ impl LineIndex {
             && new_len > self.len
             && !buffer.slice(self.len..new_len).contains('\n')
         {
+            let old_len = self.len;
+            let line = self.offset_to_line(old_len);
             if let Some(end) = self.ends.last_mut() {
                 *end = new_len;
                 self.len = new_len;
+                if let Some(line) = line {
+                    let inserted = buffer.slice(old_len..new_len);
+                    self.update_columns_after_insert(
+                        buffer, line.start, line.end, old_len, &inserted,
+                    );
+                }
                 return;
             }
         }
@@ -517,6 +600,7 @@ impl LineIndex {
         let last_chunk = self.chunk_for_line(end_line);
         let region_start = self.bases[first_chunk];
         let old_region_end = self.ends[last_chunk];
+        self.invalidate_columns(region_start, old_region_end, delta);
         let new_region_end = add_delta(old_region_end, delta).min(new_len);
         let old_region_lines = self.first_lines[last_chunk] + self.starts[last_chunk].len()
             - self.first_lines[first_chunk];
@@ -578,7 +662,7 @@ impl LineIndex {
         let chunk = self.chunk_for_line(line.line);
         let base = self.bases[chunk];
         let delta = text.len();
-        self.columns.clear();
+        self.update_columns_after_insert(buffer, line.start, line.end, at, text);
         self.len = buffer.len_bytes();
         self.ends[chunk] = self.ends[chunk].saturating_add(delta);
         for index in chunk + 1..self.starts.len() {
@@ -1141,6 +1225,53 @@ mod tests {
         let end = buffer.len_bytes();
         buffer.insert(end, "tail");
         index.apply_insert(&buffer, end, "tail");
+        assert_index_matches(&buffer, &index);
+    }
+
+    #[test]
+    fn column_cache_survives_single_line_insert() {
+        let original = "x".repeat(100_000);
+        let mut buffer = PieceTable::from_text(&original);
+        let mut index = LineIndex::from_buffer(&buffer);
+        assert!(index.columns_for_line(0).is_some());
+        buffer.insert(50_000, "abc");
+        index.apply_insert(&buffer, 50_000, "abc");
+        assert!(index.columns_for_line(0).is_some());
+        let position = index.position(&buffer, 50_003).expect("position");
+        assert_eq!(position.grapheme_column, 50_003);
+        assert_eq!(position.display_column, 50_003);
+        assert_index_matches(&buffer, &index);
+    }
+
+    #[test]
+    fn column_cache_shifts_after_later_chunk_edit() {
+        let mut text = "a\n".repeat(1025);
+        text.push_str(&"x".repeat(100_000));
+        let mut buffer = PieceTable::from_text(&text);
+        let mut index = LineIndex::from_buffer(&buffer);
+        let long_line = 2050;
+        assert!(index.columns_for_line(long_line).is_some());
+        buffer.insert(0, "\n");
+        index.apply_edit(&buffer, 0..0);
+        assert!(index.columns_for_line(long_line + 1).is_some());
+        let position = index.position(&buffer, long_line + 1 + 50_000);
+        assert!(position.is_some());
+        assert_index_matches(&buffer, &index);
+    }
+
+    #[test]
+    fn column_cache_invalidates_before_tab_shift() {
+        let mut original = "x".repeat(50_000);
+        original.push('\t');
+        original.push_str(&"x".repeat(50_000));
+        let mut buffer = PieceTable::from_text(&original);
+        let mut index = LineIndex::from_buffer(&buffer);
+        assert!(index.columns_for_line(0).is_some());
+        buffer.insert(25_000, "a");
+        index.apply_insert(&buffer, 25_000, "a");
+        assert!(index.columns_for_line(0).is_none());
+        let position = index.position(&buffer, 25_001).expect("position");
+        assert_eq!(position.display_column, 25_001);
         assert_index_matches(&buffer, &index);
     }
 }

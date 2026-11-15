@@ -13,6 +13,7 @@ cross-process contracts. Detailed decisions live in
 | Plugin authors | `anvil-api`, `anvil-ipc` | Plugin API v1 and JSON-RPC envelope are frozen |
 | Control/MCP clients | `anvil-control` | Protocol v3; typed Rust DTOs plus JSON wire |
 | Module authors | `anvil-module` | Contract v1 is frozen |
+| Text model consumers | `anvil-core` | Kernel baseline; semver-versioned source surface |
 | Headless frontends | `anvil-session` | Kernel baseline; semver-versioned source surface |
 | Editor core consumers | `anvil-editor` | Kernel baseline; semver-versioned source surface |
 | Internal TUI | `anvil-tui` | Not a kernel baseline; no stability promise |

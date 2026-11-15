@@ -8,6 +8,9 @@ post-`0.5.0` feature line.
 
 ## [Unreleased]
 ### Added
+- `anvil-core` caches `PieceTable` length, uses O(1) end-insert/append paths,
+  scans word motions over chunk streams once, and preserves/updates line-column
+  checkpoints across edits.
 - Added shared pending contexts for hover and line comments.
 - Command-based LSP code actions now dispatch through
   `workspace/executeCommand`, including actions that also carry a workspace

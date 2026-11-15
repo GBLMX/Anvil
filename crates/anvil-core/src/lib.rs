@@ -300,6 +300,7 @@ pub struct PieceTable {
     original: Arc<str>,
     added: Vec<Arc<str>>,
     pieces: Vec<Piece>,
+    len: usize,
     line_count: usize,
 }
 
@@ -325,6 +326,12 @@ impl PieceTable {
     }
 
     fn split_at(&mut self, at: usize) -> usize {
+        if at == 0 {
+            return 0;
+        }
+        if at == self.len {
+            return self.pieces.len();
+        }
         let mut position = 0;
         for (index, piece) in self.pieces.iter().enumerate() {
             if at == position {
@@ -351,6 +358,9 @@ impl PieceTable {
     }
 
     fn byte_at(&self, at: usize) -> Option<u8> {
+        if at >= self.len {
+            return None;
+        }
         let mut position = 0;
         for piece in &self.pieces {
             if at < position + piece.len {
@@ -363,7 +373,7 @@ impl PieceTable {
     }
 
     fn assert_boundary(&self, at: usize) {
-        assert!(at <= self.len_bytes(), "offset {at} is out of bounds");
+        assert!(at <= self.len, "offset {at} is out of bounds");
         if let Some(byte) = self.byte_at(at) {
             assert!((byte & 0xC0) != 0x80, "offset {at} is not a UTF-8 boundary");
         }
@@ -394,7 +404,7 @@ impl PieceTable {
     /// Returns borrowed text chunks intersecting `range` without copying the
     /// document text. This is the renderer-facing fast path.
     pub fn chunks(&self, range: Range<usize>) -> impl Iterator<Item = &str> + '_ {
-        assert!(range.start <= range.end && range.end <= self.len_bytes());
+        assert!(range.start <= range.end && range.end <= self.len);
         self.assert_boundary(range.start);
         self.assert_boundary(range.end);
         let start = range.start;
@@ -426,6 +436,7 @@ impl TextBuffer for PieceTable {
             }]
         };
         Self {
+            len: text.len(),
             original: Arc::from(text),
             added: Vec::new(),
             pieces,
@@ -434,7 +445,7 @@ impl TextBuffer for PieceTable {
     }
 
     fn len_bytes(&self) -> usize {
-        self.pieces.iter().map(|piece| piece.len).sum()
+        self.len
     }
 
     fn len_lines(&self) -> usize {
@@ -442,9 +453,8 @@ impl TextBuffer for PieceTable {
     }
 
     fn is_char_boundary(&self, at: usize) -> bool {
-        at <= self.len_bytes()
-            && (at == self.len_bytes()
-                || self.byte_at(at).is_some_and(|byte| (byte & 0xC0) != 0x80))
+        at <= self.len
+            && (at == self.len || self.byte_at(at).is_some_and(|byte| (byte & 0xC0) != 0x80))
     }
 
     fn insert(&mut self, at: usize, text: &str) {
@@ -453,7 +463,7 @@ impl TextBuffer for PieceTable {
             return;
         }
         let inserted_lines = text.bytes().filter(|byte| *byte == b'\n').count();
-        if self.len_bytes() == 0 {
+        if self.len == 0 {
             self.line_count = inserted_lines + 1;
         } else {
             self.line_count += inserted_lines;
@@ -470,10 +480,11 @@ impl TextBuffer for PieceTable {
                 len: text.len(),
             },
         );
+        self.len += text.len();
     }
 
     fn delete(&mut self, range: Range<usize>) {
-        assert!(range.start <= range.end && range.end <= self.len_bytes());
+        assert!(range.start <= range.end && range.end <= self.len);
         self.assert_boundary(range.start);
         self.assert_boundary(range.end);
         if range.start == range.end {
@@ -483,7 +494,8 @@ impl TextBuffer for PieceTable {
         let start = self.split_at(range.start);
         let end = self.split_at(range.end);
         self.pieces.drain(start..end);
-        if self.len_bytes() == 0 {
+        self.len -= range.end - range.start;
+        if self.len == 0 {
             self.line_count = 0;
         } else {
             self.line_count -= removed_lines;
@@ -491,7 +503,7 @@ impl TextBuffer for PieceTable {
     }
 
     fn slice(&self, range: Range<usize>) -> String {
-        assert!(range.start <= range.end && range.end <= self.len_bytes());
+        assert!(range.start <= range.end && range.end <= self.len);
         self.assert_boundary(range.start);
         self.assert_boundary(range.end);
         let mut result = String::with_capacity(range.end - range.start);
@@ -653,6 +665,18 @@ mod tests {
         let mut text = TextDocument::from_text("a");
         text.insert(1, "b");
         assert_eq!(text.slice(0..2), "ab");
+    }
+
+    #[test]
+    fn piece_append_keeps_cached_length() {
+        let mut text = TextDocument::from_text("");
+        for _ in 0..5000 {
+            let end = text.len_bytes();
+            text.insert(end, "a");
+        }
+        assert_eq!(text.len_bytes(), 5000);
+        assert_eq!(text.len_lines(), 1);
+        assert_eq!(text.slice(0..5000), "a".repeat(5000));
     }
 
     #[test]
