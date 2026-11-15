@@ -12,6 +12,7 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 
 mod format;
+pub mod pipe_locations;
 mod preview;
 mod protocol;
 pub mod roots;
