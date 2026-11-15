@@ -52,6 +52,8 @@ Plans and proposals use one of:
 | `Active` | Current work with an owner |
 | `Landed` | Delivered; kept as a design record |
 | `Deferred` | Intentionally not scheduled |
+| `Future` | Direction accepted, but explicitly outside the current phase |
+| `Historical` | Closed phase or superseded design record |
 | `Superseded` | Replaced; link the replacement |
 
 Do not duplicate detailed per-slice status in this index. The linked plan is
@@ -66,6 +68,7 @@ the owner.
 | [0.7.x modules](0.7.x-plan.md) | optional source-level Rust modules | Active; 0.7.1–0.7.4 landed |
 | [Command architecture](command-architecture-plan.md) | registry, keymap trie, effects | Active; partial |
 | [Linux platform](linux-platform-plan.md) | seccomp/cgroup, atomic install, watcher measurements | Active; per-section status |
+| [External integration](external-integration-plan.md) | `$EDITOR`, stdin, control socket, MCP adapter | Active; dependency cleanup/dogfood removal |
 | [Small features](small-features-plan.md) | Vim-like motions, operators, display polish | Proposed |
 | [Plugin tactical interaction](plugin-mouse-canvas-plan.md) | scoped mouse, overlays, selection, alerts | Proposed; API 1.1 |
 | [AI telemetry HUD](ai-telemetry-plan.md) | local EPM/APM/Burst telemetry | Future P3 |
@@ -86,8 +89,6 @@ the owner.
   cancellation, and shutdown
 - [Theme and settings](theme-settings-plan.md) — built-in themes and typed
   settings
-- [External integration](external-integration-plan.md) — `$EDITOR`, stdin,
-  control socket, and MCP adapter
 
 ## Historical plans
 

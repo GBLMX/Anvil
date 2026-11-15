@@ -1,8 +1,8 @@
 # External Integration Plan
 
-Status: 1a, 1b, 2, 3, the protocol v3 control plane, and the thin MCP adapter
-are implemented. Real-TUI CLI and MCP smoke tests pass, and Codex successfully
-called `anvil_status` and `anvil_query` through the adapter.
+Status: Active; 1a, 1b, 2, 3, the protocol v3 control plane, and the thin MCP
+adapter are implemented. Real-TUI CLI and MCP smoke tests pass, and Codex
+successfully called `anvil_status` and `anvil_query` through the adapter.
 
 The remaining work is dependency cleanup and dogfood-driven tool removal. The
 sections below preserve the gap analysis that drove the implementation; items
