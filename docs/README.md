@@ -23,6 +23,7 @@ Use one owner per question; other docs link instead of restating status.
 | Product direction | [ROADMAP.md](../ROADMAP.md) |
 | Internal-polish scope and exit gates | [internal-polish-plan.md](internal-polish-plan.md) |
 | Architecture and layer rules | [architecture.md](architecture.md), [ADR-0042](adr/0042-selection-first-session-frontend.md) |
+| TUI structural budget | [tui-maintainability.md](tui-maintainability.md) |
 | Architecture decisions | [ADR index](adr/README.md) |
 | Plugin API contract | [plugin-api-v1.md](spec/plugin-api-v1.md) |
 | API surface and versioning | [api-surface.md](api-surface.md) |
