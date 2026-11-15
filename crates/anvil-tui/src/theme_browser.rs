@@ -196,7 +196,6 @@ pub(crate) fn render(
 mod tests {
     use super::*;
 
-
     #[test]
     fn theme_list_scrolls_to_selection() {
         assert_eq!(list_start(0, 25, 20), 0);
@@ -218,7 +217,6 @@ mod tests {
         assert_eq!(browser.selected_name(), last);
         theme::set_startup_theme("anvil-dark").expect("reset");
     }
-
 
     #[test]
     fn theme_browser_state_owns_selection_and_original() {

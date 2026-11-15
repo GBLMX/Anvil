@@ -33,7 +33,6 @@ fn settings_tabs_map_every_group() {
     assert_eq!(SettingsOverlayState::group(9), "Appearance");
 }
 
-
 #[test]
 fn theme_row_cycles_builtins_and_resets() {
     let first = theme::Choice::Fixed("anvil-dark");
