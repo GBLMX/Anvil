@@ -11,8 +11,8 @@ post-`0.5.0` feature line.
 - Added shared pending contexts for hover and line comments.
 - Command-based LSP code actions now dispatch through
   `workspace/executeCommand`, including actions that also carry a workspace
-  edit. Sessions now fail restore on unreadable files or swap files instead of
-  opening an empty buffer.
+  edit. Sessions now fail restore on unreadable files, unreadable swap files,
+  or a missing dirty swap instead of opening an empty buffer.
 - `anvil-module` now exposes a reusable `LanguageToolingProviders` composition
   for distributions that enable multiple language providers.
 - Buffer tabs and the buffer picker now show file-type icons; picker paths are

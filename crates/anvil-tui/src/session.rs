@@ -144,6 +144,13 @@ fn restore_buffer(
         },
         None => None,
     };
+    if (saved.modified || saved.conflict) && swap_text.is_none() {
+        let label = path
+            .as_deref()
+            .map(|path| path.display().to_string())
+            .unwrap_or_else(|| "<unnamed>".to_owned());
+        return Err(format!("session restore {label}: swap is missing"));
+    }
     let changed = saved
         .source_mtime_ns
         .zip(path.as_deref().and_then(source_mtime_ns))
@@ -469,6 +476,31 @@ mod tests {
         let mut restored = Model::new(EditorState::from_text(""), None);
         let error = restore(&mut restored, &workspace).expect_err("unreadable path");
         assert!(error.contains("session restore"), "{error}");
+        assert!(restored.session.path.is_none());
+    }
+
+    #[test]
+    fn refuses_to_restore_a_dirty_buffer_without_its_swap() {
+        let dir = state_root();
+        let _guard = ENV_LOCK.lock().expect("env lock");
+        let workspace = dir.path().join("workspace");
+        fs::create_dir_all(&workspace).expect("workspace");
+        let path = workspace.join("a.rs");
+        fs::write(&path, "clean\n").expect("file");
+        unsafe { std::env::set_var("XDG_STATE_HOME", dir.path().join("state")) };
+        let mut model = Model::open(&path).expect("open");
+        model.insert_text("dirty");
+        save(&mut model, &workspace).expect("save");
+        let swap = state_path(&workspace)
+            .expect("state")
+            .parent()
+            .expect("parent")
+            .join("swaps/0.swap");
+        fs::remove_file(swap).expect("remove swap");
+
+        let mut restored = Model::new(EditorState::from_text(""), None);
+        let error = restore(&mut restored, &workspace).expect_err("missing dirty swap");
+        assert!(error.contains("swap is missing"), "{error}");
         assert!(restored.session.path.is_none());
     }
 
