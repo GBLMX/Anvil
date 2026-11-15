@@ -2,8 +2,8 @@
 
 Anvil loads an optional TOML keymap at startup. It can remap normal-mode,
 operator-pending, and editor/global context bindings without changing the
-built-in defaults. Context identifiers, the Space-leader timeout, F-key
-compatibility, and bundled presets are documented in
+built-in defaults. Key syntax, canonical bindings, and the Space-leader timeout
+are documented below; the historical 0.5.3 router design is in
 [keymap-router-analysis.md](keymap-router-analysis.md).
 
 ## Location
@@ -65,8 +65,7 @@ popup/modal built-ins consume first and do not fall back to global bindings.
 
 Two bundled presets are available:
 
-- `anvil-ergo.toml` (`ergo`, also `default`): the ergonomic Space leader and
-  selection-first aliases.
+- `anvil-ergo.toml` (`ergo`, also `default`): the ergonomic Space leader.
 - `anvil-vim.toml` (`vim`): explicit Vim-style normal bindings.
 
 Bundled presets do not bind F1–F12. A keymap file selects a preset with the
