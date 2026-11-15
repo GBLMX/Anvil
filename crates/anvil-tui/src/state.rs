@@ -4,6 +4,7 @@ use super::*;
 use anvil_lsp_client as lsp;
 use anvil_session::plugin_provider::{PluginProviderRegistry, PluginProviderRequests};
 use anvil_session::provider::{CancellationToken, PickerEntry, ProviderId};
+use anvil_session::recents::{self, Recents};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
