@@ -71,6 +71,7 @@ mod pkg_install;
 mod plugin_activation;
 mod plugin_discovery;
 mod plugin_document;
+mod plugin_host;
 #[cfg(target_os = "linux")]
 mod plugin_manager;
 mod plugins;

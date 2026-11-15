@@ -3,6 +3,7 @@
 use crate::editor_service::{EditorRequest, EditorService};
 use crate::host_session::{HostEvent, SendOutcome};
 use crate::plugin_events::{Delivery, PluginEvent, PluginEventBus};
+use crate::plugin_runtime::HostSpawner;
 use crate::plugin_session::{GatewayPort, PluginSession};
 use anvil_api::ApiError;
 use std::collections::{HashMap, VecDeque};
@@ -229,7 +230,9 @@ pub(crate) trait HostLauncher {
     ) -> Result<Box<dyn ManagedHost>, String>;
 }
 
-struct SystemLauncher;
+struct SystemLauncher {
+    spawner: Arc<dyn HostSpawner>,
+}
 
 impl HostLauncher for SystemLauncher {
     #[allow(clippy::too_many_arguments)]
@@ -249,6 +252,7 @@ impl HostLauncher for SystemLauncher {
         let host = match (mode, plugin_root) {
             (StartMode::Oom, _) => PluginSession::start_oom(
                 gateway,
+                &*self.spawner,
                 workspace,
                 plugin_id,
                 permissions,
@@ -257,6 +261,7 @@ impl HostLauncher for SystemLauncher {
             ),
             (StartMode::Normal, Some(root)) => PluginSession::start_plugin(
                 gateway,
+                &*self.spawner,
                 workspace,
                 plugin_id,
                 root,
@@ -267,6 +272,7 @@ impl HostLauncher for SystemLauncher {
             ),
             (StartMode::Normal, None) => PluginSession::start(
                 gateway,
+                &*self.spawner,
                 workspace,
                 plugin_id,
                 permissions,
@@ -289,17 +295,11 @@ pub struct PluginSupervisor {
     events: PluginEventBus,
 }
 
-impl Default for PluginSupervisor {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl PluginSupervisor {
-    pub fn new() -> Self {
+    pub fn new(spawner: Arc<dyn HostSpawner>) -> Self {
         let (editor_tx, editor_requests) = mpsc::sync_channel(MAX_QUEUED_EDITOR_REQUESTS);
         Self {
-            launcher: Box::new(SystemLauncher),
+            launcher: Box::new(SystemLauncher { spawner }),
             editor_identities: Arc::new(Mutex::new(HashMap::new())),
             entries: HashMap::new(),
             pending_starts: VecDeque::new(),

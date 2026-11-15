@@ -9,7 +9,8 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
-use crate::host_session::{self, HostEvent, HostSession, SendOutcome};
+use crate::host_session::{HostEvent, HostSession, SendOutcome};
+use crate::plugin_runtime::{HostSpawner, HostStart, HostToken};
 
 pub const DEBUG_PLUGIN_ID: &str = "debug";
 pub const DEBUG_PERMISSIONS: &[&str] = &["sys.exec"];
@@ -24,6 +25,7 @@ pub struct PluginSession {
 impl PluginSession {
     pub(crate) fn start(
         gateway: &mut GatewayPort,
+        spawner: &dyn HostSpawner,
         workspace: &Path,
         plugin_id: &str,
         permissions: &[String],
@@ -32,6 +34,7 @@ impl PluginSession {
     ) -> Result<Self, String> {
         Self::start_mode(
             gateway,
+            spawner,
             workspace,
             plugin_id,
             permissions,
@@ -45,6 +48,7 @@ impl PluginSession {
 
     pub(crate) fn start_oom(
         gateway: &mut GatewayPort,
+        spawner: &dyn HostSpawner,
         workspace: &Path,
         plugin_id: &str,
         permissions: &[String],
@@ -53,6 +57,7 @@ impl PluginSession {
     ) -> Result<Self, String> {
         Self::start_mode(
             gateway,
+            spawner,
             workspace,
             plugin_id,
             permissions,
@@ -67,6 +72,7 @@ impl PluginSession {
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn start_plugin(
         gateway: &mut GatewayPort,
+        spawner: &dyn HostSpawner,
         workspace: &Path,
         plugin_id: &str,
         plugin_root: &Path,
@@ -77,6 +83,7 @@ impl PluginSession {
     ) -> Result<Self, String> {
         Self::start_mode(
             gateway,
+            spawner,
             workspace,
             plugin_id,
             permissions,
@@ -91,7 +98,8 @@ impl PluginSession {
     #[allow(clippy::too_many_arguments)]
     fn start_mode(
         gateway: &mut GatewayPort,
-        workspace: &Path,
+        spawner: &dyn HostSpawner,
+        _workspace: &Path,
         plugin_id: &str,
         permissions: &[String],
         editor_socket: Option<&Path>,
@@ -100,7 +108,7 @@ impl PluginSession {
         oom: bool,
         identities: &Arc<Mutex<HashMap<[u8; 32], String>>>,
     ) -> Result<Self, String> {
-        let token = host_session::new_token();
+        let token = HostToken::new();
         let hash = Sha256::digest(token.0);
         let token_hash: [u8; 32] = hash.into();
         gateway
@@ -116,33 +124,18 @@ impl PluginSession {
             }
         }
         let gateway_socket = gateway.socket_path().to_path_buf();
-        let host = if oom {
-            HostSession::start_oom_with_token(
-                workspace,
-                plugin_id,
-                token,
-                Some(&gateway_socket),
-                editor_socket,
-            )
-        } else if let Some(plugin_root) = plugin_root {
-            HostSession::start_with_token_plugin(
-                workspace,
+        let host = HostSession::start(
+            spawner,
+            HostStart {
                 plugin_id,
                 plugin_root,
                 token,
-                Some(&gateway_socket),
+                gateway_socket: Some(&gateway_socket),
                 editor_socket,
                 command,
-            )
-        } else {
-            HostSession::start_with_token(
-                workspace,
-                plugin_id,
-                token,
-                Some(&gateway_socket),
-                editor_socket,
-            )
-        };
+                allocate_mb: oom.then_some(300),
+            },
+        );
         match host {
             Ok(host) => Ok(Self {
                 host,

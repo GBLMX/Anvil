@@ -485,7 +485,9 @@ impl Default for PluginState {
             #[cfg(target_os = "linux")]
             entries: Vec::new(),
             #[cfg(target_os = "linux")]
-            supervisor: PluginSupervisor::new(),
+            supervisor: PluginSupervisor::new(std::sync::Arc::new(
+                crate::plugin_host::SystemHostSpawner,
+            )),
             #[cfg(target_os = "linux")]
             manager: None,
             #[cfg(target_os = "linux")]

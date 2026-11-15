@@ -1,7 +1,9 @@
+use crate::plugin_runtime::{HostExit, HostProcess as HostProcessPort, HostSpawner, HostStart};
 use anvil_ipc::{Connection, FrameError, Listener};
-use anvil_plugin_host::{Cgroup, HostExit, HostProcess, Token, spawn, spawn_in_cgroup};
 use std::io;
-use std::path::{Path, PathBuf};
+#[cfg(test)]
+use std::path::Path;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::{self, Receiver, SyncSender, TrySendError};
@@ -77,7 +79,7 @@ enum HostCommand {
 }
 
 pub struct HostSession {
-    host: HostProcess,
+    host: Box<dyn HostProcessPort>,
     commands: SyncSender<HostCommand>,
     events: Receiver<HostEvent>,
     alive: Arc<AtomicBool>,
@@ -110,129 +112,7 @@ impl Drop for SocketCleanup {
 }
 
 impl HostSession {
-    pub(crate) fn start_with_token(
-        workspace: &Path,
-        plugin_id: &str,
-        token: Token,
-        gateway_socket: Option<&Path>,
-        editor_socket: Option<&Path>,
-    ) -> Result<Self, String> {
-        let host = host_binary()?;
-        let cgroup_root = Some(cgroup_root()?);
-        Self::start_with_host_token(
-            workspace,
-            plugin_id,
-            &host,
-            None,
-            cgroup_root,
-            token,
-            None,
-            gateway_socket,
-            editor_socket,
-            None,
-        )
-    }
-
-    pub(crate) fn start_with_token_plugin(
-        workspace: &Path,
-        plugin_id: &str,
-        plugin_root: &Path,
-        token: Token,
-        gateway_socket: Option<&Path>,
-        editor_socket: Option<&Path>,
-        command: Option<&str>,
-    ) -> Result<Self, String> {
-        let host = host_binary()?;
-        let cgroup_root = Some(cgroup_root()?);
-        Self::start_with_host_token(
-            workspace,
-            plugin_id,
-            &host,
-            None,
-            cgroup_root,
-            token,
-            Some(plugin_root),
-            gateway_socket,
-            editor_socket,
-            command,
-        )
-    }
-
-    pub(crate) fn start_oom_with_token(
-        workspace: &Path,
-        plugin_id: &str,
-        token: Token,
-        gateway_socket: Option<&Path>,
-        editor_socket: Option<&Path>,
-    ) -> Result<Self, String> {
-        let host = host_binary()?;
-        let root = cgroup_root()?;
-        Self::start_with_host_token(
-            workspace,
-            plugin_id,
-            &host,
-            Some(300),
-            Some(root),
-            token,
-            None,
-            gateway_socket,
-            editor_socket,
-            None,
-        )
-    }
-
-    #[cfg(test)]
-    pub(crate) fn start_with_host(
-        workspace: &Path,
-        host: &Path,
-        allocate_mb: Option<u32>,
-        cgroup_root: Option<PathBuf>,
-        editor_socket: Option<&Path>,
-    ) -> Result<Self, String> {
-        Self::start_with_host_token(
-            workspace,
-            "test",
-            host,
-            allocate_mb,
-            cgroup_root,
-            new_token(),
-            None,
-            None,
-            editor_socket,
-            None,
-        )
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    fn start_with_host_token(
-        _workspace: &Path,
-        plugin_id: &str,
-        host: &Path,
-        allocate_mb: Option<u32>,
-        cgroup_root: Option<PathBuf>,
-        token: Token,
-        plugin_root: Option<&Path>,
-        gateway_socket: Option<&Path>,
-        editor_socket: Option<&Path>,
-        command: Option<&str>,
-    ) -> Result<Self, String> {
-        let cgroup = match cgroup_root {
-            Some(root) => {
-                let name = format!(
-                    "anvil-plugin-{}-{}",
-                    std::process::id(),
-                    SystemTime::now()
-                        .duration_since(UNIX_EPOCH)
-                        .map(|time| time.as_nanos())
-                        .unwrap_or_default()
-                );
-                Some(
-                    Cgroup::create(root, &name, 64, 256 << 20, 100)
-                        .map_err(|error| format!("cgroup: {error}"))?,
-                )
-            }
-            None => None,
-        };
+    pub(crate) fn start(spawner: &dyn HostSpawner, start: HostStart<'_>) -> Result<Self, String> {
         let socket = std::env::temp_dir().join(format!(
             "anvil-host-{}-{}.sock",
             std::process::id(),
@@ -247,37 +127,9 @@ impl HostSession {
         listener
             .set_nonblocking(true)
             .map_err(|error| error.to_string())?;
-        let mut args = vec![
-            "--socket".to_owned(),
-            socket.display().to_string(),
-            "--plugin-id".to_owned(),
-            plugin_id.to_owned(),
-        ];
-        if let Some(mb) = allocate_mb {
-            args.push("--allocate-mb".to_owned());
-            args.push(mb.to_string());
-        }
-        if let Some(plugin_root) = plugin_root {
-            args.push("--plugin".to_owned());
-            args.push(plugin_root.display().to_string());
-        }
-        if let Some(gateway_socket) = gateway_socket {
-            args.push("--gateway-socket".to_owned());
-            args.push(gateway_socket.display().to_string());
-        }
-        if let Some(editor_socket) = editor_socket {
-            args.push("--editor-socket".to_owned());
-            args.push(editor_socket.display().to_string());
-        }
-        if let Some(command) = command {
-            args.push("--activation-command".to_owned());
-            args.push(command.to_owned());
-        }
-        let process = match cgroup {
-            Some(cgroup) => spawn_in_cgroup(host, &args, token, cgroup),
-            None => spawn(host, &args, token),
-        }
-        .map_err(|error| format!("spawn host: {error}"))?;
+        let process = spawner
+            .spawn(&start, &socket)
+            .map_err(|error| format!("spawn host: {error}"))?;
         let (command_tx, command_rx) = mpsc::sync_channel(MAX_PENDING_COMMANDS);
         let (event_tx, event_rx) = mpsc::sync_channel(MAX_QUEUED_HOST_EVENTS);
         let alive = Arc::new(AtomicBool::new(true));
@@ -556,10 +408,7 @@ impl HostSession {
             && let Ok(Some(status)) = self.host.try_wait()
         {
             self.exited = true;
-            events.push(HostEvent::Exited(anvil_plugin_host::classify_exit(
-                status,
-                self.host.memory_limited(),
-            )));
+            events.push(HostEvent::Exited(status));
         }
         events
     }
@@ -575,6 +424,33 @@ impl HostSession {
             let _ = worker.join();
         }
         let _ = std::fs::remove_file(&self.socket);
+    }
+
+    #[cfg(test)]
+    pub(crate) fn start_with_host(
+        _workspace: &Path,
+        host: &Path,
+        allocate_mb: Option<u32>,
+        cgroup_root: Option<PathBuf>,
+        editor_socket: Option<&Path>,
+    ) -> Result<Self, String> {
+        let spawner = TestSpawner {
+            host: host.to_path_buf(),
+            allocate_mb,
+            cgroup_root,
+        };
+        Self::start(
+            &spawner,
+            HostStart {
+                plugin_id: "test",
+                plugin_root: None,
+                token: crate::plugin_runtime::HostToken::new(),
+                gateway_socket: None,
+                editor_socket,
+                command: None,
+                allocate_mb,
+            },
+        )
     }
 }
 
@@ -758,43 +634,98 @@ fn event_frame(
     })
 }
 
-fn response_matches_id(response: &serde_json::Value, id: u64) -> bool {
-    response.get("id").and_then(serde_json::Value::as_u64) == Some(id)
-}
-
-fn host_binary() -> Result<PathBuf, String> {
-    if let Some(path) = std::env::var_os("ANVIL_PLUGIN_HOST") {
-        return Ok(PathBuf::from(path));
-    }
-    let current = std::env::current_exe().map_err(|error| error.to_string())?;
-    let path = current
-        .parent()
-        .ok_or_else(|| "no executable parent".to_owned())?
-        .join("anvil-plugin-host");
-    if path.is_file() {
-        Ok(path)
-    } else {
-        Err(format!("plugin host not found at {}", path.display()))
-    }
-}
-
+#[cfg(test)]
 fn cgroup_root() -> Result<PathBuf, String> {
     if let Some(root) = std::env::var_os("ANVIL_CGROUP_ROOT") {
         return Ok(PathBuf::from(root));
     }
-    Cgroup::detect_root().map_err(|error| format!("cgroup: {error}"))
+    anvil_plugin_host::Cgroup::detect_root().map_err(|error| format!("cgroup: {error}"))
 }
 
-pub(crate) fn new_token() -> Token {
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|time| time.as_nanos())
-        .unwrap_or_default();
-    let mut bytes = [0u8; 32];
-    bytes[..8].copy_from_slice(&(std::process::id() as u64).to_le_bytes());
-    bytes[8..24].copy_from_slice(&nanos.to_le_bytes());
-    bytes[24..].copy_from_slice(&(nanos.rotate_left(17) as u64).to_le_bytes());
-    Token(bytes)
+fn response_matches_id(response: &serde_json::Value, id: u64) -> bool {
+    response.get("id").and_then(serde_json::Value::as_u64) == Some(id)
+}
+#[cfg(test)]
+struct TestSpawner {
+    host: PathBuf,
+    allocate_mb: Option<u32>,
+    cgroup_root: Option<PathBuf>,
+}
+
+#[cfg(test)]
+impl HostSpawner for TestSpawner {
+    fn spawn(
+        &self,
+        start: &HostStart<'_>,
+        socket: &Path,
+    ) -> Result<Box<dyn HostProcessPort>, String> {
+        let cgroup = match &self.cgroup_root {
+            Some(root) => Some(
+                anvil_plugin_host::Cgroup::create(
+                    root,
+                    &format!(
+                        "anvil-test-{}-{}",
+                        std::process::id(),
+                        SystemTime::now()
+                            .duration_since(UNIX_EPOCH)
+                            .map(|time| time.as_nanos())
+                            .unwrap_or_default()
+                    ),
+                    64,
+                    256 << 20,
+                    100,
+                )
+                .map_err(|error| format!("cgroup: {error}"))?,
+            ),
+            None => None,
+        };
+        let mut args = vec![
+            "--socket".to_owned(),
+            socket.display().to_string(),
+            "--plugin-id".to_owned(),
+            start.plugin_id.to_owned(),
+        ];
+        if let Some(mb) = self.allocate_mb {
+            args.push("--allocate-mb".to_owned());
+            args.push(mb.to_string());
+        }
+        if let Some(editor_socket) = start.editor_socket {
+            args.push("--editor-socket".to_owned());
+            args.push(editor_socket.display().to_string());
+        }
+        let token = anvil_plugin_host::Token(start.token.0);
+        let process = match cgroup {
+            Some(cgroup) => anvil_plugin_host::spawn_in_cgroup(&self.host, &args, token, cgroup),
+            None => anvil_plugin_host::spawn(&self.host, &args, token),
+        }
+        .map_err(|error| error.to_string())?;
+        Ok(Box::new(TestProcess(process)))
+    }
+}
+
+#[cfg(test)]
+struct TestProcess(anvil_plugin_host::HostProcess);
+
+#[cfg(test)]
+impl HostProcessPort for TestProcess {
+    fn id(&self) -> u32 {
+        self.0.id()
+    }
+
+    fn try_wait(&mut self) -> io::Result<Option<HostExit>> {
+        let memory_limited = self.0.memory_limited();
+        Ok(self.0.try_wait()?.map(|status| {
+            match anvil_plugin_host::classify_exit(status, memory_limited) {
+                anvil_plugin_host::HostExit::Exited(code) => HostExit::Exited(code),
+                anvil_plugin_host::HostExit::Signaled(signal) => HostExit::Signaled(signal),
+                anvil_plugin_host::HostExit::OomKilled => HostExit::OomKilled,
+            }
+        }))
+    }
+
+    fn terminate(&mut self) {
+        self.0.terminate();
+    }
 }
 
 #[cfg(test)]

@@ -12,6 +12,7 @@ pub mod jump;
 pub mod keymap;
 pub mod plugin_events;
 pub mod plugin_provider;
+pub mod plugin_runtime;
 pub mod plugin_session;
 pub mod plugin_supervisor;
 pub mod provider;
