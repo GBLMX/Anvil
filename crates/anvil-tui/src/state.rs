@@ -556,6 +556,10 @@ pub(crate) struct WorkspaceState {
     /// Paths changed by a multi-file replace whose buffer reload failed.
     pub(crate) stale_paths: HashSet<PathBuf>,
 }
+pub(crate) struct WorkspacePoll {
+    pub(crate) file_events: Vec<anvil_workspace::FileEvent>,
+    pub(crate) root_events: Vec<(PathBuf, anvil_workspace::FileEvent)>,
+}
 
 impl WorkspaceState {
     pub(crate) fn root_label(&self, root: &Path) -> String {
@@ -589,6 +593,28 @@ impl WorkspaceState {
             root.display().to_string()
         } else {
             short
+        }
+    }
+
+    pub(crate) fn poll(&mut self) -> WorkspacePoll {
+        let file_events = self
+            .file_worker
+            .as_ref()
+            .map(|worker| worker.poll())
+            .unwrap_or_default();
+        let roots = self.root_file_workers.keys().cloned().collect::<Vec<_>>();
+        let mut root_events = Vec::new();
+        for root in roots {
+            let events = self
+                .root_file_workers
+                .get(&root)
+                .map(|worker| worker.poll())
+                .unwrap_or_default();
+            root_events.extend(events.into_iter().map(|event| (root.clone(), event)));
+        }
+        WorkspacePoll {
+            file_events,
+            root_events,
         }
     }
 }
@@ -895,6 +921,21 @@ pub(crate) struct RuntimeState {
     pub(crate) terminal_panel: bool,
 }
 
+impl RuntimeState {
+    pub(crate) fn poll_task(&mut self) -> Option<task_runner::TaskEvent> {
+        let event = self.task_worker.as_mut()?.try_recv()?;
+        self.task_worker = None;
+        Some(event)
+    }
+}
+
+#[cfg(unix)]
+pub(crate) struct TerminalPoll {
+    pub(crate) output: bool,
+    pub(crate) error: Option<String>,
+    pub(crate) exited: Option<String>,
+}
+
 #[cfg(unix)]
 impl RuntimeState {
     pub(crate) fn push_terminal_output(&mut self, bytes: &[u8]) {
@@ -903,6 +944,31 @@ impl RuntimeState {
             let excess = self.terminal_output.len() - pty_terminal::MAX_TERMINAL_OUTPUT;
             self.terminal_output.drain(..excess);
         }
+    }
+
+    pub(crate) fn poll_terminal(&mut self) -> Option<TerminalPoll> {
+        let (exited, read) = {
+            let terminal = self.terminal.as_mut()?;
+            (
+                terminal.try_wait().ok().flatten(),
+                terminal.read_available(),
+            )
+        };
+        let mut output = false;
+        let mut error = None;
+        match read {
+            Ok(bytes) if !bytes.is_empty() => {
+                self.push_terminal_output(&bytes);
+                output = true;
+            }
+            Ok(_) => {}
+            Err(read_error) => error = Some(read_error.to_string()),
+        }
+        Some(TerminalPoll {
+            output,
+            error,
+            exited: exited.map(|status| status.to_string()),
+        })
     }
 }
 

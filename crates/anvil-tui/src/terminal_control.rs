@@ -69,22 +69,17 @@ impl Model {
     }
 
     pub(crate) fn poll_terminal(&mut self) {
-        let Some(terminal) = self.runtime.terminal.as_mut() else {
+        let Some(poll) = self.runtime.poll_terminal() else {
             return;
         };
-        let exited = terminal.try_wait().ok().flatten();
-        match terminal.read_available() {
-            Ok(bytes) if !bytes.is_empty() => {
-                self.runtime.push_terminal_output(&bytes);
-                self.file.dirty = true;
-            }
-            Ok(_) => {}
-            Err(error) => {
-                self.status.text = format!("E: terminal read: {error}");
-                self.file.dirty = true;
-            }
+        if poll.output {
+            self.file.dirty = true;
         }
-        if let Some(status) = exited {
+        if let Some(error) = poll.error {
+            self.status.text = format!("E: terminal read: {error}");
+            self.file.dirty = true;
+        }
+        if let Some(status) = poll.exited {
             self.runtime.terminal = None;
             self.runtime.terminal_panel = false;
             self.status.text = format!("terminal exited: {status}");

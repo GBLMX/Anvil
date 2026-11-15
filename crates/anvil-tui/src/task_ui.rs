@@ -50,13 +50,9 @@ impl Model {
     }
 
     pub(crate) fn poll_task(&mut self) {
-        let Some(worker) = self.runtime.task_worker.as_mut() else {
+        let Some(event) = self.runtime.poll_task() else {
             return;
         };
-        let Some(event) = worker.try_recv() else {
-            return;
-        };
-        self.runtime.task_worker = None;
         let TaskEvent::Finished(result) = event;
         let tests = self.runtime.task_is_tests;
         self.runtime.task_is_tests = false;

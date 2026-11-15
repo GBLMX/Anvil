@@ -331,13 +331,8 @@ impl Model {
     }
 
     pub(crate) fn poll_file_worker(&mut self) {
-        let events = self
-            .workspace
-            .file_worker
-            .as_ref()
-            .map(|worker| worker.poll())
-            .unwrap_or_default();
-        for event in events {
+        let poll = self.workspace.poll();
+        for event in poll.file_events {
             match event {
                 FileEvent::Listed(path, result) => self.handle_tree_listing(path, result),
                 FileEvent::CompletionListed { generation, result } => {
@@ -471,20 +466,7 @@ impl Model {
             }
             self.file.dirty = true;
         }
-        let roots = self
-            .workspace
-            .root_file_workers
-            .keys()
-            .cloned()
-            .collect::<Vec<_>>();
-        for root in roots {
-            let events = self
-                .workspace
-                .root_file_workers
-                .get_mut(&root)
-                .map(|worker| worker.poll())
-                .unwrap_or_default();
-            for event in events {
+        for (root, event) in poll.root_events {
                 match event {
                     FileEvent::Files { generation, result } => {
                         self.handle_fuzzy_files(Some(root.clone()), generation, result);
