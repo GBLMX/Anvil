@@ -175,6 +175,7 @@ impl Model {
             ("q", "") => self.request_quit(),
             ("q!", "") => self.force_quit(),
             ("cq", "") => self.quit_with_code(1),
+            ("help", "recover" | "recovery") => self.show_recovery_help(),
             ("help", "") => self.show_help(),
             ("settings", "") => self.open_settings(),
             ("themes", "") => self.open_theme_browser(),

@@ -304,6 +304,7 @@ to the selected buffer.
 - [Documentation index](docs/README.md)
 - [Project charter](PROJECT_CHARTER.md)
 - [Known issues](docs/known-issues.md)
+- [Recovery and save semantics](docs/recovery.md)
 - [High-frequency command architecture plan](docs/command-architecture-plan.md)
 - [0.3.0 → 0.4.0: Polish & Specification](docs/polish-and-specification.md)
 - [0.3.0 → 0.4.0 / Phase 0.7 plan](docs/phase-0-7-plan.md)

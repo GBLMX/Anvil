@@ -6,6 +6,7 @@
 use super::*;
 
 pub(crate) const HELP_TEXT: &str = include_str!("help.txt");
+pub(crate) const RECOVERY_TEXT: &str = include_str!("../../../docs/recovery.md");
 
 #[derive(Default)]
 pub(crate) struct ReadOnlyState {
@@ -18,6 +19,10 @@ pub(crate) struct ReadOnlyState {
 impl Model {
     pub(crate) fn show_help(&mut self) {
         self.show_read_only(HELP_TEXT, "Help: :q returns", "help");
+    }
+
+    pub(crate) fn show_recovery_help(&mut self) {
+        self.show_read_only(RECOVERY_TEXT, "Recovery: :q returns", "recovery");
     }
 
     pub(crate) fn show_read_only(&mut self, text: &str, status: &str, title: &str) -> bool {

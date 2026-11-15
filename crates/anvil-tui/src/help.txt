@@ -144,6 +144,7 @@ Normal mode
   :theme-save         re-save the runtime theme choice
   :pkg install <url>  download, review, and install a signed plugin package
   :pkg install-file <package> <signature> <key>  review and install a local package
+  :help recover       recovery and save semantics
   :help               this page
 
 Insert mode

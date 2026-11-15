@@ -31,6 +31,8 @@ post-`0.5.0` feature line.
 - `:settings` now shows the effective origin of each value (`default`,
   environment, user file, or trusted project file), including ignored project
   files and the reason; `:config-reload` reports loaded and ignored files.
+- Added `:help recover` and [recovery semantics](docs/recovery.md) covering
+  save durability, session/swap recovery, undo reset, and external conflicts.
 - Command-based LSP code actions now dispatch through
   `workspace/executeCommand`, including actions that also carry a workspace
   edit. Sessions now fail restore on unreadable files, unreadable swap files,
