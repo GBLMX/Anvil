@@ -1,8 +1,8 @@
 # Theme and Settings Plan
 
-Status: active. Built-in themes and built-in Settings only; plugin-provided
-themes or plugin-rendered Settings are out of scope. Theme work does not
-require a full Settings page; the generic Settings overlay is a later gate.
+Status: landed; design record. Built-in semantic themes, theme selection and
+persistence, live preview, and typed settings landed. Plugin-provided themes,
+plugin-rendered settings, and file watching remain out of scope.
 
 Scope: semantic themes, built-in palettes, theme selection/persistence, live
 preview, and the minimum settings infrastructure needed to support them. It

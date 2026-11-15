@@ -1,6 +1,8 @@
 # Ratatui TUI Elm Loop Plan
 
-Status: TUI-0 and basic TUI-1 implemented (insert variants, save/save-as, quit guard, undo/redo, `x`/`dd`/`yy`/`p`, `/` search with `n`/`N`, embedded read-only `:help`, multi-buffer `:e`/`:bn`/`:bp`, grapheme-aware editing, horizontal scroll, cursor/viewport); Elm Msg/Cmd runtime remains planned.
+Status: historical design record. TUI-0 and basic TUI-1 landed; the Elm
+`Msg`/`Cmd` runtime was not adopted. The current TUI is typed-effect based
+(ADR-0042), not an Elm message loop.
 
 ## 1. Goal
 

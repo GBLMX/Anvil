@@ -1,8 +1,9 @@
 # Linux Platform Plan
 
-Status: planned. Cross-cuts `0.4.7` process/resource isolation, `0.4.8` plugin
-I/O, and `0.6.1` package/install atomicity. Linux is the v1 platform; this plan
-does not add Windows/macOS ports.
+Status: active; per-section status. L1/L1b hardening is landed; remaining
+sections track install atomicity, watcher measurements, and structured
+cgroup reporting. Linux is the v1 platform; this plan does not add
+Windows/macOS ports.
 
 Scope: use Linux kernel primitives where they provide enforcement, atomicity, or
 reliable lifecycle. It is not a catalogue of every available syscall.
