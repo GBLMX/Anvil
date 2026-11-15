@@ -604,3 +604,54 @@ fn message_band_reserves_space_and_blocks_editor_hits() {
         crate::mouse::Target::Editor { .. }
     ));
 }
+
+#[test]
+fn buffer_tab_hits_follow_icons_markers_and_wide_names() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let paths = ["first.rs", "测试.rs", "wide_name.rs"];
+    std::fs::write(dir.path().join(paths[0]), "text").expect("write");
+    let mut model = Model::open(dir.path().join(paths[0])).expect("open");
+    for name in &paths[1..] {
+        let path = dir.path().join(name);
+        std::fs::write(&path, "text").expect("write");
+        model.open_path(&path).expect("open buffer");
+    }
+    model.buffers.entries[1].modified = true;
+    model.buffers.entries[2].missing = true;
+    let hits = crate::render::buffer_tab_hits(&model, 200);
+    assert_eq!(hits.len(), paths.len());
+    for (index, hit) in hits.iter().enumerate() {
+        assert_eq!(hit.buffer, Some(index));
+        assert_eq!(
+            crate::render::buffer_tab_at(&model, 200, hit.range.start),
+            Some(index)
+        );
+        assert_eq!(
+            crate::render::buffer_tab_at(&model, 200, hit.range.end - 1),
+            Some(index)
+        );
+    }
+    for pair in hits.windows(2) {
+        if pair[0].range.end < pair[1].range.start {
+            assert_eq!(
+                crate::render::buffer_tab_at(&model, 200, pair[0].range.end),
+                None
+            );
+        }
+    }
+}
+
+#[test]
+fn buffer_tab_hits_do_not_map_the_pager_tab_to_a_buffer() {
+    let mut model = Model::new(EditorState::from_text("text\n"), None);
+    model.show_help();
+    let hits = crate::render::buffer_tab_hits(&model, 32);
+    let pager = hits
+        .iter()
+        .find(|hit| hit.buffer.is_none())
+        .expect("pager tab range");
+    assert_eq!(
+        crate::render::buffer_tab_at(&model, 32, pager.range.start),
+        None
+    );
+}

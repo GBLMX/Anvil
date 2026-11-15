@@ -238,7 +238,8 @@ pub(crate) fn hit_test(model: &Model, col: u16, row: u16, width: u16, height: u1
         return Target::Breadcrumb(crate::breadcrumbs::target_at(model, col, area));
     }
     if tab_row == Some(row) {
-        return Target::Tabs(tab_at(model, col.saturating_sub(inner.x), inner.width));
+        return crate::render::buffer_tab_at(model, inner.width, col.saturating_sub(inner.x))
+            .map_or(Target::Outside, Target::Tabs);
     }
     let mut editor_inner = inner;
     if model.workspace.tree.visible && tree_fits(editor_inner.width) {
@@ -554,25 +555,6 @@ fn split_ratio_at(inner: Rect, col: u16) -> u16 {
     let relative = col.saturating_sub(inner.x).min(inner.width);
     ((u32::from(relative) * 100 + u32::from(inner.width) / 2) / u32::from(inner.width))
         .clamp(20, 80) as u16
-}
-
-fn tab_at(model: &Model, offset: u16, _width: u16) -> usize {
-    let mut used = 0u16;
-    for (index, buffer) in model.buffers.entries.iter().enumerate() {
-        let name = buffer
-            .path
-            .as_ref()
-            .and_then(|path| path.file_name())
-            .map(|name| name.to_string_lossy().into_owned())
-            .unwrap_or_else(|| "[no file]".to_owned());
-        let label = format!(" {name} ");
-        let label_width = label.chars().count() as u16;
-        if offset < used + label_width {
-            return index;
-        }
-        used = used.saturating_add(label_width + 1);
-    }
-    model.buffers.active
 }
 
 #[cfg(test)]

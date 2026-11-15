@@ -160,8 +160,12 @@ struct BufferTab {
     width: usize,
 }
 
-fn buffer_bar_line(model: &Model, width: u16) -> Line<'static> {
-    let width = usize::from(width);
+pub(crate) struct BufferTabHit {
+    pub range: std::ops::Range<u16>,
+    pub buffer: Option<usize>,
+}
+
+fn buffer_tabs(model: &Model) -> (Vec<BufferTab>, usize) {
     let ascii_icons = model.appearance.ascii_icons;
     let icons = &model.appearance.icons;
     let mut tabs: Vec<BufferTab> = model
@@ -227,18 +231,18 @@ fn buffer_bar_line(model: &Model, width: u16) -> Line<'static> {
         });
         active = tabs.len() - 1;
     }
-    if tabs.is_empty() {
-        return Line::default();
-    }
-    tabs[active].style = theme::selected();
-    let tab_width = |tab: &BufferTab| tab.width;
+    (tabs, active)
+}
+
+fn buffer_tab_window(tabs: &[BufferTab], active: usize, width: u16) -> (usize, usize) {
+    let width = usize::from(width);
     let mut start = active;
     let mut end = active + 1;
-    let mut used = tab_width(&tabs[active]);
+    let mut used = tabs[active].width;
     while used < width {
         let mut progressed = false;
         if end < tabs.len() {
-            let next = tab_width(&tabs[end]) + 1;
+            let next = tabs[end].width + 1;
             if used + next <= width {
                 used += next;
                 end += 1;
@@ -246,7 +250,7 @@ fn buffer_bar_line(model: &Model, width: u16) -> Line<'static> {
             }
         }
         if start > 0 {
-            let next = tab_width(&tabs[start - 1]) + 1;
+            let next = tabs[start - 1].width + 1;
             if used + next <= width {
                 used += next;
                 start -= 1;
@@ -257,6 +261,70 @@ fn buffer_bar_line(model: &Model, width: u16) -> Line<'static> {
             break;
         }
     }
+    (start, end)
+}
+
+fn tab_label(tab: &BufferTab, width: u16) -> String {
+    let icon_width = tab
+        .icon
+        .as_ref()
+        .map(|(text, _)| UnicodeWidthStr::width(text.as_str()))
+        .unwrap_or(0);
+    let label_width =
+        usize::from(width).saturating_sub(1 + icon_width + usize::from(tab.icon.is_some()));
+    if UnicodeWidthStr::width(tab.label.as_str()) > label_width {
+        crate::status_line::middle_ellipsis(&tab.label, label_width)
+    } else {
+        tab.label.clone()
+    }
+}
+
+pub(crate) fn buffer_tab_hits(model: &Model, width: u16) -> Vec<BufferTabHit> {
+    let (tabs, active) = buffer_tabs(model);
+    if tabs.is_empty() {
+        return Vec::new();
+    }
+    let (start, end) = buffer_tab_window(&tabs, active, width);
+    let mut hits = Vec::with_capacity(end - start);
+    let mut offset = u16::from(start > 0);
+    for (index, tab) in tabs.iter().enumerate().take(end).skip(start) {
+        if index > start {
+            offset = offset.saturating_add(1);
+        }
+        let icon_width = tab
+            .icon
+            .as_ref()
+            .map(|(text, _)| UnicodeWidthStr::width(text.as_str()))
+            .unwrap_or(0);
+        let label = tab_label(tab, width);
+        let drawn = 1
+            + icon_width
+            + usize::from(tab.icon.is_some())
+            + UnicodeWidthStr::width(label.as_str());
+        let end = offset.saturating_add(drawn.min(usize::from(u16::MAX)) as u16);
+        hits.push(BufferTabHit {
+            range: offset..end,
+            buffer: (index < model.buffers.entries.len()).then_some(index),
+        });
+        offset = end;
+    }
+    hits
+}
+
+pub(crate) fn buffer_tab_at(model: &Model, width: u16, offset: u16) -> Option<usize> {
+    buffer_tab_hits(model, width)
+        .into_iter()
+        .find(|hit| hit.range.contains(&offset))
+        .and_then(|hit| hit.buffer)
+}
+
+fn buffer_bar_line(model: &Model, width: u16) -> Line<'static> {
+    let (mut tabs, active) = buffer_tabs(model);
+    if tabs.is_empty() {
+        return Line::default();
+    }
+    tabs[active].style = theme::selected();
+    let (start, end) = buffer_tab_window(&tabs, active, width);
     let mut spans = Vec::new();
     if start > 0 {
         spans.push(Span::styled("‹", theme::panel().fg(theme::muted())));
@@ -265,23 +333,12 @@ fn buffer_bar_line(model: &Model, width: u16) -> Line<'static> {
         if index > start {
             spans.push(Span::styled("│", theme::panel().fg(theme::border_color())));
         }
-        let icon_width = tab
-            .icon
-            .as_ref()
-            .map(|(text, _)| UnicodeWidthStr::width(text.as_str()))
-            .unwrap_or(0);
         spans.push(Span::styled(" ", tab.style));
         if let Some((text, color)) = &tab.icon {
             spans.push(Span::styled(text.clone(), tab.style.fg(*color)));
             spans.push(Span::styled(" ", tab.style));
         }
-        let label_width = width.saturating_sub(1 + icon_width + usize::from(tab.icon.is_some()));
-        let label = if UnicodeWidthStr::width(tab.label.as_str()) > label_width {
-            crate::status_line::middle_ellipsis(&tab.label, label_width)
-        } else {
-            tab.label.clone()
-        };
-        spans.push(Span::styled(label, tab.style));
+        spans.push(Span::styled(tab_label(tab, width), tab.style));
     }
     if end < tabs.len() {
         spans.push(Span::styled("›", theme::panel().fg(theme::muted())));
@@ -465,7 +522,7 @@ pub(crate) fn expand_tabs(spans: &mut Vec<Span<'_>>, mut column: usize) {
         let mut expanded = String::with_capacity(span.content.len());
         for character in span.content.chars() {
             if character == '\t' {
-                let spaces = 4 - column % 4;
+                let spaces = anvil_core::tab_width(column);
                 expanded.extend(std::iter::repeat_n(' ', spaces));
                 column += spaces;
             } else {

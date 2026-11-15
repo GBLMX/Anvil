@@ -24,6 +24,7 @@ pub(crate) fn render_tree(model: &Model, frame: &mut Frame, area: Rect) -> Optio
         ..tree_area
     };
     let mut lines = Vec::new();
+    let rollups = tree_rollups(model);
     let visible_height = list_area.height as usize;
     let start = model
         .workspace
@@ -94,11 +95,7 @@ pub(crate) fn render_tree(model: &Model, frame: &mut Frame, area: Rect) -> Optio
                 style.fg(theme::warning()).add_modifier(Modifier::BOLD),
             ));
         }
-        let git_marker = if entry.is_dir {
-            tree_rollup_git(model, &model.workspace.tree.entries, index)
-        } else {
-            model.workspace.git.status.get(&entry.path).copied()
-        };
+        let git_marker = rollups.git[index];
         if let Some(marker) = git_marker {
             let color = match marker {
                 'A' => theme::success(),
@@ -112,21 +109,7 @@ pub(crate) fn render_tree(model: &Model, frame: &mut Frame, area: Rect) -> Optio
                 style.fg(color).add_modifier(Modifier::BOLD),
             ));
         }
-        let diagnostic_severity = if entry.is_dir {
-            tree_rollup_diagnostic(model, &model.workspace.tree.entries, index)
-        } else {
-            model
-                .language
-                .diagnostics
-                .by_path
-                .get(&entry.path)
-                .and_then(|diagnostics| {
-                    diagnostics
-                        .iter()
-                        .filter_map(|diagnostic| diagnostic.severity)
-                        .min()
-                })
-        };
+        let diagnostic_severity = rollups.diagnostic[index];
         if let Some(severity) = diagnostic_severity {
             let color = match severity {
                 1 => theme::error(),
@@ -171,20 +154,74 @@ pub(crate) fn render_tree(model: &Model, frame: &mut Frame, area: Rect) -> Optio
     })
 }
 
-fn tree_rollup_git(model: &Model, entries: &[TreeEntry], index: usize) -> Option<char> {
-    let depth = entries[index].depth;
-    let mut marker = None;
-    for child in entries.iter().skip(index + 1) {
-        if child.depth <= depth {
-            break;
-        }
-        if let Some(next) = model.workspace.git.status.get(&child.path)
-            && git_priority(*next) > marker.map_or(0, git_priority)
+struct TreeRollups {
+    git: Vec<Option<char>>,
+    diagnostic: Vec<Option<u32>>,
+}
+
+fn tree_rollups(model: &Model) -> TreeRollups {
+    let entries = &model.workspace.tree.entries;
+    let mut rollups = TreeRollups {
+        git: vec![None; entries.len()],
+        diagnostic: vec![None; entries.len()],
+    };
+    let mut stack: Vec<(usize, usize, Option<char>, Option<u32>)> = Vec::new();
+    for (index, entry) in entries.iter().enumerate() {
+        while stack
+            .last()
+            .is_some_and(|(depth, _, _, _)| *depth >= entry.depth)
         {
-            marker = Some(*next);
+            let (_, child_index, child_git, child_diagnostic) = stack.pop().expect("checked stack");
+            rollups.git[child_index] = child_git;
+            rollups.diagnostic[child_index] = child_diagnostic;
+            if let Some((_, _, parent_git, parent_diagnostic)) = stack.last_mut() {
+                merge_git(parent_git, child_git);
+                merge_diagnostic(parent_diagnostic, child_diagnostic);
+            }
+        }
+        let git = (!entry.is_dir)
+            .then(|| model.workspace.git.status.get(&entry.path).copied())
+            .flatten();
+        let diagnostic = (!entry.is_dir)
+            .then(|| {
+                model
+                    .language
+                    .diagnostics
+                    .by_path
+                    .get(&entry.path)
+                    .and_then(|diagnostics| {
+                        diagnostics
+                            .iter()
+                            .filter_map(|diagnostic| diagnostic.severity)
+                            .min()
+                    })
+            })
+            .flatten();
+        stack.push((entry.depth, index, git, diagnostic));
+    }
+    while let Some((_, index, git, diagnostic)) = stack.pop() {
+        rollups.git[index] = git;
+        rollups.diagnostic[index] = diagnostic;
+        if let Some((_, _, parent_git, parent_diagnostic)) = stack.last_mut() {
+            merge_git(parent_git, git);
+            merge_diagnostic(parent_diagnostic, diagnostic);
         }
     }
-    marker
+    rollups
+}
+
+fn merge_git(target: &mut Option<char>, candidate: Option<char>) {
+    if let Some(next) = candidate
+        && git_priority(next) > target.map_or(0, git_priority)
+    {
+        *target = Some(next);
+    }
+}
+
+fn merge_diagnostic(target: &mut Option<u32>, candidate: Option<u32>) {
+    if let Some(next) = candidate {
+        *target = Some(target.map_or(next, |current| current.min(next)));
+    }
 }
 
 fn git_priority(marker: char) -> u8 {
@@ -195,23 +232,4 @@ fn git_priority(marker: char) -> u8 {
         'M' => 1,
         _ => 0,
     }
-}
-
-fn tree_rollup_diagnostic(model: &Model, entries: &[TreeEntry], index: usize) -> Option<u32> {
-    let depth = entries[index].depth;
-    let mut severity = None;
-    for child in entries.iter().skip(index + 1) {
-        if child.depth <= depth {
-            break;
-        }
-        if let Some(diagnostics) = model.language.diagnostics.by_path.get(&child.path)
-            && let Some(next) = diagnostics
-                .iter()
-                .filter_map(|diagnostic| diagnostic.severity)
-                .min()
-        {
-            severity = Some(severity.map_or(next, |current: u32| current.min(next)));
-        }
-    }
-    severity
 }

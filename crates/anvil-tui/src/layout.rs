@@ -52,9 +52,10 @@ impl Model {
         let mut segments = Vec::new();
         let mut segment_start = 0usize;
         let mut display = 0usize;
+        let mut column = 0usize;
         for (index, grapheme) in text.grapheme_indices(true) {
             let grapheme_width = if grapheme == "\t" {
-                4
+                anvil_core::tab_width(column)
             } else {
                 UnicodeWidthStr::width(grapheme)
             };
@@ -73,6 +74,7 @@ impl Model {
                 display = 0;
             }
             display += grapheme_width;
+            column += grapheme_width;
         }
         segments.push((segment_start, text.len()));
         let count = segments.len();
@@ -733,7 +735,7 @@ impl Model {
             if pad > 0 {
                 spans.insert(0, Span::raw(" ".repeat(pad)));
             }
-            expand_tabs(&mut spans, pad);
+            expand_tabs(&mut spans, row_base.saturating_add(pad));
             if truncated {
                 spans.push(Span::styled("…", Style::default().fg(theme::warning())));
             }
@@ -869,6 +871,26 @@ mod tests {
         assert_eq!(rendered[1], "efgh");
         assert_eq!(rendered[2], "ij");
         assert_eq!(rendered[3], "next");
+    }
+
+    #[test]
+    fn tabs_use_absolute_columns_across_soft_wrap() {
+        let mut model = Model::new(EditorState::from_text("abc\tdef"), None);
+        model.config.settings.editor.soft_wrap = true;
+        model.view.wrap_width = 6;
+        let rendered = model
+            .visible_lines(10, 6)
+            .into_iter()
+            .map(|line| {
+                line.spans
+                    .into_iter()
+                    .map(|span| span.content.into_owned())
+                    .collect::<String>()
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(rendered, ["abc de", "f"]);
+        assert_eq!(model.row_of_position(0, 4, 10), Some(0));
+        assert_eq!(model.position_at_visible_row(1), Some((0, 6)));
     }
 
     #[test]

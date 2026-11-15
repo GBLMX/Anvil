@@ -525,9 +525,28 @@ fn mouse_tab_switch_preserves_the_active_buffer() {
         row: 1,
         modifiers: crossterm::event::KeyModifiers::NONE,
     };
-    assert!(crate::mouse::handle_mouse(&mut model, click(13), 80, 24));
+    let tab_column = |model: &Model, buffer: usize| {
+        let hit = crate::render::buffer_tab_hits(model, 78)
+            .into_iter()
+            .find(|hit| hit.buffer == Some(buffer))
+            .expect("visible buffer tab");
+        1 + hit.range.start + (hit.range.end - hit.range.start) / 2
+    };
+    let second_column = tab_column(&model, 1);
+    assert!(crate::mouse::handle_mouse(
+        &mut model,
+        click(second_column),
+        80,
+        24
+    ));
     assert_eq!(model.buffers.active, 1);
-    assert!(crate::mouse::handle_mouse(&mut model, click(2), 80, 24));
+    let first_column = tab_column(&model, 0);
+    assert!(crate::mouse::handle_mouse(
+        &mut model,
+        click(first_column),
+        80,
+        24
+    ));
     assert_eq!(model.buffers.active, 0);
     assert_eq!(model.session.editor.text().slice(0..6), "Xfirst");
     assert!(model.file.modified);

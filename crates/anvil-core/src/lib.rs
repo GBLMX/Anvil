@@ -8,7 +8,7 @@ use std::{ops::Range, sync::Arc};
 mod command;
 mod line_index;
 pub use command::{CommandError, EditCommand, History, Revision};
-pub use line_index::{LineIndex, LinePosition, Position};
+pub use line_index::{LineIndex, LinePosition, Position, TAB_WIDTH, tab_width};
 mod word;
 pub use word::{end_word, next_word_start, previous_word_start};
 

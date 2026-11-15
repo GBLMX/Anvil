@@ -13,7 +13,12 @@ use crate::TextBuffer;
 const TARGET_LINES: usize = 1024;
 const MAX_LINES: usize = 2048;
 const MIN_LINES: usize = 512;
-const TAB_WIDTH: usize = 4;
+pub const TAB_WIDTH: usize = 4;
+
+/// Display columns a tab advances from `column`.
+pub fn tab_width(column: usize) -> usize {
+    TAB_WIDTH - column % TAB_WIDTH
+}
 const GRAPHEME_WINDOW: usize = 64;
 const PARALLEL_LINE_SCAN: usize = 4 << 20;
 const COLUMN_CACHE_MIN_BYTES: usize = 64 * 1024;
@@ -888,7 +893,7 @@ fn add_delta(value: usize, delta: isize) -> usize {
 
 fn display_char_width(character: char, column: usize) -> usize {
     if character == '\t' {
-        TAB_WIDTH - column % TAB_WIDTH
+        tab_width(column)
     } else if character == '\r' || character.is_control() {
         0
     } else {

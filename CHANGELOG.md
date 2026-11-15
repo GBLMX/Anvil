@@ -505,6 +505,11 @@ post-`0.5.0` feature line.
 - Gateway copies are bounded by the source size observed at stat time;
   recursive removal rejects trees deeper than 128 levels; startup reclaims
   stale `.anvil-write-*` files older than 24 hours.
+- Buffer-tab hit-testing now uses the renderer’s shared icon/marker/window/pager
+  geometry; tab stops use one absolute-column model across wrapping, rendering,
+  cursor placement, and mouse mapping.
+- Tree git/diagnostic rollups are precomputed in one bottom-up pass instead of
+  rescanning overlapping subtrees for each visible directory row.
 - The editor chrome now uses one persistent frame; the file tree keeps its
   stale/watch-limit/hidden header states without a nested border. Transient
   status and notifications share an auto-expiring bottom message band, while
