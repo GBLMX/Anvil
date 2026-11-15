@@ -1,6 +1,7 @@
 # ADR-0011: Workspace-Scoped Chunked File I/O
 
-- Status: Proposed; Go `sys.read_file`/`sys.write_file`, `anvil-ipc::GatewayClient`, TUI gateway wiring, and TUI `--workspace` are implemented
+- Status: Accepted; implemented. Gateway chunked read/write, IPC client, TUI
+  gateway wiring, and per-workspace sessions are landed.
 - Date: 2026-10-31
 - Related: [ADR-0002](0002-go-daemon.md), [ADR-0007](0007-jsonrpc-envelope-and-capability-token.md)
 

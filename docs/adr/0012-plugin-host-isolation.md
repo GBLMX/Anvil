@@ -1,9 +1,10 @@
 # ADR-0012: Plugin-Host Isolation
 
-- Status: Proposed; empty-host + FS/exec/network denial + host-side UDS EOF
-  exit + cgroup attach/OOM classification + framed host dispatch (`sys.ping`,
-  `sys.exec` mock) + TUI debug HostSession + sandboxed Luau runtime smoke
-  implemented; plugin loading and the capability API remain pending
+- Status: Accepted; implementation landed. Empty-host isolation, filesystem/
+  exec/network denial, UDS EOF exit, cgroup/OOM handling, framed dispatch,
+  sandboxed Luau runtime, plugin loading, editor RPC/provider APIs, and
+  namespace/mount/ptrace/pidfd/memfd/exec/signal syscall denial are
+  implemented. WIT remains ADR-0035.
 - Date: 2026-10-31
 - Related: [ADR-0001](0001-plugin-isolation.md), [ADR-0002](0002-go-daemon.md),
   [ADR-0007](0007-jsonrpc-envelope-and-capability-token.md),
@@ -41,8 +42,8 @@ Applied before plugin VM initialization:
   `socketpair` allow only `AF_UNIX`; other domains return `EPERM`, so TCP/UDP
   cannot be created. Non-native ABIs and x32 (`nr & 0x4000_0000`) are
   rejected. UDS stream operations remain allowed.
-  Broader namespace/mount/ptrace filtering is pending, except for the clone
-  policy below.
+  Namespace, mount, ptrace, pidfd, memfd/exec, signal, and async-I/O syscall
+  classes are denied; the clone policy follows below.
 - seccomp clone policy: only thread-style clones pass. A clone without
   `CLONE_THREAD` is rejected, so `fork`/`vfork`-like process creation cannot
   escape through `clone`; `SYS_fork` and `SYS_vfork` are denied where the

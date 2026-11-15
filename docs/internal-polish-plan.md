@@ -198,7 +198,8 @@ Implemented:
 - folding state persistence;
 - external control/MCP adapter over `anvil-control`.
 
-Remaining follow-up: cross-root file tree/search/mutations, tracked in
+Remaining boundary: cross-root move/copy stays rejected by design, and LSP is
+primary-root-only. Routed tree/search/mutations are tracked in
 [multi-root-routing-plan.md](multi-root-routing-plan.md).
 
 ## 5. Explicitly deferred

@@ -125,8 +125,8 @@ matter.
 
 ## 6. File Tree
 
-Status: landed for root nodes, list/expand, and watch routing. Mutations remain
-pending.
+Status: landed for root nodes, list/expand, watch routing, and routed
+create/rename/remove/same-root copy. Cross-root move/copy stays rejected (§9).
 
 Current model:
 

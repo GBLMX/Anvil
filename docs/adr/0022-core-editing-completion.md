@@ -1,6 +1,6 @@
 # ADR-0022: Core Editing Completion and Semantic Ownership
 
-- Status: Proposed
+- Status: Accepted; implementation landed 2026-11-15.
 - Date: 2026-11-12
 - Related: [ADR-0008](0008-selection-first-interaction.md), [ADR-0010](0010-cursor-and-snapshot-ownership.md), [ADR-0013](0013-kernel-distribution-boundary.md)
 

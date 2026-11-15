@@ -1,6 +1,11 @@
 # ADR-0023: Internal Capability Closure Before Public Distribution
 
-- Status: Proposed
+- Status: Accepted; closure audit ongoing.
+- Implementation note (2026-11-15): auto-save, config reload, dynamic plugin
+  commands, Luau plugin loading, and routed multi-root file operations landed.
+  Remaining closures include signed index-to-download orchestration,
+  marketplace surfaces, production release signing/provenance, and the
+  reference-machine performance gate. Cross-root move/copy remains rejected.
 - Date: 2026-11-12
 - Related: [ADR-0001](0001-plugin-isolation.md), [ADR-0012](0012-plugin-host-isolation.md), [ADR-0013](0013-kernel-distribution-boundary.md), [ADR-0021](0021-signed-plugin-index.md), [ADR-0022](0022-core-editing-completion.md)
 

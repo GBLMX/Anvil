@@ -1,6 +1,8 @@
 # ADR-0005: No Shell, No Pipeline, Per-Tool Argument Policy
 
-- Status: Accepted; exec runner, positive seccomp allowlist, per-tool execute, argv policy, process supervisor, symlink-race test, and kernel tests implemented. Gateway integration remains an implementation follow-up.
+- Status: Accepted; implemented. The exec runner, seccomp allowlist,
+  per-tool/argv policy, process supervisor, gateway integration, symlink-race
+  tests, and kernel tests are landed.
 - Date: 2026-10-30
 
 ## Context
