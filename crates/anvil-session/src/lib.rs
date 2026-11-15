@@ -18,10 +18,10 @@ pub mod plugin_supervisor;
 pub mod provider;
 pub mod recents;
 pub mod ui;
-use anvil_api::{ApplyEditRequest, DocumentSnapshot};
+use anvil_api::{ApplyEditRequest, DocumentSnapshot, InteractionMode, Viewport};
 use anvil_core::TextBuffer;
-use anvil_editor::{ApplyEditError, EditorState};
-use std::fmt;
+use anvil_editor::{ApplyEditError, EditorState, MacroStep};
+use std::{fmt, ops::Range};
 
 /// Why a document session operation failed.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -81,6 +81,86 @@ impl DocumentSession {
     pub fn into_inner(self) -> EditorState {
         self.editor
     }
+
+    pub fn set_selection_bytes(&mut self, anchor: usize, head: usize) -> bool {
+        self.editor.set_selection_bytes(anchor, head)
+    }
+
+    pub fn set_selections_bytes(&mut self, selections: Vec<(usize, usize)>) -> bool {
+        self.editor.set_selections_bytes(selections)
+    }
+
+    pub fn insert(&mut self, at: usize, text: &str) -> bool {
+        self.editor.insert(at, text)
+    }
+
+    pub fn delete(&mut self, range: Range<usize>) -> bool {
+        self.editor.delete(range)
+    }
+
+    pub fn apply_transaction(&mut self, edits: Vec<(Range<usize>, String)>) -> bool {
+        self.editor.apply_transaction(edits)
+    }
+
+    pub fn apply_transaction_at(
+        &mut self,
+        base_revision: u64,
+        edits: Vec<(Range<usize>, String)>,
+    ) -> Result<u64, ApplyEditError> {
+        self.editor.apply_transaction_at(base_revision, edits)
+    }
+
+    pub fn insert_at_selections(&mut self, text: &str) -> bool {
+        self.editor.insert_at_selections(text)
+    }
+
+    pub fn yank(&mut self, range: Range<usize>) -> bool {
+        self.editor.yank(range)
+    }
+
+    pub fn put(&mut self, at: usize) -> Option<Range<usize>> {
+        self.editor.put(at)
+    }
+
+    pub fn set_register(&mut self, register: char, text: &str) -> bool {
+        self.editor.set_register(register, text)
+    }
+
+    pub fn set_macro(&mut self, register: char, steps: Vec<MacroStep>) {
+        self.editor.set_macro(register, steps);
+    }
+
+    pub fn set_interaction_mode(&mut self, mode: InteractionMode) {
+        self.editor.set_interaction_mode(mode);
+    }
+
+    pub fn set_viewport(&mut self, viewport: Viewport) {
+        self.editor.set_viewport(viewport);
+    }
+
+    pub fn undo(&mut self) -> bool {
+        self.editor.undo()
+    }
+
+    pub fn redo(&mut self) -> bool {
+        self.editor.redo()
+    }
+
+    pub fn apply_edits(
+        &mut self,
+        buffer_id: u64,
+        request: ApplyEditRequest,
+    ) -> Result<u64, SessionError> {
+        Session::new(&mut self.editor, buffer_id).apply(request)
+    }
+
+    pub fn apply_format(
+        &mut self,
+        base_revision: u64,
+        formatted: &crate::provider::FormattedText,
+    ) -> Result<bool, SessionError> {
+        crate::format::FormatService::apply(&mut self.editor, base_revision, formatted)
+    }
 }
 
 impl From<EditorState> for DocumentSession {
@@ -97,11 +177,6 @@ impl std::ops::Deref for DocumentSession {
     }
 }
 
-impl std::ops::DerefMut for DocumentSession {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.editor
-    }
-}
 /// One active document in a frontend-neutral session.
 pub struct Session<'a> {
     editor: &'a mut EditorState,

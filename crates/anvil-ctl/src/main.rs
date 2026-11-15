@@ -316,12 +316,16 @@ fn execute(options: Options, command: CliCommand) -> Result<(), (Options, CliErr
             }
             return Ok(());
         }
-        CliCommand::Open { file, line, column } => client
-            .open(&file, line, column)
-            .map_err(|error| (clone_options(&options), map_error(error)))?,
-        CliCommand::Save { path } => client
-            .save(path.as_deref())
-            .map_err(|error| (clone_options(&options), map_error(error)))?,
+        CliCommand::Open { file, line, column } => json!(
+            client
+                .open(&file, line, column)
+                .map_err(|error| (clone_options(&options), map_error(error)))?
+        ),
+        CliCommand::Save { path } => json!(
+            client
+                .save(path.as_deref())
+                .map_err(|error| (clone_options(&options), map_error(error)))?
+        ),
         CliCommand::Edit { mode, text } => {
             let text = match text {
                 EditText::Inline(text) => text,
@@ -345,9 +349,11 @@ fn execute(options: Options, command: CliCommand) -> Result<(), (Options, CliErr
                 .exec(&command)
                 .map_err(|error| (clone_options(&options), map_error(error)))?
         ),
-        CliCommand::Quit { force } => client
-            .quit(force)
-            .map_err(|error| (clone_options(&options), map_error(error)))?,
+        CliCommand::Quit { force } => json!(
+            client
+                .quit(force)
+                .map_err(|error| (clone_options(&options), map_error(error)))?
+        ),
     };
     if options.json {
         print_json(name, result);

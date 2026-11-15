@@ -109,9 +109,11 @@ fn call_tool(name: &str, arguments: &Value) -> Result<Value, String> {
             let path = string_arg(arguments, "path")?;
             let line = usize_arg(arguments, "line").unwrap_or(1);
             let column = usize_arg(arguments, "column").unwrap_or(1);
-            client()?
-                .open(&PathBuf::from(path), line, column)
-                .map_err(control_error)
+            to_value(
+                client()?
+                    .open(&PathBuf::from(path), line, column)
+                    .map_err(control_error)?,
+            )
         }
         "anvil_query" => {
             let options = QueryOptions {
@@ -130,7 +132,7 @@ fn call_tool(name: &str, arguments: &Value) -> Result<Value, String> {
                 .get("path")
                 .and_then(Value::as_str)
                 .map(PathBuf::from);
-            client()?.save(path.as_deref()).map_err(control_error)
+            to_value(client()?.save(path.as_deref()).map_err(control_error)?)
         }
         "anvil_command" => command_tool(arguments),
         "anvil_quit" => {
@@ -138,7 +140,7 @@ fn call_tool(name: &str, arguments: &Value) -> Result<Value, String> {
                 .get("force")
                 .and_then(Value::as_bool)
                 .unwrap_or(false);
-            client()?.quit(force).map_err(control_error)
+            to_value(client()?.quit(force).map_err(control_error)?)
         }
         _ => Err(tool_error(
             "invalid_params",

@@ -22,6 +22,10 @@ post-`0.5.0` feature line.
   create/rename/delete, and restore completed files when a later operation
   fails. Read-only buffers and pager views reject workspace edits, and project
   replace rolls back failed writes in reverse order.
+- `DocumentSession` no longer exposes `DerefMut`; mutation now goes through
+  explicit methods, and plugin/format application uses guarded session helpers.
+- `anvil-control` clients now return typed `OpenResult`, `SaveResult`, and
+  `QuitResult` DTOs instead of raw JSON values.
 - Buffer tabs and the buffer picker now show file-type icons; picker paths are
   workspace-relative instead of absolute.
 - The status line adds the current file icon plus read-only and missing-file

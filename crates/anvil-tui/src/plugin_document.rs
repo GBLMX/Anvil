@@ -28,7 +28,7 @@ impl Model {
         }
         let buffer_id = self.buffers.active_id.get();
         let count = request.edits.len();
-        match Session::new(&mut self.session.editor, buffer_id).apply(request) {
+        match self.session.editor.apply_edits(buffer_id, request) {
             Ok(revision) => {
                 self.sync_cursor_from_selection();
                 self.file.modified = true;

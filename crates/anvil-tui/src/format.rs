@@ -1,7 +1,6 @@
 //! External formatter request path; LSP formatting remains the fallback.
 
 use super::*;
-use anvil_session::format::FormatService;
 use anvil_session::provider::{FormattedText, ProviderId};
 use anvil_workspace::FileRequest;
 
@@ -100,7 +99,7 @@ impl Model {
                     provider: ProviderId::new("builtin.exec"),
                     text,
                 };
-                match FormatService::apply(&mut self.session.editor, revision, &formatted) {
+                match self.session.editor.apply_format(revision, &formatted) {
                     Ok(true) => self.status.text = "formatted".to_owned(),
                     Ok(false) => self.status.text = "format: no changes".to_owned(),
                     Err(error) => self.status.text = format!("E: format: {error}"),

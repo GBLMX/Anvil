@@ -553,6 +553,27 @@ pub struct QueryResult {
     pub buffers: Vec<BufferInfo>,
 }
 
+/// Result of `control.open`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OpenResult {
+    pub accepted: bool,
+    pub path: PathBuf,
+}
+
+/// Result of `control.save`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SaveResult {
+    pub accepted: bool,
+    pub path: Option<PathBuf>,
+    pub status: String,
+}
+
+/// Result of `control.quit`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct QuitResult {
+    pub accepted: bool,
+}
+
 /// Result of `control.edit`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EditResult {
@@ -1122,11 +1143,12 @@ impl Client {
     }
 
     /// Ask the running editor to open a file location.
-    pub fn open(&mut self, path: &Path, line: usize, column: usize) -> Result<Value, Error> {
-        self.request(
+    pub fn open(&mut self, path: &Path, line: usize, column: usize) -> Result<OpenResult, Error> {
+        let value = self.request(
             "control.open",
             json!({"path": path, "line": line, "column": column}),
-        )
+        )?;
+        Ok(serde_json::from_value(value)?)
     }
 
     /// Execute an Ex command through the editor state machine.
@@ -1136,11 +1158,12 @@ impl Client {
     }
 
     /// Save the current buffer, optionally as a path.
-    pub fn save(&mut self, path: Option<&Path>) -> Result<Value, Error> {
-        self.request(
+    pub fn save(&mut self, path: Option<&Path>) -> Result<SaveResult, Error> {
+        let value = self.request(
             "control.save",
             json!({"path": path.map(|path| path.to_string_lossy())}),
-        )
+        )?;
+        Ok(serde_json::from_value(value)?)
     }
 
     /// Replace the whole buffer or insert at the cursor.
@@ -1180,8 +1203,9 @@ impl Client {
     }
 
     /// Ask the editor to quit.
-    pub fn quit(&mut self, force: bool) -> Result<Value, Error> {
-        self.request("control.quit", json!({"force": force}))
+    pub fn quit(&mut self, force: bool) -> Result<QuitResult, Error> {
+        let value = self.request("control.quit", json!({"force": force}))?;
+        Ok(serde_json::from_value(value)?)
     }
 
     fn request(&mut self, method: &str, params: Value) -> Result<Value, Error> {
