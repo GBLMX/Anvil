@@ -80,7 +80,7 @@ Report three values:
 
 1. `first_frame_editor`: editor only, gateway not started.
 2. `first_frame_gateway`: editor plus gateway startup.
-3. `first_frame_plugin`: first frame with one empty plugin host started.
+3. `first_frame_plugin`: first frame with one plugin host started.
 
 A single `<10ms` number is not meaningful without these three.
 
