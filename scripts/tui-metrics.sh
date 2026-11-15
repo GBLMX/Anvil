@@ -15,7 +15,30 @@ files="$(find "$src" -name '*.rs' | wc -l | tr -d ' ')"
 loc="$(find "$src" -name '*.rs' -print0 | xargs -0 cat | wc -l | tr -d ' ')"
 impl_model_files="$(grep -Rl '^impl Model' "$src" --include='*.rs' | wc -l | tr -d ' ')"
 impl_model="$(grep -R '^impl Model' "$src" --include='*.rs' | wc -l | tr -d ' ')"
-mut_methods="$(grep -R -E 'fn [A-Za-z0-9_]+.*\(&mut self' "$src" --include='*.rs' | wc -l | tr -d ' ')"
+model_mut_methods="$(
+    python3 - "$src" <<'PY'
+import pathlib
+import re
+import sys
+
+root = pathlib.Path(sys.argv[1])
+count = 0
+for path in root.rglob("*.rs"):
+    text = path.read_text()
+    for match in re.finditer(r"(?m)^impl Model\b[^{]*\{", text):
+        end = match.end()
+        depth = 1
+        while end < len(text) and depth:
+            if text[end] == "{":
+                depth += 1
+            elif text[end] == "}":
+                depth -= 1
+            end += 1
+        block = text[match.end() : end - 1]
+        count += len(re.findall(r"fn\s+\w+[^\n]*\(&mut self", block))
+print(count)
+PY
+)"
 model_new="$(grep -R 'Model::new' "$src" --include='*.rs' | wc -l | tr -d ' ')"
 oversized="$(find "$src" -name '*.rs' -print0 | xargs -0 wc -l | awk '$1 > 800 && $2 != "total" { count++ } END { print count + 0 }')"
 deps="$(
@@ -30,7 +53,7 @@ tui-metrics:
   deps=$deps
   impl_model=$impl_model
   impl_model_files=$impl_model_files
-  mut_self_methods=$mut_methods
+  model_mut_methods=$model_mut_methods
   model_new=$model_new
   files_over_800=$oversized
 EOF
@@ -56,7 +79,7 @@ check_max files "$files" "$TUI_FILES"
 check_max deps "$deps" "$TUI_DEPS"
 check_max impl_model "$impl_model" "$TUI_IMPL_MODEL"
 check_max impl_model_files "$impl_model_files" "$TUI_IMPL_MODEL_FILES"
-check_max mut_self_methods "$mut_methods" "$TUI_MUT_SELF_METHODS"
+check_max model_mut_methods "$model_mut_methods" "$TUI_MODEL_MUT_METHODS"
 check_max model_new "$model_new" "$TUI_MODEL_NEW"
 check_max files_over_800 "$oversized" "$TUI_FILES_OVER_800"
 

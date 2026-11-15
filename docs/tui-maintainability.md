@@ -11,11 +11,11 @@ file count or crate count as a goal.
 | Metric | Baseline |
 |---|---:|
 | Rust source files | 102 |
-| Source lines | 47,792 |
+| Source lines | 47,859 |
 | Normal dependencies | 30 |
 | `impl Model` blocks | 66 |
 | Files containing `impl Model` | 61 |
-| Methods taking `&mut self` | 513 |
+| Methods taking `&mut Model` | 465 |
 | `Model::new` constructions | 431 |
 | Files over 800 lines | 15 |
 
