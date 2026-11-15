@@ -753,6 +753,20 @@ fn recovery_help_opens_read_only_page() {
 }
 
 #[test]
+fn onboarding_help_opens_read_only_page() {
+    let mut model = Model::new(crate::EditorState::from_text("x"), None);
+    command(&mut model, "help start");
+    assert_eq!(model.pager.title.as_deref(), Some("start"));
+    let text = model
+        .session
+        .editor
+        .text()
+        .slice(0..model.session.editor.text().len_bytes());
+    assert!(text.contains("First-run task list"), "{text}");
+    assert!(model.close_help());
+}
+
+#[test]
 fn buffer_bar_shows_file_type_icons() {
     let dir = tempfile::tempdir().expect("tempdir");
     let rust = dir.path().join("first.rs");

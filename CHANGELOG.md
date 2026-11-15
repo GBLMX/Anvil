@@ -36,6 +36,8 @@ post-`0.5.0` feature line.
   files and the reason; `:config-reload` reports loaded and ignored files.
 - Added `:help recover` and [recovery semantics](docs/recovery.md) covering
   save durability, session/swap recovery, undo reset, and external conflicts.
+- Added `:help start` and a first-run [onboarding guide](docs/onboarding.md)
+  with a task list and compact keymap card.
 - Command-based LSP code actions now dispatch through
   `workspace/executeCommand`, including actions that also carry a workspace
   edit. Sessions now fail restore on unreadable files, unreadable swap files,

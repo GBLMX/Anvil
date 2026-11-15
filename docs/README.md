@@ -127,6 +127,7 @@ Historical plans are records, not current schedules:
 - [TUI design](tui-design.md) — visual tokens, layout, and interaction rhythm
 - [Threat model](threat-model.md) — trust boundaries and failure modes
 - [Known issues](known-issues.md) — resolved regressions and current limits
+- [Getting started](onboarding.md) — first-run tasks and keymap card
 - [Recovery and save semantics](recovery.md) — durability, undo, swaps, and
   external conflicts
 - [Remote/SSH workflow](remote-ssh.md) — remote install, color forwarding,

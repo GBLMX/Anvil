@@ -305,6 +305,7 @@ to the selected buffer.
 - [Documentation index](docs/README.md)
 - [Project charter](PROJECT_CHARTER.md)
 - [Known issues](docs/known-issues.md)
+- [Getting started](docs/onboarding.md)
 - [Recovery and save semantics](docs/recovery.md)
 - [Remote/SSH workflow](docs/remote-ssh.md)
 - [High-frequency command architecture plan](docs/command-architecture-plan.md)
