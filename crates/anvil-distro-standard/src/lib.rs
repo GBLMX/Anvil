@@ -547,6 +547,14 @@ fn check_locale() -> DoctorCheck {
 }
 
 fn check_colors() -> DoctorCheck {
+    let term = env::var("TERM").unwrap_or_default().to_ascii_lowercase();
+    if term == "dumb" {
+        return check(
+            "truecolor",
+            DoctorLevel::Warn,
+            "TERM=dumb; a full-screen TUI needs a real terminal",
+        );
+    }
     let forced = env::var("ANVIL_TRUECOLOR").ok();
     match forced.as_deref() {
         Some("0") => return check("truecolor", DoctorLevel::Ok, "forced 256-color"),
@@ -556,14 +564,6 @@ fn check_colors() -> DoctorCheck {
     let colorterm = env::var("COLORTERM")
         .unwrap_or_default()
         .to_ascii_lowercase();
-    let term = env::var("TERM").unwrap_or_default().to_ascii_lowercase();
-    if term == "dumb" {
-        return check(
-            "truecolor",
-            DoctorLevel::Warn,
-            "TERM=dumb; a full-screen TUI needs a real terminal",
-        );
-    }
     if colorterm.contains("truecolor")
         || colorterm.contains("24bit")
         || term.contains("direct")
