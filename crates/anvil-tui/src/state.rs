@@ -271,6 +271,8 @@ pub(crate) struct LspTransportState {
     pub(crate) retries: HashMap<(String, String), u8>,
     pub(crate) retry: Option<((String, String), Instant)>,
     pub(crate) status: HashMap<(String, String), LspStatus>,
+    pub(crate) desired: Option<(String, String)>,
+    pub(crate) labels: HashMap<(String, String), String>,
 }
 
 #[derive(Default)]

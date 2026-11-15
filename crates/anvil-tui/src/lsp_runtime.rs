@@ -48,6 +48,7 @@ impl Model {
     }
 
     fn retain_lsp_worker(&mut self, desired: Option<&(String, String)>) {
+        self.language.lsp.desired = desired.cloned();
         let keys = self.language.lsp.workers.keys().cloned().collect();
         for key in inactive_lsp_keys(keys, desired) {
             self.language.lsp.workers.remove(&key);
@@ -59,6 +60,10 @@ impl Model {
         for key in inactive_lsp_keys(status_keys, desired) {
             self.language.lsp.status.remove(&key);
             self.language.lsp.retries.remove(&key);
+        }
+        let label_keys = self.language.lsp.labels.keys().cloned().collect();
+        for key in inactive_lsp_keys(label_keys, desired) {
+            self.language.lsp.labels.remove(&key);
         }
         if self
             .language
@@ -179,6 +184,10 @@ impl Model {
         };
         self.activate_plugins(ActivationEvent::Language(settings.language_id.clone()));
         let desired = (settings.tool.clone(), settings.language_id.clone());
+        self.language
+            .lsp
+            .labels
+            .insert(desired.clone(), settings.label.clone());
         self.retain_lsp_worker(Some(&desired));
         if !self.language.lsp.workers.contains_key(&desired) {
             self.start_lsp();
@@ -219,6 +228,10 @@ impl Model {
             return;
         };
         let desired = (settings.tool.clone(), settings.language_id.clone());
+        self.language
+            .lsp
+            .labels
+            .insert(desired.clone(), settings.label.clone());
         self.retain_lsp_worker(Some(&desired));
         if self.language.lsp.workers.contains_key(&desired) {
             self.language.lsp.config = Some(desired.clone());

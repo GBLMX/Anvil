@@ -109,24 +109,32 @@ impl Model {
 
     fn lsp_status_segment(&self) -> Option<String> {
         let configured = self.language.lsp.config.is_some();
-        let settings = self.session.path.as_ref().and_then(|path| {
-            lsp_settings_with_service(path, self.workspace.language_tooling_service.as_deref())
-        });
-        let key = self.language.lsp.config.clone().or_else(|| {
-            settings
-                .as_ref()
-                .map(|settings| (settings.tool.clone(), settings.language_id.clone()))
-        })?;
-        let label = settings
-            .as_ref()
-            .filter(|settings| settings.tool == key.0 && settings.language_id == key.1)
-            .map(|settings| settings.label.clone())
-            .unwrap_or_else(|| {
-                Path::new(&key.0)
-                    .file_name()
-                    .map(|name| name.to_string_lossy().into_owned())
-                    .unwrap_or_else(|| key.0.clone())
-            });
+        let label_for = |key: &(String, String)| {
+            self.language
+                .lsp
+                .labels
+                .get(key)
+                .cloned()
+                .unwrap_or_else(|| {
+                    Path::new(&key.0)
+                        .file_name()
+                        .map(|name| name.to_string_lossy().into_owned())
+                        .unwrap_or_else(|| key.0.clone())
+                })
+        };
+        let (key, label) = if let Some(key) = self.language.lsp.config.clone() {
+            let label = label_for(&key);
+            (key, label)
+        } else if let Some(key) = self.language.lsp.desired.clone() {
+            let label = label_for(&key);
+            (key, label)
+        } else {
+            let settings = self.session.path.as_ref().and_then(|path| {
+                lsp_settings_with_service(path, self.workspace.language_tooling_service.as_deref())
+            })?;
+            let key = (settings.tool, settings.language_id);
+            (key, settings.label)
+        };
         let suffix = match self.language.lsp.status.get(&key) {
             Some(LspStatus::Starting { .. }) => ":starting",
             Some(LspStatus::Running { .. }) => "",
@@ -482,6 +490,28 @@ mod tests {
             .lsp
             .status
             .insert(key.clone(), LspStatus::Stopped { root });
+        assert_eq!(
+            model.lsp_status_segment().as_deref(),
+            Some("lsp clangd:stopped")
+        );
+    }
+
+    #[test]
+    fn lsp_status_uses_cached_label_without_a_path_lookup() {
+        let mut model = Model::new(EditorState::from_text("alpha"), None);
+        let key = ("/opt/clangd".to_owned(), "c".to_owned());
+        model.language.lsp.desired = Some(key.clone());
+        model
+            .language
+            .lsp
+            .labels
+            .insert(key.clone(), "clangd".to_owned());
+        model.language.lsp.status.insert(
+            key,
+            LspStatus::Stopped {
+                root: PathBuf::from("/ws"),
+            },
+        );
         assert_eq!(
             model.lsp_status_segment().as_deref(),
             Some("lsp clangd:stopped")
