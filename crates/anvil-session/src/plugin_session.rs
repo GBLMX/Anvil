@@ -1,6 +1,9 @@
 //! Plugin registration, host handshake, and revoke lifecycle.
 
-use anvil_ipc::GatewayClient;
+use anvil_ipc::PluginGateway;
+
+/// Session-facing gateway port; the concrete client is injected by the frontend.
+pub(crate) type GatewayPort = dyn PluginGateway;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::path::Path;
@@ -20,7 +23,7 @@ pub struct PluginSession {
 
 impl PluginSession {
     pub(crate) fn start(
-        gateway: &mut GatewayClient,
+        gateway: &mut GatewayPort,
         workspace: &Path,
         plugin_id: &str,
         permissions: &[String],
@@ -41,7 +44,7 @@ impl PluginSession {
     }
 
     pub(crate) fn start_oom(
-        gateway: &mut GatewayClient,
+        gateway: &mut GatewayPort,
         workspace: &Path,
         plugin_id: &str,
         permissions: &[String],
@@ -63,7 +66,7 @@ impl PluginSession {
 
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn start_plugin(
-        gateway: &mut GatewayClient,
+        gateway: &mut GatewayPort,
         workspace: &Path,
         plugin_id: &str,
         plugin_root: &Path,
@@ -87,7 +90,7 @@ impl PluginSession {
 
     #[allow(clippy::too_many_arguments)]
     fn start_mode(
-        gateway: &mut GatewayClient,
+        gateway: &mut GatewayPort,
         workspace: &Path,
         plugin_id: &str,
         permissions: &[String],

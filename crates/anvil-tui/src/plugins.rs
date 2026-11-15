@@ -323,11 +323,13 @@ impl Model {
 
     #[cfg(target_os = "linux")]
     pub(crate) fn stop_host(&mut self) {
-        match self
-            .plugins
-            .supervisor
-            .stop(DEBUG_PLUGIN_ID, self.workspace.gateway.as_mut())
-        {
+        match self.plugins.supervisor.stop(
+            DEBUG_PLUGIN_ID,
+            self.workspace
+                .gateway
+                .as_mut()
+                .map(|gateway| gateway as &mut dyn anvil_ipc::PluginGateway),
+        ) {
             Ok(()) => self.status.text = "plugin host stopped".to_owned(),
             Err(error) => self.status.text = format!("E: {error}"),
         }
@@ -572,10 +574,12 @@ impl Model {
 
     #[cfg(target_os = "linux")]
     pub(crate) fn poll_host(&mut self) {
-        let events = self
-            .plugins
-            .supervisor
-            .poll(self.workspace.gateway.as_mut());
+        let events = self.plugins.supervisor.poll(
+            self.workspace
+                .gateway
+                .as_mut()
+                .map(|gateway| gateway as &mut dyn anvil_ipc::PluginGateway),
+        );
         for event in events {
             match event {
                 SupervisorEvent::State {

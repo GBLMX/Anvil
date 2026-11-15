@@ -3,9 +3,8 @@
 use crate::editor_service::{EditorRequest, EditorService};
 use crate::host_session::{HostEvent, SendOutcome};
 use crate::plugin_events::{Delivery, PluginEvent, PluginEventBus};
-use crate::plugin_session::PluginSession;
+use crate::plugin_session::{GatewayPort, PluginSession};
 use anvil_api::ApiError;
-use anvil_ipc::GatewayClient;
 use std::collections::{HashMap, VecDeque};
 use std::path::Path;
 use std::sync::mpsc::{self, Receiver, SyncSender};
@@ -218,7 +217,7 @@ pub(crate) trait HostLauncher {
     #[allow(clippy::too_many_arguments)]
     fn start(
         &self,
-        gateway: Option<&mut GatewayClient>,
+        gateway: Option<&mut GatewayPort>,
         workspace: &Path,
         plugin_id: &str,
         plugin_root: Option<&Path>,
@@ -236,7 +235,7 @@ impl HostLauncher for SystemLauncher {
     #[allow(clippy::too_many_arguments)]
     fn start(
         &self,
-        gateway: Option<&mut GatewayClient>,
+        gateway: Option<&mut GatewayPort>,
         workspace: &Path,
         plugin_id: &str,
         plugin_root: Option<&Path>,
@@ -425,7 +424,7 @@ impl PluginSupervisor {
         &mut self,
         plugin_id: &str,
         plugin_root: &Path,
-        gateway: &mut GatewayClient,
+        gateway: &mut GatewayPort,
         workspace: &Path,
     ) -> Result<StartOutcome, String> {
         self.start_at(
@@ -447,7 +446,7 @@ impl PluginSupervisor {
         plugin_id: &str,
         plugin_root: &Path,
         command: &str,
-        gateway: &mut GatewayClient,
+        gateway: &mut GatewayPort,
         workspace: &Path,
     ) -> Result<StartOutcome, String> {
         self.start_at(
@@ -469,7 +468,7 @@ impl PluginSupervisor {
         plugin_id: &str,
         mode: StartMode,
         permissions: &[String],
-        gateway: &mut GatewayClient,
+        gateway: &mut GatewayPort,
         workspace: &Path,
     ) -> Result<StartOutcome, String> {
         self.start_at(
@@ -491,7 +490,7 @@ impl PluginSupervisor {
         now: Instant,
         plugin_id: &str,
         request: StartRequest<'_>,
-        mut gateway: Option<&mut GatewayClient>,
+        mut gateway: Option<&mut GatewayPort>,
         workspace: &Path,
     ) -> Result<StartOutcome, String> {
         self.ensure_editor_service();
@@ -599,7 +598,7 @@ impl PluginSupervisor {
             .count()
     }
 
-    fn drain_pending(&mut self, now: Instant, mut gateway: Option<&mut GatewayClient>) {
+    fn drain_pending(&mut self, now: Instant, mut gateway: Option<&mut GatewayPort>) {
         while self.running_hosts() < MAX_RUNNING_HOSTS {
             let Some(pending) = self.pending_starts.pop_front() else {
                 return;
@@ -628,7 +627,7 @@ impl PluginSupervisor {
     fn reclaim_idle(
         &mut self,
         now: Instant,
-        mut gateway: Option<&mut GatewayClient>,
+        mut gateway: Option<&mut GatewayPort>,
         events: &mut Vec<SupervisorEvent>,
     ) {
         let ids = self.entries.keys().cloned().collect::<Vec<_>>();
@@ -832,7 +831,7 @@ impl PluginSupervisor {
     pub fn stop(
         &mut self,
         plugin_id: &str,
-        gateway: Option<&mut GatewayClient>,
+        gateway: Option<&mut GatewayPort>,
     ) -> Result<(), String> {
         if self
             .entries
@@ -898,14 +897,14 @@ impl PluginSupervisor {
             .unwrap_or(HostState::Unloaded)
     }
 
-    pub fn poll(&mut self, gateway: Option<&mut GatewayClient>) -> Vec<SupervisorEvent> {
+    pub fn poll(&mut self, gateway: Option<&mut GatewayPort>) -> Vec<SupervisorEvent> {
         self.poll_at(Instant::now(), gateway)
     }
 
     fn poll_at(
         &mut self,
         now: Instant,
-        mut gateway: Option<&mut GatewayClient>,
+        mut gateway: Option<&mut GatewayPort>,
     ) -> Vec<SupervisorEvent> {
         let ids = self.entries.keys().cloned().collect::<Vec<_>>();
         let mut events = Vec::new();
@@ -1031,7 +1030,7 @@ impl PluginSupervisor {
         &mut self,
         plugin_id: &str,
         now: Instant,
-        gateway: Option<&mut GatewayClient>,
+        gateway: Option<&mut GatewayPort>,
         events: &mut Vec<SupervisorEvent>,
     ) {
         loop {
@@ -1090,7 +1089,7 @@ impl PluginSupervisor {
         plugin_id: &str,
         now: Instant,
         detail: String,
-        gateway: Option<&mut GatewayClient>,
+        gateway: Option<&mut GatewayPort>,
     ) -> String {
         let Some(entry) = self.entries.get_mut(plugin_id) else {
             return detail;
@@ -1124,7 +1123,7 @@ impl PluginSupervisor {
         }
     }
 
-    pub fn shutdown(&mut self, mut gateway: Option<&mut GatewayClient>) {
+    pub fn shutdown(&mut self, mut gateway: Option<&mut GatewayPort>) {
         let ids = self.entries.keys().cloned().collect::<Vec<_>>();
         for plugin_id in ids {
             let _ = self.stop(&plugin_id, gateway.as_deref_mut());
@@ -1246,7 +1245,7 @@ mod tests {
     impl FakeLauncher {
         fn start_impl(
             &self,
-            _gateway: Option<&mut GatewayClient>,
+            _gateway: Option<&mut GatewayPort>,
             _workspace: &Path,
             _plugin_id: &str,
             _plugin_root: Option<&Path>,
@@ -1267,7 +1266,7 @@ mod tests {
         #[allow(clippy::too_many_arguments)]
         fn start(
             &self,
-            gateway: Option<&mut GatewayClient>,
+            gateway: Option<&mut GatewayPort>,
             workspace: &Path,
             plugin_id: &str,
             plugin_root: Option<&Path>,
@@ -1294,7 +1293,7 @@ mod tests {
         #[allow(clippy::too_many_arguments)]
         fn start(
             &self,
-            gateway: Option<&mut GatewayClient>,
+            gateway: Option<&mut GatewayPort>,
             workspace: &Path,
             plugin_id: &str,
             plugin_root: Option<&Path>,

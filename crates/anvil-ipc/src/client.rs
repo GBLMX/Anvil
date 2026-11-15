@@ -932,6 +932,46 @@ fn hex_lower(bytes: &[u8]) -> String {
     }
     output
 }
+/// Gateway operations required by the plugin-session supervisor.
+///
+/// `anvil-session` depends on this port, not on the concrete
+/// [`GatewayClient`] transport type. The frontend injects the implementation.
+pub trait PluginGateway {
+    /// Register one plugin token hash and grant set.
+    fn register_plugin(
+        &mut self,
+        plugin_id: &str,
+        token_hash: &[u8; 32],
+        permissions: &[String],
+    ) -> Result<(), String>;
+
+    /// Revoke one plugin registration.
+    fn revoke_plugin(&mut self, plugin_id: &str) -> Result<(), String>;
+
+    /// Socket path used by the plugin host for this gateway session.
+    fn socket_path(&self) -> &Path;
+}
+
+impl PluginGateway for GatewayClient {
+    fn register_plugin(
+        &mut self,
+        plugin_id: &str,
+        token_hash: &[u8; 32],
+        permissions: &[String],
+    ) -> Result<(), String> {
+        GatewayClient::register_plugin(self, plugin_id, token_hash, permissions)
+            .map_err(|error| error.to_string())
+    }
+
+    fn revoke_plugin(&mut self, plugin_id: &str) -> Result<(), String> {
+        GatewayClient::revoke_plugin(self, plugin_id).map_err(|error| error.to_string())
+    }
+
+    fn socket_path(&self) -> &Path {
+        GatewayClient::socket_path(self)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

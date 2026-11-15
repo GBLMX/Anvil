@@ -480,9 +480,12 @@ impl Drop for Model {
         self.language.dap.client = None;
         self.language.dap.attach = None;
         self.language.dap.request = None;
-        self.plugins
-            .supervisor
-            .shutdown(self.workspace.gateway.as_mut());
+        self.plugins.supervisor.shutdown(
+            self.workspace
+                .gateway
+                .as_mut()
+                .map(|gateway| gateway as &mut dyn anvil_ipc::PluginGateway),
+        );
         self.workspace.gateway = None;
         let timeout = std::time::Duration::from_millis(250);
         if let Some(mut session) = self.workspace.gateway_session.take() {

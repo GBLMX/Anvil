@@ -1,8 +1,10 @@
 # ADR-0042: Selection-First Core, Headless Session, Thin Frontend
 
 - Status: Accepted
-- Implementation: direction accepted; EditorState/session extraction continues
-  under ADR-0041
+- Version: 1.1.0
+- Implementation: direction accepted; the session now depends on the
+  `anvil_ipc::PluginGateway` port instead of the concrete client. Further
+  EditorState/session extraction continues under ADR-0041.
 - Date: 2026-11-15
 - Related: [ADR-0008](0008-selection-first-interaction.md),
   [ADR-0009](0009-text-model-snapshot-gate.md),
@@ -114,11 +116,14 @@ the session's effect/result contracts. The `anvil-ipc` wire codec and DTOs are
 allowed because they are protocol contracts, not transport ownership. This
 keeps the ADR-0037 kernel baseline from growing new transport dependencies.
 
-Migration debt: `plugin_session.rs` and `plugin_supervisor.rs` currently use
-`anvil_ipc::GatewayClient` directly, and `host_session.rs` uses
-`anvil_plugin_host::{spawn, HostProcess}`. Both dependencies are temporary;
-they must be replaced by session-owned ports or moved behind the service
-layer before the session API is frozen.
+Migration debt: `host_session.rs` still uses
+`anvil_plugin_host::{spawn, HostProcess}`. That dependency is temporary; it
+must be replaced by a session-owned port or moved behind the service layer
+before the session API is frozen.
+
+The previous `GatewayClient` debt is resolved: `plugin_session.rs` and
+`plugin_supervisor.rs` depend on `anvil_ipc::PluginGateway`; the frontend
+injects the concrete client.
 
 `DocumentSession` is a frontend-neutral wrapper around `EditorState`; it is not
 a second editor kernel.
