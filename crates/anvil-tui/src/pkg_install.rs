@@ -44,7 +44,7 @@ pub(crate) enum PkgInstallState {
 
 impl Model {
     pub(crate) fn stop_installer(&mut self) {
-        if let Some((mut session, client)) = self.plugins.installer.take() {
+        if let Some((mut session, client)) = self.runtime.plugins.installer.take() {
             drop(client);
             session.shutdown_gracefully(std::time::Duration::from_millis(250));
         }
@@ -58,14 +58,14 @@ impl Model {
         };
         self.stop_installer();
         match GatewaySession::start_installer(&self.workspace.path, &host) {
-            Ok((session, client)) => self.plugins.installer = Some((session, client)),
+            Ok((session, client)) => self.runtime.plugins.installer = Some((session, client)),
             Err(error) => {
                 self.status.text = format!("E: installer gateway: {error}");
                 self.file.dirty = true;
                 return;
             }
         }
-        let Some((_, gateway)) = self.plugins.installer.as_mut() else {
+        let Some((_, gateway)) = self.runtime.plugins.installer.as_mut() else {
             return;
         };
         let signature_url = format!("{url}.sig");
@@ -80,7 +80,7 @@ impl Model {
                     return;
                 };
                 let progress = self.ui.progress.start("pkg download", url, false);
-                self.plugins.pkg_install = Some(PkgInstallState::Downloading {
+                self.runtime.plugins.pkg_install = Some(PkgInstallState::Downloading {
                     job_id: job_id.to_owned(),
                     progress,
                 });
@@ -99,14 +99,14 @@ impl Model {
     ) {
         self.stop_installer();
         match GatewaySession::start_local_installer(&self.workspace.path) {
-            Ok((session, client)) => self.plugins.installer = Some((session, client)),
+            Ok((session, client)) => self.runtime.plugins.installer = Some((session, client)),
             Err(error) => {
                 self.status.text = format!("E: installer gateway: {error}");
                 self.file.dirty = true;
                 return;
             }
         }
-        let Some((_, gateway)) = self.plugins.installer.as_mut() else {
+        let Some((_, gateway)) = self.runtime.plugins.installer.as_mut() else {
             return;
         };
         match gateway.call(
@@ -138,7 +138,7 @@ impl Model {
                     self.pkg_error_message("package inspection is incomplete");
                     return;
                 }
-                self.plugins.pkg_install = Some(PkgInstallState::Review {
+                self.runtime.plugins.pkg_install = Some(PkgInstallState::Review {
                     package_path: package_path.to_owned(),
                     signature_path: signature_path.to_owned(),
                     public_key: text("public_key"),
@@ -158,7 +158,7 @@ impl Model {
     }
 
     pub(crate) fn poll_pkg_notifications(&mut self) {
-        let Some((_, gateway)) = self.plugins.installer.as_mut() else {
+        let Some((_, gateway)) = self.runtime.plugins.installer.as_mut() else {
             return;
         };
         let notifications = match gateway.poll_notifications() {
@@ -179,7 +179,7 @@ impl Model {
     }
 
     fn pkg_progress(&mut self, params: &serde_json::Value) {
-        let Some(state) = &self.plugins.pkg_install else {
+        let Some(state) = &self.runtime.plugins.pkg_install else {
             return;
         };
         let PkgInstallState::Downloading {
@@ -205,7 +205,7 @@ impl Model {
     }
 
     fn pkg_downloaded(&mut self, params: &serde_json::Value) {
-        let Some(state) = &self.plugins.pkg_install else {
+        let Some(state) = &self.runtime.plugins.pkg_install else {
             return;
         };
         let PkgInstallState::Downloading {
@@ -232,7 +232,7 @@ impl Model {
             .cloned()
             .and_then(|value| serde_json::from_value::<PkgManifest>(value).ok())
         else {
-            self.plugins.pkg_install = None;
+            self.runtime.plugins.pkg_install = None;
             self.status.text = "E: package manifest is malformed".to_owned();
             self.file.dirty = true;
             return;
@@ -242,25 +242,25 @@ impl Model {
             .and_then(|value| value.as_bool())
             .unwrap_or(false);
         if public_key.is_empty() {
-            self.plugins.pkg_install = None;
+            self.runtime.plugins.pkg_install = None;
             self.status.text = "E: package signature has no public key".to_owned();
             self.file.dirty = true;
             return;
         }
         let digest = text("digest");
         if manifest.id.is_empty() || manifest.version.is_empty() {
-            self.plugins.pkg_install = None;
+            self.runtime.plugins.pkg_install = None;
             self.status.text = "E: package manifest has no id or version".to_owned();
             self.file.dirty = true;
             return;
         }
         if digest.is_empty() {
-            self.plugins.pkg_install = None;
+            self.runtime.plugins.pkg_install = None;
             self.status.text = "E: package download has no digest".to_owned();
             self.file.dirty = true;
             return;
         }
-        self.plugins.pkg_install = Some(PkgInstallState::Review {
+        self.runtime.plugins.pkg_install = Some(PkgInstallState::Review {
             package_path: text("package_path"),
             signature_path: text("signature_path"),
             public_key,
@@ -281,18 +281,19 @@ impl Model {
             digest,
             manifest,
             ..
-        }) = self.plugins.pkg_install.clone()
+        }) = self.runtime.plugins.pkg_install.clone()
         else {
             return;
         };
         #[cfg(target_os = "linux")]
         if self
+            .runtime
             .plugins
             .entries
             .iter()
             .any(|plugin| plugin.manifest.id == manifest.id)
             && matches!(
-                self.plugins.supervisor.state(&manifest.id),
+                self.runtime.plugins.supervisor.state(&manifest.id),
                 HostState::Queued
                     | HostState::Registering
                     | HostState::Starting
@@ -305,13 +306,18 @@ impl Model {
                 self.file.dirty = true;
                 return;
             };
-            if let Err(error) = self.plugins.supervisor.stop(&manifest.id, Some(gateway)) {
+            if let Err(error) = self
+                .runtime
+                .plugins
+                .supervisor
+                .stop(&manifest.id, Some(gateway))
+            {
                 self.status.text = format!("E: stop plugin {}: {error}", manifest.id);
                 self.file.dirty = true;
                 return;
             }
         }
-        let Some((_, gateway)) = self.plugins.installer.as_mut() else {
+        let Some((_, gateway)) = self.runtime.plugins.installer.as_mut() else {
             self.status.text = "E: pkg install requires installer gateway".to_owned();
             return;
         };
@@ -330,7 +336,7 @@ impl Model {
                     .and_then(|value| value.as_str())
                     .unwrap_or_default()
                     .to_owned();
-                self.plugins.pkg_install = None;
+                self.runtime.plugins.pkg_install = None;
                 self.stop_installer();
                 let installed =
                     format!("plugin installed: {plugin_id}; run :plugin-enable {plugin_id}");
@@ -344,7 +350,7 @@ impl Model {
                 message,
             }) => {
                 if let Some(PkgInstallState::Review { trusted, error, .. }) =
-                    self.plugins.pkg_install.as_mut()
+                    self.runtime.plugins.pkg_install.as_mut()
                 {
                     *trusted = false;
                     *error = Some(message.clone());
@@ -361,7 +367,7 @@ impl Model {
             public_key,
             manifest,
             ..
-        }) = self.plugins.pkg_install.clone()
+        }) = self.runtime.plugins.pkg_install.clone()
         else {
             return;
         };
@@ -375,7 +381,7 @@ impl Model {
         ) {
             Ok(_) => {
                 if let Some(PkgInstallState::Review { trusted, error, .. }) =
-                    self.plugins.pkg_install.as_mut()
+                    self.runtime.plugins.pkg_install.as_mut()
                 {
                     *trusted = true;
                     *error = None;
@@ -388,17 +394,20 @@ impl Model {
     }
 
     pub(crate) fn cancel_pkg_install(&mut self) {
-        if let Some(PkgInstallState::Downloading { progress, .. }) = &self.plugins.pkg_install {
+        if let Some(PkgInstallState::Downloading { progress, .. }) =
+            &self.runtime.plugins.pkg_install
+        {
             let progress = *progress;
             self.ui.progress.finish(progress);
         }
-        self.plugins.pkg_install = None;
+        self.runtime.plugins.pkg_install = None;
         self.stop_installer();
         self.file.dirty = true;
     }
 
     fn pkg_failed(&mut self, params: &serde_json::Value) {
-        let Some(PkgInstallState::Downloading { job_id, .. }) = &self.plugins.pkg_install else {
+        let Some(PkgInstallState::Downloading { job_id, .. }) = &self.runtime.plugins.pkg_install
+        else {
             return;
         };
         if params.get("job_id").and_then(|value| value.as_str()) != Some(job_id.as_str()) {
@@ -414,11 +423,13 @@ impl Model {
     }
 
     fn pkg_error_message(&mut self, message: &str) {
-        if let Some(PkgInstallState::Downloading { progress, .. }) = &self.plugins.pkg_install {
+        if let Some(PkgInstallState::Downloading { progress, .. }) =
+            &self.runtime.plugins.pkg_install
+        {
             let progress = *progress;
             self.ui.progress.finish(progress);
         }
-        self.plugins.pkg_install = None;
+        self.runtime.plugins.pkg_install = None;
         self.stop_installer();
         self.status.text = format!("E: pkg: {message}");
         self.file.dirty = true;
@@ -437,7 +448,7 @@ fn url_host(url: &str) -> Option<String> {
 }
 
 pub(crate) fn render(model: &Model, frame: &mut Frame, area: Rect) {
-    let Some(state) = &model.plugins.pkg_install else {
+    let Some(state) = &model.runtime.plugins.pkg_install else {
         return;
     };
     let PkgInstallState::Review {
@@ -519,7 +530,7 @@ mod tests {
 
     fn downloading() -> Model {
         let mut model = Model::new(EditorState::from_text(""), None);
-        model.plugins.pkg_install = Some(PkgInstallState::Downloading {
+        model.runtime.plugins.pkg_install = Some(PkgInstallState::Downloading {
             job_id: "job".to_owned(),
             progress: 0,
         });
@@ -547,7 +558,7 @@ mod tests {
             trusted,
             manifest,
             ..
-        }) = &model.plugins.pkg_install
+        }) = &model.runtime.plugins.pkg_install
         else {
             panic!("expected review state");
         };
@@ -567,7 +578,7 @@ mod tests {
             "public_key": "aa",
             "manifest": {"id": "demo", "version": "1.0.0"}
         }));
-        assert!(model.plugins.pkg_install.is_none());
+        assert!(model.runtime.plugins.pkg_install.is_none());
         assert!(
             model
                 .status
@@ -581,11 +592,11 @@ mod tests {
         let mut model = downloading();
         model.pkg_failed(&serde_json::json!({"job_id": "other", "message": "boom"}));
         assert!(matches!(
-            model.plugins.pkg_install,
+            model.runtime.plugins.pkg_install,
             Some(PkgInstallState::Downloading { .. })
         ));
         model.pkg_failed(&serde_json::json!({"job_id": "job", "message": "boom"}));
-        assert!(model.plugins.pkg_install.is_none());
+        assert!(model.runtime.plugins.pkg_install.is_none());
         assert!(model.status.text.contains("boom"));
     }
 
@@ -594,7 +605,7 @@ mod tests {
         use ratatui::{Terminal, backend::TestBackend};
 
         let mut model = Model::new(EditorState::from_text(""), None);
-        model.plugins.pkg_install = Some(PkgInstallState::Review {
+        model.runtime.plugins.pkg_install = Some(PkgInstallState::Review {
             package_path: "/tmp/pkg".to_owned(),
             signature_path: "/tmp/pkg.sig".to_owned(),
             public_key: "abcdef".to_owned(),

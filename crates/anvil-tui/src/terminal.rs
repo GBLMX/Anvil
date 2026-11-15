@@ -479,7 +479,7 @@ impl Drop for Model {
         self.language.dap.client = None;
         self.language.dap.attach = None;
         self.language.dap.request = None;
-        self.plugins.supervisor.shutdown(
+        self.runtime.plugins.supervisor.shutdown(
             self.workspace
                 .gateway
                 .as_mut()

@@ -45,7 +45,7 @@ impl Model {
     }
 
     pub(crate) fn poll_editor_requests(&mut self) {
-        while let Some(request) = self.plugins.supervisor.poll_editor_request() {
+        while let Some(request) = self.runtime.plugins.supervisor.poll_editor_request() {
             let result =
                 self.handle_editor_request(&request.plugin_id, &request.method, request.params);
             let _ = request.reply.send(result);
@@ -79,7 +79,8 @@ impl Model {
             "event.subscribe" => {
                 let request: EventSubscribeRequest =
                     serde_json::from_value(params).map_err(|error| (-32602, error.to_string()))?;
-                self.plugins
+                self.runtime
+                    .plugins
                     .supervisor
                     .subscribe(plugin_id, request.events)
                     .map(|subscription_id| {
@@ -161,6 +162,7 @@ impl Model {
             return Err("invalid plugin command title".to_owned());
         }
         if !self
+            .runtime
             .plugins
             .entries
             .iter()
@@ -172,19 +174,24 @@ impl Model {
             return Err("plugin command id must use the caller's namespace".to_owned());
         }
         if self
+            .runtime
             .plugins
             .entries
             .iter()
             .flat_map(|plugin| plugin.manifest.commands.iter())
             .any(|command| command.id == command_id)
-            || self.plugins.dynamic_commands.contains_key(&command_id)
+            || self
+                .runtime
+                .plugins
+                .dynamic_commands
+                .contains_key(&command_id)
         {
             return Err(format!("duplicate plugin command: {command_id}"));
         }
-        if self.plugins.dynamic_commands.len() >= 512 {
+        if self.runtime.plugins.dynamic_commands.len() >= 512 {
             return Err("too many dynamic plugin commands".to_owned());
         }
-        self.plugins.dynamic_commands.insert(
+        self.runtime.plugins.dynamic_commands.insert(
             command_id.clone(),
             crate::state::DynamicPluginCommand {
                 plugin_id: plugin_id.to_owned(),
@@ -199,6 +206,7 @@ impl Model {
         request: RegisterProviderRequest,
     ) -> Result<String, String> {
         if !self
+            .runtime
             .plugins
             .entries
             .iter()
@@ -206,7 +214,8 @@ impl Model {
         {
             return Err("plugin is not loaded or enabled".to_owned());
         }
-        self.plugins
+        self.runtime
+            .plugins
             .plugin_providers
             .register(plugin_id, request)
             .map(|registration| registration.id.as_str().to_owned())
@@ -358,11 +367,13 @@ mod tests {
         let mut model = Model::new(EditorState::from_text("abcd"), None);
         let token = [7u8; 32];
         model
+            .runtime
             .plugins
             .supervisor
             .register_editor_identity(Sha256::digest(token).into(), "test");
-        model.plugins.supervisor.ensure_editor_service();
+        model.runtime.plugins.supervisor.ensure_editor_service();
         let path = model
+            .runtime
             .plugins
             .supervisor
             .editor_socket()
@@ -433,7 +444,7 @@ mod tests {
     #[test]
     fn plugin_command_registration_is_namespaced_and_stored() {
         let mut model = Model::new(EditorState::from_text(""), None);
-        model.plugins.entries.push(plugin("demo"));
+        model.runtime.plugins.entries.push(plugin("demo"));
         let response = model
             .handle_editor_request(
                 "demo",
@@ -444,6 +455,7 @@ mod tests {
         assert_eq!(response["command_id"], "demo.run");
         assert_eq!(
             model
+                .runtime
                 .plugins
                 .dynamic_commands
                 .get("demo.run")
@@ -497,7 +509,7 @@ mod tests {
     #[test]
     fn plugin_stop_cancels_pending_provider_requests() {
         let mut model = Model::new(EditorState::from_text(""), None);
-        model.plugins.entries.push(plugin("demo"));
+        model.runtime.plugins.entries.push(plugin("demo"));
         model
             .handle_editor_request(
                 "demo",
@@ -506,6 +518,7 @@ mod tests {
             )
             .expect("register provider");
         let request_id = model
+            .runtime
             .plugins
             .plugin_provider_requests
             .start(
@@ -515,9 +528,10 @@ mod tests {
             )
             .expect("start request");
         model.release_plugin_providers("demo");
-        assert!(model.plugins.plugin_providers.is_empty());
+        assert!(model.runtime.plugins.plugin_providers.is_empty());
         assert!(
             model
+                .runtime
                 .plugins
                 .plugin_provider_requests
                 .accept(anvil_api::ProviderResponse {
@@ -534,12 +548,14 @@ mod tests {
         let revision = model.session.editor.revision();
         let cursor = model.session.cursor;
         model
+            .runtime
             .plugins
             .provider_snapshots
             .insert(1, (revision, cursor));
         assert!(model.take_provider_snapshot(1));
         assert!(!model.take_provider_snapshot(1));
         model
+            .runtime
             .plugins
             .provider_snapshots
             .insert(2, (revision, cursor));
@@ -619,7 +635,7 @@ mod tests {
     #[test]
     fn plugin_provider_registration_is_namespaced_and_stored() {
         let mut model = Model::new(EditorState::from_text(""), None);
-        model.plugins.entries.push(plugin("demo"));
+        model.runtime.plugins.entries.push(plugin("demo"));
         let response = model
             .handle_editor_request(
                 "demo",
@@ -628,7 +644,7 @@ mod tests {
             )
             .expect("register provider");
         assert_eq!(response["provider_id"], "demo.buffers");
-        assert_eq!(model.plugins.plugin_providers.len(), 1);
+        assert_eq!(model.runtime.plugins.plugin_providers.len(), 1);
         assert!(
             model
                 .handle_editor_request(
@@ -653,7 +669,7 @@ mod tests {
     #[test]
     fn plugin_command_registration_rejects_another_plugin_identity() {
         let mut model = Model::new(EditorState::from_text(""), None);
-        model.plugins.entries.push(plugin("demo"));
+        model.runtime.plugins.entries.push(plugin("demo"));
         assert!(
             model
                 .handle_editor_request(
@@ -669,7 +685,7 @@ mod tests {
     #[test]
     fn plugin_command_registration_rejects_unknown_namespace() {
         let mut model = Model::new(EditorState::from_text(""), None);
-        model.plugins.entries.push(plugin("demo"));
+        model.runtime.plugins.entries.push(plugin("demo"));
         assert!(
             model
                 .handle_editor_request(

@@ -229,6 +229,7 @@ impl Model {
         }
         #[cfg(target_os = "linux")]
         let plugin_ids = self
+            .runtime
             .plugins
             .entries
             .iter()

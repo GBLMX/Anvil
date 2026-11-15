@@ -123,7 +123,7 @@ use normal::*;
 fn handle_key(model: &mut Model, key: KeyPress) {
     let control = key.ctrl();
     let text_input = key.text_input();
-    if model.plugins.pkg_install.is_some() {
+    if model.runtime.plugins.pkg_install.is_some() {
         match key.code {
             KeyCode::Esc => model.cancel_pkg_install(),
             KeyCode::Enter => model.confirm_pkg_install(),
@@ -133,8 +133,9 @@ fn handle_key(model: &mut Model, key: KeyPress) {
         return;
     }
     #[cfg(target_os = "linux")]
-    if model.plugins.manager.is_some() {
+    if model.runtime.plugins.manager.is_some() {
         let confirming = model
+            .runtime
             .plugins
             .manager
             .as_ref()

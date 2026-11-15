@@ -190,9 +190,7 @@ pub struct Model {
     project: ProjectState,
     /// Tree-sitter and bracket caches.
     syntax_cache: SyntaxCacheState,
-    /// Plugin discovery, host, manager, installer, and package install state.
-    plugins: PluginState,
-    /// Task and terminal runtime workers.
+    /// Task, terminal, and plugin runtime state.
     runtime: RuntimeState,
 }
 

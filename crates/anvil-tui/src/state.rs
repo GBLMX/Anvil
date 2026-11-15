@@ -881,6 +881,8 @@ impl Default for BufferState {
 
 #[derive(Default)]
 pub(crate) struct RuntimeState {
+    /// Plugin discovery, host, manager, installer, and package install state.
+    pub(crate) plugins: PluginState,
     pub(crate) task_worker: Option<task_runner::TaskWorker>,
     pub(crate) task_output: Option<String>,
     pub(crate) task_problems: Vec<Problem>,

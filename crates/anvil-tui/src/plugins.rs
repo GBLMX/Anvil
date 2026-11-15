@@ -20,6 +20,7 @@ impl Model {
     #[cfg(target_os = "linux")]
     pub(crate) fn activate_plugins(&mut self, event: ActivationEvent) {
         let candidates = self
+            .runtime
             .plugins
             .entries
             .iter()
@@ -35,7 +36,7 @@ impl Model {
         for plugin in candidates {
             let plugin_id = plugin.manifest.id.clone();
             if matches!(
-                self.plugins.supervisor.state(&plugin_id),
+                self.runtime.plugins.supervisor.state(&plugin_id),
                 HostState::Queued
                     | HostState::Registering
                     | HostState::Starting
@@ -44,7 +45,7 @@ impl Model {
             ) {
                 continue;
             }
-            match self.plugins.supervisor.activate(
+            match self.runtime.plugins.supervisor.activate(
                 &plugin_id,
                 &plugin.root,
                 gateway,
@@ -69,6 +70,7 @@ impl Model {
     #[cfg(target_os = "linux")]
     pub(crate) fn run_plugin_command(&mut self, plugin_id: &str, command_id: &str) {
         let Some(plugin) = self
+            .runtime
             .plugins
             .entries
             .iter()
@@ -91,6 +93,7 @@ impl Model {
             .iter()
             .any(|command| command.id == command_id);
         let dynamic = self
+            .runtime
             .plugins
             .dynamic_commands
             .get(command_id)
@@ -116,19 +119,23 @@ impl Model {
             return;
         };
         if matches!(
-            self.plugins.supervisor.state(plugin_id),
+            self.runtime.plugins.supervisor.state(plugin_id),
             HostState::Queued
                 | HostState::Registering
                 | HostState::Starting
                 | HostState::Ready
                 | HostState::Draining
-        ) && let Err(error) = self.plugins.supervisor.stop(plugin_id, Some(gateway))
+        ) && let Err(error) = self
+            .runtime
+            .plugins
+            .supervisor
+            .stop(plugin_id, Some(gateway))
         {
             self.status.text = format!("E: plugin {plugin_id}: {error}");
             self.file.dirty = true;
             return;
         }
-        match self.plugins.supervisor.activate_command(
+        match self.runtime.plugins.supervisor.activate_command(
             plugin_id,
             &plugin.root,
             command_id,
@@ -161,7 +168,7 @@ impl Model {
             return;
         }
         let mut markers = Vec::new();
-        for plugin in &self.plugins.entries {
+        for plugin in &self.runtime.plugins.entries {
             for value in &plugin.manifest.activation_events {
                 let Some(ActivationEvent::WorkspaceContains(marker)) =
                     plugin_activation::parse_event(value)
@@ -228,7 +235,7 @@ impl Model {
             .iter()
             .map(|permission| (*permission).to_owned())
             .collect::<Vec<_>>();
-        match self.plugins.supervisor.start_debug(
+        match self.runtime.plugins.supervisor.start_debug(
             DEBUG_PLUGIN_ID,
             StartMode::Oom,
             &permissions,
@@ -263,7 +270,7 @@ impl Model {
             .iter()
             .map(|permission| (*permission).to_owned())
             .collect::<Vec<_>>();
-        match self.plugins.supervisor.start_debug(
+        match self.runtime.plugins.supervisor.start_debug(
             DEBUG_PLUGIN_ID,
             StartMode::Normal,
             &permissions,
@@ -285,7 +292,7 @@ impl Model {
 
     #[cfg(target_os = "linux")]
     pub(crate) fn exec_host(&mut self) {
-        match self.plugins.supervisor.exec(DEBUG_PLUGIN_ID) {
+        match self.runtime.plugins.supervisor.exec(DEBUG_PLUGIN_ID) {
             Ok(ExecOutcome::Sent) => self.status.text = "plugin host request sent".to_owned(),
             Ok(ExecOutcome::Queued) => self.status.text = "plugin host request queued".to_owned(),
             Err(error) => self.status.text = format!("E: {error}"),
@@ -297,33 +304,47 @@ impl Model {
     pub(crate) fn exec_host(&mut self) {}
 
     pub(crate) fn release_plugin_providers(&mut self, plugin_id: &str) {
-        let removed = self.plugins.plugin_providers.unregister_plugin(plugin_id);
+        let removed = self
+            .runtime
+            .plugins
+            .plugin_providers
+            .unregister_plugin(plugin_id);
         for provider in removed {
             for request_id in self
+                .runtime
                 .plugins
                 .plugin_provider_requests
                 .cancel_provider(&provider)
             {
-                self.plugins.supervisor.cancel_provider_request(request_id);
-                self.plugins.provider_snapshots.remove(&request_id);
+                self.runtime
+                    .plugins
+                    .supervisor
+                    .cancel_provider_request(request_id);
+                self.runtime.plugins.provider_snapshots.remove(&request_id);
             }
         }
     }
 
     fn cancel_provider_request(&mut self, request_id: u64) {
-        self.plugins.supervisor.cancel_provider_request(request_id);
-        self.plugins.plugin_provider_requests.cancel(request_id);
-        self.plugins.provider_snapshots.remove(&request_id);
+        self.runtime
+            .plugins
+            .supervisor
+            .cancel_provider_request(request_id);
+        self.runtime
+            .plugins
+            .plugin_provider_requests
+            .cancel(request_id);
+        self.runtime.plugins.provider_snapshots.remove(&request_id);
     }
 
     pub(crate) fn take_provider_snapshot(&mut self, request_id: u64) -> bool {
-        self.plugins.provider_snapshots.remove(&request_id)
+        self.runtime.plugins.provider_snapshots.remove(&request_id)
             == Some((self.session.editor.revision(), self.session.cursor))
     }
 
     #[cfg(target_os = "linux")]
     pub(crate) fn stop_host(&mut self) {
-        match self.plugins.supervisor.stop(
+        match self.runtime.plugins.supervisor.stop(
             DEBUG_PLUGIN_ID,
             self.workspace
                 .gateway
@@ -357,6 +378,7 @@ impl Model {
                 .map_err(|error| error.to_string())?;
         }
         if let Some(plugin) = self
+            .runtime
             .plugins
             .entries
             .iter_mut()
@@ -376,6 +398,7 @@ impl Model {
     #[cfg(target_os = "linux")]
     pub(crate) fn enable_plugin(&mut self, plugin_id: &str) {
         let Some(plugin) = self
+            .runtime
             .plugins
             .entries
             .iter()
@@ -398,12 +421,12 @@ impl Model {
             self.file.dirty = true;
             return;
         };
-        if let Err(error) = self.plugins.supervisor.enable(plugin_id) {
+        if let Err(error) = self.runtime.plugins.supervisor.enable(plugin_id) {
             self.status.text = format!("E: plugin {plugin_id}: {error}");
             self.file.dirty = true;
             return;
         }
-        match self.plugins.supervisor.activate(
+        match self.runtime.plugins.supervisor.activate(
             plugin_id,
             &plugin.root,
             gateway,
@@ -449,6 +472,7 @@ impl Model {
     #[cfg(target_os = "linux")]
     pub(crate) fn query_plugin_provider(&mut self, provider_id: &str, query: &str) {
         let Some(registration) = self
+            .runtime
             .plugins
             .plugin_providers
             .providers()
@@ -461,6 +485,7 @@ impl Model {
             return;
         };
         if !self
+            .runtime
             .plugins
             .entries
             .iter()
@@ -470,28 +495,31 @@ impl Model {
             self.file.dirty = true;
             return;
         }
-        let request_id =
-            match self
-                .plugins
-                .plugin_provider_requests
-                .start(registration.id.clone(), query, 20)
-            {
-                Ok(id) => id,
-                Err(error) => {
-                    self.status.text = format!("E: provider: {error}");
-                    self.file.dirty = true;
-                    return;
-                }
-            };
-        self.plugins.provider_snapshots.insert(
+        let request_id = match self.runtime.plugins.plugin_provider_requests.start(
+            registration.id.clone(),
+            query,
+            20,
+        ) {
+            Ok(id) => id,
+            Err(error) => {
+                self.status.text = format!("E: provider: {error}");
+                self.file.dirty = true;
+                return;
+            }
+        };
+        self.runtime.plugins.provider_snapshots.insert(
             request_id,
             (self.session.editor.revision(), self.session.cursor),
         );
         if !matches!(
-            self.plugins.supervisor.state(&registration.plugin_id),
+            self.runtime
+                .plugins
+                .supervisor
+                .state(&registration.plugin_id),
             HostState::Ready | HostState::Starting | HostState::Registering
         ) {
             let Some(plugin) = self
+                .runtime
                 .plugins
                 .entries
                 .iter()
@@ -507,7 +535,7 @@ impl Model {
                 self.file.dirty = true;
                 return;
             };
-            if let Err(error) = self.plugins.supervisor.activate(
+            if let Err(error) = self.runtime.plugins.supervisor.activate(
                 &registration.plugin_id,
                 &plugin.root,
                 gateway,
@@ -519,7 +547,7 @@ impl Model {
                 return;
             }
         }
-        match self.plugins.supervisor.provider(
+        match self.runtime.plugins.supervisor.provider(
             &registration.plugin_id,
             request_id,
             &registration.handler,
@@ -540,6 +568,7 @@ impl Model {
 
     pub(crate) fn provider_action(&mut self, provider_id: &str, value: &str) {
         let Some(registration) = self
+            .runtime
             .plugins
             .plugin_providers
             .providers()
@@ -556,9 +585,13 @@ impl Model {
             self.file.dirty = true;
             return;
         };
-        let generation = self.plugins.provider_action_generation.wrapping_add(1);
-        self.plugins.provider_action_generation = generation;
-        match self.plugins.supervisor.provider_action(
+        let generation = self
+            .runtime
+            .plugins
+            .provider_action_generation
+            .wrapping_add(1);
+        self.runtime.plugins.provider_action_generation = generation;
+        match self.runtime.plugins.supervisor.provider_action(
             &registration.plugin_id,
             generation,
             handler,
@@ -574,7 +607,7 @@ impl Model {
 
     #[cfg(target_os = "linux")]
     pub(crate) fn poll_host(&mut self) {
-        let events = self.plugins.supervisor.poll(
+        let events = self.runtime.plugins.supervisor.poll(
             self.workspace
                 .gateway
                 .as_mut()
@@ -591,7 +624,10 @@ impl Model {
                         state,
                         HostState::Stopped | HostState::Disabled | HostState::Failed
                     ) {
-                        self.plugins.plugin_providers.unregister_plugin(&plugin_id);
+                        self.runtime
+                            .plugins
+                            .plugin_providers
+                            .unregister_plugin(&plugin_id);
                     }
                     self.status.text = match state {
                         HostState::Starting => format!("plugin {plugin_id} starting"),
@@ -639,6 +675,7 @@ impl Model {
                     }) {
                         Ok(response) => {
                             let provider_id = self
+                                .runtime
                                 .plugins
                                 .plugin_provider_requests
                                 .provider_for(id)
@@ -650,7 +687,8 @@ impl Model {
                                 return;
                             }
                             let registration = provider_id.as_ref().and_then(|provider_id| {
-                                self.plugins
+                                self.runtime
+                                    .plugins
                                     .plugin_providers
                                     .providers()
                                     .iter()
@@ -659,6 +697,7 @@ impl Model {
                             });
                             let kind = registration.as_ref().map(|provider| provider.kind);
                             match self
+                                .runtime
                                 .plugins
                                 .plugin_provider_requests
                                 .accept_for(id, response)

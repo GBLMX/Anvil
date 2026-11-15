@@ -70,7 +70,6 @@ impl Model {
                 highlights: RefCell::new(SyntaxState::default()),
                 bracket: RefCell::new(bracket::BracketCache::default()),
             },
-            plugins: PluginState::default(),
             runtime: RuntimeState::default(),
         }
     }
@@ -132,7 +131,7 @@ impl Model {
         let managed = if let Some(gateway) = self.workspace.gateway.as_mut() {
             match gateway.call("pkg.installed", serde_json::json!({})) {
                 Ok(value) => {
-                    self.plugins.store_size = value
+                    self.runtime.plugins.store_size = value
                         .get("store_size")
                         .and_then(|size| size.as_u64())
                         .unwrap_or(0);
@@ -146,16 +145,16 @@ impl Model {
         let managed_conflicts = match managed {
             Ok(managed) => plugin_discovery::merge_managed(&mut plugins, managed),
             Err(error) => {
-                self.plugins.entries = plugins;
+                self.runtime.plugins.entries = plugins;
                 return Err(error);
             }
         };
         conflicts.extend(managed_conflicts);
-        self.plugins.entries = plugins;
-        if let Some(manager) = self.plugins.manager.as_mut() {
+        self.runtime.plugins.entries = plugins;
+        if let Some(manager) = self.runtime.plugins.manager.as_mut() {
             manager.selected = manager
                 .selected
-                .min(self.plugins.entries.len().saturating_sub(1));
+                .min(self.runtime.plugins.entries.len().saturating_sub(1));
         }
         if !conflicts.is_empty() {
             return Err(format!("duplicate plugin ids: {}", conflicts.join(", ")));

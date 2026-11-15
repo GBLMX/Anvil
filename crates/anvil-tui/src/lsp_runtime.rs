@@ -405,7 +405,7 @@ impl Model {
                     warning_count,
                     first_error,
                 };
-                self.plugins.supervisor.publish_event(
+                self.runtime.plugins.supervisor.publish_event(
                     PluginEvent::DiagnosticsChanged,
                     &serde_json::to_value(payload).expect("diagnostics event serializes"),
                 );

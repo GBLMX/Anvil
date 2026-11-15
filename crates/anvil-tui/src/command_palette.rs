@@ -116,7 +116,13 @@ impl Model {
             });
         }
         #[cfg(target_os = "linux")]
-        for plugin in self.plugins.entries.iter().filter(|plugin| plugin.enabled) {
+        for plugin in self
+            .runtime
+            .plugins
+            .entries
+            .iter()
+            .filter(|plugin| plugin.enabled)
+        {
             for command in &plugin.manifest.commands {
                 if items.len() >= 512 {
                     break;
@@ -146,7 +152,7 @@ impl Model {
             }
         }
         #[cfg(target_os = "linux")]
-        for (command_id, command) in &self.plugins.dynamic_commands {
+        for (command_id, command) in &self.runtime.plugins.dynamic_commands {
             if items.len() >= 512 {
                 break;
             }
@@ -154,6 +160,7 @@ impl Model {
                 continue;
             }
             if !self
+                .runtime
                 .plugins
                 .entries
                 .iter()
