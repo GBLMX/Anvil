@@ -29,6 +29,9 @@ post-`0.5.0` feature line.
   on-demand defaults. Completion labels highlight the matched prefix, inline
   diagnostics include LSP codes, workspace root labels and file-name
   validation moved to their domain owners.
+- Added a manual real-server switching smoke for clangd, jdtls,
+  rust-analyzer, and gopls with explicit skip when binaries are absent, plus a
+  deterministic fake-gateway worker lifecycle and bounded-drop test in CI.
 - Character selections now render a Helix-style selection background, a
   warning-colored primary anchor bar, and a block cursor at the selection head.
 - Implemented the existing `event.subscribe` v1 method. The editor now

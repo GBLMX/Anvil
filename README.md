@@ -259,6 +259,10 @@ the control socket, so they can run alongside a normal interactive instance.
 `scripts/ctl-smoke.sh` drives a real TUI through this CLI and asserts files,
 buffer state, undo, Git index state, and session output.
 
+`scripts/lsp-real-smoke.sh` switches a real TUI across C, Java, Rust, and Go
+and asserts one active language server. It exits 0 with `SKIP` when `clangd`,
+`jdtls`, `rust-analyzer`, or `gopls` is absent; CI does not require them.
+
 `anvil-mcp` is a thin stdio MCP adapter over `anvil-control`. It exposes
 `anvil_status`, `anvil_open`, `anvil_query`, `anvil_edit`, `anvil_save`,
 `anvil_command`, and `anvil_quit`; it never reads or writes workspace files

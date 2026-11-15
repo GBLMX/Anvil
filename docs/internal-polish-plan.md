@@ -169,7 +169,9 @@ measurements justify it.
 ### 3.7 LSP lifecycle
 
 Status: landed. Server discovery, version reporting, restart/backoff, and
-visible failure are implemented.
+visible failure are implemented. A fake-gateway worker lifecycle/drop test runs
+in normal CI; `scripts/lsp-real-smoke.sh` exercises real `clangd`, `jdtls`,
+`rust-analyzer`, and `gopls` switching and skips when they are absent.
 
 Difficulty: M. Main risk is hidden fallback behavior.
 

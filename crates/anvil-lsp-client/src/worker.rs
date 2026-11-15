@@ -727,7 +727,7 @@ mod tests {
     }
 
     #[test]
-    fn worker_parses_publish_diagnostics() {
+    fn fake_gateway_worker_lifecycle_parses_diagnostics() {
         let nanos = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("clock")
@@ -806,6 +806,12 @@ mod tests {
                     assert_eq!(path, PathBuf::from("/tmp/a.rs"));
                     assert_eq!(diagnostics.len(), 1);
                     let _ = std::fs::remove_file(&socket);
+                    let started = Instant::now();
+                    drop(worker);
+                    assert!(
+                        started.elapsed() < Duration::from_secs(2),
+                        "worker drop exceeded its shutdown budget"
+                    );
                     return;
                 }
             }
