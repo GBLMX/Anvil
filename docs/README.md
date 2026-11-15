@@ -158,10 +158,21 @@ Architecture reading order, not a second status table:
 ### Naming
 
 - ADR: `NNNN-topic.md`; `NNNN` is immutable.
-- Plan: `<version-or-phase>-topic-plan.md`.
+- Plan: `<version-or-phase>-topic-plan.md` for release/phase plans, or
+  `<topic>-plan.md` for continuous cross-cutting plans.
 - SPEC: `spec/<contract>-v<major>.md`.
 - Reference: `<topic>.md`; no `plan` suffix.
 - Do not rename a document only to reorganize it; update the index instead.
+
+### Templates
+
+- [Plan template](templates/plan.md)
+- [ADR template](templates/adr.md)
+
+### Verification
+
+- `python3 scripts/docs-check.py` checks relative links, ADR identity/date,
+  optional ADR version syntax, plan status presence, and template sections.
 
 ### Status
 

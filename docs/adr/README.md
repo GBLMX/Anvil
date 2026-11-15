@@ -90,3 +90,7 @@ Version axes are independent:
 
 `0.6.0.x` labels are not releases and not semver tags. Do not treat a four-part
 planning label as a Cargo or ADR version.
+
+## Template
+
+- [ADR template](../templates/adr.md)
