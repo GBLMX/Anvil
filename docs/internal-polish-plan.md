@@ -175,6 +175,13 @@ root, markers, retries, and server info. A fake-gateway worker lifecycle/drop
 test runs in normal CI; `scripts/lsp-real-smoke.sh` exercises real `clangd`,
 `jdtls`, `rust-analyzer`, and `gopls` switching and skips when they are absent.
 
+Workspace-wide pull diagnostics are intentionally not implemented. A
+2026-11-15 initialize probe found `diagnosticProvider` absent for clangd
+23.1.5, gopls 0.23.0, and jdtls 1.63.0-SNAPSHOT; rust-analyzer
+0.3.3057-standalone reports `workspaceDiagnostics: false`. Revisit only when a
+target server advertises `diagnosticProvider.workspaceDiagnostics: true`; do
+not fabricate a workspace scan from open documents.
+
 Difficulty: M. Main risk is hidden fallback behavior.
 
 ## 4. P1: IDE-like adapters
