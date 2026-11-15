@@ -32,6 +32,13 @@ impl Model {
 
     pub(crate) fn focus_split(&mut self, right: bool) {
         if self.buffers.split.is_none() {
+            if right {
+                self.focus_editor();
+            } else if self.tree.visible {
+                self.ui.focus.tree = true;
+                self.ui.focus.split = false;
+                self.file.dirty = true;
+            }
             return;
         }
         if self.ui.focus.split == right {

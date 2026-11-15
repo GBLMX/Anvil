@@ -2,20 +2,160 @@
 
 use super::*;
 use crossterm::event::{KeyEvent, KeyModifiers};
+use std::collections::HashSet;
 
 fn key(code: KeyCode, modifiers: KeyModifiers) -> KeyPress {
     KeyPress::from_key(KeyEvent::new(code, modifiers))
 }
 
 #[test]
-fn alt_bindings_fold_case() {
+fn canonical_default_bindings_are_unique() {
+    let bindings = [
+        (
+            key(KeyCode::Esc, KeyModifiers::NONE),
+            "editor.collapse_selections",
+        ),
+        (key(KeyCode::Char('h'), KeyModifiers::NONE), "cursor.left"),
+        (key(KeyCode::Char('j'), KeyModifiers::NONE), "cursor.down"),
+        (key(KeyCode::Char('k'), KeyModifiers::NONE), "cursor.up"),
+        (key(KeyCode::Char('l'), KeyModifiers::NONE), "cursor.right"),
+        (
+            key(KeyCode::Char('w'), KeyModifiers::NONE),
+            "cursor.word_next",
+        ),
+        (
+            key(KeyCode::Char('b'), KeyModifiers::NONE),
+            "cursor.word_previous",
+        ),
+        (
+            key(KeyCode::Char('e'), KeyModifiers::NONE),
+            "cursor.word_end",
+        ),
+        (
+            key(KeyCode::Char('0'), KeyModifiers::NONE),
+            "cursor.line_start",
+        ),
+        (
+            key(KeyCode::Char('$'), KeyModifiers::NONE),
+            "cursor.line_end",
+        ),
+        (
+            key(KeyCode::Char('G'), KeyModifiers::NONE),
+            "cursor.file_end",
+        ),
+        (
+            key(KeyCode::Char('S'), KeyModifiers::NONE),
+            "selection.split_lines",
+        ),
+        (
+            key(KeyCode::Char('s'), KeyModifiers::NONE),
+            "selection.word_occurrences",
+        ),
+        (
+            key(KeyCode::Char('C'), KeyModifiers::NONE),
+            "selection.extend_down",
+        ),
+        (
+            key(KeyCode::Char('C'), KeyModifiers::ALT),
+            "selection.extend_up",
+        ),
+        (
+            key(KeyCode::Char('i'), KeyModifiers::NONE),
+            "editor.insert_here",
+        ),
+        (key(KeyCode::Char('a'), KeyModifiers::NONE), "editor.append"),
+        (
+            key(KeyCode::Char('A'), KeyModifiers::NONE),
+            "editor.append_line_end",
+        ),
+        (
+            key(KeyCode::Char('o'), KeyModifiers::NONE),
+            "editor.open_below",
+        ),
+        (
+            key(KeyCode::Char('O'), KeyModifiers::NONE),
+            "editor.open_above",
+        ),
+        (
+            key(KeyCode::Char('x'), KeyModifiers::NONE),
+            "editor.delete_forward",
+        ),
+        (key(KeyCode::Char('p'), KeyModifiers::NONE), "editor.put"),
+        (key(KeyCode::Char('u'), KeyModifiers::NONE), "editor.undo"),
+        (
+            key(KeyCode::Char('r'), KeyModifiers::CONTROL),
+            "editor.redo",
+        ),
+        (
+            key(KeyCode::Char('.'), KeyModifiers::NONE),
+            "editor.repeat_change",
+        ),
+        (
+            key(KeyCode::Char('%'), KeyModifiers::NONE),
+            "navigation.match_bracket",
+        ),
+        (key(KeyCode::Char('q'), KeyModifiers::NONE), "macro.record"),
+        (key(KeyCode::Char('@'), KeyModifiers::NONE), "macro.replay"),
+        (key(KeyCode::Char('K'), KeyModifiers::NONE), "lsp.hover"),
+        (
+            key(KeyCode::Char('/'), KeyModifiers::CONTROL),
+            "editor.toggle_comment",
+        ),
+        (
+            key(KeyCode::Char('o'), KeyModifiers::ALT),
+            "navigation.jump_back",
+        ),
+        (
+            key(KeyCode::Char('i'), KeyModifiers::ALT),
+            "navigation.jump_forward",
+        ),
+        (
+            key(KeyCode::Char(':'), KeyModifiers::NONE),
+            "command_line.open",
+        ),
+        (key(KeyCode::Char('/'), KeyModifiers::NONE), "search.open"),
+        (key(KeyCode::Char('n'), KeyModifiers::NONE), "search.next"),
+        (
+            key(KeyCode::Char('N'), KeyModifiers::NONE),
+            "search.previous",
+        ),
+    ];
+
+    let mut seen = HashSet::new();
+    for (binding, expected) in bindings {
+        let action = normal_action(binding, 0).expect("canonical binding resolves");
+        let id = action
+            .id()
+            .expect("canonical binding has a command id")
+            .as_str();
+        assert_eq!(id, expected);
+        assert!(seen.insert(id), "duplicate canonical binding for {id}");
+    }
+}
+
+#[test]
+fn canonical_hints_match_the_rebound_keys() {
+    assert_eq!(default_key_hint("selection.split_lines"), Some("S"));
+    assert_eq!(default_key_hint("selection.extend_up"), Some("Alt-C"));
+    assert_eq!(default_key_hint("selection.extend_down"), Some("C"));
+    assert_eq!(default_key_hint("editor.toggle_comment"), Some("Ctrl-/"));
+    assert_eq!(default_key_hint("cursor.line_start"), Some("0"));
+    assert_eq!(default_key_hint("cursor.line_end"), Some("$"));
+}
+
+#[test]
+fn cursor_line_and_split_bindings_are_canonical() {
     assert_eq!(
         normal_action(key(KeyCode::Char('C'), KeyModifiers::ALT), 0),
-        Some(NormalCommand::ExtendLine(true))
+        Some(NormalCommand::AddCursorLine(true))
+    );
+    assert_eq!(
+        normal_action(key(KeyCode::Char('S'), KeyModifiers::NONE), 0),
+        Some(NormalCommand::SplitSelection)
     );
     assert_eq!(
         normal_action(key(KeyCode::Char('s'), KeyModifiers::ALT), 0),
-        Some(NormalCommand::SplitSelection)
+        None
     );
 }
 
@@ -28,14 +168,14 @@ fn ctrl_slash_toggles_comments() {
 }
 
 #[test]
-fn ctrl_o_and_ctrl_i_navigate_jump_history() {
+fn alt_jump_bindings_are_canonical() {
     assert_eq!(
         normal_action(key(KeyCode::Char('o'), KeyModifiers::CONTROL), 0),
-        Some(NormalCommand::JumpBack)
+        None
     );
     assert_eq!(
         normal_action(key(KeyCode::Char('i'), KeyModifiers::CONTROL), 0),
-        Some(NormalCommand::JumpForward)
+        None
     );
     assert_eq!(
         normal_action(key(KeyCode::Char('o'), KeyModifiers::ALT), 0),
@@ -119,11 +259,29 @@ fn pending_operators_resolve_chords() {
 }
 
 #[test]
-fn fallback_space_three_focuses_right_split() {
-    assert_eq!(
-        pending_action(' ', key(KeyCode::Char('3'), KeyModifiers::NONE), false),
-        Some(PendingCommand::FocusSplit(true))
-    );
+fn numbered_space_bindings_are_removed() {
+    for character in ['1', '2', '3'] {
+        assert_eq!(
+            pending_action(
+                ' ',
+                key(KeyCode::Char(character), KeyModifiers::NONE),
+                false,
+            ),
+            None
+        );
+    }
+    let config = KeymapConfig::from_preset("ergo").expect("ergo preset");
+    for character in ['1', '2', '3'] {
+        assert_eq!(
+            resolve_pending(
+                ' ',
+                key(KeyCode::Char(character), KeyModifiers::NONE),
+                false,
+                &config,
+            ),
+            None
+        );
+    }
 }
 
 #[test]
@@ -331,7 +489,7 @@ d = "editor.yank_lines"
     );
     assert_eq!(
         resolve_normal(key(KeyCode::Char('C'), KeyModifiers::ALT), 0, &config),
-        Some(NormalCommand::ExtendLine(true))
+        Some(NormalCommand::AddCursorLine(true))
     );
     assert_eq!(
         resolve_pending(
@@ -484,7 +642,7 @@ x = "not.a.command"
 
 #[test]
 fn bundled_presets_parse_without_function_keys() {
-    for name in ["ergo", "vim", "helix"] {
+    for name in ["ergo", "vim"] {
         let config = KeymapConfig::from_preset(name).expect("bundled preset parses");
         assert!(
             config
@@ -512,29 +670,10 @@ fn bundled_presets_parse_without_function_keys() {
 }
 
 #[test]
-fn helix_preset_maps_space_aliases() {
-    let config = KeymapConfig::from_preset("helix").expect("helix preset parses");
-    for (character, expected) in [
-        ('h', PendingCommand::References),
-        ('k', PendingCommand::Hover),
-        ('c', PendingCommand::ToggleComment),
-        ('?', PendingCommand::CommandPalette),
-    ] {
-        assert_eq!(
-            resolve_pending(
-                ' ',
-                key(KeyCode::Char(character), KeyModifiers::NONE),
-                false,
-                &config,
-            ),
-            Some(expected),
-            "Space {character}"
-        );
-    }
-}
+fn helix_preset_is_not_advertised() {
+    assert!(KeymapConfig::from_preset("helix").is_err());
+    assert!(KeymapConfig::from_preset("anvil-helix").is_err());
 
-#[test]
-fn helix_aliases_are_opt_in() {
     let config = KeymapConfig::default();
     for character in ['h', 'k', 'c', '?'] {
         assert_eq!(
@@ -545,7 +684,7 @@ fn helix_aliases_are_opt_in() {
                 &config,
             ),
             None,
-            "Space {character} must require the helix preset"
+            "Space {character} must not be a hidden duplicate"
         );
     }
 }

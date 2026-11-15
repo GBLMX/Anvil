@@ -1,8 +1,9 @@
 # ADR-0040: Helix-Compatible Keymap Preset and Command Contexts
 
-- Status: Accepted
-- Implementation: `helix` preset, shared pending contexts for hover/comment,
-  Space aliases, tests, and documentation landed.
+- Status: Superseded for the alias preset
+- Implementation: the four-binding `helix` preset was removed because every
+  binding duplicated an existing canonical key (`gr`, `K`, `Ctrl-/`, and
+  `Space p`). The shared pending contexts remain.
 - Date: 2026-11-14
 - Related: [ADR-0019](0019-terminal-keyboard-enhancement.md),
   [ADR-0024](0024-tui-state-and-domain-boundaries.md),
@@ -30,7 +31,8 @@ actions are missing or conflict with established Anvil defaults:
 - Anvil uses `Space p` for the command palette; Helix uses `Space p` to paste.
 - Anvil uses `Space F` for formatting; Helix uses `Space F` for a
   working-directory file picker.
-- Anvil uses `Alt-c` to add a cursor above; Helix uses `A-c` for line comments.
+- Anvil uses `Alt-C` to add an empty cursor above (`Alt-c` folds to the same
+  binding); Helix uses `A-c` for line comments.
 - Anvil has no diagnostic picker, changed-file picker, jumplist picker,
   last-picker state, buffer-directory tree mode, or nested `Space w` prefix.
 - Anvil supports line comments only; block comments are not implemented.
@@ -126,7 +128,7 @@ Do not remap:
 
 - `Space p` away from the command palette;
 - `Space F` away from formatting;
-- `Alt-c` away from add-cursor-above.
+- `Alt-C` away from add-cursor-above.
 
 A Helix user who wants `Space p` paste or `Space F` cwd picker needs those
 underlying pending commands first; neither has a `PendingCommand::from_id`
@@ -157,7 +159,7 @@ or produce a dead binding.
 ### Copy the entire Helix keymap
 
 Rejected. It would overwrite Anvil defaults, conflict with `Space p`,
-`Space F`, and `Alt-c`, and still leave unsupported pickers as dead keys.
+`Space F`, and `Alt-C`, and still leave unsupported pickers as dead keys.
 
 ### Create a `helix` compatibility module
 
@@ -215,3 +217,11 @@ Negative:
 - `Space c` toggles line comments through the existing comment engine.
 - `ergo` and `vim` presets retain their current behavior.
 - No keymap validation error is introduced by the new preset.
+
+## Superseded
+
+The acceptance list above is historical. The alias preset was removed rather
+than kept as a second spelling of existing actions. A future Helix mode must
+remap the core grammar (`s`, `x`, `%`, `g h`, `g i`, `g l`, `g e`, `?`) and
+document every deliberate Anvil/Helix conflict; Space-only aliases are not
+enough to be called Helix-compatible.

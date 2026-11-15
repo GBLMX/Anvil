@@ -14,7 +14,7 @@ keymap host, and no second editing model.
 
 Already present and should be reused:
 
-- normal/insert/visual modes, multi-cursor `s`/`Alt-s`/`C`, visual `v`/`V`;
+- normal/insert/visual modes, multi-cursor `s`/`S`/`C`/`Alt-C`, visual `v`/`V`;
 - `h`/`j`/`k`/`l`, `w`/`b`/`e`, `0`, `Home`/`End`;
 - `i`/`a`/`A`/`o`/`O`, `x`, `p`, `u`, `Ctrl+r`, `.`;
 - `dd`/`yy`, `dw`/`db`/`de`, `yw`/`yb`/`ye`, text objects, paragraphs, tags;

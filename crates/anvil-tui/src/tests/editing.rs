@@ -862,7 +862,7 @@ fn percent_jumps_to_matching_bracket_and_back() {
     handle_event(&mut model, key(KeyCode::Char('%')));
     assert_eq!(model.session.cursor, 2);
 
-    handle_event(&mut model, ctrl(KeyCode::Char('o')));
+    handle_event(&mut model, alt(KeyCode::Char('o')));
     assert_eq!(model.session.cursor, 0);
 }
 

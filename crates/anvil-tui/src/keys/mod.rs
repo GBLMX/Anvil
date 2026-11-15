@@ -443,6 +443,10 @@ fn handle_key(model: &mut Model, key: KeyPress) {
         return;
     }
     if model.keymap_context() == KeymapContext::FileTree {
+        if key.ctrl() && key.code == KeyCode::Char('w') {
+            model.begin_pending('w');
+            return;
+        }
         if let Some(action) = file_tree_action(key, text_input) {
             execute_file_tree_action(model, action);
             return;

@@ -243,14 +243,16 @@ fn split_panes_keep_independent_cursors() {
 }
 
 #[test]
-fn select_word_occurrences_replaces_all_as_one_undo() {
+fn select_word_occurrences_selects_all_as_one_undo() {
     let original = "foo\n".repeat(100);
     let mut model = Model::new(
         EditorState::from_text(&original),
         Some(PathBuf::from("multi.txt")),
     );
     model.select_word_occurrences();
+    assert_eq!(model.ui.input_mode, InputMode::Normal);
     assert_eq!(model.session.editor.selection_bytes().len(), 100);
+    handle_event(&mut model, key(KeyCode::Char('i')));
     model.insert_text("bar");
     assert_eq!(
         model.session.editor.text().slice(0..400),
@@ -322,16 +324,6 @@ fn alt_c_adds_a_cursor_above_for_both_keycodes() {
         handle_event(&mut model, key(KeyCode::Char('j')));
         handle_event(&mut model, alt(code));
         assert_eq!(model.session.editor.selection_bytes(), vec![(0, 0), (6, 6)]);
-    }
-}
-
-#[test]
-fn alt_s_is_case_insensitive() {
-    for code in [KeyCode::Char('s'), KeyCode::Char('S')] {
-        let mut model = Model::new(EditorState::from_text("one\ntwo\nthree"), None);
-        assert!(model.session.editor.set_selection_bytes(0, 7));
-        handle_event(&mut model, alt(code));
-        assert_eq!(model.session.editor.selection_bytes().len(), 2);
     }
 }
 

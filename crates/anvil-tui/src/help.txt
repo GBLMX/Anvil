@@ -11,13 +11,13 @@ Normal mode
   {count}w/b/e        count word motions; 3x, 2dd, 2yy
   ciw / ci" / ci'     change inner word / quoted text
   "a{yy,p}            named yank/put register; "_" is blackhole
-  Home / End          line start / end
+  0 / $               line start / end (Home / End aliases)
   q{reg} / @{reg}     record macro / replay macro; @@ repeats
   s                   select all occurrences of the word under the cursor
-  Alt-s               split the selection into one cursor per line
+  S                   split the selection into one cursor per line
   C / Alt-C           add a cursor below / above on the same column
   Ctrl-w v            open a vertical split
-  Ctrl-w h / l        focus the left / right pane
+  Ctrl-w h / l        focus the left/tree or right/editor pane
   Ctrl-w q            close the split
   Space e             file tree (h/l/Enter expand or open, H toggles hidden)
   tree a / A         create file / folder in the tree
@@ -31,11 +31,8 @@ Normal mode
   Space f             fuzzy file finder; type to filter, Enter opens
                       selected file previews beside the list when wide and
                       below it when narrow; icons mark file types
-  Helix preset only:
-  Space h             list references
-  Space k             hover documentation
-  Space c             toggle line comment
-  Space ?             open the command palette
+  Space b             buffer picker
+  Space p             command palette
   gd                  go to definition
   gD / gy / gI        declaration / type definition / implementation
   gr                  list references and jump on Enter
@@ -55,8 +52,8 @@ Normal mode
   p                   put unnamed register
   u / Ctrl+r          undo / redo
   Ctrl+/              toggle line comments
-  Ctrl-o / Alt-o      jump back through navigation history
-  Ctrl-i / Alt-i      jump forward through navigation history
+  Alt-o               jump back through navigation history
+  Alt-i               jump forward through navigation history
   g; / g,             previous / next change position
   %                   jump to matching bracket
   /pattern            incremental search; Enter accepts, Esc restores cursor

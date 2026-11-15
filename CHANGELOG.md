@@ -8,9 +8,7 @@ post-`0.5.0` feature line.
 
 ## [Unreleased]
 ### Added
-- Added the opt-in `helix` keymap preset with `Space h` references,
-  `Space k` hover, `Space c` line comments, and `Space ?` command palette.
-  Hover and line-comment commands now share the Normal and Pending contexts.
+- Added shared pending contexts for hover and line comments.
 - Buffer tabs and the buffer picker now show file-type icons; picker paths are
   workspace-relative instead of absolute.
 - The status line adds the current file icon plus read-only and missing-file
@@ -428,6 +426,10 @@ post-`0.5.0` feature line.
   the status line keeps stable diagnostics/file/LSP/position segments. The
   start dashboard is denser, and the command palette shows category groups,
   recent markers, and direct key hints.
+- Deduplicated the default keymap: removed numbered `Space` focus aliases,
+  `Ctrl-o`/`Ctrl-i` jump aliases, `Alt-s`, and the alias-only Helix preset.
+  `S` splits selections, `C`/`Alt-C` add cursors below/above, `Ctrl-/` is the
+  canonical comment key, and the Space leader timeout is now 1200 ms.
 - Rebuilt the default `anvil-dark` theme with a deep-navy, steel, cyan,
   violet, and amber palette. Syntax colors now use stronger hue separation
   and targeted bold/italic/underline modifiers while keeping WCAG-AA contrast.

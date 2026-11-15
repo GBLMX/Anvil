@@ -25,7 +25,7 @@ pub(crate) enum NormalCommand {
     MacroReplay,
     SplitSelection,
     SelectWord,
-    ExtendLine(bool),
+    AddCursorLine(bool),
     InsertHere,
     CommandLine,
     Search,
@@ -67,8 +67,8 @@ impl NormalCommand {
             MacroReplay => Some(command::MACRO_REPLAY),
             SplitSelection => Some(command::SPLIT_LINES),
             SelectWord => Some(command::WORD_OCCURRENCES),
-            ExtendLine(true) => Some(command::EXTEND_UP),
-            ExtendLine(false) => Some(command::EXTEND_DOWN),
+            AddCursorLine(true) => Some(command::EXTEND_UP),
+            AddCursorLine(false) => Some(command::EXTEND_DOWN),
             InsertHere => Some(command::INSERT_HERE),
             CommandLine => Some(command::COMMAND_LINE),
             Search => Some(command::SEARCH_OPEN),
@@ -112,8 +112,8 @@ impl NormalCommand {
             "macro.replay" => Self::MacroReplay,
             "selection.split_lines" => Self::SplitSelection,
             "selection.word_occurrences" => Self::SelectWord,
-            "selection.extend_up" => Self::ExtendLine(true),
-            "selection.extend_down" => Self::ExtendLine(false),
+            "selection.extend_up" => Self::AddCursorLine(true),
+            "selection.extend_down" => Self::AddCursorLine(false),
             "editor.insert_here" => Self::InsertHere,
             "command_line.open" => Self::CommandLine,
             "search.open" => Self::Search,
@@ -159,14 +159,12 @@ pub(crate) fn normal_action(key: KeyPress, count: usize) -> Option<NormalCommand
         KeyCode::Char('K') if text_input => Some(NormalCommand::Hover),
         KeyCode::Char('q') if text_input => Some(NormalCommand::MacroRecord),
         KeyCode::Char('@') if text_input => Some(NormalCommand::MacroReplay),
-        KeyCode::Char(_) if key.alt() && key.command_char() == Some('s') => {
-            Some(NormalCommand::SplitSelection)
-        }
         KeyCode::Char('s') if text_input => Some(NormalCommand::SelectWord),
+        KeyCode::Char('S') if text_input => Some(NormalCommand::SplitSelection),
         KeyCode::Char(_) if key.alt() && key.command_char() == Some('c') => {
-            Some(NormalCommand::ExtendLine(true))
+            Some(NormalCommand::AddCursorLine(true))
         }
-        KeyCode::Char('C') if text_input => Some(NormalCommand::ExtendLine(false)),
+        KeyCode::Char('C') if text_input => Some(NormalCommand::AddCursorLine(false)),
         KeyCode::Char('G') if text_input => Some(NormalCommand::MoveFileEnd),
         KeyCode::Char('i') if text_input => Some(NormalCommand::InsertHere),
         KeyCode::Char(':') if text_input => Some(NormalCommand::CommandLine),
@@ -177,8 +175,7 @@ pub(crate) fn normal_action(key: KeyPress, count: usize) -> Option<NormalCommand
         KeyCode::Char(_) if key.alt() && key.command_char() == Some('i') => {
             Some(NormalCommand::JumpForward)
         }
-        KeyCode::Char('o') if key.ctrl() => Some(NormalCommand::JumpBack),
-        KeyCode::Char('i') if key.ctrl() => Some(NormalCommand::JumpForward),
+
         KeyCode::Char('%') if text_input => Some(NormalCommand::MatchBracket),
         KeyCode::Char('/') if text_input => Some(NormalCommand::Search),
         KeyCode::Char('a') if text_input => Some(NormalCommand::Append),
@@ -215,6 +212,7 @@ pub(crate) fn normal_action(key: KeyPress, count: usize) -> Option<NormalCommand
         KeyCode::Char('j') | KeyCode::Down if !key.alt() => Some(NormalCommand::MoveLine(1)),
         KeyCode::Char('k') | KeyCode::Up if !key.alt() => Some(NormalCommand::MoveLine(-1)),
         KeyCode::Home => Some(NormalCommand::MoveHome),
+        KeyCode::Char('$') if text_input => Some(NormalCommand::MoveEnd),
         KeyCode::End => Some(NormalCommand::MoveEnd),
         KeyCode::Enter => Some(NormalCommand::OpenLocation),
         KeyCode::Char(_) if key.alt() && key.command_char() == Some('j') => {
@@ -681,9 +679,6 @@ pub(crate) fn pending_action(
     match (pending, key.code) {
         ('w', KeyCode::Char('v')) => Some(PendingCommand::SplitVertical),
         ('w', KeyCode::Char('h')) => Some(PendingCommand::FocusSplit(false)),
-        (' ', KeyCode::Char('1')) => Some(PendingCommand::FocusEditor),
-        (' ', KeyCode::Char('2')) => Some(PendingCommand::OpenTree),
-        (' ', KeyCode::Char('3')) => Some(PendingCommand::FocusSplit(true)),
         ('w', KeyCode::Char('l')) => Some(PendingCommand::FocusSplit(true)),
         ('w', KeyCode::Char('q')) => Some(PendingCommand::CloseSplit),
         (' ', KeyCode::Char('e')) => Some(PendingCommand::OpenTree),
@@ -756,14 +751,31 @@ impl Model {
     }
 
     pub(crate) fn pending_hints(&self) -> Vec<(String, String)> {
-        self.input
-            .pending
-            .map(|prefix| {
-                self.config
-                    .keymap
-                    .pending_actions(prefix, self.input.object_pending)
-            })
-            .unwrap_or_default()
+        let Some(prefix) = self.input.pending else {
+            return Vec::new();
+        };
+        let mut hints = self
+            .config
+            .keymap
+            .pending_actions(prefix, self.input.object_pending);
+        if prefix == ' ' {
+            for (key, action) in &mut hints {
+                *action = format!("[{}] {action}", space_hint_group(key));
+            }
+        }
+        hints
+    }
+}
+
+fn space_hint_group(key: &str) -> &'static str {
+    match key {
+        "f" => "file",
+        "b" => "buffer",
+        "e" => "tree",
+        "s" | "S" => "symbol",
+        "r" | "a" | "F" => "lsp",
+        "p" => "command",
+        _ => "command",
     }
 }
 
@@ -773,9 +785,9 @@ pub(crate) fn default_key_hint(id: &str) -> Option<&'static str> {
         "lsp.hover" => "K",
         "macro.record" => "q",
         "macro.replay" => "@",
-        "selection.split_lines" => "Alt-s",
+        "selection.split_lines" => "S",
         "selection.word_occurrences" => "s",
-        "selection.extend_up" => "Alt-c",
+        "selection.extend_up" => "Alt-C",
         "selection.extend_down" => "C",
         "editor.insert_here" => "i",
         "command_line.open" => ":",
@@ -791,13 +803,13 @@ pub(crate) fn default_key_hint(id: &str) -> Option<&'static str> {
         "editor.undo" => "u",
         "editor.redo" => "Ctrl-r",
         "editor.repeat_change" => ".",
-        "editor.toggle_comment" => "Ctrl-_",
+        "editor.toggle_comment" => "Ctrl-/",
         "navigation.match_bracket" => "%",
         "navigation.jump_back" => "Alt-o",
         "navigation.jump_forward" => "Alt-i",
         "cursor.file_end" => "G",
-        "cursor.line_start" => "0/Home",
-        "cursor.line_end" => "End",
+        "cursor.line_start" => "0",
+        "cursor.line_end" => "$",
         "cursor.word_next" => "w",
         "cursor.word_previous" => "b",
         "cursor.word_end" => "e",

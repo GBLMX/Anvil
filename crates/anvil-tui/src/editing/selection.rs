@@ -49,7 +49,6 @@ impl Model {
             .first()
             .map(|(start, _)| *start)
             .unwrap_or(cursor);
-        self.begin_insert(InsertOrigin::InsertHere);
         self.status.text = format!("{} selections", self.session.editor.selection_bytes().len());
         self.file.dirty = true;
     }
@@ -90,7 +89,7 @@ impl Model {
         self.file.dirty = true;
     }
 
-    pub(crate) fn extend_line_cursor(&mut self, up: bool) {
+    pub(crate) fn add_cursor_line(&mut self, up: bool) {
         let Some(line) = self
             .session
             .editor

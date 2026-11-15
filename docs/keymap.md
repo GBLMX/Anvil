@@ -17,7 +17,7 @@ Checked in order:
 
 A missing file keeps the default keymap. `ANVIL_KEYMAP` is intended for an
 explicit path and for tests. `ANVIL_KEYMAP_PRESET` selects a bundled preset by
-name (`ergo`, `vim`, or `helix`).
+name (`ergo` or `vim`).
 
 ## Format
 
@@ -27,7 +27,7 @@ preset = "ergo"
 
 [keymap.normal]
 x = "editor.undo"
-alt-c = "selection.extend_up"
+alt-C = "selection.extend_up"
 "ctrl-shift-p" = "command_line.open"
 
 [keymap.pending.d]
@@ -36,8 +36,8 @@ w = "editor.delete_words_next"
 
 [keymap.pending." "]
 f = "picker.fuzzy"
-1 = "view.focus_editor"
-2 = "tree.open"
+e = "tree.open"
+p = "command_palette.open"
 r = "editor.rename_symbol"
 
 [keymap.contexts.editor]
@@ -63,13 +63,11 @@ popup/modal built-ins consume first and do not fall back to global bindings.
 
 ## Presets
 
-Three bundled presets are available:
+Two bundled presets are available:
 
-- `anvil-ergo.toml` (`ergo`, also `default`): the ergonomic Space leader with
-  `Space 1/2/3` and the compatibility aliases.
+- `anvil-ergo.toml` (`ergo`, also `default`): the ergonomic Space leader and
+  selection-first aliases.
 - `anvil-vim.toml` (`vim`): explicit Vim-style normal bindings.
-- `anvil-helix.toml` (`helix`): adds `Space h` references, `Space k` hover,
-  `Space c` line comments, and `Space ?` command palette.
 
 Bundled presets do not bind F1–F12. A keymap file selects a preset with the
 top-level `preset` key and can override any of its bindings in the normal,
@@ -79,9 +77,36 @@ used; the built-in defaults remain active if neither is present.
 The configuration is parsed and validated before it replaces the active keymap.
 It is not hot-reloaded.
 
-The Space leader expires after 600 ms. `Space 1` focuses the editor,
-`Space 2` opens the file tree, and `Space p` opens the command palette; the
-existing `Space e`/`Space f` bindings remain.
+The Space leader expires after 1200 ms. `Space e` opens the file tree,
+`Space p` opens the command palette, and `Ctrl-w` handles window focus without
+numbered aliases.
+
+## Canonical bindings
+
+One action has one documented key. Hardware keys and terminal encodings may
+remain as internal aliases, but they are not separate advertised shortcuts.
+
+| Action | Key |
+|---|---|
+| Collapse selections | `Esc` |
+| Select word occurrences | `s` |
+| Split selection into lines | `S` |
+| Add cursor below | `C` |
+| Add cursor above | `Alt-C` |
+| Jump back / forward | `Alt-o` / `Alt-i` |
+| Toggle line comment | `Ctrl-/` |
+| File picker | `Space f` |
+| Buffer picker | `Space b` |
+| File tree | `Space e` |
+| Document / workspace symbols | `Space s` / `Space S` |
+| Rename / code action | `Space r` / `Space a` |
+| Format | `Space F` |
+| Command palette | `Space p` |
+| Window prefix | `Ctrl-w` |
+
+`Ctrl-_` remains accepted only because many terminals encode `Ctrl-/` as
+`0x1f`; it is not documented as a second shortcut. `Home`/`End` and arrow keys
+remain hardware aliases for `0`/`$` and `h/j/k/l`.
 
 Visual `v`/`V` selections support `d`, `y`, and `c`. Press `s` to open the
 operation-scoped surround layer, then `(`/`)`, `[`/`]`, `{`/`}`, `<`/`>`,

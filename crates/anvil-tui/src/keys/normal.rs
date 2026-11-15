@@ -183,7 +183,7 @@ pub(super) fn execute_normal_command(model: &mut Model, command: NormalCommand) 
         }
         NormalCommand::SplitSelection => model.split_selection_lines(),
         NormalCommand::SelectWord => model.select_word_occurrences(),
-        NormalCommand::ExtendLine(up) => model.extend_line_cursor(up),
+        NormalCommand::AddCursorLine(up) => model.add_cursor_line(up),
         NormalCommand::InsertHere => model.insert_here(),
         NormalCommand::CommandLine => {
             model.ui.input_mode = InputMode::CommandLine {

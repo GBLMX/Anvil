@@ -1,6 +1,7 @@
 //! Model construction, configuration reload, and input helpers.
 
 use super::*;
+const LEADER_TIMEOUT: Duration = Duration::from_millis(1200);
 
 #[cfg(feature = "official-git")]
 fn default_git_service() -> Option<std::sync::Arc<dyn anvil_module::git::GitService>> {
@@ -205,8 +206,7 @@ impl Model {
 
     pub(crate) fn begin_pending(&mut self, pending: char) {
         self.input.pending = Some(pending);
-        self.input.leader_deadline =
-            (pending == ' ').then(|| Instant::now() + Duration::from_millis(600));
+        self.input.leader_deadline = (pending == ' ').then(|| Instant::now() + LEADER_TIMEOUT);
         self.file.dirty = true;
     }
 

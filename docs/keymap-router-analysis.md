@@ -6,6 +6,10 @@ schema, and bundled presets have landed. Tree/popup/modal context dispatch, the
 full `if`-chain migration, the command palette, and operation-scoped modal
 layers remain.
 
+> Historical `0.5.3` analysis. Current canonical bindings are documented in
+> [keymap.md](keymap.md). Numbered `Space 1/2/3` bindings and the alias-only
+> `helix` preset were removed during the 0.6.x keymap cleanup.
+
 Source issue: `[Feature] Implement Contextual Keymap Router and Space-Leader
 Ergonomics`, with the accepted ADR-0020 addendum on F-key compatibility.
 

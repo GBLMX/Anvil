@@ -17,7 +17,7 @@ and the [0.7.x module plan](docs/0.7.x-plan.md).
 Development uses Rust from `rust-toolchain.toml` and Go **1.26.11 or newer**;
 CI installs the exact Go version from the root `go.mod`. The ratatui editor now
 includes insert
-mode (`i`/`a`/`A`/`o`/`O`), multi-cursor selection (`s`/`Alt-s`/`C`),
+mode (`i`/`a`/`A`/`o`/`O`), multi-cursor selection (`s`/`S`/`C`/`Alt-C`),
 `:w`/`:wa`/`:wq`/`:w file`/`:q!`, an unsaved-change guard, undo/redo,
 `x`/`dd`/`yy`/`p`, `w`/`b`/`e` word motions with
 `dw`/`db`/`de`/`yw`/`yb`/`ye`, `G` to the last line, literal `:s`/`:%s`
@@ -367,8 +367,8 @@ to the selected buffer.
 - The native editor/API interaction model is selection-first. The current TUI
   exposes that core through a Vim-like keymap implemented in Rust. Normal,
   operator-pending, and editor/global context bindings can be remapped through
-  [keymap.toml](docs/keymap.md), and bundled ergo, Vim, and Helix presets can
-  be selected as a base. Lua/TS keymap plugins are not implemented yet.
+  [keymap.toml](docs/keymap.md), and bundled ergo and Vim presets can be
+  selected as a base. Lua/TS keymap plugins are not implemented yet.
 - Full untrusted-plugin support targets Linux 5.13+ (Landlock). Linux 5.6-5.12
   may run the editor with trusted plugins only.
 

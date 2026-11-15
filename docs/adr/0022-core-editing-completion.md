@@ -68,7 +68,7 @@ while the TUI owns the real register model.
 2. **Jump list and change list**
    - Records definition, reference, diagnostic, search, quick-open, and
      conflict jumps before moving.
-   - `Ctrl-o`/`Ctrl-i` traverse jump entries; change-list traversal is
+   - `Alt-o`/`Alt-i` traverse jump entries; change-list traversal is
      separate from file navigation.
    - Per-session bounded history; deduplicate adjacent entries; drop oldest
      entries first.

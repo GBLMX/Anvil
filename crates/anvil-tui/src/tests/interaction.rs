@@ -1,60 +1,20 @@
 use super::*;
+
 #[test]
-fn space_leader_focuses_editor_and_tree() {
+fn ctrl_w_focuses_tree_and_editor_without_a_split() {
     let mut model = Model::new(EditorState::from_text("alpha"), None);
     model.start_page.welcome = false;
     model.open_tree();
     assert!(model.ui.focus.tree);
-    for key_code in [KeyCode::Char(' '), KeyCode::Char('1')] {
-        handle_event(&mut model, key(key_code));
-    }
+
+    handle_event(&mut model, ctrl(KeyCode::Char('w')));
+    handle_event(&mut model, key(KeyCode::Char('l')));
     assert!(!model.ui.focus.tree);
     assert!(model.tree.visible);
-    for key_code in [KeyCode::Char(' '), KeyCode::Char('2')] {
-        handle_event(&mut model, key(key_code));
-    }
-    assert!(model.tree.visible);
+
+    handle_event(&mut model, ctrl(KeyCode::Char('w')));
+    handle_event(&mut model, key(KeyCode::Char('h')));
     assert!(model.ui.focus.tree);
-}
-
-#[test]
-fn helix_preset_space_c_toggles_comment() {
-    let mut model = Model::new(
-        EditorState::from_text("one\n"),
-        Some(PathBuf::from("test.rs")),
-    );
-    model.config.keymap = crate::keymap::KeymapConfig::from_preset("helix").expect("helix preset");
-    for key_code in [KeyCode::Char(' '), KeyCode::Char('c')] {
-        handle_event(&mut model, key(key_code));
-    }
-    assert_eq!(model.session.editor.text().slice(0..6), "// one");
-}
-
-#[test]
-fn helix_preset_space_question_opens_palette() {
-    let mut model = Model::new(EditorState::from_text("alpha"), None);
-    model.config.keymap = crate::keymap::KeymapConfig::from_preset("helix").expect("helix preset");
-    for key_code in [KeyCode::Char(' '), KeyCode::Char('?')] {
-        handle_event(&mut model, key(key_code));
-    }
-    assert!(model.overlays.command_palette.is_some());
-}
-
-#[test]
-fn helix_preset_space_h_and_k_dispatch_lsp_requests() {
-    let mut model = Model::new(
-        EditorState::from_text("alpha"),
-        Some(PathBuf::from("test.rs")),
-    );
-    model.config.keymap = crate::keymap::KeymapConfig::from_preset("helix").expect("helix preset");
-    for key_code in [KeyCode::Char(' '), KeyCode::Char('k')] {
-        handle_event(&mut model, key(key_code));
-    }
-    assert!(model.status.text.contains("lsp is not running"));
-    for key_code in [KeyCode::Char(' '), KeyCode::Char('h')] {
-        handle_event(&mut model, key(key_code));
-    }
-    assert!(model.status.text.contains("lsp is not running"));
 }
 
 #[test]
@@ -77,6 +37,16 @@ fn repeated_space_keeps_leader_pending() {
     handle_event(&mut model, key(KeyCode::Char(' ')));
     assert_eq!(model.input.pending, Some(' '));
     assert!(model.input.leader_deadline.is_some());
+}
+
+#[test]
+fn space_leader_allows_slow_key_sequences() {
+    let mut model = Model::new(EditorState::from_text("alpha"), None);
+    handle_event(&mut model, key(KeyCode::Char(' ')));
+    let deadline = model.input.leader_deadline.expect("leader deadline");
+    let remaining = deadline.duration_since(std::time::Instant::now());
+    assert!(remaining >= std::time::Duration::from_millis(1_000));
+    assert!(remaining <= std::time::Duration::from_millis(1_500));
 }
 
 #[test]
@@ -151,7 +121,7 @@ fn pending_space_renders_keymap_continuations() {
         .map(|cell| cell.symbol())
         .collect::<String>();
     assert!(rendered.contains("picker.fuzzy"), "{rendered}");
-    assert!(rendered.contains("view.focus_editor"), "{rendered}");
+    assert!(rendered.contains("[file]"), "{rendered}");
 }
 
 #[test]
