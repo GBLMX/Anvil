@@ -549,3 +549,29 @@ fn read_only_active_buffer_rejects_workspace_edits() {
     assert!(error.contains("read-only"), "{error}");
     assert_eq!(model.session.editor.text().slice(0..3), "abc");
 }
+
+#[test]
+fn read_only_page_rejects_workspace_edits() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("file.txt");
+    fs::write(&path, "abc").expect("file");
+    let mut model = Model::open(&path).expect("open");
+    model.show_help();
+    let workspace_edit = WorkspaceEdit::from_lsp(&serde_json::json!({
+        "changes": {
+            uri(&path): [{
+                "range": {
+                    "start": {"line": 0, "character": 0},
+                    "end": {"line": 0, "character": 1}
+                },
+                "newText": "x"
+            }]
+        }
+    }))
+    .expect("parse");
+    let error = workspace_edit
+        .apply(&mut model)
+        .expect_err("read-only page");
+    assert!(error.contains("read-only view"), "{error}");
+    assert!(model.pager.back.is_some());
+}
