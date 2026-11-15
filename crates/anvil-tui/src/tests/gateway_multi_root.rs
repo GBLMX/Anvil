@@ -17,6 +17,107 @@ fn wait_until(model: &mut Model, mut predicate: impl FnMut(&Model) -> bool) {
     );
 }
 
+fn serve_handshake(
+    listener: anvil_ipc::Listener,
+    connections: usize,
+) -> std::thread::JoinHandle<()> {
+    std::thread::spawn(move || {
+        for _ in 0..connections {
+            let mut connection = listener.accept().expect("accept");
+            let frame = connection.recv().expect("recv").expect("frame");
+            let request: serde_json::Value = serde_json::from_slice(&frame).expect("request");
+            assert_eq!(request["method"], "session.hello");
+            let response = serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": request["id"],
+                "result": {"ok": true},
+            });
+            connection
+                .send(&serde_json::to_vec(&response).expect("response"))
+                .expect("send");
+        }
+    })
+}
+
+struct CountingGit {
+    calls: std::sync::Arc<std::sync::Mutex<std::collections::HashMap<PathBuf, usize>>>,
+}
+
+impl anvil_module::git::GitService for CountingGit {
+    fn git_status(
+        &self,
+        _client: &mut anvil_ipc::GatewayClient,
+        root: &Path,
+    ) -> Result<std::collections::HashMap<PathBuf, char>, String> {
+        *self
+            .calls
+            .lock()
+            .expect("calls")
+            .entry(root.to_path_buf())
+            .or_insert(0) += 1;
+        Ok(std::collections::HashMap::new())
+    }
+
+    fn git_diff(
+        &self,
+        _client: &mut anvil_ipc::GatewayClient,
+        _relative: &str,
+    ) -> Result<Vec<(usize, char)>, String> {
+        unimplemented!("not used")
+    }
+
+    fn git_diff_text(
+        &self,
+        _client: &mut anvil_ipc::GatewayClient,
+        _relative: &str,
+        _staged: bool,
+    ) -> Result<(String, bool), String> {
+        unimplemented!("not used")
+    }
+
+    fn git_blame_text(
+        &self,
+        _client: &mut anvil_ipc::GatewayClient,
+        _relative: &str,
+    ) -> Result<(String, bool), String> {
+        unimplemented!("not used")
+    }
+
+    fn git_conflicts_text(
+        &self,
+        _client: &mut anvil_ipc::GatewayClient,
+    ) -> Result<(String, bool), String> {
+        unimplemented!("not used")
+    }
+
+    fn git_conflict_stage_text(
+        &self,
+        _client: &mut anvil_ipc::GatewayClient,
+        _relative: &str,
+        _stage: u8,
+    ) -> Result<(String, bool), String> {
+        unimplemented!("not used")
+    }
+
+    fn resolve_git_conflict(
+        &self,
+        _client: &mut anvil_ipc::GatewayClient,
+        _relative: &str,
+        _stage: u8,
+    ) -> Result<(), anvil_module::git::ResolveConflictError> {
+        unimplemented!("not used")
+    }
+
+    fn apply_git_hunk(
+        &self,
+        _client: &mut anvil_ipc::GatewayClient,
+        _patch: &str,
+        _reverse: bool,
+    ) -> Result<(), String> {
+        unimplemented!("not used")
+    }
+}
+
 #[test]
 #[ignore = "requires ANVIL_GATEWAY"]
 fn secondary_root_tree_lists_and_opens_through_owning_gateway() {
@@ -125,28 +226,6 @@ fn secondary_root_tree_lists_and_opens_through_owning_gateway() {
 fn git_worker_routes_by_owning_root() {
     use anvil_workspace::FileWorker;
 
-    fn serve_handshake(
-        listener: anvil_ipc::Listener,
-        connections: usize,
-    ) -> std::thread::JoinHandle<()> {
-        std::thread::spawn(move || {
-            for _ in 0..connections {
-                let mut connection = listener.accept().expect("accept");
-                let frame = connection.recv().expect("recv").expect("frame");
-                let request: serde_json::Value = serde_json::from_slice(&frame).expect("request");
-                assert_eq!(request["method"], "session.hello");
-                let response = serde_json::json!({
-                    "jsonrpc": "2.0",
-                    "id": request["id"],
-                    "result": {"ok": true},
-                });
-                connection
-                    .send(&serde_json::to_vec(&response).expect("response"))
-                    .expect("send");
-            }
-        })
-    }
-
     let primary = tempfile::tempdir().expect("primary");
     let secondary = tempfile::tempdir().expect("secondary");
     let primary_root = primary.path().canonicalize().expect("primary canonical");
@@ -211,6 +290,92 @@ fn git_worker_routes_by_owning_root() {
         secondary_worker
     ));
 
+    primary_server.join().expect("primary server");
+    secondary_server.join().expect("secondary server");
+}
+
+#[test]
+fn external_change_burst_requests_git_status_once_per_root() {
+    use anvil_workspace::FileWorker;
+
+    let primary = tempfile::tempdir().expect("primary");
+    let secondary = tempfile::tempdir().expect("secondary");
+    let primary_root = primary.path().canonicalize().expect("primary canonical");
+    let secondary_root = secondary
+        .path()
+        .canonicalize()
+        .expect("secondary canonical");
+    let primary_socket = primary_root.join("gateway.sock");
+    let secondary_socket = secondary_root.join("gateway.sock");
+    let primary_listener = anvil_ipc::Listener::bind(&primary_socket).expect("primary bind");
+    let secondary_listener = anvil_ipc::Listener::bind(&secondary_socket).expect("secondary bind");
+    let primary_server = serve_handshake(primary_listener, 1);
+    let secondary_server = serve_handshake(secondary_listener, 1);
+
+    let primary_client =
+        anvil_ipc::GatewayClient::connect(&primary_socket, &[31; 32]).expect("primary worker");
+    let secondary_client =
+        anvil_ipc::GatewayClient::connect(&secondary_socket, &[32; 32]).expect("secondary worker");
+    let calls = std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashMap::<
+        PathBuf,
+        usize,
+    >::new()));
+    let git: std::sync::Arc<dyn anvil_module::git::GitService> = std::sync::Arc::new(CountingGit {
+        calls: calls.clone(),
+    });
+    let primary_worker = FileWorker::start_with_services(
+        primary_client,
+        primary_root.clone(),
+        Some(git.clone()),
+        None,
+    );
+    let secondary_worker = FileWorker::start_with_services(
+        secondary_client,
+        secondary_root.clone(),
+        Some(git.clone()),
+        None,
+    );
+
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.workspace.path = primary_root.clone();
+    model.workspace.roots =
+        crate::workspace_roots::WorkspaceRoots::new(&primary_root).expect("primary root");
+    model
+        .workspace
+        .roots
+        .add(&secondary_root, true)
+        .expect("secondary root");
+    model.workspace.git_service = Some(git);
+    model.workspace.file_worker = Some(primary_worker);
+    model
+        .workspace
+        .root_file_workers
+        .insert(secondary_root.clone(), secondary_worker);
+
+    model.schedule_git_status_refresh();
+    model.schedule_git_status_refresh();
+    model.workspace.git.status_debounce = Some(Instant::now() - Duration::from_millis(1));
+    model.tick_git_status();
+
+    let deadline = Instant::now() + Duration::from_secs(2);
+    loop {
+        let counts = calls.lock().expect("calls");
+        if counts.get(&primary_root) == Some(&1) && counts.get(&secondary_root) == Some(&1) {
+            break;
+        }
+        drop(counts);
+        assert!(Instant::now() < deadline, "timeout waiting for GitStatus");
+        std::thread::sleep(Duration::from_millis(10));
+    }
+
+    model.tick_git_status();
+    std::thread::sleep(Duration::from_millis(100));
+    let counts = calls.lock().expect("calls");
+    assert_eq!(counts.get(&primary_root), Some(&1));
+    assert_eq!(counts.get(&secondary_root), Some(&1));
+    drop(counts);
+
+    drop(model);
     primary_server.join().expect("primary server");
     secondary_server.join().expect("secondary server");
 }
