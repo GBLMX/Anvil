@@ -895,6 +895,17 @@ pub(crate) struct RuntimeState {
     pub(crate) terminal_panel: bool,
 }
 
+#[cfg(unix)]
+impl RuntimeState {
+    pub(crate) fn push_terminal_output(&mut self, bytes: &[u8]) {
+        self.terminal_output.extend_from_slice(bytes);
+        if self.terminal_output.len() > pty_terminal::MAX_TERMINAL_OUTPUT {
+            let excess = self.terminal_output.len() - pty_terminal::MAX_TERMINAL_OUTPUT;
+            self.terminal_output.drain(..excess);
+        }
+    }
+}
+
 #[derive(Default)]
 pub(crate) struct RecentState {
     /// Quick-open usage counts keyed by the entry string.

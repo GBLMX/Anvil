@@ -1,7 +1,7 @@
 //! Explicit workspace PTY session commands.
 
 use super::*;
-use crate::pty_terminal::{MAX_TERMINAL_OUTPUT, PtySession, default_shell};
+use crate::pty_terminal::{PtySession, default_shell};
 use crossterm::event::{KeyCode, KeyModifiers};
 
 impl Model {
@@ -75,11 +75,7 @@ impl Model {
         let exited = terminal.try_wait().ok().flatten();
         match terminal.read_available() {
             Ok(bytes) if !bytes.is_empty() => {
-                self.runtime.terminal_output.extend_from_slice(&bytes);
-                if self.runtime.terminal_output.len() > MAX_TERMINAL_OUTPUT {
-                    let excess = self.runtime.terminal_output.len() - MAX_TERMINAL_OUTPUT;
-                    self.runtime.terminal_output.drain(..excess);
-                }
+                self.runtime.push_terminal_output(&bytes);
                 self.file.dirty = true;
             }
             Ok(_) => {}
@@ -290,5 +286,19 @@ mod tests {
             terminal_key_bytes(KeyEvent::new(KeyCode::F(8), KeyModifiers::NONE)),
             None
         );
+    }
+
+    #[test]
+    fn terminal_output_keeps_a_bounded_tail() {
+        let limit = crate::pty_terminal::MAX_TERMINAL_OUTPUT;
+        let mut state = RuntimeState::default();
+        let mut input = vec![b'a'; limit];
+        input.extend_from_slice(b"tail");
+        state.push_terminal_output(&input);
+        assert_eq!(state.terminal_output.len(), limit);
+        assert_eq!(&state.terminal_output[limit - 4..], b"tail");
+        state.push_terminal_output(b"z");
+        assert_eq!(state.terminal_output.last(), Some(&b'z'));
+        assert_eq!(state.terminal_output.len(), limit);
     }
 }

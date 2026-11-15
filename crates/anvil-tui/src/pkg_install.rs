@@ -538,6 +538,14 @@ mod tests {
     }
 
     #[test]
+    fn cancelling_package_install_clears_owned_state() {
+        let mut model = downloading();
+        model.cancel_pkg_install();
+        assert!(model.runtime.plugins.pkg_install.is_none());
+        assert!(model.file.dirty);
+    }
+
+    #[test]
     fn downloaded_package_enters_review_with_digest() {
         let mut model = downloading();
         model.pkg_downloaded(&serde_json::json!({
