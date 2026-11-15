@@ -42,23 +42,28 @@ ADR-0041; until then the TUI remains the application shell.
 
 ## Decision
 
-### 1. Three runtime layers
+### 1. Runtime layers and service adapters
 
-Anvil uses three runtime layers, with `anvil-api` and `anvil-ipc` as contracts
-between them:
+Anvil has a functional editor core, a headless session boundary, and a
+frontend adapter. `anvil-api` and `anvil-ipc` are contracts across those
+boundaries:
 
 ```text
 anvil-tui (input adapter and renderer)
-    -> anvil-session (document orchestration, effects, policy)
+    -> anvil-session (document state, effects, policy)
         -> anvil-editor (EditorState, selection, transactions, snapshots)
             -> anvil-core (TextDocument, LineIndex, History)
+
+anvil-tui or a future anvil-services layer
+    -> anvil-lsp-client / gateway / task / DAP adapters
+        -> external processes
 ```
 
-External capabilities remain outside the editor core:
-
-```text
-anvil-session -> anvil-lsp-client / gateway / task / DAP / module services
-```
+`anvil-session` produces typed effects and consumes typed results. It owns
+orchestration state, generation checks, and policy, but it does not own
+transport clients. Concrete LSP/DAP/task/gateway adapters stay outside the
+kernel baseline; they live in the frontend today and may move to a dedicated
+service crate when a second consumer justifies it.
 
 ### 2. `anvil-core` stays a text model
 
@@ -91,18 +96,22 @@ The selection model is native and selection-first:
 `anvil-editor` must not own LSP sessions, gateway clients, file dialogs, or
 terminal input state.
 
-### 4. `anvil-session` owns orchestration
+### 4. `anvil-session` owns orchestration state, not clients
 
 `anvil-session` is the headless application boundary. It owns:
 
 - document sessions and their lifecycle;
 - command and effect vocabulary;
 - workspace/root policy;
-- LSP/DAP/task orchestration and worker results;
+- LSP/DAP/task state, worker-result contracts, and retry policy;
 - plugin event and provider seams;
 - stale-generation and cancellation rules.
 
 It must not depend on `anvil-tui`, ratatui, crossterm, or rendering state.
+It also must not depend on concrete `anvil-lsp-client`, task-runner, DAP, or
+gateway transport types; those are adapter services behind the session's
+effect/result contracts. This keeps the ADR-0037 kernel baseline from growing
+new transport dependencies.
 
 `DocumentSession` is a frontend-neutral wrapper around `EditorState`; it is not
 a second editor kernel.
@@ -159,9 +168,11 @@ Allowed:
 distribution -> anvil-tui
 distribution -> modules -> kernel crates
 anvil-tui -> anvil-session
+anvil-tui -> anvil-lsp-client / anvil-task / gateway transport / DAP adapter
 anvil-session -> anvil-editor / anvil-core
 anvil-editor -> anvil-core
-anvil-session -> anvil-api / anvil-ipc / module services
+anvil-session -> anvil-api / anvil-ipc / module service contracts
+future anvil-services -> concrete LSP / task / DAP / gateway adapters
 ```
 
 Forbidden:
@@ -171,16 +182,21 @@ anvil-core -> anvil-editor
 anvil-editor -> anvil-session
 anvil-editor -> anvil-tui
 anvil-session -> anvil-tui
+anvil-session -> anvil-lsp-client / anvil-task / DAP transport / gateway transport
 kernel crate -> anvil-tui
 module -> anvil-tui
 ```
+
+The concrete adapters listed under `anvil-tui` are its current implementation
+of the session's effect/result contracts. They are not part of the kernel
+baseline and may move to `anvil-services` without changing `anvil-session`.
 
 ### State ownership
 
 - `anvil-core`: text and coordinates.
 - `anvil-editor`: selection, edits, undo, snapshots.
-- `anvil-session`: document/workspace/service orchestration.
-- `anvil-tui`: input and presentation.
+- `anvil-session`: document/workspace/policy/effect/result state; no transports.
+- `anvil-tui`: input, presentation, and current adapter execution state.
 
 A state field has exactly one owner. Re-exports and snapshots are contracts, not
 a second writable source of truth.
