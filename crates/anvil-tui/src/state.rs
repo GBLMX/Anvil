@@ -927,6 +927,14 @@ impl RuntimeState {
         self.task_worker = None;
         Some(event)
     }
+
+    #[cfg(target_os = "linux")]
+    pub(crate) fn poll_plugins(
+        &mut self,
+        gateway: Option<&mut (dyn anvil_ipc::PluginGateway + 'static)>,
+    ) -> Vec<SupervisorEvent> {
+        self.plugins.supervisor.poll(gateway)
+    }
 }
 
 #[cfg(unix)]

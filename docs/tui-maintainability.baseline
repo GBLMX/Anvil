@@ -1,6 +1,6 @@
 # TUI maintainability budget. Update only when a deliberate slice changes it.
 TUI_FILES=104
-TUI_LOC=48701
+TUI_LOC=48709
 TUI_DEPS=30
 TUI_IMPL_MODEL=66
 TUI_IMPL_MODEL_FILES=61

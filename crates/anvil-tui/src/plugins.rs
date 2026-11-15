@@ -607,12 +607,12 @@ impl Model {
 
     #[cfg(target_os = "linux")]
     pub(crate) fn poll_host(&mut self) {
-        let events = self.runtime.plugins.supervisor.poll(
-            self.workspace
-                .gateway
-                .as_mut()
-                .map(|gateway| gateway as &mut dyn anvil_ipc::PluginGateway),
-        );
+        let gateway = self
+            .workspace
+            .gateway
+            .as_mut()
+            .map(|gateway| gateway as &mut dyn anvil_ipc::PluginGateway);
+        let events = self.runtime.poll_plugins(gateway);
         for event in events {
             match event {
                 SupervisorEvent::State {
