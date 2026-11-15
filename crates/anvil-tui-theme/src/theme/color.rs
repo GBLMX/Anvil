@@ -3,10 +3,20 @@
 use super::*;
 
 pub fn color_is_light(color: Color) -> bool {
-    let Some((red, green, blue)) = color_rgb(color) else {
-        return false;
+    relative_luminance(color).is_some_and(|luminance| luminance > 0.1791)
+}
+
+pub fn relative_luminance(color: Color) -> Option<f64> {
+    let (red, green, blue) = color_rgb(color)?;
+    let channel = |value: u8| {
+        let value = f64::from(value) / 255.0;
+        if value <= 0.04045 {
+            value / 12.92
+        } else {
+            ((value + 0.055) / 1.055).powf(2.4)
+        }
     };
-    (299 * u32::from(red) + 587 * u32::from(green) + 114 * u32::from(blue)) / 1000 > 128
+    Some(0.2126 * channel(red) + 0.7152 * channel(green) + 0.0722 * channel(blue))
 }
 
 pub fn color_rgb(color: Color) -> Option<(u8, u8, u8)> {

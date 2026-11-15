@@ -510,6 +510,9 @@ post-`0.5.0` feature line.
   cursor placement, and mouse mapping.
 - Tree git/diagnostic rollups are precomputed in one bottom-up pass instead of
   rescanning overlapping subtrees for each visible directory row.
+- Custom theme color errors now degrade only the affected field, keep loading
+  sibling files, and surface file/field context in status and the theme browser;
+  high-contrast text selection now uses WCAG relative luminance.
 - The editor chrome now uses one persistent frame; the file tree keeps its
   stale/watch-limit/hidden header states without a nested border. Transient
   status and notifications share an auto-expiring bottom message band, while

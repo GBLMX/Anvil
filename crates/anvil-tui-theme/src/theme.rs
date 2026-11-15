@@ -76,6 +76,7 @@ thread_local! {
     static CUSTOM: RefCell<Vec<CustomTheme>> = const { RefCell::new(Vec::new()) };
     static THEME_DIR_MTIME: Cell<Option<SystemTime>> = const { Cell::new(None) };
     static LAST_RELOAD_CHECK: Cell<Option<Instant>> = const { Cell::new(None) };
+    static WARNINGS: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
 }
 
 fn theme_dir() -> Option<PathBuf> {
@@ -103,43 +104,80 @@ pub fn load_custom_themes() -> Result<(), String> {
 
 pub fn load_custom_themes_from(directory: &Path) -> Result<(), String> {
     let old = CUSTOM.with(|custom| custom.borrow().clone());
+    let entries = match fs::read_dir(directory) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            CUSTOM.with(|current| current.borrow_mut().clear());
+            WARNINGS.with(|warnings| warnings.borrow_mut().clear());
+            return Ok(());
+        }
+        Err(error) => {
+            return Err(format!("theme directory {}: {error}", directory.display()));
+        }
+    };
     let mut paths = Vec::new();
-    if let Ok(entries) = fs::read_dir(directory) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.extension().and_then(|ext| ext.to_str()) == Some("toml") {
-                paths.push(path);
-            }
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|ext| ext.to_str()) == Some("toml") {
+            paths.push(path);
         }
     }
     paths.sort();
     let mut custom = Vec::new();
+    let mut warnings = Vec::new();
     for path in paths {
-        let source = fs::read_to_string(&path)
-            .map_err(|error| format!("theme {}: {error}", path.display()))?;
+        let source = match fs::read_to_string(&path) {
+            Ok(source) => source,
+            Err(error) => {
+                warnings.push(format!("{}: {error}", path.display()));
+                continue;
+            }
+        };
         if let Some(previous) = old
             .iter()
             .find(|theme| theme.path == path && theme.source == source)
         {
+            warnings.extend(previous.warnings.iter().cloned());
             custom.push(previous.clone());
             continue;
         }
-        let theme = parse_theme_file(&path, &source)?;
+        let parsed = match parse_theme_file(&path, &source) {
+            Ok(parsed) => parsed,
+            Err(error) => {
+                warnings.push(format!("{}: {error}", path.display()));
+                continue;
+            }
+        };
+        let file_warnings = parsed
+            .warnings
+            .into_iter()
+            .map(|warning| format!("{}: {warning}", path.display()))
+            .collect::<Vec<_>>();
+        warnings.extend(file_warnings.iter().cloned());
         custom.push(CustomTheme {
             path,
             source,
-            theme: Box::leak(Box::new(theme)),
+            theme: Box::leak(Box::new(parsed.theme)),
+            warnings: file_warnings,
         });
     }
     CUSTOM.with(|current| *current.borrow_mut() = custom);
+    WARNINGS.with(|current| *current.borrow_mut() = warnings);
     Ok(())
 }
 
-fn apply_color(target: &mut Color, value: Option<&str>) -> Result<(), String> {
-    if let Some(value) = value {
-        *target = parse_color(value)?;
+pub fn custom_theme_warnings() -> Vec<String> {
+    WARNINGS.with(|warnings| warnings.borrow().clone())
+}
+
+fn apply_color(target: &mut Color, value: Option<&str>, field: &str, warnings: &mut Vec<String>) {
+    let Some(value) = value else {
+        return;
+    };
+    match parse_color(value) {
+        Ok(color) => *target = color,
+        Err(error) => warnings.push(format!("{field}: {error}")),
     }
-    Ok(())
 }
 
 fn parse_color(value: &str) -> Result<Color, String> {
@@ -454,18 +492,7 @@ mod tests {
     use super::*;
 
     fn luminance(color: Color) -> f64 {
-        let Color::Rgb(red, green, blue) = color else {
-            panic!("theme colors must be RGB");
-        };
-        let channel = |value: u8| {
-            let value = f64::from(value) / 255.0;
-            if value <= 0.04045 {
-                value / 12.92
-            } else {
-                ((value + 0.055) / 1.055).powf(2.4)
-            }
-        };
-        0.2126 * channel(red) + 0.7152 * channel(green) + 0.0722 * channel(blue)
+        relative_luminance(color).expect("theme color has RGB representation")
     }
 
     fn contrast(left: Color, right: Color) -> f64 {
@@ -543,6 +570,27 @@ mod tests {
         let light = high_contrast_theme(&degraded);
         assert_eq!(light.text, Color::Rgb(0, 0, 0));
         assert!(color_is_light(light.bg));
+    }
+
+    #[test]
+    fn high_contrast_uses_wcag_lightness() {
+        for color in [
+            Color::LightGreen,
+            Color::White,
+            Color::LightYellow,
+            Color::LightRed,
+            Color::LightMagenta,
+        ] {
+            assert!(color_is_light(color), "{color:?}");
+        }
+        for color in [Color::Black, Color::Red, Color::Blue] {
+            assert!(!color_is_light(color), "{color:?}");
+        }
+        assert!(contrast(Color::LightRed, Color::Black) > contrast(Color::LightRed, Color::White));
+        assert!(
+            contrast(Color::LightMagenta, Color::Black)
+                > contrast(Color::LightMagenta, Color::White)
+        );
     }
 
     #[test]
@@ -641,15 +689,32 @@ mod tests {
     }
 
     #[test]
-    fn invalid_custom_theme_keeps_previous_registry() {
+    fn invalid_custom_theme_field_degrades_and_keeps_siblings() {
         let directory = tempfile::tempdir().expect("tempdir");
         fs::write(
             directory.path().join("broken.toml"),
-            "[ui]\nbackground = \"#GGGGGG\"\n",
+            "[ui]\nbackground = \"#GGGGGG\"\nforeground = \"#eeeeee\"\n",
         )
         .expect("write");
-        assert!(load_custom_themes_from(directory.path()).is_err());
-        assert!(!names().contains(&"broken"));
+        fs::write(
+            directory.path().join("valid.toml"),
+            "[ui]\nbackground = \"#101010\"\n",
+        )
+        .expect("write");
+        load_custom_themes_from(directory.path()).expect("load");
+        assert!(names().contains(&"broken"));
+        assert!(names().contains(&"valid"));
+        assert_eq!(
+            resolve("broken").expect("broken theme").bg,
+            Theme::ANVIL_DARK.bg
+        );
+        let warnings = custom_theme_warnings();
+        assert!(
+            warnings
+                .iter()
+                .any(|warning| warning.contains("broken.toml") && warning.contains("ui.background")),
+            "{warnings:?}"
+        );
     }
 
     #[test]

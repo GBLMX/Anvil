@@ -68,6 +68,12 @@ pub struct CustomTheme {
     pub path: PathBuf,
     pub source: String,
     pub theme: &'static Theme,
+    pub warnings: Vec<String>,
+}
+
+pub struct ParsedTheme {
+    pub theme: Theme,
+    pub warnings: Vec<String>,
 }
 
 fn style_modifiers(spec: &StyleSpec) -> Modifier {
@@ -86,16 +92,24 @@ fn apply_status_style(
     style: Option<&StyleSpec>,
     default_fg: Color,
     default_bg: Color,
-) -> Result<(), String> {
+    field: &str,
+    warnings: &mut Vec<String>,
+) {
     let Some(style) = style else {
-        return Ok(());
+        return;
     };
     let fg = match style.fg.as_deref() {
-        Some(value) => parse_color(value)?,
+        Some(value) => parse_color(value).unwrap_or_else(|error| {
+            warnings.push(format!("{field}.fg: {error}"));
+            default_fg
+        }),
         None => default_fg,
     };
     let bg = match style.bg.as_deref() {
-        Some(value) => parse_color(value)?,
+        Some(value) => parse_color(value).unwrap_or_else(|error| {
+            warnings.push(format!("{field}.bg: {error}"));
+            default_bg
+        }),
         None => default_bg,
     };
     *target = Some(
@@ -104,10 +118,9 @@ fn apply_status_style(
             .bg(bg)
             .add_modifier(style_modifiers(style)),
     );
-    Ok(())
 }
 
-pub fn parse_theme_file(path: &Path, source: &str) -> Result<Theme, String> {
+pub fn parse_theme_file(path: &Path, source: &str) -> Result<ParsedTheme, String> {
     let file: ThemeFile = toml_edit::de::from_str(source)
         .map_err(|error| format!("invalid theme TOML {}: {error}", path.display()))?;
     let Some(name) = path.file_stem().and_then(|name| name.to_str()) else {
@@ -118,68 +131,164 @@ pub fn parse_theme_file(path: &Path, source: &str) -> Result<Theme, String> {
     }
     let mut theme = Theme::ANVIL_DARK;
     theme.name = Box::leak(name.to_owned().into_boxed_str());
-    apply_color(&mut theme.bg, file.ui.background.as_deref())?;
-    apply_color(&mut theme.text, file.ui.foreground.as_deref())?;
-    apply_color(&mut theme.selection, file.ui.selection.as_deref())?;
-    apply_color(&mut theme.surface_alt, file.ui.cursorline.as_deref())?;
+    let mut warnings = Vec::new();
+    apply_color(
+        &mut theme.bg,
+        file.ui.background.as_deref(),
+        "ui.background",
+        &mut warnings,
+    );
+    apply_color(
+        &mut theme.text,
+        file.ui.foreground.as_deref(),
+        "ui.foreground",
+        &mut warnings,
+    );
+    apply_color(
+        &mut theme.selection,
+        file.ui.selection.as_deref(),
+        "ui.selection",
+        &mut warnings,
+    );
+    apply_color(
+        &mut theme.surface_alt,
+        file.ui.cursorline.as_deref(),
+        "ui.cursorline",
+        &mut warnings,
+    );
     if let Some(style) = &file.syntax.keyword {
-        apply_color(&mut theme.syntax_keyword, style.fg.as_deref())?;
+        apply_color(
+            &mut theme.syntax_keyword,
+            style.fg.as_deref(),
+            "syntax.keyword",
+            &mut warnings,
+        );
         theme.syntax_modifiers[0] = style_modifiers(style);
     }
     if let Some(style) = &file.syntax.string {
-        apply_color(&mut theme.syntax_string, style.fg.as_deref())?;
+        apply_color(
+            &mut theme.syntax_string,
+            style.fg.as_deref(),
+            "syntax.string",
+            &mut warnings,
+        );
         theme.syntax_modifiers[1] = style_modifiers(style);
     }
     if let Some(style) = &file.syntax.comment {
-        apply_color(&mut theme.syntax_comment, style.fg.as_deref())?;
+        apply_color(
+            &mut theme.syntax_comment,
+            style.fg.as_deref(),
+            "syntax.comment",
+            &mut warnings,
+        );
         theme.syntax_modifiers[2] = style_modifiers(style);
     }
     if let Some(style) = &file.syntax.function {
-        apply_color(&mut theme.syntax_function, style.fg.as_deref())?;
+        apply_color(
+            &mut theme.syntax_function,
+            style.fg.as_deref(),
+            "syntax.function",
+            &mut warnings,
+        );
         theme.syntax_modifiers[4] = style_modifiers(style);
     }
     if let Some(style) = &file.syntax.number {
-        apply_color(&mut theme.syntax_number, style.fg.as_deref())?;
+        apply_color(
+            &mut theme.syntax_number,
+            style.fg.as_deref(),
+            "syntax.number",
+            &mut warnings,
+        );
         theme.syntax_modifiers[3] = style_modifiers(style);
     }
     if let Some(style) = &file.syntax.r#type {
-        apply_color(&mut theme.syntax_type, style.fg.as_deref())?;
+        apply_color(
+            &mut theme.syntax_type,
+            style.fg.as_deref(),
+            "syntax.type",
+            &mut warnings,
+        );
         theme.syntax_modifiers[5] = style_modifiers(style);
     }
     if let Some(style) = &file.syntax.property {
-        apply_color(&mut theme.syntax_property, style.fg.as_deref())?;
+        apply_color(
+            &mut theme.syntax_property,
+            style.fg.as_deref(),
+            "syntax.property",
+            &mut warnings,
+        );
         theme.syntax_modifiers[6] = style_modifiers(style);
     }
     if let Some(style) = &file.syntax.constant {
-        apply_color(&mut theme.syntax_constant, style.fg.as_deref())?;
+        apply_color(
+            &mut theme.syntax_constant,
+            style.fg.as_deref(),
+            "syntax.constant",
+            &mut warnings,
+        );
         theme.syntax_modifiers[7] = style_modifiers(style);
     }
     if let Some(style) = &file.syntax.heading {
-        apply_color(&mut theme.syntax_heading, style.fg.as_deref())?;
+        apply_color(
+            &mut theme.syntax_heading,
+            style.fg.as_deref(),
+            "syntax.heading",
+            &mut warnings,
+        );
         theme.syntax_modifiers[8] = style_modifiers(style);
     }
     if let Some(style) = &file.syntax.link {
-        apply_color(&mut theme.syntax_link, style.fg.as_deref())?;
+        apply_color(
+            &mut theme.syntax_link,
+            style.fg.as_deref(),
+            "syntax.link",
+            &mut warnings,
+        );
         theme.syntax_modifiers[9] = style_modifiers(style);
     }
     if let Some(style) = &file.syntax.code {
-        apply_color(&mut theme.syntax_code, style.fg.as_deref())?;
+        apply_color(
+            &mut theme.syntax_code,
+            style.fg.as_deref(),
+            "syntax.code",
+            &mut warnings,
+        );
         theme.syntax_modifiers[10] = style_modifiers(style);
     }
     if let Some(style) = &file.syntax.emphasis {
-        apply_color(&mut theme.syntax_emphasis, style.fg.as_deref())?;
+        apply_color(
+            &mut theme.syntax_emphasis,
+            style.fg.as_deref(),
+            "syntax.emphasis",
+            &mut warnings,
+        );
         theme.syntax_modifiers[11] = style_modifiers(style);
     }
     if let Some(style) = &file.syntax.list {
-        apply_color(&mut theme.syntax_list, style.fg.as_deref())?;
+        apply_color(
+            &mut theme.syntax_list,
+            style.fg.as_deref(),
+            "syntax.list",
+            &mut warnings,
+        );
         theme.syntax_modifiers[12] = style_modifiers(style);
     }
     if let Some(style) = &file.syntax.quote {
-        apply_color(&mut theme.syntax_quote, style.fg.as_deref())?;
+        apply_color(
+            &mut theme.syntax_quote,
+            style.fg.as_deref(),
+            "syntax.quote",
+            &mut warnings,
+        );
         theme.syntax_modifiers[13] = style_modifiers(style);
     }
     if let Some(style) = &file.syntax.table {
-        apply_color(&mut theme.syntax_table, style.fg.as_deref())?;
+        apply_color(
+            &mut theme.syntax_table,
+            style.fg.as_deref(),
+            "syntax.table",
+            &mut warnings,
+        );
         theme.syntax_modifiers[14] = style_modifiers(style);
     }
     apply_status_style(
@@ -187,42 +296,56 @@ pub fn parse_theme_file(path: &Path, source: &str) -> Result<Theme, String> {
         file.status.mode_normal.as_ref(),
         theme.text,
         theme.surface_alt,
-    )?;
+        "status.mode_normal",
+        &mut warnings,
+    );
     apply_status_style(
         &mut theme.status_modes[1],
         file.status.mode_insert.as_ref(),
         theme.text,
         theme.surface_alt,
-    )?;
+        "status.mode_insert",
+        &mut warnings,
+    );
     apply_status_style(
         &mut theme.status_modes[2],
         file.status.mode_command.as_ref(),
         theme.text,
         theme.surface_alt,
-    )?;
+        "status.mode_command",
+        &mut warnings,
+    );
     apply_status_style(
         &mut theme.status_modes[3],
         file.status.mode_search.as_ref(),
         theme.text,
         theme.surface_alt,
-    )?;
+        "status.mode_search",
+        &mut warnings,
+    );
     apply_status_style(
         &mut theme.status_modes[4],
         file.status.mode_rename.as_ref(),
         theme.text,
         theme.surface_alt,
-    )?;
+        "status.mode_rename",
+        &mut warnings,
+    );
     apply_status_style(
         &mut theme.status_modes[5],
         file.status.mode_create.as_ref(),
         theme.text,
         theme.surface_alt,
-    )?;
+        "status.mode_create",
+        &mut warnings,
+    );
     apply_status_style(
         &mut theme.status_modes[6],
         file.status.mode_confirm.as_ref(),
         theme.text,
         theme.surface_alt,
-    )?;
-    Ok(theme)
+        "status.mode_confirm",
+        &mut warnings,
+    );
+    Ok(ParsedTheme { theme, warnings })
 }

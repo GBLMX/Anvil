@@ -249,6 +249,7 @@ pub fn run_with_all_services(
         }
         model.file.dirty = true;
     }
+    report_theme_warnings(&mut model);
     let project_trusted = model
         .workspace
         .roots
@@ -375,7 +376,10 @@ pub fn run_with_all_services(
         model.poll_debug_request();
         model.poll_sticky_symbols();
         match theme::reload_custom_if_changed() {
-            Ok(true) => model.file.dirty = true,
+            Ok(true) => {
+                model.file.dirty = true;
+                report_theme_warnings(&mut model);
+            }
             Ok(false) => {}
             Err(error) => {
                 model.status.text = format!("E: theme reload: {error}");
@@ -517,6 +521,24 @@ impl Drop for Model {
     }
 }
 
+fn report_theme_warnings(model: &mut Model) {
+    let warnings = theme::custom_theme_warnings();
+    let Some(first) = warnings.first() else {
+        return;
+    };
+    let message = if warnings.len() > 1 {
+        format!("W: themes: {first} (+{} more)", warnings.len() - 1)
+    } else {
+        format!("W: themes: {first}")
+    };
+    if model.status.text.is_empty() {
+        model.status.text = message;
+    } else {
+        model.status.text.push_str(" | ");
+        model.status.text.push_str(&message);
+    }
+    model.file.dirty = true;
+}
 fn control_enabled(editor_mode: bool, stdin: bool) -> bool {
     !editor_mode && !stdin
 }

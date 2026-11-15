@@ -50,7 +50,16 @@ impl Model {
         }
         self.overlays.theme_browser = Some(ThemeBrowser::new());
         self.push_overlay(OverlayKind::ThemeBrowser);
-        self.status.text = "themes · Enter apply · Esc cancel".to_owned();
+        let warnings = theme::custom_theme_warnings();
+        self.status.text = if warnings.is_empty() {
+            "themes · Enter apply · Esc cancel".to_owned()
+        } else {
+            format!(
+                "themes · {} warning(s) · {} · Enter apply · Esc cancel",
+                warnings.len(),
+                warnings[0]
+            )
+        };
         self.file.dirty = true;
     }
 
