@@ -2,44 +2,25 @@
 
 use super::*;
 
-pub(crate) use anvil_session::recents::{Recents, load, push_recent, save};
+pub(crate) use anvil_session::recents::{Recents, load};
 
 impl Model {
     pub(crate) fn install_recents(&mut self, recents: Recents) {
-        self.recent.workspaces = recents.workspaces;
-        self.recent.files = recents.files;
+        self.recent.install(recents);
     }
 
     pub(crate) fn record_recent_workspace(&mut self, workspace: &Path) {
-        push_recent(&mut self.recent.workspaces, workspace);
-        self.save_recents();
+        self.recent.record_workspace(workspace);
+        self.recent.save();
     }
 
     pub(crate) fn record_recent_file(&mut self, path: &Path) {
-        push_recent(&mut self.recent.files, path);
-        self.save_recents();
-    }
-
-    fn save_recents(&self) {
-        if !self.recent.persist {
-            return;
-        }
-        let recents = Recents::new(self.recent.workspaces.clone(), self.recent.files.clone());
-        let _ = save(&recents);
+        self.recent.record_file(path);
+        self.recent.save();
     }
 
     pub(crate) fn openable_recent_files(&self) -> Vec<PathBuf> {
-        self.recent
-            .files
-            .iter()
-            .filter(|path| {
-                self.workspace
-                    .roots
-                    .owning_root(path)
-                    .is_some_and(|root| root.trusted)
-            })
-            .cloned()
-            .collect()
+        self.recent.openable_files(&self.workspace.roots)
     }
 
     pub(crate) fn open_recent_files(&mut self) {

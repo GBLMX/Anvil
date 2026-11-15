@@ -897,6 +897,37 @@ pub(crate) struct RecentState {
     pub(crate) persist: bool,
 }
 
+impl RecentState {
+    pub(crate) fn install(&mut self, recents: Recents) {
+        self.workspaces = recents.workspaces;
+        self.files = recents.files;
+    }
+
+    pub(crate) fn record_workspace(&mut self, path: &Path) {
+        recents::push_recent(&mut self.workspaces, path);
+    }
+
+    pub(crate) fn record_file(&mut self, path: &Path) {
+        recents::push_recent(&mut self.files, path);
+    }
+
+    pub(crate) fn save(&self) {
+        if !self.persist {
+            return;
+        }
+        let recents = Recents::new(self.workspaces.clone(), self.files.clone());
+        let _ = recents::save(&recents);
+    }
+
+    pub(crate) fn openable_files(&self, roots: &workspace_roots::WorkspaceRoots) -> Vec<PathBuf> {
+        self.files
+            .iter()
+            .filter(|path| roots.owning_root(path).is_some_and(|root| root.trusted))
+            .cloned()
+            .collect()
+    }
+}
+
 #[derive(Default)]
 pub(crate) struct TreeState {
     /// Flattened workspace tree, when open.
