@@ -135,12 +135,18 @@ Make sure `$HOME/.local/bin` is on `PATH`:
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
+
 ## Verify
 
 ```bash
 anvil --version
 anvil --help
+anvil doctor
 ```
+
+`anvil doctor` checks the complete release layout, locale, terminal color
+capabilities, runtime/config paths, Landlock, and language servers on `PATH`.
+Use `anvil doctor --json` for machine-readable output.
 
 Open a workspace:
 

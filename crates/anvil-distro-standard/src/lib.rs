@@ -1,6 +1,9 @@
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 use std::{
     env,
     ffi::OsString,
+    fs,
     path::{Path, PathBuf},
     process,
 };
@@ -10,6 +13,7 @@ anvil — a terminal editor with a selection-first Rust kernel
 
 Usage:
   anvil [OPTIONS] [FILE|-]
+  anvil doctor [--json] Run installation and terminal diagnostics
 
 Options:
   -w, --workspace <DIR>  Workspace directory; --workspace=DIR is also accepted
@@ -130,6 +134,9 @@ enum Command {
         truecolor: Option<bool>,
     },
     Help,
+    Doctor {
+        json: bool,
+    },
     Version,
 }
 
@@ -305,6 +312,7 @@ where
             println!("{} {}", distribution.name, env!("CARGO_PKG_VERSION"));
             Ok(0)
         }
+        Ok(Command::Doctor { json }) => run_doctor(distribution, json),
         Ok(Command::Run {
             workspace,
             path,
@@ -342,6 +350,440 @@ where
         }
         Err(error) => Err(RunError::Args(error)),
     }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum DoctorLevel {
+    Ok,
+    Warn,
+    Error,
+}
+
+impl DoctorLevel {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Ok => "ok",
+            Self::Warn => "warn",
+            Self::Error => "error",
+        }
+    }
+}
+
+struct DoctorCheck {
+    name: &'static str,
+    level: DoctorLevel,
+    detail: String,
+}
+
+fn run_doctor(distribution: &Distribution, json: bool) -> Result<i32, RunError> {
+    let checks = doctor_checks();
+    let errors = checks
+        .iter()
+        .filter(|check| check.level == DoctorLevel::Error)
+        .count();
+    if json {
+        println!("{}", doctor_json(distribution, &checks, errors == 0));
+    } else {
+        println!("{} doctor", distribution.name);
+        for check in &checks {
+            println!(
+                "{:<5} {:<14} {}",
+                check.level.as_str(),
+                check.name,
+                check.detail
+            );
+        }
+        println!();
+        if errors > 0 {
+            println!("{errors} error(s); fix the failing checks before using Anvil.");
+        } else {
+            println!("installation checks passed.");
+        }
+    }
+    Ok(if errors > 0 { 1 } else { 0 })
+}
+
+fn doctor_checks() -> Vec<DoctorCheck> {
+    let mut checks = vec![
+        check_workspace(),
+        check_gateway(),
+        check_companion("anvil-exec-runner", true),
+        check_companion("anvil-plugin-host", true),
+        check_companion("anvil-ctl", false),
+        check_companion("anvil-mcp", false),
+        check_locale(),
+        check_colors(),
+        check_runtime_dir(),
+        check_config(),
+        check_landlock(),
+        check_lsp(),
+    ];
+    checks.shrink_to_fit();
+    checks
+}
+
+fn check(name: &'static str, level: DoctorLevel, detail: impl Into<String>) -> DoctorCheck {
+    DoctorCheck {
+        name,
+        level,
+        detail: detail.into(),
+    }
+}
+
+fn check_workspace() -> DoctorCheck {
+    match env::current_dir() {
+        Ok(path) if path.is_dir() => {
+            check("workspace", DoctorLevel::Ok, path.display().to_string())
+        }
+        Ok(path) => check(
+            "workspace",
+            DoctorLevel::Error,
+            format!("not a directory: {}", path.display()),
+        ),
+        Err(error) => check("workspace", DoctorLevel::Error, error.to_string()),
+    }
+}
+
+fn sibling_binary(name: &str) -> Result<PathBuf, String> {
+    let executable = env::current_exe().map_err(|error| error.to_string())?;
+    let directory = executable
+        .parent()
+        .ok_or_else(|| "cannot determine executable directory".to_owned())?;
+    Ok(directory.join(name))
+}
+
+fn check_gateway() -> DoctorCheck {
+    let path = env::var_os("ANVIL_GATEWAY")
+        .map(PathBuf::from)
+        .or_else(|| sibling_binary("anvil-gateway").ok());
+    match path {
+        Some(path) => check_binary(
+            "gateway",
+            &path,
+            true,
+            "install it beside anvil or set ANVIL_GATEWAY",
+        ),
+        None => check(
+            "gateway",
+            DoctorLevel::Error,
+            "cannot locate anvil-gateway; set ANVIL_GATEWAY",
+        ),
+    }
+}
+
+fn check_companion(name: &'static str, required: bool) -> DoctorCheck {
+    match sibling_binary(name) {
+        Ok(path) => check_binary(
+            name,
+            &path,
+            required,
+            "install the complete Anvil release layout",
+        ),
+        Err(error) => check(
+            name,
+            if required {
+                DoctorLevel::Error
+            } else {
+                DoctorLevel::Warn
+            },
+            error,
+        ),
+    }
+}
+
+fn check_binary(name: &'static str, path: &Path, required: bool, hint: &str) -> DoctorCheck {
+    if path.is_file() && is_executable(path) {
+        return check(name, DoctorLevel::Ok, path.display().to_string());
+    }
+    let level = if required {
+        DoctorLevel::Error
+    } else {
+        DoctorLevel::Warn
+    };
+    check(
+        name,
+        level,
+        format!("missing or not executable: {}; {hint}", path.display()),
+    )
+}
+
+#[cfg(unix)]
+fn is_executable(path: &Path) -> bool {
+    fs::metadata(path)
+        .map(|metadata| metadata.permissions().mode() & 0o111 != 0)
+        .unwrap_or(false)
+}
+
+#[cfg(not(unix))]
+fn is_executable(path: &Path) -> bool {
+    path.is_file()
+}
+
+fn nonempty_env(name: &str) -> Option<String> {
+    env::var(name).ok().filter(|value| !value.is_empty())
+}
+
+fn check_locale() -> DoctorCheck {
+    let Some(locale) = ["LC_ALL", "LC_CTYPE", "LANG"]
+        .into_iter()
+        .find_map(nonempty_env)
+    else {
+        return check(
+            "locale",
+            DoctorLevel::Warn,
+            "LC_ALL/LC_CTYPE/LANG is unset; use a UTF-8 locale",
+        );
+    };
+    let lower = locale.to_ascii_lowercase();
+    if lower.contains("utf-8") || lower.contains("utf8") {
+        check("locale", DoctorLevel::Ok, locale)
+    } else {
+        check(
+            "locale",
+            DoctorLevel::Warn,
+            format!("{locale} is not UTF-8; text width may be wrong"),
+        )
+    }
+}
+
+fn check_colors() -> DoctorCheck {
+    let forced = env::var("ANVIL_TRUECOLOR").ok();
+    match forced.as_deref() {
+        Some("0") => return check("truecolor", DoctorLevel::Ok, "forced 256-color"),
+        Some("1") => return check("truecolor", DoctorLevel::Ok, "forced 24-bit"),
+        _ => {}
+    }
+    let colorterm = env::var("COLORTERM")
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    let term = env::var("TERM").unwrap_or_default().to_ascii_lowercase();
+    if term == "dumb" {
+        return check(
+            "truecolor",
+            DoctorLevel::Warn,
+            "TERM=dumb; a full-screen TUI needs a real terminal",
+        );
+    }
+    if colorterm.contains("truecolor")
+        || colorterm.contains("24bit")
+        || term.contains("direct")
+        || term.contains("truecolor")
+    {
+        check(
+            "truecolor",
+            DoctorLevel::Ok,
+            format!("detected; COLORTERM={colorterm:?} TERM={term:?}"),
+        )
+    } else {
+        check(
+            "truecolor",
+            DoctorLevel::Warn,
+            "not detected; using 256 colors (set ANVIL_TRUECOLOR=1 to force 24-bit)",
+        )
+    }
+}
+
+fn check_runtime_dir() -> DoctorCheck {
+    if let Some(runtime) = nonempty_env("XDG_RUNTIME_DIR") {
+        let path = PathBuf::from(runtime).join("anvil");
+        if path.exists() && !path.is_dir() {
+            return check(
+                "runtime-dir",
+                DoctorLevel::Error,
+                format!("not a directory: {}", path.display()),
+            );
+        }
+        let level = if path.is_dir() {
+            DoctorLevel::Ok
+        } else {
+            DoctorLevel::Warn
+        };
+        let state = if level == DoctorLevel::Ok {
+            "exists"
+        } else {
+            "will be created"
+        };
+        return check(
+            "runtime-dir",
+            level,
+            format!("{} ({state})", path.display()),
+        );
+    }
+    let Some(home) = nonempty_env("HOME") else {
+        return check(
+            "runtime-dir",
+            DoctorLevel::Error,
+            "XDG_RUNTIME_DIR is unset and HOME is unavailable",
+        );
+    };
+    let path = PathBuf::from(home).join(".local/state/anvil/runtime/anvil");
+    check(
+        "runtime-dir",
+        DoctorLevel::Warn,
+        format!("XDG_RUNTIME_DIR is unset; fallback {}", path.display()),
+    )
+}
+
+fn config_path() -> Option<PathBuf> {
+    if let Some(path) = nonempty_env("ANVIL_SETTINGS") {
+        return Some(PathBuf::from(path));
+    }
+    if let Some(config) = nonempty_env("XDG_CONFIG_HOME") {
+        return Some(PathBuf::from(config).join("anvil/settings.toml"));
+    }
+    nonempty_env("HOME").map(|home| PathBuf::from(home).join(".config/anvil/settings.toml"))
+}
+
+fn check_config() -> DoctorCheck {
+    let Some(path) = config_path() else {
+        return check(
+            "config",
+            DoctorLevel::Error,
+            "cannot resolve ANVIL_SETTINGS, XDG_CONFIG_HOME, or HOME",
+        );
+    };
+    if path.is_file() {
+        check("config", DoctorLevel::Ok, path.display().to_string())
+    } else if nonempty_env("ANVIL_SETTINGS").is_some() {
+        check(
+            "config",
+            DoctorLevel::Error,
+            format!("ANVIL_SETTINGS does not exist: {}", path.display()),
+        )
+    } else {
+        check(
+            "config",
+            DoctorLevel::Warn,
+            format!("not found; defaults will be used ({})", path.display()),
+        )
+    }
+}
+
+fn check_landlock() -> DoctorCheck {
+    #[cfg(target_os = "linux")]
+    {
+        match fs::read_to_string("/sys/kernel/security/lsm") {
+            Ok(lsm) if lsm.contains("landlock") => {
+                check("landlock", DoctorLevel::Ok, "Landlock is active")
+            }
+            Ok(_) => check(
+                "landlock",
+                DoctorLevel::Warn,
+                "Landlock is unavailable; seccomp remains the fallback",
+            ),
+            Err(error) => check(
+                "landlock",
+                DoctorLevel::Warn,
+                format!("cannot inspect LSMs: {error}"),
+            ),
+        }
+    }
+    #[cfg(not(target_os = "linux"))]
+    check(
+        "landlock",
+        DoctorLevel::Warn,
+        "Anvil is Linux-first; sandbox checks are unavailable",
+    )
+}
+
+const LSP_TOOLS: &[&str] = &[
+    "rust-analyzer",
+    "gopls",
+    "pyright",
+    "pylsp",
+    "typescript-language-server",
+    "vtsls",
+    "clangd",
+    "jdtls",
+    "lua-language-server",
+    "vscode-json-language-server",
+    "yaml-language-server",
+    "bash-language-server",
+    "marksman",
+    "taplo",
+    "vscode-html-language-server",
+    "vscode-css-language-server",
+    "zls",
+];
+
+fn check_lsp() -> DoctorCheck {
+    let Some(path) = env::var_os("PATH") else {
+        return check(
+            "lsp",
+            DoctorLevel::Warn,
+            "PATH is unset; no language servers can be discovered",
+        );
+    };
+    let mut found = Vec::new();
+    for directory in env::split_paths(&path) {
+        for tool in LSP_TOOLS {
+            let candidate = directory.join(tool);
+            if candidate.is_file() && is_executable(&candidate) && !found.contains(tool) {
+                found.push(*tool);
+            }
+        }
+    }
+    if found.is_empty() {
+        check(
+            "lsp",
+            DoctorLevel::Warn,
+            format!(
+                "no supported language server found on PATH ({} candidates; install the ones you use)",
+                LSP_TOOLS.len()
+            ),
+        )
+    } else {
+        let missing = LSP_TOOLS.len().saturating_sub(found.len());
+        check(
+            "lsp",
+            DoctorLevel::Ok,
+            format!(
+                "found {} server(s): {}; {missing} optional server(s) missing",
+                found.len(),
+                found.join(", ")
+            ),
+        )
+    }
+}
+
+fn doctor_json(distribution: &Distribution, checks: &[DoctorCheck], ok: bool) -> String {
+    let mut out = String::from("{\"distribution\":\"");
+    out.push_str(&json_escape(distribution.name));
+    out.push_str("\",\"ok\":");
+    out.push_str(if ok { "true" } else { "false" });
+    out.push_str(",\"checks\":[");
+    for (index, check) in checks.iter().enumerate() {
+        if index > 0 {
+            out.push(',');
+        }
+        out.push_str("{\"name\":\"");
+        out.push_str(&json_escape(check.name));
+        out.push_str("\",\"status\":\"");
+        out.push_str(check.level.as_str());
+        out.push_str("\",\"detail\":\"");
+        out.push_str(&json_escape(&check.detail));
+        out.push_str("\"}");
+    }
+    out.push_str("]}");
+    out
+}
+
+fn json_escape(value: &str) -> String {
+    let mut out = String::with_capacity(value.len());
+    for character in value.chars() {
+        match character {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            character if character.is_control() => {
+                out.push_str(&format!("\\u{:04x}", character as u32));
+            }
+            character => out.push(character),
+        }
+    }
+    out
 }
 
 fn forward_to_running(
@@ -410,7 +852,14 @@ fn parse_args<I>(arguments: I) -> Result<Command, String>
 where
     I: IntoIterator<Item = OsString>,
 {
-    let mut arguments = arguments.into_iter();
+    let mut arguments = arguments.into_iter().peekable();
+    if arguments
+        .peek()
+        .is_some_and(|argument| argument == "doctor")
+    {
+        arguments.next();
+        return parse_doctor_args(arguments);
+    }
     let mut workspace = None;
     let mut path = None;
     let mut editor = false;
@@ -504,6 +953,26 @@ where
         read_only,
         truecolor,
     })
+}
+
+fn parse_doctor_args<I>(arguments: I) -> Result<Command, String>
+where
+    I: Iterator<Item = OsString>,
+{
+    let mut json = false;
+    for argument in arguments {
+        match argument.to_str() {
+            Some("--json") => json = true,
+            Some("-h" | "--help") => return Ok(Command::Help),
+            _ => {
+                return Err(format!(
+                    "unknown doctor option: {}",
+                    argument.to_string_lossy()
+                ));
+            }
+        }
+    }
+    Ok(Command::Doctor { json })
 }
 
 fn workspace_for_path(path: Option<&Path>) -> Result<PathBuf, String> {
@@ -929,5 +1398,32 @@ mod tests {
         assert!(compose_workspace_index(&FULL).expect("index").is_some());
         assert!(compose_desktop(&FULL).expect("desktop").is_some());
         assert!(compose_language_tooling(&FULL).expect("language").is_some());
+    }
+
+    #[test]
+    fn parses_doctor_and_json_flag() {
+        assert_eq!(
+            parse_args(args(&["doctor"])).unwrap(),
+            Command::Doctor { json: false }
+        );
+        assert_eq!(
+            parse_args(args(&["doctor", "--json"])).unwrap(),
+            Command::Doctor { json: true }
+        );
+        assert!(parse_args(args(&["doctor", "--wat"])).is_err());
+        assert_eq!(
+            parse_args(args(&["doctor", "--help"])).unwrap(),
+            Command::Help
+        );
+    }
+
+    #[test]
+    fn doctor_json_escapes_details() {
+        assert_eq!(json_escape("a\"b\nc"), "a\\\"b\\nc");
+        let checks = vec![check("gateway", DoctorLevel::Error, "missing \"gateway\"")];
+        let output = doctor_json(&STANDARD, &checks, false);
+        assert!(output.contains("\"distribution\":\"anvil\""));
+        assert!(output.contains("\"ok\":false"));
+        assert!(output.contains("\"detail\":\"missing \\\"gateway\\\"\""));
     }
 }
