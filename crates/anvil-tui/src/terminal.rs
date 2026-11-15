@@ -376,7 +376,6 @@ pub fn run_with_all_services(
         model.poll_pkg_notifications();
         model.poll_syntax();
         model.poll_lsp();
-        model.poll_lsp_retry();
         model.poll_file_worker();
         model.poll_task();
         #[cfg(unix)]

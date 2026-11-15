@@ -1,6 +1,7 @@
 //! LSP worker lifecycle, event polling, and diagnostic helpers.
 
 use super::*;
+use crate::state::LspPollEffect;
 use anvil_session::plugin_events::{DiagnosticsChanged, PluginEvent};
 
 fn truncate_event_text(text: &str, max: usize) -> String {
@@ -519,31 +520,16 @@ impl Model {
     }
 
     pub(crate) fn poll_lsp(&mut self) {
-        let keys: Vec<(String, String)> = self.language.lsp.workers.keys().cloned().collect();
-        for key in keys {
-            let events = self
-                .language
-                .lsp
-                .workers
-                .get(&key)
-                .map(LspWorker::poll)
-                .unwrap_or_default();
-            for event in events {
-                self.handle_lsp_event(&key, event);
+        let effects = self.language.poll(Instant::now());
+        for effect in effects {
+            match effect {
+                LspPollEffect::Event { key, event } => self.handle_lsp_event(&key, event),
+                LspPollEffect::Retry { key } => {
+                    if !self.language.lsp.workers.contains_key(&key) {
+                        self.start_lsp();
+                    }
+                }
             }
-        }
-    }
-
-    pub(crate) fn poll_lsp_retry(&mut self) {
-        let Some((key, deadline)) = self.language.lsp.retry.clone() else {
-            return;
-        };
-        if Instant::now() < deadline {
-            return;
-        }
-        self.language.lsp.retry = None;
-        if !self.language.lsp.workers.contains_key(&key) {
-            self.start_lsp();
         }
     }
 

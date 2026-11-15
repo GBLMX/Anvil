@@ -1000,6 +1000,44 @@ pub(crate) struct LanguageState {
     pub(crate) lsp: LspTransportState,
     pub(crate) lsp_requests: LspRequestsState,
 }
+pub(crate) enum LspPollEffect {
+    Event {
+        key: (String, String),
+        event: lsp::LspEvent,
+    },
+    Retry {
+        key: (String, String),
+    },
+}
+
+impl LanguageState {
+    /// Polls LSP workers and the retry deadline, returning effects for Model.
+    pub(crate) fn poll(&mut self, now: Instant) -> Vec<LspPollEffect> {
+        let keys: Vec<(String, String)> = self.lsp.workers.keys().cloned().collect();
+        let mut effects = Vec::with_capacity(keys.len() + 1);
+        for key in keys {
+            let events = self
+                .lsp
+                .workers
+                .get(&key)
+                .map(lsp::LspWorker::poll)
+                .unwrap_or_default();
+            effects.extend(events.into_iter().map(|event| LspPollEffect::Event {
+                key: key.clone(),
+                event,
+            }));
+        }
+        if let Some((key, deadline)) = self.lsp.retry.clone()
+            && now >= deadline
+        {
+            self.lsp.retry = None;
+            if !self.lsp.workers.contains_key(&key) {
+                effects.push(LspPollEffect::Retry { key });
+            }
+        }
+        effects
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum OverlayKind {
