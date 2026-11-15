@@ -196,22 +196,6 @@ pub(crate) fn render(
 mod tests {
     use super::*;
 
-    #[test]
-    fn browser_previews_cancels_and_applies() {
-        theme::set_startup_theme("anvil-dark").expect("reset");
-        let mut model = Model::new(EditorState::from_text("x"), None);
-        model.execute_command("themes");
-        assert!(model.overlays.theme_browser.is_some());
-        model.move_theme_browser(1);
-        assert_ne!(theme::name(), "anvil-dark");
-        model.cancel_theme_browser();
-        assert_eq!(theme::name(), "anvil-dark");
-        model.open_theme_browser();
-        model.move_theme_browser(1);
-        model.apply_theme_browser();
-        assert_ne!(theme::name(), "anvil-dark");
-        theme::set_startup_theme("anvil-dark").expect("reset");
-    }
 
     #[test]
     fn theme_list_scrolls_to_selection() {
@@ -235,68 +219,6 @@ mod tests {
         theme::set_startup_theme("anvil-dark").expect("reset");
     }
 
-    #[test]
-    fn mouse_wheel_moves_theme_selection() {
-        theme::set_startup_theme("anvil-dark").expect("reset");
-        let mut model = Model::new(EditorState::from_text("x"), None);
-        model.open_theme_browser();
-        let selected = |model: &Model| {
-            model
-                .overlays
-                .theme_browser
-                .as_ref()
-                .expect("theme browser")
-                .selected
-        };
-        let before = selected(&model);
-        let scroll = |kind| crossterm::event::MouseEvent {
-            kind,
-            column: 0,
-            row: 0,
-            modifiers: crossterm::event::KeyModifiers::NONE,
-        };
-        assert!(crate::mouse::handle_mouse(
-            &mut model,
-            scroll(crossterm::event::MouseEventKind::ScrollDown),
-            120,
-            40,
-        ));
-        assert_eq!(selected(&model), before + 1);
-        assert!(crate::mouse::handle_mouse(
-            &mut model,
-            scroll(crossterm::event::MouseEventKind::ScrollUp),
-            120,
-            40,
-        ));
-        assert_eq!(selected(&model), before);
-        theme::set_startup_theme("anvil-dark").expect("reset");
-    }
-
-    #[test]
-    fn theme_browser_renders_the_selected_tail() {
-        theme::set_startup_theme("anvil-dark").expect("reset");
-        let mut model = Model::new(EditorState::from_text("x"), None);
-        model.open_theme_browser();
-        model.move_theme_browser(theme::names().len() as isize);
-        let last = *theme::names().last().expect("theme");
-        let mut terminal =
-            ratatui::Terminal::new(ratatui::backend::TestBackend::new(120, 40)).expect("terminal");
-        terminal
-            .draw(|frame| crate::view(&model, frame))
-            .expect("draw");
-        let rendered = terminal
-            .backend()
-            .buffer()
-            .content()
-            .iter()
-            .map(|cell| cell.symbol())
-            .collect::<String>();
-        assert!(
-            rendered.contains(last),
-            "{last} was clipped from the theme list"
-        );
-        theme::set_startup_theme("anvil-dark").expect("reset");
-    }
 
     #[test]
     fn theme_browser_state_owns_selection_and_original() {

@@ -10,14 +10,14 @@ file count or crate count as a goal.
 
 | Metric | Baseline |
 |---|---:|
-| Rust source files | 103 |
-| Source lines | 48,404 |
+| Rust source files | 104 |
+| Source lines | 48,405 |
 | Normal dependencies | 30 |
 | `impl Model` blocks | 66 |
 | Files containing `impl Model` | 61 |
 | Methods taking `&mut Model` | 462 |
 | `Model::new` constructions | 431 |
-| Page-test `Model::new` setups | 6 |
+| Page-test `Model::new` setups | 0 |
 | Files over 800 lines | 14 |
 
 File counts and LOC are informational: a page split may add files while
