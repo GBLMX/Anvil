@@ -617,7 +617,7 @@ fn character_selection_renders_background_and_cursor_block() {
 fn completion_popup_shows_kind_docs_and_footer() {
     let mut model = Model::new(EditorState::from_text("pr"), None);
     model.start_page.welcome = false;
-    model.overlays.lsp_results.completion = Some(crate::state::CompletionState {
+    model.language.completion.completion = Some(crate::state::CompletionState {
         items: vec![crate::state::CompletionItem {
             source: anvil_session::provider::ProviderId::new("builtin.lsp"),
             label: "println".to_owned(),
@@ -694,7 +694,7 @@ fn completion_popup_scrolls_to_selected_item() {
     let filtered = (0..items.len()).collect();
     let mut model = Model::new(EditorState::from_text("it"), None);
     model.start_page.welcome = false;
-    model.overlays.lsp_results.completion = Some(crate::state::CompletionState {
+    model.language.completion.completion = Some(crate::state::CompletionState {
         items,
         filtered,
         query: "it".to_owned(),
@@ -1107,7 +1107,7 @@ fn command_palette_renders_title_detail_and_footer() {
 fn completion_popup_shows_auto_import_panel() {
     let mut model = Model::new(EditorState::from_text("Pro"), None);
     model.start_page.welcome = false;
-    model.overlays.lsp_results.completion = Some(crate::state::CompletionState {
+    model.language.completion.completion = Some(crate::state::CompletionState {
         items: vec![crate::state::CompletionItem {
             source: anvil_session::provider::ProviderId::new("builtin.lsp"),
             label: "Protocol".to_owned(),

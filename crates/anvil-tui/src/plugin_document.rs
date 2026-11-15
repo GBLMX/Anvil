@@ -587,8 +587,8 @@ mod tests {
             }],
         );
         let completion = model
-            .overlays
-            .lsp_results
+            .language
+            .completion
             .completion
             .as_ref()
             .expect("completion");

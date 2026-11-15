@@ -674,7 +674,7 @@ pub(crate) fn render_overlays(model: &Model, frame: &mut Frame, area: Rect) {
             popup,
         );
     }
-    if let Some(completion) = &model.overlays.lsp_results.completion {
+    if let Some(completion) = &model.language.completion.completion {
         let selected_item = completion
             .filtered
             .get(completion.selected)

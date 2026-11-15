@@ -50,20 +50,20 @@ impl Model {
         }
         let selections = self.session.editor.selection_bytes();
         let mirror_edit = self
-            .overlays
-            .lsp_results
+            .language
+            .completion
             .snippet
             .as_ref()
             .is_some_and(|snippet| snippet.matches_ranges(&selections));
-        if self.overlays.lsp_results.snippet.is_some() {
+        if self.language.completion.snippet.is_some() {
             if selections.len() > 1 && !mirror_edit {
-                self.overlays.lsp_results.snippet = None;
+                self.language.completion.snippet = None;
             } else if selections.len() == 1
                 && let Some((anchor, head)) = selections.first().copied()
             {
                 let start = anchor.min(head);
                 let end = anchor.max(head);
-                if let Some(snippet) = self.overlays.lsp_results.snippet.as_mut() {
+                if let Some(snippet) = self.language.completion.snippet.as_mut() {
                     snippet.adjust_delete(start, end);
                     snippet.adjust_insert(start, text.len());
                 }
@@ -80,7 +80,7 @@ impl Model {
                         .iter()
                         .map(|(start, _)| start.saturating_add(text.len()))
                         .collect::<Vec<_>>();
-                    if let Some(snippet) = self.overlays.lsp_results.snippet.as_mut() {
+                    if let Some(snippet) = self.language.completion.snippet.as_mut() {
                         snippet.replace_current_with_carets(&old_selections, &carets);
                     }
                     let _ = self.session.editor.try_set_selections_bytes(
@@ -471,7 +471,7 @@ impl Model {
         if start == self.session.cursor {
             return;
         }
-        if let Some(snippet) = self.overlays.lsp_results.snippet.as_mut() {
+        if let Some(snippet) = self.language.completion.snippet.as_mut() {
             snippet.adjust_delete(start, self.session.cursor);
         }
         let _ = self
@@ -502,7 +502,7 @@ impl Model {
         if end == self.session.cursor {
             return;
         }
-        if let Some(snippet) = self.overlays.lsp_results.snippet.as_mut() {
+        if let Some(snippet) = self.language.completion.snippet.as_mut() {
             snippet.adjust_delete(self.session.cursor, end);
         }
         let _ = self
@@ -520,20 +520,20 @@ impl Model {
             return false;
         }
         let mirror_delete = self
-            .overlays
-            .lsp_results
+            .language
+            .completion
             .snippet
             .as_ref()
             .is_some_and(|snippet| snippet.matches_ranges(&selections));
-        if self.overlays.lsp_results.snippet.is_some() {
+        if self.language.completion.snippet.is_some() {
             if selections.len() > 1 && !mirror_delete {
-                self.overlays.lsp_results.snippet = None;
+                self.language.completion.snippet = None;
             } else if selections.len() == 1
                 && let Some((anchor, head)) = selections.first().copied()
             {
                 let start = anchor.min(head);
                 let end = anchor.max(head);
-                if let Some(snippet) = self.overlays.lsp_results.snippet.as_mut() {
+                if let Some(snippet) = self.language.completion.snippet.as_mut() {
                     snippet.adjust_delete(start, end);
                 }
             }
@@ -571,7 +571,7 @@ impl Model {
                 .iter()
                 .map(|(start, _)| *start)
                 .collect::<Vec<_>>();
-            if let Some(snippet) = self.overlays.lsp_results.snippet.as_mut() {
+            if let Some(snippet) = self.language.completion.snippet.as_mut() {
                 snippet.replace_current_with_carets(&old_selections, &carets);
             }
             let _ = self

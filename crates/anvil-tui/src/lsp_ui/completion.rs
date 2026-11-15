@@ -8,8 +8,8 @@ impl Model {
                 LspRequestKind::Completion | LspRequestKind::CompletionResolve
             )
         });
-        self.overlays.lsp_results.completion = None;
-        self.overlays.lsp_results.completion_resolve = None;
+        self.language.completion.completion = None;
+        self.language.completion.resolve = None;
         self.close_overlay(OverlayKind::Completion);
     }
     pub(crate) fn auto_completion(&mut self) {
@@ -55,7 +55,7 @@ impl Model {
         self.file.dirty = true;
     }
     pub(crate) fn request_completion_resolve(&mut self) {
-        let Some(completion) = self.overlays.lsp_results.completion.as_ref() else {
+        let Some(completion) = self.language.completion.completion.as_ref() else {
             return;
         };
         let Some(index) = completion.filtered.get(completion.selected).copied() else {
@@ -69,9 +69,9 @@ impl Model {
         }
         if item.resolved
             || self
-                .overlays
-                .lsp_results
-                .completion_resolve
+                .language
+                .completion
+                .resolve
                 .is_some_and(|(_, pending)| pending == index)
         {
             return;
@@ -83,11 +83,11 @@ impl Model {
             "completionItem/resolve",
             raw,
         ) {
-            self.overlays.lsp_results.completion_resolve = Some((id, index));
+            self.language.completion.resolve = Some((id, index));
         }
     }
     pub(crate) fn apply_completion(&mut self) {
-        let Some(completion) = self.overlays.lsp_results.completion.take() else {
+        let Some(completion) = self.language.completion.completion.take() else {
             return;
         };
         self.close_overlay(OverlayKind::Completion);
@@ -104,7 +104,7 @@ impl Model {
         let replace = item.replace;
         let replace_bytes = item.replace_bytes;
         let mut snippet = item.snippet.clone();
-        self.overlays.lsp_results.snippet = None;
+        self.language.completion.snippet = None;
         if let Some((start, end)) = replace_bytes {
             let end = end.max(start);
             if !self.apply_completion_transaction(start, end, &insert) {
@@ -204,7 +204,7 @@ impl Model {
             if !self.apply_completion_transaction(start, end, &text) {
                 return false;
             }
-            if let Some(snippet) = self.overlays.lsp_results.snippet.as_mut() {
+            if let Some(snippet) = self.language.completion.snippet.as_mut() {
                 snippet.adjust_delete(start, end);
                 snippet.adjust_insert(start, text.len());
             }
@@ -219,19 +219,19 @@ impl Model {
         true
     }
     fn start_snippet(&mut self, snippet: &Snippet, base: usize) {
-        self.overlays.lsp_results.snippet = SnippetSession::new(snippet.offset_stops(base));
+        self.language.completion.snippet = SnippetSession::new(snippet.offset_stops(base));
         self.goto_snippet_stop();
     }
     fn goto_snippet_stop(&mut self) {
         let ranges = self
-            .overlays
-            .lsp_results
+            .language
+            .completion
             .snippet
             .as_ref()
             .map(SnippetSession::mirror_ranges)
             .unwrap_or_default();
         let Some((start, _)) = ranges.first().copied() else {
-            self.overlays.lsp_results.snippet = None;
+            self.language.completion.snippet = None;
             return;
         };
         let mirrors = ranges.len();
@@ -250,12 +250,12 @@ impl Model {
         }
     }
     pub(crate) fn next_snippet_stop(&mut self) -> bool {
-        let Some(mut session) = self.overlays.lsp_results.snippet.take() else {
+        let Some(mut session) = self.language.completion.snippet.take() else {
             return false;
         };
         if session.next_stop().is_some() {
             let ranges = session.mirror_ranges();
-            self.overlays.lsp_results.snippet = Some(session);
+            self.language.completion.snippet = Some(session);
             self.select_snippet_groups(ranges);
             return true;
         }
@@ -269,25 +269,25 @@ impl Model {
         true
     }
     pub(crate) fn previous_snippet_stop(&mut self) -> bool {
-        let Some(mut session) = self.overlays.lsp_results.snippet.take() else {
+        let Some(mut session) = self.language.completion.snippet.take() else {
             return false;
         };
         let moved = session.previous();
         if moved.is_some() {
             let ranges = session.mirror_ranges();
-            self.overlays.lsp_results.snippet = Some(session);
+            self.language.completion.snippet = Some(session);
             self.select_snippet_groups(ranges);
         } else {
-            self.overlays.lsp_results.snippet = Some(session);
+            self.language.completion.snippet = Some(session);
         }
         true
     }
     pub(crate) fn cancel_snippet(&mut self) {
-        self.overlays.lsp_results.snippet = None;
+        self.language.completion.snippet = None;
         self.file.dirty = true;
     }
     pub(crate) fn move_completion(&mut self, delta: isize) {
-        if let Some(completion) = self.overlays.lsp_results.completion.as_mut() {
+        if let Some(completion) = self.language.completion.completion.as_mut() {
             completion.selected = completion
                 .selected
                 .saturating_add_signed(delta)
@@ -297,7 +297,7 @@ impl Model {
         self.request_completion_resolve();
     }
     pub(crate) fn filter_completion(&mut self) {
-        if let Some(completion) = self.overlays.lsp_results.completion.as_mut() {
+        if let Some(completion) = self.language.completion.completion.as_mut() {
             let query = completion.query.to_lowercase();
             let items = &completion.items;
             let mut filtered = completion

@@ -364,15 +364,15 @@ fn completion_resolve_round_trip_through_gateway() {
     loop {
         model.poll_lsp();
         let resolved = model
-            .overlays
-            .lsp_results
+            .language
+            .completion
             .completion
             .as_ref()
             .and_then(|completion| completion.filtered.get(completion.selected))
             .and_then(|index| {
                 model
-                    .overlays
-                    .lsp_results
+                    .language
+                    .completion
                     .completion
                     .as_ref()?
                     .items
@@ -469,8 +469,8 @@ fn path_completion_uses_gateway_directory_entries() {
     model.session.cursor = model.session.editor.text().len_bytes();
     model.request_completion();
     let completion = model
-        .overlays
-        .lsp_results
+        .language
+        .completion
         .completion
         .as_ref()
         .expect("completion");
@@ -481,8 +481,8 @@ fn path_completion_uses_gateway_directory_entries() {
         .expect("path item");
     assert_eq!(completion.items[index].source.as_str(), "builtin.paths");
     model
-        .overlays
-        .lsp_results
+        .language
+        .completion
         .completion
         .as_mut()
         .expect("completion")
@@ -503,8 +503,8 @@ fn buffer_words_source_populates_local_completion() {
     model.session.cursor = model.session.editor.text().len_bytes();
     model.request_completion();
     let completion = model
-        .overlays
-        .lsp_results
+        .language
+        .completion
         .completion
         .as_ref()
         .expect("completion");
@@ -518,8 +518,8 @@ fn buffer_words_source_populates_local_completion() {
         "builtin.buffer-words"
     );
     model
-        .overlays
-        .lsp_results
+        .language
+        .completion
         .completion
         .as_mut()
         .expect("completion")
@@ -555,8 +555,8 @@ fn local_and_lsp_completions_merge_without_duplicates() {
         None,
     );
     let completion = model
-        .overlays
-        .lsp_results
+        .language
+        .completion
         .completion
         .as_ref()
         .expect("completion");
@@ -584,18 +584,18 @@ fn completion_response_uses_and_closes_the_overlay_stack() {
         }),
         None,
     );
-    assert!(model.overlays.lsp_results.completion.is_some());
+    assert!(model.language.completion.completion.is_some());
     assert_eq!(model.top_overlay(), Some(OverlayKind::Completion));
 
     handle_event(&mut model, key(KeyCode::Esc));
-    assert!(model.overlays.lsp_results.completion.is_none());
+    assert!(model.language.completion.completion.is_none());
     assert!(model.overlays.stack.is_empty());
 }
 
 #[test]
 fn cancelling_completion_drops_pending_response() {
     let mut model = Model::new(EditorState::from_text("x"), None);
-    model.overlays.lsp_results.completion = Some(CompletionState {
+    model.language.completion.completion = Some(CompletionState {
         items: vec![CompletionItem {
             source: ProviderId::new("builtin.test"),
             label: "item".to_owned(),
@@ -621,10 +621,10 @@ fn cancelling_completion_drops_pending_response() {
         .pending
         .insert(9, LspRequestKind::Completion);
     model.cancel_completion();
-    assert!(model.overlays.lsp_results.completion.is_none());
+    assert!(model.language.completion.completion.is_none());
     assert!(!model.language.lsp_requests.pending.contains_key(&9));
     model.handle_lsp_response(9, serde_json::json!({"items": []}), None);
-    assert!(model.overlays.lsp_results.completion.is_none());
+    assert!(model.language.completion.completion.is_none());
     model
         .language
         .lsp_requests
@@ -633,13 +633,13 @@ fn cancelling_completion_drops_pending_response() {
     model.cancel_completion();
     assert!(!model.language.lsp_requests.pending.contains_key(&10));
     model.handle_lsp_response(10, serde_json::json!({"items": []}), None);
-    assert!(model.overlays.lsp_results.completion.is_none());
+    assert!(model.language.completion.completion.is_none());
 }
 
 #[test]
 fn completion_resolve_updates_selected_item() {
     let mut model = Model::new(EditorState::from_text("x"), None);
-    model.overlays.lsp_results.completion = Some(CompletionState {
+    model.language.completion.completion = Some(CompletionState {
         items: vec![CompletionItem {
             source: ProviderId::new("builtin.test"),
             label: "item".to_owned(),
@@ -664,7 +664,7 @@ fn completion_resolve_updates_selected_item() {
         .lsp_requests
         .pending
         .insert(7, LspRequestKind::CompletionResolve);
-    model.overlays.lsp_results.completion_resolve = Some((7, 0));
+    model.language.completion.resolve = Some((7, 0));
     model.handle_lsp_response(
         7,
         serde_json::json!({
@@ -675,8 +675,8 @@ fn completion_resolve_updates_selected_item() {
         None,
     );
     let item = &model
-        .overlays
-        .lsp_results
+        .language
+        .completion
         .completion
         .as_ref()
         .expect("completion")
@@ -684,13 +684,13 @@ fn completion_resolve_updates_selected_item() {
     assert_eq!(item.detail, "resolved detail");
     assert_eq!(item.documentation.as_deref(), Some("resolved docs"));
     assert!(item.resolved);
-    assert!(model.overlays.lsp_results.completion_resolve.is_none());
+    assert!(model.language.completion.resolve.is_none());
 }
 
 #[test]
 fn completion_documentation_is_rendered() {
     let mut model = Model::new(EditorState::from_text("x"), None);
-    model.overlays.lsp_results.completion = Some(CompletionState {
+    model.language.completion.completion = Some(CompletionState {
         items: vec![CompletionItem {
             source: ProviderId::new("builtin.test"),
             label: "item".to_owned(),
@@ -727,7 +727,7 @@ fn completion_documentation_is_rendered() {
 fn applying_snippet_selects_and_navigates_stops() {
     let mut model = Model::new(EditorState::from_text(""), None);
     let snippet = crate::snippet::parse("fn ${1:name}(${2:args}) $0").expect("snippet");
-    model.overlays.lsp_results.completion = Some(CompletionState {
+    model.language.completion.completion = Some(CompletionState {
         items: vec![CompletionItem {
             source: ProviderId::new("builtin.test"),
             label: "fn".to_owned(),
@@ -762,14 +762,14 @@ fn applying_snippet_selects_and_navigates_stops() {
     assert!(model.next_snippet_stop());
     assert_eq!(model.session.editor.selection_bytes(), vec![(14, 14)]);
     assert!(model.next_snippet_stop());
-    assert!(model.overlays.lsp_results.snippet.is_none());
+    assert!(model.language.completion.snippet.is_none());
 }
 
 #[test]
 fn mirrored_snippet_edits_apply_to_all_tabstops() {
     let mut model = Model::new(EditorState::from_text(""), None);
     let snippet = crate::snippet::parse("${1:name} + ${1:name}").expect("snippet");
-    model.overlays.lsp_results.completion = Some(CompletionState {
+    model.language.completion.completion = Some(CompletionState {
         items: vec![CompletionItem {
             source: ProviderId::new("builtin.test"),
             label: "mirror".to_owned(),
@@ -1748,8 +1748,8 @@ fn completion_uses_sort_text_preselect_and_filter_text() {
         None,
     );
     let completion = model
-        .overlays
-        .lsp_results
+        .language
+        .completion
         .completion
         .as_ref()
         .expect("completion");
@@ -1764,16 +1764,16 @@ fn completion_uses_sort_text_preselect_and_filter_text() {
     assert_eq!(completion.selected, 0);
 
     model
-        .overlays
-        .lsp_results
+        .language
+        .completion
         .completion
         .as_mut()
         .expect("completion")
         .query = "bet".to_owned();
     model.filter_completion();
     let completion = model
-        .overlays
-        .lsp_results
+        .language
+        .completion
         .completion
         .as_ref()
         .expect("completion");
@@ -1944,7 +1944,7 @@ fn completion_unknown_key_cancels_and_passes_through() {
     let mut model = Model::new(EditorState::from_text("x"), None);
     model.ui.input_mode = InputMode::Insert;
     model.session.cursor = 1;
-    model.overlays.lsp_results.completion = Some(CompletionState {
+    model.language.completion.completion = Some(CompletionState {
         items: Vec::new(),
         filtered: Vec::new(),
         query: String::new(),
@@ -1952,7 +1952,7 @@ fn completion_unknown_key_cancels_and_passes_through() {
     });
 
     handle_event(&mut model, key(KeyCode::Home));
-    assert!(model.overlays.lsp_results.completion.is_none());
+    assert!(model.language.completion.completion.is_none());
     assert_eq!(model.session.cursor, 0);
 }
 
@@ -1960,7 +1960,7 @@ fn completion_unknown_key_cancels_and_passes_through() {
 fn completion_char_and_backspace_update_buffer_and_query() {
     let mut model = Model::new(EditorState::from_text("x"), None);
     model.ui.input_mode = InputMode::Insert;
-    model.overlays.lsp_results.completion = Some(CompletionState {
+    model.language.completion.completion = Some(CompletionState {
         items: vec![CompletionItem {
             source: ProviderId::new("builtin.test"),
             label: "item".to_owned(),
@@ -1992,8 +1992,8 @@ fn completion_char_and_backspace_update_buffer_and_query() {
     );
     assert_eq!(
         model
-            .overlays
-            .lsp_results
+            .language
+            .completion
             .completion
             .as_ref()
             .expect("completion")
@@ -2012,8 +2012,8 @@ fn completion_char_and_backspace_update_buffer_and_query() {
     );
     assert!(
         model
-            .overlays
-            .lsp_results
+            .language
+            .completion
             .completion
             .as_ref()
             .expect("completion")
@@ -2022,7 +2022,7 @@ fn completion_char_and_backspace_update_buffer_and_query() {
     );
 
     handle_event(&mut model, key(KeyCode::Tab));
-    assert!(model.overlays.lsp_results.completion.is_none());
+    assert!(model.language.completion.completion.is_none());
 }
 
 #[test]
@@ -2085,7 +2085,7 @@ fn diagnostic_ranges_snap_emoji_and_drop_invalid_utf16_columns() {
 fn completion_applies_additional_import_edit() {
     let mut model = Model::new(EditorState::from_text(""), None);
     model.start_page.welcome = false;
-    model.overlays.lsp_results.completion = Some(CompletionState {
+    model.language.completion.completion = Some(CompletionState {
         items: vec![CompletionItem {
             source: ProviderId::new("builtin.lsp"),
             label: "Protocol".to_owned(),

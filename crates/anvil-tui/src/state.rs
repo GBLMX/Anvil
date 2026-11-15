@@ -491,9 +491,6 @@ impl LspRequestsState {
 
 #[derive(Default)]
 pub(crate) struct LspResultsState {
-    pub(crate) completion: Option<CompletionState>,
-    pub(crate) completion_resolve: Option<(u64, usize)>,
-    pub(crate) snippet: Option<SnippetSession>,
     pub(crate) hover: Option<String>,
     pub(crate) code_actions: Option<CodeActionState>,
     pub(crate) document_symbols: Option<SymbolState>,
@@ -994,6 +991,14 @@ pub(crate) struct InlayHintsState {
     pub(crate) support: HashMap<(String, String), bool>,
 }
 
+/// Completion popup state, pending resolve request, and active snippet session.
+#[derive(Default)]
+pub(crate) struct CompletionUiState {
+    pub(crate) completion: Option<CompletionState>,
+    pub(crate) resolve: Option<(u64, usize)>,
+    pub(crate) snippet: Option<SnippetSession>,
+}
+
 /// Semantic token legend, cached tokens, and the revision they describe.
 #[derive(Default)]
 pub(crate) struct SemanticTokensState {
@@ -1011,6 +1016,7 @@ pub(crate) struct LanguageState {
     pub(crate) semantic_tokens: SemanticTokensState,
     pub(crate) inlay_hints: InlayHintsState,
     pub(crate) code_lens: Option<code_lens::CodeLensState>,
+    pub(crate) completion: CompletionUiState,
 }
 pub(crate) enum LspPollEffect {
     Event {

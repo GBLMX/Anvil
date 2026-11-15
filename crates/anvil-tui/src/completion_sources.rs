@@ -80,7 +80,7 @@ impl Model {
         let query = completion_prefix(&text.slice(0..text.len_bytes()), self.session.cursor);
         let filtered = (0..items.len()).collect();
         let selected = items.iter().position(|item| item.preselect).unwrap_or(0);
-        self.overlays.lsp_results.completion = Some(CompletionState {
+        self.language.completion.completion = Some(CompletionState {
             items,
             filtered,
             query,

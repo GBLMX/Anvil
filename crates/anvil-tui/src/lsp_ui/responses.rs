@@ -149,7 +149,7 @@ impl Model {
                 return;
             }
             if request.kind == LspRequestKind::CompletionResolve {
-                self.overlays.lsp_results.completion_resolve = None;
+                self.language.completion.resolve = None;
             }
             if request.kind == LspRequestKind::StickySymbols {
                 self.overlays.lsp_results.sticky_pending = false;
@@ -338,8 +338,8 @@ impl Model {
             })
             .collect();
         let mut merged = self
-            .overlays
-            .lsp_results
+            .language
+            .completion
             .completion
             .take()
             .map(|completion| completion.items)
@@ -362,7 +362,7 @@ impl Model {
         items.truncate(200);
         if items.is_empty() {
             self.status.text = "lsp: no completions".to_owned();
-            self.overlays.lsp_results.completion = None;
+            self.language.completion.completion = None;
             self.close_overlay(OverlayKind::Completion);
         } else {
             let text = self.session.editor.text();
@@ -372,7 +372,7 @@ impl Model {
             );
             let filtered = (0..items.len()).collect();
             let selected = items.iter().position(|item| item.preselect).unwrap_or(0);
-            self.overlays.lsp_results.completion = Some(CompletionState {
+            self.language.completion.completion = Some(CompletionState {
                 items,
                 filtered,
                 query,
@@ -385,14 +385,14 @@ impl Model {
     }
 
     fn apply_completion_resolve_response(&mut self, id: u64, result: &serde_json::Value) {
-        let Some((pending, index)) = self.overlays.lsp_results.completion_resolve else {
+        let Some((pending, index)) = self.language.completion.resolve else {
             return;
         };
         if pending != id {
             return;
         }
-        self.overlays.lsp_results.completion_resolve = None;
-        let Some(completion) = self.overlays.lsp_results.completion.as_mut() else {
+        self.language.completion.resolve = None;
+        let Some(completion) = self.language.completion.completion.as_mut() else {
             return;
         };
         let Some(item) = completion.items.get_mut(index) else {

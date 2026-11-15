@@ -570,14 +570,14 @@ pub(super) fn execute_completion_action(model: &mut Model, action: CompletionAct
         CompletionAction::Accept => model.apply_completion(),
         CompletionAction::Cancel => model.cancel_completion(),
         CompletionAction::Backspace => {
-            if let Some(completion) = model.overlays.lsp_results.completion.as_mut() {
+            if let Some(completion) = model.language.completion.completion.as_mut() {
                 completion.query.pop();
             }
             model.backspace();
             model.filter_completion();
         }
         CompletionAction::Insert(character) => {
-            if let Some(completion) = model.overlays.lsp_results.completion.as_mut() {
+            if let Some(completion) = model.language.completion.completion.as_mut() {
                 completion.query.push(character);
             }
             model.insert_text(&character.to_string());

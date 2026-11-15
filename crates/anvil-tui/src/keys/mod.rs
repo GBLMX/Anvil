@@ -396,7 +396,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
         return;
     }
 
-    if model.overlays.lsp_results.completion.is_some() {
+    if model.language.completion.completion.is_some() {
         let action = completion_action(key, text_input);
         if execute_completion_action(model, action) {
             return;
