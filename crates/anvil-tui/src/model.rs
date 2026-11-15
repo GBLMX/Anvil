@@ -114,6 +114,12 @@ impl Model {
     ) {
         let settings::LoadedSettings { settings, sources } = loaded;
         let files = sources.layer_files();
+        let ignored = sources
+            .ignored()
+            .iter()
+            .map(|(path, reason)| format!("{} ({reason})", path.display()))
+            .collect::<Vec<_>>()
+            .join(", ");
         self.apply_loaded_config(settings, keymap);
         self.config.sources = sources;
         self.status.text = if files.is_empty() {
@@ -128,6 +134,9 @@ impl Model {
                     .join(", ")
             )
         };
+        if !ignored.is_empty() {
+            self.status.text.push_str(&format!("; ignored {ignored}"));
+        }
         self.file.dirty = true;
     }
 

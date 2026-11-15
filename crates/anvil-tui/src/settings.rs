@@ -118,6 +118,7 @@ pub(crate) struct SettingsSources {
     origins: BTreeMap<SettingsKey, SettingsOrigin>,
     user: Option<PathBuf>,
     project: Option<PathBuf>,
+    ignored: Vec<(PathBuf, String)>,
 }
 
 impl SettingsSources {
@@ -158,11 +159,16 @@ impl SettingsSources {
         files
     }
 
+    pub(crate) fn ignored(&self) -> &[(PathBuf, String)] {
+        &self.ignored
+    }
+
     fn set(&mut self, key: SettingsKey, origin: SettingsOrigin) {
         self.origins.insert(key, origin);
     }
 }
 
+#[derive(Debug)]
 pub(crate) struct LoadedSettings {
     pub(crate) settings: Settings,
     pub(crate) sources: SettingsSources,
@@ -209,12 +215,25 @@ pub(crate) fn load_for_workspace_with_sources(
     project_trusted: bool,
 ) -> Result<LoadedSettings, String> {
     let user = path()?;
+    let candidate = workspace.join(PROJECT_SETTINGS);
+    let mut ignored = Vec::new();
     let project = if explicit_settings_path().is_some() {
+        if candidate.is_file() {
+            ignored.push((
+                candidate.clone(),
+                "explicit ANVIL_SETTINGS replaces project layer".to_owned(),
+            ));
+        }
         None
+    } else if project_trusted {
+        Some(candidate)
     } else {
-        project_layer(workspace, project_trusted)
+        if candidate.is_file() {
+            ignored.push((candidate, "workspace root is untrusted".to_owned()));
+        }
+        None
     };
-    load_from_layers_with_sources(Some(&user), project.as_deref())
+    load_from_layers_with_ignored(Some(&user), project.as_deref(), ignored)
 }
 
 #[cfg(test)]
@@ -225,6 +244,7 @@ pub(crate) fn load_for_workspace(
     load_for_workspace_with_sources(workspace, project_trusted).map(|loaded| loaded.settings)
 }
 
+#[cfg(test)]
 fn project_layer(workspace: &Path, trusted: bool) -> Option<PathBuf> {
     trusted.then(|| workspace.join(PROJECT_SETTINGS))
 }
@@ -234,11 +254,23 @@ fn load_from_layers(user: Option<&Path>, project: Option<&Path>) -> Result<Setti
     load_from_layers_with_sources(user, project).map(|loaded| loaded.settings)
 }
 
+#[cfg(test)]
 fn load_from_layers_with_sources(
     user: Option<&Path>,
     project: Option<&Path>,
 ) -> Result<LoadedSettings, String> {
-    let mut sources = SettingsSources::default();
+    load_from_layers_with_ignored(user, project, Vec::new())
+}
+
+fn load_from_layers_with_ignored(
+    user: Option<&Path>,
+    project: Option<&Path>,
+    ignored: Vec<(PathBuf, String)>,
+) -> Result<LoadedSettings, String> {
+    let mut sources = SettingsSources {
+        ignored,
+        ..SettingsSources::default()
+    };
     let mut merged = toml_edit::DocumentMut::new();
     let mut layers = Vec::new();
     for (path, is_project) in [(user, false), (project, true)] {
@@ -911,6 +943,121 @@ mod tests {
             project_layer(workspace, true),
             Some(workspace.join(PROJECT_SETTINGS))
         );
+    }
+
+    #[test]
+    fn untrusted_project_is_reported_as_ignored() {
+        let _guard = TEST_ENV_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        let directory = tempfile::tempdir().expect("tempdir");
+        let workspace = directory.path().join("workspace");
+        fs::create_dir_all(&workspace).expect("workspace");
+        fs::write(
+            workspace.join(PROJECT_SETTINGS),
+            "[editor]\nsoft_wrap = true\n",
+        )
+        .expect("project settings");
+        let previous_settings = std::env::var_os("ANVIL_SETTINGS");
+        let previous_config = std::env::var_os("XDG_CONFIG_HOME");
+        unsafe {
+            std::env::remove_var("ANVIL_SETTINGS");
+            std::env::set_var("XDG_CONFIG_HOME", directory.path().join("config"));
+        }
+        let loaded = load_for_workspace_with_sources(&workspace, false).expect("untrusted project");
+        match previous_settings {
+            Some(value) => unsafe { std::env::set_var("ANVIL_SETTINGS", value) },
+            None => unsafe { std::env::remove_var("ANVIL_SETTINGS") },
+        }
+        match previous_config {
+            Some(value) => unsafe { std::env::set_var("XDG_CONFIG_HOME", value) },
+            None => unsafe { std::env::remove_var("XDG_CONFIG_HOME") },
+        }
+        assert!(loaded.sources.ignored().iter().any(|(path, reason)| {
+            path == &workspace.join(PROJECT_SETTINGS) && reason.contains("untrusted")
+        }));
+        assert_eq!(
+            loaded.sources.origin(SettingsKey::SoftWrap),
+            SettingsOrigin::Default
+        );
+    }
+
+    #[test]
+    fn reload_reports_untrusted_project_file() {
+        let _guard = TEST_ENV_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        let directory = tempfile::tempdir().expect("tempdir");
+        let workspace = directory.path().join("workspace");
+        fs::create_dir_all(&workspace).expect("workspace");
+        fs::write(
+            workspace.join(PROJECT_SETTINGS),
+            "[editor]\nsoft_wrap = true\n",
+        )
+        .expect("project settings");
+        let previous_settings = std::env::var_os("ANVIL_SETTINGS");
+        let previous_config = std::env::var_os("XDG_CONFIG_HOME");
+        unsafe {
+            std::env::remove_var("ANVIL_SETTINGS");
+            std::env::set_var("XDG_CONFIG_HOME", directory.path().join("config"));
+        }
+        let mut model = crate::Model::new(crate::EditorState::from_text(""), None);
+        model.workspace.path = workspace.clone();
+        model.workspace.roots =
+            crate::workspace_roots::WorkspaceRoots::new(&workspace).expect("roots");
+        model
+            .workspace
+            .roots
+            .set_trusted(&workspace, false)
+            .expect("untrusted");
+        model.reload_config();
+        match previous_settings {
+            Some(value) => unsafe { std::env::set_var("ANVIL_SETTINGS", value) },
+            None => unsafe { std::env::remove_var("ANVIL_SETTINGS") },
+        }
+        match previous_config {
+            Some(value) => unsafe { std::env::set_var("XDG_CONFIG_HOME", value) },
+            None => unsafe { std::env::remove_var("XDG_CONFIG_HOME") },
+        }
+        assert!(
+            model.status.text.contains("ignored"),
+            "{}",
+            model.status.text
+        );
+        assert!(
+            model.status.text.contains("untrusted"),
+            "{}",
+            model.status.text
+        );
+    }
+
+    #[test]
+    fn invalid_project_settings_report_path_and_parse_error() {
+        let _guard = TEST_ENV_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        let directory = tempfile::tempdir().expect("tempdir");
+        let workspace = directory.path().join("workspace");
+        fs::create_dir_all(&workspace).expect("workspace");
+        let project = workspace.join(PROJECT_SETTINGS);
+        fs::write(&project, "[editor\nsoft_wrap = true\n").expect("invalid project");
+        let previous_settings = std::env::var_os("ANVIL_SETTINGS");
+        let previous_config = std::env::var_os("XDG_CONFIG_HOME");
+        unsafe {
+            std::env::remove_var("ANVIL_SETTINGS");
+            std::env::set_var("XDG_CONFIG_HOME", directory.path().join("config"));
+        }
+        let error = load_for_workspace_with_sources(&workspace, true).expect_err("invalid TOML");
+        match previous_settings {
+            Some(value) => unsafe { std::env::set_var("ANVIL_SETTINGS", value) },
+            None => unsafe { std::env::remove_var("ANVIL_SETTINGS") },
+        }
+        match previous_config {
+            Some(value) => unsafe { std::env::set_var("XDG_CONFIG_HOME", value) },
+            None => unsafe { std::env::remove_var("XDG_CONFIG_HOME") },
+        }
+        assert!(error.contains(&project.display().to_string()), "{error}");
+        assert!(error.contains("invalid settings TOML"), "{error}");
     }
 
     #[test]

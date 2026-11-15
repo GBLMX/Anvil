@@ -254,6 +254,8 @@ impl Model {
             ("lsp-start", "") => self.queue_effect(Effect::LspStart),
             ("lsp-status", "") => self.show_lsp_status(),
             ("tree", "") => self.open_tree(),
+            ("watch-status", "") => self.show_watch_status(),
+            ("tree-refresh", "") => self.refresh_tree_from_command(),
             ("lsp-stop", "") => self.queue_effect(Effect::LspStop),
             ("format", "") => self.queue_effect(Effect::LspFormat),
             ("open-url", url) => {

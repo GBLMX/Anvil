@@ -330,6 +330,42 @@ impl Model {
         self.workspace.git.status_received = 0;
     }
 
+    pub(crate) fn show_watch_status(&mut self) {
+        let enabled = self.config.settings.editor.file_watching;
+        let scope = if !enabled {
+            "off"
+        } else if self.workspace.git_service.is_some() {
+            "open buffers + visible tree + git metadata"
+        } else {
+            "open buffers + visible tree"
+        };
+        let mut text = format!("watch: {scope}");
+        if enabled {
+            text.push_str(&format!(
+                "; roots={}; tree_watch={}; stale={}",
+                self.workspace.roots.list().len(),
+                if self.workspace.tree.watch_limited {
+                    "limited to 256 directories"
+                } else {
+                    "bounded"
+                },
+                if self.workspace.tree.stale {
+                    "yes"
+                } else {
+                    "no"
+                }
+            ));
+        }
+        self.status.text = text;
+        self.file.dirty = true;
+    }
+
+    pub(crate) fn refresh_tree_from_command(&mut self) {
+        self.refresh_tree(None);
+        self.status.text = "tree refresh requested".to_owned();
+        self.file.dirty = true;
+    }
+
     fn handle_git_status(
         &mut self,
         generation: u64,

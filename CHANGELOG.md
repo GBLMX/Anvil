@@ -29,8 +29,8 @@ post-`0.5.0` feature line.
   JSON schema version 1 has stable check ids/remediation; required failures
   exit `1`.
 - `:settings` now shows the effective origin of each value (`default`,
-  environment, user file, or trusted project file); `:config-reload` reports
-  the settings files that actually loaded.
+  environment, user file, or trusted project file), including ignored project
+  files and the reason; `:config-reload` reports loaded and ignored files.
 - Command-based LSP code actions now dispatch through
   `workspace/executeCommand`, including actions that also carry a workspace
   edit. Sessions now fail restore on unreadable files, unreadable swap files,

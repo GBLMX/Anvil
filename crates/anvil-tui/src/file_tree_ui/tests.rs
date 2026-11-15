@@ -312,3 +312,16 @@ fn tree_watch_cap_is_reported() {
     assert!(model.workspace.tree.watch_limited);
     assert!(model.status.text.contains("watch limit"));
 }
+
+#[test]
+fn watch_status_reports_scope_and_disable() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.workspace.path = dir.path().to_path_buf();
+    model.workspace.roots = crate::workspace_roots::WorkspaceRoots::new(dir.path()).expect("roots");
+    model.show_watch_status();
+    assert!(model.status.text.contains("open buffers + visible tree"));
+    model.config.settings.editor.file_watching = false;
+    model.show_watch_status();
+    assert_eq!(model.status.text, "watch: off");
+}

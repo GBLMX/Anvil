@@ -455,12 +455,15 @@ pub(crate) fn render(overlay: &SettingsOverlayState, frame: &mut Frame, area: Re
         height: 1,
         ..inner
     };
+    let mut source = overlay.sources.label(settings_key(overlay.selected));
+    for (path, reason) in overlay.sources.ignored() {
+        source.push_str(&format!("; ignored {} ({reason})", path.display()));
+    }
     frame.render_widget(
         Paragraph::new(Line::styled(
             format!(
-                "{} · source: {}",
-                SettingsOverlayState::description(overlay.selected),
-                overlay.sources.label(settings_key(overlay.selected))
+                "{} · source: {source}",
+                SettingsOverlayState::description(overlay.selected)
             ),
             theme::panel().fg(theme::muted()),
         )),

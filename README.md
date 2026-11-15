@@ -118,8 +118,11 @@ project layer.
 `:settings` opens the minimal overlay: `j`/`k` select, `h`/`l` or `Enter`
 adjust, `r` resets the row, `s` saves, and `Esc` cancels. The Appearance
 section includes the active theme row.
-Each row shows its effective source (`default`, environment, user, or project
-file). `:config-reload` reports the files that actually loaded.
+Each row shows its effective source (`default`, environment, user, or trusted
+project file), including ignored project files and the reason. `:config-reload`
+reports the files that actually loaded. See
+[settings sources](docs/settings-sources.md); typed settings are not currently
+overridden by CLI flags.
 Auto-save is off by default; when enabled it writes the active named buffer
 on buffer switch/close, split focus/close changes, opening another file, focus
 loss, and `:q`. Insert/search/rename input modes are eligible; only
@@ -133,6 +136,10 @@ applies settings, keymap, and theme changes without restarting and reports the
 effective settings paths. Set
 `[editor] file_watching = false` or `ANVIL_EDITOR_FILE_WATCHING=0` to disable
 polling; the tree then relies on explicit refresh and buffer opens.
+
+`:watch-status` reports the active scope, root count, tree-watch cap, and stale
+state. `:tree-refresh` performs a manual tree and Git status refresh; the
+watcher is not a recursive whole-workspace scanner.
 
 At the `:` prompt, `Tab` completes Ex command names, `:theme` /
 `:theme-auto` arguments, and `:plugin-enable` IDs; `Up`/`Down` selects a

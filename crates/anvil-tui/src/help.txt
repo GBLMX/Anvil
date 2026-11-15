@@ -85,6 +85,8 @@ Normal mode
   :git-unstage-hunk   unstage the hunk at the cursor
   :cq                 quit with exit status 1
   :tree               toggle the workspace file tree
+  :watch-status       show watcher scope, root count, and stale state
+  :tree-refresh       refresh the tree and Git status now
   :reconnect          restart the gateway and re-handshake
   :config-reload      reload settings, keymap, and theme; report effective files
   :git-blame          show blame for the current file
