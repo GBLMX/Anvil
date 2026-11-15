@@ -27,6 +27,12 @@ pub const DEFAULT_VIEWPORT: Viewport = Viewport {
     height: 24,
 };
 
+/// Approximate heap budget for retained undo records.
+pub const MAX_UNDO_BYTES: usize = 50 * 1024 * 1024;
+
+/// Maximum number of retained undo records.
+pub const MAX_UNDO_DEPTH: usize = 1000;
+
 /// Why an editor transaction could not commit.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ApplyEditError {
@@ -121,6 +127,21 @@ struct EditRecord {
     before: Vec<(usize, usize)>,
     after: Vec<(usize, usize)>,
     action: EditAction,
+}
+
+fn record_heap_bytes(record: &EditRecord) -> usize {
+    record.before.len() * std::mem::size_of::<(usize, usize)>()
+        + record.after.len() * std::mem::size_of::<(usize, usize)>()
+        + match &record.action {
+            EditAction::Insert { text, .. } | EditAction::Delete { text, .. } => text.len(),
+            EditAction::Transaction(actions) => actions
+                .iter()
+                .map(|action| match action {
+                    EditAction::Insert { text, .. } | EditAction::Delete { text, .. } => text.len(),
+                    EditAction::Transaction(_) => 0,
+                })
+                .sum(),
+        }
 }
 
 /// Mutable editor state.
@@ -513,26 +534,13 @@ impl EditorState {
 
     /// Approximate heap bytes retained by undo records.
     pub fn undo_bytes(&self) -> usize {
-        self.undo
-            .iter()
-            .map(|record| {
-                record.before.len() * std::mem::size_of::<(usize, usize)>()
-                    + record.after.len() * std::mem::size_of::<(usize, usize)>()
-                    + match &record.action {
-                        EditAction::Insert { text, .. } | EditAction::Delete { text, .. } => {
-                            text.len()
-                        }
-                        EditAction::Transaction(actions) => actions
-                            .iter()
-                            .map(|action| match action {
-                                EditAction::Insert { text, .. }
-                                | EditAction::Delete { text, .. } => text.len(),
-                                EditAction::Transaction(_) => 0,
-                            })
-                            .sum(),
-                    }
-            })
-            .sum()
+        self.undo.iter().map(record_heap_bytes).sum()
+    }
+
+    fn trim_undo(&mut self) {
+        while self.undo.len() > MAX_UNDO_DEPTH || self.undo_bytes() > MAX_UNDO_BYTES {
+            self.undo.remove(0);
+        }
     }
 
     /// Inserts text after validating the byte offset.
@@ -614,13 +622,18 @@ impl EditorState {
     /// Applies a transaction, reporting why invalid edits were rejected.
     pub fn try_apply_transaction(
         &mut self,
-        mut edits: Vec<(Range<usize>, String)>,
+        edits: Vec<(Range<usize>, String)>,
     ) -> Result<(), EditError> {
-        edits.retain(|(range, text)| range.start != range.end || !text.is_empty());
+        let mut edits: Vec<(usize, Range<usize>, String)> = edits
+            .into_iter()
+            .enumerate()
+            .filter(|(_, (range, text))| range.start != range.end || !text.is_empty())
+            .map(|(index, (range, text))| (index, range, text))
+            .collect();
         if edits.is_empty() {
             return Err(EditError::EmptyTransaction);
         }
-        for (range, _) in &edits {
+        for (_, range, _) in &edits {
             if range.start > range.end {
                 return Err(EditError::InvertedRange {
                     start: range.start,
@@ -634,19 +647,20 @@ impl EditorState {
         }
         edits.sort_by(|left, right| {
             right
-                .0
+                .1
                 .start
-                .cmp(&left.0.start)
-                .then_with(|| right.0.end.cmp(&left.0.end))
+                .cmp(&left.1.start)
+                .then_with(|| right.1.end.cmp(&left.1.end))
+                .then_with(|| right.0.cmp(&left.0))
         });
         for pair in edits.windows(2) {
-            if pair[1].0.end > pair[0].0.start {
+            if pair[1].1.end > pair[0].1.start {
                 return Err(EditError::OverlappingEdits);
             }
         }
         let before = self.selections.clone();
         let mut actions = Vec::new();
-        for (range, text) in edits {
+        for (_, range, text) in edits {
             if range.start != range.end {
                 let deleted = self.text.slice(range.clone());
                 self.apply_delete(range.clone());
@@ -876,6 +890,7 @@ impl EditorState {
         {
             previous_text.push_str(text);
             last.after = self.selections.clone();
+            self.trim_undo();
             self.redo.clear();
             self.revision += 1;
             return;
@@ -885,6 +900,7 @@ impl EditorState {
             after: self.selections.clone(),
             action,
         });
+        self.trim_undo();
         self.redo.clear();
         self.revision += 1;
     }
@@ -1083,6 +1099,19 @@ mod tests {
     }
 
     #[test]
+    fn transaction_preserves_same_offset_insert_order() {
+        let mut state = EditorState::from_text("0123456789");
+        state
+            .try_apply_transaction(vec![
+                (5..5, "A".to_owned()),
+                (5..5, "B".to_owned()),
+                (10..10, "Z".to_owned()),
+            ])
+            .expect("transaction");
+        assert_eq!(state.text().slice(0..13), "01234AB56789Z");
+    }
+
+    #[test]
     fn transaction_rejects_non_boundary_ranges() {
         let mut state = EditorState::from_text("安装");
         assert!(
@@ -1163,6 +1192,27 @@ mod tests {
         assert_eq!(state.text().slice(0..5), "x\nabc");
         assert_eq!(state.selection_bytes(), vec![(3, 3)]);
         assert_eq!(state.revision(), 3);
+    }
+
+    #[test]
+    fn undo_depth_is_bounded() {
+        let mut state = EditorState::from_text("");
+        for _ in 0..=MAX_UNDO_DEPTH {
+            state.try_insert(0, "x").expect("insert");
+        }
+        assert_eq!(state.undo_depth(), MAX_UNDO_DEPTH);
+    }
+
+    #[test]
+    fn undo_bytes_are_bounded() {
+        let mut state = EditorState::from_text("");
+        let block = "x".repeat(1024 * 1024);
+        for _ in 0..51 {
+            state.try_insert(0, &block).expect("insert");
+            state.try_delete(0..block.len()).expect("delete");
+        }
+        assert!(state.undo_depth() < 51);
+        assert!(state.undo_bytes() <= MAX_UNDO_BYTES);
     }
 
     #[test]

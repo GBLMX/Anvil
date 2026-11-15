@@ -496,6 +496,15 @@ post-`0.5.0` feature line.
   next poll, closing a document drops matching pending text, and server
   configuration/workspace requests receive protocol results instead of
   unconditional `null`.
+- Editor transactions preserve same-offset insert order, and undo history is
+  capped at 1,000 records or 50 MiB.
+- Closing an LSP document removes its version counter, so reloads restart
+  `didOpen` version tracking at 1; closing also drops matching pending sync text.
+- Luau hosts enforce a 5-second CPU budget per entry, a 128 MiB Lua memory
+  limit, and bounded event pending/sequence tables.
+- Gateway copies are bounded by the source size observed at stat time;
+  recursive removal rejects trees deeper than 128 levels; startup reclaims
+  stale `.anvil-write-*` files older than 24 hours.
 - The editor chrome now uses one persistent frame; the file tree keeps its
   stale/watch-limit/hidden header states without a nested border. Transient
   status and notifications share an auto-expiring bottom message band, while

@@ -2,13 +2,47 @@
 
 use anvil_ipc::Connection;
 use anvil_plugin_host::{Token, write_plugin_line, write_plugin_stderr};
-use mlua::{Lua, LuaSerdeExt, Result, Value, Variadic};
+use mlua::{Lua, LuaSerdeExt, Result, Value, Variadic, VmState};
 use serde_json::{Value as JsonValue, json};
 use std::cell::RefCell;
 use std::io::Write;
 use std::path::Path;
 use std::rc::Rc;
-use std::time::Duration;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{Duration, Instant};
+
+const PLUGIN_CPU_BUDGET: Duration = Duration::from_secs(5);
+
+const MAX_EVENT_PENDING: usize = 256;
+const MAX_EVENT_SEQUENCES: usize = 1024;
+const PLUGIN_MEMORY_LIMIT: usize = 128 * 1024 * 1024;
+
+struct CpuBudget {
+    start: Instant,
+    deadline: AtomicU64,
+}
+
+impl CpuBudget {
+    fn new() -> Self {
+        Self {
+            start: Instant::now(),
+            deadline: AtomicU64::new(0),
+        }
+    }
+
+    fn arm(&self) {
+        let now = self.start.elapsed().as_nanos().min(u128::from(u64::MAX)) as u64;
+        let budget = PLUGIN_CPU_BUDGET.as_nanos().min(u128::from(u64::MAX)) as u64;
+        self.deadline
+            .store(now.saturating_add(budget), Ordering::Relaxed);
+    }
+
+    fn expired(&self) -> bool {
+        let now = self.start.elapsed().as_nanos().min(u128::from(u64::MAX)) as u64;
+        now > self.deadline.load(Ordering::Relaxed)
+    }
+}
 
 /// Blocking editor RPC client owned by the Luau runtime.
 pub(crate) struct EditorClient {
@@ -22,6 +56,7 @@ pub(crate) struct EditorClient {
 enum CallError {
     Transport(String),
     Rpc(String),
+    Serialization(String),
 }
 
 fn hex_token(token: [u8; 32]) -> String {
@@ -43,13 +78,15 @@ impl EditorClient {
     fn call(&mut self, method: &str, params: JsonValue) -> std::result::Result<JsonValue, String> {
         match self.request(method, params.clone()) {
             Ok(value) => Ok(value),
-            Err(CallError::Rpc(message)) => Err(message),
+            Err(CallError::Rpc(message) | CallError::Serialization(message)) => Err(message),
             Err(CallError::Transport(first)) => {
                 self.connection = open_connection(&self.path, &self.plugin_id, self.token)
                     .map_err(|error| format!("{first}; reconnect failed: {error}"))?;
                 if is_retryable(method) {
                     self.request(method, params).map_err(|error| match error {
-                        CallError::Transport(message) | CallError::Rpc(message) => message,
+                        CallError::Transport(message)
+                        | CallError::Rpc(message)
+                        | CallError::Serialization(message) => message,
                     })
                 } else {
                     Err(first)
@@ -74,7 +111,7 @@ impl EditorClient {
         self.connection
             .send(
                 serde_json::to_string(&request)
-                    .map_err(|error| CallError::Transport(error.to_string()))?
+                    .map_err(|error| CallError::Serialization(error.to_string()))?
                     .as_bytes(),
             )
             .map_err(|error| CallError::Transport(error.to_string()))?;
@@ -145,6 +182,12 @@ pub(crate) fn smoke() -> Result<i32> {
     Ok(value)
 }
 
+fn arm_lua_budget(lua: &Lua) {
+    if let Some(budget) = lua.app_data_ref::<Arc<CpuBudget>>() {
+        budget.arm();
+    }
+}
+
 /// Loads and executes one validated Luau entry inside the sandbox.
 pub(crate) fn run_file(
     path: &Path,
@@ -154,11 +197,24 @@ pub(crate) fn run_file(
     let source = std::fs::read_to_string(path)
         .map_err(|error| mlua::Error::RuntimeError(format!("read plugin: {error}")))?;
     let lua = Lua::new();
+    let budget = Arc::new(CpuBudget::new());
+    lua.set_app_data(Arc::clone(&budget));
+    lua.set_interrupt(move |_| {
+        if budget.expired() {
+            Err(mlua::Error::RuntimeError(
+                "plugin exceeded CPU budget".to_owned(),
+            ))
+        } else {
+            Ok(VmState::Continue)
+        }
+    });
+    lua.set_memory_limit(PLUGIN_MEMORY_LIMIT)?;
     lua.globals().set("require", mlua::Value::Nil)?;
     lua.sandbox(true)?;
     install_print(&lua)?;
     install_editor(&lua, editor)?;
     install_plugin(&lua, command)?;
+    arm_lua_budget(&lua);
     lua.load(source).exec()?;
     Ok(lua)
 }
@@ -176,6 +232,7 @@ pub(crate) fn call_provider(
         .get(handler)
         .map_err(|error| format!("provider handler {handler}: {error}"))?;
     let request = lua.to_value(params).map_err(|error| error.to_string())?;
+    arm_lua_budget(lua);
     let result: Value = function
         .call(request)
         .map_err(|error| format!("provider handler {handler}: {error}"))?;
@@ -195,11 +252,16 @@ pub(crate) fn call_event(lua: &Lua, params: &JsonValue) -> std::result::Result<(
         .globals()
         .get("__anvil_event_sequences")
         .map_err(|error| error.to_string())?;
-    if sequences
-        .get::<u64>(subscription_id)
-        .is_ok_and(|last| sequence <= last)
+    let tracked = sequences.get::<u64>(subscription_id).is_ok();
+    if tracked
+        && sequences
+            .get::<u64>(subscription_id)
+            .is_ok_and(|last| sequence <= last)
     {
         return Ok(());
+    }
+    if !tracked {
+        bound_sparse_table(&sequences, MAX_EVENT_SEQUENCES).map_err(|error| error.to_string())?;
     }
     sequences
         .set(subscription_id, sequence)
@@ -213,6 +275,12 @@ pub(crate) fn call_event(lua: &Lua, params: &JsonValue) -> std::result::Result<(
             .globals()
             .get("__anvil_event_pending")
             .map_err(|error| error.to_string())?;
+        if !pending
+            .contains_key(subscription_id)
+            .map_err(|error| error.to_string())?
+        {
+            bound_sparse_table(&pending, MAX_EVENT_PENDING).map_err(|error| error.to_string())?;
+        }
         pending
             .set(
                 subscription_id,
@@ -222,6 +290,7 @@ pub(crate) fn call_event(lua: &Lua, params: &JsonValue) -> std::result::Result<(
         return Ok(());
     };
     let event = lua.to_value(params).map_err(|error| error.to_string())?;
+    arm_lua_budget(lua);
     handler
         .call::<()>(event)
         .map_err(|error| format!("event handler {subscription_id}: {error}"))
@@ -238,10 +307,28 @@ fn deliver_pending_event(lua: &Lua, subscription_id: u64, handler: &mlua::Functi
         return;
     }
     let _ = pending.set(subscription_id, Value::Nil);
+    arm_lua_budget(lua);
     if let Err(error) = handler.call::<()>(event) {
         let message = format!("pending handler {subscription_id}: {error}");
         write_plugin_stderr("host.event: ", &message);
     }
+}
+
+fn bound_sparse_table(table: &mlua::Table, max: usize) -> Result<()> {
+    let mut keys = Vec::new();
+    for pair in table.clone().pairs::<u64, Value>() {
+        let (key, _) = pair?;
+        keys.push(key);
+    }
+    if keys.len() < max {
+        return Ok(());
+    }
+    keys.sort_unstable();
+    let excess = keys.len() - max + 1;
+    for key in keys.into_iter().take(excess) {
+        table.set(key, Value::Nil)?;
+    }
+    Ok(())
 }
 
 /// Installs `print` so plugin output can never emit raw terminal control
@@ -847,6 +934,46 @@ end)
     }
 
     #[test]
+    fn event_state_tables_are_bounded() {
+        let path = std::env::temp_dir().join(format!(
+            "anvil-bounded-events-{}-{}.luau",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("time")
+                .as_nanos()
+        ));
+        std::fs::write(&path, "return").expect("write");
+        let lua = run_file(&path, None, None).expect("run plugin");
+        let _ = std::fs::remove_file(path);
+        for subscription_id in 0..(MAX_EVENT_SEQUENCES as u64 + 10) {
+            call_event(
+                &lua,
+                &json!({
+                    "subscription_id": subscription_id,
+                    "event": "diagnostics.changed",
+                    "sequence": 1,
+                    "payload": {}
+                }),
+            )
+            .expect("event");
+        }
+        let sequences: mlua::Table = lua
+            .globals()
+            .get("__anvil_event_sequences")
+            .expect("sequences");
+        let pending: mlua::Table = lua.globals().get("__anvil_event_pending").expect("pending");
+        assert!(
+            sequences.pairs::<u64, Value>().count() <= MAX_EVENT_SEQUENCES,
+            "sequence table grew past its cap"
+        );
+        assert!(
+            pending.pairs::<u64, Value>().count() <= MAX_EVENT_PENDING,
+            "pending table grew past its cap"
+        );
+    }
+
+    #[test]
     fn luau_editor_get_view_uses_editor_socket() {
         use anvil_ipc::Listener;
 
@@ -1005,5 +1132,23 @@ end)
         .expect("run official plugin");
         server.join().expect("server");
         let _ = std::fs::remove_file(socket);
+    }
+
+    #[test]
+    fn infinite_loop_is_stopped_by_cpu_budget() {
+        let path = std::env::temp_dir().join(format!(
+            "anvil-spin-{}-{}.luau",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("time")
+                .as_nanos()
+        ));
+        std::fs::write(&path, "while true do end").expect("write");
+        let started = Instant::now();
+        let error = run_file(&path, None, None).expect_err("spinning plugin should fail");
+        let _ = std::fs::remove_file(path);
+        assert!(error.to_string().contains("CPU budget"), "{error}");
+        assert!(started.elapsed() < PLUGIN_CPU_BUDGET + Duration::from_secs(3));
     }
 }

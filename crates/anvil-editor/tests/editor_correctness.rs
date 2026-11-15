@@ -1,7 +1,7 @@
 use std::time::Instant;
 
 use anvil_core::TextBuffer;
-use anvil_editor::EditorState;
+use anvil_editor::{EditorState, MAX_UNDO_DEPTH};
 
 fn lines(count: usize) -> String {
     "line\n".repeat(count)
@@ -38,7 +38,7 @@ fn b4_selection_mapping_across_chunk_boundary() {
 }
 
 #[test]
-fn b2_ten_thousand_edits_and_undos_restore_text() {
+fn b2_ten_thousand_edits_keep_undo_bounded() {
     let mut state = EditorState::from_text("a");
     let mut first = None;
     let mut last = None;
@@ -50,18 +50,18 @@ fn b2_ten_thousand_edits_and_undos_restore_text() {
         };
         let _ = state.try_insert(at, "x");
     }
-    assert_eq!(state.undo_depth(), 10_000);
-    for index in 0..10_000 {
+    assert_eq!(state.undo_depth(), MAX_UNDO_DEPTH);
+    for index in 0..MAX_UNDO_DEPTH {
         let start = Instant::now();
         assert!(state.undo());
         let elapsed = start.elapsed();
         first.get_or_insert(elapsed);
         last = Some(elapsed);
-        if index == 0 || index == 9_999 {
+        if index == 0 || index == MAX_UNDO_DEPTH - 1 {
             assert!(elapsed.as_micros() < 10_000);
         }
     }
-    assert_eq!(state.text().slice(0..1), "a");
+    assert_eq!(state.text().len_bytes(), 10_000 - MAX_UNDO_DEPTH + 1);
     let _ = (first, last);
 }
 

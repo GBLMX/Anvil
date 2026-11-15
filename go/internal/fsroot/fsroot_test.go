@@ -1,6 +1,7 @@
 package fsroot
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -432,5 +433,52 @@ func TestDirSignatureChangesOnEntries(t *testing.T) {
 	}
 	if _, err := root.DirSignature("../outside"); err == nil {
 		t.Fatal("outside path accepted")
+	}
+}
+
+func TestRemoveAllRejectsTreesDeeperThanTheLimit(t *testing.T) {
+	root, dir := testRoot(t)
+	deep := filepath.Join(dir, "deep")
+	current := deep
+	for range maxRemoveDepth + 2 {
+		current = filepath.Join(current, "d")
+	}
+	if err := os.MkdirAll(current, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	err := root.RemoveAll("deep")
+	if !errors.Is(err, ErrMaxDepthExceeded) {
+		t.Fatalf("RemoveAll error = %v, want %v", err, ErrMaxDepthExceeded)
+	}
+}
+
+func TestCleanupStaleWritesRemovesOnlyOldWriteFiles(t *testing.T) {
+	root, dir := testRoot(t)
+	oldName := writeTempPrefix + "old"
+	freshName := writeTempPrefix + "fresh"
+	normalName := "normal.txt"
+	for _, name := range []string{oldName, freshName, normalName} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(name), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	oldTime := time.Now().Add(-2 * staleWriteAge)
+	if err := os.Chtimes(filepath.Join(dir, oldName), oldTime, oldTime); err != nil {
+		t.Fatal(err)
+	}
+	rootFD, err := openReadDirNoFollow(root.fd, ".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cleanupStaleWritesAt(rootFD, time.Now().Add(-staleWriteAge), 0)
+	_ = unix.Close(rootFD)
+
+	if _, err := os.Stat(filepath.Join(dir, oldName)); !os.IsNotExist(err) {
+		t.Fatalf("stale write file still exists: %v", err)
+	}
+	for _, name := range []string{freshName, normalName} {
+		if _, err := os.Stat(filepath.Join(dir, name)); err != nil {
+			t.Fatalf("%s was removed: %v", name, err)
+		}
 	}
 }

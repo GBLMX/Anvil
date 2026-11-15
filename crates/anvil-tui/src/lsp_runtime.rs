@@ -229,6 +229,7 @@ impl Model {
         {
             self.language.lsp.pending_sync = None;
         }
+        self.language.lsp_requests.versions.remove(path);
         for worker in self.language.lsp.workers.values() {
             let _ = worker.close(path);
         }

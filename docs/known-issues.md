@@ -232,9 +232,10 @@ in the plans linked below.
     status bar shows a spinner while a transfer or delete is in flight.
   - Open buffer paths are remapped after a move.
   - Gateway additions: `sys.rename` (move), `sys.copy`, and `sys.remove_all`.
-  - `sys.copy` streams with `io.Copy`; recursive delete walks with
-    descriptor-relative no-follow opens; source and destination symlinks are
-    rejected or removed without following.
+  - `sys.copy` streams exactly the size observed at stat time; recursive delete
+    walks with descriptor-relative no-follow opens, rejects trees deeper than
+    128 levels, and reclaims stale `.anvil-write-*` files on workspace open;
+    source and destination symlinks are rejected or removed without following.
   - TUI tests cover move/copy/recursive delete and outside-workspace rejection;
     Go tests cover copy, no-overwrite, symlink escape, and recursive delete.
 - Acceptance:

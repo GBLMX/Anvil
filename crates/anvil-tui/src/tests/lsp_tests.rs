@@ -2147,18 +2147,31 @@ fn lsp_status_command_reports_server_details() {
 }
 
 #[test]
-fn close_clears_pending_sync_only_for_the_closed_path() {
+fn close_clears_pending_sync_and_versions_only_for_the_closed_path() {
     let mut model = Model::new(EditorState::from_text("fn main() {}\n"), None);
     let first = PathBuf::from("/ws/first.rs");
     let second = PathBuf::from("/ws/second.rs");
     model.language.lsp.pending_sync = Some((first.clone(), "first".to_owned()));
+    model
+        .language
+        .lsp_requests
+        .versions
+        .insert(first.clone(), 3);
+    model
+        .language
+        .lsp_requests
+        .versions
+        .insert(second.clone(), 4);
     model.close_lsp_document(&first);
     assert!(model.language.lsp.pending_sync.is_none());
+    assert!(!model.language.lsp_requests.versions.contains_key(&first));
+    assert_eq!(model.language.lsp_requests.versions.get(&second), Some(&4));
 
     model.language.lsp.pending_sync = Some((second.clone(), "second".to_owned()));
     model.close_lsp_document(&first);
     assert_eq!(
         model.language.lsp.pending_sync,
-        Some((second, "second".to_owned()))
+        Some((second.clone(), "second".to_owned()))
     );
+    assert_eq!(model.language.lsp_requests.versions.get(&second), Some(&4));
 }

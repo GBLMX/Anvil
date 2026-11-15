@@ -12,12 +12,18 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"golang.org/x/sys/unix"
 )
 
 // DefaultMaxRead is the default per-file read limit.
 const DefaultMaxRead = 5 << 20
+
+const maxRemoveDepth = 128
+
+// ErrMaxDepthExceeded reports a directory tree deeper than the removal limit.
+var ErrMaxDepthExceeded = errors.New("directory tree depth exceeded")
 
 // ErrOffsetOutOfRange reports a read offset beyond the file size.
 var ErrOffsetOutOfRange = errors.New("offset beyond end of file")
@@ -42,7 +48,9 @@ func Open(path string) (*Root, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open workspace root %q: %w", absolute, err)
 	}
-	return &Root{fd: fd, path: absolute}, nil
+	root := &Root{fd: fd, path: absolute}
+	go root.reclaimStaleWrites()
+	return root, nil
 }
 
 // Path returns the absolute path used when the root was opened.
@@ -62,6 +70,67 @@ func (r *Root) Close() error {
 	err := unix.Close(r.fd)
 	r.fd = -1
 	return err
+}
+
+func (r *Root) reclaimStaleWrites() {
+	r.mu.RLock()
+	if r.fd < 0 {
+		r.mu.RUnlock()
+		return
+	}
+	rootFD, err := openReadDirNoFollow(r.fd, ".")
+	r.mu.RUnlock()
+	if err != nil {
+		return
+	}
+	defer unix.Close(rootFD)
+	cleanupStaleWritesAt(rootFD, time.Now().Add(-staleWriteAge), 0)
+}
+
+func cleanupStaleWritesAt(dirFD int, cutoff time.Time, depth int) {
+	if depth >= maxRemoveDepth {
+		return
+	}
+	dupFD, err := unix.Dup(dirFD)
+	if err != nil {
+		return
+	}
+	dir := os.NewFile(uintptr(dupFD), ".")
+	if dir == nil {
+		_ = unix.Close(dupFD)
+		return
+	}
+	entries, err := dir.ReadDir(-1)
+	if err != nil {
+		_ = dir.Close()
+		return
+	}
+	for _, entry := range entries {
+		name := entry.Name()
+		if strings.HasPrefix(name, writeTempPrefix) {
+			var stat unix.Stat_t
+			if err := unix.Fstatat(dirFD, name, &stat, unix.AT_SYMLINK_NOFOLLOW); err != nil {
+				continue
+			}
+			if stat.Mode&unix.S_IFMT != unix.S_IFREG {
+				continue
+			}
+			if time.Unix(stat.Mtim.Sec, stat.Mtim.Nsec).Before(cutoff) {
+				_ = unix.Unlinkat(dirFD, name, 0)
+			}
+			continue
+		}
+		if !entry.IsDir() || name == ".git" || name == "target" || name == "node_modules" {
+			continue
+		}
+		childFD, err := openReadDirNoFollow(dirFD, name)
+		if err != nil {
+			continue
+		}
+		cleanupStaleWritesAt(childFD, cutoff, depth+1)
+		_ = unix.Close(childFD)
+	}
+	_ = dir.Close()
 }
 
 // ReadFile reads a regular file beneath the root.
@@ -396,9 +465,14 @@ func (r *Root) Copy(from, to string) error {
 		}
 	}()
 
-	if _, err := io.Copy(destination, source); err != nil {
+	written, err := io.CopyN(destination, source, stat.Size)
+	if err != nil {
 		_ = destination.Close()
 		return fmt.Errorf("copy %q to %q: %w", from, to, err)
+	}
+	if written != stat.Size {
+		_ = destination.Close()
+		return fmt.Errorf("copy %q to %q: copied %d of %d bytes", from, to, written, stat.Size)
 	}
 	if err := unix.Fchmod(destFD, uint32(stat.Mode&0o777)); err != nil {
 		_ = destination.Close()
@@ -442,6 +516,13 @@ func (r *Root) RemoveAll(path string) error {
 }
 
 func removeEntryAt(parentFD int, name string) error {
+	return removeEntryAtDepth(parentFD, name, 0)
+}
+
+func removeEntryAtDepth(parentFD int, name string, depth int) error {
+	if depth >= maxRemoveDepth {
+		return ErrMaxDepthExceeded
+	}
 	var stat unix.Stat_t
 	if err := unix.Fstatat(parentFD, name, &stat, unix.AT_SYMLINK_NOFOLLOW); err != nil {
 		return err
@@ -465,7 +546,7 @@ func removeEntryAt(parentFD int, name string) error {
 		return err
 	}
 	for _, entry := range entries {
-		if err := removeEntryAt(int(dir.Fd()), entry.Name()); err != nil {
+		if err := removeEntryAtDepth(int(dir.Fd()), entry.Name(), depth+1); err != nil {
 			_ = dir.Close()
 			return err
 		}
@@ -511,6 +592,8 @@ func openReadDirNoFollow(dirfd int, path string) (int, error) {
 }
 
 const writeTempPrefix = ".anvil-write-"
+
+const staleWriteAge = 24 * time.Hour
 
 // WriteTarget is an atomic file replacement in progress.
 //
