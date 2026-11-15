@@ -275,4 +275,39 @@ mod tests {
         assert_eq!(revision, snapshot.revision + 1);
         assert_eq!(editor.text().slice(0..3), "aXd");
     }
+
+    #[test]
+    fn session_rejects_stale_or_foreign_request_without_mutation() {
+        let mut editor = EditorState::from_text("abcd");
+        let snapshot = Session::snapshot(&editor, 1);
+        let edit = DocumentEdit {
+            range: TextRange { start: 1, end: 3 },
+            text: "X".to_owned(),
+        };
+        let foreign = Session::new(&mut editor, 2).apply(ApplyEditRequest {
+            buffer_id: 1,
+            base_revision: snapshot.revision,
+            edits: vec![edit.clone()],
+        });
+        assert_eq!(
+            foreign,
+            Err(SessionError::BufferMismatch {
+                expected: 2,
+                actual: 1
+            })
+        );
+        let stale = Session::new(&mut editor, 1).apply(ApplyEditRequest {
+            buffer_id: 1,
+            base_revision: snapshot.revision + 1,
+            edits: vec![edit],
+        });
+        assert_eq!(
+            stale,
+            Err(SessionError::StaleRevision {
+                expected: snapshot.revision + 1,
+                actual: snapshot.revision
+            })
+        );
+        assert_eq!(editor.text().slice(0..4), "abcd");
+    }
 }
