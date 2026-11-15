@@ -686,10 +686,36 @@ mod tests {
         }
     }
 
+    struct LanguageToolingTwo;
+
+    impl Module for LanguageToolingTwo {
+        fn metadata(&self) -> ModuleMetadata {
+            ModuleMetadata {
+                id: ModuleId::new("official.language-tooling-two"),
+                name: "Language Tooling Two",
+                contract: ContractRange::current(),
+                commands: &[],
+            }
+        }
+
+        fn register(&self, registry: &mut ModuleRegistry) -> Result<(), ModuleError> {
+            registry.set_language_tooling_service(Arc::new(FakeLanguageTooling))
+        }
+    }
+
     #[test]
     fn registers_the_language_tooling_service() {
         let mut registry = ModuleRegistry::new();
         registry.register(&LanguageTooling).expect("register");
+        assert!(registry.language_tooling_service().is_some());
+    }
+
+    #[test]
+    fn rejects_a_second_language_service_without_replacing_the_first() {
+        let mut registry = ModuleRegistry::new();
+        registry.register(&LanguageTooling).expect("first");
+        let error = registry.register(&LanguageToolingTwo).expect_err("second");
+        assert!(error.to_string().contains("already registered"), "{error}");
         assert!(registry.language_tooling_service().is_some());
     }
 }

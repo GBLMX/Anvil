@@ -20,7 +20,7 @@ pub mod recents;
 pub mod ui;
 use anvil_api::{ApplyEditRequest, DocumentSnapshot, InteractionMode, Viewport};
 use anvil_core::TextBuffer;
-use anvil_editor::{ApplyEditError, EditorState, MacroStep};
+use anvil_editor::{ApplyEditError, EditError, EditorState, MacroStep, PositionError};
 use std::{fmt, ops::Range};
 
 /// Why a document session operation failed.
@@ -86,20 +86,50 @@ impl DocumentSession {
         self.editor.set_selection_bytes(anchor, head)
     }
 
+    pub fn try_set_selection_bytes(
+        &mut self,
+        anchor: usize,
+        head: usize,
+    ) -> Result<(), PositionError> {
+        self.editor.try_set_selection_bytes(anchor, head)
+    }
+
     pub fn set_selections_bytes(&mut self, selections: Vec<(usize, usize)>) -> bool {
         self.editor.set_selections_bytes(selections)
+    }
+
+    pub fn try_set_selections_bytes(
+        &mut self,
+        selections: Vec<(usize, usize)>,
+    ) -> Result<(), PositionError> {
+        self.editor.try_set_selections_bytes(selections)
     }
 
     pub fn insert(&mut self, at: usize, text: &str) -> bool {
         self.editor.insert(at, text)
     }
 
+    pub fn try_insert(&mut self, at: usize, text: &str) -> Result<(), EditError> {
+        self.editor.try_insert(at, text)
+    }
+
     pub fn delete(&mut self, range: Range<usize>) -> bool {
         self.editor.delete(range)
     }
 
+    pub fn try_delete(&mut self, range: Range<usize>) -> Result<(), EditError> {
+        self.editor.try_delete(range)
+    }
+
     pub fn apply_transaction(&mut self, edits: Vec<(Range<usize>, String)>) -> bool {
         self.editor.apply_transaction(edits)
+    }
+
+    pub fn try_apply_transaction(
+        &mut self,
+        edits: Vec<(Range<usize>, String)>,
+    ) -> Result<(), EditError> {
+        self.editor.try_apply_transaction(edits)
     }
 
     pub fn apply_transaction_at(

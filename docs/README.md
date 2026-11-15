@@ -25,6 +25,7 @@ Use one owner per question; other docs link instead of restating status.
 | Architecture and layer rules | [architecture.md](architecture.md), [ADR-0042](adr/0042-selection-first-session-frontend.md) |
 | Architecture decisions | [ADR index](adr/README.md) |
 | Plugin API contract | [plugin-api-v1.md](spec/plugin-api-v1.md) |
+| API surface and versioning | [api-surface.md](api-surface.md) |
 | Security model | [threat-model.md](threat-model.md), [SECURITY.md](../SECURITY.md) |
 | Performance gates | [performance.md](performance.md) |
 | Resolved bugs and current limits | [known-issues.md](known-issues.md) |
@@ -117,6 +118,7 @@ Historical plans are records, not current schedules:
 
 - [Deployment](deployment.md) — gateway, exec-runner, and cgroup boundaries
 - [Keymap configuration](keymap.md) — TOML overrides and key syntax
+- [API surface](api-surface.md) — frozen contracts, version lines, and compatibility gates
 - [Keymap routing analysis](keymap-router-analysis.md) — preset and routing notes
 - [Module compatibility](module-compatibility.md) — contract v1 matrix and
   deprecation policy

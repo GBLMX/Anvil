@@ -53,6 +53,61 @@ impl fmt::Display for ApplyEditError {
 
 impl std::error::Error for ApplyEditError {}
 
+/// Why a byte position is not a valid editor position.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum PositionError {
+    OutOfBounds { offset: usize, len: usize },
+    NotCharBoundary { offset: usize },
+}
+
+impl fmt::Display for PositionError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::OutOfBounds { offset, len } => {
+                write!(formatter, "offset {offset} is outside text length {len}")
+            }
+            Self::NotCharBoundary { offset } => {
+                write!(formatter, "offset {offset} is not a UTF-8 boundary")
+            }
+        }
+    }
+}
+
+impl std::error::Error for PositionError {}
+
+/// Why an edit could not be applied.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum EditError {
+    InvalidPosition(PositionError),
+    InvertedRange { start: usize, end: usize },
+    OverlappingEdits,
+    EmptyTransaction,
+}
+
+impl fmt::Display for EditError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::InvalidPosition(error) => error.fmt(formatter),
+            Self::InvertedRange { start, end } => {
+                write!(formatter, "range start {start} is after end {end}")
+            }
+            Self::OverlappingEdits => formatter.write_str("overlapping edit ranges"),
+            Self::EmptyTransaction => formatter.write_str("empty edit transaction"),
+        }
+    }
+}
+
+impl std::error::Error for EditError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::InvalidPosition(error) => Some(error),
+            _ => None,
+        }
+    }
+}
+
 /// One reversible text edit.
 #[derive(Debug, Clone)]
 enum EditAction {
@@ -159,32 +214,52 @@ impl EditorState {
         self.interaction_mode = mode;
     }
 
+    fn validate_position(&self, offset: usize) -> Result<(), PositionError> {
+        if offset > self.text.len_bytes() {
+            Err(PositionError::OutOfBounds {
+                offset,
+                len: self.text.len_bytes(),
+            })
+        } else if !self.text.is_char_boundary(offset) {
+            Err(PositionError::NotCharBoundary { offset })
+        } else {
+            Ok(())
+        }
+    }
+
     /// Sets one selection using byte offsets.
     pub fn set_selection_bytes(&mut self, anchor: usize, head: usize) -> bool {
-        if anchor > self.text.len_bytes()
-            || head > self.text.len_bytes()
-            || !self.text.is_char_boundary(anchor)
-            || !self.text.is_char_boundary(head)
-        {
-            return false;
-        }
+        self.try_set_selection_bytes(anchor, head).is_ok()
+    }
+
+    /// Sets one selection, reporting why invalid byte offsets were rejected.
+    pub fn try_set_selection_bytes(
+        &mut self,
+        anchor: usize,
+        head: usize,
+    ) -> Result<(), PositionError> {
+        self.validate_position(anchor)?;
+        self.validate_position(head)?;
         self.selections = vec![(anchor, head)];
-        true
+        Ok(())
     }
 
     /// Replaces all selections using byte offsets.
     pub fn set_selections_bytes(&mut self, selections: Vec<(usize, usize)>) -> bool {
-        let valid = selections.iter().all(|(anchor, head)| {
-            *anchor <= self.text.len_bytes()
-                && *head <= self.text.len_bytes()
-                && self.text.is_char_boundary(*anchor)
-                && self.text.is_char_boundary(*head)
-        });
-        if !valid {
-            return false;
+        self.try_set_selections_bytes(selections).is_ok()
+    }
+
+    /// Replaces all selections, reporting why invalid byte offsets were rejected.
+    pub fn try_set_selections_bytes(
+        &mut self,
+        selections: Vec<(usize, usize)>,
+    ) -> Result<(), PositionError> {
+        for (anchor, head) in &selections {
+            self.validate_position(*anchor)?;
+            self.validate_position(*head)?;
         }
         self.selections = selections;
-        true
+        Ok(())
     }
 
     /// Current selection byte offsets.
@@ -463,11 +538,15 @@ impl EditorState {
     /// Returns `false` without mutating when `at` is out of bounds or inside a
     /// UTF-8 scalar.
     pub fn insert(&mut self, at: usize, text: &str) -> bool {
-        if at > self.text.len_bytes() || !self.text.is_char_boundary(at) {
-            return false;
-        }
+        self.try_insert(at, text).is_ok()
+    }
+
+    /// Inserts text, reporting an invalid byte offset.
+    pub fn try_insert(&mut self, at: usize, text: &str) -> Result<(), EditError> {
+        self.validate_position(at)
+            .map_err(EditError::InvalidPosition)?;
         if text.is_empty() {
-            return true;
+            return Ok(());
         }
         let before = self.selections.clone();
         self.apply_insert(at, text);
@@ -479,7 +558,7 @@ impl EditorState {
             },
             before,
         );
-        true
+        Ok(())
     }
 
     /// Deletes a byte range after validating both endpoints.
@@ -487,15 +566,23 @@ impl EditorState {
     /// Returns `false` without mutating when the range is inverted, out of
     /// bounds, or inside a UTF-8 scalar.
     pub fn delete(&mut self, range: Range<usize>) -> bool {
-        if range.start > range.end
-            || range.end > self.text.len_bytes()
-            || !self.text.is_char_boundary(range.start)
-            || !self.text.is_char_boundary(range.end)
-        {
-            return false;
+        self.try_delete(range).is_ok()
+    }
+
+    /// Deletes a byte range, reporting why invalid ranges were rejected.
+    pub fn try_delete(&mut self, range: Range<usize>) -> Result<(), EditError> {
+        if range.start > range.end {
+            return Err(EditError::InvertedRange {
+                start: range.start,
+                end: range.end,
+            });
         }
+        self.validate_position(range.start)
+            .map_err(EditError::InvalidPosition)?;
+        self.validate_position(range.end)
+            .map_err(EditError::InvalidPosition)?;
         if range.start == range.end {
-            return true;
+            return Ok(());
         }
         let text = self.text.slice(range.clone());
         let before = self.selections.clone();
@@ -508,26 +595,37 @@ impl EditorState {
             },
             before,
         );
-        true
+        Ok(())
     }
 
     /// Applies non-overlapping edits as one undoable transaction.
     ///
     /// Ranges are applied from the end of the document toward the start so
     /// later edits never shift earlier byte offsets.
-    pub fn apply_transaction(&mut self, mut edits: Vec<(Range<usize>, String)>) -> bool {
+    pub fn apply_transaction(&mut self, edits: Vec<(Range<usize>, String)>) -> bool {
+        self.try_apply_transaction(edits).is_ok()
+    }
+
+    /// Applies a transaction, reporting why invalid edits were rejected.
+    pub fn try_apply_transaction(
+        &mut self,
+        mut edits: Vec<(Range<usize>, String)>,
+    ) -> Result<(), EditError> {
         edits.retain(|(range, text)| range.start != range.end || !text.is_empty());
         if edits.is_empty() {
-            return false;
+            return Err(EditError::EmptyTransaction);
         }
         for (range, _) in &edits {
-            if range.start > range.end
-                || range.end > self.text.len_bytes()
-                || !self.text.is_char_boundary(range.start)
-                || !self.text.is_char_boundary(range.end)
-            {
-                return false;
+            if range.start > range.end {
+                return Err(EditError::InvertedRange {
+                    start: range.start,
+                    end: range.end,
+                });
             }
+            self.validate_position(range.start)
+                .map_err(EditError::InvalidPosition)?;
+            self.validate_position(range.end)
+                .map_err(EditError::InvalidPosition)?;
         }
         edits.sort_by(|left, right| {
             right
@@ -538,7 +636,7 @@ impl EditorState {
         });
         for pair in edits.windows(2) {
             if pair[1].0.end > pair[0].0.start {
-                return false;
+                return Err(EditError::OverlappingEdits);
             }
         }
         let before = self.selections.clone();
@@ -563,7 +661,7 @@ impl EditorState {
             }
         }
         self.push_record(EditAction::Transaction(actions), before);
-        true
+        Ok(())
     }
 
     /// Applies a transaction only if it was computed against `base_revision`.
@@ -975,6 +1073,43 @@ mod tests {
     fn transaction_rejects_non_boundary_ranges() {
         let mut state = EditorState::from_text("安装");
         assert!(!state.apply_transaction(vec![(1..4, "x".to_owned())]));
+        assert_eq!(state.text().slice(0..6), "安装");
+        assert_eq!(state.undo_depth(), 0);
+    }
+
+    #[test]
+    fn typed_edit_errors_explain_rejections() {
+        let mut state = EditorState::from_text("安装");
+        assert_eq!(
+            state.try_set_selection_bytes(7, 7),
+            Err(PositionError::OutOfBounds { offset: 7, len: 6 })
+        );
+        assert_eq!(
+            state.try_insert(1, "x"),
+            Err(EditError::InvalidPosition(PositionError::NotCharBoundary {
+                offset: 1
+            }))
+        );
+        assert_eq!(
+            state.try_delete(std::ops::Range { start: 4, end: 2 }),
+            Err(EditError::InvertedRange { start: 4, end: 2 })
+        );
+        assert_eq!(
+            state.try_apply_transaction(Vec::new()),
+            Err(EditError::EmptyTransaction)
+        );
+        let mut ascii = EditorState::from_text("abcdef");
+        assert_eq!(
+            ascii.try_apply_transaction(vec![(0..4, "x".to_owned()), (3..6, "y".to_owned())]),
+            Err(EditError::OverlappingEdits)
+        );
+        assert_eq!(ascii.text().slice(0..6), "abcdef");
+        assert_eq!(
+            state.try_apply_transaction(vec![(1..4, "x".to_owned())]),
+            Err(EditError::InvalidPosition(PositionError::NotCharBoundary {
+                offset: 1
+            }))
+        );
         assert_eq!(state.text().slice(0..6), "安装");
         assert_eq!(state.undo_depth(), 0);
     }

@@ -48,6 +48,7 @@ their decision sections.
 | [0040](0040-helix-keymap-compatibility.md) | Helix-compatible keymap preset and shared command contexts | Accepted |
 | [0041](0041-tui-primitive-extraction.md) | TUI primitive extraction | Accepted |
 | [0042](0042-selection-first-session-frontend.md) | Selection-first core, headless session, thin frontend | Accepted |
+| [0043](0043-plugin-api-1-1.md) | Plugin API 1.1 capability and selection contract | Proposed |
 
 ## Numbering Rule
 
