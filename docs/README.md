@@ -56,6 +56,18 @@ Plans and proposals use one of:
 | `Historical` | Closed phase or superseded design record |
 | `Superseded` | Replaced; link the replacement |
 
+Legacy historical documents may still use `closed`, `complete`, `done`,
+`planned`, or `current`. Treat them as historical aliases:
+
+- `closed` / `complete` / `done` → `Landed` for delivered work, or
+  `Historical` for a phase record.
+- `planned` → `Proposed` unless the document is actively being worked on.
+- `current` → not a plan status; reference docs use it to mean “matches the
+  implementation”.
+
+Do not introduce these legacy words in new plans; keep the original wording in
+historical records rather than rewriting them.
+
 Do not duplicate detailed per-slice status in this index. The linked plan is
 the owner.
 
