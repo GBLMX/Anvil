@@ -394,8 +394,14 @@ below 50 MB is impossible without a different storage model.
 and a 1 GiB log, then measures the release binary through a PTY. Run it with:
 
 ```bash
-python3 scripts/perf-gates.py --binary target/release/anvil
+scripts/release-layout.sh /tmp/anvil-layout
+python3 scripts/perf-gates.py --binary /tmp/anvil-layout/bin/anvil
 ```
+
+A clean `cargo build --release -p anvil-distro-standard` does not place
+`anvil-gateway` beside `target/release/anvil`. The script finds the sidecar
+from `ANVIL_GATEWAY`, the binary directory, or `dist/anvil/bin`; use
+`--gateway <path>` when testing a sidecar-free target binary.
 
 | Scenario | Gate | 2026-11-16 i7-12700H |
 |---|---:|---:|

@@ -278,6 +278,7 @@ def inotify_kernel_latency(path: Path) -> float | None:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--binary", type=Path, default=Path("target/release/anvil"))
+    parser.add_argument("--gateway", type=Path)
     parser.add_argument("--iterations", type=int, default=3)
     parser.add_argument("--timeout", type=float, default=60.0)
     parser.add_argument("--keep", action="store_true")
@@ -285,6 +286,32 @@ def main() -> int:
     binary = args.binary.resolve()
     if not binary.is_file():
         parser.error(f"binary not found: {binary}")
+    gateway = args.gateway
+    if gateway is not None:
+        gateway = gateway.resolve()
+        if not gateway.is_file():
+            parser.error(f"gateway not found: {gateway}")
+    else:
+        repository = Path(__file__).resolve().parent.parent
+        candidates = [
+            os.environ.get("ANVIL_GATEWAY"),
+            str(binary.parent / "anvil-gateway"),
+            str(repository / "dist/anvil/bin/anvil-gateway"),
+        ]
+        gateway = next(
+            (
+                Path(candidate).resolve()
+                for candidate in candidates
+                if candidate and Path(candidate).is_file()
+            ),
+            None,
+        )
+    if gateway is None:
+        parser.error(
+            "gateway not found; run scripts/release-layout.sh and use "
+            "--binary <layout>/bin/anvil, or pass --gateway"
+        )
+    os.environ["ANVIL_GATEWAY"] = str(gateway)
 
     root = Path(tempfile.mkdtemp(prefix="anvil-perf-gates."))
     try:
