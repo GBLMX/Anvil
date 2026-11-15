@@ -209,7 +209,7 @@ pub(crate) fn apply_project_replace(
     for (index, (relative, data)) in writes.iter().enumerate() {
         if let Err(error) = client.write_all(relative, data) {
             let mut rollback_error = None;
-            for (original_path, original) in originals.iter().take(index + 1) {
+            for (original_path, original) in originals.iter().take(index + 1).rev() {
                 if let Err(rollback) = client.write_all(original_path, original) {
                     rollback_error = Some(format!("{original_path}: {rollback}"));
                 }
@@ -288,4 +288,135 @@ fn collect_fallback(
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use anvil_ipc::Listener;
+    use serde_json::json;
+    use sha2::{Digest, Sha256};
+    use std::sync::{Arc, Mutex};
+    use std::thread;
+
+    fn plan(files: &[(&str, &[u8])]) -> ProjectReplacePlan {
+        ProjectReplacePlan {
+            old: "old".to_owned(),
+            new: "new".to_owned(),
+            files: files
+                .iter()
+                .map(|(relative, bytes)| ProjectReplaceFile {
+                    relative: (*relative).to_owned(),
+                    matches: 1,
+                    hash: Sha256::digest(bytes).into(),
+                })
+                .collect(),
+        }
+    }
+
+    fn send_response(connection: &mut anvil_ipc::Connection, request: &Value, result: Value) {
+        let response = json!({
+            "jsonrpc": "2.0",
+            "id": request["id"],
+            "result": result,
+        });
+        connection
+            .send(&serde_json::to_vec(&response).expect("response"))
+            .expect("send response");
+    }
+
+    fn send_error(connection: &mut anvil_ipc::Connection, request: &Value) {
+        let response = json!({
+            "jsonrpc": "2.0",
+            "id": request["id"],
+            "error": {"code": -32000, "message": "write failed"},
+        });
+        connection
+            .send(&serde_json::to_vec(&response).expect("response"))
+            .expect("send error");
+    }
+
+    #[test]
+    fn rejects_a_preview_hash_change_before_writing() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let socket = dir.path().join("gateway.sock");
+        let listener = Listener::bind(&socket).expect("bind");
+        let server = thread::spawn(move || {
+            let mut connection = listener.accept().expect("accept");
+            let hello: Value =
+                serde_json::from_slice(&connection.recv().expect("recv").expect("frame"))
+                    .expect("hello");
+            assert_eq!(hello["method"], "session.hello");
+            send_response(&mut connection, &hello, json!({"session_id": "test"}));
+            let request: Value =
+                serde_json::from_slice(&connection.recv().expect("recv").expect("frame"))
+                    .expect("request");
+            assert_eq!(request["method"], "sys.read_file");
+            let mut frame = vec![1];
+            frame.extend_from_slice(&0u64.to_be_bytes());
+            frame.extend_from_slice(&0u64.to_be_bytes());
+            frame.extend_from_slice(b"changed");
+            connection.send(&frame).expect("binary response");
+        });
+        let mut client = GatewayClient::connect(&socket, &[7; 32]).expect("client");
+        let plan = plan(&[("a.txt", b"original")]);
+        let error = apply_project_replace(&mut client, &plan).expect_err("hash mismatch");
+        assert!(error.contains("changed since the preview"), "{error}");
+        drop(client);
+        server.join().expect("server");
+    }
+
+    #[test]
+    fn write_failure_rolls_back_completed_files() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let socket = dir.path().join("gateway.sock");
+        let listener = Listener::bind(&socket).expect("bind");
+        let writes = Arc::new(Mutex::new(Vec::new()));
+        let server_writes = Arc::clone(&writes);
+        let server = thread::spawn(move || {
+            let mut connection = listener.accept().expect("accept");
+            let hello: Value =
+                serde_json::from_slice(&connection.recv().expect("recv").expect("frame"))
+                    .expect("hello");
+            assert_eq!(hello["method"], "session.hello");
+            send_response(&mut connection, &hello, json!({"session_id": "test"}));
+            let mut failed = false;
+            while let Some(frame) = connection.recv().expect("recv") {
+                let request: Value = serde_json::from_slice(&frame).expect("request");
+                let method = request["method"].as_str().expect("method");
+                match method {
+                    "sys.read_file" => {
+                        let path = request["params"]["path"].as_str().expect("path");
+                        let data = if path == "a.txt" { b"old1" } else { b"old2" };
+                        let mut response = vec![1];
+                        response.extend_from_slice(&0u64.to_be_bytes());
+                        response.extend_from_slice(&0u64.to_be_bytes());
+                        response.extend_from_slice(data);
+                        connection.send(&response).expect("binary response");
+                    }
+                    "sys.write_file" => {
+                        let path = request["params"]["path"].as_str().expect("path");
+                        server_writes.lock().expect("writes").push(path.to_owned());
+                        if path == "b.txt" && !failed {
+                            failed = true;
+                            send_error(&mut connection, &request);
+                        } else {
+                            send_response(&mut connection, &request, json!({"next_offset": 4}));
+                        }
+                    }
+                    other => panic!("unexpected method {other}"),
+                }
+            }
+        });
+        let mut client = GatewayClient::connect(&socket, &[7; 32]).expect("client");
+        let plan = plan(&[("a.txt", b"old1"), ("b.txt", b"old2")]);
+        let error = apply_project_replace(&mut client, &plan).expect_err("write failure");
+        assert!(error.contains("rollback complete"), "{error}");
+        drop(client);
+        server.join().expect("server");
+        assert_eq!(
+            writes.lock().expect("writes").as_slice(),
+            ["a.txt", "b.txt", "b.txt", "a.txt"]
+        );
+    }
 }

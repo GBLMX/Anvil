@@ -4,9 +4,25 @@ use super::*;
 use anvil_lsp_client as lsp;
 use anvil_session::plugin_provider::{PluginProviderRegistry, PluginProviderRequests};
 use anvil_session::provider::{CancellationToken, PickerEntry, ProviderId};
+use std::sync::atomic::{AtomicU64, Ordering};
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub(crate) struct BufferId(u64);
+
+impl BufferId {
+    pub(crate) fn next() -> Self {
+        static NEXT: AtomicU64 = AtomicU64::new(1);
+        Self(NEXT.fetch_add(1, Ordering::Relaxed))
+    }
+
+    pub(crate) fn get(self) -> u64 {
+        self.0
+    }
+}
 
 #[derive(Clone)]
 pub(crate) struct Buffer {
+    pub(crate) id: BufferId,
     pub(crate) editor: DocumentSession,
     pub(crate) path: Option<PathBuf>,
     pub(crate) cursor: usize,
@@ -661,16 +677,29 @@ pub(crate) struct AppearanceState {
     pub(crate) persist_theme: bool,
 }
 
-#[derive(Default)]
 pub(crate) struct BufferState {
     /// All open buffers, including the active one after the first switch.
     pub(crate) entries: Vec<Buffer>,
+    /// Stable identity of the active editor document.
+    pub(crate) active_id: BufferId,
     /// Active buffer index.
     pub(crate) active: usize,
     /// Secondary pane when a vertical split is open.
     pub(crate) split: Option<Pane>,
     /// Internal buffers for unopened files changed by workspace edits.
     pub(crate) background: HashMap<PathBuf, Buffer>,
+}
+
+impl Default for BufferState {
+    fn default() -> Self {
+        Self {
+            entries: Vec::new(),
+            active_id: BufferId::next(),
+            active: 0,
+            split: None,
+            background: HashMap::new(),
+        }
+    }
 }
 
 #[derive(Default)]

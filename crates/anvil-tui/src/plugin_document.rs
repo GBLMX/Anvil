@@ -13,12 +13,17 @@ use crate::Model;
 impl Model {
     /// Current active-buffer snapshot for a plugin API call.
     pub fn plugin_snapshot(&self) -> DocumentSnapshot {
-        Session::snapshot(&self.session.editor, self.plugin_buffer_id())
+        Session::snapshot(&self.session.editor, self.buffers.active_id.get())
     }
 
     /// Applies one plugin transaction against the active buffer.
     pub fn apply_plugin_edit(&mut self, request: ApplyEditRequest) -> Result<u64, String> {
-        let buffer_id = self.plugin_buffer_id();
+        if self.pager.back.is_some() {
+            self.status.text = "E: editor is showing a read-only view".to_owned();
+            self.file.dirty = true;
+            return Err("editor is showing a read-only view".to_owned());
+        }
+        let buffer_id = self.buffers.active_id.get();
         let count = request.edits.len();
         match Session::new(&mut self.session.editor, buffer_id).apply(request) {
             Ok(revision) => {
@@ -50,6 +55,14 @@ impl Model {
         method: &str,
         params: serde_json::Value,
     ) -> Result<serde_json::Value, (i32, String)> {
+        if self.pager.back.is_some()
+            && matches!(
+                method,
+                "editor.get_view" | "editor.get_snapshot" | "editor.apply_edit"
+            )
+        {
+            return Err((-32000, "editor is showing a read-only view".to_owned()));
+        }
         match method {
             "editor.get_view" => Ok(serde_json::json!(self.session.editor.snapshot().view())),
             "editor.get_snapshot" => Ok(serde_json::json!(self.plugin_snapshot())),
@@ -196,10 +209,6 @@ impl Model {
             .map(|registration| registration.id.as_str().to_owned())
             .map_err(|error| error.to_string())
     }
-
-    fn plugin_buffer_id(&self) -> u64 {
-        self.buffers.active as u64 + 1
-    }
 }
 
 #[cfg(test)]
@@ -275,6 +284,49 @@ mod tests {
         };
         assert!(model.apply_plugin_edit(request).is_err());
         assert!(model.status.text.contains("buffer mismatch"));
+    }
+
+    #[test]
+    fn buffer_identity_is_stable_across_tab_switches() {
+        let mut model = Model::new(EditorState::from_text("first"), None);
+        model.ensure_current_buffer();
+        let first = model.plugin_snapshot().buffer_id;
+        model.new_buffer();
+        let second = model.plugin_snapshot().buffer_id;
+        assert_ne!(first, second);
+
+        model.select_buffer(0);
+        assert_eq!(model.plugin_snapshot().buffer_id, first);
+        model.select_buffer(1);
+        assert_eq!(model.plugin_snapshot().buffer_id, second);
+
+        model.split_vertical();
+        assert_eq!(
+            model.buffers.split.as_ref().expect("split").buffer.id,
+            model.buffers.active_id
+        );
+
+        model.close_buffer(1, true);
+        assert_eq!(model.plugin_snapshot().buffer_id, first);
+    }
+
+    #[test]
+    fn plugin_edits_are_rejected_on_a_read_only_page() {
+        let mut model = Model::new(EditorState::from_text("abcd"), None);
+        let buffer_id = model.plugin_snapshot().buffer_id;
+        model.show_help();
+        let error = model
+            .apply_plugin_edit(ApplyEditRequest {
+                buffer_id,
+                base_revision: model.session.editor.revision(),
+                edits: vec![DocumentEdit {
+                    range: TextRange { start: 0, end: 1 },
+                    text: "X".to_owned(),
+                }],
+            })
+            .expect_err("read-only page must reject edits");
+        assert!(error.contains("read-only view"), "{error}");
+        assert!(model.pager.back.is_some());
     }
 
     #[test]

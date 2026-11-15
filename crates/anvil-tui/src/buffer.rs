@@ -11,6 +11,7 @@ use std::sync::Arc;
 impl Model {
     pub(crate) fn snapshot(&self) -> Buffer {
         Buffer {
+            id: self.buffers.active_id,
             editor: self.session.editor.clone(),
             path: self.session.path.clone(),
             cursor: self.session.cursor,
@@ -290,6 +291,7 @@ impl Model {
             false,
             Some(syntax),
         );
+        self.buffers.active_id = buffer.id;
         self.buffers.active = index;
         self.ui.input_mode = InputMode::Normal;
         self.input.pending = None;
@@ -329,6 +331,7 @@ impl Model {
         }
         self.ensure_current_buffer();
         self.buffers.entries.push(Buffer {
+            id: BufferId::next(),
             editor: EditorState::from_text("").into(),
             path: None,
             cursor: 0,
@@ -492,6 +495,7 @@ impl Model {
         self.buffers.split = None;
         self.ui.focus.split = false;
         self.buffers.active = 0;
+        self.buffers.active_id = BufferId::next();
         self.sync_lsp_active();
         self.file.dirty = true;
     }
@@ -577,6 +581,7 @@ impl Model {
             self.buffers.entries.push(self.snapshot());
         }
         self.buffers.entries.push(Buffer {
+            id: BufferId::next(),
             editor: EditorState::from_text(&text).into(),
             path: Some(path.clone()),
             cursor: 0,

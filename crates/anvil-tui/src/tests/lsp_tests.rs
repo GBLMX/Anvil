@@ -1123,6 +1123,10 @@ fn formatting_response_applies_edits_without_writing() {
     assert_eq!(fs::read_to_string(&file).expect("disk"), "fn main(){}");
     assert!(model.save_all());
     assert_eq!(fs::read_to_string(&file).expect("saved"), "//fn main(){}");
+    assert_eq!(model.session.editor.undo_depth(), 1);
+    model.undo();
+    assert_eq!(model.session.editor.text().slice(0..11), "fn main(){}");
+    assert_eq!(model.session.editor.undo_depth(), 0);
 }
 
 #[test]
@@ -2138,6 +2142,6 @@ fn lsp_status_command_reports_server_details() {
     model.execute_command("lsp-status");
     let text = &model.status.text;
     assert!(text.contains("lsp clangd (c) running"), "{text}");
-    assert!(text.contains("root /ws"), "{text}");
+    assert!(text.contains("root /ws (primary)"), "{text}");
     assert!(text.contains("server clangd 18"), "{text}");
 }

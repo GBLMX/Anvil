@@ -141,6 +141,10 @@ one starts the plugin host with that command, exactly like an `onCommand`
 manifest command. Registration itself grants no filesystem, exec, clipboard, or
 editor capabilities.
 
+V1 intentionally carries no argument schema, capability, or declarative effect
+descriptor in this request; the plugin handler owns its command effects, and the
+editor still enforces its normal effect and capability boundaries.
+
 ## Provider registration
 
 `editor.register_provider` registers a data-only picker or completion provider.

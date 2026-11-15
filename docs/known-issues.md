@@ -14,12 +14,25 @@ in the plans linked below.
 | Distribution | Signed install, bounded download queue, content-addressed store, `pkg.installed`, the enable/disable/uninstall/rollback manager, typed installer `sys.fetch`, official-only release layout/installer, signed index/revocation verifier-cache, anti-rollback state, and signed release artifacts exist; marketplace UI/indexed install/consent/provenance surfaces remain missing | [0.6.x](0.6.x-plan.md) |
 | Performance | Temporary i7-12700H reference baseline is recorded; the planned 64 GiB replacement requires a fresh baseline | [performance](performance.md) |
 | Persistence | Session/tab restore, crash recovery, and dirty-swap recovery landed; persistent undo is deliberately rejected for this phase | [0.5.6](0.5.x-plan.md) |
+| Save metadata | Saves use temp-file + `fsync` + rename, but the replacement inode does not preserve owner, group, ACLs, xattrs, or hard links | [ADR-0023](adr/0023-internal-capability-closure.md) |
+| Project replace | Preview hashes every file; apply re-reads and hash-checks before sequential writes. A write failure rolls back in reverse order, but rollback failure is reported and cross-file atomicity is not guaranteed | [search.rs](../crates/anvil-workspace/src/search.rs) |
 | Configuration | Settings/keymap/theme schemas and explicit `:config-reload` landed; file watching is not enabled | [0.5.x](0.5.x-plan.md) |
 | LSP | Language servers are not bundled; discovery, restart, and lifecycle are managed by the editor | [INSTALL](../INSTALL.md) |
 | Formatting | External formatters are stdin-to-stdout only (`rustfmt`, `gofmt`); in-place and temp-file modes are unsupported, and format-on-save still uses LSP | [0.6.0.x provider plan](0.6.0.x-provider-protocol-plan.md) |
 | DAP | Debug adapters are a trusted direct-spawn exception; runtime plugin DAP providers are rejected and there is no generic process/stdio broker | [ADR-0037](adr/0037-kernel-api-baseline.md), [0.6.0.x provider plan](0.6.0.x-provider-protocol-plan.md) |
 | Plugin providers | Runtime plugins may provide picker/completion only; formatter/DAP providers are not allowed and results remain data-only. Cancellation removes queued calls and late results, but cannot abort an already-sent synchronous host call | [0.6.0.x provider plan](0.6.0.x-provider-protocol-plan.md) |
 | Release | Signed release workflow, SHA256SUMS, SPDX SBOM, and provenance attestation landed; production signing keys remain external release secrets | [0.6.1](0.6.x-plan.md), [RELEASE](../RELEASE.md) |
+
+### File lifecycle state matrix
+
+| State | Mutation | Manual save | Auto-save |
+|---|---|---|---|
+| Clean | allowed | atomic replacement | no-op |
+| Modified | allowed | atomic replacement | focus-change policy only |
+| Missing | allowed | recreates the path unless read-only | skipped |
+| Read-only | rejected | rejected | skipped |
+| External conflict | allowed | blocked until `:conflict-recover` or `:conflict-discard` | skipped |
+| Stale after project replace | allowed | blocked until reload | aborts the focus change with an error |
 
 
 ## Recently fixed bug

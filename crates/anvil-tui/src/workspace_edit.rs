@@ -48,6 +48,13 @@ enum Operation {
     },
 }
 
+#[derive(Debug)]
+enum ResourceUndo {
+    Remove(PathBuf),
+    Rename { from: PathBuf, to: PathBuf },
+    Restore { backup: PathBuf, original: PathBuf },
+}
+
 #[derive(Debug, Clone, Default)]
 pub(crate) struct WorkspaceEdit {
     operations: Vec<Operation>,
@@ -264,6 +271,30 @@ impl WorkspaceEdit {
     }
 
     fn apply_resources(&self, model: &mut Model) -> Result<(), String> {
+        let mut undo = Vec::new();
+        if let Err(error) = self.stage_resources(model, &mut undo) {
+            return Err(match rollback_resources(model, &undo) {
+                Ok(()) => format!("{error}; rollback complete"),
+                Err(rollback) => format!("{error}; rollback failed: {rollback}"),
+            });
+        }
+        self.apply_resource_model_state(model);
+        for action in &undo {
+            if let ResourceUndo::Restore { backup, .. } = action
+                && path_exists(model, backup)?
+            {
+                model.remove_path(backup)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn stage_resources(
+        &self,
+        model: &mut Model,
+        undo: &mut Vec<ResourceUndo>,
+    ) -> Result<(), String> {
+        let mut backup_counter = 0usize;
         for operation in &self.operations {
             match operation {
                 Operation::Create {
@@ -271,16 +302,18 @@ impl WorkspaceEdit {
                     overwrite,
                     ignore_if_exists,
                 } => {
-                    if path_exists(model, path)? && !overwrite {
+                    let exists = path_exists(model, path)?;
+                    if exists && !overwrite {
                         if *ignore_if_exists {
                             continue;
                         }
                         return Err(format!("file exists: {}", path.display()));
                     }
+                    if exists && *overwrite {
+                        backup_existing(model, path, &mut backup_counter, undo)?;
+                    }
                     model.write_file(path, "")?;
-                    model.tree.stale = true;
-                    model.sync_watch_paths();
-                    model.file.dirty = true;
+                    undo.push(ResourceUndo::Remove(path.clone()));
                 }
                 Operation::Rename {
                     from,
@@ -304,10 +337,13 @@ impl WorkspaceEdit {
                                 to.display()
                             ));
                         }
-                        model.remove_path(to)?;
+                        backup_existing(model, to, &mut backup_counter, undo)?;
                     }
                     model.rename_path(from, to)?;
-                    model.retarget_path(from, to);
+                    undo.push(ResourceUndo::Rename {
+                        from: to.clone(),
+                        to: from.clone(),
+                    });
                 }
                 Operation::Delete {
                     path,
@@ -326,14 +362,103 @@ impl WorkspaceEdit {
                             path.display()
                         ));
                     }
-                    model.remove_path(path)?;
-                    model.close_paths_under(path);
+                    let backup = backup_path(model, path, backup_counter)?;
+                    backup_counter += 1;
+                    model.rename_path(path, &backup)?;
+                    undo.push(ResourceUndo::Restore {
+                        backup,
+                        original: path.clone(),
+                    });
                 }
                 Operation::Text { .. } => {}
             }
         }
         Ok(())
     }
+
+    fn apply_resource_model_state(&self, model: &mut Model) {
+        for operation in &self.operations {
+            match operation {
+                Operation::Rename { from, to, .. } => model.retarget_path(from, to),
+                Operation::Delete { path, .. } => model.close_paths_under(path),
+                Operation::Create { .. } | Operation::Text { .. } => {}
+            }
+        }
+        if self
+            .operations
+            .iter()
+            .any(|operation| !matches!(operation, Operation::Text { .. }))
+        {
+            model.tree.stale = true;
+            model.sync_watch_paths();
+            model.file.dirty = true;
+        }
+    }
+}
+
+fn backup_existing(
+    model: &mut Model,
+    path: &Path,
+    counter: &mut usize,
+    undo: &mut Vec<ResourceUndo>,
+) -> Result<(), String> {
+    let backup = backup_path(model, path, *counter)?;
+    *counter += 1;
+    model.rename_path(path, &backup)?;
+    undo.push(ResourceUndo::Restore {
+        backup,
+        original: path.to_path_buf(),
+    });
+    Ok(())
+}
+
+fn backup_path(model: &mut Model, path: &Path, counter: usize) -> Result<PathBuf, String> {
+    let root = model
+        .workspace
+        .roots
+        .owning_root(path)
+        .map(|root| root.path.clone())
+        .or_else(|| path.parent().map(Path::to_path_buf))
+        .ok_or_else(|| format!("no backup root for {}", path.display()))?;
+    for attempt in 0..128 {
+        let candidate = root.join(format!(
+            ".anvil-tx-{}-{counter}-{attempt}",
+            std::process::id()
+        ));
+        if !path_exists(model, &candidate)? {
+            return Ok(candidate);
+        }
+    }
+    Err(format!(
+        "could not allocate a backup for {}",
+        path.display()
+    ))
+}
+
+fn rollback_resources(model: &mut Model, undo: &[ResourceUndo]) -> Result<(), String> {
+    for action in undo.iter().rev() {
+        match action {
+            ResourceUndo::Remove(path) => {
+                if path_exists(model, path)? {
+                    model.remove_path(path)?;
+                }
+            }
+            ResourceUndo::Rename { from, to } => {
+                if path_exists(model, from)? {
+                    model.rename_path(from, to)?;
+                }
+            }
+            ResourceUndo::Restore { backup, original } => {
+                if path_exists(model, backup)? {
+                    if path_exists(model, original)? {
+                        model.remove_path(original)?;
+                    }
+                    model.rename_path(backup, original)?;
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 fn parse_document_change(document: &serde_json::Value) -> Result<Operation, String> {
@@ -614,6 +739,7 @@ fn commit_states(model: &mut Model, prepared: HashMap<PathBuf, EditorState>) {
             model.buffers.background.insert(
                 path.clone(),
                 Buffer {
+                    id: BufferId::next(),
                     editor: state.into(),
                     path: Some(path),
                     cursor: 0,

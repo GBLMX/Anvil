@@ -1381,6 +1381,22 @@ fn visual_delete_applies_to_multiple_selections_in_one_undo() {
 }
 
 #[test]
+fn multi_cursor_insert_is_one_undo_group() {
+    let mut model = Model::new(EditorState::from_text("ab\ncd"), None);
+    assert!(
+        model
+            .session
+            .editor
+            .set_selections_bytes(vec![(0, 0), (3, 3)])
+    );
+    model.insert_text("X");
+    assert_eq!(model.session.editor.text().slice(0..7), "Xab\nXcd");
+    assert_eq!(model.session.editor.undo_depth(), 1);
+    model.undo();
+    assert_eq!(model.session.editor.text().slice(0..5), "ab\ncd");
+    assert_eq!(model.session.editor.undo_depth(), 0);
+}
+#[test]
 fn focus_change_auto_save_writes_the_active_buffer() {
     let dir = tempfile::tempdir().expect("tempdir");
     let first = dir.path().join("first.rs");

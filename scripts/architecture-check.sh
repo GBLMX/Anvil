@@ -25,6 +25,7 @@ crates/anvil-tui/src/task_runner.rs:1
 crates/anvil-tui/src/tests/gateway_multi_root.rs:1
 crates/anvil-tui/src/tests/interaction.rs:1
 crates/anvil-workspace/src/lib.rs:10
+crates/anvil-workspace/src/search.rs:2
 "
 allowed_channels="
 crates/anvil-control/src/lib.rs:2

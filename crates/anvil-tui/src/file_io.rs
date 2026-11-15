@@ -67,6 +67,7 @@ impl Model {
                 self.buffers.active = 0;
             }
             self.buffers.entries.push(Buffer {
+                id: BufferId::next(),
                 editor: EditorState::from_text(&text).into(),
                 path: Some(absolute),
                 visual_anchor: None,

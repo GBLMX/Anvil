@@ -144,7 +144,7 @@ impl Model {
             settings.root_markers.join(",")
         };
         let mut detail = format!(
-            "lsp {} ({}) {state} · root {}",
+            "lsp {} ({}) {state} · root {} (primary)",
             settings.label,
             key.1,
             root.display()

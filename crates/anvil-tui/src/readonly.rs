@@ -31,6 +31,7 @@ impl Model {
             EditorState::from_text(text).into(),
         );
         let saved = Buffer {
+            id: self.buffers.active_id,
             editor,
             path: self.session.path.take(),
             cursor: self.session.cursor,
@@ -96,6 +97,7 @@ impl Model {
         self.git.stage_pending = None;
         self.git.resolve_pending = None;
         let syntax = saved.syntax.clone();
+        self.buffers.active_id = saved.id;
         self.session.editor = saved.editor;
         self.session.path = saved.path;
         self.session.cursor = saved.cursor;

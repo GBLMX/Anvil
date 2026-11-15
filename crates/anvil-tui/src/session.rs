@@ -174,6 +174,7 @@ fn restore_buffer(
         (disk_text.unwrap_or_default(), false)
     };
     let buffer = Buffer {
+        id: BufferId::next(),
         editor: EditorState::from_text(&text).into(),
         path: path.clone(),
         cursor: saved.cursor,

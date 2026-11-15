@@ -470,3 +470,56 @@ fn applies_directory_resources_through_gateway() {
     assert!(!renamed.exists());
     drop(session);
 }
+
+#[cfg(unix)]
+#[test]
+fn failed_resource_operation_rolls_back_prior_files() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let dir = tempfile::tempdir().expect("tempdir");
+    let first = dir.path().join("first.txt");
+    let blocked = dir.path().join("blocked");
+    let second = blocked.join("nested.txt");
+    fs::create_dir(&blocked).expect("blocked dir");
+    fs::set_permissions(&blocked, fs::Permissions::from_mode(0o500)).expect("read-only dir");
+    let mut model = open(&dir);
+    let workspace_edit = WorkspaceEdit::from_lsp(&serde_json::json!({
+        "documentChanges": [
+            {"kind": "create", "uri": uri(&first)},
+            {"kind": "create", "uri": uri(&second)}
+        ]
+    }))
+    .expect("parse");
+    let error = workspace_edit
+        .apply(&mut model)
+        .expect_err("second create should fail");
+    assert!(error.contains("rollback complete"), "{error}");
+    assert!(!first.exists());
+    fs::set_permissions(&blocked, fs::Permissions::from_mode(0o700)).expect("restore dir");
+}
+
+#[test]
+fn workspace_text_edit_is_one_undo_group() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("file.txt");
+    fs::write(&path, "abc").expect("file");
+    let mut model = Model::open(&path).expect("open");
+    let workspace_edit = WorkspaceEdit::from_lsp(&serde_json::json!({
+        "changes": {
+            uri(&path): [{
+                "range": {
+                    "start": {"line": 0, "character": 0},
+                    "end": {"line": 0, "character": 1}
+                },
+                "newText": "x"
+            }]
+        }
+    }))
+    .expect("parse");
+    workspace_edit.apply(&mut model).expect("apply");
+    assert_eq!(model.session.editor.text().slice(0..3), "xbc");
+    assert_eq!(model.session.editor.undo_depth(), 1);
+    model.undo();
+    assert_eq!(model.session.editor.text().slice(0..3), "abc");
+    assert_eq!(model.session.editor.undo_depth(), 0);
+}

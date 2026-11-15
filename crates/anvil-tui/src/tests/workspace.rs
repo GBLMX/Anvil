@@ -23,6 +23,12 @@ fn rejects_cross_root_mutations_and_allows_same_root() {
     assert!(error.contains("across workspace roots"));
     assert!(first.path().join("a.txt").exists());
 
+    let error = model
+        .copy_path(&first.path().join("a.txt"), &second.path().join("copy.txt"))
+        .expect_err("cross-root copy");
+    assert!(error.contains("across workspace roots"));
+    assert!(!second.path().join("copy.txt").exists());
+
     model
         .rename_path(&second.path().join("a.txt"), &second.path().join("b.txt"))
         .expect("same-root rename");
