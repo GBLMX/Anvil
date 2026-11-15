@@ -494,9 +494,6 @@ pub(crate) struct LspResultsState {
     pub(crate) completion: Option<CompletionState>,
     pub(crate) completion_resolve: Option<(u64, usize)>,
     pub(crate) snippet: Option<SnippetSession>,
-    pub(crate) semantic_legend: Vec<String>,
-    pub(crate) semantic_tokens: Vec<SemanticToken>,
-    pub(crate) semantic_revision: Option<u64>,
     pub(crate) hover: Option<String>,
     pub(crate) code_actions: Option<CodeActionState>,
     pub(crate) document_symbols: Option<SymbolState>,
@@ -997,12 +994,21 @@ pub(crate) struct InlayHintsState {
     pub(crate) support: HashMap<(String, String), bool>,
 }
 
+/// Semantic token legend, cached tokens, and the revision they describe.
+#[derive(Default)]
+pub(crate) struct SemanticTokensState {
+    pub(crate) legend: Vec<String>,
+    pub(crate) tokens: Vec<SemanticToken>,
+    pub(crate) revision: Option<u64>,
+}
+
 #[derive(Default)]
 pub(crate) struct LanguageState {
     pub(crate) dap: DapState,
     pub(crate) diagnostics: DiagnosticsState,
     pub(crate) lsp: LspTransportState,
     pub(crate) lsp_requests: LspRequestsState,
+    pub(crate) semantic_tokens: SemanticTokensState,
     pub(crate) inlay_hints: InlayHintsState,
     pub(crate) code_lens: Option<code_lens::CodeLensState>,
 }

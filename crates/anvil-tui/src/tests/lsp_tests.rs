@@ -415,12 +415,12 @@ fn semantic_tokens_round_trip_through_gateway() {
     model.open_path(&main).expect("open");
     std::thread::sleep(Duration::from_secs(3));
     model.poll_lsp();
-    assert!(!model.overlays.lsp_results.semantic_legend.is_empty());
+    assert!(!model.language.semantic_tokens.legend.is_empty());
     model.request_semantic_tokens();
     let deadline = Instant::now() + Duration::from_secs(20);
     loop {
         model.poll_lsp();
-        if !model.overlays.lsp_results.semantic_tokens.is_empty() {
+        if !model.language.semantic_tokens.tokens.is_empty() {
             break;
         }
         assert!(

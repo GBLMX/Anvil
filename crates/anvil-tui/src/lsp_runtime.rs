@@ -45,7 +45,7 @@ impl Model {
         self.overlays.lsp_results.document_highlights = None;
         self.overlays.lsp_results.call_hierarchy = None;
         self.close_overlay(OverlayKind::CallHierarchy);
-        self.overlays.lsp_results.semantic_legend.clear();
+        self.language.semantic_tokens.legend.clear();
     }
 
     fn retain_lsp_worker(&mut self, desired: Option<&(String, String)>) {
@@ -373,9 +373,9 @@ impl Model {
                     self.language.inlay_hints.hints.clear();
                     self.language.inlay_hints.pending = None;
                     self.language.inlay_hints.checked = None;
-                    self.overlays.lsp_results.semantic_legend = semantic_token_types;
-                    self.overlays.lsp_results.semantic_tokens.clear();
-                    self.overlays.lsp_results.semantic_revision = None;
+                    self.language.semantic_tokens.legend = semantic_token_types;
+                    self.language.semantic_tokens.tokens.clear();
+                    self.language.semantic_tokens.revision = None;
                     self.request_semantic_tokens();
                 }
             }
@@ -419,8 +419,8 @@ impl Model {
                         .sum::<usize>()
                 );
                 if active
-                    && !self.overlays.lsp_results.semantic_legend.is_empty()
-                    && self.overlays.lsp_results.semantic_revision
+                    && !self.language.semantic_tokens.legend.is_empty()
+                    && self.language.semantic_tokens.revision
                         != Some(self.session.editor.revision())
                 {
                     self.request_semantic_tokens();

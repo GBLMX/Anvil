@@ -6,7 +6,7 @@ use anvil_lsp_client::file_uri;
 
 impl Model {
     pub(crate) fn request_semantic_tokens(&mut self) {
-        if self.overlays.lsp_results.semantic_legend.is_empty() {
+        if self.language.semantic_tokens.legend.is_empty() {
             return;
         }
         self.language
@@ -30,8 +30,8 @@ impl Model {
 
     pub(crate) fn apply_semantic_tokens_response(&mut self, result: &serde_json::Value) {
         let Some(data) = result.get("data").and_then(serde_json::Value::as_array) else {
-            self.overlays.lsp_results.semantic_tokens.clear();
-            self.overlays.lsp_results.semantic_revision = None;
+            self.language.semantic_tokens.tokens.clear();
+            self.language.semantic_tokens.revision = None;
             self.status.text = "lsp: no semantic tokens".to_owned();
             return;
         };
@@ -73,16 +73,16 @@ impl Model {
                 });
             }
         }
-        self.overlays.lsp_results.semantic_tokens = tokens;
-        self.overlays.lsp_results.semantic_revision =
-            if self.overlays.lsp_results.semantic_tokens.is_empty() {
-                None
-            } else {
-                Some(self.session.editor.revision())
-            };
+        self.language.semantic_tokens.tokens = tokens;
+        self.language.semantic_tokens.revision = if self.language.semantic_tokens.tokens.is_empty()
+        {
+            None
+        } else {
+            Some(self.session.editor.revision())
+        };
         self.status.text = format!(
             "semantic tokens: {}",
-            self.overlays.lsp_results.semantic_tokens.len()
+            self.language.semantic_tokens.tokens.len()
         );
         self.file.dirty = true;
     }
@@ -91,8 +91,8 @@ impl Model {
         self.language
             .lsp_requests
             .cancel(|kind| kind == LspRequestKind::SemanticTokens);
-        self.overlays.lsp_results.semantic_tokens.clear();
-        self.overlays.lsp_results.semantic_revision = None;
+        self.language.semantic_tokens.tokens.clear();
+        self.language.semantic_tokens.revision = None;
     }
 
     pub(crate) fn semantic_ranges(
@@ -100,12 +100,12 @@ impl Model {
         line_start: usize,
         line_end: usize,
     ) -> Vec<(usize, usize, Style)> {
-        if self.overlays.lsp_results.semantic_revision != Some(self.session.editor.revision()) {
+        if self.language.semantic_tokens.revision != Some(self.session.editor.revision()) {
             return Vec::new();
         }
-        self.overlays
-            .lsp_results
+        self.language
             .semantic_tokens
+            .tokens
             .iter()
             .filter_map(|token| {
                 if token.end <= line_start || token.start >= line_end {
@@ -119,9 +119,9 @@ impl Model {
 
     fn semantic_style(&self, type_index: usize) -> Option<Style> {
         let name = self
-            .overlays
-            .lsp_results
-            .semantic_legend
+            .language
+            .semantic_tokens
+            .legend
             .get(type_index)?
             .to_ascii_lowercase();
         let color = match name.as_str() {
@@ -148,8 +148,7 @@ mod tests {
     #[test]
     fn decodes_and_maps_semantic_tokens() {
         let mut model = crate::Model::new(crate::EditorState::from_text("fn main() {}"), None);
-        model.overlays.lsp_results.semantic_legend =
-            vec!["keyword".to_owned(), "function".to_owned()];
+        model.language.semantic_tokens.legend = vec!["keyword".to_owned(), "function".to_owned()];
         model.apply_semantic_tokens_response(&serde_json::json!({
             "data": [
                 0, 0, 2, 0, 0,
@@ -166,9 +165,9 @@ mod tests {
     #[test]
     fn empty_or_stale_tokens_are_not_rendered() {
         let mut model = crate::Model::new(crate::EditorState::from_text("x"), None);
-        model.overlays.lsp_results.semantic_legend = vec!["keyword".to_owned()];
+        model.language.semantic_tokens.legend = vec!["keyword".to_owned()];
         model.apply_semantic_tokens_response(&serde_json::json!({"data": []}));
-        assert!(model.overlays.lsp_results.semantic_revision.is_none());
+        assert!(model.language.semantic_tokens.revision.is_none());
         assert!(model.semantic_ranges(0, 1).is_empty());
         model.insert_text("y");
         assert!(model.semantic_ranges(0, 2).is_empty());
