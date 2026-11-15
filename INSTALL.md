@@ -15,6 +15,9 @@ anvil-plugin-host
 The editor discovers the gateway beside itself. If you move only `anvil`, file
 I/O is refused unless `ANVIL_GATEWAY` points at the gateway binary.
 
+Build-host ISA/glibc, user-vs-root, and cgroup findings are recorded in
+[multi-host install lessons](docs/multi-host-install.md).
+
 ## Requirements
 
 - Linux; Landlock requires Linux 5.13 or newer.
