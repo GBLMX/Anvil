@@ -7,13 +7,13 @@ use anvil_lsp_client::file_uri;
 impl Model {
     pub(crate) fn poll_inlay_hints(&mut self, height: u16) {
         if !self.config.settings.lsp.inlay_hints {
-            self.overlays.lsp_results.inlay_hints.clear();
-            self.overlays.lsp_results.inlay_pending = None;
-            self.overlays.lsp_results.inlay_checked = None;
+            self.language.inlay_hints.hints.clear();
+            self.language.inlay_hints.pending = None;
+            self.language.inlay_hints.checked = None;
             return;
         }
         let Some(path) = self.session.path.clone() else {
-            self.overlays.lsp_results.inlay_hints.clear();
+            self.language.inlay_hints.hints.clear();
             return;
         };
         let supported = self
@@ -21,12 +21,12 @@ impl Model {
             .lsp
             .config
             .as_ref()
-            .and_then(|key| self.overlays.lsp_results.inlay_support.get(key))
+            .and_then(|key| self.language.inlay_hints.support.get(key))
             .copied()
             .unwrap_or(false);
         if !supported {
-            self.overlays.lsp_results.inlay_hints.clear();
-            self.overlays.lsp_results.inlay_pending = None;
+            self.language.inlay_hints.hints.clear();
+            self.language.inlay_hints.pending = None;
             return;
         }
         let revision = self.session.editor.revision();
@@ -37,19 +37,19 @@ impl Model {
             self.session.editor.index().len_lines(),
         );
         let signature = (path.clone(), revision, start, end);
-        if let Some(pending) = &self.overlays.lsp_results.inlay_pending {
+        if let Some(pending) = &self.language.inlay_hints.pending {
             if (pending.1.clone(), pending.2, pending.3, pending.4) != signature {
-                self.overlays.lsp_results.inlay_pending = None;
-                self.overlays.lsp_results.inlay_hints.clear();
+                self.language.inlay_hints.pending = None;
+                self.language.inlay_hints.hints.clear();
             } else {
                 return;
             }
         }
-        if self.overlays.lsp_results.inlay_checked.as_ref() == Some(&signature) {
+        if self.language.inlay_hints.checked.as_ref() == Some(&signature) {
             return;
         }
-        if self.overlays.lsp_results.inlay_checked.as_ref() != Some(&signature) {
-            self.overlays.lsp_results.inlay_hints.clear();
+        if self.language.inlay_hints.checked.as_ref() != Some(&signature) {
+            self.language.inlay_hints.hints.clear();
         }
         let params = serde_json::json!({
             "textDocument": {"uri": file_uri(&path)},
@@ -60,32 +60,32 @@ impl Model {
         });
         let id = self.language.lsp_requests.peek_request_id();
         if self.send_lsp_request(LspRequestKind::InlayHint, "textDocument/inlayHint", params) {
-            self.overlays.lsp_results.inlay_pending = Some((id, path, revision, start, end));
-            self.overlays.lsp_results.inlay_checked = Some(signature);
+            self.language.inlay_hints.pending = Some((id, path, revision, start, end));
+            self.language.inlay_hints.checked = Some(signature);
         }
     }
 
     pub(crate) fn apply_inlay_hints_response(&mut self, id: u64, result: &serde_json::Value) {
         if self
-            .overlays
-            .lsp_results
-            .inlay_pending
+            .language
+            .inlay_hints
+            .pending
             .as_ref()
             .map(|pending| pending.0)
             != Some(id)
         {
             return;
         }
-        let Some((_, path, revision, _, _)) = self.overlays.lsp_results.inlay_pending.take() else {
+        let Some((_, path, revision, _, _)) = self.language.inlay_hints.pending.take() else {
             return;
         };
         if self.session.path.as_ref() != Some(&path) || self.session.editor.revision() != revision {
-            self.overlays.lsp_results.inlay_hints.clear();
+            self.language.inlay_hints.hints.clear();
             self.file.dirty = true;
             return;
         }
         let Some(items) = result.as_array() else {
-            self.overlays.lsp_results.inlay_hints.clear();
+            self.language.inlay_hints.hints.clear();
             return;
         };
         let mut hints = Vec::new();
@@ -118,7 +118,7 @@ impl Model {
             });
         }
         hints.sort_by_key(|hint| (hint.line, hint.character));
-        self.overlays.lsp_results.inlay_hints = hints;
+        self.language.inlay_hints.hints = hints;
         self.file.dirty = true;
     }
 
@@ -130,9 +130,9 @@ impl Model {
         spans: &mut Vec<Span<'_>>,
     ) {
         let mut hints = self
-            .overlays
-            .lsp_results
+            .language
             .inlay_hints
+            .hints
             .iter()
             .filter(|hint| hint.line == line)
             .collect::<Vec<_>>();

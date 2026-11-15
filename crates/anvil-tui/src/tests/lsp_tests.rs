@@ -1640,11 +1640,11 @@ fn disabled_inlay_hints_are_not_requested() {
     let mut model = Model::new(EditorState::from_text("x"), Some(PathBuf::from("main.rs")));
     let key = ("rust-analyzer".to_owned(), "rust".to_owned());
     model.language.lsp.config = Some(key.clone());
-    model.overlays.lsp_results.inlay_support.insert(key, true);
+    model.language.inlay_hints.support.insert(key, true);
     model.config.settings.lsp.inlay_hints = false;
     model.poll_inlay_hints(10);
-    assert!(model.overlays.lsp_results.inlay_pending.is_none());
-    assert!(model.overlays.lsp_results.inlay_hints.is_empty());
+    assert!(model.language.inlay_hints.pending.is_none());
+    assert!(model.language.inlay_hints.hints.is_empty());
 }
 
 #[test]

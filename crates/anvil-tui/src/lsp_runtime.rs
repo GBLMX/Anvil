@@ -55,7 +55,7 @@ impl Model {
             self.language.lsp.workers.remove(&key);
             self.language.lsp.retries.remove(&key);
             self.language.lsp.status.remove(&key);
-            self.overlays.lsp_results.inlay_support.remove(&key);
+            self.language.inlay_hints.support.remove(&key);
         }
         let status_keys = self.language.lsp.status.keys().cloned().collect();
         for key in inactive_lsp_keys(status_keys, desired) {
@@ -337,7 +337,7 @@ impl Model {
                 .lsp
                 .status
                 .insert(key.clone(), LspStatus::Stopped { root });
-            self.overlays.lsp_results.inlay_support.remove(&key);
+            self.language.inlay_hints.support.remove(&key);
         }
         self.clear_lsp_ui();
         self.status.text = "lsp stopped".to_owned();
@@ -362,17 +362,17 @@ impl Model {
                         server_info: server_info.clone(),
                     },
                 );
-                self.overlays
-                    .lsp_results
-                    .inlay_support
+                self.language
+                    .inlay_hints
+                    .support
                     .insert(key.clone(), inlay_hints);
                 if active {
                     if let Some(info) = server_info {
                         self.status.text = format!("lsp: {info}");
                     }
-                    self.overlays.lsp_results.inlay_hints.clear();
-                    self.overlays.lsp_results.inlay_pending = None;
-                    self.overlays.lsp_results.inlay_checked = None;
+                    self.language.inlay_hints.hints.clear();
+                    self.language.inlay_hints.pending = None;
+                    self.language.inlay_hints.checked = None;
                     self.overlays.lsp_results.semantic_legend = semantic_token_types;
                     self.overlays.lsp_results.semantic_tokens.clear();
                     self.overlays.lsp_results.semantic_revision = None;

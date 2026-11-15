@@ -212,9 +212,9 @@ impl Model {
         self.close_overlay(OverlayKind::CallHierarchy);
         self.clear_folds();
         self.clear_semantic_tokens();
-        self.overlays.lsp_results.inlay_hints.clear();
-        self.overlays.lsp_results.inlay_pending = None;
-        self.overlays.lsp_results.inlay_checked = None;
+        self.language.inlay_hints.hints.clear();
+        self.language.inlay_hints.pending = None;
+        self.language.inlay_hints.checked = None;
         self.file.dirty = true;
     }
 

@@ -506,10 +506,6 @@ pub(crate) struct LspResultsState {
     pub(crate) call_hierarchy: Option<CallHierarchyState>,
     pub(crate) signature_help: Option<SignatureHelpState>,
     pub(crate) workspace_symbols: Option<WorkspaceSymbolState>,
-    pub(crate) inlay_hints: Vec<InlayHint>,
-    pub(crate) inlay_pending: Option<(u64, PathBuf, u64, usize, usize)>,
-    pub(crate) inlay_checked: Option<(PathBuf, u64, usize, usize)>,
-    pub(crate) inlay_support: HashMap<(String, String), bool>,
     /// Document symbols used for the sticky scroll header.
     pub(crate) sticky_symbols: Vec<SymbolItem>,
     /// Path and revision those symbols describe.
@@ -993,12 +989,22 @@ pub(crate) struct GitState {
     pub(crate) branches: BTreeMap<PathBuf, Option<String>>,
 }
 
+/// Inlay hints cached for the visible viewport.
+#[derive(Default)]
+pub(crate) struct InlayHintsState {
+    pub(crate) hints: Vec<InlayHint>,
+    pub(crate) pending: Option<(u64, PathBuf, u64, usize, usize)>,
+    pub(crate) checked: Option<(PathBuf, u64, usize, usize)>,
+    pub(crate) support: HashMap<(String, String), bool>,
+}
+
 #[derive(Default)]
 pub(crate) struct LanguageState {
     pub(crate) dap: DapState,
     pub(crate) diagnostics: DiagnosticsState,
     pub(crate) lsp: LspTransportState,
     pub(crate) lsp_requests: LspRequestsState,
+    pub(crate) inlay_hints: InlayHintsState,
 }
 pub(crate) enum LspPollEffect {
     Event {
