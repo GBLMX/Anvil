@@ -49,6 +49,7 @@ their decision sections.
 | [0041](0041-tui-primitive-extraction.md) | TUI primitive extraction | Accepted |
 | [0042](0042-selection-first-session-frontend.md) | Selection-first core, headless session, thin frontend | Accepted |
 | [0043](0043-plugin-api-1-1.md) | Plugin API 1.1 capability and selection contract | Proposed |
+| [0044](0044-watcher-transport.md) | Keep bounded polling watcher; record inotify comparison | Accepted |
 
 ## Numbering Rule
 

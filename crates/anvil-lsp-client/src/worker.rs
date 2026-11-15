@@ -804,7 +804,10 @@ mod tests {
             std::process::id()
         ));
         let listener = Listener::bind(&socket).expect("bind");
-        let _server = std::thread::spawn(move || {
+        let stopped =
+            std::sync::Arc::new((std::sync::Mutex::new(false), std::sync::Condvar::new()));
+        let server_stopped = std::sync::Arc::clone(&stopped);
+        let server = std::thread::spawn(move || {
             let mut connection = listener.accept().expect("accept");
             let hello = receive(&mut connection);
             respond(&mut connection, hello.id.as_deref().expect("id"));
@@ -850,6 +853,12 @@ mod tests {
                         .expect("send notification");
                 }
             }
+            let stop = receive(&mut connection);
+            assert_eq!(stop.method, "lsp.stop");
+            respond(&mut connection, stop.id.as_deref().expect("id"));
+            let (lock, ready) = &*server_stopped;
+            *lock.lock().expect("stop state") = true;
+            ready.notify_one();
         });
         let client = anvil_ipc::GatewayClient::connect(&socket, &[1; 32]).expect("client");
         let worker = LspWorker::start(
@@ -873,13 +882,23 @@ mod tests {
                 if let LspEvent::Diagnostics(path, diagnostics) = event {
                     assert_eq!(path, PathBuf::from("/tmp/a.rs"));
                     assert_eq!(diagnostics.len(), 1);
-                    let _ = std::fs::remove_file(&socket);
                     let started = Instant::now();
                     drop(worker);
                     assert!(
                         started.elapsed() < Duration::from_secs(2),
                         "worker drop exceeded its shutdown budget"
                     );
+                    let (lock, ready) = &*stopped;
+                    let deadline = Instant::now() + Duration::from_secs(2);
+                    let mut done = lock.lock().expect("stop state");
+                    while !*done {
+                        let remaining = deadline.saturating_duration_since(Instant::now());
+                        assert!(!remaining.is_zero(), "lsp.stop was not sent");
+                        let (next, _) = ready.wait_timeout(done, remaining).expect("stop state");
+                        done = next;
+                    }
+                    server.join().expect("server");
+                    let _ = std::fs::remove_file(&socket);
                     return;
                 }
             }

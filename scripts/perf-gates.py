@@ -23,6 +23,7 @@ COLS = 120
 FILE_COUNT = 100_000
 TREE_DIRS = 256
 GB = 1024 * 1024 * 1024
+MB = 1024 * 1024
 
 
 def spawn(binary: Path, workspace: Path, target: Path | None, state: Path):
@@ -150,10 +151,23 @@ def make_workspace(root: Path) -> dict[str, Path]:
             piece = block[: min(remaining, len(block))]
             handle.write(piece)
             remaining -= len(piece)
+    large_200 = root / "200mb.log"
+    with large_200.open("wb") as handle:
+        remaining = 200 * MB
+        while remaining > 0:
+            piece = block[: min(remaining, len(block))]
+            handle.write(piece)
+            remaining -= len(piece)
     watch = root / "watch"
     watch.mkdir()
     (watch / "main.txt").write_text("initial\n")
-    return {"big": big, "tree": tree, "large": large, "watch": watch}
+    return {
+        "big": big,
+        "tree": tree,
+        "large": large,
+        "large_200": large_200,
+        "watch": watch,
+    }
 
 
 def polling_watch_latency(binary: Path, workspace: Path, timeout: float) -> float:
@@ -187,6 +201,51 @@ def polling_watch_latency(binary: Path, workspace: Path, timeout: float) -> floa
             pass
         shutil.rmtree(state, ignore_errors=True)
 
+
+def drain(master: int) -> None:
+    while select.select([master], [], [], 0.05)[0]:
+        try:
+            if not os.read(master, 65536):
+                break
+        except OSError:
+            break
+
+def large_file_latency(
+    binary: Path, target: Path, timeout: float, scroll_samples: int = 10
+) -> tuple[float, list[float]]:
+    state = Path(tempfile.mkdtemp(prefix="anvil-perf-large."))
+    (state / "run").mkdir(parents=True)
+    process, master = spawn(binary, target.parent, target, state)
+    try:
+        elapsed, output = read_until(master, b"00000000 log line filler data", timeout)
+        if elapsed is None:
+            raise RuntimeError(f"large-file open missing; tail={output[-400:]!r}")
+        open_elapsed = elapsed
+        drain(master)
+        scrolls = []
+        for _ in range(scroll_samples):
+            os.write(master, b"j")
+            elapsed, output = read_until(master, b"\x1b[", 2.0)
+            if elapsed is None:
+                raise RuntimeError(f"large-file scroll missing; tail={output[-400:]!r}")
+            scrolls.append(elapsed)
+            drain(master)
+        return open_elapsed, scrolls
+    finally:
+        try:
+            os.write(master, b":q!\r")
+        except OSError:
+            pass
+        try:
+            process.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait()
+        try:
+            os.close(master)
+        except OSError:
+            pass
+        shutil.rmtree(state, ignore_errors=True)
 
 def inotify_kernel_latency(path: Path) -> float | None:
     try:
@@ -263,6 +322,19 @@ def main() -> int:
                 )[1]
             )
             try:
+                opened, scrolls = large_file_latency(
+                    binary, fixtures["large_200"], args.timeout
+                )
+            except RuntimeError as error:
+                print(f"200 MB open failed: {error}", file=sys.stderr)
+                return 1
+            scroll = summarize(scrolls)
+            scenarios.setdefault("open_200mb_ms", []).append(opened)
+            scenarios.setdefault("scroll_200mb_ms", []).append(scroll["p50_ms"] / 1000)
+            scenarios.setdefault("scroll_200mb_max_ms", []).append(
+                scroll["max_ms"] / 1000
+            )
+            try:
                 scenarios.setdefault("reject_1gb_ms", []).append(
                     one_run(
                         binary,
@@ -291,6 +363,9 @@ def main() -> int:
             "startup_100k_ms": 100.0,
             "search_100k_ms": 2000.0,
             "tree_256_ms": 1000.0,
+            "open_200mb_ms": 2000.0,
+            "scroll_200mb_ms": 33.0,
+            "scroll_200mb_max_ms": 100.0,
             "reject_1gb_ms": 2000.0,
             "watch_poll_ms": 1500.0,
             "inotify_kernel_ms": 50.0,

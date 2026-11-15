@@ -402,6 +402,9 @@ python3 scripts/perf-gates.py --binary target/release/anvil
 | Startup in 100k-file workspace | p50 <= 100 ms | 23 ms |
 | Project search, 100k files | p50 <= 2 s | 161 ms |
 | 256-directory tree open | p50 <= 1 s | 102 ms |
+| 200 MiB log open | p50 <= 2 s | 404–427 ms |
+| 200 MiB log scroll | p50 <= 33 ms | 1.3–1.4 ms |
+| 200 MiB log scroll | max <= 100 ms | 1.6–1.8 ms |
 | 1 GiB log rejection | p50 <= 2 s | 28 ms |
 | Clean-buffer external reload (polling) | p50 <= 1.5 s | 710 ms |
 | Kernel inotify event latency | p50 <= 50 ms | 0.05 ms |
@@ -416,5 +419,7 @@ same bounded watch set, debounce, and stale-tree fallback.
 
 The 1 GiB file is rejected by the explicit 256 MiB open limit; the gate checks
 that rejection is immediate and diagnostic instead of attempting an unbounded
-read. The 100k search scan is handled by `rg` through the gateway and is not a
-recursive in-process directory walk.
+read. The 200 MiB case exercises the actual near-limit open and scroll path:
+first frame is 404–427 ms and scrolling stays below 2 ms because only the viewport
+is laid out. The 100k search scan is handled by `rg` through the gateway and is
+not a recursive in-process directory walk.

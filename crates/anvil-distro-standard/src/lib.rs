@@ -14,6 +14,7 @@ anvil — a terminal editor with a selection-first Rust kernel
 Usage:
   anvil [OPTIONS] [FILE|-]
   anvil doctor [--json] [--profile auto|dev|installed]
+  anvil modules [--json]
 
 Options:
   -w, --workspace <DIR>  Workspace directory; --workspace=DIR is also accepted
@@ -137,6 +138,9 @@ enum Command {
     Doctor {
         json: bool,
         profile: DoctorProfileChoice,
+    },
+    Modules {
+        json: bool,
     },
     Version,
 }
@@ -314,6 +318,7 @@ where
             Ok(0)
         }
         Ok(Command::Doctor { json, profile }) => run_doctor(distribution, json, profile),
+        Ok(Command::Modules { json }) => run_modules(distribution, json),
         Ok(Command::Run {
             workspace,
             path,
@@ -478,6 +483,87 @@ fn run_doctor(
         }
     }
     Ok(exit_code)
+}
+
+fn module_catalog(distribution: &Distribution) -> Vec<anvil_module::ModuleMetadata> {
+    let _ = distribution;
+    let mut modules = Vec::new();
+    #[cfg(feature = "official-git")]
+    if distribution.git {
+        modules.push(anvil_module::Module::metadata(&anvil_mod_git::GitModule));
+    }
+    #[cfg(feature = "official-workspace-index")]
+    if distribution.workspace_index {
+        modules.push(anvil_module::Module::metadata(
+            &anvil_mod_workspace_index::WorkspaceIndexModule,
+        ));
+    }
+    #[cfg(feature = "official-desktop")]
+    if distribution.desktop {
+        modules.push(anvil_module::Module::metadata(
+            &anvil_mod_desktop::DesktopModule,
+        ));
+    }
+    #[cfg(feature = "official-language-latex")]
+    if distribution.language_latex {
+        modules.push(anvil_module::Module::metadata(
+            &anvil_mod_language_latex::LatexModule,
+        ));
+    }
+    #[cfg(feature = "official-language-typst")]
+    if distribution.language_typst {
+        modules.push(anvil_module::Module::metadata(
+            &anvil_mod_language_typst::TypstModule,
+        ));
+    }
+    modules
+}
+
+fn run_modules(distribution: &Distribution, json: bool) -> Result<i32, RunError> {
+    let modules = module_catalog(distribution);
+    if json {
+        let mut out = String::from("{\"schema_version\":1,\"distribution\":\"");
+        out.push_str(&json_escape(distribution.name));
+        out.push_str("\",\"version\":\"");
+        out.push_str(env!("CARGO_PKG_VERSION"));
+        out.push_str("\",\"modules\":[");
+        for (index, module) in modules.iter().enumerate() {
+            if index > 0 {
+                out.push(',');
+            }
+            out.push_str("{\"id\":\"");
+            out.push_str(&json_escape(module.id.as_str()));
+            out.push_str("\",\"name\":\"");
+            out.push_str(&json_escape(module.name));
+            out.push_str("\",\"contract\":\"");
+            out.push_str(&format!("{}..{}", module.contract.min, module.contract.max));
+            out.push_str("\",\"version\":\"");
+            out.push_str(env!("CARGO_PKG_VERSION"));
+            out.push_str("\",\"source\":\"compiled-in\",\"commands\":");
+            out.push_str(&module.commands.len().to_string());
+            out.push('}');
+        }
+        out.push_str("]}");
+        println!("{out}");
+    } else {
+        println!(
+            "{} {} modules ({})",
+            distribution.name,
+            env!("CARGO_PKG_VERSION"),
+            distribution.name
+        );
+        for module in &modules {
+            println!(
+                "{:<28} {:<30} contract {}-{}  commands {:<3} compiled-in",
+                module.id.as_str(),
+                module.name,
+                module.contract.min,
+                module.contract.max,
+                module.commands.len()
+            );
+        }
+    }
+    Ok(0)
 }
 
 fn doctor_exit_code(checks: &[DoctorCheck]) -> i32 {
@@ -1055,6 +1141,13 @@ where
         arguments.next();
         return parse_doctor_args(arguments);
     }
+    if arguments
+        .peek()
+        .is_some_and(|argument| argument == "modules")
+    {
+        arguments.next();
+        return parse_modules_args(arguments);
+    }
     let mut workspace = None;
     let mut path = None;
     let mut editor = false;
@@ -1179,6 +1272,26 @@ where
         }
     }
     Ok(Command::Doctor { json, profile })
+}
+
+fn parse_modules_args<I>(arguments: I) -> Result<Command, String>
+where
+    I: Iterator<Item = OsString>,
+{
+    let mut json = false;
+    for argument in arguments {
+        match argument.to_str() {
+            Some("--json") => json = true,
+            Some("--help" | "-h") => return Ok(Command::Help),
+            _ => {
+                return Err(format!(
+                    "unknown modules option: {}",
+                    argument.to_string_lossy()
+                ));
+            }
+        }
+    }
+    Ok(Command::Modules { json })
 }
 
 fn parse_doctor_profile(value: &str) -> Result<DoctorProfileChoice, String> {
@@ -1793,6 +1906,35 @@ mod tests {
         assert_eq!(
             check_remote_session(true, "xterm-direct", "truecolor", true).level,
             DoctorLevel::Warn
+        );
+    }
+
+    #[test]
+    fn parses_modules_json_and_rejects_unknown_options() {
+        assert_eq!(
+            parse_args(args(&["modules"])).unwrap(),
+            Command::Modules { json: false }
+        );
+        assert_eq!(
+            parse_args(args(&["modules", "--json"])).unwrap(),
+            Command::Modules { json: true }
+        );
+        assert!(parse_args(args(&["modules", "--wat"])).is_err());
+        assert_eq!(
+            parse_args(args(&["modules", "--help"])).unwrap(),
+            Command::Help
+        );
+    }
+
+    #[cfg(feature = "official-git")]
+    #[test]
+    fn module_catalog_lists_the_compiled_git_module() {
+        let modules = module_catalog(&STANDARD);
+        assert!(
+            modules
+                .iter()
+                .any(|module| module.id.as_str() == "official.git"),
+            "missing official.git in {modules:?}"
         );
     }
 }

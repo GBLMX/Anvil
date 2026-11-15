@@ -8,6 +8,13 @@ post-`0.5.0` feature line.
 
 ## [Unreleased]
 ### Added
+- Added `anvil modules [--json]`, a read-only view of the compiled-in modules,
+  contract range, command count, and source; no marketplace or network access.
+- Comment toggling now covers C/C++/C#/Java/Kotlin/Swift, SQL/Lua, Ruby/PHP,
+  common dotfiles, CRLF files, and rejects overlapping, out-of-bounds, and
+  unsupported marker input instead of producing ambiguous edits.
+- Large-workspace gates now cover 200 MiB open and scroll latency, and
+  ADR-0044 records the polling/inotify comparison.
 - `anvil-core` caches `PieceTable` length, uses O(1) end-insert/append paths,
   scans word motions over chunk streams once, and preserves/updates line-column
   checkpoints across edits.

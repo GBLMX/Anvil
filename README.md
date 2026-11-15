@@ -219,6 +219,7 @@ crossterm's keyboard-enhancement query and the OSC 11 background query.
 ```text
 anvil [OPTIONS] [FILE|-]
   anvil doctor [--json] [--profile auto|dev|installed]
+  anvil modules [--json]
 
   -w, --workspace <DIR>  Workspace directory; --workspace=DIR is also accepted
   --editor              External-editor mode; allows one explicit file outside
@@ -236,6 +237,10 @@ defaults to `auto` (installed layout vs cargo target); dev target sidecars are
 warnings, installed-layout sidecars are errors. `--json` emits schema version
 1 with stable check ids and remediation; required failures exit nonzero. See
 [doctor checks](docs/doctor.md).
+
+`anvil modules` lists the compiled-in modules in the running distribution with
+their contract range, command count, and `compiled-in` source. `--json` emits
+schema version 1. It is read-only and does not contact a marketplace.
 
 `FILE` must be inside the selected workspace. `--editor` is intended for
 `$EDITOR`-style invocations; `:cq` exits 1 and a failed save keeps the final
