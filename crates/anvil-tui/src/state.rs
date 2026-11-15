@@ -803,6 +803,8 @@ pub(crate) struct ConfigState {
     /// In-memory keymap overrides.
     pub(crate) keymap: keymap::KeymapConfig,
     pub(crate) settings: Settings,
+    /// Effective settings layer for each field.
+    pub(crate) sources: settings::SettingsSources,
 }
 
 #[derive(Default)]

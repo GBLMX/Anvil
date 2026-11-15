@@ -33,6 +33,7 @@ pub(crate) struct SettingsOverlayState {
     pub(crate) theme: theme::Choice,
     pub(crate) opened_theme: theme::Choice,
     pub(crate) theme_touched: bool,
+    pub(crate) sources: settings::SettingsSources,
 }
 
 pub(crate) enum SettingsChange {
@@ -230,6 +231,22 @@ impl SettingsOverlayState {
         }
     }
 }
+fn settings_key(index: usize) -> settings::SettingsKey {
+    match index {
+        0 => settings::SettingsKey::ScrollMargin,
+        1 => settings::SettingsKey::AutoSave,
+        2 => settings::SettingsKey::SoftWrap,
+        3 => settings::SettingsKey::FormatOnSave,
+        4 => settings::SettingsKey::MaxBuffers,
+        5 => settings::SettingsKey::CaseSensitive,
+        6 => settings::SettingsKey::InlayHints,
+        7 => settings::SettingsKey::ReducedMotion,
+        8 => settings::SettingsKey::HighContrast,
+        9 => settings::SettingsKey::FileWatching,
+        _ => settings::SettingsKey::Theme,
+    }
+}
+
 fn theme_label(choice: theme::Choice) -> String {
     match choice {
         theme::Choice::Fixed(name) => name.to_owned(),
@@ -440,7 +457,11 @@ pub(crate) fn render(overlay: &SettingsOverlayState, frame: &mut Frame, area: Re
     };
     frame.render_widget(
         Paragraph::new(Line::styled(
-            SettingsOverlayState::description(overlay.selected),
+            format!(
+                "{} · source: {}",
+                SettingsOverlayState::description(overlay.selected),
+                overlay.sources.label(settings_key(overlay.selected))
+            ),
             theme::panel().fg(theme::muted()),
         )),
         description,
@@ -475,6 +496,7 @@ impl Model {
             theme: active_theme,
             opened_theme: active_theme,
             theme_touched: false,
+            sources: self.config.sources.clone(),
         });
         self.push_overlay(OverlayKind::Settings);
         self.status.text = "settings".to_owned();

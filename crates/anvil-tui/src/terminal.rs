@@ -254,8 +254,12 @@ pub fn run_with_all_services(
         .roots
         .primary()
         .is_some_and(|root| root.trusted);
-    match settings::load_for_workspace(&workspace, project_trusted) {
-        Ok(settings) => model.apply_settings(settings),
+    match settings::load_for_workspace_with_sources(&workspace, project_trusted) {
+        Ok(loaded) => {
+            let settings::LoadedSettings { settings, sources } = loaded;
+            model.config.sources = sources;
+            model.apply_settings(settings);
+        }
         Err(error) => {
             let message = format!("E: settings: {error}");
             if model.status.text.is_empty() {

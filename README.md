@@ -118,6 +118,8 @@ project layer.
 `:settings` opens the minimal overlay: `j`/`k` select, `h`/`l` or `Enter`
 adjust, `r` resets the row, `s` saves, and `Esc` cancels. The Appearance
 section includes the active theme row.
+Each row shows its effective source (`default`, environment, user, or project
+file). `:config-reload` reports the files that actually loaded.
 Auto-save is off by default; when enabled it writes the active named buffer
 on buffer switch/close, split focus/close changes, opening another file, focus
 loss, and `:q`. Insert/search/rename input modes are eligible; only
@@ -127,7 +129,8 @@ buffers, the visible tree, and (when the distribution provides Git)
 `.git/HEAD`/`.git/index`. Clean buffers reload, dirty buffers prompt with
 `y/N`, tree changes refresh Git status, and external
 deletion closes the LSP document and marks the buffer missing. `:config-reload`
-also applies settings, keymap, and theme changes without restarting. Set
+applies settings, keymap, and theme changes without restarting and reports the
+effective settings paths. Set
 `[editor] file_watching = false` or `ANVIL_EDITOR_FILE_WATCHING=0` to disable
 polling; the tree then relies on explicit refresh and buffer opens.
 

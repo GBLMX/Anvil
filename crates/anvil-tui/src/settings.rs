@@ -89,6 +89,85 @@ impl Default for Settings {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) enum SettingsKey {
+    Theme,
+    ScrollMargin,
+    AutoSave,
+    SoftWrap,
+    FormatOnSave,
+    MaxBuffers,
+    SidebarPercent,
+    CaseSensitive,
+    InlayHints,
+    ReducedMotion,
+    HighContrast,
+    FileWatching,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum SettingsOrigin {
+    Default,
+    User,
+    Project,
+    Environment,
+}
+
+#[derive(Clone, Debug, Default)]
+pub(crate) struct SettingsSources {
+    origins: BTreeMap<SettingsKey, SettingsOrigin>,
+    user: Option<PathBuf>,
+    project: Option<PathBuf>,
+}
+
+impl SettingsSources {
+    pub(crate) fn origin(&self, key: SettingsKey) -> SettingsOrigin {
+        self.origins
+            .get(&key)
+            .copied()
+            .unwrap_or(SettingsOrigin::Default)
+    }
+
+    pub(crate) fn label(&self, key: SettingsKey) -> String {
+        match self.origin(key) {
+            SettingsOrigin::Default => "default".to_owned(),
+            SettingsOrigin::Environment => "environment".to_owned(),
+            SettingsOrigin::User => self
+                .user
+                .as_ref()
+                .map(|path| path.display().to_string())
+                .unwrap_or_else(|| "user".to_owned()),
+            SettingsOrigin::Project => self
+                .project
+                .as_ref()
+                .map(|path| path.display().to_string())
+                .unwrap_or_else(|| "project".to_owned()),
+        }
+    }
+
+    pub(crate) fn layer_files(&self) -> Vec<PathBuf> {
+        let mut files = Vec::new();
+        if let Some(path) = &self.user {
+            files.push(path.clone());
+        }
+        if let Some(path) = &self.project
+            && !files.contains(path)
+        {
+            files.push(path.clone());
+        }
+        files
+    }
+
+    fn set(&mut self, key: SettingsKey, origin: SettingsOrigin) {
+        self.origins.insert(key, origin);
+    }
+}
+
+pub(crate) struct LoadedSettings {
+    pub(crate) settings: Settings,
+    pub(crate) sources: SettingsSources,
+}
+
 pub(crate) fn lsp_command_override(
     language_id: &str,
     default_args: &[String],
@@ -125,24 +204,41 @@ fn resolve_lsp_command(
 /// The project layer is read only when its workspace root is trusted. An
 /// explicit `ANVIL_SETTINGS` file is a complete override, matching the
 /// pre-project-layer behavior and keeping tests isolated.
-pub(crate) fn load_for_workspace(
+pub(crate) fn load_for_workspace_with_sources(
     workspace: &Path,
     project_trusted: bool,
-) -> Result<Settings, String> {
+) -> Result<LoadedSettings, String> {
     let user = path()?;
     let project = if explicit_settings_path().is_some() {
         None
     } else {
         project_layer(workspace, project_trusted)
     };
-    load_from_layers(Some(&user), project.as_deref())
+    load_from_layers_with_sources(Some(&user), project.as_deref())
+}
+
+#[cfg(test)]
+pub(crate) fn load_for_workspace(
+    workspace: &Path,
+    project_trusted: bool,
+) -> Result<Settings, String> {
+    load_for_workspace_with_sources(workspace, project_trusted).map(|loaded| loaded.settings)
 }
 
 fn project_layer(workspace: &Path, trusted: bool) -> Option<PathBuf> {
     trusted.then(|| workspace.join(PROJECT_SETTINGS))
 }
 
+#[cfg(test)]
 fn load_from_layers(user: Option<&Path>, project: Option<&Path>) -> Result<Settings, String> {
+    load_from_layers_with_sources(user, project).map(|loaded| loaded.settings)
+}
+
+fn load_from_layers_with_sources(
+    user: Option<&Path>,
+    project: Option<&Path>,
+) -> Result<LoadedSettings, String> {
+    let mut sources = SettingsSources::default();
     let mut merged = toml_edit::DocumentMut::new();
     let mut layers = Vec::new();
     for (path, is_project) in [(user, false), (project, true)] {
@@ -166,6 +262,17 @@ fn load_from_layers(user: Option<&Path>, project: Option<&Path>) -> Result<Setti
                 ));
             }
         }
+        let origin = if is_project {
+            SettingsOrigin::Project
+        } else {
+            SettingsOrigin::User
+        };
+        if is_project {
+            sources.project = Some(path.to_path_buf());
+        } else {
+            sources.user = Some(path.to_path_buf());
+        }
+        mark_layer_sources(&document, origin, &mut sources);
         merge_document(&mut merged, &document);
         layers.push(path);
     }
@@ -179,7 +286,79 @@ fn load_from_layers(user: Option<&Path>, project: Option<&Path>) -> Result<Setti
             .join(", ");
         parse(&merged.to_string()).map_err(|error| format!("{names}: {error}"))?
     };
-    apply_env(settings, |name| std::env::var(name).ok())
+    let settings = apply_env(settings, |name| std::env::var(name).ok())?;
+    mark_env_sources(&mut sources, |name| std::env::var(name).ok());
+    if std::env::var_os("ANVIL_THEME").is_some() {
+        sources.set(SettingsKey::Theme, SettingsOrigin::Environment);
+    }
+    Ok(LoadedSettings { settings, sources })
+}
+
+fn mark_layer_sources(
+    document: &toml_edit::DocumentMut,
+    origin: SettingsOrigin,
+    sources: &mut SettingsSources,
+) {
+    if ["mode", "name", "dark", "light"]
+        .iter()
+        .any(|key| has_layer_key(document, &["theme", key]))
+    {
+        sources.set(SettingsKey::Theme, origin);
+    }
+    for (key, path) in [
+        (SettingsKey::ScrollMargin, ["editor", "scroll_margin"]),
+        (SettingsKey::AutoSave, ["editor", "auto_save"]),
+        (SettingsKey::SoftWrap, ["editor", "soft_wrap"]),
+        (SettingsKey::FormatOnSave, ["editor", "format_on_save"]),
+        (SettingsKey::MaxBuffers, ["editor", "max_buffers"]),
+        (SettingsKey::SidebarPercent, ["editor", "sidebar_percent"]),
+        (SettingsKey::CaseSensitive, ["search", "case_sensitive"]),
+        (SettingsKey::InlayHints, ["lsp", "inlay_hints"]),
+        (SettingsKey::ReducedMotion, ["ui", "reduced_motion"]),
+        (SettingsKey::HighContrast, ["ui", "high_contrast"]),
+        (SettingsKey::FileWatching, ["editor", "file_watching"]),
+    ] {
+        if has_layer_key(document, &path) {
+            sources.set(key, origin);
+        }
+    }
+}
+
+fn has_layer_key(document: &toml_edit::DocumentMut, path: &[&str]) -> bool {
+    let mut table = document.as_table();
+    for (index, key) in path.iter().enumerate() {
+        let Some(item) = table.get(key) else {
+            return false;
+        };
+        if index + 1 == path.len() {
+            return true;
+        }
+        let Some(next) = item.as_table() else {
+            return false;
+        };
+        table = next;
+    }
+    true
+}
+
+fn mark_env_sources(sources: &mut SettingsSources, get: impl Fn(&str) -> Option<String>) {
+    for (key, name) in [
+        (SettingsKey::ScrollMargin, ENV_SCROLL_MARGIN),
+        (SettingsKey::AutoSave, ENV_AUTO_SAVE),
+        (SettingsKey::SoftWrap, ENV_SOFT_WRAP),
+        (SettingsKey::FormatOnSave, ENV_FORMAT_ON_SAVE),
+        (SettingsKey::MaxBuffers, ENV_MAX_BUFFERS),
+        (SettingsKey::SidebarPercent, ENV_SIDEBAR_PERCENT),
+        (SettingsKey::CaseSensitive, ENV_SEARCH_CASE_SENSITIVE),
+        (SettingsKey::InlayHints, ENV_INLAY_HINTS),
+        (SettingsKey::ReducedMotion, ENV_REDUCED_MOTION),
+        (SettingsKey::HighContrast, ENV_HIGH_CONTRAST),
+        (SettingsKey::FileWatching, ENV_FILE_WATCHING),
+    ] {
+        if get(name).is_some() {
+            sources.set(key, SettingsOrigin::Environment);
+        }
+    }
 }
 
 fn read_settings_text(path: &Path) -> Result<String, String> {
@@ -639,6 +818,89 @@ mod tests {
         assert_eq!(settings.theme, Choice::Fixed("nord"));
         assert_eq!(settings.editor.scroll_margin, 2);
         assert!(settings.editor.soft_wrap);
+    }
+
+    #[test]
+    fn tracks_per_field_settings_origins() {
+        let directory = tempfile::tempdir().expect("tempdir");
+        let user = directory.path().join("user.toml");
+        let project = directory.path().join(PROJECT_SETTINGS);
+        fs::write(
+            &user,
+            "[theme]\nname = \"anvil-dark\"\n[editor]\nscroll_margin = 2\n",
+        )
+        .expect("user settings");
+        fs::write(&project, "[editor]\nsoft_wrap = true\n").expect("project settings");
+
+        let loaded =
+            load_from_layers_with_sources(Some(&user), Some(&project)).expect("loaded settings");
+        assert_eq!(
+            loaded.sources.origin(SettingsKey::Theme),
+            SettingsOrigin::User
+        );
+        assert_eq!(
+            loaded.sources.origin(SettingsKey::ScrollMargin),
+            SettingsOrigin::User
+        );
+        assert_eq!(
+            loaded.sources.origin(SettingsKey::SoftWrap),
+            SettingsOrigin::Project
+        );
+        assert_eq!(
+            loaded.sources.origin(SettingsKey::FileWatching),
+            SettingsOrigin::Default
+        );
+        assert_eq!(loaded.sources.layer_files(), vec![user, project]);
+    }
+
+    #[test]
+    fn environment_marks_field_origin() {
+        let mut sources = SettingsSources::default();
+        mark_env_sources(&mut sources, |name| {
+            (name == ENV_MAX_BUFFERS).then(|| "12".to_owned())
+        });
+        assert_eq!(
+            sources.origin(SettingsKey::MaxBuffers),
+            SettingsOrigin::Environment
+        );
+        assert_eq!(
+            sources.origin(SettingsKey::ScrollMargin),
+            SettingsOrigin::Default
+        );
+    }
+
+    #[test]
+    fn reload_reports_effective_settings_file() {
+        let _guard = TEST_ENV_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        let directory = tempfile::tempdir().expect("tempdir");
+        let workspace = directory.path().join("workspace");
+        fs::create_dir_all(&workspace).expect("workspace");
+        let settings_path = directory.path().join("settings.toml");
+        fs::write(&settings_path, "[editor]\nscroll_margin = 2\n").expect("settings");
+
+        unsafe { std::env::set_var("ANVIL_SETTINGS", &settings_path) };
+        let mut model = crate::Model::new(crate::EditorState::from_text(""), None);
+        model.workspace.path = workspace.clone();
+        model.workspace.roots =
+            crate::workspace_roots::WorkspaceRoots::new(&workspace).expect("roots");
+        model.reload_config();
+        unsafe { std::env::remove_var("ANVIL_SETTINGS") };
+
+        assert!(
+            model
+                .status
+                .text
+                .contains(&settings_path.display().to_string()),
+            "{}",
+            model.status.text
+        );
+        assert_eq!(
+            model.config.sources.origin(SettingsKey::ScrollMargin),
+            SettingsOrigin::User
+        );
+        assert_eq!(model.config.settings.editor.scroll_margin, 2);
     }
 
     #[test]

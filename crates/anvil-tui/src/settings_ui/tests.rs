@@ -63,6 +63,7 @@ fn settings_state_owns_draft_and_theme_actions() {
         theme: theme::Choice::Fixed("anvil-dark"),
         opened_theme: theme::Choice::Fixed("anvil-dark"),
         theme_touched: false,
+        sources: Default::default(),
     };
     match state.adjust(1).expect("draft change") {
         SettingsChange::Apply(settings) => {
@@ -94,6 +95,7 @@ fn state_at(selected: usize) -> SettingsOverlayState {
         theme: theme::Choice::Fixed("anvil-dark"),
         opened_theme: theme::Choice::Fixed("anvil-dark"),
         theme_touched: false,
+        sources: Default::default(),
     }
 }
 
@@ -135,6 +137,7 @@ fn settings_page_renders_from_state_alone() {
         "SEARCH",
         "case_sensitive",
         "Use case-sensitive matching for `/` and project search.",
+        "source: default",
         "↑/↓ or j/k select · ←/→ or h/l change · r reset · s save · Esc cancel",
     ] {
         assert!(text.contains(expected), "missing {expected:?}: {text}");

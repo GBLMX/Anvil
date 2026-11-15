@@ -38,6 +38,7 @@ impl Model {
                 effects: EffectQueue::new(EFFECT_QUEUE_CAPACITY),
                 keymap: keymap::KeymapConfig::default(),
                 settings: Settings::default(),
+                sources: settings::SettingsSources::default(),
             },
             file: FileState {
                 dirty: true,
@@ -81,12 +82,13 @@ impl Model {
             .primary()
             .is_some_and(|root| root.trusted);
         let loaded = (|| -> Result<_, String> {
-            let settings = settings::load_for_workspace(&self.workspace.path, project_trusted)?;
+            let settings =
+                settings::load_for_workspace_with_sources(&self.workspace.path, project_trusted)?;
             let keymap = keymap::KeymapConfig::load_default()?;
             Ok((settings, keymap))
         })();
         match loaded {
-            Ok((settings, keymap)) => self.apply_loaded_config(settings, keymap),
+            Ok((settings, keymap)) => self.apply_loaded_config_with_sources(settings, keymap),
             Err(error) => {
                 self.status.text = format!("E: config-reload: {error}");
                 self.file.dirty = true;
@@ -102,6 +104,30 @@ impl Model {
         self.apply_settings(settings);
         self.config.keymap = keymap;
         self.status.text = "configuration reloaded".to_owned();
+        self.file.dirty = true;
+    }
+
+    fn apply_loaded_config_with_sources(
+        &mut self,
+        loaded: settings::LoadedSettings,
+        keymap: keymap::KeymapConfig,
+    ) {
+        let settings::LoadedSettings { settings, sources } = loaded;
+        let files = sources.layer_files();
+        self.apply_loaded_config(settings, keymap);
+        self.config.sources = sources;
+        self.status.text = if files.is_empty() {
+            "configuration reloaded (defaults)".to_owned()
+        } else {
+            format!(
+                "configuration reloaded from {}",
+                files
+                    .iter()
+                    .map(|path| path.display().to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
+        };
         self.file.dirty = true;
     }
 
