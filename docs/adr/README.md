@@ -47,6 +47,7 @@ their decision sections.
 | [0039](0039-plugin-event-transport.md) | Plugin event transport and interaction boundary | Proposed |
 | [0040](0040-helix-keymap-compatibility.md) | Helix-compatible keymap preset and shared command contexts | Accepted |
 | [0041](0041-tui-primitive-extraction.md) | TUI primitive extraction | Accepted |
+| [0042](0042-selection-first-session-frontend.md) | Selection-first core, headless session, thin frontend | Accepted |
 
 ## Numbering Rule
 
