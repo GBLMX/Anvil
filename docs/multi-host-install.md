@@ -42,8 +42,36 @@ anvil --truecolor=never --workspace /path/to/project
 `COLORTERM=truecolor` or `COLORTERM=24bit` is honored when the SSH/tmux
 environment preserves it.
 
-`btop` looking correct is not evidence that its terminal detection succeeded:
-it has explicit truecolor configuration and can force the profile.
+### Color profile policy
+
+Resolution order:
+
+1. `--truecolor=always|never` or `ANVIL_TRUECOLOR=1|0`
+2. `COLORTERM=truecolor` or `COLORTERM=24bit`
+3. `TERM=*direct*` or `TERM=*truecolor*`
+4. Otherwise, 256-color quantization
+
+Anvil does not default to RGB when the answer is unknown:
+
+- SSH forwards `TERM` but not `COLORTERM` by default; missing `COLORTERM` is
+  not evidence that the terminal lacks truecolor.
+- `TERM=xterm-256color` explicitly declares 256 colors. Ignoring it would
+  overstate capabilities for real 256-color terminals, serial consoles, and
+  some `screen`/tmux configurations.
+- tmux and screen may sit between Anvil and the real terminal; truecolor needs
+  their terminal features/overrides, not just the outer terminal's support.
+- `TERM=dumb`, CI logs, terminal recorders, and non-interactive streams may not
+  support RGB SGR sequences.
+- There is no reliable, side-effect-free terminal query for truecolor.
+- `btop` looking correct is not proof of automatic detection; it has explicit
+  truecolor configuration and can force the profile.
+- `NO_COLOR` is a CLI-output convention, not a full-screen TUI color mode;
+  Anvil does not use it to disable theme colors.
+
+See [OpenSSH SendEnv](https://man.openbsd.org/ssh_config#SendEnv),
+[AcceptEnv](https://man.openbsd.org/sshd_config#AcceptEnv),
+[tmux FAQ](https://github.com/tmux/tmux/wiki/FAQ), and
+[NO_COLOR](https://no-color.org/).
 
 ## Control socket runtime directory
 
