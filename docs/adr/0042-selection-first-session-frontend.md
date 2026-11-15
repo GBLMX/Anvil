@@ -115,9 +115,10 @@ allowed because they are protocol contracts, not transport ownership. This
 keeps the ADR-0037 kernel baseline from growing new transport dependencies.
 
 Migration debt: `plugin_session.rs` and `plugin_supervisor.rs` currently use
-`anvil_ipc::GatewayClient` directly. That usage is temporary; it must be
-replaced by a session-owned port or moved behind the service layer before the
-session API is frozen.
+`anvil_ipc::GatewayClient` directly, and `host_session.rs` uses
+`anvil_plugin_host::{spawn, HostProcess}`. Both dependencies are temporary;
+they must be replaced by session-owned ports or moved behind the service
+layer before the session API is frozen.
 
 `DocumentSession` is a frontend-neutral wrapper around `EditorState`; it is not
 a second editor kernel.
@@ -189,6 +190,7 @@ anvil-editor -> anvil-session
 anvil-editor -> anvil-tui
 anvil-session -> anvil-tui
 anvil-session -> anvil-lsp-client / anvil-task / DAP transport / anvil_ipc::GatewayClient
+anvil-session -> anvil-plugin-host implementation types
 kernel crate -> anvil-tui
 module -> anvil-tui
 ```
