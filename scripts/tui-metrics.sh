@@ -40,6 +40,27 @@ print(count)
 PY
 )"
 model_new="$(grep -R 'Model::new' "$src" --include='*.rs' | wc -l | tr -d ' ')"
+page_model_setups="$(
+    python3 - "$src" <<'PY'
+import pathlib
+import sys
+
+root = pathlib.Path(sys.argv[1])
+pages = [
+    "settings_ui.rs",
+    "settings_ui/tests.rs",
+    "theme_browser.rs",
+    "theme_picker.rs",
+    "command_palette.rs",
+]
+count = 0
+for page in pages:
+    path = root / page
+    if path.exists():
+        count += path.read_text().count("Model::new")
+print(count)
+PY
+)"
 oversized="$(find "$src" -name '*.rs' -print0 | xargs -0 wc -l | awk '$1 > 800 && $2 != "total" { count++ } END { print count + 0 }')"
 deps="$(
     cargo metadata --no-deps --format-version 1 \
@@ -55,6 +76,7 @@ tui-metrics:
   impl_model_files=$impl_model_files
   model_mut_methods=$model_mut_methods
   model_new=$model_new
+  page_model_setups=$page_model_setups
   files_over_800=$oversized
 EOF
 
@@ -81,6 +103,7 @@ check_max deps "$deps" "$TUI_DEPS"
 check_max impl_model "$impl_model" "$TUI_IMPL_MODEL"
 check_max model_mut_methods "$model_mut_methods" "$TUI_MODEL_MUT_METHODS"
 check_max model_new "$model_new" "$TUI_MODEL_NEW"
+check_max page_model_setups "$page_model_setups" "$TUI_PAGE_MODEL_SETUPS"
 check_max files_over_800 "$oversized" "$TUI_FILES_OVER_800"
 
 echo "tui-metrics: ok (loc=$loc; baseline=$TUI_LOC)"

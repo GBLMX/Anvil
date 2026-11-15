@@ -17,6 +17,7 @@ file count or crate count as a goal.
 | Files containing `impl Model` | 61 |
 | Methods taking `&mut Model` | 462 |
 | `Model::new` constructions | 431 |
+| Page-test `Model::new` setups | 6 |
 | Files over 800 lines | 14 |
 
 File counts and LOC are informational: a page split may add files while
