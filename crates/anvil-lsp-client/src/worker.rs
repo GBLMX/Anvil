@@ -659,7 +659,7 @@ mod tests {
         let mut group = TaskGroup::<LspEvent>::with_config(config);
         let overflow = Arc::new(Mutex::new(HashMap::new()));
         let task_overflow = Arc::clone(&overflow);
-        let id = group
+        let _ = group
             .spawn("overflow", move |context| {
                 let _ = send_lsp_event(
                     &context,
@@ -682,14 +682,8 @@ mod tests {
                 Ok(())
             })
             .expect("spawn");
-        for _ in 0..100 {
-            let _ = group.poll();
-            if group
-                .state(id)
-                .is_some_and(anvil_task::TaskState::is_terminal)
-            {
-                break;
-            }
+        let deadline = Instant::now() + Duration::from_secs(1);
+        while !overflow.lock().expect("overflow").contains_key(&2) && Instant::now() < deadline {
             std::thread::sleep(Duration::from_millis(1));
         }
         assert!(overflow.lock().expect("overflow").contains_key(&2));

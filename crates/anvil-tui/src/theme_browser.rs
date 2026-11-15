@@ -222,6 +222,20 @@ mod tests {
     }
 
     #[test]
+    fn theme_browser_state_clamps_selection_and_keeps_original() {
+        theme::set_startup_theme("anvil-dark").expect("reset");
+        let mut browser = ThemeBrowser::new();
+        let original = browser.original();
+        let first = theme::names().first().copied();
+        let last = theme::names().last().copied();
+        assert_eq!(browser.move_selection(-1000), first);
+        assert_eq!(browser.move_selection(1000), last);
+        assert_eq!(browser.original(), original);
+        assert_eq!(browser.selected_name(), last);
+        theme::set_startup_theme("anvil-dark").expect("reset");
+    }
+
+    #[test]
     fn mouse_wheel_moves_theme_selection() {
         theme::set_startup_theme("anvil-dark").expect("reset");
         let mut model = Model::new(EditorState::from_text("x"), None);
