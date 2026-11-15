@@ -274,7 +274,10 @@ impl Model {
             return;
         };
         let Some(style) = comment::comment_style(path) else {
-            self.status.text = "E: comment: unsupported file type".to_owned();
+            self.status.text = format!(
+                "E: comment: unsupported file type; no line-comment marker for {} (HTML/CSS/XML use block comments)",
+                path.display()
+            );
             self.file.dirty = true;
             return;
         };

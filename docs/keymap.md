@@ -107,6 +107,16 @@ remain as internal aliases, but they are not separate advertised shortcuts.
 `0x1f`; it is not documented as a second shortcut. `Home`/`End` and arrow keys
 remain hardware aliases for `0`/`$` and `h/j/k/l`.
 
+`Ctrl-/` toggles line comments only. It recognizes `//` for Rust, Go, C-family,
+JVM, Swift, PHP, and JavaScript/TypeScript; `#` for shell, Python, TOML, YAML,
+Rust-adjacent config, Ruby, and the listed dotfiles; `--` is used for SQL
+and Lua. Supported dotfiles are `.bashrc`, `.bash_profile`, `.zshrc`,
+`.zprofile`, `.profile`, `.env`, `.editorconfig`, `.gitignore`,
+`.gitattributes`, `.dockerignore`, `.npmrc`, `.prettierignore`, and
+`.eslintignore`. HTML, CSS, XML, and unknown extensions report an unsupported
+line-comment type instead of inserting an invalid marker; block comments are
+not implemented.
+
 Visual `v`/`V` selections support `d`, `y`, and `c`. Press `s` to open the
 operation-scoped surround layer, then `(`/`)`, `[`/`]`, `{`/`}`, `<`/`>`,
 `"`, `'`, or `` ` `` to wrap the selection. `Esc` cancels the layer.

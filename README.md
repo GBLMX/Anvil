@@ -240,7 +240,10 @@ warnings, installed-layout sidecars are errors. `--json` emits schema version
 
 `anvil modules` lists the compiled-in modules in the running distribution with
 their contract range, command count, and `compiled-in` source. `--json` emits
-schema version 1. It is read-only and does not contact a marketplace.
+schema version 1 with stable module ids, enabled state, feature name, contract,
+and source. It is read-only and does not contact a marketplace. Only modules
+compiled into the binary appear: a default build lists `official.git`, while a
+`full` build also lists workspace index, desktop, LaTeX, and Typst.
 
 `FILE` must be inside the selected workspace. `--editor` is intended for
 `$EDITOR`-style invocations; `:cq` exits 1 and a failed save keeps the final

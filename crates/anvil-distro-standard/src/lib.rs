@@ -485,35 +485,44 @@ fn run_doctor(
     Ok(exit_code)
 }
 
-fn module_catalog(distribution: &Distribution) -> Vec<anvil_module::ModuleMetadata> {
+type ModuleEntry = (&'static str, anvil_module::ModuleMetadata);
+
+fn module_catalog(distribution: &Distribution) -> Vec<ModuleEntry> {
     let _ = distribution;
     let mut modules = Vec::new();
     #[cfg(feature = "official-git")]
     if distribution.git {
-        modules.push(anvil_module::Module::metadata(&anvil_mod_git::GitModule));
+        modules.push((
+            "official-git",
+            anvil_module::Module::metadata(&anvil_mod_git::GitModule),
+        ));
     }
     #[cfg(feature = "official-workspace-index")]
     if distribution.workspace_index {
-        modules.push(anvil_module::Module::metadata(
-            &anvil_mod_workspace_index::WorkspaceIndexModule,
+        modules.push((
+            "official-workspace-index",
+            anvil_module::Module::metadata(&anvil_mod_workspace_index::WorkspaceIndexModule),
         ));
     }
     #[cfg(feature = "official-desktop")]
     if distribution.desktop {
-        modules.push(anvil_module::Module::metadata(
-            &anvil_mod_desktop::DesktopModule,
+        modules.push((
+            "official-desktop",
+            anvil_module::Module::metadata(&anvil_mod_desktop::DesktopModule),
         ));
     }
     #[cfg(feature = "official-language-latex")]
     if distribution.language_latex {
-        modules.push(anvil_module::Module::metadata(
-            &anvil_mod_language_latex::LatexModule,
+        modules.push((
+            "official-language-latex",
+            anvil_module::Module::metadata(&anvil_mod_language_latex::LatexModule),
         ));
     }
     #[cfg(feature = "official-language-typst")]
     if distribution.language_typst {
-        modules.push(anvil_module::Module::metadata(
-            &anvil_mod_language_typst::TypstModule,
+        modules.push((
+            "official-language-typst",
+            anvil_module::Module::metadata(&anvil_mod_language_typst::TypstModule),
         ));
     }
     modules
@@ -527,7 +536,7 @@ fn run_modules(distribution: &Distribution, json: bool) -> Result<i32, RunError>
         out.push_str("\",\"version\":\"");
         out.push_str(env!("CARGO_PKG_VERSION"));
         out.push_str("\",\"modules\":[");
-        for (index, module) in modules.iter().enumerate() {
+        for (index, (feature, module)) in modules.iter().enumerate() {
             if index > 0 {
                 out.push(',');
             }
@@ -539,7 +548,9 @@ fn run_modules(distribution: &Distribution, json: bool) -> Result<i32, RunError>
             out.push_str(&format!("{}..{}", module.contract.min, module.contract.max));
             out.push_str("\",\"version\":\"");
             out.push_str(env!("CARGO_PKG_VERSION"));
-            out.push_str("\",\"source\":\"compiled-in\",\"commands\":");
+            out.push_str("\",\"source\":\"compiled-in\",\"enabled\":true,\"feature\":\"");
+            out.push_str(feature);
+            out.push_str("\",\"commands\":");
             out.push_str(&module.commands.len().to_string());
             out.push('}');
         }
@@ -547,19 +558,20 @@ fn run_modules(distribution: &Distribution, json: bool) -> Result<i32, RunError>
         println!("{out}");
     } else {
         println!(
-            "{} {} modules ({})",
+            "{} {} modules (distribution {})",
             distribution.name,
             env!("CARGO_PKG_VERSION"),
             distribution.name
         );
-        for module in &modules {
+        for (feature, module) in &modules {
             println!(
-                "{:<28} {:<30} contract {}-{}  commands {:<3} compiled-in",
+                "{:<28} {:<30} contract {}-{}  commands {:<3} feature={} enabled",
                 module.id.as_str(),
                 module.name,
                 module.contract.min,
                 module.contract.max,
-                module.commands.len()
+                module.commands.len(),
+                feature
             );
         }
     }
@@ -1933,7 +1945,8 @@ mod tests {
         assert!(
             modules
                 .iter()
-                .any(|module| module.id.as_str() == "official.git"),
+                .any(|(feature, module)| *feature == "official-git"
+                    && module.id.as_str() == "official.git"),
             "missing official.git in {modules:?}"
         );
     }

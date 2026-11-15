@@ -279,6 +279,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--binary", type=Path, default=Path("target/release/anvil"))
     parser.add_argument("--gateway", type=Path)
+    parser.add_argument("--workdir", type=Path)
     parser.add_argument("--iterations", type=int, default=3)
     parser.add_argument("--timeout", type=float, default=60.0)
     parser.add_argument("--keep", action="store_true")
@@ -313,7 +314,12 @@ def main() -> int:
         )
     os.environ["ANVIL_GATEWAY"] = str(gateway)
 
-    root = Path(tempfile.mkdtemp(prefix="anvil-perf-gates."))
+    workdir = None
+    if args.workdir is not None:
+        workdir = args.workdir.resolve()
+        if not workdir.is_dir():
+            parser.error(f"workdir is not a directory: {workdir}")
+    root = Path(tempfile.mkdtemp(prefix="anvil-perf-gates.", dir=workdir))
     try:
         fixtures = make_workspace(root)
         scenarios: dict[str, list[float]] = {}

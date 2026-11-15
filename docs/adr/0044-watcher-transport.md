@@ -18,8 +18,8 @@ difference between the integrated path and the kernel primitive:
 
 | Path | p50 |
 |---|---:|
-| Clean-buffer external reload, polling | 710 ms |
-| Kernel inotify event delivery | 0.05–0.08 ms |
+| Clean-buffer external reload, polling | 708 ms |
+| Kernel inotify event delivery | 0.05–0.19 ms |
 
 The polling number includes the 100 ms stat interval and the intentional 500 ms
 stability debounce. It is not a synchronous stall, but it is noticeable after a
@@ -33,7 +33,12 @@ reconciliation. None of those are implemented today.
 ## Decision
 
 1. Keep the bounded polling watcher as the integrated transport for `0.6.x`.
-2. Keep the 100 ms stat interval, 500 ms debounce, and 256-directory cap.
+2. Keep these initial bounds for any future inotify comparison:
+   - open-buffer watches: at most the configured buffer limit (1–99, default 9);
+   - tree watches: at most 256 directories, `.git` and `target` excluded;
+   - open-buffer poll interval: 100 ms; metadata debounce: 500 ms;
+   - tree poll interval: 500 ms; tree debounce: 500 ms;
+   - file-worker event queue: 1024 events.
 3. Do not add an inotify dependency or a second watcher implementation without
    a new ADR and a reference-machine comparison.
 4. Treat the table above as the decision input for any future inotify slice.
@@ -46,7 +51,7 @@ Positive:
 
 - One transport works through the gateway on every supported platform.
 - The bounded watch set and debounce behavior remain testable and predictable.
-- The 710 ms worst-case reload is documented rather than hidden.
+- The 708 ms worst-case reload is documented rather than hidden.
 
 Negative:
 

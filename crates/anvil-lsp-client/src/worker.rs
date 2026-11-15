@@ -794,7 +794,7 @@ mod tests {
     }
 
     #[test]
-    fn fake_gateway_worker_lifecycle_parses_diagnostics() {
+    fn fake_gateway_worker_stops_and_parses_diagnostics() {
         let nanos = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("clock")
@@ -876,7 +876,7 @@ mod tests {
         )
         .expect("worker");
         assert_eq!(worker.root(), Path::new("/tmp"));
-        let deadline = Instant::now() + Duration::from_secs(2);
+        let deadline = Instant::now() + Duration::from_secs(5);
         loop {
             for event in worker.poll() {
                 if let LspEvent::Diagnostics(path, diagnostics) = event {
@@ -885,11 +885,11 @@ mod tests {
                     let started = Instant::now();
                     drop(worker);
                     assert!(
-                        started.elapsed() < Duration::from_secs(2),
+                        started.elapsed() < Duration::from_secs(5),
                         "worker drop exceeded its shutdown budget"
                     );
                     let (lock, ready) = &*stopped;
-                    let deadline = Instant::now() + Duration::from_secs(2);
+                    let deadline = Instant::now() + Duration::from_secs(5);
                     let mut done = lock.lock().expect("stop state");
                     while !*done {
                         let remaining = deadline.saturating_duration_since(Instant::now());

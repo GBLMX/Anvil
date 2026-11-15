@@ -147,7 +147,9 @@ capabilities, runtime/config paths, Landlock, and language servers on `PATH`.
 Use `anvil doctor --json` for schema-versioned, machine-readable output.
 
 `anvil modules` is a read-only view of the compiled-in modules, their contract
-range, command count, and source; `anvil modules --json` is schema-versioned.
+range, enabled state, feature name, command count, and source;
+`anvil modules --json` is schema-versioned. The list is feature-gated by the
+compiled distribution, not by installation state.
 
 Open a workspace:
 
