@@ -1,8 +1,8 @@
-//! Process boundary for the empty plugin host.
+//! Process boundary for the sandboxed Luau plugin host.
 //!
-//! The editor side only creates a pipe, passes the token FD, starts the host in
-//! its own process group, and kills the group on shutdown. Plugin code and VM
-//! initialization are deliberately not present.
+//! The editor side creates a pipe, passes the token FD, starts the host in its
+//! own process group, and kills the group on shutdown. The host binary owns VM
+//! initialization and the editor RPC bridge; this library exposes the boundary.
 
 use std::io::{self, Write};
 use std::path::Path;
@@ -135,7 +135,7 @@ mod linux {
     /// host to be reaped.
     const TERMINATE_WAIT: std::time::Duration = std::time::Duration::from_secs(2);
 
-    /// A running empty host. Dropping it kills the process and its cgroup.
+    /// A running plugin host. Dropping it kills the process and its cgroup.
     pub struct HostProcess {
         child: Child,
         pgid: i32,

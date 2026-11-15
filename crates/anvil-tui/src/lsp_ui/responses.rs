@@ -262,6 +262,9 @@ impl Model {
                 self.status.text = "code lens command executed".to_owned();
                 self.request_code_lens();
             }
+            LspRequestKind::CodeActionCommand => {
+                self.status.text = "code action command executed".to_owned();
+            }
             LspRequestKind::Formatting => {
                 let Some(path) = edit_path.or_else(|| self.session.path.clone()) else {
                     self.status.text = "lsp: no formatting path".to_owned();
@@ -823,9 +826,23 @@ impl Model {
                     },
                     None => None,
                 };
+                let command = item
+                    .get("command")
+                    .and_then(|command| command.get("command"))
+                    .and_then(serde_json::Value::as_str)
+                    .filter(|command| !command.is_empty())
+                    .map(|command| CodeActionCommand {
+                        command: command.to_owned(),
+                        arguments: item
+                            .get("command")
+                            .and_then(|command| command.get("arguments"))
+                            .cloned()
+                            .unwrap_or_else(|| serde_json::json!([])),
+                    });
                 Some(CodeActionItem {
                     title,
                     edit,
+                    command,
                     disabled,
                 })
             })

@@ -54,12 +54,21 @@ pub(crate) fn restore(model: &mut Model, workspace: &Path) -> Result<bool, Strin
     if state.version != SESSION_VERSION || state.workspace != workspace {
         return Ok(false);
     }
+
+    let mut restored = Vec::new();
+    for saved in state.buffers {
+        restored.push(restore_buffer(model, saved)?);
+    }
+    let restored_split = match state.split {
+        Some(saved) => Some(restore_buffer(model, saved)?),
+        None => None,
+    };
+
     model.workspace.conflict_swaps.clear();
     model.workspace.stale_paths.clear();
     let mut buffers = Vec::new();
     let mut conflicts = 0;
-    for saved in state.buffers {
-        let (buffer, conflict, conflicted) = restore_buffer(model, saved);
+    for (buffer, conflict, conflicted) in restored {
         if buffer.path.is_none() && !buffer.modified {
             continue;
         }
@@ -84,8 +93,7 @@ pub(crate) fn restore(model: &mut Model, workspace: &Path) -> Result<bool, Strin
     let index = model.buffers.active;
     model.load_buffer(index);
     model.overlays.lsp_results.folded = state.folded.into_iter().collect();
-    if let Some(saved_split) = state.split {
-        let (buffer, conflict, conflicted) = restore_buffer(model, saved_split);
+    if let Some((buffer, conflict, conflicted)) = restored_split {
         if conflicted {
             conflicts += 1;
         }
@@ -105,19 +113,37 @@ pub(crate) fn restore(model: &mut Model, workspace: &Path) -> Result<bool, Strin
     Ok(true)
 }
 
-fn restore_buffer(model: &mut Model, saved: SessionBuffer) -> (Buffer, Option<PathBuf>, bool) {
+fn restore_buffer(
+    model: &mut Model,
+    saved: SessionBuffer,
+) -> Result<(Buffer, Option<PathBuf>, bool), String> {
     let path = saved
         .path
         .as_ref()
         .map(|path| path.canonicalize().unwrap_or_else(|_| path.clone()));
     let disk_text = match &path {
-        Some(path) => model.read_file(path).ok(),
+        Some(path) => match model.read_file(path) {
+            Ok(text) => Some(text),
+            Err(error) => match fs::metadata(path) {
+                Ok(_) => return Err(format!("session restore {}: {error}", path.display())),
+                Err(metadata) if metadata.kind() == io::ErrorKind::NotFound => None,
+                Err(metadata) => {
+                    return Err(format!("session restore {}: {metadata}", path.display()));
+                }
+            },
+        },
         None => None,
     };
-    let swap_text = saved
-        .swap
-        .as_ref()
-        .and_then(|swap| fs::read_to_string(swap).ok());
+    let swap_text = match saved.swap.as_deref() {
+        Some(swap) => match fs::read_to_string(swap) {
+            Ok(text) => Some(text),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => None,
+            Err(error) => {
+                return Err(format!("session restore swap {}: {error}", swap.display()));
+            }
+        },
+        None => None,
+    };
     let changed = saved
         .source_mtime_ns
         .zip(path.as_deref().and_then(source_mtime_ns))
@@ -153,7 +179,7 @@ fn restore_buffer(model: &mut Model, saved: SessionBuffer) -> (Buffer, Option<Pa
         search_query: String::new(),
         syntax: Default::default(),
     };
-    (buffer, conflict_swap, conflicted)
+    Ok((buffer, conflict_swap, conflicted))
 }
 
 impl Model {
@@ -424,6 +450,26 @@ mod tests {
             fs::metadata(state).expect("state").permissions().mode() & 0o777,
             0o600
         );
+    }
+
+    #[test]
+    fn refuses_to_restore_unreadable_paths_as_empty_buffers() {
+        let dir = state_root();
+        let _guard = ENV_LOCK.lock().expect("env lock");
+        let workspace = dir.path().join("workspace");
+        fs::create_dir_all(&workspace).expect("workspace");
+        let path = workspace.join("a.rs");
+        fs::write(&path, "clean\n").expect("file");
+        unsafe { std::env::set_var("XDG_STATE_HOME", dir.path().join("state")) };
+        let mut model = Model::open(&path).expect("open");
+        save(&mut model, &workspace).expect("save");
+        fs::remove_file(&path).expect("remove file");
+        fs::create_dir(&path).expect("replace with directory");
+
+        let mut restored = Model::new(EditorState::from_text(""), None);
+        let error = restore(&mut restored, &workspace).expect_err("unreadable path");
+        assert!(error.contains("session restore"), "{error}");
+        assert!(restored.session.path.is_none());
     }
 
     #[test]

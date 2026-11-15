@@ -1,10 +1,10 @@
 //! LSP request state, completion, definition, and hover UI behavior.
 
 use super::{
-    CallHierarchyDirection, CodeActionItem, CodeActionState, CompletionItem, CompletionState,
-    LspRequestKind, Model, OverlayKind, ReferenceItem, ReferenceState, SignatureHelpState,
-    SignatureItem, Snippet, SnippetSession, SymbolItem, SymbolState, WorkspaceEdit,
-    WorkspaceSymbolItem, WorkspaceSymbolState,
+    CallHierarchyDirection, CodeActionCommand, CodeActionItem, CodeActionState, CompletionItem,
+    CompletionState, LspRequestKind, Model, OverlayKind, ReferenceItem, ReferenceState,
+    SignatureHelpState, SignatureItem, Snippet, SnippetSession, SymbolItem, SymbolState,
+    WorkspaceEdit, WorkspaceSymbolItem, WorkspaceSymbolState,
 };
 use anvil_core::TextBuffer;
 use anvil_lsp_client as lsp;
@@ -723,14 +723,47 @@ impl Model {
         };
         if let Some(reason) = &item.disabled {
             self.status.text = format!("E: {reason}");
-        } else if let Some(edit) = &item.edit {
+            self.file.dirty = true;
+            return;
+        }
+        let mut applied = false;
+        if let Some(edit) = &item.edit {
             match edit.apply(self) {
-                Ok(()) => self.status.text = format!("applied {}", item.title),
-                Err(error) => self.status.text = format!("E: {error}"),
+                Ok(()) => applied = true,
+                Err(error) => {
+                    self.status.text = format!("E: {error}");
+                    self.file.dirty = true;
+                    return;
+                }
             }
-        } else {
-            self.status.text = "E: command code actions are not supported".to_owned();
+        }
+        if let Some(command) = &item.command {
+            let sent = self.execute_lsp_command(
+                command.command.clone(),
+                command.arguments.clone(),
+                LspRequestKind::CodeActionCommand,
+            );
+            applied = true;
+            if sent {
+                self.status.text = format!("applied {}; executing command", item.title);
+            }
+        }
+        if !applied {
+            self.status.text = "E: code action has no edit or command".to_owned();
         }
         self.file.dirty = true;
+    }
+
+    pub(crate) fn execute_lsp_command(
+        &mut self,
+        command: String,
+        arguments: serde_json::Value,
+        kind: LspRequestKind,
+    ) -> bool {
+        let params = serde_json::json!({
+            "command": command,
+            "arguments": arguments,
+        });
+        self.send_lsp_request(kind, "workspace/executeCommand", params)
     }
 }

@@ -27,15 +27,16 @@ marked resolved are no longer blockers.
 ### 1.2 Control socket
 
 ```text
-$XDG_RUNTIME_DIR/anvil/control.sock
-$XDG_RUNTIME_DIR/anvil/control.lock
+$XDG_RUNTIME_DIR/anvil/control-<workspace-hash>.sock
+$XDG_RUNTIME_DIR/anvil/control-<workspace-hash>.lock
 ```
 
 - Parent directory mode `0700`; socket and lock mode `0600`.
 - Same-UID peer verification via `SO_PEERCRED`.
 - Exclusive lock; a live socket is never unlinked.
 - Stale sockets are removed only after a liveness check fails.
-- One control socket per user runtime directory, one editor instance.
+- One socket per canonical workspace; `anvil-ctl` and MCP select it with
+  `--workspace` / `ANVIL_WORKSPACE`.
 
 Wire methods, JSON-RPC over the existing bounded `anvil-ipc` framing:
 

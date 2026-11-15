@@ -926,6 +926,14 @@ fn gopls_code_action_response_applies_organize_imports() {
         .as_ref()
         .expect("actions");
     assert_eq!(actions.items.len(), 2);
+    assert_eq!(
+        actions.items[1]
+            .command
+            .as_ref()
+            .expect("command action")
+            .command,
+        "gopls.doc"
+    );
     assert!(actions.items[0].edit.is_some());
     model.apply_code_action();
     assert!(
@@ -937,6 +945,48 @@ fn gopls_code_action_response_applies_organize_imports() {
             .contains("fmt")
     );
     assert!(model.file.modified);
+}
+
+#[test]
+fn command_only_code_action_dispatches_execute_command() {
+    let mut model = Model::new(EditorState::from_text("text"), Some(PathBuf::from("a.rs")));
+    model
+        .language
+        .lsp_requests
+        .pending
+        .insert(11, LspRequestKind::CodeAction);
+    model.handle_lsp_response(
+        11,
+        serde_json::json!([{
+            "title": "Browse documentation",
+            "command": {
+                "title": "Browse documentation",
+                "command": "gopls.doc",
+                "arguments": ["main.go"]
+            }
+        }]),
+        None,
+    );
+    let actions = model
+        .overlays
+        .lsp_results
+        .code_actions
+        .as_ref()
+        .expect("actions");
+    assert_eq!(
+        actions.items[0]
+            .command
+            .as_ref()
+            .expect("command action")
+            .arguments,
+        serde_json::json!(["main.go"])
+    );
+    model.apply_code_action();
+    assert!(
+        model.status.text.contains("lsp is not running"),
+        "{}",
+        model.status.text
+    );
 }
 
 #[test]

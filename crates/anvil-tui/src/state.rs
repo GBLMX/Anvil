@@ -900,13 +900,21 @@ pub(crate) enum LspRequestKind {
     WorkspaceSymbol,
     InlayHint,
     ExecuteCommand,
+    CodeActionCommand,
     CodeLens,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct CodeActionCommand {
+    pub(crate) command: String,
+    pub(crate) arguments: serde_json::Value,
 }
 
 #[derive(Debug, Clone)]
 pub(crate) struct CodeActionItem {
     pub(crate) title: String,
     pub(crate) edit: Option<WorkspaceEdit>,
+    pub(crate) command: Option<CodeActionCommand>,
     pub(crate) disabled: Option<String>,
 }
 

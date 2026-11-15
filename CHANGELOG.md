@@ -9,6 +9,12 @@ post-`0.5.0` feature line.
 ## [Unreleased]
 ### Added
 - Added shared pending contexts for hover and line comments.
+- Command-based LSP code actions now dispatch through
+  `workspace/executeCommand`, including actions that also carry a workspace
+  edit. Sessions now fail restore on unreadable files or swap files instead of
+  opening an empty buffer.
+- `anvil-module` now exposes a reusable `LanguageToolingProviders` composition
+  for distributions that enable multiple language providers.
 - Buffer tabs and the buffer picker now show file-type icons; picker paths are
   workspace-relative instead of absolute.
 - The status line adds the current file icon plus read-only and missing-file
@@ -430,6 +436,9 @@ post-`0.5.0` feature line.
   `Ctrl-o`/`Ctrl-i` jump aliases, `Alt-s`, and the alias-only Helix preset.
   `S` splits selections, `C`/`Alt-C` add cursors below/above, `Ctrl-/` is the
   canonical comment key, and the Space leader timeout is now 1200 ms.
+- Removed the legacy single control socket and its client fallback; control
+  clients now select the workspace-keyed socket. Removed the unsupported
+  `Ctrl-v` block-selection key.
 - Rebuilt the default `anvil-dark` theme with a deep-navy, steel, cyan,
   violet, and amber palette. Syntax colors now use stronger hue separation
   and targeted bold/italic/underline modifiers while keeping WCAG-AA contrast.

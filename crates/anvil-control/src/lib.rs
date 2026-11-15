@@ -693,11 +693,6 @@ impl From<serde_json::Error> for Error {
     }
 }
 
-/// Stable legacy control socket path under `$XDG_RUNTIME_DIR`.
-pub fn socket_path() -> Result<PathBuf, Error> {
-    Ok(runtime_dir()?.join("anvil/control.sock"))
-}
-
 /// Control socket path for one canonical workspace.
 pub fn socket_path_for(workspace: &Path) -> Result<PathBuf, Error> {
     Ok(control_socket_path(&runtime_dir()?, workspace))
@@ -721,11 +716,6 @@ fn runtime_dir() -> Result<PathBuf, Error> {
 }
 
 impl ControlServer {
-    /// Start the control server at the stable runtime path.
-    pub fn start() -> Result<Self, Error> {
-        Self::start_at(socket_path()?)
-    }
-
     /// Start the control server for one workspace.
     pub fn start_for(workspace: &Path) -> Result<Self, Error> {
         Self::start_at(socket_path_for(workspace)?)
@@ -1100,12 +1090,6 @@ pub struct Client {
 }
 
 impl Client {
-    /// Connect to the stable control socket.
-    pub fn connect() -> Result<Self, Error> {
-        let socket = socket_path()?;
-        Self::connect_at(&socket, Duration::from_secs(5))
-    }
-
     /// Connect to the control socket for one workspace.
     pub fn connect_for(workspace: &Path) -> Result<Self, Error> {
         Self::connect_for_with_timeout(workspace, Duration::from_secs(5))
@@ -1198,11 +1182,6 @@ impl Client {
     /// Ask the editor to quit.
     pub fn quit(&mut self, force: bool) -> Result<Value, Error> {
         self.request("control.quit", json!({"force": force}))
-    }
-
-    /// Connect with an explicit timeout.
-    pub fn connect_with_timeout(timeout: Duration) -> Result<Self, Error> {
-        Self::connect_at(&socket_path()?, timeout)
     }
 
     fn request(&mut self, method: &str, params: Value) -> Result<Value, Error> {

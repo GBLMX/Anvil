@@ -178,19 +178,6 @@ fn compose_git(
     Ok(registry.git_service())
 }
 
-struct LanguageToolingProviders(
-    Vec<std::sync::Arc<dyn anvil_module::language::LanguageToolingService>>,
-);
-
-impl anvil_module::language::LanguageToolingService for LanguageToolingProviders {
-    fn server_for(
-        &self,
-        path: &std::path::Path,
-    ) -> Option<anvil_module::language::LanguageServerSpec> {
-        self.0.iter().find_map(|provider| provider.server_for(path))
-    }
-}
-
 #[cfg(feature = "official-language-latex")]
 fn latex_tooling()
 -> Result<std::sync::Arc<dyn anvil_module::language::LanguageToolingService>, RunError> {
@@ -244,7 +231,9 @@ fn compose_language_tooling(
     Ok(match providers.len() {
         0 => None,
         1 => providers.pop(),
-        _ => Some(std::sync::Arc::new(LanguageToolingProviders(providers))),
+        _ => Some(std::sync::Arc::new(
+            anvil_module::language::LanguageToolingProviders::new(providers),
+        )),
     })
 }
 
@@ -349,26 +338,7 @@ fn forward_to_running(
     };
     let status = match client.status() {
         Ok(status) => status,
-        Err(_) => {
-            let mut legacy = match anvil_control::Client::connect() {
-                Ok(client) => client,
-                Err(_) => return Ok(false),
-            };
-            match legacy.status() {
-                Ok(value) => {
-                    let running = value
-                        .workspace
-                        .canonicalize()
-                        .unwrap_or_else(|_| value.workspace.clone());
-                    if running != workspace {
-                        return Ok(false);
-                    }
-                    client = legacy;
-                    value
-                }
-                Err(_) => return Ok(false),
-            }
-        }
+        Err(_) => return Ok(false),
     };
     let running = status
         .workspace

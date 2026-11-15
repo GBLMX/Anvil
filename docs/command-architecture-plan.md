@@ -45,9 +45,10 @@ times per minute:
   command IDs or effects.
 - `crates/anvil-tui/src/workspace_edit.rs` applies edits to buffers and may read
   unopened files, but never writes files.
-- `crates/anvil-plugin-host` has no Lua/Luau VM yet.
-- `anvil-api` has `editor.register_command` as a method name but no command
-  descriptor or effect DTO.
+- `crates/anvil-plugin-host` owns the sandboxed Luau runtime, but not a Luau
+  keymap declaration surface.
+- `anvil-api` has `editor.register_command` DTOs, but they carry no capability
+  or effect descriptor.
 - The Go gateway owns `sys.*`, `fs.*`, and `lsp.*`; the session currently
   starts with `-allow-read -allow-write` and a trusted, unsandboxed LSP path.
 
@@ -262,7 +263,7 @@ selection-scroll bug separately.
 
 ### Phase F: Lua declarations and plugin commands
 
-Only after the plugin host owns a VM:
+Only after the plugin host exposes a keymap declaration surface:
 
 - configuration parsing and atomic keymap swap;
 - plugin command descriptors and effect submission;

@@ -51,14 +51,10 @@ impl Model {
             self.file.dirty = true;
             return;
         };
-        let params = serde_json::json!({
-            "command": command,
-            "arguments": lens.arguments,
-        });
-        if self.send_lsp_request(
+        if self.execute_lsp_command(
+            command.clone(),
+            lens.arguments,
             LspRequestKind::ExecuteCommand,
-            "workspace/executeCommand",
-            params,
         ) {
             self.status.text = format!("code lens: {command}");
         }

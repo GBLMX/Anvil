@@ -227,8 +227,8 @@ pub enum InteractionMode {
 /// grapheme clusters; `display_column` counts terminal cells and accounts for
 /// wide characters. The editor owns the conversions and guarantees the fields
 /// describe the same cursor position. Plugins receive positions from
-/// `editor.get_view`; construction stays editor-owned until a future
-/// `set_selection` contract validates it.
+/// `editor.get_view`. V1 has no `set_selection`; a deserialized position is
+/// editor output, not trusted editor input.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[ts(export)]
 pub struct TextPosition {

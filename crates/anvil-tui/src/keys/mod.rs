@@ -806,11 +806,6 @@ fn handle_key(model: &mut Model, key: KeyPress) {
                     _ => {}
                 }
             }
-            if key.ctrl() && key.code == KeyCode::Char('v') {
-                model.status.text = "E: block selection is not supported".to_owned();
-                model.file.dirty = true;
-                return;
-            }
             match key.code {
                 KeyCode::Char('v') => {
                     model.begin_visual(false);

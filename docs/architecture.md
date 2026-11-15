@@ -152,11 +152,11 @@ event notifications are defined by
 |---|---|---|---|
 | `editor.sock` | plugin host | editor | `editor.*`, `ui.*`, `event.*` |
 | `gateway.sock` | editor, plugin host | gateway | editor file/LSP/git, `sys.*`, `plugin.register` |
-| `control.sock` | `anvil-ctl`, MCP adapter | editor | `control.*` |
+| `control-<workspace-hash>.sock` | `anvil-ctl`, MCP adapter | editor | `control.*` |
 
 The control socket is not a gateway grant channel. Plugin grants register over
-the per-session gateway socket; `control.sock` belongs to the editor runtime and
-is stable across sessions under `$XDG_RUNTIME_DIR/anvil/`.
+the per-session gateway socket; the control socket belongs to the editor runtime
+and is keyed by canonical workspace under `$XDG_RUNTIME_DIR/anvil/`.
 
 `SO_PEERCRED` identifies the peer process. The capability token identifies the
 plugin. Neither is sufficient alone.
@@ -180,8 +180,8 @@ filesystem/network I/O on behalf of a plugin.
 
 ### Editor control plane
 
-- `anvil-control` owns the stable `control.sock` server/client, protocol v3,
-  typed request and response DTOs, and the shared command manifest.
+- `anvil-control` owns the workspace-keyed control socket server/client,
+  protocol v3, typed request and response DTOs, and the shared command manifest.
 - Methods: `control.status`, `control.open`, `control.save`, `control.edit`,
   `control.query`, `control.exec`, `control.quit`.
 - Every request is enqueued on the TUI actor and answered with a bounded
