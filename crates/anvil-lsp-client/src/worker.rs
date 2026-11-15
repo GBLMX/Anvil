@@ -1,5 +1,5 @@
 use crate::lsp::{Diagnostic, publish_diagnostics};
-use anvil_ipc::GatewayClient;
+use anvil_ipc::{ClientError, GatewayClient};
 use anvil_task::{DataError, TaskContext, TaskEvent as TaskGroupEvent, TaskGroup, TaskGroupConfig};
 use serde_json::Value;
 use std::collections::HashMap;
@@ -8,10 +8,11 @@ use std::sync::{
     Arc, Mutex,
     mpsc::{self, SyncSender},
 };
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 const POLL_INTERVAL: Duration = Duration::from_millis(50);
 const INITIALIZE_ID: u64 = 1;
+const INITIALIZE_TIMEOUT: Duration = Duration::from_secs(10);
 const LSP_COMMAND_CAPACITY: usize = 1024;
 const LSP_EVENT_CAPACITY: usize = 1024;
 const LSP_SHUTDOWN: Duration = Duration::from_millis(250);
@@ -376,10 +377,25 @@ impl LspWorker {
     }
 
     pub fn sync(&self, path: &Path, text: String) -> Result<(), String> {
-        self.send_command(LspCommand::Sync {
+        self.sync_recoverable(path, text)
+            .map_err(|(error, _)| error)
+    }
+
+    /// Sync, returning the unsent text when the command queue is full.
+    pub fn sync_recoverable(&self, path: &Path, text: String) -> Result<(), (String, String)> {
+        match self.commands.try_send(LspCommand::Sync {
             path: path.to_path_buf(),
             text,
-        })
+        }) {
+            Ok(()) => Ok(()),
+            Err(mpsc::TrySendError::Full(LspCommand::Sync { text, .. })) => {
+                Err(("lsp worker busy".to_owned(), text))
+            }
+            Err(mpsc::TrySendError::Disconnected(LspCommand::Sync { text, .. })) => {
+                Err(("lsp worker stopped".to_owned(), text))
+            }
+            Err(_) => Err(("lsp worker stopped".to_owned(), String::new())),
+        }
     }
 
     pub fn save(&self, path: &Path, text: String) -> Result<(), String> {
@@ -489,16 +505,32 @@ fn answer_server_request(
     let Some(id) = message.get("id") else {
         return Ok(false);
     };
-    if message.get("method").is_none() {
+    let Some(method) = message.get("method").and_then(Value::as_str) else {
         return Ok(false);
-    }
+    };
+    let result = server_request_result(method, message);
     let response = serde_json::json!({
         "jsonrpc": "2.0",
         "id": id,
-        "result": null
+        "result": result
     });
     send(client, &response)?;
     Ok(true)
+}
+
+fn server_request_result(method: &str, message: &Value) -> Value {
+    match method {
+        "workspace/configuration" => {
+            let count = message
+                .pointer("/params/items")
+                .and_then(Value::as_array)
+                .map_or(1, Vec::len);
+            Value::Array(vec![serde_json::json!({}); count])
+        }
+        "workspace/workspaceFolders" => Value::Array(Vec::new()),
+        "workspace/applyEdit" => serde_json::json!({"applied": false}),
+        _ => Value::Null,
+    }
 }
 
 fn sync_document(
@@ -609,10 +641,20 @@ fn send(client: &mut GatewayClient, message: &serde_json::Value) -> Result<(), S
 fn wait_initialize(
     client: &mut GatewayClient,
 ) -> Result<(bool, Vec<String>, Option<String>), String> {
+    let deadline = Instant::now() + INITIALIZE_TIMEOUT;
     loop {
-        let Some(message) = client
-            .recv_notification()
-            .map_err(|error| error.to_string())?
+        if Instant::now() >= deadline {
+            return Err("LSP initialize timed out".to_owned());
+        }
+        let Some(message) =
+            client
+                .recv_notification_deadline(deadline)
+                .map_err(|error| match error {
+                    ClientError::Io(std::io::ErrorKind::TimedOut) => {
+                        "LSP initialize timed out".to_owned()
+                    }
+                    error => error.to_string(),
+                })?
         else {
             return Err("gateway closed during initialize".to_owned());
         };
@@ -681,6 +723,29 @@ mod tests {
     use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
     #[test]
+    fn sync_recoverable_returns_latest_text_when_queue_is_full() {
+        let (commands, _receiver) = mpsc::sync_channel(1);
+        commands
+            .try_send(LspCommand::Sync {
+                path: PathBuf::from("/tmp/queued.rs"),
+                text: "queued".to_owned(),
+            })
+            .expect("fill queue");
+        let worker = LspWorker {
+            events: Mutex::new(TaskGroup::new()),
+            commands,
+            diagnostics: Arc::new(Mutex::new(HashMap::new())),
+            overflow_responses: Arc::new(Mutex::new(HashMap::new())),
+            root: PathBuf::from("/tmp"),
+        };
+        let (error, text) = worker
+            .sync_recoverable(Path::new("/tmp/a.rs"), "latest".to_owned())
+            .expect_err("full queue");
+        assert_eq!(error, "lsp worker busy");
+        assert_eq!(text, "latest");
+    }
+
+    #[test]
     fn response_overflow_is_explicit() {
         let config = TaskGroupConfig {
             global_data_event_capacity: 1,
@@ -744,6 +809,27 @@ mod tests {
         let uri = file_uri(&path);
         assert!(uri.starts_with("file:///"), "{uri}");
         assert!(uri.ends_with("a%20b%23c.rs"), "{uri}");
+    }
+
+    #[test]
+    fn server_requests_get_protocol_results() {
+        let message = json!({"params": {"items": [{}, {}]}});
+        assert_eq!(
+            server_request_result("workspace/configuration", &message),
+            json!([{}, {}])
+        );
+        assert_eq!(
+            server_request_result("workspace/workspaceFolders", &message),
+            json!([])
+        );
+        assert_eq!(
+            server_request_result("workspace/applyEdit", &message),
+            json!({"applied": false})
+        );
+        assert_eq!(
+            server_request_result("client/registerCapability", &message),
+            Value::Null
+        );
     }
 
     #[test]

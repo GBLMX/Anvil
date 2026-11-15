@@ -491,6 +491,10 @@ post-`0.5.0` feature line.
   Up/Down selection, and Esc dismissal.
 
 ### Changed
+- Gateway frame reads now have a 30-second deadline, LSP initialize has a
+  10-second budget, failed LSP document syncs retain the latest text for the
+  next poll, and server configuration/workspace requests receive protocol
+  results instead of unconditional `null`.
 - The editor chrome now uses one persistent frame; the file tree keeps its
   stale/watch-limit/hidden header states without a nested border. Transient
   status and notifications share an auto-expiring bottom message band, while

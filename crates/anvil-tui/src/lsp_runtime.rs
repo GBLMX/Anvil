@@ -74,6 +74,7 @@ impl Model {
             .is_some_and(|key| desired != Some(key))
         {
             self.language.lsp.config = None;
+            self.language.lsp.pending_sync = None;
         }
         if self
             .language
@@ -354,6 +355,7 @@ impl Model {
                 .insert(key.clone(), LspStatus::Stopped { root });
             self.language.inlay_hints.support.remove(&key);
         }
+        self.language.lsp.pending_sync = None;
         self.clear_lsp_ui();
         self.status.text = "lsp stopped".to_owned();
         self.file.dirty = true;
@@ -535,6 +537,7 @@ impl Model {
     }
 
     pub(crate) fn poll_lsp(&mut self) {
+        self.flush_pending_lsp_sync();
         let effects = self.language.poll(Instant::now());
         for effect in effects {
             match effect {
@@ -544,6 +547,23 @@ impl Model {
                         self.start_lsp();
                     }
                 }
+            }
+        }
+    }
+
+    fn flush_pending_lsp_sync(&mut self) {
+        let Some((path, text)) = self.language.lsp.pending_sync.take() else {
+            return;
+        };
+        let Some(worker) = self.active_lsp_worker() else {
+            return;
+        };
+        match worker.sync_recoverable(&path, text) {
+            Ok(()) => {
+                self.language.lsp_requests.record_version(&path);
+            }
+            Err((_, text)) => {
+                self.language.lsp.pending_sync = Some((path, text));
             }
         }
     }

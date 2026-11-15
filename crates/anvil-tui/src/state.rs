@@ -295,6 +295,7 @@ pub(crate) struct LspTransportState {
     pub(crate) status: HashMap<(String, String), LspStatus>,
     pub(crate) desired: Option<(String, String)>,
     pub(crate) labels: HashMap<(String, String), String>,
+    pub(crate) pending_sync: Option<(PathBuf, String)>,
 }
 
 #[derive(Default)]

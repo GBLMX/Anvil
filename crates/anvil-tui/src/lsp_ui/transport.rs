@@ -72,9 +72,25 @@ impl Model {
         let Some(worker) = self.active_lsp_worker() else {
             return Err("lsp is not running".to_owned());
         };
-        worker.sync(path, text)?;
-        self.language.lsp_requests.record_version(path);
-        Ok(())
+        match worker.sync_recoverable(path, text) {
+            Ok(()) => {
+                if self
+                    .language
+                    .lsp
+                    .pending_sync
+                    .as_ref()
+                    .is_some_and(|(pending, _)| pending == path)
+                {
+                    self.language.lsp.pending_sync = None;
+                }
+                self.language.lsp_requests.record_version(path);
+                Ok(())
+            }
+            Err((error, text)) => {
+                self.language.lsp.pending_sync = Some((path.to_path_buf(), text));
+                Err(error)
+            }
+        }
     }
     pub(crate) fn buffer_revisions(&self) -> HashMap<PathBuf, u64> {
         let mut revisions = HashMap::new();

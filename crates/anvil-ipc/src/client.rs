@@ -6,6 +6,7 @@
 
 use std::collections::{BTreeMap, VecDeque};
 use std::path::Path;
+use std::time::{Duration, Instant};
 
 use base64::{Engine as _, engine::general_purpose};
 
@@ -16,6 +17,8 @@ pub const FILE_CHUNK: usize = 5 * 1024 * 1024 + 512 * 1024;
 
 /// Raw binary read chunk; one flag byte plus this fits the 8 MiB frame.
 pub const BINARY_READ_CHUNK: usize = 7 * 1024 * 1024;
+
+const FRAME_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// A gateway client failure.
 #[derive(Debug)]
@@ -193,8 +196,16 @@ impl GatewayClient {
             .connection
             .wait_readable(std::time::Duration::from_millis(0))?
         {
-            let Some(frame) = self.connection.recv()? else {
-                break;
+            let frame = match self
+                .connection
+                .recv_deadline(Instant::now() + FRAME_TIMEOUT)
+            {
+                Ok(Some(frame)) => frame,
+                Ok(None) => break,
+                Err(FrameError::Timeout) => {
+                    return Err(ClientError::Io(std::io::ErrorKind::TimedOut));
+                }
+                Err(error) => return Err(error.into()),
             };
             if let Some(notification) = parse_notification(&frame) {
                 notifications.push(notification);
@@ -227,10 +238,47 @@ impl GatewayClient {
         Ok(self.connection.wait_readable(timeout)?)
     }
 
-    /// Block for one server-initiated notification.
+    /// Receive one non-notification frame with the default frame deadline.
+    fn recv_frame(&mut self) -> Result<Vec<u8>, ClientError> {
+        self.recv_frame_deadline(Instant::now() + FRAME_TIMEOUT)
+    }
+
+    fn recv_frame_deadline(&mut self, deadline: Instant) -> Result<Vec<u8>, ClientError> {
+        loop {
+            match self.connection.recv_deadline(deadline) {
+                Ok(Some(frame)) => {
+                    if let Some(notification) = parse_notification(&frame) {
+                        self.notifications.push_back(notification);
+                        continue;
+                    }
+                    return Ok(frame);
+                }
+                Ok(None) => return Err(ClientError::Protocol("gateway closed")),
+                Err(FrameError::Timeout) => {
+                    return Err(ClientError::Io(std::io::ErrorKind::TimedOut));
+                }
+                Err(error) => return Err(error.into()),
+            }
+        }
+    }
+
+    /// Block for one server-initiated notification with the default deadline.
     pub fn recv_notification(&mut self) -> Result<Option<Request>, ClientError> {
-        let Some(frame) = self.connection.recv()? else {
-            return Ok(None);
+        self.recv_notification_deadline(Instant::now() + FRAME_TIMEOUT)
+    }
+
+    /// Block for one server-initiated notification with an absolute deadline.
+    pub fn recv_notification_deadline(
+        &mut self,
+        deadline: Instant,
+    ) -> Result<Option<Request>, ClientError> {
+        let frame = match self.connection.recv_deadline(deadline) {
+            Ok(Some(frame)) => frame,
+            Ok(None) => return Ok(None),
+            Err(FrameError::Timeout) => {
+                return Err(ClientError::Io(std::io::ErrorKind::TimedOut));
+            }
+            Err(error) => return Err(error.into()),
         };
         if let Some(notification) = parse_notification(&frame) {
             return Ok(Some(notification));
@@ -609,17 +657,7 @@ impl GatewayClient {
                 pending.push((id, offset, seq));
                 next += 1;
             }
-            let frame = loop {
-                let frame = self
-                    .connection
-                    .recv()?
-                    .ok_or(ClientError::Protocol("gateway closed"))?;
-                if let Some(notification) = parse_notification(&frame) {
-                    self.notifications.push_back(notification);
-                    continue;
-                }
-                break frame;
-            };
+            let frame = self.recv_frame()?;
             if frame.first() == Some(&b'{') {
                 let response: Response = serde_json::from_slice(&frame)?;
                 response.validate()?;
@@ -689,17 +727,7 @@ impl GatewayClient {
                 }),
             )?;
             self.connection.send(chunk)?;
-            let frame = loop {
-                let frame = self
-                    .connection
-                    .recv()?
-                    .ok_or(ClientError::Protocol("gateway closed"))?;
-                if let Some(notification) = parse_notification(&frame) {
-                    self.notifications.push_back(notification);
-                    continue;
-                }
-                break frame;
-            };
+            let frame = self.recv_frame()?;
             if frame.first() == Some(&b'{') {
                 parse_response(&frame, &id)?;
                 return Err(ClientError::Protocol("binary write response expected"));
@@ -739,17 +767,7 @@ impl GatewayClient {
             return Err(ClientError::Protocol("read chunk size"));
         }
         let id = self.send_binary_request(path, offset, max_bytes, seq)?;
-        let frame = loop {
-            let frame = self
-                .connection
-                .recv()?
-                .ok_or(ClientError::Protocol("gateway closed"))?;
-            if let Some(notification) = parse_notification(&frame) {
-                self.notifications.push_back(notification);
-                continue;
-            }
-            break frame;
-        };
+        let frame = self.recv_frame()?;
         if frame.first() == Some(&b'{') {
             let _ = parse_response(&frame, &id)?;
             return Err(ClientError::Protocol("binary frame expected"));
@@ -787,17 +805,8 @@ impl GatewayClient {
         params: serde_json::Value,
     ) -> Result<serde_json::Value, ClientError> {
         let id = self.send_request(method, params)?;
-        loop {
-            let frame = self
-                .connection
-                .recv()?
-                .ok_or(ClientError::Protocol("gateway closed"))?;
-            if let Some(notification) = parse_notification(&frame) {
-                self.notifications.push_back(notification);
-                continue;
-            }
-            return parse_response(&frame, &id);
-        }
+        let frame = self.recv_frame()?;
+        parse_response(&frame, &id)
     }
 
     fn send_binary_request(
@@ -993,6 +1002,29 @@ mod tests {
             "anvil-ipc-{}-{name}-{nanos}.sock",
             std::process::id()
         ))
+    }
+
+    #[test]
+    fn frame_deadline_returns_timed_out() {
+        let socket = socket_path("deadline");
+        let listener = Listener::bind(&socket).expect("bind");
+        let mut client = GatewayClient {
+            connection: Connection::connect(&socket).expect("connect"),
+            next_id: 1,
+            poisoned: false,
+            notifications: VecDeque::new(),
+            socket,
+        };
+        let started = std::time::Instant::now();
+        let error = client
+            .recv_frame_deadline(started + Duration::from_millis(50))
+            .expect_err("timeout");
+        assert!(matches!(
+            error,
+            ClientError::Io(std::io::ErrorKind::TimedOut)
+        ));
+        assert!(started.elapsed() < Duration::from_secs(1));
+        drop(listener);
     }
 
     fn receive(connection: &mut Connection) -> Request {
