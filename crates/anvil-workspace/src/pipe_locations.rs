@@ -189,4 +189,28 @@ mod tests {
             .collect::<String>();
         assert_eq!(parse(&text).len(), MAX_LOCATIONS);
     }
+
+    #[test]
+    fn colon_form_wins_over_parenthesized_text_in_the_message() {
+        let parsed = parse("foo.rs:2:3: error: expected (1,2): value");
+        assert_eq!(parsed.len(), 1);
+        assert_eq!(parsed[0].message, "error: expected (1,2): value");
+    }
+
+    #[test]
+    fn timestamped_log_lines_are_not_locations() {
+        assert!(parse("2026-11-11T18:08:59 INFO startup").is_empty());
+        assert!(parse("18:08:59 INFO startup").is_empty());
+        assert_eq!(
+            parse("src/2026.rs:1:2: error").len(),
+            1,
+            "numeric file names with a path separator stay valid"
+        );
+    }
+
+    #[test]
+    fn enormous_lines_do_not_panic() {
+        let text = format!("src/main.rs:1:1: {}", "x".repeat(1_000_000));
+        assert_eq!(parse(&text).len(), 1);
+    }
 }
