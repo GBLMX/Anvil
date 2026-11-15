@@ -16,8 +16,10 @@ post-`0.5.0` feature line.
   External clean edits reload and resync LSP, dirty edits still require
   confirmation, deletions send `textDocument/didClose`, and `.git`/`target`
   tree watches are ignored. Git metadata watches and status refreshes are
-  enabled only when the distribution provides Git. `[editor] file_watching`
-  and `ANVIL_EDITOR_FILE_WATCHING` provide the disable switch.
+  enabled only when the distribution provides Git. External open-buffer edits
+  schedule one 300 ms-coalesced Git status refresh instead of one request per
+  file event. `[editor] file_watching` and `ANVIL_EDITOR_FILE_WATCHING`
+  provide the disable switch.
 - `anvil-distro-minimal` now declares `ConfigContract::SharedTui`; it reuses
   the TUI settings/theme/keymap parser instead of implying a second
   `anvil-config` consumer.

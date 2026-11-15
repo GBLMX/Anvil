@@ -7,6 +7,8 @@ use anvil_session::provider::{CancellationToken, PickerEntry, ProviderId};
 use anvil_session::recents::{self, Recents};
 use std::sync::atomic::{AtomicU64, Ordering};
 
+const GIT_STATUS_DEBOUNCE: Duration = Duration::from_millis(300);
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(crate) struct BufferId(u64);
 
@@ -1070,6 +1072,8 @@ pub(crate) struct GitState {
     pub(crate) status_expected: usize,
     /// Number of roots that answered the pending git-status request.
     pub(crate) status_received: usize,
+    /// Deadline for a coalesced external-change Git status refresh.
+    pub(crate) status_debounce: Option<Instant>,
     /// Requested git diff path and revision.
     pub(crate) diff_request: Option<(PathBuf, u64)>,
     /// Last requested git diff path and revision.
@@ -1114,6 +1118,21 @@ pub(crate) struct GitState {
     pub(crate) resolve_pending: Option<u64>,
     /// Lazily detected branch name per workspace root.
     pub(crate) branches: BTreeMap<PathBuf, Option<String>>,
+}
+
+impl GitState {
+    pub(crate) fn schedule_status_refresh(&mut self, now: Instant) {
+        self.status_debounce
+            .get_or_insert(now + GIT_STATUS_DEBOUNCE);
+    }
+
+    pub(crate) fn take_due_status_refresh(&mut self, now: Instant) -> bool {
+        if self.status_debounce.is_none_or(|due| now < due) {
+            return false;
+        }
+        self.status_debounce = None;
+        true
+    }
 }
 
 /// Inlay hints cached for the visible viewport.
@@ -1551,5 +1570,18 @@ mod tests {
         assert_eq!(state.versions.get(&path), Some(&1));
         state.record_version(&path);
         assert_eq!(state.versions.get(&path), Some(&2));
+    }
+
+    #[test]
+    fn coalesces_git_status_refresh_bursts() {
+        let mut state = GitState::default();
+        let start = Instant::now();
+        state.schedule_status_refresh(start);
+        let due = state.status_debounce.expect("deadline");
+        state.schedule_status_refresh(start + Duration::from_millis(100));
+        assert_eq!(state.status_debounce, Some(due));
+        assert!(!state.take_due_status_refresh(start + Duration::from_millis(299)));
+        assert!(state.take_due_status_refresh(start + Duration::from_millis(300)));
+        assert!(state.status_debounce.is_none());
     }
 }

@@ -299,6 +299,7 @@ impl Model {
             }
             return;
         }
+        self.schedule_git_status_refresh();
         let modified = if self.session.path.as_ref() == Some(&path) {
             self.file.modified
         } else if let Some(buffer) = self

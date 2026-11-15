@@ -365,6 +365,7 @@ pub fn run_with_all_services(
         let text_width = model.editor_text_width(size.width);
         model.ensure_cursor_visible(text_height, text_width);
         model.tick_status();
+        model.tick_git_status();
         model.poll_icons();
         model.poll_dap_attach();
         model.poll_debug_request();

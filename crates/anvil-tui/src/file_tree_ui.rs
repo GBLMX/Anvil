@@ -8,6 +8,7 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
     path::{Path, PathBuf},
+    time::Instant,
 };
 
 mod fuzzy;
@@ -274,6 +275,19 @@ impl Model {
         self.status.text = "file tree ready".to_owned();
         self.sync_tree_watches();
         self.apply_pending_tree_selection();
+    }
+
+    pub(crate) fn schedule_git_status_refresh(&mut self) {
+        if self.workspace.git_service.is_none() {
+            return;
+        }
+        self.workspace.git.schedule_status_refresh(Instant::now());
+    }
+
+    pub(crate) fn tick_git_status(&mut self) {
+        if self.workspace.git.take_due_status_refresh(Instant::now()) {
+            self.request_git_status();
+        }
     }
 
     pub(crate) fn request_git_status(&mut self) {

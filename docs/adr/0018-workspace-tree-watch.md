@@ -97,6 +97,9 @@ daemon or per-file thread.
   directories remain watched because the user explicitly opened them.
 - A `.git` metadata event refreshes Git status for every trusted root when the
   Git service is installed.
+- External open-buffer changes schedule one 300 ms-coalesced Git status
+  refresh wave; a burst across multiple files or roots does not enqueue one
+  request per event.
 - Clean buffer reloads resynchronize the active LSP document. External deletion
   sends `textDocument/didClose` before marking the buffer missing.
 - `editor.file_watching=false` or `ANVIL_EDITOR_FILE_WATCHING=0` clears both
