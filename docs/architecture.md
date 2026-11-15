@@ -20,9 +20,9 @@ remains outside that baseline. Marketplace/index work remains planned. See
 │ Editor (Rust, trusted)                             │
 │ input · view · rendering                           │
 │ anvil-session: documents · commands · plugins      │
-│ anvil-control: control.sock, protocol v3           │
+│ anvil-control: workspace control socket, v3        │
 └───┬──────────────────┬──────────────────┬──────────┘
-    │ editor API UDS   │ gateway UDS      │ control.sock
+    │ editor API UDS   │ gateway UDS      │ control UDS
     │ (plugin host)    │ (file/LSP/git)   │ control.*
 ┌───▼──────────────┐   │          ┌───────▼──────────┐
 │ Plugin host      │   │          │ anvil-ctl/MCP    │
