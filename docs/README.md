@@ -129,6 +129,8 @@ Historical plans are records, not current schedules:
 - [Known issues](known-issues.md) — resolved regressions and current limits
 - [Recovery and save semantics](recovery.md) — durability, undo, swaps, and
   external conflicts
+- [Remote/SSH workflow](remote-ssh.md) — remote install, color forwarding,
+  tmux, control socket, and diagnostics
 - [PGO](pgo-bolt.md), [PGO workload](../scripts/pgo-workload.py) — profile-guided build
   workflow
 

@@ -28,6 +28,9 @@ post-`0.5.0` feature line.
   truecolor, runtime/config paths, Landlock/seccomp, and language servers.
   JSON schema version 1 has stable check ids/remediation; required failures
   exit `1`.
+- Added SSH/tmux color-forwarding diagnostics to `anvil doctor` and a
+  [remote/SSH workflow](docs/remote-ssh.md) guide covering remote install,
+  environment forwarding, control sockets, and diagnostics.
 - `:settings` now shows the effective origin of each value (`default`,
   environment, user file, or trusted project file), including ignored project
   files and the reason; `:config-reload` reports loaded and ignored files.

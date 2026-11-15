@@ -24,6 +24,7 @@ and terminal environment before the TUI starts.
 | `anvil-mcp` | no | warn |
 | `locale` | yes, UTF-8 | error |
 | `truecolor` | no | warn |
+| `remote` | no | warn for SSH/tmux color-forwarding gaps; ok for local sessions |
 | `runtime-dir` | no, HOME fallback exists | warn on fallback; error if the path is not a directory or no HOME |
 | `config` | no | warn when defaults are used; error if an explicit path is missing or no config root resolves |
 | `landlock` | Landlock or seccomp | error only when neither is available |

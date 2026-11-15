@@ -230,7 +230,8 @@ anvil [OPTIONS] [FILE|-]
 ```
 
 `anvil doctor` checks the gateway and companion binaries, locale, truecolor,
-runtime/config paths, Landlock, and supported language servers. `--profile`
+SSH/tmux color forwarding, runtime/config paths, Landlock, and supported
+language servers. `--profile`
 defaults to `auto` (installed layout vs cargo target); dev target sidecars are
 warnings, installed-layout sidecars are errors. `--json` emits schema version
 1 with stable check ids and remediation; required failures exit nonzero. See
@@ -305,6 +306,7 @@ to the selected buffer.
 - [Project charter](PROJECT_CHARTER.md)
 - [Known issues](docs/known-issues.md)
 - [Recovery and save semantics](docs/recovery.md)
+- [Remote/SSH workflow](docs/remote-ssh.md)
 - [High-frequency command architecture plan](docs/command-architecture-plan.md)
 - [0.3.0 → 0.4.0: Polish & Specification](docs/polish-and-specification.md)
 - [0.3.0 → 0.4.0 / Phase 0.7 plan](docs/phase-0-7-plan.md)

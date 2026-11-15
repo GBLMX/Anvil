@@ -498,6 +498,7 @@ fn doctor_checks(profile: DoctorProfile, binary_dir: Option<&Path>) -> Vec<Docto
         check_companion("anvil-mcp", profile, binary_dir, false),
         check_locale(),
         check_colors(),
+        check_remote(),
         check_runtime_dir(),
         check_config(),
         check_landlock(),
@@ -683,6 +684,57 @@ fn check_colors() -> DoctorCheck {
     }
 }
 
+fn check_remote() -> DoctorCheck {
+    let ssh = ["SSH_CONNECTION", "SSH_CLIENT", "SSH_TTY"]
+        .iter()
+        .any(|name| env::var_os(name).is_some());
+    check_remote_session(
+        ssh,
+        &env::var("TERM").unwrap_or_default().to_ascii_lowercase(),
+        &env::var("COLORTERM")
+            .unwrap_or_default()
+            .to_ascii_lowercase(),
+        env::var_os("TMUX").is_some(),
+    )
+}
+
+fn check_remote_session(ssh: bool, term: &str, colorterm: &str, tmux: bool) -> DoctorCheck {
+    if !ssh {
+        return check("remote", DoctorLevel::Ok, "local session", "");
+    }
+    let truecolor = colorterm.contains("truecolor")
+        || colorterm.contains("24bit")
+        || term.contains("direct")
+        || term.contains("truecolor");
+    let mut notes = Vec::new();
+    if term == "dumb" {
+        notes.push("TERM=dumb");
+    }
+    if !truecolor {
+        notes.push("COLORTERM was not forwarded");
+    }
+    if tmux {
+        notes.push("inside tmux/screen");
+    }
+    if notes.is_empty() {
+        check(
+            "remote",
+            DoctorLevel::Ok,
+            format!("SSH session; TERM={term:?} COLORTERM={colorterm:?}"),
+            "",
+        )
+    } else {
+        check(
+            "remote",
+            DoctorLevel::Warn,
+            format!(
+                "SSH session; TERM={term:?} COLORTERM={colorterm:?}; {}",
+                notes.join("; ")
+            ),
+            "use ANVIL_TRUECOLOR=1 or --truecolor=always; configure tmux terminal-features for RGB",
+        )
+    }
+}
 fn check_runtime_dir() -> DoctorCheck {
     if let Some(runtime) = nonempty_env("XDG_RUNTIME_DIR") {
         let path = PathBuf::from(runtime).join("anvil");
@@ -1722,5 +1774,25 @@ mod tests {
         assert!(json.contains("\"schema_version\":1"));
         assert!(json.contains("\"profile\":\"installed\""));
         assert!(json.contains("\"remediation\":\"\""));
+    }
+
+    #[test]
+    fn remote_check_distinguishes_ssh_capabilities() {
+        assert_eq!(
+            check_remote_session(false, "xterm-256color", "", false).level,
+            DoctorLevel::Ok
+        );
+        assert_eq!(
+            check_remote_session(true, "xterm-256color", "", false).level,
+            DoctorLevel::Warn
+        );
+        assert_eq!(
+            check_remote_session(true, "xterm-direct", "", false).level,
+            DoctorLevel::Ok
+        );
+        assert_eq!(
+            check_remote_session(true, "xterm-direct", "truecolor", true).level,
+            DoctorLevel::Warn
+        );
     }
 }
