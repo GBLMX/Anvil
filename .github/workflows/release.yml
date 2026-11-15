@@ -64,6 +64,7 @@ jobs:
           test -x "$RUNNER_TEMP/verify-prefix/bin/anvil"
           grep -q '"source": "official"' \
             "$RUNNER_TEMP/verify-data/anvil/plugins/state.json"
+          "$RUNNER_TEMP/verify-prefix/bin/anvil" doctor
 
       - uses: anchore/sbom-action/download-syft@v0
       - name: Generate SBOM
