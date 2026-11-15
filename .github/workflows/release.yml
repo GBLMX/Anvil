@@ -64,7 +64,18 @@ jobs:
           test -x "$RUNNER_TEMP/verify-prefix/bin/anvil"
           grep -q '"source": "official"' \
             "$RUNNER_TEMP/verify-data/anvil/plugins/state.json"
-          "$RUNNER_TEMP/verify-prefix/bin/anvil" doctor
+          "$RUNNER_TEMP/verify-prefix/bin/anvil" doctor --profile installed --json \
+            > "$RUNNER_TEMP/doctor.json"
+          python3 - "$RUNNER_TEMP/doctor.json" <<'PY'
+          import json
+          import sys
+
+          report = json.load(open(sys.argv[1], encoding="utf-8"))
+          assert report["schema_version"] == 1, report
+          assert report["profile"] == "installed", report
+          assert report["ok"] is True, report
+          print("anvil doctor installed profile: ok")
+          PY
 
       - uses: anchore/sbom-action/download-syft@v0
       - name: Generate SBOM

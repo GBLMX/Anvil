@@ -23,10 +23,11 @@ post-`0.5.0` feature line.
 - `anvil-distro-minimal` now declares `ConfigContract::SharedTui`; it reuses
   the TUI settings/theme/keymap parser instead of implying a second
   `anvil-config` consumer.
-- Added `anvil doctor [--json]` for installation and terminal diagnostics:
-  companion binaries, locale, truecolor, runtime/config paths, Landlock, and
-  supported language servers. Required failures exit nonzero.
-- Added shared pending contexts for hover and line comments.
+- Added `anvil doctor [--json] [--profile auto|dev|installed]` for
+  installation and terminal diagnostics: companion binaries, locale,
+  truecolor, runtime/config paths, Landlock/seccomp, and language servers.
+  JSON schema version 1 has stable check ids/remediation; required failures
+  exit `1`.
 - Command-based LSP code actions now dispatch through
   `workspace/executeCommand`, including actions that also carry a workspace
   edit. Sessions now fail restore on unreadable files, unreadable swap files,

@@ -208,7 +208,7 @@ crossterm's keyboard-enhancement query and the OSC 11 background query.
 
 ```text
 anvil [OPTIONS] [FILE|-]
-  anvil doctor [--json] Run installation and terminal diagnostics
+  anvil doctor [--json] [--profile auto|dev|installed]
 
   -w, --workspace <DIR>  Workspace directory; --workspace=DIR is also accepted
   --editor              External-editor mode; allows one explicit file outside
@@ -220,9 +220,11 @@ anvil [OPTIONS] [FILE|-]
 ```
 
 `anvil doctor` checks the gateway and companion binaries, locale, truecolor,
-runtime/config paths, Landlock, and supported language servers. `--json` emits
-machine-readable `checks[]` with `ok`, `warn`, or `error` status; required
-failures exit nonzero.
+runtime/config paths, Landlock, and supported language servers. `--profile`
+defaults to `auto` (installed layout vs cargo target); dev target sidecars are
+warnings, installed-layout sidecars are errors. `--json` emits schema version
+1 with stable check ids and remediation; required failures exit nonzero. See
+[doctor checks](docs/doctor.md).
 
 `FILE` must be inside the selected workspace. `--editor` is intended for
 `$EDITOR`-style invocations; `:cq` exits 1 and a failed save keeps the final
