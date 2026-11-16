@@ -18,31 +18,13 @@ Version is frozen at **0.6.0** for long-term internal feature polish.
 
 ## Current
 
-- `0.5.x` feature line after the `0.5.0` session extraction release.
-- Stabilize the selection-first kernel and its existing tests.
-- Complete the kernel/distribution boundary decision
-  ([ADR-0013](docs/adr/0013-kernel-distribution-boundary.md)).
-- Keep the interim TUI keymap clearly separated from kernel semantics.
-- `0.4.6c` plugin host supervision: single-flight startup, bounded start queue,
-  start timeout, crash backoff, explicit disable/re-enable, and drain-before-kill.
-- `0.4.7a` cgroup-before-exec resource limits, `pidfd`/`cgroup.kill` stop,
-  core dump suppression, and global running/queued-start caps.
-- `0.4.7b` idle host reclaim: 60-second idle timeout with drain, token revoke,
-  socket/cgroup cleanup, and queued-start capacity release.
-- `0.4.7c-a` preconnected editor Unix socket before Landlock/seccomp; the
-  post-sandbox transport no longer opens sockets.
-- `0.4.7c-b` seccomp denylist for signals, SIGIO, exec/memfd, mounts,
-  namespaces, introspection, `clone3`, and post-sandbox sockets.
-- `0.4.8a` method catalog and document snapshot/apply-edit DTOs, generated
-  JSON, TypeScript, and Lua method bindings.
-- `0.4.8b` plugin host gateway preconnect and authenticated `sys.*` forwarding.
-- `0.4.8c` editor-side snapshot and revision-checked transaction contract with
-  status-bar rejection reporting.
-- `0.4.9` rescoped: API-version hello/manifest validation, document session,
-  plugin host lifecycle, command registry, focus state, overlay/input state,
-  and the bounded effect queue landed.
-- `0.5.0` session extraction is complete: command-visible effects route through
-  `anvil-session`; the TUI is the input adapter and renderer.
+- `0.6.0` internal-polish baseline: the selection-first kernel, session
+  extraction, P0/P1 feature sets, multi-root routing, and optional `0.7.x`
+  official modules are landed.
+- The latest hardening pass closed the open editor, plugin-host, gateway,
+  TUI, theme, and icon issues; the workspace gates pass with 1,197 Rust tests.
+- The full release layout installs and passes `anvil doctor --profile
+  installed`; the remaining exit gates are tracked below.
 
 ## Remaining internal polish
 
