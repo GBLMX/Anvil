@@ -8,6 +8,10 @@ Anvil resolves typed settings from these sources, in order:
 3. a trusted workspace `.anvil.toml`;
 4. environment variables.
 
+This page documents the current implementation. The proposed sparse-patch,
+source-aware, schema-backed redesign is
+[ADR-0045](adr/0045-settings-patch-layers.md); it is not implemented yet.
+
 CLI flags currently control process behavior (`--workspace`, `--editor`,
 `--read-only`, `--truecolor`), not typed settings fields. They are therefore not
 shown as a settings source. If a typed CLI override is added later, it must get

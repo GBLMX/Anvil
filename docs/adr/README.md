@@ -50,6 +50,7 @@ their decision sections.
 | [0042](0042-selection-first-session-frontend.md) | Selection-first core, headless session, thin frontend | Accepted |
 | [0043](0043-plugin-api-1-1.md) | Plugin API 1.1 capability and selection contract | Proposed |
 | [0044](0044-watcher-transport.md) | Keep bounded polling watcher; record inotify comparison | Accepted |
+| [0045](0045-settings-patch-layers.md) | Sparse settings layers, provenance, and a metadata registry | Proposed |
 
 ## Numbering Rule
 
