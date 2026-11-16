@@ -70,8 +70,9 @@ post-`0.5.0` feature line.
   (`sys.watch_start`, `sys.watch_status`, `sys.watch_stop`) with bounded
   inotify directory watches, excludes, directory budgets, status, and
   coalesced `watch.events`. The TUI consumes the native stream for open-buffer
-  change notifications and tree refresh; polling remains the fallback.
-
+  change notifications and tree refresh; `[watch] mode`, `max_dirs`, and
+  `cross_mounts` configure it, and `:watch-status` reports the active settings.
+  Polling remains the fallback.
 - Added `:help start` and a first-run [onboarding guide](docs/onboarding.md)
   with a task list and compact keymap card.
 - Command-based LSP code actions now dispatch through

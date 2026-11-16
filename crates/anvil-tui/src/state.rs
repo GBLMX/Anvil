@@ -608,6 +608,20 @@ impl WorkspaceState {
         }
     }
 
+    pub(crate) fn set_watch_config(&mut self, mode: &str, max_dirs: usize, cross_mounts: bool) {
+        let config = || anvil_workspace::FileRequest::SetWatchConfig {
+            mode: mode.to_owned(),
+            max_dirs,
+            cross_mounts,
+        };
+        if let Some(worker) = &self.file_worker {
+            let _ = worker.request(config());
+        }
+        for worker in self.root_file_workers.values() {
+            let _ = worker.request(config());
+        }
+    }
+
     pub(crate) fn poll(&mut self) -> WorkspacePoll {
         let file_events = self
             .file_worker

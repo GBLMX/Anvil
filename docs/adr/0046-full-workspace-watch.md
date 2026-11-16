@@ -2,8 +2,9 @@
 
 - Status: Proposed
 - Version: 1.1.0
-- Implementation: native gateway core and TUI event routing landed; watch
-  settings, mode selection, and native coverage in `:watch-status` pending
+- Implementation: native gateway core, TUI event routing, and `[watch]`
+  mode/max_dirs/cross_mounts landed; native coverage reporting and cooldown
+  remain pending
 - Date: 2026-11-16
 - Related: [ADR-0002](0002-go-daemon.md),
   [ADR-0018](0018-workspace-tree-watch.md),

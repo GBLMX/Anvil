@@ -323,7 +323,13 @@ fn watch_status_reports_scope_and_disable() {
     assert!(model.status.text.contains("open buffers + visible tree"));
     model.config.settings.editor.file_watching = false;
     model.show_watch_status();
-    assert_eq!(model.status.text, "watch: off");
+    assert!(
+        model.status.text.starts_with("watch: off"),
+        "{}",
+        model.status.text
+    );
+    assert!(model.status.text.contains("mode=auto"));
+    assert!(model.status.text.contains("max_dirs=8192"));
 }
 
 #[test]

@@ -56,12 +56,61 @@ pub(crate) struct UiSettings {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum WatchMode {
+    Auto,
+    Native,
+    Poll,
+    Off,
+}
+
+impl WatchMode {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::Auto => "auto",
+            Self::Native => "native",
+            Self::Poll => "poll",
+            Self::Off => "off",
+        }
+    }
+
+    fn parse(value: &str) -> Result<Self, String> {
+        match value {
+            "auto" => Ok(Self::Auto),
+            "native" => Ok(Self::Native),
+            "poll" => Ok(Self::Poll),
+            "off" => Ok(Self::Off),
+            _ => Err(format!(
+                "watch.mode must be auto, native, poll, or off, got {value:?}"
+            )),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct WatchSettings {
+    pub(crate) mode: WatchMode,
+    pub(crate) max_dirs: usize,
+    pub(crate) cross_mounts: bool,
+}
+
+impl Default for WatchSettings {
+    fn default() -> Self {
+        Self {
+            mode: WatchMode::Auto,
+            max_dirs: 8192,
+            cross_mounts: false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Settings {
     pub(crate) theme: Choice,
     pub(crate) editor: EditorSettings,
     pub(crate) search: SearchSettings,
     pub(crate) lsp: LspSettings,
     pub(crate) ui: UiSettings,
+    pub(crate) watch: WatchSettings,
 }
 
 impl Default for Settings {
@@ -85,6 +134,7 @@ impl Default for Settings {
                 reduced_motion: false,
                 high_contrast: false,
             },
+            watch: WatchSettings::default(),
         }
     }
 }
@@ -348,6 +398,18 @@ pub fn settings_schema() -> serde_json::Value {
             }),
         );
     }
+    properties.insert(
+        "watch".to_owned(),
+        serde_json::json!({
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "mode": {"enum": ["auto", "native", "poll", "off"]},
+                "max_dirs": {"type": "integer", "minimum": 1, "maximum": 1000000},
+                "cross_mounts": {"type": "boolean"}
+            }
+        }),
+    );
     serde_json::json!({
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "title": "Anvil settings",
@@ -850,6 +912,22 @@ pub(crate) fn save_patch_to_path(path: &Path, patch: &SettingsPatch) -> Result<(
             set_patch_value(table, "high_contrast", patch.ui.high_contrast);
         },
     )?;
+    patch_table(
+        &mut document,
+        "watch",
+        patch.watch.mode.is_some()
+            || patch.watch.max_dirs.is_some()
+            || patch.watch.cross_mounts.is_some(),
+        |table| {
+            set_patch_value(table, "mode", patch.watch.mode.as_deref());
+            set_patch_value(
+                table,
+                "max_dirs",
+                patch.watch.max_dirs.map(|value| value as i64),
+            );
+            set_patch_value(table, "cross_mounts", patch.watch.cross_mounts);
+        },
+    )?;
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)
             .map_err(|error| format!("cannot create {}: {error}", parent.display()))?;
@@ -903,7 +981,7 @@ pub(crate) fn parse(text: &str) -> Result<Settings, String> {
         .parse::<toml_edit::DocumentMut>()
         .map_err(|error| format!("invalid settings TOML: {error}"))?;
     for (key, _) in document.iter() {
-        if !matches!(key, "theme" | "editor" | "search" | "lsp" | "ui") {
+        if !matches!(key, "theme" | "editor" | "search" | "lsp" | "ui" | "watch") {
             return Err(format!("unknown settings section [{key}]"));
         }
     }
@@ -960,6 +1038,20 @@ pub(crate) fn parse(text: &str) -> Result<Settings, String> {
     }
     if let Some(high_contrast) = file.ui.high_contrast {
         settings.ui.high_contrast = high_contrast;
+    }
+    if let Some(mode) = file.watch.mode {
+        settings.watch.mode = WatchMode::parse(&mode)?;
+    }
+    if let Some(max_dirs) = file.watch.max_dirs {
+        if !(1..=1_000_000).contains(&max_dirs) {
+            return Err(format!(
+                "watch.max_dirs must be 1..=1000000, got {max_dirs}"
+            ));
+        }
+        settings.watch.max_dirs = max_dirs;
+    }
+    if let Some(cross_mounts) = file.watch.cross_mounts {
+        settings.watch.cross_mounts = cross_mounts;
     }
     Ok(settings)
 }
@@ -1092,6 +1184,7 @@ pub(crate) struct SettingsPatch {
     search: SearchFile,
     lsp: LspFile,
     ui: UiFile,
+    watch: WatchFile,
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -1155,6 +1248,14 @@ struct UiFile {
     icons: BTreeMap<String, serde::de::IgnoredAny>,
 }
 
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+struct WatchFile {
+    mode: Option<String>,
+    max_dirs: Option<usize>,
+    cross_mounts: Option<bool>,
+}
+
 impl SettingsPatch {
     pub(crate) fn from_settings(settings: Settings) -> Self {
         let mut patch = Self::default();
@@ -1162,6 +1263,9 @@ impl SettingsPatch {
             debug_assert_eq!(def.label, def.path);
             patch.set_field(def.key, &settings);
         }
+        patch.watch.mode = Some(settings.watch.mode.as_str().to_owned());
+        patch.watch.max_dirs = Some(settings.watch.max_dirs);
+        patch.watch.cross_mounts = Some(settings.watch.cross_mounts);
         patch
     }
 
@@ -1313,8 +1417,9 @@ impl crate::Model {
 
     pub(crate) fn apply_settings(&mut self, settings: Settings) {
         let theme_changed = self.config.settings.theme != settings.theme;
-        let watch_changed =
-            self.config.settings.editor.file_watching != settings.editor.file_watching;
+        let watch_changed = self.config.settings.editor.file_watching
+            != settings.editor.file_watching
+            || self.config.settings.watch != settings.watch;
         self.config.settings = settings;
         self.search.state.options.case_sensitive = settings.search.case_sensitive;
         self.language.inlay_hints.hints.clear();
@@ -1327,9 +1432,15 @@ impl crate::Model {
         }
         theme::set_high_contrast(settings.ui.high_contrast);
         if watch_changed {
-            self.workspace
-                .set_watch_enabled(settings.editor.file_watching);
-            if settings.editor.file_watching {
+            let watch_enabled =
+                settings.editor.file_watching && settings.watch.mode != WatchMode::Off;
+            self.workspace.set_watch_config(
+                settings.watch.mode.as_str(),
+                settings.watch.max_dirs,
+                settings.watch.cross_mounts,
+            );
+            self.workspace.set_watch_enabled(watch_enabled);
+            if watch_enabled {
                 self.sync_watch_paths();
                 self.sync_tree_watches();
             }
@@ -1387,6 +1498,7 @@ mod tests {
                     reduced_motion: false,
                     high_contrast: false,
                 },
+                watch: WatchSettings::default(),
             }
         );
     }
@@ -1537,7 +1649,8 @@ mod tests {
                     }
                 }
             },
-            "ui": {"icons": {"file": "custom"}}
+            "ui": {"icons": {"file": "custom"}},
+            "watch": {"mode": "native", "max_dirs": 2048, "cross_mounts": true}
         });
         assert!(schema_accepts(&schema, &sample));
         assert!(!schema_accepts(
@@ -1626,6 +1739,17 @@ mod tests {
             Some(value) => unsafe { std::env::set_var("XDG_CONFIG_HOME", value) },
             None => unsafe { std::env::remove_var("XDG_CONFIG_HOME") },
         }
+    }
+
+    #[test]
+    fn parses_and_validates_watch_settings() {
+        let settings = parse("[watch]\nmode = \"native\"\nmax_dirs = 4096\ncross_mounts = true\n")
+            .expect("watch settings");
+        assert_eq!(settings.watch.mode, WatchMode::Native);
+        assert_eq!(settings.watch.max_dirs, 4096);
+        assert!(settings.watch.cross_mounts);
+        assert!(parse("[watch]\nmode = \"sometimes\"\n").is_err());
+        assert!(parse("[watch]\nmax_dirs = 0\n").is_err());
     }
 
     #[test]

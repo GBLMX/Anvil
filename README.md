@@ -103,7 +103,17 @@ inlay_hints = true
 [lsp.commands]
 # Optional command override; the first argv element is the executable.
 json = ["node", "/path/to/vscode-json-language-server", "--stdio"]
+
+[watch]
+mode = "auto"        # auto | native | poll | off
+max_dirs = 8192
+cross_mounts = false
 ```
+
+`[watch]` controls the Linux native watcher. `auto` starts native and keeps
+polling as fallback; `native` requests native coverage; `poll` disables the
+native watcher; `off` disables workspace observation. `editor.file_watching`
+remains the on/off compatibility switch.
 
 `[lsp.commands]` is keyed by language id. A value may be a command string or
 an argv array; array arguments are passed unchanged.

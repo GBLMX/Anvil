@@ -101,6 +101,12 @@ pub enum FileRequest {
     RemoveAll(PathBuf),
     /// Enable or disable both the open-buffer and directory watch sets.
     SetWatchEnabled(bool),
+    /// Configure the native watcher before it starts.
+    SetWatchConfig {
+        mode: String,
+        max_dirs: usize,
+        cross_mounts: bool,
+    },
     /// Replace the workspace-tree directory watch set.
     WatchDirs(Vec<PathBuf>),
     /// Capture root and expanded directory listings for a tree refresh.

@@ -157,6 +157,9 @@ impl FileWorker {
             let mut watched: BTreeMap<PathBuf, Option<(u64, i64)>> = BTreeMap::new();
             let mut watched_dirs: BTreeMap<PathBuf, Option<(i64, i64)>> = BTreeMap::new();
             let mut watch_enabled = true;
+            let mut watch_mode = "auto".to_owned();
+            let mut watch_max_dirs = 8192usize;
+            let mut watch_cross_mounts = false;
             let mut pending: BTreeMap<PathBuf, Instant> = BTreeMap::new();
             let mut pending_dirs: BTreeMap<PathBuf, Instant> = BTreeMap::new();
             let mut next_poll = Instant::now();
@@ -180,13 +183,38 @@ impl FileWorker {
                             FileRequest::SetWatchEnabled(enabled) => {
                                 watch_enabled = enabled;
                                 if watch_enabled {
-                                    let _ = client.watch_start(".", &[], 8192, false, "auto");
+                                    let _ = client.watch_start(
+                                        ".",
+                                        &[],
+                                        watch_max_dirs,
+                                        watch_cross_mounts,
+                                        &watch_mode,
+                                    );
                                 } else {
                                     let _ = client.watch_stop();
                                     watched.clear();
                                     watched_dirs.clear();
                                     pending.clear();
                                     pending_dirs.clear();
+                                }
+                                continue;
+                            }
+                            FileRequest::SetWatchConfig {
+                                mode,
+                                max_dirs,
+                                cross_mounts,
+                            } => {
+                                watch_mode = mode;
+                                watch_max_dirs = max_dirs;
+                                watch_cross_mounts = cross_mounts;
+                                if watch_enabled {
+                                    let _ = client.watch_start(
+                                        ".",
+                                        &[],
+                                        watch_max_dirs,
+                                        watch_cross_mounts,
+                                        &watch_mode,
+                                    );
                                 }
                                 continue;
                             }

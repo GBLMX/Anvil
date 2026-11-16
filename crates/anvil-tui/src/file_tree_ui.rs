@@ -107,8 +107,15 @@ impl Model {
                 self.workspace.git_service.clone(),
                 self.workspace.workspace_index_service.clone(),
             );
+            let watch = self.config.settings.watch;
+            let _ = worker.request(FileRequest::SetWatchConfig {
+                mode: watch.mode.as_str().to_owned(),
+                max_dirs: watch.max_dirs,
+                cross_mounts: watch.cross_mounts,
+            });
             let _ = worker.request(FileRequest::SetWatchEnabled(
-                self.config.settings.editor.file_watching,
+                self.config.settings.editor.file_watching
+                    && watch.mode != crate::settings::WatchMode::Off,
             ));
             self.workspace.file_worker = Some(worker);
         }
@@ -143,8 +150,15 @@ impl Model {
                     )
                 });
             if let Some(worker) = worker {
+                let watch = self.config.settings.watch;
+                let _ = worker.request(FileRequest::SetWatchConfig {
+                    mode: watch.mode.as_str().to_owned(),
+                    max_dirs: watch.max_dirs,
+                    cross_mounts: watch.cross_mounts,
+                });
                 let _ = worker.request(FileRequest::SetWatchEnabled(
-                    self.config.settings.editor.file_watching,
+                    self.config.settings.editor.file_watching
+                        && watch.mode != crate::settings::WatchMode::Off,
                 ));
                 self.workspace.root_file_workers.insert(root, worker);
             }
@@ -416,7 +430,9 @@ impl Model {
     }
 
     pub(crate) fn show_watch_status(&mut self) {
-        let enabled = self.config.settings.editor.file_watching;
+        let watch = self.config.settings.watch;
+        let enabled = self.config.settings.editor.file_watching
+            && watch.mode != crate::settings::WatchMode::Off;
         let scope = if !enabled {
             "off"
         } else if self.workspace.git_service.is_some() {
@@ -424,7 +440,12 @@ impl Model {
         } else {
             "open buffers + visible tree"
         };
-        let mut text = format!("watch: {scope}");
+        let mut text = format!(
+            "watch: {scope}; mode={}; max_dirs={}; cross_mounts={}",
+            watch.mode.as_str(),
+            watch.max_dirs,
+            if watch.cross_mounts { "yes" } else { "no" }
+        );
         if enabled {
             text.push_str(&format!(
                 "; roots={}; tree_watch={}; stale={}",
