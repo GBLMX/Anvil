@@ -289,6 +289,65 @@ pub fn settings_schema() -> serde_json::Value {
             }
         }),
     );
+    if let Some(lsp_properties) = properties
+        .get_mut("lsp")
+        .and_then(|value| value.get_mut("properties"))
+        .and_then(serde_json::Value::as_object_mut)
+    {
+        lsp_properties.insert(
+            "commands".to_owned(),
+            serde_json::json!({
+                "type": "object",
+                "additionalProperties": {
+                    "oneOf": [
+                        {"type": "string"},
+                        {"type": "array", "items": {"type": "string"}}
+                    ]
+                }
+            }),
+        );
+        lsp_properties.insert(
+            "roots".to_owned(),
+            serde_json::json!({
+                "type": "object",
+                "additionalProperties": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                            "command": {
+                                "oneOf": [
+                                    {"type": "string"},
+                                    {"type": "array", "items": {"type": "string"}}
+                                ]
+                            },
+                            "args": {"type": "array", "items": {"type": "string"}},
+                            "root_markers": {"type": "array", "items": {"type": "string"}},
+                            "env": {
+                                "type": "object",
+                                "additionalProperties": {"type": "string"}
+                            },
+                            "settings": {}
+                        }
+                    }
+                }
+            }),
+        );
+    }
+    if let Some(ui_properties) = properties
+        .get_mut("ui")
+        .and_then(|value| value.get_mut("properties"))
+        .and_then(serde_json::Value::as_object_mut)
+    {
+        ui_properties.insert(
+            "icons".to_owned(),
+            serde_json::json!({
+                "type": "object",
+                "additionalProperties": true
+            }),
+        );
+    }
     serde_json::json!({
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "title": "Anvil settings",
@@ -1399,6 +1458,96 @@ mod tests {
             schema["properties"]["editor"]["properties"]["scroll_margin"]["maximum"],
             16
         );
+    }
+
+    fn schema_accepts(schema: &serde_json::Value, value: &serde_json::Value) -> bool {
+        if let Some(options) = schema.get("oneOf").and_then(serde_json::Value::as_array) {
+            return options
+                .iter()
+                .filter(|option| schema_accepts(option, value))
+                .count()
+                == 1;
+        }
+        if let Some(values) = schema.get("enum").and_then(serde_json::Value::as_array)
+            && !values.contains(value)
+        {
+            return false;
+        }
+        if let Some(kind) = schema.get("type").and_then(serde_json::Value::as_str) {
+            let matches = match kind {
+                "object" => value.is_object(),
+                "array" => value.is_array(),
+                "string" => value.is_string(),
+                "boolean" => value.is_boolean(),
+                "integer" => value.as_i64().is_some() || value.as_u64().is_some(),
+                "number" => value.is_number(),
+                _ => true,
+            };
+            if !matches {
+                return false;
+            }
+        }
+        match value {
+            serde_json::Value::Object(map) => {
+                let properties = schema
+                    .get("properties")
+                    .and_then(serde_json::Value::as_object);
+                for (key, child) in map {
+                    if let Some(property) = properties.and_then(|properties| properties.get(key)) {
+                        if !schema_accepts(property, child) {
+                            return false;
+                        }
+                    } else {
+                        match schema.get("additionalProperties") {
+                            Some(serde_json::Value::Bool(false)) => return false,
+                            Some(serde_json::Value::Bool(true)) | None => {}
+                            Some(extra) if !schema_accepts(extra, child) => return false,
+                            Some(_) => {}
+                        }
+                    }
+                }
+            }
+            serde_json::Value::Array(items) => {
+                if let Some(item_schema) = schema.get("items")
+                    && !items.iter().all(|item| schema_accepts(item_schema, item))
+                {
+                    return false;
+                }
+            }
+            _ => {}
+        }
+        true
+    }
+
+    #[test]
+    fn settings_schema_accepts_lsp_commands_roots_and_icons() {
+        let schema = settings_schema();
+        let sample = serde_json::json!({
+            "lsp": {
+                "commands": {"rust": ["rust-analyzer"]},
+                "roots": {
+                    "/repo": {
+                        "rust": {
+                            "command": "/opt/rust-analyzer",
+                            "args": ["--stdio"],
+                            "root_markers": ["Cargo.toml"],
+                            "env": {"RA_LOG": "info"},
+                            "settings": {"check": {"command": "clippy"}}
+                        }
+                    }
+                }
+            },
+            "ui": {"icons": {"file": "custom"}}
+        });
+        assert!(schema_accepts(&schema, &sample));
+        assert!(!schema_accepts(
+            &schema,
+            &serde_json::json!({"lsp": {"commands": {"rust": 7}}})
+        ));
+        assert!(!schema_accepts(
+            &schema,
+            &serde_json::json!({"lsp": {"roots": {"/repo": {"rust": {"unknown": true}}}}})
+        ));
     }
     #[test]
     fn settings_export_and_import_round_trip() {

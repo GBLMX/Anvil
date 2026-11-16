@@ -79,3 +79,4 @@ registry. Release layouts install it as
 ```
 
 Taplo uses the schema for validation, completion, and descriptions.
+The schema includes `[lsp.commands]` and per-root `[lsp.roots]` profiles.
