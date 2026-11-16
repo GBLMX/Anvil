@@ -8,7 +8,7 @@ use std::sync::{
 };
 use std::time::{Duration, Instant};
 
-use anvil_ipc::{DirEntry, GatewayClient};
+use anvil_ipc::{DirEntry, GatewayClient, Request};
 use anvil_task::{TaskContext, TaskEvent as TaskGroupEvent, TaskGroup, TaskGroupConfig};
 
 use super::preview::{PreviewData, read_preview};
@@ -165,12 +165,24 @@ impl FileWorker {
                 if context.is_cancelled() {
                     break;
                 }
+                if let Ok(notifications) = client.poll_notifications() {
+                    route_watch_notifications(
+                        &notifications,
+                        &workspace,
+                        &watched,
+                        &watched_dirs,
+                        &context,
+                    );
+                }
                 match requests.recv_timeout(Duration::from_millis(50)) {
                     Ok(request) => {
                         let event = match request {
                             FileRequest::SetWatchEnabled(enabled) => {
                                 watch_enabled = enabled;
-                                if !watch_enabled {
+                                if watch_enabled {
+                                    let _ = client.watch_start(".", &[], 8192, false, "auto");
+                                } else {
+                                    let _ = client.watch_stop();
                                     watched.clear();
                                     watched_dirs.clear();
                                     pending.clear();
@@ -761,6 +773,76 @@ fn preview_bytes(preview: &PreviewData) -> usize {
         .iter()
         .map(|line| line.len() + std::mem::size_of::<String>())
         .sum()
+}
+
+fn route_watch_notifications(
+    notifications: &[Request],
+    workspace: &Path,
+    watched: &BTreeMap<PathBuf, Option<(u64, i64)>>,
+    watched_dirs: &BTreeMap<PathBuf, Option<(i64, i64)>>,
+    context: &TaskContext<FileEvent>,
+) {
+    let mut tree_paths = Vec::new();
+    for notification in notifications {
+        if notification.method != "watch.events" {
+            continue;
+        }
+        let Some(events) = notification
+            .params
+            .get("events")
+            .and_then(|value| value.as_array())
+        else {
+            continue;
+        };
+        for event in events {
+            let Some(path) = event.get("path").and_then(|value| value.as_str()) else {
+                continue;
+            };
+            let kind = event
+                .get("kind")
+                .and_then(|value| value.as_str())
+                .unwrap_or_default();
+            if kind == "rescan" {
+                tree_paths.push(workspace.to_path_buf());
+                continue;
+            }
+            let absolute = workspace.join(path);
+            if watched.contains_key(&absolute) {
+                let _ = send_event(
+                    context,
+                    FileEvent::ExternalChanged {
+                        path: absolute.clone(),
+                    },
+                );
+            }
+            if let Some(parent) = absolute.parent()
+                && (parent == workspace || watched_dirs.contains_key(parent))
+            {
+                tree_paths.push(parent.to_path_buf());
+            }
+            if let Some(to) = event.get("to").and_then(|value| value.as_str()) {
+                let target = workspace.join(to);
+                if watched.contains_key(&target) {
+                    let _ = send_event(
+                        context,
+                        FileEvent::ExternalChanged {
+                            path: target.clone(),
+                        },
+                    );
+                }
+                if let Some(parent) = target.parent()
+                    && (parent == workspace || watched_dirs.contains_key(parent))
+                {
+                    tree_paths.push(parent.to_path_buf());
+                }
+            }
+        }
+    }
+    tree_paths.sort();
+    tree_paths.dedup();
+    if !tree_paths.is_empty() {
+        let _ = send_event(context, FileEvent::TreeChanged { paths: tree_paths });
+    }
 }
 
 fn plan_bytes(plan: &ProjectReplacePlan) -> usize {

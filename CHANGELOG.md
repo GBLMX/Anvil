@@ -69,7 +69,8 @@ post-`0.5.0` feature line.
 - Added the gateway-side native workspace watcher API
   (`sys.watch_start`, `sys.watch_status`, `sys.watch_stop`) with bounded
   inotify directory watches, excludes, directory budgets, status, and
-  coalesced `watch.events`. TUI routing to the native stream remains pending.
+  coalesced `watch.events`. The TUI consumes the native stream for open-buffer
+  change notifications and tree refresh; polling remains the fallback.
 
 - Added `:help start` and a first-run [onboarding guide](docs/onboarding.md)
   with a task list and compact keymap card.
