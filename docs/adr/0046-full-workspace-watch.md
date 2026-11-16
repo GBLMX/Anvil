@@ -1,7 +1,7 @@
 # ADR-0046: Full Workspace Watch Coverage Through the Gateway
 
 - Status: Proposed
-- Version: 1.0.0
+- Version: 1.1.0
 - Implementation: not started
 - Date: 2026-11-16
 - Related: [ADR-0002](0002-go-daemon.md),
@@ -73,7 +73,8 @@ The relevant platform behavior is well documented:
 
 ### 1. Define coverage as directory coverage with explicit limits
 
-A workspace root is `full` only when all of the following hold:
+A workspace root reaches `coverage = "full"` only after the initial directory
+walk and watch registration complete, and only when all of the following hold:
 
 1. Every directory under the trusted root, except the fixed default excludes
    and user-added excludes, has a native watch.
@@ -81,17 +82,22 @@ A workspace root is `full` only when all of the following hold:
 3. No kernel event overflow has occurred since the last successful rescan.
 4. The root is on a filesystem for which the native backend is supported.
 
+The initial walk is asynchronous. Until it completes, the root reports
+`coverage = "starting"`; it must not report `full` from the request that starts
+the walk. A completed walk reports `full` or `limited` through
+`watch.status` and `sys.watch_status`.
+
 The fixed default excludes are `.git`, `target`, `node_modules`, and `.cache`.
 User settings may add excludes; project settings may add excludes but cannot
 remove the fixed defaults. `.git` itself gets two special non-recursive watches
 for `HEAD` and `index`; its object/ref subtrees are not watched.
 
-If the budget or filesystem prevents full coverage, the root enters `limited`
-or `poll` mode and reports:
+If the budget or filesystem prevents full coverage after the walk, the root
+enters `limited` or `poll` mode and reports:
 
 ```text
 mode: native | poll | limited | off
-coverage: full | limited
+coverage: starting | full | limited | off
 watched_dirs
 skipped_dirs
 overflow_count
@@ -119,8 +125,8 @@ The gateway owns:
 
 The initial walk runs asynchronously after `sys.watch_start`; startup does not
 block the editor on a large repository. The request returns a generation and
-the immediately available status, and later status notifications report the
-completed coverage.
+`coverage = "starting"`. A later `watch.status` notification reports `full` or
+`limited` after registration completes.
 
 Linux native watch is preferred. On unsupported or remote filesystems, and on
 non-Linux platforms, use the existing polling watcher. A watch that registers
@@ -150,19 +156,44 @@ a directory budget, and a mount-crossing flag:
 }
 ```
 
-It returns at least:
+It returns the generation and a `starting` status. It must not wait for the
+initial walk:
 
 ```json
 {
   "generation": 9,
   "mode": "native",
-  "coverage": "full",
-  "watched_dirs": 139,
-  "skipped_dirs": 0
+  "coverage": "starting",
+  "watched_dirs": 0,
+  "skipped_dirs": 0,
+  "overflow_count": 0
 }
 ```
 
-The gateway pushes a bounded notification:
+When the walk finishes, the gateway pushes `watch.status`:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "watch.status",
+  "params": {
+    "generation": 9,
+    "root": ".",
+    "mode": "native",
+    "coverage": "full",
+    "watched_dirs": 139,
+    "skipped_dirs": 0,
+    "overflow_count": 0,
+    "reason": null
+  }
+}
+```
+
+`sys.watch_status` returns the same shape on demand. A later rescan or error
+also emits `watch.status`; `watch.events` is used only for file/directory
+changes and the overflow/rescan signal.
+
+The gateway also pushes a bounded event notification:
 
 ```json
 {
@@ -302,8 +333,9 @@ mode. `off` disables workspace observation.
 `[watch] mode` is present.
 
 `:watch-status` and the settings source display report the active mode,
-coverage, skipped directories, overflow count, last rescan, and fallback
-reason. Open buffers in skipped directories continue to use per-buffer polling.
+coverage (including `starting` before the walk completes), skipped
+directories, overflow count, last rescan, and fallback reason. Open buffers in
+skipped directories continue to use per-buffer polling.
 
 ## Consequences
 
@@ -327,8 +359,9 @@ Negative:
   promised for every workspace.
 - Large repositories still require excludes and a budget, and a rescan can be
   expensive.
-- Startup watch establishment is asynchronous and may temporarily show
-  `limited` or `starting`.
+- Startup watch establishment is asynchronous and reports `starting` until the
+  walk completes; it reports `limited` only after a skip or registration
+  failure.
 - A second event path (native plus polling fallback) requires generation and
   deduplication discipline.
 - User configuration outside the workspace remains unwatched until a separate
@@ -337,6 +370,9 @@ Negative:
 ## Verification
 
 - Focused gateway tests:
+  - `sys.watch_start` returns `coverage = "starting"` and never reports `full`
+    before registration completes; the completion `watch.status` and
+    `sys.watch_status` report the final coverage and directory count;
   - directory watches receive create, delete, rename, modify, and close-write
     events for children;
   - a new directory is watched before its nested events are relied upon;
