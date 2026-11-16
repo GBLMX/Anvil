@@ -20,6 +20,14 @@ pub(crate) fn tree_fits(width: u16) -> bool {
     width > TREE_MIN_WIDTH
 }
 
+pub(crate) const TREE_SCROLLOFF_ROWS: usize = 3;
+
+pub(crate) fn tree_viewport_start(selected: Option<usize>, visible_height: usize) -> usize {
+    selected
+        .unwrap_or(0)
+        .saturating_sub(visible_height.saturating_sub(1 + TREE_SCROLLOFF_ROWS))
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum DisplayRow {
     Source(usize),

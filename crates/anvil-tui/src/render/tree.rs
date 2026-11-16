@@ -26,12 +26,7 @@ pub(crate) fn render_tree(model: &Model, frame: &mut Frame, area: Rect) -> Optio
     let mut lines = Vec::new();
     let rollups = tree_rollups(model);
     let visible_height = list_area.height as usize;
-    let start = model
-        .workspace
-        .tree
-        .selected
-        .unwrap_or(0)
-        .saturating_sub(visible_height.saturating_sub(1));
+    let start = crate::layout::tree_viewport_start(model.workspace.tree.selected, visible_height);
     let ascii_icons = model.appearance.ascii_icons;
     for (index, entry) in model
         .workspace
@@ -60,8 +55,18 @@ pub(crate) fn render_tree(model: &Model, frame: &mut Frame, area: Rect) -> Optio
         } else {
             ""
         };
+        let find_match = model
+            .workspace
+            .tree
+            .find
+            .as_ref()
+            .is_some_and(|find| find.matches.contains(&index));
         let style = if model.workspace.tree.selected == Some(index) {
             theme::selected()
+        } else if find_match {
+            theme::panel()
+                .fg(theme::warning())
+                .add_modifier(Modifier::BOLD)
         } else if untrusted {
             theme::panel().fg(theme::dim())
         } else if entry.is_dir {

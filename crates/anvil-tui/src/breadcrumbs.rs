@@ -61,28 +61,9 @@ pub(crate) enum BreadcrumbTarget {
 
 impl Model {
     pub(crate) fn reveal_breadcrumb_path(&mut self) {
-        let Some(path) = self.session.path.clone() else {
-            return;
-        };
-        if !self.workspace.tree.visible {
-            self.open_tree();
-        } else {
-            self.ui.focus.tree = true;
-            self.ui.focus.split = false;
+        if let Some(path) = self.session.path.clone() {
+            self.reveal_tree_path(path);
         }
-        if let Some(index) = self
-            .workspace
-            .tree
-            .entries
-            .iter()
-            .position(|entry| entry.path == path)
-        {
-            self.workspace.tree.selected = Some(index);
-        } else {
-            self.workspace.tree.pending_select = Some(path);
-        }
-        self.status.text = "breadcrumb path".to_owned();
-        self.file.dirty = true;
     }
 
     pub(crate) fn open_breadcrumb_symbols(&mut self) {

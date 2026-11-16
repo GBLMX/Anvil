@@ -728,7 +728,7 @@ impl Model {
         });
         let input = match &self.ui.input_mode {
             InputMode::CommandLine { .. } => Some(KeymapContext::CommandLine),
-            InputMode::Search { .. } => Some(KeymapContext::Search),
+            InputMode::Search { .. } | InputMode::TreeFind { .. } => Some(KeymapContext::Search),
             InputMode::Rename { .. } => Some(KeymapContext::Rename),
             InputMode::Create { .. }
             | InputMode::RenameEntry { .. }

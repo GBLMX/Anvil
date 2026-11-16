@@ -28,8 +28,13 @@ pub struct ProjectReplacePlan {
 
 /// A background file-tree request.
 pub enum FileRequest {
-    /// List one directory.
-    List(PathBuf),
+    /// List one directory for a tree generation.
+    List { path: PathBuf, generation: u64 },
+    /// List changed tree directories for one generation.
+    TreeListings {
+        generation: u64,
+        paths: Vec<PathBuf>,
+    },
     /// List one directory for command-line path completion.
     ListCompletion { path: PathBuf, generation: u64 },
     /// Enumerate workspace files with `rg --files`, or a bounded fallback.
@@ -121,8 +126,11 @@ pub enum FileRequest {
 
 /// A background file-tree result.
 pub enum FileEvent {
-    /// Directory listing for the requested path.
-    Listed(PathBuf, Result<Vec<DirEntry>, String>),
+    Listed {
+        generation: u64,
+        path: PathBuf,
+        result: Result<Vec<DirEntry>, String>,
+    },
     /// Directory listing for command-line path completion.
     CompletionListed {
         generation: u64,
@@ -227,6 +235,11 @@ pub enum FileEvent {
     Oversized { message: String },
     /// Listings for a generation-scoped tree refresh.
     TreeSnapshot {
+        generation: u64,
+        listings: Vec<(PathBuf, Result<Vec<DirEntry>, String>)>,
+    },
+    /// Listings for changed tree directories.
+    TreeListings {
         generation: u64,
         listings: Vec<(PathBuf, Result<Vec<DirEntry>, String>)>,
     },

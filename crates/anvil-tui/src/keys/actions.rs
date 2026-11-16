@@ -71,6 +71,9 @@ pub(super) enum FileTreeAction {
     Collapse,
     Toggle,
     ToggleHidden,
+    Find,
+    FindNext,
+    FindPrevious,
     CommandLine,
     Create(CreateKind),
     Rename,
@@ -88,6 +91,10 @@ pub(super) fn file_tree_action(key: KeyPress, text_input: bool) -> Option<FileTr
         KeyCode::Char('h') | KeyCode::Left => Some(FileTreeAction::Collapse),
         KeyCode::Char('l') | KeyCode::Right | KeyCode::Enter => Some(FileTreeAction::Toggle),
         KeyCode::Char('H') if text_input => Some(FileTreeAction::ToggleHidden),
+        KeyCode::Char('/') if text_input => Some(FileTreeAction::Find),
+        KeyCode::Char('f') if text_input && key.ctrl() => Some(FileTreeAction::Find),
+        KeyCode::Char('n') if text_input => Some(FileTreeAction::FindNext),
+        KeyCode::Char('N') if text_input => Some(FileTreeAction::FindPrevious),
         KeyCode::Char(':') if text_input => Some(FileTreeAction::CommandLine),
         KeyCode::Char('a') if text_input => Some(FileTreeAction::Create(CreateKind::File)),
         KeyCode::Char('A') if text_input => Some(FileTreeAction::Create(CreateKind::Directory)),
@@ -107,6 +114,9 @@ pub(super) fn execute_file_tree_action(model: &mut Model, action: FileTreeAction
         FileTreeAction::Collapse => model.tree_collapse(),
         FileTreeAction::Toggle => model.tree_toggle(),
         FileTreeAction::ToggleHidden => model.toggle_hidden(),
+        FileTreeAction::Find => model.start_tree_find(),
+        FileTreeAction::FindNext => model.tree_find_move(1),
+        FileTreeAction::FindPrevious => model.tree_find_move(-1),
         FileTreeAction::CommandLine => {
             model.ui.input_mode = InputMode::CommandLine {
                 buffer: InputBuffer::default(),
@@ -122,6 +132,8 @@ pub(super) fn execute_file_tree_action(model: &mut Model, action: FileTreeAction
         FileTreeAction::Cancel => {
             model.ui.focus.tree = false;
             model.workspace.tree.visible = false;
+            model.workspace.tree.pending_reveal = None;
+            model.workspace.tree.find = None;
             model.refresh_wrap_width();
             model.file.dirty = true;
         }

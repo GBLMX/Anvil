@@ -166,7 +166,10 @@ mod tests {
         let client = GatewayClient::connect(&socket, &[3; 32]).expect("client");
         let worker = FileWorker::start(client, workspace.clone());
         worker
-            .request(FileRequest::List(workspace))
+            .request(FileRequest::List {
+                path: workspace,
+                generation: 0,
+            })
             .expect("list request");
         std::thread::sleep(std::time::Duration::from_millis(20));
         let started = std::time::Instant::now();

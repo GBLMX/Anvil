@@ -249,12 +249,29 @@ impl FileWorker {
                                     listings,
                                 }
                             }
-                            FileRequest::List(path) => FileEvent::Listed(
-                                path.clone(),
-                                client
+                            FileRequest::List { path, generation } => FileEvent::Listed {
+                                generation,
+                                path: path.clone(),
+                                result: client
                                     .read_dir(&relative_path(&workspace, &path))
                                     .map_err(|error| error.to_string()),
-                            ),
+                            },
+                            FileRequest::TreeListings { generation, paths } => {
+                                let listings = paths
+                                    .into_iter()
+                                    .take(MAX_TREE_WATCH_DIRS)
+                                    .map(|path| {
+                                        let result = client
+                                            .read_dir(&relative_path(&workspace, &path))
+                                            .map_err(|error| error.to_string());
+                                        (path, result)
+                                    })
+                                    .collect();
+                                FileEvent::TreeListings {
+                                    generation,
+                                    listings,
+                                }
+                            }
                             FileRequest::ListCompletion { path, generation } => {
                                 FileEvent::CompletionListed {
                                     generation,
@@ -557,12 +574,21 @@ impl Drop for FileWorker {
 fn file_event_cost(event: &FileEvent) -> usize {
     let mut bytes = std::mem::size_of_val(event);
     match event {
-        FileEvent::Listed(path, result) => {
+        FileEvent::Listed { path, result, .. } => {
             add_bytes(&mut bytes, path.as_os_str().len());
             add_bytes(
                 &mut bytes,
                 result_bytes(result, |entries| dir_entries_bytes(entries)),
             );
+        }
+        FileEvent::TreeListings { listings, .. } => {
+            for (path, result) in listings {
+                add_bytes(&mut bytes, path.as_os_str().len());
+                add_bytes(
+                    &mut bytes,
+                    result_bytes(result, |entries| dir_entries_bytes(entries)),
+                );
+            }
         }
         FileEvent::CompletionListed { result, .. } => {
             add_bytes(

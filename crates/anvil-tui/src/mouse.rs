@@ -1,7 +1,7 @@
 //! Pointer state, hit-testing, and mouse gestures.
 
 use super::*;
-use crate::layout::tree_fits;
+use crate::layout::{tree_fits, tree_viewport_start};
 use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::Rect;
 
@@ -171,6 +171,16 @@ pub(crate) fn handle_mouse(model: &mut Model, mouse: MouseEvent, width: u16, hei
             } else {
                 1
             };
+            if let Some(inner) = editor_area(model, width, height)
+                && model.workspace.tree.visible
+                && tree_fits(inner.width)
+                && mouse.column < inner.x.saturating_add(model.sidebar_width(inner.width))
+                && mouse.row > inner.y
+            {
+                model.tree_move(delta * 3);
+                model.file.dirty = true;
+                return true;
+            }
             let (side, pane_width) = editor_area(model, width, height)
                 .map(|inner| pane_at(model, inner, mouse.column))
                 .map(|(side, _, pane_width)| (side, pane_width))
@@ -187,25 +197,21 @@ pub(crate) fn handle_mouse(model: &mut Model, mouse: MouseEvent, width: u16, hei
             {
                 if split_target {
                     if let Some(pane) = model.buffers.split.as_mut() {
-                        pane.buffer.hscroll = pane
-                            .buffer
-                            .hscroll
-                            .saturating_add_signed(delta as isize * 3);
+                        pane.buffer.hscroll = pane.buffer.hscroll.saturating_add_signed(delta * 3);
                     }
                 } else {
-                    model.view.hscroll =
-                        model.view.hscroll.saturating_add_signed(delta as isize * 3);
+                    model.view.hscroll = model.view.hscroll.saturating_add_signed(delta * 3);
                 }
             } else if split_target {
-                model.scroll_split_rows(delta as isize);
+                model.scroll_split_rows(delta);
             } else if model.config.settings.editor.soft_wrap {
                 let text_width = pane_width.saturating_sub(model.gutter_width());
-                model.scroll_display_rows_in_pane(delta as isize, text_width);
+                model.scroll_display_rows_in_pane(delta, text_width);
             } else {
                 model.view.scroll = model
                     .view
                     .scroll
-                    .saturating_add_signed(delta as isize)
+                    .saturating_add_signed(delta)
                     .min(model.session.editor.index().len_lines().saturating_sub(1));
                 model.ensure_cursor_visible(height.saturating_sub(2), width.saturating_sub(2));
             }
@@ -249,12 +255,7 @@ pub(crate) fn hit_test(model: &Model, col: u16, row: u16, width: u16, height: u1
                 return Target::Outside;
             }
             let visible = editor_inner.height.saturating_sub(1) as usize;
-            let start = model
-                .workspace
-                .tree
-                .selected
-                .unwrap_or(0)
-                .saturating_sub(visible.saturating_sub(1));
+            let start = tree_viewport_start(model.workspace.tree.selected, visible);
             let index =
                 start.saturating_add(row.saturating_sub(editor_inner.y.saturating_add(1)) as usize);
             return Target::Tree(index);

@@ -63,6 +63,10 @@ pub(crate) fn handle_event(model: &mut Model, event: Event) {
             } else if let InputMode::Search { query } = &mut model.ui.input_mode {
                 query.insert_str(&text.replace('\n', " "));
                 model.file.dirty = true;
+            } else if let InputMode::TreeFind { query } = &mut model.ui.input_mode {
+                query.insert_str(&text.replace('\n', " "));
+                model.refresh_tree_find();
+                model.file.dirty = true;
             } else if let InputMode::Rename { name } = &mut model.ui.input_mode {
                 name.push_str(&text.replace('\n', " "));
                 model.file.dirty = true;
@@ -443,7 +447,9 @@ fn handle_key(model: &mut Model, key: KeyPress) {
     if model.send_terminal_key(key.event()) {
         return;
     }
-    if model.keymap_context() == KeymapContext::FileTree {
+    if model.keymap_context() == KeymapContext::FileTree
+        && !matches!(model.ui.input_mode, InputMode::TreeFind { .. })
+    {
         if key.ctrl() && key.code == KeyCode::Char('w') {
             model.begin_pending('w');
             return;
@@ -714,6 +720,44 @@ fn handle_key(model: &mut Model, key: KeyPress) {
                 _ => {}
             }
         }
+        InputMode::TreeFind { query } => match key.code {
+            KeyCode::Esc => model.cancel_tree_find(),
+            KeyCode::Enter => model.commit_tree_find(),
+            KeyCode::Up => model.tree_find_move(-1),
+            KeyCode::Down => model.tree_find_move(1),
+            KeyCode::Left => {
+                query.move_left();
+                model.file.dirty = true;
+            }
+            KeyCode::Right => {
+                query.move_right();
+                model.file.dirty = true;
+            }
+            KeyCode::Home => {
+                query.move_home();
+                model.file.dirty = true;
+            }
+            KeyCode::End => {
+                query.move_end();
+                model.file.dirty = true;
+            }
+            KeyCode::Backspace => {
+                query.backspace();
+                model.refresh_tree_find();
+                model.file.dirty = true;
+            }
+            KeyCode::Delete => {
+                query.delete();
+                model.refresh_tree_find();
+                model.file.dirty = true;
+            }
+            KeyCode::Char(character) if text_input && query.text().len() < 256 => {
+                query.insert(character);
+                model.refresh_tree_find();
+                model.file.dirty = true;
+            }
+            _ => {}
+        },
         InputMode::Insert => match key.code {
             KeyCode::Esc => {
                 model.cancel_completion();

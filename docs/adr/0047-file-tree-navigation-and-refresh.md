@@ -1,8 +1,10 @@
 # ADR-0047: File tree navigation and incremental refresh
 
-- Status: Proposed
-- Version: 1.1.0
-- Implementation: not started
+- Status: Accepted; implemented 2026-11-16
+- Version: 1.2.0
+- Implementation: natural ordering, generation-scoped listings, incremental
+  refresh, ancestor-expanding reveal, scrolloff/wheel viewport, and tree find
+  landed; multi-selection, nesting, drag-and-drop, and undo remain deferred
 - Date: 2026-11-16
 - Related: [ADR-0018](0018-workspace-tree-watch.md),
   [ADR-0044](0044-watcher-transport.md),

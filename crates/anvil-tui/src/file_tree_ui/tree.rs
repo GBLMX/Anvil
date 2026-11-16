@@ -13,9 +13,13 @@ impl Model {
         }
         if self.workspace.tree.entries.is_empty() {
             let workspace = self.workspace.path.clone();
+            let generation = self.workspace.tree.refresh_generation;
             if self.ensure_file_worker() {
                 if let Some(worker) = self.workspace.file_worker.as_ref() {
-                    let _ = worker.request(FileRequest::List(workspace));
+                    let _ = worker.request(FileRequest::List {
+                        path: workspace,
+                        generation,
+                    });
                 }
                 self.ensure_root_tree_nodes();
                 let roots = self
@@ -26,7 +30,10 @@ impl Model {
                     .collect::<Vec<_>>();
                 for root in roots {
                     if let Some(worker) = self.workspace.root_file_workers.get(&root) {
-                        let _ = worker.request(FileRequest::List(root));
+                        let _ = worker.request(FileRequest::List {
+                            path: root,
+                            generation,
+                        });
                     }
                 }
                 self.status.text = "loading file tree".to_owned();
@@ -121,8 +128,12 @@ impl Model {
                 self.ensure_file_worker() && self.file_worker_for_path(&entry.path).is_some();
             if has_worker {
                 self.workspace.tree.entries[index].expanded = true;
+                let generation = self.workspace.tree.refresh_generation;
                 if let Some(worker) = self.file_worker_for_path(&entry.path) {
-                    let _ = worker.request(FileRequest::List(entry.path));
+                    let _ = worker.request(FileRequest::List {
+                        path: entry.path,
+                        generation,
+                    });
                 }
                 self.status.text = "loading directory".to_owned();
             } else {

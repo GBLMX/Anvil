@@ -1048,6 +1048,10 @@ pub(crate) struct TreeState {
     pub(crate) visible: bool,
     /// Entry to select after the next tree refresh.
     pub(crate) pending_select: Option<PathBuf>,
+    /// Entry whose ancestors are being expanded by a reveal request.
+    pub(crate) pending_reveal: Option<PathBuf>,
+    pub(crate) reveal_steps: usize,
+    pub(crate) find: Option<TreeFindState>,
     pub(crate) stale: bool,
     pub(crate) watch_limited: bool,
     pub(crate) refresh_in_flight: bool,
@@ -1063,6 +1067,13 @@ impl TreeState {
             || !name.starts_with('.')
             || matches!(name, ".github" | ".cargo")
     }
+}
+
+#[derive(Default)]
+pub(crate) struct TreeFindState {
+    pub(crate) query: String,
+    pub(crate) matches: Vec<usize>,
+    pub(crate) current: usize,
 }
 
 #[derive(Default)]

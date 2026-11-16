@@ -139,6 +139,55 @@ impl Model {
         self.request_tree_refresh(None);
     }
 
+    pub(crate) fn handle_tree_changed(&mut self, root: Option<&Path>, paths: Vec<PathBuf>) {
+        if paths.is_empty() || paths.len() > MAX_TREE_WATCH_DIRS {
+            match root {
+                Some(root) => self.refresh_root_tree(root),
+                None => self.refresh_tree_background(),
+            }
+            return;
+        }
+        if self.workspace.tree.refresh_in_flight {
+            self.workspace.tree.refresh_queued = true;
+            return;
+        }
+        self.workspace.tree.refresh_generation =
+            self.workspace.tree.refresh_generation.wrapping_add(1);
+        let generation = self.workspace.tree.refresh_generation;
+        let request = FileRequest::TreeListings { generation, paths };
+        let sent = match root {
+            Some(root) => self
+                .workspace
+                .root_file_workers
+                .get(root)
+                .is_some_and(|worker| worker.request(request).is_ok()),
+            None => self
+                .workspace
+                .file_worker
+                .as_ref()
+                .is_some_and(|worker| worker.request(request).is_ok()),
+        };
+        self.workspace.tree.refresh_in_flight = sent;
+        self.workspace.tree.stale = !sent;
+    }
+
+    pub(super) fn apply_tree_listings(
+        &mut self,
+        generation: u64,
+        listings: Vec<(PathBuf, Result<Vec<DirEntry>, String>)>,
+    ) {
+        if generation != self.workspace.tree.refresh_generation {
+            return;
+        }
+        self.workspace.tree.refresh_in_flight = false;
+        for (path, result) in listings {
+            self.handle_tree_listing(generation, path, result);
+        }
+        self.workspace.tree.stale = false;
+        self.refresh_tree_find();
+        self.finish_tree_refresh();
+    }
+
     pub(super) fn rebuild_tree_from_disk(&mut self) {
         let expanded = self
             .expanded_tree_paths()
@@ -245,7 +294,10 @@ impl Model {
         let previous_ino = previous.map(|entry| entry.ino).filter(|ino| *ino != 0);
         let previous_index = self.workspace.tree.selected;
         let expanded = self.expanded_tree_paths();
-        let listings: BTreeMap<_, _> = listings.into_iter().collect();
+        let listings: BTreeMap<_, _> = listings
+            .into_iter()
+            .map(|(path, result)| (path, normalize_listing(result)))
+            .collect();
         match listings.get(&self.workspace.path) {
             None => {
                 self.status.text = "E: tree: missing root listing".to_owned();
@@ -287,6 +339,10 @@ impl Model {
             self.workspace.tree.refresh_queued = true;
         }
         self.sync_tree_watches();
+        if self.workspace.tree.pending_reveal.is_some() {
+            self.advance_pending_reveal();
+        }
+        self.refresh_tree_find();
         self.request_git_status();
         self.finish_tree_refresh();
     }

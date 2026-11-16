@@ -325,3 +325,186 @@ fn watch_status_reports_scope_and_disable() {
     model.show_watch_status();
     assert_eq!(model.status.text, "watch: off");
 }
+
+#[test]
+fn natural_sort_puts_directories_first_and_numbers_numerically() {
+    let mut entries = vec![
+        DirEntry {
+            name: "file10".to_owned(),
+            is_dir: false,
+            ino: 0,
+        },
+        DirEntry {
+            name: "file2".to_owned(),
+            is_dir: false,
+            ino: 0,
+        },
+        DirEntry {
+            name: "src".to_owned(),
+            is_dir: true,
+            ino: 0,
+        },
+    ];
+    sort_dir_entries(&mut entries);
+    assert_eq!(
+        entries
+            .iter()
+            .map(|entry| entry.name.as_str())
+            .collect::<Vec<_>>(),
+        vec!["src", "file2", "file10"]
+    );
+}
+
+#[test]
+fn fallback_listing_filters_temporary_and_ignored_entries() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let workspace = dir.path().to_path_buf();
+    fs::write(workspace.join("file10"), "").expect("file10");
+    fs::write(workspace.join("file2"), "").expect("file2");
+    fs::write(workspace.join(".anvil-write-deadbeef"), "").expect("temp");
+    fs::create_dir(workspace.join("target")).expect("target");
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.workspace.path = workspace.clone();
+    model.workspace.roots = crate::workspace_roots::WorkspaceRoots::new(&workspace).expect("roots");
+    let entries = model.tree_entries(&workspace).expect("listing");
+    assert_eq!(
+        entries
+            .iter()
+            .map(|entry| entry.name.as_str())
+            .collect::<Vec<_>>(),
+        vec!["file2", "file10"]
+    );
+}
+
+#[test]
+fn reveal_expands_collapsed_ancestors() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let workspace = dir.path().to_path_buf();
+    let nested = workspace.join("a/b");
+    fs::create_dir_all(&nested).expect("nested");
+    let target = nested.join("c.txt");
+    fs::write(&target, "").expect("target");
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.workspace.path = workspace.clone();
+    model.workspace.roots = crate::workspace_roots::WorkspaceRoots::new(&workspace).expect("roots");
+    model.open_tree();
+    model.reveal_tree_path(target.clone());
+    assert_eq!(
+        model
+            .workspace
+            .tree
+            .selected
+            .and_then(|index| model.workspace.tree.entries.get(index))
+            .map(|entry| entry.path.clone()),
+        Some(target)
+    );
+}
+
+#[test]
+fn tree_find_tracks_loaded_rows_and_caps_matches() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let workspace = dir.path().to_path_buf();
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.workspace.path = workspace.clone();
+    model.workspace.roots = crate::workspace_roots::WorkspaceRoots::new(&workspace).expect("roots");
+    model.workspace.tree.entries = vec![
+        TreeEntry {
+            path: workspace.join("main.rs"),
+            depth: 0,
+            is_dir: false,
+            ino: 0,
+            expanded: false,
+        },
+        TreeEntry {
+            path: workspace.join("lib.rs"),
+            depth: 0,
+            is_dir: false,
+            ino: 0,
+            expanded: false,
+        },
+    ];
+    model.ui.input_mode = InputMode::TreeFind {
+        query: anvil_session::ui::InputBuffer::new("main"),
+    };
+    model.refresh_tree_find();
+    assert_eq!(
+        model
+            .workspace
+            .tree
+            .selected
+            .and_then(|index| model.workspace.tree.entries.get(index))
+            .map(|entry| entry.path.clone()),
+        Some(workspace.join("main.rs"))
+    );
+    assert_eq!(
+        model
+            .workspace
+            .tree
+            .find
+            .as_ref()
+            .map(|find| find.matches.len()),
+        Some(1)
+    );
+}
+
+#[test]
+fn incremental_listing_replaces_only_the_changed_directory() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let workspace = dir.path().to_path_buf();
+    let src = workspace.join("src");
+    let other = workspace.join("other");
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.workspace.path = workspace.clone();
+    model.workspace.roots = crate::workspace_roots::WorkspaceRoots::new(&workspace).expect("roots");
+    model.workspace.tree.entries = vec![
+        TreeEntry {
+            path: workspace.clone(),
+            depth: 0,
+            is_dir: true,
+            ino: 0,
+            expanded: true,
+        },
+        TreeEntry {
+            path: src.clone(),
+            depth: 1,
+            is_dir: true,
+            ino: 0,
+            expanded: true,
+        },
+        TreeEntry {
+            path: other.clone(),
+            depth: 1,
+            is_dir: true,
+            ino: 0,
+            expanded: false,
+        },
+    ];
+    model.workspace.tree.refresh_generation = 3;
+    model.apply_tree_listings(
+        3,
+        vec![(
+            src.clone(),
+            Ok(vec![DirEntry {
+                name: "new.rs".to_owned(),
+                is_dir: false,
+                ino: 0,
+            }]),
+        )],
+    );
+    assert!(
+        model
+            .workspace
+            .tree
+            .entries
+            .iter()
+            .any(|entry| entry.path == src.join("new.rs"))
+    );
+    assert!(
+        model
+            .workspace
+            .tree
+            .entries
+            .iter()
+            .any(|entry| entry.path == other)
+    );
+}

@@ -266,6 +266,15 @@ impl Model {
             ("tree", "") => self.open_tree(),
             ("watch-status", "") => self.show_watch_status(),
             ("tree-refresh", "") => self.refresh_tree_from_command(),
+            ("tree-reveal", "") => {
+                if let Some(path) = self.session.path.clone() {
+                    self.reveal_tree_path(path);
+                } else {
+                    self.status.text = "E: tree-reveal requires an open file".to_owned();
+                    self.file.dirty = true;
+                }
+            }
+            ("tree-find", "") => self.start_tree_find(),
             ("lsp-stop", "") => self.queue_effect(Effect::LspStop),
             ("format", "") => self.queue_effect(Effect::LspFormat),
             ("open-url", url) => {

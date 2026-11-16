@@ -147,6 +147,8 @@ pub enum InputMode {
     CommandLine { buffer: InputBuffer },
     /// Incremental substring search.
     Search { query: InputBuffer },
+    /// Search loaded rows in the workspace tree.
+    TreeFind { query: InputBuffer },
     /// Create a file or directory in the tree.
     Create {
         directory: PathBuf,

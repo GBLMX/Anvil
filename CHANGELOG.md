@@ -10,6 +10,13 @@ post-`0.5.0` feature line.
 ### Added
 - Added `anvil modules [--json]`, a read-only view of the compiled-in modules,
   contract range, command count, and source; no marketplace or network access.
+- The workspace tree now uses case-insensitive natural ordering, filters
+  `.git`/`target`/`.anvil-write-*` consistently in gateway and fallback paths,
+  reveals collapsed ancestors with `:tree-reveal`, and supports tree-local
+  find/navigation with `/` and `n`/`N`.
+- Tree watcher changes now use generation-scoped per-directory listings instead
+  of rereading every expanded directory; stale listings are discarded and the
+  viewport keeps a three-row scrolloff with tree-focused mouse wheel movement.
 - Added `:plugin-inventory`, a read-only installed-plugin page with id, version,
   enabled state, source, and digest; `:plugin-list` remains the mutable manager.
 - `anvil-task` now keeps progress in per-task slots instead of one global

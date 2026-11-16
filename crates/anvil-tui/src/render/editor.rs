@@ -50,6 +50,11 @@ pub fn view(model: &Model, frame: &mut Frame) {
         InputMode::Search { query } => {
             (" SRC ", theme::warning(), model.search_status(query.text()))
         }
+        InputMode::TreeFind { query } => (
+            " FIND ",
+            theme::warning(),
+            format!("tree find> {}", query.text()),
+        ),
         InputMode::Insert => (" INS ", theme::success(), String::new()),
         InputMode::Create { name, kind, .. } => (
             if matches!(kind, CreateKind::Directory) {
@@ -100,6 +105,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
     let status_cursor = match &model.ui.input_mode {
         InputMode::CommandLine { buffer } => Some((1, buffer.cursor(), buffer.text())),
         InputMode::Search { query } => Some((1, query.cursor(), query.text())),
+        InputMode::TreeFind { query } => Some((1, query.cursor(), query.text())),
         _ => None,
     }
     .map(|(prefix, cursor, text)| {
@@ -117,6 +123,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
         InputMode::Insert => theme::mode_insert_badge(),
         InputMode::CommandLine { .. } => theme::mode_command_badge(),
         InputMode::Search { .. } => theme::mode_search_badge(),
+        InputMode::TreeFind { .. } => theme::mode_search_badge(),
         InputMode::Rename { .. } | InputMode::RenameEntry { .. } => theme::mode_rename_badge(),
         InputMode::Create { .. } | InputMode::TransferEntry { .. } => theme::mode_create_badge(),
         InputMode::ConfirmClose { .. }
