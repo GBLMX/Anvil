@@ -185,6 +185,14 @@ pub const COMMANDS: &[CommandSpec] = &[
         capability: Capability::Read,
     },
     CommandSpec {
+        name: "watch-status",
+        capability: Capability::Read,
+    },
+    CommandSpec {
+        name: "tree-refresh",
+        capability: Capability::Read,
+    },
+    CommandSpec {
         name: "format",
         capability: Capability::Edit,
     },
