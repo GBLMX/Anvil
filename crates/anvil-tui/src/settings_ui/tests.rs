@@ -26,12 +26,26 @@ fn settings_hit_test_maps_tabs_and_sections() {
 fn settings_tabs_map_every_group() {
     assert_eq!(SettingsOverlayState::tab(0), "Editor");
     assert_eq!(SettingsOverlayState::tab(4), "Editor");
-    assert_eq!(SettingsOverlayState::tab(5), "Language");
+    assert_eq!(SettingsOverlayState::tab(5), "Editor");
     assert_eq!(SettingsOverlayState::tab(6), "Language");
-    assert_eq!(SettingsOverlayState::tab(7), "Interface");
-    assert_eq!(SettingsOverlayState::tab(9), "Editor");
-    assert_eq!(SettingsOverlayState::tab(10), "Interface");
-    assert_eq!(SettingsOverlayState::group(10), "Appearance");
+    assert_eq!(SettingsOverlayState::tab(7), "Language");
+    assert_eq!(SettingsOverlayState::tab(8), "Interface");
+    assert_eq!(SettingsOverlayState::tab(10), "Editor");
+    assert_eq!(SettingsOverlayState::tab(11), "Interface");
+    assert_eq!(SettingsOverlayState::group(11), "Appearance");
+}
+
+#[test]
+fn settings_tab_cycle_follows_render_order() {
+    let mut state = state_at(0);
+    state.cycle_tab(false);
+    assert_eq!(state.selected, 8);
+    state.cycle_tab(false);
+    assert_eq!(state.selected, 6);
+    state.cycle_tab(false);
+    assert_eq!(state.selected, 0);
+    state.cycle_tab(true);
+    assert_eq!(state.selected, 6);
 }
 
 #[test]
@@ -76,7 +90,7 @@ fn settings_state_owns_draft_and_theme_actions() {
         }
         SettingsChange::Theme(_) => panic!("expected draft change"),
     }
-    state.select(10);
+    state.select(11);
     match state.adjust(1).expect("theme change") {
         SettingsChange::Theme(choice) => assert_ne!(choice, defaults.theme),
         SettingsChange::Apply(_) => panic!("expected theme change"),
@@ -126,7 +140,7 @@ fn rendered_text(state: &SettingsOverlayState, width: u16, height: u16) -> (Stri
 
 #[test]
 fn settings_page_renders_from_state_alone() {
-    let mut state = state_at(5);
+    let mut state = state_at(6);
     state.draft.search.case_sensitive = true;
     state.theme_touched = true;
     let (text, complete) = rendered_text(&state, 100, 30);

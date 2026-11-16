@@ -8,7 +8,7 @@ use ratatui::{
     widgets::{Clear, Paragraph},
 };
 
-pub(crate) const SETTINGS_ROWS: usize = 11;
+pub(crate) const SETTINGS_ROWS: usize = settings::SETTINGS.len();
 
 pub(crate) fn rect(area: ratatui::layout::Rect) -> ratatui::layout::Rect {
     let width = (area.width * 9 / 10)
@@ -52,81 +52,59 @@ pub(crate) enum SettingsAction {
 }
 
 impl SettingsOverlayState {
-    pub(crate) fn label(index: usize) -> &'static str {
-        match index {
-            0 => "editor.scroll_margin",
-            1 => "editor.auto_save",
-            2 => "editor.soft_wrap",
-            3 => "editor.format_on_save",
-            4 => "editor.max_buffers",
-            5 => "search.case_sensitive",
-            6 => "lsp.inlay_hints",
-            7 => "ui.reduced_motion",
-            8 => "ui.high_contrast",
-            9 => "editor.file_watching",
-            _ => "theme.name",
+    fn key(index: usize) -> settings::SettingsKey {
+        settings::SETTINGS[index.min(SETTINGS_ROWS - 1)].key
+    }
+
+    fn integer_bounds(index: usize) -> (usize, usize) {
+        match settings::SETTINGS[index.min(SETTINGS_ROWS - 1)].kind {
+            settings::SettingKind::Integer { min, max } => (min as usize, max as usize),
+            settings::SettingKind::Bool | settings::SettingKind::Theme => (0, 0),
         }
+    }
+
+    pub(crate) fn label(index: usize) -> &'static str {
+        settings::SETTINGS[index.min(SETTINGS_ROWS - 1)].label
     }
 
     pub(crate) fn description(index: usize) -> &'static str {
-        match index {
-            0 => "Lines kept visible around the cursor before scrolling.",
-            1 => "Save the active buffer when focus moves to another surface.",
-            2 => "Wrap long lines to the pane width and scroll by display row.",
-            3 => "Run LSP formatting after a successful write.",
-            4 => "Maximum foreground buffers; Alt-1..9 still select the first nine.",
-            5 => "Use case-sensitive matching for `/` and project search.",
-            6 => "Request and render language-server inlay hints.",
-            7 => "Freeze spinners and avoid continuous animation.",
-            8 => "Increase text, muted, and border contrast for the active theme.",
-            9 => "Reload buffers, tree, Git, and LSP state on external changes.",
-            _ => "Select the semantic palette used by the TUI.",
-        }
+        settings::SETTINGS[index.min(SETTINGS_ROWS - 1)].description
     }
 
     pub(crate) fn group(index: usize) -> &'static str {
-        match index {
-            0..=4 | 9 => "Editor",
-            5 => "Search",
-            6 => "LSP",
-            7..=8 => "Accessibility",
-            _ => "Appearance",
-        }
+        settings::SETTINGS[index.min(SETTINGS_ROWS - 1)].group
     }
 
     pub(crate) fn tab(index: usize) -> &'static str {
-        match Self::group(index) {
-            "Editor" => "Editor",
-            "Search" | "LSP" => "Language",
-            _ => "Interface",
-        }
+        settings::SETTINGS[index.min(SETTINGS_ROWS - 1)].tab
     }
 
     pub(crate) fn value(&self, index: usize) -> String {
-        if index == 10 {
+        if Self::key(index) == settings::SettingsKey::Theme {
             return theme_label(self.theme);
         }
         Self::value_from(&self.draft, index)
     }
 
     fn value_from(settings: &Settings, index: usize) -> String {
-        match index {
-            0 => settings.editor.scroll_margin.to_string(),
-            1 => settings.editor.auto_save.to_string(),
-            2 => settings.editor.soft_wrap.to_string(),
-            3 => settings.editor.format_on_save.to_string(),
-            4 => settings.editor.max_buffers.to_string(),
-            5 => settings.search.case_sensitive.to_string(),
-            6 => settings.lsp.inlay_hints.to_string(),
-            7 => settings.ui.reduced_motion.to_string(),
-            8 => settings.ui.high_contrast.to_string(),
-            9 => settings.editor.file_watching.to_string(),
-            _ => theme_label(settings.theme),
+        match Self::key(index) {
+            settings::SettingsKey::ScrollMargin => settings.editor.scroll_margin.to_string(),
+            settings::SettingsKey::AutoSave => settings.editor.auto_save.to_string(),
+            settings::SettingsKey::SoftWrap => settings.editor.soft_wrap.to_string(),
+            settings::SettingsKey::FormatOnSave => settings.editor.format_on_save.to_string(),
+            settings::SettingsKey::MaxBuffers => settings.editor.max_buffers.to_string(),
+            settings::SettingsKey::SidebarPercent => settings.editor.sidebar_percent.to_string(),
+            settings::SettingsKey::CaseSensitive => settings.search.case_sensitive.to_string(),
+            settings::SettingsKey::InlayHints => settings.lsp.inlay_hints.to_string(),
+            settings::SettingsKey::ReducedMotion => settings.ui.reduced_motion.to_string(),
+            settings::SettingsKey::HighContrast => settings.ui.high_contrast.to_string(),
+            settings::SettingsKey::FileWatching => settings.editor.file_watching.to_string(),
+            settings::SettingsKey::Theme => theme_label(settings.theme),
         }
     }
 
     pub(crate) fn changed(&self, index: usize) -> bool {
-        if index == 10 {
+        if Self::key(index) == settings::SettingsKey::Theme {
             return self.theme_touched;
         }
         self.value(index) != Self::value_from(&self.original, index)
@@ -144,7 +122,10 @@ impl SettingsOverlayState {
     }
 
     pub(crate) fn cycle_tab(&mut self, backwards: bool) {
-        let tabs = [0usize, 4, 6];
+        let tabs = ["Editor", "Interface", "Language"]
+            .into_iter()
+            .filter_map(|tab| settings::SETTINGS.iter().position(|def| def.tab == tab))
+            .collect::<Vec<_>>();
         let current = tabs
             .iter()
             .position(|row| Self::tab(self.selected) == Self::tab(*row))
@@ -158,63 +139,107 @@ impl SettingsOverlayState {
     }
 
     pub(crate) fn adjust(&mut self, delta: isize) -> Option<SettingsChange> {
-        if self.selected == 10 {
+        let key = Self::key(self.selected);
+        if key == settings::SettingsKey::Theme {
             self.theme = cycle_theme(self.theme, delta);
             self.theme_touched = true;
             self.user.set_theme(self.theme);
             return Some(SettingsChange::Theme(self.theme));
         }
         let mut draft = self.draft;
-        match self.selected {
-            0 => {
+        match key {
+            settings::SettingsKey::ScrollMargin => {
+                let (min, max) = Self::integer_bounds(self.selected);
                 draft.editor.scroll_margin = draft
                     .editor
                     .scroll_margin
                     .saturating_add_signed(delta)
-                    .min(settings::MAX_SCROLL_MARGIN);
+                    .clamp(min, max);
             }
-            1 => draft.editor.auto_save = !draft.editor.auto_save,
-            2 => draft.editor.soft_wrap = !draft.editor.soft_wrap,
-            3 => draft.editor.format_on_save = !draft.editor.format_on_save,
-            4 => {
+            settings::SettingsKey::AutoSave => draft.editor.auto_save = !draft.editor.auto_save,
+            settings::SettingsKey::SoftWrap => draft.editor.soft_wrap = !draft.editor.soft_wrap,
+            settings::SettingsKey::FormatOnSave => {
+                draft.editor.format_on_save = !draft.editor.format_on_save
+            }
+            settings::SettingsKey::MaxBuffers => {
+                let (min, max) = Self::integer_bounds(self.selected);
                 draft.editor.max_buffers = draft
                     .editor
                     .max_buffers
                     .saturating_add_signed(delta)
-                    .clamp(1, settings::MAX_MAX_BUFFERS);
+                    .clamp(min, max);
             }
-            5 => draft.search.case_sensitive = !draft.search.case_sensitive,
-            6 => draft.lsp.inlay_hints = !draft.lsp.inlay_hints,
-            7 => draft.ui.reduced_motion = !draft.ui.reduced_motion,
-            9 => draft.editor.file_watching = !draft.editor.file_watching,
-            _ => draft.ui.high_contrast = !draft.ui.high_contrast,
+            settings::SettingsKey::SidebarPercent => {
+                let (min, max) = Self::integer_bounds(self.selected);
+                draft.editor.sidebar_percent = (draft.editor.sidebar_percent as i16)
+                    .saturating_add(delta as i16)
+                    .clamp(min as i16, max as i16)
+                    as u16;
+            }
+            settings::SettingsKey::CaseSensitive => {
+                draft.search.case_sensitive = !draft.search.case_sensitive
+            }
+            settings::SettingsKey::InlayHints => draft.lsp.inlay_hints = !draft.lsp.inlay_hints,
+            settings::SettingsKey::ReducedMotion => {
+                draft.ui.reduced_motion = !draft.ui.reduced_motion
+            }
+            settings::SettingsKey::HighContrast => draft.ui.high_contrast = !draft.ui.high_contrast,
+            settings::SettingsKey::FileWatching => {
+                draft.editor.file_watching = !draft.editor.file_watching
+            }
+            settings::SettingsKey::Theme => unreachable!(),
         }
         self.draft = draft;
-        self.user.set_field(settings_key(self.selected), &draft);
+        self.user.set_field(key, &draft);
         Some(SettingsChange::Apply(draft))
     }
 
     pub(crate) fn reset(&mut self) -> Option<SettingsChange> {
-        if self.selected == 10 {
+        let key = Self::key(self.selected);
+        if key == settings::SettingsKey::Theme {
             self.draft.theme = self.inherited.theme;
             self.theme = self.inherited.theme;
             self.theme_touched = false;
-            self.user.clear_field(settings::SettingsKey::Theme);
+            self.user.clear_field(key);
             return Some(SettingsChange::Theme(self.theme));
         }
-        match self.selected {
-            0 => self.draft.editor.scroll_margin = self.inherited.editor.scroll_margin,
-            1 => self.draft.editor.auto_save = self.inherited.editor.auto_save,
-            2 => self.draft.editor.soft_wrap = self.inherited.editor.soft_wrap,
-            3 => self.draft.editor.format_on_save = self.inherited.editor.format_on_save,
-            4 => self.draft.editor.max_buffers = self.inherited.editor.max_buffers,
-            5 => self.draft.search.case_sensitive = self.inherited.search.case_sensitive,
-            6 => self.draft.lsp.inlay_hints = self.inherited.lsp.inlay_hints,
-            7 => self.draft.ui.reduced_motion = self.inherited.ui.reduced_motion,
-            9 => self.draft.editor.file_watching = self.inherited.editor.file_watching,
-            _ => self.draft.ui.high_contrast = self.inherited.ui.high_contrast,
+        match key {
+            settings::SettingsKey::ScrollMargin => {
+                self.draft.editor.scroll_margin = self.inherited.editor.scroll_margin
+            }
+            settings::SettingsKey::AutoSave => {
+                self.draft.editor.auto_save = self.inherited.editor.auto_save
+            }
+            settings::SettingsKey::SoftWrap => {
+                self.draft.editor.soft_wrap = self.inherited.editor.soft_wrap
+            }
+            settings::SettingsKey::FormatOnSave => {
+                self.draft.editor.format_on_save = self.inherited.editor.format_on_save
+            }
+            settings::SettingsKey::MaxBuffers => {
+                self.draft.editor.max_buffers = self.inherited.editor.max_buffers
+            }
+            settings::SettingsKey::SidebarPercent => {
+                self.draft.editor.sidebar_percent = self.inherited.editor.sidebar_percent
+            }
+            settings::SettingsKey::CaseSensitive => {
+                self.draft.search.case_sensitive = self.inherited.search.case_sensitive
+            }
+            settings::SettingsKey::InlayHints => {
+                self.draft.lsp.inlay_hints = self.inherited.lsp.inlay_hints
+            }
+            settings::SettingsKey::ReducedMotion => {
+                self.draft.ui.reduced_motion = self.inherited.ui.reduced_motion
+            }
+            settings::SettingsKey::HighContrast => {
+                self.draft.ui.high_contrast = self.inherited.ui.high_contrast
+            }
+            settings::SettingsKey::FileWatching => {
+                self.draft.editor.file_watching = self.inherited.editor.file_watching
+            }
+            settings::SettingsKey::Theme => unreachable!(),
         }
-        self.user.clear_field(settings_key(self.selected));
+        self.user.clear_field(key);
         Some(SettingsChange::Apply(self.draft))
     }
 
@@ -235,21 +260,6 @@ impl SettingsOverlayState {
             SettingsAction::Adjust(delta) => self.adjust(delta),
             SettingsAction::Reset => self.reset(),
         }
-    }
-}
-fn settings_key(index: usize) -> settings::SettingsKey {
-    match index {
-        0 => settings::SettingsKey::ScrollMargin,
-        1 => settings::SettingsKey::AutoSave,
-        2 => settings::SettingsKey::SoftWrap,
-        3 => settings::SettingsKey::FormatOnSave,
-        4 => settings::SettingsKey::MaxBuffers,
-        5 => settings::SettingsKey::CaseSensitive,
-        6 => settings::SettingsKey::InlayHints,
-        7 => settings::SettingsKey::ReducedMotion,
-        8 => settings::SettingsKey::HighContrast,
-        9 => settings::SettingsKey::FileWatching,
-        _ => settings::SettingsKey::Theme,
     }
 }
 
@@ -461,7 +471,9 @@ pub(crate) fn render(overlay: &SettingsOverlayState, frame: &mut Frame, area: Re
         height: 1,
         ..inner
     };
-    let mut source = overlay.sources.label(settings_key(overlay.selected));
+    let mut source = overlay
+        .sources
+        .label(SettingsOverlayState::key(overlay.selected));
     for (path, reason) in overlay.sources.ignored() {
         source.push_str(&format!("; ignored {} ({reason})", path.display()));
     }

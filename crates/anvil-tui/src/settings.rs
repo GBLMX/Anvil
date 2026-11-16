@@ -106,6 +106,148 @@ pub(crate) enum SettingsKey {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum SettingKind {
+    Bool,
+    Integer { min: i64, max: i64 },
+    Theme,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct SettingDef {
+    pub(crate) key: SettingsKey,
+    pub(crate) path: &'static str,
+    pub(crate) env: Option<&'static str>,
+    pub(crate) kind: SettingKind,
+    pub(crate) label: &'static str,
+    pub(crate) description: &'static str,
+    pub(crate) group: &'static str,
+    pub(crate) tab: &'static str,
+}
+
+pub(crate) const SETTINGS: &[SettingDef] = &[
+    SettingDef {
+        key: SettingsKey::ScrollMargin,
+        path: "editor.scroll_margin",
+        env: Some(ENV_SCROLL_MARGIN),
+        kind: SettingKind::Integer { min: 0, max: 16 },
+        label: "editor.scroll_margin",
+        description: "Lines kept visible around the cursor before scrolling.",
+        group: "Editor",
+        tab: "Editor",
+    },
+    SettingDef {
+        key: SettingsKey::AutoSave,
+        path: "editor.auto_save",
+        env: Some(ENV_AUTO_SAVE),
+        kind: SettingKind::Bool,
+        label: "editor.auto_save",
+        description: "Save the active buffer when focus moves to another surface.",
+        group: "Editor",
+        tab: "Editor",
+    },
+    SettingDef {
+        key: SettingsKey::SoftWrap,
+        path: "editor.soft_wrap",
+        env: Some(ENV_SOFT_WRAP),
+        kind: SettingKind::Bool,
+        label: "editor.soft_wrap",
+        description: "Wrap long lines to the pane width and scroll by display row.",
+        group: "Editor",
+        tab: "Editor",
+    },
+    SettingDef {
+        key: SettingsKey::FormatOnSave,
+        path: "editor.format_on_save",
+        env: Some(ENV_FORMAT_ON_SAVE),
+        kind: SettingKind::Bool,
+        label: "editor.format_on_save",
+        description: "Run LSP formatting after a successful write.",
+        group: "Editor",
+        tab: "Editor",
+    },
+    SettingDef {
+        key: SettingsKey::MaxBuffers,
+        path: "editor.max_buffers",
+        env: Some(ENV_MAX_BUFFERS),
+        kind: SettingKind::Integer { min: 1, max: 99 },
+        label: "editor.max_buffers",
+        description: "Maximum foreground buffers; Alt-1..9 still select the first nine.",
+        group: "Editor",
+        tab: "Editor",
+    },
+    SettingDef {
+        key: SettingsKey::SidebarPercent,
+        path: "editor.sidebar_percent",
+        env: Some(ENV_SIDEBAR_PERCENT),
+        kind: SettingKind::Integer { min: 10, max: 40 },
+        label: "editor.sidebar_percent",
+        description: "Sidebar width as a percentage of the terminal.",
+        group: "Editor",
+        tab: "Editor",
+    },
+    SettingDef {
+        key: SettingsKey::CaseSensitive,
+        path: "search.case_sensitive",
+        env: Some(ENV_SEARCH_CASE_SENSITIVE),
+        kind: SettingKind::Bool,
+        label: "search.case_sensitive",
+        description: "Use case-sensitive matching for `/` and project search.",
+        group: "Search",
+        tab: "Language",
+    },
+    SettingDef {
+        key: SettingsKey::InlayHints,
+        path: "lsp.inlay_hints",
+        env: Some(ENV_INLAY_HINTS),
+        kind: SettingKind::Bool,
+        label: "lsp.inlay_hints",
+        description: "Request and render language-server inlay hints.",
+        group: "LSP",
+        tab: "Language",
+    },
+    SettingDef {
+        key: SettingsKey::ReducedMotion,
+        path: "ui.reduced_motion",
+        env: Some(ENV_REDUCED_MOTION),
+        kind: SettingKind::Bool,
+        label: "ui.reduced_motion",
+        description: "Freeze spinners and avoid continuous animation.",
+        group: "Accessibility",
+        tab: "Interface",
+    },
+    SettingDef {
+        key: SettingsKey::HighContrast,
+        path: "ui.high_contrast",
+        env: Some(ENV_HIGH_CONTRAST),
+        kind: SettingKind::Bool,
+        label: "ui.high_contrast",
+        description: "Increase text, muted, and border contrast for the active theme.",
+        group: "Accessibility",
+        tab: "Interface",
+    },
+    SettingDef {
+        key: SettingsKey::FileWatching,
+        path: "editor.file_watching",
+        env: Some(ENV_FILE_WATCHING),
+        kind: SettingKind::Bool,
+        label: "editor.file_watching",
+        description: "Reload buffers, tree, Git, and LSP state on external changes.",
+        group: "Editor",
+        tab: "Editor",
+    },
+    SettingDef {
+        key: SettingsKey::Theme,
+        path: "theme.name",
+        env: None,
+        kind: SettingKind::Theme,
+        label: "theme.name",
+        description: "Select the semantic palette used by the TUI.",
+        group: "Appearance",
+        tab: "Interface",
+    },
+];
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum SettingsOrigin {
     Default,
     User,
@@ -400,21 +542,11 @@ fn has_layer_key(document: &toml_edit::DocumentMut, path: &[&str]) -> bool {
 }
 
 fn mark_env_sources(sources: &mut SettingsSources, get: impl Fn(&str) -> Option<String>) {
-    for (key, name) in [
-        (SettingsKey::ScrollMargin, ENV_SCROLL_MARGIN),
-        (SettingsKey::AutoSave, ENV_AUTO_SAVE),
-        (SettingsKey::SoftWrap, ENV_SOFT_WRAP),
-        (SettingsKey::FormatOnSave, ENV_FORMAT_ON_SAVE),
-        (SettingsKey::MaxBuffers, ENV_MAX_BUFFERS),
-        (SettingsKey::SidebarPercent, ENV_SIDEBAR_PERCENT),
-        (SettingsKey::CaseSensitive, ENV_SEARCH_CASE_SENSITIVE),
-        (SettingsKey::InlayHints, ENV_INLAY_HINTS),
-        (SettingsKey::ReducedMotion, ENV_REDUCED_MOTION),
-        (SettingsKey::HighContrast, ENV_HIGH_CONTRAST),
-        (SettingsKey::FileWatching, ENV_FILE_WATCHING),
-    ] {
-        if get(name).is_some() {
-            sources.set(key, SettingsOrigin::Environment);
+    for def in SETTINGS {
+        if let Some(name) = def.env
+            && get(name).is_some()
+        {
+            sources.set(def.key, SettingsOrigin::Environment);
         }
     }
 }
@@ -835,21 +967,9 @@ struct UiFile {
 impl SettingsPatch {
     pub(crate) fn from_settings(settings: Settings) -> Self {
         let mut patch = Self::default();
-        for key in [
-            SettingsKey::Theme,
-            SettingsKey::ScrollMargin,
-            SettingsKey::AutoSave,
-            SettingsKey::SoftWrap,
-            SettingsKey::FormatOnSave,
-            SettingsKey::MaxBuffers,
-            SettingsKey::SidebarPercent,
-            SettingsKey::CaseSensitive,
-            SettingsKey::InlayHints,
-            SettingsKey::ReducedMotion,
-            SettingsKey::HighContrast,
-            SettingsKey::FileWatching,
-        ] {
-            patch.set_field(key, &settings);
+        for def in SETTINGS {
+            debug_assert_eq!(def.label, def.path);
+            patch.set_field(def.key, &settings);
         }
         patch
     }
@@ -1073,6 +1193,43 @@ mod tests {
         );
     }
 
+    #[test]
+    fn registry_covers_every_setting_once() {
+        let mut keys = std::collections::BTreeSet::new();
+        let mut envs = std::collections::BTreeSet::new();
+        for def in SETTINGS {
+            assert!(
+                keys.insert(def.key),
+                "duplicate registry key: {:?}",
+                def.key
+            );
+            assert!(!def.path.is_empty());
+            assert_eq!(def.label, def.path);
+            assert!(!def.description.is_empty());
+            assert!(!def.group.is_empty());
+            assert!(!def.tab.is_empty());
+            if let Some(env) = def.env {
+                assert!(envs.insert(env), "duplicate environment name: {env}");
+            }
+        }
+        for key in [
+            SettingsKey::Theme,
+            SettingsKey::ScrollMargin,
+            SettingsKey::AutoSave,
+            SettingsKey::SoftWrap,
+            SettingsKey::FormatOnSave,
+            SettingsKey::MaxBuffers,
+            SettingsKey::SidebarPercent,
+            SettingsKey::CaseSensitive,
+            SettingsKey::InlayHints,
+            SettingsKey::ReducedMotion,
+            SettingsKey::HighContrast,
+            SettingsKey::FileWatching,
+        ] {
+            assert!(keys.contains(&key), "missing registry key: {key:?}");
+        }
+        assert_eq!(keys.len(), 12);
+    }
     #[test]
     fn settings_export_and_import_round_trip() {
         let _guard = TEST_ENV_LOCK

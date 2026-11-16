@@ -38,6 +38,11 @@ fn overlay_edits_apply_and_cancel_restores() {
     assert_eq!(model.config.settings.editor.max_buffers, 9);
     model.move_settings(1);
     model.adjust_settings(1);
+    assert_eq!(model.config.settings.editor.sidebar_percent, 21);
+    model.reset_settings_row();
+    assert_eq!(model.config.settings.editor.sidebar_percent, 20);
+    model.move_settings(1);
+    model.adjust_settings(1);
     assert!(model.config.settings.search.case_sensitive);
     model.reset_settings_row();
     assert!(!model.config.settings.search.case_sensitive);
@@ -72,7 +77,7 @@ fn settings_theme_row_saves_choice() {
     unsafe { std::env::set_var("ANVIL_SETTINGS", &path) };
     let mut model = Model::new(crate::EditorState::from_text("x"), None);
     model.open_settings();
-    for _ in 0..10 {
+    for _ in 0..11 {
         model.move_settings(1);
     }
     model.adjust_settings(1);

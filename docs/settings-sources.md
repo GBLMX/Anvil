@@ -8,9 +8,10 @@ Anvil resolves typed settings from these sources, in order:
 3. a trusted workspace `.anvil.toml`;
 4. environment variables.
 
-This page documents the current implementation. Sparse user saves and
-reset-to-inherited are implemented; the metadata registry and generated schema
-remain proposed in [ADR-0045](adr/0045-settings-patch-layers.md).
+This page documents the current implementation. Sparse user saves,
+reset-to-inherited, the metadata registry, and the registry-driven overlay are
+implemented; the generated schema and user-patch export default remain proposed
+in [ADR-0045](adr/0045-settings-patch-layers.md).
 
 CLI flags currently control process behavior (`--workspace`, `--editor`,
 `--read-only`, `--truecolor`), not typed settings fields. They are therefore not
