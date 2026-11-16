@@ -1,7 +1,7 @@
 # ADR-0045: Sparse Settings Layers, Provenance, and a Metadata Registry
 
 - Status: Proposed
-- Version: 1.2.0
+- Version: 1.2.1
 - Implementation: sparse user saves, inherited reset, theme provenance,
   unknown-key-preserving saves, the metadata registry, and the registry-driven
   overlay landed; the generated schema and user-patch export default remain
@@ -315,3 +315,18 @@ decision about which settings can change while a session is active. Explicit
 Deferred. The manual typed structs are still readable and debuggable. The
 registry removes the highest-value duplication; code generation can be measured
 later without changing the user-facing contract.
+
+## References
+
+- Helix configuration: https://docs.helix-editor.com/configuration.html —
+  global/project TOML layering, explicit config reload, and separate language
+  configuration.
+- VS Code user and workspace settings:
+  https://code.visualstudio.com/docs/configure/settings — setting scopes,
+  settings-editor search/reset, language-specific overrides, and schema-backed
+  editing.
+- Zed all settings: https://zed.dev/docs/reference/all-settings — per-setting
+  defaults, accepted values, descriptions, and language-scoped behavior.
+- Taplo schema directives:
+  https://github.com/tamasfe/taplo/blob/08f343be02ce1b20296470396a42f0fa47820449/site/site/configuration/directives.md
+  — binding a JSON Schema to a TOML document with `#:schema`.

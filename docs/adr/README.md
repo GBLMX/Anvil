@@ -57,6 +57,18 @@ their decision sections.
 - One immutable number per accepted decision.
 - A new ADR must link the ADRs it supersedes or depends on.
 
+## External References Rule
+
+- If an ADR's analysis used external documentation, specifications, source
+  code, benchmarks, or other web material, the ADR must contain a
+  `## References` section.
+- Record the exact source with a full `https://` URL, not only a title, bare
+  domain, search result, or local mirror.
+- State briefly what each source supports when the connection is not obvious.
+- Local Anvil documents may be cited alongside external references, but they do
+  not replace the external URL for an external claim.
+- Omit the section only when no external material informed the decision.
+
 ## Versioning Rule
 
 ADR identity and ADR revision are separate:

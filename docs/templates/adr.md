@@ -34,3 +34,9 @@ Negative:
 - Focused tests:
 - Failure/cancellation tests:
 - Real surface smoke:
+
+## References
+
+<!-- Required when external web material informed the decision. Remove otherwise. -->
+
+- <Title>: <https://exact-source-url> — what it supports.
