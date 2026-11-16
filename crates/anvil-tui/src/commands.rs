@@ -235,6 +235,7 @@ impl Model {
                 self.status.text = match settings::save_patch(&patch) {
                     Ok(path) => {
                         self.config.user_settings = patch;
+                        self.config.sources.mark_theme_saved();
                         format!("theme saved: {}", path.display())
                     }
                     Err(error) => format!("E: {error}"),

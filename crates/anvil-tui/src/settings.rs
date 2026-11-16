@@ -165,6 +165,10 @@ impl SettingsSources {
         &self.ignored
     }
 
+    pub(crate) fn mark_theme_saved(&mut self) {
+        self.set(SettingsKey::Theme, SettingsOrigin::User);
+    }
+
     fn set(&mut self, key: SettingsKey, origin: SettingsOrigin) {
         self.origins.insert(key, origin);
     }
@@ -1027,6 +1031,7 @@ impl crate::Model {
         match save_patch(&patch) {
             Ok(_) => {
                 self.config.user_settings = patch;
+                self.config.sources.mark_theme_saved();
                 format!("{status} (saved)")
             }
             Err(error) => format!("{status}; E: {error}"),
