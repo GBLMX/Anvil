@@ -491,6 +491,8 @@ post-`0.5.0` feature line.
   Up/Down selection, and Esc dismissal.
 
 ### Changed
+- Split `anvil-distro-standard` CLI parsing into `args.rs` and `anvil doctor`
+  diagnostics into `doctor.rs`; no behavior change.
 - Gateway frame reads now have a 30-second deadline, LSP initialize has a
   10-second budget, failed LSP document syncs retain the latest text for the
   next poll, closing a document drops matching pending text, and server
