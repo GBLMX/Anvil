@@ -123,9 +123,11 @@ user patch of explicit changes. Saving merges only that user patch into the
 user TOML. Reset deletes the key from the user patch and re-resolves the
 effective value from the remaining layers.
 
-The save path must preserve comments, ordering, and unknown keys in the existing
-file. Loading continues to reject unknown keys; the metadata registry may add
-suggestions to that error.
+The save path is a syntax-only `toml_edit` update; it must not run the semantic
+settings parser over the existing document before merging. Comments, ordering,
+and unknown keys are preserved as opaque TOML. Loading still rejects unknown
+keys, so a saved file containing an unknown key remains invalid until that key
+is removed.
 
 `:settings-export` exports the sparse user patch by default.
 `:settings-export --effective` exports the resolved values, including
@@ -174,15 +176,16 @@ The primary workspace root remains the only project settings source. Secondary
 roots must not change process-wide behavior. A future `cli` origin may be added
 for typed CLI overrides, but only with its own provenance label and tests.
 
-### 5. Make theme a first-class setting
+### 5. Keep `ANVIL_THEME` as a process-only startup override
 
-Theme is resolved through the same patch/source path as other settings.
-`ANVIL_THEME` is either applied as an environment patch to the effective theme
-or explicitly documented as a process-only startup override; the source label
-must never claim a value that was not applied.
+Theme remains a first-class field in the user and project files. `ANVIL_THEME`
+is a process-only startup override, not a `SettingsPatch` layer: it is applied
+once before the TUI starts, and `:theme` changes the running theme and writes
+only theme keys to the user patch.
 
-`:theme` and automatic theme persistence write only theme keys. A theme change
-must not rewrite unrelated effective values.
+Provenance reports this as a distinct startup override; it must not mark the
+file-resolved theme as coming from the environment. A theme change must not
+rewrite unrelated effective values.
 
 ### 6. Ship a generated JSON Schema for TOML
 
@@ -233,6 +236,9 @@ Negative:
 - settings hot reload remains manual;
 - `:settings-export` changes its default output mode, which needs a changelog
   and documentation note.
+- unknown keys are preserved by save but remain load errors until removed;
+- `ANVIL_THEME` stays startup-only, so a persisted `:theme` still loses to the
+  environment override on the next start;
 
 ## Verification
 
@@ -241,8 +247,10 @@ Negative:
     change;
   - reset removes the user key and reveals the project value;
   - reset removes the user key and reveals the environment value;
-  - comments and unknown keys survive a sparse save;
-  - theme source and effective theme agree when `ANVIL_THEME` is set;
+  - comments and unknown keys survive a sparse save, while the next reload still
+    rejects the unknown key;
+  - `ANVIL_THEME` is reported as a startup override and does not rewrite the
+    file-resolved theme value;
   - every `SettingsKey` has exactly one `SettingDef`, env name, UI row, and
     schema entry;
   - `sidebar_percent` is reachable from the registry-driven overlay;
