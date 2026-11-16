@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"os"
 
 	"github.com/GBLMX/Anvil/go/internal/fsroot"
@@ -116,7 +117,8 @@ func (s *Server) statFile(req request, state *connectionState) (interface{}, *rp
 		if errors.Is(err, os.ErrNotExist) {
 			code = -32007
 		}
-		return nil, &rpcError{Code: code, Message: "stat unavailable"}
+
+		return nil, &rpcError{Code: code, Message: fmt.Sprintf("stat unavailable: %v", err)}
 	}
 	return statResult{Size: metadata.Size, Modified: metadata.ModifiedNS}, nil
 }
