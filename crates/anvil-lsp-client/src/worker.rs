@@ -2,7 +2,7 @@ use crate::lsp::{Diagnostic, publish_diagnostics};
 use anvil_ipc::{ClientError, GatewayClient};
 use anvil_task::{DataError, TaskContext, TaskEvent as TaskGroupEvent, TaskGroup, TaskGroupConfig};
 use serde_json::Value;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::{
     Arc, Mutex,
@@ -54,6 +54,9 @@ pub enum LspCommand {
         method: String,
         params: Value,
     },
+    Configuration {
+        settings: Value,
+    },
 }
 
 /// One language-server launch profile.
@@ -63,6 +66,8 @@ pub struct LspConfig {
     pub language_id: String,
     pub root_markers: Vec<String>,
     pub initialization_options: Option<serde_json::Value>,
+    pub env: BTreeMap<String, String>,
+    pub settings: Value,
 }
 
 pub struct LspWorker {
@@ -71,12 +76,17 @@ pub struct LspWorker {
     diagnostics: Arc<Mutex<HashMap<PathBuf, Vec<Diagnostic>>>>,
     overflow_responses: Arc<Mutex<HashMap<u64, String>>>,
     root: PathBuf,
+    settings: Value,
 }
 
 impl LspWorker {
     /// Returns the project root used for the initialize handshake.
     pub fn root(&self) -> &Path {
         &self.root
+    }
+
+    pub fn settings(&self) -> Value {
+        self.settings.clone()
     }
 
     pub fn start(
@@ -93,7 +103,10 @@ impl LspWorker {
             language_id,
             root_markers,
             initialization_options,
+            env,
+            settings,
         } = config;
+        let worker_settings = settings.clone();
         let root = project_root(&workspace, &path, &root_markers);
         let worker_root = root.clone();
         let group_config = TaskGroupConfig {
@@ -108,7 +121,13 @@ impl LspWorker {
         let worker_overflow = Arc::clone(&overflow_responses);
         let mut group = TaskGroup::with_config(group_config);
         let spawn = group.spawn("lsp", move |context| {
-            if let Err(error) = client.lsp_start(&tool, &args) {
+            let relative_root = root
+                .strip_prefix(&workspace)
+                .ok()
+                .filter(|relative| !relative.as_os_str().is_empty())
+                .map(|relative| relative.to_string_lossy().into_owned());
+            let mut current_settings = settings;
+            if let Err(error) = client.lsp_start(&tool, &args, relative_root.as_deref(), &env) {
                 let _ = send_lsp_event(
                     &context,
                     &worker_overflow,
@@ -124,6 +143,7 @@ impl LspWorker {
                 "params": {
                     "processId": null,
                     "rootUri": file_uri(&root),
+                    "workspaceFolders": [workspace_folder(&root)],
                     "capabilities": {
                         "textDocument": {
                             "publishDiagnostics": {"relatedInformation": true},
@@ -178,7 +198,7 @@ impl LspWorker {
                 return Ok(());
             }
             let (inlay_hints, semantic_token_types, server_info) =
-                match wait_initialize(&mut client) {
+                match wait_initialize(&mut client, &root, &current_settings) {
                     Ok(capabilities) => capabilities,
                     Err(error) => {
                         let _ = send_lsp_event(
@@ -263,6 +283,17 @@ impl LspWorker {
                                 "params": params
                             }),
                         ),
+                        LspCommand::Configuration { settings } => {
+                            current_settings = settings.clone();
+                            send(
+                                &mut client,
+                                &serde_json::json!({
+                                    "jsonrpc": "2.0",
+                                    "method": "workspace/didChangeConfiguration",
+                                    "params": {"settings": settings}
+                                }),
+                            )
+                        }
                     };
                     if let Err(error) = result {
                         let _ =
@@ -342,7 +373,7 @@ impl LspWorker {
                             );
                             continue;
                         }
-                        match answer_server_request(&mut client, data) {
+                        match answer_server_request(&mut client, data, &root, &current_settings) {
                             Ok(true) => continue,
                             Ok(false) => {}
                             Err(error) => {
@@ -371,6 +402,7 @@ impl LspWorker {
                 diagnostics,
                 overflow_responses,
                 root: worker_root,
+                settings: worker_settings,
             }),
             Err(error) => Err(format!("lsp thread failed: {error}")),
         }
@@ -379,6 +411,12 @@ impl LspWorker {
     pub fn sync(&self, path: &Path, text: String) -> Result<(), String> {
         self.sync_recoverable(path, text)
             .map_err(|(error, _)| error)
+    }
+
+    pub fn did_change_configuration(&self, settings: Value) -> Result<(), String> {
+        self.commands
+            .try_send(LspCommand::Configuration { settings })
+            .map_err(|_| "lsp worker busy or stopped".to_owned())
     }
 
     /// Sync, returning the unsent text when the command queue is full.
@@ -498,9 +536,19 @@ fn send_lsp_event(
     }
 }
 
+fn workspace_folder(root: &Path) -> Value {
+    let name = root
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_else(|| root.display().to_string());
+    serde_json::json!({"uri": file_uri(root), "name": name})
+}
+
 fn answer_server_request(
     client: &mut GatewayClient,
     message: &serde_json::Value,
+    root: &Path,
+    settings: &Value,
 ) -> Result<bool, String> {
     let Some(id) = message.get("id") else {
         return Ok(false);
@@ -508,7 +556,7 @@ fn answer_server_request(
     let Some(method) = message.get("method").and_then(Value::as_str) else {
         return Ok(false);
     };
-    let result = server_request_result(method, message);
+    let result = server_request_result(method, message, root, settings);
     let response = serde_json::json!({
         "jsonrpc": "2.0",
         "id": id,
@@ -518,16 +566,36 @@ fn answer_server_request(
     Ok(true)
 }
 
-fn server_request_result(method: &str, message: &Value) -> Value {
+fn configuration_section(settings: &Value, section: &str) -> Value {
+    section
+        .split('.')
+        .filter(|part| !part.is_empty())
+        .try_fold(settings, |value, part| value.get(part))
+        .cloned()
+        .unwrap_or_else(|| serde_json::json!({}))
+}
+
+fn server_request_result(method: &str, message: &Value, root: &Path, settings: &Value) -> Value {
     match method {
         "workspace/configuration" => {
-            let count = message
+            let items = message
                 .pointer("/params/items")
                 .and_then(Value::as_array)
-                .map_or(1, Vec::len);
-            Value::Array(vec![serde_json::json!({}); count])
+                .cloned()
+                .unwrap_or_default();
+            Value::Array(
+                items
+                    .iter()
+                    .map(|item| {
+                        configuration_section(
+                            settings,
+                            item.get("section").and_then(Value::as_str).unwrap_or(""),
+                        )
+                    })
+                    .collect(),
+            )
         }
-        "workspace/workspaceFolders" => Value::Array(Vec::new()),
+        "workspace/workspaceFolders" => Value::Array(vec![workspace_folder(root)]),
         "workspace/applyEdit" => serde_json::json!({"applied": false}),
         _ => Value::Null,
     }
@@ -640,6 +708,8 @@ fn send(client: &mut GatewayClient, message: &serde_json::Value) -> Result<(), S
 
 fn wait_initialize(
     client: &mut GatewayClient,
+    root: &Path,
+    settings: &Value,
 ) -> Result<(bool, Vec<String>, Option<String>), String> {
     let deadline = Instant::now() + INITIALIZE_TIMEOUT;
     loop {
@@ -667,7 +737,7 @@ fn wait_initialize(
         let Some(data) = message.params.get("data") else {
             continue;
         };
-        if answer_server_request(client, data)? {
+        if answer_server_request(client, data, root, settings)? {
             continue;
         }
         if data.get("id") == Some(&serde_json::json!(INITIALIZE_ID)) {
@@ -737,6 +807,7 @@ mod tests {
             diagnostics: Arc::new(Mutex::new(HashMap::new())),
             overflow_responses: Arc::new(Mutex::new(HashMap::new())),
             root: PathBuf::from("/tmp"),
+            settings: Value::Null,
         };
         let (error, text) = worker
             .sync_recoverable(Path::new("/tmp/a.rs"), "latest".to_owned())
@@ -813,21 +884,34 @@ mod tests {
 
     #[test]
     fn server_requests_get_protocol_results() {
-        let message = json!({"params": {"items": [{}, {}]}});
+        let root = Path::new("/ws");
+        let settings = json!({
+            "rust-analyzer": {"cargo": {"allFeatures": true}},
+            "lsp": {"inlay_hints": true},
+        });
+        let message = json!({"params": {"items": [
+            {"section": "rust-analyzer"},
+            {"section": "lsp.inlay_hints"},
+            {"section": "missing"},
+        ]}});
         assert_eq!(
-            server_request_result("workspace/configuration", &message),
-            json!([{}, {}])
+            server_request_result("workspace/configuration", &message, root, &settings),
+            json!([
+                {"cargo": {"allFeatures": true}},
+                true,
+                {},
+            ])
         );
         assert_eq!(
-            server_request_result("workspace/workspaceFolders", &message),
-            json!([])
+            server_request_result("workspace/workspaceFolders", &message, root, &settings),
+            json!([{"uri": "file:///ws", "name": "ws"}])
         );
         assert_eq!(
-            server_request_result("workspace/applyEdit", &message),
+            server_request_result("workspace/applyEdit", &message, root, &settings),
             json!({"applied": false})
         );
         assert_eq!(
-            server_request_result("client/registerCapability", &message),
+            server_request_result("client/registerCapability", &message, root, &settings),
             Value::Null
         );
     }
@@ -955,6 +1039,8 @@ mod tests {
                 language_id: "rust".to_owned(),
                 initialization_options: None,
                 root_markers: vec!["Cargo.toml".to_owned()],
+                env: BTreeMap::new(),
+                settings: Value::Null,
             },
             PathBuf::from("/tmp"),
             PathBuf::from("/tmp/a.rs"),

@@ -296,8 +296,6 @@ pub(crate) struct LspTransportState {
     pub(crate) desired: Option<LspKey>,
     pub(crate) labels: HashMap<LspKey, String>,
     pub(crate) pending_sync: Option<(PathBuf, String)>,
-    #[cfg(test)]
-    pub(crate) client: Option<GatewayClient>,
 }
 
 #[derive(Default)]

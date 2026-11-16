@@ -340,6 +340,57 @@ pub(crate) fn lsp_command_override(
     resolve_lsp_command(file.lsp.commands.get(language_id)?, default_args)
 }
 
+pub(crate) fn apply_lsp_root_profile(root: &Path, settings: &mut anvil_lsp_client::LspSettings) {
+    let Ok(path) = path() else {
+        return;
+    };
+    if fs::metadata(&path)
+        .ok()
+        .is_none_or(|metadata| metadata.len() > MAX_BYTES)
+    {
+        return;
+    }
+    let Some(file) = fs::read_to_string(&path)
+        .ok()
+        .and_then(|text| toml_edit::de::from_str::<SettingsPatch>(&text).ok())
+    else {
+        return;
+    };
+    apply_lsp_root_profile_file(&file, root, settings);
+}
+
+fn apply_lsp_root_profile_file(
+    file: &SettingsPatch,
+    root: &Path,
+    settings: &mut anvil_lsp_client::LspSettings,
+) {
+    let canonical = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
+    let Some(profile) = file
+        .lsp
+        .roots
+        .get(canonical.to_string_lossy().as_ref())
+        .and_then(|profiles| profiles.get(&settings.language_id))
+    else {
+        return;
+    };
+    if let Some(command) = &profile.command
+        && let Some((tool, args)) = resolve_lsp_command(command, &settings.args)
+    {
+        settings.tool = tool;
+        settings.args = args;
+    }
+    if let Some(args) = &profile.args {
+        settings.args = args.clone();
+    }
+    if let Some(root_markers) = &profile.root_markers {
+        settings.root_markers = root_markers.clone();
+    }
+    settings.env.extend(profile.env.clone());
+    if let Some(value) = &profile.settings {
+        settings.settings = value.clone();
+    }
+}
+
 fn resolve_lsp_command(
     command: &LspCommandFile,
     default_args: &[String],
@@ -946,6 +997,7 @@ struct SearchFile {
 struct LspFile {
     inlay_hints: Option<bool>,
     commands: BTreeMap<String, LspCommandFile>,
+    roots: BTreeMap<String, BTreeMap<String, LspRootProfileFile>>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -953,6 +1005,16 @@ struct LspFile {
 enum LspCommandFile {
     Command(String),
     Argv(Vec<String>),
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+struct LspRootProfileFile {
+    command: Option<LspCommandFile>,
+    args: Option<Vec<String>>,
+    root_markers: Option<Vec<String>>,
+    env: BTreeMap<String, String>,
+    settings: Option<serde_json::Value>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -1607,6 +1669,42 @@ mod tests {
             .expect("rust command");
         assert_eq!(tool, "/usr/bin/rust-analyzer");
         assert_eq!(args, ["--stdio"]);
+    }
+
+    #[test]
+    fn applies_per_root_lsp_profiles() {
+        let directory = tempfile::tempdir().expect("tempdir");
+        let root = directory.path().canonicalize().expect("canonical");
+        let text = format!(
+            "[lsp.roots.\"{}\".rust]\n\
+             command = \"/opt/rust-analyzer\"\n\
+             args = [\"--log-file\", \"/tmp/ra.log\"]\n\
+             root_markers = [\"Cargo.toml\", \"rust-toolchain.toml\"]\n\
+             env = {{ RA_LOG = \"info\" }}\n\
+             settings = {{ check = {{ command = \"clippy\" }} }}\n",
+            root.display()
+        );
+        let file: SettingsPatch = toml_edit::de::from_str(&text).expect("profile");
+        let mut settings = anvil_lsp_client::LspSettings {
+            tool: "rust-analyzer".to_owned(),
+            args: Vec::new(),
+            language_id: "rust".to_owned(),
+            root_markers: vec!["Cargo.toml".to_owned()],
+            label: "rust-analyzer".to_owned(),
+            initialization_options: None,
+            env: BTreeMap::new(),
+            settings: serde_json::Value::Null,
+        };
+
+        apply_lsp_root_profile_file(&file, &root, &mut settings);
+        assert_eq!(settings.tool, "/opt/rust-analyzer");
+        assert_eq!(settings.args, ["--log-file", "/tmp/ra.log"]);
+        assert_eq!(settings.root_markers, ["Cargo.toml", "rust-toolchain.toml"]);
+        assert_eq!(settings.env["RA_LOG"], "info");
+        assert_eq!(
+            settings.settings,
+            serde_json::json!({"check": {"command": "clippy"}})
+        );
     }
 
     #[test]

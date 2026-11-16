@@ -6,15 +6,46 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/GBLMX/Anvil/go/internal/execpolicy"
+	"github.com/GBLMX/Anvil/go/internal/fsroot"
 	"github.com/GBLMX/Anvil/go/internal/lsp"
 )
 
 type lspStartParams struct {
-	Tool string   `json:"tool"`
-	Args []string `json:"args"`
+	Tool string            `json:"tool"`
+	Args []string          `json:"args"`
+	Root string            `json:"root"`
+	Env  map[string]string `json:"env"`
+}
+
+func lspEnvironment(env map[string]string) ([]string, error) {
+	if len(env) == 0 {
+		return nil, nil
+	}
+	keys := make([]string, 0, len(env))
+	for key, value := range env {
+		if key == "" || strings.ContainsAny(key, "=\x00,") ||
+			strings.ContainsRune(value, 0) || strings.ContainsRune(value, ',') {
+			return nil, fsroot.ErrInvalidPath
+		}
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	entries := make([]string, 0, len(keys))
+	for _, key := range keys {
+		entries = append(entries, key+"="+env[key])
+	}
+	return entries, nil
+}
+
+func (s *Server) lspRoot(relative string) (string, error) {
+	if relative == "" || relative == "." {
+		return s.cfg.Workspace, nil
+	}
+	return confinedDir(s.cfg.Workspace, relative)
 }
 
 type lspSendParams struct {
@@ -34,6 +65,14 @@ func (s *Server) lspStart(ctx context.Context, req request, state *connectionSta
 	if err := decodeParams(req.Params, &params); err != nil || params.Tool == "" {
 		return nil, &rpcError{Code: -32602, Message: "invalid params"}
 	}
+	rootDir, err := s.lspRoot(params.Root)
+	if err != nil {
+		return nil, &rpcError{Code: -32602, Message: "invalid root"}
+	}
+	userEnv, err := lspEnvironment(params.Env)
+	if err != nil {
+		return nil, &rpcError{Code: -32602, Message: "invalid env"}
+	}
 	if s.cfg.NoSandboxLSP {
 		home, _ := os.UserHomeDir()
 		path := os.Getenv("PATH")
@@ -47,10 +86,11 @@ func (s *Server) lspStart(ctx context.Context, req request, state *connectionSta
 			"PATH=" + path,
 			"RUSTC_WRAPPER=",
 		}
+		env = append(env, userEnv...)
 		manager, err := lsp.Start(ctx, lsp.Config{
 			Command: params.Tool,
 			Args:    params.Args,
-			Dir:     s.cfg.Workspace,
+			Dir:     rootDir,
 			Env:     env,
 		})
 		if err != nil {
@@ -75,6 +115,7 @@ func (s *Server) lspStart(ctx context.Context, req request, state *connectionSta
 	var runtimePaths []string
 	var execPaths []string
 	var extraEnv []string
+	extraEnv = append(extraEnv, userEnv...)
 	if home != "" {
 		runtimePaths = append(runtimePaths, filepath.Join(home, ".rustup"), filepath.Join(home, ".cargo"))
 		for _, pattern := range []string{
@@ -116,7 +157,7 @@ func (s *Server) lspStart(ctx context.Context, req request, state *connectionSta
 	manager, err := lsp.Start(ctx, lsp.Config{
 		Command: s.cfg.ExecRunner,
 		Args:    args,
-		Dir:     s.cfg.Workspace,
+		Dir:     rootDir,
 		Env:     env,
 	})
 	if err != nil {

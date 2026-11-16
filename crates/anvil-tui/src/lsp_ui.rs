@@ -17,7 +17,7 @@ mod responses;
 mod settings;
 mod symbols;
 mod transport;
-pub(crate) use settings::lsp_settings_with_service;
+pub(crate) use settings::{lsp_settings_with_root, lsp_settings_with_service};
 
 pub(crate) fn expand_snippet(text: &str) -> String {
     let mut output = String::with_capacity(text.len());

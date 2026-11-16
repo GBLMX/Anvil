@@ -1,7 +1,7 @@
 //! Breadcrumbs, middle ellipsis, and stable status segments.
 
 use super::Model;
-use crate::lsp_ui::lsp_settings_with_service;
+use crate::lsp_ui::lsp_settings_with_root;
 use crate::state::{LspKey, LspStatus};
 use std::{
     fs,
@@ -158,11 +158,12 @@ impl Model {
             (key, label)
         } else {
             let path = self.session.path.as_ref()?;
-            let settings = lsp_settings_with_service(
+            let root = self.lsp_owning_root(path)?;
+            let settings = lsp_settings_with_root(
                 path,
+                &root,
                 self.workspace.language_tooling_service.as_deref(),
             )?;
-            let root = self.lsp_owning_root(path)?;
             let key = (settings.tool, settings.language_id, root);
             (key, settings.label)
         };

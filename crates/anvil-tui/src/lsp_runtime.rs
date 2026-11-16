@@ -12,11 +12,6 @@ fn truncate_event_text(text: &str, max: usize) -> String {
     text[..end].to_owned()
 }
 
-fn inactive_lsp_keys(keys: Vec<LspKey>, desired: Option<&LspKey>) -> Vec<LspKey> {
-    keys.into_iter()
-        .filter(|key| desired != Some(key))
-        .collect()
-}
 
 fn diagnostic_code(diagnostic: &anvil_lsp_client::Diagnostic) -> Option<String> {
     diagnostic.extra.get("code").and_then(|code| match code {
@@ -47,22 +42,6 @@ impl Model {
 
     fn retain_lsp_worker(&mut self, desired: Option<&LspKey>) {
         self.language.lsp.desired = desired.cloned();
-        let keys = self.language.lsp.workers.keys().cloned().collect();
-        for key in inactive_lsp_keys(keys, desired) {
-            self.language.lsp.workers.remove(&key);
-            self.language.lsp.retries.remove(&key);
-            self.language.lsp.status.remove(&key);
-            self.language.inlay_hints.support.remove(&key);
-        }
-        let status_keys = self.language.lsp.status.keys().cloned().collect();
-        for key in inactive_lsp_keys(status_keys, desired) {
-            self.language.lsp.status.remove(&key);
-            self.language.lsp.retries.remove(&key);
-        }
-        let label_keys = self.language.lsp.labels.keys().cloned().collect();
-        for key in inactive_lsp_keys(label_keys, desired) {
-            self.language.lsp.labels.remove(&key);
-        }
         if self
             .language
             .lsp
@@ -73,14 +52,49 @@ impl Model {
             self.language.lsp.config = None;
             self.language.lsp.pending_sync = None;
         }
-        if self
+    }
+
+    pub(crate) fn stop_lsp_root(&mut self, root: &Path) {
+        let mut keys: Vec<LspKey> = self
             .language
             .lsp
-            .retry
-            .as_ref()
-            .is_some_and(|(key, _)| desired != Some(key))
-        {
-            self.language.lsp.retry = None;
+            .workers
+            .keys()
+            .chain(self.language.lsp.status.keys())
+            .chain(self.language.lsp.retries.keys())
+            .chain(self.language.lsp.labels.keys())
+            .filter(|key| key.2.as_path() == root)
+            .cloned()
+            .collect();
+        keys.sort();
+        keys.dedup();
+        let mut clear_ui = false;
+        for key in keys {
+            self.language.lsp.workers.remove(&key);
+            self.language.lsp.status.remove(&key);
+            self.language.lsp.retries.remove(&key);
+            self.language.inlay_hints.support.remove(&key);
+            self.language.lsp.labels.remove(&key);
+            if self.language.lsp.config.as_ref() == Some(&key) {
+                clear_ui = true;
+                self.language.lsp.config = None;
+                self.language.lsp.pending_sync = None;
+            }
+            if self.language.lsp.desired.as_ref() == Some(&key) {
+                clear_ui = true;
+            }
+            if self
+                .language
+                .lsp
+                .retry
+                .as_ref()
+                .is_some_and(|(retry, _)| retry == &key)
+            {
+                self.language.lsp.retry = None;
+            }
+        }
+        if clear_ui {
+            self.clear_lsp_ui();
         }
     }
 
@@ -102,8 +116,25 @@ impl Model {
 
     pub(crate) fn lsp_key(&self, path: &Path) -> Option<LspKey> {
         let root = self.lsp_owning_root(path)?;
-        lsp_settings_with_service(path, self.workspace.language_tooling_service.as_deref())
-            .map(|settings| (settings.tool, settings.language_id, root))
+        crate::lsp_ui::lsp_settings_with_root(
+            path,
+            &root,
+            self.workspace.language_tooling_service.as_deref(),
+        )
+        .map(|settings| (settings.tool, settings.language_id, root))
+    }
+
+    pub(crate) fn notify_lsp_configuration(&self) {
+        for worker in self.language.lsp.workers.values() {
+            let mut settings = worker.settings();
+            if !settings.is_object() {
+                settings = serde_json::json!({});
+            }
+            settings["lsp"] = serde_json::json!({
+                "inlay_hints": self.config.settings.lsp.inlay_hints
+            });
+            let _ = worker.did_change_configuration(settings);
+        }
     }
 
     fn lsp_status_root(&self, key: &LspKey) -> PathBuf {
@@ -133,9 +164,11 @@ impl Model {
             self.file.dirty = true;
             return;
         };
-        let Some(settings) =
-            lsp_settings_with_service(&path, self.workspace.language_tooling_service.as_deref())
-        else {
+        let Some(settings) = crate::lsp_ui::lsp_settings_with_root(
+            &path,
+            &owning_root,
+            self.workspace.language_tooling_service.as_deref(),
+        ) else {
             self.status.text = format!(
                 "E: no language server for {}; run anvil doctor or configure [lsp.commands]",
                 path.display()
@@ -199,15 +232,17 @@ impl Model {
             self.clear_lsp_ui();
             return;
         };
-        let Some(settings) =
-            lsp_settings_with_service(&path, self.workspace.language_tooling_service.as_deref())
-        else {
+        let Some(root) = self.lsp_owning_root(&path) else {
             self.language.lsp.config = None;
             self.retain_lsp_worker(None);
             self.clear_lsp_ui();
             return;
         };
-        let Some(root) = self.lsp_owning_root(&path) else {
+        let Some(settings) = crate::lsp_ui::lsp_settings_with_root(
+            &path,
+            &root,
+            self.workspace.language_tooling_service.as_deref(),
+        ) else {
             self.language.lsp.config = None;
             self.retain_lsp_worker(None);
             self.clear_lsp_ui();
@@ -267,18 +302,20 @@ impl Model {
             self.file.dirty = true;
             return;
         };
-        let Some(settings) =
-            lsp_settings_with_service(&path, self.workspace.language_tooling_service.as_deref())
-        else {
+        let Some(root) = self.lsp_owning_root(&path) else {
+            self.status.text = format!("E: lsp: outside workspace: {}", path.display());
+            self.file.dirty = true;
+            return;
+        };
+        let Some(settings) = crate::lsp_ui::lsp_settings_with_root(
+            &path,
+            &root,
+            self.workspace.language_tooling_service.as_deref(),
+        ) else {
             self.status.text = format!(
                 "E: no language server for {}; run anvil doctor or configure [lsp.commands]",
                 path.display()
             );
-            self.file.dirty = true;
-            return;
-        };
-        let Some(root) = self.lsp_owning_root(&path) else {
-            self.status.text = format!("E: lsp: outside workspace: {}", path.display());
             self.file.dirty = true;
             return;
         };
@@ -318,17 +355,17 @@ impl Model {
             self.file.dirty = true;
             return;
         }
-        #[cfg(test)]
-        let mut client = self.language.lsp.client.take();
-        #[cfg(not(test))]
-        let mut client = None;
-        if client.is_none() {
-            client = self
-                .workspace
+        let client = if root == self.workspace.path {
+            self.workspace
+                .gateway_session
+                .as_mut()
+                .and_then(|session| session.connect_lsp().ok())
+        } else {
+            self.workspace
                 .root_gateways
                 .get_mut(&root)
-                .and_then(|gateway| gateway.0.connect_lsp().ok());
-        }
+                .and_then(|gateway| gateway.0.connect_lsp().ok())
+        };
         let Some(client) = client else {
             self.language.lsp.status.insert(
                 desired,
@@ -352,6 +389,8 @@ impl Model {
             language_id: settings.language_id,
             root_markers: settings.root_markers,
             initialization_options: settings.initialization_options,
+            env: settings.env,
+            settings: settings.settings,
         };
         match LspWorker::start(client, config, root, path.clone(), text) {
             Ok(worker) => {
@@ -751,21 +790,7 @@ mod event_text_tests {
     }
 }
 
-#[cfg(test)]
-mod worker_selection_tests {
-    use super::inactive_lsp_keys;
-    use std::path::PathBuf;
 
-    #[test]
-    fn switching_language_selects_only_the_active_worker() {
-        let root = PathBuf::from("/ws");
-        let rust = ("rust-analyzer".to_owned(), "rust".to_owned(), root.clone());
-        let go = ("gopls".to_owned(), "go".to_owned(), root);
-        let keys = vec![rust.clone(), go.clone()];
-        assert_eq!(inactive_lsp_keys(keys.clone(), Some(&go)), vec![rust]);
-        assert_eq!(inactive_lsp_keys(keys.clone(), None), keys);
-    }
-}
 
 #[cfg(test)]
 mod status_tests {
@@ -890,6 +915,33 @@ mod status_tests {
         assert_eq!(first.2, primary);
         assert_eq!(second.2, secondary);
         assert_ne!(first, second);
+    }
+
+    #[test]
+    fn stopping_one_root_leaves_other_lsp_state() {
+        let mut model = Model::new(EditorState::from_text(""), None);
+        let first = ("clangd".to_owned(), "c".to_owned(), PathBuf::from("/one"));
+        let second = ("clangd".to_owned(), "c".to_owned(), PathBuf::from("/two"));
+        for key in [first.clone(), second.clone()] {
+            model.language.lsp.status.insert(
+                key.clone(),
+                LspStatus::Starting {
+                    root: key.2.clone(),
+                },
+            );
+            model
+                .language
+                .lsp
+                .labels
+                .insert(key.clone(), "clangd".to_owned());
+            model.language.lsp.retries.insert(key, 1);
+        }
+
+        model.stop_lsp_root(Path::new("/one"));
+        assert!(!model.language.lsp.status.contains_key(&first));
+        assert!(!model.language.lsp.retries.contains_key(&first));
+        assert!(model.language.lsp.status.contains_key(&second));
+        assert!(model.language.lsp.retries.contains_key(&second));
     }
 
     #[test]

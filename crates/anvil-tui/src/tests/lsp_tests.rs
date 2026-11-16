@@ -243,10 +243,9 @@ fn call_hierarchy_round_trip_through_gateway() {
         "fn callee() {}\nfn caller() { callee(); }\nfn main() { caller(); }\n",
     )
     .expect("main");
-    let (session, gateway, lsp_client) =
-        crate::gateway::GatewaySession::start(&workspace).expect("gateway");
+    let (session, gateway, _) = crate::gateway::GatewaySession::start(&workspace).expect("gateway");
     let mut model = Model::with_gateway(gateway, workspace);
-    model.language.lsp.client = Some(lsp_client);
+    model.workspace.gateway_session = Some(session);
     model.open_path(&main).expect("open");
     std::thread::sleep(Duration::from_secs(3));
 
@@ -287,7 +286,6 @@ fn call_hierarchy_round_trip_through_gateway() {
         crate::CallHierarchyDirection::Outgoing,
         "callee",
     );
-    drop(session);
 }
 
 #[test]
@@ -310,10 +308,9 @@ fn folding_round_trip_through_gateway() {
         "fn outer() {\n    if true {\n        let x = 1;\n        println!(\"{x}\");\n    }\n}\nfn main() { outer(); }\n",
     )
     .expect("main");
-    let (session, gateway, lsp_client) =
-        crate::gateway::GatewaySession::start(&workspace).expect("gateway");
+    let (session, gateway, _) = crate::gateway::GatewaySession::start(&workspace).expect("gateway");
     let mut model = Model::with_gateway(gateway, workspace);
-    model.language.lsp.client = Some(lsp_client);
+    model.workspace.gateway_session = Some(session);
     model.open_path(&main).expect("open");
     std::thread::sleep(Duration::from_secs(3));
     model.request_folding_ranges(None);
@@ -332,7 +329,6 @@ fn folding_round_trip_through_gateway() {
     }
     model.close_all_folds();
     assert!(model.has_closed_folds());
-    drop(session);
 }
 
 #[test]
@@ -351,10 +347,9 @@ fn completion_resolve_round_trip_through_gateway() {
     .expect("manifest");
     let main = source.join("main.rs");
     fs::write(&main, "fn main() {\n    let value = 1;\n    val\n}\n").expect("main");
-    let (session, gateway, lsp_client) =
-        crate::gateway::GatewaySession::start(&workspace).expect("gateway");
+    let (session, gateway, _) = crate::gateway::GatewaySession::start(&workspace).expect("gateway");
     let mut model = Model::with_gateway(gateway, workspace);
-    model.language.lsp.client = Some(lsp_client);
+    model.workspace.gateway_session = Some(session);
     model.open_path(&main).expect("open");
     std::thread::sleep(Duration::from_secs(3));
     model.session.cursor = model.offset_at_utf16(2, 7);
@@ -389,7 +384,6 @@ fn completion_resolve_round_trip_through_gateway() {
         );
         std::thread::sleep(Duration::from_millis(50));
     }
-    drop(session);
 }
 
 #[test]
@@ -408,10 +402,9 @@ fn semantic_tokens_round_trip_through_gateway() {
     .expect("manifest");
     let main = source.join("main.rs");
     fs::write(&main, "fn main() {\n    let value = 1;\n}\n").expect("main");
-    let (session, gateway, lsp_client) =
-        crate::gateway::GatewaySession::start(&workspace).expect("gateway");
+    let (session, gateway, _) = crate::gateway::GatewaySession::start(&workspace).expect("gateway");
     let mut model = Model::with_gateway(gateway, workspace);
-    model.language.lsp.client = Some(lsp_client);
+    model.workspace.gateway_session = Some(session);
     model.open_path(&main).expect("open");
     std::thread::sleep(Duration::from_secs(3));
     model.poll_lsp();
@@ -431,7 +424,6 @@ fn semantic_tokens_round_trip_through_gateway() {
         std::thread::sleep(Duration::from_millis(50));
     }
     assert!(!model.semantic_ranges(0, 40).is_empty());
-    drop(session);
 }
 
 #[test]

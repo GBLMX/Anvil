@@ -215,8 +215,22 @@ impl GatewayClient {
     }
 
     /// Start a gateway-supervised LSP process.
-    pub fn lsp_start(&mut self, tool: &str, args: &[String]) -> Result<(), ClientError> {
-        self.request("lsp.start", serde_json::json!({"tool": tool, "args": args}))?;
+    pub fn lsp_start(
+        &mut self,
+        tool: &str,
+        args: &[String],
+        root: Option<&str>,
+        env: &BTreeMap<String, String>,
+    ) -> Result<(), ClientError> {
+        self.request(
+            "lsp.start",
+            serde_json::json!({
+                "tool": tool,
+                "args": args,
+                "root": root,
+                "env": env,
+            }),
+        )?;
         Ok(())
     }
 

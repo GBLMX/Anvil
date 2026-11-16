@@ -40,6 +40,7 @@ impl Model {
             return;
         };
         if !trusted {
+            self.stop_lsp_root(&canonical);
             self.stop_root_file_worker(&canonical);
             if let Some((mut session, client)) = self.workspace.root_gateways.remove(&canonical) {
                 drop(client);
@@ -91,6 +92,7 @@ impl Model {
         };
         match self.workspace.roots.remove(&canonical) {
             Ok(()) => {
+                self.stop_lsp_root(&canonical);
                 self.stop_root_file_worker(&canonical);
                 if let Some((mut session, client)) = self.workspace.root_gateways.remove(&canonical)
                 {

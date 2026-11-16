@@ -104,6 +104,7 @@ impl Model {
         keymap: keymap::KeymapConfig,
     ) {
         self.apply_settings(settings);
+        self.notify_lsp_configuration();
         self.config.keymap = keymap;
         self.status.text = "configuration reloaded".to_owned();
         self.file.dirty = true;

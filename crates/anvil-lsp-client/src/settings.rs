@@ -1,5 +1,6 @@
 //! Language-server discovery and per-extension settings.
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use anvil_module::language::{LanguageServerSpec, LanguageToolingService};
@@ -13,6 +14,8 @@ pub struct LspSettings {
     pub root_markers: Vec<String>,
     pub label: String,
     pub initialization_options: Option<serde_json::Value>,
+    pub env: BTreeMap<String, String>,
+    pub settings: serde_json::Value,
 }
 
 impl From<LanguageServerSpec> for LspSettings {
@@ -22,8 +25,10 @@ impl From<LanguageServerSpec> for LspSettings {
             args: spec.args,
             language_id: spec.language_id,
             root_markers: spec.root_markers,
-            label: spec.label,
             initialization_options: spec.initialization_options,
+            label: spec.label,
+            env: BTreeMap::new(),
+            settings: serde_json::Value::Null,
         }
     }
 }
@@ -283,6 +288,8 @@ where
         root_markers: root_markers.into_iter().map(str::to_owned).collect(),
         label: label.to_owned(),
         initialization_options,
+        env: BTreeMap::new(),
+        settings: serde_json::Value::Null,
     })
 }
 

@@ -9,8 +9,12 @@ post-`0.5.0` feature line.
 ## [Unreleased]
 ### Added
 - LSP workers, status, retries, and inlay-hint support are now keyed by the
-  owning workspace root, and each worker opens its LSP connection through that
-  root's gateway instead of sharing the primary-root client.
+  owning workspace root. Each worker opens its LSP connection through that
+  root's gateway, uses the project root as cwd, and keeps `workspaceFolders`,
+  `workspace/configuration`, and `didChangeConfiguration` in sync. User
+  `[lsp.roots."<path>".<language>]` profiles can override command, args, root
+  markers, env, and settings, and removing or untrusting a root stops only that
+  root's workers.
 - Added `anvil modules [--json]`, a read-only view of the compiled-in modules,
   contract range, command count, and source; no marketplace or network access.
 - The workspace tree now uses case-insensitive natural ordering, filters
