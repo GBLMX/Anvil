@@ -52,6 +52,7 @@ their decision sections.
 | [0044](0044-watcher-transport.md) | Keep bounded polling watcher; record inotify comparison | Accepted |
 | [0045](0045-settings-patch-layers.md) | Sparse settings layers, provenance, and a metadata registry | Proposed |
 | [0046](0046-full-workspace-watch.md) | Full workspace watch coverage through the gateway | Proposed |
+| [0047](0047-file-tree-navigation-and-refresh.md) | File tree navigation and incremental refresh | Proposed |
 
 ## Numbering Rule
 
