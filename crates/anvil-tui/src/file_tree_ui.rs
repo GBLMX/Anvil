@@ -277,6 +277,7 @@ impl Model {
         let entries = match normalize_listing(result) {
             Ok(entries) => entries,
             Err(error) => {
+                self.drop_stale_tree_path(&path);
                 self.status.text = format!("E: tree: {error}");
                 return;
             }
@@ -817,6 +818,73 @@ impl Model {
             .map(|entries| entries.iter().any(|entry| entry.name == name))
     }
 
+    fn drop_stale_tree_path(&mut self, path: &Path) {
+        self.workspace.tree.stale = true;
+        let Some(index) = self
+            .workspace
+            .tree
+            .entries
+            .iter()
+            .position(|entry| entry.path == path)
+        else {
+            return;
+        };
+        let depth = self.workspace.tree.entries[index].depth;
+        let mut end = index + 1;
+        while self
+            .workspace
+            .tree
+            .entries
+            .get(end)
+            .is_some_and(|entry| entry.depth > depth)
+        {
+            end += 1;
+        }
+        self.workspace.tree.entries.drain(index..end);
+        if self
+            .workspace
+            .tree
+            .selected
+            .is_some_and(|selected| selected >= index)
+        {
+            self.workspace.tree.selected = (!self.workspace.tree.entries.is_empty()).then_some(
+                index
+                    .saturating_sub(1)
+                    .min(self.workspace.tree.entries.len() - 1),
+            );
+        }
+        let root = self
+            .workspace
+            .roots
+            .owning_root(path)
+            .map(|root| root.path.clone())
+            .unwrap_or_else(|| self.workspace.path.clone());
+        let parent = path
+            .parent()
+            .filter(|parent| parent.starts_with(&root))
+            .map(Path::to_path_buf);
+        let generation = self.workspace.tree.refresh_generation;
+        let requested = parent.as_ref().is_some_and(|parent| {
+            self.file_worker_for_path(parent).is_some_and(|worker| {
+                worker
+                    .request(FileRequest::List {
+                        path: parent.clone(),
+                        generation,
+                    })
+                    .is_ok()
+            })
+        });
+        if !requested {
+            if let Some(parent) = parent {
+                let result = self.tree_entries(&parent);
+                self.handle_tree_listing(generation, parent, result);
+            } else if root == self.workspace.path {
+                self.refresh_tree_background();
+            } else {
+                self.refresh_root_tree(&root);
+            }
+        }
+    }
     pub(crate) fn reveal_tree_path(&mut self, path: PathBuf) {
         let allowed = if let Some(root) = self.workspace.roots.owning_root(&path) {
             if !root.trusted {

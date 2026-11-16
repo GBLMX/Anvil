@@ -508,3 +508,58 @@ fn incremental_listing_replaces_only_the_changed_directory() {
             .any(|entry| entry.path == other)
     );
 }
+
+#[test]
+fn failed_incremental_listing_removes_stale_subtree() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let workspace = dir.path().to_path_buf();
+    let parent = workspace.join("parent");
+    let child = parent.join("child");
+    let grandchild = child.join("grandchild");
+    fs::create_dir_all(&grandchild).expect("tree");
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.workspace.path = workspace.clone();
+    model.workspace.roots = crate::workspace_roots::WorkspaceRoots::new(&workspace).expect("roots");
+    model.workspace.tree.entries = vec![
+        TreeEntry {
+            path: parent.clone(),
+            depth: 0,
+            is_dir: true,
+            ino: 0,
+            expanded: true,
+        },
+        TreeEntry {
+            path: child.clone(),
+            depth: 1,
+            is_dir: true,
+            ino: 0,
+            expanded: true,
+        },
+        TreeEntry {
+            path: grandchild.clone(),
+            depth: 2,
+            is_dir: true,
+            ino: 0,
+            expanded: false,
+        },
+    ];
+    model.workspace.tree.refresh_generation = 4;
+    fs::remove_dir_all(&child).expect("remove child");
+    model.apply_tree_listings(4, vec![(child.clone(), Err("gone".to_owned()))]);
+    assert!(
+        !model
+            .workspace
+            .tree
+            .entries
+            .iter()
+            .any(|entry| entry.path == child || entry.path == grandchild)
+    );
+    assert!(
+        model
+            .workspace
+            .tree
+            .entries
+            .iter()
+            .any(|entry| entry.path == parent)
+    );
+}

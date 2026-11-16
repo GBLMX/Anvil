@@ -180,14 +180,14 @@ impl Model {
             return;
         }
         self.workspace.tree.refresh_in_flight = false;
+        let failed = listings.iter().any(|(_, result)| result.is_err());
         for (path, result) in listings {
             self.handle_tree_listing(generation, path, result);
         }
-        self.workspace.tree.stale = false;
+        self.workspace.tree.stale = failed;
         self.refresh_tree_find();
         self.finish_tree_refresh();
     }
-
     pub(super) fn rebuild_tree_from_disk(&mut self) {
         let expanded = self
             .expanded_tree_paths()
