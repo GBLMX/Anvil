@@ -9,6 +9,12 @@ impl Model {
         let timing = std::env::var_os("ANVIL_OPEN_TIMING").is_some();
         let start = Instant::now();
         let absolute = self.workspace.absolute_path(path.as_ref())?;
+        if absolute.is_dir() {
+            let error = format!("is a directory: {}", absolute.display());
+            self.status.text = format!("E: {error}");
+            self.file.dirty = true;
+            return Err(error);
+        }
         let recent_path = absolute.clone();
         if self.session.path.as_ref() == Some(&absolute) {
             return Ok(());

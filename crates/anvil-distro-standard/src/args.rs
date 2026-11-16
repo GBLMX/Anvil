@@ -129,6 +129,13 @@ where
     if editor && stdin {
         return Err("--editor cannot be combined with stdin".to_owned());
     }
+    if path.as_deref().is_some_and(Path::is_dir) {
+        if workspace.is_some() {
+            return Err("--workspace cannot be combined with a directory path".to_owned());
+        }
+        let directory = path.take().expect("directory path");
+        workspace = Some(directory.canonicalize().unwrap_or(directory));
+    }
     let workspace = match workspace {
         Some(workspace) => workspace,
         None => workspace_for_path(path.as_deref())?,
@@ -331,6 +338,35 @@ mod tests {
         );
         assert_eq!(path, Some(file));
         assert!(!editor);
+    }
+
+    #[test]
+    fn directory_argument_opens_as_workspace() {
+        let directory = tempfile::tempdir().expect("tempdir");
+        let command = parse_args(args(&[directory.path().to_str().expect("utf-8 path")])).unwrap();
+        let Command::Run {
+            workspace, path, ..
+        } = command
+        else {
+            panic!("expected run command");
+        };
+        assert_eq!(
+            workspace,
+            directory.path().canonicalize().expect("canonical")
+        );
+        assert_eq!(path, None);
+    }
+
+    #[test]
+    fn directory_argument_rejects_explicit_workspace() {
+        let directory = tempfile::tempdir().expect("tempdir");
+        let error = parse_args(args(&[
+            "--workspace",
+            directory.path().to_str().expect("utf-8 path"),
+            directory.path().to_str().expect("utf-8 path"),
+        ]))
+        .expect_err("directory path");
+        assert!(error.contains("directory path"), "{error}");
     }
 
     #[test]

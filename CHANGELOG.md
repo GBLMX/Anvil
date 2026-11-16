@@ -600,6 +600,9 @@ post-`0.5.0` feature line.
   now 664 lines.
 
 ### Fixed
+- `anvil DIR` now opens `DIR` as the workspace instead of trying to open the
+  directory as a file. Explicitly opening a directory reports `is a directory`
+  instead of the gateway's generic `stat unavailable`.
 - `anvil-ctl` now caps `--stdin` reads at 4 MiB plus one byte, detects a
   prematurely exited `--spawn` child instead of waiting the full timeout, kills
   a timed-out child before returning, and honors `--timeout-ms` for the actual

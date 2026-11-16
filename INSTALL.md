@@ -158,6 +158,8 @@ cd ~/src/my-project
 anvil --workspace "$PWD"
 ```
 
+`anvil /path/to/project` opens that directory as the workspace.
+
 Confirm:
 
 - the editor renders and `:q` exits;

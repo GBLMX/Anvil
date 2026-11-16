@@ -671,6 +671,16 @@ fn open_resolves_symlink_to_canonical_path() {
 }
 
 #[test]
+fn opening_a_directory_reports_a_clear_error() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let mut model = Model::new(EditorState::from_text(""), None);
+    let error = model.open_path(dir.path()).expect_err("directory");
+    assert!(error.contains("is a directory"), "{error}");
+    assert!(model.status.text.contains("is a directory"));
+    assert!(model.session.path.is_none());
+}
+
+#[test]
 fn w_path_saves_as_and_updates_the_current_path() {
     let dir = tempfile::tempdir().expect("tempdir");
     let path = dir.path().join("saved.txt");
