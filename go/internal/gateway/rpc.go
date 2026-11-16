@@ -46,6 +46,7 @@ func (s *Server) handle(serverCtx context.Context, conn net.Conn) {
 	}
 	defer state.abortWrites()
 	defer state.stopLSP()
+	defer state.stopWatch()
 	var requests sync.WaitGroup
 	for {
 		body, err := readFrame(conn)
@@ -174,6 +175,12 @@ func (s *Server) dispatch(ctx context.Context, req request, state *connectionSta
 	case "lsp.stop":
 		state.stopLSP()
 		return map[string]bool{"stopped": true}, nil
+	case "sys.watch_start":
+		return s.watchStart(req, state)
+	case "sys.watch_status":
+		return s.watchStatus(req, state)
+	case "sys.watch_stop":
+		return s.watchStop(req, state)
 	default:
 		return nil, &rpcError{Code: -32601, Message: "method not found"}
 	}

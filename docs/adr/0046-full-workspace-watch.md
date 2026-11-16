@@ -2,7 +2,8 @@
 
 - Status: Proposed
 - Version: 1.1.0
-- Implementation: not started
+- Implementation: native inotify RPC/core landed; TUI routing, settings, and
+  poll fallback integration pending
 - Date: 2026-11-16
 - Related: [ADR-0002](0002-go-daemon.md),
   [ADR-0018](0018-workspace-tree-watch.md),

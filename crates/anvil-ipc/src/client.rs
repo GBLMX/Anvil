@@ -247,6 +247,38 @@ impl GatewayClient {
         Ok(())
     }
 
+    /// Start a gateway-owned native workspace watcher.
+    pub fn watch_start(
+        &mut self,
+        root: &str,
+        exclude: &[String],
+        max_dirs: usize,
+        cross_mounts: bool,
+        mode: &str,
+    ) -> Result<serde_json::Value, ClientError> {
+        self.request(
+            "sys.watch_start",
+            serde_json::json!({
+                "root": root,
+                "exclude": exclude,
+                "max_dirs": max_dirs,
+                "cross_mounts": cross_mounts,
+                "mode": mode,
+            }),
+        )
+    }
+
+    /// Return the current watcher status.
+    pub fn watch_status(&mut self) -> Result<serde_json::Value, ClientError> {
+        self.request("sys.watch_status", serde_json::json!({}))
+    }
+
+    /// Stop the gateway-owned workspace watcher.
+    pub fn watch_stop(&mut self) -> Result<(), ClientError> {
+        self.request("sys.watch_stop", serde_json::json!({}))?;
+        Ok(())
+    }
+
     /// Wait until a gateway frame may be readable.
     pub fn wait_readable(&mut self, timeout: std::time::Duration) -> Result<bool, ClientError> {
         Ok(self.connection.wait_readable(timeout)?)

@@ -20,6 +20,7 @@ import (
 	"github.com/GBLMX/Anvil/go/internal/execrunner"
 	"github.com/GBLMX/Anvil/go/internal/fetch"
 	"github.com/GBLMX/Anvil/go/internal/fsroot"
+	"github.com/GBLMX/Anvil/go/internal/fswatch"
 	"github.com/GBLMX/Anvil/go/internal/lsp"
 	"github.com/GBLMX/Anvil/go/internal/pkg"
 	"golang.org/x/sys/unix"
@@ -229,6 +230,8 @@ type connectionState struct {
 	writeMu     *sync.Mutex
 	lspMu       sync.Mutex
 	lsp         *lsp.Manager
+	watchMu     sync.Mutex
+	watch       *fswatch.Watcher
 }
 
 func (state *connectionState) stopLSP() {
@@ -238,6 +241,16 @@ func (state *connectionState) stopLSP() {
 	state.lspMu.Unlock()
 	if manager != nil {
 		_ = manager.Close()
+	}
+}
+
+func (state *connectionState) stopWatch() {
+	state.watchMu.Lock()
+	watcher := state.watch
+	state.watch = nil
+	state.watchMu.Unlock()
+	if watcher != nil {
+		watcher.Stop()
 	}
 }
 
