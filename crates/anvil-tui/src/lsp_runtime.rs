@@ -12,13 +12,13 @@ fn truncate_event_text(text: &str, max: usize) -> String {
     text[..end].to_owned()
 }
 
-
+/// Returns the server-provided diagnostic code when present.
 fn diagnostic_code(diagnostic: &anvil_lsp_client::Diagnostic) -> Option<String> {
-    diagnostic.extra.get("code").and_then(|code| match code {
-        serde_json::Value::String(code) if !code.trim().is_empty() => Some(code.clone()),
-        serde_json::Value::Number(code) => Some(code.to_string()),
+    match diagnostic.extra.get("code") {
+        Some(serde_json::Value::String(code)) if !code.trim().is_empty() => Some(code.clone()),
+        Some(serde_json::Value::Number(code)) => Some(code.to_string()),
         _ => None,
-    })
+    }
 }
 
 impl Model {
@@ -789,8 +789,6 @@ mod event_text_tests {
         assert_eq!(truncated.chars().count(), 256);
     }
 }
-
-
 
 #[cfg(test)]
 mod status_tests {
