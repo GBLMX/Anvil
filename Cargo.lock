@@ -98,6 +98,7 @@ dependencies = [
  "anvil-mod-workspace-index",
  "anvil-module",
  "anvil-tui",
+ "serde_json",
  "tempfile",
 ]
 

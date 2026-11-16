@@ -19,6 +19,7 @@ install -m 0755 \
   target/release/anvil-mcp \
   target/release/anvil-plugin-host \
   "$out/bin/"
+"$out/bin/anvil" settings schema >"$out/share/anvil/settings.schema.json"
 cp -R plugins/official/. "$out/share/anvil/official/plugins/"
 install -d \
   "$out/share/applications" \

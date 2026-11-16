@@ -50,7 +50,7 @@ their decision sections.
 | [0042](0042-selection-first-session-frontend.md) | Selection-first core, headless session, thin frontend | Accepted |
 | [0043](0043-plugin-api-1-1.md) | Plugin API 1.1 capability and selection contract | Proposed |
 | [0044](0044-watcher-transport.md) | Keep bounded polling watcher; record inotify comparison | Accepted |
-| [0045](0045-settings-patch-layers.md) | Sparse settings layers, provenance, and a metadata registry | Proposed |
+| [0045](0045-settings-patch-layers.md) | Sparse settings layers, provenance, and a metadata registry | Accepted; implemented 2026-11-16 |
 | [0046](0046-full-workspace-watch.md) | Full workspace watch coverage through the gateway | Proposed |
 | [0047](0047-file-tree-navigation-and-refresh.md) | File tree navigation and incremental refresh | Accepted; implemented |
 | [0048](0048-per-root-language-tooling-and-lsp-workspace.md) | Per-root language tooling and LSP workspace configuration | Proposed |

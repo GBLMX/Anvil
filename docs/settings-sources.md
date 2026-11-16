@@ -53,9 +53,13 @@ file are preserved, while unknown keys remain load errors on the next reload.
 
 ## Export and import
 
-`:settings-export <path>` writes the currently effective typed settings to a
-portable TOML file. Paths are resolved relative to the workspace unless
-absolute.
+`:settings-export <path>` writes the sparse user override patch to a portable
+TOML file. Paths are resolved relative to the workspace unless absolute.
+Untouched defaults, inherited project values, and environment overrides are
+not exported.
+
+`:settings-export --effective <path>` writes the resolved effective values,
+including environment overrides, for diagnostics or machine migration.
 
 `:settings-import <path>` validates the file, writes it to the user settings
 path (`ANVIL_SETTINGS` or `$XDG_CONFIG_HOME/anvil/settings.toml`), and runs the
@@ -64,6 +68,14 @@ import, and `:settings` shows the resulting origin for each field. The imported
 file is normalized: comments and unknown keys are preserved only when the
 target file already contains them, matching `:settings` saves.
 
-Export includes effective values, including any active environment overrides.
-To move settings between machines without carrying environment-specific values,
-unset `ANVIL_*` overrides before exporting.
+## Schema
+
+`anvil settings schema` prints the JSON Schema generated from the settings
+registry. Release layouts install it as
+`share/anvil/settings.schema.json`; bind it to a settings file with:
+
+```toml
+#:schema /absolute/path/to/share/anvil/settings.schema.json
+```
+
+Taplo uses the schema for validation, completion, and descriptions.

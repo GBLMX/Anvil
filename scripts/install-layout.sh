@@ -34,6 +34,9 @@ fi
 
 install -d "$prefix/bin" "$prefix/share/anvil/official"
 prefix="$(cd "$prefix" && pwd)"
+if [[ -f "$layout/share/anvil/settings.schema.json" ]]; then
+  install -m 0644 "$layout/share/anvil/settings.schema.json" "$prefix/share/anvil/"
+fi
 install -m 0755 \
   "$layout/bin/anvil" \
   "$layout/bin/anvil-ctl" \

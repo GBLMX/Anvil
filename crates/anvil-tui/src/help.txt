@@ -91,7 +91,8 @@ Normal mode
   :tree-refresh       refresh the tree and Git status now
   :reconnect          restart the gateway and re-handshake
   :config-reload      reload settings, keymap, and theme; report effective files
-  :settings-export <path>  write effective settings to a portable file
+  :settings-export <path>  write the user override patch
+  :settings-export --effective <path>  write resolved effective settings
   :settings-import <path>  validate and install a settings file
   :git-blame          show blame for the current file
   :git-conflicts      list unmerged paths

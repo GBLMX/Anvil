@@ -13,6 +13,7 @@ Usage:
   anvil [OPTIONS] [FILE|-]
   anvil doctor [--json] [--profile auto|dev|installed]
   anvil modules [--json]
+  anvil settings schema
 
 Options:
   -w, --workspace <DIR>  Workspace directory; --workspace=DIR is also accepted
@@ -296,6 +297,13 @@ where
         }
         Ok(Command::Doctor { json, profile }) => run_doctor(distribution, json, profile),
         Ok(Command::Modules { json }) => run_modules(distribution, json),
+        Ok(Command::SettingsSchema) => {
+            let schema = anvil_tui::settings_schema();
+            let text = serde_json::to_string_pretty(&schema)
+                .map_err(|error| RunError::Args(error.to_string()))?;
+            println!("{text}");
+            Ok(0)
+        }
         Ok(Command::Run {
             workspace,
             path,

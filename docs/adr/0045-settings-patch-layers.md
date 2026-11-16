@@ -1,11 +1,10 @@
 # ADR-0045: Sparse Settings Layers, Provenance, and a Metadata Registry
 
-- Status: Proposed
+- Status: Accepted; implemented 2026-11-16
 - Version: 1.2.1
-- Implementation: sparse user saves, inherited reset, theme provenance,
-  unknown-key-preserving saves, the metadata registry, and the registry-driven
-  overlay landed; the generated schema and user-patch export default remain
-  pending
+- Implementation: sparse saves, inherited reset, provenance, metadata registry,
+  registry-driven overlay, generated settings schema, and sparse export default
+  landed
 - Date: 2026-11-16
 - Related: [ADR-0006](0006-upstream-dependencies.md),
   [ADR-0023](0023-internal-capability-closure.md),

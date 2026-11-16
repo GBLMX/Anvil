@@ -26,6 +26,7 @@ pub(super) enum Command {
     Modules {
         json: bool,
     },
+    SettingsSchema,
     Version,
 }
 
@@ -47,6 +48,13 @@ where
     {
         arguments.next();
         return parse_modules_args(arguments);
+    }
+    if arguments
+        .peek()
+        .is_some_and(|argument| argument == "settings")
+    {
+        arguments.next();
+        return parse_settings_args(arguments);
     }
     let mut workspace = None;
     let mut path = None;
@@ -148,6 +156,20 @@ where
         read_only,
         truecolor,
     })
+}
+
+fn parse_settings_args<I>(mut arguments: I) -> Result<Command, String>
+where
+    I: Iterator<Item = OsString>,
+{
+    match arguments.next().as_deref() {
+        Some(value) if value == "schema" => {}
+        _ => return Err("usage: anvil settings schema".to_owned()),
+    }
+    if arguments.next().is_some() {
+        return Err("usage: anvil settings schema".to_owned());
+    }
+    Ok(Command::SettingsSchema)
 }
 
 fn parse_doctor_args<I>(arguments: I) -> Result<Command, String>
@@ -532,5 +554,15 @@ mod tests {
             parse_args(args(&["modules", "--help"])).unwrap(),
             Command::Help
         );
+    }
+
+    #[test]
+    fn parses_settings_schema_and_rejects_extra_arguments() {
+        assert_eq!(
+            parse_args(args(&["settings", "schema"])).unwrap(),
+            Command::SettingsSchema
+        );
+        assert!(parse_args(args(&["settings"])).is_err());
+        assert!(parse_args(args(&["settings", "schema", "extra"])).is_err());
     }
 }

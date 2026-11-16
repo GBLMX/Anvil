@@ -247,6 +247,76 @@ pub(crate) const SETTINGS: &[SettingDef] = &[
     },
 ];
 
+/// Builds the JSON Schema for the settings file from the registry metadata.
+pub fn settings_schema() -> serde_json::Value {
+    let mut properties = serde_json::Map::new();
+    for def in SETTINGS {
+        if def.key == SettingsKey::Theme {
+            continue;
+        }
+        let Some((group, leaf)) = def.path.split_once('.') else {
+            continue;
+        };
+        let entry = properties.entry(group.to_owned()).or_insert_with(|| {
+            serde_json::json!({
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {}
+            })
+        });
+        if let Some(group_properties) = entry
+            .get_mut("properties")
+            .and_then(serde_json::Value::as_object_mut)
+        {
+            group_properties.insert(leaf.to_owned(), setting_schema(def));
+        }
+    }
+    let theme_description = SETTINGS
+        .iter()
+        .find(|def| def.key == SettingsKey::Theme)
+        .map(|def| def.description)
+        .unwrap_or("Select the semantic palette used by the TUI.");
+    properties.insert(
+        "theme".to_owned(),
+        serde_json::json!({
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "mode": {"enum": ["fixed", "auto"]},
+                "name": {"type": "string", "description": theme_description},
+                "dark": {"type": "string"},
+                "light": {"type": "string"}
+            }
+        }),
+    );
+    serde_json::json!({
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "title": "Anvil settings",
+        "type": "object",
+        "additionalProperties": false,
+        "properties": properties
+    })
+}
+
+fn setting_schema(def: &SettingDef) -> serde_json::Value {
+    let mut schema = serde_json::Map::new();
+    match def.kind {
+        SettingKind::Bool => {
+            schema.insert("type".to_owned(), serde_json::json!("boolean"));
+        }
+        SettingKind::Integer { min, max } => {
+            schema.insert("type".to_owned(), serde_json::json!("integer"));
+            schema.insert("minimum".to_owned(), serde_json::json!(min));
+            schema.insert("maximum".to_owned(), serde_json::json!(max));
+        }
+        SettingKind::Theme => {
+            schema.insert("type".to_owned(), serde_json::json!("string"));
+        }
+    }
+    schema.insert("description".to_owned(), serde_json::json!(def.description));
+    serde_json::Value::Object(schema)
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum SettingsOrigin {
     Default,
@@ -1104,9 +1174,12 @@ fn theme_file(choice: Choice) -> ThemeFile {
 
 impl crate::Model {
     pub(crate) fn export_settings(&mut self, argument: &str) {
-        let argument = argument.trim();
-        if argument.is_empty() {
-            self.status.text = "E: usage: :settings-export <path>".to_owned();
+        let (effective, argument) = match argument.trim().strip_prefix("--effective") {
+            Some(rest) => (true, rest.trim()),
+            None => (false, argument.trim()),
+        };
+        if argument.is_empty() || (!effective && argument.starts_with("--")) {
+            self.status.text = "E: usage: :settings-export [--effective] <path>".to_owned();
             self.file.dirty = true;
             return;
         }
@@ -1118,7 +1191,11 @@ impl crate::Model {
                 return;
             }
         };
-        let patch = SettingsPatch::from_settings(self.config.settings);
+        let patch = if effective {
+            SettingsPatch::from_settings(self.config.settings)
+        } else {
+            self.config.user_settings.clone()
+        };
         match save_patch_to_path(&path, &patch) {
             Ok(()) => {
                 self.status.text = format!("settings exported: {}", path.display());
@@ -1292,6 +1369,37 @@ mod tests {
         }
         assert_eq!(keys.len(), 12);
     }
+
+    #[test]
+    fn settings_schema_covers_every_registry_path() {
+        let schema = settings_schema();
+        assert_eq!(schema["additionalProperties"], false);
+        for def in SETTINGS {
+            let mut node = &schema["properties"];
+            for part in def.path.split('.') {
+                let Some(next) = node.get(part) else {
+                    panic!("missing schema path: {}", def.path);
+                };
+                node = next;
+                if let Some(properties) = node.get("properties") {
+                    node = properties;
+                }
+            }
+            assert_eq!(node["description"], def.description, "{}", def.path);
+        }
+        assert_eq!(
+            schema["properties"]["theme"]["properties"]["mode"]["enum"],
+            serde_json::json!(["fixed", "auto"])
+        );
+        assert_eq!(
+            schema["properties"]["editor"]["properties"]["scroll_margin"]["minimum"],
+            0
+        );
+        assert_eq!(
+            schema["properties"]["editor"]["properties"]["scroll_margin"]["maximum"],
+            16
+        );
+    }
     #[test]
     fn settings_export_and_import_round_trip() {
         let _guard = TEST_ENV_LOCK
@@ -1310,7 +1418,9 @@ mod tests {
         model.workspace.path = workspace.clone();
         model.workspace.roots =
             crate::workspace_roots::WorkspaceRoots::new(&workspace).expect("roots");
-        model.config.settings.editor.scroll_margin = 6;
+        model.config.user_settings.editor.scroll_margin = Some(6);
+        model.config.user_settings.editor.soft_wrap = Some(true);
+        model.config.settings.editor.scroll_margin = 2;
         model.config.settings.editor.soft_wrap = true;
 
         model.execute_command("settings-export export.toml");
@@ -1320,8 +1430,21 @@ mod tests {
             "{}",
             model.status.text
         );
-        let parsed = parse(&fs::read_to_string(&exported).expect("export")).expect("valid export");
+        let sparse = fs::read_to_string(&exported).expect("export");
+        assert!(sparse.contains("scroll_margin = 6"), "{sparse}");
+        assert!(sparse.contains("soft_wrap = true"), "{sparse}");
+        assert!(!sparse.contains("max_buffers"), "{sparse}");
+        assert!(!sparse.contains("file_watching"), "{sparse}");
+        let parsed = parse(&sparse).expect("valid export");
         assert_eq!(parsed.editor.scroll_margin, 6);
+        assert!(parsed.editor.soft_wrap);
+
+        model.execute_command("settings-export --effective effective.toml");
+        let effective = fs::read_to_string(workspace.join("effective.toml")).expect("effective");
+        assert!(effective.contains("scroll_margin = 2"), "{effective}");
+        assert!(effective.contains("max_buffers"), "{effective}");
+        let parsed = parse(&effective).expect("valid effective export");
+        assert_eq!(parsed.editor.scroll_margin, 2);
         assert!(parsed.editor.soft_wrap);
 
         let imported = directory.path().join("import.toml");

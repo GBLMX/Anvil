@@ -60,8 +60,10 @@ post-`0.5.0` feature line.
 - `:settings` now shows the effective origin of each value (`default`,
   environment, user file, or trusted project file), including ignored project
   files and the reason; `:config-reload` reports loaded and ignored files.
-- Added `:settings-export` and `:settings-import` for portable, validated
-  settings files with an explicit reload; see [settings sources](docs/settings-sources.md).
+- Added `:settings-export [--effective]` and `:settings-import`. Export now
+  writes the sparse user patch by default; `--effective` preserves the previous
+  resolved-value output. Added `anvil settings schema` and the generated
+  `share/anvil/settings.schema.json` release artifact.
 - Added `:help recover` and [recovery semantics](docs/recovery.md) covering
   save durability, session/swap recovery, undo reset, and external conflicts.
 - Added `:help start` and a first-run [onboarding guide](docs/onboarding.md)
