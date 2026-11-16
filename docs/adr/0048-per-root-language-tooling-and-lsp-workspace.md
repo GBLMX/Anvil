@@ -1,7 +1,7 @@
 # ADR-0048: Per-root language tooling and LSP workspace configuration
 
 - Status: Proposed
-- Version: 1.0.0
+- Version: 1.1.0
 - Implementation: not started
 - Date: 2026-11-16
 - Supersedes: ADR-0025 §5 "LSP is primary-root-only for now" clause only
@@ -118,6 +118,13 @@ shape and avoids cross-server notification ambiguity.
 
 The worker thread owns its `GatewayClient` for its lifetime. Remove the shared
 `LspState.client`; it cannot safely serve multiple root-scoped workers.
+
+Retire the pre-opened LSP client returned by `GatewaySession::start`. Update
+the primary startup path, root-gateway creation, `reconnect_gateway`,
+`Model::drop`, and LSP test helpers so none of them store a session-wide
+`lsp_client`. Each worker calls `connect_lsp()` and owns the resulting
+connection. Leaving an unused pre-opened LSP connection would violate the
+one-connection-per-worker model.
 
 If the gateway connection cannot be created, the worker enters the existing
 failed state for that root and reports the owning root. It must not silently
@@ -261,6 +268,9 @@ settings snapshot.
   resolved project root require a worker restart, because they cannot be
   applied through `workspace/didChangeConfiguration`.
 - Settings-only changes do not restart the server.
+- A settings update received during initialization is coalesced into the latest
+  snapshot and sent after the `initialized` notification; it does not restart
+  the worker.
 
 Do not mutate a worker's initialization options in place. A restart is the
 only way to apply them.
@@ -284,6 +294,9 @@ For the current or any open document:
   requests are discarded.
 - Root removal, trust revocation, and gateway loss stop all of that root's
   workers.
+- Gateway reconnect is root-scoped. Reconnecting or losing the primary gateway
+  must not clear or stop workers owned by secondary roots; only workers whose
+  own connection failed are discarded.
 
 The LSP request surface and `WorkspaceEdit` rules from ADR-0025 remain
 unchanged.
@@ -434,6 +447,10 @@ Worker and protocol tests:
 
 Routing and lifecycle tests:
 
+- no session-wide pre-opened `lsp_client` remains in startup, reconnect, drop,
+  or test helpers;
+- a primary gateway reconnect leaves secondary-root workers running;
+- a settings update during initialization is applied after `initialized`;
 - definition, completion, hover, references, diagnostics, format, rename, and
   code lens requests from root B use root B's worker;
 - no request falls back to the primary root when root B has no worker;
