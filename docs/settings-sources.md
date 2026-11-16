@@ -8,9 +8,9 @@ Anvil resolves typed settings from these sources, in order:
 3. a trusted workspace `.anvil.toml`;
 4. environment variables.
 
-This page documents the current implementation. The proposed sparse-patch,
-source-aware, schema-backed redesign is
-[ADR-0045](adr/0045-settings-patch-layers.md); it is not implemented yet.
+This page documents the current implementation. Sparse user saves and
+reset-to-inherited are implemented; the metadata registry and generated schema
+remain proposed in [ADR-0045](adr/0045-settings-patch-layers.md).
 
 CLI flags currently control process behavior (`--workspace`, `--editor`,
 `--read-only`, `--truecolor`), not typed settings fields. They are therefore not
@@ -23,6 +23,7 @@ its own stable `cli` origin.
 
 - `default`
 - `environment`
+- `startup override` for `ANVIL_THEME`
 - the user settings path
 - the trusted project settings path
 
@@ -40,6 +41,14 @@ project file is then reported as ignored with that reason.
 ignored project files with their reason. A parse failure is reported as an
 error containing the file path and parser location; it does not silently
 replace the failure with defaults.
+
+## Saving and reset
+
+The `:settings` overlay saves only explicit user overrides. Resetting a row
+removes its user key and re-resolves the value from the trusted project,
+environment, or built-in default. `ANVIL_*` environment values are never
+copied into the user file by a save. Comments and unknown keys in the existing
+file are preserved, while unknown keys remain load errors on the next reload.
 
 ## Export and import
 

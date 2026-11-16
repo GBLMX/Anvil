@@ -63,6 +63,8 @@ fn settings_state_owns_draft_and_theme_actions() {
         theme: theme::Choice::Fixed("anvil-dark"),
         opened_theme: theme::Choice::Fixed("anvil-dark"),
         theme_touched: false,
+        user: Default::default(),
+        inherited: defaults,
         sources: Default::default(),
     };
     match state.adjust(1).expect("draft change") {
@@ -95,6 +97,8 @@ fn state_at(selected: usize) -> SettingsOverlayState {
         theme: theme::Choice::Fixed("anvil-dark"),
         opened_theme: theme::Choice::Fixed("anvil-dark"),
         theme_touched: false,
+        user: Default::default(),
+        inherited: defaults,
         sources: Default::default(),
     }
 }

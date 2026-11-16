@@ -230,8 +230,13 @@ impl Model {
                 self.file.dirty = true;
             }
             ("theme-save", "") => {
-                self.status.text = match settings::save(self.config.settings) {
-                    Ok(path) => format!("theme saved: {}", path.display()),
+                let mut patch = self.config.user_settings.clone();
+                patch.set_theme(self.config.settings.theme);
+                self.status.text = match settings::save_patch(&patch) {
+                    Ok(path) => {
+                        self.config.user_settings = patch;
+                        format!("theme saved: {}", path.display())
+                    }
                     Err(error) => format!("E: {error}"),
                 };
                 self.file.dirty = true;

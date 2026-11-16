@@ -257,7 +257,14 @@ pub fn run_with_all_services(
         .is_some_and(|root| root.trusted);
     match settings::load_for_workspace_with_sources(&workspace, project_trusted) {
         Ok(loaded) => {
-            let settings::LoadedSettings { settings, sources } = loaded;
+            let settings::LoadedSettings {
+                settings,
+                sources,
+                user,
+                inherited,
+            } = loaded;
+            model.config.user_settings = user;
+            model.config.inherited_settings = inherited;
             model.config.sources = sources;
             model.apply_settings(settings);
         }

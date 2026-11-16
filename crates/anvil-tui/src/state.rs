@@ -804,6 +804,10 @@ pub(crate) struct ConfigState {
     /// In-memory keymap overrides.
     pub(crate) keymap: keymap::KeymapConfig,
     pub(crate) settings: Settings,
+    /// Sparse user overrides loaded from the user settings file.
+    pub(crate) user_settings: settings::SettingsPatch,
+    /// Effective settings without the user layer, used by reset.
+    pub(crate) inherited_settings: Settings,
     /// Effective settings layer for each field.
     pub(crate) sources: settings::SettingsSources,
 }

@@ -33,6 +33,8 @@ pub(crate) struct SettingsOverlayState {
     pub(crate) theme: theme::Choice,
     pub(crate) opened_theme: theme::Choice,
     pub(crate) theme_touched: bool,
+    pub(crate) user: settings::SettingsPatch,
+    pub(crate) inherited: Settings,
     pub(crate) sources: settings::SettingsSources,
 }
 
@@ -159,6 +161,7 @@ impl SettingsOverlayState {
         if self.selected == 10 {
             self.theme = cycle_theme(self.theme, delta);
             self.theme_touched = true;
+            self.user.set_theme(self.theme);
             return Some(SettingsChange::Theme(self.theme));
         }
         let mut draft = self.draft;
@@ -187,28 +190,31 @@ impl SettingsOverlayState {
             _ => draft.ui.high_contrast = !draft.ui.high_contrast,
         }
         self.draft = draft;
+        self.user.set_field(settings_key(self.selected), &draft);
         Some(SettingsChange::Apply(draft))
     }
 
     pub(crate) fn reset(&mut self) -> Option<SettingsChange> {
-        let defaults = Settings::default();
         if self.selected == 10 {
-            self.theme = defaults.theme;
-            self.theme_touched = true;
+            self.draft.theme = self.inherited.theme;
+            self.theme = self.inherited.theme;
+            self.theme_touched = false;
+            self.user.clear_field(settings::SettingsKey::Theme);
             return Some(SettingsChange::Theme(self.theme));
         }
         match self.selected {
-            0 => self.draft.editor.scroll_margin = defaults.editor.scroll_margin,
-            1 => self.draft.editor.auto_save = defaults.editor.auto_save,
-            2 => self.draft.editor.soft_wrap = defaults.editor.soft_wrap,
-            3 => self.draft.editor.format_on_save = defaults.editor.format_on_save,
-            4 => self.draft.editor.max_buffers = defaults.editor.max_buffers,
-            5 => self.draft.search.case_sensitive = defaults.search.case_sensitive,
-            6 => self.draft.lsp.inlay_hints = defaults.lsp.inlay_hints,
-            7 => self.draft.ui.reduced_motion = defaults.ui.reduced_motion,
-            9 => self.draft.editor.file_watching = defaults.editor.file_watching,
-            _ => self.draft.ui.high_contrast = defaults.ui.high_contrast,
+            0 => self.draft.editor.scroll_margin = self.inherited.editor.scroll_margin,
+            1 => self.draft.editor.auto_save = self.inherited.editor.auto_save,
+            2 => self.draft.editor.soft_wrap = self.inherited.editor.soft_wrap,
+            3 => self.draft.editor.format_on_save = self.inherited.editor.format_on_save,
+            4 => self.draft.editor.max_buffers = self.inherited.editor.max_buffers,
+            5 => self.draft.search.case_sensitive = self.inherited.search.case_sensitive,
+            6 => self.draft.lsp.inlay_hints = self.inherited.lsp.inlay_hints,
+            7 => self.draft.ui.reduced_motion = self.inherited.ui.reduced_motion,
+            9 => self.draft.editor.file_watching = self.inherited.editor.file_watching,
+            _ => self.draft.ui.high_contrast = self.inherited.ui.high_contrast,
         }
+        self.user.clear_field(settings_key(self.selected));
         Some(SettingsChange::Apply(self.draft))
     }
 
@@ -499,6 +505,8 @@ impl Model {
             theme: active_theme,
             opened_theme: active_theme,
             theme_touched: false,
+            user: self.config.user_settings.clone(),
+            inherited: self.config.inherited_settings,
             sources: self.config.sources.clone(),
         });
         self.push_overlay(OverlayKind::Settings);
@@ -565,17 +573,24 @@ impl Model {
         };
         if overlay.theme_touched {
             overlay.draft.theme = overlay.theme;
+            overlay.user.set_theme(overlay.theme);
         }
-        match settings::save(overlay.draft) {
+        match settings::save_patch(&overlay.user) {
             Ok(path) => {
                 self.apply_settings(overlay.draft);
-                overlay.original = overlay.draft;
-                if overlay.theme_touched {
-                    overlay.opened_theme = overlay.theme;
-                }
+                self.config.user_settings = overlay.user.clone();
+                self.reload_config();
+                let reload_status = self.status.text.clone();
+                overlay.user = self.config.user_settings.clone();
+                overlay.inherited = self.config.inherited_settings;
+                overlay.sources = self.config.sources.clone();
+                overlay.original = self.config.settings;
+                overlay.draft = self.config.settings;
+                overlay.theme = theme::choice();
+                overlay.opened_theme = overlay.theme;
                 overlay.theme_touched = false;
                 self.overlays.settings_overlay = Some(overlay);
-                self.status.text = format!("settings saved: {}", path.display());
+                self.status.text = format!("settings saved: {}; {reload_status}", path.display());
             }
             Err(error) => {
                 self.overlays.settings_overlay = Some(overlay);

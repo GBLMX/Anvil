@@ -38,6 +38,8 @@ impl Model {
                 effects: EffectQueue::new(EFFECT_QUEUE_CAPACITY),
                 keymap: keymap::KeymapConfig::default(),
                 settings: Settings::default(),
+                user_settings: settings::SettingsPatch::default(),
+                inherited_settings: Settings::default(),
                 sources: settings::SettingsSources::default(),
             },
             file: FileState {
@@ -112,7 +114,12 @@ impl Model {
         loaded: settings::LoadedSettings,
         keymap: keymap::KeymapConfig,
     ) {
-        let settings::LoadedSettings { settings, sources } = loaded;
+        let settings::LoadedSettings {
+            settings,
+            sources,
+            user,
+            inherited,
+        } = loaded;
         let files = sources.layer_files();
         let ignored = sources
             .ignored()
@@ -121,6 +128,8 @@ impl Model {
             .collect::<Vec<_>>()
             .join(", ");
         self.apply_loaded_config(settings, keymap);
+        self.config.user_settings = user;
+        self.config.inherited_settings = inherited;
         self.config.sources = sources;
         self.status.text = if files.is_empty() {
             "configuration reloaded (defaults)".to_owned()

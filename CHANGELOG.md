@@ -495,6 +495,9 @@ post-`0.5.0` feature line.
 ### Changed
 - Split `anvil-distro-standard` CLI parsing into `args.rs` and `anvil doctor`
   diagnostics into `doctor.rs`; no behavior change.
+- Settings saves now write only explicit user overrides, environment values
+  are no longer persisted, and reset falls back to project/environment/default
+  values. `ANVIL_THEME` is reported as a startup override.
 - Gateway frame reads now have a 30-second deadline, LSP initialize has a
   10-second budget, failed LSP document syncs retain the latest text for the
   next poll, closing a document drops matching pending text, and server

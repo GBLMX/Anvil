@@ -111,6 +111,7 @@ pub(crate) enum SettingsOrigin {
     User,
     Project,
     Environment,
+    StartupOverride,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -133,6 +134,7 @@ impl SettingsSources {
         match self.origin(key) {
             SettingsOrigin::Default => "default".to_owned(),
             SettingsOrigin::Environment => "environment".to_owned(),
+            SettingsOrigin::StartupOverride => "startup override".to_owned(),
             SettingsOrigin::User => self
                 .user
                 .as_ref()
@@ -172,6 +174,8 @@ impl SettingsSources {
 pub(crate) struct LoadedSettings {
     pub(crate) settings: Settings,
     pub(crate) sources: SettingsSources,
+    pub(crate) user: SettingsPatch,
+    pub(crate) inherited: Settings,
 }
 
 pub(crate) fn lsp_command_override(
@@ -186,7 +190,7 @@ pub(crate) fn lsp_command_override(
         return None;
     }
     let text = fs::read_to_string(&path).ok()?;
-    let file: SettingsFile = toml_edit::de::from_str(&text).ok()?;
+    let file: SettingsPatch = toml_edit::de::from_str(&text).ok()?;
     resolve_lsp_command(file.lsp.commands.get(language_id)?, default_args)
 }
 
@@ -272,6 +276,9 @@ fn load_from_layers_with_ignored(
         ..SettingsSources::default()
     };
     let mut merged = toml_edit::DocumentMut::new();
+    let mut inherited_doc = toml_edit::DocumentMut::new();
+    let mut user_patch = SettingsPatch::default();
+    let mut has_project = false;
     let mut layers = Vec::new();
     for (path, is_project) in [(user, false), (project, true)] {
         let Some(path) = path else {
@@ -284,15 +291,19 @@ fn load_from_layers_with_ignored(
         let document = text
             .parse::<toml_edit::DocumentMut>()
             .map_err(|error| format!("{}: invalid settings TOML: {error}", path.display()))?;
+        let file: SettingsPatch = toml_edit::de::from_str(&text)
+            .map_err(|error| format!("{}: invalid settings TOML: {error}", path.display()))?;
         if is_project {
-            let file: SettingsFile = toml_edit::de::from_str(&text)
-                .map_err(|error| format!("{}: invalid settings TOML: {error}", path.display()))?;
             if !file.lsp.commands.is_empty() {
                 return Err(format!(
                     "{}: [lsp.commands] is not allowed in project settings",
                     path.display()
                 ));
             }
+            has_project = true;
+            merge_document(&mut inherited_doc, &document);
+        } else {
+            user_patch = file;
         }
         let origin = if is_project {
             SettingsOrigin::Project
@@ -319,11 +330,22 @@ fn load_from_layers_with_ignored(
         parse(&merged.to_string()).map_err(|error| format!("{names}: {error}"))?
     };
     let settings = apply_env(settings, |name| std::env::var(name).ok())?;
+    let inherited = if has_project {
+        parse(&inherited_doc.to_string()).map_err(|error| format!("project settings: {error}"))?
+    } else {
+        Settings::default()
+    };
+    let inherited = apply_env(inherited, |name| std::env::var(name).ok())?;
     mark_env_sources(&mut sources, |name| std::env::var(name).ok());
     if std::env::var_os("ANVIL_THEME").is_some() {
-        sources.set(SettingsKey::Theme, SettingsOrigin::Environment);
+        sources.set(SettingsKey::Theme, SettingsOrigin::StartupOverride);
     }
-    Ok(LoadedSettings { settings, sources })
+    Ok(LoadedSettings {
+        settings,
+        sources,
+        user: user_patch,
+        inherited,
+    })
 }
 
 fn mark_layer_sources(
@@ -426,13 +448,13 @@ pub(crate) fn load_file_from_path(path: &Path) -> Result<Settings, String> {
     parse(&read_settings_text(path)?)
 }
 
-pub(crate) fn save(settings: Settings) -> Result<PathBuf, String> {
+pub(crate) fn save_patch(patch: &SettingsPatch) -> Result<PathBuf, String> {
     let path = path()?;
-    save_to_path(&path, settings)?;
+    save_patch_to_path(&path, patch)?;
     Ok(path)
 }
 
-pub(crate) fn save_to_path(path: &Path, settings: Settings) -> Result<(), String> {
+pub(crate) fn save_patch_to_path(path: &Path, patch: &SettingsPatch) -> Result<(), String> {
     let mut document = if path.exists() {
         let metadata = fs::metadata(path)
             .map_err(|error| format!("cannot read {}: {error}", path.display()))?;
@@ -441,42 +463,77 @@ pub(crate) fn save_to_path(path: &Path, settings: Settings) -> Result<(), String
         }
         let text = fs::read_to_string(path)
             .map_err(|error| format!("cannot read {}: {error}", path.display()))?;
-        let _ = parse(&text)?;
         text.parse::<toml_edit::DocumentMut>()
             .map_err(|error| format!("invalid settings TOML: {error}"))?
     } else {
         toml_edit::DocumentMut::new()
     };
-    let theme = table_mut(&mut document, "theme")?;
-    for key in ["mode", "name", "dark", "light"] {
-        theme.remove(key);
+    if patch.theme.is_some() || document.contains_key("theme") {
+        patch_table(&mut document, "theme", true, |table| {
+            for key in ["mode", "name", "dark", "light"] {
+                table.remove(key);
+            }
+            if let Some(theme) = &patch.theme {
+                set_patch_value(table, "mode", theme.mode.as_deref());
+                set_patch_value(table, "name", theme.name.as_deref());
+                set_patch_value(table, "dark", theme.dark.as_deref());
+                set_patch_value(table, "light", theme.light.as_deref());
+            }
+        })?;
     }
-    match settings.theme {
-        Choice::Fixed(name) => {
-            theme["mode"] = toml_edit::value("fixed");
-            theme["name"] = toml_edit::value(name);
-        }
-        Choice::Auto { dark, light } => {
-            theme["mode"] = toml_edit::value("auto");
-            theme["dark"] = toml_edit::value(dark);
-            theme["light"] = toml_edit::value(light);
-        }
-    }
-    let editor = table_mut(&mut document, "editor")?;
-    editor["scroll_margin"] = toml_edit::value(settings.editor.scroll_margin as i64);
-    editor["max_buffers"] = toml_edit::value(settings.editor.max_buffers as i64);
-    editor["auto_save"] = toml_edit::value(settings.editor.auto_save);
-    editor["soft_wrap"] = toml_edit::value(settings.editor.soft_wrap);
-    editor["format_on_save"] = toml_edit::value(settings.editor.format_on_save);
-    editor["file_watching"] = toml_edit::value(settings.editor.file_watching);
-    editor["sidebar_percent"] = toml_edit::value(settings.editor.sidebar_percent as i64);
-    let search = table_mut(&mut document, "search")?;
-    search["case_sensitive"] = toml_edit::value(settings.search.case_sensitive);
-    let lsp = table_mut(&mut document, "lsp")?;
-    lsp["inlay_hints"] = toml_edit::value(settings.lsp.inlay_hints);
-    let ui = table_mut(&mut document, "ui")?;
-    ui["reduced_motion"] = toml_edit::value(settings.ui.reduced_motion);
-    ui["high_contrast"] = toml_edit::value(settings.ui.high_contrast);
+    patch_table(
+        &mut document,
+        "editor",
+        patch.editor.scroll_margin.is_some()
+            || patch.editor.max_buffers.is_some()
+            || patch.editor.auto_save.is_some()
+            || patch.editor.soft_wrap.is_some()
+            || patch.editor.format_on_save.is_some()
+            || patch.editor.file_watching.is_some()
+            || patch.editor.sidebar_percent.is_some(),
+        |table| {
+            set_patch_value(
+                table,
+                "scroll_margin",
+                patch.editor.scroll_margin.map(|value| value as i64),
+            );
+            set_patch_value(
+                table,
+                "max_buffers",
+                patch.editor.max_buffers.map(|value| value as i64),
+            );
+            set_patch_value(table, "auto_save", patch.editor.auto_save);
+            set_patch_value(table, "soft_wrap", patch.editor.soft_wrap);
+            set_patch_value(table, "format_on_save", patch.editor.format_on_save);
+            set_patch_value(table, "file_watching", patch.editor.file_watching);
+            set_patch_value(
+                table,
+                "sidebar_percent",
+                patch.editor.sidebar_percent.map(|value| value as i64),
+            );
+        },
+    )?;
+    patch_table(
+        &mut document,
+        "search",
+        patch.search.case_sensitive.is_some(),
+        |table| set_patch_value(table, "case_sensitive", patch.search.case_sensitive),
+    )?;
+    patch_table(
+        &mut document,
+        "lsp",
+        patch.lsp.inlay_hints.is_some(),
+        |table| set_patch_value(table, "inlay_hints", patch.lsp.inlay_hints),
+    )?;
+    patch_table(
+        &mut document,
+        "ui",
+        patch.ui.reduced_motion.is_some() || patch.ui.high_contrast.is_some(),
+        |table| {
+            set_patch_value(table, "reduced_motion", patch.ui.reduced_motion);
+            set_patch_value(table, "high_contrast", patch.ui.high_contrast);
+        },
+    )?;
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)
             .map_err(|error| format!("cannot create {}: {error}", parent.display()))?;
@@ -491,16 +548,38 @@ pub(crate) fn save_to_path(path: &Path, settings: Settings) -> Result<(), String
     Ok(())
 }
 
-fn table_mut<'a>(
-    document: &'a mut toml_edit::DocumentMut,
+fn patch_table(
+    document: &mut toml_edit::DocumentMut,
     key: &str,
-) -> Result<&'a mut toml_edit::Table, String> {
-    if !document.contains_key(key) {
-        document.insert(key, toml_edit::Item::Table(toml_edit::Table::new()));
+    create: bool,
+    apply: impl FnOnce(&mut toml_edit::Table),
+) -> Result<(), String> {
+    if let Some(item) = document.get_mut(key) {
+        let table = item
+            .as_table_mut()
+            .ok_or_else(|| format!("[{key}] must be a table"))?;
+        apply(table);
+        return Ok(());
     }
-    document[key]
-        .as_table_mut()
-        .ok_or_else(|| format!("[{key}] must be a table"))
+    if create {
+        let mut table = toml_edit::Table::new();
+        apply(&mut table);
+        document.insert(key, toml_edit::Item::Table(table));
+    }
+    Ok(())
+}
+
+fn set_patch_value<T: Into<toml_edit::Value>>(
+    table: &mut toml_edit::Table,
+    key: &str,
+    value: Option<T>,
+) {
+    match value {
+        Some(value) => table[key] = toml_edit::value(value),
+        None => {
+            table.remove(key);
+        }
+    }
 }
 
 pub(crate) fn parse(text: &str) -> Result<Settings, String> {
@@ -512,7 +591,7 @@ pub(crate) fn parse(text: &str) -> Result<Settings, String> {
             return Err(format!("unknown settings section [{key}]"));
         }
     }
-    let file: SettingsFile =
+    let file: SettingsPatch =
         toml_edit::de::from_str(text).map_err(|error| format!("invalid settings TOML: {error}"))?;
     let mut settings = Settings {
         theme: parse_theme(file.theme)?,
@@ -689,9 +768,9 @@ pub(crate) fn path() -> Result<PathBuf, String> {
     Ok(PathBuf::from(home).join(".config/anvil/settings.toml"))
 }
 
-#[derive(Debug, Default, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize)]
 #[serde(default)]
-struct SettingsFile {
+pub(crate) struct SettingsPatch {
     theme: Option<ThemeFile>,
     editor: EditorFile,
     search: SearchFile,
@@ -699,7 +778,7 @@ struct SettingsFile {
     ui: UiFile,
 }
 
-#[derive(Debug, Default, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 struct ThemeFile {
     mode: Option<String>,
@@ -707,7 +786,8 @@ struct ThemeFile {
     dark: Option<String>,
     light: Option<String>,
 }
-#[derive(Debug, Default, Deserialize)]
+
+#[derive(Clone, Debug, Default, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 struct EditorFile {
     scroll_margin: Option<usize>,
@@ -719,33 +799,121 @@ struct EditorFile {
     sidebar_percent: Option<u16>,
 }
 
-#[derive(Debug, Default, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 struct SearchFile {
     case_sensitive: Option<bool>,
 }
 
-#[derive(Debug, Default, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 struct LspFile {
     inlay_hints: Option<bool>,
     commands: BTreeMap<String, LspCommandFile>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 #[serde(untagged)]
 enum LspCommandFile {
     Command(String),
     Argv(Vec<String>),
 }
 
-#[derive(Debug, Default, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 struct UiFile {
     reduced_motion: Option<bool>,
     high_contrast: Option<bool>,
     #[allow(dead_code)]
     icons: BTreeMap<String, serde::de::IgnoredAny>,
+}
+
+impl SettingsPatch {
+    pub(crate) fn from_settings(settings: Settings) -> Self {
+        let mut patch = Self::default();
+        for key in [
+            SettingsKey::Theme,
+            SettingsKey::ScrollMargin,
+            SettingsKey::AutoSave,
+            SettingsKey::SoftWrap,
+            SettingsKey::FormatOnSave,
+            SettingsKey::MaxBuffers,
+            SettingsKey::SidebarPercent,
+            SettingsKey::CaseSensitive,
+            SettingsKey::InlayHints,
+            SettingsKey::ReducedMotion,
+            SettingsKey::HighContrast,
+            SettingsKey::FileWatching,
+        ] {
+            patch.set_field(key, &settings);
+        }
+        patch
+    }
+
+    pub(crate) fn set_field(&mut self, key: SettingsKey, settings: &Settings) {
+        match key {
+            SettingsKey::Theme => self.set_theme(settings.theme),
+            SettingsKey::ScrollMargin => {
+                self.editor.scroll_margin = Some(settings.editor.scroll_margin)
+            }
+            SettingsKey::AutoSave => self.editor.auto_save = Some(settings.editor.auto_save),
+            SettingsKey::SoftWrap => self.editor.soft_wrap = Some(settings.editor.soft_wrap),
+            SettingsKey::FormatOnSave => {
+                self.editor.format_on_save = Some(settings.editor.format_on_save)
+            }
+            SettingsKey::MaxBuffers => self.editor.max_buffers = Some(settings.editor.max_buffers),
+            SettingsKey::SidebarPercent => {
+                self.editor.sidebar_percent = Some(settings.editor.sidebar_percent)
+            }
+            SettingsKey::CaseSensitive => {
+                self.search.case_sensitive = Some(settings.search.case_sensitive)
+            }
+            SettingsKey::InlayHints => self.lsp.inlay_hints = Some(settings.lsp.inlay_hints),
+            SettingsKey::ReducedMotion => self.ui.reduced_motion = Some(settings.ui.reduced_motion),
+            SettingsKey::HighContrast => self.ui.high_contrast = Some(settings.ui.high_contrast),
+            SettingsKey::FileWatching => {
+                self.editor.file_watching = Some(settings.editor.file_watching)
+            }
+        }
+    }
+
+    pub(crate) fn clear_field(&mut self, key: SettingsKey) {
+        match key {
+            SettingsKey::Theme => self.theme = None,
+            SettingsKey::ScrollMargin => self.editor.scroll_margin = None,
+            SettingsKey::AutoSave => self.editor.auto_save = None,
+            SettingsKey::SoftWrap => self.editor.soft_wrap = None,
+            SettingsKey::FormatOnSave => self.editor.format_on_save = None,
+            SettingsKey::MaxBuffers => self.editor.max_buffers = None,
+            SettingsKey::SidebarPercent => self.editor.sidebar_percent = None,
+            SettingsKey::CaseSensitive => self.search.case_sensitive = None,
+            SettingsKey::InlayHints => self.lsp.inlay_hints = None,
+            SettingsKey::ReducedMotion => self.ui.reduced_motion = None,
+            SettingsKey::HighContrast => self.ui.high_contrast = None,
+            SettingsKey::FileWatching => self.editor.file_watching = None,
+        }
+    }
+
+    pub(crate) fn set_theme(&mut self, choice: Choice) {
+        self.theme = Some(theme_file(choice));
+    }
+}
+
+fn theme_file(choice: Choice) -> ThemeFile {
+    match choice {
+        Choice::Fixed(name) => ThemeFile {
+            mode: Some("fixed".to_owned()),
+            name: Some(name.to_owned()),
+            dark: None,
+            light: None,
+        },
+        Choice::Auto { dark, light } => ThemeFile {
+            mode: Some("auto".to_owned()),
+            name: None,
+            dark: Some(dark.to_owned()),
+            light: Some(light.to_owned()),
+        },
+    }
 }
 
 impl crate::Model {
@@ -764,7 +932,8 @@ impl crate::Model {
                 return;
             }
         };
-        match save_to_path(&path, self.config.settings) {
+        let patch = SettingsPatch::from_settings(self.config.settings);
+        match save_patch_to_path(&path, &patch) {
             Ok(()) => {
                 self.status.text = format!("settings exported: {}", path.display());
             }
@@ -801,7 +970,8 @@ impl crate::Model {
                 return;
             }
         };
-        let target = match save(imported) {
+        let patch = SettingsPatch::from_settings(imported);
+        let target = match save_patch(&patch) {
             Ok(path) => path,
             Err(error) => {
                 self.status.text = format!("E: settings-import: {error}");
@@ -852,8 +1022,13 @@ impl crate::Model {
         if !self.appearance.persist_theme {
             return status;
         }
-        match save(self.config.settings) {
-            Ok(_) => format!("{status} (saved)"),
+        let mut patch = self.config.user_settings.clone();
+        patch.set_theme(self.config.settings.theme);
+        match save_patch(&patch) {
+            Ok(_) => {
+                self.config.user_settings = patch;
+                format!("{status} (saved)")
+            }
             Err(error) => format!("{status}; E: {error}"),
         }
     }
@@ -1258,7 +1433,7 @@ mod tests {
         )
         .expect("settings with lsp commands");
         assert!(settings.lsp.inlay_hints);
-        let file: SettingsFile = toml_edit::de::from_str(
+        let file: SettingsPatch = toml_edit::de::from_str(
             "[lsp.commands]\njson = [\"node\", \"server.js\", \"--stdio\"]\nrust = \"/usr/bin/rust-analyzer\"\n",
         )
         .expect("lsp commands");
@@ -1274,7 +1449,7 @@ mod tests {
 
     #[test]
     fn string_json_override_keeps_builtin_stdio_args() {
-        let file: SettingsFile = toml_edit::de::from_str(
+        let file: SettingsPatch = toml_edit::de::from_str(
             "[lsp.commands]\njson = \"/usr/bin/vscode-json-language-server\"\n",
         )
         .expect("json command");
@@ -1354,13 +1529,133 @@ mod tests {
         settings.editor.max_buffers = 12;
         settings.search.case_sensitive = true;
         settings.lsp.inlay_hints = false;
-        save_to_path(&path, settings).expect("save");
+        save_patch_to_path(&path, &SettingsPatch::from_settings(settings)).expect("save");
         let text = fs::read_to_string(&path).expect("read");
         assert!(text.contains("[theme]"));
         assert!(text.contains("name = \"nord\""));
         assert!(text.contains("max_buffers = 12"));
         assert_eq!(load_file_from_path(&path).expect("load"), settings);
         let _ = fs::remove_dir_all(&directory);
+    }
+
+    #[test]
+    fn sparse_save_does_not_persist_environment_overrides() {
+        let _guard = TEST_ENV_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        let directory = tempfile::tempdir().expect("tempdir");
+        let user = directory.path().join("settings.toml");
+        fs::write(&user, "[editor]\nsoft_wrap = true\n").expect("write");
+        let previous = std::env::var_os(ENV_SCROLL_MARGIN);
+        unsafe { std::env::set_var(ENV_SCROLL_MARGIN, "9") };
+        let loaded = load_from_layers_with_sources(Some(&user), None).expect("load");
+        unsafe {
+            match previous {
+                Some(value) => std::env::set_var(ENV_SCROLL_MARGIN, value),
+                None => std::env::remove_var(ENV_SCROLL_MARGIN),
+            }
+        }
+        assert_eq!(loaded.settings.editor.scroll_margin, 9);
+        save_patch_to_path(&user, &loaded.user).expect("save");
+        let text = fs::read_to_string(&user).expect("read");
+        assert!(!text.contains("scroll_margin"), "{text}");
+        assert!(text.contains("soft_wrap = true"), "{text}");
+    }
+
+    #[test]
+    fn clearing_a_user_key_reveals_the_project_value() {
+        let directory = tempfile::tempdir().expect("tempdir");
+        let user = directory.path().join("settings.toml");
+        let project = directory.path().join(PROJECT_SETTINGS);
+        fs::write(&user, "[editor]\nsoft_wrap = false\n").expect("user");
+        fs::write(&project, "[editor]\nsoft_wrap = true\n").expect("project");
+        let loaded = load_from_layers_with_sources(Some(&user), Some(&project)).expect("load");
+        assert!(loaded.settings.editor.soft_wrap);
+        assert!(loaded.inherited.editor.soft_wrap);
+        let mut patch = loaded.user.clone();
+        patch.clear_field(SettingsKey::SoftWrap);
+        save_patch_to_path(&user, &patch).expect("save");
+        let text = fs::read_to_string(&user).expect("read");
+        assert!(!text.contains("soft_wrap"), "{text}");
+        let reloaded = load_from_layers_with_sources(Some(&user), Some(&project)).expect("reload");
+        assert!(reloaded.settings.editor.soft_wrap);
+        assert_eq!(
+            reloaded.sources.origin(SettingsKey::SoftWrap),
+            SettingsOrigin::Project
+        );
+    }
+
+    #[test]
+    fn sparse_save_preserves_comments_and_unknown_keys() {
+        let directory = tempfile::tempdir().expect("tempdir");
+        let path = directory.path().join("settings.toml");
+        fs::write(
+            &path,
+            "# keep this comment\n[editor]\nsoft_wrap = true\n[future]\nvalue = 1\n",
+        )
+        .expect("write");
+        save_patch_to_path(&path, &SettingsPatch::default()).expect("save");
+        let text = fs::read_to_string(&path).expect("read");
+        assert!(text.contains("# keep this comment"), "{text}");
+        assert!(text.contains("[future]"), "{text}");
+        assert!(text.contains("value = 1"), "{text}");
+        assert!(parse(&text).is_err(), "unknown keys remain load errors");
+    }
+
+    #[test]
+    fn theme_patch_does_not_rewrite_other_user_keys() {
+        let directory = tempfile::tempdir().expect("tempdir");
+        let path = directory.path().join("settings.toml");
+        fs::write(&path, "[editor]\nsoft_wrap = true\n").expect("write");
+        let loaded = load_from_layers_with_sources(Some(&path), None).expect("load");
+        let mut patch = loaded.user.clone();
+        patch.set_theme(Choice::Fixed("nord"));
+        save_patch_to_path(&path, &patch).expect("save");
+        let text = fs::read_to_string(&path).expect("read");
+        assert!(text.contains("soft_wrap = true"), "{text}");
+        assert!(text.contains("name = \"nord\""), "{text}");
+    }
+
+    #[test]
+    fn settings_overlay_save_keeps_env_out_of_user_file() {
+        let _guard = TEST_ENV_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        let directory = tempfile::tempdir().expect("tempdir");
+        let path = directory.path().join("settings.toml");
+        fs::write(&path, "[editor]\nsoft_wrap = true\n").expect("write");
+        let previous_settings = std::env::var_os("ANVIL_SETTINGS");
+        let previous_margin = std::env::var_os(ENV_SCROLL_MARGIN);
+        unsafe {
+            std::env::set_var("ANVIL_SETTINGS", &path);
+            std::env::set_var(ENV_SCROLL_MARGIN, "9");
+        }
+        let mut model = crate::Model::new(crate::EditorState::from_text(""), None);
+        model.reload_config();
+        assert_eq!(model.config.settings.editor.scroll_margin, 9);
+        model.open_settings();
+        model
+            .overlays
+            .settings_overlay
+            .as_mut()
+            .expect("overlay")
+            .selected = 1;
+        model.adjust_settings(1);
+        model.save_settings();
+        let text = fs::read_to_string(&path).expect("read");
+        assert!(!text.contains("scroll_margin"), "{text}");
+        assert!(text.contains("auto_save = true"), "{text}");
+        assert!(text.contains("soft_wrap = true"), "{text}");
+        unsafe {
+            match previous_settings {
+                Some(value) => std::env::set_var("ANVIL_SETTINGS", value),
+                None => std::env::remove_var("ANVIL_SETTINGS"),
+            }
+            match previous_margin {
+                Some(value) => std::env::set_var(ENV_SCROLL_MARGIN, value),
+                None => std::env::remove_var(ENV_SCROLL_MARGIN),
+            }
+        }
     }
 
     #[test]
