@@ -1,7 +1,7 @@
 # ADR-0047: File tree navigation and incremental refresh
 
 - Status: Proposed
-- Version: 1.0.0
+- Version: 1.1.0
 - Implementation: not started
 - Date: 2026-11-16
 - Related: [ADR-0018](0018-workspace-tree-watch.md),
@@ -38,6 +38,10 @@ This is deterministic, but it is case-sensitive lexicographic ordering. The TUI
 does not apply a second comparator in `handle_tree_listing` or
 `build_tree_entries`. `file2` sorts after `file10`, and uppercase names sort
 before lowercase names.
+
+The no-gateway fallback `tree_entries` has its own case-sensitive lexicographic
+sort and filters only `.git` and `target`, not the atomic-write prefix. That
+fallback must not become a second ordering or visibility policy.
 
 The gateway order is also used by command-line path completion. Natural
 ordering is a tree-browsing policy, not a transport invariant.
@@ -135,6 +139,17 @@ comparison.
 Sort each directory independently. Do not reorder the synthetic secondary-root
 nodes at depth 0; those remain a separate root group. Untrusted-root labels and
 root ordering are unchanged.
+
+All directory-listing consumers must route through one `tree_order` helper:
+
+- `handle_tree_listing`;
+- `TreeSnapshot` / `build_tree_entries`;
+- `TreeListings`;
+- the no-gateway `tree_entries` fallback.
+
+No caller may sort locally. The fallback must also use the gateway's
+`.git`/`target`/`.anvil-write-` filtering so worker-unavailable behavior does
+not expose temporary files or change ordering.
 
 Keep the gateway's lexicographic directories-first order. Do not move natural
 sorting into `sys.read_dir`, because completion and other non-tree consumers
@@ -350,6 +365,9 @@ Focused TUI tests:
 - reveal expands multiple collapsed ancestors and selects the target;
 - reveal of an untrusted, missing, or filtered path reports an error;
 - scrolloff keeps the selected row inside the viewport;
+- the no-gateway `tree_entries` fallback returns the same natural order as the
+  gateway path;
+- the fallback hides `.git`, `target`, and `.anvil-write-*` entries;
 - wheel-over-tree changes tree selection, not editor scroll;
 - tree find respects `search.case_sensitive`, caps at 1024 matches, and
   recomputes after refresh;
