@@ -1,8 +1,7 @@
 # ADR-0048: Per-root language tooling and LSP workspace configuration
 
-- Status: Proposed
+- Status: Accepted; implemented 2026-11-16
 - Version: 1.1.0
-- Implementation: implemented 2026-11-16
 - Date: 2026-11-16
 - Supersedes: ADR-0025 §5 "LSP is primary-root-only for now" clause only
 - Superseded by:
