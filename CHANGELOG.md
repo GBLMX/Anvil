@@ -8,6 +8,9 @@ post-`0.5.0` feature line.
 
 ## [Unreleased]
 ### Added
+- LSP workers, status, retries, and inlay-hint support are now keyed by the
+  owning workspace root, and each worker opens its LSP connection through that
+  root's gateway instead of sharing the primary-root client.
 - Added `anvil modules [--json]`, a read-only view of the compiled-in modules,
   contract range, command count, and source; no marketplace or network access.
 - The workspace tree now uses case-insensitive natural ordering, filters

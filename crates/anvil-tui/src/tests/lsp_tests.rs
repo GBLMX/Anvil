@@ -1138,6 +1138,10 @@ fn formatting_response_for_inactive_path_is_ignored() {
     let mut model = Model::open(&first).expect("open");
     let first_path = model.session.path.clone().expect("first path");
     model
+        .save_as(second.to_str().expect("second path"))
+        .then_some(())
+        .expect("save as");
+    model
         .language
         .lsp_requests
         .pending_edit_path
@@ -1147,10 +1151,6 @@ fn formatting_response_for_inactive_path_is_ignored() {
         .lsp_requests
         .pending
         .insert(13, LspRequestKind::Formatting);
-    model
-        .save_as(second.to_str().expect("second path"))
-        .then_some(())
-        .expect("save as");
     model.handle_lsp_response(
         13,
         serde_json::json!([{
@@ -1163,7 +1163,11 @@ fn formatting_response_for_inactive_path_is_ignored() {
         None,
     );
     assert_eq!(model.session.editor.text().slice(0..9), "fn first(");
-    assert!(model.status.text.contains("inactive"));
+    assert!(
+        model.status.text.contains("inactive"),
+        "{}",
+        model.status.text
+    );
 }
 
 #[test]
@@ -1306,6 +1310,7 @@ fn rename_response_for_inactive_path_is_ignored() {
     let mut model = Model::open(&first).expect("open");
     let first_path = model.session.path.clone().expect("first path");
     let uri = anvil_lsp_client::file_uri(&first_path);
+    assert!(model.save_as(second.to_str().expect("second path")));
     model
         .language
         .lsp_requests
@@ -1321,7 +1326,6 @@ fn rename_response_for_inactive_path_is_ignored() {
         .lsp_requests
         .pending
         .insert(16, LspRequestKind::Rename);
-    assert!(model.save_as(second.to_str().expect("second path")));
     model.handle_lsp_response(
         16,
         serde_json::json!({
@@ -1338,7 +1342,11 @@ fn rename_response_for_inactive_path_is_ignored() {
         None,
     );
     assert_eq!(model.session.editor.text().slice(0..9), "fn first(");
-    assert!(model.status.text.contains("inactive"));
+    assert!(
+        model.status.text.contains("inactive"),
+        "{}",
+        model.status.text
+    );
 }
 
 #[test]
@@ -1638,7 +1646,11 @@ fn status_column_uses_grapheme_index() {
 #[test]
 fn disabled_inlay_hints_are_not_requested() {
     let mut model = Model::new(EditorState::from_text("x"), Some(PathBuf::from("main.rs")));
-    let key = ("rust-analyzer".to_owned(), "rust".to_owned());
+    let key = (
+        "rust-analyzer".to_owned(),
+        "rust".to_owned(),
+        PathBuf::from("."),
+    );
     model.language.lsp.config = Some(key.clone());
     model.language.inlay_hints.support.insert(key, true);
     model.config.settings.lsp.inlay_hints = false;
@@ -2142,7 +2154,7 @@ fn lsp_status_command_reports_server_details() {
     model.execute_command("lsp-status");
     let text = &model.status.text;
     assert!(text.contains("lsp clangd (c) running"), "{text}");
-    assert!(text.contains("root /ws (primary)"), "{text}");
+    assert!(text.contains("root /ws (workspace root)"), "{text}");
     assert!(text.contains("server clangd 18"), "{text}");
 }
 

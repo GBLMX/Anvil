@@ -169,13 +169,13 @@ pub fn run_with_all_services(
     theme::init_color_support();
     theme::set_background_is_light(terminal_background::query_is_light());
     let (mut model, session) = match GatewaySession::start(&workspace) {
-        Ok((session, client, lsp_client)) => {
+        Ok((session, client, _)) => {
             let mut model = Model::with_gateway(client, workspace.clone());
             model.workspace.git_service = git.clone();
             model.workspace.workspace_index_service = workspace_index.clone();
             model.workspace.desktop_service = desktop.clone();
             model.workspace.language_tooling_service = language_tooling.clone();
-            model.language.lsp.client = Some(lsp_client);
+
             if stdin_text.is_none()
                 && let Some(path) = path
                 && let Err(error) = model.open_path(path)
@@ -504,7 +504,7 @@ impl Drop for Model {
         self.workspace.file_worker = None;
         self.workspace.root_file_workers.clear();
         self.language.lsp.workers.clear();
-        self.language.lsp.client = None;
+
         self.language.dap.client = None;
         self.language.dap.attach = None;
         self.language.dap.request = None;

@@ -2,7 +2,7 @@
 
 use super::Model;
 use crate::lsp_ui::lsp_settings_with_service;
-use crate::state::LspStatus;
+use crate::state::{LspKey, LspStatus};
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -137,17 +137,17 @@ impl Model {
 
     fn lsp_status_segment(&self) -> Option<String> {
         let configured = self.language.lsp.config.is_some();
-        let label_for = |key: &(String, String)| {
+        let label_for = |key: &LspKey| {
             self.language
                 .lsp
                 .labels
                 .get(key)
                 .cloned()
                 .unwrap_or_else(|| {
-                    Path::new(&key.0)
+                    Path::new(&key.1)
                         .file_name()
                         .map(|name| name.to_string_lossy().into_owned())
-                        .unwrap_or_else(|| key.0.clone())
+                        .unwrap_or_else(|| key.1.clone())
                 })
         };
         let (key, label) = if let Some(key) = self.language.lsp.config.clone() {
@@ -157,10 +157,13 @@ impl Model {
             let label = label_for(&key);
             (key, label)
         } else {
-            let settings = self.session.path.as_ref().and_then(|path| {
-                lsp_settings_with_service(path, self.workspace.language_tooling_service.as_deref())
-            })?;
-            let key = (settings.tool, settings.language_id);
+            let path = self.session.path.as_ref()?;
+            let settings = lsp_settings_with_service(
+                path,
+                self.workspace.language_tooling_service.as_deref(),
+            )?;
+            let root = self.lsp_owning_root(path)?;
+            let key = (settings.tool, settings.language_id, root);
             (key, settings.label)
         };
         let suffix = match self.language.lsp.status.get(&key) {
@@ -543,7 +546,11 @@ mod tests {
     #[test]
     fn lsp_status_uses_cached_label_without_a_path_lookup() {
         let mut model = Model::new(EditorState::from_text("alpha"), None);
-        let key = ("/opt/clangd".to_owned(), "c".to_owned());
+        let key = (
+            "/opt/clangd".to_owned(),
+            "c".to_owned(),
+            PathBuf::from("/ws"),
+        );
         model.language.lsp.desired = Some(key.clone());
         model
             .language

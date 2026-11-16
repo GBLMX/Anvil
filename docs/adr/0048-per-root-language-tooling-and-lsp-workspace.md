@@ -2,7 +2,8 @@
 
 - Status: Proposed
 - Version: 1.1.0
-- Implementation: not started
+- Implementation: root-scoped keys and per-root gateway connections landed;
+  launch profiles, workspace configuration, and lifecycle isolation pending
 - Date: 2026-11-16
 - Supersedes: ADR-0025 §5 "LSP is primary-root-only for now" clause only
 - Superseded by:

@@ -284,18 +284,20 @@ impl LspStatus {
         }
     }
 }
+pub(crate) type LspKey = (String, String, PathBuf);
 
 #[derive(Default)]
 pub(crate) struct LspTransportState {
-    pub(crate) client: Option<GatewayClient>,
-    pub(crate) workers: HashMap<(String, String), LspWorker>,
-    pub(crate) config: Option<(String, String)>,
-    pub(crate) retries: HashMap<(String, String), u8>,
-    pub(crate) retry: Option<((String, String), Instant)>,
-    pub(crate) status: HashMap<(String, String), LspStatus>,
-    pub(crate) desired: Option<(String, String)>,
-    pub(crate) labels: HashMap<(String, String), String>,
+    pub(crate) workers: HashMap<LspKey, LspWorker>,
+    pub(crate) config: Option<LspKey>,
+    pub(crate) retries: HashMap<LspKey, u8>,
+    pub(crate) retry: Option<(LspKey, Instant)>,
+    pub(crate) status: HashMap<LspKey, LspStatus>,
+    pub(crate) desired: Option<LspKey>,
+    pub(crate) labels: HashMap<LspKey, String>,
     pub(crate) pending_sync: Option<(PathBuf, String)>,
+    #[cfg(test)]
+    pub(crate) client: Option<GatewayClient>,
 }
 
 #[derive(Default)]
@@ -1159,7 +1161,7 @@ pub(crate) struct InlayHintsState {
     pub(crate) hints: Vec<InlayHint>,
     pub(crate) pending: Option<(u64, PathBuf, u64, usize, usize)>,
     pub(crate) checked: Option<(PathBuf, u64, usize, usize)>,
-    pub(crate) support: HashMap<(String, String), bool>,
+    pub(crate) support: HashMap<LspKey, bool>,
 }
 
 /// Completion popup state, pending resolve request, and active snippet session.
@@ -1190,19 +1192,14 @@ pub(crate) struct LanguageState {
     pub(crate) completion: CompletionUiState,
 }
 pub(crate) enum LspPollEffect {
-    Event {
-        key: (String, String),
-        event: lsp::LspEvent,
-    },
-    Retry {
-        key: (String, String),
-    },
+    Event { key: LspKey, event: lsp::LspEvent },
+    Retry { key: LspKey },
 }
 
 impl LanguageState {
     /// Polls LSP workers and the retry deadline, returning effects for Model.
     pub(crate) fn poll(&mut self, now: Instant) -> Vec<LspPollEffect> {
-        let keys: Vec<(String, String)> = self.lsp.workers.keys().cloned().collect();
+        let keys: Vec<LspKey> = self.lsp.workers.keys().cloned().collect();
         let mut effects = Vec::with_capacity(keys.len() + 1);
         for key in keys {
             let events = self

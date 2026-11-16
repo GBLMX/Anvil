@@ -12,10 +12,7 @@ fn truncate_event_text(text: &str, max: usize) -> String {
     text[..end].to_owned()
 }
 
-fn inactive_lsp_keys(
-    keys: Vec<(String, String)>,
-    desired: Option<&(String, String)>,
-) -> Vec<(String, String)> {
+fn inactive_lsp_keys(keys: Vec<LspKey>, desired: Option<&LspKey>) -> Vec<LspKey> {
     keys.into_iter()
         .filter(|key| desired != Some(key))
         .collect()
@@ -48,7 +45,7 @@ impl Model {
         self.language.semantic_tokens.legend.clear();
     }
 
-    fn retain_lsp_worker(&mut self, desired: Option<&(String, String)>) {
+    fn retain_lsp_worker(&mut self, desired: Option<&LspKey>) {
         self.language.lsp.desired = desired.cloned();
         let keys = self.language.lsp.workers.keys().cloned().collect();
         for key in inactive_lsp_keys(keys, desired) {
@@ -95,12 +92,21 @@ impl Model {
             .and_then(|key| self.language.lsp.workers.get(key))
     }
 
-    pub(crate) fn lsp_key(&self, path: &Path) -> Option<(String, String)> {
-        lsp_settings_with_service(path, self.workspace.language_tooling_service.as_deref())
-            .map(|settings| (settings.tool, settings.language_id))
+    pub(crate) fn lsp_owning_root(&self, path: &Path) -> Option<PathBuf> {
+        if let Some(root) = self.workspace.roots.owning_root(path) {
+            return root.trusted.then(|| root.path.clone());
+        }
+        path.starts_with(&self.workspace.path)
+            .then(|| self.workspace.path.clone())
     }
 
-    fn lsp_status_root(&self, key: &(String, String)) -> PathBuf {
+    pub(crate) fn lsp_key(&self, path: &Path) -> Option<LspKey> {
+        let root = self.lsp_owning_root(path)?;
+        lsp_settings_with_service(path, self.workspace.language_tooling_service.as_deref())
+            .map(|settings| (settings.tool, settings.language_id, root))
+    }
+
+    fn lsp_status_root(&self, key: &LspKey) -> PathBuf {
         self.language
             .lsp
             .status
@@ -122,6 +128,11 @@ impl Model {
             self.file.dirty = true;
             return;
         };
+        let Some(owning_root) = self.lsp_owning_root(&path) else {
+            self.status.text = format!("E: lsp: outside workspace: {}", path.display());
+            self.file.dirty = true;
+            return;
+        };
         let Some(settings) =
             lsp_settings_with_service(&path, self.workspace.language_tooling_service.as_deref())
         else {
@@ -132,9 +143,13 @@ impl Model {
             self.file.dirty = true;
             return;
         };
-        let key = (settings.tool, settings.language_id);
+        let key = (
+            settings.tool.clone(),
+            settings.language_id.clone(),
+            owning_root.clone(),
+        );
         let status = self.language.lsp.status.get(&key);
-        let root = self.lsp_status_root(&key);
+        let project_root = self.lsp_status_root(&key);
         let state = status.map(LspStatus::label).unwrap_or_else(|| {
             if self.language.lsp.workers.contains_key(&key) {
                 "starting"
@@ -148,11 +163,16 @@ impl Model {
         } else {
             settings.root_markers.join(",")
         };
+        let root_note = if project_root == owning_root {
+            "workspace root".to_owned()
+        } else {
+            format!("workspace {}", owning_root.display())
+        };
         let mut detail = format!(
-            "lsp {} ({}) {state} · root {} (primary)",
+            "lsp {} ({}) {state} · root {} ({root_note})",
             settings.label,
             key.1,
-            root.display()
+            project_root.display(),
         );
         if let Some(LspStatus::Running { server_info, .. }) = status
             && let Some(server_info) = server_info
@@ -187,8 +207,14 @@ impl Model {
             self.clear_lsp_ui();
             return;
         };
+        let Some(root) = self.lsp_owning_root(&path) else {
+            self.language.lsp.config = None;
+            self.retain_lsp_worker(None);
+            self.clear_lsp_ui();
+            return;
+        };
         self.activate_plugins(ActivationEvent::Language(settings.language_id.clone()));
-        let desired = (settings.tool.clone(), settings.language_id.clone());
+        let desired = (settings.tool.clone(), settings.language_id.clone(), root);
         self.language
             .lsp
             .labels
@@ -251,7 +277,16 @@ impl Model {
             self.file.dirty = true;
             return;
         };
-        let desired = (settings.tool.clone(), settings.language_id.clone());
+        let Some(root) = self.lsp_owning_root(&path) else {
+            self.status.text = format!("E: lsp: outside workspace: {}", path.display());
+            self.file.dirty = true;
+            return;
+        };
+        let desired = (
+            settings.tool.clone(),
+            settings.language_id.clone(),
+            root.clone(),
+        );
         self.language
             .lsp
             .labels
@@ -283,16 +318,22 @@ impl Model {
             self.file.dirty = true;
             return;
         }
-        let Some(client) = self.language.lsp.client.take().or_else(|| {
-            self.workspace
-                .gateway_session
-                .as_mut()
-                .and_then(|session| session.connect_lsp().ok())
-        }) else {
+        #[cfg(test)]
+        let mut client = self.language.lsp.client.take();
+        #[cfg(not(test))]
+        let mut client = None;
+        if client.is_none() {
+            client = self
+                .workspace
+                .root_gateways
+                .get_mut(&root)
+                .and_then(|gateway| gateway.0.connect_lsp().ok());
+        }
+        let Some(client) = client else {
             self.language.lsp.status.insert(
                 desired,
                 LspStatus::Failed {
-                    root: self.workspace.path.clone(),
+                    root: root.clone(),
                     error: "lsp gateway connection unavailable".to_owned(),
                 },
             );
@@ -312,13 +353,7 @@ impl Model {
             root_markers: settings.root_markers,
             initialization_options: settings.initialization_options,
         };
-        match LspWorker::start(
-            client,
-            config,
-            self.workspace.path.clone(),
-            path.clone(),
-            text,
-        ) {
+        match LspWorker::start(client, config, root, path.clone(), text) {
             Ok(worker) => {
                 self.language.lsp.config = Some(desired.clone());
                 let root = worker.root().to_path_buf();
@@ -371,7 +406,7 @@ impl Model {
         self.file.dirty = true;
     }
 
-    fn handle_lsp_event(&mut self, key: &(String, String), event: LspEvent) {
+    fn handle_lsp_event(&mut self, key: &LspKey, event: LspEvent) {
         let active = self.language.lsp.config.as_ref() == Some(key);
         match event {
             LspEvent::Capabilities {
@@ -677,7 +712,7 @@ impl Model {
         }
         self.workspace.file_worker = None;
         self.language.lsp.workers.clear();
-        self.language.lsp.client = None;
+
         self.language.lsp.config = None;
         self.language.lsp.retries.clear();
         self.clear_lsp_ui();
@@ -686,10 +721,9 @@ impl Model {
             session.shutdown_gracefully(std::time::Duration::from_millis(250));
         }
         match GatewaySession::start(&self.workspace.path) {
-            Ok((session, client, lsp_client)) => {
+            Ok((session, client, _)) => {
                 self.workspace.gateway_session = Some(session);
                 self.workspace.gateway = Some(client);
-                self.language.lsp.client = Some(lsp_client);
                 self.status.text = "gateway reconnected".to_owned();
             }
             Err(error) => {
@@ -720,11 +754,13 @@ mod event_text_tests {
 #[cfg(test)]
 mod worker_selection_tests {
     use super::inactive_lsp_keys;
+    use std::path::PathBuf;
 
     #[test]
     fn switching_language_selects_only_the_active_worker() {
-        let rust = ("rust-analyzer".to_owned(), "rust".to_owned());
-        let go = ("gopls".to_owned(), "go".to_owned());
+        let root = PathBuf::from("/ws");
+        let rust = ("rust-analyzer".to_owned(), "rust".to_owned(), root.clone());
+        let go = ("gopls".to_owned(), "go".to_owned(), root);
         let keys = vec![rust.clone(), go.clone()];
         assert_eq!(inactive_lsp_keys(keys.clone(), Some(&go)), vec![rust]);
         assert_eq!(inactive_lsp_keys(keys.clone(), None), keys);
@@ -734,6 +770,7 @@ mod worker_selection_tests {
 #[cfg(test)]
 mod status_tests {
     use super::*;
+    use crate::workspace_roots::WorkspaceRoots;
     use anvil_editor::EditorState;
 
     #[test]
@@ -743,7 +780,7 @@ mod status_tests {
             Some(PathBuf::from("/ws/main.c")),
         );
         model.workspace.path = PathBuf::from("/ws");
-        let key = ("clangd".to_owned(), "c".to_owned());
+        let key = ("clangd".to_owned(), "c".to_owned(), PathBuf::from("/ws"));
         model.language.lsp.config = Some(key.clone());
         model.language.lsp.status.insert(
             key.clone(),
@@ -788,7 +825,7 @@ mod status_tests {
             Some(PathBuf::from("/ws/main.c")),
         );
         model.workspace.path = PathBuf::from("/ws");
-        let key = ("clangd".to_owned(), "c".to_owned());
+        let key = ("clangd".to_owned(), "c".to_owned(), PathBuf::from("/ws"));
         model.language.lsp.config = Some(key.clone());
         model.language.lsp.status.insert(
             key.clone(),
@@ -811,7 +848,7 @@ mod status_tests {
             Some(PathBuf::from("/ws/main.c")),
         );
         model.workspace.path = PathBuf::from("/ws");
-        let key = ("clangd".to_owned(), "c".to_owned());
+        let key = ("clangd".to_owned(), "c".to_owned(), PathBuf::from("/ws"));
         model.language.lsp.config = Some(key.clone());
         model.language.lsp.status.insert(
             key.clone(),
@@ -825,6 +862,34 @@ mod status_tests {
             model.language.lsp.status.get(&key),
             Some(LspStatus::Failed { error, .. }) if error == "no server"
         ));
+    }
+
+    #[test]
+    fn lsp_key_is_scoped_to_the_owning_root() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let primary = dir.path().join("primary");
+        let secondary = dir.path().join("secondary");
+        std::fs::create_dir_all(&primary).expect("primary");
+        std::fs::create_dir_all(&secondary).expect("secondary");
+        let primary_file = primary.join("main.c");
+        let secondary_file = secondary.join("main.c");
+        std::fs::write(&primary_file, "int main(void) {}").expect("write");
+        std::fs::write(&secondary_file, "int main(void) {}").expect("write");
+
+        let mut model = Model::new(EditorState::from_text(""), Some(primary_file.clone()));
+        model.workspace.path = primary.clone();
+        model.workspace.roots = WorkspaceRoots::new(&primary).expect("primary root");
+        model
+            .workspace
+            .roots
+            .add(&secondary, true)
+            .expect("secondary root");
+
+        let first = model.lsp_key(&primary_file).expect("primary lsp key");
+        let second = model.lsp_key(&secondary_file).expect("secondary lsp key");
+        assert_eq!(first.2, primary);
+        assert_eq!(second.2, secondary);
+        assert_ne!(first, second);
     }
 
     #[test]
