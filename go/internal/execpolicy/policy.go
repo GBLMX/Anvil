@@ -146,9 +146,20 @@ func validateFd(args []string) error {
 	return nil
 }
 
+func validateGitStatus(args []string) bool {
+	return len(args) == 4 &&
+		args[0] == "--no-pager" &&
+		args[1] == "status" &&
+		args[2] == "--porcelain=v1" &&
+		args[3] == "-z"
+}
+
 func validateGit(args []string) error {
 	if len(args) == 4 && args[0] == "--no-pager" && args[1] == "diff" &&
 		args[2] == "--name-status" && args[3] == "--diff-filter=U" {
+		return nil
+	}
+	if validateGitStatus(args) {
 		return nil
 	}
 	if len(args) > 1 && args[1] == "apply" {

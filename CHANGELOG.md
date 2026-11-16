@@ -603,6 +603,10 @@ post-`0.5.0` feature line.
 - `anvil DIR` now opens `DIR` as the workspace instead of trying to open the
   directory as a file. Explicitly opening a directory reports `is a directory`
   instead of the gateway's generic `stat unavailable`.
+- Git status no longer passes the unsupported `--relative` flag to
+  `git status`. The gateway policy allows the exact read-only
+  `git status --porcelain=v1 -z` invocation, so toggling the file tree no
+  longer reports `git status: gateway error -32002`.
 - `anvil-ctl` now caps `--stdin` reads at 4 MiB plus one byte, detects a
   prematurely exited `--spawn` child instead of waiting the full timeout, kills
   a timed-out child before returning, and honors `--timeout-ms` for the actual

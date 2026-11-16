@@ -67,6 +67,23 @@ func TestValidatesGitDiff(t *testing.T) {
 	}
 }
 
+func TestValidatesGitStatus(t *testing.T) {
+	good := []string{"--no-pager", "status", "--porcelain=v1", "-z"}
+	if err := Validate("/usr/bin/git", good); err != nil {
+		t.Fatalf("git status: %v", err)
+	}
+	for _, bad := range [][]string{
+		{"--no-pager", "status"},
+		{"--no-pager", "status", "--porcelain=v1", "-z", "--untracked-files=all"},
+		{"--no-pager", "status", "--porcelain=v2", "-z"},
+		{"--no-pager", "status", "--porcelain=v1", "--relative", "-z"},
+	} {
+		if err := Validate("/usr/bin/git", bad); !errors.Is(err, ErrInvalidArgs) {
+			t.Fatalf("git status %v: got %v", bad, err)
+		}
+	}
+}
+
 func TestValidatesGitApply(t *testing.T) {
 	for _, args := range [][]string{
 		{"--no-pager", "apply", "--cached", "--whitespace=nowarn", "--", ".anvil-tmp/git-hunk.patch"},

@@ -112,7 +112,6 @@ pub fn git_status(
                 "--no-pager".to_owned(),
                 "status".to_owned(),
                 "--porcelain=v1".to_owned(),
-                "--relative".to_owned(),
                 "-z".to_owned(),
             ],
             3000,
