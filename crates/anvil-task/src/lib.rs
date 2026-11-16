@@ -764,6 +764,7 @@ impl<D: Send + 'static> Default for TaskGroup<D> {
 /// a warning for detached running tasks so missing shutdown calls are visible.
 impl<D> Drop for TaskGroup<D> {
     fn drop(&mut self) {
+        #[cfg(debug_assertions)]
         let running = self
             .entries
             .iter()
