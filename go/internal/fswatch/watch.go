@@ -312,9 +312,7 @@ func (w *Watcher) handleEvent(wd int, mask, cookie uint32, name string) {
 		return
 	}
 	if mask&unix.IN_IGNORED != 0 {
-		w.mu.Lock()
-		delete(w.wdPath, wd)
-		w.mu.Unlock()
+		w.dropWatch(wd)
 		return
 	}
 	base, ok := w.wdPath[wd]
@@ -345,6 +343,7 @@ func (w *Watcher) handleEvent(wd int, mask, cookie uint32, name string) {
 		delete(w.moved, cookie)
 		if from != "" {
 			delete(w.pending, from)
+			w.removeOrder(from)
 			w.addPending(Event{Path: from, Kind: "renamed", To: rel, IsDir: isDir})
 		} else {
 			w.addPending(Event{Path: rel, Kind: "created", IsDir: isDir})
@@ -371,7 +370,29 @@ func (w *Watcher) handleEvent(wd int, mask, cookie uint32, name string) {
 		w.addPending(Event{Path: rel, Kind: "modified", IsDir: isDir})
 		w.mu.Unlock()
 	case mask&(unix.IN_DELETE_SELF|unix.IN_MOVE_SELF) != 0:
-		w.markRescan("watched directory replaced")
+		w.dropWatch(wd)
+	}
+}
+
+func (w *Watcher) dropWatch(wd int) {
+	w.mu.Lock()
+	delete(w.wdPath, wd)
+	for path, descriptor := range w.pathWD {
+		if descriptor == wd {
+			delete(w.pathWD, path)
+			break
+		}
+	}
+	w.status.WatchedDirs = len(w.pathWD)
+	w.mu.Unlock()
+}
+
+func (w *Watcher) removeOrder(path string) {
+	for index, queued := range w.order {
+		if queued == path {
+			w.order = append(w.order[:index], w.order[index+1:]...)
+			return
+		}
 	}
 }
 
@@ -421,8 +442,10 @@ func (w *Watcher) flush() {
 		w.notify("watch.status", w.status)
 	}
 	for _, path := range w.order[:limit] {
-		events = append(events, w.pending[path])
-		delete(w.pending, path)
+		if event, exists := w.pending[path]; exists {
+			events = append(events, event)
+			delete(w.pending, path)
+		}
 	}
 	w.order = w.order[limit:]
 	w.notify("watch.events", map[string]any{
