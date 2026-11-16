@@ -96,6 +96,7 @@ use readonly::ReadOnlyState;
 mod settings;
 pub(crate) use anvil_tui_theme::theme;
 use settings::Settings;
+pub use settings::settings_schema;
 mod settings_ui;
 pub(crate) use anvil_editor::snippet;
 use anvil_editor::snippet::{Snippet, SnippetSession};
