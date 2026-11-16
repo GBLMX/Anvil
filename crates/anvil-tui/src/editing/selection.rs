@@ -314,7 +314,7 @@ impl Model {
         self.status.text = format!("toggled comment on {count} line(s)");
     }
 
-    fn selected_line_ranges(&self) -> Vec<std::ops::Range<usize>> {
+    pub(crate) fn selected_line_ranges(&self) -> Vec<std::ops::Range<usize>> {
         let mut ranges = Vec::new();
         if self.session.editor.text().len_bytes() == 0 {
             ranges.push(0..0);

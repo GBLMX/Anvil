@@ -1,6 +1,9 @@
 use super::*;
 use anvil_platform::clipboard::{Clipboard as _, SystemClipboard};
 
+const LINE_EDIT_LIMIT: usize = 10_000;
+const INDENT_UNIT: &str = "    ";
+
 impl Model {
     pub(crate) fn insert_auto_pair(&mut self, character: char) {
         if self.reject_read_only() {
@@ -267,6 +270,176 @@ impl Model {
             self.status.text = format!("{count} lines yanked");
         }
         self.file.dirty = true;
+    }
+
+    fn line_ranges_for_count(&self, count: usize, minimum: usize) -> Vec<std::ops::Range<usize>> {
+        let has_selection = self
+            .session
+            .editor
+            .selection_bytes()
+            .iter()
+            .any(|(anchor, head)| anchor != head);
+        let mut ranges = if has_selection {
+            self.selected_line_ranges()
+        } else {
+            let Some(position) = self
+                .session
+                .editor
+                .index()
+                .position(self.session.editor.text(), self.session.cursor)
+            else {
+                return Vec::new();
+            };
+            let mut ranges = Vec::new();
+            for offset in 0..count.max(1) {
+                let line = position.line.saturating_add(offset);
+                let Some(start) = self.session.editor.index().line_to_offset(line) else {
+                    break;
+                };
+                let Some(range) = self.session.editor.line_range_at(start) else {
+                    break;
+                };
+                ranges.push(range);
+            }
+            ranges
+        };
+        while ranges.len() < minimum {
+            let Some(last) = ranges.last() else {
+                break;
+            };
+            let Some(next) = self.session.editor.line_range_at(last.end) else {
+                break;
+            };
+            if next.start != last.end || next.is_empty() {
+                break;
+            }
+            ranges.push(next);
+        }
+        ranges.truncate(LINE_EDIT_LIMIT);
+        ranges
+    }
+
+    fn reject_large_line_edit(&mut self, count: usize) -> bool {
+        if count <= LINE_EDIT_LIMIT {
+            return false;
+        }
+        self.status.text = format!("E: line edit limit is {LINE_EDIT_LIMIT} lines");
+        self.file.dirty = true;
+        true
+    }
+
+    pub(crate) fn indent_lines(&mut self, count: usize) {
+        if self.reject_read_only() || self.reject_large_line_edit(count) {
+            return;
+        }
+        let ranges = self.line_ranges_for_count(count, 1);
+        let edits = ranges
+            .iter()
+            .map(|line| (line.start..line.start, INDENT_UNIT.to_owned()))
+            .collect::<Vec<_>>();
+        if edits.is_empty() || self.session.editor.try_apply_transaction(edits).is_err() {
+            self.status.text = "E: indent: no lines".to_owned();
+            self.file.dirty = true;
+            return;
+        }
+        self.sync_cursor_from_selection();
+        self.file.modified = true;
+        self.file.dirty = true;
+        self.status.text = format!("indented {} line(s)", ranges.len());
+    }
+
+    pub(crate) fn outdent_lines(&mut self, count: usize) {
+        if self.reject_read_only() || self.reject_large_line_edit(count) {
+            return;
+        }
+        let ranges = self.line_ranges_for_count(count, 1);
+        let text = self.session.editor.text();
+        let edits = ranges
+            .iter()
+            .filter_map(|line| {
+                let content = text.slice(line.start..line.end);
+                let indent = if content.starts_with('\t') {
+                    1
+                } else {
+                    content
+                        .bytes()
+                        .take_while(|byte| *byte == b' ')
+                        .take(4)
+                        .count()
+                };
+                (indent > 0).then(|| (line.start..line.start + indent, String::new()))
+            })
+            .collect::<Vec<_>>();
+        let changed = edits.len();
+        if edits.is_empty() {
+            self.status.text = "no indentation to remove".to_owned();
+            self.file.dirty = true;
+            return;
+        }
+        if self.session.editor.try_apply_transaction(edits).is_err() {
+            self.status.text = "E: outdent: edit failed".to_owned();
+            self.file.dirty = true;
+            return;
+        }
+        self.sync_cursor_from_selection();
+        self.file.modified = true;
+        self.file.dirty = true;
+        self.status.text = format!("outdented {changed} line(s)");
+    }
+
+    pub(crate) fn join_lines(&mut self, count: usize) {
+        if self.reject_read_only() || self.reject_large_line_edit(count) {
+            return;
+        }
+        let ranges = self.line_ranges_for_count(count.max(2), 2);
+        if ranges.len() < 2 {
+            self.status.text = "E: join: no next line".to_owned();
+            self.file.dirty = true;
+            return;
+        }
+        let text = self.session.editor.text();
+        let mut edits = Vec::new();
+        for pair in ranges.windows(2) {
+            let (previous, next) = (&pair[0], &pair[1]);
+            if previous.end != next.start {
+                continue;
+            }
+            let newline_start =
+                if previous.end >= 2 && text.slice(previous.end - 2..previous.end) == "\r\n" {
+                    previous.end - 2
+                } else if previous.end >= 1 && text.slice(previous.end - 1..previous.end) == "\n" {
+                    previous.end - 1
+                } else {
+                    continue;
+                };
+            let previous_text = text.slice(previous.start..newline_start);
+            let next_text = text.slice(next.start..next.end);
+            let indent = next_text
+                .bytes()
+                .take_while(|byte| matches!(byte, b' ' | b'\t'))
+                .count();
+            let replacement = if next_text[indent..].is_empty()
+                || previous_text.is_empty()
+                || previous_text
+                    .chars()
+                    .last()
+                    .is_some_and(char::is_whitespace)
+            {
+                String::new()
+            } else {
+                " ".to_owned()
+            };
+            edits.push((newline_start..next.start + indent, replacement));
+        }
+        if edits.is_empty() || self.session.editor.try_apply_transaction(edits).is_err() {
+            self.status.text = "E: join: no lines".to_owned();
+            self.file.dirty = true;
+            return;
+        }
+        self.sync_cursor_from_selection();
+        self.file.modified = true;
+        self.file.dirty = true;
+        self.status.text = format!("joined {} line(s)", ranges.len());
     }
 
     pub(crate) fn record_register(&mut self) {

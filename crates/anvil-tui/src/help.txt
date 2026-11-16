@@ -47,6 +47,8 @@ Normal mode
   x                   delete character
   dd                  delete line
   dw / db / de        delete word forward / back / end
+  J                   join the current line with the next line
+  > / <               indent / outdent the current line or selected lines
   yy                  yank line
   yw / yb / ye        yank word forward / back / end
   p                   put unnamed register

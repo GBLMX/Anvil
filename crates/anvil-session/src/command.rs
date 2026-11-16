@@ -107,6 +107,9 @@ pub const DELETE_WORDS_PREVIOUS: CommandId = CommandId::new("editor.delete_words
 pub const YANK_WORDS_NEXT: CommandId = CommandId::new("editor.yank_words_next");
 pub const YANK_WORDS_END: CommandId = CommandId::new("editor.yank_words_end");
 pub const YANK_WORDS_PREVIOUS: CommandId = CommandId::new("editor.yank_words_previous");
+pub const INDENT_LINES: CommandId = CommandId::new("editor.indent_lines");
+pub const OUTDENT_LINES: CommandId = CommandId::new("editor.outdent_lines");
+pub const JOIN_LINES: CommandId = CommandId::new("editor.join_lines");
 
 pub const COMMANDS: &[CommandSpec] = &[
     spec(COLLAPSE_SELECTIONS, NORMAL),
@@ -186,6 +189,9 @@ pub const COMMANDS: &[CommandSpec] = &[
     spec(YANK_WORDS_NEXT, PENDING),
     spec(YANK_WORDS_END, PENDING),
     spec(YANK_WORDS_PREVIOUS, PENDING),
+    spec(INDENT_LINES, NORMAL),
+    spec(OUTDENT_LINES, NORMAL),
+    spec(JOIN_LINES, NORMAL),
 ];
 
 const fn spec(id: CommandId, contexts: &'static [CommandContext]) -> CommandSpec {

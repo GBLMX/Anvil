@@ -489,6 +489,8 @@ post-`0.5.0` feature line.
 - Tab completion for Ex command names, `:theme` / `:theme-auto` arguments, and
   `:plugin-enable` IDs at the `:` prompt, with a filtered candidate list,
   Up/Down selection, and Esc dismissal.
+- `J` joins lines with indentation removed, and `>` / `<` indent or outdent
+  the current line or selected lines by four spaces.
 
 ### Changed
 - Split `anvil-distro-standard` CLI parsing into `args.rs` and `anvil doctor`

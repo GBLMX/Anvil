@@ -40,6 +40,9 @@ pub(crate) enum NormalCommand {
     Undo,
     Redo,
     RepeatChange,
+    JoinLines,
+    IndentLines,
+    OutdentLines,
     ToggleComment,
     MatchBracket,
     JumpBack,
@@ -83,6 +86,9 @@ impl NormalCommand {
             Undo => Some(command::UNDO),
             Redo => Some(command::REDO),
             RepeatChange => Some(command::REPEAT_CHANGE),
+            JoinLines => Some(command::JOIN_LINES),
+            IndentLines => Some(command::INDENT_LINES),
+            OutdentLines => Some(command::OUTDENT_LINES),
             ToggleComment => Some(command::TOGGLE_COMMENT),
             MatchBracket => Some(command::MATCH_BRACKET),
             JumpBack => Some(command::JUMP_BACK),
@@ -128,6 +134,9 @@ impl NormalCommand {
             "editor.undo" => Self::Undo,
             "editor.redo" => Self::Redo,
             "editor.repeat_change" => Self::RepeatChange,
+            "editor.join_lines" => Self::JoinLines,
+            "editor.indent_lines" => Self::IndentLines,
+            "editor.outdent_lines" => Self::OutdentLines,
             "editor.toggle_comment" => Self::ToggleComment,
             "navigation.match_bracket" => Self::MatchBracket,
             "navigation.jump_back" => Self::JumpBack,
@@ -193,6 +202,9 @@ pub(crate) fn normal_action(key: KeyPress, count: usize) -> Option<NormalCommand
         KeyCode::Char('u') if text_input => Some(NormalCommand::Undo),
         KeyCode::Char('r') if key.ctrl() => Some(NormalCommand::Redo),
         KeyCode::Char('.') if text_input => Some(NormalCommand::RepeatChange),
+        KeyCode::Char('J') if text_input => Some(NormalCommand::JoinLines),
+        KeyCode::Char('>') if text_input => Some(NormalCommand::IndentLines),
+        KeyCode::Char('<') if text_input => Some(NormalCommand::OutdentLines),
         KeyCode::Char(character) if key.alt() && character.is_ascii_digit() => {
             let digit = character as u8 - b'0';
             (digit > 0).then_some(NormalCommand::SelectBuffer((digit - 1) as usize))
@@ -817,6 +829,9 @@ pub(crate) fn default_key_hint(id: &str) -> Option<&'static str> {
         "cursor.right" => "l/Right",
         "cursor.down" => "j/Down",
         "cursor.up" => "k/Up",
+        "editor.join_lines" => "J",
+        "editor.indent_lines" => ">",
+        "editor.outdent_lines" => "<",
         _ => return None,
     })
 }

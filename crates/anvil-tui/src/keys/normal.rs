@@ -216,6 +216,18 @@ pub(super) fn execute_normal_command(model: &mut Model, command: NormalCommand) 
             let _ = model.take_count();
             model.repeat_last_change(count);
         }
+        NormalCommand::JoinLines => {
+            let count = model.take_count().max(2);
+            model.join_lines(count);
+        }
+        NormalCommand::IndentLines => {
+            let count = model.take_count();
+            model.indent_lines(count);
+        }
+        NormalCommand::OutdentLines => {
+            let count = model.take_count();
+            model.outdent_lines(count);
+        }
         NormalCommand::ToggleComment => model.toggle_comment(),
         NormalCommand::MatchBracket => model.match_bracket(),
         NormalCommand::JumpBack => model.jump_back(),

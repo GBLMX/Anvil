@@ -20,7 +20,8 @@ includes insert
 mode (`i`/`a`/`A`/`o`/`O`), multi-cursor selection (`s`/`S`/`C`/`Alt-C`),
 `:w`/`:wa`/`:wq`/`:w file`/`:q!`, an unsaved-change guard, undo/redo,
 `x`/`dd`/`yy`/`p`, `w`/`b`/`e` word motions with
-`dw`/`db`/`de`/`yw`/`yb`/`ye`, `G` to the last line, literal `:s`/`:%s`
+`dw`/`db`/`de`/`yw`/`yb`/`ye`, `G` to the last line, line joining (`J`),
+indent/outdent (`>`/`<`), literal `:s`/`:%s`
 substitution, `/` search
 with `n`/`N`, multi-buffer switching, vertical splits with independent pane cursors,
 read-only `:git-diff` views with hunk staging, `:git-blame`, conflict listing,

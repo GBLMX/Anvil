@@ -146,6 +146,114 @@ fn macro_records_and_replays() {
 }
 
 #[test]
+fn join_lines_uses_one_space_and_strips_indent() {
+    let mut model = Model::new(EditorState::from_text("alpha\n    beta\ngamma"), None);
+    handle_event(&mut model, key(KeyCode::Char('J')));
+    let len = model.session.editor.text().len_bytes();
+    assert_eq!(
+        model.session.editor.text().slice(0..len),
+        "alpha beta\ngamma"
+    );
+    assert!(model.file.modified);
+}
+
+#[test]
+fn count_join_lines_joins_the_requested_number_of_lines() {
+    let mut model = Model::new(EditorState::from_text("a\nb\nc\nd"), None);
+    handle_event(&mut model, key(KeyCode::Char('3')));
+    handle_event(&mut model, key(KeyCode::Char('J')));
+    let len = model.session.editor.text().len_bytes();
+    assert_eq!(model.session.editor.text().slice(0..len), "a b c\nd");
+}
+
+#[test]
+fn join_lines_handles_crlf_and_existing_whitespace() {
+    let mut model = Model::new(EditorState::from_text("alpha \r\n\tbeta"), None);
+    handle_event(&mut model, key(KeyCode::Char('J')));
+    let len = model.session.editor.text().len_bytes();
+    assert_eq!(model.session.editor.text().slice(0..len), "alpha beta");
+}
+
+#[test]
+fn indent_and_outdent_selected_lines() {
+    let mut model = Model::new(EditorState::from_text("one\n  two\n"), None);
+    model
+        .session
+        .editor
+        .try_set_selection_bytes(0, model.session.editor.text().len_bytes())
+        .expect("select lines");
+    model.indent_lines(1);
+    let len = model.session.editor.text().len_bytes();
+    assert_eq!(
+        model.session.editor.text().slice(0..len),
+        "    one\n      two\n"
+    );
+    model.outdent_lines(1);
+    let len = model.session.editor.text().len_bytes();
+    assert_eq!(model.session.editor.text().slice(0..len), "one\n  two\n");
+}
+
+#[test]
+fn count_indent_and_outdent_current_lines() {
+    let mut model = Model::new(EditorState::from_text("a\nb\nc"), None);
+    for code in [KeyCode::Char('2'), KeyCode::Char('>')] {
+        handle_event(&mut model, key(code));
+    }
+    let len = model.session.editor.text().len_bytes();
+    assert_eq!(model.session.editor.text().slice(0..len), "    a\n    b\nc");
+    for code in [KeyCode::Char('2'), KeyCode::Char('<')] {
+        handle_event(&mut model, key(code));
+    }
+    let len = model.session.editor.text().len_bytes();
+    assert_eq!(model.session.editor.text().slice(0..len), "a\nb\nc");
+}
+
+#[test]
+fn visual_line_indent_and_outdent_use_the_same_selection() {
+    let mut indent = Model::new(EditorState::from_text("one\ntwo\nthree"), None);
+    for code in [KeyCode::Char('V'), KeyCode::Char('j'), KeyCode::Char('>')] {
+        handle_event(&mut indent, key(code));
+    }
+    let len = indent.session.editor.text().len_bytes();
+    assert_eq!(
+        indent.session.editor.text().slice(0..len),
+        "    one\n    two\nthree"
+    );
+
+    let mut outdent = Model::new(EditorState::from_text("    one\n    two\nthree"), None);
+    for code in [KeyCode::Char('V'), KeyCode::Char('j'), KeyCode::Char('<')] {
+        handle_event(&mut outdent, key(code));
+    }
+    let len = outdent.session.editor.text().len_bytes();
+    assert_eq!(
+        outdent.session.editor.text().slice(0..len),
+        "one\ntwo\nthree"
+    );
+}
+
+#[test]
+fn outdent_accepts_tabs_and_up_to_four_spaces() {
+    let mut model = Model::new(EditorState::from_text("\tfoo\n  bar\n baz"), None);
+    model
+        .session
+        .editor
+        .try_set_selection_bytes(0, model.session.editor.text().len_bytes())
+        .expect("select lines");
+    model.outdent_lines(1);
+    let len = model.session.editor.text().len_bytes();
+    assert_eq!(model.session.editor.text().slice(0..len), "foo\nbar\nbaz");
+}
+
+#[test]
+fn line_edits_refuse_read_only_buffers() {
+    let mut model = Model::new(EditorState::from_text("one\ntwo"), None);
+    model.file.read_only = true;
+    handle_event(&mut model, key(KeyCode::Char('J')));
+    assert!(model.status.text.contains("read-only"));
+    assert_eq!(model.session.editor.text().slice(0..7), "one\ntwo");
+}
+
+#[test]
 fn change_inner_word_and_quote() {
     let mut model = Model::new(EditorState::from_text("alpha beta"), None);
     for key_code in [KeyCode::Char('c'), KeyCode::Char('i'), KeyCode::Char('w')] {

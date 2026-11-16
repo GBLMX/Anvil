@@ -91,6 +91,18 @@ fn canonical_default_bindings_are_unique() {
             "editor.repeat_change",
         ),
         (
+            key(KeyCode::Char('J'), KeyModifiers::NONE),
+            "editor.join_lines",
+        ),
+        (
+            key(KeyCode::Char('>'), KeyModifiers::NONE),
+            "editor.indent_lines",
+        ),
+        (
+            key(KeyCode::Char('<'), KeyModifiers::NONE),
+            "editor.outdent_lines",
+        ),
+        (
             key(KeyCode::Char('%'), KeyModifiers::NONE),
             "navigation.match_bracket",
         ),
@@ -141,6 +153,9 @@ fn canonical_hints_match_the_rebound_keys() {
     assert_eq!(default_key_hint("editor.toggle_comment"), Some("Ctrl-/"));
     assert_eq!(default_key_hint("cursor.line_start"), Some("0"));
     assert_eq!(default_key_hint("cursor.line_end"), Some("$"));
+    assert_eq!(default_key_hint("editor.join_lines"), Some("J"));
+    assert_eq!(default_key_hint("editor.indent_lines"), Some(">"));
+    assert_eq!(default_key_hint("editor.outdent_lines"), Some("<"));
 }
 
 #[test]
@@ -460,6 +475,14 @@ fn macro_key_labels_round_trip_special_keys() {
 fn command_ids_are_registered() {
     assert_eq!(NormalCommand::Append.id(), Some(command::APPEND));
     assert!(is_registered(command::APPEND, CommandContext::Normal));
+    for (command, id) in [
+        (NormalCommand::JoinLines, command::JOIN_LINES),
+        (NormalCommand::IndentLines, command::INDENT_LINES),
+        (NormalCommand::OutdentLines, command::OUTDENT_LINES),
+    ] {
+        assert_eq!(command.id(), Some(id));
+        assert!(is_registered(id, CommandContext::Normal));
+    }
     assert_eq!(
         PendingCommand::DeleteLines.id(),
         Some(command::DELETE_LINES)
