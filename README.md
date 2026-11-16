@@ -53,8 +53,11 @@ that checks document versions and request-time buffer revisions, applies
 `documentChanges` create/rename/delete operations, keeps unopened files as
 background buffers, and does not write files during an edit; `:wa` saves every
 modified buffer.
-Supported files start their language server automatically; each
-`(tool, language_id)` keeps its own worker while the session is open.
+Supported files start their language server automatically. Each trusted
+workspace root owns a separate `(tool, language_id)` worker and LSP
+connection; the project root is the server's working directory. The client
+answers `workspace/workspaceFolders` and `workspace/configuration`, and sends
+`workspace/didChangeConfiguration` after `:config-reload`.
 Language servers are not bundled; install them on `PATH`.
 
 - TypeScript prefers a project-local compiler (`npm install -D typescript`).
@@ -105,10 +108,29 @@ json = ["node", "/path/to/vscode-json-language-server", "--stdio"]
 `[lsp.commands]` is keyed by language id. A value may be a command string or
 an argv array; array arguments are passed unchanged.
 
+User settings may also override one launch profile per workspace root:
+
+```toml
+[lsp.roots."/home/me/src/project".rust]
+command = "/opt/rust-analyzer"
+args = ["--log-file", "/tmp/ra.log"]
+root_markers = ["Cargo.toml", "rust-toolchain.toml"]
+env = { RA_LOG = "info" }
+settings = { check = { command = "clippy" } }
+```
+
+`[lsp.roots]` is keyed by the canonical workspace-root path and then by
+language id. `command`, `args`, and `root_markers` override the built-in
+launch profile; `env` extends the server environment; `settings` becomes the
+value returned for `workspace/configuration` requests. Root profiles are read
+from user settings, not project settings.
+
 A trusted workspace may add `.anvil.toml`. Its `theme`, `editor`, `search`,
 `ui`, and `lsp.inlay_hints` values merge over the user file for that
 workspace. Project settings are read-only and cannot set `[lsp.commands]`;
 that table is rejected because it would let a repository select an executable.
+`[lsp.roots]` is only honored from user settings. An explicit `ANVIL_SETTINGS`
+file remains a complete override and disables the project layer.
 An explicit `ANVIL_SETTINGS` file remains a complete override and disables the
 project layer.
 
