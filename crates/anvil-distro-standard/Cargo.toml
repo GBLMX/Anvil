@@ -16,6 +16,9 @@ official-language-latex = ["anvil-tui/official-language-latex", "dep:anvil-mod-l
 official-language-typst = ["anvil-tui/official-language-typst", "dep:anvil-mod-language-typst"]
 official-language-web = ["anvil-tui/official-language-web"]
 official-language-c-family = ["anvil-tui/official-language-c-family"]
+language-pack-rust = ["anvil-tui/language-pack-rust"]
+language-pack-typescript = ["anvil-tui/language-pack-typescript"]
+language-pack-c-family = ["anvil-tui/language-pack-c-family"]
 full = [
     "official-git",
     "official-workspace-index",
@@ -24,6 +27,9 @@ full = [
     "official-language-typst",
     "official-language-web",
     "official-language-c-family",
+    "language-pack-rust",
+    "language-pack-typescript",
+    "language-pack-c-family",
 ]
 
 [dependencies]

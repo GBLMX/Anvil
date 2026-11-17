@@ -364,6 +364,8 @@ Git-changed files; filter by status or path and press `Enter` to open.
 `Space H` opens search history; filter and press `Enter` to replay a search.
 `Space :` opens command history and `Space K` opens the full keymap list.
 `Space L` opens language readiness; nothing there installs tools or edits PATH.
+Rust is always included; TypeScript/JavaScript and C/C++ grammars are
+build-time packs named `language-pack-typescript` and `language-pack-c-family`.
 
 ## Documents
 

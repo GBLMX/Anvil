@@ -154,8 +154,9 @@ Negative:
   remains the keymapped-commands palette subset. `Space L` / `:languages`
   reports syntax grammar availability, LSP profile/root/server lookup,
   formatter fallback, and explicitly unconfigured linter/test/debug surfaces.
-- Pending: a centralized catalog of built-in context actions; compiled
-  language-pack matrix.
+  Build-time packs are exposed as `language-pack-rust`,
+  `language-pack-typescript`, and `language-pack-c-family`; `full` enables all.
+- Pending: a centralized catalog of built-in context actions.
 
 ## Verification
 

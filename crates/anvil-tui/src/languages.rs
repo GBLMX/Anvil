@@ -38,6 +38,9 @@ impl Model {
         let mut lines = vec![
             "Language readiness".to_owned(),
             format!("Workspace: {}", self.workspace.path.display()),
+            "Packs are build-time compositions: Rust is always included;".to_owned(),
+            "TypeScript/JavaScript uses language-pack-typescript and C/C++ uses".to_owned(),
+            "language-pack-c-family. Rebuild to change the included packs.".to_owned(),
             String::new(),
         ];
         for (name, extensions) in LANGUAGES {
@@ -135,6 +138,7 @@ mod tests {
         assert!(text.contains("formatter: external rust"), "{text}");
         assert!(text.contains("linter: not configured"), "{text}");
         assert!(text.contains("TypeScript"), "{text}");
+        assert!(text.contains("Packs are build-time compositions"), "{text}");
         let java = text.split("\nJava\n").nth(1).expect("java section");
         assert!(java.contains("syntax: missing"), "{text}");
         let latex = text.split("\nLaTeX\n").nth(1).expect("latex section");
