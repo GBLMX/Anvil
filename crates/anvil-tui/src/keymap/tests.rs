@@ -826,11 +826,16 @@ fn keymap_list_includes_pending_and_context_bindings() {
 
 #[test]
 fn builtin_context_catalog_uses_known_contexts() {
+    let mut seen = HashSet::new();
     for (overlay, route, key, action) in BUILTIN_CONTEXT_KEYS {
         assert!(!overlay.is_empty());
         assert!(KeymapContext::route_order().contains(route));
         assert!(!key.is_empty());
         assert!(!action.is_empty());
+        assert!(
+            seen.insert((*overlay, *key)),
+            "duplicate catalog key {overlay} {key}"
+        );
     }
 }
 
