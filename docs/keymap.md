@@ -77,8 +77,9 @@ The configuration is parsed and validated before it replaces the active keymap.
 It is not hot-reloaded.
 
 The Space leader expires after 1200 ms. `Space e` opens the file tree,
-`Space d` opens the filterable diagnostics picker, `Space p` opens the command
-palette, and `Ctrl-w` handles window focus without numbered aliases.
+`Space d` opens the filterable diagnostics picker, `Space g` lists changed
+files, `Space p` opens the command palette, and `Ctrl-w` handles window focus
+without numbered aliases.
 
 ## Canonical bindings
 
@@ -98,6 +99,7 @@ remain as internal aliases, but they are not separate advertised shortcuts.
 | Buffer picker | `Space b` |
 | File tree | `Space e` |
 | Diagnostics picker | `Space d` |
+| Changed files | `Space g` |
 | Document / workspace symbols | `Space s` / `Space S` |
 | Rename / code action | `Space r` / `Space a` |
 | Format | `Space F` |

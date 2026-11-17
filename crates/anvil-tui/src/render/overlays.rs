@@ -253,6 +253,14 @@ pub(crate) fn render_overlays(model: &Model, frame: &mut Frame, area: Rect) {
             crate::state::BufferPickerMode::Plugin { .. } => {
                 ("Provider · Enter apply · Esc close", "no matching items")
             }
+            crate::state::BufferPickerMode::ChangedFiles { .. } => (
+                "Changed files · Enter open · Esc close",
+                if model.workspace.git.status_pending.is_some() {
+                    "loading changed files"
+                } else {
+                    "no changed files"
+                },
+            ),
         };
         if picker.filtered.is_empty() {
             lines.push(Line::styled(empty, theme::muted()));

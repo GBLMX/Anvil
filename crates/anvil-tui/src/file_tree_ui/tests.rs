@@ -111,6 +111,33 @@ fn git_status_merges_primary_and_secondary_roots() {
 }
 
 #[test]
+fn changed_files_picker_refreshes_after_git_status() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("src/main.rs");
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.workspace.path = dir.path().to_path_buf();
+    model.workspace.git.status_pending = Some(8);
+    model.workspace.git.status_expected = 1;
+    model.workspace.git.status_received = 0;
+    model.workspace.git.status.clear();
+    model.open_changed_files_picker();
+    assert!(
+        model
+            .overlays
+            .buffer_picker
+            .as_ref()
+            .expect("picker")
+            .entries
+            .is_empty()
+    );
+
+    model.handle_git_status(8, Ok(std::collections::HashMap::from([(path, 'M')])));
+    let picker = model.overlays.buffer_picker.as_ref().expect("picker");
+    assert_eq!(picker.entries.len(), 1);
+    assert_eq!(picker.entries[0].display, "M src/main.rs");
+}
+
+#[test]
 fn untrusted_root_cannot_expand() {
     let dir = tempfile::tempdir().expect("tempdir");
     let workspace = dir.path().join("primary");

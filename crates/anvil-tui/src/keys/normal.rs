@@ -104,6 +104,11 @@ pub(super) fn execute_pending_command(
             let _ = model.take_count();
             model.toggle_problems();
         }
+
+        PendingCommand::ChangedFiles => {
+            let _ = model.take_count();
+            model.open_changed_files_picker();
+        }
         PendingCommand::StartFuzzy => {
             let _ = model.take_count();
             model.start_fuzzy();

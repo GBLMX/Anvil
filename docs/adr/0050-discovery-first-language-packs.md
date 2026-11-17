@@ -145,6 +145,12 @@ Negative:
 - Default keymap groups become part of the compatibility surface and need
   deliberate changes.
 
+## Implementation status (2026-11-17)
+
+- Landed: diagnostics picker (`Space d`) and changed-files picker (`Space g`).
+- Pending: jump-list, command-history, keymap-list, and search-history pickers;
+  `:languages`; compiled language-pack matrix.
+
 ## Verification
 
 - Picker tests:

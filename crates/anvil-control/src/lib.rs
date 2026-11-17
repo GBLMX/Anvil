@@ -213,6 +213,10 @@ pub const COMMANDS: &[CommandSpec] = &[
         capability: Capability::Read,
     },
     CommandSpec {
+        name: "changed-files",
+        capability: Capability::Read,
+    },
+    CommandSpec {
         name: "replace",
         capability: Capability::Edit,
     },

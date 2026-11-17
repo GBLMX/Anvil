@@ -548,6 +548,7 @@ impl Model {
             self.workspace.git.status_expected = 0;
             self.workspace.git.status_received = 0;
             self.file.dirty = true;
+            self.refresh_changed_files_picker();
         }
     }
 

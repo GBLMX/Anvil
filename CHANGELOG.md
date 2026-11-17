@@ -11,6 +11,8 @@ post-`0.5.0` feature line.
 - The problems panel is now a filterable diagnostics picker: type to filter by
   path, message, source, or code, `Ctrl-u` clears, and `Enter` jumps to the
   selected diagnostic. `Space d`, `:diagnostics`, and `:problems` open it.
+- Added a filterable changed-files picker over the workspace Git status.
+  `Space g` and `:changed-files` open it; `Enter` opens the selected path.
 - Added the opt-in `official-language-web` syntax feature for TypeScript,
   TSX, JavaScript/JSX, and CSS files and Markdown code fences. The `full`
   distribution feature includes it; default builds stay unchanged.

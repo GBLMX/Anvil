@@ -323,6 +323,52 @@ fn space_d_opens_the_diagnostics_picker() {
 }
 
 #[test]
+fn space_g_opens_the_changed_files_picker() {
+    let mut model = Model::new(EditorState::from_text("alpha"), None);
+    model.start_page.welcome = false;
+    model.workspace.path = PathBuf::from("/ws");
+    model
+        .workspace
+        .git
+        .status
+        .insert(PathBuf::from("/ws/src/main.rs"), 'M');
+
+    handle_event(&mut model, key(KeyCode::Char(' ')));
+    handle_event(&mut model, key(KeyCode::Char('g')));
+    assert_eq!(model.top_overlay(), Some(OverlayKind::BufferPicker));
+    let picker = model.overlays.buffer_picker.as_ref().expect("picker");
+    assert!(matches!(
+        &picker.mode,
+        crate::state::BufferPickerMode::ChangedFiles { .. }
+    ));
+    assert_eq!(picker.entries.len(), 1);
+    assert_eq!(picker.entries[0].display, "M src/main.rs");
+
+    model.close_buffer_picker();
+    model.execute_command("changed-files");
+    assert_eq!(model.top_overlay(), Some(OverlayKind::BufferPicker));
+}
+
+#[test]
+fn changed_files_picker_opens_the_selected_path() {
+    let directory = tempfile::tempdir().expect("tempdir");
+    let path = directory.path().join("src/main.rs");
+    std::fs::create_dir_all(path.parent().expect("parent")).expect("create dir");
+    std::fs::write(&path, "hello").expect("write");
+    let mut model = Model::new(EditorState::from_text("alpha"), None);
+    model.start_page.welcome = false;
+    model.file.modified = false;
+    model.workspace.path = directory.path().to_path_buf();
+    model.workspace.git.status.insert(path.clone(), 'M');
+
+    model.open_changed_files_picker();
+    model.apply_buffer_picker();
+
+    assert_eq!(model.session.path.as_deref(), Some(path.as_path()));
+    assert_eq!(model.session.editor.text().slice(0..5), "hello");
+}
+
+#[test]
 fn problems_panel_filters_with_query_and_clear() {
     let mut model = Model::new(EditorState::from_text("alpha"), None);
     model.start_page.welcome = false;

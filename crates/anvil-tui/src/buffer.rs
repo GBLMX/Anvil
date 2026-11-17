@@ -88,6 +88,38 @@ impl Model {
         self.file.dirty = true;
     }
 
+    pub(crate) fn open_changed_files_picker(&mut self) {
+        self.cancel_completion();
+        let (entries, paths) = self.changed_file_entries();
+        if entries.is_empty() {
+            self.request_git_status();
+            if self.workspace.git.status_pending.is_none() {
+                if self.status.text.starts_with("E: git status") {
+                    self.file.dirty = true;
+                    return;
+                }
+                self.status.text = "no changed files".to_owned();
+                self.file.dirty = true;
+                return;
+            }
+        }
+        self.overlays.buffer_picker = Some(BufferPickerState {
+            query: String::new(),
+            filtered: (0..entries.len()).collect(),
+            entries,
+            selected: 0,
+            cancel: CancellationToken::new(),
+            mode: BufferPickerMode::ChangedFiles { paths },
+        });
+        self.push_overlay(OverlayKind::BufferPicker);
+        self.status.text = if self.workspace.git.status_pending.is_some() {
+            "loading changed files".to_owned()
+        } else {
+            format!("changed files: {}", self.workspace.git.status.len())
+        };
+        self.file.dirty = true;
+    }
+
     pub(crate) fn open_plugin_picker(
         &mut self,
         provider_id: ProviderId,
@@ -128,19 +160,14 @@ impl Model {
             return;
         };
         let query = picker.query.clone();
-        if matches!(picker.mode, BufferPickerMode::Plugin { .. }) {
-            let needle = query.to_lowercase();
+        if matches!(
+            picker.mode,
+            BufferPickerMode::Plugin { .. } | BufferPickerMode::ChangedFiles { .. }
+        ) {
             let Some(picker) = self.overlays.buffer_picker.as_mut() else {
                 return;
             };
-            picker.filtered = picker
-                .entries
-                .iter()
-                .enumerate()
-                .filter(|(_, entry)| entry.display.to_lowercase().contains(&needle))
-                .map(|(index, _)| index)
-                .collect();
-            picker.selected = picker.selected.min(picker.filtered.len().saturating_sub(1));
+            filter_local_picker(picker);
             self.file.dirty = true;
             return;
         }
@@ -161,6 +188,23 @@ impl Model {
         picker.filtered = (0..picker.entries.len()).collect();
         picker.selected = picker.selected.min(picker.filtered.len().saturating_sub(1));
         picker.cancel = cancel;
+        self.file.dirty = true;
+    }
+
+    pub(crate) fn refresh_changed_files_picker(&mut self) {
+        let Some(picker) = self.overlays.buffer_picker.as_ref() else {
+            return;
+        };
+        if !matches!(picker.mode, BufferPickerMode::ChangedFiles { .. }) {
+            return;
+        }
+        let (entries, paths) = self.changed_file_entries();
+        let Some(picker) = self.overlays.buffer_picker.as_mut() else {
+            return;
+        };
+        picker.entries = entries;
+        picker.mode = BufferPickerMode::ChangedFiles { paths };
+        filter_local_picker(picker);
         self.file.dirty = true;
     }
 
@@ -198,7 +242,7 @@ impl Model {
             self.file.dirty = true;
             return;
         };
-        if let BufferPickerMode::Plugin { provider_id } = picker.mode {
+        if let BufferPickerMode::Plugin { provider_id } = &picker.mode {
             let Some(value) = entry.value.as_str() else {
                 self.status.text = "E: invalid provider picker value".to_owned();
                 self.file.dirty = true;
@@ -212,11 +256,44 @@ impl Model {
             .as_u64()
             .and_then(|value| usize::try_from(value).ok())
         else {
-            self.status.text = "E: invalid buffer picker value".to_owned();
+            self.status.text = "E: invalid picker value".to_owned();
             self.file.dirty = true;
             return;
         };
+        if let BufferPickerMode::ChangedFiles { paths } = &picker.mode {
+            let Some(path) = paths.get(index).cloned() else {
+                self.status.text = "E: invalid changed-files picker value".to_owned();
+                self.file.dirty = true;
+                return;
+            };
+            if let Err(error) = self.open_path(&path) {
+                self.status.text = format!("E: {error}");
+                self.file.dirty = true;
+            }
+            return;
+        }
         self.select_buffer(index);
+    }
+
+    fn changed_file_entries(&self) -> (Vec<PickerEntry>, Vec<PathBuf>) {
+        let mut files = self.workspace.git.status.iter().collect::<Vec<_>>();
+        files.sort_by(|(left, _), (right, _)| left.cmp(right));
+        let mut paths = Vec::with_capacity(files.len());
+        let entries = files
+            .into_iter()
+            .map(|(path, status)| {
+                let index = paths.len();
+                paths.push(path.clone());
+                let relative = path.strip_prefix(&self.workspace.path).unwrap_or(path);
+                let display = format!("{status} {}", relative.display());
+                PickerEntry {
+                    value: serde_json::Value::from(index as u64),
+                    ordinal: display.clone(),
+                    display,
+                }
+            })
+            .collect();
+        (entries, paths)
     }
 
     fn buffer_picker_context(&self) -> PickerContext {
@@ -744,6 +821,18 @@ impl PickerSource for BufferPickerSource {
         emit(entries);
         Ok(())
     }
+}
+
+fn filter_local_picker(picker: &mut BufferPickerState) {
+    let needle = picker.query.to_lowercase();
+    picker.filtered = picker
+        .entries
+        .iter()
+        .enumerate()
+        .filter(|(_, entry)| entry.display.to_lowercase().contains(&needle))
+        .map(|(index, _)| index)
+        .collect();
+    picker.selected = picker.selected.min(picker.filtered.len().saturating_sub(1));
 }
 
 fn buffer_picker_registry() -> ProviderRegistry<dyn PickerSource> {

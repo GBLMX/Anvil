@@ -143,6 +143,7 @@ pub(crate) struct FuzzyState {
 pub(crate) enum BufferPickerMode {
     Buffers,
     Plugin { provider_id: ProviderId },
+    ChangedFiles { paths: Vec<PathBuf> },
 }
 
 pub(crate) struct BufferPickerState {

@@ -38,6 +38,7 @@ inside the editor with `:help start`.
 | `Space f` | fuzzy file finder |
 | `Space e` | file tree |
 | `Space d` | diagnostics picker |
+| `Space g` | changed files |
 | `Space b` | buffer picker |
 | `Space p` | command palette |
 | `Space s` | document symbols |

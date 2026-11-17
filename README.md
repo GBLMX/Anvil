@@ -358,7 +358,8 @@ Quick open: `Space f` filters workspace files and previews the selected file
 through the gateway. Wide terminals show the preview beside the list; narrow
 terminals stack it below. `Space b` filters the open buffers; `Enter` switches
 to the selected buffer. `Space d` opens the diagnostics picker; type to filter
-by path, message, source, or code, and press `Enter` to jump.
+by path, message, source, or code, and press `Enter` to jump. `Space g` lists
+Git-changed files; filter by status or path and press `Enter` to open.
 
 ## Documents
 
