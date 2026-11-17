@@ -1,8 +1,10 @@
 # ADR-0025: LSP Surface and Language Breadth
 
-- Status: Accepted 2026-11-13; implementation audited after the 0.5.x and 0.7.4 slices
+- Status: Accepted 2026-11-13; implementation audited after the 0.5.x and 0.7.4 slices; §5 primary-root-only clause superseded by ADR-0048
+- Version: 1.1.0
 - Date: 2026-11-12
 - Related: [ADR-0008](0008-selection-first-interaction.md), [ADR-0010](0010-cursor-and-snapshot-ownership.md), [ADR-0013](0013-kernel-distribution-boundary.md), [ADR-0022](0022-core-editing-completion.md), [ADR-0023](0023-internal-capability-closure.md), [ADR-0024](0024-tui-state-and-domain-boundaries.md)
+- Superseded by: [ADR-0048](0048-per-root-language-tooling-and-lsp-workspace.md) for §5 only
 
 ## Context
 
