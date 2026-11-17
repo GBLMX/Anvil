@@ -48,41 +48,37 @@ impl Model {
                 .any(|extension| anvil_syntax::supports_path(&probe_path(extension)));
             lines.push(format!(
                 "  syntax: {}",
-                if syntax {
-                    "yes"
-                } else {
-                    "missing (grammar feature not compiled)"
-                }
+                if syntax { "yes" } else { "missing" }
             ));
-            match self.lsp_profile(extensions) {
-                Some(settings) => {
-                    let roots = if settings.root_markers.is_empty() {
-                        "none".to_owned()
-                    } else {
-                        settings.root_markers.join(", ")
-                    };
-                    let available = if tool_on_path(&settings.tool) {
-                        "found"
-                    } else {
-                        "not found on PATH"
-                    };
-                    lines.push(format!(
-                        "  lsp: {} ({} / {}) · roots {} · server {available}",
-                        settings.label, settings.tool, settings.language_id, roots
-                    ));
-                }
-                None => lines.push("  lsp: no built-in profile".to_owned()),
+            let lsp = self.lsp_profile(extensions);
+            if let Some(settings) = &lsp {
+                let roots = if settings.root_markers.is_empty() {
+                    "none".to_owned()
+                } else {
+                    settings.root_markers.join(", ")
+                };
+                let available = if tool_on_path(&settings.tool) {
+                    "found"
+                } else {
+                    "not found on PATH"
+                };
+                lines.push(format!(
+                    "  lsp: {} ({} / {}) · roots {} · server {available}",
+                    settings.label, settings.tool, settings.language_id, roots
+                ));
+            } else {
+                lines.push("  lsp: no built-in profile".to_owned());
             }
             let formatter = extensions
                 .iter()
                 .find_map(|extension| crate::format::formatter_language(&probe_path(extension)));
-            lines.push(format!(
-                "  formatter: {}",
-                formatter.map_or_else(
-                    || "LSP fallback".to_owned(),
-                    |language| format!("external {language} (LSP fallback)")
-                )
-            ));
+            let formatter = match (formatter, lsp.is_some()) {
+                (Some(language), true) => format!("external {language} (LSP fallback)"),
+                (Some(language), false) => format!("external {language}"),
+                (None, true) => "LSP fallback".to_owned(),
+                (None, false) => "none".to_owned(),
+            };
+            lines.push(format!("  formatter: {formatter}"));
             lines.push("  linter: not configured".to_owned());
             lines.push("  tests/debug: not configured".to_owned());
             lines.push(String::new());
@@ -139,5 +135,11 @@ mod tests {
         assert!(text.contains("formatter: external rust"), "{text}");
         assert!(text.contains("linter: not configured"), "{text}");
         assert!(text.contains("TypeScript"), "{text}");
+        let java = text.split("\nJava\n").nth(1).expect("java section");
+        assert!(java.contains("syntax: missing"), "{text}");
+        let latex = text.split("\nLaTeX\n").nth(1).expect("latex section");
+        assert!(latex.contains("syntax: missing"), "{text}");
+        assert!(latex.contains("formatter: none"), "{text}");
+        assert!(!text.contains("grammar feature not compiled"), "{text}");
     }
 }
