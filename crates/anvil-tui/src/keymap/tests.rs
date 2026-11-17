@@ -811,6 +811,10 @@ fn keymap_list_includes_pending_and_context_bindings() {
     let text = model.keymap_list_text();
     assert!(text.contains("Space d"), "{text}");
     assert!(text.contains("Leader and pending bindings"), "{text}");
+    assert!(text.contains("Built-in context bindings"), "{text}");
+    assert!(text.contains("command_line"), "{text}");
+    assert!(text.contains("close tree"), "{text}");
+    assert!(text.contains("Configured context overrides"), "{text}");
     assert!(text.contains("file_tree"), "{text}");
     assert!(text.contains("lsp.hover"), "{text}");
 }

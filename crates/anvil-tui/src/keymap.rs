@@ -16,6 +16,48 @@ use anvil_session::keymap::KeymapContext;
 mod config;
 pub(crate) use config::{ContextAction, KeyChord, KeymapConfig, macro_key, macro_step};
 
+const BUILTIN_CONTEXT_KEYS: &[(&str, &str, &str)] = &[
+    ("file_tree", "Esc", "close tree"),
+    ("file_tree", "j / Down", "next entry"),
+    ("file_tree", "k / Up", "previous entry"),
+    ("file_tree", "h / Left", "collapse"),
+    ("file_tree", "l / Right / Enter", "expand or open"),
+    ("file_tree", "H", "toggle hidden files"),
+    ("file_tree", "/", "find in tree"),
+    ("file_tree", "n / N", "next / previous find match"),
+    ("file_tree", ":", "command line"),
+    ("file_tree", "a / A", "create file / directory"),
+    ("file_tree", "r", "rename"),
+    ("file_tree", "m / c", "move / copy"),
+    ("file_tree", "d / Delete", "delete"),
+    ("file_tree", "Space", "leader"),
+    ("popup", "Esc", "close overlay"),
+    ("popup", "Enter", "accept selection"),
+    ("popup", "Up / Down", "move selection"),
+    (
+        "popup",
+        "Ctrl-n / Ctrl-p",
+        "move selection in command palette",
+    ),
+    ("popup", "typed text", "filter"),
+    (
+        "command_line",
+        "Enter",
+        "execute command or accept completion",
+    ),
+    ("command_line", "Tab", "complete command"),
+    ("command_line", "Esc", "cancel"),
+    ("search", "Enter", "commit search"),
+    ("search", "Esc", "cancel search"),
+    ("search", "Ctrl-r", "toggle regex"),
+    ("search", "Ctrl-w", "toggle whole word"),
+    ("search", "Ctrl-c", "toggle case sensitivity"),
+    ("rename", "Enter", "commit rename"),
+    ("rename", "Esc", "cancel rename"),
+    ("modal", "Esc", "cancel modal layer"),
+    ("global", "Ctrl-w", "window prefix"),
+];
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum NormalCommand {
     CollapseSelections,
@@ -866,7 +908,13 @@ impl Model {
         lines.push("  d/y/c + i/a + object  operator pending".to_owned());
 
         lines.push(String::new());
-        lines.push("Configured context bindings".to_owned());
+        lines.push("Built-in context bindings".to_owned());
+        for (context, key, action) in BUILTIN_CONTEXT_KEYS {
+            lines.push(format!("  {context:<14} {key:<18} {action}"));
+        }
+
+        lines.push(String::new());
+        lines.push("Configured context overrides".to_owned());
         let mut contexts = Vec::new();
         for context in KeymapContext::route_order() {
             let Some(bindings) = self.config.keymap.contexts.get(&context) else {
@@ -887,7 +935,7 @@ impl Model {
         }
         lines.push(String::new());
         lines.push(
-            "Built-in context actions are listed by :help; configured overrides are shown here."
+            "Configured overrides take priority over built-in bindings in the same context."
                 .to_owned(),
         );
         lines.join("\n")
