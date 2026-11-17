@@ -162,7 +162,7 @@ impl Model {
             ("jumps", "") => self.open_jump_picker(),
             ("search-history", "") => self.open_search_history(),
             ("command-history", "") => self.open_command_history(),
-            ("keymaps", "") => self.open_keymap_list(),
+            ("keybinds", "") => self.open_keybinds(),
             ("replace", value) => {
                 self.replace_current(value);
             }

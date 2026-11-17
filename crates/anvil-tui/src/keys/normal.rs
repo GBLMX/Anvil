@@ -124,9 +124,9 @@ pub(super) fn execute_pending_command(
             let _ = model.take_count();
             model.open_command_history();
         }
-        PendingCommand::KeymapList => {
+        PendingCommand::Keybinds => {
             let _ = model.take_count();
-            model.open_keymap_list();
+            model.open_keybinds();
         }
         PendingCommand::StartFuzzy => {
             let _ = model.take_count();

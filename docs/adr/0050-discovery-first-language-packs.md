@@ -145,13 +145,13 @@ Negative:
 - Default keymap groups become part of the compatibility surface and need
   deliberate changes.
 
-## Implementation status (2026-11-17)
+## Implementation status (2026-11-18)
 
 - Landed: diagnostics (`Space d`), changed-files (`Space g`), jump-list
-  (`Space j`), search-history (`Space H`), command-history (`Space :`), and
-  keymap-list (`Space K`) pickers. Command history and keymaps reuse the
-  command palette.
-- Pending: `:languages` and the compiled language-pack matrix.
+  (`Space j`), search-history (`Space H`), and command-history (`Space :`)
+  pickers. A keymapped-commands palette mode is available at `Space K`.
+- Pending: the full keymap list including pending-leader and context bindings;
+  `:languages`; compiled language-pack matrix.
 
 ## Verification
 

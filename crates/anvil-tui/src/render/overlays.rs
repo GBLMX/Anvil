@@ -132,7 +132,9 @@ pub(crate) fn render_overlays(model: &Model, frame: &mut Frame, area: Rect) {
         let (label, empty) = match palette.mode {
             crate::state::CommandPaletteMode::All => ("Commands", "no commands"),
             crate::state::CommandPaletteMode::History => ("Command history", "no command history"),
-            crate::state::CommandPaletteMode::Keymaps => ("Keymaps", "no keymapped commands"),
+            crate::state::CommandPaletteMode::Keybinds => {
+                ("Keymapped commands", "no keymapped commands")
+            }
         };
         if palette.table.is_empty() {
             lines.push(Line::styled(empty, theme::panel().fg(theme::muted())));

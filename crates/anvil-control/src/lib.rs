@@ -229,7 +229,7 @@ pub const COMMANDS: &[CommandSpec] = &[
         capability: Capability::Read,
     },
     CommandSpec {
-        name: "keymaps",
+        name: "keybinds",
         capability: Capability::Read,
     },
     CommandSpec {

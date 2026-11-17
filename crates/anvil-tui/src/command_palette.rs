@@ -73,8 +73,8 @@ impl Model {
         self.open_command_palette_with(CommandPaletteMode::History);
     }
 
-    pub(crate) fn open_keymap_list(&mut self) {
-        self.open_command_palette_with(CommandPaletteMode::Keymaps);
+    pub(crate) fn open_keybinds(&mut self) {
+        self.open_command_palette_with(CommandPaletteMode::Keybinds);
     }
 
     fn open_command_palette_with(&mut self, mode: CommandPaletteMode) {
@@ -203,12 +203,12 @@ impl Model {
         match mode {
             CommandPaletteMode::All => {}
             CommandPaletteMode::History => items.retain(|item| item.recent),
-            CommandPaletteMode::Keymaps => items.retain(|item| item.key.is_some()),
+            CommandPaletteMode::Keybinds => items.retain(|item| item.key.is_some()),
         }
         if items.is_empty() {
             self.status.text = match mode {
                 CommandPaletteMode::History => "no command history",
-                CommandPaletteMode::Keymaps => "no keymapped commands",
+                CommandPaletteMode::Keybinds => "no keymapped commands",
                 CommandPaletteMode::All => "no commands",
             }
             .to_owned();
@@ -444,7 +444,7 @@ mod tests {
     }
 
     #[test]
-    fn history_and_keymap_modes_filter_the_palette() {
+    fn history_and_keybind_modes_filter_the_palette() {
         let mut model = Model::new(EditorState::from_text(""), None);
         model.overlays.command_palette_recents = vec!["editor.undo".to_owned()];
 
@@ -461,9 +461,9 @@ mod tests {
         );
 
         model.close_command_palette();
-        model.open_keymap_list();
-        let palette = model.overlays.command_palette.as_ref().expect("keymaps");
-        assert_eq!(palette.mode, CommandPaletteMode::Keymaps);
+        model.open_keybinds();
+        let palette = model.overlays.command_palette.as_ref().expect("keybinds");
+        assert_eq!(palette.mode, CommandPaletteMode::Keybinds);
         assert!(palette.table.items().iter().all(|item| item.key.is_some()));
     }
 }

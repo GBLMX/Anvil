@@ -457,7 +457,7 @@ fn space_shift_h_opens_search_history() {
 }
 
 #[test]
-fn command_history_and_keymap_shortcuts_open_the_palette_modes() {
+fn command_history_and_keybind_shortcuts_open_the_palette_modes() {
     let mut model = Model::new(EditorState::from_text("alpha"), None);
     model.start_page.welcome = false;
     model.overlays.command_palette_recents = vec!["editor.undo".to_owned()];
@@ -470,8 +470,8 @@ fn command_history_and_keymap_shortcuts_open_the_palette_modes() {
 
     handle_event(&mut model, key(KeyCode::Char(' ')));
     handle_event(&mut model, key(KeyCode::Char('K')));
-    let palette = model.overlays.command_palette.as_ref().expect("keymaps");
-    assert_eq!(palette.mode, crate::state::CommandPaletteMode::Keymaps);
+    let palette = model.overlays.command_palette.as_ref().expect("keybinds");
+    assert_eq!(palette.mode, crate::state::CommandPaletteMode::Keybinds);
 }
 
 #[test]

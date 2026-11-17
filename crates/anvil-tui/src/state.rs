@@ -193,7 +193,7 @@ pub(crate) enum CommandPaletteMode {
     #[default]
     All,
     History,
-    Keymaps,
+    Keybinds,
 }
 
 #[derive(Debug, Clone)]
