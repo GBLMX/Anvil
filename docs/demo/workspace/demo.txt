@@ -1,0 +1,11 @@
+Anvil demo
+==========
+
+A Linux-first terminal editor with a selection-first core.
+
+- fuzzy file open
+- workspace tree
+- search and replace
+- themes, splits, and session restore
+
+Try :theme, /search, or Space p.

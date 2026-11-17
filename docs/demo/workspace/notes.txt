@@ -1,0 +1,13 @@
+Demo notes
+==========
+
+The fuzzy finder opens this file from the preview list.
+
+Workspace loop
+--------------
+
+1. Find a file.
+2. Edit it.
+3. Save it.
+4. Search the buffer.
+5. Switch the theme.

@@ -10,6 +10,10 @@ The official standard edition is one composition; third-party distributions
 can compose the kernel with their own UI and trusted Rust code. Runtime plugins
 remain untrusted and sandboxed.
 
+<p align="center">
+  <img src="docs/assets/anvil-demo.gif" alt="Anvil terminal editor demo: fuzzy open, edit, save, search, tree, and Git gutter" width="900">
+</p>
+
 Status: **`0.6.0` remains the frozen workspace/release version while the
 `0.7.x` optional-module line is developed in-tree; no public release or tag
 during this phase**. See [internal polish plan](docs/internal-polish-plan.md)
