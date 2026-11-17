@@ -56,6 +56,7 @@ their decision sections.
 | [0048](0048-per-root-language-tooling-and-lsp-workspace.md) | Per-root language tooling and LSP workspace configuration | Accepted; implemented 2026-11-16 |
 | [0049](0049-editor-control-plane.md) | Editor control plane and MCP adapter boundary | Accepted; implemented 2026-11-17 |
 | [0050](0050-discovery-first-language-packs.md) | Discovery-first defaults and compiled language packs | Proposed |
+| [0051](0051-external-editor-reference-models.md) | External editor reference models for UX and language support | Proposed |
 
 ## Numbering Rule
 
