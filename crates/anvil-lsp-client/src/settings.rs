@@ -318,24 +318,28 @@ fn tool_search_directories() -> Vec<PathBuf> {
 }
 
 fn user_tool_directories(home: &Path) -> Vec<PathBuf> {
-    let mut directories: Vec<PathBuf> = [
-        ".local/bin",
-        "bin",
-        ".cargo/bin",
-        "go/bin",
-        ".local/share/vite-plus/bin",
-        ".local/share/mise/shims",
-        ".asdf/shims",
-        ".bun/bin",
-    ]
-    .into_iter()
-    .map(|relative| home.join(relative))
-    .collect();
+    let mut directories = Vec::new();
     for variable in ["MISE_DATA_DIR", "ASDF_DATA_DIR"] {
-        if let Some(data_dir) = std::env::var_os(variable) {
+        if let Some(data_dir) = std::env::var_os(variable)
+            && !data_dir.is_empty()
+        {
             directories.push(PathBuf::from(data_dir).join("shims"));
         }
     }
+    directories.extend(
+        [
+            ".local/bin",
+            "bin",
+            ".cargo/bin",
+            "go/bin",
+            ".local/share/vite-plus/bin",
+            ".local/share/mise/shims",
+            ".asdf/shims",
+            ".bun/bin",
+        ]
+        .into_iter()
+        .map(|relative| home.join(relative)),
+    );
     directories
 }
 
@@ -429,7 +433,17 @@ mod tests {
         unsafe { std::env::set_var("ASDF_DATA_DIR", data_dir.path()) };
         let directories = user_tool_directories(home);
         unsafe { std::env::remove_var("ASDF_DATA_DIR") };
-        assert!(directories.contains(&data_dir.path().join("shims")));
+        let custom = data_dir.path().join("shims");
+        let default = home.join(".asdf/shims");
+        let custom_index = directories
+            .iter()
+            .position(|path| path == &custom)
+            .expect("custom shim directory");
+        let default_index = directories
+            .iter()
+            .position(|path| path == &default)
+            .expect("default shim directory");
+        assert!(custom_index < default_index);
     }
 
     #[test]
