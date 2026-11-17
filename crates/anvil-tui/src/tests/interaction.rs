@@ -457,6 +457,24 @@ fn space_shift_h_opens_search_history() {
 }
 
 #[test]
+fn command_history_and_keymap_shortcuts_open_the_palette_modes() {
+    let mut model = Model::new(EditorState::from_text("alpha"), None);
+    model.start_page.welcome = false;
+    model.overlays.command_palette_recents = vec!["editor.undo".to_owned()];
+
+    handle_event(&mut model, key(KeyCode::Char(' ')));
+    handle_event(&mut model, key(KeyCode::Char(':')));
+    let palette = model.overlays.command_palette.as_ref().expect("history");
+    assert_eq!(palette.mode, crate::state::CommandPaletteMode::History);
+    model.close_command_palette();
+
+    handle_event(&mut model, key(KeyCode::Char(' ')));
+    handle_event(&mut model, key(KeyCode::Char('K')));
+    let palette = model.overlays.command_palette.as_ref().expect("keymaps");
+    assert_eq!(palette.mode, crate::state::CommandPaletteMode::Keymaps);
+}
+
+#[test]
 fn problems_panel_filters_with_query_and_clear() {
     let mut model = Model::new(EditorState::from_text("alpha"), None);
     model.start_page.welcome = false;

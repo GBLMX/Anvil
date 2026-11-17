@@ -225,6 +225,14 @@ pub const COMMANDS: &[CommandSpec] = &[
         capability: Capability::Read,
     },
     CommandSpec {
+        name: "command-history",
+        capability: Capability::Read,
+    },
+    CommandSpec {
+        name: "keymaps",
+        capability: Capability::Read,
+    },
+    CommandSpec {
         name: "replace",
         capability: Capability::Edit,
     },

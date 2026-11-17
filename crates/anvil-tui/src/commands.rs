@@ -161,6 +161,8 @@ impl Model {
             ("changed-files", "") => self.open_changed_files_picker(),
             ("jumps", "") => self.open_jump_picker(),
             ("search-history", "") => self.open_search_history(),
+            ("command-history", "") => self.open_command_history(),
+            ("keymaps", "") => self.open_keymap_list(),
             ("replace", value) => {
                 self.replace_current(value);
             }

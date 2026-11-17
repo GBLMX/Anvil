@@ -148,9 +148,10 @@ Negative:
 ## Implementation status (2026-11-17)
 
 - Landed: diagnostics (`Space d`), changed-files (`Space g`), jump-list
-  (`Space j`), and search-history (`Space H`) pickers.
-- Pending: command-history and keymap-list pickers; `:languages`; compiled
-  language-pack matrix.
+  (`Space j`), search-history (`Space H`), command-history (`Space :`), and
+  keymap-list (`Space K`) pickers. Command history and keymaps reuse the
+  command palette.
+- Pending: `:languages` and the compiled language-pack matrix.
 
 ## Verification
 

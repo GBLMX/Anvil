@@ -129,11 +129,13 @@ pub(crate) fn render_overlays(model: &Model, frame: &mut Frame, area: Rect) {
                 ),
             ]));
         }
+        let (label, empty) = match palette.mode {
+            crate::state::CommandPaletteMode::All => ("Commands", "no commands"),
+            crate::state::CommandPaletteMode::History => ("Command history", "no command history"),
+            crate::state::CommandPaletteMode::Keymaps => ("Keymaps", "no keymapped commands"),
+        };
         if palette.table.is_empty() {
-            lines.push(Line::styled(
-                "no commands",
-                theme::panel().fg(theme::muted()),
-            ));
+            lines.push(Line::styled(empty, theme::panel().fg(theme::muted())));
         }
         lines.push(Line::styled(
             "Enter run · ↑/↓ move · Esc close",
@@ -143,7 +145,7 @@ pub(crate) fn render_overlays(model: &Model, frame: &mut Frame, area: Rect) {
             Paragraph::new(lines)
                 .style(theme::panel())
                 .block(crate::render::focused_panel_block(format!(
-                    "Commands · {} · Esc close",
+                    "{label} · {} · Esc close",
                     palette.table.filtered().len()
                 ))),
             popup,

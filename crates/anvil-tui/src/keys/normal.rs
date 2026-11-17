@@ -119,6 +119,15 @@ pub(super) fn execute_pending_command(
             let _ = model.take_count();
             model.open_search_history();
         }
+
+        PendingCommand::CommandHistory => {
+            let _ = model.take_count();
+            model.open_command_history();
+        }
+        PendingCommand::KeymapList => {
+            let _ = model.take_count();
+            model.open_keymap_list();
+        }
         PendingCommand::StartFuzzy => {
             let _ = model.take_count();
             model.start_fuzzy();

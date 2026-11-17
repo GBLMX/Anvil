@@ -188,10 +188,19 @@ pub(crate) struct CommandPaletteItem {
     pub(crate) theme: Option<&'static str>,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) enum CommandPaletteMode {
+    #[default]
+    All,
+    History,
+    Keymaps,
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct CommandPaletteState {
     pub(crate) table: SelectionTable<CommandPaletteItem>,
     pub(crate) theme_picker: theme_picker::ThemePicker,
+    pub(crate) mode: CommandPaletteMode,
 }
 
 impl SelectionItem for CommandPaletteItem {

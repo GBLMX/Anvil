@@ -41,6 +41,8 @@ inside the editor with `:help start`.
 | `Space g` | changed files |
 | `Space j` | jump list |
 | `Space H` | search history |
+| `Space :` | command history |
+| `Space K` | keymap list |
 | `Space b` | buffer picker |
 | `Space p` | command palette |
 | `Space s` | document symbols |

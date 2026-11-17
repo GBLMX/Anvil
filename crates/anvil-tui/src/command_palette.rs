@@ -66,6 +66,18 @@ impl CommandPaletteState {
 
 impl Model {
     pub(crate) fn open_command_palette(&mut self) {
+        self.open_command_palette_with(CommandPaletteMode::All);
+    }
+
+    pub(crate) fn open_command_history(&mut self) {
+        self.open_command_palette_with(CommandPaletteMode::History);
+    }
+
+    pub(crate) fn open_keymap_list(&mut self) {
+        self.open_command_palette_with(CommandPaletteMode::Keymaps);
+    }
+
+    fn open_command_palette_with(&mut self, mode: CommandPaletteMode) {
         let recents = self.overlays.command_palette_recents.clone();
         let mut items = command::COMMANDS
             .iter()
@@ -188,9 +200,25 @@ impl Model {
                 theme: None,
             });
         }
+        match mode {
+            CommandPaletteMode::All => {}
+            CommandPaletteMode::History => items.retain(|item| item.recent),
+            CommandPaletteMode::Keymaps => items.retain(|item| item.key.is_some()),
+        }
+        if items.is_empty() {
+            self.status.text = match mode {
+                CommandPaletteMode::History => "no command history",
+                CommandPaletteMode::Keymaps => "no keymapped commands",
+                CommandPaletteMode::All => "no commands",
+            }
+            .to_owned();
+            self.file.dirty = true;
+            return;
+        }
         self.overlays.command_palette = Some(CommandPaletteState {
             table: SelectionTable::new(items),
             theme_picker: theme_picker::ThemePicker::new(),
+            mode,
         });
         self.push_overlay(OverlayKind::CommandPalette);
         self.refresh_command_palette();
@@ -287,6 +315,7 @@ mod tests {
         CommandPaletteState {
             table: SelectionTable::new(items),
             theme_picker: theme_picker::ThemePicker::new(),
+            mode: CommandPaletteMode::All,
         }
     }
 
@@ -412,5 +441,29 @@ mod tests {
         assert_eq!(recents.len(), RECENTS_LIMIT);
         assert_eq!(recents.first().map(String::as_str), Some("command.14"));
         assert_eq!(recents.last().map(String::as_str), Some("command.5"));
+    }
+
+    #[test]
+    fn history_and_keymap_modes_filter_the_palette() {
+        let mut model = Model::new(EditorState::from_text(""), None);
+        model.overlays.command_palette_recents = vec!["editor.undo".to_owned()];
+
+        model.open_command_history();
+        let palette = model.overlays.command_palette.as_ref().expect("history");
+        assert_eq!(palette.mode, CommandPaletteMode::History);
+        assert!(palette.table.items().iter().all(|item| item.recent));
+        assert!(
+            palette
+                .table
+                .items()
+                .iter()
+                .any(|item| item.id == "editor.undo")
+        );
+
+        model.close_command_palette();
+        model.open_keymap_list();
+        let palette = model.overlays.command_palette.as_ref().expect("keymaps");
+        assert_eq!(palette.mode, CommandPaletteMode::Keymaps);
+        assert!(palette.table.items().iter().all(|item| item.key.is_some()));
     }
 }
