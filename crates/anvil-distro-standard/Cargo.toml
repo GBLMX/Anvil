@@ -15,6 +15,7 @@ official-desktop = ["dep:anvil-mod-desktop"]
 official-language-latex = ["anvil-tui/official-language-latex", "dep:anvil-mod-language-latex"]
 official-language-typst = ["anvil-tui/official-language-typst", "dep:anvil-mod-language-typst"]
 official-language-web = ["anvil-tui/official-language-web"]
+official-language-c-family = ["anvil-tui/official-language-c-family"]
 full = [
     "official-git",
     "official-workspace-index",
@@ -22,6 +23,7 @@ full = [
     "official-language-latex",
     "official-language-typst",
     "official-language-web",
+    "official-language-c-family",
 ]
 
 [dependencies]

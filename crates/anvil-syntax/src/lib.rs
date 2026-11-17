@@ -154,6 +154,23 @@ static CSS: LazyLock<SyntaxLanguage> = LazyLock::new(|| {
         false,
     )
 });
+#[cfg(feature = "c-family")]
+static C: LazyLock<SyntaxLanguage> = LazyLock::new(|| {
+    SyntaxLanguage::grammar(
+        Language::new(tree_sitter_c::LANGUAGE),
+        tree_sitter_c::HIGHLIGHT_QUERY,
+        false,
+    )
+});
+#[cfg(feature = "c-family")]
+static CPP: LazyLock<SyntaxLanguage> = LazyLock::new(|| {
+    let query = format!(
+        "{}\n{}",
+        tree_sitter_c::HIGHLIGHT_QUERY,
+        tree_sitter_cpp::HIGHLIGHT_QUERY
+    );
+    SyntaxLanguage::grammar(Language::new(tree_sitter_cpp::LANGUAGE), &query, false)
+});
 static TOML: LazyLock<SyntaxLanguage> = LazyLock::new(|| {
     SyntaxLanguage::grammar(
         Language::new(tree_sitter_toml_ng::LANGUAGE),
@@ -793,6 +810,10 @@ fn language_for_tag(tag: &str) -> Option<&'static SyntaxLanguage> {
         "tsx" | "javascript" | "js" | "jsx" => Some(&*TSX),
         #[cfg(feature = "web")]
         "css" => Some(&*CSS),
+        #[cfg(feature = "c-family")]
+        "c" => Some(&*C),
+        #[cfg(feature = "c-family")]
+        "cpp" | "c++" | "cxx" => Some(&*CPP),
         _ => None,
     }
 }
@@ -942,6 +963,10 @@ fn language_for(path: &Path) -> Option<&'static SyntaxLanguage> {
         "js" | "mjs" | "cjs" => Some(&*TSX),
         #[cfg(feature = "web")]
         "css" => Some(&*CSS),
+        #[cfg(feature = "c-family")]
+        "c" | "h" => Some(&*C),
+        #[cfg(feature = "c-family")]
+        "cc" | "cpp" | "cxx" | "hpp" | "hh" | "hxx" => Some(&*CPP),
         "md" | "markdown" => Some(&*MARKDOWN),
         _ => None,
     }
@@ -1121,6 +1146,45 @@ mod tests {
 
         let css = parse_source("body { color: red; }\n", Path::new("x.css")).expect("parse css");
         assert!(css.iter().any(|h| h.class == SyntaxClass::Property));
+    }
+
+    #[cfg(feature = "c-family")]
+    #[test]
+    fn c_family_extensions_and_tags_map_to_grammars() {
+        for path in [
+            "x.c", "x.h", "x.cc", "x.cpp", "x.cxx", "x.hpp", "x.hh", "x.hxx",
+        ] {
+            assert!(language_for(Path::new(path)).is_some(), "{path}");
+        }
+        assert!(language_for_tag("c").is_some());
+        assert!(language_for_tag("cpp").is_some());
+        assert!(language_for_tag("c++").is_some());
+    }
+
+    #[cfg(not(feature = "c-family"))]
+    #[test]
+    fn c_family_extensions_are_absent_without_feature() {
+        assert!(language_for(Path::new("x.c")).is_none());
+        assert!(language_for(Path::new("x.cpp")).is_none());
+        assert!(language_for_tag("cpp").is_none());
+    }
+
+    #[cfg(feature = "c-family")]
+    #[test]
+    fn c_family_grammars_produce_expected_classes() {
+        let c = parse_source("int main(void) { return 0; }\n// note\n", Path::new("x.c"))
+            .expect("parse c");
+        assert!(c.iter().any(|h| h.class == SyntaxClass::Keyword));
+        assert!(c.iter().any(|h| h.class == SyntaxClass::Number));
+        assert!(c.iter().any(|h| h.class == SyntaxClass::Comment));
+
+        let cpp = parse_source(
+            "class Demo { public: int value; };\n// note\n",
+            Path::new("x.cpp"),
+        )
+        .expect("parse cpp");
+        assert!(cpp.iter().any(|h| h.class == SyntaxClass::Keyword));
+        assert!(cpp.iter().any(|h| h.class == SyntaxClass::Comment));
     }
 
     #[test]

@@ -40,7 +40,8 @@ HTML (`.html`, `.htm`), Markdown, Makefile, Dockerfile, and LaTeX
 use Tree-sitter highlighting on a debounced background thread, capped at
 256 KiB so large files keep plain-text latency.
 The `official-language-web` feature adds TypeScript, TSX, JavaScript/JSX, and
-CSS highlighting; the `full` distribution feature includes it.
+CSS highlighting; `official-language-c-family` adds C and C++. The `full`
+distribution feature includes both.
 Trusted language servers (rust-analyzer, gopls, pyright/pylsp,
 typescript-language-server/vtsls, clangd, jdtls, lua-language-server,
 vscode-json-language-server, yaml-language-server, bash-language-server,
@@ -223,7 +224,7 @@ loading, or marketplace-installed Rust module. Module contract v1 is frozen;
 the `0.7.1`-`0.7.3` module, workspace-index, and compatibility-gate slices and
 the `0.7.4` desktop, LaTeX, and Typst slices are complete.
 
-The `full` Cargo feature enables every official module and the web syntax
+The `full` Cargo feature enables every official module and the web/C/C++ syntax
 grammars at runtime; building with `--all-features` selects it. The default
 `anvil` binary remains the standard Git-only composition unless `full` is
 selected.
@@ -246,6 +247,9 @@ selected.
 - `official-language-web` is opt-in through `official-language-web`. It adds
   Tree-sitter highlighting for TypeScript, TSX, JavaScript/JSX, and CSS,
   including Markdown fenced-code blocks. It does not add a language server.
+- `official-language-c-family` is opt-in through `official-language-c-family`.
+  It adds C and C++ Tree-sitter highlighting for `.c`, `.h`, `.cc`, `.cpp`,
+  `.cxx`, `.hpp`, `.hh`, and `.hxx`; it does not add a language server.
 - `anvil-distro-minimal` composes none of these modules.
 
 Module compatibility, caps, and deprecation rules are in

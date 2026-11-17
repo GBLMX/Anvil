@@ -11,6 +11,9 @@ post-`0.5.0` feature line.
 - Added the opt-in `official-language-web` syntax feature for TypeScript,
   TSX, JavaScript/JSX, and CSS files and Markdown code fences. The `full`
   distribution feature includes it; default builds stay unchanged.
+- Added the opt-in `official-language-c-family` syntax feature for C and C++,
+  including Markdown code fences. The `full` distribution feature includes it;
+  default builds stay unchanged.
 - LSP workers, status, retries, and inlay-hint support are now keyed by the
   owning workspace root. Each worker opens its LSP connection through that
   root's gateway, uses the project root as cwd, and keeps `workspaceFolders`,
