@@ -165,6 +165,7 @@ impl Model {
             BufferPickerMode::Plugin { .. }
                 | BufferPickerMode::ChangedFiles { .. }
                 | BufferPickerMode::Jumps { .. }
+                | BufferPickerMode::SearchHistory { .. }
         ) {
             let Some(picker) = self.overlays.buffer_picker.as_mut() else {
                 return;
@@ -281,6 +282,15 @@ impl Model {
                 return;
             };
             self.jump_history_to(forward, target);
+            return;
+        }
+        if let BufferPickerMode::SearchHistory { queries } = &picker.mode {
+            let Some(query) = queries.get(index).cloned() else {
+                self.status.text = "E: invalid search history picker value".to_owned();
+                self.file.dirty = true;
+                return;
+            };
+            self.replay_search(query);
             return;
         }
         self.select_buffer(index);

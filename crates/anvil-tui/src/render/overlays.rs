@@ -264,6 +264,9 @@ pub(crate) fn render_overlays(model: &Model, frame: &mut Frame, area: Rect) {
             crate::state::BufferPickerMode::Jumps { .. } => {
                 ("Jumps · Enter jump · Esc close", "no jumps")
             }
+            crate::state::BufferPickerMode::SearchHistory { .. } => {
+                ("Search history · Enter replay · Esc close", "no searches")
+            }
         };
         if picker.filtered.is_empty() {
             lines.push(Line::styled(empty, theme::muted()));

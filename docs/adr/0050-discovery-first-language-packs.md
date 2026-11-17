@@ -147,10 +147,10 @@ Negative:
 
 ## Implementation status (2026-11-17)
 
-- Landed: diagnostics (`Space d`), changed-files (`Space g`), and jump-list
-  (`Space j`) pickers.
-- Pending: command-history, keymap-list, and search-history pickers;
-  `:languages`; compiled language-pack matrix.
+- Landed: diagnostics (`Space d`), changed-files (`Space g`), jump-list
+  (`Space j`), and search-history (`Space H`) pickers.
+- Pending: command-history and keymap-list pickers; `:languages`; compiled
+  language-pack matrix.
 
 ## Verification
 

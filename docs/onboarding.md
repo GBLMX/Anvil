@@ -40,6 +40,7 @@ inside the editor with `:help start`.
 | `Space d` | diagnostics picker |
 | `Space g` | changed files |
 | `Space j` | jump list |
+| `Space H` | search history |
 | `Space b` | buffer picker |
 | `Space p` | command palette |
 | `Space s` | document symbols |

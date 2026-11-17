@@ -160,6 +160,7 @@ impl Model {
             ("problems" | "diagnostics", "") => self.toggle_problems(),
             ("changed-files", "") => self.open_changed_files_picker(),
             ("jumps", "") => self.open_jump_picker(),
+            ("search-history", "") => self.open_search_history(),
             ("replace", value) => {
                 self.replace_current(value);
             }

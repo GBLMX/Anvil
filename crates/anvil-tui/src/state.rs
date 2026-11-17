@@ -152,6 +152,9 @@ pub(crate) enum BufferPickerMode {
     Jumps {
         targets: Vec<(bool, usize)>,
     },
+    SearchHistory {
+        queries: Vec<String>,
+    },
 }
 
 pub(crate) struct BufferPickerState {
@@ -904,6 +907,8 @@ pub(crate) struct InputState {
 pub(crate) struct SearchSession {
     /// Last substring search.
     pub(crate) query: String,
+    /// Bounded committed search history, newest first.
+    pub(crate) history: Vec<String>,
     pub(crate) state: search::SearchState,
 }
 

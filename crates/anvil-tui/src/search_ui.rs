@@ -2,7 +2,10 @@
 
 use super::*;
 use crate::search::{MAX_SEARCH_MATCHES, find_matches_limited};
+use anvil_session::provider::{CancellationToken, PickerEntry};
 use anvil_workspace::{FileRequest, MAX_PROJECT_RESULTS};
+
+const SEARCH_HISTORY_LIMIT: usize = 50;
 
 impl Model {
     pub(crate) fn begin_search(&mut self) {
@@ -34,10 +37,60 @@ impl Model {
 
     pub(crate) fn commit_search(&mut self, query: String) {
         if self.apply_search_query(&query, true) {
-            self.search.query = query;
+            self.search.query = query.clone();
+            self.remember_search(&query);
             self.ui.input_mode = InputMode::Normal;
         }
         self.file.dirty = true;
+    }
+
+    pub(crate) fn open_search_history(&mut self) {
+        if self.search.history.is_empty() {
+            self.status.text = "no search history".to_owned();
+            self.file.dirty = true;
+            return;
+        }
+        let queries = self.search.history.clone();
+        let entries = queries
+            .iter()
+            .enumerate()
+            .map(|(index, query)| PickerEntry {
+                value: serde_json::Value::from(index as u64),
+                ordinal: query.to_lowercase(),
+                display: query.clone(),
+            })
+            .collect::<Vec<_>>();
+        self.overlays.buffer_picker = Some(BufferPickerState {
+            query: String::new(),
+            filtered: (0..entries.len()).collect(),
+            entries,
+            selected: 0,
+            cancel: CancellationToken::new(),
+            mode: BufferPickerMode::SearchHistory { queries },
+        });
+        self.push_overlay(OverlayKind::BufferPicker);
+        self.status.text = "search history".to_owned();
+        self.file.dirty = true;
+    }
+
+    pub(crate) fn replay_search(&mut self, query: String) {
+        self.search
+            .state
+            .begin(self.session.cursor, self.session.editor.selection_bytes());
+        if self.apply_search_query(&query, true) {
+            self.search.query = query.clone();
+            self.remember_search(&query);
+        }
+        self.file.dirty = true;
+    }
+
+    fn remember_search(&mut self, query: &str) {
+        if query.is_empty() {
+            return;
+        }
+        self.search.history.retain(|entry| entry != query);
+        self.search.history.insert(0, query.to_owned());
+        self.search.history.truncate(SEARCH_HISTORY_LIMIT);
     }
 
     pub(crate) fn cancel_search(&mut self) {
@@ -543,5 +596,32 @@ mod tests {
         assert_eq!(model.project.search_expected, 0);
         assert_eq!(model.project.search_received, 0);
         assert!(model.project.search_results.is_empty());
+    }
+
+    #[test]
+    fn search_history_dedupes_and_replays() {
+        let mut model = Model::new(EditorState::from_text("alpha beta alpha"), None);
+        model.commit_search("alpha".to_owned());
+        model.commit_search("beta".to_owned());
+        assert_eq!(
+            model.search.history,
+            vec!["beta".to_owned(), "alpha".to_owned()]
+        );
+
+        model.commit_search("alpha".to_owned());
+        assert_eq!(
+            model.search.history,
+            vec!["alpha".to_owned(), "beta".to_owned()]
+        );
+
+        model.open_search_history();
+        let picker = model.overlays.buffer_picker.as_mut().expect("picker");
+        picker.selected = 1;
+        model.apply_buffer_picker();
+        assert_eq!(model.search.query, "beta");
+        assert_eq!(
+            model.search.history,
+            vec!["beta".to_owned(), "alpha".to_owned()]
+        );
     }
 }

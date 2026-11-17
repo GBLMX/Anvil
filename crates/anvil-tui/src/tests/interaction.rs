@@ -441,6 +441,22 @@ fn forward_jump_target_preserves_intermediate_history() {
 }
 
 #[test]
+fn space_shift_h_opens_search_history() {
+    let mut model = Model::new(EditorState::from_text("alpha"), None);
+    model.start_page.welcome = false;
+    model.commit_search("alpha".to_owned());
+
+    handle_event(&mut model, key(KeyCode::Char(' ')));
+    handle_event(&mut model, key(KeyCode::Char('H')));
+    let picker = model.overlays.buffer_picker.as_ref().expect("picker");
+    assert!(matches!(
+        &picker.mode,
+        crate::state::BufferPickerMode::SearchHistory { .. }
+    ));
+    assert_eq!(picker.entries[0].display, "alpha");
+}
+
+#[test]
 fn problems_panel_filters_with_query_and_clear() {
     let mut model = Model::new(EditorState::from_text("alpha"), None);
     model.start_page.welcome = false;

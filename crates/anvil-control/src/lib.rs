@@ -221,6 +221,10 @@ pub const COMMANDS: &[CommandSpec] = &[
         capability: Capability::Read,
     },
     CommandSpec {
+        name: "search-history",
+        capability: Capability::Read,
+    },
+    CommandSpec {
         name: "replace",
         capability: Capability::Edit,
     },

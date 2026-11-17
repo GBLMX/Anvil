@@ -114,6 +114,11 @@ pub(super) fn execute_pending_command(
             let _ = model.take_count();
             model.open_jump_picker();
         }
+
+        PendingCommand::SearchHistory => {
+            let _ = model.take_count();
+            model.open_search_history();
+        }
         PendingCommand::StartFuzzy => {
             let _ = model.take_count();
             model.start_fuzzy();

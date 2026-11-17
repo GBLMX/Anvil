@@ -15,6 +15,8 @@ post-`0.5.0` feature line.
   `Space g` and `:changed-files` open it; `Enter` opens the selected path.
 - Added a jump-list picker over back and forward navigation history.
   `Space j` and `:jumps` open it; `Enter` jumps to the selected entry.
+- Added a bounded buffer-search history with a replay picker. `Space H` and
+  `:search-history` open it; `Enter` re-runs the selected search.
 - Added the opt-in `official-language-web` syntax feature for TypeScript,
   TSX, JavaScript/JSX, and CSS files and Markdown code fences. The `full`
   distribution feature includes it; default builds stay unchanged.
