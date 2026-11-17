@@ -18,9 +18,10 @@ post-`0.5.0` feature line.
 - Added a bounded buffer-search history with a replay picker. `Space H` and
   `:search-history` open it; `Enter` re-runs the selected search.
 - Command palette modes now expose recent-command history (`Space :`); the
-  command is `:command-history`. `Space K` and `:keymaps` open a full keymap
-  list covering normal, leader/pending, and configured context bindings;
-  `:keybinds` opens the keymapped-commands palette subset.
+  command is `:command-history`. `Space K` and `:keymaps` open a keymap list
+  covering normal, leader/pending, a curated common context subset, and
+  configured context overrides; `:keybinds` opens the keymapped-commands
+  palette subset.
 - Added `:languages` / `Space L`, a read-only readiness page for syntax
   grammar availability, LSP profile/root markers/server lookup, formatter
   fallback, and unconfigured linter/test/debug surfaces.

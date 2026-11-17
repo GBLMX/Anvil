@@ -821,6 +821,18 @@ fn keymap_list_includes_pending_and_context_bindings() {
 }
 
 #[test]
+fn builtin_context_catalog_uses_known_contexts() {
+    for (context, key, action) in BUILTIN_CONTEXT_KEYS {
+        assert!(
+            KeymapContext::from_name(context).is_some(),
+            "unknown context {context}"
+        );
+        assert!(!key.is_empty());
+        assert!(!action.is_empty());
+    }
+}
+
+#[test]
 fn keymap_list_prefers_configured_bindings_over_default_hints() {
     let mut model = Model::new(EditorState::from_text(""), None);
     assert!(model.config.keymap.bind(

@@ -134,7 +134,7 @@ Normal mode
   :jumps              open the jump-list picker
   :search-history     open the buffer-search history picker
   :command-history    open the command-history picker
-  :keymaps            open the full keymap list
+  :keymaps            open the keymap list
   :keybinds           open the keymapped-commands subset
   :languages          open language readiness
   :task <command>      run a bounded background shell task in the workspace

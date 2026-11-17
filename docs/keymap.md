@@ -79,8 +79,8 @@ It is not hot-reloaded.
 The Space leader expires after 1200 ms. `Space e` opens the file tree,
 `Space d` opens the filterable diagnostics picker, `Space g` lists changed
 files, `Space j` opens the jump list, `Space H` opens search history,
-`Space :` opens command history, `Space K` opens the full keymap list
-(`:keybinds` shows the keymapped-command subset), `Space L` opens language
+`Space :` opens command history, `Space K` opens the keymap list (normal,
+leader/pending, and a curated common context subset), `Space L` opens language
 readiness, `Space p` opens the command palette, and `Ctrl-w` handles window
 focus without numbered aliases.
 
