@@ -467,7 +467,7 @@ fn inside_overlay(model: &Model, col: u16, row: u16, area: Rect) -> bool {
         let width = (area.width * 3 / 4)
             .max(30)
             .min(area.width.saturating_sub(2));
-        let height = (model.ui.problems.items.len() as u16 + 2)
+        let height = (model.ui.problems.visible_len() as u16 + 2)
             .min(18)
             .min(area.height.saturating_sub(2));
         let popup = Rect {

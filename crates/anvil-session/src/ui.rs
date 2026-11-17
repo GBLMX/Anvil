@@ -340,6 +340,8 @@ pub struct ProblemsState {
     pub visible: bool,
     pub selected: usize,
     pub items: Vec<Problem>,
+    pub query: String,
+    pub filtered: Vec<usize>,
 }
 
 impl ProblemsState {
@@ -352,22 +354,86 @@ impl ProblemsState {
                 .then(left.severity.cmp(&right.severity))
         });
         self.items = items;
-        self.selected = self.selected.min(self.items.len().saturating_sub(1));
+        self.refilter();
+    }
+
+    pub fn set_query(&mut self, query: String) {
+        self.query = query;
+        self.refilter();
+    }
+
+    pub fn pop_query(&mut self) {
+        self.query.pop();
+        self.refilter();
+    }
+
+    pub fn clear_query(&mut self) {
+        self.set_query(String::new());
+    }
+
+    pub fn visible(&self) -> impl Iterator<Item = (usize, &Problem)> {
+        self.filtered
+            .iter()
+            .copied()
+            .filter_map(|index| self.items.get(index).map(|problem| (index, problem)))
+    }
+
+    pub fn visible_len(&self) -> usize {
+        self.filtered.len()
     }
 
     pub fn move_selection(&mut self, delta: isize) {
-        if self.items.is_empty() {
-            self.selected = 0;
+        let Some(position) = self
+            .filtered
+            .iter()
+            .position(|index| *index == self.selected)
+        else {
+            self.selected = self.filtered.first().copied().unwrap_or(0);
             return;
-        }
-        self.selected = self
-            .selected
+        };
+        let position = position
             .saturating_add_signed(delta)
-            .min(self.items.len() - 1);
+            .min(self.filtered.len().saturating_sub(1));
+        self.selected = self.filtered[position];
     }
 
     pub fn selected(&self) -> Option<&Problem> {
-        self.items.get(self.selected)
+        self.filtered
+            .iter()
+            .copied()
+            .find(|index| *index == self.selected)
+            .and_then(|index| self.items.get(index))
+    }
+
+    fn refilter(&mut self) {
+        let needle = self.query.to_lowercase();
+        self.filtered = self
+            .items
+            .iter()
+            .enumerate()
+            .filter(|(_, problem)| {
+                needle.is_empty()
+                    || problem
+                        .path
+                        .to_string_lossy()
+                        .to_lowercase()
+                        .contains(&needle)
+                    || problem.message.to_lowercase().contains(&needle)
+                    || problem
+                        .source
+                        .as_deref()
+                        .is_some_and(|source| source.to_lowercase().contains(&needle))
+                    || problem
+                        .code
+                        .as_deref()
+                        .is_some_and(|code| code.to_lowercase().contains(&needle))
+            })
+            .map(|(index, _)| index)
+            .collect();
+        if self.filtered.contains(&self.selected) {
+            return;
+        }
+        self.selected = self.filtered.first().copied().unwrap_or(0);
     }
 }
 
@@ -444,7 +510,7 @@ mod tests {
     }
 
     #[test]
-    fn problems_sort_and_clamp_selection() {
+    fn problems_sort_filter_and_clamp_selection() {
         let mut problems = ProblemsState::default();
         problems.replace(vec![
             Problem {
@@ -452,24 +518,42 @@ mod tests {
                 line: 1,
                 character: 0,
                 severity: Some(1),
-                source: None,
+                source: Some("rust-analyzer".to_owned()),
                 code: None,
-                message: "b".to_owned(),
+                message: "unused import".to_owned(),
             },
             Problem {
                 path: PathBuf::from("a.rs"),
                 line: 2,
                 character: 0,
                 severity: Some(2),
-                source: None,
+                source: Some("clippy".to_owned()),
                 code: None,
-                message: "a".to_owned(),
+                message: "needless borrow".to_owned(),
             },
         ]);
         assert_eq!(problems.items[0].path, PathBuf::from("a.rs"));
+        assert_eq!(problems.visible_len(), 2);
         problems.selected = 9;
         problems.move_selection(1);
+        assert_eq!(problems.selected, 0);
+
+        problems.set_query("unused".to_owned());
+        assert_eq!(problems.visible_len(), 1);
         assert_eq!(problems.selected, 1);
+        assert_eq!(
+            problems.selected().map(|problem| problem.path.clone()),
+            Some(PathBuf::from("b.rs"))
+        );
+
+        problems.set_query("clippy".to_owned());
+        assert_eq!(problems.visible_len(), 1);
+        assert_eq!(problems.selected, 0);
+
+        problems.clear_query();
+        assert_eq!(problems.visible_len(), 2);
+        problems.move_selection(-1);
+        assert_eq!(problems.selected, 0);
     }
 
     #[test]

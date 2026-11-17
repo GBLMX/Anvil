@@ -37,6 +37,7 @@ inside the editor with `:help start`.
 | `/` then `n` / `N` | search |
 | `Space f` | fuzzy file finder |
 | `Space e` | file tree |
+| `Space d` | diagnostics picker |
 | `Space b` | buffer picker |
 | `Space p` | command palette |
 | `Space s` | document symbols |

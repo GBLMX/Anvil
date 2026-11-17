@@ -79,7 +79,7 @@ impl Model {
             self.close_problems();
         } else if !self.runtime.task_problems.is_empty() {
             self.open_problems();
-            self.ui.problems.selected = 0;
+            self.ui.problems.move_selection(0);
         }
         let label = if tests { "tests" } else { "task" };
         let mut status = if result.timed_out {

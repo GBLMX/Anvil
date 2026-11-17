@@ -157,7 +157,7 @@ impl Model {
             ("w", path) => self.queue_effect(Effect::SaveAs(path.into())),
             ("wa", "") => self.queue_effect(Effect::SaveAll),
             ("e", path) => self.queue_effect(Effect::Open(path.into())),
-            ("problems", "") => self.toggle_problems(),
+            ("problems" | "diagnostics", "") => self.toggle_problems(),
             ("replace", value) => {
                 self.replace_current(value);
             }

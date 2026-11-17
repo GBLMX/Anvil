@@ -71,13 +71,21 @@ impl Model {
         }
         self.open_problems();
         self.rebuild_problems();
-        self.status.text = format!("problems: {}", self.ui.problems.items.len());
+        self.status.text = format!(
+            "diagnostics: {}/{}",
+            self.ui.problems.visible_len(),
+            self.ui.problems.items.len()
+        );
         self.file.dirty = true;
     }
 
     pub(crate) fn jump_problem(&mut self) {
         let Some(problem) = self.ui.problems.selected().cloned() else {
-            self.status.text = "no problems".to_owned();
+            self.status.text = if self.ui.problems.query.is_empty() {
+                "no problems".to_owned()
+            } else {
+                "no matching diagnostics".to_owned()
+            };
             self.file.dirty = true;
             return;
         };

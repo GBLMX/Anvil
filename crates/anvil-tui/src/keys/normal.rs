@@ -100,6 +100,10 @@ pub(super) fn execute_pending_command(
             let _ = model.take_count();
             model.open_tree();
         }
+        PendingCommand::Problems => {
+            let _ = model.take_count();
+            model.toggle_problems();
+        }
         PendingCommand::StartFuzzy => {
             let _ = model.take_count();
             model.start_fuzzy();

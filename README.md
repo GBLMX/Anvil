@@ -357,7 +357,8 @@ directly. `scripts/mcp-smoke.sh` starts the adapter against a real TUI.
 Quick open: `Space f` filters workspace files and previews the selected file
 through the gateway. Wide terminals show the preview beside the list; narrow
 terminals stack it below. `Space b` filters the open buffers; `Enter` switches
-to the selected buffer.
+to the selected buffer. `Space d` opens the diagnostics picker; type to filter
+by path, message, source, or code, and press `Enter` to jump.
 
 ## Documents
 

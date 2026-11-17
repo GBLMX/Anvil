@@ -431,14 +431,22 @@ pub(super) enum ProblemsAction {
     Next,
     Jump,
     Cancel,
+    Input(char),
+    Backspace,
+    Clear,
 }
 
 pub(super) fn problems_action(key: KeyPress) -> Option<ProblemsAction> {
+    if key.ctrl() && key.code == KeyCode::Char('u') {
+        return Some(ProblemsAction::Clear);
+    }
     match key.code {
         KeyCode::Esc => Some(ProblemsAction::Cancel),
         KeyCode::Up => Some(ProblemsAction::Previous),
         KeyCode::Down => Some(ProblemsAction::Next),
         KeyCode::Enter => Some(ProblemsAction::Jump),
+        KeyCode::Backspace => Some(ProblemsAction::Backspace),
+        KeyCode::Char(character) => Some(ProblemsAction::Input(character)),
         _ => None,
     }
 }
@@ -455,6 +463,20 @@ pub(super) fn execute_problems_action(model: &mut Model, action: ProblemsAction)
         }
         ProblemsAction::Jump => model.jump_problem(),
         ProblemsAction::Cancel => model.close_problems(),
+        ProblemsAction::Input(character) => {
+            let mut query = model.ui.problems.query.clone();
+            query.push(character);
+            model.ui.problems.set_query(query);
+            model.file.dirty = true;
+        }
+        ProblemsAction::Backspace => {
+            model.ui.problems.pop_query();
+            model.file.dirty = true;
+        }
+        ProblemsAction::Clear => {
+            model.ui.problems.clear_query();
+            model.file.dirty = true;
+        }
     }
 }
 

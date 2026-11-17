@@ -347,6 +347,7 @@ pub(crate) enum PendingCommand {
     FocusEditor,
     CloseSplit,
     OpenTree,
+    Problems,
     StartFuzzy,
     BufferPicker,
     CommandPalette,
@@ -423,6 +424,7 @@ impl PendingCommand {
             | OperatorTag { .. }
             | Count { .. }
             | BufferPicker
+            | Problems
             | FileStart
             | CenterCursor
             | SectionPrevious
@@ -494,6 +496,7 @@ impl PendingCommand {
             Self::SectionPrevious => "previous section".to_owned(),
             Self::SectionNext => "next section".to_owned(),
             Self::ChangeLines => "change line".to_owned(),
+            Self::Problems => "diagnostics".to_owned(),
             _ => "command".to_owned(),
         }
     }
@@ -510,6 +513,7 @@ impl PendingCommand {
                 | Self::FocusEditor
                 | Self::CloseSplit
                 | Self::OpenTree
+                | Self::Problems
                 | Self::StartFuzzy
                 | Self::StartRename
                 | Self::References
@@ -694,6 +698,7 @@ pub(crate) fn pending_action(
         ('w', KeyCode::Char('l')) => Some(PendingCommand::FocusSplit(true)),
         ('w', KeyCode::Char('q')) => Some(PendingCommand::CloseSplit),
         (' ', KeyCode::Char('e')) => Some(PendingCommand::OpenTree),
+        (' ', KeyCode::Char('d')) => Some(PendingCommand::Problems),
         (' ', KeyCode::Char('f')) => Some(PendingCommand::StartFuzzy),
         (' ', KeyCode::Char('p')) => Some(PendingCommand::CommandPalette),
         (' ', KeyCode::Char('r')) => Some(PendingCommand::StartRename),
@@ -782,6 +787,7 @@ impl Model {
 fn space_hint_group(key: &str) -> &'static str {
     match key {
         "f" => "file",
+        "d" => "diagnostics",
         "b" => "buffer",
         "e" => "tree",
         "s" | "S" => "symbol",

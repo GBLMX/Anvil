@@ -375,7 +375,7 @@ fn problem_lines(model: &Model, width: usize) -> (Vec<Line<'static>>, Option<usi
     let mut lines = Vec::new();
     let mut selected_line = None;
     let mut current_path = None;
-    for (index, problem) in model.ui.problems.items.iter().enumerate() {
+    for (index, problem) in model.ui.problems.visible() {
         if current_path.as_ref() != Some(&problem.path) {
             current_path = Some(problem.path.clone());
             lines.push(Line::styled(

@@ -537,6 +537,36 @@ fn notification_progress_and_problems_render_without_focus_change() {
 }
 
 #[test]
+fn problems_picker_renders_the_filtered_diagnostics() {
+    let mut model = Model::new(EditorState::from_text("x"), None);
+    model.start_page.welcome = false;
+    model.language.diagnostics.by_path.insert(
+        PathBuf::from("diag.rs"),
+        vec![
+            diagnostic(0, 0, "unused import"),
+            diagnostic(1, 0, "needless borrow"),
+        ],
+    );
+    model.rebuild_problems();
+    model.ui.problems.visible = true;
+    model.ui.problems.set_query("needless".to_owned());
+
+    let backend = TestBackend::new(80, 16);
+    let mut terminal = Terminal::new(backend).expect("terminal");
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+    let rendered = terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect::<String>();
+    assert!(rendered.contains("Problems /needless"), "{rendered}");
+    assert!(rendered.contains("needless borrow"), "{rendered}");
+    assert!(!rendered.contains("unused import"), "{rendered}");
+}
+
+#[test]
 fn status_bar_renders_path_diagnostics_and_position() {
     let mut model = Model::new(EditorState::from_text("x"), None);
     model.start_page.welcome = false;

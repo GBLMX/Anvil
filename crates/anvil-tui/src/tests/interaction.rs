@@ -307,6 +307,67 @@ fn problems_panel_uses_the_overlay_stack() {
 }
 
 #[test]
+fn space_d_opens_the_diagnostics_picker() {
+    let mut model = Model::new(EditorState::from_text("alpha"), None);
+    model.start_page.welcome = false;
+
+    handle_event(&mut model, key(KeyCode::Char(' ')));
+    handle_event(&mut model, key(KeyCode::Char('d')));
+    assert!(model.ui.problems.visible);
+    assert_eq!(model.top_overlay(), Some(OverlayKind::Problems));
+
+    model.close_problems();
+    model.execute_command("diagnostics");
+    assert!(model.ui.problems.visible);
+    assert_eq!(model.top_overlay(), Some(OverlayKind::Problems));
+}
+
+#[test]
+fn problems_panel_filters_with_query_and_clear() {
+    let mut model = Model::new(EditorState::from_text("alpha"), None);
+    model.start_page.welcome = false;
+    model.toggle_problems();
+    model.ui.problems.replace(vec![
+        Problem {
+            path: PathBuf::from("a.rs"),
+            line: 0,
+            character: 0,
+            severity: Some(1),
+            source: Some("rust-analyzer".to_owned()),
+            code: None,
+            message: "unused import".to_owned(),
+        },
+        Problem {
+            path: PathBuf::from("b.rs"),
+            line: 0,
+            character: 0,
+            severity: Some(2),
+            source: Some("clippy".to_owned()),
+            code: None,
+            message: "needless borrow".to_owned(),
+        },
+    ]);
+
+    for character in "unused".chars() {
+        handle_event(&mut model, key(KeyCode::Char(character)));
+    }
+    assert_eq!(model.ui.problems.query, "unused");
+    assert_eq!(model.ui.problems.visible_len(), 1);
+    assert_eq!(
+        model
+            .ui
+            .problems
+            .selected()
+            .map(|problem| problem.path.clone()),
+        Some(PathBuf::from("a.rs"))
+    );
+
+    handle_event(&mut model, ctrl(KeyCode::Char('u')));
+    assert!(model.ui.problems.query.is_empty());
+    assert_eq!(model.ui.problems.visible_len(), 2);
+}
+
+#[test]
 fn popup_context_bindings_consume_buffer_picker_keys() {
     let mut model = Model::new(EditorState::from_text("alpha"), None);
     model.start_page.welcome = false;

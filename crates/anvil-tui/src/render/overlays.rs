@@ -386,11 +386,27 @@ pub(crate) fn render_overlays(model: &Model, frame: &mut Frame, area: Rect) {
         let mut lines: Vec<Line<'static>> =
             all_lines.into_iter().skip(start).take(visible).collect();
         if lines.is_empty() {
-            lines.push(Line::styled(
-                "no problems",
-                theme::panel().fg(theme::muted()),
-            ));
+            let text = if model.ui.problems.items.is_empty() {
+                "no problems"
+            } else {
+                "no matching problems"
+            };
+            lines.push(Line::styled(text, theme::panel().fg(theme::muted())));
         }
+        let query = &model.ui.problems.query;
+        let title = if query.is_empty() {
+            format!(
+                "Problems · {}/{}",
+                model.ui.problems.visible_len(),
+                model.ui.problems.items.len()
+            )
+        } else {
+            format!(
+                "Problems /{query} · {}/{}",
+                model.ui.problems.visible_len(),
+                model.ui.problems.items.len()
+            )
+        };
         let popup = Rect {
             x: area.x + (area.width.saturating_sub(width)) / 2,
             y: area.y + (area.height.saturating_sub(height)) / 2,
@@ -401,7 +417,7 @@ pub(crate) fn render_overlays(model: &Model, frame: &mut Frame, area: Rect) {
         frame.render_widget(
             Paragraph::new(lines)
                 .style(theme::panel())
-                .block(crate::render::focused_panel_block("Problems")),
+                .block(crate::render::focused_panel_block(title)),
             popup,
         );
     }
