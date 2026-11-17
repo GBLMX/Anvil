@@ -1,8 +1,8 @@
 # Contributing to Anvil
 
-Anvil is in Phase 0. The most useful contributions are security review, threat
-model corrections, benchmark fixtures, and small vertical slices that match the
-charter.
+Anvil is in the `0.6.0` internal-polish phase. The most useful contributions
+are security review, threat-model corrections, benchmark fixtures, and small
+vertical slices that match the charter and ADRs.
 
 ## Before you start
 
@@ -31,21 +31,25 @@ There is no separate CLA.
 
 ## Development setup
 
-The current layout is:
+The high-level layout is:
 
 ```text
 Cargo.toml                  Rust workspace
 go.mod                      Go module at the repository root
-crates/anvil-api/           public Rust types, schema, generated stubs
-crates/anvil-core/         text model, commands, snapshots
-crates/anvil-editor/       selection-first editor state and snapshots
-crates/anvil-ipc/          UDS transport, JSON-RPC framing
-crates/anvil-plugin-host/  Lua/QuickJS host and sandbox
-crates/anvil-tui/          terminal frontend
-go/cmd/anvil-gateway/      gateway entry point
-go/cmd/anvil-exec-runner/  sandboxed rg/fd launcher
-go/internal/               gateway, LSP, fetch, policy, fsroot, execrunner
-docs/                      charter, threat model, ADRs, performance
+crates/anvil-api/           public Rust types and schemas
+crates/anvil-core/          text model, commands, snapshots
+crates/anvil-editor/        selection-first editor state and snapshots
+crates/anvil-syntax/        Tree-sitter highlighting and scope extraction
+crates/anvil-workspace/     file workers, tree snapshots, watch status
+crates/anvil-session/       headless session, providers, plugin lifecycle
+crates/anvil-ipc/           UDS transport, JSON-RPC framing
+crates/anvil-control/       control socket and shared command manifest
+crates/anvil-tui/           terminal frontend
+crates/anvil-plugin-host/   sandboxed Luau host
+go/cmd/anvil-gateway/       gateway entry point
+go/cmd/anvil-exec-runner/   sandboxed rg/fd launcher
+go/internal/                gateway, LSP, watch, fetch, policy, fsroot
+docs/                       charter, threat model, ADRs, plans, performance
 ```
 
 Rust is pinned by `rust-toolchain.toml`. Go **1.26.11 or newer** is required;

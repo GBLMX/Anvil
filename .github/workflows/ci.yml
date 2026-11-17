@@ -138,11 +138,13 @@ jobs:
           cargo test -p anvil-tui --features official-workspace-index
           cargo test -p anvil-tui --features official-language-latex
           cargo test -p anvil-tui --features official-language-typst
-          cargo check -p anvil-tui --features official-git,official-workspace-index,official-language-latex,official-language-typst
+          cargo test -p anvil-tui --features official-language-web
+          cargo check -p anvil-tui --features official-git,official-workspace-index,official-language-latex,official-language-typst,official-language-web
           cargo test -p anvil-distro-standard --no-default-features
           cargo test -p anvil-distro-standard --features official-workspace-index
           cargo test -p anvil-distro-standard --features official-language-latex
           cargo test -p anvil-distro-standard --features official-language-typst
+          cargo test -p anvil-distro-standard --features official-language-web
           cargo test -p anvil-distro-standard --features official-desktop
           cargo test -p anvil-distro-standard --all-features
           cargo run -q -p anvil-distro-minimal -- --version | grep -q '^anvil-minimal '
