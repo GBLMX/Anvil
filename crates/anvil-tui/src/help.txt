@@ -25,7 +25,7 @@ Normal mode
   Space j             jump list; type to filter, Enter jumps
   Space H             search history; type to filter, Enter replays
   Space :             command history; filter and Enter runs
-  Space K             keymapped commands; filter and Enter runs
+  Space K             keymap list; read-only, / searches
   tree a / A         create file / folder in the tree
   tree r / m / c     rename / move / copy the selected entry
   tree d             delete the selected entry recursively
@@ -133,7 +133,8 @@ Normal mode
   :jumps              open the jump-list picker
   :search-history     open the buffer-search history picker
   :command-history    open the command-history picker
-  :keybinds           open the keymapped-commands list
+  :keymaps            open the full keymap list
+  :keybinds           open the keymapped-commands subset
   :task <command>      run a bounded background shell task in the workspace
   :task-output         show the last task output
   :tests <command>     run tests and open located failures

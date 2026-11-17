@@ -42,7 +42,7 @@ inside the editor with `:help start`.
 | `Space j` | jump list |
 | `Space H` | search history |
 | `Space :` | command history |
-| `Space K` | keymapped commands |
+| `Space K` | keymap list |
 | `Space b` | buffer picker |
 | `Space p` | command palette |
 | `Space s` | document symbols |

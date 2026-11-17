@@ -149,9 +149,11 @@ Negative:
 
 - Landed: diagnostics (`Space d`), changed-files (`Space g`), jump-list
   (`Space j`), search-history (`Space H`), and command-history (`Space :`)
-  pickers. A keymapped-commands palette mode is available at `Space K`.
-- Pending: the full keymap list including pending-leader and context bindings;
-  `:languages`; compiled language-pack matrix.
+  pickers. `Space K` / `:keymaps` opens a keymap list for normal commands,
+  leader/pending bindings, and configured context bindings; `:keybinds`
+  remains the keymapped-commands palette subset.
+- Pending: a centralized catalog of built-in context actions; `:languages`;
+  compiled language-pack matrix.
 
 ## Verification
 

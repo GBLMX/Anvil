@@ -79,9 +79,9 @@ It is not hot-reloaded.
 The Space leader expires after 1200 ms. `Space e` opens the file tree,
 `Space d` opens the filterable diagnostics picker, `Space g` lists changed
 files, `Space j` opens the jump list, `Space H` opens search history,
-`Space :` opens command history, `Space K` lists keymapped commands,
-`Space p` opens the command palette, and `Ctrl-w` handles window focus without
-numbered aliases.
+`Space :` opens command history, `Space K` opens the full keymap list
+(`:keybinds` shows the keymapped-command subset), `Space p` opens the command
+palette, and `Ctrl-w` handles window focus without numbered aliases.
 
 ## Canonical bindings
 
@@ -105,7 +105,7 @@ remain as internal aliases, but they are not separate advertised shortcuts.
 | Jump list | `Space j` |
 | Search history | `Space H` |
 | Command history | `Space :` |
-| Keymapped commands | `Space K` |
+| Keymap list | `Space K` |
 | Document / workspace symbols | `Space s` / `Space S` |
 | Rename / code action | `Space r` / `Space a` |
 | Format | `Space F` |

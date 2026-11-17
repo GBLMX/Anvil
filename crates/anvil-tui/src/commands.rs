@@ -163,6 +163,7 @@ impl Model {
             ("search-history", "") => self.open_search_history(),
             ("command-history", "") => self.open_command_history(),
             ("keybinds", "") => self.open_keybinds(),
+            ("keymaps", "") => self.show_keymap_list(),
             ("replace", value) => {
                 self.replace_current(value);
             }

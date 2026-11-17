@@ -17,9 +17,10 @@ post-`0.5.0` feature line.
   `Space j` and `:jumps` open it; `Enter` jumps to the selected entry.
 - Added a bounded buffer-search history with a replay picker. `Space H` and
   `:search-history` open it; `Enter` re-runs the selected search.
-- Command palette modes now expose recent-command history (`Space :`) and
-  keymapped commands (`Space K`); `:command-history` and `:keybinds` also open
-  them.
+- Command palette modes now expose recent-command history (`Space :`); the
+  command is `:command-history`. `Space K` and `:keymaps` open a full keymap
+  list covering normal, leader/pending, and configured context bindings;
+  `:keybinds` opens the keymapped-commands palette subset.
 - Added the opt-in `official-language-web` syntax feature for TypeScript,
   TSX, JavaScript/JSX, and CSS files and Markdown code fences. The `full`
   distribution feature includes it; default builds stay unchanged.

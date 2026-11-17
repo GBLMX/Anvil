@@ -352,7 +352,7 @@ pub(crate) enum PendingCommand {
     Jumps,
     SearchHistory,
     CommandHistory,
-    Keybinds,
+    KeymapList,
     StartFuzzy,
     BufferPicker,
     CommandPalette,
@@ -434,7 +434,7 @@ impl PendingCommand {
             | Jumps
             | SearchHistory
             | CommandHistory
-            | Keybinds
+            | KeymapList
             | FileStart
             | CenterCursor
             | SectionPrevious
@@ -511,7 +511,7 @@ impl PendingCommand {
             Self::Jumps => "jump list".to_owned(),
             Self::SearchHistory => "search history".to_owned(),
             Self::CommandHistory => "command history".to_owned(),
-            Self::Keybinds => "keybinds".to_owned(),
+            Self::KeymapList => "keymap list".to_owned(),
             _ => "command".to_owned(),
         }
     }
@@ -533,7 +533,7 @@ impl PendingCommand {
                 | Self::Jumps
                 | Self::SearchHistory
                 | Self::CommandHistory
-                | Self::Keybinds
+                | Self::KeymapList
                 | Self::StartFuzzy
                 | Self::StartRename
                 | Self::References
@@ -723,7 +723,7 @@ pub(crate) fn pending_action(
         (' ', KeyCode::Char('j')) => Some(PendingCommand::Jumps),
         (' ', KeyCode::Char('H')) => Some(PendingCommand::SearchHistory),
         (' ', KeyCode::Char(':')) => Some(PendingCommand::CommandHistory),
-        (' ', KeyCode::Char('K')) => Some(PendingCommand::Keybinds),
+        (' ', KeyCode::Char('K')) => Some(PendingCommand::KeymapList),
         (' ', KeyCode::Char('f')) => Some(PendingCommand::StartFuzzy),
         (' ', KeyCode::Char('p')) => Some(PendingCommand::CommandPalette),
         (' ', KeyCode::Char('r')) => Some(PendingCommand::StartRename),
@@ -807,6 +807,90 @@ impl Model {
         }
         hints
     }
+
+    pub(crate) fn show_keymap_list(&mut self) {
+        let text = self.keymap_list_text();
+        self.show_read_only(&text, "Keymaps: :q returns", "keymaps");
+    }
+
+    fn keymap_list_text(&self) -> String {
+        let mut lines = vec![
+            "Anvil keymap".to_owned(),
+            String::new(),
+            "Normal mode".to_owned(),
+        ];
+        let mut normal = self
+            .config
+            .keymap
+            .normal
+            .iter()
+            .filter_map(|(chord, command)| {
+                command
+                    .id()
+                    .map(|id| (chord.label(), id.as_str().to_owned()))
+            })
+            .collect::<Vec<_>>();
+        for spec in command::COMMANDS {
+            if let Some(key) = self.config.keymap.key_for_command(spec.id.as_str()) {
+                normal.push((key, spec.id.as_str().to_owned()));
+            }
+        }
+        normal.sort();
+        normal.dedup();
+        for (key, id) in normal {
+            lines.push(format!(
+                "  {key:<18} {id}  {}",
+                crate::command_palette::command_title(&id)
+            ));
+        }
+
+        lines.push(String::new());
+        lines.push("Leader and pending bindings".to_owned());
+        let mut pending = Vec::new();
+        for prefix in [' ', 'g', 'w', 'z', ']', '[', 'c', 'd', 'y'] {
+            for (key, label) in self.config.keymap.pending_actions(prefix, false) {
+                let binding = if prefix == ' ' {
+                    format!("Space {key}")
+                } else {
+                    format!("{prefix} {key}")
+                };
+                pending.push((binding, label));
+            }
+        }
+        pending.sort();
+        pending.dedup();
+        for (key, label) in pending {
+            lines.push(format!("  {key:<18} {label}"));
+        }
+        lines.push("  d/y/c + i/a + object  operator pending".to_owned());
+
+        lines.push(String::new());
+        lines.push("Configured context bindings".to_owned());
+        let mut contexts = Vec::new();
+        for context in KeymapContext::route_order() {
+            let Some(bindings) = self.config.keymap.contexts.get(&context) else {
+                continue;
+            };
+            for (chord, action) in bindings {
+                contexts.push((context.as_str().to_owned(), chord.label(), action.label()));
+            }
+        }
+        contexts.sort();
+        contexts.dedup();
+        if contexts.is_empty() {
+            lines.push("  none".to_owned());
+        } else {
+            for (context, key, action) in contexts {
+                lines.push(format!("  {context:<14} {key:<18} {action}"));
+            }
+        }
+        lines.push(String::new());
+        lines.push(
+            "Built-in context actions are listed by :help; configured overrides are shown here."
+                .to_owned(),
+        );
+        lines.join("\n")
+    }
 }
 
 fn space_hint_group(key: &str) -> &'static str {
@@ -816,7 +900,7 @@ fn space_hint_group(key: &str) -> &'static str {
         "g" => "git",
         "j" => "jump",
         "H" | ":" => "history",
-        "K" => "keybind",
+        "K" => "keymap",
         "b" => "buffer",
         "e" => "tree",
         "s" | "S" => "symbol",

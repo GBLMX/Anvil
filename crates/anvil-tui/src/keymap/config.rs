@@ -228,6 +228,16 @@ impl ContextAction {
                 .map(Self::Pending)
         })
     }
+
+    pub(crate) fn label(&self) -> String {
+        match self {
+            Self::Normal(command) => command
+                .id()
+                .map(|id| id.as_str().to_owned())
+                .unwrap_or_else(|| "state command".to_owned()),
+            Self::Pending(command) => command.label(),
+        }
+    }
 }
 
 #[derive(Debug, Default)]

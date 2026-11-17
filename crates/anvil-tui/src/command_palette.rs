@@ -5,7 +5,7 @@ use anvil_session::command::{self, CommandContext};
 
 const RECENTS_LIMIT: usize = 10;
 
-fn command_title(id: &str) -> String {
+pub(crate) fn command_title(id: &str) -> String {
     id.split(['.', '_'])
         .filter(|part| !part.is_empty())
         .map(|part| {

@@ -1,6 +1,7 @@
 //! Keymap resolution tests.
 
 use super::*;
+use crate::EditorState;
 use crossterm::event::{KeyEvent, KeyModifiers};
 use std::collections::HashSet;
 
@@ -791,4 +792,25 @@ x = "view.focus_editor"
         resolved.1,
         ContextAction::Pending(PendingCommand::FocusEditor)
     ));
+}
+
+#[test]
+fn keymap_list_includes_pending_and_context_bindings() {
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model
+        .config
+        .keymap
+        .contexts
+        .entry(KeymapContext::FileTree)
+        .or_default()
+        .insert(
+            KeyChord::from_key(key(KeyCode::Char('x'), KeyModifiers::NONE)),
+            ContextAction::Normal(NormalCommand::Hover),
+        );
+
+    let text = model.keymap_list_text();
+    assert!(text.contains("Space d"), "{text}");
+    assert!(text.contains("Leader and pending bindings"), "{text}");
+    assert!(text.contains("file_tree"), "{text}");
+    assert!(text.contains("lsp.hover"), "{text}");
 }
