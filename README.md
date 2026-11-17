@@ -360,6 +360,7 @@ terminals stack it below. `Space b` filters the open buffers; `Enter` switches
 to the selected buffer. `Space d` opens the diagnostics picker; type to filter
 by path, message, source, or code, and press `Enter` to jump. `Space g` lists
 Git-changed files; filter by status or path and press `Enter` to open.
+`Space j` opens the jump list; filter and press `Enter` to navigate history.
 
 ## Documents
 

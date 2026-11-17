@@ -147,8 +147,9 @@ Negative:
 
 ## Implementation status (2026-11-17)
 
-- Landed: diagnostics picker (`Space d`) and changed-files picker (`Space g`).
-- Pending: jump-list, command-history, keymap-list, and search-history pickers;
+- Landed: diagnostics (`Space d`), changed-files (`Space g`), and jump-list
+  (`Space j`) pickers.
+- Pending: command-history, keymap-list, and search-history pickers;
   `:languages`; compiled language-pack matrix.
 
 ## Verification

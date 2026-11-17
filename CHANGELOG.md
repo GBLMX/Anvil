@@ -13,6 +13,8 @@ post-`0.5.0` feature line.
   selected diagnostic. `Space d`, `:diagnostics`, and `:problems` open it.
 - Added a filterable changed-files picker over the workspace Git status.
   `Space g` and `:changed-files` open it; `Enter` opens the selected path.
+- Added a jump-list picker over back and forward navigation history.
+  `Space j` and `:jumps` open it; `Enter` jumps to the selected entry.
 - Added the opt-in `official-language-web` syntax feature for TypeScript,
   TSX, JavaScript/JSX, and CSS files and Markdown code fences. The `full`
   distribution feature includes it; default builds stay unchanged.

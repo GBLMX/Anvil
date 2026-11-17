@@ -142,8 +142,16 @@ pub(crate) struct FuzzyState {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum BufferPickerMode {
     Buffers,
-    Plugin { provider_id: ProviderId },
-    ChangedFiles { paths: Vec<PathBuf> },
+    Plugin {
+        provider_id: ProviderId,
+    },
+    ChangedFiles {
+        paths: Vec<PathBuf>,
+    },
+    /// `(forward, display index)` for each picker row.
+    Jumps {
+        targets: Vec<(bool, usize)>,
+    },
 }
 
 pub(crate) struct BufferPickerState {

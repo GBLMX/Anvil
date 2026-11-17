@@ -159,6 +159,7 @@ impl Model {
             ("e", path) => self.queue_effect(Effect::Open(path.into())),
             ("problems" | "diagnostics", "") => self.toggle_problems(),
             ("changed-files", "") => self.open_changed_files_picker(),
+            ("jumps", "") => self.open_jump_picker(),
             ("replace", value) => {
                 self.replace_current(value);
             }

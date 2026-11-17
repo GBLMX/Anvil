@@ -22,6 +22,7 @@ Normal mode
   Space e             file tree (h/l/Enter expand or open, H toggles hidden)
   Space d             diagnostics picker; type to filter, Enter jumps
   Space g             changed files; type to filter, Enter opens
+  Space j             jump list; type to filter, Enter jumps
   tree a / A         create file / folder in the tree
   tree r / m / c     rename / move / copy the selected entry
   tree d             delete the selected entry recursively
@@ -126,6 +127,7 @@ Normal mode
   :symbols             document symbols
   :problems           toggle the diagnostics picker (alias: :diagnostics)
   :changed-files      open the changed-files picker
+  :jumps              open the jump-list picker
   :task <command>      run a bounded background shell task in the workspace
   :task-output         show the last task output
   :tests <command>     run tests and open located failures

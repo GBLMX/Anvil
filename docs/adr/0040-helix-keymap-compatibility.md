@@ -145,7 +145,6 @@ The following are out of scope until their underlying commands exist:
 | `Space y` / `Y` / `P` / `R` | selection-to-system-clipboard command |
 | `Space /` | interactive workspace-search prompt |
 | `Space w` | nested prefix / which-key |
-| `Space j` | jumplist picker |
 | `Space '` | last-picker state |
 | `Space E` | tree rooted at buffer directory |
 | `Space C` | block comments |
@@ -154,9 +153,9 @@ The following are out of scope until their underlying commands exist:
 Adding a preset entry before the command exists would fail keymap validation
 or produce a dead binding.
 
-Implementation note (2026-11-17): `Space d` now opens the diagnostics picker
-and `Space g` opens the changed-files picker. `Space D` and the remaining
-rows above are still deferred.
+Implementation note (2026-11-17): `Space d` opens the diagnostics picker,
+`Space g` opens the changed-files picker, and `Space j` opens the jump-list
+picker. `Space D` and the remaining rows above are still deferred.
 
 ## Alternatives considered
 

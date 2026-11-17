@@ -43,6 +43,25 @@ impl JumpList {
         self.forward.pop_back()
     }
 
+    /// Newest back entries first.
+    pub fn back_entries(&self) -> impl DoubleEndedIterator<Item = &JumpEntry> {
+        self.back.iter().rev()
+    }
+
+    /// Newest forward entries first.
+    pub fn forward_entries(&self) -> impl DoubleEndedIterator<Item = &JumpEntry> {
+        self.forward.iter().rev()
+    }
+
+    /// Pop back entries through the display index, newest first.
+    pub fn take_back_to(&mut self, index: usize) -> Option<Vec<JumpEntry>> {
+        take_to(&mut self.back, index)
+    }
+
+    /// Pop forward entries through the display index, nearest first.
+    pub fn take_forward_to(&mut self, index: usize) -> Option<Vec<JumpEntry>> {
+        take_to(&mut self.forward, index)
+    }
     /// Push a back entry without clearing forward history.
     pub fn push_back(&mut self, entry: JumpEntry) {
         push_bounded(&mut self.back, entry);
@@ -62,6 +81,18 @@ impl JumpList {
     pub fn forward_len(&self) -> usize {
         self.forward.len()
     }
+}
+
+fn take_to(stack: &mut VecDeque<JumpEntry>, index: usize) -> Option<Vec<JumpEntry>> {
+    if index >= stack.len() {
+        return None;
+    }
+    let count = index + 1;
+    let mut popped = Vec::with_capacity(count);
+    for _ in 0..count {
+        popped.push(stack.pop_back()?);
+    }
+    Some(popped)
 }
 
 fn push_bounded(stack: &mut VecDeque<JumpEntry>, entry: JumpEntry) {
@@ -90,6 +121,28 @@ mod tests {
         }
         assert_eq!(list.back_len(), MAX_JUMP_ENTRIES);
         assert_eq!(list.take_back(), Some(entry(MAX_JUMP_ENTRIES + 9)));
+    }
+
+    #[test]
+    fn take_back_to_returns_entries_through_the_target() {
+        let mut list = JumpList::default();
+        for cursor in 1..=3 {
+            list.record(entry(cursor));
+        }
+        assert_eq!(list.take_back_to(1), Some(vec![entry(3), entry(2)]));
+        assert_eq!(list.back_len(), 1);
+        assert_eq!(list.back_entries().next(), Some(&entry(1)));
+    }
+
+    #[test]
+    fn take_forward_to_returns_nearest_entries_first() {
+        let mut list = JumpList::default();
+        for cursor in 1..=3 {
+            list.push_forward(entry(cursor));
+        }
+        assert_eq!(list.take_forward_to(1), Some(vec![entry(3), entry(2)]));
+        assert_eq!(list.forward_len(), 1);
+        assert_eq!(list.forward_entries().next(), Some(&entry(1)));
     }
 
     #[test]

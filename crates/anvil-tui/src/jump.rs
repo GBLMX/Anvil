@@ -3,6 +3,7 @@
 use super::*;
 
 pub(crate) use anvil_session::jump::{JumpEntry, JumpList};
+use anvil_session::provider::{CancellationToken, PickerEntry};
 
 impl Model {
     pub(crate) fn record_jump(&mut self) {
@@ -20,19 +21,65 @@ impl Model {
         self.jump_history(true);
     }
 
+    pub(crate) fn open_jump_picker(&mut self) {
+        self.cancel_completion();
+        let mut entries = Vec::new();
+        let mut targets = Vec::new();
+        for (index, entry) in self.session.jump_list.back_entries().enumerate() {
+            let picker_index = targets.len();
+            targets.push((false, index));
+            entries.push(jump_picker_entry(
+                &self.workspace.path,
+                false,
+                picker_index,
+                entry,
+            ));
+        }
+        for (index, entry) in self.session.jump_list.forward_entries().enumerate() {
+            let picker_index = targets.len();
+            targets.push((true, index));
+            entries.push(jump_picker_entry(
+                &self.workspace.path,
+                true,
+                picker_index,
+                entry,
+            ));
+        }
+        if entries.is_empty() {
+            self.status.text = "no jumps".to_owned();
+            self.file.dirty = true;
+            return;
+        }
+        self.overlays.buffer_picker = Some(BufferPickerState {
+            query: String::new(),
+            filtered: (0..entries.len()).collect(),
+            entries,
+            selected: 0,
+            cancel: CancellationToken::new(),
+            mode: BufferPickerMode::Jumps { targets },
+        });
+        self.push_overlay(OverlayKind::BufferPicker);
+        self.status.text = "jump list".to_owned();
+        self.file.dirty = true;
+    }
+
     fn jump_history(&mut self, forward: bool) {
+        self.jump_history_to(forward, 0);
+    }
+
+    pub(crate) fn jump_history_to(&mut self, forward: bool, index: usize) {
         if self.session.path.is_none() && self.file.modified {
             self.status.text = "E: save or discard the unnamed buffer before jumping".to_owned();
             self.file.dirty = true;
             return;
         }
         let current = self.current_jump_entry();
-        let target = if forward {
-            self.session.jump_list.take_forward()
+        let popped = if forward {
+            self.session.jump_list.take_forward_to(index)
         } else {
-            self.session.jump_list.take_back()
+            self.session.jump_list.take_back_to(index)
         };
-        let Some(target) = target else {
+        let Some(popped) = popped else {
             self.status.text = if forward {
                 "no forward jump".to_owned()
             } else {
@@ -41,11 +88,14 @@ impl Model {
             self.file.dirty = true;
             return;
         };
+        let target = popped.last().cloned().expect("jump target");
         if !self.jump_to(&target) {
-            if forward {
-                self.session.jump_list.push_forward(target);
-            } else {
-                self.session.jump_list.push_back(target);
+            for entry in popped.into_iter().rev() {
+                if forward {
+                    self.session.jump_list.push_forward(entry);
+                } else {
+                    self.session.jump_list.push_back(entry);
+                }
             }
             return;
         }
@@ -54,6 +104,14 @@ impl Model {
                 self.session.jump_list.push_back(current);
             } else {
                 self.session.jump_list.push_forward(current);
+            }
+        }
+        let skipped = popped.len().saturating_sub(1);
+        for entry in popped.into_iter().take(skipped) {
+            if forward {
+                self.session.jump_list.push_back(entry);
+            } else {
+                self.session.jump_list.push_forward(entry);
             }
         }
         self.status.text = format!(
@@ -185,5 +243,20 @@ impl Model {
             self.session.change_list.forward_len()
         );
         self.file.dirty = true;
+    }
+}
+
+fn jump_picker_entry(root: &Path, forward: bool, index: usize, entry: &JumpEntry) -> PickerEntry {
+    let relative = entry.path.strip_prefix(root).unwrap_or(&entry.path);
+    let display = format!(
+        "{} {} @ {}",
+        if forward { "→" } else { "←" },
+        relative.display(),
+        entry.cursor
+    );
+    PickerEntry {
+        value: serde_json::Value::from(index as u64),
+        ordinal: display.to_lowercase(),
+        display,
     }
 }

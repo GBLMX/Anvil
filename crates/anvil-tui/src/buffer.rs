@@ -162,7 +162,9 @@ impl Model {
         let query = picker.query.clone();
         if matches!(
             picker.mode,
-            BufferPickerMode::Plugin { .. } | BufferPickerMode::ChangedFiles { .. }
+            BufferPickerMode::Plugin { .. }
+                | BufferPickerMode::ChangedFiles { .. }
+                | BufferPickerMode::Jumps { .. }
         ) {
             let Some(picker) = self.overlays.buffer_picker.as_mut() else {
                 return;
@@ -270,6 +272,15 @@ impl Model {
                 self.status.text = format!("E: {error}");
                 self.file.dirty = true;
             }
+            return;
+        }
+        if let BufferPickerMode::Jumps { targets } = &picker.mode {
+            let Some((forward, target)) = targets.get(index).copied() else {
+                self.status.text = "E: invalid jump picker value".to_owned();
+                self.file.dirty = true;
+                return;
+            };
+            self.jump_history_to(forward, target);
             return;
         }
         self.select_buffer(index);

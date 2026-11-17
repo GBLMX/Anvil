@@ -369,6 +369,78 @@ fn changed_files_picker_opens_the_selected_path() {
 }
 
 #[test]
+fn space_j_opens_jump_picker_and_selects_older_jump() {
+    let mut model = Model::new(EditorState::from_text("alpha"), None);
+    model.start_page.welcome = false;
+    model.session.path = Some(PathBuf::from("main.rs"));
+    model.session.jump_list.record(crate::jump::JumpEntry {
+        path: PathBuf::from("main.rs"),
+        cursor: 1,
+    });
+    model.session.jump_list.record(crate::jump::JumpEntry {
+        path: PathBuf::from("main.rs"),
+        cursor: 2,
+    });
+
+    handle_event(&mut model, key(KeyCode::Char(' ')));
+    handle_event(&mut model, key(KeyCode::Char('j')));
+    let picker = model.overlays.buffer_picker.as_ref().expect("picker");
+    assert!(matches!(
+        &picker.mode,
+        crate::state::BufferPickerMode::Jumps { .. }
+    ));
+    assert_eq!(picker.entries.len(), 2);
+    assert!(picker.entries[0].display.starts_with('←'));
+
+    model
+        .overlays
+        .buffer_picker
+        .as_mut()
+        .expect("picker")
+        .selected = 1;
+    model.apply_buffer_picker();
+    assert_eq!(model.session.cursor, 1);
+    assert_eq!(model.session.jump_list.back_len(), 0);
+    assert_eq!(model.session.jump_list.forward_len(), 2);
+
+    model.jump_forward();
+    assert_eq!(model.session.cursor, 2);
+    model.jump_forward();
+    assert_eq!(model.session.cursor, 0);
+}
+
+#[test]
+fn forward_jump_target_preserves_intermediate_history() {
+    let mut model = Model::new(EditorState::from_text("alpha"), None);
+    model.start_page.welcome = false;
+    model.session.path = Some(PathBuf::from("main.rs"));
+    model
+        .session
+        .jump_list
+        .push_forward(crate::jump::JumpEntry {
+            path: PathBuf::from("main.rs"),
+            cursor: 2,
+        });
+    model
+        .session
+        .jump_list
+        .push_forward(crate::jump::JumpEntry {
+            path: PathBuf::from("main.rs"),
+            cursor: 1,
+        });
+
+    model.jump_history_to(true, 1);
+    assert_eq!(model.session.cursor, 2);
+    assert_eq!(model.session.jump_list.back_len(), 2);
+    assert_eq!(model.session.jump_list.forward_len(), 0);
+
+    model.jump_back();
+    assert_eq!(model.session.cursor, 1);
+    model.jump_back();
+    assert_eq!(model.session.cursor, 0);
+}
+
+#[test]
 fn problems_panel_filters_with_query_and_clear() {
     let mut model = Model::new(EditorState::from_text("alpha"), None);
     model.start_page.welcome = false;

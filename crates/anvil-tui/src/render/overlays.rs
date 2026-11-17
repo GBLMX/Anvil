@@ -261,6 +261,9 @@ pub(crate) fn render_overlays(model: &Model, frame: &mut Frame, area: Rect) {
                     "no changed files"
                 },
             ),
+            crate::state::BufferPickerMode::Jumps { .. } => {
+                ("Jumps · Enter jump · Esc close", "no jumps")
+            }
         };
         if picker.filtered.is_empty() {
             lines.push(Line::styled(empty, theme::muted()));

@@ -349,6 +349,7 @@ pub(crate) enum PendingCommand {
     OpenTree,
     Problems,
     ChangedFiles,
+    Jumps,
     StartFuzzy,
     BufferPicker,
     CommandPalette,
@@ -427,6 +428,7 @@ impl PendingCommand {
             | BufferPicker
             | Problems
             | ChangedFiles
+            | Jumps
             | FileStart
             | CenterCursor
             | SectionPrevious
@@ -500,6 +502,7 @@ impl PendingCommand {
             Self::ChangeLines => "change line".to_owned(),
             Self::Problems => "diagnostics".to_owned(),
             Self::ChangedFiles => "changed files".to_owned(),
+            Self::Jumps => "jump list".to_owned(),
             _ => "command".to_owned(),
         }
     }
@@ -518,6 +521,7 @@ impl PendingCommand {
                 | Self::OpenTree
                 | Self::Problems
                 | Self::ChangedFiles
+                | Self::Jumps
                 | Self::StartFuzzy
                 | Self::StartRename
                 | Self::References
@@ -704,6 +708,7 @@ pub(crate) fn pending_action(
         (' ', KeyCode::Char('e')) => Some(PendingCommand::OpenTree),
         (' ', KeyCode::Char('d')) => Some(PendingCommand::Problems),
         (' ', KeyCode::Char('g')) => Some(PendingCommand::ChangedFiles),
+        (' ', KeyCode::Char('j')) => Some(PendingCommand::Jumps),
         (' ', KeyCode::Char('f')) => Some(PendingCommand::StartFuzzy),
         (' ', KeyCode::Char('p')) => Some(PendingCommand::CommandPalette),
         (' ', KeyCode::Char('r')) => Some(PendingCommand::StartRename),
@@ -794,6 +799,7 @@ fn space_hint_group(key: &str) -> &'static str {
         "f" => "file",
         "d" => "diagnostics",
         "g" => "git",
+        "j" => "jump",
         "b" => "buffer",
         "e" => "tree",
         "s" | "S" => "symbol",

@@ -39,6 +39,7 @@ inside the editor with `:help start`.
 | `Space e` | file tree |
 | `Space d` | diagnostics picker |
 | `Space g` | changed files |
+| `Space j` | jump list |
 | `Space b` | buffer picker |
 | `Space p` | command palette |
 | `Space s` | document symbols |
