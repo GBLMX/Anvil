@@ -404,19 +404,26 @@ fn write_atomic(path: &Path, data: &[u8]) -> io::Result<()> {
             .unwrap_or("state"),
         std::process::id()
     ));
-    let mut file = OpenOptions::new()
-        .create(true)
-        .truncate(true)
-        .write(true)
-        .mode(0o600)
-        .open(&temp)?;
-    file.write_all(data)?;
-    file.sync_all()?;
-    fs::rename(&temp, path)?;
-    if let Ok(directory) = File::open(parent) {
-        let _ = directory.sync_all();
+    let result = (|| -> io::Result<()> {
+        let mut file = OpenOptions::new()
+            .create(true)
+            .truncate(true)
+            .write(true)
+            .mode(0o600)
+            .open(&temp)?;
+        file.write_all(data)?;
+        file.sync_all()?;
+        drop(file);
+        fs::rename(&temp, path)?;
+        if let Ok(directory) = File::open(parent) {
+            let _ = directory.sync_all();
+        }
+        Ok(())
+    })();
+    if result.is_err() {
+        let _ = fs::remove_file(&temp);
     }
-    Ok(())
+    result
 }
 
 #[cfg(test)]
@@ -631,5 +638,69 @@ mod tests {
         assert!(discarded.workspace.conflict_swaps.is_empty());
         assert!(!swap.exists());
         assert_eq!(fs::read_to_string(&path).expect("disk"), "changed again\n");
+    }
+
+    #[test]
+    fn truncated_session_json_fails_without_mutating_model() {
+        let dir = state_root();
+        let _guard = ENV_LOCK.lock().expect("env lock");
+        let workspace = dir.path().join("workspace");
+        fs::create_dir_all(&workspace).expect("workspace");
+        let path = workspace.join("a.rs");
+        fs::write(&path, "clean\n").expect("file");
+        unsafe { std::env::set_var("XDG_STATE_HOME", dir.path().join("state")) };
+        let mut model = Model::open(&path).expect("open");
+        save(&mut model, &workspace).expect("save");
+        let state = state_path(&workspace).expect("state");
+        let data = fs::read(&state).expect("state data");
+        fs::write(&state, &data[..data.len() / 2]).expect("truncate");
+
+        let mut restored = Model::new(EditorState::from_text(""), None);
+        let error = restore(&mut restored, &workspace).expect_err("truncated session");
+        assert!(error.contains("session JSON"), "{error}");
+        assert!(restored.session.path.is_none());
+    }
+
+    #[test]
+    fn save_failure_after_restore_keeps_dirty_buffer() {
+        let dir = state_root();
+        let _guard = ENV_LOCK.lock().expect("env lock");
+        let workspace = dir.path().join("workspace");
+        fs::create_dir_all(&workspace).expect("workspace");
+        let path = workspace.join("a.rs");
+        fs::write(&path, "clean\n").expect("file");
+        unsafe { std::env::set_var("XDG_STATE_HOME", dir.path().join("state")) };
+        let mut model = Model::open(&path).expect("open");
+        model.insert_text("dirty");
+        save(&mut model, &workspace).expect("save");
+
+        let mut restored = Model::new(EditorState::from_text(""), None);
+        assert!(restore(&mut restored, &workspace).expect("restore"));
+        assert!(restored.file.modified);
+        let swap_dir = state_path(&workspace)
+            .expect("state")
+            .parent()
+            .expect("parent")
+            .join("swaps");
+        fs::remove_dir_all(&swap_dir).expect("remove swaps");
+        fs::write(&swap_dir, "blocked").expect("block swap dir");
+        let error = save(&mut restored, &workspace).expect_err("save must fail");
+        assert!(!error.is_empty(), "{error}");
+        assert!(restored.file.modified);
+        assert_eq!(restored.session.editor.text().slice(0..10), "dirtyclean");
+    }
+
+    #[test]
+    fn atomic_write_removes_temp_when_rename_fails() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let target = dir.path().join("state");
+        fs::create_dir(&target).expect("target directory");
+        write_atomic(&target, b"payload").expect_err("rename onto directory must fail");
+        let leftovers = fs::read_dir(dir.path())
+            .expect("read dir")
+            .flatten()
+            .filter(|entry| entry.file_name().to_string_lossy().starts_with(".state."))
+            .count();
+        assert_eq!(leftovers, 0, "temporary state file was not cleaned");
     }
 }
