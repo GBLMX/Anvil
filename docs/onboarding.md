@@ -43,6 +43,7 @@ inside the editor with `:help start`.
 | `Space H` | search history |
 | `Space :` | command history |
 | `Space K` | keymap list |
+| `Space L` | language readiness |
 | `Space b` | buffer picker |
 | `Space p` | command palette |
 | `Space s` | document symbols |

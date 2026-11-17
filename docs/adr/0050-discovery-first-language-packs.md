@@ -151,9 +151,11 @@ Negative:
   (`Space j`), search-history (`Space H`), and command-history (`Space :`)
   pickers. `Space K` / `:keymaps` opens a keymap list for normal commands,
   leader/pending bindings, and configured context bindings; `:keybinds`
-  remains the keymapped-commands palette subset.
-- Pending: a centralized catalog of built-in context actions; `:languages`;
-  compiled language-pack matrix.
+  remains the keymapped-commands palette subset. `Space L` / `:languages`
+  reports syntax grammar availability, LSP profile/root/server lookup,
+  formatter fallback, and explicitly unconfigured linter/test/debug surfaces.
+- Pending: a centralized catalog of built-in context actions; compiled
+  language-pack matrix.
 
 ## Verification
 

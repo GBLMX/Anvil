@@ -4,7 +4,7 @@ use super::*;
 use anvil_session::provider::{FormattedText, ProviderId};
 use anvil_workspace::FileRequest;
 
-fn formatter_language(path: &Path) -> Option<&'static str> {
+pub(crate) fn formatter_language(path: &Path) -> Option<&'static str> {
     match path
         .extension()
         .and_then(|extension| extension.to_str())

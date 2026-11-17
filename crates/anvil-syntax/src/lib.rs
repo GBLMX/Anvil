@@ -972,6 +972,11 @@ fn language_for(path: &Path) -> Option<&'static SyntaxLanguage> {
     }
 }
 
+/// Whether a Tree-sitter grammar is compiled in for this path.
+pub fn supports_path(path: &Path) -> bool {
+    language_for(path).is_some()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

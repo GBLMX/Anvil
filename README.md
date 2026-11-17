@@ -363,6 +363,7 @@ Git-changed files; filter by status or path and press `Enter` to open.
 `Space j` opens the jump list; filter and press `Enter` to navigate history.
 `Space H` opens search history; filter and press `Enter` to replay a search.
 `Space :` opens command history and `Space K` opens the full keymap list.
+`Space L` opens language readiness; nothing there installs tools or edits PATH.
 
 ## Documents
 

@@ -479,6 +479,17 @@ fn command_history_and_keymap_shortcuts_open_the_expected_surfaces() {
 }
 
 #[test]
+fn space_shift_l_opens_language_readiness() {
+    let mut model = Model::new(EditorState::from_text("alpha"), None);
+    model.start_page.welcome = false;
+
+    handle_event(&mut model, key(KeyCode::Char(' ')));
+    handle_event(&mut model, key(KeyCode::Char('L')));
+    assert_eq!(model.pager.title.as_deref(), Some("languages"));
+    assert!(model.status.text.starts_with("Languages:"));
+}
+
+#[test]
 fn problems_panel_filters_with_query_and_clear() {
     let mut model = Model::new(EditorState::from_text("alpha"), None);
     model.start_page.welcome = false;

@@ -237,6 +237,10 @@ pub const COMMANDS: &[CommandSpec] = &[
         capability: Capability::Read,
     },
     CommandSpec {
+        name: "languages",
+        capability: Capability::Read,
+    },
+    CommandSpec {
         name: "replace",
         capability: Capability::Edit,
     },

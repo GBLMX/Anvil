@@ -51,6 +51,7 @@ use command_line::CommandCompletion;
 mod code_lens;
 pub mod dap;
 mod inlay_hints;
+mod languages;
 mod lsp_ui;
 mod modal;
 mod mouse;

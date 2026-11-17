@@ -26,6 +26,7 @@ Normal mode
   Space H             search history; type to filter, Enter replays
   Space :             command history; filter and Enter runs
   Space K             keymap list; read-only, / searches
+  Space L             language readiness; read-only, / searches
   tree a / A         create file / folder in the tree
   tree r / m / c     rename / move / copy the selected entry
   tree d             delete the selected entry recursively
@@ -135,6 +136,7 @@ Normal mode
   :command-history    open the command-history picker
   :keymaps            open the full keymap list
   :keybinds           open the keymapped-commands subset
+  :languages          open language readiness
   :task <command>      run a bounded background shell task in the workspace
   :task-output         show the last task output
   :tests <command>     run tests and open located failures

@@ -128,6 +128,11 @@ pub(super) fn execute_pending_command(
             let _ = model.take_count();
             model.show_keymap_list();
         }
+
+        PendingCommand::Languages => {
+            let _ = model.take_count();
+            model.show_languages();
+        }
         PendingCommand::StartFuzzy => {
             let _ = model.take_count();
             model.start_fuzzy();

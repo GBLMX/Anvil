@@ -164,6 +164,7 @@ impl Model {
             ("command-history", "") => self.open_command_history(),
             ("keybinds", "") => self.open_keybinds(),
             ("keymaps", "") => self.show_keymap_list(),
+            ("languages", "") => self.show_languages(),
             ("replace", value) => {
                 self.replace_current(value);
             }

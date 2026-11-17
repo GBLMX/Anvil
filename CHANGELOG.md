@@ -21,6 +21,9 @@ post-`0.5.0` feature line.
   command is `:command-history`. `Space K` and `:keymaps` open a full keymap
   list covering normal, leader/pending, and configured context bindings;
   `:keybinds` opens the keymapped-commands palette subset.
+- Added `:languages` / `Space L`, a read-only readiness page for syntax
+  grammar availability, LSP profile/root markers/server lookup, formatter
+  fallback, and unconfigured linter/test/debug surfaces.
 - Added the opt-in `official-language-web` syntax feature for TypeScript,
   TSX, JavaScript/JSX, and CSS files and Markdown code fences. The `full`
   distribution feature includes it; default builds stay unchanged.
