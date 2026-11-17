@@ -202,6 +202,9 @@ filesystem/network I/O on behalf of a plugin.
   Tools are filtered by capability and derived from the same command manifest
   as the TUI and CLI. It does not depend on `anvil-tui`.
 
+The control-plane trust, capability, path, and MCP boundary is recorded in
+[ADR-0049](adr/0049-editor-control-plane.md).
+
 `scripts/ctl-smoke.sh` exercises the real TUI through the CLI, including file
 save, undo/redo, Git hunk staging, session output, and forced quit.
 

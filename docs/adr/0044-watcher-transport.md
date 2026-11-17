@@ -1,9 +1,10 @@
 # ADR-0044: Keep the bounded polling watcher for 0.6.x
 
-- Status: Accepted
-- Version: 1.0.0
+- Status: Superseded by [ADR-0046](0046-full-workspace-watch.md)
+- Version: 1.1.0
 - Date: 2026-11-16
 - Related: [ADR-0018](0018-workspace-tree-watch.md)
+- Superseded by: [ADR-0046](0046-full-workspace-watch.md)
 
 ## Context
 

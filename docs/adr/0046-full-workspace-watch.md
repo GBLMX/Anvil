@@ -1,7 +1,7 @@
 # ADR-0046: Full Workspace Watch Coverage Through the Gateway
 
 - Status: Accepted; implemented 2026-11-17
-- Version: 1.2.0
+- Version: 1.3.0
 - Implementation: native watcher, TUI event routing, `[watch]`
   mode/max_dirs/cross_mounts, live coverage/overflow status, path-scoped
   permissions, and ENOSPC/EMFILE cooldown landed
@@ -11,7 +11,7 @@
   [ADR-0023](0023-internal-capability-closure.md),
   [ADR-0045](0045-settings-patch-layers.md),
   [ADR-0044](0044-watcher-transport.md)
-- Supersedes:
+- Supersedes: [ADR-0044](0044-watcher-transport.md) for the native transport decision; polling remains the fallback
 - Superseded by:
 
 ## Context

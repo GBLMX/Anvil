@@ -30,7 +30,7 @@ their decision sections.
 | [0022](0022-core-editing-completion.md) | Core editing completion and semantic ownership | Accepted; implemented |
 | [0023](0023-internal-capability-closure.md) | Internal capability closure before public distribution | Accepted; closure audit ongoing |
 | [0024](0024-tui-state-and-domain-boundaries.md) | TUI state composition, page state, and domain boundaries | Partially implemented; primitives split in ADR-0041 |
-| [0025](0025-lsp-and-language-breadth.md) | LSP surface and language breadth boundaries | Accepted |
+| [0025](0025-lsp-and-language-breadth.md) | LSP surface and language breadth boundaries | Accepted; primary-root LSP clause superseded by ADR-0048 |
 | [0026](0026-persistent-undo-decision.md) | Persistent undo is deferred and gated | Accepted |
 | [0027](0027-distribution-composition-crate.md) | Standard distribution composition crate and two consumers | Accepted |
 | [0028](0028-module-contract.md) | Trusted source-level module contract | Accepted |
@@ -49,11 +49,12 @@ their decision sections.
 | [0041](0041-tui-primitive-extraction.md) | TUI primitive extraction | Accepted |
 | [0042](0042-selection-first-session-frontend.md) | Selection-first core, headless session, thin frontend | Accepted |
 | [0043](0043-plugin-api-1-1.md) | Plugin API 1.1 capability and selection contract | Proposed |
-| [0044](0044-watcher-transport.md) | Keep bounded polling watcher; record inotify comparison | Accepted |
+| [0044](0044-watcher-transport.md) | Keep bounded polling watcher; record inotify comparison | Superseded by ADR-0046 |
 | [0045](0045-settings-patch-layers.md) | Sparse settings layers, provenance, and a metadata registry | Accepted; implemented 2026-11-16 |
-| [0046](0046-full-workspace-watch.md) | Full workspace watch coverage through the gateway | Accepted; implemented 2026-11-17 |
+| [0046](0046-full-workspace-watch.md) | Full workspace watch coverage through the gateway | Accepted; implemented 2026-11-17; supersedes ADR-0044 transport decision |
 | [0047](0047-file-tree-navigation-and-refresh.md) | File tree navigation and incremental refresh | Accepted; implemented |
-| [0048](0048-per-root-language-tooling-and-lsp-workspace.md) | Per-root language tooling and LSP workspace configuration | Proposed |
+| [0048](0048-per-root-language-tooling-and-lsp-workspace.md) | Per-root language tooling and LSP workspace configuration | Accepted; implemented 2026-11-16 |
+| [0049](0049-editor-control-plane.md) | Editor control plane and MCP adapter boundary | Accepted; implemented 2026-11-17 |
 
 ## Numbering Rule
 
