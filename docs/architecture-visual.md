@@ -11,43 +11,21 @@ surfaces remain deferred. Layer rules and ownership stay in
 
 ```mermaid
 flowchart TB
-    subgraph FRONTEND["anvil-tui · Rust · trusted"]
-        MAIN["main / terminal loop"]
-        INPUT["input + keymap"]
-        MODEL["Model<br/>buffers · view · overlays<br/>workspace roots"]
+    subgraph FRONTEND["anvil-tui + anvil-session · trusted"]
+        UI["input · model · view<br/>buffers · overlays · roots"]
         SESSION["anvil-session<br/>documents · commands · effects"]
         TREE["file tree UI"]
         LSPUI["LSP UI"]
         GITUI["Git UI"]
         PLUGINS["plugin supervisor<br/>activation · backoff · drain"]
         CONTROL["anvil-control<br/>control socket v3"]
-
-        MAIN --> INPUT --> MODEL
-        MODEL --> SESSION
-        MODEL --> TREE
-        MODEL --> LSPUI
-        MODEL --> GITUI
-        MODEL --> PLUGINS
-        MODEL --> CONTROL
+        UI --> SESSION
+        UI --> TREE
+        UI --> LSPUI
+        UI --> GITUI
+        UI --> PLUGINS
+        UI --> CONTROL
     end
-
-    subgraph LIBS["trusted Rust libraries"]
-        EDITOR["anvil-editor"]
-        CORE["anvil-core<br/>PieceTable · LineIndex"]
-        API["anvil-api"]
-        TASK["anvil-task"]
-        PLATFORM["anvil-platform"]
-        SYNTAX["anvil-syntax"]
-        MODULES["anvil-module<br/>official.git · workspace-index<br/>desktop · LaTeX · Typst"]
-    end
-
-    SESSION --> EDITOR
-    MODEL --> CORE
-    MODEL --> TASK
-    MODEL --> PLATFORM
-    EDITOR --> SYNTAX
-    EDITOR --> API
-    MODULES --> MODEL
 
     subgraph WORKERS["background workers"]
         FW["FileWorker<br/>one per trusted root"]
@@ -70,17 +48,16 @@ flowchart TB
         LSPMGR["internal/lsp"]
         WATCH["internal/fswatch<br/>inotify · cooldown"]
         PKG["internal/pkg + pluginindex"]
+        ROUTER --> POLICY
+        ROUTER --> FS
+        ROUTER --> EXEC
+        ROUTER --> FETCH
+        ROUTER --> LSPMGR
+        ROUTER --> WATCH
+        ROUTER --> PKG
     end
 
     IPC -- gateway UDS --> ROUTER
-    ROUTER --> POLICY
-    ROUTER --> FS
-    ROUTER --> EXEC
-    ROUTER --> FETCH
-    ROUTER --> LSPMGR
-    ROUTER --> WATCH
-    ROUTER --> PKG
-
     EXEC --> RUNNER["anvil-exec-runner<br/>Landlock · seccomp · cgroup"]
     RUNNER --> TOOLS["rg · fd"]
     LSPMGR --> LS["LSP processes<br/>trusted · isolated from plugin host"]
