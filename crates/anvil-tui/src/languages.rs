@@ -86,9 +86,9 @@ impl Model {
             lines.push("  tests/debug: not configured".to_owned());
             lines.push(String::new());
         }
+        lines.push("Nothing is installed or downloaded here; install servers manually.".to_owned());
         lines.push(
-            "Nothing is installed or downloaded here; use anvil doctor for tool installation."
-                .to_owned(),
+            "Configure [lsp.commands] or [lsp.roots]; anvil doctor only verifies PATH.".to_owned(),
         );
         lines.join("\n")
     }
@@ -144,6 +144,11 @@ mod tests {
         let latex = text.split("\nLaTeX\n").nth(1).expect("latex section");
         assert!(latex.contains("syntax: missing"), "{text}");
         assert!(latex.contains("formatter: none"), "{text}");
+        assert!(text.contains("install servers manually"), "{text}");
+        assert!(text.contains("[lsp.commands]"), "{text}");
+        assert!(text.contains("[lsp.roots]"), "{text}");
+        assert!(text.contains("doctor only verifies PATH"), "{text}");
+        assert!(!text.contains("for tool installation"), "{text}");
         assert!(!text.contains("grammar feature not compiled"), "{text}");
     }
 }
