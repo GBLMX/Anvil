@@ -131,6 +131,29 @@ static TYPST: LazyLock<SyntaxLanguage> = LazyLock::new(|| {
         false,
     )
 });
+#[cfg(feature = "web")]
+fn web_language(language: Language) -> SyntaxLanguage {
+    let query = format!(
+        "{}\n{}",
+        tree_sitter_javascript::HIGHLIGHT_QUERY,
+        tree_sitter_typescript::HIGHLIGHTS_QUERY
+    );
+    SyntaxLanguage::grammar(language, &query, false)
+}
+#[cfg(feature = "web")]
+static TYPESCRIPT: LazyLock<SyntaxLanguage> =
+    LazyLock::new(|| web_language(Language::new(tree_sitter_typescript::LANGUAGE_TYPESCRIPT)));
+#[cfg(feature = "web")]
+static TSX: LazyLock<SyntaxLanguage> =
+    LazyLock::new(|| web_language(Language::new(tree_sitter_typescript::LANGUAGE_TSX)));
+#[cfg(feature = "web")]
+static CSS: LazyLock<SyntaxLanguage> = LazyLock::new(|| {
+    SyntaxLanguage::grammar(
+        Language::new(tree_sitter_css::LANGUAGE),
+        tree_sitter_css::HIGHLIGHTS_QUERY,
+        false,
+    )
+});
 static TOML: LazyLock<SyntaxLanguage> = LazyLock::new(|| {
     SyntaxLanguage::grammar(
         Language::new(tree_sitter_toml_ng::LANGUAGE),
@@ -764,6 +787,12 @@ fn language_for_tag(tag: &str) -> Option<&'static SyntaxLanguage> {
         "html" | "htm" => Some(&*HTML),
         "make" | "makefile" => Some(&*MAKE),
         "dockerfile" | "docker" => Some(&*DOCKERFILE),
+        #[cfg(feature = "web")]
+        "typescript" | "ts" => Some(&*TYPESCRIPT),
+        #[cfg(feature = "web")]
+        "tsx" | "javascript" | "js" | "jsx" => Some(&*TSX),
+        #[cfg(feature = "web")]
+        "css" => Some(&*CSS),
         _ => None,
     }
 }
@@ -905,6 +934,14 @@ fn language_for(path: &Path) -> Option<&'static SyntaxLanguage> {
         "tex" | "ltx" | "sty" | "cls" => Some(&*LATEX),
         #[cfg(feature = "typst")]
         "typ" => Some(&*TYPST),
+        #[cfg(feature = "web")]
+        "ts" | "mts" | "cts" => Some(&*TYPESCRIPT),
+        #[cfg(feature = "web")]
+        "tsx" | "jsx" => Some(&*TSX),
+        #[cfg(feature = "web")]
+        "js" | "mjs" | "cjs" => Some(&*TSX),
+        #[cfg(feature = "web")]
+        "css" => Some(&*CSS),
         "md" | "markdown" => Some(&*MARKDOWN),
         _ => None,
     }
@@ -1046,6 +1083,44 @@ mod tests {
         #[cfg(not(feature = "typst"))]
         assert!(language_for(Path::new("x.typ")).is_none());
         assert!(language_for(Path::new("x.unknown")).is_none());
+    }
+
+    #[cfg(feature = "web")]
+    #[test]
+    fn web_extensions_and_tags_map_to_grammars() {
+        for path in [
+            "x.ts", "x.mts", "x.cts", "x.tsx", "x.jsx", "x.js", "x.mjs", "x.css",
+        ] {
+            assert!(language_for(Path::new(path)).is_some(), "{path}");
+        }
+        assert!(language_for_tag("typescript").is_some());
+        assert!(language_for_tag("tsx").is_some());
+        assert!(language_for_tag("css").is_some());
+    }
+
+    #[cfg(not(feature = "web"))]
+    #[test]
+    fn web_extensions_are_absent_without_feature() {
+        assert!(language_for(Path::new("x.ts")).is_none());
+        assert!(language_for(Path::new("x.tsx")).is_none());
+        assert!(language_for(Path::new("x.css")).is_none());
+        assert!(language_for_tag("typescript").is_none());
+    }
+
+    #[cfg(feature = "web")]
+    #[test]
+    fn web_grammars_produce_expected_classes() {
+        let ts = parse_source(
+            "interface User { name: string }\nconst count: number = 1; // note\n",
+            Path::new("x.ts"),
+        )
+        .expect("parse ts");
+        assert!(ts.iter().any(|h| h.class == SyntaxClass::Keyword));
+        assert!(ts.iter().any(|h| h.class == SyntaxClass::Type));
+        assert!(ts.iter().any(|h| h.class == SyntaxClass::Comment));
+
+        let css = parse_source("body { color: red; }\n", Path::new("x.css")).expect("parse css");
+        assert!(css.iter().any(|h| h.class == SyntaxClass::Property));
     }
 
     #[test]

@@ -13,6 +13,7 @@ official-git = ["dep:anvil-mod-git"]
 official-workspace-index = ["dep:anvil-mod-workspace-index"]
 official-language-latex = ["anvil-syntax/latex"]
 official-language-typst = ["anvil-syntax/typst"]
+official-language-web = ["anvil-syntax/web"]
 e2e-bench = []
 
 [dependencies]

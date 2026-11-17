@@ -39,6 +39,8 @@ HTML (`.html`, `.htm`), Markdown, Makefile, Dockerfile, and LaTeX
 (`.tex`, `.ltx`, `.sty`, `.cls`)
 use Tree-sitter highlighting on a debounced background thread, capped at
 256 KiB so large files keep plain-text latency.
+The `official-language-web` feature adds TypeScript, TSX, JavaScript/JSX, and
+CSS highlighting; the `full` distribution feature includes it.
 Trusted language servers (rust-analyzer, gopls, pyright/pylsp,
 typescript-language-server/vtsls, clangd, jdtls, lua-language-server,
 vscode-json-language-server, yaml-language-server, bash-language-server,
