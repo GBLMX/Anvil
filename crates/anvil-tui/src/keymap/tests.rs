@@ -814,3 +814,21 @@ fn keymap_list_includes_pending_and_context_bindings() {
     assert!(text.contains("file_tree"), "{text}");
     assert!(text.contains("lsp.hover"), "{text}");
 }
+
+#[test]
+fn keymap_list_prefers_configured_bindings_over_default_hints() {
+    let mut model = Model::new(EditorState::from_text(""), None);
+    assert!(model.config.keymap.bind(
+        KeyChord::from_key(key(KeyCode::Char('x'), KeyModifiers::NONE)),
+        NormalCommand::Hover,
+    ));
+
+    let text = model.keymap_list_text();
+    let x_rows = text
+        .lines()
+        .filter(|line| line.trim_start().starts_with("x "))
+        .collect::<Vec<_>>();
+    assert_eq!(x_rows.len(), 1, "{text}");
+    assert!(x_rows[0].contains("lsp.hover"), "{text}");
+    assert!(!x_rows[0].contains("editor.delete_forward"), "{text}");
+}

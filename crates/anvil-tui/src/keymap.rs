@@ -819,25 +819,21 @@ impl Model {
             String::new(),
             "Normal mode".to_owned(),
         ];
-        let mut normal = self
-            .config
-            .keymap
-            .normal
-            .iter()
-            .filter_map(|(chord, command)| {
-                command
-                    .id()
-                    .map(|id| (chord.label(), id.as_str().to_owned()))
-            })
-            .collect::<Vec<_>>();
-        for spec in command::COMMANDS {
-            if let Some(key) = self.config.keymap.key_for_command(spec.id.as_str()) {
-                normal.push((key, spec.id.as_str().to_owned()));
+        let mut normal = std::collections::BTreeMap::new();
+        for (chord, command) in &self.config.keymap.normal {
+            if let Some(id) = command.id() {
+                let label = chord.label();
+                normal.insert(label.to_lowercase(), (label, id.as_str().to_owned()));
             }
         }
-        normal.sort();
-        normal.dedup();
-        for (key, id) in normal {
+        for spec in command::COMMANDS {
+            if let Some(key) = default_key_hint(spec.id.as_str()) {
+                normal
+                    .entry(key.to_lowercase())
+                    .or_insert_with(|| (key.to_owned(), spec.id.as_str().to_owned()));
+            }
+        }
+        for (_, (key, id)) in normal {
             lines.push(format!(
                 "  {key:<18} {id}  {}",
                 crate::command_palette::command_title(&id)
