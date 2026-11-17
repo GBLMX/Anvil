@@ -33,8 +33,10 @@ actions are missing or conflict with established Anvil defaults:
   working-directory file picker.
 - Anvil uses `Alt-C` to add an empty cursor above (`Alt-c` folds to the same
   binding); Helix uses `A-c` for line comments.
-- Anvil has no diagnostic picker, changed-file picker, jumplist picker,
-  last-picker state, buffer-directory tree mode, or nested `Space w` prefix.
+- At the time of this decision, Anvil had no diagnostic picker, changed-file
+  picker, jumplist picker, last-picker state, buffer-directory tree mode, or
+  nested `Space w` prefix. The diagnostic and changed-file pickers have since
+  landed; the rest remain deferred.
 - Anvil supports line comments only; block comments are not implemented.
 
 There is also a command-registry constraint. `execute_pending_command` asserts
