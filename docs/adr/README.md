@@ -57,6 +57,7 @@ their decision sections.
 | [0049](0049-editor-control-plane.md) | Editor control plane and MCP adapter boundary | Accepted; implemented 2026-11-17 |
 | [0050](0050-discovery-first-language-packs.md) | Discovery-first defaults and compiled language packs | Proposed |
 | [0051](0051-external-editor-reference-models.md) | External editor reference models for UX and language support | Proposed |
+| [0052](0052-language-tool-setup-and-source-resolution.md) | Explicit language tool setup and per-tool source resolution | Proposed |
 
 ## Numbering Rule
 
