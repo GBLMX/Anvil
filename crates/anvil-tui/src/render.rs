@@ -371,6 +371,31 @@ fn progress_lines(model: &Model) -> Vec<Line<'static>> {
         .collect()
 }
 
+pub(crate) fn problems_popup_rect(model: &Model, area: Rect) -> Rect {
+    let width = (area.width * 3 / 4)
+        .max(30)
+        .min(area.width.saturating_sub(2));
+    let mut last_path: Option<&std::path::Path> = None;
+    let mut headers = 0;
+    for (_, problem) in model.ui.problems.visible() {
+        let path = problem.path.as_path();
+        if last_path != Some(path) {
+            last_path = Some(path);
+            headers += 1;
+        }
+    }
+    let rows = model.ui.problems.visible_len() + headers;
+    let height = (rows.max(1) as u16 + 2)
+        .min(18)
+        .min(area.height.saturating_sub(2));
+    Rect {
+        x: area.x + (area.width.saturating_sub(width)) / 2,
+        y: area.y + (area.height.saturating_sub(height)) / 2,
+        width,
+        height,
+    }
+}
+
 fn problem_lines(model: &Model, width: usize) -> (Vec<Line<'static>>, Option<usize>) {
     let mut lines = Vec::new();
     let mut selected_line = None;

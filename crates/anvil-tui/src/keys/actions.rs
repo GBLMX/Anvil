@@ -446,7 +446,9 @@ pub(super) fn problems_action(key: KeyPress) -> Option<ProblemsAction> {
         KeyCode::Down => Some(ProblemsAction::Next),
         KeyCode::Enter => Some(ProblemsAction::Jump),
         KeyCode::Backspace => Some(ProblemsAction::Backspace),
-        KeyCode::Char(character) => Some(ProblemsAction::Input(character)),
+        KeyCode::Char(character) if !key.ctrl() && !key.alt() && !key.super_key() => {
+            Some(ProblemsAction::Input(character))
+        }
         _ => None,
     }
 }

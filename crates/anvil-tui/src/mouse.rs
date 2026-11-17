@@ -464,19 +464,11 @@ fn inside_overlay(model: &Model, col: u16, row: u16, area: Rect) -> bool {
         }
     }
     if model.ui.problems.visible {
-        let width = (area.width * 3 / 4)
-            .max(30)
-            .min(area.width.saturating_sub(2));
-        let height = (model.ui.problems.visible_len() as u16 + 2)
-            .min(18)
-            .min(area.height.saturating_sub(2));
-        let popup = Rect {
-            x: area.x + (area.width.saturating_sub(width)) / 2,
-            y: area.y + (area.height.saturating_sub(height)) / 2,
-            width,
-            height,
-        };
-        return crate::render::rect_contains(popup, col, row);
+        return crate::render::rect_contains(
+            crate::render::problems_popup_rect(model, area),
+            col,
+            row,
+        );
     }
     if model.overlays.command_palette.is_some() {
         return crate::render::rect_contains(crate::render::command_palette_rect(area), col, row);

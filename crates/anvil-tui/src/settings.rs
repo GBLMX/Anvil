@@ -1799,6 +1799,9 @@ mod tests {
 
     #[test]
     fn tracks_per_field_settings_origins() {
+        let _guard = TEST_ENV_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         let directory = tempfile::tempdir().expect("tempdir");
         let user = directory.path().join("user.toml");
         let project = directory.path().join(PROJECT_SETTINGS);

@@ -51,6 +51,7 @@ impl Model {
         if self.ui.problems.visible {
             return;
         }
+        self.ui.problems.clear_query();
         self.ui.problems.visible = true;
         self.push_overlay_if_idle(OverlayKind::Problems);
         self.file.dirty = true;

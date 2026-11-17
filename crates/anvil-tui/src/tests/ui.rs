@@ -564,6 +564,17 @@ fn problems_picker_renders_the_filtered_diagnostics() {
     assert!(rendered.contains("Problems /needless"), "{rendered}");
     assert!(rendered.contains("needless borrow"), "{rendered}");
     assert!(!rendered.contains("unused import"), "{rendered}");
+
+    model.ui.problems.set_query("absent".to_owned());
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+    let rendered = terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect::<String>();
+    assert!(rendered.contains("no matching problems"), "{rendered}");
 }
 
 #[test]

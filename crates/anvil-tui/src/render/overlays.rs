@@ -372,14 +372,10 @@ pub(crate) fn render_overlays(model: &Model, frame: &mut Frame, area: Rect) {
     #[cfg(unix)]
     crate::terminal_control::render_panel(model, frame, area);
     if model.ui.problems.visible {
-        let width = (area.width * 3 / 4)
-            .max(30)
-            .min(area.width.saturating_sub(2));
-        let (all_lines, selected_line) = problem_lines(model, width.saturating_sub(2) as usize);
-        let height = (all_lines.len() as u16 + 2)
-            .min(18)
-            .min(area.height.saturating_sub(2));
-        let visible = height.saturating_sub(2) as usize;
+        let popup = crate::render::problems_popup_rect(model, area);
+        let (all_lines, selected_line) =
+            problem_lines(model, popup.width.saturating_sub(2) as usize);
+        let visible = popup.height.saturating_sub(2) as usize;
         let start = selected_line
             .unwrap_or(0)
             .saturating_sub(visible.saturating_sub(1));
@@ -406,12 +402,6 @@ pub(crate) fn render_overlays(model: &Model, frame: &mut Frame, area: Rect) {
                 model.ui.problems.visible_len(),
                 model.ui.problems.items.len()
             )
-        };
-        let popup = Rect {
-            x: area.x + (area.width.saturating_sub(width)) / 2,
-            y: area.y + (area.height.saturating_sub(height)) / 2,
-            width,
-            height,
         };
         frame.render_widget(Clear, popup);
         frame.render_widget(

@@ -352,6 +352,9 @@ fn problems_panel_filters_with_query_and_clear() {
         handle_event(&mut model, key(KeyCode::Char(character)));
     }
     assert_eq!(model.ui.problems.query, "unused");
+
+    handle_event(&mut model, ctrl(KeyCode::Char('a')));
+    assert_eq!(model.ui.problems.query, "unused");
     assert_eq!(model.ui.problems.visible_len(), 1);
     assert_eq!(
         model
@@ -365,6 +368,11 @@ fn problems_panel_filters_with_query_and_clear() {
     handle_event(&mut model, ctrl(KeyCode::Char('u')));
     assert!(model.ui.problems.query.is_empty());
     assert_eq!(model.ui.problems.visible_len(), 2);
+
+    model.ui.problems.set_query("unused".to_owned());
+    model.close_problems();
+    model.toggle_problems();
+    assert!(model.ui.problems.query.is_empty());
 }
 
 #[test]
