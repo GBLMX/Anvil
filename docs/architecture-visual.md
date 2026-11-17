@@ -1,7 +1,8 @@
 # Anvil Architecture Maps
 
-Status: current as of 2026-11-17. Solid paths are implemented; dashed paths are
-planned, deferred, or failure-only. `0.6.0` internal polish is active, the
+Status: current as of 2026-11-17. Solid paths are implemented, including
+asynchronous and out-of-process calls; dashed paths are deferred marketplace
+work. `0.6.0` internal polish is active, the
 `0.7.1`–`0.7.4` official modules are landed, and marketplace/signed-index
 surfaces remain deferred. Layer rules and ownership stay in
 [architecture.md](architecture.md); this file is the diagram view.
@@ -83,14 +84,14 @@ flowchart TB
     EXEC --> RUNNER["anvil-exec-runner<br/>Landlock · seccomp · cgroup"]
     RUNNER --> TOOLS["rg · fd"]
     LSPMGR --> LS["LSP processes<br/>trusted · isolated from plugin host"]
-    WATCH -. "watch.events / watch.status" .-> ROUTER
+    WATCH -- "watch.events / watch.status" --> ROUTER
 
     subgraph PLUGIN["anvil-plugin-host · untrusted"]
         HOST["Luau runtime<br/>Landlock · seccomp · cgroup"]
     end
 
-    PLUGINS -. "editor.sock" .-> HOST
-    HOST -. "sys.* + token" .-> ROUTER
+    PLUGINS -- "editor.sock" --> HOST
+    HOST -- "sys.* + token" --> ROUTER
 
     CTL["anvil-ctl · anvil-mcp<br/>same-UID local adapters"]
     CONTROL <--> CTL
