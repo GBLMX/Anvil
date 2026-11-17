@@ -1,7 +1,7 @@
 # ADR-0052: Explicit Language Tool Setup and Source Resolution
 
 - Status: Proposed
-- Version: 1.1.0
+- Version: 1.1.1
 - Date: 2026-11-18
 - Related: [ADR-0020](0020-content-addressed-plugin-store.md),
   [ADR-0025](0025-lsp-and-language-breadth.md),
@@ -167,12 +167,18 @@ The setup and readiness surfaces must preserve the existing LSP override order:
 2. `ANVIL_LSP_<LANG>` or `ANVIL_LSP`;
 3. `[lsp.commands]` from user settings;
 4. Anvil-managed tool directory;
-5. `PATH`.
+5. `PATH` and common user tool directories, including mise/asdf shims.
 
 The per-root profile is applied last in the current resolver and therefore has
 the highest precedence. The environment override is checked before the global
 `[lsp.commands]` table. Managed tools are inserted only after explicit user
 choices and before generic PATH discovery.
+
+Fallback discovery checks `~/.local/share/mise/shims`, `~/.asdf/shims`,
+`$MISE_DATA_DIR/shims`, and `$ASDF_DATA_DIR/shims`, with custom data
+directories before their defaults. This is executable discovery only:
+Anvil does not parse project version files or select a toolchain version.
+See [ADR-0048](0048-per-root-language-tooling-and-lsp-workspace.md).
 
 If an explicit path is configured but missing or non-executable, setup reports
 an error. It must not silently fall back to another server: the user selected a
