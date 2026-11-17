@@ -1,6 +1,7 @@
 Output docs/assets/anvil-demo.gif
 
 Set Shell bash
+Set FontFamily "JetBrainsMono Nerd Font Mono"
 Set FontSize 16
 Set Width 1200
 Set Height 760
@@ -13,7 +14,7 @@ Type "cd $(git rev-parse --show-toplevel)"
 Enter
 Type "rm -rf /tmp/anvil-vhs && cp -R docs/demo/workspace /tmp/anvil-vhs && mkdir -p /tmp/anvil-vhs/.config /tmp/anvil-vhs/.state && cd /tmp/anvil-vhs && git init -q && git add . && git -c user.email=demo@example.com -c user.name=Demo commit -qm init"
 Enter
-Type "cd /tmp/anvil-vhs && env -u ANVIL_SETTINGS -u ANVIL_THEME XDG_CONFIG_HOME=$PWD/.config XDG_STATE_HOME=$PWD/.state anvil -w . demo.txt"
+Type "cd /tmp/anvil-vhs && env -u NO_COLOR -u ANVIL_SETTINGS TERM=xterm-256color COLORTERM=truecolor ANVIL_TRUECOLOR=1 ANVIL_THEME=tokyonight XDG_CONFIG_HOME=$PWD/.config XDG_STATE_HOME=$PWD/.state anvil --truecolor=always -w . Makefile"
 Enter
 Sleep 4s
 Show
