@@ -810,9 +810,13 @@ fn keymap_list_includes_pending_and_context_bindings() {
 
     let text = model.keymap_list_text();
     assert!(text.contains("Space d"), "{text}");
-    assert!(text.contains("Leader and pending bindings"), "{text}");
-    assert!(text.contains("Common built-in context keys"), "{text}");
-    assert!(text.contains("curated common subset"), "{text}");
+    assert!(text.contains("Built-in keys by overlay"), "{text}");
+    assert!(text.contains("settings"), "{text}");
+    assert!(text.contains("completion"), "{text}");
+    assert!(text.contains("lsp_list"), "{text}");
+    assert!(text.contains("debug_panel"), "{text}");
+    assert!(text.contains("insert"), "{text}");
+    assert!(text.contains("confirm_close"), "{text}");
     assert!(text.contains("command_line"), "{text}");
     assert!(text.contains("close tree"), "{text}");
     assert!(text.contains("Configured context overrides"), "{text}");
@@ -822,11 +826,9 @@ fn keymap_list_includes_pending_and_context_bindings() {
 
 #[test]
 fn builtin_context_catalog_uses_known_contexts() {
-    for (context, key, action) in BUILTIN_CONTEXT_KEYS {
-        assert!(
-            KeymapContext::from_name(context).is_some(),
-            "unknown context {context}"
-        );
+    for (overlay, route, key, action) in BUILTIN_CONTEXT_KEYS {
+        assert!(!overlay.is_empty());
+        assert!(KeymapContext::route_order().contains(route));
         assert!(!key.is_empty());
         assert!(!action.is_empty());
     }

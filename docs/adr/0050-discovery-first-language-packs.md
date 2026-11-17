@@ -150,15 +150,13 @@ Negative:
 - Landed: diagnostics (`Space d`), changed-files (`Space g`), jump-list
   (`Space j`), search-history (`Space H`), and command-history (`Space :`)
   pickers. `Space K` / `:keymaps` opens a keymap list for normal commands,
-  leader/pending bindings, a curated common set of built-in context keys, and
-  configured context overrides; `:keybinds` remains the keymapped-commands
-  palette subset. `Space L` / `:languages` reports syntax grammar availability,
-  LSP profile/root/server lookup, formatter fallback, and explicitly
-  unconfigured linter/test/debug surfaces. Build-time packs are exposed as
+  leader/pending bindings, built-in keys grouped by overlay, and configured
+  context overrides; `:keybinds` remains the keymapped-commands palette
+  subset. `Space L` / `:languages` reports syntax grammar availability, LSP
+  profile/root/server lookup, formatter fallback, and explicitly unconfigured
+  linter/test/debug surfaces. Build-time packs are exposed as
   `language-pack-rust`, `language-pack-typescript`, and
   `language-pack-c-family`; `full` enables all.
-- Pending: an exhaustive per-overlay built-in key catalog; the current keymap
-  page labels its context section as a curated common subset.
 
 ## Verification
 
