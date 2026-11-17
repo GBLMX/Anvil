@@ -908,10 +908,13 @@ impl Model {
         lines.push("  d/y/c + i/a + object  operator pending".to_owned());
 
         lines.push(String::new());
-        lines.push("Built-in context bindings".to_owned());
+        lines.push("Common built-in context keys".to_owned());
         for (context, key, action) in BUILTIN_CONTEXT_KEYS {
             lines.push(format!("  {context:<14} {key:<18} {action}"));
         }
+        lines.push(
+            "  Overlay-specific handlers may add keys; this is a curated common subset.".to_owned(),
+        );
 
         lines.push(String::new());
         lines.push("Configured context overrides".to_owned());
@@ -935,7 +938,7 @@ impl Model {
         }
         lines.push(String::new());
         lines.push(
-            "Configured overrides take priority over built-in bindings in the same context."
+            "Configured overrides take priority over common built-in keys in the same context."
                 .to_owned(),
         );
         lines.join("\n")
