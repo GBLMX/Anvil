@@ -1,7 +1,7 @@
 # Documentation Index
 
 Status: canonical map for architecture, plans, ADRs, SPECs, and reference
-material. Last reviewed 2026-11-15.
+material. Last reviewed 2026-11-17.
 
 ## Start here
 
@@ -10,7 +10,7 @@ material. Last reviewed 2026-11-15.
 - [Multi-host install lessons](multi-host-install.md) — Arch, Debian, and Ubuntu compatibility findings
 - [Roadmap](../ROADMAP.md) — directional priorities
 - [Architecture](architecture.md) — process model and layer boundaries
-- [Architecture maps](architecture-visual.md) — current/future diagrams
+- [Architecture maps](architecture-visual.md) — current processes, flows, and deferred surfaces
 - [Threat model](threat-model.md) — adversaries, mitigations, invariants
 - [Internal polish](internal-polish-plan.md) — frozen `0.6.0` phase
 - [Performance baseline](performance.md) — gates and re-run triggers

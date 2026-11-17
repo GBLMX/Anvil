@@ -1,6 +1,6 @@
 # Anvil Architecture
 
-Status: current as of 2026-11-15. The editor control plane (`anvil-control`,
+Status: current as of 2026-11-17. The editor control plane (`anvil-control`,
 `anvil-ctl`, protocol v3) and the thin `anvil-mcp` stdio adapter are implemented.
 The cgroup-before-exec, host supervision, idle reclaim, and seccomp closure
 are landed, as are the bounded control/session/DAP/plugin-host failure paths.
@@ -9,9 +9,11 @@ text-search, snippet, comment, workspace-root, and key-input primitives are
 split out under ADR-0041. The selection-first core, headless session, and thin
 frontend boundary is accepted in ADR-0042. The official-only plugin
 distribution path is landed: signed layout, installer, bundled fallback, and
-managed store. The kernel API baseline is accepted in ADR-0037; `anvil-tui`
-remains outside that baseline. Marketplace/index work remains planned. See
-[visual current/future maps](architecture-visual.md).
+managed store. Native workspace watching, live coverage status, and the
+registration cooldown are implemented under ADR-0046. The kernel API baseline
+is accepted in ADR-0037; `anvil-tui` remains outside that baseline.
+Marketplace/index work remains deferred. See
+[architecture maps](architecture-visual.md).
 
 ## 1. Process model
 
