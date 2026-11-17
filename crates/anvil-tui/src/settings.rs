@@ -1881,6 +1881,40 @@ mod tests {
     }
 
     #[test]
+    fn invalid_reload_keeps_last_good_settings() {
+        let _guard = TEST_ENV_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        let directory = tempfile::tempdir().expect("tempdir");
+        let workspace = directory.path().join("workspace");
+        fs::create_dir_all(&workspace).expect("workspace");
+        let settings_path = directory.path().join("settings.toml");
+        fs::write(&settings_path, "[editor]\nscroll_margin = 3\n").expect("settings");
+        let previous = std::env::var_os("ANVIL_SETTINGS");
+        unsafe { std::env::set_var("ANVIL_SETTINGS", &settings_path) };
+
+        let mut model = crate::Model::new(crate::EditorState::from_text(""), None);
+        model.workspace.path = workspace.clone();
+        model.workspace.roots =
+            crate::workspace_roots::WorkspaceRoots::new(&workspace).expect("roots");
+        model.reload_config();
+        assert_eq!(model.config.settings.editor.scroll_margin, 3);
+
+        fs::write(&settings_path, "[editor]\nscroll_margin = 99\n").expect("invalid settings");
+        model.reload_config();
+        assert!(
+            model.status.text.contains("E: config-reload"),
+            "{}",
+            model.status.text
+        );
+        assert_eq!(model.config.settings.editor.scroll_margin, 3);
+        match previous {
+            Some(value) => unsafe { std::env::set_var("ANVIL_SETTINGS", value) },
+            None => unsafe { std::env::remove_var("ANVIL_SETTINGS") },
+        }
+    }
+
+    #[test]
     fn project_layer_requires_trust() {
         let workspace = Path::new("/workspace");
         assert_eq!(project_layer(workspace, false), None);
