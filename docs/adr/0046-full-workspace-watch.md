@@ -1,10 +1,10 @@
 # ADR-0046: Full Workspace Watch Coverage Through the Gateway
 
-- Status: Proposed
-- Version: 1.1.0
-- Implementation: native gateway core, TUI event routing, and `[watch]`
-  mode/max_dirs/cross_mounts landed; native coverage reporting and cooldown
-  remain pending
+- Status: Accepted; implemented 2026-11-17
+- Version: 1.2.0
+- Implementation: native watcher, TUI event routing, `[watch]`
+  mode/max_dirs/cross_mounts, live coverage/overflow status, path-scoped
+  permissions, and ENOSPC/EMFILE cooldown landed
 - Date: 2026-11-16
 - Related: [ADR-0002](0002-go-daemon.md),
   [ADR-0018](0018-workspace-tree-watch.md),

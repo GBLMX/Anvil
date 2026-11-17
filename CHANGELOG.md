@@ -72,6 +72,10 @@ post-`0.5.0` feature line.
   coalesced `watch.events`. The TUI consumes the native stream for open-buffer
   change notifications and tree refresh; `[watch] mode`, `max_dirs`, and
   `cross_mounts` configure it, and `:watch-status` reports the active settings.
+  Live `watch.status` updates now feed coverage, watched/skipped directory
+  counts, overflow count, and the degraded reason into `:watch-status`.
+  `ENOSPC`/`EMFILE` during registration enters a bounded cooldown instead of
+  retrying in a tight loop.
   Polling remains the fallback.
 - Added `:help start` and a first-run [onboarding guide](docs/onboarding.md)
   with a task list and compact keymap card.

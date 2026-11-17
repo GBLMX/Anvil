@@ -107,6 +107,8 @@ pub enum FileRequest {
         max_dirs: usize,
         cross_mounts: bool,
     },
+    /// Query the current native watcher status.
+    WatchStatus,
     /// Replace the workspace-tree directory watch set.
     WatchDirs(Vec<PathBuf>),
     /// Capture root and expanded directory listings for a tree refresh.
@@ -233,6 +235,16 @@ pub enum FileEvent {
     },
     /// A watched file changed on disk.
     ExternalChanged { path: PathBuf },
+    /// Native watcher coverage changed.
+    WatchStatus {
+        root: String,
+        mode: String,
+        coverage: String,
+        watched_dirs: usize,
+        skipped_dirs: usize,
+        overflow_count: u64,
+        reason: Option<String>,
+    },
     /// One or more watched directories changed; refresh once.
     TreeChanged { paths: Vec<PathBuf> },
     /// Directory watching is unsupported or failed; the tree is stale.

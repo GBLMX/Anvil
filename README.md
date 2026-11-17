@@ -170,9 +170,12 @@ effective settings paths. Set
 `[editor] file_watching = false` or `ANVIL_EDITOR_FILE_WATCHING=0` to disable
 polling; the tree then relies on explicit refresh and buffer opens.
 
-`:watch-status` reports the active scope, root count, tree-watch cap, and stale
-state. `:tree-refresh` performs a manual tree and Git status refresh; the
-watcher is not a recursive whole-workspace scanner.
+`:watch-status` reports the active scope, root count, tree-watch cap, stale
+state, and live native coverage (`full`/`limited`/`starting`), watched and
+skipped directory counts, overflow count, and degradation reason. Native
+registration pauses for a short cooldown after `ENOSPC`/`EMFILE`.
+`:tree-refresh` performs a manual tree and Git status refresh; the watcher is
+not a recursive whole-workspace scanner.
 
 At the `:` prompt, `Tab` completes Ex command names, `:theme` /
 `:theme-auto` arguments, and `:plugin-enable` IDs; `Up`/`Down` selects a

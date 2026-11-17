@@ -183,13 +183,28 @@ impl FileWorker {
                             FileRequest::SetWatchEnabled(enabled) => {
                                 watch_enabled = enabled;
                                 if watch_enabled {
-                                    let _ = client.watch_start(
+                                    let watch_result = client.watch_start(
                                         ".",
                                         &[],
                                         watch_max_dirs,
                                         watch_cross_mounts,
                                         &watch_mode,
                                     );
+                                    match watch_result {
+                                        Ok(status) => {
+                                            if let Some(event) = watch_status_event(&status) {
+                                                let _ = send_event(&context, event);
+                                            }
+                                        }
+                                        Err(error) => {
+                                            let _ = send_event(
+                                                &context,
+                                                FileEvent::TreeWatchUnavailable(format!(
+                                                    "native watcher: {error}"
+                                                )),
+                                            );
+                                        }
+                                    }
                                 } else {
                                     let _ = client.watch_stop();
                                     watched.clear();
@@ -208,13 +223,35 @@ impl FileWorker {
                                 watch_max_dirs = max_dirs;
                                 watch_cross_mounts = cross_mounts;
                                 if watch_enabled {
-                                    let _ = client.watch_start(
+                                    match client.watch_start(
                                         ".",
                                         &[],
                                         watch_max_dirs,
                                         watch_cross_mounts,
                                         &watch_mode,
-                                    );
+                                    ) {
+                                        Ok(status) => {
+                                            if let Some(event) = watch_status_event(&status) {
+                                                let _ = send_event(&context, event);
+                                            }
+                                        }
+                                        Err(error) => {
+                                            let _ = send_event(
+                                                &context,
+                                                FileEvent::TreeWatchUnavailable(format!(
+                                                    "native watcher: {error}"
+                                                )),
+                                            );
+                                        }
+                                    }
+                                }
+                                continue;
+                            }
+                            FileRequest::WatchStatus => {
+                                if let Ok(status) = client.watch_status()
+                                    && let Some(event) = watch_status_event(&status)
+                                {
+                                    let _ = send_event(&context, event);
                                 }
                                 continue;
                             }
@@ -734,6 +771,18 @@ fn file_event_cost(event: &FileEvent) -> usize {
         FileEvent::TreeWatchUnavailable(message) | FileEvent::Oversized { message } => {
             add_bytes(&mut bytes, message.len());
         }
+        FileEvent::WatchStatus {
+            root,
+            mode,
+            coverage,
+            reason,
+            ..
+        } => {
+            add_bytes(&mut bytes, root.len() + mode.len() + coverage.len());
+            if let Some(reason) = reason {
+                add_bytes(&mut bytes, reason.len());
+            }
+        }
         FileEvent::TreeSnapshot { listings, .. } => {
             add_bytes(
                 &mut bytes,
@@ -803,6 +852,34 @@ fn preview_bytes(preview: &PreviewData) -> usize {
         .sum()
 }
 
+fn watch_status_event(value: &serde_json::Value) -> Option<FileEvent> {
+    Some(FileEvent::WatchStatus {
+        root: value
+            .get("root")
+            .and_then(|value| value.as_str())
+            .unwrap_or(".")
+            .to_owned(),
+        mode: value.get("mode")?.as_str()?.to_owned(),
+        coverage: value.get("coverage")?.as_str()?.to_owned(),
+        watched_dirs: value
+            .get("watched_dirs")
+            .and_then(|value| value.as_u64())
+            .unwrap_or(0) as usize,
+        skipped_dirs: value
+            .get("skipped_dirs")
+            .and_then(|value| value.as_u64())
+            .unwrap_or(0) as usize,
+        overflow_count: value
+            .get("overflow_count")
+            .and_then(|value| value.as_u64())
+            .unwrap_or(0),
+        reason: value
+            .get("reason")
+            .and_then(|value| value.as_str())
+            .map(str::to_owned),
+    })
+}
+
 fn route_watch_notifications(
     notifications: &[Request],
     workspace: &Path,
@@ -812,6 +889,12 @@ fn route_watch_notifications(
 ) {
     let mut tree_paths = Vec::new();
     for notification in notifications {
+        if notification.method == "watch.status" {
+            if let Some(event) = watch_status_event(&notification.params) {
+                let _ = send_event(context, event);
+            }
+            continue;
+        }
         if notification.method != "watch.events" {
             continue;
         }
@@ -980,6 +1063,31 @@ mod cost_tests {
                 result: Err("x".repeat(4096)),
             }) > std::mem::size_of::<FileEvent>()
         );
+    }
+    #[test]
+    fn watch_status_event_parses_native_coverage() {
+        let event = watch_status_event(&serde_json::json!({
+            "root": ".",
+            "mode": "native",
+            "coverage": "limited",
+            "watched_dirs": 12,
+            "skipped_dirs": 3,
+            "overflow_count": 7,
+            "reason": "directory budget reached"
+        }))
+        .expect("status event");
+        assert!(matches!(
+            event,
+            FileEvent::WatchStatus {
+                root,
+                mode,
+                coverage,
+                watched_dirs: 12,
+                skipped_dirs: 3,
+                overflow_count: 7,
+                reason: Some(reason),
+            } if root == "." && mode == "native" && coverage == "limited" && reason == "directory budget reached"
+        ));
     }
 
     #[test]

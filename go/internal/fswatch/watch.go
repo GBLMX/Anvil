@@ -19,7 +19,11 @@ const (
 	maxBatch      = 1024
 	maxPending    = 16384
 	defaultMaxDir = 8192
+	watchCooldown = 5 * time.Second
 )
+
+// inotifyAddWatch is a test seam for deterministic registration failures.
+var inotifyAddWatch = unix.InotifyAddWatch
 
 var defaultExcludes = map[string]bool{
 	".git":         true,
@@ -60,24 +64,26 @@ type Event struct {
 
 // Watcher owns one inotify instance and directory watch set.
 type Watcher struct {
-	mu       sync.Mutex
-	fd       int
-	root     string
-	rootRel  string
-	exclude  []string
-	maxDirs  int
-	cross    bool
-	notify   func(string, any)
-	status   Status
-	wdPath   map[int]string
-	pathWD   map[string]int
-	pending  map[string]Event
-	order    []string
-	moved    map[uint32]string
-	rescan   bool
-	stopped  chan struct{}
-	stopOnce sync.Once
-	done     chan struct{}
+	mu            sync.Mutex
+	fd            int
+	root          string
+	rootRel       string
+	exclude       []string
+	maxDirs       int
+	cross         bool
+	notify        func(string, any)
+	status        Status
+	wdPath        map[int]string
+	pathWD        map[string]int
+	pending       map[string]Event
+	order         []string
+	moved         map[uint32]string
+	rescan        bool
+	stopped       chan struct{}
+	stopOnce      sync.Once
+	retryPending  bool
+	cooldownUntil time.Time
+	done          chan struct{}
 }
 
 // Start creates a watcher and starts the asynchronous initial walk.
@@ -173,6 +179,7 @@ func (w *Watcher) run() {
 			w.flush()
 			lastFlush = time.Now()
 		}
+		w.retryCooled()
 	}
 }
 
@@ -188,6 +195,10 @@ func (w *Watcher) walk(root, rootRel string) {
 		}
 		if !entry.IsDir() || path == root {
 			return nil
+		}
+		if w.registrationPaused() {
+			w.skipDir()
+			return fs.SkipDir
 		}
 		rel, err := filepath.Rel(root, path)
 		if err != nil {
@@ -247,12 +258,23 @@ func (w *Watcher) addWatch(path, rel string) error {
 	if _, exists := w.pathWD[path]; exists {
 		return nil
 	}
+	if w.registrationPaused() {
+		return errors.New("watch registration cooling down")
+	}
 	mask := uint32(unix.IN_CREATE | unix.IN_DELETE | unix.IN_MODIFY |
 		unix.IN_ATTRIB | unix.IN_CLOSE_WRITE | unix.IN_MOVED_FROM |
 		unix.IN_MOVED_TO | unix.IN_DELETE_SELF | unix.IN_MOVE_SELF |
 		unix.IN_ONLYDIR | unix.IN_DONT_FOLLOW | unix.IN_EXCL_UNLINK)
-	wd, err := unix.InotifyAddWatch(w.fd, path, mask)
+	wd, err := inotifyAddWatch(w.fd, path, mask)
 	if err != nil {
+		if errors.Is(err, unix.ENOSPC) || errors.Is(err, unix.EMFILE) {
+			w.mu.Lock()
+			w.status.Coverage = "limited"
+			w.status.Reason = "inotify watch limit reached; cooling down"
+			w.cooldownUntil = time.Now().Add(watchCooldown)
+			w.retryPending = true
+			w.mu.Unlock()
+		}
 		return err
 	}
 	w.wdPath[wd] = rel
@@ -268,6 +290,32 @@ func (w *Watcher) skipDir() {
 	w.status.SkippedDirs++
 	w.status.Coverage = "limited"
 	w.mu.Unlock()
+}
+func (w *Watcher) registrationPaused() bool {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if !w.cooldownUntil.IsZero() && time.Now().Before(w.cooldownUntil) {
+		w.retryPending = true
+		return true
+	}
+	return false
+}
+
+func (w *Watcher) retryCooled() {
+	w.mu.Lock()
+	retry := w.retryPending && !w.cooldownUntil.IsZero() && !time.Now().Before(w.cooldownUntil)
+	if retry {
+		w.retryPending = false
+		w.cooldownUntil = time.Time{}
+		w.status.Coverage = "starting"
+		w.status.SkippedDirs = 0
+		w.status.Reason = ""
+	}
+	w.mu.Unlock()
+	if retry {
+		w.walk(w.root, ".")
+		w.publishStatus()
+	}
 }
 
 func (w *Watcher) publishStatus() {

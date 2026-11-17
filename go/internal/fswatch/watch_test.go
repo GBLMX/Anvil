@@ -230,3 +230,60 @@ func TestWatcherRewatchesRecreatedDirectory(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 }
+
+func TestWatcherCooldownPausesRegistration(t *testing.T) {
+	watcher := &Watcher{cooldownUntil: time.Now().Add(time.Minute)}
+	if !watcher.registrationPaused() {
+		t.Fatal("expected registration to be paused during cooldown")
+	}
+	watcher.mu.Lock()
+	retryPending := watcher.retryPending
+	watcher.cooldownUntil = time.Now().Add(-time.Second)
+	watcher.mu.Unlock()
+	if !retryPending {
+		t.Fatal("expected a retry to be queued")
+	}
+	if watcher.registrationPaused() {
+		t.Fatal("expired cooldown still paused registration")
+	}
+}
+
+func TestWatcherRegistrationErrorEntersCooldown(t *testing.T) {
+	for _, want := range []error{unix.ENOSPC, unix.EMFILE} {
+		t.Run(want.Error(), func(t *testing.T) {
+			original := inotifyAddWatch
+			t.Cleanup(func() { inotifyAddWatch = original })
+			inotifyAddWatch = func(int, string, uint32) (int, error) {
+				return -1, want
+			}
+			watcher := &Watcher{
+				fd:     -1,
+				pathWD: map[string]int{},
+				wdPath: map[int]string{},
+			}
+			if err := watcher.addWatch("/tmp/watch", "."); err != want {
+				t.Fatalf("addWatch error = %v, want %v", err, want)
+			}
+			status := watcher.Status()
+			if status.Coverage != "limited" {
+				t.Fatalf("coverage = %q, want limited", status.Coverage)
+			}
+			if status.Reason != "inotify watch limit reached; cooling down" {
+				t.Fatalf("reason = %q", status.Reason)
+			}
+			watcher.mu.Lock()
+			retryPending := watcher.retryPending
+			cooldownUntil := watcher.cooldownUntil
+			watcher.mu.Unlock()
+			if !retryPending {
+				t.Fatal("registration error did not queue a retry")
+			}
+			if !time.Now().Before(cooldownUntil) {
+				t.Fatalf("cooldown not armed: %v", cooldownUntil)
+			}
+			if !watcher.registrationPaused() {
+				t.Fatal("registration remained active during cooldown")
+			}
+		})
+	}
+}

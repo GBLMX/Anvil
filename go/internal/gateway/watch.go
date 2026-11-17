@@ -13,9 +13,6 @@ type watchStartParams struct {
 }
 
 func (s *Server) watchStart(req request, state *connectionState) (interface{}, *rpcError) {
-	if rpcErr := s.permissionError(state, "fs.read"); rpcErr != nil {
-		return nil, rpcErr
-	}
 	if s.root == nil {
 		return nil, &rpcError{Code: -32008, Message: "file service unavailable"}
 	}
@@ -41,6 +38,9 @@ func (s *Server) watchStart(req request, state *connectionState) (interface{}, *
 		}
 		rootDir = resolved
 		rootRel = params.Root
+	}
+	if rpcErr := s.pathPermissionError(state, "fs.read", rootRel); rpcErr != nil {
+		return nil, rpcErr
 	}
 	state.stopWatch()
 	watcher, status, err := fswatch.Start(fswatch.Config{

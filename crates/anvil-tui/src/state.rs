@@ -1054,6 +1054,15 @@ impl RecentState {
     }
 }
 
+#[derive(Clone, Default)]
+pub(crate) struct WatchRootStatus {
+    pub(crate) coverage: String,
+    pub(crate) watched_dirs: usize,
+    pub(crate) skipped_dirs: usize,
+    pub(crate) overflow_count: u64,
+    pub(crate) reason: Option<String>,
+}
+
 #[derive(Default)]
 pub(crate) struct TreeState {
     /// Flattened workspace tree, when open.
@@ -1068,6 +1077,8 @@ pub(crate) struct TreeState {
     pub(crate) find: Option<TreeFindState>,
     pub(crate) stale: bool,
     pub(crate) watch_limited: bool,
+
+    pub(crate) watch: BTreeMap<String, WatchRootStatus>,
     pub(crate) refresh_in_flight: bool,
     pub(crate) refresh_queued: bool,
     pub(crate) refresh_generation: u64,

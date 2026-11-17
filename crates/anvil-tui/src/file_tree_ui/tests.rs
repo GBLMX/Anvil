@@ -333,6 +333,44 @@ fn watch_status_reports_scope_and_disable() {
 }
 
 #[test]
+fn watch_status_aggregates_native_coverage() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.workspace.path = dir.path().to_path_buf();
+    model.workspace.roots = crate::workspace_roots::WorkspaceRoots::new(dir.path()).expect("roots");
+    model.apply_watch_status(
+        ".".to_owned(),
+        crate::state::WatchRootStatus {
+            coverage: "full".to_owned(),
+            watched_dirs: 4,
+            skipped_dirs: 0,
+            overflow_count: 0,
+            reason: None,
+        },
+    );
+    model.apply_watch_status(
+        "../other".to_owned(),
+        crate::state::WatchRootStatus {
+            coverage: "limited".to_owned(),
+            watched_dirs: 2,
+            skipped_dirs: 1,
+            overflow_count: 3,
+            reason: Some("directory budget reached".to_owned()),
+        },
+    );
+    assert!(model.status.text.contains("native=limited"));
+    assert!(model.status.text.contains("watched=6"));
+    assert!(model.status.text.contains("skipped=1"));
+    assert!(model.status.text.contains("overflow=3"));
+    assert!(
+        model
+            .status
+            .text
+            .contains("reason=directory budget reached")
+    );
+}
+
+#[test]
 fn natural_sort_puts_directories_first_and_numbers_numerically() {
     let mut entries = vec![
         DirEntry {

@@ -429,7 +429,31 @@ impl Model {
         self.workspace.git.status_received = 0;
     }
 
+    pub(crate) fn apply_watch_status(
+        &mut self,
+        root: String,
+        status: crate::state::WatchRootStatus,
+    ) {
+        self.workspace.tree.watch.insert(root, status);
+        self.file.dirty = true;
+        self.render_watch_status();
+    }
+
     pub(crate) fn show_watch_status(&mut self) {
+        self.request_watch_status();
+        self.render_watch_status();
+    }
+
+    fn request_watch_status(&mut self) {
+        if let Some(worker) = &self.workspace.file_worker {
+            let _ = worker.request(FileRequest::WatchStatus);
+        }
+        for worker in self.workspace.root_file_workers.values() {
+            let _ = worker.request(FileRequest::WatchStatus);
+        }
+    }
+
+    fn render_watch_status(&mut self) {
         let watch = self.config.settings.watch;
         let enabled = self.config.settings.editor.file_watching
             && watch.mode != crate::settings::WatchMode::Off;
@@ -461,6 +485,37 @@ impl Model {
                     "no"
                 }
             ));
+            if !self.workspace.tree.watch.is_empty() {
+                let mut coverage = "full";
+                let mut watched = 0;
+                let mut skipped = 0;
+                let mut overflow = 0;
+                let mut reasons = std::collections::BTreeSet::new();
+                for status in self.workspace.tree.watch.values() {
+                    watched += status.watched_dirs;
+                    skipped += status.skipped_dirs;
+                    overflow += status.overflow_count;
+                    if status.coverage == "limited" {
+                        coverage = "limited";
+                    } else if status.coverage == "starting" && coverage == "full" {
+                        coverage = "starting";
+                    } else if status.coverage == "off" {
+                        coverage = "off";
+                    }
+                    if let Some(reason) = &status.reason {
+                        reasons.insert(reason.as_str());
+                    }
+                }
+                text.push_str(&format!(
+                    "; native={coverage}; watched={watched}; skipped={skipped}; overflow={overflow}"
+                ));
+                if !reasons.is_empty() {
+                    text.push_str(&format!(
+                        "; reason={}",
+                        reasons.into_iter().collect::<Vec<_>>().join(", ")
+                    ));
+                }
+            }
         }
         self.status.text = text;
         self.file.dirty = true;
@@ -614,6 +669,24 @@ impl Model {
                 FileEvent::TreeChanged { paths } => {
                     self.handle_tree_changed(None, paths);
                 }
+                FileEvent::WatchStatus {
+                    root,
+                    mode: _,
+                    coverage,
+                    watched_dirs,
+                    skipped_dirs,
+                    overflow_count,
+                    reason,
+                } => self.apply_watch_status(
+                    root,
+                    crate::state::WatchRootStatus {
+                        coverage,
+                        watched_dirs,
+                        skipped_dirs,
+                        overflow_count,
+                        reason,
+                    },
+                ),
                 FileEvent::TreeWatchUnavailable(error) => {
                     self.workspace.tree.stale = true;
                     self.status.text = format!(
@@ -684,6 +757,24 @@ impl Model {
                     generation,
                     listings,
                 } => self.apply_tree_listings(generation, listings),
+                FileEvent::WatchStatus {
+                    root,
+                    mode: _,
+                    coverage,
+                    watched_dirs,
+                    skipped_dirs,
+                    overflow_count,
+                    reason,
+                } => self.apply_watch_status(
+                    root,
+                    crate::state::WatchRootStatus {
+                        coverage,
+                        watched_dirs,
+                        skipped_dirs,
+                        overflow_count,
+                        reason,
+                    },
+                ),
                 FileEvent::TreeWatchUnavailable(error) => {
                     self.workspace.tree.stale = true;
                     self.status.text = format!(
