@@ -318,18 +318,25 @@ fn tool_search_directories() -> Vec<PathBuf> {
 }
 
 fn user_tool_directories(home: &Path) -> Vec<PathBuf> {
-    [
+    let mut directories: Vec<PathBuf> = [
         ".local/bin",
         "bin",
         ".cargo/bin",
         "go/bin",
         ".local/share/vite-plus/bin",
         ".local/share/mise/shims",
+        ".asdf/shims",
         ".bun/bin",
     ]
     .into_iter()
     .map(|relative| home.join(relative))
-    .collect()
+    .collect();
+    for variable in ["MISE_DATA_DIR", "ASDF_DATA_DIR"] {
+        if let Some(data_dir) = std::env::var_os(variable) {
+            directories.push(PathBuf::from(data_dir).join("shims"));
+        }
+    }
+    directories
 }
 
 fn find_tool_in(candidates: &[&str], directories: &[PathBuf]) -> Option<PathBuf> {
@@ -412,6 +419,17 @@ mod tests {
         assert!(directories.contains(&home.join("go/bin")));
         assert!(directories.contains(&home.join(".local/share/vite-plus/bin")));
         assert!(directories.contains(&home.join(".local/share/mise/shims")));
+        assert!(directories.contains(&home.join(".asdf/shims")));
+    }
+
+    #[test]
+    fn user_tool_directories_include_data_dir_shims() {
+        let home = Path::new("/home/test");
+        let data_dir = tempfile::tempdir().expect("tempdir");
+        unsafe { std::env::set_var("ASDF_DATA_DIR", data_dir.path()) };
+        let directories = user_tool_directories(home);
+        unsafe { std::env::remove_var("ASDF_DATA_DIR") };
+        assert!(directories.contains(&data_dir.path().join("shims")));
     }
 
     #[test]
