@@ -371,6 +371,35 @@ fn watch_status_aggregates_native_coverage() {
 }
 
 #[test]
+fn git_status_failure_reports_error_and_completes_request() {
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.workspace.git.status_pending = Some(7);
+    model.workspace.git.status_expected = 1;
+    model.workspace.git.status_received = 0;
+
+    model.handle_git_status(7, Err("git unavailable".to_owned()));
+    assert!(model.status.text.contains("E: git status: git unavailable"));
+    assert!(model.workspace.git.status_pending.is_none());
+    assert_eq!(model.workspace.git.status_expected, 0);
+    assert_eq!(model.workspace.git.status_received, 0);
+}
+
+#[test]
+fn stale_git_status_generation_is_ignored() {
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.workspace.git.status_pending = Some(9);
+    model.workspace.git.status_expected = 1;
+    model.workspace.git.status_received = 0;
+    model.status.text = "keep".to_owned();
+
+    model.handle_git_status(8, Ok(std::collections::HashMap::new()));
+    assert_eq!(model.status.text, "keep");
+    assert_eq!(model.workspace.git.status_pending, Some(9));
+    assert_eq!(model.workspace.git.status_expected, 1);
+    assert_eq!(model.workspace.git.status_received, 0);
+}
+
+#[test]
 fn natural_sort_puts_directories_first_and_numbers_numerically() {
     let mut entries = vec![
         DirEntry {

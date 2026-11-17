@@ -533,6 +533,7 @@ impl Model {
                 if active {
                     self.language.lsp.config = None;
                     self.clear_lsp_ui();
+                    self.language.lsp.retry = None;
                     let retries = {
                         let retries = self.language.lsp.retries.entry(key.clone()).or_insert(0);
                         *retries += 1;
@@ -839,6 +840,76 @@ mod status_tests {
             "{}",
             model.status.text
         );
+    }
+
+    #[test]
+    fn crash_retry_budget_exhausts_and_stops_retrying() {
+        let mut model = Model::new(
+            EditorState::from_text(""),
+            Some(PathBuf::from("/ws/main.c")),
+        );
+        model.workspace.path = PathBuf::from("/ws");
+        let key = ("clangd".to_owned(), "c".to_owned(), PathBuf::from("/ws"));
+        model.language.lsp.status.insert(
+            key.clone(),
+            LspStatus::Starting {
+                root: PathBuf::from("/ws"),
+            },
+        );
+
+        for attempt in 1..=3 {
+            model.language.lsp.config = Some(key.clone());
+            model.handle_lsp_event(&key, LspEvent::Crashed("boom".to_owned()));
+            assert!(matches!(
+                model.language.lsp.status.get(&key),
+                Some(LspStatus::Restarting { attempt: current, .. }) if *current == attempt
+            ));
+            assert!(model.language.lsp.retry.is_some());
+        }
+
+        model.language.lsp.config = Some(key.clone());
+        model.handle_lsp_event(&key, LspEvent::Crashed("fatal".to_owned()));
+        assert!(matches!(
+            model.language.lsp.status.get(&key),
+            Some(LspStatus::Failed { error, .. }) if error == "fatal"
+        ));
+        assert!(model.language.lsp.retry.is_none());
+        assert!(model.status.text.contains("E: lsp crashed"));
+        assert_eq!(model.language.lsp.retries.get(&key), Some(&4));
+    }
+
+    #[test]
+    fn successful_capabilities_reset_crash_retry_budget() {
+        let mut model = Model::new(
+            EditorState::from_text(""),
+            Some(PathBuf::from("/ws/main.c")),
+        );
+        model.workspace.path = PathBuf::from("/ws");
+        let key = ("clangd".to_owned(), "c".to_owned(), PathBuf::from("/ws"));
+        model.language.lsp.config = Some(key.clone());
+        model.language.lsp.retries.insert(key.clone(), 3);
+        model.language.lsp.retry = Some((key.clone(), Instant::now()));
+        model.language.lsp.status.insert(
+            key.clone(),
+            LspStatus::Starting {
+                root: PathBuf::from("/ws"),
+            },
+        );
+
+        model.handle_lsp_event(
+            &key,
+            LspEvent::Capabilities {
+                inlay_hints: false,
+                semantic_token_types: Vec::new(),
+                server_info: None,
+            },
+        );
+        assert!(!model.language.lsp.retries.contains_key(&key));
+        assert!(model.language.lsp.retry.is_none());
+        assert!(matches!(
+            model.language.lsp.status.get(&key),
+            Some(LspStatus::Running { .. })
+        ));
     }
 
     #[test]

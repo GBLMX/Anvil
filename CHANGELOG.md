@@ -616,6 +616,10 @@ post-`0.5.0` feature line.
 - Atomic session and swap writes now remove their temporary file when write,
   sync, or rename fails. Recovery tests cover truncated session JSON and a
   failed save leaving the restored dirty buffer intact.
+- Exhausted LSP crash retries now clear the pending retry timer instead of
+  scheduling one more restart after the failure. A successful initialize
+  resets the crash budget; Git status failures and stale generations are
+  covered by tests.
 - `anvil DIR` now opens `DIR` as the workspace instead of trying to open the
   directory as a file. Explicitly opening a directory reports `is a directory`
   instead of the gateway's generic `stat unavailable`.
