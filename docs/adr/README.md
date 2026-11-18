@@ -59,6 +59,7 @@ their decision sections.
 | [0051](0051-external-editor-reference-models.md) | External editor reference models for UX and language support | Proposed |
 | [0052](0052-language-tool-setup-and-source-resolution.md) | Explicit language tool setup and per-tool source resolution | Proposed |
 | [0053](0053-settings-scopes-and-language-overlays.md) | Explicit settings scopes, language overlays, and registry completeness | Proposed |
+| [0054](0054-file-picker-query-and-index-lifecycle.md) | File picker query, ranking, and index lifecycle | Proposed |
 
 ## Numbering Rule
 
