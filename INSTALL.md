@@ -147,12 +147,13 @@ anvil setup check
 anvil setup plan
 ```
 
-`anvil setup` is read-only. `check` lists found/missing language servers;
-`plan` adds provider commands, prerequisites, and root requirements. Use
-`--json` for schema-versioned output or `--plain` for one record per line.
-`setup apply` is not implemented yet.
-Resolution follows `ANVIL_LSP_*`, `[lsp.commands]`, and `[lsp.roots]` before
-user tool directories and `PATH`.
+`anvil setup check` and `plan` are read-only. `check` lists found/missing
+language servers; `plan` adds provider commands, prerequisites, and root
+requirements. `apply` installs missing user-level providers after confirmation;
+root-requiring and manual providers are printed and blocked. Use `--json` for
+schema-versioned output or `--plain` for one record per line. Resolution
+follows `ANVIL_LSP_*`, `[lsp.commands]`, and `[lsp.roots]` before user tool
+directories and `PATH`.
 
 
 `anvil doctor` checks the complete release layout, locale, terminal color

@@ -269,7 +269,7 @@ crossterm's keyboard-enhancement query and the OSC 11 background query.
 ```text
 anvil [OPTIONS] [FILE|-]
   anvil doctor [--json] [--profile auto|dev|installed]
-  anvil setup [check|plan] [--json] [--plain] [--tool <id>]
+  anvil setup [check|plan|apply] [--json] [--plain] [--tool <id>] [--yes] [--no-input]
   anvil modules [--json]
 
   -w, --workspace <DIR>  Workspace directory; --workspace=DIR is also accepted
@@ -289,11 +289,13 @@ warnings, installed-layout sidecars are errors. `--json` emits schema version
 1 with stable check ids and remediation; required failures exit nonzero. See
 [doctor checks](docs/doctor.md).
 
-`anvil setup` is read-only: `check` reports found/missing language servers and
-`plan` prints provider commands, prerequisites, and root requirements. `--json`
-emits schema version 1; `--plain` emits one record per line.
-Resolution follows `ANVIL_LSP_*`, `[lsp.commands]`, and `[lsp.roots]` before
-user tool directories and `PATH`.
+`anvil setup check` and `plan` are read-only: `check` reports found/missing
+language servers, and `plan` adds provider commands, prerequisites, and root
+requirements. `apply` installs missing user-level providers after confirmation;
+root-requiring and manual providers are printed and blocked. Use `--json` for
+schema-versioned output or `--plain` for one record per line. Resolution
+follows `ANVIL_LSP_*`, `[lsp.commands]`, and `[lsp.roots]` before user tool
+directories and `PATH`.
 
 `anvil modules` lists the compiled-in modules in the running distribution with
 their contract range, command count, and `compiled-in` source. `--json` emits

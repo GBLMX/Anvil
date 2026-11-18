@@ -1,6 +1,12 @@
 //! Read-only language-tool setup discovery and planning.
 
-use std::{env, path::Path, path::PathBuf};
+use std::{
+    env,
+    io::{self, IsTerminal, Write},
+    path::Path,
+    path::PathBuf,
+    process::{Command, Stdio},
+};
 
 use anvil_lsp_client::find_tool_path;
 use anvil_module::language::LanguageToolingService;
@@ -41,6 +47,41 @@ impl Provider {
             Self::Cargo(package) => format!("cargo install {package} --locked"),
             Self::System(package) => system_install_command(package),
             Self::Manual(hint) => hint.to_owned(),
+        }
+    }
+
+    fn program_args(self) -> Option<(String, Vec<String>)> {
+        match self {
+            Self::Rustup(component) => Some((
+                "rustup".to_owned(),
+                vec![
+                    "component".to_owned(),
+                    "add".to_owned(),
+                    component.to_owned(),
+                ],
+            )),
+            Self::Npm(package) => {
+                let mut args = vec!["install".to_owned(), "-g".to_owned()];
+                args.extend(package.split_whitespace().map(str::to_owned));
+                Some(("npm".to_owned(), args))
+            }
+            Self::Go(package) => Some((
+                "go".to_owned(),
+                vec!["install".to_owned(), package.to_owned()],
+            )),
+            Self::Pipx(package) => Some((
+                "pipx".to_owned(),
+                vec!["install".to_owned(), package.to_owned()],
+            )),
+            Self::Cargo(package) => Some((
+                "cargo".to_owned(),
+                vec![
+                    "install".to_owned(),
+                    package.to_owned(),
+                    "--locked".to_owned(),
+                ],
+            )),
+            Self::System(_) | Self::Manual(_) => None,
         }
     }
 
@@ -103,6 +144,8 @@ pub(super) fn run_setup(
     json_output: bool,
     plain: bool,
     tool: Option<String>,
+    yes: bool,
+    no_input: bool,
     service: Option<&dyn LanguageToolingService>,
 ) -> Result<i32, RunError> {
     let cwd = env::current_dir().map_err(|error| RunError::Args(error.to_string()))?;
@@ -114,6 +157,9 @@ pub(super) fn run_setup(
                 "unknown setup tool or language: {filter}"
             )));
         }
+    }
+    if mode == SetupMode::Apply {
+        return apply_setup(&cwd, service, &statuses, json_output, plain, yes, no_input);
     }
     let found = statuses
         .iter()
@@ -136,6 +182,150 @@ pub(super) fn run_setup(
         print_plan(&statuses, found, missing, no_profile);
     } else {
         print_check(&statuses, found, missing, no_profile);
+    }
+    Ok(0)
+}
+
+fn apply_setup(
+    root: &Path,
+    service: Option<&dyn LanguageToolingService>,
+    statuses: &[LanguageStatus],
+    json_output: bool,
+    plain: bool,
+    yes: bool,
+    no_input: bool,
+) -> Result<i32, RunError> {
+    let missing: Vec<&LanguageStatus> = statuses
+        .iter()
+        .filter(|status| status.state() == "missing")
+        .collect();
+    if missing.is_empty() {
+        if json_output {
+            print_apply_json(statuses, false, &[])?;
+        } else if plain {
+            print_plain(statuses);
+        } else {
+            println!("Nothing to install.");
+        }
+        return Ok(0);
+    }
+
+    let mut blocked = Vec::new();
+    for status in &missing {
+        let Some(provider) = status.provider else {
+            blocked.push(format!("{}: no installation provider", status.name));
+            continue;
+        };
+        if provider.requires_root() {
+            blocked.push(format!(
+                "{}: requires root; run: {}",
+                status.name,
+                provider.command()
+            ));
+            continue;
+        }
+        if provider.program_args().is_none() {
+            blocked.push(format!("{}: {}", status.name, provider.command()));
+            continue;
+        }
+        for requirement in provider.requires() {
+            if find_tool_path(&[*requirement]).is_none() {
+                blocked.push(format!("{}: requires {requirement} on PATH", status.name));
+            }
+        }
+    }
+    if !blocked.is_empty() {
+        if json_output {
+            print_apply_json(statuses, false, &blocked)?;
+        } else {
+            eprintln!("Setup blocked:");
+            for reason in &blocked {
+                eprintln!("  {reason}");
+            }
+            eprintln!("No changes made.");
+        }
+        return Ok(3);
+    }
+
+    if !yes {
+        if no_input || !io::stdin().is_terminal() {
+            let reason = vec!["confirmation required; rerun with --yes".to_owned()];
+            if json_output {
+                print_apply_json(statuses, false, &reason)?;
+            } else {
+                eprintln!("Setup blocked: confirmation required; rerun with --yes.");
+            }
+            return Ok(3);
+        }
+        print!("Install {} missing language tool(s)? [y/N] ", missing.len());
+        io::stdout().flush()?;
+        let mut answer = String::new();
+        io::stdin().read_line(&mut answer)?;
+        if !matches!(answer.trim().to_ascii_lowercase().as_str(), "y" | "yes") {
+            let reason = vec!["cancelled".to_owned()];
+            if json_output {
+                print_apply_json(statuses, false, &reason)?;
+            } else {
+                println!("Cancelled.");
+            }
+            return Ok(3);
+        }
+    }
+
+    for status in missing {
+        let provider = status.provider.expect("preflight checked provider");
+        let (program, args) = provider.program_args().expect("preflight checked command");
+        let executable =
+            find_tool_path(&[program.as_str()]).unwrap_or_else(|| PathBuf::from(&program));
+        if json_output {
+            eprintln!("installing {} via {}", status.name, provider.label());
+        } else {
+            println!("Installing {} via {}...", status.name, provider.label());
+        }
+        let success = if json_output {
+            let output = Command::new(&executable)
+                .args(&args)
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .output()?;
+            if !output.status.success() {
+                eprint!("{}", String::from_utf8_lossy(&output.stderr));
+            }
+            output.status.success()
+        } else {
+            Command::new(&executable).args(&args).status()?.success()
+        };
+        if !success {
+            let errors = vec![format!("{}: installation command failed", status.name)];
+            if json_output {
+                print_apply_json(statuses, false, &errors)?;
+            } else {
+                eprintln!("E: {} installation failed", status.name);
+            }
+            return Ok(1);
+        }
+    }
+
+    let after = collect(root, service);
+    let found = after
+        .iter()
+        .filter(|status| status.state() == "found")
+        .count();
+    let missing = after
+        .iter()
+        .filter(|status| status.state() == "missing")
+        .count();
+    let no_profile = after
+        .iter()
+        .filter(|status| status.state() == "no_profile")
+        .count();
+    if json_output {
+        print_apply_json(&after, true, &[])?;
+    } else if plain {
+        print_plain(&after);
+    } else {
+        println!("Applied language-tool installation(s).");
+        print_check(&after, found, missing, no_profile);
     }
     Ok(0)
 }
@@ -303,14 +493,8 @@ fn print_plain(statuses: &[LanguageStatus]) {
     }
 }
 
-fn print_json(
-    mode: SetupMode,
-    statuses: &[LanguageStatus],
-    found: usize,
-    missing: usize,
-    no_profile: usize,
-) -> Result<(), RunError> {
-    let tools: Vec<serde_json::Value> = statuses
+fn tools_json(statuses: &[LanguageStatus]) -> Vec<serde_json::Value> {
+    statuses
         .iter()
         .map(|status| {
             let provider = status.provider;
@@ -328,7 +512,32 @@ fn print_json(
                 "requires_root": provider.is_some_and(|provider| provider.requires_root()),
             })
         })
-        .collect();
+        .collect()
+}
+
+fn counts(statuses: &[LanguageStatus]) -> (usize, usize, usize) {
+    let found = statuses
+        .iter()
+        .filter(|status| status.state() == "found")
+        .count();
+    let missing = statuses
+        .iter()
+        .filter(|status| status.state() == "missing")
+        .count();
+    let no_profile = statuses
+        .iter()
+        .filter(|status| status.state() == "no_profile")
+        .count();
+    (found, missing, no_profile)
+}
+
+fn print_json(
+    mode: SetupMode,
+    statuses: &[LanguageStatus],
+    found: usize,
+    missing: usize,
+    no_profile: usize,
+) -> Result<(), RunError> {
     let document = json!({
         "schema_version": 1,
         "mode": mode.as_str(),
@@ -337,13 +546,43 @@ fn print_json(
             "arch": env::consts::ARCH,
         },
         "ok": true,
+        "changed": false,
         "counts": {
             "found": found,
             "missing": missing,
             "no_profile": no_profile,
         },
-        "tools": tools,
+        "tools": tools_json(statuses),
         "errors": [],
+    });
+    let text = serde_json::to_string_pretty(&document)
+        .map_err(|error| RunError::Args(error.to_string()))?;
+    println!("{text}");
+    Ok(())
+}
+
+fn print_apply_json(
+    statuses: &[LanguageStatus],
+    changed: bool,
+    errors: &[String],
+) -> Result<(), RunError> {
+    let (found, missing, no_profile) = counts(statuses);
+    let document = json!({
+        "schema_version": 1,
+        "mode": "apply",
+        "platform": {
+            "os": env::consts::OS,
+            "arch": env::consts::ARCH,
+        },
+        "ok": errors.is_empty(),
+        "changed": changed,
+        "counts": {
+            "found": found,
+            "missing": missing,
+            "no_profile": no_profile,
+        },
+        "tools": tools_json(statuses),
+        "errors": errors,
     });
     let text = serde_json::to_string_pretty(&document)
         .map_err(|error| RunError::Args(error.to_string()))?;

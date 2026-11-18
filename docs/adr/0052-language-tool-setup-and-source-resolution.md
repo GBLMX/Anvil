@@ -1,7 +1,7 @@
 # ADR-0052: Explicit Language Tool Setup and Source Resolution
 
 - Status: Proposed
-- Version: 1.3.0
+- Version: 1.4.0
 - Date: 2026-11-18
 - Related: [ADR-0020](0020-content-addressed-plugin-store.md),
   [ADR-0025](0025-lsp-and-language-breadth.md),
@@ -349,10 +349,11 @@ Negative:
 
 - Release layouts now build the full official composition with every documented
   language pack; plain local builds remain standard unless `full` is selected.
-- `anvil setup`, `setup check`, and `setup plan` are implemented read-only
-  using the shared settings-aware language resolver, including the compiled
-  LaTeX/Typst tooling service in full distributions;
-- `setup apply` remains unimplemented.
+- `anvil setup` / `check` / `plan` and native `apply` are implemented using the
+  shared settings-aware resolver, including the compiled LaTeX/Typst service;
+- `apply` executes user-level native providers after confirmation and blocks
+  root-requiring or manual providers before changing anything;
+- managed downloads and persistent tool state remain phase 3.
 - `:languages` and `anvil doctor` remain read-only.
 - The `:languages` footer points at manual installation and
   `[lsp.commands]`/`[lsp.roots]`, and states that `doctor` only verifies

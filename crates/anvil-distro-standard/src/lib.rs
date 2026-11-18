@@ -14,7 +14,7 @@ anvil — a terminal editor with a selection-first Rust kernel
 Usage:
   anvil [OPTIONS] [FILE|-]
   anvil doctor [--json] [--profile auto|dev|installed]
-  anvil setup [check|plan] [--json] [--plain] [--tool <id>]
+  anvil setup [check|plan|apply] [--json] [--plain] [--tool <id>] [--yes] [--no-input]
   anvil modules [--json]
   anvil settings schema
 
@@ -304,9 +304,11 @@ where
             json,
             plain,
             tool,
+            yes,
+            no_input,
         }) => {
             let service = compose_language_tooling(distribution)?;
-            run_setup(mode, json, plain, tool, service.as_deref())
+            run_setup(mode, json, plain, tool, yes, no_input, service.as_deref())
         }
         Ok(Command::Modules { json }) => run_modules(distribution, json),
         Ok(Command::SettingsSchema) => {

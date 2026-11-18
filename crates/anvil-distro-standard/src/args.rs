@@ -12,6 +12,7 @@ use crate::doctor::DoctorProfileChoice;
 pub(super) enum SetupMode {
     Check,
     Plan,
+    Apply,
 }
 
 impl SetupMode {
@@ -19,6 +20,7 @@ impl SetupMode {
         match self {
             Self::Check => "check",
             Self::Plan => "plan",
+            Self::Apply => "apply",
         }
     }
 }
@@ -43,6 +45,8 @@ pub(super) enum Command {
         json: bool,
         plain: bool,
         tool: Option<String>,
+        yes: bool,
+        no_input: bool,
     },
     Modules {
         json: bool,
@@ -236,6 +240,8 @@ where
     let mut json = false;
     let mut plain = false;
     let mut tool = None;
+    let mut yes = false;
+    let mut no_input = false;
     while let Some(argument) = arguments.next() {
         match argument.to_str() {
             Some("check") => {
@@ -248,8 +254,15 @@ where
                     return Err("setup mode may be specified only once".to_owned());
                 }
             }
+            Some("apply") => {
+                if mode.replace(SetupMode::Apply).is_some() {
+                    return Err("setup mode may be specified only once".to_owned());
+                }
+            }
             Some("--json") => json = true,
             Some("--plain") => plain = true,
+            Some("--yes") => yes = true,
+            Some("--no-input") => no_input = true,
             Some("--tool") => {
                 let Some(value) = arguments.next() else {
                     return Err("--tool requires a tool id".to_owned());
@@ -280,6 +293,8 @@ where
         json,
         plain,
         tool,
+        yes,
+        no_input,
     })
 }
 
