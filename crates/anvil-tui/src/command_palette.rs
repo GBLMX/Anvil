@@ -70,7 +70,41 @@ impl Model {
     }
 
     pub(crate) fn open_command_history(&mut self) {
+        if !self.workspace.recent.commands.is_empty() {
+            self.open_ex_command_history();
+            return;
+        }
         self.open_command_palette_with(CommandPaletteMode::History);
+    }
+
+    fn open_ex_command_history(&mut self) {
+        let items = self
+            .workspace
+            .recent
+            .commands
+            .iter()
+            .map(|command| CommandPaletteItem {
+                id: format!("ex:{command}"),
+                label: format!("ex {command}"),
+                title: command.clone(),
+                detail: "Ex command".to_owned(),
+                group: "ex".to_owned(),
+                key: None,
+                recent: true,
+                plugin_id: None,
+                theme: None,
+            })
+            .collect();
+        self.overlays.command_palette = Some(CommandPaletteState {
+            table: SelectionTable::new(items),
+            theme_picker: theme_picker::ThemePicker::new(),
+            mode: CommandPaletteMode::History,
+        });
+        self.push_overlay(OverlayKind::CommandPalette);
+        self.refresh_command_palette();
+        self.input.pending = None;
+        self.input.leader_deadline = None;
+        self.file.dirty = true;
     }
 
     pub(crate) fn open_keybinds(&mut self) {
@@ -465,5 +499,26 @@ mod tests {
         let palette = model.overlays.command_palette.as_ref().expect("keybinds");
         assert_eq!(palette.mode, CommandPaletteMode::Keybinds);
         assert!(palette.table.items().iter().all(|item| item.key.is_some()));
+    }
+
+    #[test]
+    fn ex_command_history_prefers_persisted_commands() {
+        let mut model = Model::new(EditorState::from_text(""), None);
+        model.record_ex_command("w");
+        model.record_ex_command("s/foo/bar/g");
+
+        model.open_command_history();
+
+        let palette = model.overlays.command_palette.as_ref().expect("history");
+        assert_eq!(palette.mode, CommandPaletteMode::History);
+        assert_eq!(
+            palette
+                .table
+                .items()
+                .iter()
+                .map(|item| item.id.as_str())
+                .collect::<Vec<_>>(),
+            ["ex:s/foo/bar/g", "ex:w"]
+        );
     }
 }

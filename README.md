@@ -372,7 +372,8 @@ by path, message, source, or code, and press `Enter` to jump. `Space g` lists
 Git-changed files; filter by status or path and press `Enter` to open.
 `Space j` opens the jump list; filter and press `Enter` to navigate history.
 `Space H` opens search history; filter and press `Enter` to replay a search.
-`Space :` opens command history and `Space K` opens the keymap list.
+`Space :` opens persisted Ex command history; filter and press `Enter` to
+replay a command. `Space K` opens the keymap list.
 `Space L` opens language readiness; nothing there installs tools or edits PATH.
 Rust is always included; TypeScript/JavaScript and C/C++ grammars are
 build-time packs named `language-pack-typescript` and `language-pack-c-family`.

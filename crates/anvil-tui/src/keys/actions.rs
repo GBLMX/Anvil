@@ -164,11 +164,16 @@ pub(super) fn execute_command_palette_action(
             let selected = model.selected_command();
             model.close_command_palette();
             if let Some((id, plugin_id)) = selected {
-                model.remember_command(&id);
-                if let Some(plugin_id) = plugin_id {
-                    model.run_plugin_command(&plugin_id, &id);
+                if let Some(command) = id.strip_prefix("ex:") {
+                    model.record_ex_command(command);
+                    model.execute_command(command);
                 } else {
-                    execute_command_id(model, &id, key);
+                    model.remember_command(&id);
+                    if let Some(plugin_id) = plugin_id {
+                        model.run_plugin_command(&plugin_id, &id);
+                    } else {
+                        execute_command_id(model, &id, key);
+                    }
                 }
             }
         }

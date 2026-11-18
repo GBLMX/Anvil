@@ -17,6 +17,9 @@ post-`0.5.0` feature line.
   `Space j` and `:jumps` open it; `Enter` jumps to the selected entry.
 - Added a bounded buffer-search history with a replay picker. `Space H` and
   `:search-history` open it; `Enter` re-runs the selected search.
+- `Space :` now records Ex commands entered at the `:` prompt and persists up
+  to 50 in the recent state; palette recents remain the fallback when no Ex
+  history exists.
 - Command palette modes now expose recent-command history (`Space :`); the
   command is `:command-history`. `Space K` and `:keymaps` open a keymap list
   covering normal, leader/pending, built-in keys by overlay, and configured

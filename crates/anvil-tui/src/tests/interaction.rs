@@ -479,6 +479,24 @@ fn command_history_and_keymap_shortcuts_open_the_expected_surfaces() {
 }
 
 #[test]
+fn command_line_enter_records_ex_history() {
+    let mut model = Model::new(EditorState::from_text("alpha"), None);
+    model.start_page.welcome = false;
+    model.ui.input_mode = InputMode::CommandLine {
+        buffer: InputBuffer::default(),
+    };
+    for character in "theme anvil-dark".chars() {
+        handle_event(&mut model, key(KeyCode::Char(character)));
+    }
+    handle_event(&mut model, key(KeyCode::Enter));
+
+    assert_eq!(
+        model.workspace.recent.commands.first().map(String::as_str),
+        Some("theme anvil-dark")
+    );
+}
+
+#[test]
 fn space_shift_l_opens_language_readiness() {
     let mut model = Model::new(EditorState::from_text("alpha"), None);
     model.start_page.welcome = false;

@@ -1044,6 +1044,8 @@ pub(crate) struct RecentState {
     /// Recently opened workspaces and files, newest first.
     pub(crate) workspaces: Vec<PathBuf>,
     pub(crate) files: Vec<PathBuf>,
+    /// Recently entered Ex commands, newest first.
+    pub(crate) commands: Vec<String>,
     /// Whether recent lists are written to the state directory.
     pub(crate) persist: bool,
 }
@@ -1060,6 +1062,10 @@ impl RecentState {
 
     pub(crate) fn record_file(&mut self, path: &Path) {
         recents::push_recent(&mut self.files, path);
+    }
+
+    pub(crate) fn record_command(&mut self, command: &str) {
+        crate::recents::push_command(&mut self.commands, command);
     }
 
     pub(crate) fn save(&self) {

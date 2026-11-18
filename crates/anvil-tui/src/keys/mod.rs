@@ -633,7 +633,9 @@ fn handle_key(model: &mut Model, key: KeyPress) {
                 } else {
                     let command = buffer.take();
                     model.ui.input_mode = InputMode::Normal;
-                    model.execute_command(command.trim());
+                    let command = command.trim();
+                    model.record_ex_command(command);
+                    model.execute_command(command);
                 }
             }
             KeyCode::Left => {
