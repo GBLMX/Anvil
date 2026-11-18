@@ -9,6 +9,70 @@ use ratatui::{
 };
 
 pub(crate) const SETTINGS_ROWS: usize = settings::SETTINGS.len();
+pub(crate) const TABS: [&str; 3] = ["Editor", "Interface", "Language"];
+pub(crate) const SECTIONS: [&str; 5] = ["Editor", "Search", "LSP", "Accessibility", "Appearance"];
+
+/// Shared geometry for rendering and mouse hit-testing.
+pub(crate) struct SettingsLayout {
+    pub(crate) popup: Rect,
+    pub(crate) inner: Rect,
+    pub(crate) body: Rect,
+    pub(crate) sidebar: Rect,
+    pub(crate) content: Rect,
+}
+
+pub(crate) fn layout(area: Rect) -> Option<SettingsLayout> {
+    let popup = rect(area);
+    let inner = Rect {
+        x: popup.x + 2,
+        y: popup.y + 1,
+        width: popup.width.saturating_sub(4),
+        height: popup.height.saturating_sub(2),
+    };
+    if inner.width < 20 || inner.height < 6 {
+        return None;
+    }
+    let body = Rect {
+        y: inner.y + 2,
+        height: inner.height.saturating_sub(5),
+        ..inner
+    };
+    let sidebar_width = (inner.width / 5).clamp(18, 24);
+    let sidebar = Rect {
+        width: sidebar_width,
+        ..body
+    };
+    let content = Rect {
+        x: body.x + sidebar_width,
+        width: body.width.saturating_sub(sidebar_width),
+        ..body
+    };
+    Some(SettingsLayout {
+        popup,
+        inner,
+        body,
+        sidebar,
+        content,
+    })
+}
+
+/// Display width of one rendered tab, including its surrounding spaces.
+fn tab_width(label: &str) -> u16 {
+    unicode_width::UnicodeWidthStr::width(label) as u16 + 2
+}
+
+/// Column offset of tab `index` inside `inner`, separators included.
+pub(crate) fn tab_offset(index: usize) -> u16 {
+    TABS[..index].iter().map(|tab| tab_width(tab) + 1).sum()
+}
+
+fn first_row_with_tab(tab: &str) -> Option<usize> {
+    (0..SETTINGS_ROWS).find(|&row| SettingsOverlayState::tab(row) == tab)
+}
+
+fn first_row_with_group(group: &str) -> Option<usize> {
+    (0..SETTINGS_ROWS).find(|&row| SettingsOverlayState::group(row) == group)
+}
 
 pub(crate) fn rect(area: ratatui::layout::Rect) -> ratatui::layout::Rect {
     let width = (area.width * 9 / 10)
@@ -287,51 +351,38 @@ fn cycle_theme(choice: theme::Choice, delta: isize) -> theme::Choice {
     theme::Choice::Fixed(names[index])
 }
 
-pub(crate) fn hit(area: ratatui::layout::Rect, col: u16, row: u16) -> Option<usize> {
-    let popup = rect(area);
-    if !crate::render::rect_contains(popup, col, row) {
+pub(crate) fn hit(area: Rect, col: u16, row: u16) -> Option<usize> {
+    let layout = layout(area)?;
+    if !crate::render::rect_contains(layout.popup, col, row) {
         return None;
     }
-    let inner = ratatui::layout::Rect {
-        x: popup.x + 2,
-        y: popup.y + 1,
-        width: popup.width.saturating_sub(4),
-        height: popup.height.saturating_sub(2),
-    };
-    if inner.width < 20 || inner.height < 6 {
-        return None;
+    if row == layout.inner.y {
+        return tab_at(layout.inner.x, col);
     }
-    if row == inner.y {
-        let x = col.saturating_sub(inner.x);
-        if x < 8 {
-            return Some(0);
-        }
-        if (9..20).contains(&x) {
-            return Some(5);
-        }
-        if (21..31).contains(&x) {
-            return Some(7);
-        }
-    }
-    let body = ratatui::layout::Rect {
-        y: inner.y + 2,
-        height: inner.height.saturating_sub(4),
-        ..inner
-    };
-    let sidebar_width = (inner.width / 5).clamp(18, 24);
-    let sidebar = ratatui::layout::Rect {
-        width: sidebar_width,
-        ..body
-    };
+    let sidebar = layout.sidebar;
     if crate::render::rect_contains(sidebar, col, row)
         && col > sidebar.x
         && col < sidebar.right().saturating_sub(1)
         && row > sidebar.y
     {
         let index = usize::from(row.saturating_sub(sidebar.y).saturating_sub(1));
-        return [0usize, 5, 6, 7, 9].get(index).copied();
+        return SECTIONS
+            .get(index)
+            .and_then(|section| first_row_with_group(section));
     }
     None
+}
+
+fn tab_at(inner_x: u16, col: u16) -> Option<usize> {
+    let offset = col.saturating_sub(inner_x);
+    TABS.iter().enumerate().find_map(|(index, tab)| {
+        let start = tab_offset(index);
+        if (start..start + tab_width(tab)).contains(&offset) {
+            first_row_with_tab(tab)
+        } else {
+            None
+        }
+    })
 }
 
 /// Paints the settings page from page state alone.
@@ -346,18 +397,19 @@ pub(crate) fn render(overlay: &SettingsOverlayState, frame: &mut Frame, area: Re
         crate::render::focused_panel_block("Settings · s save · Esc cancel"),
         popup,
     );
-    let inner = Rect {
-        x: popup.x + 2,
-        y: popup.y + 1,
-        width: popup.width.saturating_sub(4),
-        height: popup.height.saturating_sub(2),
-    };
-    if inner.width < 20 || inner.height < 6 {
+    let Some(layout) = layout(area) else {
         return false;
-    }
+    };
+    let SettingsLayout {
+        inner,
+        body,
+        sidebar,
+        content,
+        ..
+    } = layout;
     let group = SettingsOverlayState::group(overlay.selected);
     let active_tab = SettingsOverlayState::tab(overlay.selected);
-    let tab_style = |name| {
+    let tab_style = |name: &str| {
         if name == active_tab {
             theme::panel()
                 .fg(theme::accent())
@@ -366,34 +418,19 @@ pub(crate) fn render(overlay: &SettingsOverlayState, frame: &mut Frame, area: Re
             theme::panel().fg(theme::dim())
         }
     };
-    let tabs = Line::from(vec![
-        Span::styled(" Editor ", tab_style("Editor")),
-        Span::styled("│", theme::panel().fg(theme::border_color())),
-        Span::styled(" Interface ", tab_style("Interface")),
-        Span::styled("│", theme::panel().fg(theme::border_color())),
-        Span::styled(" Language ", tab_style("Language")),
-    ]);
+    let mut tab_spans = Vec::new();
+    for (index, tab) in TABS.iter().enumerate() {
+        if index > 0 {
+            tab_spans.push(Span::styled("│", theme::panel().fg(theme::border_color())));
+        }
+        tab_spans.push(Span::styled(format!(" {tab} "), tab_style(tab)));
+    }
     frame.render_widget(
-        Paragraph::new(tabs).style(theme::panel()),
+        Paragraph::new(Line::from(tab_spans)).style(theme::panel()),
         Rect { height: 1, ..inner },
     );
-    let body = Rect {
-        y: inner.y + 2,
-        height: inner.height.saturating_sub(5),
-        ..inner
-    };
-    let sidebar_width = (inner.width / 5).clamp(18, 24);
-    let sidebar = Rect {
-        width: sidebar_width,
-        ..body
-    };
-    let content = Rect {
-        x: body.x + sidebar_width,
-        width: body.width.saturating_sub(sidebar_width),
-        ..body
-    };
     let mut sidebar_lines = Vec::new();
-    for name in ["Editor", "Search", "LSP", "Accessibility", "Appearance"] {
+    for name in SECTIONS {
         let style = if name == group {
             theme::selected()
         } else {

@@ -1,25 +1,115 @@
 use super::*;
 
-#[test]
-fn settings_hit_test_maps_tabs_and_sections() {
-    let area = ratatui::layout::Rect {
+fn area() -> Rect {
+    Rect {
         x: 0,
         y: 0,
         width: 100,
         height: 30,
+    }
+}
+
+fn state_at(selected: usize) -> SettingsOverlayState {
+    let defaults = Settings::default();
+    SettingsOverlayState {
+        selected,
+        original: defaults,
+        draft: defaults,
+        theme: theme::Choice::Fixed("anvil-dark"),
+        opened_theme: theme::Choice::Fixed("anvil-dark"),
+        theme_touched: false,
+        user: Default::default(),
+        inherited: defaults,
+        sources: Default::default(),
+    }
+}
+
+fn rendered(state: &SettingsOverlayState, width: u16, height: u16) -> (Vec<Vec<String>>, bool) {
+    use ratatui::{Terminal, backend::TestBackend};
+
+    let backend = TestBackend::new(width, height);
+    let mut terminal = Terminal::new(backend).expect("terminal");
+    let mut complete = false;
+    terminal
+        .draw(|frame| {
+            complete = render(state, frame, frame.area());
+        })
+        .expect("draw");
+    let buffer = terminal.backend().buffer();
+    let rows = buffer
+        .content()
+        .chunks(usize::from(width))
+        .map(|row| {
+            row.iter()
+                .map(|cell| cell.symbol().to_owned())
+                .collect::<Vec<_>>()
+        })
+        .collect();
+    (rows, complete)
+}
+
+fn text_at(row: &[String], x: u16, len: usize) -> String {
+    row[usize::from(x)..usize::from(x) + len].concat()
+}
+
+#[test]
+fn settings_hit_test_maps_tabs() {
+    let area = area();
+    let layout = layout(area).expect("layout");
+    for (index, tab) in TABS.iter().enumerate() {
+        let col = layout.inner.x + tab_offset(index) + 1;
+        let row = hit(area, col, layout.inner.y).expect(tab);
+        assert_eq!(
+            SettingsOverlayState::tab(row),
+            *tab,
+            "tab {tab} should select a row on its own tab"
+        );
+    }
+    for index in 1..TABS.len() {
+        let separator = layout.inner.x + tab_offset(index) - 1;
+        assert_eq!(
+            hit(area, separator, layout.inner.y),
+            None,
+            "tab separators are not clickable"
+        );
+    }
+    assert_eq!(hit(area, layout.inner.x, layout.inner.y + 1), None);
+}
+
+#[test]
+fn settings_hit_test_maps_sections() {
+    let area = area();
+    let layout = layout(area).expect("layout");
+    for (index, section) in SECTIONS.iter().enumerate() {
+        let col = layout.sidebar.x + 2;
+        let row = layout.sidebar.y + 1 + index as u16;
+        let hit_row = hit(area, col, row).expect(section);
+        assert_eq!(
+            SettingsOverlayState::group(hit_row),
+            *section,
+            "section {section} should select a row in its own group"
+        );
+    }
+    assert_eq!(hit(area, layout.sidebar.x + 2, layout.sidebar.y), None);
+    assert_eq!(hit(area, layout.sidebar.x, layout.sidebar.y + 1), None);
+    let empty = layout.sidebar.y + 1 + SECTIONS.len() as u16;
+    assert_eq!(hit(area, layout.sidebar.x + 2, empty), None);
+}
+
+#[test]
+fn settings_hit_test_rejects_outside_and_tiny_areas() {
+    let area = area();
+    assert_eq!(hit(area, 0, 0), None);
+    assert_eq!(hit(area, area.width - 1, area.height - 1), None);
+
+    let tiny = Rect {
+        x: 0,
+        y: 0,
+        width: 20,
+        height: 10,
     };
-    let popup = rect(area);
-    let inner_y = popup.y + 1;
-    assert_eq!(hit(area, popup.x + 4, inner_y), Some(0));
-    assert_eq!(hit(area, popup.x + 14, inner_y), Some(5));
-    assert_eq!(hit(area, popup.x + 25, inner_y), Some(7));
-    let body_y = inner_y + 2;
-    let sidebar_x = popup.x + 3;
-    assert_eq!(hit(area, sidebar_x, body_y + 1), Some(0));
-    assert_eq!(hit(area, sidebar_x, body_y + 2), Some(5));
-    assert_eq!(hit(area, sidebar_x, body_y + 3), Some(6));
-    assert_eq!(hit(area, sidebar_x, body_y + 4), Some(7));
-    assert_eq!(hit(area, sidebar_x, body_y + 5), Some(9));
+    assert!(layout(tiny).is_none());
+    assert_eq!(hit(tiny, 1, 1), None);
 }
 
 #[test]
@@ -36,16 +126,16 @@ fn settings_tabs_map_every_group() {
 }
 
 #[test]
-fn settings_tab_cycle_follows_render_order() {
+fn settings_tab_cycle_wraps_both_directions() {
     let mut state = state_at(0);
-    state.cycle_tab(false);
-    assert_eq!(state.selected, 8);
-    state.cycle_tab(false);
-    assert_eq!(state.selected, 6);
-    state.cycle_tab(false);
-    assert_eq!(state.selected, 0);
-    state.cycle_tab(true);
-    assert_eq!(state.selected, 6);
+    for expected in [8, 6, 0] {
+        state.cycle_tab(false);
+        assert_eq!(state.selected, expected);
+    }
+    for expected in [6, 8, 0] {
+        state.cycle_tab(true);
+        assert_eq!(state.selected, expected);
+    }
 }
 
 #[test]
@@ -68,106 +158,121 @@ fn theme_row_cycles_builtins_and_resets() {
 }
 
 #[test]
-fn settings_state_owns_draft_and_theme_actions() {
-    let defaults = Settings::default();
-    let mut state = SettingsOverlayState {
-        selected: 0,
-        original: defaults,
-        draft: defaults,
-        theme: theme::Choice::Fixed("anvil-dark"),
-        opened_theme: theme::Choice::Fixed("anvil-dark"),
-        theme_touched: false,
-        user: Default::default(),
-        inherited: defaults,
-        sources: Default::default(),
+fn integer_rows_clamp_and_bools_toggle() {
+    let mut state = state_at(0);
+    let settings::SettingKind::Integer { min, max } = settings::SETTINGS[0].kind else {
+        panic!("editor.scroll_margin must be an integer row");
     };
-    match state.adjust(1).expect("draft change") {
-        SettingsChange::Apply(settings) => {
-            assert_eq!(
-                settings.editor.scroll_margin,
-                defaults.editor.scroll_margin + 1
-            );
-        }
+    state.draft.editor.scroll_margin = min as usize;
+    match state.adjust(-1).expect("low clamp") {
+        SettingsChange::Apply(settings) => assert_eq!(settings.editor.scroll_margin as i64, min),
         SettingsChange::Theme(_) => panic!("expected draft change"),
     }
-    state.select(11);
-    match state.adjust(1).expect("theme change") {
-        SettingsChange::Theme(choice) => assert_ne!(choice, defaults.theme),
-        SettingsChange::Apply(_) => panic!("expected theme change"),
+    state.draft.editor.scroll_margin = max as usize;
+    match state.adjust(1).expect("high clamp") {
+        SettingsChange::Apply(settings) => assert_eq!(settings.editor.scroll_margin as i64, max),
+        SettingsChange::Theme(_) => panic!("expected draft change"),
     }
-    assert!(state.theme_touched);
-    match state.reset().expect("theme reset") {
-        SettingsChange::Theme(choice) => assert_eq!(choice, defaults.theme),
-        SettingsChange::Apply(_) => panic!("expected theme reset"),
+
+    state.select(1);
+    let before = state.draft.editor.auto_save;
+    match state.adjust(1).expect("toggle") {
+        SettingsChange::Apply(settings) => assert_ne!(settings.editor.auto_save, before),
+        SettingsChange::Theme(_) => panic!("expected draft change"),
     }
-}
-
-fn state_at(selected: usize) -> SettingsOverlayState {
-    let defaults = Settings::default();
-    SettingsOverlayState {
-        selected,
-        original: defaults,
-        draft: defaults,
-        theme: theme::Choice::Fixed("anvil-dark"),
-        opened_theme: theme::Choice::Fixed("anvil-dark"),
-        theme_touched: false,
-        user: Default::default(),
-        inherited: defaults,
-        sources: Default::default(),
-    }
-}
-
-fn rendered_text(state: &SettingsOverlayState, width: u16, height: u16) -> (String, bool) {
-    use ratatui::{Terminal, backend::TestBackend};
-
-    let backend = TestBackend::new(width, height);
-    let mut terminal = Terminal::new(backend).expect("terminal");
-    let mut complete = false;
-    terminal
-        .draw(|frame| {
-            complete = render(state, frame, frame.area());
-        })
-        .expect("draw");
-    let text = terminal
-        .backend()
-        .buffer()
-        .content()
-        .iter()
-        .map(|cell| cell.symbol())
-        .collect::<String>();
-    (text, complete)
 }
 
 #[test]
-fn settings_page_renders_from_state_alone() {
+fn reset_restores_draft_and_theme() {
+    let mut state = state_at(0);
+    let inherited = state.inherited;
+    state.adjust(3).expect("adjust");
+    assert!(state.changed(0));
+    state.reset().expect("draft reset");
+    assert_eq!(
+        state.draft.editor.scroll_margin,
+        inherited.editor.scroll_margin
+    );
+    assert!(!state.changed(0));
+
+    state.select(11);
+    state.adjust(1).expect("theme change");
+    assert!(state.theme_touched);
+    assert_ne!(state.theme, inherited.theme);
+    match state.reset().expect("theme reset") {
+        SettingsChange::Theme(choice) => assert_eq!(choice, inherited.theme),
+        SettingsChange::Apply(_) => panic!("expected theme reset"),
+    }
+    assert!(!state.theme_touched);
+    assert_eq!(state.theme, inherited.theme);
+    assert_eq!(state.draft.theme, inherited.theme);
+}
+
+#[test]
+fn update_returns_none_only_for_navigation_actions() {
+    let mut state = state_at(0);
+    assert!(state.update(SettingsAction::Select(6)).is_none());
+    assert!(state.update(SettingsAction::Move(1)).is_none());
+    assert!(state.update(SettingsAction::CycleTab(false)).is_none());
+    assert!(state.update(SettingsAction::Adjust(1)).is_some());
+    assert!(state.update(SettingsAction::Reset).is_some());
+}
+
+#[test]
+fn settings_page_places_tabs_sections_and_values() {
     let mut state = state_at(6);
     state.draft.search.case_sensitive = true;
     state.theme_touched = true;
-    let (text, complete) = rendered_text(&state, 100, 30);
-    assert!(complete);
+    let (rows, complete) = rendered(&state, 100, 30);
+    assert!(complete, "render should complete");
+    let layout = layout(area()).expect("layout");
+
+    let title = rows[usize::from(layout.popup.y)].concat();
+    assert!(
+        title.contains("Settings · s save · Esc cancel"),
+        "title missing: {title}"
+    );
+
+    let tab_row = &rows[usize::from(layout.inner.y)];
+    let tabs = " Editor │ Interface │ Language ";
+    assert_eq!(text_at(tab_row, layout.inner.x, tabs.chars().count()), tabs);
+
+    for (index, section) in SECTIONS.iter().enumerate() {
+        let row = &rows[usize::from(layout.sidebar.y + 1 + index as u16)];
+        let expected = format!("  {section}");
+        assert_eq!(
+            text_at(row, layout.sidebar.x + 1, expected.len()),
+            expected,
+            "section {section} position"
+        );
+    }
+
+    let screen: String = rows.iter().flatten().map(String::as_str).collect();
     for expected in [
-        "Settings · s save · Esc cancel",
-        "Editor",
-        "Interface",
-        "Language",
-        "Sections",
-        "Values",
         "SEARCH",
         "case_sensitive",
         "Use case-sensitive matching for `/` and project search.",
+        "* search.case_sensitive",
         "source: default",
         "↑/↓ or j/k select · ←/→ or h/l change · r reset · s save · Esc cancel",
     ] {
-        assert!(text.contains(expected), "missing {expected:?}: {text}");
+        assert!(screen.contains(expected), "missing {expected:?}");
     }
-    assert!(text.contains("* search.case_sensitive"), "{text}");
 }
 
 #[test]
 fn settings_page_stops_when_popup_is_too_small() {
-    let (text, complete) = rendered_text(&state_at(0), 20, 10);
+    let area = Rect {
+        x: 0,
+        y: 0,
+        width: 20,
+        height: 10,
+    };
+    assert!(layout(area).is_none());
+    let (rows, complete) = rendered(&state_at(0), 20, 10);
     assert!(!complete);
-    assert!(text.contains("Settings · s sa"), "{text}");
-    assert!(!text.contains("Sections"), "{text}");
-    assert!(!text.contains("editor.scroll_margin"), "{text}");
+    let screen: String = rows.iter().flatten().map(String::as_str).collect();
+    assert!(screen.contains("Settings · s sa"), "{screen}");
+    assert!(!screen.contains("Sections"), "{screen}");
+    assert!(!screen.contains("editor.scroll_margin"), "{screen}");
 }
