@@ -131,9 +131,9 @@ fn secondary_root_tree_lists_and_opens_through_owning_gateway() {
         .canonicalize()
         .expect("secondary canonical");
 
-    let (primary_session, primary_client, _primary_lsp) =
+    let (primary_session, primary_client) =
         GatewaySession::start(&primary_root).expect("primary gateway");
-    let (secondary_session, secondary_client, _secondary_lsp) =
+    let (secondary_session, secondary_client) =
         GatewaySession::start(&secondary_root).expect("secondary gateway");
     let mut model = Model::with_gateway(primary_client, primary_root.clone());
     model.workspace.gateway_session = Some(primary_session);

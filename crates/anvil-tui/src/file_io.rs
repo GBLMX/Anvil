@@ -306,6 +306,10 @@ impl Model {
             return;
         }
         self.schedule_git_status_refresh();
+        if self.workspace.last_writes.get(&path).copied() == crate::session::source_mtime_ns(&path)
+        {
+            return;
+        }
         let modified = if self.session.path.as_ref() == Some(&path) {
             self.file.modified
         } else if let Some(buffer) = self
@@ -483,6 +487,7 @@ impl Model {
                 self.file.stdin_buffer = false;
                 self.file.modified = false;
                 self.file.missing = false;
+                self.mark_self_write(&path);
                 self.workspace.git.diff_checked = None;
                 self.workspace.git.diff_due = Some(Instant::now());
                 self.sync_lsp_active();
@@ -545,6 +550,12 @@ impl Model {
         }
     }
 
+    fn mark_self_write(&mut self, path: &Path) {
+        if let Some(mtime) = crate::session::source_mtime_ns(path) {
+            self.workspace.last_writes.insert(path.to_path_buf(), mtime);
+        }
+    }
+
     pub(crate) fn save(&mut self) -> bool {
         if self.reject_read_only() {
             return false;
@@ -604,6 +615,7 @@ impl Model {
                         buffer.modified = false;
                         buffer.missing = false;
                     }
+                    self.mark_self_write(&path);
                     self.clear_conflict(&path);
                 }
                 Err(error) => {
@@ -619,6 +631,7 @@ impl Model {
                         buffer.modified = false;
                         buffer.missing = false;
                     }
+                    self.mark_self_write(&path);
                     self.clear_conflict(&path);
                 }
                 Err(error) => {

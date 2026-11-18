@@ -383,7 +383,7 @@ fn state_path(workspace: &Path) -> Result<PathBuf, String> {
     Ok(root.join("anvil/sessions").join(format!("{key}.json")))
 }
 
-fn source_mtime_ns(path: &Path) -> Option<u64> {
+pub(crate) fn source_mtime_ns(path: &Path) -> Option<u64> {
     fs::metadata(path)
         .ok()?
         .modified()

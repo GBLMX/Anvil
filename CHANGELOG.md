@@ -645,6 +645,14 @@ post-`0.5.0` feature line.
   now 664 lines.
 
 ### Fixed
+- Editor-originated saves no longer re-enter the workspace watcher as external
+  changes. The watcher ignores events whose mtime matches the just-written
+  file, so saving an externally watched buffer no longer prompts for a reload
+  or marks the buffer conflicted.
+- The initial file now opens after the primary gateway session is attached, so
+  LSP workers started by that open can connect instead of failing with
+  `lsp gateway connection unavailable`. The initial LSP connection created at
+  gateway startup is reused when available.
 - Atomic session and swap writes now remove their temporary file when write,
   sync, or rename fails. Recovery tests cover truncated session JSON and a
   failed save leaving the restored dirty buffer intact.

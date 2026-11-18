@@ -895,6 +895,25 @@ fn external_clean_change_reloads() {
 }
 
 #[test]
+fn own_save_watcher_event_is_ignored() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("file.txt");
+    fs::write(&path, "old").expect("write");
+    let mut model = Model::open(&path).expect("open");
+    model.insert_text("X");
+    assert!(model.save());
+    model.insert_text("Y");
+    assert!(model.file.modified);
+
+    model.handle_external_change(model.session.path.clone().expect("path"));
+
+    assert!(!matches!(
+        model.ui.input_mode,
+        InputMode::ConfirmReload { .. }
+    ));
+    assert_eq!(model.session.editor.text().slice(0..5), "XYold");
+}
+#[test]
 fn external_dirty_change_requires_confirmation() {
     let dir = tempfile::tempdir().expect("tempdir");
     let path = dir.path().join("file.txt");

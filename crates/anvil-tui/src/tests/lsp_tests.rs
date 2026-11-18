@@ -243,7 +243,7 @@ fn call_hierarchy_round_trip_through_gateway() {
         "fn callee() {}\nfn caller() { callee(); }\nfn main() { caller(); }\n",
     )
     .expect("main");
-    let (session, gateway, _) = crate::gateway::GatewaySession::start(&workspace).expect("gateway");
+    let (session, gateway) = crate::gateway::GatewaySession::start(&workspace).expect("gateway");
     let mut model = Model::with_gateway(gateway, workspace);
     model.workspace.gateway_session = Some(session);
     model.open_path(&main).expect("open");
@@ -308,7 +308,7 @@ fn folding_round_trip_through_gateway() {
         "fn outer() {\n    if true {\n        let x = 1;\n        println!(\"{x}\");\n    }\n}\nfn main() { outer(); }\n",
     )
     .expect("main");
-    let (session, gateway, _) = crate::gateway::GatewaySession::start(&workspace).expect("gateway");
+    let (session, gateway) = crate::gateway::GatewaySession::start(&workspace).expect("gateway");
     let mut model = Model::with_gateway(gateway, workspace);
     model.workspace.gateway_session = Some(session);
     model.open_path(&main).expect("open");
@@ -347,7 +347,7 @@ fn completion_resolve_round_trip_through_gateway() {
     .expect("manifest");
     let main = source.join("main.rs");
     fs::write(&main, "fn main() {\n    let value = 1;\n    val\n}\n").expect("main");
-    let (session, gateway, _) = crate::gateway::GatewaySession::start(&workspace).expect("gateway");
+    let (session, gateway) = crate::gateway::GatewaySession::start(&workspace).expect("gateway");
     let mut model = Model::with_gateway(gateway, workspace);
     model.workspace.gateway_session = Some(session);
     model.open_path(&main).expect("open");
@@ -402,7 +402,7 @@ fn semantic_tokens_round_trip_through_gateway() {
     .expect("manifest");
     let main = source.join("main.rs");
     fs::write(&main, "fn main() {\n    let value = 1;\n}\n").expect("main");
-    let (session, gateway, _) = crate::gateway::GatewaySession::start(&workspace).expect("gateway");
+    let (session, gateway) = crate::gateway::GatewaySession::start(&workspace).expect("gateway");
     let mut model = Model::with_gateway(gateway, workspace);
     model.workspace.gateway_session = Some(session);
     model.open_path(&main).expect("open");
@@ -454,7 +454,7 @@ fn path_completion_uses_gateway_directory_entries() {
     fs::create_dir(&src).expect("src");
     fs::write(src.join("main.rs"), "fn main() {}\n").expect("main");
     fs::write(src.join("model.rs"), "struct Model;\n").expect("model");
-    let (session, gateway, _) = crate::gateway::GatewaySession::start(&workspace).expect("gateway");
+    let (session, gateway) = crate::gateway::GatewaySession::start(&workspace).expect("gateway");
     let mut model = Model::with_gateway(gateway, workspace);
     model.session.path = Some(src.join("main.rs"));
     model.session.editor = EditorState::from_text("./mo").into();

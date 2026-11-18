@@ -42,16 +42,26 @@ impl Model {
 
     fn retain_lsp_worker(&mut self, desired: Option<&LspKey>) {
         self.language.lsp.desired = desired.cloned();
-        if self
+        let Some(active) = self
             .language
             .lsp
             .config
             .as_ref()
-            .is_some_and(|key| desired != Some(key))
-        {
-            self.language.lsp.config = None;
-            self.language.lsp.pending_sync = None;
-        }
+            .filter(|key| desired != Some(*key))
+            .cloned()
+        else {
+            return;
+        };
+        let root = self.lsp_status_root(&active);
+        self.language.lsp.workers.remove(&active);
+        self.language.lsp.retries.remove(&active);
+        self.language
+            .lsp
+            .status
+            .insert(active.clone(), LspStatus::Stopped { root });
+        self.language.inlay_hints.support.remove(&active);
+        self.language.lsp.config = None;
+        self.language.lsp.pending_sync = None;
     }
 
     pub(crate) fn stop_lsp_root(&mut self, root: &Path) {
@@ -359,24 +369,29 @@ impl Model {
             self.workspace
                 .gateway_session
                 .as_mut()
-                .and_then(|session| session.connect_lsp().ok())
+                .ok_or_else(|| "primary gateway session unavailable".to_owned())
+                .and_then(|session| session.connect_lsp())
         } else {
             self.workspace
                 .root_gateways
                 .get_mut(&root)
-                .and_then(|gateway| gateway.0.connect_lsp().ok())
+                .ok_or_else(|| format!("root gateway unavailable: {}", root.display()))
+                .and_then(|gateway| gateway.0.connect_lsp())
         };
-        let Some(client) = client else {
-            self.language.lsp.status.insert(
-                desired,
-                LspStatus::Failed {
-                    root: root.clone(),
-                    error: "lsp gateway connection unavailable".to_owned(),
-                },
-            );
-            self.status.text = "E: lsp gateway connection unavailable".to_owned();
-            self.file.dirty = true;
-            return;
+        let client = match client {
+            Ok(client) => client,
+            Err(error) => {
+                self.language.lsp.status.insert(
+                    desired,
+                    LspStatus::Failed {
+                        root: root.clone(),
+                        error: format!("lsp gateway connection: {error}"),
+                    },
+                );
+                self.status.text = format!("E: lsp gateway connection: {error}");
+                self.file.dirty = true;
+                return;
+            }
         };
         let text = self
             .session
@@ -761,7 +776,7 @@ impl Model {
             session.shutdown_gracefully(std::time::Duration::from_millis(250));
         }
         match GatewaySession::start(&self.workspace.path) {
-            Ok((session, client, _)) => {
+            Ok((session, client)) => {
                 self.workspace.gateway_session = Some(session);
                 self.workspace.gateway = Some(client);
                 self.status.text = "gateway reconnected".to_owned();

@@ -415,8 +415,7 @@ fn applies_directory_resources_through_gateway() {
     let moved = workspace.join("moved.txt");
     fs::create_dir(&old).expect("old dir");
     fs::write(old.join("file.txt"), "content").expect("nested file");
-    let (session, gateway, _lsp) =
-        crate::gateway::GatewaySession::start(&workspace).expect("gateway");
+    let (session, gateway) = crate::gateway::GatewaySession::start(&workspace).expect("gateway");
     let mut model = Model::with_gateway(gateway, workspace.clone());
     model.workspace.require_gateway = true;
 

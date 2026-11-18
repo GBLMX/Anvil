@@ -18,12 +18,13 @@ pub struct GatewaySession {
     child: Child,
     socket: Option<PathBuf>,
     lsp_token: [u8; 32],
+    initial_lsp: Option<GatewayClient>,
     stopped: bool,
 }
 
 impl GatewaySession {
     /// Start `anvil-gateway` for `workspace` and return a handshaken client.
-    pub fn start(workspace: &Path) -> Result<(Self, GatewayClient, GatewayClient), String> {
+    pub fn start(workspace: &Path) -> Result<(Self, GatewayClient), String> {
         let workspace = workspace
             .canonicalize()
             .map_err(|error| format!("workspace {}: {error}", workspace.display()))?;
@@ -77,15 +78,17 @@ impl GatewaySession {
             child,
             socket: Some(socket),
             lsp_token,
+            initial_lsp: None,
             stopped: false,
         };
         let result = (|| {
             let client = session.connect(&token)?;
             let lsp_client = session.connect(&lsp_token)?;
-            Ok((client, lsp_client))
+            session.initial_lsp = Some(lsp_client);
+            Ok(client)
         })();
         match result {
-            Ok((client, lsp_client)) => Ok((session, client, lsp_client)),
+            Ok(client) => Ok((session, client)),
             Err(error) => {
                 session.stop();
                 Err(error)
@@ -147,6 +150,7 @@ impl GatewaySession {
             child,
             socket: Some(socket),
             lsp_token: [0; 32],
+            initial_lsp: None,
             stopped: false,
         };
         let client = match session.connect(&token) {
@@ -161,6 +165,9 @@ impl GatewaySession {
 
     /// Open a fresh authenticated LSP connection.
     pub fn connect_lsp(&mut self) -> Result<GatewayClient, String> {
+        if let Some(client) = self.initial_lsp.take() {
+            return Ok(client);
+        }
         let token = self.lsp_token;
         self.connect(&token)
     }
@@ -328,6 +335,7 @@ mod tests {
                 child,
                 socket: Some(socket.clone()),
                 lsp_token: [0; 32],
+                initial_lsp: None,
                 stopped: false,
             },
             socket,

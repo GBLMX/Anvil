@@ -577,6 +577,8 @@ pub(crate) struct WorkspaceState {
     pub(crate) fuzzy_cancel: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
     /// Dirty swap files that must survive a source conflict.
     pub(crate) conflict_swaps: HashMap<PathBuf, PathBuf>,
+    /// Latest mtime written by this editor process, used to ignore own watcher events.
+    pub(crate) last_writes: HashMap<PathBuf, u64>,
     /// Paths changed by a multi-file replace whose buffer reload failed.
     pub(crate) stale_paths: HashSet<PathBuf>,
 }

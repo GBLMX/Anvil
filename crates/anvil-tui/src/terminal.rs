@@ -168,9 +168,10 @@ pub fn run_with_all_services(
     }
     theme::init_color_support();
     theme::set_background_is_light(terminal_background::query_is_light());
-    let (mut model, session) = match GatewaySession::start(&workspace) {
-        Ok((session, client, _)) => {
+    let mut model = match GatewaySession::start(&workspace) {
+        Ok((session, client)) => {
             let mut model = Model::with_gateway(client, workspace.clone());
+            model.workspace.gateway_session = Some(session);
             model.workspace.git_service = git.clone();
             model.workspace.workspace_index_service = workspace_index.clone();
             model.workspace.desktop_service = desktop.clone();
@@ -183,7 +184,7 @@ pub fn run_with_all_services(
                 model.status.text = format!("E: {error}");
                 model.file.dirty = true;
             }
-            (model, Some(session))
+            model
         }
         Err(error) => {
             let mut model = Model::new(EditorState::from_text(""), None);
@@ -196,10 +197,9 @@ pub fn run_with_all_services(
             model.workspace.require_gateway = true;
             model.status.text = format!("E: gateway unavailable: {error}");
             model.file.dirty = true;
-            (model, None)
+            model
         }
     };
-    model.workspace.gateway_session = session;
     model.set_editor_mode(editor_mode);
     if session_enabled {
         model.install_recents(crate::recents::load());

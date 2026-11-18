@@ -59,7 +59,7 @@ impl Model {
             self.status.text = format!("workspace root {}: already trusted", canonical.display());
         } else {
             match GatewaySession::start(&canonical) {
-                Ok((session, gateway, _lsp)) => {
+                Ok((session, gateway)) => {
                     self.workspace.roots.set_trusted(&canonical, true).ok();
                     self.workspace
                         .root_gateways
