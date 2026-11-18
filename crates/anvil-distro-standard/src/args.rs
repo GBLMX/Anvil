@@ -651,6 +651,8 @@ mod tests {
                 json: false,
                 plain: false,
                 tool: None,
+                yes: false,
+                no_input: false,
             }
         );
         assert_eq!(
@@ -660,6 +662,8 @@ mod tests {
                 json: true,
                 plain: false,
                 tool: Some("rust-analyzer".to_owned()),
+                yes: false,
+                no_input: false,
             }
         );
         assert_eq!(
@@ -669,6 +673,19 @@ mod tests {
                 json: false,
                 plain: true,
                 tool: None,
+                yes: false,
+                no_input: false,
+            }
+        );
+        assert_eq!(
+            parse_args(args(&["setup", "apply", "--yes", "--no-input"])).unwrap(),
+            Command::Setup {
+                mode: SetupMode::Apply,
+                json: false,
+                plain: false,
+                tool: None,
+                yes: true,
+                no_input: true,
             }
         );
     }
