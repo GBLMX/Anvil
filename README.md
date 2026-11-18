@@ -269,6 +269,7 @@ crossterm's keyboard-enhancement query and the OSC 11 background query.
 ```text
 anvil [OPTIONS] [FILE|-]
   anvil doctor [--json] [--profile auto|dev|installed]
+  anvil setup [check|plan] [--json] [--plain] [--tool <id>]
   anvil modules [--json]
 
   -w, --workspace <DIR>  Workspace directory; --workspace=DIR is also accepted
@@ -287,6 +288,10 @@ defaults to `auto` (installed layout vs cargo target); dev target sidecars are
 warnings, installed-layout sidecars are errors. `--json` emits schema version
 1 with stable check ids and remediation; required failures exit nonzero. See
 [doctor checks](docs/doctor.md).
+
+`anvil setup` is read-only: `check` reports found/missing language servers and
+`plan` prints provider commands, prerequisites, and root requirements. `--json`
+emits schema version 1; `--plain` emits one record per line.
 
 `anvil modules` lists the compiled-in modules in the running distribution with
 their contract range, command count, and `compiled-in` source. `--json` emits

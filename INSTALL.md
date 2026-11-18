@@ -143,7 +143,15 @@ export PATH="$HOME/.local/bin:$PATH"
 anvil --version
 anvil --help
 anvil doctor --profile installed
+anvil setup check
+anvil setup plan
 ```
+
+`anvil setup` is read-only. `check` lists found/missing language servers;
+`plan` adds provider commands, prerequisites, and root requirements. Use
+`--json` for schema-versioned output or `--plain` for one record per line.
+`setup apply` is not implemented yet.
+
 
 `anvil doctor` checks the complete release layout, locale, terminal color
 capabilities, runtime/config paths, Landlock, and language servers on `PATH`.

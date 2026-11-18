@@ -24,6 +24,9 @@ post-`0.5.0` feature line.
 - Added `:languages` / `Space L`, a read-only readiness page for syntax
   grammar availability, LSP profile/root markers/server lookup, formatter
   fallback, and unconfigured linter/test/debug surfaces.
+- Added read-only `anvil setup` / `setup check` / `setup plan` discovery for
+  language servers, with human, plain, and JSON output. `setup apply` remains
+  unimplemented.
 - Added build-time `language-pack-rust`, `language-pack-typescript`, and
   `language-pack-c-family` composition features; `full` includes all three.
 - Added the opt-in `official-language-web` syntax feature for TypeScript,

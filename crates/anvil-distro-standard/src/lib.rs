@@ -2,9 +2,11 @@ use std::{env, ffi::OsString, path::Path, process};
 
 mod args;
 mod doctor;
+mod setup;
 
 use args::{Command, parse_args};
 use doctor::{json_escape, run_doctor};
+use setup::run_setup;
 
 const USAGE: &str = "\
 anvil — a terminal editor with a selection-first Rust kernel
@@ -12,6 +14,7 @@ anvil — a terminal editor with a selection-first Rust kernel
 Usage:
   anvil [OPTIONS] [FILE|-]
   anvil doctor [--json] [--profile auto|dev|installed]
+  anvil setup [check|plan] [--json] [--plain] [--tool <id>]
   anvil modules [--json]
   anvil settings schema
 
@@ -296,6 +299,12 @@ where
             Ok(0)
         }
         Ok(Command::Doctor { json, profile }) => run_doctor(distribution, json, profile),
+        Ok(Command::Setup {
+            mode,
+            json,
+            plain,
+            tool,
+        }) => run_setup(mode, json, plain, tool),
         Ok(Command::Modules { json }) => run_modules(distribution, json),
         Ok(Command::SettingsSchema) => {
             let schema = anvil_tui::settings_schema();

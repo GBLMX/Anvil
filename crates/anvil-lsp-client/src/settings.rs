@@ -293,12 +293,15 @@ where
     })
 }
 
+/// Finds the first executable candidate in the shared tool search path.
+pub fn find_tool_path(candidates: &[&str]) -> Option<PathBuf> {
+    find_tool_in(candidates, &tool_search_directories())
+}
+
 fn find_tool(candidates: &[&str]) -> Option<String> {
-    let directories = tool_search_directories();
-    if let Some(path) = find_tool_in(candidates, &directories) {
-        return Some(path.to_string_lossy().into_owned());
-    }
-    candidates.first().map(|candidate| (*candidate).to_owned())
+    find_tool_path(candidates)
+        .map(|path| path.to_string_lossy().into_owned())
+        .or_else(|| candidates.first().map(|candidate| (*candidate).to_owned()))
 }
 
 fn tool_search_directories() -> Vec<PathBuf> {

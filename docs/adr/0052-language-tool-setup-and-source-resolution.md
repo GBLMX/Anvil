@@ -1,7 +1,7 @@
 # ADR-0052: Explicit Language Tool Setup and Source Resolution
 
 - Status: Proposed
-- Version: 1.2.0
+- Version: 1.3.0
 - Date: 2026-11-18
 - Related: [ADR-0020](0020-content-addressed-plugin-store.md),
   [ADR-0025](0025-lsp-and-language-breadth.md),
@@ -349,7 +349,8 @@ Negative:
 
 - Release layouts now build the full official composition with every documented
   language pack; plain local builds remain standard unless `full` is selected.
-- No `anvil setup` command exists yet.
+- `anvil setup`, `setup check`, and `setup plan` are implemented read-only;
+  `setup apply` remains unimplemented.
 - `:languages` and `anvil doctor` remain read-only.
 - The `:languages` footer points at manual installation and
   `[lsp.commands]`/`[lsp.roots]`, and states that `doctor` only verifies

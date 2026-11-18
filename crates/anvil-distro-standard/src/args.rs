@@ -8,6 +8,21 @@ use std::{
 
 use crate::doctor::DoctorProfileChoice;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum SetupMode {
+    Check,
+    Plan,
+}
+
+impl SetupMode {
+    pub(super) fn as_str(self) -> &'static str {
+        match self {
+            Self::Check => "check",
+            Self::Plan => "plan",
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub(super) enum Command {
     Run {
@@ -22,6 +37,12 @@ pub(super) enum Command {
     Doctor {
         json: bool,
         profile: DoctorProfileChoice,
+    },
+    Setup {
+        mode: SetupMode,
+        json: bool,
+        plain: bool,
+        tool: Option<String>,
     },
     Modules {
         json: bool,
@@ -41,6 +62,10 @@ where
     {
         arguments.next();
         return parse_doctor_args(arguments);
+    }
+    if arguments.peek().is_some_and(|argument| argument == "setup") {
+        arguments.next();
+        return parse_setup_args(arguments);
     }
     if arguments
         .peek()
@@ -201,6 +226,68 @@ where
         }
     }
     Ok(Command::Doctor { json, profile })
+}
+
+fn parse_setup_args<I>(mut arguments: I) -> Result<Command, String>
+where
+    I: Iterator<Item = OsString>,
+{
+    let mut mode = None;
+    let mut json = false;
+    let mut plain = false;
+    let mut tool = None;
+    while let Some(argument) = arguments.next() {
+        match argument.to_str() {
+            Some("check") => {
+                if mode.replace(SetupMode::Check).is_some() {
+                    return Err("setup mode may be specified only once".to_owned());
+                }
+            }
+            Some("plan") => {
+                if mode.replace(SetupMode::Plan).is_some() {
+                    return Err("setup mode may be specified only once".to_owned());
+                }
+            }
+            Some("--json") => json = true,
+            Some("--plain") => plain = true,
+            Some("--tool") => {
+                let Some(value) = arguments.next() else {
+                    return Err("--tool requires a tool id".to_owned());
+                };
+                set_setup_tool(&mut tool, value.to_string_lossy().into_owned())?;
+            }
+            Some(value) if value.starts_with("--tool=") => {
+                let value = &value["--tool=".len()..];
+                if value.is_empty() {
+                    return Err("--tool requires a tool id".to_owned());
+                }
+                set_setup_tool(&mut tool, value.to_owned())?;
+            }
+            Some("-h" | "--help") => return Ok(Command::Help),
+            _ => {
+                return Err(format!(
+                    "unknown setup option: {}",
+                    argument.to_string_lossy()
+                ));
+            }
+        }
+    }
+    if json && plain {
+        return Err("--json and --plain are mutually exclusive".to_owned());
+    }
+    Ok(Command::Setup {
+        mode: mode.unwrap_or(SetupMode::Check),
+        json,
+        plain,
+        tool,
+    })
+}
+
+fn set_setup_tool(tool: &mut Option<String>, value: String) -> Result<(), String> {
+    if tool.replace(value).is_some() {
+        return Err("--tool may be specified only once".to_owned());
+    }
+    Ok(())
 }
 
 fn parse_modules_args<I>(arguments: I) -> Result<Command, String>
@@ -538,6 +625,46 @@ mod tests {
             parse_args(args(&["doctor", "--help"])).unwrap(),
             Command::Help
         );
+    }
+
+    #[test]
+    fn parses_setup_modes_and_output_flags() {
+        assert_eq!(
+            parse_args(args(&["setup"])).unwrap(),
+            Command::Setup {
+                mode: SetupMode::Check,
+                json: false,
+                plain: false,
+                tool: None,
+            }
+        );
+        assert_eq!(
+            parse_args(args(&["setup", "plan", "--json", "--tool=rust-analyzer"])).unwrap(),
+            Command::Setup {
+                mode: SetupMode::Plan,
+                json: true,
+                plain: false,
+                tool: Some("rust-analyzer".to_owned()),
+            }
+        );
+        assert_eq!(
+            parse_args(args(&["setup", "check", "--plain"])).unwrap(),
+            Command::Setup {
+                mode: SetupMode::Check,
+                json: false,
+                plain: true,
+                tool: None,
+            }
+        );
+    }
+
+    #[test]
+    fn rejects_conflicting_setup_options() {
+        assert!(parse_args(args(&["setup", "--json", "--plain"])).is_err());
+        assert!(parse_args(args(&["setup", "check", "plan"])).is_err());
+        assert!(parse_args(args(&["setup", "--tool"])).is_err());
+        assert!(parse_args(args(&["setup", "--tool=a", "--tool=b"])).is_err());
+        assert!(parse_args(args(&["setup", "--wat"])).is_err());
     }
     #[test]
     fn parses_modules_json_and_rejects_unknown_options() {
