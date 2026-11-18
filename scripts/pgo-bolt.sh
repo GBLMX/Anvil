@@ -43,7 +43,7 @@ cargo_build() {
     local flags="$2"
     mapfile -t target < <(target_args)
     CARGO_TARGET_DIR="$dir" RUSTFLAGS="${BASE_RUSTFLAGS} ${flags}" \
-        cargo build --release "${target[@]}" -p anvil-distro-standard
+        cargo build --release "${target[@]}" -p anvil-distro-standard --features full
 }
 
 run_workload() {

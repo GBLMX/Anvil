@@ -56,7 +56,7 @@ Also verify:
 2. Run the release gates on Linux.
 3. Update `CHANGELOG.md` and the version fields.
 4. Check the generated TypeScript bindings.
-5. Build the standard edition and the gateway/exec-runner artifacts.
+5. Build the full official composition and the gateway/exec-runner artifacts.
 6. Create the signed/tagged release only after CI passes.
 7. Publish release notes with breaking changes, security notes, and unsupported
    platforms.
@@ -94,8 +94,9 @@ The tarball includes `install.sh`, which copies the layout and runs
 `anvil-gateway -install-bundled` when signed packages are present. The package
 public key is shipped as `share/anvil/packages/official.pub`.
 
-The standard edition and third-party distributions use the same kernel source
-boundary described in `docs/adr/0013-kernel-distribution-boundary.md`.
+The full official composition and third-party distributions use the same
+kernel source boundary described in
+[docs/adr/0013-kernel-distribution-boundary.md](docs/adr/0013-kernel-distribution-boundary.md).
 
 ## Hotfixes
 

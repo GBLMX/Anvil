@@ -38,7 +38,7 @@ Language servers are not bundled. Install the servers you want on `PATH`:
 From the repository root:
 
 ```bash
-cargo build --release -p anvil-tui -p anvil-ctl -p anvil-mcp -p anvil-plugin-host
+cargo build --release -p anvil-distro-standard -p anvil-ctl -p anvil-mcp -p anvil-plugin-host
 GOTOOLCHAIN=go1.26.11 go build -o target/release/anvil-gateway ./go/cmd/anvil-gateway
 GOTOOLCHAIN=go1.26.11 go build -o target/release/anvil-exec-runner ./go/cmd/anvil-exec-runner
 ```
@@ -60,6 +60,9 @@ Build a self-contained layout with the binaries and official plugin sources:
 ```bash
 scripts/release-layout.sh "$PWD/dist/anvil"
 ```
+
+`scripts/release-layout.sh` builds the full official composition
+(`--features full`); the layout is not a standard-only development build.
 
 The layout is:
 

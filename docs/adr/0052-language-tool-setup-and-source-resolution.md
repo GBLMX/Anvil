@@ -1,7 +1,7 @@
 # ADR-0052: Explicit Language Tool Setup and Source Resolution
 
 - Status: Proposed
-- Version: 1.1.1
+- Version: 1.2.0
 - Date: 2026-11-18
 - Related: [ADR-0020](0020-content-addressed-plugin-store.md),
   [ADR-0025](0025-lsp-and-language-breadth.md),
@@ -21,9 +21,9 @@ Anvil reports language readiness but has no setup path:
 - no `anvil setup` or `install-tools` command exists;
 - `dist/anvil/install.sh` copies binaries and plugins but has no language-tool
   options;
-- the release layout is built as `anvil-distro-standard` without `--features
-  full`, so it does not compile the TypeScript/JavaScript web grammar or the
-  C/C++ grammar by default;
+- release layouts previously used the standard composition without `--features
+  full`, so TypeScript/JavaScript and C/C++ syntax were absent; plain local
+  builds still use that standard composition;
 - `language-pack-rust` is empty because Rust syntax is always compiled;
 - `[lsp.commands]`, `[lsp.roots.<path>.<lang>] command`, and
   `ANVIL_LSP_<LANG>`/`ANVIL_LSP` already select explicit server paths;
@@ -347,8 +347,8 @@ Negative:
 
 ## Implementation status (2026-11-18)
 
-- Current release layout still builds the standard composition without the full
-  language packs.
+- Release layouts now build the full official composition with every documented
+  language pack; plain local builds remain standard unless `full` is selected.
 - No `anvil setup` command exists yet.
 - `:languages` and `anvil doctor` remain read-only.
 - The `:languages` footer points at manual installation and

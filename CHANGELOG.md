@@ -32,6 +32,8 @@ post-`0.5.0` feature line.
 - Added the opt-in `official-language-c-family` syntax feature for C and C++,
   including Markdown code fences. The `full` distribution feature includes it;
   default builds stay unchanged.
+- Release layouts now build the full official composition (`--features full`),
+  including the web and C/C++ syntax packs; plain local builds remain standard.
 - LSP workers, status, retries, and inlay-hint support are now keyed by the
   owning workspace root. Each worker opens its LSP connection through that
   root's gateway, uses the project root as cwd, and keeps `workspaceFolders`,

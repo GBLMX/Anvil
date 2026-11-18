@@ -138,6 +138,19 @@ mod tests {
         assert!(text.contains("formatter: external rust"), "{text}");
         assert!(text.contains("linter: not configured"), "{text}");
         assert!(text.contains("TypeScript"), "{text}");
+        let typescript = text
+            .split("\nTypeScript\n")
+            .nth(1)
+            .expect("typescript section");
+        #[cfg(feature = "official-language-web")]
+        assert!(typescript.contains("syntax: yes"), "{text}");
+        #[cfg(not(feature = "official-language-web"))]
+        assert!(typescript.contains("syntax: missing"), "{text}");
+        let cpp = text.split("\nC++\n").nth(1).expect("c++ section");
+        #[cfg(feature = "official-language-c-family")]
+        assert!(cpp.contains("syntax: yes"), "{text}");
+        #[cfg(not(feature = "official-language-c-family"))]
+        assert!(cpp.contains("syntax: missing"), "{text}");
         assert!(text.contains("Packs are build-time compositions"), "{text}");
         let java = text.split("\nJava\n").nth(1).expect("java section");
         assert!(java.contains("syntax: missing"), "{text}");
