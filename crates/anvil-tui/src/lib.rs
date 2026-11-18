@@ -96,6 +96,7 @@ use readonly::HELP_TEXT;
 use readonly::ReadOnlyState;
 mod settings;
 pub(crate) use anvil_tui_theme::theme;
+pub use languages::{language_probes, resolve_lsp_settings, resolve_lsp_settings_with_service};
 use settings::Settings;
 pub use settings::settings_schema;
 mod settings_ui;

@@ -292,6 +292,8 @@ warnings, installed-layout sidecars are errors. `--json` emits schema version
 `anvil setup` is read-only: `check` reports found/missing language servers and
 `plan` prints provider commands, prerequisites, and root requirements. `--json`
 emits schema version 1; `--plain` emits one record per line.
+Resolution follows `ANVIL_LSP_*`, `[lsp.commands]`, and `[lsp.roots]` before
+user tool directories and `PATH`.
 
 `anvil modules` lists the compiled-in modules in the running distribution with
 their contract range, command count, and `compiled-in` source. `--json` emits

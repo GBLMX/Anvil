@@ -1,8 +1,9 @@
 //! Read-only language-tool setup discovery and planning.
 
-use std::{env, path::PathBuf};
+use std::{env, path::Path, path::PathBuf};
 
 use anvil_lsp_client::find_tool_path;
+use anvil_module::language::LanguageToolingService;
 use serde_json::json;
 
 use crate::{RunError, args::SetupMode};
@@ -59,104 +60,42 @@ impl Provider {
     }
 }
 
-#[derive(Debug)]
-struct ToolSpec {
-    id: &'static str,
-    candidates: &'static [&'static str],
-    provider: Provider,
+struct LanguageStatus {
+    name: &'static str,
+    tool: Option<String>,
+    label: Option<String>,
+    path: Option<PathBuf>,
+    provider: Option<Provider>,
 }
 
-const TOOLS: &[ToolSpec] = &[
-    ToolSpec {
-        id: "rust-analyzer",
-        candidates: &["rust-analyzer"],
-        provider: Provider::Rustup("rust-analyzer"),
-    },
-    ToolSpec {
-        id: "gopls",
-        candidates: &["gopls"],
-        provider: Provider::Go("golang.org/x/tools/gopls@v0.23.0"),
-    },
-    ToolSpec {
-        id: "typescript-language-server",
-        candidates: &["typescript-language-server"],
-        provider: Provider::Npm("typescript-language-server@5.1.3 typescript"),
-    },
-    ToolSpec {
-        id: "vtsls",
-        candidates: &["vtsls"],
-        provider: Provider::Npm("@vtsls/language-server"),
-    },
-    ToolSpec {
-        id: "clangd",
-        candidates: &["clangd"],
-        provider: Provider::Manual("install clangd through your LLVM/clang package"),
-    },
-    ToolSpec {
-        id: "pyright",
-        candidates: &["pyright", "pyright-langserver"],
-        provider: Provider::Npm("pyright"),
-    },
-    ToolSpec {
-        id: "pylsp",
-        candidates: &["pylsp"],
-        provider: Provider::Pipx("python-lsp-server"),
-    },
-    ToolSpec {
-        id: "jdtls",
-        candidates: &["jdtls"],
-        provider: Provider::Manual("install eclipse.jdt.ls and put jdtls on PATH"),
-    },
-    ToolSpec {
-        id: "lua-language-server",
-        candidates: &["lua-language-server"],
-        provider: Provider::System("lua-language-server"),
-    },
-    ToolSpec {
-        id: "vscode-json-language-server",
-        candidates: &["vscode-json-language-server", "json-languageserver"],
-        provider: Provider::Npm("vscode-json-languageserver"),
-    },
-    ToolSpec {
-        id: "yaml-language-server",
-        candidates: &["yaml-language-server"],
-        provider: Provider::Npm("yaml-language-server"),
-    },
-    ToolSpec {
-        id: "bash-language-server",
-        candidates: &["bash-language-server"],
-        provider: Provider::Npm("bash-language-server"),
-    },
-    ToolSpec {
-        id: "marksman",
-        candidates: &["marksman"],
-        provider: Provider::Manual("install marksman from its GitHub releases"),
-    },
-    ToolSpec {
-        id: "taplo",
-        candidates: &["taplo"],
-        provider: Provider::Cargo("taplo-cli"),
-    },
-    ToolSpec {
-        id: "vscode-html-language-server",
-        candidates: &["vscode-html-language-server"],
-        provider: Provider::Npm("vscode-html-languageserver-bin"),
-    },
-    ToolSpec {
-        id: "vscode-css-language-server",
-        candidates: &["vscode-css-language-server"],
-        provider: Provider::Npm("vscode-css-languageserver-bin"),
-    },
-    ToolSpec {
-        id: "zls",
-        candidates: &["zls"],
-        provider: Provider::System("zls"),
-    },
-];
+impl LanguageStatus {
+    fn state(&self) -> &'static str {
+        match (&self.tool, &self.path) {
+            (None, _) => "no_profile",
+            (Some(_), Some(_)) => "found",
+            (Some(_), None) => "missing",
+        }
+    }
 
-struct ToolStatus {
-    spec: &'static ToolSpec,
-    path: Option<PathBuf>,
+    fn action(&self) -> &'static str {
+        if self.state() == "missing" {
+            "install"
+        } else {
+            "none"
+        }
+    }
+
+    fn matches(&self, filter: &str) -> bool {
+        self.name.eq_ignore_ascii_case(filter)
+            || self
+                .tool
+                .as_deref()
+                .is_some_and(|tool| tool.eq_ignore_ascii_case(filter))
+            || self
+                .label
+                .as_deref()
+                .is_some_and(|label| label.eq_ignore_ascii_case(filter))
+    }
 }
 
 pub(super) fn run_setup(
@@ -164,142 +103,229 @@ pub(super) fn run_setup(
     json_output: bool,
     plain: bool,
     tool: Option<String>,
+    service: Option<&dyn LanguageToolingService>,
 ) -> Result<i32, RunError> {
-    let specs = selected_specs(tool.as_deref())?;
-    let statuses: Vec<ToolStatus> = specs
-        .into_iter()
-        .map(|spec| ToolStatus {
-            spec,
-            path: find_tool_path(spec.candidates),
-        })
-        .collect();
+    let cwd = env::current_dir().map_err(|error| RunError::Args(error.to_string()))?;
+    let mut statuses = collect(&cwd, service);
+    if let Some(filter) = tool {
+        statuses.retain(|status| status.matches(&filter));
+        if statuses.is_empty() {
+            return Err(RunError::Args(format!(
+                "unknown setup tool or language: {filter}"
+            )));
+        }
+    }
     let found = statuses
         .iter()
-        .filter(|status| status.path.is_some())
+        .filter(|status| status.state() == "found")
         .count();
-    let missing = statuses.len().saturating_sub(found);
+    let missing = statuses
+        .iter()
+        .filter(|status| status.state() == "missing")
+        .count();
+    let no_profile = statuses
+        .iter()
+        .filter(|status| status.state() == "no_profile")
+        .count();
 
     if json_output {
-        print_json(mode, &statuses, found, missing)?;
+        print_json(mode, &statuses, found, missing, no_profile)?;
     } else if plain {
         print_plain(&statuses);
     } else if mode == SetupMode::Plan {
-        print_plan(&statuses, found, missing);
+        print_plan(&statuses, found, missing, no_profile);
     } else {
-        print_check(&statuses, found, missing);
+        print_check(&statuses, found, missing, no_profile);
     }
     Ok(0)
 }
 
-fn selected_specs(tool: Option<&str>) -> Result<Vec<&'static ToolSpec>, RunError> {
-    let Some(tool) = tool else {
-        return Ok(TOOLS.iter().collect());
-    };
-    TOOLS
+fn collect(root: &Path, service: Option<&dyn LanguageToolingService>) -> Vec<LanguageStatus> {
+    anvil_tui::language_probes()
         .iter()
-        .find(|spec| spec.id == tool)
-        .map(|spec| vec![spec])
-        .ok_or_else(|| RunError::Args(format!("unknown setup tool: {tool}")))
+        .map(|(name, extensions)| {
+            let extension = extensions.first().copied().unwrap_or("txt");
+            let probe = Path::new("probe").with_extension(extension);
+            let settings = anvil_tui::resolve_lsp_settings_with_service(&probe, root, service);
+            match settings {
+                Some(settings) => {
+                    let path = resolve_existing(&settings.tool);
+                    let provider = provider_for(&settings.tool, &settings.label);
+                    LanguageStatus {
+                        name,
+                        tool: Some(settings.tool),
+                        label: Some(settings.label),
+                        path,
+                        provider: Some(provider),
+                    }
+                }
+                None => LanguageStatus {
+                    name,
+                    tool: None,
+                    label: None,
+                    path: None,
+                    provider: None,
+                },
+            }
+        })
+        .collect()
 }
 
-fn print_check(statuses: &[ToolStatus], found: usize, missing: usize) {
+fn resolve_existing(tool: &str) -> Option<PathBuf> {
+    let path = Path::new(tool);
+    if path.is_absolute() || path.components().count() > 1 {
+        return path.is_file().then(|| path.to_path_buf());
+    }
+    find_tool_path(&[tool])
+}
+
+fn print_check(statuses: &[LanguageStatus], found: usize, missing: usize, no_profile: usize) {
     println!(
         "Language tools ({} / {})",
         env::consts::OS,
         env::consts::ARCH
     );
     for status in statuses {
-        match &status.path {
-            Some(path) => println!("  {:<28} found    {}", status.spec.id, path.display()),
-            None => println!("  {:<28} missing", status.spec.id),
+        match status.state() {
+            "found" => println!(
+                "  {:<28} found    {}",
+                status.name,
+                status
+                    .path
+                    .as_ref()
+                    .map(|path| path.display().to_string())
+                    .unwrap_or_default(),
+            ),
+            "missing" => println!(
+                "  {:<28} missing  {}",
+                status.name,
+                status.tool.as_deref().unwrap_or("")
+            ),
+            _ => println!("  {:<28} no profile", status.name),
         }
     }
     println!();
-    println!("Summary: {found} found, {missing} missing");
+    println!("Summary: {found} found, {missing} missing, {no_profile} no profile");
     if missing > 0 {
         println!("Run `anvil setup plan` to see installation commands.");
     }
 }
 
-fn print_plan(statuses: &[ToolStatus], found: usize, missing: usize) {
+fn print_plan(statuses: &[LanguageStatus], found: usize, missing: usize, no_profile: usize) {
     println!(
         "Language tools ({} / {})",
         env::consts::OS,
         env::consts::ARCH
     );
     for status in statuses {
-        println!("  {}", status.spec.id);
-        match &status.path {
-            Some(path) => {
+        println!("  {}", status.name);
+        match status.state() {
+            "found" => {
                 println!("    status: found");
-                println!("    path: {}", path.display());
+                println!(
+                    "    tool: {}",
+                    status
+                        .label
+                        .as_deref()
+                        .or(status.tool.as_deref())
+                        .unwrap_or("")
+                );
+                println!(
+                    "    path: {}",
+                    status
+                        .path
+                        .as_ref()
+                        .map(|path| path.display().to_string())
+                        .unwrap_or_default()
+                );
                 println!("    action: none");
             }
-            None => {
+            "missing" => {
                 println!("    status: missing");
-                println!("    provider: {}", status.spec.provider.label());
-                println!("    command: {}", status.spec.provider.command());
-                let requires = status.spec.provider.requires();
-                if !requires.is_empty() {
-                    println!("    requires: {}", requires.join(", "));
-                }
-                println!(
-                    "    requires root: {}",
-                    if status.spec.provider.requires_root() {
-                        "yes"
-                    } else {
-                        "no"
+                println!("    tool: {}", status.tool.as_deref().unwrap_or(""));
+                if let Some(provider) = status.provider {
+                    println!("    provider: {}", provider.label());
+                    println!("    command: {}", provider.command());
+                    let requires = provider.requires();
+                    if !requires.is_empty() {
+                        println!("    requires: {}", requires.join(", "));
                     }
-                );
+                    println!(
+                        "    requires root: {}",
+                        if provider.requires_root() {
+                            "yes"
+                        } else {
+                            "no"
+                        }
+                    );
+                }
+            }
+            _ => {
+                println!("    status: no profile");
+                println!("    action: none");
             }
         }
     }
     println!();
-    println!("Summary: {found} found, {missing} missing");
+    println!("Summary: {found} found, {missing} missing, {no_profile} no profile");
     println!("Nothing changed.");
 }
 
-fn print_plain(statuses: &[ToolStatus]) {
+fn print_plain(statuses: &[LanguageStatus]) {
     for status in statuses {
-        let (state, path, action) = match &status.path {
-            Some(path) => ("found", path.display().to_string(), "none"),
-            None => ("missing", String::new(), "install"),
-        };
+        let path = status
+            .path
+            .as_ref()
+            .map(|path| path.display().to_string())
+            .unwrap_or_default();
+        let provider = status
+            .provider
+            .map(|provider| provider.label())
+            .unwrap_or("none");
+        let command = status
+            .provider
+            .map(|provider| provider.command())
+            .unwrap_or_default();
         println!(
-            "id={} status={} action={} path={} provider={} requires_root={} command={}",
-            status.spec.id,
-            state,
-            action,
+            "language={} id={} status={} action={} tool={} path={} provider={} requires_root={} command={}",
+            status.name,
+            status.name.to_ascii_lowercase(),
+            status.state(),
+            status.action(),
+            status.tool.as_deref().unwrap_or(""),
             path,
-            status.spec.provider.label(),
-            status.spec.provider.requires_root(),
-            status.spec.provider.command(),
+            provider,
+            status
+                .provider
+                .is_some_and(|provider| provider.requires_root()),
+            command
         );
     }
 }
 
 fn print_json(
     mode: SetupMode,
-    statuses: &[ToolStatus],
+    statuses: &[LanguageStatus],
     found: usize,
     missing: usize,
+    no_profile: usize,
 ) -> Result<(), RunError> {
     let tools: Vec<serde_json::Value> = statuses
         .iter()
         .map(|status| {
-            let path = status
-                .path
-                .as_ref()
-                .map(|path| path.to_string_lossy().into_owned());
+            let provider = status.provider;
             json!({
-                "id": status.spec.id,
-                "status": if path.is_some() { "found" } else { "missing" },
-                "path": path,
-                "provider": status.spec.provider.label(),
-                "command": status.spec.provider.command(),
-                "requires": status.spec.provider.requires(),
-                "requires_root": status.spec.provider.requires_root(),
-                "action": if path.is_some() { "none" } else { "install" },
+                "id": status.name.to_ascii_lowercase(),
+                "language": status.name,
+                "status": status.state(),
+                "action": status.action(),
+                "tool": status.tool,
+                "label": status.label,
+                "path": status.path.as_ref().map(|path| path.to_string_lossy().into_owned()),
+                "provider": provider.map(|provider| provider.label()),
+                "command": provider.map(|provider| provider.command()),
+                "requires": provider.map(|provider| provider.requires()),
+                "requires_root": provider.is_some_and(|provider| provider.requires_root()),
             })
         })
         .collect();
@@ -314,6 +340,7 @@ fn print_json(
         "counts": {
             "found": found,
             "missing": missing,
+            "no_profile": no_profile,
         },
         "tools": tools,
         "errors": [],
@@ -322,6 +349,52 @@ fn print_json(
         .map_err(|error| RunError::Args(error.to_string()))?;
     println!("{text}");
     Ok(())
+}
+
+fn provider_for(tool: &str, label: &str) -> Provider {
+    let name = Path::new(tool)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or(tool)
+        .to_ascii_lowercase();
+    let label = label.to_ascii_lowercase();
+    if name.contains("rust-analyzer") || label.contains("rust-analyzer") {
+        Provider::Rustup("rust-analyzer")
+    } else if name.contains("gopls") || label.contains("gopls") {
+        Provider::Go("golang.org/x/tools/gopls@v0.23.0")
+    } else if name.contains("typescript-language-server") || label.contains("typescript") {
+        Provider::Npm("typescript-language-server@5.1.3 typescript")
+    } else if name.contains("vtsls") {
+        Provider::Npm("@vtsls/language-server")
+    } else if name.contains("pyright") || label.contains("pyright") {
+        Provider::Npm("pyright")
+    } else if name.contains("pylsp") || label.contains("pylsp") {
+        Provider::Pipx("python-lsp-server")
+    } else if name.contains("clangd") || label.contains("clangd") {
+        Provider::Manual("install clangd through your LLVM/clang package")
+    } else if name.contains("jdtls") || label.contains("jdtls") {
+        Provider::Manual("install eclipse.jdt.ls and put jdtls on PATH")
+    } else if name.contains("lua-language-server") {
+        Provider::System("lua-language-server")
+    } else if name.contains("json-language-server") {
+        Provider::Npm("vscode-json-languageserver")
+    } else if name.contains("yaml-language-server") {
+        Provider::Npm("yaml-language-server")
+    } else if name.contains("bash-language-server") {
+        Provider::Npm("bash-language-server")
+    } else if name.contains("marksman") {
+        Provider::Manual("install marksman from its GitHub releases")
+    } else if name.contains("taplo") {
+        Provider::Cargo("taplo-cli")
+    } else if name.contains("html-language-server") {
+        Provider::Npm("vscode-html-languageserver-bin")
+    } else if name.contains("css-language-server") {
+        Provider::Npm("vscode-css-languageserver-bin")
+    } else if name.contains("zls") {
+        Provider::System("zls")
+    } else {
+        Provider::Manual("install a compatible language server for this language")
+    }
 }
 
 fn system_install_command(package: &str) -> String {
@@ -341,23 +414,33 @@ mod tests {
     use super::*;
 
     #[test]
-    fn catalog_ids_are_unique() {
-        let mut ids: Vec<&str> = TOOLS.iter().map(|spec| spec.id).collect();
-        ids.sort_unstable();
-        ids.dedup();
-        assert_eq!(ids.len(), TOOLS.len());
+    fn providers_follow_resolved_tools() {
+        assert_eq!(
+            provider_for("rust-analyzer", "rust-analyzer").label(),
+            "rustup"
+        );
+        assert_eq!(provider_for("gopls", "gopls").label(), "go");
+        assert_eq!(
+            provider_for("typescript-language-server", "typescript language server").label(),
+            "npm"
+        );
+        assert_eq!(
+            provider_for("unknown-server", "custom server").label(),
+            "manual"
+        );
     }
 
     #[test]
-    fn filtering_rejects_unknown_tools() {
-        let error = selected_specs(Some("not-a-server")).unwrap_err();
-        assert!(error.to_string().contains("unknown setup tool"));
-    }
-
-    #[test]
-    fn known_tool_filter_returns_one_entry() {
-        let specs = selected_specs(Some("rust-analyzer")).expect("known tool");
-        assert_eq!(specs.len(), 1);
-        assert_eq!(specs[0].id, "rust-analyzer");
+    fn status_matching_accepts_language_and_tool_names() {
+        let status = LanguageStatus {
+            name: "Rust",
+            tool: Some("rust-analyzer".to_owned()),
+            label: Some("rust-analyzer".to_owned()),
+            path: None,
+            provider: Some(Provider::Rustup("rust-analyzer")),
+        };
+        assert!(status.matches("Rust"));
+        assert!(status.matches("rust-analyzer"));
+        assert!(!status.matches("gopls"));
     }
 }

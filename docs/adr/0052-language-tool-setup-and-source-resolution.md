@@ -349,8 +349,10 @@ Negative:
 
 - Release layouts now build the full official composition with every documented
   language pack; plain local builds remain standard unless `full` is selected.
-- `anvil setup`, `setup check`, and `setup plan` are implemented read-only;
-  `setup apply` remains unimplemented.
+- `anvil setup`, `setup check`, and `setup plan` are implemented read-only
+  using the shared settings-aware language resolver, including the compiled
+  LaTeX/Typst tooling service in full distributions;
+- `setup apply` remains unimplemented.
 - `:languages` and `anvil doctor` remain read-only.
 - The `:languages` footer points at manual installation and
   `[lsp.commands]`/`[lsp.roots]`, and states that `doctor` only verifies

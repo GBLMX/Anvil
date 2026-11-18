@@ -304,7 +304,10 @@ where
             json,
             plain,
             tool,
-        }) => run_setup(mode, json, plain, tool),
+        }) => {
+            let service = compose_language_tooling(distribution)?;
+            run_setup(mode, json, plain, tool, service.as_deref())
+        }
         Ok(Command::Modules { json }) => run_modules(distribution, json),
         Ok(Command::SettingsSchema) => {
             let schema = anvil_tui::settings_schema();

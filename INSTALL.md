@@ -151,6 +151,8 @@ anvil setup plan
 `plan` adds provider commands, prerequisites, and root requirements. Use
 `--json` for schema-versioned output or `--plain` for one record per line.
 `setup apply` is not implemented yet.
+Resolution follows `ANVIL_LSP_*`, `[lsp.commands]`, and `[lsp.roots]` before
+user tool directories and `PATH`.
 
 
 `anvil doctor` checks the complete release layout, locale, terminal color
