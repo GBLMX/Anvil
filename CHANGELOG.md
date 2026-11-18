@@ -653,6 +653,9 @@ post-`0.5.0` feature line.
   LSP workers started by that open can connect instead of failing with
   `lsp gateway connection unavailable`. The initial LSP connection created at
   gateway startup is reused when available.
+- Switching between workspace roots with the same language now keeps the
+  existing root's LSP worker; only tool or language changes stop the active
+  worker.
 - Atomic session and swap writes now remove their temporary file when write,
   sync, or rename fails. Recovery tests cover truncated session JSON and a
   failed save leaving the restored dirty buffer intact.

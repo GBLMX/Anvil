@@ -21,6 +21,10 @@ fn diagnostic_code(diagnostic: &anvil_lsp_client::Diagnostic) -> Option<String> 
     }
 }
 
+fn lsp_worker_replacement_required(active: &LspKey, desired: &LspKey) -> bool {
+    active.0 != desired.0 || active.1 != desired.1
+}
+
 impl Model {
     pub(crate) fn clear_lsp_ui(&mut self) {
         self.clear_lsp_requests();
@@ -42,16 +46,20 @@ impl Model {
 
     fn retain_lsp_worker(&mut self, desired: Option<&LspKey>) {
         self.language.lsp.desired = desired.cloned();
-        let Some(active) = self
-            .language
-            .lsp
-            .config
-            .as_ref()
-            .filter(|key| desired != Some(*key))
-            .cloned()
-        else {
+        let Some(active) = self.language.lsp.config.clone() else {
             return;
         };
+        if desired == Some(&active) {
+            return;
+        }
+        self.language.lsp.config = None;
+        self.language.lsp.pending_sync = None;
+        let Some(desired) = desired else {
+            return;
+        };
+        if !lsp_worker_replacement_required(&active, desired) {
+            return;
+        }
         let root = self.lsp_status_root(&active);
         self.language.lsp.workers.remove(&active);
         self.language.lsp.retries.remove(&active);
@@ -60,8 +68,6 @@ impl Model {
             .status
             .insert(active.clone(), LspStatus::Stopped { root });
         self.language.inlay_hints.support.remove(&active);
-        self.language.lsp.config = None;
-        self.language.lsp.pending_sync = None;
     }
 
     pub(crate) fn stop_lsp_root(&mut self, root: &Path) {
@@ -811,6 +817,10 @@ mod status_tests {
     use super::*;
     use crate::workspace_roots::WorkspaceRoots;
     use anvil_editor::EditorState;
+    use anvil_ipc::{GatewayClient, Listener};
+    use anvil_lsp_client::{LspConfig, LspWorker};
+    use serde_json::json;
+    use std::collections::BTreeMap;
 
     #[test]
     fn capabilities_and_crash_update_the_status_snapshot() {
@@ -1026,6 +1036,120 @@ mod status_tests {
         assert!(!model.language.lsp.retries.contains_key(&first));
         assert!(model.language.lsp.status.contains_key(&second));
         assert!(model.language.lsp.retries.contains_key(&second));
+    }
+
+    fn fake_lsp_worker(socket: &Path, root: &Path, path: &Path) -> LspWorker {
+        let client = GatewayClient::connect(socket, &[1; 32]).expect("client");
+        LspWorker::start(
+            client,
+            LspConfig {
+                tool: "clangd".to_owned(),
+                args: Vec::new(),
+                language_id: "c".to_owned(),
+                root_markers: Vec::new(),
+                initialization_options: None,
+                env: BTreeMap::new(),
+                settings: json!({}),
+            },
+            root.to_path_buf(),
+            path.to_path_buf(),
+            "int main(void) { return 0; }".to_owned(),
+        )
+        .expect("worker")
+    }
+
+    #[test]
+    fn two_roots_with_same_language_keep_the_existing_worker() {
+        let first = tempfile::tempdir().expect("first root");
+        let second = tempfile::tempdir().expect("second root");
+        let first_root = first.path().canonicalize().expect("first canonical");
+        let second_root = second.path().canonicalize().expect("second canonical");
+        let first_file = first_root.join("main.c");
+        let second_file = second_root.join("main.c");
+        std::fs::write(&first_file, "int main(void) { return 0; }").expect("first file");
+        std::fs::write(&second_file, "int main(void) { return 0; }").expect("second file");
+        let socket = first_root.join("gateway.sock");
+        std::thread::scope(|scope| {
+            let listener = Listener::bind(&socket).expect("bind");
+            scope.spawn(move || {
+                for _ in 0..2 {
+                    let mut connection = listener.accept().expect("accept");
+                    scope.spawn(move || {
+                        while let Ok(Some(frame)) = connection.recv() {
+                            let request: serde_json::Value =
+                                serde_json::from_slice(&frame).expect("request");
+                            let response = json!({
+                                "jsonrpc": "2.0",
+                                "id": request.get("id").cloned().unwrap_or(serde_json::Value::Null),
+                                "result": {"ok": true}
+                            });
+                            connection
+                                .send(&serde_json::to_vec(&response).expect("response"))
+                                .expect("send");
+                            if request["params"]["data"]["method"] == "initialize" {
+                                let notification = json!({
+                                    "jsonrpc": "2.0",
+                                    "method": "lsp.message",
+                                    "params": {"data": {
+                                        "jsonrpc": "2.0",
+                                        "id": 1,
+                                        "result": {"capabilities": {}}
+                                    }}
+                                });
+                                connection
+                                    .send(
+                                        &serde_json::to_vec(&notification)
+                                            .expect("initialization notification"),
+                                    )
+                                    .expect("send");
+                            }
+                        }
+                    });
+                }
+            });
+
+            let first_key = ("clangd".to_owned(), "c".to_owned(), first_root.clone());
+            let second_key = ("clangd".to_owned(), "c".to_owned(), second_root);
+            let mut model = Model::new(EditorState::from_text(""), Some(first_file.clone()));
+            model.workspace.path = first_root.clone();
+            model.language.lsp.workers.insert(
+                first_key.clone(),
+                fake_lsp_worker(&socket, &first_root, &first_file),
+            );
+            model.language.lsp.workers.insert(
+                second_key.clone(),
+                fake_lsp_worker(&socket, &second_key.2, &second_file),
+            );
+            model.language.lsp.config = Some(first_key.clone());
+            model.language.lsp.status.insert(
+                first_key.clone(),
+                LspStatus::Running {
+                    root: first_root.clone(),
+                    server_info: None,
+                },
+            );
+            model.language.lsp.status.insert(
+                second_key.clone(),
+                LspStatus::Running {
+                    root: second_key.2.clone(),
+                    server_info: None,
+                },
+            );
+
+            model.retain_lsp_worker(Some(&second_key));
+            assert!(model.language.lsp.workers.contains_key(&first_key));
+            assert!(model.language.lsp.workers.contains_key(&second_key));
+            assert!(model.language.lsp.config.is_none());
+
+            model.language.lsp.config = Some(second_key.clone());
+            model.retain_lsp_worker(Some(&(
+                "rust-analyzer".to_owned(),
+                "rust".to_owned(),
+                first_root,
+            )));
+            assert!(!model.language.lsp.workers.contains_key(&second_key));
+            assert!(model.language.lsp.workers.contains_key(&first_key));
+        });
     }
 
     #[test]
