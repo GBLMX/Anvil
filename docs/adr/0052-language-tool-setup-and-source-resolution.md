@@ -1,7 +1,7 @@
 # ADR-0052: Explicit Language Tool Setup and Source Resolution
 
 - Status: Proposed
-- Version: 1.5.0
+- Version: 1.5.1
 - Date: 2026-11-18
 - Related: [ADR-0020](0020-content-addressed-plugin-store.md),
   [ADR-0025](0025-lsp-and-language-breadth.md),
@@ -355,7 +355,9 @@ Negative:
   root-requiring or manual providers before changing anything;
 - successful native apply records tool provenance in
   `$XDG_DATA_HOME/anvil/tools/state.json` with a lock and atomic replacement;
-- managed downloads remain phase 3.
+- Managed downloads are deferred: no current provider lacks a native path, and
+  adding an HTTP client is a separate trust/dependency decision. Native
+  providers are the only apply path.
 - Deferred setup flags: `--profile`, `--dry-run`, `--quiet`, `--verbose`,
   `--no-color`, and `--print-path`; usage documents only implemented flags.
 - `:languages` and `anvil doctor` remain read-only.
