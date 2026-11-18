@@ -663,3 +663,25 @@ fn failed_incremental_listing_removes_stale_subtree() {
             .any(|entry| entry.path == parent)
     );
 }
+
+#[test]
+fn tree_changes_invalidate_the_root_file_cache() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let root = dir.path().to_path_buf();
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.workspace.path = root.clone();
+    model
+        .workspace
+        .file_cache
+        .insert((root.clone(), false), vec!["src/lib.rs".to_owned()]);
+
+    model.handle_tree_changed(Some(&root), Vec::new());
+
+    assert!(
+        !model
+            .workspace
+            .file_cache
+            .keys()
+            .any(|(cached_root, _)| cached_root == &root)
+    );
+}

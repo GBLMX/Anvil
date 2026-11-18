@@ -140,6 +140,10 @@ impl Model {
     }
 
     pub(crate) fn handle_tree_changed(&mut self, root: Option<&Path>, paths: Vec<PathBuf>) {
+        let changed_root = root.unwrap_or(&self.workspace.path);
+        self.workspace
+            .file_cache
+            .retain(|(cached_root, _), _| cached_root != changed_root);
         if paths.is_empty() || paths.len() > MAX_TREE_WATCH_DIRS {
             match root {
                 Some(root) => self.refresh_root_tree(root),

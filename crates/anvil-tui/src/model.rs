@@ -29,7 +29,7 @@ impl Model {
             },
             start_page: StartPageState {
                 welcome,
-                welcome_back: false,
+                ..Default::default()
             },
             edit: EditSessionState::default(),
             view: ViewState::default(),
@@ -39,8 +39,12 @@ impl Model {
                 keymap: keymap::KeymapConfig::default(),
                 settings: Settings::default(),
                 user_settings: settings::SettingsPatch::default(),
+                project_settings: settings::SettingsPatch::default(),
                 inherited_settings: Settings::default(),
                 sources: settings::SettingsSources::default(),
+                language_overlays: settings::LanguageOverlays::default(),
+                language_revision: 0,
+                buffer_settings: std::cell::RefCell::default(),
             },
             file: FileState {
                 dirty: true,
@@ -119,7 +123,10 @@ impl Model {
             settings,
             sources,
             user,
+            project,
             inherited,
+            languages,
+            warnings,
         } = loaded;
         let files = sources.layer_files();
         let ignored = sources
@@ -130,8 +137,11 @@ impl Model {
             .join(", ");
         self.apply_loaded_config(settings, keymap);
         self.config.user_settings = user;
+        self.config.project_settings = project;
         self.config.inherited_settings = inherited;
         self.config.sources = sources;
+        self.config.language_overlays = languages;
+        self.config.language_revision = self.config.language_revision.wrapping_add(1);
         self.status.text = if files.is_empty() {
             "configuration reloaded (defaults)".to_owned()
         } else {
@@ -146,6 +156,11 @@ impl Model {
         };
         if !ignored.is_empty() {
             self.status.text.push_str(&format!("; ignored {ignored}"));
+        }
+        if !warnings.is_empty() {
+            self.status
+                .text
+                .push_str(&format!("; warnings {}", warnings.join("; ")));
         }
         self.file.dirty = true;
     }

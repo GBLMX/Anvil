@@ -1,7 +1,10 @@
 # ADR-0054: File Picker Query, Ranking, and Index Lifecycle
 
-- Status: Proposed
+- Status: Accepted; implemented 2026-11-19
 - Version: 1.0.0
+- Implementation: `FileQuery` matching/ranking, cached per-root indexing,
+  generation-safe previews, syntax preview, and picker actions landed;
+  `Ctrl-s` horizontal split remains deferred by the vertical-only split model.
 - Date: 2026-11-18
 - Related: [ADR-0040](0040-helix-keymap-compatibility.md),
   [ADR-0046](0046-full-workspace-watch.md),
@@ -186,12 +189,11 @@ The fuzzy picker gets its own key hints and actions:
 |---|---|
 | `Enter` | open in the current pane |
 | `Ctrl-v` | open in a vertical split |
-| `Ctrl-s` | open in a horizontal split |
+| `Ctrl-s` | horizontal split (deferred; the split model is vertical-only) |
 | `Ctrl-t` | open in a new buffer/tab |
 | `Ctrl-h` | toggle hidden files |
 | `Ctrl-r` | recent-files mode |
 | `Ctrl-y` | copy selected path |
-| `?` or `F1` | show picker key hints |
 | `Esc` | cancel |
 
 Actions are implemented in the fuzzy picker's key path; they must not silently

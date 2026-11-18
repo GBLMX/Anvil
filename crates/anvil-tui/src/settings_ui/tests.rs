@@ -13,15 +13,23 @@ fn state_at(selected: usize) -> SettingsOverlayState {
     let defaults = Settings::default();
     SettingsOverlayState {
         selected,
+        query: String::new(),
+        querying: false,
+        filtered: (0..SETTINGS_ROWS).collect(),
         original: defaults,
         draft: defaults,
         theme: theme::Choice::Fixed("anvil-dark"),
         opened_theme: theme::Choice::Fixed("anvil-dark"),
         theme_touched: false,
         user: Default::default(),
+        project: Default::default(),
         inherited: defaults,
         sources: Default::default(),
     }
+}
+
+fn hit(area: Rect, col: u16, row: u16) -> Option<usize> {
+    super::hit(&state_at(0), area, col, row)
 }
 
 fn rendered(state: &SettingsOverlayState, width: u16, height: u16) -> (Vec<Vec<String>>, bool) {
@@ -94,6 +102,34 @@ fn settings_hit_test_maps_sections() {
     assert_eq!(hit(area, layout.sidebar.x, layout.sidebar.y + 1), None);
     let empty = layout.sidebar.y + 1 + SECTIONS.len() as u16;
     assert_eq!(hit(area, layout.sidebar.x + 2, empty), None);
+}
+
+#[test]
+fn settings_hit_test_respects_active_filter() {
+    let mut state = state_at(0);
+    state.begin_query();
+    for character in "@language".chars() {
+        state.append_query(character);
+    }
+    let area = area();
+    let layout = layout(area).expect("layout");
+    let editor = super::hit(
+        &state,
+        area,
+        layout.inner.x + tab_offset(0) + 1,
+        layout.inner.y,
+    )
+    .expect("editor tab row");
+    assert_eq!(editor, 2);
+    let interface = super::hit(
+        &state,
+        area,
+        layout.inner.x + tab_offset(1) + 1,
+        layout.inner.y,
+    );
+    assert_eq!(interface, None);
+    let search = super::hit(&state, area, layout.sidebar.x + 2, layout.sidebar.y + 1 + 1);
+    assert_eq!(search, None);
 }
 
 #[test]
@@ -219,6 +255,74 @@ fn update_returns_none_only_for_navigation_actions() {
 }
 
 #[test]
+fn query_filters_by_text_and_moves_within_filtered_rows() {
+    let mut state = state_at(0);
+    state.begin_query();
+    for character in "soft".chars() {
+        state.append_query(character);
+    }
+    assert_eq!(state.filtered, vec![2]);
+    state.move_selection(1);
+    assert_eq!(state.selected, 2);
+    assert_eq!(
+        state.update(SettingsAction::Adjust(1)).map(|_| ()),
+        Some(())
+    );
+    state.clear_query();
+    assert_eq!(state.filtered.len(), SETTINGS_ROWS);
+}
+
+#[test]
+fn language_and_explicit_filters_use_registry_metadata() {
+    let mut state = state_at(0);
+    state.begin_query();
+    for character in "@language".chars() {
+        state.append_query(character);
+    }
+    assert_eq!(state.filtered, vec![2, 3]);
+
+    state.clear_query();
+    state
+        .user
+        .set_field(settings::SettingsKey::ScrollMargin, &state.draft);
+    state.begin_query();
+    for character in "@explicit".chars() {
+        state.append_query(character);
+    }
+    assert_eq!(state.filtered, vec![0]);
+}
+
+#[test]
+fn empty_filter_cannot_adjust_or_reset_hidden_row() {
+    let mut state = state_at(0);
+    state.begin_query();
+    for character in "no-such-setting".chars() {
+        state.append_query(character);
+    }
+    assert!(state.filtered.is_empty());
+    assert!(state.adjust(1).is_none());
+    assert!(state.reset().is_none());
+    assert_eq!(state.draft, state.original);
+}
+
+#[test]
+fn rendering_shows_active_search_query() {
+    let mut state = state_at(0);
+    state.begin_query();
+    for character in "wrap".chars() {
+        state.append_query(character);
+    }
+    let (rows, complete) = rendered(&state, 100, 30);
+    assert!(complete);
+    let screen = rows
+        .iter()
+        .map(|row| row.join(""))
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(screen.contains("Search: wrap_"));
+}
+
+#[test]
 fn settings_page_places_tabs_sections_and_values() {
     let mut state = state_at(6);
     state.draft.search.case_sensitive = true;
@@ -254,7 +358,7 @@ fn settings_page_places_tabs_sections_and_values() {
         "Use case-sensitive matching for `/` and project search.",
         "* search.case_sensitive",
         "source: default",
-        "↑/↓ or j/k select · ←/→ or h/l change · r reset · s save · Esc cancel",
+        "↑/↓ or j/k select · ←/→ or h/l change · / search · r reset · s save · Esc cancel",
     ] {
         assert!(screen.contains(expected), "missing {expected:?}");
     }

@@ -434,7 +434,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
             area,
             &split.buffer,
             model.ui.focus.split,
-            model.config.settings.editor.soft_wrap,
+            model.buffer_settings().soft_wrap,
         );
     }
     render_overlays(model, frame, area);

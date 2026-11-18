@@ -415,6 +415,7 @@ fn fuzzy_selection_scrolls_into_view() {
         entries: (0..20).map(|index| format!("f{index:02}.txt")).collect(),
         filtered: (0..20).collect(),
         selected: 19,
+        truncated: false,
     });
 
     let backend = TestBackend::new(80, 12);
@@ -439,6 +440,7 @@ fn fuzzy_preview_and_icon_render_on_wide_terminals() {
         entries: vec!["src/main.rs".to_owned()],
         filtered: vec![0],
         selected: 0,
+        truncated: false,
     });
     model.overlays.preview = PreviewState {
         path: Some("src/main.rs".to_owned()),
@@ -471,6 +473,7 @@ fn fuzzy_preview_stacks_below_list_on_narrow_terminals() {
         entries: vec!["src/main.rs".to_owned()],
         filtered: vec![0],
         selected: 0,
+        truncated: false,
     });
     model.overlays.preview = PreviewState {
         path: Some("src/main.rs".to_owned()),
@@ -1082,11 +1085,14 @@ fn welcome_recent_rows_are_clickable() {
     );
     let area = model.welcome_area(80, 30);
     let recent_row = (0..30)
-        .find(|row| crate::render::welcome_recent_at(&model, 35, *row, area) == Some(0))
+        .find(|row| {
+            crate::render::welcome_hit_at(&model, 35, *row, area)
+                == Some(crate::render::WelcomeHit::File(0))
+        })
         .expect("clickable recent row");
     assert_eq!(
         crate::mouse::hit_test(&model, 35, recent_row, 80, 30),
-        crate::mouse::Target::WelcomeRecent(0)
+        crate::mouse::Target::WelcomeFile(0)
     );
     let click = crossterm::event::MouseEvent {
         kind: crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left),
@@ -1097,6 +1103,167 @@ fn welcome_recent_rows_are_clickable() {
     assert!(crate::mouse::handle_mouse(&mut model, click, 80, 30));
     assert!(!model.start_page.welcome);
     assert_eq!(model.session.path.as_deref(), Some(path.as_path()));
+}
+
+#[test]
+fn dashboard_jk_and_tab_navigate_sections() {
+    let mut model = Model::new(EditorState::from_text(""), None);
+    handle_event(&mut model, key(KeyCode::Char('j')));
+    assert_eq!(model.start_page.action_selected, 1);
+    handle_event(&mut model, key(KeyCode::Tab));
+    assert_eq!(model.start_page.focus, crate::state::StartPageFocus::Files);
+    handle_event(&mut model, key(KeyCode::BackTab));
+    assert_eq!(
+        model.start_page.focus,
+        crate::state::StartPageFocus::Actions
+    );
+    handle_event(&mut model, key(KeyCode::Enter));
+    assert!(!model.start_page.welcome);
+    assert!(model.overlays.fuzzy.is_some());
+}
+
+#[test]
+fn dashboard_space_f_opens_file_finder() {
+    let mut model = Model::new(EditorState::from_text(""), None);
+    handle_event(&mut model, key(KeyCode::Char(' ')));
+    assert!(model.start_page.pending_space);
+    handle_event(&mut model, key(KeyCode::Char('f')));
+    assert!(!model.start_page.welcome);
+    assert!(model.overlays.fuzzy.is_some());
+}
+
+#[test]
+fn dashboard_ignores_unmatched_keys() {
+    let mut model = Model::new(EditorState::from_text(""), None);
+    handle_event(&mut model, key(KeyCode::Char('x')));
+    assert!(model.start_page.welcome);
+    assert_eq!(model.session.editor.text().len_bytes(), 0);
+}
+
+#[test]
+fn dashboard_empty_states_show_actionable_hints() {
+    let model = Model::new(EditorState::from_text(""), None);
+    let backend = TestBackend::new(100, 30);
+    let mut terminal = Terminal::new(backend).expect("terminal");
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+    let rendered = terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect::<String>();
+    assert!(rendered.contains("Space f find file"), "{rendered}");
+    assert!(rendered.contains("no recent workspaces"), "{rendered}");
+}
+
+#[test]
+fn dashboard_resize_clamps_selection() {
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.start_page.file_selected = 99;
+    handle_event(&mut model, Event::Resize(80, 24));
+    assert_eq!(model.start_page.file_selected, 0);
+}
+
+#[test]
+fn dashboard_missing_recent_file_is_disabled() {
+    let workspace = tempfile::tempdir().expect("workspace");
+    let missing = workspace.path().join("missing.rs");
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.workspace.path = workspace.path().to_path_buf();
+    model.workspace.roots =
+        crate::workspace_roots::WorkspaceRoots::new(&model.workspace.path).expect("roots");
+    model.record_recent_file(&missing);
+    model.start_page.focus = crate::state::StartPageFocus::Files;
+    handle_event(&mut model, key(KeyCode::Enter));
+    assert!(model.start_page.welcome);
+    assert!(model.status.text.contains("missing file"));
+}
+
+#[test]
+fn dashboard_recent_workspaces_disambiguate_basenames() {
+    let first = tempfile::tempdir().expect("first");
+    let second = tempfile::tempdir().expect("second");
+    let first_ws = first.path().join("ws");
+    let second_ws = second.path().join("ws");
+    fs::create_dir_all(&first_ws).expect("first workspace");
+    fs::create_dir_all(&second_ws).expect("second workspace");
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.workspace.recent.workspaces = vec![first_ws.clone(), second_ws.clone()];
+    let labels = model
+        .start_recent_workspaces()
+        .into_iter()
+        .map(|workspace| workspace.label)
+        .collect::<Vec<_>>();
+    assert!(labels.iter().all(|label| label.ends_with("/ws")));
+    assert_ne!(labels[0], labels[1]);
+}
+
+#[test]
+fn dashboard_workspace_rows_mark_missing_and_untrusted() {
+    let workspace = tempfile::tempdir().expect("workspace");
+    let missing = workspace.path().join("missing");
+    let untrusted = workspace.path().join("untrusted");
+    fs::create_dir_all(&untrusted).expect("untrusted workspace");
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model
+        .workspace
+        .roots
+        .add(&untrusted, false)
+        .expect("add untrusted root");
+    model.workspace.recent.workspaces = vec![missing.clone(), untrusted.clone()];
+    let rows = model.start_recent_workspaces();
+    assert_eq!(
+        rows[0].state,
+        crate::start_page::StartWorkspaceState::Missing
+    );
+    assert_eq!(
+        rows[1].state,
+        crate::start_page::StartWorkspaceState::Untrusted
+    );
+    model.start_page.focus = crate::state::StartPageFocus::Workspaces;
+    handle_event(&mut model, key(KeyCode::Enter));
+    assert!(model.start_page.welcome);
+    assert!(model.status.text.contains("missing workspace"));
+    handle_event(&mut model, key(KeyCode::Char('j')));
+    handle_event(&mut model, key(KeyCode::Enter));
+    assert!(model.start_page.welcome);
+    assert!(model.status.text.contains("untrusted workspace"));
+}
+
+#[test]
+fn dashboard_mouse_action_activates_editor() {
+    let mut model = Model::new(EditorState::from_text(""), None);
+    let area = model.welcome_area(80, 30);
+    let (column, row) = (0..80)
+        .find_map(|column| {
+            (0..30).find_map(|row| {
+                (crate::render::welcome_hit_at(&model, column, row, area)
+                    == Some(crate::render::WelcomeHit::Action(0)))
+                .then_some((column, row))
+            })
+        })
+        .expect("action row");
+    let click = crossterm::event::MouseEvent {
+        kind: crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left),
+        column,
+        row,
+        modifiers: crossterm::event::KeyModifiers::NONE,
+    };
+    assert!(crate::mouse::handle_mouse(&mut model, click, 80, 30));
+    assert!(!model.start_page.welcome);
+    assert!(matches!(model.ui.input_mode, InputMode::Insert));
+}
+
+#[test]
+fn dashboard_continue_row_clamps_file_selection() {
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.start_page.session_available = true;
+    assert_eq!(model.start_file_rows(), 1);
+    model.start_page.file_selected = 99;
+    model.start_focus_files();
+    model.clamp_start_selection();
+    assert_eq!(model.start_page.file_selected, 0);
 }
 
 #[test]

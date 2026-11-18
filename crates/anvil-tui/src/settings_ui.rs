@@ -66,14 +66,6 @@ pub(crate) fn tab_offset(index: usize) -> u16 {
     TABS[..index].iter().map(|tab| tab_width(tab) + 1).sum()
 }
 
-fn first_row_with_tab(tab: &str) -> Option<usize> {
-    (0..SETTINGS_ROWS).find(|&row| SettingsOverlayState::tab(row) == tab)
-}
-
-fn first_row_with_group(group: &str) -> Option<usize> {
-    (0..SETTINGS_ROWS).find(|&row| SettingsOverlayState::group(row) == group)
-}
-
 pub(crate) fn rect(area: ratatui::layout::Rect) -> ratatui::layout::Rect {
     let width = (area.width * 9 / 10)
         .max(56)
@@ -92,12 +84,16 @@ pub(crate) fn rect(area: ratatui::layout::Rect) -> ratatui::layout::Rect {
 #[derive(Debug, Clone)]
 pub(crate) struct SettingsOverlayState {
     pub(crate) selected: usize,
+    pub(crate) query: String,
+    pub(crate) querying: bool,
+    pub(crate) filtered: Vec<usize>,
     pub(crate) original: Settings,
     pub(crate) draft: Settings,
     pub(crate) theme: theme::Choice,
     pub(crate) opened_theme: theme::Choice,
     pub(crate) theme_touched: bool,
     pub(crate) user: settings::SettingsPatch,
+    pub(crate) project: settings::SettingsPatch,
     pub(crate) inherited: Settings,
     pub(crate) sources: settings::SettingsSources,
 }
@@ -113,6 +109,11 @@ pub(crate) enum SettingsAction {
     CycleTab(bool),
     Adjust(isize),
     Reset,
+    BeginQuery,
+    EndQuery,
+    AppendQuery(char),
+    PopQuery,
+    ClearQuery,
 }
 
 impl SettingsOverlayState {
@@ -174,18 +175,98 @@ impl SettingsOverlayState {
         self.value(index) != Self::value_from(&self.original, index)
     }
 
+    pub(crate) fn refilter(&mut self) {
+        let query = self.query.to_lowercase();
+        let terms = query
+            .split_whitespace()
+            .filter(|term| !term.is_empty())
+            .collect::<Vec<_>>();
+        self.filtered = (0..SETTINGS_ROWS)
+            .filter(|&index| {
+                let def = &settings::SETTINGS[index];
+                let haystack = format!(
+                    "{} {} {} {}",
+                    def.path, def.label, def.description, def.group
+                )
+                .to_lowercase();
+                terms.iter().all(|term| match *term {
+                    "@modified" => self.changed(index),
+                    "@explicit" => self
+                        .project
+                        .value(def.key)
+                        .or_else(|| self.user.value(def.key))
+                        .is_some(),
+                    "@language" => def.scope() == settings::SettingScope::Language,
+                    source if source.starts_with("@source:") => {
+                        let source = &source["@source:".len()..];
+                        self.sources.label(def.key).to_lowercase().contains(source)
+                    }
+                    text => haystack.contains(text),
+                })
+            })
+            .collect();
+        if !self.filtered.contains(&self.selected) {
+            self.selected = self.filtered.first().copied().unwrap_or(0);
+        }
+    }
+
+    pub(crate) fn begin_query(&mut self) {
+        self.querying = true;
+    }
+
+    pub(crate) fn end_query(&mut self) {
+        self.querying = false;
+    }
+
+    pub(crate) fn append_query(&mut self, character: char) {
+        self.query.push(character);
+        self.refilter();
+    }
+
+    pub(crate) fn pop_query(&mut self) {
+        self.query.pop();
+        self.refilter();
+    }
+
+    pub(crate) fn clear_query(&mut self) {
+        self.query.clear();
+        self.querying = false;
+        self.refilter();
+    }
+
     pub(crate) fn select(&mut self, selected: usize) {
-        self.selected = selected.min(SETTINGS_ROWS - 1);
+        if self.filtered.contains(&selected) {
+            self.selected = selected;
+        }
     }
 
     pub(crate) fn move_selection(&mut self, delta: isize) {
-        self.selected = self
-            .selected
+        let Some(position) = self.filtered.iter().position(|row| *row == self.selected) else {
+            self.selected = self.filtered.first().copied().unwrap_or(0);
+            return;
+        };
+        let next = position
             .saturating_add_signed(delta)
-            .min(SETTINGS_ROWS - 1);
+            .min(self.filtered.len().saturating_sub(1));
+        self.selected = self.filtered[next];
+    }
+
+    pub(crate) fn display_rows(&self) -> Vec<(Option<&'static str>, usize)> {
+        let mut rows = Vec::new();
+        let mut group = "";
+        for index in &self.filtered {
+            let next = Self::group(*index);
+            if next != group {
+                group = next;
+                rows.push((Some(group), *index));
+            }
+            rows.push((None, *index));
+        }
+        rows
     }
 
     pub(crate) fn cycle_tab(&mut self, backwards: bool) {
+        self.clear_query();
         let tabs = ["Editor", "Interface", "Language"]
             .into_iter()
             .filter_map(|tab| settings::SETTINGS.iter().position(|def| def.tab == tab))
@@ -203,6 +284,9 @@ impl SettingsOverlayState {
     }
 
     pub(crate) fn adjust(&mut self, delta: isize) -> Option<SettingsChange> {
+        if self.filtered.is_empty() {
+            return None;
+        }
         let key = Self::key(self.selected);
         if key == settings::SettingsKey::Theme {
             self.theme = cycle_theme(self.theme, delta);
@@ -255,16 +339,21 @@ impl SettingsOverlayState {
         }
         self.draft = draft;
         self.user.set_field(key, &draft);
+        self.refilter();
         Some(SettingsChange::Apply(draft))
     }
 
     pub(crate) fn reset(&mut self) -> Option<SettingsChange> {
+        if self.filtered.is_empty() {
+            return None;
+        }
         let key = Self::key(self.selected);
         if key == settings::SettingsKey::Theme {
             self.draft.theme = self.inherited.theme;
             self.theme = self.inherited.theme;
             self.theme_touched = false;
             self.user.clear_field(key);
+            self.refilter();
             return Some(SettingsChange::Theme(self.theme));
         }
         match key {
@@ -304,6 +393,7 @@ impl SettingsOverlayState {
             settings::SettingsKey::Theme => unreachable!(),
         }
         self.user.clear_field(key);
+        self.refilter();
         Some(SettingsChange::Apply(self.draft))
     }
 
@@ -323,6 +413,26 @@ impl SettingsOverlayState {
             }
             SettingsAction::Adjust(delta) => self.adjust(delta),
             SettingsAction::Reset => self.reset(),
+            SettingsAction::BeginQuery => {
+                self.begin_query();
+                None
+            }
+            SettingsAction::EndQuery => {
+                self.end_query();
+                None
+            }
+            SettingsAction::AppendQuery(character) => {
+                self.append_query(character);
+                None
+            }
+            SettingsAction::PopQuery => {
+                self.pop_query();
+                None
+            }
+            SettingsAction::ClearQuery => {
+                self.clear_query();
+                None
+            }
         }
     }
 }
@@ -351,13 +461,13 @@ fn cycle_theme(choice: theme::Choice, delta: isize) -> theme::Choice {
     theme::Choice::Fixed(names[index])
 }
 
-pub(crate) fn hit(area: Rect, col: u16, row: u16) -> Option<usize> {
+pub(crate) fn hit(overlay: &SettingsOverlayState, area: Rect, col: u16, row: u16) -> Option<usize> {
     let layout = layout(area)?;
     if !crate::render::rect_contains(layout.popup, col, row) {
         return None;
     }
     if row == layout.inner.y {
-        return tab_at(layout.inner.x, col);
+        return tab_at(overlay, layout.inner.x, col);
     }
     let sidebar = layout.sidebar;
     if crate::render::rect_contains(sidebar, col, row)
@@ -366,19 +476,27 @@ pub(crate) fn hit(area: Rect, col: u16, row: u16) -> Option<usize> {
         && row > sidebar.y
     {
         let index = usize::from(row.saturating_sub(sidebar.y).saturating_sub(1));
-        return SECTIONS
-            .get(index)
-            .and_then(|section| first_row_with_group(section));
+        return SECTIONS.get(index).and_then(|section| {
+            overlay
+                .filtered
+                .iter()
+                .copied()
+                .find(|row| SettingsOverlayState::group(*row) == *section)
+        });
     }
     None
 }
 
-fn tab_at(inner_x: u16, col: u16) -> Option<usize> {
+fn tab_at(overlay: &SettingsOverlayState, inner_x: u16, col: u16) -> Option<usize> {
     let offset = col.saturating_sub(inner_x);
     TABS.iter().enumerate().find_map(|(index, tab)| {
         let start = tab_offset(index);
         if (start..start + tab_width(tab)).contains(&offset) {
-            first_row_with_tab(tab)
+            overlay
+                .filtered
+                .iter()
+                .copied()
+                .find(|row| SettingsOverlayState::tab(*row) == *tab)
         } else {
             None
         }
@@ -429,6 +547,28 @@ pub(crate) fn render(overlay: &SettingsOverlayState, frame: &mut Frame, area: Re
         Paragraph::new(Line::from(tab_spans)).style(theme::panel()),
         Rect { height: 1, ..inner },
     );
+    let query_line = if overlay.querying {
+        format!("Search: {}_", overlay.query)
+    } else if overlay.query.is_empty() {
+        "Search: /".to_owned()
+    } else {
+        format!("Search: {}", overlay.query)
+    };
+    frame.render_widget(
+        Paragraph::new(Line::styled(
+            query_line,
+            theme::panel().fg(if overlay.querying {
+                theme::accent()
+            } else {
+                theme::muted()
+            }),
+        )),
+        Rect {
+            y: inner.y + 1,
+            height: 1,
+            ..inner
+        },
+    );
     let mut sidebar_lines = Vec::new();
     for name in SECTIONS {
         let style = if name == group {
@@ -444,17 +584,17 @@ pub(crate) fn render(overlay: &SettingsOverlayState, frame: &mut Frame, area: Re
             .block(crate::render::panel_block("Sections")),
         sidebar,
     );
+    let display_rows = overlay.display_rows();
     let mut lines = Vec::new();
-    let mut rendered_group = "";
-    for row in 0..SETTINGS_ROWS {
-        let next = SettingsOverlayState::group(row);
-        if next != rendered_group {
-            rendered_group = next;
+    for (header, row) in &display_rows {
+        if let Some(header) = header {
             lines.push(Line::styled(
-                rendered_group.to_ascii_uppercase(),
+                header.to_ascii_uppercase(),
                 theme::panel().fg(theme::dim()).add_modifier(Modifier::BOLD),
             ));
+            continue;
         }
+        let row = *row;
         let marker = if overlay.changed(row) { "*" } else { " " };
         let label = SettingsOverlayState::label(row);
         let value = overlay.value(row);
@@ -468,16 +608,35 @@ pub(crate) fn render(overlay: &SettingsOverlayState, frame: &mut Frame, area: Re
         } else {
             theme::panel().fg(theme::warning())
         };
+        let explicit = if overlay
+            .project
+            .value(SettingsOverlayState::key(row))
+            .or_else(|| overlay.user.value(SettingsOverlayState::key(row)))
+            .is_some()
+        {
+            " *explicit"
+        } else {
+            ""
+        };
         lines.push(Line::from(vec![
             Span::styled(format!("{marker} {label:<27} "), style),
             Span::styled(value, value_style),
+            Span::styled(explicit, theme::panel().fg(theme::muted())),
         ]));
     }
+    if lines.is_empty() {
+        lines.push(Line::styled(
+            "no matching settings",
+            theme::panel().fg(theme::muted()),
+        ));
+    }
+    let selected_row = display_rows
+        .iter()
+        .position(|(header, row)| header.is_none() && *row == overlay.selected)
+        .unwrap_or(0);
     let visible = body.height.saturating_sub(2) as usize;
-    let start = overlay
-        .selected
-        .saturating_add(SETTINGS_ROWS / 2)
-        .saturating_sub(visible)
+    let start = selected_row
+        .saturating_sub(visible / 2)
         .min(lines.len().saturating_sub(visible));
     frame.render_widget(
         Paragraph::new(
@@ -498,7 +657,7 @@ pub(crate) fn render(overlay: &SettingsOverlayState, frame: &mut Frame, area: Re
     };
     frame.render_widget(
         Paragraph::new(Line::styled(
-            "↑/↓ or j/k select · ←/→ or h/l change · r reset · s save · Esc cancel",
+            "↑/↓ or j/k select · ←/→ or h/l change · / search · r reset · s save · Esc cancel",
             theme::panel().fg(theme::dim()),
         )),
         keys,
@@ -549,12 +708,16 @@ impl Model {
         let active_theme = theme::choice();
         self.overlays.settings_overlay = Some(SettingsOverlayState {
             selected: 0,
+            query: String::new(),
+            querying: false,
+            filtered: (0..SETTINGS_ROWS).collect(),
             original: self.config.settings,
             draft: self.config.settings,
             theme: active_theme,
             opened_theme: active_theme,
             theme_touched: false,
             user: self.config.user_settings.clone(),
+            project: self.config.project_settings.clone(),
             inherited: self.config.inherited_settings,
             sources: self.config.sources.clone(),
         });
@@ -578,6 +741,32 @@ impl Model {
             overlay.update(SettingsAction::Move(delta));
             self.file.dirty = true;
         }
+    }
+    fn update_settings_query(&mut self, action: SettingsAction) {
+        if let Some(overlay) = self.overlays.settings_overlay.as_mut() {
+            overlay.update(action);
+            self.file.dirty = true;
+        }
+    }
+
+    pub(crate) fn begin_settings_query(&mut self) {
+        self.update_settings_query(SettingsAction::BeginQuery);
+    }
+
+    pub(crate) fn end_settings_query(&mut self) {
+        self.update_settings_query(SettingsAction::EndQuery);
+    }
+
+    pub(crate) fn append_settings_query(&mut self, character: char) {
+        self.update_settings_query(SettingsAction::AppendQuery(character));
+    }
+
+    pub(crate) fn pop_settings_query(&mut self) {
+        self.update_settings_query(SettingsAction::PopQuery);
+    }
+
+    pub(crate) fn clear_settings_query(&mut self) {
+        self.update_settings_query(SettingsAction::ClearQuery);
     }
 
     pub(crate) fn adjust_settings(&mut self, delta: isize) {
@@ -631,6 +820,7 @@ impl Model {
                 self.reload_config();
                 let reload_status = self.status.text.clone();
                 overlay.user = self.config.user_settings.clone();
+                overlay.project = self.config.project_settings.clone();
                 overlay.inherited = self.config.inherited_settings;
                 overlay.sources = self.config.sources.clone();
                 overlay.original = self.config.settings;
@@ -638,6 +828,7 @@ impl Model {
                 overlay.theme = theme::choice();
                 overlay.opened_theme = overlay.theme;
                 overlay.theme_touched = false;
+                overlay.refilter();
                 self.overlays.settings_overlay = Some(overlay);
                 self.status.text = format!("settings saved: {}; {reload_status}", path.display());
             }

@@ -110,6 +110,7 @@ fn named_register_yank_and_put() {
 #[test]
 fn unknown_macro_steps_surface_an_error() {
     let mut model = Model::new(EditorState::from_text(""), None);
+    model.start_page.welcome = false;
     model.session.editor.set_macro(
         'a',
         vec![anvil_editor::MacroStep {
@@ -125,6 +126,7 @@ fn unknown_macro_steps_surface_an_error() {
 #[test]
 fn macro_records_and_replays() {
     let mut model = Model::new(EditorState::from_text(""), None);
+    model.start_page.welcome = false;
     for code in [
         KeyCode::Char('q'),
         KeyCode::Char('a'),
@@ -1017,6 +1019,7 @@ fn soft_wrap_preserves_scroll_margin() {
 #[test]
 fn auto_pairs_insert_skip_and_backspace() {
     let mut model = Model::new(EditorState::from_text(""), None);
+    model.start_page.welcome = false;
     model.ui.input_mode = InputMode::Insert;
     handle_event(&mut model, key(KeyCode::Char('(')));
     assert_eq!(model.session.editor.text().slice(0..2), "()");
@@ -1030,6 +1033,7 @@ fn auto_pairs_insert_skip_and_backspace() {
     assert_eq!(model.session.editor.text().len_bytes(), 0);
 
     let mut pair = Model::new(EditorState::from_text(""), None);
+    pair.start_page.welcome = false;
     pair.ui.input_mode = InputMode::Insert;
     handle_event(&mut pair, key(KeyCode::Char('(')));
     handle_event(&mut pair, key(KeyCode::Backspace));

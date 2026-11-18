@@ -76,7 +76,12 @@ pub(crate) fn handle_event(model: &mut Model, event: Event) {
             model.auto_save_before_focus_change();
             model.file.dirty = true;
         }
-        Event::Resize(_, _) => model.file.dirty = true,
+        Event::Resize(_, _) => {
+            if model.start_page.welcome {
+                model.clamp_start_selection();
+            }
+            model.file.dirty = true;
+        }
         _ => {}
     }
     model.drain_effects();
@@ -165,22 +170,50 @@ fn handle_key(model: &mut Model, key: KeyPress) {
     }
 
     if model.start_page.welcome {
-        if key.code == KeyCode::Esc {
-            model.start_page.welcome = false;
+        if model.start_page.pending_space {
+            model.start_page.pending_space = false;
+            let action = match key.code {
+                KeyCode::Char('f') => Some(crate::start_page::StartAction::FindFile),
+                KeyCode::Char('e') => Some(crate::start_page::StartAction::FileTree),
+                KeyCode::Char('b') => Some(crate::start_page::StartAction::Buffers),
+                KeyCode::Char('p') => Some(crate::start_page::StartAction::Palette),
+                _ => None,
+            };
+            if let Some(action) = action {
+                model.activate_start_action(model.start_action_index(action));
+            }
+            return;
+        }
+        if key.code == KeyCode::Char(' ') {
+            model.start_page.pending_space = true;
             model.file.dirty = true;
             return;
         }
-        if key.code == KeyCode::Char('?') {
-            model.show_help();
+        match key.code {
+            KeyCode::Esc => model.close_start_page(),
+            KeyCode::Tab => model.start_focus_next(),
+            KeyCode::BackTab => model.start_focus_previous(),
+            KeyCode::Char('j') | KeyCode::Down => model.move_start_selection(1),
+            KeyCode::Char('k') | KeyCode::Up => model.move_start_selection(-1),
+            KeyCode::Enter => model.activate_start_selection(),
+            KeyCode::Char('?') => {
+                model.show_help();
+            }
+            KeyCode::Char('r') => {
+                model.close_start_page();
+                model.open_recent_files();
+            }
+            KeyCode::Char('w') => model.start_focus_workspaces(),
+            KeyCode::Char('i') => {
+                model.close_start_page();
+                model.insert_here();
+            }
+            KeyCode::Char(':') => model.close_start_page(),
+            _ => {}
+        }
+        if key.code != KeyCode::Char(':') {
             return;
         }
-        if key.code == KeyCode::Char('r') {
-            model.start_page.welcome = false;
-            model.open_recent_files();
-            return;
-        }
-        model.start_page.welcome = false;
-        model.file.dirty = true;
     }
     if let Some(waiting) = model.input.macro_wait.take() {
         match waiting {
@@ -256,7 +289,12 @@ fn handle_key(model: &mut Model, key: KeyPress) {
                 return;
             }
             OverlayKind::Settings => {
-                if let Some(action) = settings_action(key) {
+                let querying = model
+                    .overlays
+                    .settings_overlay
+                    .as_ref()
+                    .is_some_and(|overlay| overlay.querying);
+                if let Some(action) = settings_action(key, text_input, querying) {
                     execute_settings_action(model, action);
                 }
                 return;
@@ -378,7 +416,37 @@ fn handle_key(model: &mut Model, key: KeyPress) {
         return;
     }
     if model.overlays.fuzzy.is_some() {
-        if let Some(action) = picker_action(key, text_input) {
+        if key.ctrl() && key.code == KeyCode::Char('h') {
+            model.toggle_fuzzy_hidden();
+            return;
+        }
+        if key.ctrl() && key.code == KeyCode::Char('r') {
+            model.close_fuzzy();
+            model.open_recent_files();
+            return;
+        }
+        if key.ctrl() && key.code == KeyCode::Char('v') {
+            model.fuzzy_open_split();
+            return;
+        }
+        if key.ctrl() && key.code == KeyCode::Char('t') {
+            model.fuzzy_open();
+            return;
+        }
+        if key.ctrl() && key.code == KeyCode::Char('y') {
+            model.fuzzy_copy_path();
+            return;
+        }
+        let preview_delta = match key.code {
+            KeyCode::PageDown => Some(10),
+            KeyCode::PageUp => Some(-10),
+            KeyCode::Char('d') if key.ctrl() => Some(5),
+            KeyCode::Char('u') if key.ctrl() => Some(-5),
+            _ => None,
+        };
+        if let Some(delta) = preview_delta {
+            model.scroll_preview(delta);
+        } else if let Some(action) = picker_action(key, text_input) {
             execute_fuzzy_action(model, action);
         }
         return;

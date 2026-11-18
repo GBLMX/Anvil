@@ -450,17 +450,20 @@ impl Model {
         self.record_register_text(register, &text);
     }
 
-    pub(crate) fn record_register_text(&mut self, register: char, text: &str) {
+    pub(crate) fn record_register_text(&mut self, register: char, text: &str) -> bool {
         match register {
-            '_' => {}
-            '+' => {
-                if let Err(error) = SystemClipboard.set_text(text) {
+            '_' => true,
+            '+' => match SystemClipboard.set_text(text) {
+                Ok(()) => true,
+                Err(error) => {
                     self.status.text = format!("E: {error}");
                     self.file.dirty = true;
+                    false
                 }
-            }
+            },
             _ => {
                 self.session.editor.set_register(register, text);
+                true
             }
         }
     }

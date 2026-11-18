@@ -1,7 +1,11 @@
 # ADR-0055: Start Dashboard Actions, Focus, and Contextual Recents
 
-- Status: Proposed
+- Status: Accepted; implemented 2026-11-19
 - Version: 1.0.0
+- Implementation: dashboard focus/selection, command-backed actions, contextual
+  recents, missing/untrusted state, mouse parity, and session Continue landed.
+  Cross-workspace switching still requires a process restart and is called out
+  in the dashboard instead of silently opening a second workspace.
 - Date: 2026-11-18
 - Related: [ADR-0024](0024-tui-state-and-domain-boundaries.md),
   [ADR-0040](0040-helix-keymap-compatibility.md),

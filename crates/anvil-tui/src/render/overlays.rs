@@ -330,16 +330,23 @@ pub(crate) fn render_overlays(model: &Model, frame: &mut Frame, area: Rect) {
             format!("> {}", fuzzy.query),
             Style::default().fg(theme::accent()).bg(theme::surface()),
         ));
+        let mut title = if model.workspace.tree.show_hidden {
+            "Files · hidden".to_owned()
+        } else {
+            "Files".to_owned()
+        };
+        if fuzzy.truncated {
+            title.push_str(" · truncated");
+        }
+        if list_area.width >= 80 {
+            title.push_str(" · Enter open · Ctrl-v split · Ctrl-t buffer");
+        } else if list_area.width >= 60 {
+            title.push_str(" · Enter open · Ctrl-h hidden");
+        }
         frame.render_widget(
             Paragraph::new(lines)
                 .style(theme::panel())
-                .block(crate::render::focused_panel_block(
-                    if model.workspace.tree.show_hidden {
-                        "Files · hidden"
-                    } else {
-                        "Files"
-                    },
-                )),
+                .block(crate::render::focused_panel_block(title)),
             list_area,
         );
         let preview_area = if horizontal {

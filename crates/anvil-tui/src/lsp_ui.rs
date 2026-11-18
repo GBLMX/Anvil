@@ -660,7 +660,7 @@ impl Model {
     }
 
     pub(crate) fn request_format_after_save(&mut self) {
-        if !self.config.settings.editor.format_on_save
+        if !self.buffer_settings().format_on_save
             || self.language.lsp_requests.format_on_save_blocked()
             || self.active_lsp_worker().is_none()
         {

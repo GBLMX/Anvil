@@ -39,7 +39,10 @@ pub(crate) enum Target {
     },
     Status,
     Breadcrumb(crate::breadcrumbs::BreadcrumbTarget),
-    WelcomeRecent(usize),
+    WelcomeAction(usize),
+    WelcomeContinue,
+    WelcomeFile(usize),
+    WelcomeWorkspace(usize),
 }
 
 pub(crate) fn handle_mouse(model: &mut Model, mouse: MouseEvent, width: u16, height: u16) -> bool {
@@ -63,9 +66,18 @@ pub(crate) fn handle_mouse(model: &mut Model, mouse: MouseEvent, width: u16, hei
                 _ => {}
             }
         }
+        if mouse.kind == MouseEventKind::Down(MouseButton::Left)
+            && model.overlays.fuzzy.is_some()
+            && let Some(row) = crate::render::fuzzy_row_at(model, area, mouse.column, mouse.row)
+        {
+            model.overlays.fuzzy.as_mut().expect("fuzzy").selected = row;
+            model.request_preview();
+            model.file.dirty = true;
+            return true;
+        }
         if mouse.kind == MouseEventKind::Down(MouseButton::Left) {
-            if model.overlays.settings_overlay.is_some()
-                && let Some(row) = crate::settings_ui::hit(area, mouse.column, mouse.row)
+            if let Some(overlay) = model.overlays.settings_overlay.as_ref()
+                && let Some(row) = crate::settings_ui::hit(overlay, area, mouse.column, mouse.row)
             {
                 model.select_settings_row(row);
                 return true;
@@ -118,14 +130,28 @@ pub(crate) fn handle_mouse(model: &mut Model, mouse: MouseEvent, width: u16, hei
                 Target::Breadcrumb(crate::breadcrumbs::BreadcrumbTarget::Symbol) => {
                     model.open_breadcrumb_symbols();
                 }
-                Target::WelcomeRecent(index) => {
-                    if let Some(path) = model.openable_recent_files().get(index).cloned() {
-                        model.start_page.welcome = false;
-                        if let Err(error) = model.open_path(&path) {
-                            model.status.text = format!("E: {error}");
-                        }
-                        model.file.dirty = true;
-                    }
+                Target::WelcomeAction(index) => {
+                    model.start_focus_actions();
+                    model.start_page.action_selected = index;
+                    model.activate_start_action(index);
+                }
+                Target::WelcomeContinue => {
+                    model.start_focus_files();
+                    model.start_page.file_selected = 0;
+                    model.activate_start_file(0);
+                }
+                Target::WelcomeFile(index) => {
+                    model.start_focus_files();
+                    model.start_page.file_selected =
+                        index + usize::from(model.start_page.session_available);
+                    model.activate_start_file(
+                        index + usize::from(model.start_page.session_available),
+                    );
+                }
+                Target::WelcomeWorkspace(index) => {
+                    model.start_focus_workspaces();
+                    model.start_page.workspace_selected = index;
+                    model.activate_start_workspace(index);
                 }
                 Target::Status | Target::Outside => {
                     model.view.pointer = PointerState::Idle;
@@ -204,7 +230,7 @@ pub(crate) fn handle_mouse(model: &mut Model, mouse: MouseEvent, width: u16, hei
                 }
             } else if split_target {
                 model.scroll_split_rows(delta);
-            } else if model.config.settings.editor.soft_wrap {
+            } else if model.buffer_settings().soft_wrap {
                 let text_width = pane_width.saturating_sub(model.gutter_width());
                 model.scroll_display_rows_in_pane(delta, text_width);
             } else {
@@ -228,8 +254,13 @@ pub(crate) fn hit_test(model: &Model, col: u16, row: u16, width: u16, height: u1
     }
     if model.start_page.welcome {
         let area = model.welcome_area(width, height);
-        return crate::render::welcome_recent_at(model, col, row, area)
-            .map_or(Target::Outside, Target::WelcomeRecent);
+        return match crate::render::welcome_hit_at(model, col, row, area) {
+            Some(crate::render::WelcomeHit::Action(index)) => Target::WelcomeAction(index),
+            Some(crate::render::WelcomeHit::Continue) => Target::WelcomeContinue,
+            Some(crate::render::WelcomeHit::File(index)) => Target::WelcomeFile(index),
+            Some(crate::render::WelcomeHit::Workspace(index)) => Target::WelcomeWorkspace(index),
+            None => Target::Outside,
+        };
     }
     let Some((inner, tab_row, breadcrumb_row, message_area)) = content_rect(model, width, height)
     else {

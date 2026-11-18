@@ -55,12 +55,12 @@ their decision sections.
 | [0047](0047-file-tree-navigation-and-refresh.md) | File tree navigation and incremental refresh | Accepted; implemented |
 | [0048](0048-per-root-language-tooling-and-lsp-workspace.md) | Per-root language tooling and LSP workspace configuration | Accepted; implemented 2026-11-16 |
 | [0049](0049-editor-control-plane.md) | Editor control plane and MCP adapter boundary | Accepted; implemented 2026-11-17 |
-| [0050](0050-discovery-first-language-packs.md) | Discovery-first defaults and compiled language packs | Proposed |
+| [0050](0050-discovery-first-language-packs.md) | Discovery-first defaults and compiled language packs | Accepted; implemented 2026-11-19 |
 | [0051](0051-external-editor-reference-models.md) | External editor reference models for UX and language support | Proposed |
-| [0052](0052-language-tool-setup-and-source-resolution.md) | Explicit language tool setup and per-tool source resolution | Proposed |
-| [0053](0053-settings-scopes-and-language-overlays.md) | Explicit settings scopes, language overlays, and registry completeness | Proposed |
-| [0054](0054-file-picker-query-and-index-lifecycle.md) | File picker query, ranking, and index lifecycle | Proposed |
-| [0055](0055-start-dashboard-actions-and-context.md) | Start dashboard actions, focus, and contextual recents | Proposed |
+| [0052](0052-language-tool-setup-and-source-resolution.md) | Explicit language tool setup and per-tool source resolution | Accepted; implemented native providers 2026-11-19; managed downloads deferred |
+| [0053](0053-settings-scopes-and-language-overlays.md) | Explicit settings scopes, language overlays, and registry completeness | Accepted; implemented 2026-11-19 |
+| [0054](0054-file-picker-query-and-index-lifecycle.md) | File picker query, ranking, and index lifecycle | Accepted; implemented 2026-11-19 |
+| [0055](0055-start-dashboard-actions-and-context.md) | Start dashboard actions, focus, and contextual recents | Accepted; implemented 2026-11-19 |
 
 ## Numbering Rule
 

@@ -104,7 +104,7 @@ impl Model {
     }
 
     pub(crate) fn refresh_wrap_width(&mut self) {
-        if self.config.settings.editor.soft_wrap {
+        if self.buffer_settings().soft_wrap {
             self.view.wrap_width = self.wrap_text_width(self.view.viewport_width.saturating_sub(2));
         }
     }
@@ -177,7 +177,7 @@ impl Model {
 
     #[cfg(test)]
     pub(crate) fn scroll_display_rows(&mut self, delta: isize, width: u16) {
-        if !self.config.settings.editor.soft_wrap {
+        if !self.buffer_settings().soft_wrap {
             self.view.scroll = self
                 .view
                 .scroll
@@ -191,7 +191,7 @@ impl Model {
     }
 
     pub(crate) fn scroll_display_rows_in_pane(&mut self, delta: isize, text_width: u16) {
-        if !self.config.settings.editor.soft_wrap {
+        if !self.buffer_settings().soft_wrap {
             self.view.scroll = self
                 .view
                 .scroll
@@ -315,7 +315,7 @@ impl Model {
             if rows.len() >= height {
                 break;
             }
-            if self.config.settings.editor.soft_wrap && self.view.wrap_width > 0 {
+            if self.buffer_settings().soft_wrap && self.view.wrap_width > 0 {
                 let segments = self.wrap_segments(line, self.view.wrap_width);
                 let first_segment = if line == self.view.scroll {
                     self.view
@@ -585,7 +585,7 @@ impl Model {
 
         let diagnostic_lines = self.diagnostic_lines();
         let bracket_pair = self.bracket_pair();
-        let hscroll = if self.config.settings.editor.soft_wrap {
+        let hscroll = if self.buffer_settings().soft_wrap {
             0
         } else {
             self.view.hscroll

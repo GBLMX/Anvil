@@ -52,6 +52,10 @@ pub(super) enum Command {
         json: bool,
     },
     SettingsSchema,
+    LanguagesSchema,
+    SettingsCheck {
+        json: bool,
+    },
     Version,
 }
 
@@ -192,13 +196,34 @@ where
     I: Iterator<Item = OsString>,
 {
     match arguments.next().as_deref() {
-        Some(value) if value == "schema" => {}
-        _ => return Err("usage: anvil settings schema".to_owned()),
+        Some(value) if value == "schema" => {
+            if arguments.next().is_some() {
+                return Err("usage: anvil settings schema".to_owned());
+            }
+            Ok(Command::SettingsSchema)
+        }
+        Some(value) if value == "languages-schema" => {
+            if arguments.next().is_some() {
+                return Err("usage: anvil settings languages-schema".to_owned());
+            }
+            Ok(Command::LanguagesSchema)
+        }
+        Some(value) if value == "check" => {
+            let json = match arguments.next().as_deref() {
+                None => false,
+                Some(value) if value == "--json" => true,
+                _ => return Err("usage: anvil settings check [--json]".to_owned()),
+            };
+            if arguments.next().is_some() {
+                return Err("usage: anvil settings check [--json]".to_owned());
+            }
+            Ok(Command::SettingsCheck { json })
+        }
+        _ => Err(
+            "usage: anvil settings schema | settings languages-schema | settings check [--json]"
+                .to_owned(),
+        ),
     }
-    if arguments.next().is_some() {
-        return Err("usage: anvil settings schema".to_owned());
-    }
-    Ok(Command::SettingsSchema)
 }
 
 fn parse_doctor_args<I>(arguments: I) -> Result<Command, String>
@@ -721,7 +746,22 @@ mod tests {
             parse_args(args(&["settings", "schema"])).unwrap(),
             Command::SettingsSchema
         );
+        assert_eq!(
+            parse_args(args(&["settings", "languages-schema"])).unwrap(),
+            Command::LanguagesSchema
+        );
+        assert_eq!(
+            parse_args(args(&["settings", "check"])).unwrap(),
+            Command::SettingsCheck { json: false }
+        );
+        assert_eq!(
+            parse_args(args(&["settings", "check", "--json"])).unwrap(),
+            Command::SettingsCheck { json: true }
+        );
         assert!(parse_args(args(&["settings"])).is_err());
         assert!(parse_args(args(&["settings", "schema", "extra"])).is_err());
+        assert!(parse_args(args(&["settings", "languages-schema", "extra"])).is_err());
+        assert!(parse_args(args(&["settings", "check", "--wat"])).is_err());
+        assert!(parse_args(args(&["settings", "check", "extra"])).is_err());
     }
 }

@@ -18,6 +18,8 @@ Usage:
   anvil setup [check|plan|apply] [--json] [--plain] [--tool <id>] [--yes] [--no-input]
   anvil modules [--json]
   anvil settings schema
+  anvil settings languages-schema
+  anvil settings check [--json]
 
 Options:
   -w, --workspace <DIR>  Workspace directory; --workspace=DIR is also accepted
@@ -317,6 +319,26 @@ where
             let text = serde_json::to_string_pretty(&schema)
                 .map_err(|error| RunError::Args(error.to_string()))?;
             println!("{text}");
+            Ok(0)
+        }
+        Ok(Command::LanguagesSchema) => {
+            let schema = anvil_tui::languages_schema();
+            let text = serde_json::to_string_pretty(&schema)
+                .map_err(|error| RunError::Args(error.to_string()))?;
+            println!("{text}");
+            Ok(0)
+        }
+        Ok(Command::SettingsCheck { json }) => {
+            let workspace =
+                std::env::current_dir().map_err(|error| RunError::Args(error.to_string()))?;
+            let report = anvil_tui::settings_check(&workspace, true);
+            if json {
+                let text = serde_json::to_string_pretty(&report.to_json())
+                    .map_err(|error| RunError::Args(error.to_string()))?;
+                println!("{text}");
+            } else {
+                println!("{}", report.text());
+            }
             Ok(0)
         }
         Ok(Command::Run {

@@ -497,9 +497,27 @@ pub(super) enum SettingsAction {
     Reset,
     Save,
     Cancel,
+    BeginQuery,
+    EndQuery,
+    AppendQuery(char),
+    PopQuery,
+    ClearQuery,
 }
 
-pub(super) fn settings_action(key: KeyPress) -> Option<SettingsAction> {
+pub(super) fn settings_action(
+    key: KeyPress,
+    text_input: bool,
+    querying: bool,
+) -> Option<SettingsAction> {
+    if querying {
+        return match key.code {
+            KeyCode::Esc => Some(SettingsAction::ClearQuery),
+            KeyCode::Enter => Some(SettingsAction::EndQuery),
+            KeyCode::Backspace => Some(SettingsAction::PopQuery),
+            KeyCode::Char(character) if text_input => Some(SettingsAction::AppendQuery(character)),
+            _ => None,
+        };
+    }
     match key.code {
         KeyCode::Esc => Some(SettingsAction::Cancel),
         KeyCode::Up | KeyCode::Char('k') => Some(SettingsAction::Previous),
@@ -510,6 +528,7 @@ pub(super) fn settings_action(key: KeyPress) -> Option<SettingsAction> {
             key.modifiers
                 .contains(crossterm::event::KeyModifiers::SHIFT),
         )),
+        KeyCode::Char('/') => Some(SettingsAction::BeginQuery),
         KeyCode::Char('r') => Some(SettingsAction::Reset),
         KeyCode::Char('s') => Some(SettingsAction::Save),
         _ => None,
@@ -526,6 +545,11 @@ pub(super) fn execute_settings_action(model: &mut Model, action: SettingsAction)
         SettingsAction::Reset => model.reset_settings_row(),
         SettingsAction::Save => model.save_settings(),
         SettingsAction::Cancel => model.cancel_settings(),
+        SettingsAction::BeginQuery => model.begin_settings_query(),
+        SettingsAction::EndQuery => model.end_settings_query(),
+        SettingsAction::AppendQuery(character) => model.append_settings_query(character),
+        SettingsAction::PopQuery => model.pop_settings_query(),
+        SettingsAction::ClearQuery => model.clear_settings_query(),
     }
 }
 

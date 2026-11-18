@@ -42,6 +42,21 @@ struct SessionBuffer {
     source_mtime_ns: Option<u64>,
 }
 
+pub(crate) fn available(workspace: &Path) -> bool {
+    let Ok(state_path) = state_path(workspace) else {
+        return false;
+    };
+    let Ok(data) = fs::read(state_path) else {
+        return false;
+    };
+    let Ok(state) = serde_json::from_slice::<SessionFile>(&data) else {
+        return false;
+    };
+    state.version == SESSION_VERSION
+        && state.workspace == workspace
+        && (!state.buffers.is_empty() || state.split.is_some())
+}
+
 pub(crate) fn restore(model: &mut Model, workspace: &Path) -> Result<bool, String> {
     let state_path = state_path(workspace)?;
     let data = match fs::read(&state_path) {

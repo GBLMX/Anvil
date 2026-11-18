@@ -110,6 +110,7 @@ struct LanguageStatus {
     label: Option<String>,
     path: Option<PathBuf>,
     provider: Option<Provider>,
+    source: Option<&'static str>,
 }
 
 impl LanguageStatus {
@@ -368,6 +369,7 @@ fn collect(root: &Path, service: Option<&dyn LanguageToolingService>) -> Vec<Lan
                         label: Some(settings.label),
                         path,
                         provider: Some(provider),
+                        source: Some(settings.source.as_str()),
                     }
                 }
                 None => LanguageStatus {
@@ -376,6 +378,7 @@ fn collect(root: &Path, service: Option<&dyn LanguageToolingService>) -> Vec<Lan
                     label: None,
                     path: None,
                     provider: None,
+                    source: None,
                 },
             }
         })
@@ -407,6 +410,7 @@ fn print_check(statuses: &[LanguageStatus], found: usize, missing: usize, no_pro
                     .map(|path| path.display().to_string())
                     .unwrap_or_default(),
             ),
+            // source is printed in plan/json to keep check lines stable.
             "missing" => println!(
                 "  {:<28} missing  {}",
                 status.name,
@@ -449,6 +453,7 @@ fn print_plan(statuses: &[LanguageStatus], found: usize, missing: usize, no_prof
                         .map(|path| path.display().to_string())
                         .unwrap_or_default()
                 );
+                println!("    source: {}", status.source.unwrap_or("unknown"));
                 println!("    action: none");
             }
             "missing" => {
@@ -498,13 +503,14 @@ fn print_plain(statuses: &[LanguageStatus]) {
             .map(|provider| provider.command())
             .unwrap_or_default();
         println!(
-            "language={} id={} status={} action={} tool={} path={} provider={} requires_root={} command={}",
+            "language={} id={} status={} action={} tool={} path={} source={} provider={} requires_root={} command={}",
             status.name,
             status.name.to_ascii_lowercase(),
             status.state(),
             status.action(),
             status.tool.as_deref().unwrap_or(""),
             path,
+            status.source.unwrap_or("unknown"),
             provider,
             status
                 .provider
@@ -527,6 +533,7 @@ fn tools_json(statuses: &[LanguageStatus]) -> Vec<serde_json::Value> {
                 "tool": status.tool,
                 "label": status.label,
                 "path": status.path.as_ref().map(|path| path.to_string_lossy().into_owned()),
+                "source": status.source,
                 "provider": provider.map(|provider| provider.label()),
                 "command": provider.map(|provider| provider.command()),
                 "requires": provider.map(|provider| provider.requires()),
@@ -698,6 +705,7 @@ mod tests {
             label: Some("rust-analyzer".to_owned()),
             path: None,
             provider: Some(Provider::Rustup(&["rust-analyzer", "rust-src"])),
+            source: None,
         };
         assert!(status.matches("Rust"));
         assert!(status.matches("rust-analyzer"));

@@ -9,6 +9,7 @@ fn poll_background(model: &mut Model) {
     model.poll_host();
     model.poll_pkg_notifications();
     model.poll_syntax();
+    model.poll_preview_syntax();
     model.poll_lsp();
     model.poll_file_worker();
     model.poll_task();
@@ -229,6 +230,7 @@ pub fn run_with_all_services(
         model.file.dirty = true;
     }
     model.set_read_only(read_only);
+    model.start_page.session_available = restore_session && session::available(&workspace);
     if restore_session && let Err(error) = session::restore(&mut model, &workspace) {
         let message = format!("E: session: {error}");
         if model.status.text.is_empty() {
@@ -261,12 +263,28 @@ pub fn run_with_all_services(
                 settings,
                 sources,
                 user,
+                project,
                 inherited,
+                languages,
+                warnings,
             } = loaded;
             model.config.user_settings = user;
+            model.config.project_settings = project;
             model.config.inherited_settings = inherited;
             model.config.sources = sources;
+            model.config.language_overlays = languages;
+            model.config.language_revision = model.config.language_revision.wrapping_add(1);
             model.apply_settings(settings);
+            if !warnings.is_empty() {
+                let message = format!("E: settings warnings: {}", warnings.join("; "));
+                if model.status.text.is_empty() {
+                    model.status.text = message;
+                } else {
+                    model.status.text.push_str(" | ");
+                    model.status.text.push_str(&message);
+                }
+                model.file.dirty = true;
+            }
         }
         Err(error) => {
             let message = format!("E: settings: {error}");

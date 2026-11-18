@@ -327,7 +327,7 @@ impl Model {
             self.view.scroll = line + margin + 1 - height;
         }
         let column = position.display_column;
-        if self.config.settings.editor.soft_wrap {
+        if self.buffer_settings().soft_wrap {
             self.view.wrap_width = self.wrap_text_width(width);
             if self.row_of_position(line, column, height).is_none() {
                 self.view.scroll = line;

@@ -80,3 +80,33 @@ registry. Release layouts install it as
 
 Taplo uses the schema for validation, completion, and descriptions.
 The schema includes `[lsp.commands]` and per-root `[lsp.roots]` profiles.
+
+Language-scoped editor values live in `$XDG_CONFIG_HOME/anvil/languages.toml`
+and, for trusted primary roots, `<root>/.anvil/languages.toml`:
+
+```toml
+[languages.rust]
+soft_wrap = true
+format_on_save = true
+```
+
+`anvil settings languages-schema` prints the generated schema; release layouts
+install it as `share/anvil/languages.schema.json`. Only registry entries marked
+language-scoped are accepted. Global-only keys, unknown keys, and executable
+settings are rejected. Language overrides apply to the active buffer only and
+do not mutate process-wide settings.
+
+The precedence is global resolved value, user language layer, trusted project
+language layer, then `ANVIL_*` environment. `ANVIL_SETTINGS` remains a complete
+override and ignores both language files.
+
+`anvil settings check [--json]` is a read-only report of the global and
+language layers. It lists each candidate path, whether it exists, why a layer
+was ignored, every field's effective and explicit value with its source, and
+language overlay values. JSON output carries `schema_version: 1`. It does not
+apply settings or replace `anvil doctor`.
+
+The `:settings` overlay supports `/` search over key, label, description, and
+group. Query filters include `@modified`, `@explicit`, `@language`, and
+`@source:<text>`. Rows mark explicit overrides and the footer reports the
+selected field's source. Saving still writes only the user global layer.

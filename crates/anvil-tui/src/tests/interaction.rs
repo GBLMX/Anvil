@@ -160,6 +160,7 @@ fn keymap_context_prefers_popup_then_command_line_then_tree() {
         entries: vec!["a".to_owned()],
         filtered: vec![0],
         selected: 0,
+        truncated: false,
     });
     model.push_overlay(OverlayKind::Fuzzy);
     assert_eq!(
@@ -1000,6 +1001,56 @@ fn fuzzy_filters_workspace_files() {
     model.close_fuzzy();
     assert!(model.overlays.stack.is_empty());
 }
+
+#[test]
+fn preview_requests_coalesce_while_loading() {
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.overlays.fuzzy = Some(FuzzyState {
+        generation: 0,
+        query: String::new(),
+        entries: vec!["a.rs".to_owned(), "b.rs".to_owned()],
+        filtered: vec![0, 1],
+        selected: 0,
+        truncated: false,
+    });
+    model.overlays.preview_generation = 1;
+    model.overlays.preview = PreviewState {
+        path: Some("a.rs".to_owned()),
+        loading: true,
+        ..PreviewState::default()
+    };
+
+    model.overlays.fuzzy.as_mut().expect("fuzzy").selected = 1;
+    model.request_preview();
+    assert_eq!(model.overlays.preview.pending.as_deref(), Some("b.rs"));
+
+    model.handle_preview(
+        "a.rs".to_owned(),
+        1,
+        Ok(PreviewData {
+            lines: vec!["old".to_owned()],
+            truncated: false,
+        }),
+    );
+    assert_eq!(model.overlays.preview.path.as_deref(), Some("b.rs"));
+    assert_eq!(
+        model.overlays.preview.message.as_deref(),
+        Some("preview unavailable: gateway")
+    );
+    assert!(model.overlays.preview.pending.is_none());
+}
+
+#[test]
+fn preview_scroll_is_bounded() {
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.overlays.preview.lines = (0..20).map(|index| index.to_string()).collect();
+    model.scroll_preview(5);
+    assert_eq!(model.overlays.preview.scroll, 5);
+    model.scroll_preview(-100);
+    assert_eq!(model.overlays.preview.scroll, 0);
+    model.scroll_preview(100);
+    assert_eq!(model.overlays.preview.scroll, 19);
+}
 #[test]
 fn stale_preview_results_are_discarded() {
     let mut model = Model::new(EditorState::from_text(""), None);
@@ -1065,6 +1116,7 @@ fn preview_without_worker_reports_gateway_unavailable() {
         entries: vec!["src/main.rs".to_owned()],
         filtered: vec![0],
         selected: 0,
+        truncated: false,
     });
     model.request_preview();
     assert!(!model.overlays.preview.loading);
@@ -1323,6 +1375,7 @@ fn fuzzy_merges_secondary_root_files() {
         entries: vec!["src/main.rs".to_owned()],
         filtered: vec![0],
         selected: 0,
+        truncated: false,
     });
 
     model.handle_fuzzy_files(Some(root.clone()), 4, Ok(vec!["src/lib.rs".to_owned()]));
@@ -1333,6 +1386,10 @@ fn fuzzy_merges_secondary_root_files() {
         entries
             .iter()
             .any(|entry| entry == &root.join("src/lib.rs").to_string_lossy())
+    );
+    assert_eq!(
+        model.workspace.file_cache.get(&(root, false)),
+        Some(&vec!["src/lib.rs".to_owned()])
     );
 }
 
@@ -1352,9 +1409,10 @@ fn stale_secondary_root_files_are_discarded() {
         entries: Vec::new(),
         filtered: Vec::new(),
         selected: 0,
+        truncated: false,
     });
 
-    model.handle_fuzzy_files(Some(root), 3, Ok(vec!["src/lib.rs".to_owned()]));
+    model.handle_fuzzy_files(Some(root.clone()), 3, Ok(vec!["src/lib.rs".to_owned()]));
 
     assert!(
         model
@@ -1364,6 +1422,13 @@ fn stale_secondary_root_files_are_discarded() {
             .expect("fuzzy")
             .entries
             .is_empty()
+    );
+    assert!(
+        !model
+            .workspace
+            .file_cache
+            .keys()
+            .any(|(cached_root, _)| cached_root == &root)
     );
 }
 
@@ -1379,6 +1444,7 @@ fn fuzzy_opens_absolute_secondary_root_file() {
         entries: vec![file.to_string_lossy().into_owned()],
         filtered: vec![0],
         selected: 0,
+        truncated: false,
     });
 
     model.fuzzy_open();
@@ -1403,6 +1469,7 @@ fn fuzzy_keeps_root_files_when_primary_result_arrives_later() {
         entries: Vec::new(),
         filtered: Vec::new(),
         selected: 0,
+        truncated: false,
     });
 
     model.handle_fuzzy_files(Some(root.clone()), 4, Ok(vec!["src/lib.rs".to_owned()]));
@@ -1415,6 +1482,56 @@ fn fuzzy_keeps_root_files_when_primary_result_arrives_later() {
             .iter()
             .any(|entry| entry == &root.join("src/lib.rs").to_string_lossy())
     );
+}
+
+#[test]
+fn fuzzy_caps_results_and_marks_truncated() {
+    let mut model = Model::new(EditorState::from_text(""), None);
+    let entries = (0..crate::file_query::FILE_PICKER_RESULT_LIMIT + 5)
+        .map(|index| format!("src/file{index}.rs"))
+        .collect::<Vec<_>>();
+    model.overlays.fuzzy = Some(FuzzyState {
+        generation: 0,
+        query: String::new(),
+        entries,
+        filtered: Vec::new(),
+        selected: 0,
+        truncated: false,
+    });
+    model.fuzzy_refresh();
+    let fuzzy = model.overlays.fuzzy.as_ref().expect("fuzzy");
+    assert_eq!(
+        fuzzy.filtered.len(),
+        crate::file_query::FILE_PICKER_RESULT_LIMIT
+    );
+    assert!(fuzzy.truncated);
+}
+
+#[test]
+fn fuzzy_query_filters_across_path_segments_and_negation() {
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.overlays.fuzzy = Some(FuzzyState {
+        generation: 0,
+        query: "abc !test".to_owned(),
+        entries: vec![
+            "a/b/c.rs".to_owned(),
+            "src/abc.rs".to_owned(),
+            "tests/abc.rs".to_owned(),
+        ],
+        filtered: Vec::new(),
+        selected: 0,
+        truncated: false,
+    });
+    model.fuzzy_refresh();
+    let fuzzy = model.overlays.fuzzy.as_ref().expect("fuzzy");
+    let entries = fuzzy
+        .filtered
+        .iter()
+        .map(|index| fuzzy.entries[*index].as_str())
+        .collect::<Vec<_>>();
+    assert!(entries.contains(&"a/b/c.rs"));
+    assert!(entries.contains(&"src/abc.rs"));
+    assert!(!entries.contains(&"tests/abc.rs"));
 }
 
 #[test]
@@ -1431,6 +1548,7 @@ fn fuzzy_ranks_basename_then_frecency_then_short_paths() {
         ],
         filtered: Vec::new(),
         selected: 0,
+        truncated: false,
     });
     model
         .workspace
@@ -1456,6 +1574,28 @@ fn fuzzy_ranks_basename_then_frecency_then_short_paths() {
 }
 
 #[test]
+fn fuzzy_open_split_uses_the_selected_file() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let file = dir.path().join("main.rs");
+    fs::write(&file, "fn main() {}").expect("file");
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.workspace.path = dir.path().to_path_buf();
+    model.overlays.fuzzy = Some(FuzzyState {
+        generation: 0,
+        query: String::new(),
+        entries: vec![file.to_string_lossy().into_owned()],
+        filtered: vec![0],
+        selected: 0,
+        truncated: false,
+    });
+
+    model.fuzzy_open_split();
+
+    assert!(model.buffers.split.is_some());
+    assert_eq!(model.session.path.as_deref(), Some(file.as_path()));
+    assert!(model.ui.focus.split);
+}
+#[test]
 fn fuzzy_open_records_frecency() {
     let dir = tempfile::tempdir().expect("tempdir");
     fs::write(dir.path().join("main.rs"), "fn main() {}").expect("file");
@@ -1467,6 +1607,7 @@ fn fuzzy_open_records_frecency() {
         entries: vec!["main.rs".to_owned()],
         filtered: vec![0],
         selected: 0,
+        truncated: false,
     });
     model.fuzzy_open();
     assert_eq!(model.workspace.recent.frecency.get("main.rs"), Some(&1));

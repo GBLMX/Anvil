@@ -5,10 +5,34 @@ use std::path::{Path, PathBuf};
 
 use anvil_module::language::{LanguageServerSpec, LanguageToolingService};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ToolSource {
+    RootProfile,
+    Environment,
+    UserCommands,
+    Managed,
+    SearchPath,
+    Module,
+}
+
+impl ToolSource {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::RootProfile => "root-profile",
+            Self::Environment => "environment",
+            Self::UserCommands => "user-commands",
+            Self::Managed => "managed",
+            Self::SearchPath => "search-path",
+            Self::Module => "module",
+        }
+    }
+}
+
 /// Resolved language-server launch profile.
 #[derive(Debug, Clone)]
 pub struct LspSettings {
     pub tool: String,
+    pub source: ToolSource,
     pub args: Vec<String>,
     pub language_id: String,
     pub root_markers: Vec<String>,
@@ -22,6 +46,7 @@ impl From<LanguageServerSpec> for LspSettings {
     fn from(spec: LanguageServerSpec) -> Self {
         Self {
             tool: spec.tool,
+            source: ToolSource::Module,
             args: spec.args,
             language_id: spec.language_id,
             root_markers: spec.root_markers,
@@ -272,17 +297,34 @@ where
         .or_else(|| std::env::var_os("ANVIL_LSP"))
         .and_then(|path| {
             let path = path.to_string_lossy().into_owned();
-            (!path.is_empty()).then_some((path, args.clone()))
+            (!path.is_empty()).then_some((path, args.clone(), ToolSource::Environment))
         })
-        .or_else(|| command_override(language_id, &args))
-        .or_else(|| find_tool(&candidates).map(|tool| (tool, args.clone())))?;
-    let (tool, mut args) = command;
+        .or_else(|| {
+            command_override(language_id, &args)
+                .map(|(tool, args)| (tool, args, ToolSource::UserCommands))
+        })
+        .or_else(|| {
+            find_managed_tool(&candidates)
+                .or_else(|| find_tool_in(&candidates, &managed_tool_directories()))
+                .map(|tool| {
+                    (
+                        tool.to_string_lossy().into_owned(),
+                        args.clone(),
+                        ToolSource::Managed,
+                    )
+                })
+        })
+        .or_else(|| {
+            find_tool(&candidates).map(|tool| (tool, args.clone(), ToolSource::SearchPath))
+        })?;
+    let (tool, mut args, source) = command;
     if tool.ends_with("pyright-langserver") && args.is_empty() {
         args = vec!["--stdio".to_owned()];
     }
     let initialization_options = tsserver_options(&tool, path);
     Some(LspSettings {
         tool,
+        source,
         args,
         language_id: language_id.to_owned(),
         root_markers: root_markers.into_iter().map(str::to_owned).collect(),
@@ -304,8 +346,60 @@ fn find_tool(candidates: &[&str]) -> Option<String> {
         .or_else(|| candidates.first().map(|candidate| (*candidate).to_owned()))
 }
 
-fn tool_search_directories() -> Vec<PathBuf> {
+fn managed_tool_state_directory() -> Option<PathBuf> {
+    if let Some(data_home) = std::env::var_os("XDG_DATA_HOME") {
+        let data_home = data_home.to_string_lossy();
+        if !data_home.trim().is_empty() {
+            return Some(PathBuf::from(data_home.into_owned()).join("anvil/tools"));
+        }
+    }
+    std::env::var_os("HOME")
+        .map(PathBuf::from)
+        .map(|home| home.join(".local/share/anvil/tools"))
+}
+
+fn find_managed_tool(candidates: &[&str]) -> Option<PathBuf> {
+    let directory = managed_tool_state_directory()?;
+    find_managed_tool_in(&directory, candidates)
+}
+
+fn find_managed_tool_in(directory: &Path, candidates: &[&str]) -> Option<PathBuf> {
+    let text = std::fs::read_to_string(directory.join("state.json")).ok()?;
+    let state: serde_json::Value = serde_json::from_str(&text).ok()?;
+    let tools = state.get("tools")?.as_object()?;
+    for entry in tools.values() {
+        let Some(path) = entry.get("path").and_then(|path| path.as_str()) else {
+            continue;
+        };
+        let path = PathBuf::from(path);
+        if path.is_file()
+            && path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| candidates.contains(&name))
+        {
+            return Some(path);
+        }
+    }
+    None
+}
+
+fn managed_tool_directories() -> Vec<PathBuf> {
     let mut directories = Vec::new();
+    if let Some(data_home) = std::env::var_os("XDG_DATA_HOME") {
+        let data_home = data_home.to_string_lossy();
+        if !data_home.trim().is_empty() {
+            directories.push(PathBuf::from(data_home.into_owned()).join("anvil/tools"));
+        }
+    }
+    if let Some(home) = std::env::var_os("HOME") {
+        directories.push(PathBuf::from(home).join(".local/share/anvil/tools"));
+    }
+    directories
+}
+
+fn tool_search_directories() -> Vec<PathBuf> {
+    let mut directories = managed_tool_directories();
     if let Some(path) = std::env::var_os("PATH") {
         directories.extend(std::env::split_paths(&path));
     }
@@ -420,6 +514,25 @@ mod tests {
     }
 
     #[test]
+    fn managed_state_paths_are_used_and_missing_files_are_ignored() {
+        let directory = tempfile::tempdir().expect("tempdir");
+        let executable = directory.path().join("custom-lsp");
+        std::fs::write(&executable, b"test").expect("write");
+        std::fs::write(
+            directory.path().join("state.json"),
+            format!(
+                r#"{{"tools":{{"rust":{{"path":"{}"}},"go":{{"path":"{}"}}}}}}"#,
+                executable.display(),
+                directory.path().join("missing").display()
+            ),
+        )
+        .expect("state");
+        let found = find_managed_tool_in(directory.path(), &["custom-lsp"]).expect("managed");
+        assert_eq!(found, executable);
+        assert!(find_managed_tool_in(directory.path(), &["missing"]).is_none());
+    }
+
+    #[test]
     fn user_tool_directories_include_common_installers() {
         let home = Path::new("/home/test");
         let directories = user_tool_directories(home);
@@ -468,6 +581,23 @@ mod tests {
             lsp_settings_with_service(Path::new("src/main.rs"), Some(&provider), |_, _| None)
                 .expect("builtin fallback");
         assert_eq!(rust.language_id, "rust");
+    }
+
+    #[test]
+    fn user_command_wins_and_missing_explicit_command_does_not_fall_back() {
+        let java = lsp_settings_with_service(Path::new("Main.java"), None, |_, _| {
+            Some(("custom-jdtls".to_owned(), Vec::new()))
+        })
+        .expect("user command");
+        assert_eq!(java.tool, "custom-jdtls");
+        assert_eq!(java.source, ToolSource::UserCommands);
+
+        let missing = lsp_settings_with_service(Path::new("Main.java"), None, |_, _| {
+            Some(("definitely-missing-lsp".to_owned(), Vec::new()))
+        })
+        .expect("explicit command remains selected");
+        assert_eq!(missing.tool, "definitely-missing-lsp");
+        assert_eq!(missing.source, ToolSource::UserCommands);
     }
 
     #[test]

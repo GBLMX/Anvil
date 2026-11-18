@@ -137,6 +137,7 @@ pub(crate) struct FuzzyState {
     pub(crate) entries: Vec<String>,
     pub(crate) filtered: Vec<usize>,
     pub(crate) selected: usize,
+    pub(crate) truncated: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -166,13 +167,16 @@ pub(crate) struct BufferPickerState {
     pub(crate) mode: BufferPickerMode,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Clone, Default)]
 pub(crate) struct PreviewState {
     pub(crate) path: Option<String>,
     pub(crate) lines: Vec<String>,
     pub(crate) message: Option<String>,
     pub(crate) loading: bool,
     pub(crate) truncated: bool,
+    pub(crate) pending: Option<String>,
+    pub(crate) scroll: usize,
+    pub(crate) syntax: anvil_syntax::SyntaxCache,
 }
 
 #[derive(Debug, Clone)]
@@ -548,6 +552,8 @@ pub(crate) struct WorkspaceState {
     pub(crate) roots: workspace_roots::WorkspaceRoots,
     /// Recent workspaces, files, and quick-open ranking.
     pub(crate) recent: RecentState,
+    /// Cached workspace-relative file lists keyed by trusted root and visibility.
+    pub(crate) file_cache: HashMap<(PathBuf, bool), Vec<String>>,
     /// Workspace tree view and refresh state.
     pub(crate) tree: TreeState,
     /// Git workspace, request, and view state.
@@ -843,10 +849,18 @@ pub(crate) struct ConfigState {
     pub(crate) settings: Settings,
     /// Sparse user overrides loaded from the user settings file.
     pub(crate) user_settings: settings::SettingsPatch,
+    /// Sparse trusted-project overrides.
+    pub(crate) project_settings: settings::SettingsPatch,
     /// Effective settings without the user layer, used by reset.
     pub(crate) inherited_settings: Settings,
     /// Effective settings layer for each field.
     pub(crate) sources: settings::SettingsSources,
+    /// User and trusted-project language overlays.
+    pub(crate) language_overlays: settings::LanguageOverlays,
+    /// Bumped whenever language overlays are replaced.
+    pub(crate) language_revision: u64,
+    /// Cached effective settings for the active buffer.
+    pub(crate) buffer_settings: std::cell::RefCell<settings::BufferSettingsCache>,
 }
 
 #[derive(Default)]
@@ -873,12 +887,29 @@ pub struct FileState {
     pub(crate) exit_code: i32,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) enum StartPageFocus {
+    #[default]
+    Actions,
+    Files,
+    Workspaces,
+}
+
 #[derive(Default)]
 pub(crate) struct StartPageState {
     /// Full-editor start dashboard, shown until the first interaction or file open.
     pub(crate) welcome: bool,
     /// Dashboard state to restore after closing the help page.
     pub(crate) welcome_back: bool,
+    /// Section receiving dashboard navigation keys.
+    pub(crate) focus: StartPageFocus,
+    pub(crate) action_selected: usize,
+    pub(crate) file_selected: usize,
+    pub(crate) workspace_selected: usize,
+    /// Waiting for the second key of a Space-leader dashboard action.
+    pub(crate) pending_space: bool,
+    /// A restorable session exists for the current workspace.
+    pub(crate) session_available: bool,
 }
 
 pub(crate) struct SyntaxCacheState {
@@ -1322,6 +1353,7 @@ pub(crate) struct OverlayState {
     pub(crate) buffer_picker: Option<BufferPickerState>,
     pub(crate) preview: PreviewState,
     pub(crate) preview_generation: u64,
+    pub(crate) preview_syntax: SyntaxState,
     pub(crate) debug_panel: Option<debug_panel::DebugPanelState>,
     pub(crate) test_explorer: Option<test_explorer::TestExplorerState>,
     pub(crate) command_completion: Option<CommandCompletion>,

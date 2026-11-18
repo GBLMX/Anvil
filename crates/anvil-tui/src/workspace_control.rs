@@ -93,6 +93,9 @@ impl Model {
         match self.workspace.roots.remove(&canonical) {
             Ok(()) => {
                 self.stop_lsp_root(&canonical);
+                self.workspace
+                    .file_cache
+                    .retain(|(root, _), _| root != &canonical);
                 self.stop_root_file_worker(&canonical);
                 if let Some((mut session, client)) = self.workspace.root_gateways.remove(&canonical)
                 {
@@ -234,6 +237,7 @@ mod trust_tests {
             entries: vec![dropped.to_string_lossy().into_owned()],
             filtered: vec![0],
             selected: 0,
+            truncated: false,
         });
         model.overlays.preview.path = Some(dropped.to_string_lossy().into_owned());
         model.workspace.git.status.insert(dropped.clone(), 'M');

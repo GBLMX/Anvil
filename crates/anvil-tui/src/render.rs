@@ -1,6 +1,7 @@
 //! Ratatui rendering for the editor, tree, completion, and hover overlays.
 
 use super::*;
+use crate::file_query::FileQuery;
 use crate::theme;
 use anvil_api::EditorView;
 use anvil_session::ui::CreateKind;
@@ -24,7 +25,7 @@ use overlays::render_overlays;
 use panes::{render_pipe_locations, render_split_pane};
 use tree::render_tree;
 use welcome::render_welcome;
-pub(crate) use welcome::welcome_recent_at;
+pub(crate) use welcome::{WelcomeHit, welcome_hit_at};
 
 pub(crate) const SPINNER: [&str; 8] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧"];
 
@@ -117,6 +118,49 @@ pub(crate) fn fuzzy_rect(area: Rect) -> Rect {
     }
     .min(area.height.saturating_sub(2));
     centered_rect(area, width, height)
+}
+
+pub(crate) fn fuzzy_row_at(model: &Model, area: Rect, col: u16, row: u16) -> Option<usize> {
+    let fuzzy = model.overlays.fuzzy.as_ref()?;
+    let horizontal = area.width >= 80;
+    let stacked = !horizontal && area.height >= 16;
+    let popup = fuzzy_rect(area);
+    let list_width = if horizontal {
+        (popup.width * 55 / 100)
+            .max(20)
+            .min(popup.width.saturating_sub(20))
+    } else {
+        popup.width
+    };
+    let list_height = if stacked {
+        (popup.height * 3 / 5)
+            .max(6)
+            .min(popup.height.saturating_sub(4))
+    } else {
+        popup.height
+    };
+    let list_area = Rect {
+        width: list_width,
+        height: list_height,
+        ..popup
+    };
+    let inner = Rect {
+        x: list_area.x + 1,
+        y: list_area.y + 1,
+        width: list_area.width.saturating_sub(2),
+        height: list_area.height.saturating_sub(2),
+    };
+    if !rect_contains(inner, col, row) {
+        return None;
+    }
+    let visible = usize::from(list_area.height.saturating_sub(3));
+    let offset = usize::from(row.saturating_sub(inner.y));
+    if visible == 0 || offset >= visible {
+        return None;
+    }
+    let start = fuzzy.selected.saturating_sub(visible.saturating_sub(1));
+    let selected = start + offset;
+    (selected < fuzzy.filtered.len()).then_some(selected)
 }
 
 pub(crate) fn code_actions_rect(area: Rect, items: usize) -> Rect {
@@ -811,13 +855,13 @@ fn syntax_style(class: SyntaxClass) -> Style {
     style
 }
 
-fn clip_path(path: &str, max_width: usize) -> String {
+fn clip_path_with_offset(path: &str, max_width: usize) -> (String, usize) {
     let width = path.width();
     if width <= max_width {
-        return path.to_owned();
+        return (path.to_owned(), 0);
     }
     if max_width == 0 {
-        return String::new();
+        return (String::new(), path.len());
     }
     let mut suffix = String::new();
     let mut used = 0;
@@ -829,24 +873,36 @@ fn clip_path(path: &str, max_width: usize) -> String {
         suffix.insert(0, character);
         used += character_width;
     }
-    format!("…{suffix}")
+    let offset = path.len() - suffix.len();
+    (format!("…{suffix}"), offset)
+}
+
+#[cfg(test)]
+fn clip_path(path: &str, max_width: usize) -> String {
+    clip_path_with_offset(path, max_width).0
+}
+
+fn clipped_match_ranges(
+    path: &str,
+    clipped: &str,
+    offset: usize,
+    query: &str,
+) -> Vec<(usize, usize)> {
+    let ellipsis = clipped
+        .len()
+        .saturating_sub(path.len().saturating_sub(offset));
+    fuzzy_match_ranges(path, query)
+        .into_iter()
+        .filter_map(|(start, end)| {
+            let start = start.max(offset);
+            let end = end.min(path.len());
+            (end > start).then_some((start - offset + ellipsis, end - offset + ellipsis))
+        })
+        .collect()
 }
 
 fn fuzzy_match_ranges(path: &str, query: &str) -> Vec<(usize, usize)> {
-    if query.is_empty() || !path.is_ascii() || !query.is_ascii() {
-        return Vec::new();
-    }
-    let path_lower = path.to_ascii_lowercase();
-    let query_lower = query.to_ascii_lowercase();
-    let mut ranges = Vec::new();
-    let mut offset = 0;
-    while let Some(found) = path_lower[offset..].find(&query_lower) {
-        let start = offset + found;
-        let end = start + query_lower.len();
-        ranges.push((start, end));
-        offset = end;
-    }
-    ranges
+    FileQuery::parse(query).highlight_ranges(path)
 }
 
 fn fuzzy_path_line(
@@ -876,8 +932,8 @@ fn fuzzy_path_line(
     } else {
         max_width
     };
-    let clipped = clip_path(path, path_width);
-    let ranges = fuzzy_match_ranges(&clipped, query);
+    let (clipped, offset) = clip_path_with_offset(path, path_width);
+    let ranges = clipped_match_ranges(path, &clipped, offset, query);
     let mut spans = Vec::new();
     if show_icon {
         let (text, color) = icon.expect("checked icon");
@@ -920,11 +976,31 @@ fn fuzzy_preview_lines(model: &Model) -> Vec<Line<'static>> {
             theme::panel().fg(theme::error()),
         )];
     }
-    let mut lines: Vec<Line<'static>> = preview
+    let scroll = preview.scroll.min(preview.lines.len().saturating_sub(1));
+    let highlights = preview.syntax.highlights();
+    let mut offset: usize = preview
         .lines
         .iter()
-        .map(|line| Line::styled(line.clone(), theme::panel()))
-        .collect();
+        .take(scroll)
+        .map(|line| line.len() + 1)
+        .sum();
+    let mut lines: Vec<Line<'static>> = Vec::new();
+    for (index, line) in preview.lines.iter().enumerate().skip(scroll) {
+        let text = line.clone();
+        let mut spans = vec![Span::styled(
+            format!("{:>4} ", index + 1),
+            theme::panel().fg(theme::muted()),
+        )];
+        let mut syntax_spans = Vec::new();
+        push_syntax_spans(&mut syntax_spans, &text, offset, highlights);
+        spans.extend(
+            syntax_spans
+                .into_iter()
+                .map(|span| Span::styled(span.content.into_owned(), span.style)),
+        );
+        lines.push(Line::from(spans));
+        offset += line.len() + 1;
+    }
     if preview.truncated {
         lines.push(Line::styled(
             "… preview truncated",
@@ -959,7 +1035,7 @@ pub(crate) fn apply_code_block_background(model: &Model, lines: &mut [Line<'_>],
 
 #[cfg(test)]
 mod tests {
-    use super::{clip_path, fuzzy_match_ranges};
+    use super::{clip_path, clip_path_with_offset, clipped_match_ranges, fuzzy_match_ranges};
 
     #[test]
     fn clips_paths_from_the_left() {
@@ -969,7 +1045,16 @@ mod tests {
 
     #[test]
     fn finds_case_insensitive_match_ranges() {
-        assert_eq!(fuzzy_match_ranges("src/main.rs", "MAIN"), vec![(4, 8)]);
+        assert_eq!(fuzzy_match_ranges("src/main.rs", "main"), vec![(4, 8)]);
+        assert!(fuzzy_match_ranges("src/main.rs", "MAIN").is_empty());
         assert!(fuzzy_match_ranges("src/main.rs", "zzz").is_empty());
+    }
+    #[test]
+    fn long_path_suffix_match_is_highlighted_in_the_clipped_suffix() {
+        let path = "a/very/long/workspace/path/that/exceeds/the/picker/width/src/main.rs";
+        let (clipped, offset) = clip_path_with_offset(path, 24);
+        let ranges = clipped_match_ranges(path, &clipped, offset, "main.rs$");
+        assert!(!ranges.is_empty());
+        assert!(ranges.iter().all(|(_start, end)| *end <= clipped.len()));
     }
 }

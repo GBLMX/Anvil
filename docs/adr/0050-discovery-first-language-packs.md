@@ -1,7 +1,9 @@
 # ADR-0050: Discovery-First Defaults and Compiled Language Packs
 
-- Status: Proposed
+- Status: Accepted; implemented 2026-11-19
 - Version: 1.0.0
+- Implementation: discovery pickers, readiness surface, keymap groups, and
+  feature-gated Rust/TypeScript/C-family language packs are verified.
 - Date: 2026-11-17
 - Related: [ADR-0025](0025-lsp-and-language-breadth.md),
   [ADR-0032](0032-language-tooling-service.md),

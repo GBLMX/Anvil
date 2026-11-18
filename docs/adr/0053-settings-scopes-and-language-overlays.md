@@ -1,7 +1,9 @@
 # ADR-0053: Explicit Settings Scopes, Language Overlays, and Registry Completeness
 
-- Status: Proposed
+- Status: Accepted; implemented 2026-11-19
 - Version: 1.0.0
+- Implementation: language scopes, `languages.toml`, generated schemas,
+  `settings check`, overlay filters, registry metadata, and alias normalization landed.
 - Date: 2026-11-18
 - Related: [ADR-0024](0024-tui-state-and-domain-boundaries.md),
   [ADR-0038](0038-project-settings-trust.md),

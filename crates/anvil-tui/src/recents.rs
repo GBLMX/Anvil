@@ -155,6 +155,7 @@ impl Model {
             filtered: (0..entries.len()).collect(),
             entries,
             selected: 0,
+            truncated: false,
         });
         self.push_overlay(OverlayKind::Fuzzy);
         self.status.text = "recent files".to_owned();

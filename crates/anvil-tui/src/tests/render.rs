@@ -369,6 +369,7 @@ fn clicking_outside_fuzzy_closes_it() {
         entries: vec!["src/main.rs".to_owned()],
         filtered: vec![0],
         selected: 0,
+        truncated: false,
     });
     let click = crossterm::event::MouseEvent {
         kind: crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left),
@@ -653,5 +654,47 @@ fn buffer_tab_hits_do_not_map_the_pager_tab_to_a_buffer() {
     assert_eq!(
         crate::render::buffer_tab_at(&model, 32, pager.range.start),
         None
+    );
+}
+
+#[test]
+fn fuzzy_row_click_selects_the_row() {
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.overlays.fuzzy = Some(FuzzyState {
+        generation: 0,
+        query: String::new(),
+        entries: (0..20).map(|index| format!("f{index:02}.rs")).collect(),
+        filtered: (0..20).collect(),
+        selected: 0,
+        truncated: false,
+    });
+    let area = ratatui::layout::Rect {
+        x: 0,
+        y: 0,
+        width: 120,
+        height: 40,
+    };
+    let hits = (0..area.height)
+        .filter_map(|row| {
+            crate::render::fuzzy_row_at(&model, area, 20, row).map(|index| (row, index))
+        })
+        .collect::<Vec<_>>();
+    assert!(hits.len() >= 2);
+    let (row, index) = hits[1];
+    let click = crossterm::event::MouseEvent {
+        kind: crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left),
+        column: 20,
+        row,
+        modifiers: crossterm::event::KeyModifiers::NONE,
+    };
+    assert!(crate::mouse::handle_mouse(
+        &mut model,
+        click,
+        area.width,
+        area.height
+    ));
+    assert_eq!(
+        model.overlays.fuzzy.as_ref().expect("fuzzy").selected,
+        index
     );
 }

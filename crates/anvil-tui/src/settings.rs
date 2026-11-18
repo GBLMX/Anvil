@@ -139,6 +139,120 @@ impl Default for Settings {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct LanguagePatch {
+    pub(crate) soft_wrap: Option<bool>,
+    pub(crate) format_on_save: Option<bool>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum LanguageLayer {
+    User,
+    Project,
+}
+
+#[derive(Clone, Debug, Default)]
+pub(crate) struct LanguageOverlays {
+    pub(crate) patches: BTreeMap<String, LanguagePatch>,
+    pub(crate) soft_wrap_sources: BTreeMap<String, LanguageLayer>,
+    pub(crate) format_on_save_sources: BTreeMap<String, LanguageLayer>,
+    pub(crate) user: Option<PathBuf>,
+    pub(crate) project: Option<PathBuf>,
+    pub(crate) ignored: Vec<(PathBuf, String)>,
+    pub(crate) warnings: Vec<String>,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct BufferSettings {
+    pub(crate) soft_wrap: bool,
+    pub(crate) format_on_save: bool,
+}
+
+#[derive(Debug, Default)]
+pub(crate) struct BufferSettingsCache {
+    initialized: bool,
+    path: Option<PathBuf>,
+    global_soft_wrap: bool,
+    global_format_on_save: bool,
+    language_revision: u64,
+    value: BufferSettings,
+}
+
+pub(crate) fn language_id_for_path(path: &Path) -> Option<&'static str> {
+    match path
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .map(str::to_ascii_lowercase)
+        .as_deref()
+    {
+        Some("rs") => Some("rust"),
+        Some("go") => Some("go"),
+        Some("md" | "markdown") => Some("markdown"),
+        Some("py") => Some("python"),
+        Some("ts" | "tsx") => Some("typescript"),
+        Some("js" | "jsx") => Some("javascript"),
+        Some("json" | "jsonc") => Some("json"),
+        Some("toml") => Some("toml"),
+        Some("yaml" | "yml") => Some("yaml"),
+        Some("html" | "htm") => Some("html"),
+        Some("css") => Some("css"),
+        Some("c" | "h") => Some("c"),
+        Some("cc" | "cpp" | "cxx" | "hpp" | "hh" | "hxx") => Some("cpp"),
+        Some("sh" | "bash" | "zsh") => Some("bash"),
+        Some("lua") => Some("lua"),
+        _ => None,
+    }
+}
+
+impl crate::Model {
+    pub(crate) fn buffer_settings(&self) -> BufferSettings {
+        let path = self.session.path.as_deref();
+        let global_soft_wrap = self.config.settings.editor.soft_wrap;
+        let global_format_on_save = self.config.settings.editor.format_on_save;
+        let mut cache = self.config.buffer_settings.borrow_mut();
+        if cache.initialized
+            && cache.path.as_deref() == path
+            && cache.global_soft_wrap == global_soft_wrap
+            && cache.global_format_on_save == global_format_on_save
+            && cache.language_revision == self.config.language_revision
+        {
+            return cache.value;
+        }
+        let mut effective = BufferSettings {
+            soft_wrap: global_soft_wrap,
+            format_on_save: global_format_on_save,
+        };
+        if let Some(language) = path.and_then(language_id_for_path)
+            && let Some(patch) = self.config.language_overlays.patches.get(language)
+        {
+            if let Some(value) = patch.soft_wrap {
+                effective.soft_wrap = value;
+            }
+            if let Some(value) = patch.format_on_save {
+                effective.format_on_save = value;
+            }
+        }
+        if let Ok(value) = std::env::var(ENV_SOFT_WRAP)
+            && let Ok(value) = parse_bool(ENV_SOFT_WRAP, &value)
+        {
+            effective.soft_wrap = value;
+        }
+        if let Ok(value) = std::env::var(ENV_FORMAT_ON_SAVE)
+            && let Ok(value) = parse_bool(ENV_FORMAT_ON_SAVE, &value)
+        {
+            effective.format_on_save = value;
+        }
+        cache.initialized = true;
+        cache.path = path.map(Path::to_path_buf);
+        cache.global_soft_wrap = global_soft_wrap;
+        cache.global_format_on_save = global_format_on_save;
+        cache.language_revision = self.config.language_revision;
+        cache.value = effective;
+        effective
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum SettingsKey {
     Theme,
@@ -162,6 +276,12 @@ pub(crate) enum SettingKind {
     Theme,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum SettingScope {
+    Global,
+    Language,
+}
+
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct SettingDef {
     pub(crate) key: SettingsKey,
@@ -172,6 +292,137 @@ pub(crate) struct SettingDef {
     pub(crate) description: &'static str,
     pub(crate) group: &'static str,
     pub(crate) tab: &'static str,
+}
+
+impl SettingDef {
+    pub(crate) fn scope(&self) -> SettingScope {
+        match self.key {
+            SettingsKey::SoftWrap | SettingsKey::FormatOnSave => SettingScope::Language,
+            _ => SettingScope::Global,
+        }
+    }
+
+    pub(crate) const fn project_allowed(&self) -> bool {
+        true
+    }
+
+    pub(crate) fn language_allowed(&self) -> bool {
+        self.scope() == SettingScope::Language
+    }
+
+    pub(crate) const fn introduced(&self) -> &'static str {
+        "0.6.0"
+    }
+
+    pub(crate) const fn aliases(&self) -> &'static [&'static str] {
+        &[]
+    }
+
+    pub(crate) const fn deprecated(&self) -> Option<&'static str> {
+        None
+    }
+
+    pub(crate) fn schema_fragment(&self) -> serde_json::Value {
+        setting_schema(self)
+    }
+}
+
+#[derive(Clone, Copy)]
+struct SchemaFragment {
+    section: &'static str,
+    build: fn() -> serde_json::Value,
+}
+
+const SCHEMA_FRAGMENTS: &[SchemaFragment] = &[
+    SchemaFragment {
+        section: "theme",
+        build: theme_schema,
+    },
+    SchemaFragment {
+        section: "lsp",
+        build: lsp_schema_fragment,
+    },
+    SchemaFragment {
+        section: "ui",
+        build: ui_schema_fragment,
+    },
+    SchemaFragment {
+        section: "watch",
+        build: watch_schema,
+    },
+];
+
+fn theme_schema() -> serde_json::Value {
+    serde_json::json!({
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+            "mode": {"enum": ["fixed", "auto"]},
+            "name": {"type": "string", "description": "Select the semantic palette used by the TUI."},
+            "dark": {"type": "string"},
+            "light": {"type": "string"}
+        }
+    })
+}
+
+fn lsp_schema_fragment() -> serde_json::Value {
+    serde_json::json!({
+        "commands": {
+            "type": "object",
+            "additionalProperties": {
+                "oneOf": [
+                    {"type": "string"},
+                    {"type": "array", "items": {"type": "string"}}
+                ]
+            }
+        },
+        "roots": {
+            "type": "object",
+            "additionalProperties": {
+                "type": "object",
+                "additionalProperties": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                        "command": {
+                            "oneOf": [
+                                {"type": "string"},
+                                {"type": "array", "items": {"type": "string"}}
+                            ]
+                        },
+                        "args": {"type": "array", "items": {"type": "string"}},
+                        "root_markers": {"type": "array", "items": {"type": "string"}},
+                        "env": {
+                            "type": "object",
+                            "additionalProperties": {"type": "string"}
+                        },
+                        "settings": {}
+                    }
+                }
+            }
+        }
+    })
+}
+
+fn ui_schema_fragment() -> serde_json::Value {
+    serde_json::json!({
+        "icons": {
+            "type": "object",
+            "additionalProperties": true
+        }
+    })
+}
+
+fn watch_schema() -> serde_json::Value {
+    serde_json::json!({
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+            "mode": {"enum": ["auto", "native", "poll", "off"]},
+            "max_dirs": {"type": "integer", "minimum": 1, "maximum": 1000000},
+            "cross_mounts": {"type": "boolean"}
+        }
+    })
 }
 
 pub(crate) const SETTINGS: &[SettingDef] = &[
@@ -318,104 +569,56 @@ pub fn settings_schema() -> serde_json::Value {
             .get_mut("properties")
             .and_then(serde_json::Value::as_object_mut)
         {
-            group_properties.insert(leaf.to_owned(), setting_schema(def));
+            group_properties.insert(leaf.to_owned(), def.schema_fragment());
         }
     }
-    let theme_description = SETTINGS
-        .iter()
-        .find(|def| def.key == SettingsKey::Theme)
-        .map(|def| def.description)
-        .unwrap_or("Select the semantic palette used by the TUI.");
-    properties.insert(
-        "theme".to_owned(),
-        serde_json::json!({
-            "type": "object",
-            "additionalProperties": false,
-            "properties": {
-                "mode": {"enum": ["fixed", "auto"]},
-                "name": {"type": "string", "description": theme_description},
-                "dark": {"type": "string"},
-                "light": {"type": "string"}
-            }
-        }),
-    );
-    if let Some(lsp_properties) = properties
-        .get_mut("lsp")
-        .and_then(|value| value.get_mut("properties"))
-        .and_then(serde_json::Value::as_object_mut)
-    {
-        lsp_properties.insert(
-            "commands".to_owned(),
-            serde_json::json!({
-                "type": "object",
-                "additionalProperties": {
-                    "oneOf": [
-                        {"type": "string"},
-                        {"type": "array", "items": {"type": "string"}}
-                    ]
-                }
-            }),
-        );
-        lsp_properties.insert(
-            "roots".to_owned(),
-            serde_json::json!({
-                "type": "object",
-                "additionalProperties": {
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "object",
-                        "additionalProperties": false,
-                        "properties": {
-                            "command": {
-                                "oneOf": [
-                                    {"type": "string"},
-                                    {"type": "array", "items": {"type": "string"}}
-                                ]
-                            },
-                            "args": {"type": "array", "items": {"type": "string"}},
-                            "root_markers": {"type": "array", "items": {"type": "string"}},
-                            "env": {
-                                "type": "object",
-                                "additionalProperties": {"type": "string"}
-                            },
-                            "settings": {}
-                        }
-                    }
-                }
-            }),
-        );
+    for fragment in SCHEMA_FRAGMENTS {
+        let value = (fragment.build)();
+        if matches!(fragment.section, "theme" | "watch") {
+            properties.insert(fragment.section.to_owned(), value);
+        } else if let Some(group_properties) = properties
+            .get_mut(fragment.section)
+            .and_then(|value| value.get_mut("properties"))
+            .and_then(serde_json::Value::as_object_mut)
+            && let Some(fragment_properties) = value.as_object()
+        {
+            group_properties.extend(fragment_properties.clone());
+        }
     }
-    if let Some(ui_properties) = properties
-        .get_mut("ui")
-        .and_then(|value| value.get_mut("properties"))
-        .and_then(serde_json::Value::as_object_mut)
-    {
-        ui_properties.insert(
-            "icons".to_owned(),
-            serde_json::json!({
-                "type": "object",
-                "additionalProperties": true
-            }),
-        );
-    }
-    properties.insert(
-        "watch".to_owned(),
-        serde_json::json!({
-            "type": "object",
-            "additionalProperties": false,
-            "properties": {
-                "mode": {"enum": ["auto", "native", "poll", "off"]},
-                "max_dirs": {"type": "integer", "minimum": 1, "maximum": 1000000},
-                "cross_mounts": {"type": "boolean"}
-            }
-        }),
-    );
     serde_json::json!({
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "title": "Anvil settings",
         "type": "object",
         "additionalProperties": false,
         "properties": properties
+    })
+}
+
+/// Builds the JSON Schema for `languages.toml` from language-scoped registry
+/// entries.
+pub fn languages_schema() -> serde_json::Value {
+    let mut language_properties = serde_json::Map::new();
+    for def in SETTINGS.iter().filter(|def| def.language_allowed()) {
+        let Some((_, leaf)) = def.path.split_once('.') else {
+            continue;
+        };
+        language_properties.insert(leaf.to_owned(), def.schema_fragment());
+    }
+    serde_json::json!({
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "title": "Anvil language settings",
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+            "languages": {
+                "type": "object",
+                "additionalProperties": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": language_properties
+                }
+            }
+        }
     })
 }
 
@@ -512,7 +715,272 @@ pub(crate) struct LoadedSettings {
     pub(crate) settings: Settings,
     pub(crate) sources: SettingsSources,
     pub(crate) user: SettingsPatch,
+    pub(crate) project: SettingsPatch,
     pub(crate) inherited: Settings,
+    pub(crate) languages: LanguageOverlays,
+    pub(crate) warnings: Vec<String>,
+}
+
+#[derive(Debug, serde::Serialize)]
+pub struct SettingsCheck {
+    schema_version: u32,
+    workspace: String,
+    project_trusted: bool,
+    explicit_override: bool,
+    layers: Vec<SettingsCheckLayer>,
+    fields: Vec<SettingsCheckField>,
+    languages: Vec<SettingsCheckLanguage>,
+    tools: Vec<SettingsCheckTool>,
+    warnings: Vec<String>,
+    error: Option<String>,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct SettingsCheckLayer {
+    role: &'static str,
+    path: String,
+    exists: bool,
+    ignored: Option<String>,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct SettingsCheckField {
+    key: &'static str,
+    value: String,
+    explicit: Option<String>,
+    source: String,
+    introduced: &'static str,
+    deprecated: Option<&'static str>,
+    aliases: &'static [&'static str],
+    project_allowed: bool,
+    language_allowed: bool,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct SettingsCheckLanguage {
+    language: String,
+    soft_wrap: bool,
+    format_on_save: bool,
+    soft_wrap_source: String,
+    format_on_save_source: String,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct SettingsCheckTool {
+    language: String,
+    tool: Option<String>,
+    source: Option<String>,
+    path: Option<String>,
+}
+
+impl SettingsCheck {
+    pub fn to_json(&self) -> serde_json::Value {
+        serde_json::to_value(self).unwrap_or_else(|_| serde_json::json!({"error": "serialize"}))
+    }
+
+    pub fn text(&self) -> String {
+        let mut lines = vec![format!("settings check (schema {})", self.schema_version)];
+        lines.push(format!("workspace {}", self.workspace));
+        lines.push(format!("project trusted: {}", self.project_trusted));
+        if self.explicit_override {
+            lines.push("ANVIL_SETTINGS: active complete override".to_owned());
+        }
+        for layer in &self.layers {
+            let state = if layer.exists { "exists" } else { "missing" };
+            let ignored = layer
+                .ignored
+                .as_ref()
+                .map(|reason| format!(" ignored ({reason})"))
+                .unwrap_or_default();
+            lines.push(format!(
+                "layer {} {}: {state}{ignored}",
+                layer.role, layer.path
+            ));
+        }
+        for field in &self.fields {
+            let explicit = field
+                .explicit
+                .as_ref()
+                .map(|value| format!(" explicit={value}"))
+                .unwrap_or_default();
+            lines.push(format!(
+                "field {} = {}{} source={} introduced={}",
+                field.key, field.value, explicit, field.source, field.introduced
+            ));
+        }
+        for language in &self.languages {
+            lines.push(format!(
+                "language {} soft_wrap={} ({}) format_on_save={} ({})",
+                language.language,
+                language.soft_wrap,
+                language.soft_wrap_source,
+                language.format_on_save,
+                language.format_on_save_source
+            ));
+        }
+        for tool in &self.tools {
+            lines.push(format!(
+                "tool {} {}{} source={} path={}",
+                tool.language,
+                tool.tool.as_deref().unwrap_or("missing"),
+                tool.tool.as_ref().map(|_| "").unwrap_or(""),
+                tool.source.as_deref().unwrap_or("none"),
+                tool.path.as_deref().unwrap_or("")
+            ));
+        }
+        for warning in &self.warnings {
+            lines.push(format!("warning {warning}"));
+        }
+        if let Some(error) = &self.error {
+            lines.push(format!("error {error}"));
+        }
+        lines.join("\n")
+    }
+}
+
+pub fn settings_check(workspace: &Path, project_trusted: bool) -> SettingsCheck {
+    let user = path().ok();
+    let project = workspace.join(PROJECT_SETTINGS);
+    let language_user = languages_path().ok();
+    let language_project = workspace.join(".anvil/languages.toml");
+    let explicit_override = explicit_settings_path().is_some();
+    let loaded = load_for_workspace_with_sources(workspace, project_trusted);
+    let mut ignored = BTreeMap::new();
+    if let Ok(loaded) = &loaded {
+        for (path, reason) in loaded.sources.ignored() {
+            ignored.insert(path.clone(), reason.clone());
+        }
+        for (path, reason) in &loaded.languages.ignored {
+            ignored.insert(path.clone(), reason.clone());
+        }
+    }
+    let mut layers = Vec::new();
+    for (role, path) in [
+        ("global-user", user),
+        ("global-project", Some(project)),
+        ("language-user", language_user),
+        ("language-project", Some(language_project)),
+    ] {
+        let Some(path) = path else {
+            continue;
+        };
+        layers.push(SettingsCheckLayer {
+            role,
+            exists: path.is_file(),
+            ignored: ignored.get(&path).cloned(),
+            path: path.display().to_string(),
+        });
+    }
+    match loaded {
+        Ok(loaded) => {
+            let fields = SETTINGS
+                .iter()
+                .map(|def| SettingsCheckField {
+                    key: def.path,
+                    value: settings_value(&loaded.settings, def.key),
+                    explicit: loaded
+                        .project
+                        .value(def.key)
+                        .or_else(|| loaded.user.value(def.key)),
+                    source: loaded.sources.label(def.key),
+                    introduced: def.introduced(),
+                    deprecated: def.deprecated(),
+                    aliases: def.aliases(),
+                    project_allowed: def.project_allowed(),
+                    language_allowed: def.language_allowed(),
+                })
+                .collect();
+            let languages = loaded
+                .languages
+                .patches
+                .iter()
+                .map(|(language, patch)| SettingsCheckLanguage {
+                    language: language.clone(),
+                    soft_wrap: patch.soft_wrap.unwrap_or(loaded.settings.editor.soft_wrap),
+                    format_on_save: patch
+                        .format_on_save
+                        .unwrap_or(loaded.settings.editor.format_on_save),
+                    soft_wrap_source: match loaded.languages.soft_wrap_sources.get(language) {
+                        Some(LanguageLayer::User) => "language user layer".to_owned(),
+                        Some(LanguageLayer::Project) => "language project layer".to_owned(),
+                        None => "global".to_owned(),
+                    },
+                    format_on_save_source: match loaded
+                        .languages
+                        .format_on_save_sources
+                        .get(language)
+                    {
+                        Some(LanguageLayer::User) => "language user layer".to_owned(),
+                        Some(LanguageLayer::Project) => "language project layer".to_owned(),
+                        None => "global".to_owned(),
+                    },
+                })
+                .collect();
+            let tools = crate::language_probes()
+                .iter()
+                .map(|(language, extensions)| {
+                    let extension = extensions.first().copied().unwrap_or("txt");
+                    let probe = Path::new("probe").with_extension(extension);
+                    let settings = crate::resolve_lsp_settings(&probe, workspace);
+                    let tool = settings.as_ref().map(|settings| settings.tool.clone());
+                    let source = settings
+                        .as_ref()
+                        .map(|settings| settings.source.as_str().to_owned());
+                    let path = settings.as_ref().and_then(|settings| {
+                        let path = Path::new(&settings.tool);
+                        (path.is_absolute() && path.is_file()).then(|| path.display().to_string())
+                    });
+                    SettingsCheckTool {
+                        language: (*language).to_owned(),
+                        tool,
+                        source,
+                        path,
+                    }
+                })
+                .collect();
+            SettingsCheck {
+                schema_version: 1,
+                workspace: workspace.display().to_string(),
+                project_trusted,
+                explicit_override,
+                layers,
+                fields,
+                languages,
+                tools,
+                warnings: loaded.warnings,
+                error: None,
+            }
+        }
+        Err(error) => SettingsCheck {
+            schema_version: 1,
+            workspace: workspace.display().to_string(),
+            project_trusted,
+            explicit_override,
+            layers,
+            fields: Vec::new(),
+            languages: Vec::new(),
+            tools: Vec::new(),
+            warnings: Vec::new(),
+            error: Some(error),
+        },
+    }
+}
+
+fn settings_value(settings: &Settings, key: SettingsKey) -> String {
+    match key {
+        SettingsKey::Theme => format!("{:?}", settings.theme),
+        SettingsKey::ScrollMargin => settings.editor.scroll_margin.to_string(),
+        SettingsKey::AutoSave => settings.editor.auto_save.to_string(),
+        SettingsKey::SoftWrap => settings.editor.soft_wrap.to_string(),
+        SettingsKey::FormatOnSave => settings.editor.format_on_save.to_string(),
+        SettingsKey::MaxBuffers => settings.editor.max_buffers.to_string(),
+        SettingsKey::SidebarPercent => settings.editor.sidebar_percent.to_string(),
+        SettingsKey::CaseSensitive => settings.search.case_sensitive.to_string(),
+        SettingsKey::InlayHints => settings.lsp.inlay_hints.to_string(),
+        SettingsKey::ReducedMotion => settings.ui.reduced_motion.to_string(),
+        SettingsKey::HighContrast => settings.ui.high_contrast.to_string(),
+        SettingsKey::FileWatching => settings.editor.file_watching.to_string(),
+    }
 }
 
 pub(crate) fn lsp_command_override(
@@ -569,6 +1037,7 @@ fn apply_lsp_root_profile_file(
     {
         settings.tool = tool;
         settings.args = args;
+        settings.source = anvil_lsp_client::ToolSource::RootProfile;
     }
     if let Some(args) = &profile.args {
         settings.args = args.clone();
@@ -625,7 +1094,12 @@ pub(crate) fn load_for_workspace_with_sources(
         }
         None
     };
-    load_from_layers_with_ignored(Some(&user), project.as_deref(), ignored)
+    let mut loaded = load_from_layers_with_ignored(Some(&user), project.as_deref(), ignored)?;
+    let languages = load_language_overlays(workspace, project_trusted)?;
+    loaded.sources.ignored.extend(languages.ignored.clone());
+    loaded.warnings.extend(languages.warnings.clone());
+    loaded.languages = languages;
+    Ok(loaded)
 }
 
 #[cfg(test)]
@@ -666,6 +1140,8 @@ fn load_from_layers_with_ignored(
     let mut merged = toml_edit::DocumentMut::new();
     let mut inherited_doc = toml_edit::DocumentMut::new();
     let mut user_patch = SettingsPatch::default();
+    let mut project_patch = SettingsPatch::default();
+    let mut warnings = Vec::new();
     let mut has_project = false;
     let mut layers = Vec::new();
     for (path, is_project) in [(user, false), (project, true)] {
@@ -676,10 +1152,11 @@ fn load_from_layers_with_ignored(
             continue;
         }
         let text = read_settings_text(path)?;
-        let document = text
+        let mut document = text
             .parse::<toml_edit::DocumentMut>()
             .map_err(|error| format!("{}: invalid settings TOML: {error}", path.display()))?;
-        let file: SettingsPatch = toml_edit::de::from_str(&text)
+        warnings.extend(normalize_aliases(&mut document, SETTINGS_ALIASES, path));
+        let file: SettingsPatch = toml_edit::de::from_str(&document.to_string())
             .map_err(|error| format!("{}: invalid settings TOML: {error}", path.display()))?;
         if is_project {
             if !file.lsp.commands.is_empty() {
@@ -689,6 +1166,7 @@ fn load_from_layers_with_ignored(
                 ));
             }
             has_project = true;
+            project_patch = file;
             merge_document(&mut inherited_doc, &document);
         } else {
             user_patch = file;
@@ -732,8 +1210,79 @@ fn load_from_layers_with_ignored(
         settings,
         sources,
         user: user_patch,
+        project: project_patch,
         inherited,
+        languages: LanguageOverlays::default(),
+        warnings,
     })
+}
+
+pub(crate) const SETTINGS_ALIASES: &[(&str, &str)] = &[];
+pub(crate) const LANGUAGE_ALIASES: &[(&str, &str)] = &[];
+
+fn normalize_language_aliases(
+    document: &mut toml_edit::DocumentMut,
+    aliases: &[(&str, &str)],
+    path: &Path,
+) -> Vec<String> {
+    let mut warnings = Vec::new();
+    let Some(languages) = document
+        .get_mut("languages")
+        .and_then(|item| item.as_table_mut())
+    else {
+        return warnings;
+    };
+    for (language, item) in languages.iter_mut() {
+        let Some(table) = item.as_table_mut() else {
+            continue;
+        };
+        for (alias, canonical) in aliases {
+            let Some(value) = table.remove(alias) else {
+                continue;
+            };
+            if !table.contains_key(canonical) {
+                table.insert(canonical, value);
+            }
+            warnings.push(format!(
+                "{}: languages.{language}.{alias} is deprecated; use {canonical}",
+                path.display()
+            ));
+        }
+    }
+    warnings
+}
+
+fn normalize_aliases(
+    document: &mut toml_edit::DocumentMut,
+    aliases: &[(&str, &str)],
+    path: &Path,
+) -> Vec<String> {
+    let mut warnings = Vec::new();
+    for (alias, canonical) in aliases {
+        let Some((group, leaf)) = canonical.split_once('.') else {
+            continue;
+        };
+        let Some((alias_group, alias_leaf)) = alias.split_once('.') else {
+            continue;
+        };
+        if alias_group != group {
+            continue;
+        }
+        let Some(table) = document.get_mut(group).and_then(|item| item.as_table_mut()) else {
+            continue;
+        };
+        let Some(value) = table.remove(alias_leaf) else {
+            continue;
+        };
+        if !table.contains_key(leaf) {
+            table.insert(leaf, value);
+        }
+        warnings.push(format!(
+            "{}: alias {alias} is deprecated; use {canonical}",
+            path.display()
+        ));
+    }
+    warnings
 }
 
 fn mark_layer_sources(
@@ -1176,6 +1725,135 @@ pub(crate) fn path() -> Result<PathBuf, String> {
     Ok(PathBuf::from(home).join(".config/anvil/settings.toml"))
 }
 
+pub(crate) fn languages_path() -> Result<PathBuf, String> {
+    if let Some(config) = std::env::var_os("XDG_CONFIG_HOME") {
+        let config = config.to_string_lossy();
+        if !config.trim().is_empty() {
+            return Ok(PathBuf::from(config.into_owned()).join("anvil/languages.toml"));
+        }
+    }
+    let home = std::env::var_os("HOME")
+        .ok_or_else(|| "cannot resolve languages path: HOME is unset".to_owned())?;
+    Ok(PathBuf::from(home).join(".config/anvil/languages.toml"))
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct LanguagesFile {
+    #[serde(default)]
+    languages: BTreeMap<String, LanguagePatch>,
+}
+
+fn load_language_overlays(
+    workspace: &Path,
+    project_trusted: bool,
+) -> Result<LanguageOverlays, String> {
+    let project = workspace.join(".anvil/languages.toml");
+    if explicit_settings_path().is_some() {
+        let mut overlays = LanguageOverlays::default();
+        let mut paths = vec![project];
+        if let Ok(user) = languages_path() {
+            paths.insert(0, user);
+        }
+        for path in paths {
+            if path.is_file() {
+                overlays.ignored.push((
+                    path,
+                    "explicit ANVIL_SETTINGS replaces language layers".to_owned(),
+                ));
+            }
+        }
+        return Ok(overlays);
+    }
+    let user = languages_path()?;
+    load_language_overlays_from(&user, &project, project_trusted, false)
+}
+
+fn load_language_overlays_from(
+    user: &Path,
+    project: &Path,
+    project_trusted: bool,
+    explicit: bool,
+) -> Result<LanguageOverlays, String> {
+    let mut overlays = LanguageOverlays::default();
+    if explicit {
+        for path in [user, project] {
+            if path.is_file() {
+                overlays.ignored.push((
+                    path.to_path_buf(),
+                    "explicit ANVIL_SETTINGS replaces language layers".to_owned(),
+                ));
+            }
+        }
+        return Ok(overlays);
+    }
+    if user.is_file() {
+        apply_language_file(user, &mut overlays, LanguageLayer::User)?;
+        overlays.user = Some(user.to_path_buf());
+    }
+    if project.is_file() {
+        if project_trusted {
+            apply_language_file(project, &mut overlays, LanguageLayer::Project)?;
+            overlays.project = Some(project.to_path_buf());
+        } else {
+            overlays.ignored.push((
+                project.to_path_buf(),
+                "workspace root is untrusted".to_owned(),
+            ));
+        }
+    }
+    Ok(overlays)
+}
+
+fn apply_language_file(
+    path: &Path,
+    overlays: &mut LanguageOverlays,
+    layer: LanguageLayer,
+) -> Result<(), String> {
+    let text = read_settings_text(path)?;
+    let mut document = text
+        .parse::<toml_edit::DocumentMut>()
+        .map_err(|error| format!("{}: invalid languages TOML: {error}", path.display()))?;
+    overlays.warnings.extend(normalize_language_aliases(
+        &mut document,
+        LANGUAGE_ALIASES,
+        path,
+    ));
+    if let Some(languages) = document.get("languages").and_then(|item| item.as_table()) {
+        for (language, item) in languages {
+            let Some(table) = item.as_table() else {
+                continue;
+            };
+            for (key, _) in table.iter() {
+                let key = key.to_string();
+                if !SETTINGS
+                    .iter()
+                    .any(|def| def.language_allowed() && def.path.ends_with(key.as_str()))
+                {
+                    return Err(format!(
+                        "{}: languages.{language}.{key} is not a language-scoped setting",
+                        path.display()
+                    ));
+                }
+            }
+        }
+    }
+    let file: LanguagesFile = toml_edit::de::from_str(&document.to_string())
+        .map_err(|error| format!("{}: invalid languages TOML: {error}", path.display()))?;
+    for (language, patch) in file.languages {
+        let target = overlays.patches.entry(language.clone()).or_default();
+        if patch.soft_wrap.is_some() {
+            target.soft_wrap = patch.soft_wrap;
+            overlays.soft_wrap_sources.insert(language.clone(), layer);
+        }
+        if patch.format_on_save.is_some() {
+            target.format_on_save = patch.format_on_save;
+            overlays.format_on_save_sources.insert(language, layer);
+        }
+    }
+    Ok(())
+}
+
 #[derive(Clone, Debug, Default, Deserialize)]
 #[serde(default)]
 pub(crate) struct SettingsPatch {
@@ -1267,6 +1945,25 @@ impl SettingsPatch {
         patch.watch.max_dirs = Some(settings.watch.max_dirs);
         patch.watch.cross_mounts = Some(settings.watch.cross_mounts);
         patch
+    }
+
+    pub(crate) fn value(&self, key: SettingsKey) -> Option<String> {
+        match key {
+            SettingsKey::Theme => self.theme.as_ref().map(|_| "configured".to_owned()),
+            SettingsKey::ScrollMargin => self.editor.scroll_margin.map(|value| value.to_string()),
+            SettingsKey::AutoSave => self.editor.auto_save.map(|value| value.to_string()),
+            SettingsKey::SoftWrap => self.editor.soft_wrap.map(|value| value.to_string()),
+            SettingsKey::FormatOnSave => self.editor.format_on_save.map(|value| value.to_string()),
+            SettingsKey::MaxBuffers => self.editor.max_buffers.map(|value| value.to_string()),
+            SettingsKey::SidebarPercent => {
+                self.editor.sidebar_percent.map(|value| value.to_string())
+            }
+            SettingsKey::CaseSensitive => self.search.case_sensitive.map(|value| value.to_string()),
+            SettingsKey::InlayHints => self.lsp.inlay_hints.map(|value| value.to_string()),
+            SettingsKey::ReducedMotion => self.ui.reduced_motion.map(|value| value.to_string()),
+            SettingsKey::HighContrast => self.ui.high_contrast.map(|value| value.to_string()),
+            SettingsKey::FileWatching => self.editor.file_watching.map(|value| value.to_string()),
+        }
     }
 
     pub(crate) fn set_field(&mut self, key: SettingsKey, settings: &Settings) {
@@ -2120,6 +2817,7 @@ mod tests {
         let file: SettingsPatch = toml_edit::de::from_str(&text).expect("profile");
         let mut settings = anvil_lsp_client::LspSettings {
             tool: "rust-analyzer".to_owned(),
+            source: anvil_lsp_client::ToolSource::SearchPath,
             args: Vec::new(),
             language_id: "rust".to_owned(),
             root_markers: vec!["Cargo.toml".to_owned()],
@@ -2131,6 +2829,7 @@ mod tests {
 
         apply_lsp_root_profile_file(&file, &root, &mut settings);
         assert_eq!(settings.tool, "/opt/rust-analyzer");
+        assert_eq!(settings.source, anvil_lsp_client::ToolSource::RootProfile);
         assert_eq!(settings.args, ["--log-file", "/tmp/ra.log"]);
         assert_eq!(settings.root_markers, ["Cargo.toml", "rust-toolchain.toml"]);
         assert_eq!(settings.env["RA_LOG"], "info");
@@ -2451,5 +3150,221 @@ mod accessibility_tests {
         .expect("env");
         assert!(!settings.ui.reduced_motion);
         assert!(settings.ui.high_contrast);
+    }
+}
+
+#[cfg(test)]
+mod language_settings_tests {
+    use super::*;
+
+    #[test]
+    fn alias_normalization_rewrites_deprecated_keys_and_warns() {
+        let mut document = "[editor]\nold_margin = 5\n"
+            .parse::<toml_edit::DocumentMut>()
+            .expect("document");
+        let warnings = normalize_aliases(
+            &mut document,
+            &[("editor.old_margin", "editor.scroll_margin")],
+            Path::new("settings.toml"),
+        );
+        assert_eq!(warnings.len(), 1);
+        assert!(warnings[0].contains("deprecated"));
+        assert_eq!(document["editor"]["scroll_margin"].as_integer(), Some(5));
+        assert!(document["editor"].get("old_margin").is_none());
+    }
+
+    #[test]
+    fn language_alias_normalization_rewrites_and_warns() {
+        let mut document = "[languages.rust]\nold_wrap = true\n"
+            .parse::<toml_edit::DocumentMut>()
+            .expect("document");
+        let warnings = normalize_language_aliases(
+            &mut document,
+            &[("old_wrap", "soft_wrap")],
+            Path::new("languages.toml"),
+        );
+        assert_eq!(warnings.len(), 1);
+        assert!(warnings[0].contains("deprecated"));
+        assert_eq!(
+            document["languages"]["rust"]["soft_wrap"].as_bool(),
+            Some(true)
+        );
+        assert!(document["languages"]["rust"].get("old_wrap").is_none());
+    }
+
+    #[test]
+    fn registry_metadata_covers_patch_schema_ui_provenance_and_scope() {
+        let settings = Settings::default();
+        let sources = SettingsSources::default();
+        let schema = settings_schema();
+        let language_schema = languages_schema();
+        for def in SETTINGS {
+            assert!(!def.introduced().is_empty(), "{}", def.path);
+            assert!(def.project_allowed(), "{}", def.path);
+            assert_eq!(
+                def.language_allowed(),
+                def.scope() == SettingScope::Language
+            );
+            assert!(!def.label.is_empty());
+            assert!(!def.description.is_empty());
+            assert!(!def.group.is_empty());
+            assert!(!def.tab.is_empty());
+            assert!(def.schema_fragment().is_object(), "{}", def.path);
+            let mut patch = SettingsPatch::default();
+            patch.set_field(def.key, &settings);
+            assert!(patch.value(def.key).is_some(), "{}", def.path);
+            assert_eq!(sources.origin(def.key), SettingsOrigin::Default);
+            if def.key == SettingsKey::Theme {
+                assert!(schema.pointer("/properties/theme").is_some());
+            } else {
+                let (group, leaf) = def.path.split_once('.').expect("path");
+                assert!(
+                    schema
+                        .pointer(&format!("/properties/{group}/properties/{leaf}"))
+                        .is_some(),
+                    "{}",
+                    def.path
+                );
+            }
+            if def.language_allowed() {
+                let (_, leaf) = def.path.split_once('.').expect("path");
+                assert!(
+                    language_schema
+                        .pointer(&format!(
+                            "/properties/languages/additionalProperties/properties/{leaf}"
+                        ))
+                        .is_some(),
+                    "{}",
+                    def.path
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn language_schema_only_exposes_language_scoped_keys() {
+        let schema = languages_schema();
+        let properties = schema
+            .pointer("/properties/languages/additionalProperties/properties")
+            .and_then(serde_json::Value::as_object)
+            .expect("language properties");
+        assert!(properties.contains_key("soft_wrap"));
+        assert!(properties.contains_key("format_on_save"));
+        assert!(!properties.contains_key("scroll_margin"));
+        assert!(!properties.contains_key("theme"));
+    }
+
+    #[test]
+    fn language_files_reject_global_and_unknown_keys() {
+        assert!(
+            toml_edit::de::from_str::<LanguagesFile>("[languages.rust]\nscroll_margin = 2\n")
+                .is_err()
+        );
+        assert!(
+            toml_edit::de::from_str::<LanguagesFile>(
+                "[languages.rust]\nsoft_wrap = true\nexec = \"x\"\n"
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn buffer_settings_follow_the_active_language_without_mutating_global() {
+        let mut model = crate::Model::new(crate::EditorState::from_text(""), None);
+        model.config.settings.editor.soft_wrap = true;
+        model.config.language_overlays.patches.insert(
+            "rust".to_owned(),
+            LanguagePatch {
+                soft_wrap: Some(false),
+                format_on_save: Some(true),
+            },
+        );
+        model.session.path = Some(PathBuf::from("main.rs"));
+        let rust = model.buffer_settings();
+        assert!(!rust.soft_wrap);
+        assert!(rust.format_on_save);
+        assert!(model.config.settings.editor.soft_wrap);
+
+        model.session.path = Some(PathBuf::from("notes.md"));
+        let markdown = model.buffer_settings();
+        assert!(markdown.soft_wrap);
+        assert!(!markdown.format_on_save);
+    }
+
+    #[test]
+    fn settings_check_reports_layers_fields_and_language_errors() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let report = settings_check(dir.path(), true);
+        let json = report.to_json();
+        assert_eq!(json["schema_version"], 1);
+        assert!(json["fields"].as_array().is_some_and(|fields| {
+            fields
+                .iter()
+                .any(|field| field["key"] == "editor.soft_wrap")
+        }));
+        assert!(json["tools"].as_array().is_some_and(|tools| {
+            !tools.is_empty() && tools.iter().all(|tool| tool.get("source").is_some())
+        }));
+        assert!(report.text().contains("field editor.soft_wrap"));
+    }
+
+    #[test]
+    fn settings_check_reports_project_explicit_values() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        fs::write(
+            dir.path().join(PROJECT_SETTINGS),
+            "[editor]\nscroll_margin = 7\n",
+        )
+        .expect("project settings");
+        let report = settings_check(dir.path(), true);
+        let field = report.to_json()["fields"]
+            .as_array()
+            .and_then(|fields| {
+                fields
+                    .iter()
+                    .find(|field| field["key"] == "editor.scroll_margin")
+            })
+            .cloned()
+            .expect("field");
+        assert_eq!(field["explicit"], "7");
+        assert_eq!(field["value"], "7");
+    }
+
+    #[test]
+    fn buffer_settings_cache_is_initialized_on_first_empty_path_lookup() {
+        let model = crate::Model::new(crate::EditorState::from_text(""), None);
+        assert!(!model.config.buffer_settings.borrow().initialized);
+        let _ = model.buffer_settings();
+        assert!(model.config.buffer_settings.borrow().initialized);
+    }
+
+    #[test]
+    fn language_layers_follow_trust_and_project_precedence() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let user = dir.path().join("user/languages.toml");
+        let project = dir.path().join("ws/.anvil/languages.toml");
+        fs::create_dir_all(user.parent().expect("user parent")).expect("user dir");
+        fs::create_dir_all(project.parent().expect("project parent")).expect("project dir");
+        fs::write(
+            &user,
+            "[languages.rust]\nsoft_wrap = true\nformat_on_save = true\n",
+        )
+        .expect("user");
+        fs::write(&project, "[languages.rust]\nsoft_wrap = false\n").expect("project");
+
+        let trusted = load_language_overlays_from(&user, &project, true, false).expect("trusted");
+        assert_eq!(trusted.patches["rust"].soft_wrap, Some(false));
+        assert_eq!(trusted.patches["rust"].format_on_save, Some(true));
+        assert_eq!(trusted.soft_wrap_sources["rust"], LanguageLayer::Project);
+        assert_eq!(trusted.format_on_save_sources["rust"], LanguageLayer::User);
+
+        let untrusted =
+            load_language_overlays_from(&user, &project, false, false).expect("untrusted");
+        assert_eq!(untrusted.patches["rust"].soft_wrap, Some(true));
+        assert_eq!(untrusted.ignored.len(), 1);
+
+        let explicit = load_language_overlays_from(&user, &project, true, true).expect("explicit");
+        assert!(explicit.patches.is_empty());
+        assert_eq!(explicit.ignored.len(), 2);
     }
 }

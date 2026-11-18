@@ -1,7 +1,10 @@
 # ADR-0052: Explicit Language Tool Setup and Source Resolution
 
-- Status: Proposed
+- Status: Accepted; implemented native providers 2026-11-19; managed downloads deferred
 - Version: 1.5.1
+- Implementation: shared source resolver, setup check/plan/apply, provenance state,
+  language/settings diagnostics, and managed-state discovery landed. Managed
+  downloads remain deferred as documented below.
 - Date: 2026-11-18
 - Related: [ADR-0020](0020-content-addressed-plugin-store.md),
   [ADR-0025](0025-lsp-and-language-breadth.md),
