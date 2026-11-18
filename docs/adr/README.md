@@ -61,6 +61,8 @@ their decision sections.
 | [0053](0053-settings-scopes-and-language-overlays.md) | Explicit settings scopes, language overlays, and registry completeness | Accepted; implemented 2026-11-19 |
 | [0054](0054-file-picker-query-and-index-lifecycle.md) | File picker query, ranking, and index lifecycle | Accepted; implemented 2026-11-19 |
 | [0055](0055-start-dashboard-actions-and-context.md) | Start dashboard actions, focus, and contextual recents | Accepted; implemented 2026-11-19 |
+| [0056](0056-mcp-dual-era-protocol-and-tool-contract.md) | MCP dual-era protocol and structured tool contract | Proposed |
+| [0057](0057-tui-surface-model-and-focus-contract.md) | TUI surface model and focus contract | Proposed |
 
 ## Numbering Rule
 

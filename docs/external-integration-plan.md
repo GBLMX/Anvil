@@ -232,6 +232,11 @@ serialization only.
 
 Transport: MCP stdio, one request at a time. No network listener and no
 additional control protocol.
+Protocol upgrade: the current adapter is legacy-only. The dual-era
+`2026-07-28` plus `initialize` compatibility decision, structured results, and
+revision guard are recorded in
+[ADR-0056](adr/0056-mcp-dual-era-protocol-and-tool-contract.md). The P1
+acceptance below describes the implemented legacy surface until that ADR lands.
 
 Tools:
 
