@@ -28,6 +28,25 @@ const LANGUAGES: &[(&str, &[&str])] = &[
     ("Typst", &["typ"]),
 ];
 
+/// Shared language probes used by readiness and setup surfaces.
+pub fn language_probes() -> &'static [(&'static str, &'static [&'static str])] {
+    LANGUAGES
+}
+
+/// Resolves the active LSP profile with user and per-root settings applied.
+pub fn resolve_lsp_settings(path: &Path, root: &Path) -> Option<anvil_lsp_client::LspSettings> {
+    resolve_lsp_settings_with_service(path, root, None)
+}
+
+/// Resolves the active LSP profile with an optional language-tooling service.
+pub fn resolve_lsp_settings_with_service(
+    path: &Path,
+    root: &Path,
+    service: Option<&dyn anvil_module::language::LanguageToolingService>,
+) -> Option<anvil_lsp_client::LspSettings> {
+    lsp_ui::lsp_settings_with_root(path, root, service)
+}
+
 impl Model {
     pub(crate) fn show_languages(&mut self) {
         let text = self.language_readiness_text();
