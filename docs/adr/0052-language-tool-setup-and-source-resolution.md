@@ -1,7 +1,7 @@
 # ADR-0052: Explicit Language Tool Setup and Source Resolution
 
 - Status: Proposed
-- Version: 1.4.0
+- Version: 1.4.1
 - Date: 2026-11-18
 - Related: [ADR-0020](0020-content-addressed-plugin-store.md),
   [ADR-0025](0025-lsp-and-language-breadth.md),
@@ -354,6 +354,8 @@ Negative:
 - `apply` executes user-level native providers after confirmation and blocks
   root-requiring or manual providers before changing anything;
 - managed downloads and persistent tool state remain phase 3.
+- Deferred setup flags: `--profile`, `--dry-run`, `--quiet`, `--verbose`,
+  `--no-color`, and `--print-path`; usage documents only implemented flags.
 - `:languages` and `anvil doctor` remain read-only.
 - The `:languages` footer points at manual installation and
   `[lsp.commands]`/`[lsp.roots]`, and states that `doctor` only verifies
