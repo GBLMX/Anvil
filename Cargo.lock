@@ -91,6 +91,7 @@ name = "anvil-distro-standard"
 version = "0.6.0"
 dependencies = [
  "anvil-control",
+ "anvil-lsp-client",
  "anvil-mod-desktop",
  "anvil-mod-git",
  "anvil-mod-language-latex",
