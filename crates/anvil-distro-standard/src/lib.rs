@@ -3,6 +3,7 @@ use std::{env, ffi::OsString, path::Path, process};
 mod args;
 mod doctor;
 mod setup;
+mod tool_state;
 
 use args::{Command, parse_args};
 use doctor::{json_escape, run_doctor};

@@ -28,7 +28,8 @@ post-`0.5.0` feature line.
   language servers using the shared settings-aware resolver, including
   `ANVIL_LSP_*`, `[lsp.commands]`, and `[lsp.roots]`. `setup apply` installs
   missing user-level providers after confirmation; root/manual providers are
-  blocked before changes. `--yes` enables non-interactive apply.
+  blocked before changes. `--yes` enables non-interactive apply, and successful
+  installs are recorded in `$XDG_DATA_HOME/anvil/tools/state.json`.
 - Added build-time `language-pack-rust`, `language-pack-typescript`, and
   `language-pack-c-family` composition features; `full` includes all three.
 - Added the opt-in `official-language-web` syntax feature for TypeScript,

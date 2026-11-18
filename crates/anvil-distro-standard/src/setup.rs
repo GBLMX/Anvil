@@ -12,7 +12,11 @@ use anvil_lsp_client::find_tool_path;
 use anvil_module::language::LanguageToolingService;
 use serde_json::json;
 
-use crate::{RunError, args::SetupMode};
+use crate::{
+    RunError,
+    args::SetupMode,
+    tool_state::{InstalledTool, record_installed},
+};
 
 #[derive(Clone, Copy, Debug)]
 enum Provider {
@@ -271,6 +275,7 @@ fn apply_setup(
         }
     }
 
+    let mut installed = Vec::new();
     for status in missing {
         let provider = status.provider.expect("preflight checked provider");
         let (program, args) = provider.program_args().expect("preflight checked command");
@@ -303,6 +308,23 @@ fn apply_setup(
             }
             return Ok(1);
         }
+        installed.push(InstalledTool {
+            language: status.name,
+            tool: status.tool.clone().unwrap_or_default(),
+            provider: provider.label(),
+            command: provider.command(),
+            path: status.tool.as_deref().and_then(resolve_existing),
+        });
+    }
+
+    if let Err(error) = record_installed(&installed) {
+        let errors = vec![format!("tool state: {error}")];
+        if json_output {
+            print_apply_json(statuses, true, &errors)?;
+        } else {
+            eprintln!("E: tool state: {error}");
+        }
+        return Ok(1);
     }
 
     let after = collect(root, service);
