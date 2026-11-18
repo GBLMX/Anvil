@@ -16,7 +16,7 @@ use crate::{RunError, args::SetupMode};
 
 #[derive(Clone, Copy, Debug)]
 enum Provider {
-    Rustup(&'static str),
+    Rustup(&'static [&'static str]),
     Npm(&'static str),
     Go(&'static str),
     Pipx(&'static str),
@@ -40,7 +40,9 @@ impl Provider {
 
     fn command(self) -> String {
         match self {
-            Self::Rustup(component) => format!("rustup component add {component}"),
+            Self::Rustup(components) => {
+                format!("rustup component add {}", components.join(" "))
+            }
             Self::Npm(package) => format!("npm install -g {package}"),
             Self::Go(package) => format!("go install {package}"),
             Self::Pipx(package) => format!("pipx install {package}"),
@@ -52,11 +54,6 @@ impl Provider {
 
     fn program_args(self) -> Option<(String, Vec<String>)> {
         match self {
-                vec![
-                    "component".to_owned(),
-                    "add".to_owned(),
-                    component.to_owned(),
-                ],
             Self::Rustup(components) => {
                 let mut args = vec!["component".to_owned(), "add".to_owned()];
                 args.extend(components.iter().map(|component| (*component).to_owned()));
@@ -128,14 +125,6 @@ impl LanguageStatus {
         }
     }
 
-    fn action(&self) -> &'static str {
-        if self.state() == "missing" {
-            "install"
-        } else {
-            "none"
-        }
-    }
-
     fn matches(&self, filter: &str) -> bool {
         self.name.eq_ignore_ascii_case(filter)
             || self
@@ -183,14 +172,6 @@ pub(super) fn run_setup(
         .iter()
         .filter(|status| status.state() == "no_profile")
         .count();
-    let missing = statuses
-        .iter()
-        .filter(|status| status.state() == "missing")
-        .count();
-    let no_profile = statuses
-        .iter()
-        .filter(|status| status.state() == "no_profile")
-        .count();
 
     if json_output {
         print_json(mode, &statuses, found, missing, no_profile)?;
@@ -199,151 +180,6 @@ pub(super) fn run_setup(
     } else if mode == SetupMode::Plan {
         print_plan(&statuses, found, missing, no_profile);
     } else {
-        print_check(&statuses, found, missing, no_profile);
-    }
-    Ok(0)
-}
-
-fn apply_setup(
-    root: &Path,
-    service: Option<&dyn LanguageToolingService>,
-    statuses: &[LanguageStatus],
-    json_output: bool,
-    plain: bool,
-    yes: bool,
-    no_input: bool,
-) -> Result<i32, RunError> {
-    let missing: Vec<&LanguageStatus> = statuses
-        .iter()
-        .filter(|status| status.state() == "missing")
-        .collect();
-    if missing.is_empty() {
-        if json_output {
-            print_apply_json(statuses, false, &[])?;
-        } else if plain {
-            print_plain(statuses);
-        } else {
-            println!("Nothing to install.");
-        }
-        return Ok(0);
-    }
-
-    let mut blocked = Vec::new();
-    for status in &missing {
-        let Some(provider) = status.provider else {
-            blocked.push(format!("{}: no installation provider", status.name));
-            continue;
-        };
-        if provider.requires_root() {
-            blocked.push(format!(
-                "{}: requires root; run: {}",
-                status.name,
-                provider.command()
-            ));
-            continue;
-        }
-        if provider.program_args().is_none() {
-            blocked.push(format!("{}: {}", status.name, provider.command()));
-            continue;
-        }
-        for requirement in provider.requires() {
-            if find_tool_path(&[*requirement]).is_none() {
-                blocked.push(format!("{}: requires {requirement} on PATH", status.name));
-            }
-        }
-    }
-    if !blocked.is_empty() {
-        if json_output {
-            print_apply_json(statuses, false, &blocked)?;
-        } else {
-            eprintln!("Setup blocked:");
-            for reason in &blocked {
-                eprintln!("  {reason}");
-            }
-            eprintln!("No changes made.");
-        }
-        return Ok(3);
-    }
-
-    if !yes {
-        if no_input || !io::stdin().is_terminal() {
-            let reason = vec!["confirmation required; rerun with --yes".to_owned()];
-            if json_output {
-                print_apply_json(statuses, false, &reason)?;
-            } else {
-                eprintln!("Setup blocked: confirmation required; rerun with --yes.");
-            }
-            return Ok(3);
-        }
-        print!("Install {} missing language tool(s)? [y/N] ", missing.len());
-        io::stdout().flush()?;
-        let mut answer = String::new();
-        io::stdin().read_line(&mut answer)?;
-        if !matches!(answer.trim().to_ascii_lowercase().as_str(), "y" | "yes") {
-            let reason = vec!["cancelled".to_owned()];
-            if json_output {
-                print_apply_json(statuses, false, &reason)?;
-            } else {
-                println!("Cancelled.");
-            }
-            return Ok(3);
-        }
-    }
-
-    for status in missing {
-        let provider = status.provider.expect("preflight checked provider");
-        let (program, args) = provider.program_args().expect("preflight checked command");
-        let executable =
-            find_tool_path(&[program.as_str()]).unwrap_or_else(|| PathBuf::from(&program));
-        if json_output {
-            eprintln!("installing {} via {}", status.name, provider.label());
-        } else {
-            println!("Installing {} via {}...", status.name, provider.label());
-        }
-        let success = if json_output {
-            let output = Command::new(&executable)
-                .args(&args)
-                .stdout(Stdio::piped())
-                .stderr(Stdio::piped())
-                .output()?;
-            if !output.status.success() {
-                eprint!("{}", String::from_utf8_lossy(&output.stderr));
-            }
-            output.status.success()
-        } else {
-            Command::new(&executable).args(&args).status()?.success()
-        };
-        if !success {
-            let errors = vec![format!("{}: installation command failed", status.name)];
-            if json_output {
-                print_apply_json(statuses, false, &errors)?;
-            } else {
-                eprintln!("E: {} installation failed", status.name);
-            }
-            return Ok(1);
-        }
-    }
-
-    let after = collect(root, service);
-    let found = after
-        .iter()
-        .filter(|status| status.state() == "found")
-        .count();
-    let missing = after
-        .iter()
-        .filter(|status| status.state() == "missing")
-        .count();
-    let no_profile = after
-        .iter()
-        .filter(|status| status.state() == "no_profile")
-        .count();
-    if json_output {
-        print_apply_json(&after, true, &[])?;
-    } else if plain {
-        print_plain(&after);
-    } else {
-        println!("Applied language-tool installation(s).");
-        print_check(&after, found, missing, no_profile);
         print_check(&statuses, found, missing, no_profile);
     }
     Ok(0)
@@ -532,14 +368,6 @@ fn resolve_existing(tool: &str) -> Option<PathBuf> {
     find_tool_path(&[tool])
 }
 
-fn resolve_existing(tool: &str) -> Option<PathBuf> {
-    let path = Path::new(tool);
-    if path.is_absolute() || path.components().count() > 1 {
-        return path.is_file().then(|| path.to_path_buf());
-    }
-    find_tool_path(&[tool])
-}
-
 fn print_check(statuses: &[LanguageStatus], found: usize, missing: usize, no_profile: usize) {
     println!(
         "Language tools ({} / {})",
@@ -592,14 +420,6 @@ fn print_plan(statuses: &[LanguageStatus], found: usize, missing: usize, no_prof
                         .unwrap_or("")
                 );
                 println!(
-                    "    tool: {}",
-                    status
-                        .label
-                        .as_deref()
-                        .or(status.tool.as_deref())
-                        .unwrap_or("")
-                );
-                println!(
                     "    path: {}",
                     status
                         .path
@@ -628,10 +448,6 @@ fn print_plan(statuses: &[LanguageStatus], found: usize, missing: usize, no_prof
                         }
                     );
                 }
-            }
-            _ => {
-                println!("    status: no profile");
-                println!("    action: none");
             }
             _ => {
                 println!("    status: no profile");
@@ -781,7 +597,7 @@ fn provider_for(tool: &str, label: &str) -> Provider {
         .to_ascii_lowercase();
     let label = label.to_ascii_lowercase();
     if name.contains("rust-analyzer") || label.contains("rust-analyzer") {
-        Provider::Rustup("rust-analyzer")
+        Provider::Rustup(&["rust-analyzer", "rust-src"])
     } else if name.contains("gopls") || label.contains("gopls") {
         Provider::Go("golang.org/x/tools/gopls@v0.23.0")
     } else if name.contains("typescript-language-server") || label.contains("typescript") {
@@ -859,7 +675,7 @@ mod tests {
             tool: Some("rust-analyzer".to_owned()),
             label: Some("rust-analyzer".to_owned()),
             path: None,
-            provider: Some(Provider::Rustup("rust-analyzer")),
+            provider: Some(Provider::Rustup(&["rust-analyzer", "rust-src"])),
         };
         assert!(status.matches("Rust"));
         assert!(status.matches("rust-analyzer"));
