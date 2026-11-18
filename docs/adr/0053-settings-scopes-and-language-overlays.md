@@ -116,9 +116,10 @@ when the primary workspace root is trusted, matching ADR-0038. Secondary roots
 do not contribute process settings or language overlays.
 
 `ANVIL_SETTINGS` keeps its existing complete-override behavior: when it is set,
-the user and project `settings.toml` layers are replaced. Language files remain
-a separate surface; an explicit `ANVIL_LANGUAGES` override is not added in this
-ADR.
+the `ANVIL_SETTINGS` file replaces every other file-backed layer. That includes
+the user and project `settings.toml` layers and the user and trusted-project
+`languages.toml` layers. `ANVIL_*` environment variables still apply after it.
+No `ANVIL_LANGUAGES` override is added in this ADR.
 
 ### 3. Put language overrides in a separate `languages.toml`
 
@@ -278,7 +279,9 @@ Focused tests and checks:
 - search and `@modified` operate on the registry, not hardcoded row indexes;
 - sparse save preserves comments and unknown keys, and reload still rejects the
   unknown key;
-- `ANVIL_SETTINGS` complete-override behavior remains unchanged;
+- `ANVIL_SETTINGS` ignores both user/project `settings.toml` and
+  user/project `languages.toml` layers while `ANVIL_*` environment variables
+  still apply;
 - no language override is written into the user settings or project files by
   reset or save;
 - language overlay resolution does not run on the render path.
