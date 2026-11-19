@@ -1,7 +1,7 @@
 # ADR-0059: Public Docs Boundary and Deferred Navigation
 
 - Status: Accepted; docs entry and checks implemented 2026-11-20
-- Version: 1.0.0
+- Version: 1.1.0
 - Date: 2026-11-20
 - Related: [ADR-0013](0013-kernel-distribution-boundary.md),
   [ADR-0021](0021-signed-plugin-index.md),
@@ -65,8 +65,11 @@ Every page under `/docs` renders through the site's shared layout and provides:
 - Open Graph and Twitter metadata;
 - `aria-label` on icon-only controls and previous/next links.
 
-The site build fails if a docs page is missing these properties. This check is
-enforced by `scripts/check-site.mjs` in the site repository.
+The site build fails if a docs page is missing the structural and metadata
+parts of this contract: skip link, non-empty title and description, absolute
+canonical URL, Open Graph/Twitter metadata, exactly one `main#main`, and labels
+on icon-only and previous/next controls. Focus styling remains part of the
+layout contract and is verified in the browser.
 
 ### 3. Docs content stays source-backed
 
@@ -95,8 +98,8 @@ Positive:
 - No empty navigation, dead chapters, or misleading search UI.
 - The canonical docs source and the public site cannot drift silently.
 - Accessibility and SEO checks are enforced from the first docs page.
-- The site keeps the low-maintenance, zero-JS-first docs entry until content
-  justifies more machinery.
+- The site keeps the low-maintenance, minimal-JS docs entry: no docs framework
+  or large client bundle until content justifies it.
 
 Negative:
 
@@ -111,8 +114,9 @@ Negative:
 
 - Docs metadata and accessibility: run `python3 scripts/docs-check.py` in this
   repository; run `npm run build` in `anvilkernel-site`, whose generated check
-  requires skip links, non-empty descriptions, canonical/Open Graph metadata,
-  labeled icon controls, and the docs copy controls.
+  requires skip links, non-empty title/description, canonical/Open Graph
+  metadata, exactly one `main#main`, labeled controls, and the docs copy
+  controls. Focus styling is checked in the browser.
 - Keyboard: Tab from the top reaches the skip link; Enter on a focused copy
   button changes its label to `已复制`.
 - Responsive: verify `/docs/` at 390px and desktop widths with no horizontal
