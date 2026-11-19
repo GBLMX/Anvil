@@ -81,6 +81,10 @@ It builds `scripts/release-layout.sh`, generates an SPDX JSON SBOM with
 `syft`, creates a tarball, writes `SHA256SUMS`, and signs the exact checksum
 file. GitHub build-provenance attestation is attached to the release tarball.
 
+The workflow verifies the checksum file, signature, SPDX SBOM, and required
+archive entries before publishing, then verifies the published provenance
+attestation.
+
 Verification:
 
 ```bash

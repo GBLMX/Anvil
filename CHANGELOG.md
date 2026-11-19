@@ -12,6 +12,9 @@ post-`0.5.0` feature line.
   install/upgrade/uninstall lifecycle smoke runs in CI and the release
   workflow. Uninstall removes only manifest-recorded files and preserves
   configuration and runtime state.
+- The release workflow verifies checksums, the signature, the SPDX SBOM, the
+  required installer/uninstaller archive entries, and published provenance
+  before completing.
 - The problems panel is now a filterable diagnostics picker: type to filter by
   path, message, source, or code, `Ctrl-u` clears, and `Enter` jumps to the
   selected diagnostic. `Space d`, `:diagnostics`, and `:problems` open it.
