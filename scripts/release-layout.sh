@@ -7,6 +7,11 @@ go_toolchain="${GOTOOLCHAIN:-go1.26.11}"
 
 cd "$root"
 
+target_dir="${CARGO_TARGET_DIR:-"$root/target"}"
+if [[ "$target_dir" != /* ]]; then
+  target_dir="$root/$target_dir"
+fi
+
 install -d "$out/bin" "$out/share/anvil/official/plugins"
 
 # Release layouts include every documented language pack and official module.
@@ -16,10 +21,10 @@ GOTOOLCHAIN="$go_toolchain" go build -trimpath -buildvcs=false -ldflags='-s -w' 
 GOTOOLCHAIN="$go_toolchain" go build -trimpath -buildvcs=false -ldflags='-s -w' -o "$out/bin/anvil-exec-runner" ./go/cmd/anvil-exec-runner
 
 install -m 0755 \
-  target/release/anvil \
-  target/release/anvil-ctl \
-  target/release/anvil-mcp \
-  target/release/anvil-plugin-host \
+  "$target_dir/release/anvil" \
+  "$target_dir/release/anvil-ctl" \
+  "$target_dir/release/anvil-mcp" \
+  "$target_dir/release/anvil-plugin-host" \
   "$out/bin/"
 "$out/bin/anvil" settings schema >"$out/share/anvil/settings.schema.json"
 "$out/bin/anvil" settings languages-schema >"$out/share/anvil/languages.schema.json"
