@@ -115,7 +115,7 @@ impl Cgroup {
     }
 }
 
-const CGROUP2_SUPER_MAGIC: libc::c_long = 0x6367_7270;
+const CGROUP2_SUPER_MAGIC: u64 = 0x6367_7270;
 
 fn is_delegated(root: &Path) -> bool {
     if !root.is_dir() || !is_cgroup2(root).unwrap_or(false) {
@@ -141,7 +141,7 @@ fn is_cgroup2(root: &Path) -> io::Result<bool> {
     if unsafe { libc::statfs(path.as_ptr(), &mut stat) } != 0 {
         return Err(io::Error::last_os_error());
     }
-    Ok(stat.f_type == CGROUP2_SUPER_MAGIC)
+    Ok(stat.f_type as u64 == CGROUP2_SUPER_MAGIC)
 }
 
 impl Drop for Cgroup {
