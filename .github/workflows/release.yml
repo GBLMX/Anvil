@@ -78,6 +78,9 @@ jobs:
           print("anvil doctor installed profile: ok")
           PY
 
+      - name: Verify install, upgrade, and uninstall lifecycle
+        run: scripts/release-lifecycle-smoke.sh "$RUNNER_TEMP/layout"
+
       - uses: anchore/sbom-action/download-syft@v0
       - name: Generate SBOM
         run: |

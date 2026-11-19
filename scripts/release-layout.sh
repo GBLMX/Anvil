@@ -38,6 +38,7 @@ install -m 0644 \
   resources/icons/com.github.GBLMX.Anvil.png \
   "$out/share/icons/hicolor/256x256/apps/"
 install -m 0755 scripts/install-layout.sh "$out/install.sh"
+install -m 0755 scripts/uninstall-layout.sh "$out/uninstall.sh"
 
 if [[ -n "${ANVIL_PLUGIN_SIGNING_KEY:-}" ]]; then
   for plugin in "$root"/plugins/official/*; do

@@ -94,6 +94,12 @@ The tarball includes `install.sh`, which copies the layout and runs
 `anvil-gateway -install-bundled` when signed packages are present. The package
 public key is shipped as `share/anvil/packages/official.pub`.
 
+The tarball also includes `uninstall.sh`, which removes only manifest-recorded
+files. The release workflow runs `scripts/release-lifecycle-smoke.sh` on the
+clean runner: install, manifest and doctor verification, upgrade replacing the
+schema and cleaning stale files, then uninstall while preserving config and
+runtime state.
+
 The full official composition and third-party distributions use the same
 kernel source boundary described in
 [docs/adr/0013-kernel-distribution-boundary.md](docs/adr/0013-kernel-distribution-boundary.md).

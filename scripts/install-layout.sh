@@ -34,6 +34,16 @@ fi
 
 install -d "$prefix/bin" "$prefix/share/anvil/official"
 prefix="$(cd "$prefix" && pwd)"
+
+old_manifest=""
+cleanup() {
+  [[ -z "$old_manifest" ]] || rm -f -- "$old_manifest"
+}
+trap cleanup EXIT
+if [[ -f "$prefix/share/anvil/install-manifest.txt" ]]; then
+  old_manifest="$(mktemp)"
+  cp "$prefix/share/anvil/install-manifest.txt" "$old_manifest"
+fi
 for schema in settings.schema.json languages.schema.json; do
   if [[ -f "$layout/share/anvil/$schema" ]]; then
     install -m 0644 "$layout/share/anvil/$schema" "$prefix/share/anvil/"
@@ -92,6 +102,50 @@ fi
 if compgen -G "$prefix/share/anvil/packages/*.anvil-plugin" >/dev/null; then
   "$prefix/bin/anvil-gateway" \
     -install-bundled "$prefix/share/anvil/packages"
+fi
+
+manifest="$prefix/share/anvil/install-manifest.txt"
+manifest_stage="$prefix/share/anvil/.install-manifest-$$"
+{
+  for binary in anvil anvil-ctl anvil-mcp anvil-gateway anvil-exec-runner anvil-plugin-host; do
+    printf 'bin/%s\n' "$binary"
+  done
+  for schema in settings.schema.json languages.schema.json; do
+    if [[ -f "$prefix/share/anvil/$schema" ]]; then
+      printf 'share/anvil/%s\n' "$schema"
+    fi
+  done
+  if [[ -f "$prefix/share/applications/com.github.GBLMX.Anvil.desktop" ]]; then
+    printf 'share/applications/com.github.GBLMX.Anvil.desktop\n'
+  fi
+  if [[ -f "$prefix/share/icons/hicolor/scalable/apps/com.github.GBLMX.Anvil.svg" ]]; then
+    printf 'share/icons/hicolor/scalable/apps/com.github.GBLMX.Anvil.svg\n'
+  fi
+  if [[ -f "$prefix/share/icons/hicolor/256x256/apps/com.github.GBLMX.Anvil.png" ]]; then
+    printf 'share/icons/hicolor/256x256/apps/com.github.GBLMX.Anvil.png\n'
+  fi
+  if [[ -d "$prefix/share/anvil/official/plugins" ]]; then
+    find "$prefix/share/anvil/official/plugins" -type f -printf 'share/anvil/official/plugins/%P\n'
+  fi
+  if [[ -d "$prefix/share/anvil/packages" ]]; then
+    find "$prefix/share/anvil/packages" -type f -printf 'share/anvil/packages/%P\n'
+  fi
+} | LC_ALL=C sort -u >"$manifest_stage"
+mv "$manifest_stage" "$manifest"
+
+if [[ -n "$old_manifest" ]]; then
+  while IFS= read -r relative; do
+    [[ -n "$relative" ]] || continue
+    case "$relative" in
+      /*|..|../*|*/..|*/../*)
+        echo "refusing unsafe manifest path: $relative" >&2
+        exit 2
+        ;;
+    esac
+    if ! grep -Fxq "$relative" "$manifest"; then
+      rm -f -- "$prefix/$relative"
+    fi
+  done <"$old_manifest"
 fi
 
 printf 'installed Anvil into %s\n' "$prefix"

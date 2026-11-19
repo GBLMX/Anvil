@@ -211,6 +211,22 @@ jobs:
           ANVIL_GATEWAY: ${{ github.workspace }}/target/release/anvil-gateway
         run: scripts/mcp-smoke.sh
 
+  release-lifecycle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install pinned Rust toolchain
+        run: rustup show
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Build release layout
+        run: scripts/release-layout.sh "$RUNNER_TEMP/layout"
+      - name: Verify install, upgrade, and uninstall lifecycle
+        run: scripts/release-lifecycle-smoke.sh "$RUNNER_TEMP/layout"
+
   go:
     runs-on: ubuntu-latest
     steps:

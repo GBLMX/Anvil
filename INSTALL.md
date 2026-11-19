@@ -68,6 +68,7 @@ The layout is:
 
 ```text
 install.sh
+uninstall.sh
 bin/anvil
 bin/anvil-ctl
 bin/anvil-mcp
@@ -88,10 +89,16 @@ Install or upgrade a layout with:
 ```
 
 `prefix` defaults to `$HOME/.local`. The installer copies the binaries,
-desktop entry, and hicolor icons; replaces the bundled package set; then runs
-`anvil-gateway -install-bundled` when signed packages are present. Re-running
-it upgrades in place and preserves enable/disable state for unchanged
-permissions.
+desktop entry, and hicolor icons; replaces the bundled package set; writes an
+install manifest; then runs `anvil-gateway -install-bundled` when signed
+packages are present. Re-running it upgrades in place, removes stale manifest
+entries, and preserves enable/disable state for unchanged permissions.
+
+Uninstall only the files recorded by the install manifest:
+
+```bash
+./uninstall.sh [prefix]
+```
 
 `anvil` discovers `../share/anvil/official/plugins` relative to itself. A
 portable layout may instead place plugins in `bin/plugins/`.
@@ -219,14 +226,13 @@ The equivalent CLI override is `--truecolor=always`, `--truecolor=never`, or
 
 ## Uninstall
 
+Use the `uninstall.sh` shipped with the release layout:
+
 ```bash
-rm "$HOME/.local/bin/anvil" \
-   "$HOME/.local/bin/anvil-ctl" \
-   "$HOME/.local/bin/anvil-mcp" \
-   "$HOME/.local/bin/anvil-gateway" \
-   "$HOME/.local/bin/anvil-exec-runner" \
-   "$HOME/.local/bin/anvil-plugin-host"
+./uninstall.sh [prefix]
 ```
 
-Editor state, workspace files, and language-server caches are not removed by
-the uninstall.
+It reads `share/anvil/install-manifest.txt` and removes only the files Anvil
+installed. It refuses to run without a manifest or with unsafe paths. Editor
+configuration, workspace files, installed-plugin state, and language-server
+caches are not removed.
