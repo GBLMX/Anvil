@@ -18,6 +18,21 @@ fn ctrl_w_focuses_tree_and_editor_without_a_split() {
 }
 
 #[test]
+fn tab_cycles_tree_and_editor_only_as_a_fallback() {
+    let mut model = Model::new(EditorState::from_text("alpha"), None);
+    model.start_page.welcome = false;
+    model.open_tree();
+    assert!(model.ui.focus.tree);
+
+    handle_event(&mut model, key(KeyCode::Tab));
+    assert!(!model.ui.focus.tree);
+    assert!(!model.ui.focus.split);
+
+    handle_event(&mut model, key(KeyCode::BackTab));
+    assert!(model.ui.focus.tree);
+}
+
+#[test]
 fn space_leader_expires_without_consuming_next_key() {
     let mut model = Model::new(EditorState::from_text("alpha\nbeta"), None);
     handle_event(&mut model, key(KeyCode::Char(' ')));

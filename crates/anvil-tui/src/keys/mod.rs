@@ -526,7 +526,11 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             execute_file_tree_action(model, action);
             return;
         }
-        dispatch_context_binding(model, KeymapContext::Global, key);
+        if !dispatch_context_binding(model, KeymapContext::Global, key)
+            && matches!(key.code, KeyCode::Tab | KeyCode::BackTab)
+        {
+            model.cycle_surface(key.code == KeyCode::Tab);
+        }
         return;
     }
     if model.ui.input_mode == InputMode::Normal && key.code == KeyCode::Char('?') {
@@ -953,6 +957,8 @@ fn handle_key(model: &mut Model, key: KeyPress) {
                 execute_normal_command(model, command);
             } else if dispatch_context_binding(model, KeymapContext::Global, key) {
                 return;
+            } else if matches!(key.code, KeyCode::Tab | KeyCode::BackTab) {
+                model.cycle_surface(key.code == KeyCode::Tab);
             }
             if model.edit.visual_anchor.is_some() {
                 model.sync_visual_selection();

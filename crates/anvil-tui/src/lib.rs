@@ -65,6 +65,7 @@ mod recents;
 mod remote;
 mod session;
 mod start_page;
+mod surface;
 mod theme_browser;
 mod theme_picker;
 mod workspace_control;
@@ -188,6 +189,8 @@ pub struct Model {
     workspace: WorkspaceState,
     /// Language services and debugger runtime.
     language: LanguageState,
+    /// Focusable surface identity and overlay history.
+    surfaces: surface::FocusStack,
     overlays: OverlayState,
     /// Icon and theme persistence state.
     appearance: AppearanceState,

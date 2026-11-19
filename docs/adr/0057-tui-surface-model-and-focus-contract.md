@@ -1,8 +1,10 @@
 # ADR-0057: TUI Surface Model and Focus Contract
 
-- Status: Proposed
-- Version: 1.0.0
+- Status: Accepted; core implemented 2026-11-20
+- Version: 1.1.0
 - Date: 2026-11-19
+- Implementation: surface taxonomy, focus history, per-surface key routing,
+  and shared workbench layout
 - Related: [ADR-0024](0024-tui-state-and-domain-boundaries.md),
   [ADR-0040](0040-helix-keymap-compatibility.md),
   [ADR-0041](0041-tui-primitive-extraction.md),

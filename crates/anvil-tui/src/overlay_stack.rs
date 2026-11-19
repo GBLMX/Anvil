@@ -1,3 +1,5 @@
+use crate::surface::SurfaceId;
+
 use super::*;
 
 impl Model {
@@ -9,10 +11,11 @@ impl Model {
         if self.top_overlay() == Some(kind) {
             return;
         }
-        self.overlays.stack.push(OverlayEntry {
-            kind,
-            focus_before: self.ui.focus,
-        });
+        if self.overlays.stack.is_empty() {
+            self.surfaces.set_base(self.base_surface());
+        }
+        self.surfaces.push_overlay(SurfaceId::from(kind));
+        self.overlays.stack.push(OverlayEntry { kind });
         self.file.dirty = true;
     }
 
@@ -32,9 +35,14 @@ impl Model {
             return false;
         };
         let was_top = index + 1 == self.overlays.stack.len();
-        let entry = self.overlays.stack.remove(index);
+        self.overlays.stack.remove(index);
+        self.surfaces.remove_overlay(index);
         if was_top {
-            self.ui.focus = entry.focus_before;
+            if let Some(surface) = self.surfaces.top() {
+                self.ui.focus = surface.focus_state();
+            } else {
+                self.restore_base_focus();
+            }
             self.file.dirty = true;
         }
         true

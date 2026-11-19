@@ -145,76 +145,29 @@ pub fn view(model: &Model, frame: &mut Frame) {
     {
         frame.set_cursor_position((x, y));
     }
-    let mut inner = Rect {
-        x: area.x + 1,
-        y: area.y + 1,
-        width: area.width.saturating_sub(2),
-        height: area.height.saturating_sub(2),
+    let Some(rects) = crate::layout::workbench_rects(model, area.width, area.height) else {
+        return;
     };
-    if !model.start_page.welcome && (model.buffers.entries.len() > 1 || model.pager.back.is_some())
-    {
-        let bar = Rect {
-            height: inner.height.min(1),
-            ..inner
-        };
+    if let Some(bar) = rects.tab_bar {
         frame.render_widget(
             Paragraph::new(buffer_bar_line(model, bar.width)).style(theme::panel()),
             bar,
         );
-        inner.y = inner.y.saturating_add(1);
-        inner.height = inner.height.saturating_sub(1);
     }
-    if crate::breadcrumbs::visible(model, inner) {
-        let breadcrumb = Rect { height: 1, ..inner };
+    if let Some(breadcrumb) = rects.breadcrumbs {
         crate::breadcrumbs::render(model, frame, breadcrumb);
-        inner.y = inner.y.saturating_add(1);
-        inner.height = inner.height.saturating_sub(1);
     }
-    let message_height = crate::message::height(model, inner.height);
-    let message_area = Rect {
-        y: inner.y + inner.height.saturating_sub(message_height),
-        height: message_height,
-        ..inner
-    };
-    inner.height = inner.height.saturating_sub(message_height);
-    if message_height > 0 {
+    if let Some(message_area) = rects.message {
         crate::message::render(model, frame, message_area);
     }
-    let mut content = inner;
     if model.start_page.welcome {
-        render_welcome(frame, inner, model);
+        render_welcome(frame, rects.inner, model);
         return;
     }
-    if let Some(next) = render_tree(model, frame, inner) {
-        content = next;
-    }
-    let locations_area = crate::pipe_locations::panel_rect(model, content);
-    if let Some(area) = locations_area {
-        content.height = area.y.saturating_sub(content.y);
-    }
-    let mut split_area = None;
-    if model.buffers.split.is_some() {
-        let half = content
-            .width
-            .saturating_mul(model.view.split_ratio.min(100))
-            / 100;
-        let left = Rect {
-            width: half,
-            ..content
-        };
-        let right = Rect {
-            x: content.x + half,
-            width: content.width.saturating_sub(half),
-            ..content
-        };
-        if model.ui.focus.split {
-            content = right;
-            split_area = Some(left);
-        } else {
-            content = left;
-            split_area = Some(right);
-        }
-    }
+    render_tree(model, frame, rects.content);
+    let locations_area = rects.pipe_locations;
+    let split_area = rects.other_editor;
+    let content = rects.editor;
     let gutter_width = model.gutter_width().min(content.width);
     let gutter_area = Rect {
         width: gutter_width,

@@ -780,8 +780,8 @@ impl Model {
         {
             contexts.push(context);
         }
-        if let Some(kind) = self.top_overlay() {
-            let context = kind.keymap_context();
+        if self.surfaces.top().is_some() {
+            let context = self.active_surface().spec().keymap_context;
             if contexts.last() != Some(&context) {
                 contexts.push(context);
             }

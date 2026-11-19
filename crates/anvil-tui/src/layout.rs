@@ -21,6 +21,146 @@ pub(crate) fn tree_fits(width: u16) -> bool {
 }
 
 pub(crate) const TREE_SCROLLOFF_ROWS: usize = 3;
+pub(crate) struct SplitRects {
+    pub(crate) left: Rect,
+    pub(crate) right: Rect,
+    pub(crate) handle_x: u16,
+}
+
+pub(crate) struct WorkbenchRects {
+    pub(crate) inner: Rect,
+    pub(crate) tab_bar: Option<Rect>,
+    pub(crate) breadcrumbs: Option<Rect>,
+    pub(crate) message: Option<Rect>,
+    pub(crate) content: Rect,
+    pub(crate) tree: Option<Rect>,
+    pub(crate) editor_content: Rect,
+    pub(crate) pipe_locations: Option<Rect>,
+    pub(crate) split: Option<SplitRects>,
+    pub(crate) editor: Rect,
+    pub(crate) other_editor: Option<Rect>,
+    pub(crate) status: Rect,
+}
+
+impl WorkbenchRects {
+    pub(crate) fn rect_for(&self, surface: crate::surface::SurfaceId) -> Option<Rect> {
+        use crate::surface::{DockId, EditorPane, SurfaceId};
+        match surface {
+            SurfaceId::Dock(DockId::Tree) => self.tree,
+            SurfaceId::Editor(EditorPane::Primary) => Some(
+                self.split
+                    .as_ref()
+                    .map_or(self.editor_content, |split| split.left),
+            ),
+            SurfaceId::Editor(EditorPane::Split) => self.split.as_ref().map(|split| split.right),
+            SurfaceId::Page(_) | SurfaceId::Overlay(_) => None,
+        }
+    }
+}
+
+pub(crate) fn workbench_rects(model: &Model, width: u16, height: u16) -> Option<WorkbenchRects> {
+    if width == 0 || height == 0 {
+        return None;
+    }
+    let mut inner = Rect {
+        x: 1,
+        y: 1,
+        width: width.saturating_sub(2),
+        height: height.saturating_sub(2),
+    };
+    if inner.width == 0 || inner.height == 0 {
+        return None;
+    }
+    let mut tab_bar = None;
+    if !model.start_page.welcome && (model.buffers.entries.len() > 1 || model.pager.back.is_some())
+    {
+        tab_bar = Some(Rect { height: 1, ..inner });
+        inner.y = inner.y.saturating_add(1);
+        inner.height = inner.height.saturating_sub(1);
+    }
+    let breadcrumbs = if crate::breadcrumbs::visible(model, inner) {
+        let area = Rect { height: 1, ..inner };
+        inner.y = inner.y.saturating_add(1);
+        inner.height = inner.height.saturating_sub(1);
+        Some(area)
+    } else {
+        None
+    };
+    let message_height = crate::message::height(model, inner.height);
+    let message = (message_height > 0).then(|| Rect {
+        y: inner.y + inner.height.saturating_sub(message_height),
+        height: message_height,
+        ..inner
+    });
+    inner.height = inner.height.saturating_sub(message_height);
+
+    let content = inner;
+    let mut tree = None;
+    let mut editor_content = content;
+    if !model.start_page.welcome && model.workspace.tree.visible && tree_fits(editor_content.width)
+    {
+        let sidebar = model.sidebar_width(editor_content.width);
+        tree = Some(Rect {
+            width: sidebar,
+            ..editor_content
+        });
+        editor_content.x = editor_content.x.saturating_add(sidebar);
+        editor_content.width = editor_content.width.saturating_sub(sidebar);
+    }
+    let pipe_locations = (!model.start_page.welcome)
+        .then(|| crate::pipe_locations::panel_rect(model, editor_content))
+        .flatten();
+    if let Some(panel) = pipe_locations {
+        editor_content.height = panel.y.saturating_sub(editor_content.y);
+    }
+
+    let split = if !model.start_page.welcome && model.buffers.split.is_some() {
+        let half = editor_content
+            .width
+            .saturating_mul(model.view.split_ratio.min(100))
+            / 100;
+        let left = Rect {
+            width: half,
+            ..editor_content
+        };
+        let right = Rect {
+            x: editor_content.x.saturating_add(half),
+            width: editor_content.width.saturating_sub(half),
+            ..editor_content
+        };
+        Some(SplitRects {
+            left,
+            right,
+            handle_x: right.x,
+        })
+    } else {
+        None
+    };
+    let (editor, other_editor) = match &split {
+        Some(split) if model.ui.focus.split => (split.right, Some(split.left)),
+        Some(split) => (split.left, Some(split.right)),
+        None => (editor_content, None),
+    };
+    Some(WorkbenchRects {
+        inner,
+        tab_bar,
+        breadcrumbs,
+        message,
+        content,
+        tree,
+        editor_content,
+        pipe_locations,
+        split,
+        editor,
+        other_editor,
+        status: Rect {
+            x: 0,
+            y: height.saturating_sub(1),
+            width,
+            height: 1,
+        },
+    })
+}
 
 pub(crate) fn tree_viewport_start(selected: Option<usize>, visible_height: usize) -> usize {
     selected
@@ -1113,5 +1253,64 @@ mod pane_scroll_tests {
         model.scroll_display_rows_in_pane(1, 4);
         assert_eq!(model.view.wrap_width, 4);
         assert_eq!(model.view.scroll_subrow, 1);
+    }
+}
+
+#[cfg(test)]
+mod workbench_layout_tests {
+    use super::*;
+    use crate::surface::{DockId, EditorPane, SurfaceId};
+
+    fn model() -> Model {
+        let mut model = Model::new(EditorState::from_text("alpha\nbeta"), None);
+        model.start_page.welcome = false;
+        model.workspace.tree.visible = true;
+        model
+    }
+
+    #[test]
+    fn layout_is_non_overlapping_at_supported_sizes() {
+        let model = model();
+        for (width, height) in [(40, 15), (80, 24), (120, 40), (200, 60)] {
+            let rects = workbench_rects(&model, width, height).expect("layout");
+            assert_eq!(rects.status.y, height - 1);
+            assert!(rects.editor_content.width > 0);
+            if let Some(tree) = rects.tree {
+                assert_eq!(tree.right(), rects.editor_content.x);
+                assert_eq!(rects.rect_for(SurfaceId::Dock(DockId::Tree)), Some(tree));
+            } else {
+                assert!(width <= 62, "tree unexpectedly hidden at {width}");
+            }
+            assert_eq!(
+                rects.rect_for(SurfaceId::Editor(EditorPane::Primary)),
+                Some(rects.editor_content)
+            );
+        }
+    }
+
+    #[test]
+    fn split_rects_follow_focus_and_remain_available() {
+        let mut model = model();
+        model.buffers.split = Some(Pane {
+            buffer: model.snapshot(),
+        });
+        let rects = workbench_rects(&model, 120, 40).expect("layout");
+        let split = rects.split.as_ref().expect("split");
+        assert_eq!(rects.editor, split.left);
+        assert_eq!(rects.other_editor, Some(split.right));
+        assert_eq!(
+            rects.rect_for(SurfaceId::Editor(EditorPane::Primary)),
+            Some(split.left)
+        );
+        assert_eq!(
+            rects.rect_for(SurfaceId::Editor(EditorPane::Split)),
+            Some(split.right)
+        );
+
+        model.ui.focus.split = true;
+        let rects = workbench_rects(&model, 120, 40).expect("layout");
+        let split = rects.split.as_ref().expect("split");
+        assert_eq!(rects.editor, split.right);
+        assert_eq!(rects.other_editor, Some(split.left));
     }
 }

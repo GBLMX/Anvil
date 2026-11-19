@@ -1330,16 +1330,9 @@ pub(crate) enum OverlayKind {
     Completion,
 }
 
-impl OverlayKind {
-    pub(crate) fn keymap_context(self) -> KeymapContext {
-        KeymapContext::Popup
-    }
-}
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct OverlayEntry {
     pub(crate) kind: OverlayKind,
-    pub(crate) focus_before: anvil_session::ui::FocusState,
 }
 
 #[derive(Default)]

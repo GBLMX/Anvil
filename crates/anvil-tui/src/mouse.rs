@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::layout::{tree_fits, tree_viewport_start};
+use crate::surface::{DockId, SurfaceId};
 use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::Rect;
 
@@ -262,39 +263,38 @@ pub(crate) fn hit_test(model: &Model, col: u16, row: u16, width: u16, height: u1
             None => Target::Outside,
         };
     }
-    let Some((inner, tab_row, breadcrumb_row, message_area)) = content_rect(model, width, height)
-    else {
+    let Some(rects) = crate::layout::workbench_rects(model, width, height) else {
         return Target::Outside;
     };
-    if message_area.is_some_and(|area| row >= area.y && row < area.bottom()) {
+    if rects
+        .message
+        .is_some_and(|area| row >= area.y && row < area.bottom())
+    {
         return Target::Outside;
     }
-    if let Some(area) = breadcrumb_row
+    if let Some(area) = rects.breadcrumbs
         && row == area.y
     {
         return Target::Breadcrumb(crate::breadcrumbs::target_at(model, col, area));
     }
-    if tab_row == Some(row) {
-        return crate::render::buffer_tab_at(model, inner.width, col.saturating_sub(inner.x))
+    if let Some(area) = rects.tab_bar
+        && row == area.y
+    {
+        return crate::render::buffer_tab_at(model, area.width, col.saturating_sub(area.x))
             .map_or(Target::Outside, Target::Tabs);
     }
-    let mut editor_inner = inner;
-    if model.workspace.tree.visible && tree_fits(editor_inner.width) {
-        let sidebar = model.sidebar_width(editor_inner.width);
-        if col < editor_inner.x.saturating_add(sidebar) {
-            if row == editor_inner.y {
-                return Target::Outside;
-            }
-            let visible = editor_inner.height.saturating_sub(1) as usize;
-            let start = tree_viewport_start(model.workspace.tree.selected, visible);
-            let index =
-                start.saturating_add(row.saturating_sub(editor_inner.y.saturating_add(1)) as usize);
-            return Target::Tree(index);
+    if let Some(area) = rects.rect_for(SurfaceId::Dock(DockId::Tree))
+        && col < area.right()
+    {
+        if row == area.y {
+            return Target::Outside;
         }
-        editor_inner.x = editor_inner.x.saturating_add(sidebar);
-        editor_inner.width = editor_inner.width.saturating_sub(sidebar);
+        let visible = area.height.saturating_sub(1) as usize;
+        let start = tree_viewport_start(model.workspace.tree.selected, visible);
+        let index = start.saturating_add(row.saturating_sub(area.y.saturating_add(1)) as usize);
+        return Target::Tree(index);
     }
-    if let Some(panel) = crate::pipe_locations::panel_rect(model, editor_inner)
+    if let Some(panel) = rects.pipe_locations
         && row > panel.y
         && row + 1 < panel.bottom()
         && col >= panel.x
@@ -306,19 +306,20 @@ pub(crate) fn hit_test(model: &Model, col: u16, row: u16, width: u16, height: u1
             return Target::Location(index);
         }
     }
-    if row >= editor_inner.y
+    if row >= rects.editor_content.y
         && let Some(index) = model.code_lens_at_row(
-            usize::from(row - editor_inner.y),
-            usize::from(editor_inner.height),
+            usize::from(row - rects.editor_content.y),
+            usize::from(rects.editor_content.height),
         )
     {
         return Target::CodeLens(index);
     }
-    if row == height.saturating_sub(1) {
+    if row == rects.status.y {
         return Target::Status;
     }
-    let split_x = split_x(editor_inner, model.view.split_ratio);
-    if model.buffers.split.is_some() && col.abs_diff(split_x) <= 1 {
+    if let Some(split) = rects.split
+        && col.abs_diff(split.handle_x) <= 1
+    {
         return Target::SplitHandle;
     }
     let (side, line, column) = editor_position_at(model, col, row, width, height).unwrap_or((
@@ -329,53 +330,8 @@ pub(crate) fn hit_test(model: &Model, col: u16, row: u16, width: u16, height: u1
     Target::Editor { side, line, column }
 }
 
-type ContentRects = (Rect, Option<u16>, Option<Rect>, Option<Rect>);
-
-fn content_rect(model: &Model, width: u16, height: u16) -> Option<ContentRects> {
-    if model.start_page.welcome {
-        return None;
-    }
-    let mut inner = Rect {
-        x: 1,
-        y: 1,
-        width: width.saturating_sub(2),
-        height: height.saturating_sub(2),
-    };
-    if inner.width == 0 || inner.height == 0 {
-        return None;
-    }
-    let mut tab_row = None;
-    if model.buffers.entries.len() > 1 || model.pager.back.is_some() {
-        tab_row = Some(inner.y);
-        inner.y = inner.y.saturating_add(1);
-        inner.height = inner.height.saturating_sub(1);
-    }
-    let breadcrumb_row = if crate::breadcrumbs::visible(model, inner) {
-        let area = Rect { height: 1, ..inner };
-        inner.y = inner.y.saturating_add(1);
-        inner.height = inner.height.saturating_sub(1);
-        Some(area)
-    } else {
-        None
-    };
-    let message_height = crate::message::height(model, inner.height);
-    let message_area = (message_height > 0).then(|| Rect {
-        y: inner.y + inner.height.saturating_sub(message_height),
-        height: message_height,
-        ..inner
-    });
-    inner.height = inner.height.saturating_sub(message_height);
-    Some((inner, tab_row, breadcrumb_row, message_area))
-}
-
 fn editor_area(model: &Model, width: u16, height: u16) -> Option<Rect> {
-    let (mut inner, _, _, _) = content_rect(model, width, height)?;
-    if model.workspace.tree.visible && tree_fits(inner.width) {
-        let sidebar = model.sidebar_width(inner.width);
-        inner.x = inner.x.saturating_add(sidebar);
-        inner.width = inner.width.saturating_sub(sidebar);
-    }
-    Some(inner)
+    crate::layout::workbench_rects(model, width, height).map(|rects| rects.editor_content)
 }
 
 fn split_x(inner: Rect, ratio: u16) -> u16 {

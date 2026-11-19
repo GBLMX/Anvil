@@ -48,6 +48,12 @@ pub(super) const BUILTIN_CONTEXT_KEYS: &[(&str, KeymapContext, &str, &str)] = &[
     ("file_tree", KeymapContext::FileTree, "d / Delete", "delete"),
     ("file_tree", KeymapContext::FileTree, "Space", "leader"),
     ("global", KeymapContext::Global, "Ctrl-w", "window prefix"),
+    (
+        "global",
+        KeymapContext::Global,
+        "Tab / Shift-Tab",
+        "cycle surface (fallback)",
+    ),
     ("settings", KeymapContext::Popup, "Esc", "cancel"),
     (
         "settings",

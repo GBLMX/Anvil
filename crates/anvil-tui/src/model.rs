@@ -66,6 +66,7 @@ impl Model {
                 ..Default::default()
             },
             language: LanguageState::default(),
+            surfaces: surface::FocusStack::default(),
             overlays: OverlayState::default(),
             appearance: AppearanceState {
                 ascii_icons: icon_theme::ascii_mode(),
