@@ -77,12 +77,14 @@ The configuration is parsed and validated before it replaces the active keymap.
 It is not hot-reloaded.
 
 The Space leader expires after 1200 ms. `Space e` opens the file tree,
-`Space d` opens the filterable diagnostics picker, `Space g` lists changed
-files, `Space j` opens the jump list, `Space H` opens search history,
-`Space :` opens command history, `Space K` opens the keymap list (normal,
-leader/pending, built-in keys by overlay, and configured context overrides),
-`Space L` opens language readiness, `Space p` opens the command palette, and
-`Ctrl-w` handles window focus without numbered aliases.
+`Space w` opens the start page focused on recent workspaces (session
+workspaces, not the current session's extra roots), `Space d` opens the
+filterable diagnostics picker, `Space g` lists changed files, `Space j` opens
+the jump list, `Space H` opens search history, `Space :` opens command
+history, `Space K` opens the keymap list (normal, leader/pending, built-in keys
+by overlay, and configured context overrides), `Space L` opens language
+readiness, `Space p` opens the command palette, and `Ctrl-w` handles window
+focus without numbered aliases.
 
 ## Canonical bindings
 
