@@ -211,7 +211,11 @@ Negative:
   - `scripts/mcp-smoke.sh` runs both modern and legacy transcripts against a
     real TUI;
   - `scripts/ctl-smoke.sh` covers CLI `edit replace` and revision rejection;
-  - Claude Code, Codex, and MCP Inspector are used for dogfood where available.
+  - Codex and MCP Inspector are used for dogfood where available.
+  - MCP Inspector 2.16.0 CLI dogfood covered legacy initialize, strict
+    tools/list portability checks, status, query, a guarded set, stale-revision
+    rejection, and quit. Its CLI does not expose `server/discover`, so modern
+    dogfood remains covered by `scripts/mcp-smoke.sh`.
 
 ## References
 

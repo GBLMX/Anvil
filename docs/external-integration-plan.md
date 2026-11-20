@@ -279,6 +279,11 @@ Acceptance:
 
 - Completed: Codex called `anvil_status` and `anvil_query` through the adapter
   against a real TUI.
+- MCP Inspector 2.16.0 CLI dogfood covered legacy initialize, tools/list,
+  status, query, guarded set, stale-revision rejection, and quit. Strict schema
+  checks exposed nullable `type` arrays; output schemas now use `anyOf`.
+  Inspector CLI does not expose `server/discover`, so modern remains covered by
+  `scripts/mcp-smoke.sh`.
 - All seven tools are exercised by `scripts/mcp-smoke.sh`; none are removed yet
   because one dogfood turn is not enough evidence.
 - Multi-file replace stays deferred until measured demand.

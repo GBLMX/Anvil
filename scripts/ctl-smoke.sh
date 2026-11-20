@@ -122,6 +122,17 @@ assert_contains() {
 	fi
 }
 
+wait_for_conflict_picker() {
+	for _ in $(seq 1 50); do
+		ctl --json command ':git-conflicts'
+		if [[ "$last_code" -eq 0 && "$last_out" != *"loading git conflicts"* ]]; then
+			return 0
+		fi
+		sleep 0.1
+	done
+	fail "git conflict picker did not become ready"
+}
+
 tmux -L "$session" new-session -d -s anvil -x 120 -y 40 \
 	"cd '$workspace' && exec '$anvil_bin' -w '$workspace' a.txt"
 for _ in $(seq 1 100); do
@@ -195,7 +206,7 @@ git -C "$workspace" -c user.name=Test -c user.email=test@example.com commit -qm 
 git -C "$workspace" merge side >/dev/null 2>&1 || true
 
 expect_ok --json open conflict.txt
-expect_ok --json command ':git-conflicts'
+wait_for_conflict_picker
 expect_ok --json command ':q'
 expect_ok --json command ':git-resolve-ours'
 unmerged=""
@@ -209,7 +220,7 @@ done
 
 expect_ok --json command ':git-blame'
 expect_ok --json command ':q'
-expect_ok --json command ':git-conflicts'
+wait_for_conflict_picker
 expect_ok --json command ':q'
 expect_ok --json edit set $'dirty\n'
 

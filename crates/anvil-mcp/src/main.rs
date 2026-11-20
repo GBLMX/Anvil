@@ -617,7 +617,7 @@ fn status_output_schema() -> Value {
             "version": {"type": "string"},
             "protocol_version": {"type": "string"},
             "workspace": {"type": "string"},
-            "file": {"type": ["string", "null"]},
+            "file": {"anyOf": [{"type": "string"}, {"type": "null"}]},
             "dirty": {"type": "boolean"},
             "capabilities": {"type": "array", "items": {"type": "string"}}
         },
@@ -644,7 +644,7 @@ fn query_output_schema() -> Value {
         "properties": {
             "version": {"type": "string"},
             "workspace": {"type": "string"},
-            "path": {"type": ["string", "null"]},
+            "path": {"anyOf": [{"type": "string"}, {"type": "null"}]},
             "modified": {"type": "boolean"},
             "read_only": {"type": "boolean"},
             "cursor": {"type": "integer"},
@@ -684,7 +684,7 @@ fn save_output_schema() -> Value {
         "type": "object",
         "properties": {
             "accepted": {"type": "boolean"},
-            "path": {"type": ["string", "null"]},
+            "path": {"anyOf": [{"type": "string"}, {"type": "null"}]},
             "status": {"type": "string"}
         },
         "required": ["accepted", "status"],
