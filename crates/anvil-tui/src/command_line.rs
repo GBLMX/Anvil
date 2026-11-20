@@ -8,7 +8,6 @@ use anvil_session::command_completion::{
 use anvil_tui_kit::{SelectionItem, SelectionTable};
 use anvil_workspace::FileRequest;
 
-
 #[derive(Clone, Debug)]
 pub(crate) struct CompletionItem {
     pub(crate) label: String,
