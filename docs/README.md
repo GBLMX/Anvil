@@ -7,7 +7,7 @@ material. Last reviewed 2026-11-18.
 
 - [Project overview](../README.md) — what Anvil is and how to build it
 - [Install](../INSTALL.md) — local build and installed-binary smoke test
-- [Multi-host install lessons](multi-host-install.md) — Arch, Debian, and Ubuntu compatibility findings
+- [Multi-host install lessons](multi-host-install.md) — Arch, Debian, Ubuntu, and Fedora compatibility findings
 - [Roadmap](../ROADMAP.md) — directional priorities
 - [Analysis backlog](analysis-backlog.md) — research queue, not a release commitment
 - [Architecture](architecture.md) — process model and layer boundaries

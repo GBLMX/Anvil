@@ -1,11 +1,11 @@
 # Multi-host install lessons
 
-Status: Reference. Validated 2026-11-15 against three hosts.
+Status: Reference. Validated 2026-11-20 against four hosts.
 
-This document records what installing Anvil on Arch, Debian, and Ubuntu
-revealed about build portability, installation, and deployment. It is not a
-support matrix; it is a list of constraints the release process must either
-handle or document.
+This document records what installing Anvil on Arch, Debian, Ubuntu, and
+Fedora revealed about build portability, installation, and deployment. It is
+not a support matrix; it is a list of constraints the release process must
+either handle or document.
 
 ## Hosts
 
@@ -14,10 +14,18 @@ handle or document.
 | Local workstation | Arch Linux | supports `x86-64-v3` | 2.42 | Works |
 | `r420` | Debian 13 (trixie) | Xeon E5-2407 v2, `x86-64-v2` | 2.41 | Native build; works |
 | `ecs` | Ubuntu 26.04 LTS | Xeon Platinum, `x86-64-v4` | 2.43 | Prebuilt layout; works |
+| `fedora-vm` | Fedora Linux 44 | QEMU x86_64 guest | 2.43 | Generic CLI layout and lifecycle smoke; TUI not tested |
 
 The Debian and Ubuntu hosts are terminal-only. Verification used a TUI inside
 `tmux` plus `anvil-ctl`; this is **remote TUI over SSH/tmux**, not a headless
 editor service.
+
+Fedora was validated through the command line, `doctor --profile installed`,
+and the release lifecycle smoke. Its interactive TUI was not part of that run.
+
+The Fedora test harness needed temporary SELinux permissive mode because the
+QEMU guest-agent domain cannot execute `/tmp` binaries; the persistent SELinux
+configuration was not changed.
 
 ## Truecolor over SSH
 
@@ -117,6 +125,7 @@ environment, or explicitly checked for ELF ISA properties before publication.
 | Debian 13 | 2.41 |
 | Arch | 2.42 |
 | Ubuntu 26.04 | 2.43 |
+| Fedora 44 | 2.43 |
 
 A binary linked on a newer glibc may reference symbols absent from an older
 target. Ubuntu success does not imply Debian compatibility.
