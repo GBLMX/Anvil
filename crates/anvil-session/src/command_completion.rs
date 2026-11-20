@@ -138,7 +138,7 @@ fn path_items(
     argument: &str,
     data: &CommandCompletionData<'_>,
 ) -> Vec<CompletionItem> {
-    if command.is_empty() || !crate::command_completion::PATH_COMMANDS.contains(&command) {
+    if command.is_empty() || !is_path_command(command) {
         return Vec::new();
     }
     let (directory, query) = match argument.rsplit_once('/') {
@@ -201,6 +201,11 @@ const PATH_COMMANDS: &[&str] = &[
     "workspace-trust",
     "workspace-untrust",
 ];
+
+/// Whether command completion should request workspace path entries.
+pub fn is_path_command(command: &str) -> bool {
+    PATH_COMMANDS.contains(&command)
+}
 
 fn sanitize_name(name: &str) -> Option<String> {
     let sanitized = name

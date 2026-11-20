@@ -2,18 +2,12 @@
 
 use super::*;
 use anvil_api::{CompletionContext, CompletionRequest};
-use anvil_session::command_completion::{BuiltinCompleter, CommandCompletionData, Completer};
+use anvil_session::command_completion::{
+    BuiltinCompleter, CommandCompletionData, Completer, is_path_command,
+};
 use anvil_tui_kit::{SelectionItem, SelectionTable};
 use anvil_workspace::FileRequest;
 
-const PATH_COMMANDS: &[&str] = &[
-    "e",
-    "w",
-    "workspace-add",
-    "workspace-remove",
-    "workspace-trust",
-    "workspace-untrust",
-];
 
 #[derive(Clone, Debug)]
 pub(crate) struct CompletionItem {
@@ -203,7 +197,7 @@ impl Model {
             Some((command, argument)) => (command, argument.trim(), true),
             None => (buffer, "", false),
         };
-        if !has_argument || !PATH_COMMANDS.contains(&command) {
+        if !has_argument || !is_path_command(command) {
             return None;
         }
         let argument = argument.trim();
