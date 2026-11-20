@@ -3,13 +3,14 @@
 Anvil is pre-alpha. This document describes the release procedure for the
 current `0.x` line; it is not a compatibility guarantee.
 
-## Release freeze
+## Release candidate
 
-`0.6.0` is frozen for long-term internal polish. Do not create release tags or
-publish releases during this phase. `.github/workflows/release.yml` rejects a
-`0.6.0` tag, and `scripts/check-frozen-version.sh` fails CI on an accidental
-version bump. Unfreeze only by updating the version, freeze check, roadmap, and
-internal-polish exit gates in one intentional change.
+`0.7.0` is the current internal release candidate. Do not create a public
+release tag until production plugin/checksum signing and GitHub provenance are
+authorized. Internal candidates use the CI checksum key under
+[ADR-0060](docs/adr/0060-release-checksum-signing-authority.md).
+`scripts/check-frozen-version.sh` keeps the workspace version pinned to the
+chosen candidate version; change it only with the release version.
 
 
 ## Versioning
@@ -80,6 +81,11 @@ PIN and touch, and reads the matching public key from the same slot. Set
 It builds `scripts/release-layout.sh`, generates an SPDX JSON SBOM with
 `syft`, creates a tarball, writes `SHA256SUMS`, and signs the exact checksum
 file. GitHub build-provenance attestation is attached to the release tarball.
+
+For internal candidates this CI-held checksum key is allowed by ADR-0060.
+Public releases require a separate hardware-backed checksum authority; do not
+create a public tag until that ceremony and build-provenance verification are
+authorized.
 
 The workflow verifies the checksum file, signature, SPDX SBOM, and required
 archive entries before publishing, then verifies the published provenance

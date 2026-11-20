@@ -1,20 +1,20 @@
 # Internal Polish Plan
 
-Status: active, P0 and P1 complete. Version is frozen at **0.6.0**. This is a long
-internal-polish phase, not a public release line.
+Status: 0.6.0 internal polish is complete; **0.7.0** is the release
+candidate. Public signing custody and GitHub provenance remain external
+release-time gates.
 
-The project keeps landing code and docs, but does not bump the version, create
-release tags, publish GitHub releases, or open a marketplace during this phase.
-Public distribution work resumes only after the exit gates below are accepted.
+The project can land candidate changes and prepare `0.7.0`, but must not publish
+a public release until those external gates are authorized.
 
 ## 1. Rules
 
-- `Cargo.toml` workspace version remains `0.6.0`. The freeze check in CI fails
-  if it changes accidentally.
-- `CHANGELOG.md` keeps accumulating under `[Unreleased]`. Do not add a new
-  version heading for internal work.
-- Do not create `v0.6.x` tags or run the release workflow. Release secrets stay
-  outside the repository.
+- `Cargo.toml` workspace version is `0.7.0`; the CI release-version guard fails
+  on an accidental mismatch.
+- `CHANGELOG.md` uses a `0.7.0` candidate section; new post-candidate work goes
+  under `[Unreleased]`.
+- Do not create a public tag or publish a release until production signing and
+  provenance are authorized. Release secrets stay outside the repository.
 - The plugin API, gateway protocol, plugin index schema, and settings schema
   remain internal contracts. They may change without a public migration.
 - Security fixes still land on `main`; they do not imply a public release.
@@ -35,7 +35,7 @@ Already landed:
   role, installed-plugin manager, official-only release layout, installer, and
   signed release workflow.
 
-Frozen version: `0.6.0`.
+Candidate version: `0.7.0`.
 
 ## 3. P0: daily-use completeness
 
@@ -237,8 +237,9 @@ Internal polish ends only when all are true:
   verified with production-like keys in
   [release-dry-run-2026-11-20.md](release-dry-run-2026-11-20.md); production key
   custody and CI provenance remain release-time external steps.
-- The next public version number is chosen explicitly; the frozen-version check
-  is then updated in the same commit as the version bump.
+- The next public version is `0.7.0`, and the release-version guard is updated;
+  public publication remains gated on production signing custody and CI
+  provenance.
 
 ## 8. Verification
 

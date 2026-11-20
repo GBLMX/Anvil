@@ -65,6 +65,7 @@ their decision sections.
 | [0057](0057-tui-surface-model-and-focus-contract.md) | TUI surface model and focus contract | Accepted; core implemented 2026-11-20 |
 | [0058](0058-sandbox-capability-profiles-and-trust-boundaries.md) | Sandbox capability profiles and trust boundaries | Accepted; implemented 2026-11-20 |
 | [0059](0059-public-docs-boundary-and-deferred-navigation.md) | Public docs boundary, accessibility gates, and deferred navigation/search | Accepted; docs entry and checks implemented 2026-11-20 |
+| [0060](0060-release-checksum-signing-authority.md) | Release checksum signing for internal candidates and the public authority boundary | Accepted; internal candidate policy 2026-11-20 |
 
 ## Numbering Rule
 

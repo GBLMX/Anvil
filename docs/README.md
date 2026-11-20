@@ -13,7 +13,7 @@ material. Last reviewed 2026-11-18.
 - [Architecture](architecture.md) — process model and layer boundaries
 - [Architecture maps](architecture-visual.md) — current processes, flows, and deferred surfaces
 - [Threat model](threat-model.md) — adversaries, mitigations, invariants
-- [Internal polish](internal-polish-plan.md) — frozen `0.6.0` phase
+- [Internal polish](internal-polish-plan.md) — `0.7.0` release candidate
 - [Performance baseline](performance.md) — gates and re-run triggers
 
 ## Sources of truth
@@ -79,7 +79,7 @@ the owner.
 
 | Plan | Scope | Status |
 |---|---|---|
-| [Internal polish](internal-polish-plan.md) | P0/P1 polish under frozen `0.6.0` | Active; exit gates open |
+| [Internal polish](internal-polish-plan.md) | 0.6.0 polish closure and 0.7.0 candidate | Active; external signing/provenance gates |
 | [0.6.x distribution](0.6.x-plan.md) | packages, signing, download manager, marketplace | Active; marketplace deferred |
 | [0.7.x modules](0.7.x-plan.md) | optional source-level Rust modules | Active; 0.7.1–0.7.4 landed |
 | [Command architecture](command-architecture-plan.md) | registry, keymap trie, effects | Active; partial |
@@ -195,8 +195,8 @@ Architecture reading order, not a second status table:
 
 ### Version axes
 
-- Product version: workspace/Cargo version (`0.6.0`).
-- Plan slice: internal labels such as `0.6.0.1`; not semver or release tags.
+- Product version: workspace/Cargo version (`0.7.0`).
+- Plan slice: internal labels such as `0.7.0.1`; not semver or release tags.
 - ADR version: `x.y.z`; see [`adr/README.md`](adr/README.md).
 
 ### Redundancy rules

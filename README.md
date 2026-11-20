@@ -14,10 +14,10 @@ remain untrusted and sandboxed.
   <img src="docs/assets/anvil-demo.gif" alt="Anvil terminal editor demo: fuzzy open, edit, save, search, tree, and Git gutter" width="900">
 </p>
 
-Status: **`0.6.0` remains the frozen workspace/release version while the
-`0.7.x` optional-module line is developed in-tree; no public release or tag
-during this phase**. See [internal polish plan](docs/internal-polish-plan.md)
-and the [0.7.x module plan](docs/0.7.x-plan.md).
+Status: **`0.7.0` is the workspace release candidate; public tagging remains
+gated on production signing and provenance**. See the
+[internal polish plan](docs/internal-polish-plan.md) and the
+[0.7.x module plan](docs/0.7.x-plan.md).
 Development uses Rust from `rust-toolchain.toml` and Go **1.26.11 or newer**;
 CI installs the exact Go version from the root `go.mod`. The ratatui editor now
 includes insert

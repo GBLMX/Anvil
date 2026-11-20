@@ -4,23 +4,24 @@ This is a directional roadmap, not a release commitment. The detailed gates stay
 in `PROJECT_CHARTER.md`, `docs/phase-0-7-plan.md`, and the ADRs.
 Canonical layer/order: [docs/README.md § Delivery hierarchy](docs/README.md#delivery-hierarchy).
 
-## Internal polish mode
+## 0.7.0 release candidate
 
-Version is frozen at **0.6.0** for long-term internal feature polish.
+The workspace version is **0.7.0**.
 
-- Do not bump the version, create release tags, or publish releases.
-- Do not add signed-index/marketplace surfaces during this phase.
-- Accumulate work under `CHANGELOG.md` `[Unreleased]`.
-- Follow [docs/internal-polish-plan.md](docs/internal-polish-plan.md) for P0/P1
-  priorities and exit gates.
-- `scripts/check-frozen-version.sh` fails CI on an accidental version bump.
+- Do not create a public release tag or publish until production signing
+  custody and GitHub provenance are authorized.
+- Keep candidate work in the `0.7.0` changelog section; post-candidate work
+  goes under `[Unreleased]`.
+- Follow [docs/internal-polish-plan.md](docs/internal-polish-plan.md) for the
+  remaining external release gates.
+- `scripts/check-frozen-version.sh` fails CI on an accidental release-version
+  mismatch.
 
 
 ## Current
 
-- `0.6.0` internal-polish baseline: the selection-first kernel, session
-  extraction, P0/P1 feature sets, multi-root routing, and optional `0.7.x`
-  official modules are landed.
+- `0.7.0` release candidate: the `0.6.0` internal-polish baseline, P0/P1
+  feature sets, multi-root routing, and the landed `0.7.x` official modules.
 - The latest hardening pass closed the open editor, plugin-host, gateway,
   TUI, theme, and icon issues; the workspace gates pass with 1,335 Rust tests
   (1,294 default plus 41 bindings-gated) and 16 explicit ignored/manual tests.
@@ -29,9 +30,8 @@ Version is frozen at **0.6.0** for long-term internal feature polish.
 
 ## Remaining internal polish
 
-P0/P1 items are complete. Cross-root file tree/search UX and focus-change
-auto-save policy are closed; root labels, secondary-root refresh, untrusted
-roots, root-removal cleanup, and auto-save safety guards are landed.
+P0/P1 items are complete and the internal feature work is closed. The remaining
+release gates are production signing custody and CI provenance.
 
 Persistent undo is deferred by
 [ADR-0026](docs/adr/0026-persistent-undo-decision.md); revisiting it requires

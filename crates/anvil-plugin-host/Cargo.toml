@@ -10,16 +10,16 @@ repository.workspace = true
 [dependencies]
 
 [target.'cfg(target_os = "linux")'.dependencies]
-anvil-ipc = { path = "../anvil-ipc", version = "0.6.0" }
+anvil-ipc = { path = "../anvil-ipc", version = "0.7.0" }
 serde = { version = "1", features = ["derive"] }
 libc = "0.2"
 serde_json = "1"
 mlua = { version = "0.12", features = ["luau", "vendored", "serialize"] }
 
 [target.'cfg(target_os = "linux")'.dev-dependencies]
-anvil-editor = { path = "../anvil-editor", version = "0.6.0" }
-anvil-core = { path = "../anvil-core", version = "0.6.0" }
-anvil-api = { path = "../anvil-api", version = "0.6.0" }
+anvil-editor = { path = "../anvil-editor", version = "0.7.0" }
+anvil-core = { path = "../anvil-core", version = "0.7.0" }
+anvil-api = { path = "../anvil-api", version = "0.7.0" }
 
 [[bin]]
 name = "anvil-plugin-host"

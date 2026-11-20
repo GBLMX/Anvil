@@ -7,6 +7,8 @@ post-`0.5.0` feature line.
 
 
 ## [Unreleased]
+
+## [0.7.0] - 2026-11-20
 ### Added
 - Local release layout, installer, signed-plugin, artifact, and
   signature-verification dry run passed with ephemeral production-like Ed25519
@@ -633,8 +635,8 @@ post-`0.5.0` feature line.
 - Rebuilt the default `anvil-dark` theme with a deep-navy, steel, cyan,
   violet, and amber palette. Syntax colors now use stronger hue separation
   and targeted bold/italic/underline modifiers while keeping WCAG-AA contrast.
-- Version frozen at `0.6.0` for long-term internal polish; no release tags or
-  public releases during this phase.
+- Closed the `0.6.0` internal-polish phase and advanced the workspace to the
+  `0.7.0` release candidate.
 - Cursor visibility now uses the rendered text viewport instead of the full
   terminal, and indent guides reuse one visible-row projection per frame. This
   removes scroll jumps and repeated row layout on large files.

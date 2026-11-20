@@ -40,7 +40,7 @@ checksum = "940b3a0ca603d1eade50a4846a2afffd5ef57a9feac2c0e2ec2e14f9ead76000"
 
 [[package]]
 name = "anvil-api"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "schemars",
  "serde",
@@ -50,7 +50,7 @@ dependencies = [
 
 [[package]]
 name = "anvil-control"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "anvil-ipc",
  "rustix",
@@ -62,7 +62,7 @@ dependencies = [
 
 [[package]]
 name = "anvil-core"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "criterion",
  "proptest",
@@ -73,7 +73,7 @@ dependencies = [
 
 [[package]]
 name = "anvil-ctl"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "anvil-control",
  "serde_json",
@@ -81,14 +81,14 @@ dependencies = [
 
 [[package]]
 name = "anvil-distro-minimal"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "anvil-distro-standard",
 ]
 
 [[package]]
 name = "anvil-distro-standard"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "anvil-control",
  "anvil-lsp-client",
@@ -108,7 +108,7 @@ dependencies = [
 
 [[package]]
 name = "anvil-editor"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "anvil-api",
  "anvil-core",
@@ -120,7 +120,7 @@ dependencies = [
 
 [[package]]
 name = "anvil-ipc"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "base64 0.23.1",
  "rustix",
@@ -130,7 +130,7 @@ dependencies = [
 
 [[package]]
 name = "anvil-lsp-client"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "anvil-ipc",
  "anvil-module",
@@ -142,7 +142,7 @@ dependencies = [
 
 [[package]]
 name = "anvil-mcp"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "anvil-control",
  "serde",
@@ -151,7 +151,7 @@ dependencies = [
 
 [[package]]
 name = "anvil-mod-desktop"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "anvil-module",
  "tempfile",
@@ -159,7 +159,7 @@ dependencies = [
 
 [[package]]
 name = "anvil-mod-git"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "anvil-ipc",
  "anvil-module",
@@ -169,21 +169,21 @@ dependencies = [
 
 [[package]]
 name = "anvil-mod-language-latex"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "anvil-module",
 ]
 
 [[package]]
 name = "anvil-mod-language-typst"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "anvil-module",
 ]
 
 [[package]]
 name = "anvil-mod-workspace-index"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "anvil-ipc",
  "anvil-module",
@@ -191,7 +191,7 @@ dependencies = [
 
 [[package]]
 name = "anvil-module"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "anvil-api",
  "anvil-ipc",
@@ -201,11 +201,11 @@ dependencies = [
 
 [[package]]
 name = "anvil-platform"
-version = "0.6.0"
+version = "0.7.0"
 
 [[package]]
 name = "anvil-plugin-host"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "anvil-api",
  "anvil-core",
@@ -219,14 +219,14 @@ dependencies = [
 
 [[package]]
 name = "anvil-process"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "nix 0.31.3",
 ]
 
 [[package]]
 name = "anvil-session"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "anvil-api",
  "anvil-core",
@@ -242,7 +242,7 @@ dependencies = [
 
 [[package]]
 name = "anvil-syntax"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "anvil-core",
  "codebook-tree-sitter-latex",
@@ -269,11 +269,11 @@ dependencies = [
 
 [[package]]
 name = "anvil-task"
-version = "0.6.0"
+version = "0.7.0"
 
 [[package]]
 name = "anvil-tui"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "anvil-api",
  "anvil-control",
@@ -308,7 +308,7 @@ dependencies = [
 
 [[package]]
 name = "anvil-tui-kit"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "crossterm",
  "ratatui",
@@ -316,7 +316,7 @@ dependencies = [
 
 [[package]]
 name = "anvil-tui-theme"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "ratatui",
  "serde",
@@ -326,7 +326,7 @@ dependencies = [
 
 [[package]]
 name = "anvil-workspace"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "anvil-ipc",
  "anvil-mod-git",

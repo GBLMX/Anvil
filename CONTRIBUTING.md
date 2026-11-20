@@ -1,8 +1,8 @@
 # Contributing to Anvil
 
-Anvil is in the `0.6.0` internal-polish phase. The most useful contributions
-are security review, threat-model corrections, benchmark fixtures, and small
-vertical slices that match the charter and ADRs.
+Anvil is preparing the `0.7.0` release candidate. The most useful
+contributions are security review, threat-model corrections, benchmark
+fixtures, and small vertical slices that match the charter and ADRs.
 
 ## Before you start
 

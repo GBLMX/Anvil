@@ -1,9 +1,10 @@
 # ADR-0034: Release and Plugin Signing Authority
 
-- Status: Proposed; public-release direction selected, implementation deferred until the `0.6.0` freeze exits
+- Status: Proposed; plugin public-release direction selected, checksum authority split to ADR-0060
 - Date: 2026-11-13
 - Related: [ADR-0021](0021-signed-plugin-index.md),
   [ADR-0020](0020-content-addressed-plugin-store.md),
+  [ADR-0060](0060-release-checksum-signing-authority.md),
   [RELEASE.md](../../RELEASE.md), [threat model](../threat-model.md)
 
 ## Context
@@ -30,14 +31,14 @@ managed store by a real TUI session.
 A GitHub-hosted runner cannot access a locally attached YubiKey. Supporting the
 hardware key therefore requires either an offline signing step or a
 self-hosted runner. This ADR selects that authority model. It does not change
-the frozen `0.6.0` release workflow yet.
+the current internal-candidate release workflow.
 
 ## Decision
 
 ### 1. Authority classes
 
-- **Internal/non-public builds:** may continue to use a CI-held PEM key while
-  the internal-polish freeze is active.
+- **Internal/non-public builds:** may use a CI-held PEM key for plugin packages
+  and the checksum policy in ADR-0060 while no public release is claimed.
 - **Public releases:** must use an offline, hardware-backed Ed25519 key for
   plugin packages. A GitHub-hosted runner must never receive the production
   private key.
@@ -95,7 +96,7 @@ Public publication is rejected unless all of the following hold:
 
 Rejected for public releases because the production key is exportable and
 available to the build runner. It remains acceptable for internal/non-public
-builds during the freeze.
+candidates.
 
 ### Self-hosted runner with YubiKey
 
@@ -117,7 +118,7 @@ It may be reconsidered if offline signing becomes a release bottleneck.
   with rotation and revocation support.
 - The current hardware signing path remains local-only until the release
   workflow is redesigned.
-- No production workflow changes are required during the `0.6.0` freeze.
+- No public-release workflow change is required for internal candidates.
 
 ## Implementation gates
 
@@ -128,5 +129,6 @@ It may be reconsidered if offline signing becomes a release bottleneck.
 4. Add tamper, wrong-key, missing-signature, revoked-key, and rotation-overlap
    tests.
 5. Keep `ANVIL_PLUGIN_SIGNING_KEY=piv:9c` limited to local signing; the CI PEM
-   path remains the internal-build path until the freeze exits.
-6. Decide release-checksum signing separately before the first public release.
+   path remains the internal-build path until public signing is authorized.
+6. Keep public checksum signing separate; ADR-0060 defines internal-candidate
+   authority and leaves the public ceremony gated.

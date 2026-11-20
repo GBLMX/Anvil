@@ -1,11 +1,12 @@
 # ADR-0023: Internal Capability Closure Before Public Distribution
 
 - Status: Accepted; closure audit ongoing.
-- Implementation note (2026-11-15): auto-save, config reload, dynamic plugin
-  commands, Luau plugin loading, and routed multi-root file operations landed.
-  Remaining closures include signed index-to-download orchestration,
-  marketplace surfaces, production release signing/provenance, and the
-  reference-machine performance gate. Cross-root move/copy remains rejected.
+- Implementation note (2026-11-20): auto-save, config reload, dynamic plugin
+  commands, Luau plugin loading, routed multi-root file operations, the
+  reference-machine performance baseline, and the internal release dry run
+  are complete. Remaining closures are signed index-to-download
+  orchestration, marketplace surfaces, and production release
+  signing/provenance. Cross-root move/copy remains rejected.
 - Date: 2026-11-12
 - Related: [ADR-0001](0001-plugin-isolation.md), [ADR-0012](0012-plugin-host-isolation.md), [ADR-0013](0013-kernel-distribution-boundary.md), [ADR-0021](0021-signed-plugin-index.md), [ADR-0022](0022-core-editing-completion.md)
 
@@ -34,9 +35,10 @@ Examples:
 - **Plugin sandbox**: `LANDLOCK_SCOPE_SIGNAL` is enabled on Landlock ABI >= 6;
   older kernels still rely on seccomp as the primary signal control. The threat
   model tracks this as T9/T10.
-- **Verification**: the full performance gate has not run on the reference
-  machine, and release signing/provenance has not been exercised with
-  production-like keys.
+- **Verification**: the reference-machine performance baseline is recorded,
+  and the internal release signing dry run passed with ephemeral
+  production-like keys. Production key custody and GitHub provenance remain
+  external.
 
 Calling these "landed" because the underlying module exists makes the
 documentation overstate the product. This ADR defines what "closed" means and

@@ -9,7 +9,7 @@ verification, artifact signing, SBOM shape, and installed `doctor` profile.
 - Plugin signing key: ephemeral Ed25519 PEM.
 - Release signing key: ephemeral Ed25519 PEM.
 - Public release key SHA-256:
-  `c31727efe20bec3f6e7195ce7367c72f4402f2923c3227806f65d1091f0fe28f`
+  `6edfec66a048b3afc07ed226abd84883a8f7dda54aae796a3bdf24796855b5b1`
 - The private keys were generated in a temporary directory and deleted after
   the run. They are not production custody keys.
 
@@ -35,11 +35,11 @@ Temporary plugin package digest:
 ## Artifacts
 
 ```sh
-syft layout -o "spdx-json=anvil-0.6.0-dryrun.sbom.spdx.json"
+syft layout -o "spdx-json=anvil-0.7.0-dryrun.sbom.spdx.json"
 tar --sort=name --mtime='@0' --owner=0 --group=0 --numeric-owner \
-  -czf anvil-0.6.0-dryrun-linux-x86_64.tar.gz -C layout .
-sha256sum anvil-0.6.0-dryrun-linux-x86_64.tar.gz \
-  anvil-0.6.0-dryrun.sbom.spdx.json release.pub.pem > SHA256SUMS
+  -czf anvil-0.7.0-dryrun-linux-x86_64.tar.gz -C layout .
+sha256sum anvil-0.7.0-dryrun-linux-x86_64.tar.gz \
+  anvil-0.7.0-dryrun.sbom.spdx.json release.pub.pem > SHA256SUMS
 openssl pkeyutl -sign -inkey release-signing.pem -rawin \
   -in SHA256SUMS -out SHA256SUMS.sig
 sha256sum -c SHA256SUMS
@@ -50,8 +50,8 @@ openssl pkeyutl -verify -pubin -inkey release.pub.pem -rawin \
 Results:
 
 ```text
-tarball 3b872cfca9ded1899e1a1b4f4756055b0f668c3d61a6f471787953de9741b489
-sbom    17a7891c8de5923660d306e908e56a256aeef09e1c16213c7f6e96975cbe111b
+tarball 8d8fcf2c6987e5aa25b8517e8e0492ce6550511c3c4f489f852d018501767d99
+sbom    4413cbea16ecfe2745db2ecb75620a57712ce4ca82208b76b75c59a697c8aa98
 signature: verified
 sbom: SPDX-2.3, 7 packages
 ```
@@ -65,8 +65,9 @@ The archive contained `./install.sh`, `./uninstall.sh`, `./bin/anvil`, and
 
 - Production key custody and hardware-backed signing ceremony.
 - GitHub build-provenance attestation and `gh attestation verify`.
-- Explicit choice of the next public version and the matching freeze/version
-  update.
+- The next public version is `0.7.0`; the workspace and release-version guard
+  are updated, but no public tag is authorized yet.
 
-`0.6.0` remains frozen for internal polish; this dry run used the non-release
-label `0.6.0-dryrun`.
+The dry run used the non-release label `0.7.0-dryrun`. The current release
+candidate is `0.7.0`; public publication remains gated on production signing
+and provenance.
