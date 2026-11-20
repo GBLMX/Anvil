@@ -1,7 +1,7 @@
 # ADR-0058: Sandbox Capability Profiles and Trust Boundaries
 
-- Status: Proposed; profile selection and doctor capability report implemented 2026-11-20
-- Version: 1.8.0
+- Status: Accepted; implemented 2026-11-20
+- Version: 1.9.0
 - Date: 2026-11-20
 - Implementation note (2026-11-20): `anvil doctor --json` exposes the structured
   `sandbox` object (Landlock ABI/signal scope, seccomp, cgroup v2, plugin/exec
