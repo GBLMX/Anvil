@@ -2,11 +2,11 @@
 
 Status: Active; 1a, 1b, 2, 3, the protocol v3 control plane, and the thin MCP
 adapter are implemented. Real-TUI CLI and MCP smoke tests pass, and Codex
-successfully called `anvil_status` and `anvil_query` through the adapter.
+successfully exercised status, query, guarded edit, and stale rejection.
 
-The remaining work is dependency cleanup and dogfood-driven tool removal. The
-sections below preserve the gap analysis that drove the implementation; items
-marked resolved are no longer blockers.
+The remaining work is dogfood-driven tool removal. The sections below preserve
+the gap analysis that drove the implementation; items marked resolved are no
+longer blockers.
 
 ## 1. Current contract
 
@@ -164,8 +164,8 @@ MCP sends edit text as JSON over the socket. `anvil-ctl edit set --stdin` and
 
 `scripts/ctl-smoke.sh` and `scripts/mcp-smoke.sh` run in the Linux
 `control-smoke` CI job against the real TUI and the real gateway.
-The remaining work is dependency cleanup (`anvil-api` schema features) and
-dogfood-driven MCP tool removal. Both are P2 and not blockers.
+The remaining work is dogfood-driven MCP tool removal, which is P2 and not a
+blocker.
 
 ## 3. Work plan
 

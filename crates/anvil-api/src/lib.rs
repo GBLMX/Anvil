@@ -6,8 +6,10 @@
 
 use std::collections::BTreeMap;
 
+#[cfg(feature = "bindings")]
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "bindings")]
 use ts_rs::TS;
 
 mod module;
@@ -157,8 +159,9 @@ pub const METHODS: &[MethodSpec] = &[
 ///
 /// The numeric code mapping follows ADR-0007. `InvalidMode` and `Unsupported`
 /// are method-level kinds that reuse the closest transport code.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export)]
+#[cfg_attr(feature = "bindings", derive(JsonSchema, TS))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "bindings", ts(export))]
 #[serde(rename_all = "snake_case")]
 #[non_exhaustive]
 pub enum ApiError {
@@ -210,8 +213,9 @@ impl ApiError {
 /// The interaction model active for the current editor session.
 ///
 /// Phase 0 has one native model, `select`. A caret is an empty selection.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export)]
+#[cfg_attr(feature = "bindings", derive(JsonSchema, TS))]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "bindings", ts(export))]
 #[serde(rename_all = "snake_case")]
 #[non_exhaustive]
 pub enum InteractionMode {
@@ -229,12 +233,13 @@ pub enum InteractionMode {
 /// describe the same cursor position. Plugins receive positions from
 /// `editor.get_view`. V1 has no `set_selection`; a deserialized position is
 /// editor output, not trusted editor input.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export)]
+#[cfg_attr(feature = "bindings", derive(JsonSchema, TS))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "bindings", ts(export))]
 pub struct TextPosition {
     /// UTF-8 byte offset from the start of the document.
-    #[ts(type = "number")]
-    #[schemars(range(max = 9007199254740991i64))]
+    #[cfg_attr(feature = "bindings", ts(type = "number"))]
+    #[cfg_attr(feature = "bindings", schemars(range(max = 9007199254740991i64)))]
     pub byte_offset: u64,
     /// Zero-based line number.
     pub line: u32,
@@ -247,8 +252,9 @@ pub struct TextPosition {
 }
 
 /// The visible region of the document.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export)]
+#[cfg_attr(feature = "bindings", derive(JsonSchema, TS))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "bindings", ts(export))]
 pub struct Viewport {
     /// First visible line.
     pub first_line: u32,
@@ -263,8 +269,9 @@ pub struct Viewport {
 }
 
 /// One selection. A caret is an empty selection where `anchor == head`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export)]
+#[cfg_attr(feature = "bindings", derive(JsonSchema, TS))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "bindings", ts(export))]
 pub struct Selection {
     /// Fixed end of the selection.
     pub anchor: TextPosition,
@@ -275,12 +282,13 @@ pub struct Selection {
 /// Result of `editor.get_view`.
 ///
 /// Phase 0 has at least one selection and one native mode (`select`).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export)]
+#[cfg_attr(feature = "bindings", derive(JsonSchema, TS))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "bindings", ts(export))]
 pub struct EditorView {
     /// Monotonic document revision at snapshot time.
-    #[ts(type = "number")]
-    #[schemars(range(max = 9007199254740991i64))]
+    #[cfg_attr(feature = "bindings", ts(type = "number"))]
+    #[cfg_attr(feature = "bindings", schemars(range(max = 9007199254740991i64)))]
     pub revision: u64,
     /// Session interaction mode.
     pub interaction_mode: InteractionMode,
@@ -291,109 +299,120 @@ pub struct EditorView {
 }
 
 /// Payload for `editor.set_mode`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export)]
+#[cfg_attr(feature = "bindings", derive(JsonSchema, TS))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "bindings", ts(export))]
 pub struct SetModeRequest {
     /// The mode to activate for the current session.
     pub mode: InteractionMode,
 }
 
 /// Result of `editor.set_mode`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export)]
+#[cfg_attr(feature = "bindings", derive(JsonSchema, TS))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "bindings", ts(export))]
 pub struct SetModeResponse {
     /// The mode active after the request.
     pub mode: InteractionMode,
 }
 
 /// Half-open UTF-8 byte range used by document transactions.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export)]
+#[cfg_attr(feature = "bindings", derive(JsonSchema, TS))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "bindings", ts(export))]
 pub struct TextRange {
     /// Inclusive UTF-8 byte offset.
-    #[ts(type = "number")]
-    #[schemars(range(max = 9007199254740991i64))]
+    #[cfg_attr(feature = "bindings", ts(type = "number"))]
+    #[cfg_attr(feature = "bindings", schemars(range(max = 9007199254740991i64)))]
     pub start: u64,
     /// Exclusive UTF-8 byte offset.
-    #[ts(type = "number")]
-    #[schemars(range(max = 9007199254740991i64))]
+    #[cfg_attr(feature = "bindings", ts(type = "number"))]
+    #[cfg_attr(feature = "bindings", schemars(range(max = 9007199254740991i64)))]
     pub end: u64,
 }
 
 /// One replacement in a document transaction.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export)]
+#[cfg_attr(feature = "bindings", derive(JsonSchema, TS))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "bindings", ts(export))]
 pub struct DocumentEdit {
     pub range: TextRange,
     pub text: String,
 }
 
 /// Payload for `editor.apply_edit`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export)]
+#[cfg_attr(feature = "bindings", derive(JsonSchema, TS))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "bindings", ts(export))]
 pub struct ApplyEditRequest {
     /// Editor-owned buffer identity.
-    #[ts(type = "number")]
-    #[schemars(range(max = 9007199254740991i64))]
+    #[cfg_attr(feature = "bindings", ts(type = "number"))]
+    #[cfg_attr(feature = "bindings", schemars(range(max = 9007199254740991i64)))]
     pub buffer_id: u64,
     /// Revision the edits were computed against.
-    #[ts(type = "number")]
-    #[schemars(range(max = 9007199254740991i64))]
+    #[cfg_attr(feature = "bindings", ts(type = "number"))]
+    #[cfg_attr(feature = "bindings", schemars(range(max = 9007199254740991i64)))]
     pub base_revision: u64,
     pub edits: Vec<DocumentEdit>,
 }
 
 /// Result of `editor.apply_edit`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export)]
+#[cfg_attr(feature = "bindings", derive(JsonSchema, TS))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "bindings", ts(export))]
 pub struct ApplyEditResponse {
     /// Revision after the transaction commits.
-    #[ts(type = "number")]
-    #[schemars(range(max = 9007199254740991i64))]
+    #[cfg_attr(feature = "bindings", ts(type = "number"))]
+    #[cfg_attr(feature = "bindings", schemars(range(max = 9007199254740991i64)))]
     pub revision: u64,
     /// Number of replacements applied.
     pub applied_edits: u32,
 }
 
 /// Result of `editor.get_snapshot`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export)]
+#[cfg_attr(feature = "bindings", derive(JsonSchema, TS))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "bindings", ts(export))]
 pub struct DocumentSnapshot {
     /// Editor-owned buffer identity.
-    #[ts(type = "number")]
-    #[schemars(range(max = 9007199254740991i64))]
+    #[cfg_attr(feature = "bindings", ts(type = "number"))]
+    #[cfg_attr(feature = "bindings", schemars(range(max = 9007199254740991i64)))]
     pub buffer_id: u64,
     /// Monotonic document revision at snapshot time.
-    #[ts(type = "number")]
-    #[schemars(range(max = 9007199254740991i64))]
+    #[cfg_attr(feature = "bindings", ts(type = "number"))]
+    #[cfg_attr(feature = "bindings", schemars(range(max = 9007199254740991i64)))]
     pub revision: u64,
     /// Full UTF-8 document text.
     pub text: String,
 }
 
 /// No result fields.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export)]
+#[cfg_attr(feature = "bindings", derive(JsonSchema, TS))]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "bindings", ts(export))]
 pub struct EmptyResponse {}
 
 /// Request to register a plugin command.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export)]
+#[cfg_attr(feature = "bindings", derive(JsonSchema, TS))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "bindings", ts(export))]
 pub struct RegisterCommandRequest {
     pub id: String,
     pub title: String,
 }
 
 /// Result of registering a plugin command.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export)]
+#[cfg_attr(feature = "bindings", derive(JsonSchema, TS))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "bindings", ts(export))]
 pub struct RegisterCommandResponse {
     pub command_id: String,
 }
 
 /// Provider capability exposed by a runtime plugin.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export)]
+#[cfg_attr(feature = "bindings", derive(JsonSchema, TS))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "bindings", ts(export))]
 #[serde(rename_all = "snake_case")]
 pub enum ProviderKind {
     Picker,
@@ -403,8 +422,9 @@ pub enum ProviderKind {
 /// Request to register one runtime-plugin provider.
 ///
 /// `handler` names a Lua global function invoked with the provider request table.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export)]
+#[cfg_attr(feature = "bindings", derive(JsonSchema, TS))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "bindings", ts(export))]
 pub struct RegisterProviderRequest {
     pub id: String,
     pub kind: ProviderKind,
@@ -415,18 +435,20 @@ pub struct RegisterProviderRequest {
 }
 
 /// Result of registering a runtime-plugin provider.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export)]
+#[cfg_attr(feature = "bindings", derive(JsonSchema, TS))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "bindings", ts(export))]
 pub struct RegisterProviderResponse {
     pub provider_id: String,
 }
 
 /// Data-only request sent to a runtime plugin provider.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export)]
+#[cfg_attr(feature = "bindings", derive(JsonSchema, TS))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "bindings", ts(export))]
 pub struct ProviderRequest {
-    #[ts(type = "number")]
-    #[schemars(range(max = 9007199254740991i64))]
+    #[cfg_attr(feature = "bindings", ts(type = "number"))]
+    #[cfg_attr(feature = "bindings", schemars(range(max = 9007199254740991i64)))]
     pub request_id: u64,
     pub provider_id: String,
     pub query: String,
@@ -434,8 +456,9 @@ pub struct ProviderRequest {
 }
 
 /// One pinned provider result.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export)]
+#[cfg_attr(feature = "bindings", derive(JsonSchema, TS))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "bindings", ts(export))]
 pub struct ProviderItem {
     pub label: String,
     pub value: Option<String>,
@@ -444,38 +467,42 @@ pub struct ProviderItem {
 }
 
 /// Data-only response from a runtime plugin provider.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export)]
+#[cfg_attr(feature = "bindings", derive(JsonSchema, TS))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "bindings", ts(export))]
 pub struct ProviderResponse {
-    #[ts(type = "number")]
-    #[schemars(range(max = 9007199254740991i64))]
+    #[cfg_attr(feature = "bindings", ts(type = "number"))]
+    #[cfg_attr(feature = "bindings", schemars(range(max = 9007199254740991i64)))]
     pub request_id: u64,
     pub items: Vec<ProviderItem>,
 }
 
 /// One picker action sent back to a runtime plugin.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export)]
+#[cfg_attr(feature = "bindings", derive(JsonSchema, TS))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "bindings", ts(export))]
 pub struct ProviderAction {
-    #[ts(type = "number")]
-    #[schemars(range(max = 9007199254740991i64))]
+    #[cfg_attr(feature = "bindings", ts(type = "number"))]
+    #[cfg_attr(feature = "bindings", schemars(range(max = 9007199254740991i64)))]
     pub request_id: u64,
     pub provider_id: String,
     pub value: String,
 }
 
 /// Cancel one in-flight runtime-plugin provider request.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export)]
+#[cfg_attr(feature = "bindings", derive(JsonSchema, TS))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "bindings", ts(export))]
 pub struct ProviderCancel {
-    #[ts(type = "number")]
-    #[schemars(range(max = 9007199254740991i64))]
+    #[cfg_attr(feature = "bindings", ts(type = "number"))]
+    #[cfg_attr(feature = "bindings", schemars(range(max = 9007199254740991i64)))]
     pub request_id: u64,
 }
 
 /// Notification severity.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export)]
+#[cfg_attr(feature = "bindings", derive(JsonSchema, TS))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "bindings", ts(export))]
 #[serde(rename_all = "snake_case")]
 #[non_exhaustive]
 pub enum NotificationSeverity {
@@ -485,98 +512,109 @@ pub enum NotificationSeverity {
 }
 
 /// Request to show a transient notification.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export)]
+#[cfg_attr(feature = "bindings", derive(JsonSchema, TS))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "bindings", ts(export))]
 pub struct NotifyRequest {
     pub message: String,
     pub severity: NotificationSeverity,
 }
 
 /// Request to replace the status line.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export)]
+#[cfg_attr(feature = "bindings", derive(JsonSchema, TS))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "bindings", ts(export))]
 pub struct StatusRequest {
     pub message: String,
 }
 
 /// Request to subscribe to editor events.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export)]
+#[cfg_attr(feature = "bindings", derive(JsonSchema, TS))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "bindings", ts(export))]
 pub struct EventSubscribeRequest {
     pub events: Vec<String>,
 }
 
 /// Subscription identity returned by `event.subscribe`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export)]
+#[cfg_attr(feature = "bindings", derive(JsonSchema, TS))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "bindings", ts(export))]
 pub struct EventSubscribeResponse {
-    #[ts(type = "number")]
-    #[schemars(range(max = 9007199254740991i64))]
+    #[cfg_attr(feature = "bindings", ts(type = "number"))]
+    #[cfg_attr(feature = "bindings", schemars(range(max = 9007199254740991i64)))]
     pub subscription_id: u64,
 }
 
 /// Path-only filesystem request.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export)]
+#[cfg_attr(feature = "bindings", derive(JsonSchema, TS))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "bindings", ts(export))]
 pub struct PathRequest {
     pub path: String,
 }
 
 /// Request to read a bounded file chunk.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export)]
+#[cfg_attr(feature = "bindings", derive(JsonSchema, TS))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "bindings", ts(export))]
 pub struct ReadFileRequest {
     pub path: String,
-    #[ts(type = "number")]
-    #[schemars(range(max = 9007199254740991i64))]
+    #[cfg_attr(feature = "bindings", ts(type = "number"))]
+    #[cfg_attr(feature = "bindings", schemars(range(max = 9007199254740991i64)))]
     pub offset: u64,
-    #[ts(type = "number")]
-    #[schemars(range(max = 9007199254740991i64))]
+    #[cfg_attr(feature = "bindings", ts(type = "number"))]
+    #[cfg_attr(feature = "bindings", schemars(range(max = 9007199254740991i64)))]
     pub max_bytes: u64,
 }
 
 /// Base64-encoded file chunk.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export)]
+#[cfg_attr(feature = "bindings", derive(JsonSchema, TS))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "bindings", ts(export))]
 pub struct ReadFileResponse {
     pub data: String,
-    #[ts(type = "number")]
-    #[schemars(range(max = 9007199254740991i64))]
+    #[cfg_attr(feature = "bindings", ts(type = "number"))]
+    #[cfg_attr(feature = "bindings", schemars(range(max = 9007199254740991i64)))]
     pub next_offset: u64,
     pub eof: bool,
 }
 
 /// Request to move or rename one workspace entry.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export)]
+#[cfg_attr(feature = "bindings", derive(JsonSchema, TS))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "bindings", ts(export))]
 pub struct RenameRequest {
     pub from: String,
     pub to: String,
 }
 
 /// Request to copy one workspace entry.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export)]
+#[cfg_attr(feature = "bindings", derive(JsonSchema, TS))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "bindings", ts(export))]
 pub struct CopyRequest {
     pub from: String,
     pub to: String,
 }
 
 /// Request to perform one allowlisted HTTP fetch.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export)]
+#[cfg_attr(feature = "bindings", derive(JsonSchema, TS))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "bindings", ts(export))]
 pub struct FetchRequest {
     pub url: String,
-    #[ts(type = "number")]
-    #[schemars(range(max = 9007199254740991i64))]
+    #[cfg_attr(feature = "bindings", ts(type = "number"))]
+    #[cfg_attr(feature = "bindings", schemars(range(max = 9007199254740991i64)))]
     pub max_bytes: u64,
     #[serde(default)]
     pub headers: BTreeMap<String, String>,
 }
 
 /// Bounded HTTP fetch result.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export)]
+#[cfg_attr(feature = "bindings", derive(JsonSchema, TS))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "bindings", ts(export))]
 pub struct FetchResponse {
     pub status: u16,
     pub content_type: String,
@@ -585,37 +623,40 @@ pub struct FetchResponse {
 }
 
 /// Request to run one allowlisted tool.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export)]
+#[cfg_attr(feature = "bindings", derive(JsonSchema, TS))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "bindings", ts(export))]
 pub struct ExecRequest {
     pub tool: String,
     pub args: Vec<String>,
-    #[ts(type = "number")]
-    #[schemars(range(max = 9007199254740991i64))]
+    #[cfg_attr(feature = "bindings", ts(type = "number"))]
+    #[cfg_attr(feature = "bindings", schemars(range(max = 9007199254740991i64)))]
     pub timeout_ms: u64,
 }
 
 /// Bounded one-shot exec request with stdin and an optional workspace-relative cwd.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export)]
+#[cfg_attr(feature = "bindings", derive(JsonSchema, TS))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "bindings", ts(export))]
 pub struct ExecRequestV2 {
     pub tool: String,
     pub args: Vec<String>,
     pub cwd: Option<String>,
-    #[schemars(length(max = 4194304))]
+    #[cfg_attr(feature = "bindings", schemars(length(max = 4194304)))]
     pub stdin: Option<String>,
-    #[ts(type = "number")]
-    #[schemars(range(max = 9007199254740991i64))]
+    #[cfg_attr(feature = "bindings", ts(type = "number"))]
+    #[cfg_attr(feature = "bindings", schemars(range(max = 9007199254740991i64)))]
     pub timeout_ms: u64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
-    #[schemars(range(max = 9007199254740991i64))]
+    #[cfg_attr(feature = "bindings", ts(optional))]
+    #[cfg_attr(feature = "bindings", schemars(range(max = 9007199254740991i64)))]
     pub max_output_bytes: Option<u64>,
 }
 
 /// Sandboxed process result.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export)]
+#[cfg_attr(feature = "bindings", derive(JsonSchema, TS))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "bindings", ts(export))]
 pub struct ExecResponse {
     pub stdout: String,
     pub stderr: String,
@@ -690,6 +731,7 @@ mod tests {
         assert_eq!(decoded, view);
     }
 
+    #[cfg(feature = "bindings")]
     #[test]
     fn schema_exposes_mode_and_safe_integer_bounds() {
         let schema = serde_json::to_value(schemars::schema_for!(EditorView)).unwrap();
@@ -792,6 +834,11 @@ mod tests {
             serde_json::to_string(&ProviderCancel { request_id: 7 }).unwrap(),
             r#"{"request_id":7}"#
         );
+    }
+
+    #[cfg(feature = "bindings")]
+    #[test]
+    fn provider_schema_and_bindings_match() {
         let request_schema = serde_json::to_value(schemars::schema_for!(ProviderRequest)).unwrap();
         assert_eq!(
             request_schema["properties"]["request_id"]["maximum"].as_u64(),

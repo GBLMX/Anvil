@@ -8,6 +8,9 @@ post-`0.5.0` feature line.
 
 ## [Unreleased]
 ### Added
+- `anvil-api` schema and TypeScript generation now sit behind the opt-in
+  `bindings` feature; default runtime builds no longer pull `schemars` or
+  `ts-rs`. CI runs the bindings-gated contract tests separately.
 - Release layouts now write an install manifest and ship `uninstall.sh`; an
   install/upgrade/uninstall lifecycle smoke runs in CI and the release
   workflow. Uninstall removes only manifest-recorded files and preserves

@@ -22,8 +22,8 @@ Version is frozen at **0.6.0** for long-term internal feature polish.
   extraction, P0/P1 feature sets, multi-root routing, and optional `0.7.x`
   official modules are landed.
 - The latest hardening pass closed the open editor, plugin-host, gateway,
-  TUI, theme, and icon issues; the workspace gates pass with 1,333 Rust tests
-  and 16 explicit ignored/manual tests.
+  TUI, theme, and icon issues; the workspace gates pass with 1,334 Rust tests
+  (1,293 default plus 41 bindings-gated) and 16 explicit ignored/manual tests.
 - The full release layout installs and passes `anvil doctor --profile
   installed`; the remaining exit gates are tracked below.
 

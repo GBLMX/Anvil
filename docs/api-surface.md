@@ -60,7 +60,7 @@ gateway internals beyond the versioned protocol.
 
 ## Automated gates
 
-- Generated bindings: `cargo run -p anvil-api --example export_bindings`, then
+- Generated bindings: `cargo run -p anvil-api --example export_bindings --features bindings`, then
   `git diff --exit-code -- crates/anvil-api/bindings`.
 - Public surface snapshot: `bash scripts/api-surface-check.sh` hashes every
   normalized `pub` declaration, including signatures, fields, and variants.

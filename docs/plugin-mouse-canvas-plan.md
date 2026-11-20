@@ -375,7 +375,7 @@ arbitrary audio process is started.
 
 ## 7. Tests and verification
 
-- Generated API bindings: `cargo run -p anvil-api --example export_bindings -- --check`.
+- Generated API bindings: `cargo run -p anvil-api --example export_bindings --features bindings`.
 - Schema/TypeScript/Luau parity and API version negotiation tests.
 - Mouse mapping matrix: scroll, soft wrap, tab, wide glyph, split, overlay,
   scrolled horizontal viewport.
