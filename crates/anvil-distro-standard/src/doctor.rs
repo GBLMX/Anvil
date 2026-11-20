@@ -166,7 +166,7 @@ fn doctor_checks(
         check_remote(),
         check_runtime_dir(),
         check_config(),
-        check_landlock(),
+        check_landlock(sandbox),
         check_sandbox(sandbox),
         check_lsp(),
     ]
@@ -502,38 +502,26 @@ fn check_config() -> DoctorCheck {
     }
 }
 
-fn check_landlock() -> DoctorCheck {
+fn check_landlock(sandbox: &SandboxReport) -> DoctorCheck {
     #[cfg(target_os = "linux")]
     {
-        match fs::read_to_string("/sys/kernel/security/lsm") {
-            Ok(lsm) if lsm.contains("landlock") => {
-                check("landlock", DoctorLevel::Ok, "Landlock is active", "")
-            }
-            Ok(_) if seccomp_available() => check(
+        if sandbox.landlock_present {
+            return check("landlock", DoctorLevel::Ok, "Landlock is active", "");
+        }
+        if sandbox.seccomp_available {
+            return check(
                 "landlock",
                 DoctorLevel::Warn,
                 "Landlock unavailable; seccomp fallback is active",
                 "enable Landlock in the kernel or accept the documented seccomp fallback",
-            ),
-            Ok(_) => check(
-                "landlock",
-                DoctorLevel::Error,
-                "neither Landlock nor seccomp is available",
-                "use a Linux kernel with Landlock or seccomp",
-            ),
-            Err(error) if seccomp_available() => check(
-                "landlock",
-                DoctorLevel::Warn,
-                format!("cannot inspect LSMs: {error}; seccomp fallback is active"),
-                "check kernel security permissions or accept the documented fallback",
-            ),
-            Err(error) => check(
-                "landlock",
-                DoctorLevel::Error,
-                format!("cannot inspect LSMs: {error}; no seccomp fallback"),
-                "check kernel security permissions",
-            ),
+            );
         }
+        check(
+            "landlock",
+            DoctorLevel::Error,
+            "neither Landlock nor seccomp is available",
+            "use a Linux kernel with Landlock or seccomp",
+        )
     }
     #[cfg(not(target_os = "linux"))]
     check(
@@ -542,13 +530,6 @@ fn check_landlock() -> DoctorCheck {
         "Anvil is Linux-first; sandbox checks are unavailable",
         "run Anvil on Linux with Landlock or seccomp",
     )
-}
-
-#[cfg(target_os = "linux")]
-fn seccomp_available() -> bool {
-    fs::read_to_string("/proc/sys/kernel/seccomp/actions_avail")
-        .map(|value| !value.trim().is_empty())
-        .unwrap_or(false)
 }
 
 const LSP_TOOLS: &[&str] = &[
@@ -673,6 +654,21 @@ mod tests {
     use super::*;
     use crate::STANDARD;
     use crate::sandbox::SandboxStatus;
+
+    #[test]
+    fn landlock_check_uses_the_probed_report() {
+        let mut report = crate::sandbox::probe(crate::sandbox::SandboxProfile::Auto, None);
+        report.landlock_present = true;
+        report.seccomp_available = false;
+        assert_eq!(check_landlock(&report).level, DoctorLevel::Ok);
+
+        report.landlock_present = false;
+        report.seccomp_available = true;
+        assert_eq!(check_landlock(&report).level, DoctorLevel::Warn);
+
+        report.seccomp_available = false;
+        assert_eq!(check_landlock(&report).level, DoctorLevel::Error);
+    }
 
     #[test]
     fn doctor_json_has_stable_schema() {

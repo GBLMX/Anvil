@@ -664,6 +664,9 @@ post-`0.5.0` feature line.
   now 664 lines.
 
 ### Fixed
+- `anvil doctor` now derives Landlock status from the probed sandbox report
+  instead of reading `/sys/kernel/security/lsm`; Snap and Flatpak sandboxes no
+  longer report a false Landlock error when securityfs is hidden.
 - Editor-originated saves no longer re-enter the workspace watcher as external
   changes. The watcher ignores events whose mtime matches the just-written
   file, so saving an externally watched buffer no longer prompts for a reload
