@@ -29,7 +29,7 @@
       "type": "object"
     },
     "TextPosition": {
-      "description": "A position in the document.\n\nAll indices are zero-based. `byte_offset` is a UTF-8 byte offset;\n`char_column` counts Unicode scalars; `grapheme_column` counts extended\ngrapheme clusters; `display_column` counts terminal cells and accounts for\nwide characters. The editor owns the conversions and guarantees the fields\ndescribe the same cursor position. Plugins receive positions from\n`editor.get_view`; construction stays editor-owned until a future\n`set_selection` contract validates it.",
+      "description": "A position in the document.\n\nAll indices are zero-based. `byte_offset` is a UTF-8 byte offset;\n`char_column` counts Unicode scalars; `grapheme_column` counts extended\ngrapheme clusters; `display_column` counts terminal cells and accounts for\nwide characters. The editor owns the conversions and guarantees the fields\ndescribe the same cursor position. Plugins receive positions from\n`editor.get_view`. V1 has no `set_selection`; a deserialized position is\neditor output, not trusted editor input.",
       "properties": {
         "byte_offset": {
           "description": "UTF-8 byte offset from the start of the document.",
