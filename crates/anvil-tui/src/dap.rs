@@ -512,10 +512,12 @@ while True:
     }
 
     #[test]
+    #[ignore = "requires /usr/bin/lldb-dap"]
     fn lldb_dap_initializes() {
-        if !Path::new("/usr/bin/lldb-dap").is_file() {
-            return;
-        }
+        assert!(
+            Path::new("/usr/bin/lldb-dap").is_file(),
+            "requires /usr/bin/lldb-dap"
+        );
         let mut client =
             DapClient::spawn(Path::new("/usr/bin/lldb-dap"), &[], &std::env::temp_dir())
                 .expect("spawn");

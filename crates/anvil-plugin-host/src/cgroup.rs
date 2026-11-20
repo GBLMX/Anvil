@@ -170,15 +170,12 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "requires delegated cgroup v2 root"]
     fn writes_limits_when_delegated_root_is_available() {
-        let Ok(root) = Cgroup::detect_root() else {
-            return;
-        };
+        let root = Cgroup::detect_root().expect("delegated cgroup v2 root required");
         let name = format!("anvil-plugin-test-{}", std::process::id());
-        let Ok(mut cgroup) = Cgroup::create(&root, &name, 64, 256 << 20, 100) else {
-            eprintln!("skipping cgroup limit test: no delegated writable cgroup2 root");
-            return;
-        };
+        let mut cgroup =
+            Cgroup::create(&root, &name, 64, 256 << 20, 100).expect("create delegated cgroup");
         assert_eq!(
             fs::read_to_string(cgroup.path().join("pids.max"))
                 .expect("pids")

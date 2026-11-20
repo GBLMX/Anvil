@@ -1,0 +1,58 @@
+name: Manual Tests
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  boundaries:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install pinned Rust toolchain
+        run: rustup show
+      - name: Run manual boundary tests
+        run: |
+          cargo test -p anvil-core --release -- --ignored sparse_columns_100mb
+          cargo test -p anvil-editor --release -- --ignored dense_100mb_search_is_bounded
+          cargo test -p anvil-editor --release -- --ignored stress_100k_random_edits
+          cargo test -p anvil-tui --release -- --ignored long_line_render_stays_bounded
+          cargo test -p anvil-tui --release -- --ignored long_line_cursor_at_end_render_stays_bounded
+
+  gateway-lsp:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      ANVIL_GATEWAY: ${{ github.workspace }}/target/release/anvil-gateway
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install pinned Rust toolchain
+        run: rustup show
+      - name: Install rust-analyzer
+        run: rustup component add rust-analyzer
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Build gateway
+        run: |
+          cargo build --release -p anvil-distro-standard -p anvil-ctl -p anvil-mcp
+          go build -trimpath -buildvcs=false -ldflags='-s -w' \
+            -o target/release/anvil-gateway ./go/cmd/anvil-gateway
+          go build -trimpath -buildvcs=false -ldflags='-s -w' \
+            -o target/release/anvil-exec-runner ./go/cmd/anvil-exec-runner
+      - name: Run gateway integration tests
+        run: |
+          for test in \
+            secondary_root_tree_lists_and_opens_through_owning_gateway \
+            applies_directory_resources_through_gateway \
+            path_completion_uses_gateway_directory_entries \
+            call_hierarchy_round_trip_through_gateway \
+            folding_round_trip_through_gateway \
+            completion_resolve_round_trip_through_gateway \
+            semantic_tokens_round_trip_through_gateway; do
+            cargo test -p anvil-tui --release "$test" -- --ignored
+          done

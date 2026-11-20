@@ -1058,10 +1058,12 @@ fn dap_auto_without_file_reports_error() {
 }
 
 #[test]
+#[ignore = "requires /usr/bin/lldb-dap"]
 fn dap_auto_attaches_builtin_rust_adapter() {
-    if !std::path::Path::new("/usr/bin/lldb-dap").is_file() {
-        return;
-    }
+    assert!(
+        std::path::Path::new("/usr/bin/lldb-dap").is_file(),
+        "requires /usr/bin/lldb-dap"
+    );
     let directory = std::env::temp_dir().join(format!(
         "anvil-dap-auto-{}-{}",
         std::process::id(),

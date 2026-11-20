@@ -232,9 +232,10 @@ mod tests {
 
     #[test]
     fn runs_shell_in_pty() {
-        if !Path::new("/bin/sh").exists() {
-            return;
-        }
+        assert!(
+            Path::new("/bin/sh").exists(),
+            "requires /bin/sh for PTY test"
+        );
         let mut session =
             PtySession::spawn("/bin/sh", Path::new("/tmp"), 80, 24).expect("spawn pty shell");
         session.write_all(b"printf 'pty-ok\\n'\n").expect("write");

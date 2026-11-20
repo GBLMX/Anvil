@@ -650,7 +650,7 @@ fn closing_modified_buffer_can_save_or_discard() {
 }
 
 #[test]
-fn failed_save_keeps_close_confirmation_open() {
+fn invalid_save_index_keeps_close_confirmation_open() {
     let dir = tempfile::tempdir().expect("tempdir");
     let mut model = Model::new(EditorState::from_text("dirty"), None);
     model.session.path = Some(dir.path().to_path_buf());
@@ -666,7 +666,11 @@ fn failed_save_keeps_close_confirmation_open() {
         model.ui.input_mode,
         InputMode::ConfirmClose { index: 0 }
     ));
-    assert!(model.status.text.starts_with("E:"), "{}", model.status.text);
+    assert!(
+        model.status.text.contains("invalid buffer index"),
+        "{}",
+        model.status.text
+    );
 }
 
 #[test]
@@ -1431,7 +1435,11 @@ fn unknown_object_failure_preserves_text() {
         handle_event(&mut model, key(key_code));
     }
     assert_eq!(model.session.editor.text().slice(0..3), "abc");
-    assert!(model.status.text.starts_with("E:"));
+    assert!(
+        model.status.text.contains("object"),
+        "{}",
+        model.status.text
+    );
 }
 
 #[test]
@@ -1501,7 +1509,11 @@ fn failed_auto_save_aborts_the_focus_change() {
 
     assert_eq!(model.buffers.active, 0);
     assert!(model.file.modified);
-    assert!(model.status.text.contains("E:"));
+    assert!(
+        model.status.text.contains("auto-save"),
+        "{}",
+        model.status.text
+    );
 }
 
 #[test]

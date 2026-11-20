@@ -1119,7 +1119,6 @@ fn preview_failure_keeps_the_list_usable() {
         model.overlays.preview.message.as_deref(),
         Some("gateway failed")
     );
-    assert!(model.status.text.contains("E: preview: gateway failed"));
 }
 
 #[test]
@@ -1139,12 +1138,6 @@ fn preview_without_worker_reports_gateway_unavailable() {
         model.overlays.preview.message.as_deref(),
         Some("preview unavailable: gateway")
     );
-    assert!(
-        model
-            .status
-            .text
-            .contains("E: preview: gateway unavailable")
-    );
 }
 
 #[test]
@@ -1156,7 +1149,7 @@ fn theme_command_switches_and_lists_builtins() {
     assert!(model.status.text.contains("one-dark"));
     model.execute_command("theme missing");
     assert_eq!(theme::name(), "one-dark");
-    assert!(model.status.text.starts_with("E:"));
+    assert!(model.status.text.contains("theme"), "{}", model.status.text);
     model.execute_command("theme");
     assert!(model.status.text.contains("solarized-light"));
     model.execute_command("theme anvil-dark");

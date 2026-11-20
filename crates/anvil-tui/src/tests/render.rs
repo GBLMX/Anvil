@@ -1,5 +1,7 @@
 use super::*;
+use crate::mouse::Target;
 use anvil_lsp_client as lsp;
+
 #[test]
 fn markdown_fenced_code_renders_a_full_width_background() {
     let mut model = Model::new(EditorState::from_text("```rust\nfn main() {}\n```\n"), None);
@@ -404,18 +406,35 @@ fn long_line_render_stays_bounded() {
 #[test]
 fn hit_test_extreme_dimensions_do_not_overflow() {
     let mut model = Model::new(EditorState::from_text("abc"), None);
+    model.start_page.welcome = false;
     model.workspace.tree.visible = true;
     model.split_vertical();
-    for (width, height) in [(0, 0), (1, 1), (2, 2), (u16::MAX, u16::MAX)] {
-        let _ = mouse_hit_boundary(&model, 0, 0, width, height);
-        let _ = mouse_hit_boundary(
-            &model,
-            width.saturating_sub(1),
-            height.saturating_sub(1),
-            width,
-            height,
+    for (width, height) in [(0, 0), (1, 1), (2, 2)] {
+        assert_eq!(
+            mouse_hit_boundary(&model, 0, 0, width, height),
+            Target::Outside
+        );
+        assert_eq!(
+            mouse_hit_boundary(
+                &model,
+                width.saturating_sub(1),
+                height.saturating_sub(1),
+                width,
+                height
+            ),
+            Target::Outside
         );
     }
+    let target = mouse_hit_boundary(&model, 0, 0, u16::MAX, u16::MAX);
+    assert!(matches!(
+        target,
+        Target::Outside
+            | Target::Tabs(_)
+            | Target::Tree(_)
+            | Target::Status
+            | Target::SplitHandle
+            | Target::Editor { .. }
+    ));
 }
 
 #[test]

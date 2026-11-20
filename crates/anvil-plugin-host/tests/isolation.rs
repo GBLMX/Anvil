@@ -272,14 +272,11 @@ fn editor_uds_eof_exits_host() {
 }
 
 #[test]
+#[ignore = "requires delegated cgroup v2 root"]
 fn host_can_join_delegated_cgroup() {
     let name = format!("anvil-plugin-test-{}", std::process::id());
-    let Ok(root) = Cgroup::detect_root() else {
-        return;
-    };
-    let Ok(cgroup) = Cgroup::create(&root, &name, 64, 256 << 20, 100) else {
-        return;
-    };
+    let root = Cgroup::detect_root().expect("delegated cgroup v2 root required");
+    let cgroup = Cgroup::create(&root, &name, 64, 256 << 20, 100).expect("create delegated cgroup");
     let cgroup_path = cgroup.path().to_path_buf();
     let mut host = spawn_in_cgroup(host_bin(), &["--hold".to_owned()], Token([11; 32]), cgroup)
         .expect("spawn host");
