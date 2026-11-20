@@ -12,6 +12,9 @@ authorized. Internal candidates use the CI checksum key under
 `scripts/check-frozen-version.sh` keeps the workspace version pinned to the
 chosen candidate version; change it only with the release version.
 
+The `0.7.0` gate matrix and signed dry-run evidence are recorded in
+[docs/release-dry-run-2026-11-20.md](docs/release-dry-run-2026-11-20.md).
+
 
 ## Versioning
 

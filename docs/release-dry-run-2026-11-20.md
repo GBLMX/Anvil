@@ -61,6 +61,23 @@ The archive contained `./install.sh`, `./uninstall.sh`, `./bin/anvil`, and
 `doctor` report with `ok: true`, and the installed plugin state retained
 `source: "official"`.
 
+## 0.7.0 release gates
+
+- `cargo test --workspace --all-targets`: 1294 passed, 16 ignored.
+- `cargo test -p anvil-api --features bindings`: 53 passed.
+- `cargo clippy --workspace --all-targets -- -D warnings`: passed.
+- `cargo fmt --all -- --check`: passed.
+- `cargo deny check`: passed (`advisories`, `bans`, `licenses`, `sources`);
+  upstream duplicate-`syn` and unused license-allowance warnings remain.
+- `go test -race ./...`, `go vet ./...`, `golangci-lint run ./...`, and
+  `govulncheck ./...`: passed with `umask 022`.
+- `shellcheck scripts/*.sh`, `actionlint`, and YAML parsing: passed.
+- Generated bindings and API surface checks: unchanged.
+
+The first Go race run inherited `umask 077` from the signing rehearsal and
+failed the copy-mode assertion; rerunning with `umask 022` passed. The failure
+was test-environment state, not a repository change.
+
 ## Remaining release-time steps
 
 - Production key custody and hardware-backed signing ceremony.
