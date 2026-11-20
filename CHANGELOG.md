@@ -8,6 +8,9 @@ post-`0.5.0` feature line.
 
 ## [Unreleased]
 ### Added
+- Local release layout, installer, signed-plugin, artifact, and
+  signature-verification dry run passed with ephemeral production-like Ed25519
+  keys; evidence is in `docs/release-dry-run-2026-11-20.md`.
 - The local i7-12700H workstation is now the authoritative performance
   reference; the current baseline is
   `docs/benchmarks/reference-2026-11-20-local-i7.md`. The planned replacement

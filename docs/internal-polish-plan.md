@@ -234,7 +234,9 @@ Internal polish ends only when all are true:
   `docs/benchmarks/reference-2026-11-20-local-i7.md` and re-run at the
   documented dependency/release boundaries.
 - Release layout, installer, plugin bootstrap, and release-signing dry run are
-  verified with production-like keys.
+  verified with production-like keys in
+  [release-dry-run-2026-11-20.md](release-dry-run-2026-11-20.md); production key
+  custody and CI provenance remain release-time external steps.
 - The next public version number is chosen explicitly; the frozen-version check
   is then updated in the same commit as the version bump.
 

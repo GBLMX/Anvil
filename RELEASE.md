@@ -94,6 +94,10 @@ openssl pkeyutl -verify -pubin -inkey release.pub.pem \
 gh attestation verify anvil-<version>-linux-x86_64.tar.gz --repo GBLMX/Anvil
 ```
 
+Local packaging and signing dry-run evidence, including artifact hashes and
+the installed-artifact check, is recorded in
+[docs/release-dry-run-2026-11-20.md](docs/release-dry-run-2026-11-20.md).
+
 The tarball includes `install.sh`, which copies the layout and runs
 `anvil-gateway -install-bundled` when signed packages are present. The package
 public key is shipped as `share/anvil/packages/official.pub`.
