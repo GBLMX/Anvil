@@ -7,7 +7,8 @@ use std::{
 };
 
 use anvil_api::{
-    API_VERSION, ApiError, ApplyEditRequest, ApplyEditResponse, CopyRequest, DocumentEdit,
+    API_VERSION, ApiError, ApplyEditRequest, ApplyEditResponse, CompletionContext, CompletionItem,
+    CompletionKind, CompletionRequest, CompletionResponse, CopyRequest, DocumentEdit,
     DocumentSnapshot, EditorView, EmptyResponse, EventSubscribeRequest, EventSubscribeResponse,
     ExecRequest, ExecResponse, FetchRequest, FetchResponse, METHODS, MethodType,
     NotificationSeverity, NotifyRequest, PathRequest, ReadFileRequest, ReadFileResponse,
@@ -127,6 +128,11 @@ fn main() -> Result<(), Box<dyn Error>> {
         ("ExecRequest", schema_for!(ExecRequest)),
         ("ExecResponse", schema_for!(ExecResponse)),
         ("EmptyResponse", schema_for!(EmptyResponse)),
+        ("CompletionContext", schema_for!(CompletionContext)),
+        ("CompletionKind", schema_for!(CompletionKind)),
+        ("CompletionItem", schema_for!(CompletionItem)),
+        ("CompletionRequest", schema_for!(CompletionRequest)),
+        ("CompletionResponse", schema_for!(CompletionResponse)),
         ("ApiError", schema_for!(ApiError)),
     ];
 
@@ -172,6 +178,11 @@ fn main() -> Result<(), Box<dyn Error>> {
             "ExecRequest" => "exec-request.schema.json",
             "ExecResponse" => "exec-response.schema.json",
             "EmptyResponse" => "empty-response.schema.json",
+            "CompletionContext" => "completion-context.schema.json",
+            "CompletionKind" => "completion-kind.schema.json",
+            "CompletionItem" => "completion-item.schema.json",
+            "CompletionRequest" => "completion-request.schema.json",
+            "CompletionResponse" => "completion-response.schema.json",
             "ApiError" => "api-error.schema.json",
             other => unreachable!("unhandled root {other}"),
         };

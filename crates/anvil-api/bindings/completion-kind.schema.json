@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Kind of command-line completion candidate.",
+  "enum": [
+    "command",
+    "path",
+    "directory",
+    "buffer",
+    "plugin"
+  ],
+  "title": "CompletionKind",
+  "type": "string"
+}

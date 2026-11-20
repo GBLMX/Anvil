@@ -4,6 +4,7 @@
 //! contract; this crate does not depend on the TUI.
 
 pub mod command;
+pub mod command_completion;
 pub mod editor_service;
 pub mod effect;
 pub mod format;

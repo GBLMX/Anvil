@@ -1,0 +1,78 @@
+{
+  "$defs": {
+    "CompletionItem": {
+      "description": "One command-line completion candidate.",
+      "properties": {
+        "detail": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kind": {
+          "$ref": "#/$defs/CompletionKind"
+        },
+        "label": {
+          "type": "string"
+        },
+        "replacement": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "label",
+        "replacement",
+        "kind",
+        "source"
+      ],
+      "type": "object"
+    },
+    "CompletionKind": {
+      "description": "Kind of command-line completion candidate.",
+      "enum": [
+        "command",
+        "path",
+        "directory",
+        "buffer",
+        "plugin"
+      ],
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Bounded command-line completion response.",
+  "properties": {
+    "items": {
+      "items": {
+        "$ref": "#/$defs/CompletionItem"
+      },
+      "type": "array"
+    },
+    "request_id": {
+      "format": "uint64",
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "revision": {
+      "format": "uint64",
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "truncated": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "request_id",
+    "revision",
+    "items",
+    "truncated"
+  ],
+  "title": "CompletionResponse",
+  "type": "object"
+}

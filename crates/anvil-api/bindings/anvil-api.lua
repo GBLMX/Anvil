@@ -29,6 +29,37 @@
 ---@field applied_edits integer
 ---@field revision integer
 
+---@alias CompletionContext
+---| "command"
+---| "path"
+---| "buffer"
+
+---@class CompletionItem
+---@field detail any
+---@field kind CompletionKind
+---@field label string
+---@field replacement string
+---@field source string
+
+---@alias CompletionKind
+---| "command"
+---| "path"
+---| "directory"
+---| "buffer"
+---| "plugin"
+
+---@class CompletionRequest
+---@field context CompletionContext
+---@field cursor integer
+---@field query string
+---@field workspace_revision integer
+
+---@class CompletionResponse
+---@field items CompletionItem[]
+---@field request_id integer
+---@field revision integer
+---@field truncated boolean
+
 ---@class CopyRequest
 ---@field from string
 ---@field to string

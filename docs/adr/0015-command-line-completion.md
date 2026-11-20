@@ -1,7 +1,8 @@
 # ADR-0015: Command-Line Completion and Popup
 
-- Status: Phase 1 implemented; Phase 2 kernel completion contract and Phase 3
-  plugin polish remain pending
+- Status: Phase 1 and Phase 2 implemented; Phase 3 plugin polish remains
+  pending on the plugin capability/event contracts.
+- Version: 1.1.0
 - Date: 2026-11-01
 - Related: [ADR-0003](0003-idl.md), [ADR-0008](0008-selection-first-interaction.md),
   [ADR-0035](0035-plugin-wit-seams.md),
@@ -180,24 +181,24 @@ No plugin can intercept the key path or execute arbitrary code on Tab.
 Exit criteria: `:` completion works for command names and paths, is usable in
 an 80×24 terminal, and never blocks the input loop.
 
-Current implementation status (2026-11-13): `crates/anvil-tui/src/command_line.rs`
-implements command-name, `theme`/`theme-auto`, `plugin-enable`, and workspace
-path completion. Path requests use `FileWorker::ListCompletion` and are
-generation-checked, so stale directory results cannot replace newer input.
-Path candidates containing control characters are dropped before label or
-insert construction.
-Command names come from `anvil_control::COMMANDS`. Buffer completion is deferred
-until a `:b` command exists. The Phase 1 exit criteria are met; Phase 2 and
-Phase 3 remain pending.
+Current implementation status (2026-11-20): `crates/anvil-tui/src/command_line.rs`
+renders candidates produced by the kernel policy in
+`crates/anvil-session/src/command_completion.rs`. Path requests still use
+`FileWorker::ListCompletion` and are generation-checked, so stale directory
+results cannot replace newer input. The kernel contract owns command, path,
+and buffer candidate generation, including control-character rejection.
+Command names come from `anvil_control::COMMANDS`. The Phase 1 and Phase 2
+exit criteria are met; Phase 3 plugin completion remains dependent on the
+plugin completion contract.
 
 ### Phase 2: Kernel contract
 
-- [ ] Add `CompletionItem`, request/response DTOs to `anvil-api`.
-- [ ] Add the kernel `Completer` interface outside `anvil-api`.
-- [ ] Implement Command/Path/Buffer completers against one interface.
-- [ ] Make TUI command completion consume the kernel result.
-- [ ] Add stale-request and revision tests.
-- [ ] Derive command names from the command registry plan.
+- [x] Add `CompletionItem`, request/response DTOs to `anvil-api`.
+- [x] Add the kernel `Completer` interface outside `anvil-api`.
+- [x] Implement Command/Path/Buffer completers against one interface.
+- [x] Make TUI command completion consume the kernel result.
+- [x] Add stale-request and revision tests.
+- [x] Derive command names from the command registry plan.
 
 Exit criteria: TUI is a renderer; completion policy is testable without the
 TUI.

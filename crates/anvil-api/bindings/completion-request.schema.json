@@ -1,0 +1,43 @@
+{
+  "$defs": {
+    "CompletionContext": {
+      "description": "Command-line completion context.",
+      "enum": [
+        "command",
+        "path",
+        "buffer"
+      ],
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Bounded command-line completion request.",
+  "properties": {
+    "context": {
+      "$ref": "#/$defs/CompletionContext"
+    },
+    "cursor": {
+      "format": "uint64",
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "query": {
+      "type": "string"
+    },
+    "workspace_revision": {
+      "format": "uint64",
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "query",
+    "cursor",
+    "context",
+    "workspace_revision"
+  ],
+  "title": "CompletionRequest",
+  "type": "object"
+}

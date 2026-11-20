@@ -1,6 +1,8 @@
 //! Ex command-name and argument completion.
 
 use super::*;
+use anvil_api::{CompletionContext, CompletionRequest};
+use anvil_session::command_completion::{BuiltinCompleter, CommandCompletionData, Completer};
 use anvil_tui_kit::{SelectionItem, SelectionTable};
 use anvil_workspace::FileRequest;
 
@@ -40,45 +42,42 @@ struct PathCompletion {
 
 impl CommandCompletion {
     fn new(buffer: &str, plugin_ids: &[&str], git: bool, desktop: bool) -> Self {
-        let buffer = buffer.trim_start();
-        let (command, argument, has_argument) = match buffer.split_once(char::is_whitespace) {
-            Some((command, argument)) => (command, argument.trim_start(), true),
-            None => (buffer, "", false),
+        let themes = theme::names()
+            .into_iter()
+            .map(str::to_owned)
+            .collect::<Vec<_>>();
+        let plugins = plugin_ids
+            .iter()
+            .map(|id| (*id).to_owned())
+            .collect::<Vec<_>>();
+        let request = CompletionRequest {
+            query: buffer.to_owned(),
+            cursor: buffer.len() as u64,
+            context: CompletionContext::Command,
+            workspace_revision: 0,
         };
-        let (query, items) = if has_argument {
-            match command {
-                "theme" => argument_items(command, argument, theme::names().into_iter(), 1)
-                    .unwrap_or_default(),
-                "theme-auto" => argument_items(command, argument, theme::names().into_iter(), 2)
-                    .unwrap_or_default(),
-                "plugin-enable" => argument_items(command, argument, plugin_ids.iter().copied(), 1)
-                    .unwrap_or_default(),
-                _ => (String::new(), Vec::new()),
-            }
-        } else {
-            (
-                buffer.to_owned(),
-                anvil_control::COMMANDS
-                    .iter()
-                    .filter(|command| {
-                        (git || !command.name.starts_with("git-"))
-                            && (desktop || command.name != "open-url")
-                    })
-                    .map(|command| CompletionItem {
-                        label: command.name.to_owned(),
-                        insert: format!("{} ", command.name),
-                    })
-                    .collect(),
-            )
+        let data = CommandCompletionData {
+            path_entries: &[],
+            plugin_ids: &plugins,
+            themes: &themes,
+            buffers: &[],
+            git,
+            desktop,
         };
-        let mut table = SelectionTable::new(items);
-        table.query_mut().push_str(&query);
-        table.refresh_with(|item, query| {
-            query.is_empty() || item.label.to_ascii_lowercase().starts_with(query)
-        });
-        Self { table, path: None }
+        let response = BuiltinCompleter.complete(&request, &data);
+        let items = response
+            .items
+            .into_iter()
+            .map(|item| CompletionItem {
+                label: item.label,
+                insert: item.replacement,
+            })
+            .collect();
+        Self {
+            table: SelectionTable::new(items),
+            path: None,
+        }
     }
-
     fn pending(path: PathCompletion) -> Self {
         Self {
             table: SelectionTable::new(Vec::new()),
@@ -98,39 +97,32 @@ impl CommandCompletion {
         let Some(path) = self.path.take() else {
             return;
         };
-        let mut entries = entries;
-        entries.sort_by(|left, right| left.name.cmp(&right.name));
-        let items = entries
-            .into_iter()
-            .filter_map(|entry| {
-                let name = sanitize_path_name(&entry.name)?;
-                let label = if entry.is_dir {
-                    format!("{}{name}/", path.directory)
-                } else {
-                    format!("{}{name}", path.directory)
-                };
-                Some(CompletionItem {
-                    label: label.clone(),
-                    insert: if entry.is_dir {
-                        format!("{} {label}", path.command)
-                    } else {
-                        format!("{} {label} ", path.command)
-                    },
+        let query = format!("{} {}{}", path.command, path.directory, path.query);
+        let request = CompletionRequest {
+            query,
+            cursor: (path.command.len() + 1 + path.directory.len() + path.query.len()) as u64,
+            context: CompletionContext::Path,
+            workspace_revision: 0,
+        };
+        let data = CommandCompletionData {
+            path_entries: &entries,
+            plugin_ids: &[],
+            themes: &[],
+            buffers: &[],
+            git: true,
+            desktop: true,
+        };
+        let response = BuiltinCompleter.complete(&request, &data);
+        self.table = SelectionTable::new(
+            response
+                .items
+                .into_iter()
+                .map(|item| CompletionItem {
+                    label: item.label,
+                    insert: item.replacement,
                 })
-            })
-            .collect();
-        let mut table = SelectionTable::new(items);
-        table.query_mut().push_str(&path.query);
-        table.refresh_with(|item, query| {
-            query.is_empty()
-                || item
-                    .label
-                    .trim_end_matches('/')
-                    .rsplit('/')
-                    .next()
-                    .is_some_and(|name| name.starts_with(query))
-        });
-        self.table = table;
+                .collect(),
+        );
     }
 
     pub(crate) fn is_empty(&self) -> bool {
@@ -158,46 +150,6 @@ impl CommandCompletion {
     }
 }
 
-fn sanitize_path_name(name: &str) -> Option<String> {
-    let sanitized = name
-        .chars()
-        .filter(|character| !character.is_control())
-        .collect::<String>();
-    (!sanitized.is_empty() && sanitized == name).then_some(sanitized)
-}
-
-fn argument_items(
-    command: &str,
-    argument: &str,
-    names: impl Iterator<Item = impl AsRef<str>>,
-    max_arguments: usize,
-) -> Option<(String, Vec<CompletionItem>)> {
-    let (before, query) = if argument.ends_with(char::is_whitespace) {
-        (argument, "")
-    } else if let Some((before, query)) = argument.rsplit_once(char::is_whitespace) {
-        (before, query)
-    } else {
-        ("", argument)
-    };
-    if before.split_whitespace().count() >= max_arguments {
-        return None;
-    }
-    let prefix = if before.is_empty() {
-        format!("{command} ")
-    } else {
-        format!("{command} {before} ")
-    };
-    let items = names
-        .map(|name| {
-            let name = name.as_ref().to_owned();
-            CompletionItem {
-                label: name.clone(),
-                insert: format!("{prefix}{name} "),
-            }
-        })
-        .collect();
-    Some((query.to_owned(), items))
-}
 
 impl Model {
     pub(crate) fn refresh_command_completion(&mut self) {

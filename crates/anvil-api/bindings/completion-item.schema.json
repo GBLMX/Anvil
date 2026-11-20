@@ -1,0 +1,45 @@
+{
+  "$defs": {
+    "CompletionKind": {
+      "description": "Kind of command-line completion candidate.",
+      "enum": [
+        "command",
+        "path",
+        "directory",
+        "buffer",
+        "plugin"
+      ],
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "One command-line completion candidate.",
+  "properties": {
+    "detail": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "kind": {
+      "$ref": "#/$defs/CompletionKind"
+    },
+    "label": {
+      "type": "string"
+    },
+    "replacement": {
+      "type": "string"
+    },
+    "source": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "label",
+    "replacement",
+    "kind",
+    "source"
+  ],
+  "title": "CompletionItem",
+  "type": "object"
+}

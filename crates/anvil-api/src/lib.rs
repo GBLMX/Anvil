@@ -392,6 +392,72 @@ pub struct DocumentSnapshot {
 #[cfg_attr(feature = "bindings", ts(export))]
 pub struct EmptyResponse {}
 
+/// Command-line completion context.
+#[cfg_attr(feature = "bindings", derive(JsonSchema, TS))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "bindings", ts(export))]
+#[serde(rename_all = "snake_case")]
+pub enum CompletionContext {
+    Command,
+    Path,
+    Buffer,
+}
+
+/// Kind of command-line completion candidate.
+#[cfg_attr(feature = "bindings", derive(JsonSchema, TS))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "bindings", ts(export))]
+#[serde(rename_all = "snake_case")]
+pub enum CompletionKind {
+    Command,
+    Path,
+    Directory,
+    Buffer,
+    Plugin,
+}
+
+/// One command-line completion candidate.
+#[cfg_attr(feature = "bindings", derive(JsonSchema, TS))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "bindings", ts(export))]
+pub struct CompletionItem {
+    pub label: String,
+    pub replacement: String,
+    pub detail: Option<String>,
+    pub kind: CompletionKind,
+    pub source: String,
+}
+
+/// Bounded command-line completion request.
+#[cfg_attr(feature = "bindings", derive(JsonSchema, TS))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "bindings", ts(export))]
+pub struct CompletionRequest {
+    pub query: String,
+    #[cfg_attr(feature = "bindings", ts(type = "number"))]
+    #[cfg_attr(feature = "bindings", schemars(range(max = 9007199254740991i64)))]
+    pub cursor: u64,
+    pub context: CompletionContext,
+    #[cfg_attr(feature = "bindings", ts(type = "number"))]
+    #[cfg_attr(feature = "bindings", schemars(range(max = 9007199254740991i64)))]
+    pub workspace_revision: u64,
+}
+
+/// Bounded command-line completion response.
+#[cfg_attr(feature = "bindings", derive(JsonSchema, TS))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "bindings", ts(export))]
+pub struct CompletionResponse {
+    #[cfg_attr(feature = "bindings", ts(type = "number"))]
+    #[cfg_attr(feature = "bindings", schemars(range(max = 9007199254740991i64)))]
+    pub request_id: u64,
+    #[cfg_attr(feature = "bindings", ts(type = "number"))]
+    #[cfg_attr(feature = "bindings", schemars(range(max = 9007199254740991i64)))]
+    pub revision: u64,
+    pub items: Vec<CompletionItem>,
+    pub truncated: bool,
+}
+
 /// Request to register a plugin command.
 #[cfg_attr(feature = "bindings", derive(JsonSchema, TS))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
