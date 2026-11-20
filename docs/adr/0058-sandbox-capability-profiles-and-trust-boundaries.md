@@ -1,7 +1,7 @@
 # ADR-0058: Sandbox Capability Profiles and Trust Boundaries
 
 - Status: Proposed; profile selection and doctor capability report implemented 2026-11-20
-- Version: 1.5.0
+- Version: 1.6.0
 - Date: 2026-11-20
 - Implementation note (2026-11-20): `anvil doctor --json` exposes the structured
   `sandbox` object (Landlock ABI/signal scope, seccomp, cgroup v2, plugin/exec
@@ -14,9 +14,11 @@
   `/dev` replaced by empty tmpfs mounts, a real Debian 13 SSH host using a
   portable x86-64 build, and a Flatpak sandbox running the installed layout
   through the VLC app. The Flatpak run reported `deployment=flatpak`, installed
-  profile, and strict plugin/exec boundaries. Snap package-level smoke is
-  blocked here: `snapd` is inactive and no `snap` binary or package is
-  available; `SNAP` environment detection alone reports `deployment=snap`.
+  profile, and strict plugin/exec boundaries. Snap package-level smoke is still
+  blocked: `snapd` 2.78 is installed and active, but `snap debug confinement`
+  reports `partial`, no snap is installed, and sudo authentication failed while
+  installing `core24`. `SNAP` environment detection alone reports
+  `deployment=snap`.
 - Related: [ADR-0001](0001-plugin-isolation.md),
   [ADR-0002](0002-go-daemon.md),
   [ADR-0005](0005-exec-policy.md),
