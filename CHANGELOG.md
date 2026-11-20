@@ -24,6 +24,11 @@ post-`0.5.0` feature line.
 - Gateway startup resolves `anvil-exec-runner` with the same explicit,
   sibling, and `PATH` order as `doctor`; a PATH-resolved gateway no longer
   silently drops `sys.exec`.
+- `anvil-mcp` now serves MCP `2026-07-28` and legacy `initialize` versions,
+  with `server/discover`, structured tool output, annotations, output schemas,
+  deterministic tool/list cache metadata, and revision-guarded edits.
+- `anvil-ctl edit replace <range> <text> --expected-revision <N>` now exposes
+  the guarded control edit path from the CLI.
 - The problems panel is now a filterable diagnostics picker: type to filter by
   path, message, source, or code, `Ctrl-u` clears, and `Enter` jumps to the
   selected diagnostic. `Space d`, `:diagnostics`, and `:problems` open it.

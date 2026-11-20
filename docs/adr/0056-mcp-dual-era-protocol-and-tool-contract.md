@@ -1,7 +1,7 @@
 # ADR-0056: MCP Dual-Era Protocol and Structured Tool Contract
 
-- Status: Proposed
-- Version: 1.0.0
+- Status: Accepted; implemented 2026-11-20
+- Version: 1.1.0
 - Date: 2026-11-19
 - Related: [ADR-0006](0006-upstream-dependencies.md),
   [ADR-0023](0023-internal-capability-closure.md),

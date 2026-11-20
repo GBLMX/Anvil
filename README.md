@@ -332,6 +332,7 @@ anvil-ctl status
 anvil-ctl --workspace /path/to/project status
 anvil-ctl --json open src/main.rs +12:3
 anvil-ctl --json edit set $'alpha\nbeta\n'
+anvil-ctl --json edit replace 1:1:1:6 gamma --expected-revision 12
 printf 'alpha\nbeta\n' | anvil-ctl --json edit set --stdin
 anvil-ctl --json query 1:200
 anvil-ctl --json command ':git-diff'
@@ -359,10 +360,13 @@ buffer state, undo, Git index state, and session output.
 and asserts one active language server. It exits 0 with `SKIP` when `clangd`,
 `jdtls`, `rust-analyzer`, or `gopls` is absent; CI does not require them.
 
-`anvil-mcp` is a thin stdio MCP adapter over `anvil-control`. It exposes
-`anvil_status`, `anvil_open`, `anvil_query`, `anvil_edit`, `anvil_save`,
-`anvil_command`, and `anvil_quit`; it never reads or writes workspace files
-directly. `scripts/mcp-smoke.sh` starts the adapter against a real TUI.
+`anvil-mcp` is a thin stdio MCP adapter over `anvil-control`. It serves MCP
+`2026-07-28` through `server/discover` and per-request `_meta`, and legacy
+`initialize` clients using `2024-11-05`, `2025-03-26`, `2025-06-18`, or
+`2025-11-25`. Tool results include text, annotations, output schemas, and
+`structuredContent`; `set` and `replace` require `expected_revision` and
+stale edits fail without changing the buffer. `scripts/mcp-smoke.sh` starts
+both protocol eras against a real TUI.
 
 Quick open: `Space f` filters workspace files and previews the selected file
 through the gateway. Wide terminals show the preview beside the list; narrow

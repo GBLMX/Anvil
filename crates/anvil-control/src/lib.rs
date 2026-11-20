@@ -1257,7 +1257,24 @@ impl Client {
 
     /// Replace the whole buffer or insert at the cursor.
     pub fn edit(&mut self, mode: EditMode, text: &str) -> Result<EditResult, Error> {
-        let value = self.request("control.edit", json!({"mode": mode, "text": text}))?;
+        self.edit_with_revision(mode, text, None)
+    }
+
+    /// Replace or insert, optionally guarded by the expected revision.
+    pub fn edit_with_revision(
+        &mut self,
+        mode: EditMode,
+        text: &str,
+        expected_revision: Option<u64>,
+    ) -> Result<EditResult, Error> {
+        let value = self.request(
+            "control.edit",
+            json!({
+                "mode": mode,
+                "text": text,
+                "expected_revision": expected_revision,
+            }),
+        )?;
         Ok(serde_json::from_value(value)?)
     }
 

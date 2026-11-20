@@ -152,6 +152,17 @@ expect_ok --json command ':redo'
 expect_ok --json save
 [[ "$(cat "$workspace/a.txt")" == $'alpha\nbeta' ]] || fail "save did not update file"
 
+expect_ok --json query
+revision="$(json_field revision)"
+expect_ok --json edit replace 1:1:1:6 gamma --expected-revision "$revision"
+expect_ok --json query
+assert_json text $'gamma\nbeta'
+
+ctl --json edit replace 1:1:1:6 stale --expected-revision "$revision"
+[[ "$last_code" -eq 5 ]] || fail "stale replace did not fail"
+expect_ok --json query
+assert_json text $'gamma\nbeta'
+
 expect_ok --json edit set $'staged\n'
 expect_ok --json query
 assert_json text $'staged'

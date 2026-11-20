@@ -1,5 +1,6 @@
 use anvil_control::{
-    Client, EditMode, Error as ControlError, QueryOptions, validate_remote_command,
+    Client, EditMode, EditRange, Error as ControlError, QueryOptions, TextPoint,
+    validate_remote_command,
 };
 use serde_json::{Value, json};
 use std::{
@@ -17,6 +18,7 @@ Usage:
   anvil-ctl [OPTIONS] save [FILE]
   anvil-ctl [OPTIONS] edit set <TEXT|--stdin>
   anvil-ctl [OPTIONS] edit insert <TEXT|--stdin>
+  anvil-ctl [OPTIONS] edit replace <START_LINE:START_BYTE:END_LINE:END_BYTE> <TEXT|--stdin> --expected-revision <N>
   anvil-ctl [OPTIONS] query [START[:END]]
   anvil-ctl [OPTIONS] command <COMMAND>
   anvil-ctl [OPTIONS] quit [--force]
@@ -25,7 +27,7 @@ Commands:
   status    Print the running editor status
   open      Open a workspace file at a 1-based line and column
   save      Save the current buffer, optionally as FILE
-  edit      Replace (`set`) or insert (`insert`); --stdin reads the payload
+  edit      Set, insert, or replace a range; --stdin reads the payload
   query     Dump bounded buffer state; default is the whole buffer
   command   Execute an Ex command through the editor state machine (alias: exec)
   quit      Quit; --force discards unsaved changes
@@ -35,6 +37,7 @@ Options:
   --timeout-ms <MS>   Socket timeout (default: 5000)
   --workspace <DIR>   Select the Anvil instance for DIR (default: cwd)
   --spawn             Start Anvil in the current terminal if none is running
+  --expected-revision <N>  Required revision guard for edit replace
   -h, --help          Show this help
 
 Exit codes:
@@ -143,6 +146,8 @@ enum CliCommand {
     Edit {
         mode: EditMode,
         text: EditText,
+        range: Option<EditRange>,
+        expected_revision: Option<u64>,
     },
     Query(QueryOptions),
     Command(String),
@@ -237,25 +242,46 @@ fn parse_command(options: &Options) -> Result<CliCommand, CliError> {
         }
         "edit" => {
             let Some(mode) = arguments.first() else {
-                return Err(CliError::usage("edit requires set or insert"));
+                return Err(CliError::usage("edit requires set, insert, or replace"));
             };
-            let mode = match mode.as_str() {
-                "set" => EditMode::Set,
-                "insert" => EditMode::Insert,
-                _ => return Err(CliError::usage("edit mode must be set or insert")),
-            };
-            let Some(text) = arguments.get(1) else {
-                return Err(CliError::usage("edit requires text or --stdin"));
-            };
-            if arguments.len() > 2 {
-                return Err(CliError::usage("edit takes mode and text"));
+            match mode.as_str() {
+                "set" | "insert" => {
+                    let mode = if mode == "set" {
+                        EditMode::Set
+                    } else {
+                        EditMode::Insert
+                    };
+                    let Some(text) = arguments.get(1) else {
+                        return Err(CliError::usage("edit requires text or --stdin"));
+                    };
+                    if arguments.len() > 2 {
+                        return Err(CliError::usage("edit takes mode and text"));
+                    }
+                    Ok(CliCommand::Edit {
+                        mode,
+                        text: edit_text(text),
+                        range: None,
+                        expected_revision: None,
+                    })
+                }
+                "replace" => {
+                    let Some(range) = arguments.get(1) else {
+                        return Err(CliError::usage(
+                            "edit replace requires START_LINE:START_BYTE:END_LINE:END_BYTE",
+                        ));
+                    };
+                    let Some(text) = arguments.get(2) else {
+                        return Err(CliError::usage("edit replace requires text or --stdin"));
+                    };
+                    Ok(CliCommand::Edit {
+                        mode: EditMode::Replace,
+                        text: edit_text(text),
+                        range: Some(parse_edit_range(range)?),
+                        expected_revision: Some(parse_expected_revision(&arguments[3..])?),
+                    })
+                }
+                _ => Err(CliError::usage("edit mode must be set, insert, or replace")),
             }
-            let text = if text == "--stdin" {
-                EditText::Stdin
-            } else {
-                EditText::Inline(text.clone())
-            };
-            Ok(CliCommand::Edit { mode, text })
         }
         "query" => Ok(CliCommand::Query(parse_query_options(arguments)?)),
         "command" | "exec" => {
@@ -279,6 +305,63 @@ fn parse_command(options: &Options) -> Result<CliCommand, CliError> {
     }
 }
 
+fn edit_text(value: &str) -> EditText {
+    if value == "--stdin" {
+        EditText::Stdin
+    } else {
+        EditText::Inline(value.to_owned())
+    }
+}
+
+fn parse_edit_range(value: &str) -> Result<EditRange, CliError> {
+    let parts = value.split(':').collect::<Vec<_>>();
+    let [start_line, start_byte, end_line, end_byte] = parts.as_slice() else {
+        return Err(CliError::usage(
+            "edit range must be START_LINE:START_BYTE:END_LINE:END_BYTE",
+        ));
+    };
+    Ok(EditRange {
+        start: TextPoint {
+            line: parse_positive(start_line, "start line")?,
+            byte_column: parse_positive(start_byte, "start byte")?,
+        },
+        end: TextPoint {
+            line: parse_positive(end_line, "end line")?,
+            byte_column: parse_positive(end_byte, "end byte")?,
+        },
+    })
+}
+
+fn parse_positive(value: &str, label: &str) -> Result<usize, CliError> {
+    let value = value
+        .parse::<usize>()
+        .map_err(|_| CliError::usage(format!("invalid {label}: {value}")))?;
+    if value == 0 {
+        return Err(CliError::usage(format!("{label} must be 1-based")));
+    }
+    Ok(value)
+}
+
+fn parse_expected_revision(arguments: &[String]) -> Result<u64, CliError> {
+    match arguments {
+        [flag, value] if flag == "--expected-revision" => parse_revision(value),
+        [flag] => match flag.strip_prefix("--expected-revision=") {
+            Some(value) => parse_revision(value),
+            None => Err(CliError::usage(
+                "edit replace requires --expected-revision <N>",
+            )),
+        },
+        _ => Err(CliError::usage(
+            "edit replace requires --expected-revision <N>",
+        )),
+    }
+}
+
+fn parse_revision(value: &str) -> Result<u64, CliError> {
+    value
+        .parse::<u64>()
+        .map_err(|_| CliError::usage(format!("invalid expected revision: {value}")))
+}
 #[allow(clippy::result_large_err)]
 fn execute(options: Options, command: CliCommand) -> Result<(), (Options, CliError)> {
     let mut client = Client::connect_for_with_timeout(&options.workspace, options.timeout)
@@ -328,18 +411,27 @@ fn execute(options: Options, command: CliCommand) -> Result<(), (Options, CliErr
                 .save(path.as_deref())
                 .map_err(|error| (clone_options(&options), map_error(error)))?
         ),
-        CliCommand::Edit { mode, text } => {
+        CliCommand::Edit {
+            mode,
+            text,
+            range,
+            expected_revision,
+        } => {
             let text = match text {
                 EditText::Inline(text) => text,
                 EditText::Stdin => {
                     read_stdin_text().map_err(|error| (clone_options(&options), error))?
                 }
             };
-            json!(
-                client
-                    .edit(mode, &text)
-                    .map_err(|error| (clone_options(&options), map_error(error)))?
-            )
+            let result = match (mode, range, expected_revision) {
+                (EditMode::Replace, Some(range), Some(expected_revision)) => client
+                    .replace(range, &text, expected_revision)
+                    .map_err(|error| (clone_options(&options), map_error(error)))?,
+                _ => client
+                    .edit_with_revision(mode, &text, expected_revision)
+                    .map_err(|error| (clone_options(&options), map_error(error)))?,
+            };
+            json!(result)
         }
         CliCommand::Query(query) => json!(
             client
@@ -432,6 +524,14 @@ fn parse_options() -> Result<Options, CliError> {
                         .ok_or_else(|| CliError::usage("--workspace requires a directory"))?,
                 );
             }
+            "--expected-revision" => {
+                positional.push(argument);
+                positional.push(
+                    args.next()
+                        .ok_or_else(|| CliError::usage("--expected-revision requires a value"))?,
+                );
+            }
+            value if value.starts_with("--expected-revision=") => positional.push(argument),
             value if value.starts_with("--timeout-ms=") => {
                 timeout = parse_timeout(&value["--timeout-ms=".len()..])?;
             }
@@ -656,6 +756,7 @@ mod tests {
             CliCommand::Edit {
                 mode: EditMode::Set,
                 text: EditText::Inline(text),
+                ..
             } if text == " "
         ));
         assert!(matches!(
@@ -663,12 +764,56 @@ mod tests {
             CliCommand::Edit {
                 mode: EditMode::Set,
                 text: EditText::Stdin,
+                ..
             }
         ));
         assert!(matches!(
             parse_command(&options(&["quit", "--force"])).unwrap(),
             CliCommand::Quit { force: true }
         ));
+    }
+
+    #[test]
+    fn parses_replace_ranges_and_revisions() {
+        let parsed = parse_command(&options(&[
+            "edit",
+            "replace",
+            "1:7:1:11",
+            "gamma",
+            "--expected-revision",
+            "9",
+        ]))
+        .expect("replace");
+        assert!(matches!(
+            parsed,
+            CliCommand::Edit {
+                mode: EditMode::Replace,
+                text: EditText::Inline(text),
+                range: Some(EditRange {
+                    start: TextPoint {
+                        line: 1,
+                        byte_column: 7
+                    },
+                    end: TextPoint {
+                        line: 1,
+                        byte_column: 11
+                    }
+                }),
+                expected_revision: Some(9),
+            } if text == "gamma"
+        ));
+        assert!(parse_command(&options(&["edit", "replace", "1:7:1:11", "x"])).is_err());
+        assert!(
+            parse_command(&options(&[
+                "edit",
+                "replace",
+                "1:0:1:11",
+                "x",
+                "--expected-revision",
+                "1",
+            ]))
+            .is_err()
+        );
     }
 
     #[test]

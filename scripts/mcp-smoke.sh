@@ -112,93 +112,138 @@ import subprocess
 import sys
 import time
 
-mcp = sys.argv[1]
-process = subprocess.Popen(
-    [mcp],
-    stdin=subprocess.PIPE,
-    stdout=subprocess.PIPE,
-    stderr=subprocess.STDOUT,
-    text=True,
-    bufsize=1,
-    env=os.environ,
-)
-selector = selectors.DefaultSelector()
-selector.register(process.stdout, selectors.EVENT_READ)
-next_id = 1
+MODERN = "2026-07-28"
+META = "io.modelcontextprotocol/protocolVersion"
 
 
-def request(method, params=None):
-    global next_id
-    request_id = next_id
-    next_id += 1
-    message = {"jsonrpc": "2.0", "id": request_id, "method": method}
-    if params is not None:
-        message["params"] = params
-    process.stdin.write(json.dumps(message) + "\n")
-    process.stdin.flush()
-    deadline = time.monotonic() + 10
-    while True:
-        remaining = deadline - time.monotonic()
-        if remaining <= 0:
-            raise RuntimeError(f"{method}: timed out")
-        if not selector.select(remaining):
-            raise RuntimeError(f"{method}: timed out")
-        line = process.stdout.readline()
-        if not line:
-            raise RuntimeError(f"{method}: MCP exited")
-        response = json.loads(line)
-        if response.get("id") == request_id:
+class Session:
+    def __init__(self, mcp, modern):
+        self.process = subprocess.Popen(
+            [mcp],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+            env=os.environ,
+        )
+        self.selector = selectors.DefaultSelector()
+        self.selector.register(self.process.stdout, selectors.EVENT_READ)
+        self.next_id = 1
+        self.modern = modern
+        if modern:
+            discovered = self.request("server/discover")
+            assert discovered["supportedVersions"] == [MODERN], discovered
+            assert discovered["resultType"] == "complete", discovered
+        else:
+            initialized = self.request(
+                "initialize", {"protocolVersion": "2024-11-05"}
+            )
+            assert initialized["protocolVersion"] == "2024-11-05", initialized
+
+    def request(self, method, params=None, expect_error=False):
+        request_id = self.next_id
+        self.next_id += 1
+        message = {"jsonrpc": "2.0", "id": request_id, "method": method}
+        if params is not None:
+            message["params"] = params
+        if self.modern and method != "server/discover" and params is not None:
+            message["params"] = dict(params)
+            message["params"]["_meta"] = {META: MODERN}
+        self.process.stdin.write(json.dumps(message) + "\n")
+        self.process.stdin.flush()
+        deadline = time.monotonic() + 10
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise RuntimeError(f"{method}: timed out")
+            if not self.selector.select(remaining):
+                raise RuntimeError(f"{method}: timed out")
+            line = self.process.stdout.readline()
+            if not line:
+                raise RuntimeError(f"{method}: MCP exited")
+            response = json.loads(line)
+            if response.get("id") != request_id:
+                continue
             if "error" in response:
+                if expect_error:
+                    return response["error"]
                 raise RuntimeError(f"{method}: {response['error']}")
             return response["result"]
 
+    def tool(self, name, arguments):
+        result = self.request(
+            "tools/call", {"name": name, "arguments": arguments}
+        )
+        if result.get("isError"):
+            raise RuntimeError(f"{name}: {result['content'][0]['text']}")
+        if self.modern:
+            assert result["resultType"] == "complete", result
+        assert "structuredContent" in result, result
+        return result["structuredContent"]
 
-def tool(name, arguments):
-    result = request("tools/call", {"name": name, "arguments": arguments})
-    if result.get("isError"):
-        raise RuntimeError(f"{name}: {result['content'][0]['text']}")
-    return json.loads(result["content"][0]["text"])
+    def close(self):
+        self.process.stdin.close()
+        try:
+            self.process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            self.process.kill()
+            self.process.wait()
 
 
+mcp = sys.argv[1]
+legacy = Session(mcp, modern=False)
 try:
-    initialized = request("initialize", {})
-    assert initialized["protocolVersion"] == "2024-11-05", initialized
-    tools = request("tools/list")["tools"]
+    tools = legacy.request("tools/list")["tools"]
     names = {entry["name"] for entry in tools}
     assert {"anvil_status", "anvil_query", "anvil_edit", "anvil_command"} <= names, names
 
-    status = tool("anvil_status", {})
+    status = legacy.tool("anvil_status", {})
     assert status["protocol_version"] == "3", status
-
-    query = tool("anvil_query", {"start_line": 1, "end_line": 1})
+    query = legacy.tool("anvil_query", {"start_line": 1, "end_line": 1})
     assert query["text"] == "one\n", query
-
-    edited = tool("anvil_edit", {"mode": "set", "text": "alpha\nbeta\n"})
+    edited = legacy.tool(
+        "anvil_edit",
+        {
+            "mode": "set",
+            "text": "alpha\nbeta\n",
+            "expected_revision": query["revision"],
+        },
+    )
     assert edited["accepted"] is True, edited
-    query = tool("anvil_query", {"start_line": 1, "end_line": 2})
-    assert query["text"] == "alpha\nbeta\n", query
-
-    undone = tool("anvil_command", {"command": ":undo"})
+    undone = legacy.tool("anvil_command", {"command": ":undo"})
     assert undone["accepted"] is True, undone
-    query = tool("anvil_query", {"start_line": 1, "end_line": 1})
-    assert query["text"] == "one\n", query
-
-    denied = request(
+    denied = legacy.request(
         "tools/call",
         {"name": "anvil_command", "arguments": {"command": "pkg install x"}},
     )
     assert denied["isError"] is True, denied
     assert "policy_denied" in denied["content"][0]["text"], denied
+finally:
+    legacy.close()
 
-    quit_result = tool("anvil_quit", {"force": True})
+modern = Session(mcp, modern=True)
+try:
+    tools = modern.request("tools/list", {})["tools"]
+    assert all("title" in tool and "annotations" in tool for tool in tools), tools
+    status = modern.tool("anvil_status", {})
+    assert status["protocol_version"] == "3", status
+    query = modern.tool("anvil_query", {"start_line": 1, "end_line": 2})
+    assert query["text"] == "one\ntwo\n", query
+    edited = modern.tool(
+        "anvil_edit",
+        {
+            "mode": "set",
+            "text": "modern\n",
+            "expected_revision": query["revision"],
+        },
+    )
+    assert edited["accepted"] is True, edited
+    assert modern.request("ping", {}, expect_error=True)["code"] == -32601
+    quit_result = modern.tool("anvil_quit", {"force": True})
     assert quit_result["accepted"] is True, quit_result
 finally:
-    process.stdin.close()
-    try:
-        process.wait(timeout=5)
-    except subprocess.TimeoutExpired:
-        process.kill()
-        process.wait()
+    modern.close()
 PY
 then
 	fail "MCP stdio transcript failed"

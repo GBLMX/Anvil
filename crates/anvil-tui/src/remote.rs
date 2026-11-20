@@ -189,12 +189,13 @@ impl Model {
         }
         match mode {
             EditMode::Set => {
-                if range.is_some() || expected_revision.is_some() {
+                if range.is_some() {
                     return Err(RpcError::new(
                         codes::INVALID_PARAMS,
-                        "set does not accept a range or revision",
+                        "set does not accept a range",
                     ));
                 }
+                self.check_expected_revision(expected_revision)?;
                 let end = self.session.editor.text().len_bytes();
                 let changed = self
                     .session
@@ -219,12 +220,13 @@ impl Model {
                 self.status.text = "remote edit: set".to_owned();
             }
             EditMode::Insert => {
-                if range.is_some() || expected_revision.is_some() {
+                if range.is_some() {
                     return Err(RpcError::new(
                         codes::INVALID_PARAMS,
-                        "insert does not accept a range or revision",
+                        "insert does not accept a range",
                     ));
                 }
+                self.check_expected_revision(expected_revision)?;
                 if text.is_empty() {
                     return Err(RpcError::new(codes::INVALID_PARAMS, "text is empty"));
                 }
@@ -289,6 +291,21 @@ impl Model {
             modified: self.file.modified,
             cursor: self.session.cursor,
         })
+    }
+
+    fn check_expected_revision(&self, expected: Option<u64>) -> Result<(), RpcError> {
+        if let Some(expected) = expected
+            && expected != self.session.editor.revision()
+        {
+            return Err(RpcError::new(
+                codes::CONFLICT,
+                format!(
+                    "revision changed: expected {expected}, current {}",
+                    self.session.editor.revision()
+                ),
+            ));
+        }
+        Ok(())
     }
 
     fn offset_for_point(&self, point: TextPoint) -> Result<usize, RpcError> {
@@ -579,6 +596,62 @@ mod tests {
         });
         assert_eq!(stale.unwrap_err().code, codes::CONFLICT);
         assert_eq!(result.revision, model.session.editor.revision());
+    }
+
+    #[test]
+    fn set_and_insert_reject_stale_revisions_without_mutating() {
+        let mut model = Model::new(EditorState::from_text("alpha"), None);
+        let revision = model.session.editor.revision();
+        let stale = model.handle_control(ControlRequest::Edit {
+            mode: EditMode::Set,
+            text: "bad".to_owned(),
+            range: None,
+            expected_revision: Some(revision + 1),
+        });
+        assert_eq!(stale.unwrap_err().code, codes::CONFLICT);
+        assert_eq!(
+            model
+                .session
+                .editor
+                .text()
+                .slice(0..model.session.editor.text().len_bytes()),
+            "alpha"
+        );
+
+        let revision = model.session.editor.revision();
+        model
+            .handle_control(ControlRequest::Edit {
+                mode: EditMode::Insert,
+                text: "!".to_owned(),
+                range: None,
+                expected_revision: Some(revision + 1),
+            })
+            .expect_err("stale insert");
+        assert_eq!(
+            model
+                .session
+                .editor
+                .text()
+                .slice(0..model.session.editor.text().len_bytes()),
+            "alpha"
+        );
+        let current = model.session.editor.revision();
+        model
+            .handle_control(ControlRequest::Edit {
+                mode: EditMode::Insert,
+                text: "!".to_owned(),
+                range: None,
+                expected_revision: Some(current),
+            })
+            .expect("current insert");
+        assert_eq!(
+            model
+                .session
+                .editor
+                .text()
+                .slice(0..model.session.editor.text().len_bytes()),
+            "!alpha"
+        );
     }
 
     #[test]

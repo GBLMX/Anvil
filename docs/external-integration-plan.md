@@ -65,6 +65,7 @@ anvil-ctl ... open <FILE> [+LINE[:COL]]
 anvil-ctl ... save [FILE]
 anvil-ctl ... edit set <TEXT|--stdin>
 anvil-ctl ... edit insert <TEXT|--stdin>
+anvil-ctl ... edit replace <START_LINE:START_BYTE:END_LINE:END_BYTE> <TEXT|--stdin> --expected-revision N
 anvil-ctl ... query [START[:END]]
 anvil-ctl ... command <COMMAND>
 anvil-ctl ... exec <COMMAND>
@@ -232,11 +233,10 @@ serialization only.
 
 Transport: MCP stdio, one request at a time. No network listener and no
 additional control protocol.
-Protocol upgrade: the current adapter is legacy-only. The dual-era
-`2026-07-28` plus `initialize` compatibility decision, structured results, and
-revision guard are recorded in
-[ADR-0056](adr/0056-mcp-dual-era-protocol-and-tool-contract.md). The P1
-acceptance below describes the implemented legacy surface until that ADR lands.
+Protocol upgrade: the adapter serves MCP `2026-07-28` through
+`server/discover` and per-request `_meta`, plus legacy `initialize` clients for
+`2024-11-05`, `2025-03-26`, `2025-06-18`, and `2025-11-25`, as recorded in
+[ADR-0056](adr/0056-mcp-dual-era-protocol-and-tool-contract.md).
 
 Tools:
 
@@ -258,18 +258,22 @@ Rules:
 
 - no direct filesystem reads or writes;
 - workspace path checks remain in the TUI actor;
-- all MCP results are structured JSON text, with `isError` on failure;
+- tool results keep text content and add annotations, output schemas, and
+  `structuredContent` on success; failures set `isError` and omit structured
+  content;
 - no `anvil_spawn`; if no instance exists, return the no-instance error;
 - no admin tools in the default tool list;
 - document that the MCP client runs with the user's authority.
 
 Acceptance:
 
-- an MCP client can initialize, list tools, open a file, query a range, edit,
-  save, run `:git-diff`, and quit;
-- an edit after a stale revision fails without changing the buffer;
-- no-instance, timeout, policy-denied, and RPC errors are distinguishable;
-- `scripts/ctl-smoke.sh` and an MCP transcript smoke both pass in CI.
+- modern and legacy MCP clients can initialize/discover, list tools, open a
+  file, query a range, edit, save, run `:git-diff`, and quit;
+- `set`, `insert`, and `replace` reject stale revisions without changing the
+  buffer;
+- no-instance, timeout, policy-denied, RPC, invalid-parameter, and unknown-tool
+  errors are distinguishable;
+- `scripts/ctl-smoke.sh` and both MCP protocol transcripts pass in CI.
 
 ### P2: dogfood status
 
