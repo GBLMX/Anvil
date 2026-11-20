@@ -2,6 +2,7 @@ use std::{env, ffi::OsString, path::Path, process};
 
 mod args;
 mod doctor;
+mod sandbox;
 mod setup;
 mod tool_state;
 

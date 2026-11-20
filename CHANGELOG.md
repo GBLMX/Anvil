@@ -15,6 +15,9 @@ post-`0.5.0` feature line.
 - The release workflow verifies checksums, the signature, the SPDX SBOM, the
   required installer/uninstaller archive entries, and published provenance
   before completing.
+- `anvil doctor --json` now reports a structured `sandbox` capability object:
+  Landlock ABI and signal scope, seccomp, cgroup v2, plugin/exec status, LSP
+  trust, control transport, and deployment.
 - The problems panel is now a filterable diagnostics picker: type to filter by
   path, message, source, or code, `Ctrl-u` clears, and `Enter` jumps to the
   selected diagnostic. `Space d`, `:diagnostics`, and `:problems` open it.
