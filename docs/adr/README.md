@@ -63,7 +63,7 @@ their decision sections.
 | [0055](0055-start-dashboard-actions-and-context.md) | Start dashboard actions, focus, and contextual recents | Accepted; implemented 2026-11-19 |
 | [0056](0056-mcp-dual-era-protocol-and-tool-contract.md) | MCP dual-era protocol and structured tool contract | Proposed |
 | [0057](0057-tui-surface-model-and-focus-contract.md) | TUI surface model and focus contract | Accepted; core implemented 2026-11-20 |
-| [0058](0058-sandbox-capability-profiles-and-trust-boundaries.md) | Sandbox capability profiles and trust boundaries | Proposed; doctor capability report implemented 2026-11-20 |
+| [0058](0058-sandbox-capability-profiles-and-trust-boundaries.md) | Sandbox capability profiles and trust boundaries | Proposed; profile selection and doctor capability report implemented 2026-11-20 |
 | [0059](0059-public-docs-boundary-and-deferred-navigation.md) | Public docs boundary, accessibility gates, and deferred navigation/search | Accepted; docs entry and checks implemented 2026-11-20 |
 
 ## Numbering Rule

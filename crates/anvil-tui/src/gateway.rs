@@ -2,6 +2,7 @@
 
 use std::{
     env,
+    ffi::OsStr,
     fs::File,
     io::Read,
     path::{Path, PathBuf},
@@ -64,11 +65,7 @@ impl GatewaySession {
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(gateway_stderr);
-        if let Some(runner) = gateway_binary()
-            .parent()
-            .map(|parent| parent.join("anvil-exec-runner"))
-            .filter(|path| path.is_file())
-        {
+        if let Some(runner) = gateway_runner(&binary) {
             command.arg("-allow-exec").arg("-exec-runner").arg(runner);
         }
         let child = command
@@ -266,18 +263,40 @@ impl Drop for GatewaySession {
 }
 
 fn gateway_binary() -> PathBuf {
-    if let Some(path) = env::var_os("ANVIL_GATEWAY") {
-        return PathBuf::from(path);
+    let explicit = env::var_os("ANVIL_GATEWAY").map(PathBuf::from);
+    let binary_dir = env::current_exe()
+        .ok()
+        .and_then(|executable| executable.parent().map(Path::to_path_buf));
+    gateway_binary_from(
+        explicit.as_deref(),
+        binary_dir.as_deref(),
+        env::var_os("PATH").as_deref(),
+    )
+}
+
+fn gateway_binary_from(
+    explicit: Option<&Path>,
+    binary_dir: Option<&Path>,
+    path: Option<&OsStr>,
+) -> PathBuf {
+    if let Some(explicit) = explicit {
+        return explicit.to_path_buf();
     }
-    if let Ok(executable) = env::current_exe()
-        && let Some(parent) = executable.parent()
-    {
-        let sibling = parent.join("anvil-gateway");
-        if sibling.exists() {
-            return sibling;
-        }
-    }
-    PathBuf::from("anvil-gateway")
+    anvil_process::find_executable_with_path("anvil-gateway", None, binary_dir, path)
+        .unwrap_or_else(|| PathBuf::from("anvil-gateway"))
+}
+
+fn gateway_runner(binary: &Path) -> Option<PathBuf> {
+    let explicit = env::var_os("ANVIL_EXEC_RUNNER").map(PathBuf::from);
+    gateway_runner_from(binary, explicit.as_deref(), env::var_os("PATH").as_deref())
+}
+
+fn gateway_runner_from(
+    binary: &Path,
+    explicit: Option<&Path>,
+    path: Option<&OsStr>,
+) -> Option<PathBuf> {
+    anvil_process::find_executable_with_path("anvil-exec-runner", explicit, binary.parent(), path)
 }
 
 fn random_token() -> Result<[u8; 32], String> {
@@ -309,6 +328,39 @@ fn hex(bytes: &[u8]) -> String {
 #[cfg(all(test, unix))]
 mod tests {
     use super::*;
+
+    fn write_executable(path: &Path) {
+        use std::os::unix::fs::PermissionsExt;
+
+        std::fs::write(path, b"").expect("write executable");
+        let mut permissions = std::fs::metadata(path).expect("metadata").permissions();
+        permissions.set_mode(0o755);
+        std::fs::set_permissions(path, permissions).expect("mode");
+    }
+
+    #[test]
+    fn path_resolved_gateway_finds_runner_beside_it() {
+        let directory = tempfile::tempdir().expect("tempdir");
+        let gateway = directory.path().join("anvil-gateway");
+        let runner = directory.path().join("anvil-exec-runner");
+        write_executable(&gateway);
+        write_executable(&runner);
+        let path = directory.path().as_os_str();
+
+        let binary = gateway_binary_from(None, None, Some(path));
+        assert_eq!(binary, gateway);
+        assert_eq!(gateway_runner_from(&binary, None, Some(path)), Some(runner));
+    }
+
+    #[test]
+    fn gateway_without_runner_does_not_report_exec() {
+        let directory = tempfile::tempdir().expect("tempdir");
+        let gateway = directory.path().join("anvil-gateway");
+        write_executable(&gateway);
+        let binary = gateway_binary_from(None, Some(directory.path()), None);
+        assert_eq!(binary, gateway);
+        assert_eq!(gateway_runner_from(&binary, None, None), None);
+    }
 
     fn wait_for(path: &Path) {
         let deadline = Instant::now() + Duration::from_secs(1);

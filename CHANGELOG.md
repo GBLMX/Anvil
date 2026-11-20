@@ -18,6 +18,12 @@ post-`0.5.0` feature line.
 - `anvil doctor --json` now reports a structured `sandbox` capability object:
   Landlock ABI and signal scope, seccomp, cgroup v2, plugin/exec status, LSP
   trust, control transport, and deployment.
+  `ANVIL_SANDBOX_PROFILE=auto|strict|off` selects the policy at startup;
+  strict refuses degraded boundaries, and off warns without disabling the
+  untrusted plugin boundary.
+- Gateway startup resolves `anvil-exec-runner` with the same explicit,
+  sibling, and `PATH` order as `doctor`; a PATH-resolved gateway no longer
+  silently drops `sys.exec`.
 - The problems panel is now a filterable diagnostics picker: type to filter by
   path, message, source, or code, `Ctrl-u` clears, and `Enter` jumps to the
   selected diagnostic. `Space d`, `:diagnostics`, and `:problems` open it.

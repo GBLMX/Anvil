@@ -4,7 +4,9 @@
 //! the pid, and shut the process group down. Dropping the task kills it.
 
 use std::{
-    io,
+    env,
+    ffi::OsStr,
+    fs, io,
     path::{Path, PathBuf},
     process::{Child, ChildStderr, ChildStdin, ChildStdout, Command, ExitStatus, Stdio},
     time::{Duration, Instant},
@@ -72,6 +74,61 @@ impl ProcessSpec {
     }
 }
 
+/// Resolve a sidecar executable using the configured path, a sibling directory,
+/// and finally `PATH`.
+pub fn find_executable(
+    name: &str,
+    explicit: Option<&Path>,
+    binary_dir: Option<&Path>,
+) -> Option<PathBuf> {
+    find_executable_with_path(name, explicit, binary_dir, env::var_os("PATH").as_deref())
+}
+
+/// Resolve an executable against an explicit path value for callers and tests
+/// that must not read the process environment.
+pub fn find_executable_with_path(
+    name: &str,
+    explicit: Option<&Path>,
+    binary_dir: Option<&Path>,
+    path: Option<&OsStr>,
+) -> Option<PathBuf> {
+    if let Some(path) = explicit
+        && is_executable(path)
+    {
+        return Some(path.to_path_buf());
+    }
+    if let Some(directory) = binary_dir {
+        let path = directory.join(name);
+        if is_executable(&path) {
+            return Some(path);
+        }
+    }
+    for directory in env::split_paths(path?) {
+        let path = directory.join(name);
+        if is_executable(&path) {
+            return Some(path);
+        }
+    }
+    None
+}
+
+fn is_executable(path: &Path) -> bool {
+    let Ok(metadata) = fs::metadata(path) else {
+        return false;
+    };
+    if !metadata.is_file() {
+        return false;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        metadata.permissions().mode() & 0o111 != 0
+    }
+    #[cfg(not(unix))]
+    {
+        true
+    }
+}
 /// One owned child process group.
 pub struct ProcessTask {
     child: Option<Child>,
@@ -270,6 +327,30 @@ fn kill_group(_pid: u32) {}
 mod tests {
     use super::*;
 
+    #[test]
+    fn executable_lookup_prefers_explicit_then_sibling_then_path() {
+        assert_eq!(
+            find_executable_with_path("sh", Some(Path::new("/bin/sh")), None, None),
+            Some(PathBuf::from("/bin/sh"))
+        );
+        assert_eq!(
+            find_executable_with_path("sh", None, Some(Path::new("/bin")), None),
+            Some(PathBuf::from("/bin/sh"))
+        );
+        assert_eq!(
+            find_executable_with_path("sh", None, None, Some(OsStr::new("/bin"))),
+            Some(PathBuf::from("/bin/sh"))
+        );
+        assert_eq!(
+            find_executable_with_path(
+                "anvil-not-a-real-binary",
+                None,
+                None,
+                Some(OsStr::new("/bin"))
+            ),
+            None
+        );
+    }
     #[test]
     fn shutdown_escalates_and_reaps() {
         let mut process = ProcessTask::spawn(ProcessSpec::new("/bin/sh").args(["-c", "sleep 30"]))

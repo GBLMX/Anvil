@@ -35,6 +35,7 @@ Options:
 Environment:
   ANVIL_GATEWAY          Explicit path to anvil-gateway
   ANVIL_RG               Explicit ripgrep path for fuzzy file listing
+  ANVIL_SANDBOX_PROFILE auto, strict, or off; default auto
   ANVIL_THEME            Startup theme by name; :theme lists built-ins
   ANVIL_TRUECOLOR       Force 24-bit RGB (1) or 256-color fallback (0)
   ANVIL_SETTINGS         Explicit settings.toml path
@@ -289,6 +290,37 @@ fn compose_git(
     Ok(None)
 }
 
+fn sandbox_profile_from_os(value: Option<OsString>) -> Result<sandbox::SandboxProfile, RunError> {
+    let Some(value) = value else {
+        return Ok(sandbox::SandboxProfile::Auto);
+    };
+    let value = value
+        .into_string()
+        .map_err(|_| RunError::Args("ANVIL_SANDBOX_PROFILE is not valid UTF-8".to_owned()))?;
+    sandbox::SandboxProfile::parse(&value).map_err(RunError::Args)
+}
+
+fn sandbox_profile_from_env() -> Result<sandbox::SandboxProfile, RunError> {
+    sandbox_profile_from_os(env::var_os("ANVIL_SANDBOX_PROFILE"))
+}
+
+fn sandbox_binary_dir() -> Option<std::path::PathBuf> {
+    env::current_exe()
+        .ok()
+        .and_then(|executable| executable.parent().map(Path::to_path_buf))
+}
+
+fn enforce_sandbox_profile(profile: sandbox::SandboxProfile) -> Result<(), RunError> {
+    let report = sandbox::probe(profile, sandbox_binary_dir().as_deref());
+    if let Some(error) = report.policy_error() {
+        return Err(RunError::Args(error));
+    }
+    if let Some(warning) = report.startup_warning() {
+        eprintln!("anvil: {warning}");
+    }
+    Ok(())
+}
+
 fn run<I>(distribution: &Distribution, arguments: I) -> Result<i32, RunError>
 where
     I: IntoIterator<Item = OsString>,
@@ -302,7 +334,10 @@ where
             println!("{} {}", distribution.name, env!("CARGO_PKG_VERSION"));
             Ok(0)
         }
-        Ok(Command::Doctor { json, profile }) => run_doctor(distribution, json, profile),
+        Ok(Command::Doctor { json, profile }) => {
+            let sandbox_profile = sandbox_profile_from_env()?;
+            run_doctor(distribution, json, profile, sandbox_profile)
+        }
         Ok(Command::Setup {
             mode,
             json,
@@ -350,6 +385,8 @@ where
             read_only,
             truecolor,
         }) => {
+            let sandbox_profile = sandbox_profile_from_env()?;
+            enforce_sandbox_profile(sandbox_profile)?;
             if !stdin
                 && !editor
                 && forward_to_running(distribution, &workspace, path.as_deref(), read_only)?
@@ -539,6 +576,26 @@ fn forward_to_running(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn sandbox_profile_env_defaults_only_when_unset() {
+        assert_eq!(
+            sandbox_profile_from_os(None).expect("default"),
+            sandbox::SandboxProfile::Auto
+        );
+        assert_eq!(
+            sandbox_profile_from_os(Some(OsString::from("strict"))).expect("strict"),
+            sandbox::SandboxProfile::Strict
+        );
+        assert!(sandbox_profile_from_os(Some(OsString::from("nope"))).is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn sandbox_profile_env_rejects_non_unicode() {
+        use std::os::unix::ffi::OsStringExt;
+        assert!(sandbox_profile_from_os(Some(OsString::from_vec(vec![0xff]))).is_err());
+    }
 
     #[cfg(feature = "official-git")]
     #[test]

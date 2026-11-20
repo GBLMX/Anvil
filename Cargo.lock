@@ -98,6 +98,7 @@ dependencies = [
  "anvil-mod-language-typst",
  "anvil-mod-workspace-index",
  "anvil-module",
+ "anvil-process",
  "anvil-tui",
  "libc",
  "rustix",

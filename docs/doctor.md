@@ -12,6 +12,19 @@ and terminal environment before the TUI starts.
 - `installed`: missing required sidecar binaries are errors. Release installers
   and release CI must use this profile explicitly.
 
+## Sandbox profile
+
+`ANVIL_SANDBOX_PROFILE=auto|strict|off` selects the capability policy before
+startup. The default is `auto`.
+
+- `auto`: use the strongest available boundary and report degraded state.
+- `strict`: fail startup when the plugin or exec boundary is not strict.
+- `off`: development escape hatch; emits a warning, but untrusted plugin
+  boundaries remain enforced.
+
+The selected profile and capability details are included in
+`anvil doctor --json` under `sandbox`.
+
 ## Required / optional matrix
 
 | Check id | Required | Missing behavior |
@@ -30,6 +43,9 @@ and terminal environment before the TUI starts.
 | `landlock` | Landlock or seccomp | error only when neither is available |
 | `sandbox` | structured capability report | warn when plugin/exec is degraded; error when untrusted plugins are disabled |
 | `lsp` | no | warn when no supported server is on `PATH` |
+
+`anvil-exec-runner` is resolved from `ANVIL_EXEC_RUNNER`, then the gateway
+sibling, then `PATH`. Gateway startup uses the same order.
 
 `TERM=dumb` is a warning even when `ANVIL_TRUECOLOR` is forced.
 

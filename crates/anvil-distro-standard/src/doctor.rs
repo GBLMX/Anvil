@@ -8,7 +8,7 @@ use std::{
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 
-use crate::sandbox::{self, SandboxReport, SandboxStatus};
+use crate::sandbox::{self, SandboxProfile, SandboxReport};
 use crate::{Distribution, RunError};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -99,12 +99,13 @@ pub(super) fn run_doctor(
     distribution: &Distribution,
     json: bool,
     profile_choice: DoctorProfileChoice,
+    sandbox_profile: SandboxProfile,
 ) -> Result<i32, RunError> {
     let profile = profile_choice.resolve();
     let binary_dir = env::current_exe()
         .ok()
         .and_then(|executable| executable.parent().map(Path::to_path_buf));
-    let sandbox = sandbox::probe(binary_dir.as_deref());
+    let sandbox = sandbox::probe(sandbox_profile, binary_dir.as_deref());
     let checks = doctor_checks(profile, binary_dir.as_deref(), &sandbox);
     let errors = checks
         .iter()
@@ -172,30 +173,20 @@ fn doctor_checks(
 }
 
 fn check_sandbox(sandbox: &SandboxReport) -> DoctorCheck {
-    let (level, remediation) = match sandbox.plugin_status {
-        SandboxStatus::Strict if sandbox.exec_status == SandboxStatus::Strict => {
-            (DoctorLevel::Ok, "")
-        }
-        SandboxStatus::Strict => (
-            DoctorLevel::Warn,
-            "install anvil-exec-runner beside Anvil or on PATH",
-        ),
-        SandboxStatus::Degraded => (
-            DoctorLevel::Warn,
-            "enable Landlock and seccomp for the strict plugin boundary",
-        ),
-        SandboxStatus::Disabled => (
-            DoctorLevel::Error,
-            "untrusted plugins cannot start without Landlock or seccomp",
-        ),
-    };
+    if let Some(error) = sandbox.policy_error() {
+        return check("sandbox", DoctorLevel::Error, error, "");
+    }
+    if let Some(warning) = sandbox.startup_warning() {
+        return check("sandbox", DoctorLevel::Warn, warning, "");
+    }
     let message = format!(
-        "profile=auto plugin: {}; exec: {}; deployment={}",
+        "profile={} plugin: {}; exec: {}; deployment={}",
+        sandbox.profile.as_str(),
         sandbox.plugin_summary(),
         sandbox.exec_summary(),
         sandbox.deployment
     );
-    check("sandbox", level, message, remediation)
+    check("sandbox", DoctorLevel::Ok, message, "")
 }
 
 fn check_workspace() -> DoctorCheck {
@@ -681,6 +672,7 @@ pub(super) fn json_escape(value: &str) -> String {
 mod tests {
     use super::*;
     use crate::STANDARD;
+    use crate::sandbox::SandboxStatus;
 
     #[test]
     fn doctor_json_has_stable_schema() {
@@ -691,7 +683,7 @@ mod tests {
             "missing \"gateway\"",
             "install it",
         )];
-        let sandbox = sandbox::probe(None);
+        let sandbox = sandbox::probe(SandboxProfile::Auto, None);
         let output = doctor_json(
             &STANDARD,
             DoctorProfile::Installed,
@@ -806,7 +798,7 @@ mod tests {
         ];
         assert!(checks.iter().all(|check| check.level == DoctorLevel::Ok));
         assert_eq!(doctor_exit_code(&checks), 0);
-        let sandbox = sandbox::probe(None);
+        let sandbox = sandbox::probe(SandboxProfile::Auto, None);
         let json = doctor_json(&STANDARD, DoctorProfile::Installed, &sandbox, &checks, true);
         assert!(json.contains("\"schema_version\":1"));
         assert!(json.contains("\"profile\":\"installed\""));
@@ -835,7 +827,7 @@ mod tests {
 
     #[test]
     fn sandbox_check_marks_degraded_and_disabled() {
-        let mut report = sandbox::probe(None);
+        let mut report = sandbox::probe(SandboxProfile::Auto, None);
         report.plugin_status = SandboxStatus::Degraded;
         report.exec_status = SandboxStatus::Strict;
         assert_eq!(check_sandbox(&report).level, DoctorLevel::Warn);

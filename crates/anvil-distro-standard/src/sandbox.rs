@@ -1,7 +1,7 @@
 //! Structured sandbox and trust-boundary capability report.
 
 use std::{
-    env, fs,
+    env,
     path::{Path, PathBuf},
 };
 
@@ -22,8 +22,37 @@ impl SandboxStatus {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum SandboxProfile {
+    Auto,
+    Strict,
+    Off,
+}
+
+impl SandboxProfile {
+    pub(super) fn as_str(self) -> &'static str {
+        match self {
+            Self::Auto => "auto",
+            Self::Strict => "strict",
+            Self::Off => "off",
+        }
+    }
+
+    pub(super) fn parse(value: &str) -> Result<Self, String> {
+        match value.to_ascii_lowercase().as_str() {
+            "auto" => Ok(Self::Auto),
+            "strict" => Ok(Self::Strict),
+            "off" => Ok(Self::Off),
+            _ => Err(format!(
+                "invalid sandbox profile {value:?}; expected auto, strict, or off"
+            )),
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub(super) struct SandboxReport {
+    pub(super) profile: SandboxProfile,
     pub(super) landlock_present: bool,
     pub(super) landlock_abi: Option<u32>,
     pub(super) signal_scope: bool,
@@ -61,9 +90,46 @@ impl SandboxReport {
         )
     }
 
+    pub(super) fn policy_error(&self) -> Option<String> {
+        if self.plugin_status == SandboxStatus::Disabled {
+            return Some("untrusted plugins cannot start without Landlock or seccomp".to_owned());
+        }
+        if self.profile == SandboxProfile::Strict {
+            if self.plugin_status != SandboxStatus::Strict {
+                return Some(
+                    "sandbox=strict requires the full plugin boundary; use auto or off explicitly"
+                        .to_owned(),
+                );
+            }
+            if self.exec_status != SandboxStatus::Strict {
+                return Some(
+                    "sandbox=strict requires anvil-exec-runner and the full exec boundary"
+                        .to_owned(),
+                );
+            }
+        }
+        None
+    }
+
+    pub(super) fn startup_warning(&self) -> Option<String> {
+        if self.profile == SandboxProfile::Off {
+            return Some(
+                "sandbox=off is a development escape hatch; untrusted plugin boundaries remain enforced"
+                    .to_owned(),
+            );
+        }
+        if self.plugin_status == SandboxStatus::Degraded {
+            return Some("sandbox is degraded; plugin signal isolation may be reduced".to_owned());
+        }
+        if self.exec_status == SandboxStatus::Disabled {
+            return Some("sandbox exec is disabled: anvil-exec-runner was not found".to_owned());
+        }
+        None
+    }
+
     pub(super) fn to_json(&self) -> String {
         serde_json::json!({
-            "profile": "auto",
+            "profile": self.profile.as_str(),
             "plugin": {
                 "landlock": {
                     "present": self.landlock_present,
@@ -100,7 +166,7 @@ impl SandboxReport {
     }
 }
 
-pub(super) fn probe(binary_dir: Option<&Path>) -> SandboxReport {
+pub(super) fn probe(profile: SandboxProfile, binary_dir: Option<&Path>) -> SandboxReport {
     let (landlock_present, landlock_abi) = landlock_probe();
     let signal_scope = landlock_abi.is_some_and(|abi| abi >= 6);
     let seccomp_available = seccomp_available();
@@ -115,6 +181,7 @@ pub(super) fn probe(binary_dir: Option<&Path>) -> SandboxReport {
     };
 
     SandboxReport {
+        profile,
         landlock_present,
         landlock_abi,
         signal_scope,
@@ -163,39 +230,8 @@ fn seccomp_available() -> bool {
 }
 
 fn find_exec_runner(binary_dir: Option<&Path>) -> Option<PathBuf> {
-    if let Some(path) = env::var_os("ANVIL_EXEC_RUNNER").map(PathBuf::from)
-        && is_executable(&path)
-    {
-        return Some(path);
-    }
-    if let Some(directory) = binary_dir {
-        let path = directory.join("anvil-exec-runner");
-        if is_executable(&path) {
-            return Some(path);
-        }
-    }
-    let paths = env::var_os("PATH")?;
-    for directory in env::split_paths(&paths) {
-        let path = directory.join("anvil-exec-runner");
-        if is_executable(&path) {
-            return Some(path);
-        }
-    }
-    None
-}
-
-#[cfg(unix)]
-fn is_executable(path: &Path) -> bool {
-    use std::os::unix::fs::PermissionsExt;
-
-    fs::metadata(path)
-        .map(|metadata| metadata.is_file() && metadata.permissions().mode() & 0o111 != 0)
-        .unwrap_or(false)
-}
-
-#[cfg(not(unix))]
-fn is_executable(path: &Path) -> bool {
-    path.is_file()
+    let explicit = env::var_os("ANVIL_EXEC_RUNNER").map(PathBuf::from);
+    anvil_process::find_executable("anvil-exec-runner", explicit.as_deref(), binary_dir)
 }
 
 fn detect_deployment() -> &'static str {
@@ -231,7 +267,7 @@ mod tests {
 
     #[test]
     fn report_json_contains_the_required_boundaries() {
-        let report = probe(None);
+        let report = probe(SandboxProfile::Auto, None);
         let json: serde_json::Value =
             serde_json::from_str(&report.to_json()).expect("sandbox json");
         assert_eq!(json["profile"], "auto");
@@ -243,5 +279,25 @@ mod tests {
         assert_eq!(json["lsp"]["trust"], "trusted_external");
         assert_eq!(json["control"]["peer"], "same_uid");
         assert!(json["deployment"].is_string());
+    }
+
+    #[test]
+    fn sandbox_profile_parses_and_rejects_unknown_values() {
+        assert_eq!(SandboxProfile::parse("AUTO"), Ok(SandboxProfile::Auto));
+        assert_eq!(SandboxProfile::parse("strict"), Ok(SandboxProfile::Strict));
+        assert_eq!(SandboxProfile::parse("off"), Ok(SandboxProfile::Off));
+        assert!(SandboxProfile::parse("permissive").is_err());
+    }
+
+    #[test]
+    fn strict_profile_rejects_degraded_boundaries_and_off_warns() {
+        let mut report = probe(SandboxProfile::Strict, None);
+        report.plugin_status = SandboxStatus::Degraded;
+        report.exec_status = SandboxStatus::Strict;
+        assert!(report.policy_error().is_some());
+
+        report.profile = SandboxProfile::Off;
+        assert!(report.policy_error().is_none());
+        assert!(report.startup_warning().is_some());
     }
 }
