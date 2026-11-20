@@ -212,6 +212,9 @@ Negative:
     real TUI;
   - `scripts/ctl-smoke.sh` covers CLI `edit replace` and revision rejection;
   - Codex and MCP Inspector are used for dogfood where available.
+  - Codex 0.170.0 dogfood exercised status, query, guarded set, and stale
+    rejection against a real TUI. It negotiated legacy `2025-06-18`; enabling
+    `mcp_2026_07_28` did not change that negotiation.
   - MCP Inspector 2.16.0 CLI dogfood covered legacy initialize, strict
     tools/list portability checks, status, query, a guarded set, stale-revision
     rejection, and quit.

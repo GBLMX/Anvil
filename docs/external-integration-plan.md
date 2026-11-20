@@ -277,8 +277,12 @@ Acceptance:
 
 ### P2: dogfood status
 
-- Completed: Codex called `anvil_status` and `anvil_query` through the adapter
-  against a real TUI.
+- Completed: Codex 0.170.0 called status and query, then applied a guarded set
+  and received the expected stale-revision rejection against a real TUI.
+  Codex negotiated legacy `2025-06-18`; enabling its `mcp_2026_07_28` feature
+  still negotiated legacy, so modern Codex remains unavailable in this version.
+  Default `codex exec` approval policy blocked MCP mutations; the mutation test
+  ran against a temporary TUI with approvals explicitly bypassed.
 - MCP Inspector 2.16.0 CLI dogfood covered legacy initialize, tools/list,
   status, query, guarded set, stale-revision rejection, and quit. Strict schema
   checks exposed nullable `type` arrays; output schemas now use `anyOf`.
