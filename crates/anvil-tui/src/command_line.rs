@@ -150,7 +150,6 @@ impl CommandCompletion {
     }
 }
 
-
 impl Model {
     pub(crate) fn refresh_command_completion(&mut self) {
         let InputMode::CommandLine { buffer } = &self.ui.input_mode else {
