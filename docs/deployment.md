@@ -121,6 +121,14 @@ build-provenance attestation described in [RELEASE.md](../RELEASE.md). The
 package signature is checked against `share/anvil/packages/official.pub`
 before a package enters the store.
 
+
+## Portable deployment builds
+
+Binaries built with `target-cpu=native` are not portable to older CPUs. When
+building a release layout for another host, ensure the effective Rust flags use
+a generic `target-cpu` such as `x86-64`, and verify the result on the target.
+A native build can abort at startup with `CPU ISA level is lower than required`.
+
 ## TUI startup ordering
 
 The TUI must not block on gateway startup. The required ordering is:
