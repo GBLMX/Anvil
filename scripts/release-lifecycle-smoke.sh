@@ -14,6 +14,7 @@ fi
 
 tmp="$(mktemp -d)"
 cleanup() {
+  chmod -R u+rwX "$tmp" 2>/dev/null || true
   rm -rf -- "$tmp"
 }
 trap cleanup EXIT
@@ -38,6 +39,13 @@ done
 }
 grep -Fxq 'bin/anvil' "$prefix/share/anvil/install-manifest.txt"
 grep -q '^share/anvil/official/plugins/' "$prefix/share/anvil/install-manifest.txt"
+
+if compgen -G "$layout/share/anvil/packages/*.anvil-plugin" >/dev/null; then
+  grep -q '"source": "official"' "$XDG_DATA_HOME/anvil/plugins/state.json" || {
+    echo "signed package was not installed from the official source" >&2
+    exit 1
+  }
+fi
 "$prefix/bin/anvil" --version >/dev/null
 
 doctor="$tmp/doctor.json"
