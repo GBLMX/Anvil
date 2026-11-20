@@ -2,11 +2,8 @@
 
 Status: Active; 1a, 1b, 2, 3, the protocol v3 control plane, and the thin MCP
 adapter are implemented. Real-TUI CLI and MCP smoke tests pass, and Codex
-successfully exercised status, query, guarded edit, and stale rejection.
-
-The remaining work is dogfood-driven tool removal. The sections below preserve
-the gap analysis that drove the implementation; items marked resolved are no
-longer blockers.
+exercised all seven MCP tools against a real TUI. The tool set is retained;
+there are no remaining tasks in this plan.
 
 ## 1. Current contract
 
@@ -277,20 +274,22 @@ Acceptance:
 
 ### P2: dogfood status
 
-- Completed: Codex 0.170.0 called status and query, then applied a guarded set
-  and received the expected stale-revision rejection against a real TUI.
-  Codex negotiated legacy `2025-06-18`; enabling its `mcp_2026_07_28` feature
-  still negotiated legacy, so modern Codex remains unavailable in this version.
-  Default `codex exec` approval policy blocked MCP mutations; the mutation test
-  ran against a temporary TUI with approvals explicitly bypassed.
+- Completed: Codex 0.170.0 exercised all seven tools against a real TUI:
+  status, open, query, guarded set, save, command, and quit. It negotiated
+  legacy `2025-06-18`; enabling its `mcp_2026_07_28` feature still negotiated
+  legacy, so modern Codex remains unavailable in this version. Default
+  `codex exec` approval policy blocked MCP mutations; mutation runs used a
+  temporary TUI with approvals explicitly bypassed.
+- The command exercise exposed and fixed a stale-status bug: a missing-Git
+  `E: git status` was reported as the result of a successful `:undo`.
 - MCP Inspector 2.16.0 CLI dogfood covered legacy initialize, tools/list,
   status, query, guarded set, stale-revision rejection, and quit. Strict schema
   checks exposed nullable `type` arrays; output schemas now use `anyOf`.
   The CLI does not expose `server/discover`; Inspector Web UI with
   `--protocol-era modern` covered discovery, guarded edit, stale rejection, and
   structured results.
-- All seven tools are exercised by `scripts/mcp-smoke.sh`; none are removed yet
-  because one dogfood turn is not enough evidence.
+- All seven tools are exercised by `scripts/mcp-smoke.sh` and now have
+  real-client evidence; no tool removal is justified.
 - Multi-file replace stays deferred until measured demand.
 - Do not add session multiplexing, TCP, or cross-user control without a new
   threat model.

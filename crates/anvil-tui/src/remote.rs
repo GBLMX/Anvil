@@ -116,6 +116,7 @@ impl Model {
                 return Err(RpcError::new(codes::POLICY_DENIED, error.to_string()));
             }
         }
+        self.status.text.clear();
         self.execute_command(command);
         if self.status.text.starts_with("E:") {
             return Err(RpcError::new(
@@ -512,6 +513,31 @@ mod tests {
             command: "!touch nope".to_owned(),
         });
         assert_eq!(reply.unwrap_err().code, codes::POLICY_DENIED);
+    }
+
+    #[test]
+    fn remote_exec_ignores_unrelated_previous_error() {
+        let mut model = Model::new(EditorState::from_text("alpha"), None);
+        let revision = model.session.editor.revision();
+        model
+            .handle_control(ControlRequest::Edit {
+                mode: EditMode::Set,
+                text: "beta".to_owned(),
+                range: None,
+                expected_revision: Some(revision),
+            })
+            .expect("set");
+
+        model.status.text = "E: git status: not a repository".to_owned();
+        let value = model
+            .handle_control(ControlRequest::Exec {
+                command: "undo".to_owned(),
+            })
+            .expect("undo");
+        let result: ExecResult = serde_json::from_value(value).expect("exec result");
+        assert!(result.accepted);
+        let text = model.session.editor.text();
+        assert_eq!(text.slice(0..text.len_bytes()), "alpha");
     }
 
     #[test]

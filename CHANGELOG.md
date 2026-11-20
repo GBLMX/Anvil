@@ -672,6 +672,9 @@ post-`0.5.0` feature line.
   now 664 lines.
 
 ### Fixed
+- Remote `anvil_command` no longer reports an unrelated pre-existing status
+  error, such as a missing-Git `E: git status`, as a command failure. Status is
+  cleared before dispatch, with a regression test.
 - `anvil doctor` now derives Landlock status from the probed sandbox report
   instead of reading `/sys/kernel/security/lsm`; Snap and Flatpak sandboxes no
   longer report a false Landlock error when securityfs is hidden.

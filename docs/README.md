@@ -84,7 +84,7 @@ the owner.
 | [0.7.x modules](0.7.x-plan.md) | optional source-level Rust modules | Active; 0.7.1–0.7.4 landed |
 | [Command architecture](command-architecture-plan.md) | registry, keymap trie, effects | Active; partial |
 | [Linux platform](linux-platform-plan.md) | seccomp/cgroup, atomic install, watcher measurements | Active; per-section status |
-| [External integration](external-integration-plan.md) | `$EDITOR`, stdin, control socket, MCP adapter | Active; dogfood removal |
+| [External integration](external-integration-plan.md) | `$EDITOR`, stdin, control socket, MCP adapter | Active; all seven tools retained |
 | [Small features](small-features-plan.md) | Vim-like motions, operators, display polish | Proposed |
 | [Plugin tactical interaction](plugin-mouse-canvas-plan.md) | scoped mouse, overlays, selection, alerts | Proposed; API 1.1 |
 | [AI telemetry HUD](ai-telemetry-plan.md) | local EPM/APM/Burst telemetry | Future P3 |
