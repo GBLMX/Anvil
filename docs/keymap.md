@@ -101,6 +101,7 @@ remain as internal aliases, but they are not separate advertised shortcuts.
 | File picker | `Space f` |
 | Buffer picker | `Space b` |
 | File tree | `Space e` |
+| Workspace start page | `Space w` |
 | Diagnostics picker | `Space d` |
 | Changed files | `Space g` |
 | Jump list | `Space j` |

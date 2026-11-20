@@ -129,6 +129,11 @@ pub(super) fn execute_pending_command(
             model.show_keymap_list();
         }
 
+        PendingCommand::Workspaces => {
+            let _ = model.take_count();
+            model.open_start_page_workspaces();
+        }
+
         PendingCommand::Languages => {
             let _ = model.take_count();
             model.show_languages();

@@ -355,6 +355,7 @@ pub(crate) enum PendingCommand {
     SearchHistory,
     CommandHistory,
     KeymapList,
+    Workspaces,
     Languages,
     StartFuzzy,
     BufferPicker,
@@ -438,6 +439,7 @@ impl PendingCommand {
             | SearchHistory
             | CommandHistory
             | KeymapList
+            | Workspaces
             | Languages
             | FileStart
             | CenterCursor
@@ -516,6 +518,7 @@ impl PendingCommand {
             Self::SearchHistory => "search history".to_owned(),
             Self::CommandHistory => "command history".to_owned(),
             Self::KeymapList => "keymap list".to_owned(),
+            Self::Workspaces => "workspaces".to_owned(),
             Self::Languages => "languages".to_owned(),
             _ => "command".to_owned(),
         }
@@ -539,6 +542,7 @@ impl PendingCommand {
                 | Self::SearchHistory
                 | Self::CommandHistory
                 | Self::KeymapList
+                | Self::Workspaces
                 | Self::Languages
                 | Self::StartFuzzy
                 | Self::StartRename
@@ -730,6 +734,7 @@ pub(crate) fn pending_action(
         (' ', KeyCode::Char('H')) => Some(PendingCommand::SearchHistory),
         (' ', KeyCode::Char(':')) => Some(PendingCommand::CommandHistory),
         (' ', KeyCode::Char('K')) => Some(PendingCommand::KeymapList),
+        (' ', KeyCode::Char('w')) => Some(PendingCommand::Workspaces),
         (' ', KeyCode::Char('L')) => Some(PendingCommand::Languages),
         (' ', KeyCode::Char('f')) => Some(PendingCommand::StartFuzzy),
         (' ', KeyCode::Char('p')) => Some(PendingCommand::CommandPalette),
@@ -910,6 +915,7 @@ fn space_hint_group(key: &str) -> &'static str {
         "j" => "jump",
         "H" | ":" => "history",
         "K" => "keymap",
+        "w" => "workspace",
         "L" => "language",
         "b" => "buffer",
         "e" => "tree",

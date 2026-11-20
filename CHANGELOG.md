@@ -16,6 +16,8 @@ post-`0.5.0` feature line.
 - Command-line completion now has an `anvil-api` contract and a
   UI-neutral kernel policy in `anvil-session`; the TUI renders the kernel
   candidates for command, path, and buffer completion.
+- `Space w` opens the start page focused on recent workspaces, including from
+  an existing editor session.
 - The local i7-12700H workstation is now the authoritative performance
   reference; the current baseline is
   `docs/benchmarks/reference-2026-11-20-local-i7.md`. The planned replacement

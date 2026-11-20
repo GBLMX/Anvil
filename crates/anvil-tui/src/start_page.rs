@@ -113,6 +113,14 @@ impl Model {
         }
     }
 
+    pub(crate) fn open_start_page_workspaces(&mut self) {
+        self.start_page.welcome = true;
+        self.start_page.pending_space = false;
+        self.start_page.focus = StartPageFocus::Workspaces;
+        self.clamp_start_selection();
+        self.file.dirty = true;
+    }
+
     pub(crate) fn start_action_key(&self, action: &StartActionSpec) -> String {
         action
             .command
