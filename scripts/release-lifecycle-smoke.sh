@@ -23,6 +23,7 @@ export XDG_DATA_HOME="$tmp/data"
 export XDG_CONFIG_HOME="$tmp/config"
 export XDG_STATE_HOME="$tmp/state"
 export LANG=C.UTF-8
+export ANVIL_SANDBOX_PROFILE=auto
 
 "$layout/install.sh" "$prefix"
 for binary in anvil anvil-ctl anvil-mcp anvil-gateway anvil-exec-runner anvil-plugin-host; do
@@ -49,6 +50,10 @@ report = json.load(open(sys.argv[1], encoding="utf-8"))
 assert report["schema_version"] == 1, report
 assert report["profile"] == "installed", report
 assert report["ok"] is True, report
+sandbox = report["sandbox"]
+assert sandbox["profile"] == "auto", sandbox
+assert sandbox["exec"]["runner"]["found"] is True, sandbox
+assert sandbox["lsp"] == {"sandboxed": False, "trust": "trusted_external"}, sandbox
 PY
 
 mkdir -p "$XDG_CONFIG_HOME/anvil" "$XDG_STATE_HOME/anvil"

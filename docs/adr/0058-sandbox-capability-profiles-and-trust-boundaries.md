@@ -1,15 +1,18 @@
 # ADR-0058: Sandbox Capability Profiles and Trust Boundaries
 
 - Status: Proposed; profile selection and doctor capability report implemented 2026-11-20
-- Version: 1.2.0
+- Version: 1.3.0
 - Date: 2026-11-20
 - Implementation note (2026-11-20): `anvil doctor --json` exposes the structured
   `sandbox` object (Landlock ABI/signal scope, seccomp, cgroup v2, plugin/exec
   status, LSP trust, control transport, deployment). `ANVIL_SANDBOX_PROFILE`
   selects `auto|strict|off` at startup; strict refuses degraded boundaries and
   off warns while the untrusted plugin boundary remains enforced. Gateway and
-  doctor share the explicit/sibling/PATH runner lookup. Deployment-specific
-  smoke coverage remains open.
+  doctor share the explicit/sibling/PATH runner lookup. Deployment smoke passed
+  for an installed layout, local and systemd-service detection, an Arch
+  container with Docker's default seccomp profile, and bwrap with `/proc` and
+  `/dev` replaced by empty tmpfs mounts. SSH was detected via environment
+  only; Flatpak/Snap package-level and real remote-host smoke remain open.
 - Related: [ADR-0001](0001-plugin-isolation.md),
   [ADR-0002](0002-go-daemon.md),
   [ADR-0005](0005-exec-policy.md),
