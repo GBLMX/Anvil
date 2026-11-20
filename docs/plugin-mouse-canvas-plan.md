@@ -398,8 +398,8 @@ arbitrary audio process is started.
 - TUI smoke for all three plugins; `cargo test --workspace`, clippy, fmt,
   plugin host smoke, and real gateway TUI smoke.
 - Performance: input-to-highlight latency, overlay patch frame cost, and no
-  editor-frame regression against the temporary reference baseline; typing
-  remains responsive while 1000+ node layout runs.
+  editor-frame regression against the reference baseline; typing remains
+  responsive while 1000+ node layout runs.
 
 ## 8. Exit criteria
 

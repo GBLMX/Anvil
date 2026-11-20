@@ -8,6 +8,10 @@ post-`0.5.0` feature line.
 
 ## [Unreleased]
 ### Added
+- The local i7-12700H workstation is now the authoritative performance
+  reference; the current baseline is
+  `docs/benchmarks/reference-2026-11-20-local-i7.md`. The planned replacement
+  host is no longer a gate.
 - `anvil-api` schema and TypeScript generation now sit behind the opt-in
   `bindings` feature; default runtime builds no longer pull `schemars` or
   `ts-rs`. CI runs the bindings-gated contract tests separately.

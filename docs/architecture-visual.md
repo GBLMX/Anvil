@@ -187,7 +187,7 @@ flowchart LR
 | Native workspace watch + live status | landed |
 | Marketplace, signed-index UI, install/update consent | deferred |
 | Release signing/provenance with production keys | external gate |
-| Reference-machine performance baseline | external gate |
+| Reference-machine performance baseline | recorded; rerun at boundaries |
 
 Exit gates live in [internal-polish-plan.md](internal-polish-plan.md).
 Architecture decisions and status live in the [ADR index](adr/README.md).

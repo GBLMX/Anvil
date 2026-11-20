@@ -1,10 +1,9 @@
-# Temporary Reference Baseline — 2026-11-14
+# Historical Reference Baseline — 2026-11-14
 
-Status: first automated local baseline after designating the i7-12700H
-workstation as the temporary reference machine. It covers the core text model,
-editor, line index, TUI, and Go gateway. Plugin first-frame and hot-reload
-measurements remain manual. The file must be replaced, not compared across
-machines, when the planned 64 GiB host arrives.
+Status: historical automated baseline recorded before the current
+`reference-2026-11-20-local-i7.md` run. It covers the core text model, editor,
+line index, TUI, and Go gateway. Keep it for regression history; use the
+2026-11-20 file as the authoritative reference.
 
 ## Machine
 
@@ -114,7 +113,5 @@ remains below the 10% regression threshold.
 
 ## Gate status
 
-- Temporary reference baseline: established above.
-- Absolute thresholds: evaluate against this file until the 64 GiB host arrives.
-- 64 GiB replacement: re-run everything and replace this file; do not compare
-  absolute numbers across the two machines.
+- Historical baseline: retained for regression history.
+- Authoritative thresholds: use `reference-2026-11-20-local-i7.md`.

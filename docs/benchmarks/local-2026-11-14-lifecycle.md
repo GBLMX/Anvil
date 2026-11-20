@@ -1,8 +1,8 @@
 # Local Lifecycle Re-run — 2026-11-14
 
-Status: targeted run on the temporary i7-12700H reference. The full baseline
-is `reference-2026-11-14-local-i7.md`; this file remains the lifecycle-specific
-comparison.
+Status: targeted run on the i7-12700H reference. The authoritative full
+baseline is `reference-2026-11-20-local-i7.md`; this file remains the
+lifecycle-specific comparison.
 
 ## Machine
 

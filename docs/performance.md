@@ -1,13 +1,14 @@
 # Anvil Performance Baseline
 
-Status: Phase 0 measurement plan. Numbers are gates, not shipped claims.
-The temporary reference machine is the local i7-12700H workstation; its first
-automated baseline is recorded in
-[benchmarks/reference-2026-11-14-local-i7.md](benchmarks/reference-2026-11-14-local-i7.md).
-A 64 GiB machine is planned; replacing the reference invalidates every
-absolute number and requires a fresh baseline.
+Status: active; the i7-12700H reference baseline is linked below. Numbers are
+gates, not shipped claims.
+The reference machine is the local i7-12700H workstation; the authoritative
+baseline is
+[benchmarks/reference-2026-11-20-local-i7.md](benchmarks/reference-2026-11-20-local-i7.md).
+Absolute numbers are valid for this machine and are not compared across
+different hardware.
 
-## 1. Reference machine (temporary)
+## 1. Reference machine
 
 - CPU: Intel Core i7-12700H, 6 P-cores + 8 E-cores, 20 threads
 - RAM: 15 GiB
@@ -29,7 +30,7 @@ Performance is re-run at dependency boundaries, not after every commit.
 |---|---|
 | Documentation/plan-only change | None |
 | `0.4.6b` activation work | Targeted: `first_frame_plugin`, host start, startup activation on/off |
-| Before `0.4.7` | Reference-machine full baseline: `benchmarks/reference-2026-11-14-local-i7.md` |
+| Before `0.4.7` | Reference-machine full baseline: `benchmarks/reference-2026-11-20-local-i7.md` |
 | `0.4.7` resource/security | Targeted: plugin start, reload, OOM, process/cgroup cleanup |
 | `0.4.8` plugin I/O | Targeted: UDS round trip, `sys.read_file`, `sys.fetch`, `sys.exec` |
 | `0.4.9` session/protocol | Full hot path: first frame, 1/10/100 MB open, edit, scroll, key-to-screen |
@@ -195,7 +196,7 @@ skip highlighting.
 ## 3.2 0.3.0 pre-switch spot checks (not gates)
 
 These numbers were collected before the i7-12700H was designated as the
-temporary reference machine. They remain spot checks, not full-gate evidence.
+reference machine. They remain spot checks, not full-gate evidence.
 Several scenarios intentionally have fewer than the required 30 samples and are
 marked as single-run or observed-max values.
 
@@ -215,7 +216,7 @@ marked as single-run or observed-max values.
 
 `BenchmarkReadResponseEncoding` measured **12.25 ms mean** for a large
 JSON/base64 read response on this workstation. It is a Go benchmark mean, not
-a UDS round-trip p99. It was re-recorded in the temporary reference baseline,
+a UDS round-trip p99. It was re-recorded in the reference baseline,
 but remains a mean, not the required p99 gate.
 
 The TUI's normal file path uses binary frames; `BenchmarkReadFileChunk`
