@@ -214,8 +214,11 @@ Negative:
   - Codex and MCP Inspector are used for dogfood where available.
   - MCP Inspector 2.16.0 CLI dogfood covered legacy initialize, strict
     tools/list portability checks, status, query, a guarded set, stale-revision
-    rejection, and quit. Its CLI does not expose `server/discover`, so modern
-    dogfood remains covered by `scripts/mcp-smoke.sh`.
+    rejection, and quit.
+  - MCP Inspector 2.16.0 Web UI with `--protocol-era modern` connected to
+    `anvil-mcp`, observed `server/discover` and `tools/list`, executed status
+    and query, and verified guarded set plus stale-revision rejection with
+    structured output. The CLI itself does not expose `server/discover`.
 
 ## References
 
