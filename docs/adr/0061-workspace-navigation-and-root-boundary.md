@@ -87,8 +87,8 @@ Negative:
 
 - The handoff replaces process state; dirty buffers, editor mode, and stdin
   mode refuse the switch.
-- The process PID is replaced; transient in-memory UI state does not carry
-  across.
+- The process image is replaced while the PID is preserved; transient
+  in-memory UI state does not carry across.
 
 ## Verification
 

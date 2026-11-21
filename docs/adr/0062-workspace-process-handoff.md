@@ -83,8 +83,8 @@ Positive:
 
 Negative:
 
-- The process PID is replaced; macros, pending requests, and unsaved UI state
-  do not carry across the switch.
+- The process image is replaced while the PID is preserved; macros, pending
+  requests, and unsaved UI state do not carry across the switch.
 - Windows remains unsupported; the workspace handoff is a Unix `exec` path.
 - Switching requires a clean buffer set.
 
