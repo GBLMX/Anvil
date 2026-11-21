@@ -18,7 +18,7 @@ Normal mode
   C / Alt-C           add a cursor below / above on the same column
   Ctrl-w v            open a vertical split
   Ctrl-w s            open a horizontal split
-  Ctrl-w h / l        focus the left/tree or right/editor pane
+  Ctrl-w h / j / k / l focus the previous/next pane
   Ctrl-w q            close the split
   Space e             file tree (h/l/Enter expand or open, H toggles hidden)
   Space d             diagnostics picker; type to filter, Enter jumps

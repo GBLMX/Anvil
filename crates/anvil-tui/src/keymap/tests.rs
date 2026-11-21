@@ -714,6 +714,24 @@ fn window_prefix_opens_both_split_orientations() {
         ),
         Some(PendingCommand::SplitHorizontal)
     );
+    assert_eq!(
+        resolve_pending(
+            'w',
+            key(KeyCode::Char('j'), KeyModifiers::NONE),
+            false,
+            &config,
+        ),
+        Some(PendingCommand::FocusSplit(true))
+    );
+    assert_eq!(
+        resolve_pending(
+            'w',
+            key(KeyCode::Char('k'), KeyModifiers::NONE),
+            false,
+            &config,
+        ),
+        Some(PendingCommand::FocusSplit(false))
+    );
 }
 #[test]
 fn helix_preset_is_not_advertised() {

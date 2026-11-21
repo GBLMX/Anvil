@@ -729,6 +729,8 @@ pub(crate) fn pending_action(
     match (pending, key.code) {
         ('w', KeyCode::Char('v')) => Some(PendingCommand::SplitVertical),
         ('w', KeyCode::Char('s')) => Some(PendingCommand::SplitHorizontal),
+        ('w', KeyCode::Char('j')) => Some(PendingCommand::FocusSplit(true)),
+        ('w', KeyCode::Char('k')) => Some(PendingCommand::FocusSplit(false)),
         ('w', KeyCode::Char('h')) => Some(PendingCommand::FocusSplit(false)),
         ('w', KeyCode::Char('l')) => Some(PendingCommand::FocusSplit(true)),
         ('w', KeyCode::Char('q')) => Some(PendingCommand::CloseSplit),
