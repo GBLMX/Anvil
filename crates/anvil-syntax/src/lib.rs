@@ -513,11 +513,11 @@ impl SyntaxState {
             self.cache.clear(revision, None);
             return true;
         };
-        if text.len_bytes() > MAX_HIGHLIGHT_BYTES || language_for(path).is_none() {
+        let source = text.slice(0..text.len_bytes());
+        if text.len_bytes() > MAX_HIGHLIGHT_BYTES || language_for_source(&source, path).is_none() {
             self.cache.clear(revision, Some(path));
             return true;
         }
-        let source = text.slice(0..text.len_bytes());
         self.worker.request(ParseRequest {
             epoch: self.epoch,
             revision,
@@ -543,7 +543,7 @@ impl SyntaxState {
 }
 
 fn parse_scopes(source: &str, path: &Path) -> Option<Vec<Scope>> {
-    let definition = language_for(path)?;
+    let definition = language_for_source(source, path)?;
     if definition.kind != SyntaxKind::TreeSitter && definition.kind != SyntaxKind::Markdown {
         return Some(Vec::new());
     }
@@ -641,7 +641,7 @@ fn scope_at_offset(scopes: &[Scope], offset: usize) -> Option<&Scope> {
 }
 
 fn parse_source(source: &str, path: &Path) -> Option<Vec<Highlight>> {
-    let definition = language_for(path)?;
+    let definition = language_for_source(source, path)?;
     let mut highlights = match definition.kind {
         SyntaxKind::GoMod => parse_go_mod(source),
         SyntaxKind::Markdown => parse_markdown(source, definition)?,
@@ -939,6 +939,9 @@ fn language_for(path: &Path) -> Option<&'static SyntaxLanguage> {
         "Makefile" | "makefile" => return Some(&*MAKE),
         "Dockerfile" => return Some(&*DOCKERFILE),
         "go.mod" => return Some(&*GO_MOD),
+        ".zshrc" | ".zshenv" | ".zprofile" | ".zlogin" | ".zlogout" | ".zsh_aliases"
+        | ".bashrc" | ".bash_profile" | ".bash_login" | ".bash_logout" | ".bash_aliases"
+        | ".profile" | ".xprofile" | "zshrc" | "bashrc" => return Some(&*BASH),
         _ => {}
     }
     match path.extension()?.to_str()? {
@@ -975,6 +978,24 @@ fn language_for(path: &Path) -> Option<&'static SyntaxLanguage> {
 /// Whether a Tree-sitter grammar is compiled in for this path.
 pub fn supports_path(path: &Path) -> bool {
     language_for(path).is_some()
+}
+
+fn language_for_source(source: &str, path: &Path) -> Option<&'static SyntaxLanguage> {
+    language_for(path).or_else(|| shebang_language(source))
+}
+
+fn shebang_language(source: &str) -> Option<&'static SyntaxLanguage> {
+    let command = source.lines().next()?.trim().strip_prefix("#!")?;
+    let mut parts = command.split_whitespace();
+    let mut executable = parts.next()?;
+    if executable.ends_with("/env") {
+        executable = parts.next()?;
+    }
+    match executable.rsplit('/').next()? {
+        "sh" | "bash" | "zsh" | "dash" | "ksh" | "brush" => Some(&*BASH),
+        "fish" => Some(&*FISH),
+        _ => None,
+    }
 }
 
 #[cfg(test)]
@@ -1099,9 +1120,16 @@ mod tests {
             "Makefile",
             "Dockerfile",
             "go.mod",
+            ".zshrc",
+            ".zshenv",
+            ".zprofile",
+            ".bashrc",
+            ".bash_profile",
+            ".profile",
         ] {
             assert!(language_for(Path::new(path)).is_some(), "{path}");
         }
+
         #[cfg(feature = "latex")]
         for path in ["x.tex", "x.ltx", "x.sty", "x.cls"] {
             assert!(language_for(Path::new(path)).is_some(), "{path}");
@@ -1113,6 +1141,25 @@ mod tests {
         #[cfg(not(feature = "typst"))]
         assert!(language_for(Path::new("x.typ")).is_none());
         assert!(language_for(Path::new("x.unknown")).is_none());
+    }
+    #[test]
+    fn shell_configs_and_shebangs_highlight_comments() {
+        for source in [
+            "# zsh comment\nif true; then echo hi; fi\n",
+            "#!/usr/bin/env zsh\n# zsh comment\nif true; then echo hi; fi\n",
+        ] {
+            let highlights = parse_source(source, Path::new(".zshrc")).expect("shell highlights");
+            assert!(
+                highlights.iter().any(|h| h.class == SyntaxClass::Comment),
+                "{source}"
+            );
+        }
+        let highlights = parse_source(
+            "#!/usr/bin/env bash\n# config comment\nexport VALUE=1\n",
+            Path::new(".config/tool/config"),
+        )
+        .expect("shebang config highlights");
+        assert!(highlights.iter().any(|h| h.class == SyntaxClass::Comment));
     }
 
     #[cfg(feature = "web")]
