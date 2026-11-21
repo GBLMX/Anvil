@@ -1,6 +1,7 @@
 //! Start dashboard rendering.
 
 use super::*;
+use crate::icon_theme;
 use crate::start_page::{START_ACTIONS, StartWorkspaceState};
 use crate::state::StartPageFocus;
 use crate::theme;
