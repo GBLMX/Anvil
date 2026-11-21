@@ -1,8 +1,9 @@
 # Theme and Settings Plan
 
 Status: landed; design record. Built-in semantic themes, theme selection and
-persistence, live preview, and typed settings landed. Plugin-provided themes,
-plugin-rendered settings, and file watching remain out of scope.
+persistence, live preview, and typed settings landed. Plugin-provided themes
+and plugin-rendered settings remain out of scope; settings/language file hot
+reload is governed by ADR-0067.
 
 Scope: semantic themes, built-in palettes, theme selection/persistence, live
 preview, and the minimum settings infrastructure needed to support them. It
