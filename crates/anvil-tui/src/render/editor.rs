@@ -388,6 +388,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
             &split.buffer,
             model.ui.focus.split,
             model.buffer_settings().soft_wrap,
+            model.view.split_orientation == crate::state::SplitOrientation::Vertical,
         );
     }
     render_overlays(model, frame, area);

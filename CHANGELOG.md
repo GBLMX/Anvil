@@ -29,6 +29,8 @@ post-`0.5.0` feature line.
   the previous `❯`.
 - Start-page recents and the changed-files picker now use the shared
   file/folder icon registry.
+- `Ctrl-w s` opens a horizontal split; mouse resize and focus routing follow
+  the split orientation.
 - The local i7-12700H workstation is now the authoritative performance
   reference; the current baseline is
   `docs/benchmarks/reference-2026-11-20-local-i7.md`. The planned replacement

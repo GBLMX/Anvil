@@ -58,19 +58,33 @@ pub(crate) fn render_split_pane(
     buffer: &Buffer,
     is_active: bool,
     soft_wrap: bool,
+    vertical: bool,
 ) {
+    let border = if vertical {
+        Borders::LEFT
+    } else {
+        Borders::TOP
+    };
     let block = ratatui::widgets::Block::default()
-        .borders(Borders::LEFT)
+        .borders(border)
         .border_type(if is_active {
             ratatui::widgets::BorderType::Thick
         } else {
             ratatui::widgets::BorderType::Rounded
         })
         .border_style(theme::border(is_active));
-    let inner = Rect {
-        x: area.x + 1,
-        width: area.width.saturating_sub(1),
-        ..area
+    let inner = if vertical {
+        Rect {
+            x: area.x.saturating_add(1),
+            width: area.width.saturating_sub(1),
+            ..area
+        }
+    } else {
+        Rect {
+            y: area.y.saturating_add(1),
+            height: area.height.saturating_sub(1),
+            ..area
+        }
     };
     frame.render_widget(block, area);
     let total = buffer.editor.index().len_lines();

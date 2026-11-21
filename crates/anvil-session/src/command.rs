@@ -79,6 +79,7 @@ pub const OUTGOING_CALLS: CommandId = CommandId::new("lsp.outgoing_calls");
 pub const DIAGNOSTICS_NEXT: CommandId = CommandId::new("diagnostics.next");
 pub const DIAGNOSTICS_PREVIOUS: CommandId = CommandId::new("diagnostics.previous");
 pub const SPLIT_VERTICAL: CommandId = CommandId::new("view.split_vertical");
+pub const SPLIT_HORIZONTAL: CommandId = CommandId::new("view.split_horizontal");
 pub const FOCUS_LEFT: CommandId = CommandId::new("view.focus_left");
 pub const FOCUS_EDITOR: CommandId = CommandId::new("view.focus_editor");
 pub const FOCUS_RIGHT: CommandId = CommandId::new("view.focus_right");
@@ -161,6 +162,7 @@ pub const COMMANDS: &[CommandSpec] = &[
     spec(DIAGNOSTICS_NEXT, PENDING),
     spec(DIAGNOSTICS_PREVIOUS, PENDING),
     spec(SPLIT_VERTICAL, PENDING),
+    spec(SPLIT_HORIZONTAL, PENDING),
     spec(FOCUS_LEFT, PENDING),
     spec(FOCUS_RIGHT, PENDING),
     spec(FOCUS_EDITOR, PENDING),

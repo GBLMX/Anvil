@@ -25,6 +25,8 @@ pub(crate) struct SplitRects {
     pub(crate) left: Rect,
     pub(crate) right: Rect,
     pub(crate) handle_x: u16,
+    pub(crate) handle_y: u16,
+    pub(crate) vertical: bool,
 }
 
 pub(crate) struct WorkbenchRects {
@@ -115,24 +117,49 @@ pub(crate) fn workbench_rects(model: &Model, width: u16, height: u16) -> Option<
     }
 
     let split = if !model.start_page.welcome && model.buffers.split.is_some() {
-        let half = editor_content
-            .width
-            .saturating_mul(model.view.split_ratio.min(100))
-            / 100;
-        let left = Rect {
-            width: half,
-            ..editor_content
-        };
-        let right = Rect {
-            x: editor_content.x.saturating_add(half),
-            width: editor_content.width.saturating_sub(half),
-            ..editor_content
-        };
-        Some(SplitRects {
-            left,
-            right,
-            handle_x: right.x,
-        })
+        if model.view.split_orientation == crate::state::SplitOrientation::Horizontal {
+            let half = editor_content
+                .height
+                .saturating_mul(model.view.split_ratio.min(100))
+                / 100;
+            let top = Rect {
+                height: half,
+                ..editor_content
+            };
+            let bottom = Rect {
+                y: editor_content.y.saturating_add(half),
+                height: editor_content.height.saturating_sub(half),
+                ..editor_content
+            };
+            Some(SplitRects {
+                left: top,
+                right: bottom,
+                handle_x: 0,
+                handle_y: bottom.y,
+                vertical: false,
+            })
+        } else {
+            let half = editor_content
+                .width
+                .saturating_mul(model.view.split_ratio.min(100))
+                / 100;
+            let left = Rect {
+                width: half,
+                ..editor_content
+            };
+            let right = Rect {
+                x: editor_content.x.saturating_add(half),
+                width: editor_content.width.saturating_sub(half),
+                ..editor_content
+            };
+            Some(SplitRects {
+                left,
+                right,
+                handle_x: right.x,
+                handle_y: 0,
+                vertical: true,
+            })
+        }
     } else {
         None
     };
@@ -254,7 +281,9 @@ impl Model {
         if self.workspace.tree.visible && tree_fits(width) {
             width = width.saturating_sub(self.sidebar_width(width));
         }
-        if self.buffers.split.is_some() {
+        if self.buffers.split.is_some()
+            && self.view.split_orientation == crate::state::SplitOrientation::Vertical
+        {
             let split = width.saturating_mul(self.view.split_ratio.min(100)) / 100;
             width = if self.ui.focus.split {
                 split
@@ -285,9 +314,21 @@ impl Model {
             height = height.saturating_sub(1);
         }
         height = height.saturating_sub(crate::message::height(self, height));
-        height
+        let height = height
             .saturating_sub(crate::pipe_locations::panel_height(self, height))
-            .max(1)
+            .max(1);
+        if self.buffers.split.is_some()
+            && self.view.split_orientation == crate::state::SplitOrientation::Horizontal
+        {
+            let split = height.saturating_mul(self.view.split_ratio.min(100)) / 100;
+            return if self.ui.focus.split {
+                split
+            } else {
+                height.saturating_sub(split)
+            }
+            .max(1);
+        }
+        height
     }
 
     pub(crate) fn welcome_area(&self, width: u16, height: u16) -> Rect {
@@ -1306,6 +1347,28 @@ mod workbench_layout_tests {
             rects.rect_for(SurfaceId::Editor(EditorPane::Split)),
             Some(split.right)
         );
+
+        model.ui.focus.split = true;
+        let rects = workbench_rects(&model, 120, 40).expect("layout");
+        let split = rects.split.as_ref().expect("split");
+        assert_eq!(rects.editor, split.right);
+        assert_eq!(rects.other_editor, Some(split.left));
+    }
+
+    #[test]
+    fn horizontal_split_stacks_panes_and_keeps_full_width() {
+        let mut model = model();
+        let full_width = model.wrap_text_width(120);
+        model.split_horizontal();
+        model.view.split_ratio = 50;
+        assert_eq!(model.wrap_text_width(120), full_width);
+
+        let rects = workbench_rects(&model, 120, 40).expect("layout");
+        let split = rects.split.as_ref().expect("split");
+        assert!(!split.vertical);
+        assert_eq!(split.left.width, rects.editor_content.width);
+        assert_eq!(split.right.width, rects.editor_content.width);
+        assert_eq!(split.handle_y, split.right.y);
 
         model.ui.focus.split = true;
         let rects = workbench_rects(&model, 120, 40).expect("layout");

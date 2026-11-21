@@ -345,6 +345,7 @@ pub(crate) enum PendingCommand {
         digit: char,
     },
     SplitVertical,
+    SplitHorizontal,
     FocusSplit(bool),
     FocusEditor,
     CloseSplit,
@@ -401,6 +402,7 @@ impl PendingCommand {
             Diagnostic(true) => Some(command::DIAGNOSTICS_NEXT),
             Diagnostic(false) => Some(command::DIAGNOSTICS_PREVIOUS),
             SplitVertical => Some(command::SPLIT_VERTICAL),
+            SplitHorizontal => Some(command::SPLIT_HORIZONTAL),
             FocusSplit(true) => Some(command::FOCUS_RIGHT),
             FocusEditor => Some(command::FOCUS_EDITOR),
             FocusSplit(false) => Some(command::FOCUS_LEFT),
@@ -532,6 +534,7 @@ impl PendingCommand {
                 | Self::Definition
                 | Self::Diagnostic(_)
                 | Self::SplitVertical
+                | Self::SplitHorizontal
                 | Self::FocusSplit(_)
                 | Self::FocusEditor
                 | Self::CloseSplit
@@ -590,6 +593,7 @@ impl PendingCommand {
             "diagnostics.next" => Self::Diagnostic(true),
             "diagnostics.previous" => Self::Diagnostic(false),
             "view.split_vertical" => Self::SplitVertical,
+            "view.split_horizontal" => Self::SplitHorizontal,
             "view.focus_left" => Self::FocusSplit(false),
             "view.focus_right" => Self::FocusSplit(true),
             "view.focus_editor" => Self::FocusEditor,
@@ -724,6 +728,7 @@ pub(crate) fn pending_action(
     }
     match (pending, key.code) {
         ('w', KeyCode::Char('v')) => Some(PendingCommand::SplitVertical),
+        ('w', KeyCode::Char('s')) => Some(PendingCommand::SplitHorizontal),
         ('w', KeyCode::Char('h')) => Some(PendingCommand::FocusSplit(false)),
         ('w', KeyCode::Char('l')) => Some(PendingCommand::FocusSplit(true)),
         ('w', KeyCode::Char('q')) => Some(PendingCommand::CloseSplit),

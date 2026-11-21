@@ -694,6 +694,28 @@ fn bundled_presets_parse_without_function_keys() {
 }
 
 #[test]
+fn window_prefix_opens_both_split_orientations() {
+    let config = KeymapConfig::default();
+    assert_eq!(
+        resolve_pending(
+            'w',
+            key(KeyCode::Char('v'), KeyModifiers::NONE),
+            false,
+            &config,
+        ),
+        Some(PendingCommand::SplitVertical)
+    );
+    assert_eq!(
+        resolve_pending(
+            'w',
+            key(KeyCode::Char('s'), KeyModifiers::NONE),
+            false,
+            &config,
+        ),
+        Some(PendingCommand::SplitHorizontal)
+    );
+}
+#[test]
 fn helix_preset_is_not_advertised() {
     assert!(KeymapConfig::from_preset("helix").is_err());
     assert!(KeymapConfig::from_preset("anvil-helix").is_err());

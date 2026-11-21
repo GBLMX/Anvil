@@ -84,6 +84,10 @@ pub(super) fn execute_pending_command(
             let _ = model.take_count();
             model.split_vertical();
         }
+        PendingCommand::SplitHorizontal => {
+            let _ = model.take_count();
+            model.split_horizontal();
+        }
         PendingCommand::FocusSplit(right) => {
             let _ = model.take_count();
             model.focus_split(right);

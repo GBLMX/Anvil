@@ -4,16 +4,29 @@ use super::*;
 
 impl Model {
     pub(crate) fn split_vertical(&mut self) {
+        self.open_split(crate::state::SplitOrientation::Vertical);
+    }
+
+    pub(crate) fn split_horizontal(&mut self) {
+        self.open_split(crate::state::SplitOrientation::Horizontal);
+    }
+
+    fn open_split(&mut self, orientation: crate::state::SplitOrientation) {
         if self.buffers.split.is_some() {
             self.status.text = "split already open".to_owned();
             self.file.dirty = true;
             return;
         }
+        self.view.split_orientation = orientation;
         self.buffers.split = Some(Pane {
             buffer: self.snapshot(),
         });
         self.ui.focus.split = false;
-        self.status.text = "vertical split".to_owned();
+        self.status.text = match orientation {
+            crate::state::SplitOrientation::Vertical => "vertical split",
+            crate::state::SplitOrientation::Horizontal => "horizontal split",
+        }
+        .to_owned();
         self.sync_watch_paths();
         self.refresh_wrap_width();
         self.file.dirty = true;

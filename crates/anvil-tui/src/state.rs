@@ -700,6 +700,13 @@ pub(crate) struct ProjectState {
     pub(crate) replace_pending: Option<u64>,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) enum SplitOrientation {
+    #[default]
+    Vertical,
+    Horizontal,
+}
+
 pub struct ViewState {
     /// First visible line, independent of the cursor.
     pub scroll: usize,
@@ -707,6 +714,7 @@ pub struct ViewState {
     pub hscroll: usize,
     pub(crate) viewport_height: u16,
     pub(crate) viewport_width: u16,
+    pub(crate) split_orientation: SplitOrientation,
     pub(crate) split_ratio: u16,
     pub(crate) pointer: mouse::PointerState,
     /// Text-area width used by the soft-wrap projection.
@@ -718,6 +726,7 @@ pub struct ViewState {
 impl Default for ViewState {
     fn default() -> Self {
         Self {
+            split_orientation: SplitOrientation::Vertical,
             scroll: 0,
             hscroll: 0,
             viewport_height: 24,

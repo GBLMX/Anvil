@@ -177,7 +177,13 @@ pub(crate) fn handle_mouse(model: &mut Model, mouse: MouseEvent, width: u16, hei
                         }
                         DragKind::Split => {
                             if let Some(inner) = editor_area(model, width, height) {
-                                model.view.split_ratio = split_ratio_at(inner, mouse.column);
+                                model.view.split_ratio = if model.view.split_orientation
+                                    == crate::state::SplitOrientation::Vertical
+                                {
+                                    split_ratio_at(inner.x, inner.width, mouse.column)
+                                } else {
+                                    split_ratio_at(inner.y, inner.height, mouse.row)
+                                };
                                 model.refresh_wrap_width();
                             }
                         }
@@ -209,8 +215,8 @@ pub(crate) fn handle_mouse(model: &mut Model, mouse: MouseEvent, width: u16, hei
                 return true;
             }
             let (side, pane_width) = editor_area(model, width, height)
-                .map(|inner| pane_at(model, inner, mouse.column))
-                .map(|(side, _, pane_width)| (side, pane_width))
+                .map(|inner| pane_at(model, inner, mouse.column, mouse.row))
+                .map(|(side, _, pane_width, _)| (side, pane_width))
                 .unwrap_or((Side::Left, width.saturating_sub(2)));
             let active_side = if model.ui.focus.split {
                 Side::Right
@@ -318,7 +324,12 @@ pub(crate) fn hit_test(model: &Model, col: u16, row: u16, width: u16, height: u1
         return Target::Status;
     }
     if let Some(split) = rects.split
-        && col.abs_diff(split.handle_x) <= 1
+        && col >= rects.editor_content.x
+        && col < rects.editor_content.right()
+        && row >= rects.editor_content.y
+        && row < rects.editor_content.bottom()
+        && ((split.vertical && col.abs_diff(split.handle_x) <= 1)
+            || (!split.vertical && row.abs_diff(split.handle_y) <= 1))
     {
         return Target::SplitHandle;
     }
@@ -340,20 +351,34 @@ fn split_x(inner: Rect, ratio: u16) -> u16 {
         .saturating_add((u32::from(inner.width) * u32::from(ratio.min(100)) / 100) as u16)
 }
 
-fn pane_at(model: &Model, inner: Rect, col: u16) -> (Side, u16, u16) {
-    let split_x = split_x(inner, model.view.split_ratio);
-    if model.buffers.split.is_some() {
+fn pane_at(model: &Model, inner: Rect, col: u16, row: u16) -> (Side, u16, u16, u16) {
+    if model.buffers.split.is_none() {
+        return (Side::Left, inner.x, inner.width, inner.y);
+    }
+    if model.view.split_orientation == crate::state::SplitOrientation::Horizontal {
+        let split_y = split_y(inner, model.view.split_ratio);
+        if row < split_y {
+            (Side::Left, inner.x, inner.width, inner.y)
+        } else {
+            (Side::Right, inner.x, inner.width, split_y)
+        }
+    } else {
+        let split_x = split_x(inner, model.view.split_ratio);
         if col < split_x {
-            (Side::Left, inner.x, split_x.saturating_sub(inner.x))
+            (
+                Side::Left,
+                inner.x,
+                split_x.saturating_sub(inner.x),
+                inner.y,
+            )
         } else {
             (
                 Side::Right,
                 split_x,
                 inner.x.saturating_add(inner.width).saturating_sub(split_x),
+                inner.y,
             )
         }
-    } else {
-        (Side::Left, inner.x, inner.width)
     }
 }
 
@@ -365,9 +390,9 @@ fn editor_position_at(
     height: u16,
 ) -> Option<(Side, usize, usize)> {
     let inner = editor_area(model, width, height)?;
-    let (side, pane_x, pane_width) = pane_at(model, inner, col);
+    let (side, pane_x, pane_width, pane_y) = pane_at(model, inner, col, row);
     let gutter = model.gutter_width().min(pane_width);
-    let (line, base_column) = model.position_at_visible_row(row.saturating_sub(inner.y) as usize)?;
+    let (line, base_column) = model.position_at_visible_row(row.saturating_sub(pane_y) as usize)?;
     let column = col
         .saturating_sub(pane_x.saturating_add(gutter))
         .saturating_add(base_column as u16) as usize;
@@ -528,13 +553,18 @@ fn offset_for_position(model: &Model, line: usize, column: usize) -> usize {
         .unwrap_or_else(|| model.session.cursor.min(editor.text().len_bytes()))
 }
 
-fn split_ratio_at(inner: Rect, col: u16) -> u16 {
-    if inner.width == 0 {
+fn split_ratio_at(start: u16, size: u16, position: u16) -> u16 {
+    if size == 0 {
         return 50;
     }
-    let relative = col.saturating_sub(inner.x).min(inner.width);
-    ((u32::from(relative) * 100 + u32::from(inner.width) / 2) / u32::from(inner.width))
-        .clamp(20, 80) as u16
+    let relative = position.saturating_sub(start).min(size);
+    ((u32::from(relative) * 100 + u32::from(size) / 2) / u32::from(size)).clamp(20, 80) as u16
+}
+
+fn split_y(inner: Rect, ratio: u16) -> u16 {
+    inner
+        .y
+        .saturating_add((u32::from(inner.height) * u32::from(ratio.min(100)) / 100) as u16)
 }
 
 #[cfg(test)]
