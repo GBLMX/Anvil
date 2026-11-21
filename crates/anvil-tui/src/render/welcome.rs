@@ -212,7 +212,7 @@ fn welcome_actions(model: &Model, width: usize) -> Vec<Line<'static>> {
             &label,
             u16::try_from(width.saturating_sub(9)).unwrap_or(u16::MAX),
         );
-        let marker = if selected { "›" } else { " " };
+        let marker = if selected { crate::art::SELECTED } else { " " };
         lines.push(Line::from(vec![
             Span::styled(format!("{marker}{key:<8}"), key_style.patch(base)),
             Span::styled(label, base),
@@ -284,6 +284,6 @@ fn welcome_recent(model: &Model, width: usize) -> Vec<Line<'static>> {
 }
 
 fn selected_line(text: &str, selected: bool) -> Line<'static> {
-    let marker = if selected { "›" } else { " " };
+    let marker = if selected { crate::art::SELECTED } else { " " };
     Line::styled(format!("{marker}{text}"), selected_style(selected))
 }

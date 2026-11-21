@@ -102,9 +102,9 @@ pub(crate) fn render_overlays(model: &Model, frame: &mut Frame, area: Rect) {
             );
             let detail = truncate_width(&detail, detail_width as u16);
             let marker = if selected_row {
-                "❯ "
+                crate::art::SELECTED_SPACED
             } else if item.recent {
-                "↺ "
+                crate::art::RECENT_SPACED
             } else {
                 "  "
             };
@@ -239,7 +239,14 @@ pub(crate) fn render_overlays(model: &Model, frame: &mut Frame, area: Rect) {
             let max_width = popup.width.saturating_sub(2) as usize;
             let display_width =
                 max_width.saturating_sub(2 + icon_width + usize::from(icon.is_some())) as u16;
-            let mut spans = vec![Span::styled(if selected { "❯ " } else { "  " }, style)];
+            let mut spans = vec![Span::styled(
+                if selected {
+                    crate::art::SELECTED_SPACED
+                } else {
+                    "  "
+                },
+                style,
+            )];
             if let Some((text, color)) = icon {
                 spans.push(Span::styled(text, style.fg(color)));
                 spans.push(Span::styled(" ", style));
@@ -800,7 +807,14 @@ pub(crate) fn render_overlays(model: &Model, frame: &mut Frame, area: Rect) {
             let padding = inner_width
                 .saturating_sub(2 + label_width + kind_width)
                 .max(1);
-            let mut spans = vec![Span::styled(if selected_row { "❯ " } else { "  " }, style)];
+            let mut spans = vec![Span::styled(
+                if selected_row {
+                    crate::art::SELECTED_SPACED
+                } else {
+                    "  "
+                },
+                style,
+            )];
             spans.extend(completion_label_spans(&label, &completion.query, style));
             spans.push(Span::styled(" ".repeat(padding), style));
             spans.push(Span::styled(kind, style.fg(theme::muted())));

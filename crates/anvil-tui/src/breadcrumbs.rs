@@ -19,7 +19,7 @@ pub(crate) fn visible(model: &Model, inner: Rect) -> bool {
 
 pub(crate) fn render(model: &Model, frame: &mut Frame, area: Rect) {
     let text = model.breadcrumb_text(usize::from(area.width));
-    let Some((path, symbol)) = text.split_once(" › ") else {
+    let Some((path, symbol)) = text.split_once(crate::art::PATH_SEPARATOR) else {
         frame.render_widget(
             Paragraph::new(Line::styled(text, theme::panel().fg(theme::muted()))),
             area,
@@ -29,7 +29,10 @@ pub(crate) fn render(model: &Model, frame: &mut Frame, area: Rect) {
     frame.render_widget(
         Paragraph::new(Line::from(vec![
             Span::styled(path.to_owned(), theme::panel().fg(theme::muted())),
-            Span::styled(" › ", Style::default().fg(theme::accent())),
+            Span::styled(
+                crate::art::PATH_SEPARATOR,
+                Style::default().fg(theme::accent()),
+            ),
             Span::styled(
                 symbol.to_owned(),
                 theme::panel().fg(theme::text().fg.unwrap_or_default()),
@@ -43,7 +46,7 @@ pub(crate) fn target_at(model: &Model, column: u16, area: Rect) -> BreadcrumbTar
     let text = model.breadcrumb_text(usize::from(area.width));
     let relative = column.saturating_sub(area.x) as usize;
     let symbol_start = text
-        .find(" › ")
+        .find(crate::art::PATH_SEPARATOR)
         .map(|index| UnicodeWidthStr::width(&text[..index]))
         .map_or(usize::MAX, |width| width + 3);
     if relative >= symbol_start {

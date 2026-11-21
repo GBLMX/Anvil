@@ -385,7 +385,10 @@ fn buffer_bar_line(model: &Model, width: u16) -> Line<'static> {
         spans.push(Span::styled(tab_label(tab, width), tab.style));
     }
     if end < tabs.len() {
-        spans.push(Span::styled("›", theme::panel().fg(theme::muted())));
+        spans.push(Span::styled(
+            crate::art::SELECTED,
+            theme::panel().fg(theme::muted()),
+        ));
     }
     Line::from(spans)
 }

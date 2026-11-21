@@ -24,6 +24,9 @@ post-`0.5.0` feature line.
   are loaded.
 - Settings and language files now hot-reload with last-good fallback; an open
   Settings overlay defers the update until it closes.
+- TUI selection markers, breadcrumb/status separators, and message dots now
+  use one shared visual vocabulary; the command palette uses `›` instead of
+  the previous `❯`.
 - The local i7-12700H workstation is now the authoritative performance
   reference; the current baseline is
   `docs/benchmarks/reference-2026-11-20-local-i7.md`. The planned replacement

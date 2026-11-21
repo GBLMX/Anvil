@@ -1330,6 +1330,8 @@ fn command_palette_renders_title_detail_and_footer() {
     assert!(rendered.contains("normal"), "{rendered}");
     assert!(rendered.contains("editor:"), "{rendered}");
     assert!(rendered.contains("↺"), "{rendered}");
+    assert!(rendered.contains(crate::art::SELECTED_SPACED), "{rendered}");
+    assert!(!rendered.contains('❯'), "{rendered}");
     assert!(
         model.config.keymap.key_for_command("editor.undo").is_some(),
         "expected a direct key hint for editor.undo"

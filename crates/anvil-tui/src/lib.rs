@@ -25,6 +25,7 @@ use ratatui::{
     text::{Line, Span},
 };
 
+mod art;
 mod bracket;
 mod breadcrumbs;
 mod buffer;

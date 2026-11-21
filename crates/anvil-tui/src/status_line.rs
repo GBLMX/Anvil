@@ -15,7 +15,7 @@ const STATUS_MESSAGE_TTL: Duration = Duration::from_secs(8);
 const INFO_NOTIFICATION_TTL_MS: u64 = 4_000;
 const WARNING_NOTIFICATION_TTL_MS: u64 = 8_000;
 const ERROR_NOTIFICATION_TTL_MS: u64 = 12_000;
-const STATUS_SEPARATOR: &str = " · ";
+const STATUS_SEPARATOR: &str = crate::art::STATUS_SEPARATOR;
 
 impl Model {
     pub(crate) fn tick_status(&mut self) {

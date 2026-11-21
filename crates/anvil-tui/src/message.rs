@@ -65,7 +65,7 @@ fn messages(model: &Model) -> Vec<Message> {
         } else if text.starts_with("W:") {
             (warning_marker(), theme::warning())
         } else {
-            ("·", theme::muted())
+            (crate::art::DOT, theme::muted())
         };
         messages.push(Message {
             marker,
