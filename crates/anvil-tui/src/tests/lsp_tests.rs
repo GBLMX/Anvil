@@ -2109,6 +2109,69 @@ fn completion_char_and_backspace_update_buffer_and_query() {
 }
 
 #[test]
+fn completion_ctrl_n_and_p_move_selection() {
+    let mut model = Model::new(EditorState::from_text("x"), None);
+    model.ui.input_mode = InputMode::Insert;
+    let item = |label: &str| CompletionItem {
+        source: ProviderId::new("builtin.test"),
+        label: label.to_owned(),
+        filter_text: label.to_owned(),
+        sort_text: label.to_owned(),
+        preselect: false,
+        insert: label.to_owned(),
+        snippet: None,
+        detail: String::new(),
+        replace: None,
+        replace_bytes: None,
+        documentation: None,
+        raw: serde_json::Value::Null,
+        resolved: true,
+    };
+    model.language.completion.completion = Some(CompletionState {
+        items: vec![item("alpha"), item("beta")],
+        filtered: vec![0, 1],
+        query: String::new(),
+        selected: 0,
+    });
+
+    handle_event(&mut model, ctrl(KeyCode::Char('n')));
+    assert_eq!(
+        model
+            .language
+            .completion
+            .completion
+            .as_ref()
+            .expect("completion")
+            .selected,
+        1
+    );
+    handle_event(&mut model, ctrl(KeyCode::Char('p')));
+    assert_eq!(
+        model
+            .language
+            .completion
+            .completion
+            .as_ref()
+            .expect("completion")
+            .selected,
+        0
+    );
+}
+
+#[test]
+fn insert_ctrl_n_requests_completion() {
+    let mut model = Model::new(
+        EditorState::from_text("alpha al"),
+        Some(PathBuf::from("main.rs")),
+    );
+    model.start_page.welcome = false;
+    model.ui.input_mode = InputMode::Insert;
+    model.session.cursor = model.session.editor.text().len_bytes();
+    handle_event(&mut model, ctrl(KeyCode::Char('n')));
+    assert!(model.language.completion.completion.is_some());
+}
+
+#[test]
 fn diagnostic_ranges_handle_cjk_utf16_columns() {
     let text = "安装布局";
     let path = PathBuf::from("cjk.rs");

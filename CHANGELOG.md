@@ -33,6 +33,8 @@ post-`0.5.0` feature line.
   the split orientation.
 - Completion now fuzzy-filters all candidates with boundary/camel ranking and
   restores candidates after backspace instead of narrowing permanently.
+- Insert-mode `Ctrl-n` triggers completion and remains IME-safe; `Ctrl-p` /
+  `Ctrl-n` select the previous/next candidate while the popup is open.
 - The local i7-12700H workstation is now the authoritative performance
   reference; the current baseline is
   `docs/benchmarks/reference-2026-11-20-local-i7.md`. The planned replacement

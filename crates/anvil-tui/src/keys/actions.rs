@@ -621,6 +621,8 @@ pub(super) fn completion_action(key: KeyPress, text_input: bool) -> CompletionAc
         KeyCode::Esc => CompletionAction::Cancel,
         KeyCode::Up => CompletionAction::Previous,
         KeyCode::Down => CompletionAction::Next,
+        KeyCode::Char('p') if key.ctrl() => CompletionAction::Previous,
+        KeyCode::Char('n') if key.ctrl() => CompletionAction::Next,
         KeyCode::Enter | KeyCode::Tab => CompletionAction::Accept,
         KeyCode::Backspace => CompletionAction::Backspace,
         KeyCode::Char(character) if text_input => CompletionAction::Insert(character),

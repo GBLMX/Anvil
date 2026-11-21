@@ -860,6 +860,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             KeyCode::Home => model.move_home(),
             KeyCode::End => model.move_end(),
             KeyCode::Char(' ') if control => model.queue_effect(Effect::LspCompletion),
+            KeyCode::Char('n') if control => model.queue_effect(Effect::LspCompletion),
             KeyCode::Char(character) if text_input => {
                 model.insert_auto_pair(character);
                 if matches!(character, '.' | ':') {
