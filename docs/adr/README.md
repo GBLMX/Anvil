@@ -73,7 +73,7 @@ their decision sections.
 | [0065](0065-provider-protocols-and-execution-classes.md) | UI-neutral providers with data-only, one-shot, LSP, and DAP execution classes | Accepted; implemented |
 | [0066](0066-bounded-background-task-lifecycle.md) | Bounded task ownership, cancellation, and deterministic shutdown | Accepted; implemented |
 | [0067](0067-settings-file-hot-reload.md) | Poll settings and language files, preserve last-good config, defer while Settings is open | Accepted; implemented 2026-11-20 |
-| [0068](0068-tui-visual-language-and-markers.md) | Shared TUI glyph vocabulary and panel conventions | Accepted; shared glyphs implemented 2026-11-20 |
+| [0068](0068-tui-visual-language-and-markers.md) | Shared TUI glyph vocabulary, file icon routing, and panel conventions | Accepted; shared glyphs and file icons implemented 2026-11-20 |
 
 ## Numbering Rule
 

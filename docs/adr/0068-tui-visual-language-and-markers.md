@@ -1,6 +1,6 @@
 # ADR-0068: Unified TUI Visual Language and Markers
 
-- Status: Accepted; shared glyph vocabulary implemented 2026-11-20
+- Status: Accepted; shared glyphs and file icons implemented 2026-11-20
 - Version: 1.0.0
 - Date: 2026-11-20
 - Related: [ADR-0016](0016-render-style-layers.md),
@@ -57,10 +57,12 @@ local variant of the same concept.
 The editor tree remains a gutter with its own header, but its title and
 selection styling use the same theme and glyph vocabulary.
 
-### 4. Icon fallback
+### 4. Icon routing
 
 File and folder icons use `icon_theme`; ASCII fallback remains available through
-the existing appearance setting. The TUI does not add a second emoji/icon
+the existing appearance setting. The tree, buffer tabs, status line, fuzzy
+file finder, buffer picker, changed-files picker, and start-page recents all
+resolve icons through that registry. The TUI does not add a second emoji/icon
 registry per surface.
 
 ## Consequences
@@ -86,3 +88,5 @@ Negative:
   border convention.
 - Theme and high-contrast smoke tests render all surfaces.
 - No new hardcoded chrome colors are introduced in render code.
+- File/folder icons resolve through `icon_theme` in every file-bearing surface,
+  including start-page recents and the changed-files picker.

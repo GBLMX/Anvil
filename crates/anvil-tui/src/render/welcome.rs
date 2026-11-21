@@ -250,11 +250,10 @@ fn welcome_recent(model: &Model, width: usize) -> Vec<Line<'static>> {
                 && model.start_page.file_selected
                     == index + usize::from(model.start_page.session_available);
             let suffix = if file.missing { " [missing]" } else { "" };
-            let text = format!(" {}{suffix}", file.label);
-            lines.push(selected_line(
-                &truncate_width(&text, u16::try_from(width).unwrap_or(u16::MAX)),
-                selected,
-            ));
+            let text = format!("{}{suffix}", file.label);
+            let icon = icon_theme::icon_for(&file.path.to_string_lossy())
+                .unwrap_or_else(icon_theme::default_file_icon);
+            lines.push(selected_icon_line(model, icon, &text, width, selected));
         }
     }
     lines.push(Line::styled("", theme::panel()));
@@ -271,11 +270,9 @@ fn welcome_recent(model: &Model, width: usize) -> Vec<Line<'static>> {
                 StartWorkspaceState::Missing => " [missing]",
                 StartWorkspaceState::Untrusted => " [untrusted]",
             };
-            let text = format!(" {}{state} · {}", workspace.label, workspace.detail);
-            lines.push(selected_line(
-                &truncate_width(&text, u16::try_from(width).unwrap_or(u16::MAX)),
-                selected,
-            ));
+            let text = format!("{}{state} · {}", workspace.label, workspace.detail);
+            let icon = icon_theme::folder_icon(workspace.state == StartWorkspaceState::Current);
+            lines.push(selected_icon_line(model, icon, &text, width, selected));
         }
     }
     lines.push(Line::styled("", theme::panel()));
@@ -286,4 +283,37 @@ fn welcome_recent(model: &Model, width: usize) -> Vec<Line<'static>> {
 fn selected_line(text: &str, selected: bool) -> Line<'static> {
     let marker = if selected { crate::art::SELECTED } else { " " };
     Line::styled(format!("{marker}{text}"), selected_style(selected))
+}
+
+fn selected_icon_line(
+    model: &Model,
+    icon: icon_theme::Icon,
+    text: &str,
+    width: usize,
+    selected: bool,
+) -> Line<'static> {
+    let style = selected_style(selected);
+    let marker = if selected { crate::art::SELECTED } else { " " };
+    let glyph = model
+        .appearance
+        .icons
+        .icon_text(icon, model.appearance.ascii_icons);
+    let icon_width = glyph
+        .as_ref()
+        .map(|text| unicode_width::UnicodeWidthStr::width(text.as_str()))
+        .unwrap_or(0);
+    let text = truncate_width(
+        text,
+        u16::try_from(width.saturating_sub(1 + icon_width)).unwrap_or(u16::MAX),
+    );
+    let mut spans = vec![Span::styled(marker, style)];
+    if let Some(glyph) = glyph {
+        let trailing_space = glyph.ends_with(' ');
+        spans.push(Span::styled(glyph, style.fg((icon.color)())));
+        if !trailing_space {
+            spans.push(Span::raw(" "));
+        }
+    }
+    spans.push(Span::styled(text, style));
+    Line::from(spans)
 }

@@ -3,6 +3,28 @@
 use super::*;
 use crate::CallHierarchyDirection;
 
+fn picker_file_icon(
+    model: &Model,
+    path: &std::path::Path,
+    missing: bool,
+) -> Option<(String, ratatui::style::Color)> {
+    let name = path.file_name()?;
+    let icon =
+        icon_theme::icon_for(&name.to_string_lossy()).unwrap_or_else(icon_theme::default_file_icon);
+    let text = model
+        .appearance
+        .icons
+        .icon_text(icon, model.appearance.ascii_icons)?
+        .trim_end()
+        .to_owned();
+    let color = if missing {
+        theme::dim()
+    } else {
+        (icon.color)()
+    };
+    Some((text, color))
+}
+
 fn completion_kind_label(item: &crate::state::CompletionItem) -> &'static str {
     let kind = item
         .raw
@@ -206,31 +228,19 @@ pub(crate) fn render_overlays(model: &Model, frame: &mut Frame, area: Rect) {
             let Some(entry) = picker.entries.get(*index) else {
                 continue;
             };
-            let icon = if matches!(picker.mode, crate::state::BufferPickerMode::Buffers) {
-                entry
+            let icon = match &picker.mode {
+                crate::state::BufferPickerMode::Buffers => entry
                     .value
                     .as_u64()
                     .and_then(|index| usize::try_from(index).ok())
                     .and_then(|index| model.buffers.entries.get(index))
                     .and_then(|buffer| {
-                        let name = buffer.path.as_deref()?.file_name()?;
-                        let icon = icon_theme::icon_for(&name.to_string_lossy())
-                            .unwrap_or_else(icon_theme::default_file_icon);
-                        let text = model
-                            .appearance
-                            .icons
-                            .icon_text(icon, model.appearance.ascii_icons)?
-                            .trim_end()
-                            .to_owned();
-                        let color = if buffer.missing {
-                            theme::dim()
-                        } else {
-                            (icon.color)()
-                        };
-                        Some((text, color))
-                    })
-            } else {
-                None
+                        picker_file_icon(model, buffer.path.as_deref()?, buffer.missing)
+                    }),
+                crate::state::BufferPickerMode::ChangedFiles { paths } => paths
+                    .get(*index)
+                    .and_then(|path| picker_file_icon(model, path, false)),
+                _ => None,
             };
             let icon_width = icon
                 .as_ref()

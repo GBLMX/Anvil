@@ -1049,6 +1049,7 @@ fn welcome_shows_recent_files_and_r_opens_them() {
     model.workspace.roots =
         crate::workspace_roots::WorkspaceRoots::new(&model.workspace.path).expect("roots");
     model.record_recent_file(&workspace.path().join("main.rs"));
+    model.appearance.ascii_icons = true;
     let backend = TestBackend::new(80, 30);
     let mut terminal = Terminal::new(backend).expect("terminal");
     terminal.draw(|frame| view(&model, frame)).expect("draw");
@@ -1061,6 +1062,10 @@ fn welcome_shows_recent_files_and_r_opens_them() {
         .collect::<String>();
     assert!(rendered.contains("recent"), "{rendered}");
     assert!(rendered.contains("main.rs"), "{rendered}");
+    assert!(
+        rendered.contains(icon_theme::ascii_glyph(icon_theme::IconKind::Rust)),
+        "{rendered}"
+    );
     assert!(rendered.contains("recent files"), "{rendered}");
 
     handle_event(&mut model, key(KeyCode::Char('r')));
