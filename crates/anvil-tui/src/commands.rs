@@ -572,4 +572,71 @@ mod tests {
             crate::state::StartPageFocus::Workspaces
         );
     }
+
+    #[cfg(unix)]
+    #[test]
+    fn workspace_switch_stages_clean_available_workspace() {
+        let mut model = Model::new(EditorState::from_text(""), None);
+        let target = tempfile::tempdir().expect("workspace");
+        model
+            .workspace
+            .recent
+            .workspaces
+            .push(target.path().to_path_buf());
+        model.open_start_page_workspaces();
+        model.activate_start_workspace(0);
+        let expected = target.path().canonicalize().expect("canonical workspace");
+        assert_eq!(
+            model.workspace.pending_switch.as_deref(),
+            Some(expected.as_path())
+        );
+        assert!(!model.start_page.welcome);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn workspace_switch_refuses_modified_buffers() {
+        let mut model = Model::new(EditorState::from_text(""), None);
+        model.file.modified = true;
+        let target = tempfile::tempdir().expect("workspace");
+        model
+            .workspace
+            .recent
+            .workspaces
+            .push(target.path().to_path_buf());
+        model.open_start_page_workspaces();
+        model.activate_start_workspace(0);
+        assert!(model.workspace.pending_switch.is_none());
+        assert!(model.status.text.contains("save or discard"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn workspace_switch_refuses_editor_mode() {
+        let mut model = Model::new(EditorState::from_text(""), None);
+        model.file.editor_mode = true;
+        let target = tempfile::tempdir().expect("workspace");
+        model.request_workspace_switch(target.path());
+        assert!(model.workspace.pending_switch.is_none());
+        assert!(model.status.text.contains("editor or stdin mode"));
+    }
+
+    #[test]
+    fn opening_a_file_preserves_installed_recent_workspaces() {
+        let mut model = Model::new(EditorState::from_text(""), None);
+        let installed = tempfile::tempdir().expect("installed workspace");
+        let files = tempfile::tempdir().expect("files");
+        let path = files.path().join("a.txt");
+        std::fs::write(&path, "one\n").expect("file");
+        model.install_recents(crate::recents::Recents {
+            version: 1,
+            workspaces: vec![installed.path().to_path_buf()],
+            files: Vec::new(),
+        });
+        model.open_path(&path).expect("open");
+        assert_eq!(
+            model.workspace.recent.workspaces,
+            vec![installed.path().to_path_buf()]
+        );
+    }
 }

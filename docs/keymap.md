@@ -86,6 +86,10 @@ by overlay, and configured context overrides), `Space L` opens language
 readiness, `Space p` opens the command palette, and `Ctrl-w` handles window
 focus without numbered aliases.
 
+Selecting an available workspace replaces the process with
+`anvil --workspace <path>` after saving the session. Modified buffers block
+the switch.
+
 ## Canonical bindings
 
 One action has one documented key. Hardware keys and terminal encodings may

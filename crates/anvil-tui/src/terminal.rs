@@ -5,6 +5,11 @@ use anvil_tui_kit::{TerminalOptions, TerminalSession};
 use std::io::{IsTerminal, Read};
 use std::sync::Arc;
 
+enum RunOutcome {
+    Quit(i32),
+    Switch { workspace: PathBuf, read_only: bool },
+}
+
 fn poll_background(model: &mut Model) {
     model.poll_host();
     model.poll_pkg_notifications();
@@ -178,6 +183,10 @@ pub fn run_with_all_services(
             model.workspace.desktop_service = desktop.clone();
             model.workspace.language_tooling_service = language_tooling.clone();
 
+            if session_enabled {
+                model.install_recents(crate::recents::load());
+            }
+
             if stdin_text.is_none()
                 && let Some(path) = path
                 && let Err(error) = model.open_path(path)
@@ -193,6 +202,9 @@ pub fn run_with_all_services(
             model.workspace.workspace_index_service = workspace_index.clone();
             model.workspace.desktop_service = desktop.clone();
             model.workspace.language_tooling_service = language_tooling.clone();
+            if session_enabled {
+                model.install_recents(crate::recents::load());
+            }
             model.workspace.path = workspace.clone();
             model.reload_icons();
             model.workspace.require_gateway = true;
@@ -203,7 +215,6 @@ pub fn run_with_all_services(
     };
     model.set_editor_mode(editor_mode);
     if session_enabled {
-        model.install_recents(crate::recents::load());
         model.record_recent_workspace(&workspace);
     }
 
@@ -380,7 +391,7 @@ pub fn run_with_all_services(
     let mut session_saved_at = Instant::now();
     let mut session_error_reported = false;
     let mut insert_cursor: Option<bool> = None;
-    loop {
+    let outcome = loop {
         let wants_bar = matches!(model.ui.input_mode, InputMode::Insert);
         if insert_cursor != Some(wants_bar) {
             terminal.set_cursor_shape(wants_bar)?;
@@ -464,13 +475,53 @@ pub fn run_with_all_services(
                 }
             }
         }
+        if let Some(target) = model.workspace.pending_switch.take() {
+            if session_enabled {
+                let _ = session::save(&mut model, &workspace);
+            }
+            break RunOutcome::Switch {
+                workspace: target,
+                read_only: model.file.read_only,
+            };
+        }
         if model.file.quit {
             if session_enabled {
                 let _ = session::save(&mut model, &workspace);
             }
-            return Ok(model.exit_code());
+            break RunOutcome::Quit(model.exit_code());
         }
+    };
+    drop(terminal);
+    drop(model);
+    drop(control);
+    match outcome {
+        RunOutcome::Quit(code) => Ok(code),
+        RunOutcome::Switch {
+            workspace,
+            read_only,
+        } => exec_workspace(&workspace, read_only),
     }
+}
+
+#[cfg(unix)]
+fn exec_workspace(workspace: &Path, read_only: bool) -> io::Result<i32> {
+    use std::os::unix::process::CommandExt;
+
+    let executable = std::env::current_exe()?;
+    let mut command = std::process::Command::new(executable);
+    command.arg("--workspace").arg(workspace);
+    if read_only {
+        command.arg("--read-only");
+    }
+    Err(command.exec())
+}
+
+#[cfg(not(unix))]
+fn exec_workspace(_workspace: &Path, _read_only: bool) -> io::Result<i32> {
+    Err(io::Error::new(
+        io::ErrorKind::Unsupported,
+        "workspace switching is unsupported on this platform",
+    ))
 }
 
 fn read_stdin_bounded() -> io::Result<String> {

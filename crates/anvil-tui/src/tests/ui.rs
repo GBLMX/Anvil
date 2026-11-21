@@ -1133,6 +1133,24 @@ fn dashboard_space_f_opens_file_finder() {
 }
 
 #[test]
+fn dashboard_space_w_focuses_workspaces() {
+    let mut model = Model::new(EditorState::from_text(""), None);
+    let workspace = tempfile::tempdir().expect("workspace");
+    model
+        .workspace
+        .recent
+        .workspaces
+        .push(workspace.path().to_path_buf());
+    handle_event(&mut model, key(KeyCode::Char(' ')));
+    handle_event(&mut model, key(KeyCode::Char('w')));
+    assert!(model.start_page.welcome);
+    assert_eq!(
+        model.start_page.focus,
+        crate::state::StartPageFocus::Workspaces
+    );
+}
+
+#[test]
 fn dashboard_ignores_unmatched_keys() {
     let mut model = Model::new(EditorState::from_text(""), None);
     handle_event(&mut model, key(KeyCode::Char('x')));

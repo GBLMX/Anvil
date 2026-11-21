@@ -177,6 +177,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
                 KeyCode::Char('e') => Some(crate::start_page::StartAction::FileTree),
                 KeyCode::Char('b') => Some(crate::start_page::StartAction::Buffers),
                 KeyCode::Char('p') => Some(crate::start_page::StartAction::Palette),
+                KeyCode::Char('w') => Some(crate::start_page::StartAction::Workspaces),
                 _ => None,
             };
             if let Some(action) = action {

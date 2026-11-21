@@ -420,12 +420,45 @@ impl Model {
                 self.file.dirty = true;
             }
             StartWorkspaceState::Available => {
-                self.status.text = format!(
-                    "E: workspace switching requires restarting anvil at {}",
-                    workspace.path.display()
-                );
-                self.file.dirty = true;
+                self.request_workspace_switch(&workspace.path);
             }
+        }
+    }
+
+    pub(crate) fn request_workspace_switch(&mut self, path: &Path) {
+        #[cfg(not(unix))]
+        {
+            let _ = path;
+            self.status.text = "E: workspace switching is unsupported on this platform".to_owned();
+            self.file.dirty = true;
+        }
+        #[cfg(unix)]
+        {
+            if self.file.editor_mode || self.file.stdin_buffer {
+                self.status.text =
+                    "E: workspace switching is unavailable in editor or stdin mode".to_owned();
+                self.file.dirty = true;
+                return;
+            }
+            if self.any_modified() {
+                self.status.text =
+                    "E: save or discard modified buffers before switching workspace".to_owned();
+                self.file.dirty = true;
+                return;
+            }
+            let Ok(path) = path.canonicalize() else {
+                self.status.text = format!("E: missing workspace: {}", path.display());
+                self.file.dirty = true;
+                return;
+            };
+            if !path.is_dir() {
+                self.status.text = format!("E: workspace is not a directory: {}", path.display());
+                self.file.dirty = true;
+                return;
+            }
+            self.workspace.pending_switch = Some(path);
+            self.close_start_page();
+            self.file.dirty = true;
         }
     }
 }

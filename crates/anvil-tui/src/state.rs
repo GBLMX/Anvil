@@ -549,6 +549,8 @@ pub(crate) struct LspResultsState {
 pub(crate) struct WorkspaceState {
     /// Workspace root used to resolve all file paths.
     pub(crate) path: PathBuf,
+    /// Workspace selected for a process handoff; consumed by the terminal loop.
+    pub(crate) pending_switch: Option<PathBuf>,
     pub(crate) roots: workspace_roots::WorkspaceRoots,
     /// Recent workspaces, files, and quick-open ranking.
     pub(crate) recent: RecentState,

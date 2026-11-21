@@ -4,8 +4,8 @@
 - Version: 1.0.0
 - Implementation: dashboard focus/selection, command-backed actions, contextual
   recents, missing/untrusted state, mouse parity, and session Continue landed.
-  Cross-workspace switching still requires a process restart and is called out
-  in the dashboard instead of silently opening a second workspace.
+  Cross-workspace switching now uses the process handoff in ADR-0062 instead
+  of silently opening a second workspace.
 - Date: 2026-11-18
 - Related: [ADR-0024](0024-tui-state-and-domain-boundaries.md),
   [ADR-0040](0040-helix-keymap-compatibility.md),
