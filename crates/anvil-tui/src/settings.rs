@@ -721,6 +721,51 @@ pub(crate) struct LoadedSettings {
     pub(crate) warnings: Vec<String>,
 }
 
+#[derive(Debug)]
+pub(crate) struct SettingsWatch {
+    files: Vec<(PathBuf, Option<Vec<u8>>)>,
+}
+
+impl SettingsWatch {
+    pub(crate) fn new(paths: Vec<PathBuf>) -> Self {
+        Self {
+            files: paths
+                .into_iter()
+                .map(|path| {
+                    let contents = fs::read(&path).ok();
+                    (path, contents)
+                })
+                .collect(),
+        }
+    }
+
+    pub(crate) fn sync(&mut self, paths: Vec<PathBuf>) -> bool {
+        let changed = self.files.iter().map(|(path, _)| path).ne(paths.iter());
+        let mut files = Vec::with_capacity(paths.len());
+        for path in paths {
+            if let Some((_, contents)) = self.files.iter().find(|(known, _)| known == &path) {
+                files.push((path, contents.clone()));
+            } else {
+                files.push((path, None));
+            }
+        }
+        self.files = files;
+        changed
+    }
+
+    pub(crate) fn changed(&self) -> bool {
+        self.files
+            .iter()
+            .any(|(path, contents)| fs::read(path).ok() != *contents)
+    }
+
+    pub(crate) fn refresh(&mut self) {
+        for (path, contents) in &mut self.files {
+            *contents = fs::read(path).ok();
+        }
+    }
+}
+
 #[derive(Debug, serde::Serialize)]
 pub struct SettingsCheck {
     schema_version: u32,
@@ -1735,6 +1780,31 @@ pub(crate) fn languages_path() -> Result<PathBuf, String> {
     let home = std::env::var_os("HOME")
         .ok_or_else(|| "cannot resolve languages path: HOME is unset".to_owned())?;
     Ok(PathBuf::from(home).join(".config/anvil/languages.toml"))
+}
+
+pub(crate) fn watch_paths(workspace: &Path, project_trusted: bool) -> Vec<PathBuf> {
+    let mut paths = Vec::new();
+    if let Ok(path) = path() {
+        paths.push(path);
+    }
+    if explicit_settings_path().is_some() {
+        return paths;
+    }
+    if project_trusted {
+        paths.push(workspace.join(PROJECT_SETTINGS));
+    }
+    if let Ok(path) = languages_path()
+        && !paths.contains(&path)
+    {
+        paths.push(path);
+    }
+    if project_trusted {
+        let path = workspace.join(".anvil/languages.toml");
+        if !paths.contains(&path) {
+            paths.push(path);
+        }
+    }
+    paths
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -3366,5 +3436,31 @@ mod language_settings_tests {
         let explicit = load_language_overlays_from(&user, &project, true, true).expect("explicit");
         assert!(explicit.patches.is_empty());
         assert_eq!(explicit.ignored.len(), 2);
+    }
+
+    #[test]
+    fn settings_watch_detects_content_and_path_changes() {
+        let directory = tempfile::tempdir().expect("tempdir");
+        let user = directory.path().join("settings.toml");
+        let language = directory.path().join("languages.toml");
+        fs::write(&user, "[editor]\nscroll_margin = 3\n").expect("user");
+        fs::write(&language, "[languages.rust]\nsoft_wrap = true\n").expect("language");
+
+        let mut watch = SettingsWatch::new(vec![user.clone()]);
+        assert!(!watch.changed());
+        fs::write(&user, "[editor]\nscroll_margin = 4\n").expect("user update");
+        assert!(watch.changed());
+        watch.refresh();
+        assert!(!watch.changed());
+
+        assert!(watch.sync(vec![user.clone(), language.clone()]));
+        assert!(watch.changed());
+        watch.refresh();
+        assert!(!watch.changed());
+
+        assert!(watch.sync(vec![user.clone()]));
+        assert!(!watch.changed());
+        fs::remove_file(&user).expect("remove user");
+        assert!(watch.changed());
     }
 }

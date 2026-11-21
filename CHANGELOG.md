@@ -22,6 +22,8 @@ post-`0.5.0` feature line.
   to that workspace; modified buffers block the switch.
 - Opening a startup file no longer overwrites recent workspaces before they
   are loaded.
+- Settings and language files now hot-reload with last-good fallback; an open
+  Settings overlay defers the update until it closes.
 - The local i7-12700H workstation is now the authoritative performance
   reference; the current baseline is
   `docs/benchmarks/reference-2026-11-20-local-i7.md`. The planned replacement

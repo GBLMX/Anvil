@@ -308,6 +308,11 @@ pub fn run_with_all_services(
             model.file.dirty = true;
         }
     }
+
+    let mut settings_watch =
+        settings::SettingsWatch::new(settings::watch_paths(&workspace, project_trusted));
+    let mut settings_reload_pending = false;
+    let mut next_settings_poll = Instant::now() + Duration::from_secs(1);
     if model.workspace.gateway_session.is_some() {
         model.sync_watch_paths();
         model.sync_tree_watches();
@@ -420,6 +425,29 @@ pub fn run_with_all_services(
             Err(error) => {
                 model.status.text = format!("E: theme reload: {error}");
                 model.file.dirty = true;
+            }
+        }
+        if Instant::now() >= next_settings_poll {
+            next_settings_poll = Instant::now() + Duration::from_secs(1);
+            let project_trusted = model
+                .workspace
+                .roots
+                .primary()
+                .is_some_and(|root| root.trusted);
+            let paths = settings::watch_paths(&model.workspace.path, project_trusted);
+            let paths_changed = settings_watch.sync(paths);
+            let changed = settings_reload_pending || paths_changed || settings_watch.changed();
+            if changed {
+                if model.overlays.settings_overlay.is_some() {
+                    settings_reload_pending = true;
+                } else {
+                    settings_reload_pending = false;
+                    if let Err(error) = model.reload_settings_from_files() {
+                        model.status.text = format!("E: settings reload: {error}");
+                        model.file.dirty = true;
+                    }
+                    settings_watch.refresh();
+                }
             }
         }
         model.tick_search();

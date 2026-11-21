@@ -260,8 +260,8 @@ additional boxpigma palettes.
 ### 6.4 Settings overlay gate
 
 Status: the typed registry, `:settings` overlay, and Appearance theme row
-landed. Theme is part of `Settings` and `settings.toml`; hot reload remains
-gated.
+landed. Theme is part of `Settings` and `settings.toml`; settings and language
+file hot reload is governed by ADR-0067.
 
 Proceed only if accepted by the review gate:
 

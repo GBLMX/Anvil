@@ -13,6 +13,21 @@ fn default_git_service() -> Option<std::sync::Arc<dyn anvil_module::git::GitServ
     None
 }
 
+fn reload_status(prefix: &str, files: &[PathBuf]) -> String {
+    if files.is_empty() {
+        format!("{prefix} (defaults)")
+    } else {
+        format!(
+            "{prefix} from {}",
+            files
+                .iter()
+                .map(|path| path.display().to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    }
+}
+
 impl Model {
     /// Builds a model from text and an optional source path.
     pub fn new(editor: EditorState, path: Option<PathBuf>) -> Self {
@@ -103,6 +118,7 @@ impl Model {
         }
     }
 
+    #[cfg(test)]
     pub(crate) fn apply_loaded_config(
         &mut self,
         settings: settings::Settings,
@@ -115,11 +131,10 @@ impl Model {
         self.file.dirty = true;
     }
 
-    fn apply_loaded_config_with_sources(
+    fn install_loaded_settings(
         &mut self,
         loaded: settings::LoadedSettings,
-        keymap: keymap::KeymapConfig,
-    ) {
+    ) -> (Vec<PathBuf>, String, Vec<String>) {
         let settings::LoadedSettings {
             settings,
             sources,
@@ -136,25 +151,26 @@ impl Model {
             .map(|(path, reason)| format!("{} ({reason})", path.display()))
             .collect::<Vec<_>>()
             .join(", ");
-        self.apply_loaded_config(settings, keymap);
+        self.apply_settings(settings);
         self.config.user_settings = user;
         self.config.project_settings = project;
         self.config.inherited_settings = inherited;
         self.config.sources = sources;
         self.config.language_overlays = languages;
         self.config.language_revision = self.config.language_revision.wrapping_add(1);
-        self.status.text = if files.is_empty() {
-            "configuration reloaded (defaults)".to_owned()
-        } else {
-            format!(
-                "configuration reloaded from {}",
-                files
-                    .iter()
-                    .map(|path| path.display().to_string())
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            )
-        };
+        self.notify_lsp_configuration();
+        self.file.dirty = true;
+        (files, ignored, warnings)
+    }
+
+    fn apply_loaded_config_with_sources(
+        &mut self,
+        loaded: settings::LoadedSettings,
+        keymap: keymap::KeymapConfig,
+    ) {
+        let (files, ignored, warnings) = self.install_loaded_settings(loaded);
+        self.config.keymap = keymap;
+        self.status.text = reload_status("configuration reloaded", &files);
         if !ignored.is_empty() {
             self.status.text.push_str(&format!("; ignored {ignored}"));
         }
@@ -164,6 +180,27 @@ impl Model {
                 .push_str(&format!("; warnings {}", warnings.join("; ")));
         }
         self.file.dirty = true;
+    }
+
+    pub(crate) fn reload_settings_from_files(&mut self) -> Result<(), String> {
+        let project_trusted = self
+            .workspace
+            .roots
+            .primary()
+            .is_some_and(|root| root.trusted);
+        let loaded =
+            settings::load_for_workspace_with_sources(&self.workspace.path, project_trusted)?;
+        let (files, ignored, warnings) = self.install_loaded_settings(loaded);
+        self.status.text = reload_status("settings reloaded", &files);
+        if !ignored.is_empty() {
+            self.status.text.push_str(&format!("; ignored {ignored}"));
+        }
+        if !warnings.is_empty() {
+            self.status
+                .text
+                .push_str(&format!("; warnings {}", warnings.join("; ")));
+        }
+        Ok(())
     }
 
     pub(crate) fn load_keymap_config_from(&mut self, path: &Path) -> Result<(), String> {

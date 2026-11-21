@@ -7,6 +7,8 @@
   are complete. Remaining closures are signed index-to-download
   orchestration, marketplace surfaces, and production release
   signing/provenance. Cross-root move/copy remains rejected.
+- Settings hot reload is now implemented under
+  [ADR-0067](0067-settings-file-hot-reload.md); keymap reload remains explicit.
 - Date: 2026-11-12
 - Related: [ADR-0001](0001-plugin-isolation.md), [ADR-0012](0012-plugin-host-isolation.md), [ADR-0013](0013-kernel-distribution-boundary.md), [ADR-0021](0021-signed-plugin-index.md), [ADR-0022](0022-core-editing-completion.md)
 
@@ -25,8 +27,8 @@ Examples:
   plan is still marked proposed even though root registration and open/save
   routing exist.
 - **File lifecycle**: auto-save has a documented policy but no implementation.
-  External settings hot reload is explicitly unsupported. Persistent undo is
-  explicitly rejected for this phase.
+  Settings hot reload is governed by ADR-0067. Persistent undo is explicitly
+  rejected for this phase.
 - **Plugin distribution**: manifest `onCommand` dispatch works, but dynamic
   `editor.register_command` is pending. The signed index/revocation verifier
   and cache exist, but marketplace browse/detail, indexed install, consent,

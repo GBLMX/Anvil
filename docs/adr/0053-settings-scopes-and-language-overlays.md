@@ -11,7 +11,7 @@
   [ADR-0048](0048-per-root-language-tooling-and-lsp-workspace.md),
   [ADR-0052](0052-language-tool-setup-and-source-resolution.md)
 - Supersedes:
-- Superseded by:
+- Superseded by: [ADR-0067](0067-settings-file-hot-reload.md) for automatic settings hot reload
 
 ## Context
 

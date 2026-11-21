@@ -46,14 +46,14 @@ These are the only internal-polish priorities until the phase exit gate.
 Status: typed registry and minimal `:settings` overlay landed for
 `editor.scroll_margin`, `editor.max_buffers`, `editor.auto_save`,
 `search.case_sensitive`, and `lsp.inlay_hints`.
-External-file hot reload remains out of scope.
+Settings and language files hot-reload under ADR-0067.
 
 Implemented: typed registry, `:settings` overlay, changed markers, per-row
-reset, and save/cancel validation.
+reset, save/cancel validation, and polling hot reload with last-good fallback.
 
 Remaining boundary:
-- `:config-reload` reloads settings, keymap, and theme atomically at runtime;
-  file watching is not supported;
+- `:config-reload` remains the explicit full reload for settings, keymap, and
+  theme; keymap file watching is not supported;
 - no new domains without a concrete consumer.
 
 Difficulty: M. Main risk is scope creep; do not build a ten-tab settings clone.

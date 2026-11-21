@@ -12,7 +12,7 @@
   [ADR-0045](0045-settings-patch-layers.md),
   [ADR-0044](0044-watcher-transport.md)
 - Supersedes: [ADR-0044](0044-watcher-transport.md) for the native transport decision; polling remains the fallback
-- Superseded by:
+- Superseded by: [ADR-0067](0067-settings-file-hot-reload.md) for settings/language file application only
 
 ## Context
 
@@ -294,8 +294,8 @@ The gateway emits one event stream; the TUI fans it out:
 | Workspace index | Invalidate affected file or directory; rebuild lazily on the next query |
 | Project search | Mark results stale; rerun only on the next explicit search |
 | Git | Keep special `.git/HEAD`/`.git/index` watches; coalesce status refresh at 300 ms |
-| Project `.anvil.toml` | Mark config dirty; require explicit `:config-reload` |
-| User settings | Not part of workspace watch; separate path watcher needed later |
+| Project `.anvil.toml` | Settings poll reloads it under ADR-0067; workspace events do not apply config |
+| User settings | Not part of workspace watch; ADR-0067 polls it separately |
 
 Directory creation/rename triggers a local subtree snapshot, not a full-tree
 snapshot. A `rescan` event is the only path that requests a full root snapshot.

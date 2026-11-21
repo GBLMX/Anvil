@@ -12,7 +12,7 @@
   [ADR-0037](0037-kernel-api-baseline.md),
   [ADR-0038](0038-project-settings-trust.md)
 - Supersedes:
-- Superseded by:
+- Superseded by: [ADR-0067](0067-settings-file-hot-reload.md) for the settings hot-reload clause only
 
 ## Context
 
