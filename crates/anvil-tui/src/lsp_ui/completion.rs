@@ -1,5 +1,77 @@
 use super::*;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct CompletionMatch {
+    rank: u8,
+    gaps: usize,
+    start: usize,
+    length: usize,
+}
+
+fn completion_match(text: &str, query: &str) -> Option<CompletionMatch> {
+    let text_chars = text.chars().collect::<Vec<_>>();
+    let lower = text.to_lowercase().chars().collect::<Vec<_>>();
+    let query = query.to_lowercase().chars().collect::<Vec<_>>();
+    let length = text_chars.len();
+    if query.is_empty() {
+        return Some(CompletionMatch {
+            rank: 0,
+            gaps: 0,
+            start: 0,
+            length: 0,
+        });
+    }
+    if query.len() > lower.len() {
+        return None;
+    }
+    if lower.starts_with(&query) {
+        return Some(CompletionMatch {
+            rank: 0,
+            gaps: 0,
+            start: 0,
+            length,
+        });
+    }
+    if let Some(start) = lower
+        .windows(query.len())
+        .position(|window| window == query.as_slice())
+    {
+        return Some(CompletionMatch {
+            rank: 2,
+            gaps: 0,
+            start,
+            length,
+        });
+    }
+
+    let mut positions = Vec::with_capacity(query.len());
+    let mut cursor = 0;
+    for character in &query {
+        let offset = lower[cursor..]
+            .iter()
+            .position(|candidate| candidate == character)?;
+        let position = cursor + offset;
+        positions.push(position);
+        cursor = position + 1;
+    }
+    let boundary = positions.iter().all(|&position| {
+        position == 0
+            || !lower[position - 1].is_alphanumeric()
+            || (position < text_chars.len()
+                && text_chars[position].is_uppercase()
+                && text_chars[position - 1].is_lowercase())
+    });
+    Some(CompletionMatch {
+        rank: if boundary { 1 } else { 3 },
+        gaps: positions
+            .windows(2)
+            .map(|pair| pair[1].saturating_sub(pair[0] + 1))
+            .sum(),
+        start: positions.first().copied().unwrap_or(0),
+        length,
+    })
+}
+
 impl Model {
     pub(crate) fn cancel_completion(&mut self) {
         self.language.lsp_requests.cancel(|kind| {
@@ -300,36 +372,25 @@ impl Model {
         if let Some(completion) = self.language.completion.completion.as_mut() {
             let query = completion.query.to_lowercase();
             let items = &completion.items;
-            let mut filtered = completion
-                .filtered
-                .iter()
-                .copied()
-                .filter(|index| items[*index].filter_text.to_lowercase().contains(&query))
+            let mut filtered = (0..items.len())
+                .filter_map(|index| {
+                    completion_match(&items[index].filter_text, &query).map(|score| (index, score))
+                })
                 .collect::<Vec<_>>();
-            filtered.sort_by(|left, right| {
-                let left_item = &items[*left];
-                let right_item = &items[*right];
-                let left_prefix =
-                    !query.is_empty() && left_item.filter_text.to_lowercase().starts_with(&query);
-                let right_prefix =
-                    !query.is_empty() && right_item.filter_text.to_lowercase().starts_with(&query);
-                right_prefix
-                    .cmp(&left_prefix)
-                    .then_with(|| {
-                        if left_prefix {
-                            left_item
-                                .label
-                                .chars()
-                                .count()
-                                .cmp(&right_item.label.chars().count())
-                        } else {
-                            std::cmp::Ordering::Equal
-                        }
-                    })
-                    .then_with(|| left_item.sort_text.cmp(&right_item.sort_text))
-                    .then_with(|| left_item.label.cmp(&right_item.label))
+            filtered.sort_by(|(left, left_score), (right, right_score)| {
+                left_score
+                    .rank
+                    .cmp(&right_score.rank)
+                    .then_with(|| left_score.gaps.cmp(&right_score.gaps))
+                    .then_with(|| left_score.start.cmp(&right_score.start))
+                    .then_with(|| left_score.length.cmp(&right_score.length))
+                    .then_with(|| items[*left].sort_text.cmp(&items[*right].sort_text))
+                    .then_with(|| items[*left].label.cmp(&items[*right].label))
             });
-            completion.filtered = filtered;
+            completion.filtered = filtered
+                .into_iter()
+                .map(|(index, _)| index)
+                .collect::<Vec<_>>();
             let preferred = if query.is_empty() {
                 completion
                     .filtered

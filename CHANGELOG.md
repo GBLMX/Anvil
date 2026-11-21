@@ -31,6 +31,8 @@ post-`0.5.0` feature line.
   file/folder icon registry.
 - `Ctrl-w s` opens a horizontal split; mouse resize and focus routing follow
   the split orientation.
+- Completion now fuzzy-filters all candidates with boundary/camel ranking and
+  restores candidates after backspace instead of narrowing permanently.
 - The local i7-12700H workstation is now the authoritative performance
   reference; the current baseline is
   `docs/benchmarks/reference-2026-11-20-local-i7.md`. The planned replacement

@@ -1786,6 +1786,85 @@ fn completion_uses_sort_text_preselect_and_filter_text() {
 }
 
 #[test]
+fn completion_fuzzy_ranks_boundaries_and_restores_items() {
+    let mut model = Model::new(EditorState::from_text("x"), None);
+    model
+        .language
+        .lsp_requests
+        .pending
+        .insert(22, LspRequestKind::Completion);
+    model.handle_lsp_response(
+        22,
+        serde_json::json!({"items": [
+            {"label": "foo_bar", "sortText": "2", "filterText": "foo_bar"},
+            {"label": "foobar", "sortText": "1", "filterText": "foobar"},
+            {"label": "fb", "sortText": "3", "filterText": "fb"}
+        ]}),
+        None,
+    );
+    let completion = model
+        .language
+        .completion
+        .completion
+        .as_mut()
+        .expect("completion");
+    completion.query = "fb".to_owned();
+    model.filter_completion();
+    let completion = model
+        .language
+        .completion
+        .completion
+        .as_ref()
+        .expect("completion");
+    assert_eq!(
+        completion
+            .filtered
+            .iter()
+            .map(|index| completion.items[*index].label.as_str())
+            .collect::<Vec<_>>(),
+        vec!["fb", "foo_bar", "foobar"]
+    );
+
+    model
+        .language
+        .completion
+        .completion
+        .as_mut()
+        .expect("completion")
+        .query = "zz".to_owned();
+    model.filter_completion();
+    assert!(
+        model
+            .language
+            .completion
+            .completion
+            .as_ref()
+            .expect("completion")
+            .filtered
+            .is_empty()
+    );
+    model
+        .language
+        .completion
+        .completion
+        .as_mut()
+        .expect("completion")
+        .query
+        .clear();
+    model.filter_completion();
+    assert_eq!(
+        model
+            .language
+            .completion
+            .completion
+            .as_ref()
+            .expect("completion")
+            .filtered
+            .len(),
+        3
+    );
+}
+#[test]
 fn definition_jump_back_and_forward_round_trip() {
     let dir = tempfile::tempdir().expect("tempdir");
     let main = dir.path().join("main.rs");
