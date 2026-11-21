@@ -19,4 +19,4 @@ unicode-segmentation = "1"
 
 [dev-dependencies]
 anvil-plugin-host = { path = "../anvil-plugin-host", version = "0.6.0" }
-nix = { version = "0.31", features = ["poll", "process", "signal", "term"] }
+nix = { version = "0.32", features = ["poll", "process", "signal", "term"] }
