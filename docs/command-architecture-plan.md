@@ -11,6 +11,8 @@ Decision (2026-11-15): Ex command dispatch remains string-keyed in v1. The
 `CommandId` registry covers native keymap commands and plugin commands; do not
 introduce a second Ex-command registry until a measured consumer needs it.
 
+Related: [ADR-0063](adr/0063-command-architecture-and-execution-boundary.md).
+
 ## Goal
 
 Make Anvil's high-frequency editor actions fast, asynchronous where needed,

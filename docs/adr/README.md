@@ -68,6 +68,10 @@ their decision sections.
 | [0060](0060-release-checksum-signing-authority.md) | Release checksum signing for internal candidates and the public authority boundary | Accepted; internal candidate policy 2026-11-20 |
 | [0061](0061-workspace-navigation-and-root-boundary.md) | Distinguish recent session workspaces from current-session roots | Accepted; process handoff implemented 2026-11-20 |
 | [0062](0062-workspace-process-handoff.md) | Switch session workspaces by replacing the process after session save | Accepted; implemented 2026-11-20 |
+| [0063](0063-command-architecture-and-execution-boundary.md) | Stable command identities, shared capability policy, and bounded effects | Accepted; core implemented |
+| [0064](0064-multi-root-routing-and-ownership.md) | Route file, tree, search, and Git work by owning root | Accepted; implemented |
+| [0065](0065-provider-protocols-and-execution-classes.md) | UI-neutral providers with data-only, one-shot, LSP, and DAP execution classes | Accepted; implemented |
+| [0066](0066-bounded-background-task-lifecycle.md) | Bounded task ownership, cancellation, and deterministic shutdown | Accepted; implemented |
 
 ## Numbering Rule
 

@@ -4,14 +4,18 @@ Status: complete for routed file and Git surfaces. Trust, root registration,
 per-root gateway lifecycle, open/save routing, trusted-root quick-open
 enumeration/preview, project-search merge/cancel, secondary-root tree
 list/expand/watch, same-root create/rename/remove/copy, file-scoped Git
-operations, and root-qualified conflict lists are implemented. LSP remains
-primary-root by design (section 11). File-scoped Git
+operations, and root-qualified conflict lists are implemented. LSP routing is
+governed by [ADR-0048](adr/0048-per-root-language-tooling-and-lsp-workspace.md);
+the historical primary-root clause in section 11 is superseded. File-scoped Git
 operations now route through the owning root worker. Root labels disambiguate
 duplicate basenames, untrusted roots are marked and read-only, mutations
 refresh the owning root, stale root results are dropped, and root removal
 cancels a pending project search. Cross-root mutation is rejected. File-scoped
 Git operations, the merged conflict list, per-root status marks, and lazy
 per-root branch detection are root-aware.
+
+Related: [ADR-0064](adr/0064-multi-root-routing-and-ownership.md),
+[ADR-0048](adr/0048-per-root-language-tooling-and-lsp-workspace.md).
 
 ## 1. Scope
 
@@ -26,7 +30,7 @@ Make every workspace file operation route through the owning
 
 Out of scope for this plan:
 
-- LSP multi-root servers. Current session still uses the primary root for LSP.
+- LSP worker design is governed by ADR-0048; this plan does not define it.
 - Cross-root rename/copy. These are rejected, not copied between gateways.
 - Remote workspaces over the network.
 
@@ -257,16 +261,12 @@ Acceptance:
 
 ## 11. LSP Boundary
 
-LSP remains primary-root for now.
-
-Reason:
-
-- one language server per root would need server discovery, capability
-  merging, diagnostics keyed by root, and workspace symbol scoping.
-- `WorkspaceRoots` trust applies to file/Git operations first.
-
-Document in `docs/ide-capability-plan.md` that multi-root LSP is a separate
-follow-up; do not silently start one server against the wrong root.
+The earlier primary-root-only decision is superseded by
+[ADR-0048](adr/0048-per-root-language-tooling-and-lsp-workspace.md). LSP
+workers are keyed by owning root, use the owning root gateway, and never fall
+back to the primary root. The root-scoped worker design, project-root
+discovery, workspace folders, per-root settings, and shutdown behavior are
+owned by that ADR.
 
 ## 12. Tests
 
