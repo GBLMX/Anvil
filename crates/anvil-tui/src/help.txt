@@ -150,7 +150,7 @@ Normal mode
   :workspace-remove <path> remove a workspace root and stop its gateway
   :workspace-list      list workspace roots and trust state
   :recent-files        fuzzy open recently opened files
-  :recent-workspaces   list recently opened workspaces
+  :recent-workspaces   open the start page focused on recent workspaces
   :plugin-start       start the debug plugin host
   :plugin-list        open installed-plugin manager (enable/uninstall/rollback)
   :plugin-inventory   read-only list of installed plugins, versions, and source

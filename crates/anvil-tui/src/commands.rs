@@ -387,7 +387,7 @@ impl Model {
             ("workspace-untrust", path) => self.trust_workspace_root(path, false),
             ("workspace-list", "") => self.list_workspace_roots(),
             ("recent-files", "") => self.open_recent_files(),
-            ("recent-workspaces", "") => self.show_recent_workspaces(),
+            ("recent-workspaces", "") => self.open_start_page_workspaces(),
             ("wq", "") => self.queue_effect(Effect::SaveAndQuit),
             ("wq", path) => self.queue_effect(Effect::SaveAsAndQuit(path.into())),
             _ => {
@@ -560,5 +560,16 @@ mod tests {
         model.execute_command("open-url");
         assert!(urls.lock().expect("urls").is_empty());
         assert_eq!(model.status.text, "E: usage: :open-url <http(s)-url>");
+    }
+
+    #[test]
+    fn recent_workspaces_opens_start_page_focused_on_workspaces() {
+        let mut model = Model::new(EditorState::from_text(""), None);
+        model.execute_command("recent-workspaces");
+        assert!(model.start_page.welcome);
+        assert_eq!(
+            model.start_page.focus,
+            crate::state::StartPageFocus::Workspaces
+        );
     }
 }

@@ -162,24 +162,6 @@ impl Model {
         self.request_preview();
         self.file.dirty = true;
     }
-
-    pub(crate) fn show_recent_workspaces(&mut self) {
-        if self.workspace.recent.workspaces.is_empty() {
-            self.status.text = "no recent workspaces".to_owned();
-        } else {
-            self.status.text = format!(
-                "recent: {}",
-                self.workspace
-                    .recent
-                    .workspaces
-                    .iter()
-                    .map(|path| path.display().to_string())
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            );
-        }
-        self.file.dirty = true;
-    }
 }
 
 #[cfg(test)]

@@ -22,6 +22,8 @@ post-`0.5.0` feature line.
   reference; the current baseline is
   `docs/benchmarks/reference-2026-11-20-local-i7.md`. The planned replacement
   host is no longer a gate.
+- `:recent-workspaces` now opens the same start-page workspace list as
+  `Space w` instead of printing paths to the status line.
 - `anvil-api` schema and TypeScript generation now sit behind the opt-in
   `bindings` feature; default runtime builds no longer pull `schemars` or
   `ts-rs`. CI runs the bindings-gated contract tests separately.
