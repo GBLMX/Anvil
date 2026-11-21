@@ -639,4 +639,78 @@ mod tests {
             vec![installed.path().to_path_buf()]
         );
     }
+
+    #[test]
+    fn settings_reload_preserves_last_good_and_defers_while_overlay_is_open() {
+        let _guard = crate::settings::TEST_ENV_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        let directory = tempfile::tempdir().expect("settings");
+        let path = directory.path().join("settings.toml");
+        std::fs::write(&path, "[editor]\nscroll_margin = 4\n").expect("valid settings");
+        let previous = std::env::var_os("ANVIL_SETTINGS");
+        unsafe { std::env::set_var("ANVIL_SETTINGS", &path) };
+        let mut model = Model::new(EditorState::from_text(""), None);
+        let mut watch = crate::settings::SettingsWatch::new(crate::settings::watch_paths(
+            &model.workspace.path,
+            true,
+        ));
+        let mut pending = false;
+        model.reload_settings_from_files().expect("initial reload");
+        assert_eq!(model.config.settings.editor.scroll_margin, 4);
+
+        std::fs::write(&path, "[editor]\nscroll_margin = \"bad\"\n").expect("invalid settings");
+        model.poll_settings_watch(&mut watch, &mut pending);
+        assert!(model.status.text.contains("invalid settings TOML"));
+        assert_eq!(model.config.settings.editor.scroll_margin, 4);
+
+        std::fs::write(&path, "[editor]\nscroll_margin = 5\n").expect("valid settings");
+        model.open_settings();
+        model.poll_settings_watch(&mut watch, &mut pending);
+        assert!(pending);
+        assert_eq!(model.config.settings.editor.scroll_margin, 4);
+        model.cancel_settings();
+
+        model.poll_settings_watch(&mut watch, &mut pending);
+        assert!(!pending);
+        assert_eq!(model.config.settings.editor.scroll_margin, 5);
+
+        match previous {
+            Some(value) => unsafe { std::env::set_var("ANVIL_SETTINGS", value) },
+            None => unsafe { std::env::remove_var("ANVIL_SETTINGS") },
+        }
+    }
+
+    #[test]
+    fn settings_watch_paths_follow_project_trust() {
+        let _guard = crate::settings::TEST_ENV_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        let workspace = tempfile::tempdir().expect("workspace");
+        let config = tempfile::tempdir().expect("config");
+        let previous_settings = std::env::var_os("ANVIL_SETTINGS");
+        let previous_config = std::env::var_os("XDG_CONFIG_HOME");
+        unsafe {
+            std::env::remove_var("ANVIL_SETTINGS");
+            std::env::set_var("XDG_CONFIG_HOME", config.path());
+        }
+
+        let untrusted = crate::settings::watch_paths(workspace.path(), false);
+        assert!(untrusted.contains(&config.path().join("anvil/settings.toml")));
+        assert!(untrusted.contains(&config.path().join("anvil/languages.toml")));
+        assert!(!untrusted.contains(&workspace.path().join(".anvil.toml")));
+
+        let trusted = crate::settings::watch_paths(workspace.path(), true);
+        assert!(trusted.contains(&workspace.path().join(".anvil.toml")));
+        assert!(trusted.contains(&workspace.path().join(".anvil/languages.toml")));
+
+        match previous_settings {
+            Some(value) => unsafe { std::env::set_var("ANVIL_SETTINGS", value) },
+            None => unsafe { std::env::remove_var("ANVIL_SETTINGS") },
+        }
+        match previous_config {
+            Some(value) => unsafe { std::env::set_var("XDG_CONFIG_HOME", value) },
+            None => unsafe { std::env::remove_var("XDG_CONFIG_HOME") },
+        }
+    }
 }

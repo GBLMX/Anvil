@@ -203,6 +203,33 @@ impl Model {
         Ok(())
     }
 
+    pub(crate) fn poll_settings_watch(
+        &mut self,
+        watch: &mut settings::SettingsWatch,
+        pending: &mut bool,
+    ) {
+        let project_trusted = self
+            .workspace
+            .roots
+            .primary()
+            .is_some_and(|root| root.trusted);
+        let paths = settings::watch_paths(&self.workspace.path, project_trusted);
+        let paths_changed = watch.sync(paths);
+        if !(*pending || paths_changed || watch.changed()) {
+            return;
+        }
+        if self.overlays.settings_overlay.is_some() {
+            *pending = true;
+            return;
+        }
+        *pending = false;
+        if let Err(error) = self.reload_settings_from_files() {
+            self.status.text = format!("E: settings reload: {error}");
+            self.file.dirty = true;
+        }
+        watch.refresh();
+    }
+
     pub(crate) fn load_keymap_config_from(&mut self, path: &Path) -> Result<(), String> {
         let config = keymap::KeymapConfig::from_path(path)?;
         self.config.keymap = config;
