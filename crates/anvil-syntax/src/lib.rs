@@ -975,7 +975,10 @@ fn language_for(path: &Path) -> Option<&'static SyntaxLanguage> {
     }
 }
 
-/// Whether a Tree-sitter grammar is compiled in for this path.
+/// Whether a grammar is available from the path alone.
+///
+/// Content-based shebang detection happens during parsing; extensionless
+/// config scripts therefore return `false` here.
 pub fn supports_path(path: &Path) -> bool {
     language_for(path).is_some()
 }
@@ -988,8 +991,11 @@ fn shebang_language(source: &str) -> Option<&'static SyntaxLanguage> {
     let command = source.lines().next()?.trim().strip_prefix("#!")?;
     let mut parts = command.split_whitespace();
     let mut executable = parts.next()?;
-    if executable.ends_with("/env") {
+    if executable == "env" || executable.ends_with("/env") {
         executable = parts.next()?;
+        if executable == "-S" || executable.starts_with("-S") {
+            executable = parts.next()?;
+        }
     }
     match executable.rsplit('/').next()? {
         "sh" | "bash" | "zsh" | "dash" | "ksh" | "brush" => Some(&*BASH),
@@ -1141,7 +1147,10 @@ mod tests {
         #[cfg(not(feature = "typst"))]
         assert!(language_for(Path::new("x.typ")).is_none());
         assert!(language_for(Path::new("x.unknown")).is_none());
+        assert!(supports_path(Path::new(".zshrc")));
+        assert!(!supports_path(Path::new(".config/tool/config")));
     }
+
     #[test]
     fn shell_configs_and_shebangs_highlight_comments() {
         for source in [
@@ -1155,7 +1164,7 @@ mod tests {
             );
         }
         let highlights = parse_source(
-            "#!/usr/bin/env bash\n# config comment\nexport VALUE=1\n",
+            "#!/usr/bin/env -S bash -e\n# config comment\nexport VALUE=1\n",
             Path::new(".config/tool/config"),
         )
         .expect("shebang config highlights");

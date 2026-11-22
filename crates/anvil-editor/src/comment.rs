@@ -24,11 +24,21 @@ pub fn comment_style(path: &Path) -> Option<CommentStyle> {
     }
     if matches!(
         name,
-        ".bashrc"
-            | ".bash_profile"
-            | ".zshrc"
+        ".zshrc"
+            | ".zshenv"
             | ".zprofile"
+            | ".zlogin"
+            | ".zlogout"
+            | ".zsh_aliases"
+            | ".bashrc"
+            | ".bash_profile"
+            | ".bash_login"
+            | ".bash_logout"
+            | ".bash_aliases"
             | ".profile"
+            | ".xprofile"
+            | "zshrc"
+            | "bashrc"
             | ".env"
             | ".editorconfig"
             | ".gitignore"
@@ -204,6 +214,11 @@ mod tests {
     fn covers_dotfiles_and_common_line_comment_languages() {
         for (path, marker) in [
             (".bashrc", "#"),
+            (".zshenv", "#"),
+            (".zlogin", "#"),
+            (".bash_aliases", "#"),
+            (".xprofile", "#"),
+            ("bashrc", "#"),
             (".env", "#"),
             ("main.c", "//"),
             ("main.cpp", "//"),

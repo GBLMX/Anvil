@@ -128,12 +128,13 @@ remain hardware aliases for `0`/`$` and `h/j/k/l`.
 `Ctrl-/` toggles line comments only. It recognizes `//` for Rust, Go, C-family,
 JVM, Swift, PHP, and JavaScript/TypeScript; `#` for shell, Python, TOML, YAML,
 Rust-adjacent config, Ruby, and the listed dotfiles; `--` is used for SQL
-and Lua. Supported dotfiles are `.bashrc`, `.bash_profile`, `.zshrc`,
-`.zprofile`, `.profile`, `.env`, `.editorconfig`, `.gitignore`,
-`.gitattributes`, `.dockerignore`, `.npmrc`, `.prettierignore`, and
-`.eslintignore`. HTML, CSS, XML, and unknown extensions report an unsupported
-line-comment type instead of inserting an invalid marker; block comments are
-not implemented.
+and Lua. Supported dotfiles are `.zshrc`, `.zshenv`, `.zprofile`, `.zlogin`,
+`.zlogout`, `.zsh_aliases`, `.bashrc`, `.bash_profile`, `.bash_login`,
+`.bash_logout`, `.bash_aliases`, `.profile`, `.xprofile`, `zshrc`, `bashrc`,
+`.env`, `.editorconfig`, `.gitignore`, `.gitattributes`, `.dockerignore`,
+`.npmrc`, `.prettierignore`, and `.eslintignore`. HTML, CSS, XML, and unknown
+extensions report an unsupported line-comment type instead of inserting an
+invalid marker; block comments are not implemented.
 
 Visual `v`/`V` selections support `d`, `y`, and `c`. Press `s` to open the
 operation-scoped surround layer, then `(`/`)`, `[`/`]`, `{`/`}`, `<`/`>`,

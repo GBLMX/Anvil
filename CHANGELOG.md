@@ -37,7 +37,8 @@ post-`0.5.0` feature line.
   `Ctrl-n` select the previous/next candidate while the popup is open.
 - Shell startup files such as `.zshrc`, `.zshenv`, `.bashrc`, and `.profile`
   now use shell syntax highlighting, including `#` comments; extensionless
-  config scripts are detected from their shell shebang.
+  config scripts are detected from their shell shebang. The same startup
+  dotfiles now support `Ctrl-/` line comments.
 - The local i7-12700H workstation is now the authoritative performance
   reference; the current baseline is
   `docs/benchmarks/reference-2026-11-20-local-i7.md`. The planned replacement
