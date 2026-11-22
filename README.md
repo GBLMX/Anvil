@@ -34,14 +34,14 @@ base/ours/theirs previews, and whole-file `:git-resolve-ours` /
 workspace session restore, dirty-buffer swap
 conflict commands, and a fresh undo stack after restore, horizontal scrolling,
 and dirty-only redraws, insert-mode Tab indentation, a workspace file tree, and a fuzzy file
-finder. Rust, TOML, Go, Bash/Zsh/Brush, Fish, Python, YAML, JSON/JSONC,
-HTML (`.html`, `.htm`), Markdown, Makefile, Dockerfile, and LaTeX
+finder. Rust, TOML, Go, Bash/Zsh/Brush, Fish, Python, Lua (`.lua`), YAML,
+JSON/JSONC, HTML (`.html`, `.htm`), Markdown, Makefile, Dockerfile, and LaTeX
 (`.tex`, `.ltx`, `.sty`, `.cls`)
 use Tree-sitter highlighting on a debounced background thread, capped at
 256 KiB so large files keep plain-text latency.
 The `official-language-web` feature adds TypeScript, TSX, JavaScript/JSX, and
-CSS highlighting; `official-language-c-family` adds C and C++. The `full`
-distribution feature includes both.
+CSS highlighting; `official-language-c-family` adds C and C++;
+`official-language-lua` adds Lua. The `full` distribution feature includes all.
 Trusted language servers (rust-analyzer, gopls, pyright/pylsp,
 typescript-language-server/vtsls, clangd, jdtls, lua-language-server,
 vscode-json-language-server, yaml-language-server, bash-language-server,
@@ -224,10 +224,10 @@ loading, or marketplace-installed Rust module. Module contract v1 is frozen;
 the `0.7.1`-`0.7.3` module, workspace-index, and compatibility-gate slices and
 the `0.7.4` desktop, LaTeX, and Typst slices are complete.
 
-The `full` Cargo feature enables every official module and the web/C/C++ syntax
-grammars. Release layouts are built with `--features full`; a plain local
-`cargo build` remains the standard Git-only composition unless `full` is
-selected. `--all-features` also selects it.
+The `full` Cargo feature enables every official module and the
+web/C/C++/Lua syntax grammars. Release layouts are built with
+`--features full`; a plain local `cargo build` remains the standard Git-only
+composition unless `full` is selected. `--all-features` also selects it.
 
 - `official.git` is part of the default standard composition. `:git-*` dispatch
   and completion are gated off when the Git service is absent.
@@ -244,6 +244,9 @@ selected. `--all-features` also selects it.
 - `official.language-typst` is opt-in through `official-language-typst`. It
   supplies a `tinymist` profile for Typst; `.typ` files get Tree-sitter
   highlighting through the `typst` syntax feature.
+- `official-language-lua` is opt-in through `official-language-lua`. It adds
+  Lua Tree-sitter highlighting for `.lua`; the `lua-language-server` profile is
+  already built into `anvil-lsp-client`.
 - `official-language-web` is opt-in through `official-language-web`. It adds
   Tree-sitter highlighting for TypeScript, TSX, JavaScript/JSX, and CSS,
   including Markdown fenced-code blocks. It does not add a language server.
@@ -379,8 +382,9 @@ Git-changed files; filter by status or path and press `Enter` to open.
 `Space :` opens persisted Ex command history; filter and press `Enter` to
 replay a command. `Space K` opens the keymap list.
 `Space L` opens language readiness; nothing there installs tools or edits PATH.
-Rust is always included; TypeScript/JavaScript and C/C++ grammars are
-build-time packs named `language-pack-typescript` and `language-pack-c-family`.
+Rust is always included; TypeScript/JavaScript, C/C++, and Lua grammars are
+build-time packs named `language-pack-typescript`, `language-pack-c-family`,
+and `language-pack-lua`.
 
 ## Documents
 

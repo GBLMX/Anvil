@@ -54,10 +54,10 @@ pub fn comment_style(path: &Path) -> Option<CommentStyle> {
     match extension.as_str() {
         "rs" | "go" | "jsonc" | "c" | "h" | "cc" | "cpp" | "cxx" | "hpp" | "hh" | "hxx" | "cs"
         | "java" | "kt" | "kts" | "swift" | "scala" | "dart" | "php" | "js" | "jsx" | "mjs"
-        | "cjs" | "ts" | "tsx" | "m" | "mm" => Some(CommentStyle { line: "//" }),
+        | "cjs" | "ts" | "mts" | "cts" | "tsx" | "m" | "mm" => Some(CommentStyle { line: "//" }),
         "sql" | "lua" => Some(CommentStyle { line: "--" }),
-        "sh" | "bash" | "zsh" | "fish" | "py" | "toml" | "yaml" | "yml" | "mk" | "rb" | "rake"
-        | "gemspec" => Some(CommentStyle { line: "#" }),
+        "sh" | "bash" | "zsh" | "brush" | "fish" | "py" | "toml" | "yaml" | "yml" | "mk" | "rb"
+        | "rake" | "gemspec" => Some(CommentStyle { line: "#" }),
         _ => None,
     }
 }
@@ -229,6 +229,9 @@ mod tests {
             ("init.lua", "--"),
             ("app.rb", "#"),
             ("index.php", "//"),
+            ("main.mts", "//"),
+            ("main.cts", "//"),
+            ("run.brush", "#"),
         ] {
             assert_eq!(
                 comment_style(Path::new(path)),

@@ -115,6 +115,14 @@ static PYTHON: LazyLock<SyntaxLanguage> = LazyLock::new(|| {
         false,
     )
 });
+#[cfg(feature = "lua")]
+static LUA: LazyLock<SyntaxLanguage> = LazyLock::new(|| {
+    SyntaxLanguage::grammar(
+        Language::new(tree_sitter_lua::LANGUAGE),
+        tree_sitter_lua::HIGHLIGHTS_QUERY,
+        false,
+    )
+});
 #[cfg(feature = "latex")]
 static LATEX: LazyLock<SyntaxLanguage> = LazyLock::new(|| {
     SyntaxLanguage::grammar(
@@ -909,18 +917,20 @@ fn walk_keywords(node: tree_sitter::Node<'_>, base: usize, highlights: &mut Vec<
 }
 
 fn class_for(name: &str) -> Option<SyntaxClass> {
-    Some(match name {
+    if matches!(name, "conditional" | "repeat") {
+        return Some(SyntaxClass::Keyword);
+    }
+    let base = name.split('.').next().unwrap_or(name);
+    Some(match base {
         "keyword" => SyntaxClass::Keyword,
-        "string" | "string.special" | "string.regex" | "escape" => SyntaxClass::String,
-        "comment" => SyntaxClass::Comment,
+        "string" | "escape" => SyntaxClass::String,
+        "comment" | "preproc" => SyntaxClass::Comment,
         "number" => SyntaxClass::Number,
-        "function" | "function.builtin" | "function.method" | "constructor" => {
-            SyntaxClass::Function
-        }
+        "function" | "method" | "constructor" => SyntaxClass::Function,
         "type" => SyntaxClass::Type,
         "tag" => SyntaxClass::Type,
-        "property" | "attribute" | "label" => SyntaxClass::Property,
-        "constant" | "constant.builtin" | "constant.macro" | "boolean" => SyntaxClass::Constant,
+        "property" | "attribute" | "label" | "field" => SyntaxClass::Property,
+        "constant" | "boolean" => SyntaxClass::Constant,
         "heading" => SyntaxClass::Heading,
         "link" => SyntaxClass::Link,
         "code" => SyntaxClass::Code,
@@ -952,6 +962,8 @@ fn language_for(path: &Path) -> Option<&'static SyntaxLanguage> {
         "sh" | "bash" | "zsh" | "brush" => Some(&*BASH),
         "fish" => Some(&*FISH),
         "py" => Some(&*PYTHON),
+        #[cfg(feature = "lua")]
+        "lua" => Some(&*LUA),
         "toml" => Some(&*TOML),
         "yml" | "yaml" => Some(&*YAML),
         #[cfg(feature = "latex")]
@@ -1103,6 +1115,26 @@ mod tests {
         assert!(highlights.iter().any(|h| h.class == SyntaxClass::Heading));
     }
 
+    #[cfg(feature = "lua")]
+    #[test]
+    fn lua_highlights_keywords_functions_strings_and_comments() {
+        let source =
+            "-- note\nlocal function greet(name)\n  print(\"hi\", name)\nend\nreturn greet\n";
+        let highlights = parse_source(source, Path::new("init.lua")).expect("parse lua");
+        assert!(highlights.iter().any(|h| h.class == SyntaxClass::Comment));
+        assert!(highlights.iter().any(|h| h.class == SyntaxClass::Keyword));
+        assert!(highlights.iter().any(|h| h.class == SyntaxClass::Function));
+        assert!(highlights.iter().any(|h| h.class == SyntaxClass::String));
+        let scopes = parse_scopes(source, Path::new("init.lua")).expect("lua scopes");
+        assert!(scopes.iter().any(|scope| scope.label == "greet"));
+    }
+
+    #[cfg(not(feature = "lua"))]
+    #[test]
+    fn lua_extension_is_absent_without_feature() {
+        assert!(language_for(Path::new("init.lua")).is_none());
+    }
+
     #[test]
     fn detects_project_formats_by_extension_and_name() {
         for path in [
@@ -1135,6 +1167,11 @@ mod tests {
         ] {
             assert!(language_for(Path::new(path)).is_some(), "{path}");
         }
+
+        #[cfg(feature = "lua")]
+        assert!(language_for(Path::new("x.lua")).is_some());
+        #[cfg(not(feature = "lua"))]
+        assert!(language_for(Path::new("x.lua")).is_none());
 
         #[cfg(feature = "latex")]
         for path in ["x.tex", "x.ltx", "x.sty", "x.cls"] {

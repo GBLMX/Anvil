@@ -44,7 +44,7 @@ GOTOOLCHAIN=go1.26.11 go build -o target/release/anvil-exec-runner ./go/cmd/anvi
 ```
 
 The default `anvil` composition is standard/Git-only. For a local full build
-that activates every official module and the web/C/C++ syntax grammars:
+that activates every official module and the web/C/C++/Lua syntax grammars:
 
 ```bash
 cargo build --release -p anvil-distro-standard --features full \

@@ -58,8 +58,9 @@ impl Model {
             "Language readiness".to_owned(),
             format!("Workspace: {}", self.workspace.path.display()),
             "Packs are build-time compositions: Rust is always included;".to_owned(),
-            "TypeScript/JavaScript uses language-pack-typescript and C/C++ uses".to_owned(),
-            "language-pack-c-family. Rebuild to change the included packs.".to_owned(),
+            "TypeScript/JavaScript uses language-pack-typescript, C/C++ uses".to_owned(),
+            "language-pack-c-family, and Lua uses language-pack-lua. Rebuild to".to_owned(),
+            "change the included packs.".to_owned(),
             String::new(),
         ];
         for (name, extensions) in LANGUAGES {
@@ -170,11 +171,25 @@ mod tests {
         assert!(cpp.contains("syntax: yes"), "{text}");
         #[cfg(not(feature = "official-language-c-family"))]
         assert!(cpp.contains("syntax: missing"), "{text}");
+        let lua = text.split("\nLua\n").nth(1).expect("lua section");
+        #[cfg(feature = "official-language-lua")]
+        assert!(lua.contains("syntax: yes"), "{text}");
+        #[cfg(not(feature = "official-language-lua"))]
+        assert!(lua.contains("syntax: missing"), "{text}");
+        assert!(lua.contains("lsp: lua-language-server"), "{text}");
         assert!(text.contains("Packs are build-time compositions"), "{text}");
         let java = text.split("\nJava\n").nth(1).expect("java section");
         assert!(java.contains("syntax: missing"), "{text}");
         let latex = text.split("\nLaTeX\n").nth(1).expect("latex section");
+        #[cfg(feature = "official-language-latex")]
+        assert!(latex.contains("syntax: yes"), "{text}");
+        #[cfg(not(feature = "official-language-latex"))]
         assert!(latex.contains("syntax: missing"), "{text}");
+        let typst = text.split("\nTypst\n").nth(1).expect("typst section");
+        #[cfg(feature = "official-language-typst")]
+        assert!(typst.contains("syntax: yes"), "{text}");
+        #[cfg(not(feature = "official-language-typst"))]
+        assert!(typst.contains("syntax: missing"), "{text}");
         assert!(latex.contains("formatter: none"), "{text}");
         assert!(text.contains("install servers manually"), "{text}");
         assert!(text.contains("[lsp.commands]"), "{text}");

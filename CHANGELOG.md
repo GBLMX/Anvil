@@ -7,6 +7,9 @@ post-`0.5.0` feature line.
 
 
 ## [Unreleased]
+- Lua `.lua` files now get Tree-sitter highlighting through
+  `official-language-lua` / `language-pack-lua`, included in `full`; the
+  existing `lua-language-server` profile is unchanged.
 
 ## [0.7.0] - 2026-11-20
 ### Added
