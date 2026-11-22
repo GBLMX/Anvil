@@ -85,14 +85,17 @@ The local PIV signing rehearsal is recorded in
 [docs/release-yubikey-rehearsal-2026-11-22.md](docs/release-yubikey-rehearsal-2026-11-22.md);
 it is evidence for the hardware path, not public release authority.
 
+For `0.7.0`, ADR-0069 accepts one physical YubiKey with separate plugin and
+checksum keys in PIV slots `9c` and `9d`; a second device is deferred.
+
 It builds `scripts/release-layout.sh`, generates an SPDX JSON SBOM with
 `syft`, creates a tarball, writes `SHA256SUMS`, and signs the exact checksum
 file. GitHub build-provenance attestation is attached to the release tarball.
 
 For internal candidates this CI-held checksum key is allowed by ADR-0060.
-Public releases require a separate hardware-backed checksum authority; do not
-create a public tag until that ceremony and build-provenance verification are
-authorized.
+For `0.7.0`, the checksum key is the separate on-device slot `9d`. Public
+publication still requires the offline build-to-sign-to-publish flow,
+build-provenance verification, and explicit authorization.
 
 The workflow verifies the checksum file, signature, SPDX SBOM, and required
 archive entries before publishing, then verifies the published provenance

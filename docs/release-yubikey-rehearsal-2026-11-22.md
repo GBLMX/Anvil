@@ -3,14 +3,15 @@
 Status: local hardware-backed rehearsal passed. This does **not** authorize a
 public release.
 
-## Device and key
+## Device and keys
 
 - Device: YubiKey 5C NFC
-- PIV slot: `9c`
-- Algorithm: Ed25519
-- Public key identifier:
+- Plugin signing: PIV slot `9c`, Ed25519,
   `sha256:f9417611718349316c304ee4e2262e7f6f42137608111d7918bad9085cc216c3`
-- The private key remained on the YubiKey; no PEM export was created.
+- Checksum signing: PIV slot `9d`, Ed25519,
+  `sha256:3055cc47d2cc940d519e7eb370b8bb3049b59903c0c400e426de1b0bcb15ba8b`
+- Both private keys remained on the YubiKey; no PEM export was created.
+- ADR-0069 records the temporary single-device exception for `0.7.0`.
 
 ## Commands
 
@@ -26,43 +27,43 @@ tar --sort=name --mtime='@0' --owner=0 --group=0 --numeric-owner \
   -C /tmp/anvil-yubikey-layout .
 sha256sum anvil-0.7.0-yubikey-linux-x86_64.tar.gz \
   anvil-0.7.0-yubikey.sbom.spdx.json > SHA256SUMS
-yubico-piv-tool -a verify-pin --sign -s 9c -A ED25519 \
+yubico-piv-tool -a verify-pin --sign -s 9d -A ED25519 \
   -i SHA256SUMS -o SHA256SUMS.sig
 ```
 
 `release-layout.sh` signed the official plugin through PIV slot `9c`.
+`yubico-piv-tool` signed the exact `SHA256SUMS` bytes through PIV slot `9d`.
 `release-lifecycle-smoke.sh` completed install, upgrade, uninstall, and the
 installed `doctor` profile with the hardware-signed package.
 
 ## Artifact evidence
 
 ```text
-package digest 594c23658c78d109d968efe7142bebba4d545baad64ebb1393a3ddb13744fc09
-tarball        0d82f5f2112d6b81e4a1b1b450c6c2d6790fb85bb06ce524819f44c12e7de220
-SBOM           e142beb1553e28c3760af6ce98db1ea29228ba63a4bce35a84f5ad5a47222d90
-SHA256SUMS     bd490669b31ef6ebfbd49658899cacd2a38569393cfc2a7d341c0699f0a08e2f
-public key PEM 97e8340ecdb65ae9e98dc9eca4bf3263bb812496f41f2f0de51a5137eb142b1c
+package digest      594c23658c78d109d968efe7142bebba4d545baad64ebb1393a3ddb13744fc09
+tarball             0d82f5f2112d6b81e4a1b1b450c6c2d6790fb85bb06ce524819f44c12e7de220
+SBOM                e142beb1553e28c3760af6ce98db1ea29228ba63a4bce35a84f5ad5a47222d90
+SHA256SUMS          bd490669b31ef6ebfbd49658899cacd2a38569393cfc2a7d341c0699f0a08e2f
+checksum public key 8dd26f932b6c23a946038db5c3f6f548197ded42c74554af838782856b39af24
 ```
 
 Verification results:
 
 ```text
 sha256sum -c SHA256SUMS: OK
-openssl pkeyutl -verify: Signature Verified Successfully
+openssl pkeyutl -verify (slot 9d): Signature Verified Successfully
 SBOM: SPDX-2.3, 7 packages
-package public key matches the checksum public key
+plugin public key differs from the checksum public key
 ```
 
 ## Remaining public-release blockers
 
-- The checksum rehearsal used the same PIV key as the plugin package. ADR-0034
-  and ADR-0060 require a separate hardware-backed checksum authority for public
-  release.
-- Only one production YubiKey is currently provisioned; the policy requires two
-  independently generated keys before a public release.
+- Only one physical production YubiKey is provisioned. ADR-0069 accepts this
+  single-device exception for `0.7.0`; the second device and rotation overlap
+  remain deferred.
 - The official package trust layout still carries a single `official.pub`;
   keyed multi-key trust and rotation support are not implemented.
 - The GitHub release workflow still uses CI-held PEM secrets; the CI build to
   offline YubiKey signing flow is not implemented.
+- GitHub build-provenance attestation must still be generated and verified.
 
 No public tag was pushed from this rehearsal.
