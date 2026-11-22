@@ -24,8 +24,8 @@ The workspace version is **0.7.0**.
   feature sets, multi-root routing, cross-workspace process handoff, and the
   landed `0.7.x` official modules.
 - The latest hardening pass closed the open editor, plugin-host, gateway,
-  TUI, theme, and icon issues; the workspace gates pass with 1,362 Rust tests
-  (1,316 default plus 46 bindings-gated) and 16 explicit ignored/manual tests.
+  TUI, theme, and icon issues; the workspace gates pass with 1,374 Rust tests
+  (1,316 default plus 58 bindings-gated) and 16 explicit ignored/manual tests.
 - The full release layout installs and passes `anvil doctor --profile
   installed`; the remaining exit gates are tracked below.
 

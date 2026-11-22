@@ -7,15 +7,12 @@ post-`0.5.0` feature line.
 
 
 ## [Unreleased]
-- Lua `.lua` files now get Tree-sitter highlighting through
-  `official-language-lua` / `language-pack-lua`, included in `full`; the
-  existing `lua-language-server` profile is unchanged.
 
-## [0.7.0] - 2026-11-20
+## [0.7.0] - 2026-11-22
 ### Added
 - Local release layout, installer, signed-plugin, artifact, and
   signature-verification dry run passed with ephemeral production-like Ed25519
-  keys; evidence is in `docs/release-dry-run-2026-11-20.md`.
+  keys; evidence is in `docs/release-dry-run-2026-11-22.md`.
 - Command-line completion now has an `anvil-api` contract and a
   UI-neutral kernel policy in `anvil-session`; the TUI renders the kernel
   candidates for command, path, and buffer completion.
@@ -42,6 +39,9 @@ post-`0.5.0` feature line.
   now use shell syntax highlighting, including `#` comments; extensionless
   config scripts are detected from their shell shebang. The same startup
   dotfiles now support `Ctrl-/` line comments.
+- Lua `.lua` files now get Tree-sitter highlighting through
+  `official-language-lua` / `language-pack-lua`, included in `full`; the
+  existing `lua-language-server` profile is unchanged.
 - The local i7-12700H workstation is now the authoritative performance
   reference; the current baseline is
   `docs/benchmarks/reference-2026-11-20-local-i7.md`. The planned replacement

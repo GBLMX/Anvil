@@ -235,7 +235,7 @@ Internal polish ends only when all are true:
   documented dependency/release boundaries.
 - Release layout, installer, plugin bootstrap, and release-signing dry run are
   verified with production-like keys in
-  [release-dry-run-2026-11-20.md](release-dry-run-2026-11-20.md); production key
+  [release-dry-run-2026-11-22.md](release-dry-run-2026-11-22.md); production key
   custody and CI provenance remain release-time external steps.
 - The next public version is `0.7.0`, and the release-version guard is updated;
   public publication remains gated on production signing custody and CI
