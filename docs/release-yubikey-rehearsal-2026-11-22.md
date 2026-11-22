@@ -26,7 +26,7 @@ tar --sort=name --mtime='@0' --owner=0 --group=0 --numeric-owner \
   -czf /tmp/anvil-0.7.0-yubikey-linux-x86_64.tar.gz \
   -C /tmp/anvil-yubikey-layout .
 sha256sum anvil-0.7.0-yubikey-linux-x86_64.tar.gz \
-  anvil-0.7.0-yubikey.sbom.spdx.json > SHA256SUMS
+  anvil-0.7.0-yubikey.sbom.spdx.json release.pub.pem > SHA256SUMS
 yubico-piv-tool -a verify-pin --sign -s 9d -A ED25519 \
   -i SHA256SUMS -o SHA256SUMS.sig
 ```
@@ -42,8 +42,9 @@ installed `doctor` profile with the hardware-signed package.
 package digest      594c23658c78d109d968efe7142bebba4d545baad64ebb1393a3ddb13744fc09
 tarball             0d82f5f2112d6b81e4a1b1b450c6c2d6790fb85bb06ce524819f44c12e7de220
 SBOM                e142beb1553e28c3760af6ce98db1ea29228ba63a4bce35a84f5ad5a47222d90
-SHA256SUMS          bd490669b31ef6ebfbd49658899cacd2a38569393cfc2a7d341c0699f0a08e2f
+SHA256SUMS          a6f72b1defea4d7e45aadd2ed34d7f494f4b952e70dceb5a2bc36fee96caa6ad
 checksum public key 8dd26f932b6c23a946038db5c3f6f548197ded42c74554af838782856b39af24
+signature           960e209edd305056736cc0349e267dcf9bb0d2a5ef15f94041af6c0645cdc6d5
 ```
 
 Verification results:
