@@ -13,6 +13,9 @@ post-`0.5.0` feature line.
 - Local release layout, installer, signed-plugin, artifact, and
   signature-verification dry run passed with ephemeral production-like Ed25519
   keys; evidence is in `docs/release-dry-run-2026-11-22.md`.
+- `scripts/release-yubikey.sh` provides the scripted offline release flow:
+  plugin signatures in PIV slot `9c`, checksum signatures in slot `9d`, and
+  full artifact/lifecycle verification.
 - Command-line completion now has an `anvil-api` contract and a
   UI-neutral kernel policy in `anvil-session`; the TUI renders the kernel
   candidates for command, path, and buffer completion.

@@ -88,13 +88,19 @@ it is evidence for the hardware path, not public release authority.
 For `0.7.0`, ADR-0069 accepts one physical YubiKey with separate plugin and
 checksum keys in PIV slots `9c` and `9d`; a second device is deferred.
 
+The scripted local flow is `scripts/release-yubikey.sh`. It builds the `full`
+layout, signs the plugin in slot `9c`, runs the lifecycle smoke, creates the
+SBOM and tarball, signs `SHA256SUMS` in slot `9d`, and verifies both
+signatures. `--verify-only <dir>` verifies an existing bundle without the key.
+It refuses a dirty tracked worktree or a tag that does not point at `HEAD`.
+
 It builds `scripts/release-layout.sh`, generates an SPDX JSON SBOM with
 `syft`, creates a tarball, writes `SHA256SUMS`, and signs the exact checksum
 file. GitHub build-provenance attestation is attached to the release tarball.
 
 For internal candidates this CI-held checksum key is allowed by ADR-0060.
 For `0.7.0`, the checksum key is the separate on-device slot `9d`. Public
-publication still requires the offline build-to-sign-to-publish flow,
+publication still requires the CI build-to-offline-sign-to-publish flow,
 build-provenance verification, and explicit authorization.
 
 The workflow verifies the checksum file, signature, SPDX SBOM, and required

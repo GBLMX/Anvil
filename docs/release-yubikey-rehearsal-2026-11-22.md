@@ -16,35 +16,25 @@ public release.
 ## Commands
 
 ```sh
-rm -rf /tmp/anvil-yubikey-layout
-ANVIL_PLUGIN_SIGNING_KEY=piv:9c \
-  scripts/release-layout.sh /tmp/anvil-yubikey-layout
-scripts/release-lifecycle-smoke.sh /tmp/anvil-yubikey-layout
-syft /tmp/anvil-yubikey-layout \
-  -o "spdx-json=/tmp/anvil-0.7.0-yubikey.sbom.spdx.json"
-tar --sort=name --mtime='@0' --owner=0 --group=0 --numeric-owner \
-  -czf /tmp/anvil-0.7.0-yubikey-linux-x86_64.tar.gz \
-  -C /tmp/anvil-yubikey-layout .
-sha256sum anvil-0.7.0-yubikey-linux-x86_64.tar.gz \
-  anvil-0.7.0-yubikey.sbom.spdx.json release.pub.pem > SHA256SUMS
-yubico-piv-tool -a verify-pin --sign -s 9d -A ED25519 \
-  -i SHA256SUMS -o SHA256SUMS.sig
+scripts/release-yubikey.sh
+scripts/release-yubikey.sh --verify-only dist/anvil-0.7.0
 ```
 
-`release-layout.sh` signed the official plugin through PIV slot `9c`.
-`yubico-piv-tool` signed the exact `SHA256SUMS` bytes through PIV slot `9d`.
-`release-lifecycle-smoke.sh` completed install, upgrade, uninstall, and the
-installed `doctor` profile with the hardware-signed package.
+The script builds the `full` release layout, signs the official plugin through
+PIV slot `9c`, runs the install/upgrade/uninstall/doctor lifecycle smoke,
+creates the SPDX SBOM and tarball, signs the exact `SHA256SUMS` through PIV slot
+`9d`, and verifies both signatures. It refuses a dirty tracked worktree or a
+tag that does not point at `HEAD`.
 
 ## Artifact evidence
 
 ```text
 package digest      594c23658c78d109d968efe7142bebba4d545baad64ebb1393a3ddb13744fc09
 tarball             0d82f5f2112d6b81e4a1b1b450c6c2d6790fb85bb06ce524819f44c12e7de220
-SBOM                e142beb1553e28c3760af6ce98db1ea29228ba63a4bce35a84f5ad5a47222d90
-SHA256SUMS          a6f72b1defea4d7e45aadd2ed34d7f494f4b952e70dceb5a2bc36fee96caa6ad
+SBOM                e009cbaa45372179cf59f78db8a29a3af8a361e2e254b1ef8c2551a06cd2c950
+SHA256SUMS          16e53685d978e4238530c3a544c9be3659acdde3d7d5abf1f5082ec04f1fd032
 checksum public key 8dd26f932b6c23a946038db5c3f6f548197ded42c74554af838782856b39af24
-signature           960e209edd305056736cc0349e267dcf9bb0d2a5ef15f94041af6c0645cdc6d5
+signature           83c03ecb40cada6894ab56f492bb49b4accd780f37da08f422d4b87c2ed35123
 ```
 
 Verification results:
@@ -52,7 +42,7 @@ Verification results:
 ```text
 sha256sum -c SHA256SUMS: OK
 openssl pkeyutl -verify (slot 9d): Signature Verified Successfully
-SBOM: SPDX-2.3, 7 packages
+SBOM: SPDX-2.3, 6 packages
 plugin public key differs from the checksum public key
 ```
 
