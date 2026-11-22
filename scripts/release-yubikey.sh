@@ -13,8 +13,9 @@ PY
 tag="v$version"
 out="$root/dist/anvil-$version"
 verify_only=false
+publish=false
 if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
-    echo "usage: $0 [--out DIR] [--verify-only DIR]" >&2
+    echo "usage: $0 [--out DIR] [--verify-only DIR] [--publish]" >&2
     exit 0
 fi
 while [[ $# -gt 0 ]]; do
@@ -29,6 +30,10 @@ while [[ $# -gt 0 ]]; do
             out="$2"
             verify_only=true
             shift 2
+            ;;
+        --publish)
+            publish=true
+            shift
             ;;
         *)
             echo "unknown argument: $1" >&2
@@ -101,6 +106,21 @@ git -C "$root" rev-parse -q --verify "refs/tags/$tag" >/dev/null || {
     exit 2
 }
 
+if [[ "$publish" == true ]]; then
+    command -v gh >/dev/null 2>&1 || {
+        echo "missing required tool: gh" >&2
+        exit 2
+    }
+    remote_tag="$(git -C "$root" ls-remote --tags origin "refs/tags/$tag^{}" | awk '{print $1}')"
+    if [[ -z "$remote_tag" ]]; then
+        remote_tag="$(git -C "$root" ls-remote --tags origin "refs/tags/$tag" | awk '{print $1}')"
+    fi
+    [[ "$remote_tag" == "$(git -C "$root" rev-parse HEAD)" ]] || {
+        echo "remote tag $tag is missing or does not point at HEAD" >&2
+        exit 2
+    }
+fi
+
 rm -rf "$out"
 mkdir -p "$out"
 echo "building YubiKey-signed layout for $tag in $out/layout"
@@ -121,3 +141,17 @@ yubico-piv-tool -a verify-pin --sign -s "$checksum_slot" -A ED25519 \
     -i "$out/SHA256SUMS" -o "$out/SHA256SUMS.sig"
 
 verify_artifacts "$out"
+
+if [[ "$publish" == true ]]; then
+    echo "creating draft release for $tag"
+    gh release create "$tag" \
+        "$out/anvil-$version-linux-x86_64.tar.gz" \
+        "$out/anvil-$version.sbom.spdx.json" \
+        "$out/SHA256SUMS" \
+        "$out/SHA256SUMS.sig" \
+        "$out/release.pub.pem" \
+        --verify-tag \
+        --draft \
+        --generate-notes \
+        --title "Anvil $version"
+fi
