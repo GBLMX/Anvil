@@ -55,9 +55,8 @@ plugin public key differs from the checksum public key
   keyed multi-key trust and rotation support are not implemented.
 - The GitHub release workflow still uses CI-held PEM secrets; the CI build to
   offline YubiKey signing flow is not implemented.
-- `scripts/release-yubikey.sh --publish` creates a draft GitHub release from
-  the verified bundle, but was not exercised because no remote tag/publication
-  authorization exists.
+- Publication remains the tag-triggered workflow; the rehearsal did not upload
+  or publish assets.
 - GitHub build-provenance attestation must still be generated and verified.
 
 No public tag was pushed from this rehearsal.

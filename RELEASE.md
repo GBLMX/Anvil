@@ -92,19 +92,19 @@ The scripted local flow is `scripts/release-yubikey.sh`. It builds the `full`
 layout, signs the plugin in slot `9c`, runs the lifecycle smoke, creates the
 SBOM and tarball, signs `SHA256SUMS` in slot `9d`, and verifies both
 signatures. `--verify-only <dir>` verifies an existing bundle without the key.
-`--publish` uploads the verified bundle to a draft GitHub release; it requires
-`gh` and an existing remote tag that points at `HEAD`. The local script
-refuses a dirty tracked worktree or a tag that does not point at `HEAD`.
+The script stops at offline signing; it does not upload or publish.
+Publication remains the tag-triggered workflow below. It refuses a dirty
+tracked worktree or a tag that does not point at `HEAD`.
 
 It builds `scripts/release-layout.sh`, generates an SPDX JSON SBOM with
 `syft`, creates a tarball, writes `SHA256SUMS`, and signs the exact checksum
 file. GitHub build-provenance attestation is attached to the release tarball.
 
 For internal candidates this CI-held checksum key is allowed by ADR-0060.
-For `0.7.0`, the checksum key is the separate on-device slot `9d`. Draft
-upload is not public publication: promoting the draft with
-`gh release edit vX.Y.Z --draft=false` still requires build-provenance
-verification and explicit authorization.
+For `0.7.0`, the checksum key is the separate on-device slot `9d`. Public
+publication still requires the CI build-to-offline-sign-to-publish flow,
+build-provenance verification, and explicit authorization. The local script
+produces the signed bundle used by that flow; it does not create a release.
 
 The workflow verifies the checksum file, signature, SPDX SBOM, and required
 archive entries before publishing, then verifies the published provenance
