@@ -81,6 +81,10 @@ signs the SHA-256 digest through `yubico-piv-tool`; the tool prompts for the PIV
 PIN and touch, and reads the matching public key from the same slot. Set
 `YUBICO_PIV_TOOL` when the binary is not on `PATH`.
 
+The local PIV signing rehearsal is recorded in
+[docs/release-yubikey-rehearsal-2026-11-22.md](docs/release-yubikey-rehearsal-2026-11-22.md);
+it is evidence for the hardware path, not public release authority.
+
 It builds `scripts/release-layout.sh`, generates an SPDX JSON SBOM with
 `syft`, creates a tarball, writes `SHA256SUMS`, and signs the exact checksum
 file. GitHub build-provenance attestation is attached to the release tarball.
