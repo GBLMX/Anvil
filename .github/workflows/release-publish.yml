@@ -54,7 +54,8 @@ jobs:
           test -n "$archive"
           gh attestation verify "$archive" \
             --repo "$GITHUB_REPOSITORY" \
-            --source-ref "refs/tags/${{ inputs.tag }}"
+            --source-ref "refs/tags/${{ inputs.tag }}" \
+            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yml"
 
       - name: Verify CI input checksums
         run: |
