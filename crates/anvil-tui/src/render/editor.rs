@@ -189,6 +189,11 @@ pub fn view(model: &Model, frame: &mut Frame) {
         }
     }
     if model.start_page.welcome {
+        {
+            let mut motion = model.motion.borrow_mut();
+            let _ = motion.fade_progress(motion_now, None, motion_reduced);
+            let _ = motion.fade(motion_now, None, None, motion_reduced);
+        }
         render_welcome(frame, rects.inner, model);
         return;
     }

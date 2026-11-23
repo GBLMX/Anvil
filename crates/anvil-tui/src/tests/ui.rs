@@ -1043,6 +1043,7 @@ fn reduced_motion_uses_a_static_busy_glyph() {
 #[test]
 fn command_palette_fades_only_when_motion_is_enabled() {
     let mut model = Model::new(EditorState::from_text(""), None);
+    model.start_page.welcome = false;
     model.set_motion_enabled(true);
     model.open_command_palette();
     let backend = TestBackend::new(80, 24);
@@ -1059,6 +1060,7 @@ fn command_palette_fades_only_when_motion_is_enabled() {
 #[test]
 fn fuzzy_overlay_fades_when_motion_is_enabled() {
     let mut model = Model::new(EditorState::from_text(""), None);
+    model.start_page.welcome = false;
     model.set_motion_enabled(true);
     model.start_fuzzy();
     let backend = TestBackend::new(80, 24);
@@ -1116,6 +1118,43 @@ fn new_progress_id_fades_the_progress_panel() {
         .expect("progress panel");
     let cell = &terminal.backend().buffer()[(area.x + 1, area.y + 1)];
     assert_ne!(cell.fg, crate::theme::accent());
+}
+
+#[test]
+fn welcome_page_clears_hidden_progress_and_overlay_motion() {
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.set_motion_enabled(true);
+    let backend = TestBackend::new(80, 24);
+    let mut terminal = Terminal::new(backend).expect("terminal");
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+
+    model.ui.progress.start("copy", "working", false);
+    model.file.dirty = true;
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+    assert!(!model.motion_active());
+
+    model.open_command_palette();
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+    assert!(!model.motion_active());
+}
+
+#[test]
+fn opening_start_page_clears_active_progress_motion() {
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.start_page.welcome = false;
+    model.set_motion_enabled(true);
+    let backend = TestBackend::new(80, 24);
+    let mut terminal = Terminal::new(backend).expect("terminal");
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+
+    model.ui.progress.start("copy", "working", false);
+    model.file.dirty = true;
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+    assert!(model.motion_active());
+
+    model.open_start_page_workspaces();
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+    assert!(!model.motion_active());
 }
 
 #[test]
