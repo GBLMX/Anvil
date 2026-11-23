@@ -48,6 +48,7 @@ impl Model {
             }
             self.load_buffer(index);
             self.record_recent_file(&absolute);
+            self.request_document_symbols_silent_if_runtime();
             return Ok(());
         }
         if let Some(mut buffer) = self.buffers.background.remove(&absolute) {
@@ -60,6 +61,7 @@ impl Model {
             self.load_buffer(index);
             self.sync_watch_paths();
             self.record_recent_file(&absolute);
+            self.request_document_symbols_silent_if_runtime();
             self.file.stdin_buffer = false;
             self.file.dirty = true;
             return Ok(());
@@ -108,6 +110,7 @@ impl Model {
         self.file.stdin_buffer = false;
         self.start_page.welcome_back = false;
         self.sync_lsp_active();
+        self.request_document_symbols_silent_if_runtime();
         self.sync_watch_paths();
         self.record_recent_file(&recent_path);
         self.file.dirty = true;
@@ -478,6 +481,7 @@ impl Model {
                 self.workspace.git.diff_due = Some(Instant::now());
                 self.sync_lsp_active();
                 self.notify_lsp_save(&path, &text);
+                self.request_document_symbols_silent_if_runtime();
                 self.sync_watch_paths();
                 self.status.text = format!("\"{display}\" written");
                 self.request_format_after_save();

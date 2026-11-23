@@ -196,6 +196,21 @@ impl Model {
         self.file.dirty = true;
     }
     pub(crate) fn request_document_symbols(&mut self) {
+        self.request_document_symbols_mode(false);
+    }
+
+    pub(crate) fn request_document_symbols_silent(&mut self) {
+        self.request_document_symbols_mode(true);
+    }
+
+    pub(crate) fn request_document_symbols_silent_if_runtime(&mut self) {
+        if self.project.platform.is_some() {
+            self.request_document_symbols_silent();
+        }
+    }
+
+    fn request_document_symbols_mode(&mut self, silent: bool) {
+        self.project.silent_symbol_refresh = silent;
         self.cancel_completion();
         self.cancel_code_actions();
         self.cancel_document_symbols();
@@ -214,7 +229,8 @@ impl Model {
             LspRequestKind::DocumentSymbol,
             "textDocument/documentSymbol",
             params,
-        ) {
+        ) && !silent
+        {
             self.status.text = "document symbols".to_owned();
         }
         self.file.dirty = true;
@@ -351,5 +367,45 @@ mod tests {
                 .iter()
                 .any(|item| item.name == "refreshed_symbol")
         );
+    }
+
+    #[test]
+    fn silent_document_symbol_response_updates_index_without_panel() {
+        let directory = tempfile::tempdir().expect("tempdir");
+        std::fs::create_dir(directory.path().join("src")).expect("src");
+        std::fs::write(
+            directory.path().join("Cargo.toml"),
+            "[package]\nname = \"refresh\"\nversion = \"0.1.0\"\nedition = \"2024\"\n",
+        )
+        .expect("manifest");
+        let path = directory.path().join("src/main.rs");
+        std::fs::write(&path, "fn main() {}\n").expect("file");
+        let mut model = Model::new(EditorState::from_text(""), None);
+        model.workspace.path = directory.path().to_path_buf();
+        model.load_project_info();
+        model.session.path = Some(path);
+        model.project.silent_symbol_refresh = true;
+        let response = serde_json::json!([{
+            "name": "silent_symbol",
+            "detail": "function",
+            "range": {
+                "start": {"line": 0, "character": 3},
+                "end": {"line": 0, "character": 7}
+            },
+            "selectionRange": {
+                "start": {"line": 0, "character": 3},
+                "end": {"line": 0, "character": 7}
+            }
+        }]);
+        model.apply_document_symbols_response(&response);
+        let runtime = model.project.platform.as_ref().expect("runtime");
+        assert!(
+            runtime
+                .symbols()
+                .symbols("silent_symbol", 10)
+                .iter()
+                .any(|symbol| symbol.name == "silent_symbol")
+        );
+        assert!(model.overlays.lsp_results.document_symbols.is_none());
     }
 }

@@ -24,6 +24,8 @@ post-`0.5.0` feature line.
   that index.
 - `Space P` opens the project/index symbol panel directly; LSP symbol
   responses refresh the same index.
+- Opening or saving a file silently requests document symbols to refresh the
+  project symbol index without opening the symbol panel.
 - Offline signing can consume the CI build-input artifact; `Release publish`
   verifies provenance, input checksums, and the checksum-key fingerprint
   before uploading release assets.

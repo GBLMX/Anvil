@@ -702,6 +702,8 @@ pub(crate) struct ProjectState {
     pub(crate) replace_pending: Option<u64>,
     /// Lazily loaded UI-neutral project, grants, and symbol services.
     pub(crate) platform: Option<anvil_runtime::Runtime>,
+    /// Whether the in-flight document-symbol request should only feed the index.
+    pub(crate) silent_symbol_refresh: bool,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

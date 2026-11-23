@@ -9,16 +9,22 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 impl Model {
-    fn apply_document_symbols_response(&mut self, result: &serde_json::Value) {
+    pub(crate) fn apply_document_symbols_response(&mut self, result: &serde_json::Value) {
+        let silent = std::mem::take(&mut self.project.silent_symbol_refresh);
         let Some(items) = result.as_array() else {
-            self.status.text = "lsp: no document symbols".to_owned();
-            self.overlays.lsp_results.document_symbols = None;
-            self.close_overlay(OverlayKind::DocumentSymbols);
+            if !silent {
+                self.status.text = "lsp: no document symbols".to_owned();
+                self.overlays.lsp_results.document_symbols = None;
+                self.close_overlay(OverlayKind::DocumentSymbols);
+            }
             return;
         };
         let items = symbols_from_lsp(items);
         if let Some(path) = self.session.path.clone() {
             self.index_document_symbols(&path, &items);
+        }
+        if silent {
+            return;
         }
         if items.is_empty() {
             self.status.text = "lsp: no document symbols".to_owned();
