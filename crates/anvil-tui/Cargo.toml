@@ -52,10 +52,10 @@ regex = "1"
 unicode-segmentation = "1"
 
 [target.'cfg(unix)'.dependencies]
-nix = { version = "0.31", features = ["poll", "process", "signal", "term"] }
+nix = { version = "0.32", features = ["poll", "process", "signal", "term"] }
 
 [dev-dependencies]
-nix = { version = "0.31", features = ["poll", "process", "signal", "term"] }
+nix = { version = "0.32", features = ["poll", "process", "signal", "term"] }
 tempfile = "3"
 
 [[bench]]
