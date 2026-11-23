@@ -7,6 +7,10 @@ post-`0.5.0` feature line.
 
 
 ## [Unreleased]
+### Added
+- `anvil-project` provides a UI-neutral project model and a read-only
+  `cargo metadata` adapter for roots, targets, source roots, and capabilities.
+
 ### Changed
 - The tag-triggered release workflow now builds and uploads unsigned inputs
   with build provenance instead of signing with CI keys or publishing.

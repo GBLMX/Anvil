@@ -1,6 +1,6 @@
 # IDE Platform Plan
 
-Status: Active; design accepted, implementation not started
+Status: Active; S1 (read-only project model + Cargo adapter) landed
 
 Scope: move Anvil from an editor with IDE features to a project-aware IDE
 platform without turning the kernel into a language-specific compiler or
@@ -26,7 +26,8 @@ Already landed:
 - workspace file index and gateway-backed search;
 - runtime plugin host with commands, picker, completion, and existing
   capability-gated `sys.exec` / `sys.exec.v2`;
-- compile-time official modules: Git, workspace index, desktop, LaTeX, Typst.
+- compile-time official modules: Git, workspace index, desktop, LaTeX, Typst;
+- `anvil-project` read-only model with a `cargo metadata` adapter.
 
 The remaining product gap is not basic editing. It is project awareness,
 workspace-scale code intelligence, integration contribution, debugger depth,

@@ -225,6 +225,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "anvil-project"
+version = "0.7.0"
+dependencies = [
+ "serde_json",
+]
+
+[[package]]
 name = "anvil-session"
 version = "0.7.0"
 dependencies = [
