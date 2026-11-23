@@ -843,6 +843,14 @@ fn space_w_opens_workspace_start_page() {
 }
 
 #[test]
+fn space_p_opens_project_symbols() {
+    assert_eq!(
+        pending_action(' ', key(KeyCode::Char('P'), KeyModifiers::NONE), false),
+        Some(PendingCommand::WorkspaceSymbols)
+    );
+}
+
+#[test]
 fn keymap_list_includes_pending_and_context_bindings() {
     let mut model = Model::new(EditorState::from_text(""), None);
     model

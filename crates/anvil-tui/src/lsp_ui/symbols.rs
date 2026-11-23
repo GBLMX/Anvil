@@ -308,3 +308,51 @@ impl Model {
         self.file.dirty = true;
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::EditorState;
+
+    #[test]
+    fn lsp_symbols_refresh_the_runtime_index() {
+        let mut model = Model::new(EditorState::from_text(""), None);
+        model.load_project_info();
+        let before = model
+            .project
+            .platform
+            .as_ref()
+            .expect("runtime")
+            .symbols()
+            .len();
+        let path = model.workspace.path.join("src/main.rs");
+        model.index_workspace_symbols(&[WorkspaceSymbolItem {
+            name: "refreshed_symbol".to_owned(),
+            detail: "function".to_owned(),
+            path,
+            line: 2,
+            character: 4,
+        }]);
+        let after = model
+            .project
+            .platform
+            .as_ref()
+            .expect("runtime")
+            .symbols()
+            .len();
+        assert!(after > before);
+        assert!(model.open_cached_workspace_symbols());
+        let cached = model
+            .overlays
+            .lsp_results
+            .workspace_symbols
+            .as_ref()
+            .expect("cached panel");
+        assert!(
+            cached
+                .items
+                .iter()
+                .any(|item| item.name == "refreshed_symbol")
+        );
+    }
+}

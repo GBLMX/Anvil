@@ -22,6 +22,8 @@ post-`0.5.0` feature line.
 - `:project-symbols` opens the workspace-symbol panel from cached Cargo
   targets and the runtime symbol index; LSP document/workspace symbols feed
   that index.
+- `Space P` opens the project/index symbol panel directly; LSP symbol
+  responses refresh the same index.
 - Offline signing can consume the CI build-input artifact; `Release publish`
   verifies provenance, input checksums, and the checksum-key fingerprint
   before uploading release assets.

@@ -47,6 +47,8 @@ inside the editor with `:help start`.
 | `Space b` | buffer picker |
 | `Space p` | command palette |
 | `Space s` | document symbols |
+| `Space P` | project/index symbols quick jump |
+| `Space S` | workspace symbols |
 | `K` | hover |
 | `gd` / `gr` | definition / references |
 | `:` | Ex command |
