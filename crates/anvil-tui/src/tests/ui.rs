@@ -1180,6 +1180,23 @@ fn tiny_terminal_clears_alert_motion() {
 }
 
 #[test]
+fn short_terminal_clears_notification_motion() {
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.set_motion_enabled(true);
+    let backend = TestBackend::new(80, 3);
+    let mut terminal = Terminal::new(backend).expect("terminal");
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+
+    model.notify(
+        anvil_session::ui::NotificationSeverity::Info,
+        "test",
+        "short",
+    );
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+    assert!(!model.motion_active());
+}
+
+#[test]
 fn reduced_motion_skips_the_command_palette_fade() {
     let mut model = Model::new(EditorState::from_text(""), None);
     model.set_motion_enabled(true);
