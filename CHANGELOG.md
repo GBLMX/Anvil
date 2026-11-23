@@ -10,6 +10,8 @@ post-`0.5.0` feature line.
 ### Added
 - `anvil-project` provides a UI-neutral project model and a read-only
   `cargo metadata` adapter for roots, targets, source roots, and capabilities.
+- `anvil-integrations` defines closed execution capabilities, descriptor
+  hashing, and grants bound to integration, root, capability, and executable.
 
 ### Changed
 - The tag-triggered release workflow now builds and uploads unsigned inputs

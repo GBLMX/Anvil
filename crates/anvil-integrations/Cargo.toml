@@ -1,0 +1,11 @@
+[package]
+name = "anvil-integrations"
+description = "Declarative IDE integration descriptors and per-root execution grants"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+sha2 = "0.11"

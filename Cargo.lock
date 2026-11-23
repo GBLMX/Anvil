@@ -119,6 +119,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "anvil-integrations"
+version = "0.7.0"
+dependencies = [
+ "sha2 0.11.1",
+]
+
+[[package]]
 name = "anvil-ipc"
 version = "0.7.0"
 dependencies = [

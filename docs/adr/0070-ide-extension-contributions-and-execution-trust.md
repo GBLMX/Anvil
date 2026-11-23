@@ -1,6 +1,6 @@
 # ADR-0070: IDE Extension Contributions and Execution Trust
 
-- Status: Accepted; implementation pending
+- Status: Accepted; descriptor and grant contract implemented
 - Version: 1.0.0
 - Date: 2026-11-23
 - Related: [ADR-0001](0001-plugin-isolation.md),

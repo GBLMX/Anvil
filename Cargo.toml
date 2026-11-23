@@ -6,6 +6,7 @@ members = [
     "crates/anvil-ctl",
     "crates/anvil-distro-standard",
     "crates/anvil-editor",
+    "crates/anvil-integrations",
     "crates/anvil-ipc",
     "crates/anvil-lsp-client",
     "crates/anvil-mcp",
