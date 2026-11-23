@@ -25,6 +25,12 @@ pub(crate) fn macro_step(key: KeyEvent) -> MacroStep {
 /// Rebuilds a terminal key event from a macro step.
 pub(crate) fn macro_key(step: &MacroStep) -> Option<KeyEvent> {
     let chord = KeyChord::parse(&step.key).ok()?;
+    let mut code = chord.code;
+    if step.shift
+        && let KeyCode::Char(character) = code
+    {
+        code = KeyCode::Char(character.to_ascii_uppercase());
+    }
     let mut modifiers = KeyModifiers::NONE;
     if chord.ctrl {
         modifiers |= KeyModifiers::CONTROL;
@@ -38,7 +44,7 @@ pub(crate) fn macro_key(step: &MacroStep) -> Option<KeyEvent> {
     if step.shift {
         modifiers |= KeyModifiers::SHIFT;
     }
-    Some(KeyEvent::new(chord.code, modifiers))
+    Some(KeyEvent::new(code, modifiers))
 }
 
 impl KeyChord {

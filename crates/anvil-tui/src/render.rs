@@ -13,6 +13,7 @@ use ratatui::{
     text::{Line, Span},
     widgets::{Block, BorderType, Clear, Paragraph},
 };
+use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 mod editor;
@@ -67,13 +68,13 @@ pub(crate) fn truncate_width(text: &str, max: u16) -> String {
     let max = usize::from(max);
     let mut output = String::new();
     let mut width = 0;
-    for character in text.chars() {
-        let character_width = UnicodeWidthChar::width(character).unwrap_or(0);
-        if width + character_width > max {
+    for grapheme in text.graphemes(true) {
+        let grapheme_width = UnicodeWidthStr::width(grapheme);
+        if width + grapheme_width > max {
             break;
         }
-        width += character_width;
-        output.push(character);
+        width += grapheme_width;
+        output.push_str(grapheme);
     }
     output
 }
@@ -1033,6 +1034,19 @@ pub(crate) fn apply_code_block_background(model: &Model, lines: &mut [Line<'_>],
                 .push(Span::styled(" ".repeat(target - used), style));
         }
         *line = rendered;
+    }
+}
+
+#[cfg(test)]
+mod tests_truncate_width {
+    use super::truncate_width;
+
+    #[test]
+    fn keeps_wide_graphemes_whole() {
+        assert_eq!(truncate_width("你好", 3), "你");
+        assert_eq!(truncate_width("e\u{301}x", 1), "e\u{301}");
+        let family = "👩‍👩‍👧‍👦";
+        assert_eq!(truncate_width(&format!("{family}x"), 2), family);
     }
 }
 

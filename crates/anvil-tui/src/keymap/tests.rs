@@ -928,3 +928,11 @@ fn legacy_alt_uppercase_still_folds_without_shift() {
     let chord = KeyChord::from_key(key(KeyCode::Char('C'), KeyModifiers::ALT));
     assert_eq!(chord.code, KeyCode::Char('c'));
 }
+
+#[test]
+fn alt_shift_macro_round_trip_preserves_case() {
+    let original = KeyEvent::new(KeyCode::Char('A'), KeyModifiers::ALT | KeyModifiers::SHIFT);
+    let restored = macro_key(&macro_step(original)).expect("macro key");
+    assert_eq!(restored.code, KeyCode::Char('A'));
+    assert_eq!(restored.modifiers, KeyModifiers::ALT | KeyModifiers::SHIFT);
+}

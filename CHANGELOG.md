@@ -36,6 +36,8 @@ post-`0.5.0` feature line.
   when the project platform starts.
 - The TUI tracks enabled terminal capabilities and wraps dirty frames in synchronized output; `ANVIL_SYNCHRONIZED_OUTPUT=0` disables it.
 - Explicit `Alt+Shift` keymap bindings preserve the shifted key instead of folding it to lowercase.
+- TUI labels and overlay text truncate on grapheme boundaries, keeping emoji and combining sequences intact.
+- Alt+Shift macro replay preserves the shifted key instead of replaying lowercase.
 - Offline signing can consume the CI build-input artifact; `Release publish`
   verifies provenance, input checksums, and the checksum-key fingerprint
   before uploading release assets.

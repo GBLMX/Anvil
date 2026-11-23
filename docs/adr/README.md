@@ -76,7 +76,7 @@ their decision sections.
 | [0068](0068-tui-visual-language-and-markers.md) | Shared TUI glyph vocabulary, file icon routing, and panel conventions | Accepted; shared glyphs and file icons implemented 2026-11-20 |
 | [0069](0069-single-yubikey-0-7-0-exception.md) | One YubiKey with separate plugin and checksum keys for 0.7.0 | Accepted; second device deferred |
 | [0070](0070-ide-extension-contributions-and-execution-trust.md) | IDE integration descriptors and extension execution trust | Accepted; implementation pending |
-| [0071](0071-tui-terminal-capability-and-frame-delivery.md) | TUI terminal capability and frame delivery upgrade | Accepted; terminal profile, synchronized draw, and keyboard normalization implemented |
+| [0071](0071-tui-terminal-capability-and-frame-delivery.md) | TUI terminal capability and frame delivery upgrade | Accepted; terminal profile, synchronized draw, keyboard normalization, and wide-character truncation implemented |
 
 ## Numbering Rule
 
