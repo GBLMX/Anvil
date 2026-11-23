@@ -308,7 +308,8 @@ impl Model {
             return;
         }
         self.schedule_git_status_refresh();
-        if self.workspace.last_writes.get(&path).copied() == crate::session::source_mtime_ns(&path)
+        if let Some(mtime) = crate::session::source_mtime_ns(&path)
+            && self.workspace.last_writes.get(&path).copied() == Some(mtime)
         {
             return;
         }
@@ -357,6 +358,9 @@ impl Model {
             Ok(text) => text,
             Err(error) => {
                 self.mark_missing(path);
+                if !path.exists() {
+                    self.forget_symbols_for_path(path);
+                }
                 return Err(error);
             }
         };
@@ -398,6 +402,9 @@ impl Model {
             pane.buffer.missing = false;
         }
         self.sync_active();
+        if self.session.path.as_deref() == Some(path) {
+            self.request_document_symbols_silent_if_runtime();
+        }
         self.sync_watch_paths();
         self.workspace.stale_paths.remove(path);
         self.status.text = format!("reloaded {}", path.display());

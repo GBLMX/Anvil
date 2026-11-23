@@ -1705,3 +1705,51 @@ fn buffer_switch_requests_silent_symbol_refresh() {
     model.switch_buffer(-1);
     assert!(model.project.silent_symbol_refresh);
 }
+
+#[test]
+fn external_change_refreshes_active_symbol_index() {
+    let directory = tempfile::tempdir().expect("tempdir");
+    std::fs::create_dir(directory.path().join("src")).expect("src");
+    std::fs::write(
+        directory.path().join("Cargo.toml"),
+        "[package]\nname = \"refresh\"\nversion = \"0.1.0\"\nedition = \"2024\"\n",
+    )
+    .expect("manifest");
+    let path = directory.path().join("src/main.rs");
+    std::fs::write(&path, "fn main() {}\n").expect("file");
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.workspace.path = directory.path().to_path_buf();
+    model.open_path(&path).expect("open");
+    model.project.silent_symbol_refresh = false;
+    std::thread::sleep(std::time::Duration::from_millis(10));
+    std::fs::write(&path, "fn main() { let _ = 1; }\n").expect("external");
+    model.handle_external_change(path);
+    assert!(model.project.silent_symbol_refresh);
+}
+
+#[test]
+fn external_delete_forgets_active_symbols() {
+    let directory = tempfile::tempdir().expect("tempdir");
+    std::fs::create_dir(directory.path().join("src")).expect("src");
+    std::fs::write(
+        directory.path().join("Cargo.toml"),
+        "[package]\nname = \"refresh\"\nversion = \"0.1.0\"\nedition = \"2024\"\n",
+    )
+    .expect("manifest");
+    let path = directory.path().join("src/main.rs");
+    std::fs::write(&path, "fn main() {}\n").expect("file");
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.workspace.path = directory.path().to_path_buf();
+    model.open_path(&path).expect("open");
+    model.index_workspace_symbols(&[WorkspaceSymbolItem {
+        name: "gone".to_owned(),
+        detail: "function".to_owned(),
+        path: path.clone(),
+        line: 0,
+        character: 0,
+    }]);
+    std::fs::remove_file(&path).expect("remove");
+    model.handle_external_change(path);
+    let runtime = model.project.platform.as_ref().expect("runtime");
+    assert!(runtime.symbols().symbols("gone", 10).is_empty());
+}

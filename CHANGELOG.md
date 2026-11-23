@@ -28,6 +28,8 @@ post-`0.5.0` feature line.
   project symbol index without opening the symbol panel.
 - Buffer switches refresh the active file's symbols; rename and delete events
   drop the old path's symbols and refresh a renamed active buffer.
+- External file changes refresh the active file's symbols; missing files drop
+  their indexed symbols.
 - The first open/save lazily loads Cargo metadata once, so the index works
   without running `:project-info` first.
 - Offline signing can consume the CI build-input artifact; `Release publish`
