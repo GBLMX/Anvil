@@ -11,6 +11,7 @@ use std::{
     io,
     os::fd::{AsRawFd, OwnedFd},
     path::Path,
+    time::{Duration, Instant},
 };
 
 pub(crate) const MAX_TERMINAL_OUTPUT: usize = 256 * 1024;
@@ -82,13 +83,21 @@ impl PtySession {
     }
 
     pub(crate) fn write_all(&mut self, bytes: &[u8]) -> io::Result<()> {
+        const WRITE_DEADLINE: Duration = Duration::from_millis(250);
+        let deadline = Instant::now() + WRITE_DEADLINE;
         let mut written = 0;
         while written < bytes.len() {
             match write(&self.master, &bytes[written..]) {
                 Ok(0) => break,
                 Ok(count) => written += count,
                 Err(Errno::EAGAIN) => {
-                    std::thread::sleep(std::time::Duration::from_millis(5));
+                    if Instant::now() >= deadline {
+                        return Err(io::Error::new(
+                            io::ErrorKind::TimedOut,
+                            "terminal input is not being consumed",
+                        ));
+                    }
+                    std::thread::sleep(Duration::from_millis(2));
                 }
                 Err(error) => return Err(errno(error)),
             }
