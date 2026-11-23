@@ -659,13 +659,32 @@ impl Model {
         for effect in effects {
             match effect {
                 LspPollEffect::Event { key, event } => self.handle_lsp_event(&key, event),
-                LspPollEffect::Retry { key } => {
-                    if !self.language.lsp.workers.contains_key(&key) {
-                        self.start_lsp();
-                    }
-                }
+                LspPollEffect::Retry { key } => self.retry_lsp(key),
             }
         }
+    }
+
+    pub(crate) fn retry_lsp(&mut self, key: LspKey) {
+        if self.language.lsp.workers.contains_key(&key) {
+            return;
+        }
+        if self.language.lsp.config.as_ref() == Some(&key) {
+            self.start_lsp();
+            return;
+        }
+        self.language.lsp.status.insert(
+            key.clone(),
+            LspStatus::Failed {
+                root: key.2.clone(),
+                error: "lsp crashed in the background; switch to its root to restart".to_owned(),
+            },
+        );
+        self.language.lsp.retries.remove(&key);
+        self.status.text = format!(
+            "E: lsp crashed in the background: {}; switch to its root to restart",
+            key.2.display()
+        );
+        self.file.dirty = true;
     }
 
     fn flush_pending_lsp_sync(&mut self) {

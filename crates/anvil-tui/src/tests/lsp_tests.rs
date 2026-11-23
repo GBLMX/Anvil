@@ -2337,3 +2337,25 @@ fn recording_lsp_sync_tracks_current_revision() {
     );
     assert!(model.language.lsp.change_due.is_none());
 }
+
+#[test]
+fn background_lsp_retry_does_not_restart_current_root() {
+    let mut model = Model::new(EditorState::from_text("fn main() {}\n"), None);
+    let key: LspKey = (
+        "rust-analyzer".to_owned(),
+        "rust".to_owned(),
+        PathBuf::from("/other"),
+    );
+
+    model.retry_lsp(key.clone());
+
+    assert!(model.language.lsp.workers.is_empty());
+    match model.language.lsp.status.get(&key) {
+        Some(LspStatus::Failed { root, error }) => {
+            assert_eq!(root, &PathBuf::from("/other"));
+            assert!(error.contains("background"), "{error}");
+        }
+        status => panic!("unexpected status: {status:?}"),
+    }
+    assert!(model.status.text.contains("background"));
+}
