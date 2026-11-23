@@ -47,6 +47,10 @@ signed-index work stay deferred until the polish phase exits.
 
 ## Later
 
+- IDE platform after the `0.7.0` release gates: project model, workspace index,
+  declarative integration descriptors, debugger depth, and remote workspace;
+  see [docs/ide-platform-plan.md](docs/ide-platform-plan.md) and
+  [ADR-0070](docs/adr/0070-ide-extension-contributions-and-execution-trust.md).
 - [0.7.x] Official optional Rust modules: source-level only, feature-gated,
   trusted in-process code; see [docs/0.7.x-plan.md](docs/0.7.x-plan.md).
   Composition and two-consumer gate are landed (ADR-0027); the module contract

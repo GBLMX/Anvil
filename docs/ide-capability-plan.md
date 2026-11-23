@@ -7,6 +7,10 @@ are implemented. Cross-root tree/search is tracked separately in
 problems, quick-open preview, and icon themes are owned by
 `0.5.4`/`0.5.7`/`0.5.8`; this plan does not re-schedule them.
 
+Project-aware IDE work continues in
+[ide-platform-plan.md](ide-platform-plan.md) under
+[ADR-0070](adr/0070-ide-extension-contributions-and-execution-trust.md).
+
 Scope: editor-level capabilities that make Anvil usable for daily software work
 without turning the kernel into a full IDE. Anvil remains Linux-first, with no
 Tokio runtime, no in-process plugin UI, and no embedded WebView.

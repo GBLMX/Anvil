@@ -75,6 +75,7 @@ their decision sections.
 | [0067](0067-settings-file-hot-reload.md) | Poll settings and language files, preserve last-good config, defer while Settings is open | Accepted; implemented 2026-11-20 |
 | [0068](0068-tui-visual-language-and-markers.md) | Shared TUI glyph vocabulary, file icon routing, and panel conventions | Accepted; shared glyphs and file icons implemented 2026-11-20 |
 | [0069](0069-single-yubikey-0-7-0-exception.md) | One YubiKey with separate plugin and checksum keys for 0.7.0 | Accepted; second device deferred |
+| [0070](0070-ide-extension-contributions-and-execution-trust.md) | IDE integration descriptors and extension execution trust | Accepted; implementation pending |
 
 ## Numbering Rule
 

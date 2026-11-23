@@ -88,6 +88,7 @@ the owner.
 | [Small features](small-features-plan.md) | Vim-like motions, operators, display polish | Proposed |
 | [Plugin tactical interaction](plugin-mouse-canvas-plan.md) | scoped mouse, overlays, selection, alerts | Proposed; API 1.1 |
 | [AI telemetry HUD](ai-telemetry-plan.md) | local EPM/APM/Burst telemetry | Future P3 |
+| [IDE platform](ide-platform-plan.md) | project model, workspace index, integration descriptors, debug depth, remote | Active; design accepted, implementation not started |
 
 ## Landed plans and design records
 
