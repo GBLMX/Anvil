@@ -90,22 +90,62 @@ impl Model {
     }
 }
 
-pub(crate) fn render(model: &Model, frame: &mut Frame, area: Rect) {
-    let Some(explorer) = &model.overlays.test_explorer else {
-        return;
-    };
+pub(crate) fn popup_rect_for_hit(area: Rect, items: usize) -> Rect {
+    popup_rect(area, items)
+}
+
+fn popup_rect(area: Rect, items: usize) -> Rect {
     let width = (area.width * 3 / 4)
         .max(36)
         .min(area.width.saturating_sub(2));
-    let height = (explorer.items.len() as u16 + 3)
+    let height = (items as u16 + 3)
         .clamp(6, 18)
         .min(area.height.saturating_sub(2));
-    let popup = Rect {
+    Rect {
         x: area.x + (area.width.saturating_sub(width)) / 2,
         y: area.y + (area.height.saturating_sub(height)) / 2,
         width,
         height,
+    }
+}
+
+pub(crate) fn hit(model: &Model, area: Rect, col: u16, row: u16) -> Option<usize> {
+    let explorer = model.overlays.test_explorer.as_ref()?;
+    let popup = popup_rect(area, explorer.items.len());
+    let inner = Rect {
+        x: popup.x + 1,
+        y: popup.y + 1,
+        width: popup.width.saturating_sub(2),
+        height: popup.height.saturating_sub(2),
     };
+    if col < inner.x || col >= inner.right() || row < inner.y || row >= inner.bottom() {
+        return None;
+    }
+    let mut current_path = None;
+    let mut rows = Vec::new();
+    let mut selected_line = 0usize;
+    for (index, problem) in explorer.items.iter().enumerate() {
+        if current_path.as_ref() != Some(&problem.path) {
+            current_path = Some(problem.path.clone());
+            rows.push(None);
+        }
+        if index == explorer.selected {
+            selected_line = rows.len();
+        }
+        rows.push(Some(index));
+    }
+    let visible = inner.height as usize;
+    let start = selected_line.saturating_sub(visible.saturating_sub(1));
+    let line = start + usize::from(row - inner.y);
+    rows.get(line).copied().flatten()
+}
+
+pub(crate) fn render(model: &Model, frame: &mut Frame, area: Rect) {
+    let Some(explorer) = &model.overlays.test_explorer else {
+        return;
+    };
+    let popup = popup_rect(area, explorer.items.len());
+    let width = popup.width;
     frame.render_widget(Clear, popup);
     let content_width = width.saturating_sub(4) as usize;
     let mut lines = Vec::new();
@@ -134,7 +174,7 @@ pub(crate) fn render(model: &Model, frame: &mut Frame, area: Rect) {
             theme::panel().fg(theme::muted()),
         ));
     }
-    let visible = height.saturating_sub(2) as usize;
+    let visible = popup.height.saturating_sub(2) as usize;
     let start = selected_line
         .unwrap_or(0)
         .saturating_sub(visible.saturating_sub(1));
@@ -169,6 +209,31 @@ mod tests {
             code: None,
             message: format!("failure {line}"),
         }
+    }
+
+    #[test]
+    fn hit_maps_headers_and_rows() {
+        let mut model = Model::new(EditorState::from_text(""), None);
+        model.overlays.test_explorer = Some(TestExplorerState::new(vec![problem(0), problem(1)]));
+        let area = Rect::new(0, 0, 100, 30);
+        let popup = popup_rect(area, 2);
+        assert_eq!(hit(&model, area, popup.x + 2, popup.y + 2), Some(0));
+        assert_eq!(hit(&model, area, popup.x + 2, popup.y + 3), Some(1));
+        assert_eq!(hit(&model, area, popup.x, popup.y + 2), None);
+    }
+
+    #[test]
+    fn outside_click_closes_explorer() {
+        let mut model = Model::new(EditorState::from_text(""), None);
+        model.overlays.test_explorer = Some(TestExplorerState::new(vec![problem(0), problem(1)]));
+        let click = crossterm::event::MouseEvent {
+            kind: crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left),
+            column: 0,
+            row: 0,
+            modifiers: crossterm::event::KeyModifiers::NONE,
+        };
+        crate::keys::handle_event(&mut model, crossterm::event::Event::Mouse(click));
+        assert!(model.overlays.test_explorer.is_none());
     }
 
     #[test]

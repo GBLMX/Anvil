@@ -147,6 +147,47 @@ impl CommandCompletion {
     }
 }
 
+pub(crate) fn handle_completion_mouse(
+    model: &mut Model,
+    mouse: &crossterm::event::MouseEvent,
+    area: ratatui::layout::Rect,
+) -> bool {
+    if model.overlays.command_completion.is_some() {
+        match mouse.kind {
+            crossterm::event::MouseEventKind::ScrollUp => {
+                if let Some(completion) = model.overlays.command_completion.as_mut() {
+                    completion.move_by(-1);
+                }
+                model.file.dirty = true;
+                return true;
+            }
+            crossterm::event::MouseEventKind::ScrollDown => {
+                if let Some(completion) = model.overlays.command_completion.as_mut() {
+                    completion.move_by(1);
+                }
+                model.file.dirty = true;
+                return true;
+            }
+            _ => {}
+        }
+    }
+    if mouse.kind == crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left)
+        && model.overlays.command_completion.is_some()
+        && let Some(row) =
+            crate::render::command_completion_row_at(model, area, mouse.column, mouse.row)
+    {
+        model
+            .overlays
+            .command_completion
+            .as_mut()
+            .expect("command completion")
+            .select(row);
+        model.file.dirty = true;
+        return true;
+    }
+    false
+}
+
 impl Model {
     pub(crate) fn refresh_command_completion(&mut self) {
         let InputMode::CommandLine { buffer } = &self.ui.input_mode else {

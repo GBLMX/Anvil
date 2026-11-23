@@ -40,6 +40,7 @@ post-`0.5.0` feature line.
 - Command palette rows now respond to mouse clicks for selection while Enter still executes.
 - Buffer, provider, changed-file, jump, and history pickers now consume mouse input and support row selection and wheel scrolling.
 - Code actions, document symbols, references, and call hierarchy rows now support click selection.
+- Test failure rows now support click selection, wheel scrolling, and outside-click close.
 - Command-line completion rows now support click selection while Tab and Enter still accept.
 - Mouse wheel scrolls command-line and LSP completion selections without moving the editor.
 - Problems rows support click selection and wheel scrolling while Enter still jumps.
