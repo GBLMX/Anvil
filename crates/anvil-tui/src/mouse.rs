@@ -64,6 +64,27 @@ pub(crate) fn handle_mouse(model: &mut Model, mouse: MouseEvent, width: u16, hei
                     model.move_theme_browser(1);
                     return true;
                 }
+                MouseEventKind::Down(MouseButton::Left) => {
+                    if let Some(browser) = model.overlays.theme_browser.as_ref()
+                        && let Some(index) =
+                            crate::theme_browser::hit(browser, area, mouse.column, mouse.row)
+                    {
+                        let browser = model
+                            .overlays
+                            .theme_browser
+                            .as_mut()
+                            .expect("theme browser");
+                        browser.selected = index;
+                        if let Some(name) = browser.selected_name() {
+                            let _ = crate::theme::apply_choice(
+                                crate::theme::Choice::Fixed(name),
+                                false,
+                            );
+                        }
+                        model.file.dirty = true;
+                        return true;
+                    }
+                }
                 _ => {}
             }
         }

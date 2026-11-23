@@ -127,6 +127,40 @@ fn list_start(selected: usize, len: usize, visible: usize) -> usize {
         .min(len.saturating_sub(visible))
 }
 
+fn list_area(area: ratatui::layout::Rect) -> ratatui::layout::Rect {
+    let popup = rect(area);
+    let left_width = (popup.width / 3)
+        .max(20)
+        .min(popup.width.saturating_sub(30));
+    ratatui::layout::Rect {
+        width: left_width,
+        ..popup
+    }
+}
+
+pub(crate) fn hit(
+    browser: &ThemeBrowser,
+    area: ratatui::layout::Rect,
+    col: u16,
+    row: u16,
+) -> Option<usize> {
+    let left = list_area(area);
+    let inner = ratatui::layout::Rect {
+        x: left.x + 1,
+        y: left.y + 1,
+        width: left.width.saturating_sub(2),
+        height: left.height.saturating_sub(2),
+    };
+    if col < inner.x || col >= inner.right() || row < inner.y || row >= inner.bottom() {
+        return None;
+    }
+    let names = theme::names();
+    let visible = usize::from(inner.height).max(1);
+    let start = list_start(browser.selected, names.len(), visible);
+    let index = start + usize::from(row - inner.y);
+    (index < names.len()).then_some(index)
+}
+
 pub(crate) fn render(
     browser: &ThemeBrowser,
     frame: &mut ratatui::Frame,
@@ -136,16 +170,10 @@ pub(crate) fn render(
     let popup = rect(area);
     frame.render_widget(ratatui::widgets::Clear, popup);
     let gap = 2;
-    let left_width = (popup.width / 3)
-        .max(20)
-        .min(popup.width.saturating_sub(30));
-    let left = ratatui::layout::Rect {
-        width: left_width,
-        ..popup
-    };
+    let left = list_area(area);
     let right = ratatui::layout::Rect {
-        x: popup.x + left_width + gap,
-        width: popup.width.saturating_sub(left_width + gap),
+        x: left.right() + gap,
+        width: popup.width.saturating_sub(left.width + gap),
         ..popup
     };
     let visible = usize::from(left.height.saturating_sub(2)).max(1);
@@ -225,6 +253,19 @@ mod tests {
         assert_eq!(browser.original(), original);
         assert_eq!(browser.selected_name(), last);
         theme::set_startup_theme("anvil-dark").expect("reset");
+    }
+
+    #[test]
+    fn theme_list_hit_maps_visible_rows() {
+        let area = ratatui::layout::Rect::new(0, 0, 100, 30);
+        let mut browser = ThemeBrowser::new();
+        browser.selected = 0;
+        let left = list_area(area);
+        let first = hit(&browser, area, left.x + 1, left.y + 1).expect("first row");
+        assert_eq!(first, 0);
+        let second = hit(&browser, area, left.x + 1, left.y + 2).expect("second row");
+        assert_eq!(second, 1);
+        assert!(hit(&browser, area, left.x, left.y + 1).is_none());
     }
 
     #[test]
