@@ -4,6 +4,9 @@ use super::*;
 use unicode_width::UnicodeWidthStr;
 pub fn view(model: &Model, frame: &mut Frame) {
     let area = frame.area();
+    let motion_now = Instant::now();
+    let motion_overlay = model.top_overlay();
+    let motion_rect = motion_overlay.and_then(|kind| crate::motion::overlay_rect(kind, area));
     let editor_view: EditorView = model.session.editor.snapshot().view();
     let title = if model.pager.back.is_some() {
         format!("[{}]", model.pager.title.as_deref().unwrap_or("help"))
@@ -392,6 +395,14 @@ pub fn view(model: &Model, frame: &mut Frame) {
         );
     }
     render_overlays(model, frame, area);
+    if let Some((rect, alpha)) = model.motion.borrow_mut().fade(
+        motion_now,
+        motion_overlay,
+        motion_rect,
+        model.config.settings.ui.reduced_motion,
+    ) {
+        crate::motion::fade_buffer(frame.buffer_mut(), rect, alpha);
+    }
 }
 
 fn indentation_columns(model: &Model, line_number: usize) -> Option<usize> {

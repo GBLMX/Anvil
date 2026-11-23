@@ -78,7 +78,7 @@ their decision sections.
 | [0070](0070-ide-extension-contributions-and-execution-trust.md) | IDE integration descriptors and extension execution trust | Accepted; implementation pending |
 | [0071](0071-tui-terminal-capability-and-frame-delivery.md) | TUI terminal capability and frame delivery upgrade | Accepted; terminal profile, synchronized draw, keyboard normalization, and wide-character truncation implemented |
 | [0072](0072-opt-in-osc52-clipboard-fallback.md) | Opt-in OSC 52 clipboard write fallback | Accepted; implemented 2026-11-23 |
-| [0073](0073-tui-motion-and-transition-boundary.md) | TUI motion and transition boundary | Proposed |
+| [0073](0073-tui-motion-and-transition-boundary.md) | TUI motion and transition boundary | Accepted; command palette enter fade implemented |
 
 ## Numbering Rule
 

@@ -1041,6 +1041,34 @@ fn reduced_motion_uses_a_static_busy_glyph() {
 }
 
 #[test]
+fn command_palette_fades_only_when_motion_is_enabled() {
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.set_motion_enabled(true);
+    model.open_command_palette();
+    let backend = TestBackend::new(80, 24);
+    let mut terminal = Terminal::new(backend).expect("terminal");
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+    assert!(model.motion_active());
+
+    model.motion.borrow_mut().finish();
+    model.file.dirty = true;
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+    assert!(!model.motion_active());
+}
+
+#[test]
+fn reduced_motion_skips_the_command_palette_fade() {
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.set_motion_enabled(true);
+    model.config.settings.ui.reduced_motion = true;
+    model.open_command_palette();
+    let backend = TestBackend::new(80, 24);
+    let mut terminal = Terminal::new(backend).expect("terminal");
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+    assert!(!model.motion_active());
+}
+
+#[test]
 fn welcome_shows_recent_files_and_r_opens_them() {
     let workspace = tempfile::tempdir().expect("workspace");
     fs::write(workspace.path().join("main.rs"), "fn main() {}").expect("file");

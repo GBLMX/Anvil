@@ -1,6 +1,6 @@
 # ADR-0073: TUI Motion and Transition Boundary
 
-- Status: Proposed
+- Status: Accepted; command palette enter fade implemented
 - Version: 1.0.0
 - Date: 2026-11-23
 - Related: [ADR-0016](0016-render-style-layers.md),
@@ -134,6 +134,15 @@ Negative:
   TachyonFX gate is met.
 - Motion state adds one more owner to the existing TUI loop and needs lifecycle
   tests.
+
+## Implementation status
+
+2026-11-23: the local engine is in `anvil-tui/src/motion.rs`. The command
+palette fades in over 120 ms behind synchronized output. It is disabled by
+`reduced_motion`, `NO_COLOR`, `TERM=dumb`, or unavailable synchronized output.
+Closing remains immediate; exit transitions need a buffered previous frame and
+are not part of this delivery.
+
 
 ## Verification
 

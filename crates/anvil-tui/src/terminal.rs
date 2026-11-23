@@ -403,6 +403,10 @@ pub fn run_with_all_services(
         keyboard_enhancement: !crate::terminal_background::terminal_queries_disabled(),
         ..Default::default()
     })?;
+    let motion_enabled = terminal.profile().synchronized_output
+        && std::env::var_os("NO_COLOR").is_none()
+        && std::env::var("TERM").map_or(true, |term| !term.eq_ignore_ascii_case("dumb"));
+    model.set_motion_enabled(motion_enabled);
     let terminal_ready = start.elapsed();
     let mut last_title_path: Option<PathBuf> = None;
     let mut last_title_workspace = PathBuf::new();
@@ -457,6 +461,9 @@ pub fn run_with_all_services(
         model.tick_search();
         if model.file.dirty {
             terminal.draw(|frame| view(&model, frame))?;
+            if !terminal.profile().synchronized_output {
+                model.set_motion_enabled(false);
+            }
             model.file.dirty = false;
             if first_draw {
                 first_draw = false;
@@ -482,8 +489,12 @@ pub fn run_with_all_services(
             model.file.dirty = true;
         }
         poll_presentation(&mut model, size.height.saturating_sub(2));
+        if model.motion_active() {
+            model.file.dirty = true;
+        }
+        let poll_timeout = if model.motion_active() { 16 } else { 50 };
         model.expire_leader();
-        if event::poll(std::time::Duration::from_millis(50))? {
+        if event::poll(std::time::Duration::from_millis(poll_timeout))? {
             handle_event(&mut model, event::read()?);
         }
         if session_enabled

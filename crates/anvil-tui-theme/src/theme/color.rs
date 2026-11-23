@@ -43,6 +43,24 @@ pub fn color_rgb(color: Color) -> Option<(u8, u8, u8)> {
     }
 }
 
+/// Mixes `color` over `base`; `alpha` 0 keeps the base and 1 keeps the color.
+pub fn blend(color: Color, base: Color, alpha: f32) -> Color {
+    let (Some((red, green, blue)), Some((base_red, base_green, base_blue))) =
+        (color_rgb(color), color_rgb(base))
+    else {
+        return color;
+    };
+    let alpha = alpha.clamp(0.0, 1.0);
+    let mix = |base: u8, value: u8| {
+        (f32::from(base) + (f32::from(value) - f32::from(base)) * alpha).round() as u8
+    };
+    super::degrade_color(Color::Rgb(
+        mix(base_red, red),
+        mix(base_green, green),
+        mix(base_blue, blue),
+    ))
+}
+
 pub fn indexed_rgb(index: u8) -> (u8, u8, u8) {
     const ANSI: [(u8, u8, u8); 16] = [
         (0, 0, 0),

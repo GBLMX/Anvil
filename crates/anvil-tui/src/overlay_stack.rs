@@ -17,6 +17,13 @@ impl Model {
         self.surfaces.push_overlay(SurfaceId::from(kind));
         self.overlays.stack.push(OverlayEntry { kind });
         self.file.dirty = true;
+        if kind == OverlayKind::CommandPalette {
+            self.motion.borrow_mut().start(
+                kind,
+                Instant::now(),
+                self.config.settings.ui.reduced_motion,
+            );
+        }
     }
 
     pub(crate) fn push_overlay_if_idle(&mut self, kind: OverlayKind) {

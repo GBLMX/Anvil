@@ -55,6 +55,7 @@ mod inlay_hints;
 mod languages;
 mod lsp_ui;
 mod modal;
+mod motion;
 mod mouse;
 mod overlay_stack;
 mod overlays;
@@ -193,6 +194,8 @@ pub struct Model {
     /// Focusable surface identity and overlay history.
     surfaces: surface::FocusStack,
     overlays: OverlayState,
+    /// Bounded post-render transitions; never editor state.
+    motion: RefCell<motion::MotionState>,
     /// Icon and theme persistence state.
     appearance: AppearanceState,
     /// Project search and replace runtime state.

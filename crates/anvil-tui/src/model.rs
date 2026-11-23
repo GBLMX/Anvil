@@ -95,6 +95,7 @@ impl Model {
             language: LanguageState::default(),
             surfaces: surface::FocusStack::default(),
             overlays: OverlayState::default(),
+            motion: RefCell::new(motion::MotionState::default()),
             appearance: AppearanceState {
                 ascii_icons: icon_theme::ascii_mode(),
                 persist_theme: !cfg!(test),
