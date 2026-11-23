@@ -100,6 +100,16 @@ func confinedDir(workspace, relative string) (string, error) {
 	return candidate, nil
 }
 
+func needsWorkspaceWrite(tool string, args []string) bool {
+	if filepath.Base(tool) != "git" || len(args) == 0 {
+		return false
+	}
+	if args[0] == "add" {
+		return true
+	}
+	return len(args) > 1 && args[0] == "--no-pager" && args[1] == "add"
+}
+
 func (s *Server) exec(parent context.Context, req request, state *connectionState) (interface{}, *rpcError) {
 	if rpcErr := s.permissionError(state, "sys.exec"); rpcErr != nil {
 		return nil, rpcErr
@@ -176,10 +186,11 @@ func (s *Server) exec(parent context.Context, req request, state *connectionStat
 		"-tool", params.Tool,
 		"-runtime-paths", strings.Join(runtimePaths, ","),
 		"-exec-paths", strings.Join(execPaths, ","),
-		"-workspace-write",
-		"-env", strings.Join(extraEnv, ","),
-		"--",
 	}
+	if needsWorkspaceWrite(params.Tool, params.Args) {
+		args = append(args, "-workspace-write")
+	}
+	args = append(args, "-env", strings.Join(extraEnv, ","), "--")
 	args = append(args, params.Args...)
 	env := []string{}
 	if s.cgroup != "" {

@@ -56,6 +56,24 @@ func TestExecGitApplyAllowedForEditorConnection(t *testing.T) {
 	}
 }
 
+func TestNeedsWorkspaceWrite(t *testing.T) {
+	cases := []struct {
+		tool string
+		args []string
+		want bool
+	}{
+		{"/usr/bin/git", []string{"add", "--", "a.go"}, true},
+		{"/usr/bin/git", []string{"--no-pager", "add", "-A"}, true},
+		{"/usr/bin/git", []string{"status"}, false},
+		{"/usr/bin/rg", []string{"add"}, false},
+	}
+	for _, tc := range cases {
+		if got := needsWorkspaceWrite(tc.tool, tc.args); got != tc.want {
+			t.Fatalf("%s %v: got %v, want %v", tc.tool, tc.args, got, tc.want)
+		}
+	}
+}
+
 func TestConfinedDirRejectsSymlinkEscape(t *testing.T) {
 	workspace := t.TempDir()
 	outside := t.TempDir()
