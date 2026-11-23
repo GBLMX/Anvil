@@ -845,6 +845,7 @@ impl Model {
             return;
         }
         self.workspace.file_worker = None;
+        self.workspace.root_file_workers.clear();
         self.language.lsp.workers.clear();
 
         self.language.lsp.config = None;
