@@ -140,6 +140,37 @@ pub(crate) fn hit(model: &Model, area: Rect, col: u16, row: u16) -> Option<usize
     rows.get(line).copied().flatten()
 }
 
+pub(crate) fn handle_mouse(
+    model: &mut Model,
+    mouse: &crossterm::event::MouseEvent,
+    area: Rect,
+) -> bool {
+    if model.overlays.test_explorer.is_none() {
+        return false;
+    }
+    match mouse.kind {
+        crossterm::event::MouseEventKind::ScrollUp => {
+            model.move_test_explorer(-1);
+            true
+        }
+        crossterm::event::MouseEventKind::ScrollDown => {
+            model.move_test_explorer(1);
+            true
+        }
+        crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left) => {
+            let Some(index) = hit(model, area, mouse.column, mouse.row) else {
+                return false;
+            };
+            if let Some(explorer) = model.overlays.test_explorer.as_mut() {
+                explorer.selected = index;
+            }
+            model.file.dirty = true;
+            true
+        }
+        _ => false,
+    }
+}
+
 pub(crate) fn render(model: &Model, frame: &mut Frame, area: Rect) {
     let Some(explorer) = &model.overlays.test_explorer else {
         return;

@@ -82,18 +82,11 @@ pub(crate) fn handle_mouse(model: &mut Model, mouse: MouseEvent, width: u16, hei
         }
     }
     if overlay_open(model) {
-        if model.overlays.test_explorer.is_some() {
-            match mouse.kind {
-                MouseEventKind::ScrollUp => {
-                    model.move_test_explorer(-1);
-                    return true;
-                }
-                MouseEventKind::ScrollDown => {
-                    model.move_test_explorer(1);
-                    return true;
-                }
-                _ => {}
-            }
+        if crate::debug_panel::handle_mouse(model, &mouse, area) {
+            return true;
+        }
+        if crate::test_explorer::handle_mouse(model, &mouse, area) {
+            return true;
         }
         if model.ui.problems.visible {
             match mouse.kind {
@@ -228,16 +221,6 @@ pub(crate) fn handle_mouse(model: &mut Model, mouse: MouseEvent, width: u16, hei
         {
             model.overlays.fuzzy.as_mut().expect("fuzzy").selected = row;
             model.request_preview();
-            model.file.dirty = true;
-            return true;
-        }
-        if mouse.kind == MouseEventKind::Down(MouseButton::Left)
-            && model.overlays.test_explorer.is_some()
-            && let Some(index) = crate::test_explorer::hit(model, area, mouse.column, mouse.row)
-        {
-            if let Some(explorer) = model.overlays.test_explorer.as_mut() {
-                explorer.selected = index;
-            }
             model.file.dirty = true;
             return true;
         }
@@ -584,6 +567,7 @@ fn overlay_open(model: &Model) -> bool {
         || model.overlays.lsp_results.references.is_some()
         || model.overlays.lsp_results.call_hierarchy.is_some()
         || model.overlays.settings_overlay.is_some()
+        || model.overlays.debug_panel.is_some()
         || model.overlays.test_explorer.is_some()
         || model.overlays.theme_browser.is_some()
         || model.language.completion.completion.is_some()
@@ -619,6 +603,9 @@ fn close_outside_overlay(model: &mut Model) {
     }
     if model.overlays.settings_overlay.is_some() {
         model.cancel_settings();
+    }
+    if model.overlays.debug_panel.is_some() {
+        model.close_debug_panel();
     }
     if model.overlays.test_explorer.is_some() {
         model.close_test_explorer();
@@ -691,6 +678,10 @@ fn inside_overlay(model: &Model, col: u16, row: u16, area: Rect) -> bool {
     }
     if model.overlays.settings_overlay.is_some() {
         return crate::render::rect_contains(crate::settings_ui::rect(area), col, row);
+    }
+    if let Some(panel) = model.overlays.debug_panel.as_ref() {
+        let popup = crate::debug_panel::popup_rect(area, panel.selected_len());
+        return crate::render::rect_contains(popup, col, row);
     }
     if let Some(explorer) = model.overlays.test_explorer.as_ref() {
         let popup = crate::test_explorer::popup_rect_for_hit(area, explorer.items.len());

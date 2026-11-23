@@ -102,12 +102,18 @@ pub(crate) struct DebugSnapshot {
 const DAP_REFRESH_TIMEOUT: Duration = Duration::from_secs(5);
 
 impl DebugPanelState {
-    fn selected_len(&self) -> usize {
+    pub(crate) fn selected_len(&self) -> usize {
         match self.kind {
             DebugPanelKind::Threads => self.threads.len(),
             DebugPanelKind::Stack => self.frames.len(),
             DebugPanelKind::Variables => self.variables.len(),
             DebugPanelKind::Watch => self.watches.len(),
+        }
+    }
+
+    pub(crate) fn select(&mut self, index: usize) {
+        if index < self.selected_len() {
+            *self.selected_mut() = index;
         }
     }
 
@@ -554,22 +560,82 @@ fn request_body(
     Ok(response.get("body").cloned().unwrap_or(Value::Null))
 }
 
-pub(crate) fn render(model: &Model, frame: &mut Frame, area: Rect) {
-    let Some(panel) = &model.overlays.debug_panel else {
-        return;
-    };
+pub(crate) fn popup_rect(area: Rect, items: usize) -> Rect {
     let width = (area.width * 2 / 5)
         .max(34)
         .min(area.width.saturating_sub(2));
-    let height = (panel.selected_len() as u16 + 4)
+    let height = (items as u16 + 4)
         .clamp(9, 19)
         .min(area.height.saturating_sub(2));
-    let popup = Rect {
+    Rect {
         x: area.x + area.width.saturating_sub(width + 1),
         y: area.y + 1,
         width,
         height,
+    }
+}
+
+pub(crate) fn hit(model: &Model, area: Rect, col: u16, row: u16) -> Option<usize> {
+    let panel = model.overlays.debug_panel.as_ref()?;
+    let popup = popup_rect(area, panel.selected_len());
+    let inner = Rect {
+        x: popup.x + 1,
+        y: popup.y + 1,
+        width: popup.width.saturating_sub(2),
+        height: popup.height.saturating_sub(3),
     };
+    if col < inner.x || col >= inner.right() || row < inner.y || row >= inner.bottom() {
+        return None;
+    }
+    let selected = match panel.kind {
+        DebugPanelKind::Threads => panel.selected_thread,
+        DebugPanelKind::Stack => panel.selected_frame,
+        DebugPanelKind::Variables => panel.selected_variable,
+        DebugPanelKind::Watch => panel.selected_watch,
+    };
+    let start = selected.saturating_sub(inner.height.saturating_sub(1) as usize);
+    let index = start + usize::from(row - inner.y);
+    (index < panel.selected_len()).then_some(index)
+}
+
+pub(crate) fn handle_mouse(
+    model: &mut Model,
+    mouse: &crossterm::event::MouseEvent,
+    area: Rect,
+) -> bool {
+    if model.overlays.debug_panel.is_none() {
+        return false;
+    }
+    match mouse.kind {
+        crossterm::event::MouseEventKind::ScrollUp => {
+            model.move_debug_selection(-1);
+            true
+        }
+        crossterm::event::MouseEventKind::ScrollDown => {
+            model.move_debug_selection(1);
+            true
+        }
+        crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left) => {
+            let Some(index) = hit(model, area, mouse.column, mouse.row) else {
+                return false;
+            };
+            if let Some(panel) = model.overlays.debug_panel.as_mut() {
+                panel.select(index);
+            }
+            model.file.dirty = true;
+            true
+        }
+        _ => false,
+    }
+}
+
+pub(crate) fn render(model: &Model, frame: &mut Frame, area: Rect) {
+    let Some(panel) = &model.overlays.debug_panel else {
+        return;
+    };
+    let popup = popup_rect(area, panel.selected_len());
+    let width = popup.width;
+    let height = popup.height;
     frame.render_widget(Clear, popup);
     let content_width = width.saturating_sub(4) as usize;
     let mut lines = Vec::new();
@@ -698,83 +764,4 @@ fn push_item(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[cfg(unix)]
-    #[test]
-    fn snapshot_reads_threads_stack_scopes_variables_and_watches() {
-        let directory = std::env::temp_dir().join(format!(
-            "anvil-debug-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|duration| duration.as_nanos())
-                .unwrap_or_default()
-        ));
-        std::fs::create_dir_all(&directory).expect("create temp dir");
-        let adapter = directory.join("adapter.py");
-        std::fs::write(
-            &adapter,
-            r#"import json, sys
-bodies = {
-    "threads": {"threads": [{"id": 1, "name": "main"}]},
-    "stackTrace": {"stackFrames": [{"id": 10, "name": "run", "source": {"path": "/tmp/main.rs"}, "line": 7, "column": 3}]},
-    "scopes": {"scopes": [{"name": "Locals", "variablesReference": 100}]},
-    "variables": {"variables": [{"name": "x", "value": "42", "variablesReference": 0}]},
-    "evaluate": {"result": "3"},
-}
-while True:
-    headers = {}
-    while True:
-        line = sys.stdin.buffer.readline()
-        if not line:
-            sys.exit(0)
-        if line in (b"\r\n", b"\n"):
-            break
-        key, value = line.decode().split(":", 1)
-        headers[key.lower()] = value.strip()
-    body = sys.stdin.buffer.read(int(headers["content-length"]))
-    request = json.loads(body)
-    response = {
-        "seq": 1,
-        "type": "response",
-        "request_seq": request["seq"],
-        "success": True,
-        "command": request["command"],
-        "body": bodies.get(request["command"], {}),
-    }
-    data = json.dumps(response).encode()
-    sys.stdout.buffer.write(f"Content-Length: {len(data)}\r\n\r\n".encode() + data)
-    sys.stdout.buffer.flush()
-"#,
-        )
-        .expect("write adapter");
-        let mut client = DapClient::spawn(
-            Path::new("python3"),
-            &[adapter.display().to_string()],
-            &directory,
-        )
-        .expect("spawn adapter");
-        let request = client.initialize().expect("initialize");
-        client.wait_response(request).expect("initialize response");
-        let snapshot = snapshot(
-            &mut client,
-            &DebugSelection {
-                thread: 0,
-                frame: 0,
-                scope: 0,
-                watches: vec!["count".to_owned()],
-            },
-        )
-        .expect("snapshot");
-        assert_eq!(snapshot.threads[0].name, "main");
-        assert_eq!(snapshot.frames[0].line, 7);
-        assert_eq!(snapshot.scopes[0].name, "Locals");
-        assert_eq!(snapshot.variables[0].name, "x");
-        assert_eq!(snapshot.variables[0].value, "42");
-        assert_eq!(snapshot.watches[0].value, "3");
-        client.kill();
-        let _ = std::fs::remove_dir_all(directory);
-    }
-}
+mod tests;
