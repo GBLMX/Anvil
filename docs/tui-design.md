@@ -97,4 +97,4 @@ related workflows. Otherwise it remains a bounded overlay.
    still need the same treatment.
 4. Theme preview page uses the same panel/selected primitives (`:themes`).
 5. Optional animation only where it communicates transition, never for
-   decoration.
+   decoration; see [ADR-0073](adr/0073-tui-motion-and-transition-boundary.md).
