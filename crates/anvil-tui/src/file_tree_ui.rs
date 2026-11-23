@@ -648,6 +648,15 @@ impl Model {
                     Ok(()) => {
                         if !copy {
                             self.remap_open_path(&from, &to);
+                            self.forget_symbols_for_path(&from);
+                            if self
+                                .session
+                                .path
+                                .as_ref()
+                                .is_some_and(|path| path.starts_with(&to))
+                            {
+                                self.request_document_symbols_silent_if_runtime();
+                            }
                         }
                         self.status.text = if copy {
                             format!("copied {}", to.display())
@@ -669,6 +678,7 @@ impl Model {
                 match result {
                     Ok(()) => {
                         self.mark_missing(&path);
+                        self.forget_symbols_for_path(&path);
                         self.status.text = format!("deleted {}", path.display());
                         self.refresh_tree(None);
                         self.finish_busy_progress(None);

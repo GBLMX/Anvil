@@ -394,6 +394,7 @@ impl Model {
         self.ui.input_mode = InputMode::Normal;
         self.input.pending = None;
         self.sync_lsp_active();
+        self.request_document_symbols_silent_if_runtime();
         self.file.dirty = true;
     }
 

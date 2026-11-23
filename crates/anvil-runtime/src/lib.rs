@@ -82,6 +82,15 @@ impl Runtime {
         &mut self.symbols
     }
 
+    /// Remove indexed symbols for a file or directory subtree.
+    pub fn remove_symbols_under_path(&mut self, path: &Path) -> usize {
+        let Ok(relative) = path.strip_prefix(&self.workspace_root) else {
+            return 0;
+        };
+        let relative = relative.to_string_lossy().replace('\\', "/");
+        self.symbols.remove_paths_under(&relative)
+    }
+
     /// Authorize one integration launch against this root's trust and grants.
     pub fn authorize(
         &self,

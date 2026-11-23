@@ -141,6 +141,11 @@ impl Model {
             );
         }
     }
+    pub(crate) fn forget_symbols_for_path(&mut self, path: &Path) {
+        if let Some(runtime) = self.project.platform.as_mut() {
+            runtime.remove_symbols_under_path(path);
+        }
+    }
     pub(crate) fn move_workspace_symbol(&mut self, delta: isize) {
         if let Some(symbols) = self.overlays.lsp_results.workspace_symbols.as_mut() {
             symbols.selected = symbols

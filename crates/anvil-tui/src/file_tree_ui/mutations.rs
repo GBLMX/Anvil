@@ -301,6 +301,10 @@ impl Model {
         match self.rename_path(&path, &target) {
             Ok(()) => {
                 self.remap_open_path(&path, &target);
+                self.forget_symbols_for_path(&path);
+                if self.session.path.as_deref() == Some(target.as_path()) {
+                    self.request_document_symbols_silent_if_runtime();
+                }
                 self.refresh_tree(Some(target.clone()));
                 if let Some(root) = self.secondary_root(&target) {
                     self.refresh_root_tree(&root);
@@ -350,6 +354,7 @@ impl Model {
         }
         match self.remove_path(&path) {
             Ok(()) => {
+                self.forget_symbols_for_path(&path);
                 self.refresh_tree(None);
                 if let Some(root) = self.secondary_root(&path) {
                     self.refresh_root_tree(&root);

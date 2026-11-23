@@ -26,6 +26,8 @@ post-`0.5.0` feature line.
   responses refresh the same index.
 - Opening or saving a file silently requests document symbols to refresh the
   project symbol index without opening the symbol panel.
+- Buffer switches refresh the active file's symbols; rename and delete events
+  drop the old path's symbols and refresh a renamed active buffer.
 - Offline signing can consume the CI build-input artifact; `Release publish`
   verifies provenance, input checksums, and the checksum-key fingerprint
   before uploading release assets.

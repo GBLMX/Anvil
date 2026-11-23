@@ -1681,3 +1681,27 @@ fn open_and_save_request_silent_symbol_refresh() {
     assert!(model.save_to(path.clone()));
     assert!(model.project.silent_symbol_refresh);
 }
+
+#[test]
+fn buffer_switch_requests_silent_symbol_refresh() {
+    let directory = tempfile::tempdir().expect("tempdir");
+    std::fs::create_dir(directory.path().join("src")).expect("src");
+    std::fs::write(
+        directory.path().join("Cargo.toml"),
+        "[package]\nname = \"refresh\"\nversion = \"0.1.0\"\nedition = \"2024\"\n",
+    )
+    .expect("manifest");
+    let first = directory.path().join("src/a.rs");
+    let second = directory.path().join("src/b.rs");
+    std::fs::write(directory.path().join("src/main.rs"), "fn main() {}\n").expect("main");
+    std::fs::write(&first, "fn a() {}\n").expect("first");
+    std::fs::write(&second, "fn b() {}\n").expect("second");
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.workspace.path = directory.path().to_path_buf();
+    model.load_project_info();
+    model.open_path(&first).expect("open first");
+    model.open_path(&second).expect("open second");
+    model.project.silent_symbol_refresh = false;
+    model.switch_buffer(-1);
+    assert!(model.project.silent_symbol_refresh);
+}

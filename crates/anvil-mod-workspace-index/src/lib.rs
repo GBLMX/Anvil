@@ -371,6 +371,68 @@ impl WorkspaceSymbolIndex {
             .cloned()
             .collect()
     }
+
+    /// Remove symbols and occurrences for a file or directory subtree.
+    pub fn remove_paths_under(&mut self, prefix: &str) -> usize {
+        if prefix.is_empty() {
+            return 0;
+        }
+        let matches = |path: &str| {
+            path == prefix
+                || path
+                    .strip_prefix(prefix)
+                    .is_some_and(|rest| rest.starts_with('/'))
+        };
+        let before = self.symbols.len() + self.occurrences.len();
+        self.symbols.retain(|symbol| !matches(&symbol.path));
+        self.occurrences
+            .retain(|occurrence| !matches(&occurrence.path));
+        self.symbol_keys = self
+            .symbols
+            .iter()
+            .map(|symbol| {
+                (
+                    symbol.name.clone(),
+                    symbol.path.clone(),
+                    symbol.range.start.line,
+                    symbol.range.start.character,
+                    symbol.range.end.line,
+                    symbol.range.end.character,
+                )
+            })
+            .collect();
+        self.occurrence_keys = self
+            .occurrences
+            .iter()
+            .map(|occurrence| {
+                let role = match occurrence.role {
+                    SymbolRole::Definition => 0,
+                    SymbolRole::Reference => 1,
+                    SymbolRole::Implementation => 2,
+                };
+                (
+                    occurrence.symbol.clone(),
+                    occurrence.path.clone(),
+                    occurrence.range.start.line,
+                    occurrence.range.start.character,
+                    occurrence.range.end.line,
+                    occurrence.range.end.character,
+                    role,
+                )
+            })
+            .collect();
+        self.bytes = self
+            .symbols
+            .iter()
+            .map(|symbol| symbol.name.len() + symbol.path.len() + symbol_kind_bytes(&symbol.kind))
+            .sum::<usize>()
+            + self
+                .occurrences
+                .iter()
+                .map(|occurrence| occurrence.symbol.len() + occurrence.path.len())
+                .sum::<usize>();
+        before - (self.symbols.len() + self.occurrences.len())
+    }
 }
 
 fn symbol_kind_bytes(kind: &SymbolKind) -> usize {
@@ -858,5 +920,29 @@ mod tests {
         );
         assert_eq!(index.occurrences("src/lib.rs", "run", 10).len(), 1);
         assert_eq!(index.occurrence_len(), 1);
+    }
+
+    #[test]
+    fn remove_paths_under_drops_files_and_subtrees() {
+        let mut index = WorkspaceSymbolIndex::new(SymbolIndexCaps::default());
+        for (name, path) in [
+            ("run", "src/a.rs"),
+            ("nested", "src/a/nested.rs"),
+            ("other", "src/b.rs"),
+        ] {
+            assert_eq!(
+                index.push_symbol(symbol(name, path, 1)),
+                PushOutcome::Inserted
+            );
+        }
+        assert_eq!(
+            index.push_occurrence(occurrence("run", "src/a.rs", 2)),
+            PushOutcome::Inserted
+        );
+        assert_eq!(index.remove_paths_under("src/a.rs"), 2);
+        assert_eq!(index.len(), 2);
+        assert_eq!(index.occurrence_len(), 0);
+        assert_eq!(index.remove_paths_under("src"), 2);
+        assert!(index.is_empty());
     }
 }
