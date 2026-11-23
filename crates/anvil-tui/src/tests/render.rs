@@ -363,6 +363,50 @@ fn clicking_outside_command_palette_closes_it() {
 }
 
 #[test]
+fn clicking_document_symbol_row_selects_it() {
+    let mut model = Model::new(EditorState::from_text("one"), None);
+    model.view.viewport_width = 100;
+    model.view.viewport_height = 30;
+    model.overlays.lsp_results.document_symbols = Some(SymbolState {
+        items: vec![
+            SymbolItem {
+                name: "first".to_owned(),
+                detail: None,
+                line: 0,
+                character: 0,
+                depth: 0,
+            },
+            SymbolItem {
+                name: "second".to_owned(),
+                detail: None,
+                line: 1,
+                character: 0,
+                depth: 0,
+            },
+        ],
+        selected: 0,
+    });
+    let popup = crate::render::document_symbols_rect(ratatui::layout::Rect::new(0, 0, 100, 30), 2);
+    let click = crossterm::event::MouseEvent {
+        kind: crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left),
+        column: popup.x + 2,
+        row: popup.y + 2,
+        modifiers: crossterm::event::KeyModifiers::NONE,
+    };
+    handle_event(&mut model, Event::Mouse(click));
+    assert_eq!(
+        model
+            .overlays
+            .lsp_results
+            .document_symbols
+            .as_ref()
+            .expect("symbols")
+            .selected,
+        1
+    );
+}
+
+#[test]
 fn clicking_command_palette_row_selects_it() {
     let mut model = Model::new(EditorState::from_text("one"), None);
     model.open_command_palette();

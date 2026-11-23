@@ -115,6 +115,43 @@ pub(crate) fn handle_mouse(model: &mut Model, mouse: MouseEvent, width: u16, hei
             model.file.dirty = true;
             return true;
         }
+        if mouse.kind == MouseEventKind::Down(MouseButton::Left) {
+            if let Some(row) =
+                crate::render::code_action_row_at(model, area, mouse.column, mouse.row)
+            {
+                if let Some(actions) = model.overlays.lsp_results.code_actions.as_mut() {
+                    actions.selected = row;
+                    model.file.dirty = true;
+                    return true;
+                }
+            }
+            if let Some(row) =
+                crate::render::document_symbol_row_at(model, area, mouse.column, mouse.row)
+            {
+                if let Some(symbols) = model.overlays.lsp_results.document_symbols.as_mut() {
+                    symbols.selected = row;
+                    model.file.dirty = true;
+                    return true;
+                }
+            }
+            if let Some(row) = crate::render::reference_row_at(model, area, mouse.column, mouse.row)
+            {
+                if let Some(references) = model.overlays.lsp_results.references.as_mut() {
+                    references.selected = row;
+                    model.file.dirty = true;
+                    return true;
+                }
+            }
+            if let Some(row) =
+                crate::render::call_hierarchy_row_at(model, area, mouse.column, mouse.row)
+            {
+                if let Some(calls) = model.overlays.lsp_results.call_hierarchy.as_mut() {
+                    calls.selected = row;
+                    model.file.dirty = true;
+                    return true;
+                }
+            }
+        }
         if mouse.kind == MouseEventKind::Down(MouseButton::Left)
             && model.overlays.buffer_picker.is_some()
             && let Some(row) =

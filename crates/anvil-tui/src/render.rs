@@ -144,6 +144,62 @@ pub(crate) fn command_palette_row_at(
     (index < palette.table.filtered().len()).then_some(index)
 }
 
+fn list_row_at(popup: Rect, start: usize, len: usize, col: u16, row: u16) -> Option<usize> {
+    let inner = Rect {
+        x: popup.x + 1,
+        y: popup.y + 1,
+        width: popup.width.saturating_sub(2),
+        height: popup.height.saturating_sub(2),
+    };
+    if !rect_contains(inner, col, row) {
+        return None;
+    }
+    let index = start + usize::from(row - inner.y);
+    (index < len).then_some(index)
+}
+
+pub(crate) fn code_action_row_at(model: &Model, area: Rect, col: u16, row: u16) -> Option<usize> {
+    let actions = model.overlays.lsp_results.code_actions.as_ref()?;
+    let popup = code_actions_rect(area, actions.items.len());
+    list_row_at(popup, 0, actions.items.len(), col, row)
+}
+
+pub(crate) fn document_symbol_row_at(
+    model: &Model,
+    area: Rect,
+    col: u16,
+    row: u16,
+) -> Option<usize> {
+    let symbols = model.overlays.lsp_results.document_symbols.as_ref()?;
+    let popup = document_symbols_rect(area, symbols.items.len());
+    let visible = popup.height.saturating_sub(2) as usize;
+    let start = symbols.selected.saturating_sub(visible.saturating_sub(1));
+    list_row_at(popup, start, symbols.items.len(), col, row)
+}
+
+pub(crate) fn reference_row_at(model: &Model, area: Rect, col: u16, row: u16) -> Option<usize> {
+    let references = model.overlays.lsp_results.references.as_ref()?;
+    let popup = document_symbols_rect(area, references.items.len());
+    let visible = popup.height.saturating_sub(2) as usize;
+    let start = references
+        .selected
+        .saturating_sub(visible.saturating_sub(1));
+    list_row_at(popup, start, references.items.len(), col, row)
+}
+
+pub(crate) fn call_hierarchy_row_at(
+    model: &Model,
+    area: Rect,
+    col: u16,
+    row: u16,
+) -> Option<usize> {
+    let calls = model.overlays.lsp_results.call_hierarchy.as_ref()?;
+    let popup = document_symbols_rect(area, calls.items.len());
+    let visible = popup.height.saturating_sub(2) as usize;
+    let start = calls.selected.saturating_sub(visible.saturating_sub(1));
+    list_row_at(popup, start, calls.items.len(), col, row)
+}
+
 pub(crate) fn buffer_picker_row_at(model: &Model, area: Rect, col: u16, row: u16) -> Option<usize> {
     let picker = model.overlays.buffer_picker.as_ref()?;
     let popup = fuzzy_rect(area);
