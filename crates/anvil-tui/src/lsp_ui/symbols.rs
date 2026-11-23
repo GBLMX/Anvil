@@ -211,6 +211,7 @@ impl Model {
 
     fn request_document_symbols_mode(&mut self, silent: bool) {
         self.project.silent_symbol_refresh = silent;
+        self.project.document_symbol_path = self.session.path.clone();
         self.cancel_completion();
         self.cancel_code_actions();
         self.cancel_document_symbols();

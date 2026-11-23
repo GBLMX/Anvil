@@ -704,6 +704,8 @@ pub(crate) struct ProjectState {
     pub(crate) platform: Option<anvil_runtime::Runtime>,
     /// Whether the in-flight document-symbol request should only feed the index.
     pub(crate) silent_symbol_refresh: bool,
+    /// Path that the in-flight document-symbol request was issued for.
+    pub(crate) document_symbol_path: Option<PathBuf>,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

@@ -11,6 +11,12 @@ use std::path::PathBuf;
 impl Model {
     pub(crate) fn apply_document_symbols_response(&mut self, result: &serde_json::Value) {
         let silent = std::mem::take(&mut self.project.silent_symbol_refresh);
+        let requested_path = self.project.document_symbol_path.take();
+        if let Some(requested_path) = requested_path
+            && self.session.path.as_ref() != Some(&requested_path)
+        {
+            return;
+        }
         let Some(items) = result.as_array() else {
             if !silent {
                 self.status.text = "lsp: no document symbols".to_owned();
