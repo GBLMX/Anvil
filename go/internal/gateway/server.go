@@ -218,20 +218,21 @@ type rpcError struct {
 }
 
 type connectionState struct {
-	mu          sync.Mutex
-	handshaken  bool
-	isEditor    bool
-	pluginID    string
-	sessionID   string
-	permissions []string
-	writesMu    sync.Mutex
-	writes      map[string]*pendingWrite
-	conn        net.Conn
-	writeMu     *sync.Mutex
-	lspMu       sync.Mutex
-	lsp         *lsp.Manager
-	watchMu     sync.Mutex
-	watch       *fswatch.Watcher
+	mu            sync.Mutex
+	handshaken    bool
+	isEditor      bool
+	lspAuthorized bool
+	pluginID      string
+	sessionID     string
+	permissions   []string
+	writesMu      sync.Mutex
+	writes        map[string]*pendingWrite
+	conn          net.Conn
+	writeMu       *sync.Mutex
+	lspMu         sync.Mutex
+	lsp           *lsp.Manager
+	watchMu       sync.Mutex
+	watch         *fswatch.Watcher
 }
 
 func (state *connectionState) stopLSP() {

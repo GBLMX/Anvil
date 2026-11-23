@@ -33,6 +33,7 @@ mod linux {
         let mut check_network = false;
         let mut check_exec = false;
         let mut check_write = false;
+        let mut check_write_existing = None;
         let mut check_uds = false;
         let mut check_hardening = false;
         let mut lua_smoke = false;
@@ -75,6 +76,12 @@ mod linux {
                 "--check-network" => check_network = true,
                 "--check-exec" => check_exec = true,
                 "--check-write" => check_write = true,
+                "--check-write-existing" => {
+                    check_write_existing =
+                        Some(args.next().ok_or_else(|| {
+                            io::Error::other("missing --check-write-existing value")
+                        })?);
+                }
                 "--check-uds" => check_uds = true,
                 "--check-hardening" => check_hardening = true,
                 "--lua-smoke" => lua_smoke = true,
@@ -228,6 +235,17 @@ mod linux {
                 Err(error) if error.kind() == io::ErrorKind::PermissionDenied => return Ok(20),
                 Ok(_) => return Ok(21),
                 Err(_) => return Ok(22),
+            }
+        }
+
+        if let Some(path) = check_write_existing {
+            match std::fs::OpenOptions::new().append(true).open(&path) {
+                Err(error) if error.kind() == io::ErrorKind::PermissionDenied => return Ok(26),
+                Ok(mut file) => {
+                    let _ = file.write_all(b"x");
+                    return Ok(27);
+                }
+                Err(_) => return Ok(28),
             }
         }
 

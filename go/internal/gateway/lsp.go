@@ -53,13 +53,23 @@ type lspSendParams struct {
 }
 
 func (s *Server) lspStart(ctx context.Context, req request, state *connectionState) (interface{}, *rpcError) {
+	state.mu.Lock()
+	handshaken := state.handshaken
+	authorized := handshaken && (state.isEditor || state.lspAuthorized)
+	state.mu.Unlock()
+	if !handshaken {
+		return nil, &rpcError{Code: -32003, Message: "session required"}
+	}
+	if !authorized {
+		return nil, &rpcError{Code: -32002, Message: "policy denied"}
+	}
 	if !s.cfg.NoSandboxLSP {
 		if rpcErr := s.permissionError(state, "sys.exec"); rpcErr != nil {
 			return nil, rpcErr
 		}
-	}
-	if !s.cfg.NoSandboxLSP && s.cfg.ExecRunner == "" {
-		return nil, &rpcError{Code: -32008, Message: "exec runner unavailable"}
+		if s.cfg.ExecRunner == "" {
+			return nil, &rpcError{Code: -32008, Message: "exec runner unavailable"}
+		}
 	}
 	var params lspStartParams
 	if err := decodeParams(req.Params, &params); err != nil || params.Tool == "" {

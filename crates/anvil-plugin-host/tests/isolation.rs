@@ -321,6 +321,31 @@ fn landlock_denies_write() {
 }
 
 #[test]
+fn landlock_denies_existing_file_write() {
+    let suffix = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("time")
+        .as_nanos();
+    let path = std::env::temp_dir().join(format!(
+        "anvil-plugin-existing-{}-{suffix}.txt",
+        std::process::id()
+    ));
+    std::fs::write(&path, b"keep").expect("seed file");
+    let mut host = spawn(
+        host_bin(),
+        &[
+            "--check-write-existing".to_owned(),
+            path.display().to_string(),
+        ],
+        Token([9; 32]),
+    )
+    .expect("spawn host");
+    assert_eq!(host.wait().expect("wait").code(), Some(26));
+    assert_eq!(std::fs::read_to_string(&path).expect("read file"), "keep");
+    let _ = std::fs::remove_file(path);
+}
+
+#[test]
 fn landlock_denies_exec() {
     let mut host =
         spawn(host_bin(), &["--check-exec".to_owned()], Token([5; 32])).expect("spawn host");

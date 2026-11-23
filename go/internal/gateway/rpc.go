@@ -215,7 +215,9 @@ func (s *Server) hello(req request, state *connectionState) (interface{}, *rpcEr
 		s.tokenMu.Unlock()
 	} else if s.cfg.LSPTokenSHA256 != [32]byte{} && subtle.ConstantTimeCompare(hash[:], s.cfg.LSPTokenSHA256[:]) == 1 {
 		// The LSP token is session-bound and may be reused after a worker crash
-		// so the editor can reconnect and restart rust-analyzer.
+		// so the editor can reconnect and restart rust-analyzer. It is the only
+		// non-editor token allowed to start an unsandboxed LSP process.
+		state.lspAuthorized = true
 		s.tokenMu.Unlock()
 	} else {
 		s.tokenMu.Unlock()
