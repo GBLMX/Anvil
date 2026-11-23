@@ -33,6 +33,7 @@ impl Model {
             Ok(session) => {
                 self.status.text = format!("terminal: {} pid {}", session.shell(), session.pid());
                 self.runtime.terminal_output.clear();
+                self.runtime.terminal_scroll = 0;
                 self.runtime.terminal = Some(session);
                 self.runtime.terminal_panel = true;
             }
@@ -49,6 +50,7 @@ impl Model {
         };
         terminal.kill();
         self.runtime.terminal_panel = false;
+        self.runtime.terminal_scroll = 0;
         self.status.text = "terminal stopped".to_owned();
         self.file.dirty = true;
     }
@@ -114,13 +116,37 @@ impl Model {
             return;
         }
         self.runtime.terminal_panel = !self.runtime.terminal_panel;
+        if self.runtime.terminal_panel {
+            self.runtime.terminal_scroll = 0;
+        }
         self.file.dirty = true;
     }
+    pub(crate) fn scroll_terminal(&mut self, delta: isize) {
+        if !self.runtime.terminal_panel {
+            return;
+        }
+        let lines = crate::pty_terminal::sanitize_terminal_output(&self.runtime.terminal_output);
+        let visible = panel_height(self.view.viewport_height).saturating_sub(2) as usize;
+        let max = lines.lines().count().saturating_sub(visible);
+        self.runtime.terminal_scroll = if delta < 0 {
+            self.runtime
+                .terminal_scroll
+                .saturating_add(delta.unsigned_abs())
+                .min(max)
+        } else {
+            self.runtime
+                .terminal_scroll
+                .saturating_sub(delta.unsigned_abs())
+        };
+        self.file.dirty = true;
+    }
+
     pub(crate) fn send_terminal_text(&mut self, text: &str) {
         self.write_terminal_bytes(text.as_bytes());
     }
 
     fn write_terminal_bytes(&mut self, bytes: &[u8]) {
+        self.runtime.terminal_scroll = 0;
         let Some(terminal) = self.runtime.terminal.as_mut() else {
             return;
         };
@@ -201,20 +227,55 @@ fn terminal_panel_size(width: u16, height: u16) -> (u16, u16) {
     (width.saturating_sub(2).max(20), rows)
 }
 
-pub(crate) fn render_panel(model: &Model, frame: &mut ratatui::Frame, area: ratatui::layout::Rect) {
-    if !model.runtime.terminal_panel {
-        return;
-    }
+pub(crate) fn panel_rect(area: ratatui::layout::Rect) -> Option<ratatui::layout::Rect> {
     let height = panel_height(area.height);
-    if height < 3 {
-        return;
-    }
-    let popup = ratatui::layout::Rect {
+    (height >= 3).then_some(ratatui::layout::Rect {
         x: area.x,
         y: area.y + area.height.saturating_sub(height),
         width: area.width,
         height,
+    })
+}
+
+pub(crate) fn handle_mouse(
+    model: &mut Model,
+    mouse: &crossterm::event::MouseEvent,
+    area: ratatui::layout::Rect,
+) -> bool {
+    if !model.runtime.terminal_panel {
+        return false;
+    }
+    let Some(popup) = panel_rect(area) else {
+        return false;
     };
+    if mouse.column < popup.x
+        || mouse.column >= popup.x + popup.width
+        || mouse.row < popup.y
+        || mouse.row >= popup.y + popup.height
+    {
+        return false;
+    }
+    match mouse.kind {
+        crossterm::event::MouseEventKind::ScrollUp => {
+            model.scroll_terminal(-3);
+            true
+        }
+        crossterm::event::MouseEventKind::ScrollDown => {
+            model.scroll_terminal(3);
+            true
+        }
+        _ => false,
+    }
+}
+
+pub(crate) fn render_panel(model: &Model, frame: &mut ratatui::Frame, area: ratatui::layout::Rect) {
+    if !model.runtime.terminal_panel {
+        return;
+    }
+    let Some(popup) = panel_rect(area) else {
+        return;
+    };
+    let height = popup.height;
     frame.render_widget(ratatui::widgets::Clear, popup);
     let text = crate::pty_terminal::sanitize_terminal_output(&model.runtime.terminal_output);
     let visible = height.saturating_sub(2) as usize;
@@ -222,9 +283,11 @@ pub(crate) fn render_panel(model: &Model, frame: &mut ratatui::Frame, area: rata
         .lines()
         .map(|line| ratatui::text::Line::raw(line.to_owned()))
         .collect();
-    if lines.len() > visible {
-        lines.drain(..lines.len() - visible);
-    }
+    let max_scroll = lines.len().saturating_sub(visible);
+    let scroll = model.runtime.terminal_scroll.min(max_scroll);
+    let end = lines.len().saturating_sub(scroll);
+    let start = end.saturating_sub(visible);
+    lines = lines.into_iter().skip(start).take(end - start).collect();
     if lines.is_empty() {
         lines.push(ratatui::text::Line::styled(
             "terminal",
@@ -234,7 +297,11 @@ pub(crate) fn render_panel(model: &Model, frame: &mut ratatui::Frame, area: rata
     frame.render_widget(
         ratatui::widgets::Paragraph::new(lines)
             .style(crate::theme::panel())
-            .block(crate::render::panel_block("Terminal (Ctrl+T closes)")),
+            .block(crate::render::panel_block(if scroll > 0 {
+                "Terminal · scrollback (Ctrl+T closes)"
+            } else {
+                "Terminal (Ctrl+T closes)"
+            })),
         popup,
     );
 }
@@ -249,6 +316,34 @@ mod tests {
         assert_eq!(panel_height(40), 13);
         assert_eq!(terminal_panel_size(120, 40), (118, 11));
         assert_eq!(terminal_panel_size(10, 5), (20, 5));
+    }
+
+    #[test]
+    fn scrollback_clamps_and_returns_to_tail() {
+        let mut model = Model::new(EditorState::from_text(""), None);
+        model.view.viewport_height = 40;
+        model.runtime.terminal_panel = true;
+        model.runtime.terminal_output = (0..30)
+            .map(|line| format!("line{line}\n"))
+            .collect::<String>()
+            .into_bytes();
+        model.scroll_terminal(-3);
+        assert_eq!(model.runtime.terminal_scroll, 3);
+        model.scroll_terminal(-100);
+        assert_eq!(model.runtime.terminal_scroll, 30 - 11);
+        model.scroll_terminal(100);
+        assert_eq!(model.runtime.terminal_scroll, 0);
+    }
+
+    #[test]
+    fn new_output_preserves_scrollback_position() {
+        let mut runtime = RuntimeState {
+            terminal_output: b"a\nb\n".to_vec(),
+            terminal_scroll: 2,
+            ..Default::default()
+        };
+        runtime.push_terminal_output(b"c\n");
+        assert_eq!(runtime.terminal_scroll, 3);
     }
 
     #[test]

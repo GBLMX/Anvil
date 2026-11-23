@@ -43,6 +43,7 @@ post-`0.5.0` feature line.
 - Test failure rows now support click selection, wheel scrolling, and outside-click close.
 - Debug panel rows now support click selection, wheel scrolling, and outside-click close.
 - Diagnostic peek scrolls with the mouse wheel while preserving keyboard selection.
+- Terminal panels retain scrollback, scroll with the mouse wheel, and return to follow mode on input.
 - Command-line completion rows now support click selection while Tab and Enter still accept.
 - Mouse wheel scrolls command-line and LSP completion selections without moving the editor.
 - Problems rows support click selection and wheel scrolling while Enter still jumps.

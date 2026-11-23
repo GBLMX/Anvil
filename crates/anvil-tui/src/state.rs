@@ -1028,6 +1028,8 @@ pub(crate) struct RuntimeState {
     pub(crate) terminal_output: Vec<u8>,
     #[cfg(unix)]
     pub(crate) terminal_panel: bool,
+    #[cfg(unix)]
+    pub(crate) terminal_scroll: usize,
 }
 
 impl RuntimeState {
@@ -1047,6 +1049,11 @@ impl RuntimeState {
 }
 
 #[cfg(unix)]
+fn terminal_newlines(bytes: &[u8]) -> usize {
+    bytes.iter().filter(|byte| **byte == b'\n').count()
+}
+
+#[cfg(unix)]
 pub(crate) struct TerminalPoll {
     pub(crate) output: bool,
     pub(crate) error: Option<String>,
@@ -1056,10 +1063,17 @@ pub(crate) struct TerminalPoll {
 #[cfg(unix)]
 impl RuntimeState {
     pub(crate) fn push_terminal_output(&mut self, bytes: &[u8]) {
+        let before = terminal_newlines(&self.terminal_output);
         self.terminal_output.extend_from_slice(bytes);
         if self.terminal_output.len() > pty_terminal::MAX_TERMINAL_OUTPUT {
             let excess = self.terminal_output.len() - pty_terminal::MAX_TERMINAL_OUTPUT;
             self.terminal_output.drain(..excess);
+        }
+        let after = terminal_newlines(&self.terminal_output);
+        if self.terminal_scroll > 0 {
+            self.terminal_scroll = self
+                .terminal_scroll
+                .saturating_add_signed(after as isize - before as isize);
         }
     }
 

@@ -53,6 +53,10 @@ pub(crate) fn handle_mouse(model: &mut Model, mouse: MouseEvent, width: u16, hei
         width,
         height,
     };
+    #[cfg(unix)]
+    if crate::terminal_control::handle_mouse(model, &mouse, area) {
+        return true;
+    }
     if mouse.kind == MouseEventKind::Down(MouseButton::Left)
         && model.language.completion.completion.is_some()
         && let Some(row) = crate::render::completion_row_at(model, area, mouse.column, mouse.row)
