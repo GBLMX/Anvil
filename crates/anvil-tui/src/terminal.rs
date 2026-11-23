@@ -10,6 +10,19 @@ enum RunOutcome {
     Switch { workspace: PathBuf, read_only: bool },
 }
 
+fn window_title_for(path: Option<&Path>, workspace: &Path) -> String {
+    let name = path
+        .and_then(Path::file_name)
+        .and_then(|name| name.to_str())
+        .or_else(|| workspace.file_name().and_then(|name| name.to_str()))
+        .unwrap_or("anvil");
+    format!("{name} — anvil")
+}
+
+fn window_title(model: &Model) -> String {
+    window_title_for(model.session.path.as_deref(), &model.workspace.path)
+}
+
 fn poll_background(model: &mut Model) {
     model.poll_host();
     model.poll_pkg_notifications();
@@ -391,6 +404,8 @@ pub fn run_with_all_services(
         ..Default::default()
     })?;
     let terminal_ready = start.elapsed();
+    let mut last_title_path: Option<PathBuf> = None;
+    let mut last_title_workspace = PathBuf::new();
     let mut first_draw = true;
     let mut last_session_revision = model.session.editor.revision();
     let mut last_session_active = model.buffers.active;
@@ -398,6 +413,13 @@ pub fn run_with_all_services(
     let mut session_error_reported = false;
     let mut insert_cursor: Option<bool> = None;
     let outcome = loop {
+        if last_title_path.as_ref() != model.session.path.as_ref()
+            || last_title_workspace != model.workspace.path
+        {
+            terminal.set_title(&window_title(&model))?;
+            last_title_path = model.session.path.clone();
+            last_title_workspace = model.workspace.path.clone();
+        }
         let wants_bar = matches!(model.ui.input_mode, InputMode::Insert);
         if insert_cursor != Some(wants_bar) {
             terminal.set_cursor_shape(wants_bar)?;
@@ -631,7 +653,22 @@ fn control_enabled(editor_mode: bool, stdin: bool) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::control_enabled;
+    use super::{Path, control_enabled, window_title_for};
+
+    #[test]
+    fn window_title_uses_active_file_then_workspace() {
+        assert_eq!(
+            window_title_for(
+                Some(Path::new("/tmp/project/src/main.rs")),
+                Path::new("/tmp/project")
+            ),
+            "main.rs — anvil"
+        );
+        assert_eq!(
+            window_title_for(None, Path::new("/tmp/project")),
+            "project — anvil"
+        );
+    }
 
     #[test]
     fn editor_and_stdin_modes_do_not_claim_the_control_socket() {

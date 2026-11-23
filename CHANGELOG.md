@@ -35,6 +35,7 @@ post-`0.5.0` feature line.
 - The symbol index persists in the per-workspace cache directory and reloads
   when the project platform starts.
 - The TUI tracks enabled terminal capabilities and wraps dirty frames in synchronized output; `ANVIL_SYNCHRONIZED_OUTPUT=0` disables it.
+- The terminal title follows the active file or workspace name, with control characters stripped before emission.
 - `ANVIL_OSC52=1` enables a write-only OSC 52 clipboard fallback when native clipboard tools are unavailable.
 - Explicit `Alt+Shift` keymap bindings preserve the shifted key instead of folding it to lowercase.
 - TUI labels and overlay text truncate on grapheme boundaries, keeping emoji and combining sequences intact.

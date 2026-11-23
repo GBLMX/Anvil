@@ -13,7 +13,7 @@ use crossterm::{
     execute,
     terminal::{
         BeginSynchronizedUpdate, EndSynchronizedUpdate, EnterAlternateScreen, LeaveAlternateScreen,
-        disable_raw_mode, enable_raw_mode,
+        SetTitle, disable_raw_mode, enable_raw_mode,
     },
 };
 use ratatui::{Frame, Terminal, backend::CrosstermBackend};
@@ -156,6 +156,12 @@ impl TerminalSession {
         result
     }
 
+    /// Set the terminal window title with control characters removed.
+    pub fn set_title(&mut self, title: &str) -> io::Result<()> {
+        let title = sanitize_title(title);
+        execute!(self.terminal.backend_mut(), SetTitle(title))
+    }
+
     /// Set the cursor shape for normal or insert mode.
     pub fn set_cursor_shape(&mut self, insert: bool) -> io::Result<()> {
         let style = if insert {
@@ -186,6 +192,19 @@ impl Drop for TerminalSession {
 pub fn keyboard_enhancement_flags() -> KeyboardEnhancementFlags {
     KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
         | KeyboardEnhancementFlags::REPORT_EVENT_TYPES
+}
+
+fn sanitize_title(title: &str) -> String {
+    title
+        .chars()
+        .map(|character| {
+            if character.is_control() {
+                ' '
+            } else {
+                character
+            }
+        })
+        .collect()
 }
 
 fn begin_synchronized<W: Write>(out: &mut W) -> io::Result<()> {
@@ -250,6 +269,11 @@ pub fn supports_truecolor() -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn title_strips_control_characters() {
+        assert_eq!(sanitize_title("a\u{1b}]0;bad\u{7}b"), "a ]0;bad b");
+    }
 
     #[test]
     fn keyboard_flags_do_not_report_all_keys() {
