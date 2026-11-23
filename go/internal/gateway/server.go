@@ -42,6 +42,14 @@ const (
 	Protocol = "anvil-jsonrpc-1"
 	// APIVersion is the public API version.
 	APIVersion = "1.0.0"
+	// maxConcurrentRequests bounds in-flight requests per connection.
+	maxConcurrentRequests = 16
+	// maxConnections bounds accepted gateway clients.
+	maxConnections = 32
+	// maxFrameWriteTimeout bounds one framed write.
+	maxFrameWriteTimeout = 5 * time.Second
+	// maxFrameReadTimeout bounds one framed read without idling connections.
+	maxFrameReadTimeout = 5 * time.Second
 )
 
 // Config is the minimum per-session gateway configuration.
@@ -175,8 +183,8 @@ func (s *Server) Serve(ctx context.Context) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
+	slots := make(chan struct{}, maxConnections)
 	done := make(chan struct{})
-	defer close(done)
 	go func() {
 		select {
 		case <-ctx.Done():
@@ -192,7 +200,15 @@ func (s *Server) Serve(ctx context.Context) error {
 			}
 			return err
 		}
-		go s.handle(ctx, conn)
+		select {
+		case slots <- struct{}{}:
+			go func(conn net.Conn) {
+				defer func() { <-slots }()
+				s.handle(ctx, conn)
+			}(conn)
+		default:
+			_ = conn.Close()
+		}
 	}
 }
 
@@ -391,9 +407,19 @@ func readFrame(reader io.Reader) ([]byte, error) {
 	return body, nil
 }
 
+func readFrameWithDeadline(conn net.Conn, timeout time.Duration) ([]byte, error) {
+	_ = conn.SetReadDeadline(time.Now().Add(timeout))
+	body, err := readFrame(conn)
+	_ = conn.SetReadDeadline(time.Time{})
+	return body, err
+}
+
 func writeFrame(writer io.Writer, body []byte) error {
 	if len(body) == 0 || len(body) > MaxFrameLen {
 		return errors.New("invalid frame length")
+	}
+	if deadline, ok := writer.(interface{ SetWriteDeadline(time.Time) error }); ok {
+		_ = deadline.SetWriteDeadline(time.Now().Add(maxFrameWriteTimeout))
 	}
 	header := []byte{byte(len(body) >> 24), byte(len(body) >> 16), byte(len(body) >> 8), byte(len(body))}
 	if _, err := writer.Write(header); err != nil {

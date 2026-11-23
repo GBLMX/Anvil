@@ -48,8 +48,9 @@ func (s *Server) handle(serverCtx context.Context, conn net.Conn) {
 	defer state.stopLSP()
 	defer state.stopWatch()
 	var requests sync.WaitGroup
+	requestSlots := make(chan struct{}, maxConcurrentRequests)
 	for {
-		body, err := readFrame(conn)
+		body, err := readFrameWithDeadline(conn, maxFrameReadTimeout)
 		if err != nil {
 			cancel()
 			break
@@ -74,13 +75,15 @@ func (s *Server) handle(serverCtx context.Context, conn net.Conn) {
 		if req.Method == "sys.write_file" {
 			var params writeParams
 			if json.Unmarshal(req.Params, &params) == nil && params.Binary {
-				data, err := readFrame(conn)
+				data, err := readFrameWithDeadline(conn, maxFrameReadTimeout)
 				if err != nil {
 					cancel()
 					break
 				}
 				requests.Add(1)
+				requestSlots <- struct{}{}
 				go func(req request, data []byte) {
+					defer func() { <-requestSlots }()
 					defer requests.Done()
 					result, rpcErr := s.writeFileBinary(req, state, data)
 					writeMu.Lock()
@@ -98,7 +101,9 @@ func (s *Server) handle(serverCtx context.Context, conn net.Conn) {
 			}
 		}
 		requests.Add(1)
+		requestSlots <- struct{}{}
 		go func(req request) {
+			defer func() { <-requestSlots }()
 			defer requests.Done()
 			result, rpcErr := s.dispatch(ctx, req, state)
 			writeMu.Lock()
