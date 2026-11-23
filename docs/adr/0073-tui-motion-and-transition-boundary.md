@@ -1,6 +1,6 @@
 # ADR-0073: TUI Motion and Transition Boundary
 
-- Status: Accepted; command palette enter fade implemented
+- Status: Accepted; overlay enter fades implemented
 - Version: 1.0.0
 - Date: 2026-11-23
 - Related: [ADR-0016](0016-render-style-layers.md),
@@ -137,11 +137,13 @@ Negative:
 
 ## Implementation status
 
-2026-11-23: the local engine is in `anvil-tui/src/motion.rs`. The command
-palette fades in over 120 ms behind synchronized output. It is disabled by
-`reduced_motion`, `NO_COLOR`, `TERM=dumb`, or unavailable synchronized output.
-Closing remains immediate; exit transitions need a buffered previous frame and
-are not part of this delivery.
+2026-11-23: the local engine is in `anvil-tui/src/motion.rs`. Command palette,
+fuzzy/buffer pickers, settings, theme browser, problems, diagnostic peek,
+debug/test panels, and LSP result panels fade in over 120 ms behind
+synchronized output. Motion is disabled by `reduced_motion`, `NO_COLOR`,
+`TERM=dumb`, or unavailable synchronized output. Closing remains immediate;
+exit transitions need a buffered previous frame and are not part of this
+delivery.
 
 
 ## Verification

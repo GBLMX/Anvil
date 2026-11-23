@@ -6,7 +6,8 @@ pub fn view(model: &Model, frame: &mut Frame) {
     let area = frame.area();
     let motion_now = Instant::now();
     let motion_overlay = model.top_overlay();
-    let motion_rect = motion_overlay.and_then(|kind| crate::motion::overlay_rect(kind, area));
+    let motion_rect =
+        motion_overlay.and_then(|kind| crate::motion::overlay_rect(model, kind, area));
     let editor_view: EditorView = model.session.editor.snapshot().view();
     let title = if model.pager.back.is_some() {
         format!("[{}]", model.pager.title.as_deref().unwrap_or("help"))

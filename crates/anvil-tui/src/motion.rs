@@ -84,13 +84,89 @@ impl Model {
     }
 }
 
+/// Whether an overlay has a bounded post-render fade target.
+pub(crate) fn supports(kind: OverlayKind) -> bool {
+    matches!(
+        kind,
+        OverlayKind::CommandPalette
+            | OverlayKind::Fuzzy
+            | OverlayKind::BufferPicker
+            | OverlayKind::Settings
+            | OverlayKind::ThemeBrowser
+            | OverlayKind::Problems
+            | OverlayKind::DiagnosticPeek
+            | OverlayKind::DebugPanel
+            | OverlayKind::TestExplorer
+            | OverlayKind::CodeActions
+            | OverlayKind::DocumentSymbols
+            | OverlayKind::References
+            | OverlayKind::CallHierarchy
+    )
+}
+
 /// The post-render area for an animated overlay.
-///
-/// The first transition covers the command palette. Other overlays remain
-/// static until they get the same bounded fade treatment.
-pub(crate) fn overlay_rect(kind: OverlayKind, area: Rect) -> Option<Rect> {
+pub(crate) fn overlay_rect(model: &Model, kind: OverlayKind, area: Rect) -> Option<Rect> {
     match kind {
         OverlayKind::CommandPalette => Some(crate::render::command_palette_rect(area)),
+        OverlayKind::Fuzzy | OverlayKind::BufferPicker => Some(crate::render::fuzzy_rect(area)),
+        OverlayKind::Settings => Some(crate::settings_ui::rect(area)),
+        OverlayKind::ThemeBrowser => Some(crate::theme_browser::rect(area)),
+        OverlayKind::Problems => Some(crate::render::problems_popup_rect(model, area)),
+        OverlayKind::DiagnosticPeek => {
+            let peek = model.ui.diagnostic_peek.as_ref()?;
+            let cursor_line = model
+                .session
+                .editor
+                .index()
+                .position(model.session.editor.text(), model.session.cursor)
+                .map(|position| position.line as u16)
+                .unwrap_or(0);
+            let cursor_y = area
+                .y
+                .saturating_add(cursor_line.saturating_sub(model.view.scroll as u16))
+                .min(area.y + area.height.saturating_sub(1));
+            let width = (area.width * 2 / 3)
+                .max(30)
+                .min(area.width.saturating_sub(2));
+            let height = (peek.line_count as u16 + 2)
+                .min(12)
+                .min(area.height.saturating_sub(2));
+            crate::render::diagnostic_peek_rect(area, cursor_y, width, height)
+        }
+        OverlayKind::DebugPanel => model
+            .overlays
+            .debug_panel
+            .as_ref()
+            .map(|panel| crate::debug_panel::popup_rect(area, panel.selected_len())),
+        OverlayKind::TestExplorer => {
+            model.overlays.test_explorer.as_ref().map(|explorer| {
+                crate::test_explorer::popup_rect_for_hit(area, explorer.items.len())
+            })
+        }
+        OverlayKind::CodeActions => model
+            .overlays
+            .lsp_results
+            .code_actions
+            .as_ref()
+            .map(|actions| crate::render::code_actions_rect(area, actions.items.len())),
+        OverlayKind::DocumentSymbols => model
+            .overlays
+            .lsp_results
+            .document_symbols
+            .as_ref()
+            .map(|symbols| crate::render::document_symbols_rect(area, symbols.items.len())),
+        OverlayKind::References => model
+            .overlays
+            .lsp_results
+            .references
+            .as_ref()
+            .map(|references| crate::render::document_symbols_rect(area, references.items.len())),
+        OverlayKind::CallHierarchy => model
+            .overlays
+            .lsp_results
+            .call_hierarchy
+            .as_ref()
+            .map(|calls| crate::render::document_symbols_rect(area, calls.items.len())),
         _ => None,
     }
 }
