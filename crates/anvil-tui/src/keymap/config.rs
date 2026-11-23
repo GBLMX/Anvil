@@ -44,7 +44,9 @@ pub(crate) fn macro_key(step: &MacroStep) -> Option<KeyEvent> {
 impl KeyChord {
     pub(crate) fn from_key(key: KeyPress) -> Self {
         let code = match key.code {
-            KeyCode::Char(character) if key.alt() => KeyCode::Char(character.to_ascii_lowercase()),
+            KeyCode::Char(character) if key.alt() && !key.shift() => {
+                KeyCode::Char(character.to_ascii_lowercase())
+            }
             code => code,
         };
         Self {
@@ -100,7 +102,10 @@ impl KeyChord {
                 _ => return Err(format!("shift requires a letter in {spec:?}")),
             };
         }
-        if alt && let KeyCode::Char(character) = code {
+        if alt
+            && !shift
+            && let KeyCode::Char(character) = code
+        {
             code = KeyCode::Char(character.to_ascii_lowercase());
         }
         Ok(Self {

@@ -34,6 +34,10 @@ impl KeyPress {
         self.0.modifiers.contains(KeyModifiers::SUPER)
     }
 
+    pub fn shift(self) -> bool {
+        self.0.modifiers.contains(KeyModifiers::SHIFT)
+    }
+
     /// Plain or shifted character input, excluding command modifiers.
     pub fn text_input(self) -> bool {
         !self.ctrl() && !self.alt() && !self.super_key()
@@ -45,7 +49,9 @@ impl KeyPress {
     /// lowercase; command matching deliberately folds that difference.
     pub fn command_char(self) -> Option<char> {
         match self.0.code {
-            KeyCode::Char(character) if self.alt() => Some(character.to_ascii_lowercase()),
+            KeyCode::Char(character) if self.alt() && !self.shift() => {
+                Some(character.to_ascii_lowercase())
+            }
             KeyCode::Char(character) => Some(character),
             _ => None,
         }
@@ -78,6 +84,15 @@ mod tests {
             key(KeyCode::Char('c'), KeyModifiers::ALT).command_char(),
             Some('c')
         );
+    }
+
+    #[test]
+    fn explicit_shift_survives_alt_normalization() {
+        let key = KeyPress::from_key(KeyEvent::new(
+            KeyCode::Char('A'),
+            KeyModifiers::ALT | KeyModifiers::SHIFT,
+        ));
+        assert_eq!(key.command_char(), Some('A'));
     }
 
     #[test]

@@ -89,10 +89,7 @@ impl TerminalSession {
         let keyboard_enhancement = supported
             && execute!(
                 stdout,
-                PushKeyboardEnhancementFlags(
-                    KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
-                        | KeyboardEnhancementFlags::REPORT_EVENT_TYPES,
-                )
+                PushKeyboardEnhancementFlags(keyboard_enhancement_flags())
             )
             .is_ok();
         let profile = TerminalProfile {
@@ -185,6 +182,12 @@ impl Drop for TerminalSession {
     }
 }
 
+/// Keyboard protocol flags requested from the terminal.
+pub fn keyboard_enhancement_flags() -> KeyboardEnhancementFlags {
+    KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
+        | KeyboardEnhancementFlags::REPORT_EVENT_TYPES
+}
+
 fn begin_synchronized<W: Write>(out: &mut W) -> io::Result<()> {
     execute!(out, BeginSynchronizedUpdate)
 }
@@ -247,6 +250,15 @@ pub fn supports_truecolor() -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn keyboard_flags_do_not_report_all_keys() {
+        assert_eq!(
+            keyboard_enhancement_flags(),
+            KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
+                | KeyboardEnhancementFlags::REPORT_EVENT_TYPES
+        );
+    }
 
     #[test]
     fn synchronized_output_can_be_disabled() {

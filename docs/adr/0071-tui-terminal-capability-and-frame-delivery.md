@@ -1,7 +1,7 @@
 # ADR-0071: TUI Terminal Capability and Frame Delivery Upgrade
 
-- Status: Accepted; terminal profile and synchronized draw implemented 2026-11-23
-- Version: 1.1.0
+- Status: Accepted; terminal profile, synchronized draw, and keyboard normalization implemented 2026-11-23
+- Version: 1.2.0
 - Date: 2026-11-23
 - Related: [ADR-0019](0019-terminal-keyboard-enhancement.md),
   [ADR-0057](0057-tui-surface-model-and-focus-contract.md),

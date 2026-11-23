@@ -912,3 +912,19 @@ fn keymap_list_prefers_configured_bindings_over_default_hints() {
     assert!(x_rows[0].contains("lsp.hover"), "{text}");
     assert!(!x_rows[0].contains("editor.delete_forward"), "{text}");
 }
+
+#[test]
+fn alt_shift_letter_preserves_explicit_shift() {
+    let chord = KeyChord::from_key(key(
+        KeyCode::Char('A'),
+        KeyModifiers::ALT | KeyModifiers::SHIFT,
+    ));
+    assert_eq!(chord, KeyChord::parse("alt-shift-a").expect("alt-shift"));
+    assert_eq!(chord.code, KeyCode::Char('A'));
+}
+
+#[test]
+fn legacy_alt_uppercase_still_folds_without_shift() {
+    let chord = KeyChord::from_key(key(KeyCode::Char('C'), KeyModifiers::ALT));
+    assert_eq!(chord.code, KeyCode::Char('c'));
+}
