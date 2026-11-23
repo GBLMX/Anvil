@@ -82,6 +82,19 @@ pub(crate) fn handle_mouse(model: &mut Model, mouse: MouseEvent, width: u16, hei
         }
     }
     if overlay_open(model) {
+        if model.ui.diagnostic_peek.is_some() {
+            match mouse.kind {
+                MouseEventKind::ScrollUp => {
+                    model.scroll_diagnostic_peek(-1);
+                    return true;
+                }
+                MouseEventKind::ScrollDown => {
+                    model.scroll_diagnostic_peek(1);
+                    return true;
+                }
+                _ => {}
+            }
+        }
         if crate::debug_panel::handle_mouse(model, &mouse, area) {
             return true;
         }

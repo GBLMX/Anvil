@@ -2359,3 +2359,28 @@ fn background_lsp_retry_does_not_restart_current_root() {
     }
     assert!(model.status.text.contains("background"));
 }
+
+#[test]
+fn diagnostic_peek_wheel_scrolls() {
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.view.viewport_height = 30;
+    model.ui.diagnostic_peek = Some(anvil_session::ui::DiagnosticPeek {
+        path: PathBuf::from("a.rs"),
+        revision: 0,
+        line: 0,
+        character: 0,
+        focus: anvil_session::ui::FocusState::default(),
+        diagnostics: Vec::new(),
+        selected: 0,
+        line_count: 20,
+        scroll: 0,
+    });
+    let scroll = crossterm::event::MouseEvent {
+        kind: crossterm::event::MouseEventKind::ScrollDown,
+        column: 1,
+        row: 1,
+        modifiers: crossterm::event::KeyModifiers::NONE,
+    };
+    handle_event(&mut model, Event::Mouse(scroll));
+    assert_eq!(model.ui.diagnostic_peek.as_ref().expect("peek").scroll, 1);
+}
