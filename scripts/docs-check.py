@@ -52,7 +52,7 @@ def check_links(path: Path, text: str) -> None:
 def status_block(text: str) -> str | None:
     lines = text.splitlines()
     for index, line in enumerate(lines):
-        if line.startswith("Status:") or line.startswith("- Status:"):
+        if line.startswith(("Status:", "- Status:")):
             return " ".join(lines[index : index + 3]).casefold()
     return None
 

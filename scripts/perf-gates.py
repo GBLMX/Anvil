@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import fcntl
 import json
 import os
@@ -101,19 +102,15 @@ def one_run(
             times.append(elapsed)
         return times
     finally:
-        try:
+        with contextlib.suppress(OSError):
             os.write(master, b":q!\r")
-        except OSError:
-            pass
         try:
             process.wait(timeout=5)
         except subprocess.TimeoutExpired:
             process.kill()
             process.wait()
-        try:
+        with contextlib.suppress(OSError):
             os.close(master)
-        except OSError:
-            pass
         shutil.rmtree(state, ignore_errors=True)
 
 
@@ -186,19 +183,15 @@ def polling_watch_latency(binary: Path, workspace: Path, timeout: float) -> floa
             raise RuntimeError(f"polling did not reload; tail={output[-400:]!r}")
         return time.monotonic() - start
     finally:
-        try:
+        with contextlib.suppress(OSError):
             os.write(master, b":q!\r")
-        except OSError:
-            pass
         try:
             process.wait(timeout=5)
         except subprocess.TimeoutExpired:
             process.kill()
             process.wait()
-        try:
+        with contextlib.suppress(OSError):
             os.close(master)
-        except OSError:
-            pass
         shutil.rmtree(state, ignore_errors=True)
 
 
@@ -232,19 +225,15 @@ def large_file_latency(
             drain(master)
         return open_elapsed, scrolls
     finally:
-        try:
+        with contextlib.suppress(OSError):
             os.write(master, b":q!\r")
-        except OSError:
-            pass
         try:
             process.wait(timeout=10)
         except subprocess.TimeoutExpired:
             process.kill()
             process.wait()
-        try:
+        with contextlib.suppress(OSError):
             os.close(master)
-        except OSError:
-            pass
         shutil.rmtree(state, ignore_errors=True)
 
 def inotify_kernel_latency(path: Path) -> float | None:
