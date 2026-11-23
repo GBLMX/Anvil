@@ -29,6 +29,11 @@ Anvil already has two extension mechanisms with different trust models:
 - runtime Lua/TS plugins run in the sandboxed plugin host;
 - source-level Rust modules are compile-time, trusted, and feature-gated.
 
+The runtime plugin API already exposes capability-gated `sys.exec` and
+`sys.exec.v2`. This ADR does not remove those existing bounded one-shot
+capabilities; it narrows what runtime plugins may contribute as IDE providers
+and descriptors.
+
 ADR-0065 allows runtime plugins to provide data-only picker and completion
 results, but rejects runtime formatter and DAP providers. Formatters and test
 runners use bounded one-shot gateway execution; language servers use the
@@ -65,7 +70,7 @@ The following classes are distinct and must not be collapsed:
 
 | Class | Trust | May contribute |
 |---|---|---|
-| Runtime plugin | Sandboxed, untrusted | Commands, picker sources, completion sources |
+| Runtime plugin | Sandboxed, untrusted | Commands, picker/completion sources, and existing capability-gated `sys.exec` / `sys.exec.v2` |
 | Native module | Official source, compile-time | Typed in-process services, commands, and declarative tool descriptors |
 | Trusted tool descriptor | Declarative configuration, explicit user grant | LSP, formatter, DAP, build, and task descriptors |
 
@@ -187,12 +192,18 @@ Runtime plugins:
 
 - may register commands, picker sources, and completion sources;
 - may call core-mediated commands subject to the command policy;
-- may not spawn processes;
-- may not declare or implement formatter, DAP, LSP, build, or task providers;
+- may request bounded one-shot `sys.exec` / `sys.exec.v2` through the
+  gateway when the host advertises and the user grants that existing plugin
+  capability;
+- may not spawn processes directly or bypass the gateway;
+- may not declare or implement formatter, DAP, LSP, build, or task
+  descriptors/providers;
 - may not modify text, selection, undo, rendering, focus, or sandbox policy.
 
-This preserves ADR-0065 and ADR-0014. Adding a runtime formatter/DAP provider
-would require a new ADR that supersedes those boundaries.
+This preserves ADR-0065 and ADR-0014. Removing `sys.exec` / `sys.exec.v2`
+would be a separate breaking plugin-API decision. Adding a runtime
+formatter/DAP provider would also require a new ADR that supersedes those
+boundaries.
 
 ## Consequences
 
@@ -216,6 +227,8 @@ Negative:
 - Focused tests:
   - runtime plugin manifest with `formatter`, `dap`, or `lsp` is rejected;
   - descriptor without a grant cannot start;
+  - runtime plugin `sys.exec` remains capability-gated and bounded; this ADR
+    does not widen or remove it;
   - `exec:*` and unknown capabilities are rejected;
   - grant invalidates on version, manifest hash, root, capability, or command
     change.

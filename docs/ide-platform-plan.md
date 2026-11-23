@@ -24,7 +24,8 @@ Already landed:
 - Git diff, hunk staging, blame, and conflict handling;
 - multi-root workspace routing and per-root gateways;
 - workspace file index and gateway-backed search;
-- runtime plugin host with commands, picker, and completion;
+- runtime plugin host with commands, picker, completion, and existing
+  capability-gated `sys.exec` / `sys.exec.v2`;
 - compile-time official modules: Git, workspace index, desktop, LaTeX, Typst.
 
 The remaining product gap is not basic editing. It is project awareness,
@@ -128,7 +129,9 @@ compiler/language-server output, not replace it.
 
 Follow ADR-0070:
 
-- runtime plugins: commands, picker, completion only;
+- runtime plugins: commands, picker, completion, and existing capability-gated
+  `sys.exec` / `sys.exec.v2`; no formatter/DAP/LSP/build descriptors or
+  providers;
 - native modules: trusted in-process code and declarative descriptors;
 - user/workspace settings: trusted declarative descriptors;
 - no runtime formatter/DAP/LSP provider;
@@ -198,8 +201,9 @@ are code intelligence and debugging depth. S7–S8 are later platform work.
 
 - No new runtime dependency without an ADR and measured need.
 - No extension exec without a capability grant and gateway validation.
-- A runtime plugin cannot spawn a process, implement a formatter/DAP/LSP
-  provider, or mutate core editing state.
+- A runtime plugin cannot spawn directly or bypass the gateway, implement a
+  formatter/DAP/LSP provider, or mutate core editing state; its existing
+  `sys.exec` / `sys.exec.v2` capabilities remain bounded and gateway-mediated.
 - Descriptor grants are per root and invalidated by manifest, version, command,
   or root changes.
 - Untrusted workspaces start no external integration automatically.
