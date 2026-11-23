@@ -306,6 +306,16 @@ impl Model {
         {
             self.language.lsp.pending_sync = None;
         }
+        if self
+            .language
+            .lsp
+            .last_synced
+            .as_ref()
+            .is_some_and(|(synced, _)| synced == path)
+        {
+            self.language.lsp.last_synced = None;
+            self.language.lsp.change_due = None;
+        }
         self.language.lsp_requests.versions.remove(path);
         for worker in self.language.lsp.workers.values() {
             let _ = worker.close(path);
@@ -644,6 +654,7 @@ impl Model {
 
     pub(crate) fn poll_lsp(&mut self) {
         self.flush_pending_lsp_sync();
+        self.sync_lsp_edits();
         let effects = self.language.poll(Instant::now());
         for effect in effects {
             match effect {
@@ -667,11 +678,54 @@ impl Model {
         match worker.sync_recoverable(&path, text) {
             Ok(()) => {
                 self.language.lsp_requests.record_version(&path);
+                self.record_lsp_synced(&path);
             }
             Err((_, text)) => {
                 self.language.lsp.pending_sync = Some((path, text));
             }
         }
+    }
+
+    fn sync_lsp_edits(&mut self) {
+        let Some(path) = self.session.path.clone() else {
+            self.language.lsp.change_due = None;
+            return;
+        };
+        if self.active_lsp_worker().is_none() {
+            self.language.lsp.change_due = None;
+            return;
+        }
+        let revision = self.session.editor.revision();
+        if self
+            .language
+            .lsp
+            .last_synced
+            .as_ref()
+            .is_some_and(|(synced, synced_revision)| {
+                synced == &path && *synced_revision == revision
+            })
+        {
+            self.language.lsp.change_due = None;
+            return;
+        }
+        if self.language.lsp.pending_sync.is_some() {
+            return;
+        }
+        let now = Instant::now();
+        let due = *self
+            .language
+            .lsp
+            .change_due
+            .get_or_insert(now + Duration::from_millis(150));
+        if now < due {
+            return;
+        }
+        let text = self
+            .session
+            .editor
+            .text()
+            .slice(0..self.session.editor.text().len_bytes());
+        let _ = self.sync_lsp_document(&path, text);
     }
 
     pub(crate) fn diagnostic_lines(&self) -> Vec<usize> {

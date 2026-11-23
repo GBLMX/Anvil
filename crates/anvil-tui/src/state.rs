@@ -321,6 +321,8 @@ pub(crate) struct LspTransportState {
     pub(crate) desired: Option<LspKey>,
     pub(crate) labels: HashMap<LspKey, String>,
     pub(crate) pending_sync: Option<(PathBuf, String)>,
+    pub(crate) last_synced: Option<(PathBuf, u64)>,
+    pub(crate) change_due: Option<Instant>,
 }
 
 #[derive(Default)]

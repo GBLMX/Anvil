@@ -68,6 +68,13 @@ impl Model {
         self.language.lsp_requests.track(id, request);
         true
     }
+    pub(crate) fn record_lsp_synced(&mut self, path: &Path) {
+        if self.session.path.as_deref() == Some(path) {
+            self.language.lsp.last_synced =
+                Some((path.to_path_buf(), self.session.editor.revision()));
+            self.language.lsp.change_due = None;
+        }
+    }
     pub(crate) fn sync_lsp_document(&mut self, path: &Path, text: String) -> Result<(), String> {
         let Some(worker) = self.active_lsp_worker() else {
             return Err("lsp is not running".to_owned());
@@ -84,6 +91,7 @@ impl Model {
                     self.language.lsp.pending_sync = None;
                 }
                 self.language.lsp_requests.record_version(path);
+                self.record_lsp_synced(path);
                 Ok(())
             }
             Err((error, text)) => {

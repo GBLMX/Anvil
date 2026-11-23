@@ -2321,3 +2321,19 @@ fn close_clears_pending_sync_and_versions_only_for_the_closed_path() {
     );
     assert_eq!(model.language.lsp_requests.versions.get(&second), Some(&4));
 }
+
+#[test]
+fn recording_lsp_sync_tracks_current_revision() {
+    let mut model = Model::new(EditorState::from_text("fn main() {}\n"), None);
+    let path = PathBuf::from("/ws/main.rs");
+    model.session.path = Some(path.clone());
+    model.language.lsp.change_due = Some(Instant::now());
+
+    model.record_lsp_synced(&path);
+
+    assert_eq!(
+        model.language.lsp.last_synced,
+        Some((path, model.session.editor.revision()))
+    );
+    assert!(model.language.lsp.change_due.is_none());
+}
