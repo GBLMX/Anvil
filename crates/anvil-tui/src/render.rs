@@ -158,6 +158,29 @@ fn list_row_at(popup: Rect, start: usize, len: usize, col: u16, row: u16) -> Opt
     (index < len).then_some(index)
 }
 
+pub(crate) fn command_completion_row_at(
+    model: &Model,
+    area: Rect,
+    col: u16,
+    row: u16,
+) -> Option<usize> {
+    let completion = model.overlays.command_completion.as_ref()?;
+    let popup = command_completion_rect(area, completion.filtered().len());
+    let inner = Rect {
+        x: popup.x + 1,
+        y: popup.y + 1,
+        width: popup.width.saturating_sub(2),
+        height: popup.height.saturating_sub(2),
+    };
+    if !rect_contains(inner, col, row) {
+        return None;
+    }
+    let selected = completion.selected_index();
+    let start = selected.saturating_sub(inner.height.saturating_sub(1) as usize);
+    let index = start + usize::from(row - inner.y);
+    (index < completion.filtered().len()).then_some(index)
+}
+
 pub(crate) fn code_action_row_at(model: &Model, area: Rect, col: u16, row: u16) -> Option<usize> {
     let actions = model.overlays.lsp_results.code_actions.as_ref()?;
     let popup = code_actions_rect(area, actions.items.len());

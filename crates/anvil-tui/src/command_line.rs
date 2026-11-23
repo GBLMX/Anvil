@@ -138,6 +138,10 @@ impl CommandCompletion {
         self.table.filtered()
     }
 
+    pub(crate) fn select(&mut self, index: usize) {
+        self.table.select(index);
+    }
+
     pub(crate) fn selected_index(&self) -> usize {
         self.table.selected_index()
     }
@@ -321,6 +325,20 @@ mod tests {
             .iter()
             .map(|index| completion.items()[*index].label.as_str())
             .collect()
+    }
+
+    #[test]
+    fn command_completion_row_hit_selects_visible_row() {
+        let mut model = Model::new(EditorState::from_text(""), None);
+        model.view.viewport_width = 100;
+        model.view.viewport_height = 30;
+        model.overlays.command_completion = Some(CommandCompletion::new("", &[], true, true));
+        let area = ratatui::layout::Rect::new(0, 0, 100, 30);
+        let popup = crate::render::command_completion_rect(area, 10);
+        assert_eq!(
+            crate::render::command_completion_row_at(&model, area, popup.x + 2, popup.y + 2),
+            Some(1)
+        );
     }
 
     #[test]

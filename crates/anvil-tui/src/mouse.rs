@@ -53,6 +53,20 @@ pub(crate) fn handle_mouse(model: &mut Model, mouse: MouseEvent, width: u16, hei
         width,
         height,
     };
+    if mouse.kind == MouseEventKind::Down(MouseButton::Left)
+        && model.overlays.command_completion.is_some()
+        && let Some(row) =
+            crate::render::command_completion_row_at(model, area, mouse.column, mouse.row)
+    {
+        model
+            .overlays
+            .command_completion
+            .as_mut()
+            .expect("command completion")
+            .select(row);
+        model.file.dirty = true;
+        return true;
+    }
     if overlay_open(model) {
         if model.overlays.theme_browser.is_some() {
             match mouse.kind {

@@ -40,6 +40,7 @@ post-`0.5.0` feature line.
 - Command palette rows now respond to mouse clicks for selection while Enter still executes.
 - Buffer, provider, changed-file, jump, and history pickers now consume mouse input and support row selection and wheel scrolling.
 - Code actions, document symbols, references, and call hierarchy rows now support click selection.
+- Command-line completion rows now support click selection while Tab and Enter still accept.
 - `ANVIL_OSC52=1` enables a write-only OSC 52 clipboard fallback when native clipboard tools are unavailable.
 - Explicit `Alt+Shift` keymap bindings preserve the shifted key instead of folding it to lowercase.
 - TUI labels and overlay text truncate on grapheme boundaries, keeping emoji and combining sequences intact.
