@@ -75,7 +75,7 @@ The installed layout passed `anvil doctor --profile installed --json` with
 ## Remaining release-time steps
 
 - Production key custody and hardware-backed signing ceremony.
-- GitHub build-provenance attestation and `gh attestation verify`.
-- Repository `ANVIL_PLUGIN_SIGNING_KEY` and `ANVIL_RELEASE_SIGNING_KEY`
-  secrets are not present in this checkout's GitHub repository; no public tag
-  has been pushed.
+- The tag workflow emits unsigned build inputs with provenance; wiring the
+  offline signer to those inputs and verifying provenance in a publish job
+  remain.
+- No public tag has been pushed.

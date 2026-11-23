@@ -53,10 +53,10 @@ plugin public key differs from the checksum public key
   remain deferred.
 - The official package trust layout still carries a single `official.pub`;
   keyed multi-key trust and rotation support are not implemented.
-- The GitHub release workflow still uses CI-held PEM secrets; the CI build to
-  offline YubiKey signing flow is not implemented.
-- Publication remains the tag-triggered workflow; the rehearsal did not upload
-  or publish assets.
-- GitHub build-provenance attestation must still be generated and verified.
+- The tag workflow now emits unsigned build inputs and provenance only; it
+  does not sign with production keys or publish.
+- Wiring the offline signer to those inputs and adding a verified publish job
+  remains.
+- The publish job must verify build provenance before release.
 
 No public tag was pushed from this rehearsal.

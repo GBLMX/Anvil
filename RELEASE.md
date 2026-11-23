@@ -69,11 +69,16 @@ Also verify:
 
 ## Artifacts
 
-Pushing a `vX.Y.Z` tag runs `.github/workflows/release.yml`. The workflow
-requires two repository secrets containing Ed25519 PEM private keys:
+Pushing a `vX.Y.Z` tag runs `.github/workflows/release.yml`. It builds a test
+layout with an ephemeral CI key, verifies the installer and lifecycle, removes
+the test-signed package directory, and uploads unsigned build inputs:
 
-- `ANVIL_PLUGIN_SIGNING_KEY` signs official plugin packages.
-- `ANVIL_RELEASE_SIGNING_KEY` signs `SHA256SUMS`.
+- `anvil-<version>-linux-x86_64-inputs.tar.gz`
+- `anvil-<version>.sbom.spdx.json`
+- `anvil-<version>-inputs.sha256`
+
+The tarball carries a GitHub build-provenance attestation. The workflow does
+not sign with production keys and does not create or publish a release.
 
 For local hardware-backed signing, point `ANVIL_PLUGIN_SIGNING_KEY` at a PIV
 slot (`piv:9c`) instead of a PEM path. `scripts/package-official-plugin.sh`
@@ -92,23 +97,17 @@ The scripted local flow is `scripts/release-yubikey.sh`. It builds the `full`
 layout, signs the plugin in slot `9c`, runs the lifecycle smoke, creates the
 SBOM and tarball, signs `SHA256SUMS` in slot `9d`, and verifies both
 signatures. `--verify-only <dir>` verifies an existing bundle without the key.
-The script stops at offline signing; it does not upload or publish.
-Publication remains the tag-triggered workflow below. It refuses a dirty
-tracked worktree or a tag that does not point at `HEAD`.
+The script stops at offline signing; it does not upload or publish. It refuses
+a dirty tracked worktree or a tag that does not point at `HEAD`.
 
 It builds `scripts/release-layout.sh`, generates an SPDX JSON SBOM with
 `syft`, creates a tarball, writes `SHA256SUMS`, and signs the exact checksum
-file. GitHub build-provenance attestation is attached to the release tarball.
+file.
 
-For internal candidates this CI-held checksum key is allowed by ADR-0060.
-For `0.7.0`, the checksum key is the separate on-device slot `9d`. Public
-publication still requires the CI build-to-offline-sign-to-publish flow,
-build-provenance verification, and explicit authorization. The local script
-produces the signed bundle used by that flow; it does not create a release.
-
-The workflow verifies the checksum file, signature, SPDX SBOM, and required
-archive entries before publishing, then verifies the published provenance
-attestation.
+Public publication still requires a verified offline-signing handoff over the
+CI build inputs, build-provenance verification, and explicit authorization.
+The current local script rebuilds its bundle; it is not yet wired to consume
+the workflow artifact.
 
 Verification:
 

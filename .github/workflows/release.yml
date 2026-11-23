@@ -1,4 +1,4 @@
-name: Release
+name: Release build
 
 on:
   push:
@@ -6,16 +6,13 @@ on:
       - "v*"
 
 permissions:
-  contents: write
+  contents: read
   id-token: write
   attestations: write
 
 jobs:
-  release:
+  build:
     runs-on: ubuntu-latest
-    env:
-      PLUGIN_SIGNING_KEY: ${{ secrets.ANVIL_PLUGIN_SIGNING_KEY }}
-      RELEASE_SIGNING_KEY: ${{ secrets.ANVIL_RELEASE_SIGNING_KEY }}
     steps:
       - uses: actions/checkout@v7
       - name: Install pinned Rust toolchain
@@ -25,7 +22,7 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Check tag and keys
+      - name: Check tag
         run: |
           version="${GITHUB_REF_NAME#v}"
           cargo_version="$(python3 - <<'PY'
@@ -38,17 +35,12 @@ jobs:
             echo "tag $GITHUB_REF_NAME does not match Cargo.toml $cargo_version" >&2
             exit 1
           fi
-          if [ -z "$PLUGIN_SIGNING_KEY" ] || [ -z "$RELEASE_SIGNING_KEY" ]; then
-            echo "ANVIL_PLUGIN_SIGNING_KEY and ANVIL_RELEASE_SIGNING_KEY are required" >&2
-            exit 1
-          fi
-          umask 077
-          printf '%s\n' "$PLUGIN_SIGNING_KEY" > "$RUNNER_TEMP/plugin-signing.pem"
-          printf '%s\n' "$RELEASE_SIGNING_KEY" > "$RUNNER_TEMP/release-signing.pem"
 
-      - name: Build signed layout
+      - name: Build test layout
         run: |
-          ANVIL_PLUGIN_SIGNING_KEY="$RUNNER_TEMP/plugin-signing.pem" \
+          umask 077
+          openssl genpkey -algorithm ED25519 -out "$RUNNER_TEMP/test-plugin.pem"
+          ANVIL_PLUGIN_SIGNING_KEY="$RUNNER_TEMP/test-plugin.pem" \
             scripts/release-layout.sh "$RUNNER_TEMP/layout"
 
       - name: Verify shipped installer
@@ -78,89 +70,37 @@ jobs:
         run: scripts/release-lifecycle-smoke.sh "$RUNNER_TEMP/layout"
 
       - uses: anchore/sbom-action/download-syft@v0
-      - name: Generate SBOM
+      - name: Prepare unsigned build inputs
         run: |
           version="${GITHUB_REF_NAME#v}"
+          rm -rf "$RUNNER_TEMP/layout/share/anvil/packages"
           syft "$RUNNER_TEMP/layout" \
             -o "spdx-json=$RUNNER_TEMP/anvil-$version.sbom.spdx.json"
-
-      - name: Package artifacts
-        run: |
-          version="${GITHUB_REF_NAME#v}"
           tar \
             --sort=name \
             --mtime='@0' \
             --owner=0 \
             --group=0 \
             --numeric-owner \
-            -czf "$RUNNER_TEMP/anvil-$version-linux-x86_64.tar.gz" \
+            -czf "$RUNNER_TEMP/anvil-$version-linux-x86_64-inputs.tar.gz" \
             -C "$RUNNER_TEMP/layout" .
-          openssl pkey \
-            -in "$RUNNER_TEMP/release-signing.pem" \
-            -pubout \
-            -out "$RUNNER_TEMP/release.pub.pem"
           cd "$RUNNER_TEMP"
           sha256sum \
-            "anvil-$version-linux-x86_64.tar.gz" \
+            "anvil-$version-linux-x86_64-inputs.tar.gz" \
             "anvil-$version.sbom.spdx.json" \
-            release.pub.pem \
-            > SHA256SUMS
-          openssl pkeyutl \
-            -sign \
-            -inkey "$RUNNER_TEMP/release-signing.pem" \
-            -rawin \
-            -in SHA256SUMS \
-            -out SHA256SUMS.sig
-
-      - name: Verify packaged artifacts
-        run: |
-          version="${GITHUB_REF_NAME#v}"
-          cd "$RUNNER_TEMP"
-          sha256sum -c SHA256SUMS
-          openssl pkeyutl -verify \
-            -pubin \
-            -inkey release.pub.pem \
-            -rawin \
-            -in SHA256SUMS \
-            -sigfile SHA256SUMS.sig
-          tar -tzf "anvil-$version-linux-x86_64.tar.gz" > "$RUNNER_TEMP/archive.list"
-          for path in ./install.sh ./uninstall.sh ./bin/anvil ./bin/anvil-gateway; do
-            grep -qx "$path" "$RUNNER_TEMP/archive.list"
-          done
-          python3 - "$RUNNER_TEMP/anvil-$version.sbom.spdx.json" <<'PY'
-          import json
-          import sys
-
-          sbom = json.load(open(sys.argv[1], encoding="utf-8"))
-          assert sbom["spdxVersion"].startswith("SPDX-2"), sbom.get("spdxVersion")
-          assert sbom["packages"], sbom
-          PY
+            > "anvil-$version-inputs.sha256"
 
       - name: Attest build provenance
         uses: actions/attest-build-provenance@v2
         with:
-          subject-path: ${{ runner.temp }}/anvil-*-linux-x86_64.tar.gz
+          subject-path: ${{ runner.temp }}/anvil-*-linux-x86_64-inputs.tar.gz
 
-      - name: Publish release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          version="${GITHUB_REF_NAME#v}"
-          gh release create "$GITHUB_REF_NAME" \
-            "$RUNNER_TEMP/anvil-$version-linux-x86_64.tar.gz" \
-            "$RUNNER_TEMP/anvil-$version.sbom.spdx.json" \
-            "$RUNNER_TEMP/SHA256SUMS" \
-            "$RUNNER_TEMP/SHA256SUMS.sig" \
-            "$RUNNER_TEMP/release.pub.pem" \
-            --verify-tag \
-            --generate-notes \
-            --title "Anvil $version"
-
-      - name: Verify published provenance
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          version="${GITHUB_REF_NAME#v}"
-          gh attestation verify \
-            "$RUNNER_TEMP/anvil-$version-linux-x86_64.tar.gz" \
-            --repo "$GITHUB_REPOSITORY"
+      - name: Upload unsigned build inputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: anvil-${{ github.ref_name }}-build-inputs
+          if-no-files-found: error
+          path: |
+            ${{ runner.temp }}/anvil-*-linux-x86_64-inputs.tar.gz
+            ${{ runner.temp }}/anvil-*.sbom.spdx.json
+            ${{ runner.temp }}/anvil-*-inputs.sha256

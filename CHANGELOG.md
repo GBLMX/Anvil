@@ -7,6 +7,9 @@ post-`0.5.0` feature line.
 
 
 ## [Unreleased]
+### Changed
+- The tag-triggered release workflow now builds and uploads unsigned inputs
+  with build provenance instead of signing with CI keys or publishing.
 
 ## [0.7.0] - 2026-11-22
 ### Added
