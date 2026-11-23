@@ -943,6 +943,41 @@ fn external_dirty_change_requires_confirmation() {
 }
 
 #[test]
+fn external_change_prompts_when_split_copy_is_dirty() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("file.txt");
+    fs::write(&path, "old").expect("write");
+    let mut model = Model::open(&path).expect("open");
+    model.config.settings.editor.auto_save = false;
+    model.split_vertical();
+    model.insert_text("X");
+    model.focus_split(true);
+    assert!(
+        model
+            .buffers
+            .split
+            .as_ref()
+            .is_some_and(|pane| pane.buffer.modified)
+    );
+    assert!(!model.file.modified);
+
+    fs::write(&path, "disk").expect("external write");
+    model.handle_external_change(path);
+
+    assert!(matches!(
+        model.ui.input_mode,
+        InputMode::ConfirmReload { .. }
+    ));
+    assert!(
+        model
+            .buffers
+            .split
+            .as_ref()
+            .is_some_and(|pane| pane.buffer.editor.text().slice(0..1) == "X")
+    );
+}
+
+#[test]
 fn quit_guard_checks_inactive_buffers() {
     let dir = tempfile::tempdir().expect("tempdir");
     let first = dir.path().join("first.txt");

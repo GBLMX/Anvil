@@ -733,6 +733,23 @@ impl Model {
         self.status.text = format!("buffer {}/{}: {name}", target + 1, len);
     }
 
+    pub(crate) fn path_is_dirty(&self, path: &Path) -> bool {
+        (self.session.path.as_deref() == Some(path) && self.file.modified)
+            || self
+                .buffers
+                .entries
+                .iter()
+                .any(|buffer| buffer.path.as_deref() == Some(path) && buffer.modified)
+            || self
+                .buffers
+                .background
+                .get(path)
+                .is_some_and(|buffer| buffer.modified)
+            || self.buffers.split.as_ref().is_some_and(|pane| {
+                pane.buffer.path.as_deref() == Some(path) && pane.buffer.modified
+            })
+    }
+
     pub(crate) fn any_modified(&self) -> bool {
         self.file.modified
             || self

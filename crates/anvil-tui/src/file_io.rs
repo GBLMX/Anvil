@@ -310,21 +310,7 @@ impl Model {
         {
             return;
         }
-        let modified = if self.session.path.as_ref() == Some(&path) {
-            self.file.modified
-        } else if let Some(buffer) = self
-            .buffers
-            .entries
-            .iter()
-            .find(|buffer| buffer.path.as_ref() == Some(&path))
-        {
-            buffer.modified
-        } else {
-            self.buffers
-                .background
-                .get(&path)
-                .is_some_and(|buffer| buffer.modified)
-        };
+        let modified = self.path_is_dirty(&path);
         if modified {
             if matches!(
                 &self.ui.input_mode,
