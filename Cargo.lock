@@ -217,6 +217,9 @@ dependencies = [
 [[package]]
 name = "anvil-platform"
 version = "0.7.0"
+dependencies = [
+ "base64 0.23.1",
+]
 
 [[package]]
 name = "anvil-plugin-host"
