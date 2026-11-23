@@ -1393,3 +1393,48 @@ fn completion_popup_shows_auto_import_panel() {
     );
     assert!(rendered.contains("class"), "{rendered}");
 }
+
+#[test]
+fn clicking_completion_row_selects_it() {
+    let item = |index: usize| crate::state::CompletionItem {
+        source: anvil_session::provider::ProviderId::new("builtin.lsp"),
+        label: format!("item{index}"),
+        filter_text: format!("item{index}"),
+        sort_text: format!("item{index}"),
+        preselect: false,
+        insert: format!("item{index}"),
+        snippet: None,
+        detail: String::new(),
+        replace: None,
+        replace_bytes: None,
+        documentation: None,
+        raw: serde_json::json!({"kind": 6}),
+        resolved: true,
+    };
+    let mut model = Model::new(EditorState::from_text("it"), None);
+    model.language.completion.completion = Some(crate::state::CompletionState {
+        items: vec![item(0), item(1)],
+        filtered: vec![0, 1],
+        query: "it".to_owned(),
+        selected: 0,
+    });
+    let area = ratatui::layout::Rect::new(0, 0, 100, 24);
+    let geometry = crate::render::completion_geometry(&model, area).expect("completion layout");
+    let click = crossterm::event::MouseEvent {
+        kind: crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left),
+        column: geometry.popup.x + 2,
+        row: geometry.popup.y + 2,
+        modifiers: crossterm::event::KeyModifiers::NONE,
+    };
+    handle_event(&mut model, Event::Mouse(click));
+    assert_eq!(
+        model
+            .language
+            .completion
+            .completion
+            .as_ref()
+            .expect("completion")
+            .selected,
+        1
+    );
+}

@@ -87,6 +87,116 @@ fn completion_label_spans(label: &str, query: &str, style: Style) -> Vec<Span<'s
     ]
 }
 
+pub(crate) struct CompletionGeometry {
+    pub(crate) popup: Rect,
+    pub(crate) visible: usize,
+    pub(crate) start: usize,
+    pub(crate) has_scrollbar: bool,
+    pub(crate) inner_width: usize,
+    pub(crate) side_width: u16,
+    pub(crate) gap: u16,
+    pub(crate) documentation: Option<String>,
+    pub(crate) detail_panel: Option<(&'static str, String)>,
+}
+
+pub(crate) fn completion_geometry(model: &Model, area: Rect) -> Option<CompletionGeometry> {
+    let completion = model.language.completion.completion.as_ref()?;
+    let selected_item = completion
+        .filtered
+        .get(completion.selected)
+        .and_then(|index| completion.items.get(*index));
+    let auto_import =
+        selected_item.and_then(|item| crate::completion_sources::completion_auto_import(&item.raw));
+    let detail_panel = auto_import.map(|text| ("Auto-import", text)).or_else(|| {
+        selected_item.and_then(|item| {
+            let mut body = item.detail.clone();
+            if let Some(documentation) = &item.documentation {
+                let documentation =
+                    crate::completion_sources::clean_completion_documentation(documentation);
+                if !documentation.is_empty() {
+                    if !body.is_empty() {
+                        body.push_str("\n\n");
+                    }
+                    body.push_str(&documentation);
+                }
+            }
+            (!body.trim().is_empty()).then_some(("Details", body))
+        })
+    });
+    let side_width = if detail_panel.is_some() && area.width >= 80 {
+        (area.width * 2 / 5).max(30)
+    } else {
+        0
+    };
+    let gap = u16::from(side_width > 0);
+    let max_total = area.width.saturating_sub(2);
+    let desired_list = (area.width * 2 / 5).max(44);
+    let total_width = (desired_list + gap + side_width).min(max_total);
+    let width = if side_width == 0 {
+        total_width
+    } else {
+        total_width.saturating_sub(side_width + gap)
+    };
+    let documentation = if side_width == 0 {
+        selected_item
+            .and_then(|item| item.documentation.as_deref())
+            .and_then(|text| text.lines().next())
+            .map(str::trim)
+            .filter(|text| !text.is_empty())
+            .map(str::to_owned)
+    } else {
+        None
+    };
+    let extra = u16::from(documentation.is_some());
+    let detail_height = detail_panel
+        .as_ref()
+        .map(|(_, body)| body.lines().count() as u16 + 2)
+        .unwrap_or(0);
+    let height = (completion.filtered.len() as u16 + 3 + extra)
+        .max(detail_height)
+        .min(15)
+        .min(area.height.saturating_sub(2));
+    let popup = Rect {
+        x: area.x + (area.width.saturating_sub(total_width)) / 2,
+        y: area.y + (area.height.saturating_sub(height)) / 2,
+        width,
+        height,
+    };
+    let visible = height.saturating_sub(3 + extra) as usize;
+    let start = completion
+        .selected
+        .saturating_sub(visible.saturating_sub(1));
+    let has_scrollbar = completion.filtered.len() > visible;
+    let inner_width = usize::from(width.saturating_sub(2 + u16::from(has_scrollbar)));
+    Some(CompletionGeometry {
+        popup,
+        visible,
+        start,
+        has_scrollbar,
+        inner_width,
+        side_width,
+        gap,
+        documentation,
+        detail_panel,
+    })
+}
+
+pub(crate) fn completion_row_at(model: &Model, area: Rect, col: u16, row: u16) -> Option<usize> {
+    let completion = model.language.completion.completion.as_ref()?;
+    let geometry = completion_geometry(model, area)?;
+    let inner = Rect {
+        x: geometry.popup.x + 1,
+        y: geometry.popup.y + 1,
+        width: geometry.popup.width.saturating_sub(2),
+        height: geometry.visible as u16,
+    };
+    if !crate::render::rect_contains(inner, col, row) {
+        return None;
+    }
+    let index = geometry.start + usize::from(row - inner.y);
+    (index < completion.filtered.len()).then_some(index)
+}
+
 pub(crate) fn render_overlays(model: &Model, frame: &mut Frame, area: Rect) {
     if let Some(palette) = &model.overlays.command_palette {
         let popup = command_palette_rect(area);
@@ -723,74 +833,21 @@ pub(crate) fn render_overlays(model: &Model, frame: &mut Frame, area: Rect) {
         );
     }
     if let Some(completion) = &model.language.completion.completion {
-        let selected_item = completion
-            .filtered
-            .get(completion.selected)
-            .and_then(|index| completion.items.get(*index));
-        let auto_import = selected_item
-            .and_then(|item| crate::completion_sources::completion_auto_import(&item.raw));
-        let detail_panel = auto_import.map(|text| ("Auto-import", text)).or_else(|| {
-            selected_item.and_then(|item| {
-                let mut body = item.detail.clone();
-                if let Some(documentation) = &item.documentation {
-                    let documentation =
-                        crate::completion_sources::clean_completion_documentation(documentation);
-                    if !documentation.is_empty() {
-                        if !body.is_empty() {
-                            body.push_str("\n\n");
-                        }
-                        body.push_str(&documentation);
-                    }
-                }
-                (!body.trim().is_empty()).then_some(("Details", body))
-            })
-        });
-        let side_width = if detail_panel.is_some() && area.width >= 80 {
-            (area.width * 2 / 5).max(30)
-        } else {
-            0
+        let Some(geometry) = completion_geometry(model, area) else {
+            return;
         };
-        let gap = u16::from(side_width > 0);
-        let max_total = area.width.saturating_sub(2);
-        let desired_list = (area.width * 2 / 5).max(44);
-        let total_width = (desired_list + gap + side_width).min(max_total);
-        let width = if side_width == 0 {
-            total_width
-        } else {
-            total_width.saturating_sub(side_width + gap)
-        };
-        let documentation = if side_width == 0 {
-            selected_item
-                .and_then(|item| item.documentation.as_deref())
-                .and_then(|text| text.lines().next())
-                .map(str::trim)
-                .filter(|text| !text.is_empty())
-                .map(str::to_owned)
-        } else {
-            None
-        };
-        let extra = u16::from(documentation.is_some());
-        let detail_height = detail_panel
-            .as_ref()
-            .map(|(_, body)| body.lines().count() as u16 + 2)
-            .unwrap_or(0);
-        let height = (completion.filtered.len() as u16 + 3 + extra)
-            .max(detail_height)
-            .min(15)
-            .min(area.height.saturating_sub(2));
-        let popup = Rect {
-            x: area.x + (area.width.saturating_sub(total_width)) / 2,
-            y: area.y + (area.height.saturating_sub(height)) / 2,
-            width,
-            height,
-        };
+        let CompletionGeometry {
+            popup,
+            visible,
+            start,
+            has_scrollbar,
+            inner_width,
+            side_width,
+            gap,
+            documentation,
+            detail_panel,
+        } = geometry;
         frame.render_widget(Clear, popup);
-        let visible = height.saturating_sub(3 + extra) as usize;
-        let start = completion
-            .selected
-            .saturating_sub(visible.saturating_sub(1));
-        let has_scrollbar = completion.filtered.len() > visible;
-        let inner_width = usize::from(width.saturating_sub(2 + u16::from(has_scrollbar)));
         let mut lines = Vec::new();
         for (row, index) in completion
             .filtered
@@ -875,10 +932,10 @@ pub(crate) fn render_overlays(model: &Model, frame: &mut Frame, area: Rect) {
         }
         if let Some((title, body)) = detail_panel {
             let side = Rect {
-                x: popup.x.saturating_add(width).saturating_add(gap),
+                x: popup.x.saturating_add(popup.width).saturating_add(gap),
                 y: popup.y,
                 width: side_width,
-                height,
+                height: popup.height,
             };
             frame.render_widget(Clear, side);
             frame.render_widget(

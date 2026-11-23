@@ -53,6 +53,16 @@ pub(crate) fn handle_mouse(model: &mut Model, mouse: MouseEvent, width: u16, hei
         width,
         height,
     };
+    if mouse.kind == MouseEventKind::Down(MouseButton::Left)
+        && model.language.completion.completion.is_some()
+        && let Some(row) = crate::render::completion_row_at(model, area, mouse.column, mouse.row)
+    {
+        if let Some(completion) = model.language.completion.completion.as_mut() {
+            completion.selected = row;
+        }
+        model.file.dirty = true;
+        return true;
+    }
     if model.overlays.command_completion.is_some() {
         match mouse.kind {
             MouseEventKind::ScrollUp => {
