@@ -1,7 +1,7 @@
 //! Debug adapter panels for threads, stack frames, variables, and watches.
 
 use super::*;
-use crate::dap::{DapCancel, DapClient, DapWorker};
+use anvil_dap::{DapCancel, DapClient, DapWorker};
 use ratatui::{
     Frame,
     layout::Rect,
@@ -388,7 +388,7 @@ struct DebugSelection {
 fn snapshot(
     client: &mut DapClient,
     selection: &DebugSelection,
-) -> Result<DebugSnapshot, crate::dap::DapError> {
+) -> Result<DebugSnapshot, anvil_dap::DapError> {
     let threads = request_body(client, "threads", json!({}))?
         .get("threads")
         .and_then(Value::as_array)
@@ -517,7 +517,7 @@ fn watch_values(
     client: &mut DapClient,
     expressions: &[String],
     frame_id: Option<i64>,
-) -> Result<Vec<DebugWatch>, crate::dap::DapError> {
+) -> Result<Vec<DebugWatch>, anvil_dap::DapError> {
     expressions
         .iter()
         .map(|expression| {
@@ -548,7 +548,7 @@ fn request_body(
     client: &mut DapClient,
     command: &str,
     arguments: Value,
-) -> Result<Value, crate::dap::DapError> {
+) -> Result<Value, anvil_dap::DapError> {
     let request = client.request(command, arguments)?;
     let response = client.wait_response(request)?;
     Ok(response.get("body").cloned().unwrap_or(Value::Null))

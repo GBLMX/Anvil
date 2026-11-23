@@ -80,6 +80,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "anvil-dap"
+version = "0.7.0"
+dependencies = [
+ "anvil-process",
+ "serde_json",
+]
+
+[[package]]
 name = "anvil-distro-minimal"
 version = "0.7.0"
 dependencies = [
@@ -295,6 +303,7 @@ dependencies = [
  "anvil-api",
  "anvil-control",
  "anvil-core",
+ "anvil-dap",
  "anvil-editor",
  "anvil-ipc",
  "anvil-lsp-client",

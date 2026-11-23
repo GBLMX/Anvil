@@ -29,6 +29,7 @@ anvil-editor = { path = "../anvil-editor", version = "0.7.0" }
 anvil-ipc = { path = "../anvil-ipc", version = "0.7.0" }
 anvil-lsp-client = { path = "../anvil-lsp-client", version = "0.7.0" }
 anvil-control = { path = "../anvil-control", version = "0.7.0" }
+anvil-dap = { path = "../anvil-dap", version = "0.7.0" }
 anvil-mod-git = { path = "../anvil-mod-git", version = "0.7.0", optional = true }
 anvil-mod-workspace-index = { path = "../anvil-mod-workspace-index", version = "0.7.0", optional = true }
 anvil-module = { path = "../anvil-module", version = "0.7.0" }

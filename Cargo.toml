@@ -4,6 +4,7 @@ members = [
     "crates/anvil-control",
     "crates/anvil-core",
     "crates/anvil-ctl",
+    "crates/anvil-dap",
     "crates/anvil-distro-standard",
     "crates/anvil-editor",
     "crates/anvil-integrations",

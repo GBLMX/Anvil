@@ -14,6 +14,7 @@ post-`0.5.0` feature line.
   hashing, and grants bound to integration, root, capability, and executable.
 - `anvil-mod-workspace-index` now has a bounded symbol/occurrence layer with
   definition, reference, and implementation roles.
+- `anvil-dap` is a UI-neutral DAP client extracted from the TUI.
 
 ### Changed
 - The tag-triggered release workflow now builds and uploads unsigned inputs

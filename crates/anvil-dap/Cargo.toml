@@ -1,0 +1,12 @@
+[package]
+name = "anvil-dap"
+description = "UI-neutral Debug Adapter Protocol client"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+anvil-process = { path = "../anvil-process", version = "0.7.0" }
+serde_json = "1"

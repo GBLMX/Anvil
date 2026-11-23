@@ -1,7 +1,7 @@
 //! Local breakpoint state and optional DAP synchronization.
 
 use super::*;
-use crate::dap::{DapCancel, DapClient, DapWorker};
+use anvil_dap::{DapCancel, DapClient, DapWorker};
 use anvil_session::provider::{
     DapAdapterManager, DapAdapterProvider, DapAdapterSpec, DapContext, ProviderId, ProviderOrigin,
     ProviderPriority, RustDapProvider,

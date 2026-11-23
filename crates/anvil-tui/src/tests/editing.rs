@@ -1109,9 +1109,9 @@ fn dap_attach_does_not_block_and_reports_failure() {
 }
 
 #[cfg(unix)]
-fn idle_dap_client() -> (crate::dap::DapClient, tempfile::TempDir) {
+fn idle_dap_client() -> (anvil_dap::DapClient, tempfile::TempDir) {
     let directory = tempfile::tempdir().expect("tempdir");
-    let client = crate::dap::DapClient::spawn(
+    let client = anvil_dap::DapClient::spawn(
         std::path::Path::new("sleep"),
         &["30".to_owned()],
         directory.path(),
@@ -1179,7 +1179,7 @@ fn dap_attach_timeout_kills_adapter_process_group() {
             .dap
             .attach_worker
             .as_ref()
-            .map(crate::dap::DapWorker::pid)
+            .map(anvil_dap::DapWorker::pid)
             .unwrap_or(0);
         if pid != 0 {
             break pid;

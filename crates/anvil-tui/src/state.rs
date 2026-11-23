@@ -232,28 +232,28 @@ impl Default for LocationPanelState {
 }
 
 /// Result of one asynchronous adapter attach, tagged with its generation.
-pub(crate) type DapAttachMessage = (u64, Result<crate::dap::DapClient, String>);
+pub(crate) type DapAttachMessage = (u64, Result<anvil_dap::DapClient, String>);
 
 /// Result of one asynchronous panel refresh, tagged with its generation.
 pub(crate) type DapRefreshMessage = (
     u64,
-    crate::dap::DapClient,
+    anvil_dap::DapClient,
     Result<debug_panel::DebugSnapshot, String>,
 );
 
 #[derive(Default)]
 pub(crate) struct DapState {
     pub(crate) breakpoints: HashMap<PathBuf, BTreeSet<u32>>,
-    pub(crate) client: Option<crate::dap::DapClient>,
+    pub(crate) client: Option<anvil_dap::DapClient>,
     /// Bumped on every attach and detach. Workers echo it back so a late result
     /// cannot replace a newer client or revive a detached one.
     pub(crate) generation: u64,
     pub(crate) attach: Option<mpsc::Receiver<DapAttachMessage>>,
     pub(crate) attach_started: Option<Instant>,
-    pub(crate) attach_worker: Option<crate::dap::DapWorker>,
+    pub(crate) attach_worker: Option<anvil_dap::DapWorker>,
     pub(crate) request: Option<mpsc::Receiver<DapRefreshMessage>>,
     pub(crate) request_started: Option<Instant>,
-    pub(crate) request_worker: Option<crate::dap::DapWorker>,
+    pub(crate) request_worker: Option<anvil_dap::DapWorker>,
 }
 
 #[derive(Default)]
