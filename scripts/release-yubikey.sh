@@ -13,8 +13,10 @@ PY
 tag="v$version"
 out="$root/dist/anvil-$version"
 verify_only=false
+inputs=""
+expected_fingerprint=""
 if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
-    echo "usage: $0 [--out DIR] [--verify-only DIR]" >&2
+    echo "usage: $0 [--out DIR] [--inputs DIR] [--expected-checksum-key-sha256 HEX] [--verify-only DIR]" >&2
     exit 0
 fi
 while [[ $# -gt 0 ]]; do
@@ -28,6 +30,16 @@ while [[ $# -gt 0 ]]; do
             [[ $# -ge 2 ]] || { echo "--verify-only needs a directory" >&2; exit 2; }
             out="$2"
             verify_only=true
+            shift 2
+            ;;
+        --inputs)
+            [[ $# -ge 2 ]] || { echo "--inputs needs a directory" >&2; exit 2; }
+            inputs="$2"
+            shift 2
+            ;;
+        --expected-checksum-key-sha256)
+            [[ $# -ge 2 ]] || { echo "--expected-checksum-key-sha256 needs a value" >&2; exit 2; }
+            expected_fingerprint="${2,,}"
             shift 2
             ;;
         *)
@@ -77,6 +89,15 @@ verify_artifacts() {
         echo "plugin and checksum keys must differ" >&2
         exit 2
     }
+    if [[ -n "$expected_fingerprint" ]]; then
+        local actual_fingerprint
+        actual_fingerprint="$(openssl pkey -pubin -in "$public_key" -outform DER \
+            | sha256sum | awk '{print $1}')"
+        [[ "$actual_fingerprint" == "$expected_fingerprint" ]] || {
+            echo "checksum key fingerprint mismatch: $actual_fingerprint" >&2
+            exit 2
+        }
+    fi
     echo "plugin key:   sha256:$plugin_id"
     echo "checksum key: sha256:$checksum_id"
     echo "verified: $dir"
@@ -103,19 +124,47 @@ git -C "$root" rev-parse -q --verify "refs/tags/$tag" >/dev/null || {
 
 rm -rf "$out"
 mkdir -p "$out"
-echo "building YubiKey-signed layout for $tag in $out/layout"
-ANVIL_PLUGIN_SIGNING_KEY="piv:$plugin_slot" \
-    "$root/scripts/release-layout.sh" "$out/layout"
+if [[ -n "$inputs" ]]; then
+    [[ -d "$inputs" ]] || { echo "inputs directory missing: $inputs" >&2; exit 2; }
+    input_archive="$inputs/anvil-$version-linux-x86_64-inputs.tar.gz"
+    input_sums="$inputs/anvil-$version-inputs.sha256"
+    for file in "$input_archive" "$input_sums"; do
+        [[ -f "$file" ]] || { echo "missing build input: $file" >&2; exit 2; }
+    done
+    (cd "$inputs" && sha256sum -c "anvil-$version-inputs.sha256")
+    mkdir -p "$out/layout"
+    tar -xzf "$input_archive" -C "$out/layout"
+    verify_layout "$out/layout"
+    echo "re-signing CI layout for $tag in $out/layout"
+    for plugin in "$out/layout/share/anvil/official/plugins"/*; do
+        [[ -d "$plugin" ]] || continue
+        "$root/scripts/package-official-plugin.sh" \
+            "$plugin" \
+            "piv:$plugin_slot" \
+            "$out/layout/share/anvil/packages"
+    done
+    cp "$input_sums" "$out/anvil-$version-inputs.sha256"
+else
+    echo "building YubiKey-signed layout for $tag in $out/layout"
+    ANVIL_PLUGIN_SIGNING_KEY="piv:$plugin_slot" \
+        "$root/scripts/release-layout.sh" "$out/layout"
+fi
 "$root/scripts/release-lifecycle-smoke.sh" "$out/layout"
-
 syft "$out/layout" -o "spdx-json=$out/anvil-$version.sbom.spdx.json"
 tar --sort=name --mtime='@0' --owner=0 --group=0 --numeric-owner \
     -czf "$out/anvil-$version-linux-x86_64.tar.gz" -C "$out/layout" .
 yubico-piv-tool -a read-public-key -s "$checksum_slot" -o "$out/release.pub.pem"
 (
     cd "$out"
-    sha256sum "anvil-$version-linux-x86_64.tar.gz" \
-        "anvil-$version.sbom.spdx.json" release.pub.pem > SHA256SUMS
+    sums=(
+        "anvil-$version-linux-x86_64.tar.gz"
+        "anvil-$version.sbom.spdx.json"
+        release.pub.pem
+    )
+    if [[ -f "anvil-$version-inputs.sha256" ]]; then
+        sums+=("anvil-$version-inputs.sha256")
+    fi
+    sha256sum "${sums[@]}" > SHA256SUMS
 )
 yubico-piv-tool -a verify-pin --sign -s "$checksum_slot" -A ED25519 \
     -i "$out/SHA256SUMS" -o "$out/SHA256SUMS.sig"

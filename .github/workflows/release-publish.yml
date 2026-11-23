@@ -1,0 +1,104 @@
+name: Release publish
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag, for example v0.7.0
+        required: true
+        type: string
+      build_run_id:
+        description: Run ID containing the tag build-inputs artifact
+        required: true
+        type: string
+      signed_release_tag:
+        description: Draft release tag containing the offline-signed assets
+        required: true
+        type: string
+      expected_checksum_key_sha256:
+        description: Expected SHA-256 fingerprint of release.pub.pem
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  attestations: read
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Download CI build inputs
+        uses: actions/download-artifact@v4
+        with:
+          name: anvil-${{ inputs.tag }}-build-inputs
+          path: build-inputs
+          run-id: ${{ inputs.build_run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Download offline-signed release
+        run: |
+          set -euo pipefail
+          gh release download "${{ inputs.signed_release_tag }}" \
+            --dir signed --clobber
+
+      - name: Verify build provenance
+        run: |
+          set -euo pipefail
+          archive="$(find build-inputs -maxdepth 1 -name 'anvil-*-linux-x86_64-inputs.tar.gz' -print -quit)"
+          test -n "$archive"
+          gh attestation verify "$archive" \
+            --repo "$GITHUB_REPOSITORY" \
+            --source-ref "refs/tags/${{ inputs.tag }}"
+
+      - name: Verify CI input checksums
+        run: |
+          set -euo pipefail
+          cd build-inputs
+          checksum="$(find . -maxdepth 1 -name 'anvil-*-inputs.sha256' -print -quit)"
+          test -n "$checksum"
+          sha256sum -c "$checksum"
+
+      - name: Verify signed release
+        env:
+          EXPECTED_CHECKSUM_KEY_SHA256: ${{ inputs.expected_checksum_key_sha256 }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          cd signed
+          sha256sum -c SHA256SUMS
+          openssl pkeyutl -verify -pubin -inkey release.pub.pem -rawin \
+            -in SHA256SUMS -sigfile SHA256SUMS.sig
+          actual="$(openssl pkey -pubin -in release.pub.pem -outform DER \
+            | sha256sum | awk '{print $1}')"
+          test "$actual" = "${EXPECTED_CHECKSUM_KEY_SHA256,,}"
+          version="${TAG#v}"
+          cmp "anvil-$version-inputs.sha256" "../build-inputs/anvil-$version-inputs.sha256"
+
+      - name: Publish verified release
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          version="${TAG#v}"
+          files=(
+            "signed/anvil-$version-linux-x86_64.tar.gz"
+            "signed/anvil-$version.sbom.spdx.json"
+            "signed/anvil-$version-inputs.sha256"
+            "signed/SHA256SUMS"
+            "signed/SHA256SUMS.sig"
+            "signed/release.pub.pem"
+          )
+          for file in "${files[@]}"; do
+            test -f "$file"
+          done
+          gh release view "$TAG" >/dev/null 2>&1 || \
+            gh release create "$TAG" --verify-tag --title "$TAG" \
+              --notes "Verified release $TAG"
+          gh release upload "$TAG" "${files[@]}" --clobber
+          gh release delete "${{ inputs.signed_release_tag }}" --yes
