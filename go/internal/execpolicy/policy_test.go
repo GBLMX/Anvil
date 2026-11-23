@@ -2,6 +2,8 @@ package execpolicy
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -178,5 +180,31 @@ func TestValidatesFormatterArgs(t *testing.T) {
 	}
 	if err := Validate("/usr/bin/gofmt", []string{"-w"}); !errors.Is(err, ErrInvalidArgs) {
 		t.Fatalf("gofmt -w: got %v", err)
+	}
+}
+
+func TestRustAnalyzerRequiresTrustedCanonicalPath(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	trusted := filepath.Join(home, ".cargo", "bin", "rust-analyzer")
+	if err := os.MkdirAll(filepath.Dir(trusted), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(trusted, []byte("#!/bin/sh\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := Validate(trusted, nil); err != nil {
+		t.Fatalf("trusted rust-analyzer: %v", err)
+	}
+
+	untrusted := filepath.Join(t.TempDir(), "rust-analyzer")
+	if err := os.WriteFile(untrusted, []byte("#!/bin/sh\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := Validate(untrusted, nil); !errors.Is(err, ErrUnknownTool) {
+		t.Fatalf("untrusted rust-analyzer: %v", err)
+	}
+	if err := Validate("rust-analyzer", nil); !errors.Is(err, ErrUnknownTool) {
+		t.Fatalf("bare rust-analyzer: %v", err)
 	}
 }

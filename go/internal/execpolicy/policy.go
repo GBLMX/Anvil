@@ -5,6 +5,7 @@ package execpolicy
 import (
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 )
@@ -31,11 +32,40 @@ func AllowedTool(path string) (string, error) {
 	case "/usr/bin/gofmt", "/bin/gofmt", "/usr/local/bin/gofmt":
 		return "gofmt", nil
 	default:
-		if filepath.Base(clean) == "rust-analyzer" {
+		if validRustAnalyzerPath(path) {
 			return "rust-analyzer", nil
 		}
 		return "", fmt.Errorf("%w: %s", ErrUnknownTool, path)
 	}
+}
+
+func validRustAnalyzerPath(path string) bool {
+	clean := filepath.Clean(path)
+	if !filepath.IsAbs(clean) || filepath.Base(clean) != "rust-analyzer" {
+		return false
+	}
+	resolved, err := filepath.EvalSymlinks(clean)
+	if err != nil || filepath.Base(resolved) != "rust-analyzer" {
+		return false
+	}
+	return trustedRustAnalyzerPath(clean) && trustedRustAnalyzerPath(resolved)
+}
+
+func trustedRustAnalyzerPath(path string) bool {
+	prefixes := []string{"/usr/bin", "/usr/local/bin", "/nix/store"}
+	if home, err := os.UserHomeDir(); err == nil && home != "" {
+		prefixes = append(
+			prefixes,
+			filepath.Join(home, ".cargo/bin"),
+			filepath.Join(home, ".rustup/toolchains"),
+		)
+	}
+	for _, prefix := range prefixes {
+		if strings.HasPrefix(path, prefix+string(os.PathSeparator)) {
+			return true
+		}
+	}
+	return false
 }
 
 // Validate checks an argv array against the per-tool parser.
