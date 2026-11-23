@@ -52,7 +52,8 @@ limited to 64 KiB and contains:
   "api": "1.0",
   "entry": "run.luau",
   "activationEvents": ["onStartup"],
-  "commands": [{"id": "demo.run", "title": "Run"}]
+  "commands": [{"id": "demo.run", "title": "Run"}],
+  "permissions": ["editor.read", "editor.write"]
 }
 ```
 
@@ -60,6 +61,12 @@ limited to 64 KiB and contains:
 activation. `activationEvents` are limited to `onStartup`, `onCommand:`,
 `onLanguage:`, and `onWorkspaceContains:`.
 
+
+`permissions` defaults to an empty list. Editor RPCs require `editor.read`
+(`editor.get_view`, `editor.get_snapshot`, `event.subscribe`) or `editor.write`
+(`editor.set_mode`, `editor.apply_edit`, `editor.register_command`,
+`editor.register_provider`). `ui.notify` requires `ui.notify`. Missing
+permissions fail with `policy_denied`; `editor.*` grants both editor scopes.
 ## Method catalog
 
 `anvil_api::METHODS` is the single source of truth.

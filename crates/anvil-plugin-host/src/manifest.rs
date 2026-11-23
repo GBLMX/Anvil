@@ -19,6 +19,8 @@ pub struct PluginManifest {
     pub activation_events: Vec<String>,
     #[serde(default)]
     pub commands: Vec<PluginCommand>,
+    #[serde(default)]
+    pub permissions: Vec<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
@@ -97,6 +99,14 @@ impl PluginManifest {
                 return Err("invalid plugin commands".to_owned());
             }
         }
+        if self.permissions.len() > 64
+            || self
+                .permissions
+                .iter()
+                .any(|permission| permission.is_empty() || permission.len() > 128)
+        {
+            return Err("invalid plugin permissions".to_owned());
+        }
         Ok(())
     }
 }
@@ -135,6 +145,7 @@ mod tests {
                 id: "demo.run".to_owned(),
                 title: "Run".to_owned(),
             }],
+            permissions: Vec::new(),
         }
     }
 

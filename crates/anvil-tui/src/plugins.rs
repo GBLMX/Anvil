@@ -48,6 +48,7 @@ impl Model {
             match self.runtime.plugins.supervisor.activate(
                 &plugin_id,
                 &plugin.root,
+                &plugin.manifest.permissions,
                 gateway,
                 &self.workspace.path,
             ) {
@@ -139,6 +140,7 @@ impl Model {
             plugin_id,
             &plugin.root,
             command_id,
+            &plugin.manifest.permissions,
             gateway,
             &self.workspace.path,
         ) {
@@ -429,6 +431,7 @@ impl Model {
         match self.runtime.plugins.supervisor.activate(
             plugin_id,
             &plugin.root,
+            &plugin.manifest.permissions,
             gateway,
             &self.workspace.path,
         ) {
@@ -538,6 +541,7 @@ impl Model {
             if let Err(error) = self.runtime.plugins.supervisor.activate(
                 &registration.plugin_id,
                 &plugin.root,
+                &plugin.manifest.permissions,
                 gateway,
                 &self.workspace.path,
             ) {

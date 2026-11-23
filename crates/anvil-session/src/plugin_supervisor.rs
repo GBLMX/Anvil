@@ -424,6 +424,7 @@ impl PluginSupervisor {
         &mut self,
         plugin_id: &str,
         plugin_root: &Path,
+        permissions: &[String],
         gateway: &mut GatewayPort,
         workspace: &Path,
     ) -> Result<StartOutcome, String> {
@@ -433,7 +434,7 @@ impl PluginSupervisor {
             StartRequest {
                 plugin_root: Some(plugin_root),
                 mode: StartMode::Normal,
-                permissions: &[],
+                permissions,
                 command: None,
             },
             Some(gateway),
@@ -446,6 +447,7 @@ impl PluginSupervisor {
         plugin_id: &str,
         plugin_root: &Path,
         command: &str,
+        permissions: &[String],
         gateway: &mut GatewayPort,
         workspace: &Path,
     ) -> Result<StartOutcome, String> {
@@ -455,7 +457,7 @@ impl PluginSupervisor {
             StartRequest {
                 plugin_root: Some(plugin_root),
                 mode: StartMode::Normal,
-                permissions: &[],
+                permissions,
                 command: Some(command),
             },
             Some(gateway),

@@ -10,6 +10,18 @@ use anvil_session::Session;
 
 use crate::Model;
 
+fn required_editor_permission(method: &str) -> Option<&'static str> {
+    match method {
+        "editor.get_view" | "editor.get_snapshot" | "event.subscribe" => Some("editor.read"),
+        "editor.set_mode"
+        | "editor.apply_edit"
+        | "editor.register_command"
+        | "editor.register_provider" => Some("editor.write"),
+        "ui.notify" => Some("ui.notify"),
+        _ => None,
+    }
+}
+
 impl Model {
     /// Current active-buffer snapshot for a plugin API call.
     pub fn plugin_snapshot(&self) -> DocumentSnapshot {
@@ -65,6 +77,21 @@ impl Model {
             )
         {
             return Err((-32000, "editor is showing a read-only view".to_owned()));
+        }
+        if let Some(required) = required_editor_permission(method)
+            && let Some(plugin) = self
+                .runtime
+                .plugins
+                .entries
+                .iter()
+                .find(|plugin| plugin.manifest.id == plugin_id)
+            && !plugin
+                .manifest
+                .permissions
+                .iter()
+                .any(|permission| permission == required || permission == "editor.*")
+        {
+            return Err((-32002, format!("plugin {plugin_id} lacks {required}")));
         }
         match method {
             "editor.get_view" => Ok(serde_json::json!(self.session.editor.snapshot().view())),
@@ -432,6 +459,7 @@ mod tests {
                 api: "1.0".to_owned(),
                 activation_events: Vec::new(),
                 commands: Vec::new(),
+                permissions: vec!["editor.read".to_owned(), "editor.write".to_owned()],
             },
             enabled: true,
             digest: None,
@@ -694,6 +722,28 @@ mod tests {
                     serde_json::json!({"id": "other.run", "title": "Run"}),
                 )
                 .is_err()
+        );
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn editor_read_requires_declared_permission() {
+        let mut model = Model::new(EditorState::from_text(""), None);
+        let mut descriptor = plugin("demo");
+        descriptor.manifest.permissions.clear();
+        model.runtime.plugins.entries.push(descriptor);
+        let (code, _) = model
+            .handle_editor_request("demo", "editor.get_view", serde_json::json!({}))
+            .expect_err("missing permission");
+        assert_eq!(code, -32002);
+        model.runtime.plugins.entries[0]
+            .manifest
+            .permissions
+            .push("editor.read".to_owned());
+        assert!(
+            model
+                .handle_editor_request("demo", "editor.get_view", serde_json::json!({}))
+                .is_ok()
         );
     }
 }

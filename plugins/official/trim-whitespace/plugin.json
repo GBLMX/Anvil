@@ -4,6 +4,7 @@
   "api": "1.0",
   "entry": "main.luau",
   "activationEvents": ["onCommand:anvil.trim-trailing-whitespace"],
+  "permissions": ["editor.read", "editor.write"],
   "commands": [
     {
       "id": "anvil.trim-trailing-whitespace",

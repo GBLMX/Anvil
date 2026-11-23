@@ -381,6 +381,7 @@ mod tests {
                     api: "1.0".to_owned(),
                     activation_events: Vec::new(),
                     commands: Vec::new(),
+                    permissions: Vec::new(),
                 },
                 enabled: true,
                 digest: Some("0123456789abcdef".to_owned()),

@@ -654,12 +654,15 @@ mod tests {
     }
 
     #[test]
-    fn official_manifest_without_permissions_parses() {
+    fn official_manifest_permissions_parse() {
         let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../plugins/official/trim-whitespace/plugin.json");
         let data = std::fs::read_to_string(path).expect("official manifest");
         let manifest: PkgManifest = serde_json::from_str(&data).expect("parse manifest");
         assert_eq!(manifest.id, "anvil.official.trim-whitespace");
-        assert!(manifest.permissions.is_empty());
+        assert_eq!(
+            manifest.permissions,
+            ["editor.read".to_owned(), "editor.write".to_owned()]
+        );
     }
 }

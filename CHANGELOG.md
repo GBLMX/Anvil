@@ -10,6 +10,8 @@ post-`0.5.0` feature line.
 ### Changed
 - The tag-triggered release workflow now builds and uploads unsigned inputs
   with build provenance instead of signing with CI keys or publishing.
+- Plugin manifests now declare `permissions`; editor RPCs require
+  `editor.read`/`editor.write` and `ui.notify` requires `ui.notify`.
 
 ## [0.7.0] - 2026-11-22
 ### Added

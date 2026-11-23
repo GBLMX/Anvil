@@ -793,6 +793,7 @@ fn command_palette_includes_plugin_commands() {
                     id: "demo.trim".to_owned(),
                     title: "Trim".to_owned(),
                 }],
+                permissions: vec!["editor.read".to_owned(), "editor.write".to_owned()],
             },
             enabled: true,
             digest: None,
