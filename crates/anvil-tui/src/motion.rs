@@ -28,7 +28,7 @@ struct OverlayFade {
     started: Instant,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 enum AlertTarget {
     Notifications,
     Progress,
@@ -131,22 +131,39 @@ impl MotionState {
         Some((rect, MIN_ALPHA + (1.0 - MIN_ALPHA) * eased))
     }
 
-    pub(crate) fn fade_alert(
+    pub(crate) fn fade_notifications(
         &mut self,
         now: Instant,
-        notifications: Option<Rect>,
-        progress: Option<Rect>,
+        rect: Option<Rect>,
+        reduced_motion: bool,
+    ) -> Option<(Rect, f32)> {
+        self.fade_alert(AlertTarget::Notifications, now, rect, reduced_motion)
+    }
+
+    pub(crate) fn fade_progress(
+        &mut self,
+        now: Instant,
+        rect: Option<Rect>,
+        reduced_motion: bool,
+    ) -> Option<(Rect, f32)> {
+        self.fade_alert(AlertTarget::Progress, now, rect, reduced_motion)
+    }
+
+    fn fade_alert(
+        &mut self,
+        target: AlertTarget,
+        now: Instant,
+        rect: Option<Rect>,
         reduced_motion: bool,
     ) -> Option<(Rect, f32)> {
         let alert = self.alert.as_ref()?;
+        if alert.target != target {
+            return None;
+        }
         if reduced_motion {
             self.alert = None;
             return None;
         }
-        let rect = match alert.target {
-            AlertTarget::Notifications => notifications,
-            AlertTarget::Progress => progress,
-        };
         let Some(rect) = rect else {
             self.alert = None;
             return None;
@@ -375,11 +392,11 @@ mod tests {
         motion.observe_notifications(2, now, false);
         assert!(motion.active());
         let rect = Rect::new(0, 1, 20, 2);
-        assert!(motion.fade_alert(now, Some(rect), None, false).is_some());
+        assert!(motion.fade_notifications(now, Some(rect), false).is_some());
         assert!(motion.active());
         assert!(
             motion
-                .fade_alert(now + NOTIFICATION_FADE, Some(rect), None, false)
+                .fade_notifications(now + NOTIFICATION_FADE, Some(rect), false)
                 .is_none()
         );
         assert!(!motion.active());
@@ -397,6 +414,6 @@ mod tests {
         motion.observe_progress([1, 2], now, false);
         assert!(motion.active());
         let rect = Rect::new(0, 1, 20, 3);
-        assert!(motion.fade_alert(now, None, Some(rect), false).is_some());
+        assert!(motion.fade_progress(now, Some(rect), false).is_some());
     }
 }

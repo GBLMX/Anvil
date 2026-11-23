@@ -1089,11 +1089,19 @@ fn notification_generation_fades_when_length_is_unchanged() {
 
     assert_eq!(model.ui.notifications.items().len(), 1);
     assert!(model.motion_active());
+    let message = crate::layout::workbench_rects(&model, 80, 24)
+        .expect("layout")
+        .message
+        .expect("message band");
+    let area = crate::message::notification_area(&model, message).expect("notification rows");
+    let cell = &terminal.backend().buffer()[(area.x + 3, area.y)];
+    assert_ne!(cell.fg, crate::theme::text_color());
 }
 
 #[test]
 fn new_progress_id_fades_the_progress_panel() {
     let mut model = Model::new(EditorState::from_text(""), None);
+    model.start_page.welcome = false;
     model.set_motion_enabled(true);
     let backend = TestBackend::new(80, 24);
     let mut terminal = Terminal::new(backend).expect("terminal");
@@ -1104,6 +1112,10 @@ fn new_progress_id_fades_the_progress_panel() {
     terminal.draw(|frame| view(&model, frame)).expect("draw");
 
     assert!(model.motion_active());
+    let area = crate::render::progress_rect(&model, ratatui::layout::Rect::new(0, 0, 80, 24))
+        .expect("progress panel");
+    let cell = &terminal.backend().buffer()[(area.x + 1, area.y + 1)];
+    assert_ne!(cell.fg, crate::theme::accent());
 }
 
 #[test]

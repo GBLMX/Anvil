@@ -32,7 +32,7 @@ pub(crate) fn height(model: &Model, available: u16) -> u16 {
 
 /// The rows occupied by notifications inside the message band.
 pub(crate) fn notification_area(model: &Model, area: Rect) -> Option<Rect> {
-    let total = usize::from(height(model, area.height));
+    let total = usize::from(area.height);
     let primary = usize::from(
         model.status.busy.is_some()
             || (matches!(model.ui.input_mode, InputMode::Normal) && !model.status.text.is_empty()),

@@ -177,6 +177,16 @@ pub fn view(model: &Model, frame: &mut Frame) {
     }
     if let Some(message_area) = rects.message {
         crate::message::render(model, frame, message_area);
+        if let Some(rect) = crate::message::notification_area(model, message_area) {
+            if let Some((rect, alpha)) =
+                model
+                    .motion
+                    .borrow_mut()
+                    .fade_notifications(motion_now, Some(rect), motion_reduced)
+            {
+                crate::motion::fade_buffer(frame.buffer_mut(), rect, alpha);
+            }
+        }
     }
     if model.start_page.welcome {
         render_welcome(frame, rects.inner, model);
@@ -418,16 +428,13 @@ pub fn view(model: &Model, frame: &mut Frame) {
     {
         crate::motion::fade_buffer(frame.buffer_mut(), rect, alpha);
     }
-    let notification_rect = rects
-        .message
-        .and_then(|area| crate::message::notification_area(model, area));
     let progress_rect = crate::render::progress_rect(model, area);
-    if let Some((rect, alpha)) = model.motion.borrow_mut().fade_alert(
-        motion_now,
-        notification_rect,
-        progress_rect,
-        motion_reduced,
-    ) {
+    if let Some((rect, alpha)) =
+        model
+            .motion
+            .borrow_mut()
+            .fade_progress(motion_now, progress_rect, motion_reduced)
+    {
         crate::motion::fade_buffer(frame.buffer_mut(), rect, alpha);
     }
 }
