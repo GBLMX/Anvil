@@ -148,8 +148,6 @@ workspace. Project settings are read-only and cannot set `[lsp.commands]`;
 that table is rejected because it would let a repository select an executable.
 `[lsp.roots]` is only honored from user settings. An explicit `ANVIL_SETTINGS`
 file remains a complete override and disables the project layer.
-An explicit `ANVIL_SETTINGS` file remains a complete override and disables the
-project layer.
 
 `ANVIL_EDITOR_SCROLL_MARGIN`, `ANVIL_EDITOR_MAX_BUFFERS`,
 `ANVIL_EDITOR_AUTO_SAVE`, `ANVIL_EDITOR_FILE_WATCHING`,

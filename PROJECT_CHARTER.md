@@ -1,8 +1,8 @@
 # Anvil Project Charter
 
-Status: **0.4.5 / post-`0.4.0` feature line. Pre-alpha.**
-Release model: **0.3.0 → 0.4.0 was the maintenance train**, released
-2026-11-01. Feature development resumes after `0.4.0` on the `0.4.x` line.
+Status: **0.7.0 release candidate; public tagging remains gated on production signing and provenance.**
+Release model: **0.7.0 is the current candidate**; `0.3.0 → 0.4.0` was an
+earlier maintenance train released 2026-11-01. Later work lands under `[Unreleased]`.
 Supersedes: the V1.0 whitepaper draft where it conflicts with the decisions below.
 Changes to this document require an ADR.
 
@@ -259,20 +259,5 @@ are accepted under the same dual-license terms.
 
 ## 15. ADR index
 
-- [0001: Plugin isolation](docs/adr/0001-plugin-isolation.md)
-- [0002: Go gateway role](docs/adr/0002-go-daemon.md)
-- [0003: IDL strategy](docs/adr/0003-idl.md)
-- [0004: Text model](docs/adr/0004-text-model.md)
-- [0005: Exec policy](docs/adr/0005-exec-policy.md)
-- [0006: Upstream dependencies](docs/adr/0006-upstream-dependencies.md)
-- [0007: JSON-RPC envelope and capability token](docs/adr/0007-jsonrpc-envelope-and-capability-token.md)
-- [0008: Selection-first interaction](docs/adr/0008-selection-first-interaction.md)
-- [0009: Text-model snapshot gate](docs/adr/0009-text-model-snapshot-gate.md)
-- [0010: Cursor and snapshot ownership](docs/adr/0010-cursor-and-snapshot-ownership.md)
-- [0011: Workspace-scoped chunked file I/O](docs/adr/0011-workspace-chunked-file-io.md)
-- [0012: Plugin-host isolation](docs/adr/0012-plugin-host-isolation.md)
-- [0013: Rust kernel and distribution boundary](docs/adr/0013-kernel-distribution-boundary.md)
-- [0035: Plugin WIT seams](docs/adr/0035-plugin-wit-seams.md)
-- [0015: Command-line completion](docs/adr/0015-command-line-completion.md)
-- [0016: Render style layers](docs/adr/0016-render-style-layers.md)
-- [0017: Plugin activation, concurrency, and lifecycle](docs/adr/0017-plugin-activation-and-lifecycle.md)
+The canonical ADR index is [docs/adr/README.md](docs/adr/README.md); it tracks
+ADR-0001 through ADR-0073. This charter does not maintain a duplicate list.

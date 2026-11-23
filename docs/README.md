@@ -1,7 +1,7 @@
 # Documentation Index
 
 Status: canonical map for architecture, plans, ADRs, SPECs, and reference
-material. Last reviewed 2026-11-18.
+material. Last reviewed 2026-11-24.
 
 ## Start here
 
