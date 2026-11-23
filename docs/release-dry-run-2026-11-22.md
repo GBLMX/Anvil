@@ -75,7 +75,7 @@ The installed layout passed `anvil doctor --profile installed --json` with
 ## Remaining release-time steps
 
 - Production key custody and hardware-backed signing ceremony.
-- The tag workflow emits unsigned build inputs with provenance; wiring the
-  offline signer to those inputs and verifying provenance in a publish job
-  remain.
+- The tag workflow emits unsigned build inputs with provenance; the offline
+  signer now consumes those inputs and `Release publish` verifies provenance
+  before upload. See `docs/release-offline-publish.md`.
 - No public tag has been pushed.

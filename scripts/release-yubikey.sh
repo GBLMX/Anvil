@@ -134,7 +134,6 @@ if [[ -n "$inputs" ]]; then
     (cd "$inputs" && sha256sum -c "anvil-$version-inputs.sha256")
     mkdir -p "$out/layout"
     tar -xzf "$input_archive" -C "$out/layout"
-    verify_layout "$out/layout"
     echo "re-signing CI layout for $tag in $out/layout"
     for plugin in "$out/layout/share/anvil/official/plugins"/*; do
         [[ -d "$plugin" ]] || continue
@@ -143,6 +142,7 @@ if [[ -n "$inputs" ]]; then
             "piv:$plugin_slot" \
             "$out/layout/share/anvil/packages"
     done
+    verify_layout "$out/layout"
     cp "$input_sums" "$out/anvil-$version-inputs.sha256"
 else
     echo "building YubiKey-signed layout for $tag in $out/layout"
