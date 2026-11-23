@@ -6,6 +6,12 @@ use anvil_workspace::{FileRequest, ProjectReplacePlan};
 
 impl Model {
     pub(crate) fn preview_project_replace(&mut self, spec: &str) {
+        if self.workspace.roots.list().len() > 1 {
+            self.status.text =
+                "E: :replace-project is single-root only; remove extra roots first".to_owned();
+            self.file.dirty = true;
+            return;
+        }
         let Some((old, new)) = spec.split_once('/') else {
             self.status.text = "E: usage: :replace-project OLD/NEW/".to_owned();
             self.file.dirty = true;
@@ -283,5 +289,25 @@ mod tests {
         assert!(model.status.text.contains("modified buffers"));
         assert!(!model.save());
         assert!(model.status.text.contains("reload before saving"));
+    }
+
+    #[test]
+    fn multi_root_replace_is_rejected() {
+        let primary = tempfile::tempdir().expect("primary");
+        let secondary = tempfile::tempdir().expect("secondary");
+        let mut model = Model::new(EditorState::from_text("x"), None);
+        model.workspace.path = primary.path().to_path_buf();
+        model.workspace.roots =
+            crate::workspace_roots::WorkspaceRoots::new(primary.path()).expect("roots");
+        model
+            .workspace
+            .roots
+            .add(secondary.path(), true)
+            .expect("secondary root");
+
+        model.preview_project_replace("old/new/");
+
+        assert!(model.status.text.contains("single-root only"));
+        assert!(model.project.replace_pending.is_none());
     }
 }
