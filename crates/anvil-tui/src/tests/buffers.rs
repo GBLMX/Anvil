@@ -1913,3 +1913,41 @@ fn toggles_breakpoint_gutter_marker() {
     model.toggle_breakpoint();
     assert!(!model.breakpoint_marker(&path, 1));
 }
+
+#[test]
+fn buffer_picker_mouse_selects_visible_row_and_closes_outside() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let first = dir.path().join("first.txt");
+    let second = dir.path().join("second.txt");
+    let third = dir.path().join("third.txt");
+    for path in [&first, &second, &third] {
+        fs::write(path, "text").expect("write buffer");
+    }
+    let mut model = Model::open(&first).expect("open first");
+    model.open_path(&second).expect("open second");
+    model.open_path(&third).expect("open third");
+    model.open_buffer_picker();
+    model.view.viewport_width = 100;
+    model.view.viewport_height = 30;
+    let popup = crate::render::fuzzy_rect(ratatui::layout::Rect::new(0, 0, 100, 30));
+    let click = |column, row| MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column,
+        row,
+        modifiers: crossterm::event::KeyModifiers::NONE,
+    };
+
+    handle_event(&mut model, Event::Mouse(click(popup.x + 2, popup.y + 2)));
+    assert_eq!(
+        model
+            .overlays
+            .buffer_picker
+            .as_ref()
+            .expect("picker")
+            .selected,
+        1
+    );
+
+    handle_event(&mut model, Event::Mouse(click(0, 0)));
+    assert!(model.overlays.buffer_picker.is_none());
+}

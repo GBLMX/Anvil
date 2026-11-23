@@ -144,6 +144,25 @@ pub(crate) fn command_palette_row_at(
     (index < palette.table.filtered().len()).then_some(index)
 }
 
+pub(crate) fn buffer_picker_row_at(model: &Model, area: Rect, col: u16, row: u16) -> Option<usize> {
+    let picker = model.overlays.buffer_picker.as_ref()?;
+    let popup = fuzzy_rect(area);
+    let inner = Rect {
+        x: popup.x + 1,
+        y: popup.y + 1,
+        width: popup.width.saturating_sub(2),
+        height: popup.height.saturating_sub(3),
+    };
+    if !rect_contains(inner, col, row) {
+        return None;
+    }
+    let start = picker
+        .selected
+        .saturating_sub(inner.height.saturating_sub(1) as usize);
+    let index = start + usize::from(row - inner.y);
+    (index < picker.filtered.len()).then_some(index)
+}
+
 pub(crate) fn fuzzy_row_at(model: &Model, area: Rect, col: u16, row: u16) -> Option<usize> {
     let fuzzy = model.overlays.fuzzy.as_ref()?;
     let horizontal = area.width >= 80;

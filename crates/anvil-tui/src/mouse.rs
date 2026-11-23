@@ -88,6 +88,19 @@ pub(crate) fn handle_mouse(model: &mut Model, mouse: MouseEvent, width: u16, hei
                 _ => {}
             }
         }
+        if model.overlays.buffer_picker.is_some() {
+            match mouse.kind {
+                MouseEventKind::ScrollUp => {
+                    model.move_buffer_picker(-1);
+                    return true;
+                }
+                MouseEventKind::ScrollDown => {
+                    model.move_buffer_picker(1);
+                    return true;
+                }
+                _ => {}
+            }
+        }
         if mouse.kind == MouseEventKind::Down(MouseButton::Left)
             && model.overlays.command_palette.is_some()
             && let Some(row) =
@@ -99,6 +112,20 @@ pub(crate) fn handle_mouse(model: &mut Model, mouse: MouseEvent, width: u16, hei
                 .as_mut()
                 .expect("command palette")
                 .select(row);
+            model.file.dirty = true;
+            return true;
+        }
+        if mouse.kind == MouseEventKind::Down(MouseButton::Left)
+            && model.overlays.buffer_picker.is_some()
+            && let Some(row) =
+                crate::render::buffer_picker_row_at(model, area, mouse.column, mouse.row)
+        {
+            model
+                .overlays
+                .buffer_picker
+                .as_mut()
+                .expect("buffer picker")
+                .selected = row;
             model.file.dirty = true;
             return true;
         }
@@ -438,6 +465,7 @@ fn overlay_open(model: &Model) -> bool {
     model.ui.diagnostic_peek.is_some()
         || model.ui.problems.visible
         || model.overlays.command_palette.is_some()
+        || model.overlays.buffer_picker.is_some()
         || model.overlays.fuzzy.is_some()
         || model.overlays.lsp_results.code_actions.is_some()
         || model.overlays.lsp_results.document_symbols.is_some()
@@ -457,6 +485,9 @@ fn close_outside_overlay(model: &mut Model) {
     }
     if model.overlays.command_palette.is_some() {
         model.close_command_palette();
+    }
+    if model.overlays.buffer_picker.is_some() {
+        model.close_buffer_picker();
     }
     if model.overlays.fuzzy.is_some() {
         model.close_fuzzy();
@@ -519,6 +550,9 @@ fn inside_overlay(model: &Model, col: u16, row: u16, area: Rect) -> bool {
     }
     if model.overlays.command_palette.is_some() {
         return crate::render::rect_contains(crate::render::command_palette_rect(area), col, row);
+    }
+    if model.overlays.buffer_picker.is_some() {
+        return crate::render::rect_contains(crate::render::fuzzy_rect(area), col, row);
     }
     if model.overlays.fuzzy.is_some() {
         return crate::render::rect_contains(crate::render::fuzzy_rect(area), col, row);

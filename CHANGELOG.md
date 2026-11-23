@@ -38,6 +38,7 @@ post-`0.5.0` feature line.
 - The terminal title follows the active file or workspace name, with control characters stripped before emission.
 - Theme browser rows now respond to mouse clicks for selection and live preview.
 - Command palette rows now respond to mouse clicks for selection while Enter still executes.
+- Buffer, provider, changed-file, jump, and history pickers now consume mouse input and support row selection and wheel scrolling.
 - `ANVIL_OSC52=1` enables a write-only OSC 52 clipboard fallback when native clipboard tools are unavailable.
 - Explicit `Alt+Shift` keymap bindings preserve the shifted key instead of folding it to lowercase.
 - TUI labels and overlay text truncate on grapheme boundaries, keeping emoji and combining sequences intact.
