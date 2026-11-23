@@ -67,6 +67,7 @@ inside the editor with `:help start`.
 :git-diff           current-file diff
 :git-blame          current-file blame
 :search-project Q   bounded project search
+:project-info        load Cargo targets and capabilities
 :task <command>     run a bounded workspace task
 ```
 

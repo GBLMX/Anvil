@@ -700,6 +700,8 @@ pub(crate) struct ProjectState {
     pub(crate) replace_generation: u64,
     /// Pending project-replace generation, if a request is in flight.
     pub(crate) replace_pending: Option<u64>,
+    /// Lazily loaded UI-neutral project, grants, and symbol services.
+    pub(crate) platform: Option<anvil_runtime::Runtime>,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

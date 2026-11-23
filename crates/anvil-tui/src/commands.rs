@@ -146,6 +146,7 @@ impl Model {
             ("git-conflict-ours", "") => self.request_git_conflict_stage(2),
             ("git-conflict-theirs", "") => self.request_git_conflict_stage(3),
             ("search-project", query) => self.request_project_search(query),
+            ("project-info", "") => self.load_project_info(),
             ("search-cancel", "") => self.cancel_project_search(),
             ("replace-project", spec) => self.preview_project_replace(spec),
             ("replace-project-apply", "") => self.apply_project_replace(),

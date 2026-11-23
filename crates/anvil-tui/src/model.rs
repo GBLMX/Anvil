@@ -292,6 +292,7 @@ impl Model {
         let mut model = Self::new(EditorState::from_text(""), None);
         model.workspace.gateway = Some(gateway);
         model.workspace.path = workspace;
+        model.project.platform = None;
         model.workspace.roots =
             workspace_roots::WorkspaceRoots::new(&model.workspace.path).unwrap_or_default();
         model.workspace.root_gateways.clear();

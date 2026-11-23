@@ -1621,3 +1621,15 @@ fn fuzzy_open_records_frecency() {
     model.fuzzy_open();
     assert_eq!(model.workspace.recent.frecency.get("main.rs"), Some(&1));
 }
+
+#[test]
+fn project_info_loads_cargo_runtime() {
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.execute_command("project-info");
+    assert!(model.project.platform.is_some(), "{}", model.status.text);
+    assert!(
+        model.status.text.starts_with("project:"),
+        "{}",
+        model.status.text
+    );
+}

@@ -365,6 +365,10 @@ pub const COMMANDS: &[CommandSpec] = &[
         capability: Capability::Read,
     },
     CommandSpec {
+        name: "project-info",
+        capability: Capability::Read,
+    },
+    CommandSpec {
         name: "search-cancel",
         capability: Capability::Read,
     },

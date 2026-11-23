@@ -322,6 +322,7 @@ dependencies = [
  "anvil-platform",
  "anvil-plugin-host",
  "anvil-process",
+ "anvil-runtime",
  "anvil-session",
  "anvil-syntax",
  "anvil-task",

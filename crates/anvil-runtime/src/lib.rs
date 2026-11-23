@@ -34,8 +34,16 @@ impl Runtime {
         })
     }
 
-    /// Discover a Cargo project and compose the runtime around its first root.
-    pub fn open_cargo(start: &Path, symbol_caps: SymbolIndexCaps) -> Result<Self, String> {
+    /// Discover a Cargo project with default symbol caps.
+    pub fn open_cargo(start: &Path) -> Result<Self, String> {
+        Self::open_cargo_with_caps(start, SymbolIndexCaps::default())
+    }
+
+    /// Discover a Cargo project with explicit symbol caps.
+    pub fn open_cargo_with_caps(
+        start: &Path,
+        symbol_caps: SymbolIndexCaps,
+    ) -> Result<Self, String> {
         Self::new(Project::cargo(start)?, symbol_caps)
     }
 

@@ -79,6 +79,7 @@ mod plugin_host;
 #[cfg(target_os = "linux")]
 mod plugin_manager;
 mod plugins;
+mod project_info;
 mod project_replace;
 mod repeat;
 pub(crate) use anvil_editor::search;

@@ -17,6 +17,8 @@ post-`0.5.0` feature line.
 - `anvil-dap` is a UI-neutral DAP client extracted from the TUI.
 - `anvil-runtime` composes project discovery, integration grants, and the
   workspace symbol index behind one UI-neutral entry point.
+- `:project-info` loads the Cargo project model into the TUI runtime root and
+  reports its root and target counts.
 - Offline signing can consume the CI build-input artifact; `Release publish`
   verifies provenance, input checksums, and the checksum-key fingerprint
   before uploading release assets.

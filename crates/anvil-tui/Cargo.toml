@@ -36,6 +36,7 @@ anvil-module = { path = "../anvil-module", version = "0.7.0" }
 anvil-plugin-host = { path = "../anvil-plugin-host", version = "0.7.0" }
 anvil-platform = { path = "../anvil-platform", version = "0.7.0" }
 anvil-process = { path = "../anvil-process", version = "0.7.0" }
+anvil-runtime = { path = "../anvil-runtime", version = "0.7.0" }
 anvil-session = { path = "../anvil-session", version = "0.7.0" }
 anvil-task = { path = "../anvil-task", version = "0.7.0" }
 anvil-workspace = { path = "../anvil-workspace", version = "0.7.0", default-features = false }
