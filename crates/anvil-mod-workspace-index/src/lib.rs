@@ -180,6 +180,23 @@ pub enum SymbolKind {
     Other(String),
 }
 
+impl SymbolKind {
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::Module => "module",
+            Self::Function => "function",
+            Self::Struct => "struct",
+            Self::Enum => "enum",
+            Self::Trait => "trait",
+            Self::Method => "method",
+            Self::Field => "field",
+            Self::Constant => "constant",
+            Self::Variable => "variable",
+            Self::Other(value) => value,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SymbolRole {
     Definition,

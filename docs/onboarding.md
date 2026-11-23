@@ -68,6 +68,7 @@ inside the editor with `:help start`.
 :git-blame          current-file blame
 :search-project Q   bounded project search
 :project-info        load Cargo targets and capabilities
+:project-symbols     project/index symbols quick jump
 :task <command>     run a bounded workspace task
 ```
 

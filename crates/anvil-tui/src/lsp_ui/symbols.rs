@@ -1,5 +1,10 @@
 use super::*;
 
+use anvil_runtime::{
+    SymbolKind, SymbolOccurrence, SymbolRole, TextPosition, TextRange, WorkspaceSymbol,
+};
+use std::path::Path;
+
 impl Model {
     pub(crate) fn request_workspace_symbols(&mut self) {
         self.cancel_completion();
@@ -8,7 +13,15 @@ impl Model {
         self.cancel_workspace_symbols();
         self.close_hover();
         self.close_diagnostic_peek();
+        if self.project.platform.is_none() {
+            self.load_project_info();
+        }
+        let cached = self.open_cached_workspace_symbols();
         let Some(path) = self.session.path.as_ref() else {
+            if !cached {
+                self.status.text = "E: no workspace symbols".to_owned();
+                self.file.dirty = true;
+            }
             return;
         };
         let params = serde_json::json!({"query": ""});
@@ -17,6 +30,116 @@ impl Model {
             self.status.text = "workspace symbols".to_owned();
         }
         self.file.dirty = true;
+    }
+
+    fn cached_workspace_symbols(&self) -> Vec<WorkspaceSymbolItem> {
+        let Some(runtime) = self.project.platform.as_ref() else {
+            return Vec::new();
+        };
+        let root = runtime.workspace_root();
+        runtime
+            .symbols()
+            .symbols("", usize::MAX)
+            .into_iter()
+            .map(|symbol| WorkspaceSymbolItem {
+                detail: symbol.kind.as_str().to_owned(),
+                path: root.join(&symbol.path),
+                line: symbol.range.start.line as usize,
+                character: symbol.range.start.character as usize,
+                name: symbol.name,
+            })
+            .collect()
+    }
+
+    pub(crate) fn open_cached_workspace_symbols(&mut self) -> bool {
+        let items = self.cached_workspace_symbols();
+        if items.is_empty() {
+            return false;
+        }
+        let count = items.len();
+        self.overlays.lsp_results.workspace_symbols = Some(WorkspaceSymbolState {
+            filtered: (0..count).collect(),
+            items,
+            query: String::new(),
+            selected: 0,
+        });
+        self.push_overlay_if_idle(OverlayKind::WorkspaceSymbols);
+        self.status.text = format!("workspace symbols: {count} cached");
+        self.file.dirty = true;
+        true
+    }
+
+    fn index_symbol(
+        &mut self,
+        name: &str,
+        detail: &str,
+        path: &Path,
+        line: usize,
+        character: usize,
+    ) {
+        let Some(runtime) = self.project.platform.as_mut() else {
+            return;
+        };
+        let root = runtime.workspace_root().to_path_buf();
+        let Ok(relative) = path.strip_prefix(&root) else {
+            return;
+        };
+        let path = relative.to_string_lossy().replace('\\', "/");
+        if path.is_empty() || name.is_empty() {
+            return;
+        }
+        let caps = runtime.symbols().caps();
+        if name.len() > caps.max_name_bytes || path.len() > caps.max_path_bytes {
+            return;
+        }
+        let start = TextPosition {
+            line: line.min(u32::MAX as usize) as u32,
+            character: character.min(u32::MAX as usize) as u32,
+        };
+        let range = TextRange {
+            start,
+            end: TextPosition {
+                line: start.line,
+                character: start.character.saturating_add(1),
+            },
+        };
+        let kind = SymbolKind::Other(detail.chars().take(64).collect());
+        let _ = runtime.symbols_mut().push_symbol(WorkspaceSymbol {
+            name: name.to_owned(),
+            kind: kind.clone(),
+            path: path.clone(),
+            range,
+        });
+        let _ = runtime.symbols_mut().push_occurrence(SymbolOccurrence {
+            symbol: name.to_owned(),
+            role: SymbolRole::Definition,
+            path,
+            range,
+        });
+    }
+
+    pub(crate) fn index_workspace_symbols(&mut self, items: &[WorkspaceSymbolItem]) {
+        for item in items {
+            self.index_symbol(
+                &item.name,
+                &item.detail,
+                &item.path,
+                item.line,
+                item.character,
+            );
+        }
+    }
+
+    pub(crate) fn index_document_symbols(&mut self, path: &Path, items: &[SymbolItem]) {
+        for item in items {
+            self.index_symbol(
+                &item.name,
+                item.detail.as_deref().unwrap_or_default(),
+                path,
+                item.line,
+                item.character,
+            );
+        }
     }
     pub(crate) fn move_workspace_symbol(&mut self, delta: isize) {
         if let Some(symbols) = self.overlays.lsp_results.workspace_symbols.as_mut() {

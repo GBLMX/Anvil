@@ -19,6 +19,9 @@ post-`0.5.0` feature line.
   workspace symbol index behind one UI-neutral entry point.
 - `:project-info` loads the Cargo project model into the TUI runtime root and
   reports its root and target counts.
+- `:project-symbols` opens the workspace-symbol panel from cached Cargo
+  targets and the runtime symbol index; LSP document/workspace symbols feed
+  that index.
 - Offline signing can consume the CI build-input artifact; `Release publish`
   verifies provenance, input checksums, and the checksum-key fingerprint
   before uploading release assets.

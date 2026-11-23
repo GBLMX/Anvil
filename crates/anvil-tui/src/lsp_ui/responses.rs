@@ -17,6 +17,9 @@ impl Model {
             return;
         };
         let items = symbols_from_lsp(items);
+        if let Some(path) = self.session.path.clone() {
+            self.index_document_symbols(&path, &items);
+        }
         if items.is_empty() {
             self.status.text = "lsp: no document symbols".to_owned();
             self.overlays.lsp_results.document_symbols = None;
@@ -702,9 +705,11 @@ fn call_hierarchy_item_from_lsp(item: &serde_json::Value) -> Option<CallHierarch
 impl Model {
     fn apply_workspace_symbols_response(&mut self, result: &serde_json::Value) {
         let Some(items) = result.as_array() else {
-            self.status.text = "lsp: no workspace symbols".to_owned();
-            self.overlays.lsp_results.workspace_symbols = None;
-            self.close_overlay(OverlayKind::WorkspaceSymbols);
+            if !self.open_cached_workspace_symbols() {
+                self.status.text = "lsp: no workspace symbols".to_owned();
+                self.overlays.lsp_results.workspace_symbols = None;
+                self.close_overlay(OverlayKind::WorkspaceSymbols);
+            }
             return;
         };
         let mut parsed = Vec::new();
@@ -749,10 +754,13 @@ impl Model {
                 character,
             });
         }
+        self.index_workspace_symbols(&parsed);
         if parsed.is_empty() {
-            self.status.text = "lsp: no workspace symbols".to_owned();
-            self.overlays.lsp_results.workspace_symbols = None;
-            self.close_overlay(OverlayKind::WorkspaceSymbols);
+            if !self.open_cached_workspace_symbols() {
+                self.status.text = "lsp: no workspace symbols".to_owned();
+                self.overlays.lsp_results.workspace_symbols = None;
+                self.close_overlay(OverlayKind::WorkspaceSymbols);
+            }
         } else {
             self.overlays.lsp_results.workspace_symbols = Some(WorkspaceSymbolState {
                 filtered: (0..parsed.len()).collect(),

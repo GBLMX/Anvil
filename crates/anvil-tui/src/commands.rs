@@ -354,6 +354,7 @@ impl Model {
             ("debug-watch", expression) => self.add_debug_watch(expression),
             ("debug-watch-clear", "") => self.clear_debug_watches(),
             ("symbols", "") => self.queue_effect(Effect::LspDocumentSymbols),
+            ("project-symbols", "") => self.queue_effect(Effect::LspWorkspaceSymbols),
             ("plugin-start", "") => self.queue_effect(Effect::PluginStart),
             ("plugin-list", "") => self.queue_effect(Effect::PluginList),
             ("plugin-inventory", "") => self.show_plugin_inventory(),

@@ -5,6 +5,9 @@ use anvil_integrations::{
     Authorization, Capability, Denial, Grant, GrantStore, IntegrationDescriptor, authorize,
 };
 use anvil_mod_workspace_index::{SymbolIndexCaps, WorkspaceSymbolIndex};
+pub use anvil_mod_workspace_index::{
+    SymbolKind, SymbolOccurrence, SymbolRole, TextPosition, TextRange, WorkspaceSymbol,
+};
 use anvil_project::Project;
 use std::path::{Path, PathBuf};
 
