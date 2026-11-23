@@ -53,6 +53,40 @@ pub(crate) fn handle_mouse(model: &mut Model, mouse: MouseEvent, width: u16, hei
         width,
         height,
     };
+    if model.overlays.command_completion.is_some() {
+        match mouse.kind {
+            MouseEventKind::ScrollUp => {
+                if let Some(completion) = model.overlays.command_completion.as_mut() {
+                    completion.move_by(-1);
+                }
+                model.file.dirty = true;
+                return true;
+            }
+            MouseEventKind::ScrollDown => {
+                if let Some(completion) = model.overlays.command_completion.as_mut() {
+                    completion.move_by(1);
+                }
+                model.file.dirty = true;
+                return true;
+            }
+            _ => {}
+        }
+    }
+    if model.language.completion.completion.is_some() {
+        match mouse.kind {
+            MouseEventKind::ScrollUp => {
+                model.move_completion(-1);
+                model.file.dirty = true;
+                return true;
+            }
+            MouseEventKind::ScrollDown => {
+                model.move_completion(1);
+                model.file.dirty = true;
+                return true;
+            }
+            _ => {}
+        }
+    }
     if mouse.kind == MouseEventKind::Down(MouseButton::Left)
         && model.overlays.command_completion.is_some()
         && let Some(row) =

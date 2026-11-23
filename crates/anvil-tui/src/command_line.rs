@@ -342,6 +342,28 @@ mod tests {
     }
 
     #[test]
+    fn command_completion_wheel_moves_selection() {
+        let mut model = Model::new(EditorState::from_text(""), None);
+        model.overlays.command_completion = Some(CommandCompletion::new("", &[], true, true));
+        let scroll = crossterm::event::MouseEvent {
+            kind: crossterm::event::MouseEventKind::ScrollDown,
+            column: 1,
+            row: 1,
+            modifiers: crossterm::event::KeyModifiers::NONE,
+        };
+        crate::keys::handle_event(&mut model, crossterm::event::Event::Mouse(scroll));
+        assert_eq!(
+            model
+                .overlays
+                .command_completion
+                .as_ref()
+                .expect("completion")
+                .selected_index(),
+            1
+        );
+    }
+
+    #[test]
     fn completes_exact_command_prefix() {
         let completion = CommandCompletion::new("theme", &[], true, true);
         assert_eq!(
