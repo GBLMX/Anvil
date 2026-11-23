@@ -1158,6 +1158,28 @@ fn opening_start_page_clears_active_progress_motion() {
 }
 
 #[test]
+fn tiny_terminal_clears_alert_motion() {
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.set_motion_enabled(true);
+    let backend = TestBackend::new(1, 1);
+    let mut terminal = Terminal::new(backend).expect("terminal");
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+
+    model.notify(
+        anvil_session::ui::NotificationSeverity::Info,
+        "test",
+        "tiny",
+    );
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+    assert!(!model.motion_active());
+
+    model.ui.progress.start("copy", "working", false);
+    model.file.dirty = true;
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+    assert!(!model.motion_active());
+}
+
+#[test]
 fn reduced_motion_skips_the_command_palette_fade() {
     let mut model = Model::new(EditorState::from_text(""), None);
     model.set_motion_enabled(true);

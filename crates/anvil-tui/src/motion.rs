@@ -178,10 +178,14 @@ impl MotionState {
         Some((rect, MIN_ALPHA + (1.0 - MIN_ALPHA) * eased))
     }
 
-    #[cfg(test)]
-    pub(crate) fn finish(&mut self) {
+    pub(crate) fn clear(&mut self) {
         self.overlay = None;
         self.alert = None;
+    }
+
+    #[cfg(test)]
+    pub(crate) fn finish(&mut self) {
+        self.clear();
     }
 }
 

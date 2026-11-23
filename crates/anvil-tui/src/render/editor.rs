@@ -164,6 +164,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
         frame.set_cursor_position((x, y));
     }
     let Some(rects) = crate::layout::workbench_rects(model, area.width, area.height) else {
+        model.motion.borrow_mut().clear();
         return;
     };
     if let Some(bar) = rects.tab_bar {
