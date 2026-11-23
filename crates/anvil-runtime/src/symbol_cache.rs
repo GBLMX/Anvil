@@ -44,22 +44,16 @@ impl SymbolCache {
     }
 
     pub fn load_into(&self, index: &mut WorkspaceSymbolIndex) -> Result<usize, String> {
-        let file = match File::open(&self.path) {
-            Ok(file) => file,
+        let metadata = match fs::metadata(&self.path) {
+            Ok(metadata) => metadata,
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(0),
             Err(error) => {
                 return Err(format!(
-                    "failed to open symbol cache {}: {error}",
+                    "failed to stat symbol cache {}: {error}",
                     self.path.display()
                 ));
             }
         };
-        let metadata = file.metadata().map_err(|error| {
-            format!(
-                "failed to stat symbol cache {}: {error}",
-                self.path.display()
-            )
-        })?;
         if !metadata.is_file() {
             return Err(format!(
                 "symbol cache {} is not a regular file",
@@ -73,6 +67,12 @@ impl SymbolCache {
                 MAX_CACHE_BYTES
             ));
         }
+        let file = File::open(&self.path).map_err(|error| {
+            format!(
+                "failed to open symbol cache {}: {error}",
+                self.path.display()
+            )
+        })?;
         let cache: CacheFile = serde_json::from_reader(BufReader::new(file)).map_err(|error| {
             format!(
                 "failed to read symbol cache {}: {error}",
