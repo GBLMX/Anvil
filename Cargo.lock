@@ -358,6 +358,7 @@ dependencies = [
 name = "anvil-tui-theme"
 version = "0.7.0"
 dependencies = [
+ "anvil-tui-kit",
  "ratatui",
  "serde",
  "tempfile",

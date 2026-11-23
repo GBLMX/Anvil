@@ -8,6 +8,7 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
+anvil-tui-kit = { path = "../anvil-tui-kit", version = "0.7.0" }
 ratatui = "0.30"
 serde = { version = "1", features = ["derive"] }
 toml_edit = { version = "0.25", features = ["serde"] }

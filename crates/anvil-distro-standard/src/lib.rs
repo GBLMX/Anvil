@@ -38,6 +38,7 @@ Environment:
   ANVIL_SANDBOX_PROFILE auto, strict, or off; default auto
   ANVIL_THEME            Startup theme by name; :theme lists built-ins
   ANVIL_TRUECOLOR       Force 24-bit RGB (1) or 256-color fallback (0)
+  ANVIL_SYNCHRONIZED_OUTPUT  Disable synchronized frame output with 0
   ANVIL_SETTINGS         Explicit settings.toml path
   ANVIL_EDITOR_SCROLL_MARGIN  Viewport scroll margin (0-16)
   ANVIL_EDITOR_MAX_BUFFERS  Maximum foreground buffers (1-99)

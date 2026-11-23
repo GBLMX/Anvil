@@ -1,7 +1,7 @@
 # ADR-0071: TUI Terminal Capability and Frame Delivery Upgrade
 
-- Status: Accepted; implementation pending
-- Version: 1.0.0
+- Status: Accepted; terminal profile and synchronized draw implemented 2026-11-23
+- Version: 1.1.0
 - Date: 2026-11-23
 - Related: [ADR-0019](0019-terminal-keyboard-enhancement.md),
   [ADR-0057](0057-tui-surface-model-and-focus-contract.md),
@@ -75,6 +75,8 @@ instead of calling `terminal.draw` directly. The helper owns:
 - best-effort end/cleanup when a draw fails.
 
 Synchronized output is emitted only when the profile says it is active.
+`ANVIL_SYNCHRONIZED_OUTPUT=0` disables it before startup for terminals or
+multiplexers that accept the sequence but render it incorrectly.
 
 ### 3. Synchronized output is the first frame upgrade
 

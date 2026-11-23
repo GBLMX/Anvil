@@ -10,4 +10,4 @@ pub mod selection;
 pub mod terminal;
 
 pub use selection::{SelectionItem, SelectionTable};
-pub use terminal::{TerminalOptions, TerminalSession};
+pub use terminal::{TerminalOptions, TerminalProfile, TerminalSession, supports_truecolor};

@@ -1,7 +1,5 @@
-//! Terminal lifecycle: alternate screen, raw mode, input modes, and cleanup.
-//!
-//! The guard restores every mode it enabled, including when startup fails
-//! partway through. Applications own the draw loop and use [`TerminalSession::terminal`].
+//! Terminal lifecycle: alternate screen, raw mode, input modes, cleanup, and
+//! synchronized frame delivery.
 
 use std::io::{self, Stdout, Write};
 
@@ -13,21 +11,38 @@ use crossterm::{
         PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags,
     },
     execute,
-    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
+    terminal::{
+        BeginSynchronizedUpdate, EndSynchronizedUpdate, EnterAlternateScreen, LeaveAlternateScreen,
+        disable_raw_mode, enable_raw_mode,
+    },
 };
-use ratatui::{Terminal, backend::CrosstermBackend};
+use ratatui::{Frame, Terminal, backend::CrosstermBackend};
+
+/// Terminal features enabled for a session.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct TerminalProfile {
+    pub keyboard_enhancement: bool,
+    pub synchronized_output: bool,
+    pub focus_events: bool,
+    pub mouse_capture: bool,
+    pub bracketed_paste: bool,
+    pub truecolor: bool,
+}
 
 /// Startup options for [`TerminalSession`].
 #[derive(Clone, Copy, Debug)]
 pub struct TerminalOptions {
     /// Request terminal keyboard-enhancement support when available.
     pub keyboard_enhancement: bool,
+    /// Batch each frame with the terminal's synchronized-update mode.
+    pub synchronized_output: bool,
 }
 
 impl Default for TerminalOptions {
     fn default() -> Self {
         Self {
             keyboard_enhancement: true,
+            synchronized_output: synchronized_output_enabled(),
         }
     }
 }
@@ -35,10 +50,12 @@ impl Default for TerminalOptions {
 /// Owns the terminal modes for a TUI session.
 ///
 /// Dropping the session restores the alternate screen, raw mode, paste/focus
-/// reporting, mouse capture, keyboard enhancement, and the cursor shape.
+/// reporting, mouse capture, keyboard enhancement, synchronized-update mode,
+/// and the cursor shape.
 pub struct TerminalSession {
     terminal: Terminal<CrosstermBackend<Stdout>>,
-    keyboard_enhancement: bool,
+    profile: TerminalProfile,
+    synchronized_active: bool,
 }
 
 impl TerminalSession {
@@ -58,15 +75,15 @@ impl TerminalSession {
             return Err(error);
         }
         if let Err(error) = execute!(stdout, EnableBracketedPaste) {
-            restore(&mut stdout, false, false, false, true, true);
+            restore(&mut stdout, false, false, false, false, false, true);
             return Err(error);
         }
         if let Err(error) = execute!(stdout, EnableFocusChange) {
-            restore(&mut stdout, false, false, true, true, true);
+            restore(&mut stdout, false, false, false, true, false, true);
             return Err(error);
         }
         if let Err(error) = execute!(stdout, EnableMouseCapture) {
-            restore(&mut stdout, false, true, true, true, true);
+            restore(&mut stdout, false, false, true, true, false, true);
             return Err(error);
         }
         let keyboard_enhancement = supported
@@ -78,11 +95,20 @@ impl TerminalSession {
                 )
             )
             .is_ok();
+        let profile = TerminalProfile {
+            keyboard_enhancement,
+            synchronized_output: options.synchronized_output,
+            focus_events: true,
+            mouse_capture: true,
+            bracketed_paste: true,
+            truecolor: supports_truecolor(),
+        };
         let backend = CrosstermBackend::new(stdout);
         match Terminal::new(backend) {
             Ok(terminal) => Ok(Self {
                 terminal,
-                keyboard_enhancement,
+                profile,
+                synchronized_active: false,
             }),
             Err(error) => {
                 restore(
@@ -91,6 +117,7 @@ impl TerminalSession {
                     true,
                     true,
                     true,
+                    false,
                     true,
                 );
                 Err(error)
@@ -98,9 +125,38 @@ impl TerminalSession {
         }
     }
 
+    /// Capabilities enabled for this session.
+    pub fn profile(&self) -> TerminalProfile {
+        self.profile
+    }
+
     /// Underlying ratatui terminal.
     pub fn terminal(&mut self) -> &mut Terminal<CrosstermBackend<Stdout>> {
         &mut self.terminal
+    }
+
+    /// Draw one frame, wrapping it in synchronized output when enabled.
+    pub fn draw<F>(&mut self, render: F) -> io::Result<()>
+    where
+        F: FnOnce(&mut Frame),
+    {
+        let synchronized = self.profile.synchronized_output;
+        let sync_begun = synchronized && begin_synchronized(self.terminal.backend_mut()).is_ok();
+        if synchronized && !sync_begun {
+            self.profile.synchronized_output = false;
+        }
+        self.synchronized_active = sync_begun;
+        let result = self.terminal.draw(render).map(|_| ());
+        if sync_begun {
+            let end = end_synchronized(self.terminal.backend_mut());
+            if end.is_ok() {
+                self.synchronized_active = false;
+            }
+            if result.is_ok() {
+                end?;
+            }
+        }
+        result
     }
 
     /// Set the cursor shape for normal or insert mode.
@@ -118,14 +174,23 @@ impl Drop for TerminalSession {
     fn drop(&mut self) {
         restore(
             self.terminal.backend_mut(),
-            self.keyboard_enhancement,
-            true,
-            true,
-            true,
+            self.profile.keyboard_enhancement,
+            self.profile.mouse_capture,
+            self.profile.focus_events,
+            self.profile.bracketed_paste,
+            self.synchronized_active,
             true,
         );
         let _ = self.terminal.show_cursor();
     }
+}
+
+fn begin_synchronized<W: Write>(out: &mut W) -> io::Result<()> {
+    execute!(out, BeginSynchronizedUpdate)
+}
+
+fn end_synchronized<W: Write>(out: &mut W) -> io::Result<()> {
+    execute!(out, EndSynchronizedUpdate)
 }
 
 fn restore<W: Write>(
@@ -134,8 +199,12 @@ fn restore<W: Write>(
     mouse: bool,
     focus: bool,
     bracketed_paste: bool,
+    synchronized: bool,
     alternate_screen: bool,
 ) {
+    if synchronized {
+        let _ = end_synchronized(out);
+    }
     if keyboard_enhancement {
         let _ = execute!(out, PopKeyboardEnhancementFlags);
     }
@@ -153,4 +222,49 @@ fn restore<W: Write>(
         let _ = execute!(out, LeaveAlternateScreen);
     }
     let _ = disable_raw_mode();
+}
+
+/// Whether synchronized frame delivery is enabled for this process.
+pub fn synchronized_output_enabled() -> bool {
+    synchronized_output_enabled_for(std::env::var_os("ANVIL_SYNCHRONIZED_OUTPUT").as_deref())
+}
+
+fn synchronized_output_enabled_for(value: Option<&std::ffi::OsStr>) -> bool {
+    value != Some(std::ffi::OsStr::new("0"))
+}
+
+/// Whether the environment advertises 24-bit color.
+pub fn supports_truecolor() -> bool {
+    if let Some(value) = std::env::var_os("ANVIL_TRUECOLOR") {
+        return value != "0";
+    }
+    std::env::var("COLORTERM").is_ok_and(|value| {
+        value.eq_ignore_ascii_case("truecolor") || value.eq_ignore_ascii_case("24bit")
+    }) || std::env::var("TERM")
+        .is_ok_and(|value| value.contains("direct") || value.contains("truecolor"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn synchronized_output_can_be_disabled() {
+        assert!(synchronized_output_enabled_for(None));
+        assert!(!synchronized_output_enabled_for(Some(
+            std::ffi::OsStr::new("0")
+        )));
+        assert!(synchronized_output_enabled_for(Some(std::ffi::OsStr::new(
+            "1"
+        ))));
+    }
+
+    #[test]
+    fn synchronized_commands_bracket_frame_output() {
+        let mut output = Vec::new();
+        begin_synchronized(&mut output).expect("begin");
+        output.extend_from_slice(b"frame");
+        end_synchronized(&mut output).expect("end");
+        assert_eq!(output, b"\x1b[?2026hframe\x1b[?2026l");
+    }
 }

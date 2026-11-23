@@ -388,6 +388,7 @@ pub fn run_with_all_services(
     let model_ready = start.elapsed();
     let mut terminal = TerminalSession::start_with(TerminalOptions {
         keyboard_enhancement: !crate::terminal_background::terminal_queries_disabled(),
+        ..Default::default()
     })?;
     let terminal_ready = start.elapsed();
     let mut first_draw = true;
@@ -433,7 +434,7 @@ pub fn run_with_all_services(
         }
         model.tick_search();
         if model.file.dirty {
-            terminal.terminal().draw(|frame| view(&model, frame))?;
+            terminal.draw(|frame| view(&model, frame))?;
             model.file.dirty = false;
             if first_draw {
                 first_draw = false;

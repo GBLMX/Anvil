@@ -2,6 +2,7 @@
 //!
 //! The TUI owns its background instead of inheriting the terminal theme so
 //! syntax and chrome colors stay readable across terminal profiles.
+use anvil_tui_kit::supports_truecolor;
 use std::cell::{Cell, RefCell};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -227,23 +228,13 @@ fn parse_color(value: &str) -> Result<Color, String> {
 }
 
 fn degrade_color(color: Color) -> Color {
-    if !truecolor_supported() {
+    if !supports_truecolor() {
         return match color {
             Color::Rgb(red, green, blue) => Color::Indexed(nearest_ansi_256(red, green, blue)),
             other => other,
         };
     }
     color
-}
-
-fn truecolor_supported() -> bool {
-    if let Some(value) = std::env::var_os("ANVIL_TRUECOLOR") {
-        return value != "0";
-    }
-    std::env::var("COLORTERM").is_ok_and(|value| {
-        value.eq_ignore_ascii_case("truecolor") || value.eq_ignore_ascii_case("24bit")
-    }) || std::env::var("TERM")
-        .is_ok_and(|value| value.contains("direct") || value.contains("truecolor"))
 }
 
 fn nearest_ansi_256(red: u8, green: u8, blue: u8) -> u8 {
@@ -370,7 +361,7 @@ fn refresh_active() {
     if HIGH_CONTRAST.with(Cell::get) {
         theme = Box::leak(Box::new(high_contrast_theme(theme)));
     }
-    if !truecolor_supported() {
+    if !supports_truecolor() {
         theme = Box::leak(Box::new(quantize_theme(theme)));
     }
     ACTIVE.with(|active| active.set(theme));
