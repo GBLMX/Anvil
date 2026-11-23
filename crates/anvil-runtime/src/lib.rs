@@ -1,6 +1,9 @@
 //! UI-neutral composition root for project discovery, integration grants, and
 //! the workspace symbol index.
 
+mod symbol_cache;
+pub use symbol_cache::SymbolCache;
+
 use anvil_integrations::{
     Authorization, Capability, Denial, Grant, GrantStore, IntegrationDescriptor, authorize,
 };
@@ -80,6 +83,18 @@ impl Runtime {
 
     pub fn symbols_mut(&mut self) -> &mut WorkspaceSymbolIndex {
         &mut self.symbols
+    }
+
+    pub fn symbol_cache(&self) -> SymbolCache {
+        SymbolCache::for_workspace(&self.workspace_root)
+    }
+
+    pub fn load_symbol_cache(&mut self) -> Result<usize, String> {
+        self.symbol_cache().load_into(&mut self.symbols)
+    }
+
+    pub fn save_symbol_cache(&self) -> Result<(), String> {
+        self.symbol_cache().save(&self.symbols)
     }
 
     /// Remove indexed symbols for a file or directory subtree.

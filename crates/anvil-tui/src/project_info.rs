@@ -55,7 +55,9 @@ impl Model {
                 },
             });
         }
+        let _ = runtime.load_symbol_cache();
         self.project.platform = Some(runtime);
+        self.persist_symbol_cache();
         Ok((roots, targets.len()))
     }
 }

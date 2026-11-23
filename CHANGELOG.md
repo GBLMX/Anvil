@@ -32,6 +32,8 @@ post-`0.5.0` feature line.
   their indexed symbols.
 - The first open/save lazily loads Cargo metadata once, so the index works
   without running `:project-info` first.
+- The symbol index persists in the per-workspace cache directory and reloads
+  when the project platform starts.
 - Offline signing can consume the CI build-input artifact; `Release publish`
   verifies provenance, input checksums, and the checksum-key fingerprint
   before uploading release assets.

@@ -11,3 +11,9 @@ repository.workspace = true
 anvil-integrations = { path = "../anvil-integrations", version = "0.7.0" }
 anvil-mod-workspace-index = { path = "../anvil-mod-workspace-index", version = "0.7.0" }
 anvil-project = { path = "../anvil-project", version = "0.7.0" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.11"
+
+[dev-dependencies]
+tempfile = "3"

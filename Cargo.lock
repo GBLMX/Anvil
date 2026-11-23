@@ -253,6 +253,10 @@ dependencies = [
  "anvil-integrations",
  "anvil-mod-workspace-index",
  "anvil-project",
+ "serde",
+ "serde_json",
+ "sha2 0.11.1",
+ "tempfile",
 ]
 
 [[package]]

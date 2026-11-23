@@ -195,6 +195,21 @@ impl SymbolKind {
             Self::Other(value) => value,
         }
     }
+
+    pub fn from_label(label: &str) -> Self {
+        match label {
+            "module" => Self::Module,
+            "function" => Self::Function,
+            "struct" => Self::Struct,
+            "enum" => Self::Enum,
+            "trait" => Self::Trait,
+            "method" => Self::Method,
+            "field" => Self::Field,
+            "constant" => Self::Constant,
+            "variable" => Self::Variable,
+            other => Self::Other(other.to_owned()),
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -202,6 +217,24 @@ pub enum SymbolRole {
     Definition,
     Reference,
     Implementation,
+}
+
+impl SymbolRole {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Definition => "definition",
+            Self::Reference => "reference",
+            Self::Implementation => "implementation",
+        }
+    }
+
+    pub fn from_label(label: &str) -> Self {
+        match label {
+            "reference" => Self::Reference,
+            "implementation" => Self::Implementation,
+            _ => Self::Definition,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -345,6 +378,14 @@ impl WorkspaceSymbolIndex {
         self.occurrence_keys.insert(key);
         self.occurrences.push(occurrence);
         PushOutcome::Inserted
+    }
+
+    pub fn all_symbols(&self) -> &[WorkspaceSymbol] {
+        &self.symbols
+    }
+
+    pub fn all_occurrences(&self) -> &[SymbolOccurrence] {
+        &self.occurrences
     }
 
     pub fn symbols(&self, query: &str, limit: usize) -> Vec<WorkspaceSymbol> {

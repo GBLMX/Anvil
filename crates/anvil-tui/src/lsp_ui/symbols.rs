@@ -128,6 +128,7 @@ impl Model {
                 item.character,
             );
         }
+        self.persist_symbol_cache();
     }
 
     pub(crate) fn index_document_symbols(&mut self, path: &Path, items: &[SymbolItem]) {
@@ -140,10 +141,18 @@ impl Model {
                 item.character,
             );
         }
+        self.persist_symbol_cache();
     }
     pub(crate) fn forget_symbols_for_path(&mut self, path: &Path) {
         if let Some(runtime) = self.project.platform.as_mut() {
             runtime.remove_symbols_under_path(path);
+        }
+        self.persist_symbol_cache();
+    }
+
+    pub(crate) fn persist_symbol_cache(&self) {
+        if let Some(runtime) = self.project.platform.as_ref() {
+            let _ = runtime.save_symbol_cache();
         }
     }
     pub(crate) fn move_workspace_symbol(&mut self, delta: isize) {

@@ -1639,7 +1639,7 @@ fn symbols_use_cached_project_index_without_lsp() {
     let mut model = Model::new(EditorState::from_text(""), None);
     model.execute_command("project-info");
     let runtime = model.project.platform.as_ref().expect("project runtime");
-    assert_eq!(runtime.symbols().len(), runtime.project().targets.len());
+    assert!(runtime.symbols().len() >= runtime.project().targets.len());
     model.execute_command("project-symbols");
     let symbols = model
         .overlays
