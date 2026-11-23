@@ -152,7 +152,11 @@ impl Model {
 
     pub(crate) fn persist_symbol_cache(&self) {
         if let Some(runtime) = self.project.platform.as_ref() {
-            let _ = runtime.save_symbol_cache();
+            let cache = self
+                .symbol_cache
+                .clone()
+                .unwrap_or_else(|| runtime.symbol_cache());
+            let _ = cache.save(runtime.symbols());
         }
     }
     pub(crate) fn move_workspace_symbol(&mut self, delta: isize) {

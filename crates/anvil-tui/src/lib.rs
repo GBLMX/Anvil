@@ -201,6 +201,9 @@ pub struct Model {
     syntax_cache: SyntaxCacheState,
     /// Task, terminal, and plugin runtime state.
     runtime: RuntimeState,
+    symbol_cache: Option<anvil_runtime::SymbolCache>,
+    #[cfg(test)]
+    _symbol_cache_temp: Option<tempfile::TempDir>,
 }
 
 #[cfg(test)]

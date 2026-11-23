@@ -60,6 +60,12 @@ impl SymbolCache {
                 self.path.display()
             )
         })?;
+        if !metadata.is_file() {
+            return Err(format!(
+                "symbol cache {} is not a regular file",
+                self.path.display()
+            ));
+        }
         if metadata.len() > MAX_CACHE_BYTES {
             return Err(format!(
                 "symbol cache {} exceeds {} bytes",
@@ -147,7 +153,7 @@ impl SymbolCache {
                 .map_err(|error| format!("failed to write {}: {error}", temporary.display()))?;
             file.sync_all()
                 .map_err(|error| format!("failed to sync {}: {error}", temporary.display()))?;
-            fs::rename(&temporary, &self.path).map_err(|error| {
+            replace_file(&temporary, &self.path).map_err(|error| {
                 format!(
                     "failed to replace {} with {}: {error}",
                     self.path.display(),
@@ -159,6 +165,26 @@ impl SymbolCache {
             let _ = fs::remove_file(&temporary);
         }
         result
+    }
+}
+fn replace_file(from: &Path, to: &Path) -> std::io::Result<()> {
+    #[cfg(windows)]
+    {
+        match fs::rename(from, to) {
+            Ok(()) => return Ok(()),
+            Err(error)
+                if error.kind() == std::io::ErrorKind::AlreadyExists
+                    || error.kind() == std::io::ErrorKind::PermissionDenied =>
+            {
+                fs::remove_file(to)?;
+                fs::rename(from, to)
+            }
+            Err(error) => Err(error),
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        fs::rename(from, to)
     }
 }
 

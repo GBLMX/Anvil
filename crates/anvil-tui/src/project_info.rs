@@ -55,7 +55,11 @@ impl Model {
                 },
             });
         }
-        let _ = runtime.load_symbol_cache();
+        let cache = self
+            .symbol_cache
+            .clone()
+            .unwrap_or_else(|| runtime.symbol_cache());
+        let _ = cache.load_into(runtime.symbols_mut());
         self.project.platform = Some(runtime);
         self.persist_symbol_cache();
         Ok((roots, targets.len()))

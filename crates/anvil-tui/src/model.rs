@@ -34,6 +34,18 @@ impl Model {
         let welcome = path.is_none() && editor.text().len_bytes() == 0;
         let workspace = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
         let workspace_roots = workspace_roots::WorkspaceRoots::new(&workspace).unwrap_or_default();
+        #[cfg(test)]
+        let (symbol_cache, _symbol_cache_temp) = match tempfile::tempdir() {
+            Ok(directory) => (
+                Some(anvil_runtime::SymbolCache::at(
+                    directory.path().join("symbols.json"),
+                )),
+                Some(directory),
+            ),
+            Err(_) => (None, None),
+        };
+        #[cfg(not(test))]
+        let symbol_cache = None;
         Self {
             session: EditorSessionState {
                 editor: DocumentSession::from(editor),
@@ -94,6 +106,9 @@ impl Model {
                 bracket: RefCell::new(bracket::BracketCache::default()),
             },
             runtime: RuntimeState::default(),
+            symbol_cache,
+            #[cfg(test)]
+            _symbol_cache_temp,
         }
     }
 
