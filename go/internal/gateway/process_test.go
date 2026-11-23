@@ -64,6 +64,8 @@ func TestNeedsWorkspaceWrite(t *testing.T) {
 	}{
 		{"/usr/bin/git", []string{"add", "--", "a.go"}, true},
 		{"/usr/bin/git", []string{"--no-pager", "add", "-A"}, true},
+		{"/usr/bin/git", []string{"--no-pager", "apply", "--cached", "--", "x.patch"}, true},
+		{"/usr/bin/git", []string{"apply", "--", "x.patch"}, false},
 		{"/usr/bin/git", []string{"status"}, false},
 		{"/usr/bin/rg", []string{"add"}, false},
 	}

@@ -104,10 +104,24 @@ func needsWorkspaceWrite(tool string, args []string) bool {
 	if filepath.Base(tool) != "git" || len(args) == 0 {
 		return false
 	}
-	if args[0] == "add" {
-		return true
+	command := args[0]
+	if command == "--no-pager" {
+		if len(args) < 2 {
+			return false
+		}
+		command = args[1]
 	}
-	return len(args) > 1 && args[0] == "--no-pager" && args[1] == "add"
+	switch command {
+	case "add":
+		return true
+	case "apply":
+		for _, arg := range args {
+			if arg == "--cached" {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (s *Server) exec(parent context.Context, req request, state *connectionState) (interface{}, *rpcError) {
