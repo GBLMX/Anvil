@@ -415,7 +415,7 @@ pub(crate) fn render_overlays(model: &Model, frame: &mut Frame, area: Rect) {
     crate::terminal_control::render_panel(model, frame, area);
     if model.ui.problems.visible {
         let popup = crate::render::problems_popup_rect(model, area);
-        let (all_lines, selected_line) =
+        let (all_lines, selected_line, _) =
             problem_lines(model, popup.width.saturating_sub(2) as usize);
         let visible = popup.height.saturating_sub(2) as usize;
         let start = selected_line

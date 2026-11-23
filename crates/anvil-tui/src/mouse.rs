@@ -102,6 +102,21 @@ pub(crate) fn handle_mouse(model: &mut Model, mouse: MouseEvent, width: u16, hei
         return true;
     }
     if overlay_open(model) {
+        if model.ui.problems.visible {
+            match mouse.kind {
+                MouseEventKind::ScrollUp => {
+                    model.ui.problems.move_selection(-1);
+                    model.file.dirty = true;
+                    return true;
+                }
+                MouseEventKind::ScrollDown => {
+                    model.ui.problems.move_selection(1);
+                    model.file.dirty = true;
+                    return true;
+                }
+                _ => {}
+            }
+        }
         if model.overlays.theme_browser.is_some() {
             match mouse.kind {
                 MouseEventKind::ScrollUp => {
@@ -220,6 +235,15 @@ pub(crate) fn handle_mouse(model: &mut Model, mouse: MouseEvent, width: u16, hei
         {
             model.overlays.fuzzy.as_mut().expect("fuzzy").selected = row;
             model.request_preview();
+            model.file.dirty = true;
+            return true;
+        }
+        if mouse.kind == MouseEventKind::Down(MouseButton::Left)
+            && model.ui.problems.visible
+            && let Some(index) =
+                crate::render::problems_row_at(model, area, mouse.column, mouse.row)
+        {
+            model.ui.problems.selected = index;
             model.file.dirty = true;
             return true;
         }

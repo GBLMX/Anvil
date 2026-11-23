@@ -565,8 +565,32 @@ pub(crate) fn problems_popup_rect(model: &Model, area: Rect) -> Rect {
     }
 }
 
-fn problem_lines(model: &Model, width: usize) -> (Vec<Line<'static>>, Option<usize>) {
+pub(crate) fn problems_row_at(model: &Model, area: Rect, col: u16, row: u16) -> Option<usize> {
+    let popup = problems_popup_rect(model, area);
+    let inner = Rect {
+        x: popup.x + 1,
+        y: popup.y + 1,
+        width: popup.width.saturating_sub(2),
+        height: popup.height.saturating_sub(2),
+    };
+    if !rect_contains(inner, col, row) {
+        return None;
+    }
+    let (_, selected_line, rows) = problem_lines(model, popup.width.saturating_sub(2) as usize);
+    let visible = inner.height as usize;
+    let start = selected_line
+        .unwrap_or(0)
+        .saturating_sub(visible.saturating_sub(1));
+    let line = start + usize::from(row - inner.y);
+    rows.get(line).copied().flatten()
+}
+
+fn problem_lines(
+    model: &Model,
+    width: usize,
+) -> (Vec<Line<'static>>, Option<usize>, Vec<Option<usize>>) {
     let mut lines = Vec::new();
+    let mut rows = Vec::new();
     let mut selected_line = None;
     let mut current_path = None;
     for (index, problem) in model.ui.problems.visible() {
@@ -576,6 +600,7 @@ fn problem_lines(model: &Model, width: usize) -> (Vec<Line<'static>>, Option<usi
                 problem.path.display().to_string(),
                 theme::panel().fg(theme::accent()),
             ));
+            rows.push(None);
         }
         let severity = match problem.severity {
             Some(1) => "[E]",
@@ -602,8 +627,9 @@ fn problem_lines(model: &Model, width: usize) -> (Vec<Line<'static>>, Option<usi
             theme::panel()
         };
         lines.push(Line::styled(text, style));
+        rows.push(Some(index));
     }
-    (lines, selected_line)
+    (lines, selected_line, rows)
 }
 
 pub(crate) fn diagnostic_peek_rect(

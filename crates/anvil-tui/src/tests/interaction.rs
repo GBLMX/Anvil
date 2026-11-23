@@ -524,6 +524,44 @@ fn space_shift_l_opens_language_readiness() {
 }
 
 #[test]
+fn clicking_problems_row_selects_problem() {
+    let mut model = Model::new(EditorState::from_text("one"), None);
+    model.view.viewport_width = 100;
+    model.view.viewport_height = 30;
+    model.ui.problems.visible = true;
+    model.ui.problems.replace(vec![
+        Problem {
+            path: PathBuf::from("a.rs"),
+            line: 0,
+            character: 0,
+            severity: Some(1),
+            source: None,
+            code: None,
+            message: "first".to_owned(),
+        },
+        Problem {
+            path: PathBuf::from("a.rs"),
+            line: 1,
+            character: 0,
+            severity: Some(2),
+            source: None,
+            code: None,
+            message: "second".to_owned(),
+        },
+    ]);
+    let popup =
+        crate::render::problems_popup_rect(&model, ratatui::layout::Rect::new(0, 0, 100, 30));
+    let click = crossterm::event::MouseEvent {
+        kind: crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left),
+        column: popup.x + 2,
+        row: popup.y + 3,
+        modifiers: crossterm::event::KeyModifiers::NONE,
+    };
+    handle_event(&mut model, Event::Mouse(click));
+    assert_eq!(model.ui.problems.selected, 1);
+}
+
+#[test]
 fn problems_panel_filters_with_query_and_clear() {
     let mut model = Model::new(EditorState::from_text("alpha"), None);
     model.start_page.welcome = false;
