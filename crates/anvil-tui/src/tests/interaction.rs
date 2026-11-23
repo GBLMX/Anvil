@@ -1674,8 +1674,9 @@ fn open_and_save_request_silent_symbol_refresh() {
     std::fs::write(&path, "fn main() {}\n").expect("file");
     let mut model = Model::new(EditorState::from_text(""), None);
     model.workspace.path = directory.path().to_path_buf();
-    model.load_project_info();
+    assert!(model.project.platform.is_none());
     model.open_path(&path).expect("open");
+    assert!(model.project.platform.is_some());
     assert!(model.project.silent_symbol_refresh);
     model.project.silent_symbol_refresh = false;
     assert!(model.save_to(path.clone()));
@@ -1698,7 +1699,6 @@ fn buffer_switch_requests_silent_symbol_refresh() {
     std::fs::write(&second, "fn b() {}\n").expect("second");
     let mut model = Model::new(EditorState::from_text(""), None);
     model.workspace.path = directory.path().to_path_buf();
-    model.load_project_info();
     model.open_path(&first).expect("open first");
     model.open_path(&second).expect("open second");
     model.project.silent_symbol_refresh = false;

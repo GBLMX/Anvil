@@ -209,7 +209,7 @@ impl Model {
     }
 
     pub(crate) fn request_document_symbols_silent_if_runtime(&mut self) {
-        if self.project.platform.is_some() {
+        if self.project.platform.is_some() || self.ensure_project_platform() {
             self.request_document_symbols_silent();
         }
     }
