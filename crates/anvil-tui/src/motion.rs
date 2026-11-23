@@ -3,16 +3,24 @@
 //! Motion is a post-render pass over an already rendered buffer. It never feeds
 //! back into editor state, cursor placement, scrolling, or LSP updates.
 
+use std::collections::HashSet;
+
 use super::*;
 use ratatui::{buffer::Buffer, layout::Rect};
 
 pub(crate) const OVERLAY_FADE: Duration = Duration::from_millis(120);
+const NOTIFICATION_FADE: Duration = Duration::from_millis(140);
+const PROGRESS_FADE: Duration = Duration::from_millis(160);
 const MIN_ALPHA: f32 = 0.15;
 
 #[derive(Default)]
 pub(crate) struct MotionState {
     enabled: bool,
     overlay: Option<OverlayFade>,
+    alert: Option<AlertFade>,
+    notification_generation: Option<u64>,
+    seen_progress: HashSet<u64>,
+    progress_initialized: bool,
 }
 
 struct OverlayFade {
@@ -20,11 +28,24 @@ struct OverlayFade {
     started: Instant,
 }
 
+#[derive(Clone, Copy)]
+enum AlertTarget {
+    Notifications,
+    Progress,
+}
+
+struct AlertFade {
+    target: AlertTarget,
+    started: Instant,
+    duration: Duration,
+}
+
 impl MotionState {
     pub(crate) fn set_enabled(&mut self, enabled: bool) {
         self.enabled = enabled;
         if !enabled {
             self.overlay = None;
+            self.alert = None;
         }
     }
 
@@ -37,7 +58,49 @@ impl MotionState {
     }
 
     pub(crate) fn active(&self) -> bool {
-        self.overlay.is_some()
+        self.overlay.is_some() || self.alert.is_some()
+    }
+
+    pub(crate) fn observe_notifications(
+        &mut self,
+        generation: u64,
+        now: Instant,
+        reduced_motion: bool,
+    ) {
+        let changed = self
+            .notification_generation
+            .is_some_and(|previous| previous != generation);
+        self.notification_generation = Some(generation);
+        if changed && self.enabled && !reduced_motion {
+            self.alert = Some(AlertFade {
+                target: AlertTarget::Notifications,
+                started: now,
+                duration: NOTIFICATION_FADE,
+            });
+        }
+    }
+
+    pub(crate) fn observe_progress(
+        &mut self,
+        ids: impl IntoIterator<Item = u64>,
+        now: Instant,
+        reduced_motion: bool,
+    ) {
+        let current: HashSet<u64> = ids.into_iter().collect();
+        if !self.progress_initialized {
+            self.seen_progress = current;
+            self.progress_initialized = true;
+            return;
+        }
+        let added = current.iter().any(|id| !self.seen_progress.contains(id));
+        self.seen_progress = current;
+        if added && self.enabled && !reduced_motion {
+            self.alert = Some(AlertFade {
+                target: AlertTarget::Progress,
+                started: now,
+                duration: PROGRESS_FADE,
+            });
+        }
     }
 
     /// Returns the current target and opacity, or clears the transition when
@@ -68,9 +131,40 @@ impl MotionState {
         Some((rect, MIN_ALPHA + (1.0 - MIN_ALPHA) * eased))
     }
 
+    pub(crate) fn fade_alert(
+        &mut self,
+        now: Instant,
+        notifications: Option<Rect>,
+        progress: Option<Rect>,
+        reduced_motion: bool,
+    ) -> Option<(Rect, f32)> {
+        let alert = self.alert.as_ref()?;
+        if reduced_motion {
+            self.alert = None;
+            return None;
+        }
+        let rect = match alert.target {
+            AlertTarget::Notifications => notifications,
+            AlertTarget::Progress => progress,
+        };
+        let Some(rect) = rect else {
+            self.alert = None;
+            return None;
+        };
+        let elapsed = now.saturating_duration_since(alert.started);
+        if elapsed >= alert.duration {
+            self.alert = None;
+            return None;
+        }
+        let progress = elapsed.as_secs_f32() / alert.duration.as_secs_f32();
+        let eased = 1.0 - (1.0 - progress).powi(3);
+        Some((rect, MIN_ALPHA + (1.0 - MIN_ALPHA) * eased))
+    }
+
     #[cfg(test)]
     pub(crate) fn finish(&mut self) {
         self.overlay = None;
+        self.alert = None;
     }
 }
 
@@ -268,5 +362,41 @@ mod tests {
 
         assert_ne!(buffer[(0, 0)].fg, Color::Rgb(255, 255, 255));
         assert_eq!(buffer[(3, 0)].fg, Color::Rgb(255, 255, 255));
+    }
+
+    #[test]
+    fn notification_generation_starts_and_cancels_alert_fade() {
+        let mut motion = MotionState::default();
+        motion.set_enabled(true);
+        let now = Instant::now();
+        motion.observe_notifications(1, now, false);
+        assert!(!motion.active());
+
+        motion.observe_notifications(2, now, false);
+        assert!(motion.active());
+        let rect = Rect::new(0, 1, 20, 2);
+        assert!(motion.fade_alert(now, Some(rect), None, false).is_some());
+        assert!(motion.active());
+        assert!(
+            motion
+                .fade_alert(now + NOTIFICATION_FADE, Some(rect), None, false)
+                .is_none()
+        );
+        assert!(!motion.active());
+    }
+
+    #[test]
+    fn progress_ids_start_only_for_new_items() {
+        let mut motion = MotionState::default();
+        motion.set_enabled(true);
+        let now = Instant::now();
+        motion.observe_progress([1], now, false);
+        assert!(!motion.active());
+        motion.observe_progress([1], now, false);
+        assert!(!motion.active());
+        motion.observe_progress([1, 2], now, false);
+        assert!(motion.active());
+        let rect = Rect::new(0, 1, 20, 3);
+        assert!(motion.fade_alert(now, None, Some(rect), false).is_some());
     }
 }

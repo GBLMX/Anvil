@@ -1068,6 +1068,45 @@ fn fuzzy_overlay_fades_when_motion_is_enabled() {
 }
 
 #[test]
+fn notification_generation_fades_when_length_is_unchanged() {
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.set_motion_enabled(true);
+    let backend = TestBackend::new(80, 24);
+    let mut terminal = Terminal::new(backend).expect("terminal");
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+
+    model.notify(
+        anvil_session::ui::NotificationSeverity::Info,
+        "test",
+        "same",
+    );
+    model.notify(
+        anvil_session::ui::NotificationSeverity::Info,
+        "test",
+        "same",
+    );
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+
+    assert_eq!(model.ui.notifications.items().len(), 1);
+    assert!(model.motion_active());
+}
+
+#[test]
+fn new_progress_id_fades_the_progress_panel() {
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.set_motion_enabled(true);
+    let backend = TestBackend::new(80, 24);
+    let mut terminal = Terminal::new(backend).expect("terminal");
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+
+    model.ui.progress.start("copy", "working", false);
+    model.file.dirty = true;
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+
+    assert!(model.motion_active());
+}
+
+#[test]
 fn reduced_motion_skips_the_command_palette_fade() {
     let mut model = Model::new(EditorState::from_text(""), None);
     model.set_motion_enabled(true);

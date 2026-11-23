@@ -9,6 +9,20 @@ pub fn view(model: &Model, frame: &mut Frame) {
     let motion_rect =
         motion_overlay.and_then(|kind| crate::motion::overlay_rect(model, kind, area));
     let editor_view: EditorView = model.session.editor.snapshot().view();
+    let motion_reduced = model.config.settings.ui.reduced_motion;
+    {
+        let mut motion = model.motion.borrow_mut();
+        motion.observe_notifications(
+            model.ui.notifications.generation(),
+            motion_now,
+            motion_reduced,
+        );
+        motion.observe_progress(
+            model.ui.progress.items().iter().map(|item| item.id),
+            motion_now,
+            motion_reduced,
+        );
+    }
     let title = if model.pager.back.is_some() {
         format!("[{}]", model.pager.title.as_deref().unwrap_or("help"))
     } else {
@@ -396,11 +410,23 @@ pub fn view(model: &Model, frame: &mut Frame) {
         );
     }
     render_overlays(model, frame, area);
-    if let Some((rect, alpha)) = model.motion.borrow_mut().fade(
+    if let Some((rect, alpha)) =
+        model
+            .motion
+            .borrow_mut()
+            .fade(motion_now, motion_overlay, motion_rect, motion_reduced)
+    {
+        crate::motion::fade_buffer(frame.buffer_mut(), rect, alpha);
+    }
+    let notification_rect = rects
+        .message
+        .and_then(|area| crate::message::notification_area(model, area));
+    let progress_rect = crate::render::progress_rect(model, area);
+    if let Some((rect, alpha)) = model.motion.borrow_mut().fade_alert(
         motion_now,
-        motion_overlay,
-        motion_rect,
-        model.config.settings.ui.reduced_motion,
+        notification_rect,
+        progress_rect,
+        motion_reduced,
     ) {
         crate::motion::fade_buffer(frame.buffer_mut(), rect, alpha);
     }

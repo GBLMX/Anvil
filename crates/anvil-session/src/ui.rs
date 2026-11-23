@@ -192,6 +192,7 @@ pub struct Notification {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct NotificationQueue {
     items: Vec<Notification>,
+    generation: u64,
 }
 
 impl NotificationQueue {
@@ -209,6 +210,7 @@ impl NotificationQueue {
         }) {
             existing.timestamp = timestamp;
             existing.count = existing.count.saturating_add(1);
+            self.generation = self.generation.wrapping_add(1);
             return;
         }
         if self.items.len() >= NOTIFICATION_CAPACITY {
@@ -221,6 +223,7 @@ impl NotificationQueue {
             timestamp,
             count: 1,
         });
+        self.generation = self.generation.wrapping_add(1);
     }
 
     /// Drops notifications older than their severity TTL.
@@ -245,6 +248,11 @@ impl NotificationQueue {
 
     pub fn items(&self) -> &[Notification] {
         &self.items
+    }
+
+    /// Monotonic revision for new or merged notifications.
+    pub fn generation(&self) -> u64 {
+        self.generation
     }
 
     pub fn dismiss(&mut self, index: usize) {
@@ -495,6 +503,23 @@ mod tests {
         assert_eq!(queue.items()[1].message, "error");
         assert!(queue.expire(13_000, 4_000, 8_000, 12_000));
         assert!(queue.items().is_empty());
+    }
+
+    #[test]
+    fn notification_generation_tracks_new_and_merged_items() {
+        let mut queue = NotificationQueue::default();
+        queue.push(NotificationSeverity::Info, "test", "info", 1_000);
+        let first = queue.generation();
+        queue.push(NotificationSeverity::Info, "test", "info", 1_001);
+        let merged = queue.generation();
+        assert!(merged > first);
+        queue.push(NotificationSeverity::Warning, "test", "warning", 1_002);
+        let added = queue.generation();
+        assert!(added > merged);
+        assert!(queue.expire(13_000, 4_000, 8_000, 12_000));
+        assert_eq!(queue.generation(), added);
+        queue.clear();
+        assert_eq!(queue.generation(), added);
     }
 
     #[test]

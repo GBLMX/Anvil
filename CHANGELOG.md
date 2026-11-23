@@ -44,7 +44,7 @@ post-`0.5.0` feature line.
 - Debug panel rows now support click selection, wheel scrolling, and outside-click close.
 - Diagnostic peek scrolls with the mouse wheel while preserving keyboard selection.
 - Terminal panels retain scrollback, scroll with the mouse wheel, and return to follow mode on input.
-- Command palette, pickers, settings, theme browser, problems, diagnostic peek, debug/test panels, and LSP result panels fade in over 120 ms when synchronized output is available; reduced motion, `NO_COLOR`, `TERM=dumb`, and unsupported terminals keep the static frame.
+- Command palette, pickers, settings, theme browser, problems, diagnostic peek, debug/test panels, and LSP result panels fade in over 120 ms when synchronized output is available; new notifications and progress panels fade in over 140 ms/160 ms. Reduced motion, `NO_COLOR`, `TERM=dumb`, and unsupported terminals keep the static frame.
 - Command-line completion rows now support click selection while Tab and Enter still accept.
 - Mouse wheel scrolls command-line and LSP completion selections without moving the editor.
 - Problems rows support click selection and wheel scrolling while Enter still jumps.

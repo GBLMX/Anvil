@@ -30,6 +30,25 @@ pub(crate) fn height(model: &Model, available: u16) -> u16 {
         .min(available.saturating_sub(1))
 }
 
+/// The rows occupied by notifications inside the message band.
+pub(crate) fn notification_area(model: &Model, area: Rect) -> Option<Rect> {
+    let total = usize::from(height(model, area.height));
+    let primary = usize::from(
+        model.status.busy.is_some()
+            || (matches!(model.ui.input_mode, InputMode::Normal) && !model.status.text.is_empty()),
+    );
+    let notifications = notification_messages(model)
+        .len()
+        .min(total.saturating_sub(primary));
+    let height = u16::try_from(notifications).unwrap_or(0);
+    (height > 0).then(|| Rect {
+        x: area.x,
+        y: area.y + area.height.saturating_sub(height),
+        width: area.width,
+        height,
+    })
+}
+
 pub(crate) fn render(model: &Model, frame: &mut Frame, area: Rect) {
     if area.height == 0 {
         return;

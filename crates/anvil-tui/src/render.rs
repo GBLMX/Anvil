@@ -543,6 +543,21 @@ fn progress_lines(model: &Model) -> Vec<Line<'static>> {
         .collect()
 }
 
+pub(crate) fn progress_rect(model: &Model, area: Rect) -> Option<Rect> {
+    let items = model.ui.progress.items().len().min(5) as u16;
+    if items == 0 {
+        return None;
+    }
+    let width = (area.width / 2).max(24).min(area.width.saturating_sub(2));
+    let height = (items + 2).min(7).min(area.height.saturating_sub(2));
+    (height > 0).then(|| Rect {
+        x: area.x + 1,
+        y: area.y + area.height.saturating_sub(height + 2),
+        width,
+        height,
+    })
+}
+
 pub(crate) fn problems_popup_rect(model: &Model, area: Rect) -> Rect {
     let width = (area.width * 3 / 4)
         .max(30)

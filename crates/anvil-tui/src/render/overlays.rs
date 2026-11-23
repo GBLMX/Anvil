@@ -501,21 +501,10 @@ pub(crate) fn render_overlays(model: &Model, frame: &mut Frame, area: Rect) {
             );
         }
     }
-    let progress = progress_lines(model);
-    if !progress.is_empty() {
-        let width = (area.width / 2).max(24).min(area.width.saturating_sub(2));
-        let height = (progress.len() as u16 + 2)
-            .min(7)
-            .min(area.height.saturating_sub(2));
-        let popup = Rect {
-            x: area.x + 1,
-            y: area.y + area.height.saturating_sub(height + 2),
-            width,
-            height,
-        };
+    if let Some(popup) = crate::render::progress_rect(model, area) {
         frame.render_widget(Clear, popup);
         frame.render_widget(
-            Paragraph::new(progress)
+            Paragraph::new(progress_lines(model))
                 .style(theme::panel())
                 .block(panel_block("Progress")),
             popup,
