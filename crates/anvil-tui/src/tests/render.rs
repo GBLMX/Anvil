@@ -363,6 +363,24 @@ fn clicking_outside_command_palette_closes_it() {
 }
 
 #[test]
+fn clicking_command_palette_row_selects_it() {
+    let mut model = Model::new(EditorState::from_text("one"), None);
+    model.open_command_palette();
+    model.view.viewport_width = 100;
+    model.view.viewport_height = 30;
+    let popup = crate::render::command_palette_rect(ratatui::layout::Rect::new(0, 0, 100, 30));
+    let click = crossterm::event::MouseEvent {
+        kind: crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left),
+        column: popup.x + 2,
+        row: popup.y + 3,
+        modifiers: crossterm::event::KeyModifiers::NONE,
+    };
+    handle_event(&mut model, Event::Mouse(click));
+    let palette = model.overlays.command_palette.as_ref().expect("palette");
+    assert_eq!(palette.table.selected_index(), 1);
+}
+
+#[test]
 fn clicking_outside_fuzzy_closes_it() {
     let mut model = Model::new(EditorState::from_text("one"), None);
     model.overlays.fuzzy = Some(FuzzyState {

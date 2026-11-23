@@ -37,6 +37,7 @@ post-`0.5.0` feature line.
 - The TUI tracks enabled terminal capabilities and wraps dirty frames in synchronized output; `ANVIL_SYNCHRONIZED_OUTPUT=0` disables it.
 - The terminal title follows the active file or workspace name, with control characters stripped before emission.
 - Theme browser rows now respond to mouse clicks for selection and live preview.
+- Command palette rows now respond to mouse clicks for selection while Enter still executes.
 - `ANVIL_OSC52=1` enables a write-only OSC 52 clipboard fallback when native clipboard tools are unavailable.
 - Explicit `Alt+Shift` keymap bindings preserve the shifted key instead of folding it to lowercase.
 - TUI labels and overlay text truncate on grapheme boundaries, keeping emoji and combining sequences intact.

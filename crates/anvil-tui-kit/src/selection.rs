@@ -90,6 +90,13 @@ impl<T: SelectionItem> SelectionTable<T> {
         self.filtered.sort_by_key(|index| key(&items[*index]));
     }
 
+    /// Select a row in the filtered view, ignoring an out-of-range index.
+    pub fn select(&mut self, index: usize) {
+        if index < self.filtered.len() {
+            self.selected = index;
+        }
+    }
+
     /// Move the selected row by `delta`, clamped to the filtered view.
     pub fn move_by(&mut self, delta: isize) {
         if self.filtered.is_empty() {
@@ -147,6 +154,15 @@ mod tests {
         table.refresh();
         assert_eq!(table.filtered(), &[2]);
         table.move_by(5);
+        assert_eq!(table.selected().map(|item| item.label), Some("gamma"));
+    }
+
+    #[test]
+    fn selects_only_valid_filtered_rows() {
+        let mut table = table();
+        table.select(2);
+        assert_eq!(table.selected().map(|item| item.label), Some("gamma"));
+        table.select(99);
         assert_eq!(table.selected().map(|item| item.label), Some("gamma"));
     }
 

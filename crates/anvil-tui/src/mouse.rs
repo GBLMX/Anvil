@@ -89,6 +89,20 @@ pub(crate) fn handle_mouse(model: &mut Model, mouse: MouseEvent, width: u16, hei
             }
         }
         if mouse.kind == MouseEventKind::Down(MouseButton::Left)
+            && model.overlays.command_palette.is_some()
+            && let Some(row) =
+                crate::render::command_palette_row_at(model, area, mouse.column, mouse.row)
+        {
+            model
+                .overlays
+                .command_palette
+                .as_mut()
+                .expect("command palette")
+                .select(row);
+            model.file.dirty = true;
+            return true;
+        }
+        if mouse.kind == MouseEventKind::Down(MouseButton::Left)
             && model.overlays.fuzzy.is_some()
             && let Some(row) = crate::render::fuzzy_row_at(model, area, mouse.column, mouse.row)
         {

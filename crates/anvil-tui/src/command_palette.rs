@@ -37,6 +37,11 @@ impl CommandPaletteState {
         self.table.selected().and_then(|item| item.theme)
     }
 
+    /// Select a visible palette row without executing it.
+    pub(crate) fn select(&mut self, index: usize) {
+        self.table.select(index);
+    }
+
     /// Move the selected row `delta` places, clamped to the filtered view.
     pub(crate) fn move_selection(&mut self, delta: isize) {
         self.table.move_by(delta);

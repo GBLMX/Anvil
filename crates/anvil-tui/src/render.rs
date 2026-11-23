@@ -121,6 +121,29 @@ pub(crate) fn fuzzy_rect(area: Rect) -> Rect {
     centered_rect(area, width, height)
 }
 
+pub(crate) fn command_palette_row_at(
+    model: &Model,
+    area: Rect,
+    col: u16,
+    row: u16,
+) -> Option<usize> {
+    let palette = model.overlays.command_palette.as_ref()?;
+    let popup = command_palette_rect(area);
+    let inner = Rect {
+        x: popup.x + 1,
+        y: popup.y + 2,
+        width: popup.width.saturating_sub(2),
+        height: popup.height.saturating_sub(4),
+    };
+    if !rect_contains(inner, col, row) {
+        return None;
+    }
+    let selected = palette.table.selected_index();
+    let start = selected.saturating_sub(inner.height.saturating_sub(1) as usize);
+    let index = start + usize::from(row - inner.y);
+    (index < palette.table.filtered().len()).then_some(index)
+}
+
 pub(crate) fn fuzzy_row_at(model: &Model, area: Rect, col: u16, row: u16) -> Option<usize> {
     let fuzzy = model.overlays.fuzzy.as_ref()?;
     let horizontal = area.width >= 80;
