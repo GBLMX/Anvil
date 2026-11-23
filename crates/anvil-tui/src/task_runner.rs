@@ -1,7 +1,8 @@
 //! Bounded background task execution and compiler-style problem parsing.
 
 use anvil_task::{
-    CancelToken, DataError, TaskEvent as TaskGroupEvent, TaskGroup, TaskGroupConfig, TaskState,
+    CancelToken, DataError, TaskEvent as TaskGroupEvent, TaskGroup, TaskGroupConfig, TaskId,
+    TaskState,
 };
 use regex::Regex;
 use std::{
@@ -41,6 +42,7 @@ pub(crate) enum TaskEvent {
 
 pub(crate) struct TaskWorker {
     group: Option<TaskGroup<TaskResult>>,
+    task_id: Option<TaskId>,
     command: String,
     terminal: Option<TaskEvent>,
 }
@@ -68,19 +70,27 @@ impl TaskWorker {
             }
         });
         match spawn {
-            Ok(_) => Self {
+            Ok(task_id) => Self {
                 group: Some(group),
+                task_id: Some(task_id),
                 command,
                 terminal: None,
             },
             Err(error) => Self {
                 group: None,
+                task_id: None,
                 command: command.clone(),
                 terminal: Some(TaskEvent::Finished(failed_task_result(
                     &command,
                     format!("task spawn failed: {error}"),
                 ))),
             },
+        }
+    }
+
+    pub(crate) fn cancel(&mut self) {
+        if let (Some(group), Some(task_id)) = (self.group.as_mut(), self.task_id) {
+            group.cancel(task_id);
         }
     }
 
@@ -202,7 +212,11 @@ fn run_task_with_cancel(
     output.push_str(&String::from_utf8_lossy(&stderr));
     let mut truncated = stdout_truncated || stderr_truncated;
     if output.len() > MAX_TASK_OUTPUT {
-        output.truncate(MAX_TASK_OUTPUT);
+        let mut end = MAX_TASK_OUTPUT;
+        while !output.is_char_boundary(end) {
+            end -= 1;
+        }
+        output.truncate(end);
         truncated = true;
     }
     if cancelled && output.is_empty() {
@@ -397,6 +411,18 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
+    fn truncates_utf8_output_at_a_char_boundary() {
+        let result = run_task(
+            "head -c 262143 /dev/zero | tr '\\0' x; printf '\\342\\202\\254'; printf x",
+            Path::new("/tmp"),
+        );
+        assert!(result.truncated);
+        assert!(result.output.is_char_boundary(result.output.len()));
+        assert_eq!(result.output.len(), MAX_TASK_OUTPUT - 1);
+    }
+
+    #[cfg(unix)]
+    #[test]
     fn worker_delivers_result_and_cancels_on_drop() {
         let mut worker = TaskWorker::start("printf worker-ok".to_owned(), PathBuf::from("/tmp"));
         let deadline = Instant::now() + Duration::from_secs(3);
@@ -415,6 +441,25 @@ mod tests {
         let worker = TaskWorker::start("sleep 30".to_owned(), PathBuf::from("/tmp"));
         drop(worker);
         assert!(started.elapsed() < Duration::from_secs(2));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn worker_cancels_running_task() {
+        let mut worker = TaskWorker::start("sleep 30".to_owned(), PathBuf::from("/tmp"));
+        worker.cancel();
+        let deadline = Instant::now() + Duration::from_secs(3);
+        let result = loop {
+            if let Some(TaskEvent::Finished(result)) = worker.try_recv() {
+                break result;
+            }
+            assert!(Instant::now() < deadline, "cancelled worker did not finish");
+            thread::sleep(Duration::from_millis(10));
+        };
+        assert!(
+            result.output.contains("cancel") || result.exit_code.is_none(),
+            "{result:?}"
+        );
     }
 }
 

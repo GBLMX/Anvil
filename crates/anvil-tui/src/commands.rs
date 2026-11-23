@@ -363,6 +363,7 @@ impl Model {
                 self.queue_effect(Effect::PluginEnable(plugin_id.to_owned()))
             }
             ("task", command) => self.start_task(command),
+            ("task-cancel", "") => self.cancel_task(),
             ("task-output", "") => self.show_task_output(),
             ("tests", command) => self.start_tests(command),
             #[cfg(unix)]

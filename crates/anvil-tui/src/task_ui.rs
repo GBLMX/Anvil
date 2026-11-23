@@ -13,6 +13,17 @@ impl Model {
         self.start_task_mode(command, true);
     }
 
+    pub(crate) fn cancel_task(&mut self) {
+        let Some(worker) = self.runtime.task_worker.as_mut() else {
+            self.status.text = "E: no task running".to_owned();
+            self.file.dirty = true;
+            return;
+        };
+        worker.cancel();
+        self.status.text = "cancelling task…".to_owned();
+        self.file.dirty = true;
+    }
+
     fn start_task_mode(&mut self, command: &str, tests: bool) {
         let command = command.trim();
         if command.is_empty() {
