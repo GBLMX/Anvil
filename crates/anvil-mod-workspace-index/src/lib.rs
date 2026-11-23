@@ -124,6 +124,9 @@ impl WorkspaceIndex {
 pub const DEFAULT_MAX_SYMBOLS: usize = 200_000;
 pub const DEFAULT_MAX_OCCURRENCES: usize = 1_000_000;
 pub const DEFAULT_MAX_SYMBOL_NAME_BYTES: usize = 256;
+pub const DEFAULT_MAX_SYMBOL_PATH_BYTES: usize = 4096;
+pub const DEFAULT_MAX_SYMBOL_QUERY_BYTES: usize = 256;
+pub const DEFAULT_MAX_SYMBOL_BYTES: usize = 32 * 1024 * 1024;
 
 /// Bounds for the symbol/occurrence layer.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -131,6 +134,9 @@ pub struct SymbolIndexCaps {
     pub max_symbols: usize,
     pub max_occurrences: usize,
     pub max_name_bytes: usize,
+    pub max_path_bytes: usize,
+    pub max_query_bytes: usize,
+    pub max_total_bytes: usize,
     pub max_results: usize,
 }
 
@@ -140,6 +146,9 @@ impl Default for SymbolIndexCaps {
             max_symbols: DEFAULT_MAX_SYMBOLS,
             max_occurrences: DEFAULT_MAX_OCCURRENCES,
             max_name_bytes: DEFAULT_MAX_SYMBOL_NAME_BYTES,
+            max_path_bytes: DEFAULT_MAX_SYMBOL_PATH_BYTES,
+            max_query_bytes: DEFAULT_MAX_SYMBOL_QUERY_BYTES,
+            max_total_bytes: DEFAULT_MAX_SYMBOL_BYTES,
             max_results: DEFAULT_MAX_RESULTS,
         }
     }
@@ -203,6 +212,7 @@ pub struct WorkspaceSymbolIndex {
     symbol_keys: BTreeSet<(String, String, u32, u32, u32, u32)>,
     occurrences: Vec<SymbolOccurrence>,
     occurrence_keys: BTreeSet<(String, String, u32, u32, u32, u32, u8)>,
+    bytes: usize,
     truncated: bool,
 }
 
@@ -214,6 +224,7 @@ impl WorkspaceSymbolIndex {
             symbol_keys: BTreeSet::new(),
             occurrences: Vec::new(),
             occurrence_keys: BTreeSet::new(),
+            bytes: 0,
             truncated: false,
         }
     }
@@ -243,13 +254,16 @@ impl WorkspaceSymbolIndex {
             return PushOutcome::Truncated;
         }
         if !valid_symbol_path(&symbol.path)
+            || symbol.path.len() > self.caps.max_path_bytes
             || !valid_range(symbol.range)
             || symbol.name.is_empty()
             || symbol.name.len() > self.caps.max_name_bytes
+            || symbol_kind_bytes(&symbol.kind) > self.caps.max_name_bytes
         {
             self.truncated = true;
             return PushOutcome::Truncated;
         }
+        let bytes = symbol.name.len() + symbol.path.len() + symbol_kind_bytes(&symbol.kind);
         let key = (
             symbol.name.clone(),
             symbol.path.clone(),
@@ -261,10 +275,13 @@ impl WorkspaceSymbolIndex {
         if self.symbol_keys.contains(&key) {
             return PushOutcome::Duplicate;
         }
-        if self.symbols.len() >= self.caps.max_symbols {
+        if self.symbols.len() >= self.caps.max_symbols
+            || self.bytes.saturating_add(bytes) > self.caps.max_total_bytes
+        {
             self.truncated = true;
             return PushOutcome::Truncated;
         }
+        self.bytes += bytes;
         self.symbol_keys.insert(key);
         self.symbols.push(symbol);
         PushOutcome::Inserted
@@ -275,6 +292,7 @@ impl WorkspaceSymbolIndex {
             return PushOutcome::Truncated;
         }
         if !valid_symbol_path(&occurrence.path)
+            || occurrence.path.len() > self.caps.max_path_bytes
             || !valid_range(occurrence.range)
             || occurrence.symbol.is_empty()
             || occurrence.symbol.len() > self.caps.max_name_bytes
@@ -282,6 +300,7 @@ impl WorkspaceSymbolIndex {
             self.truncated = true;
             return PushOutcome::Truncated;
         }
+        let bytes = occurrence.symbol.len() + occurrence.path.len();
         let role = match occurrence.role {
             SymbolRole::Definition => 0,
             SymbolRole::Reference => 1,
@@ -299,32 +318,48 @@ impl WorkspaceSymbolIndex {
         if self.occurrence_keys.contains(&key) {
             return PushOutcome::Duplicate;
         }
-        if self.occurrences.len() >= self.caps.max_occurrences {
+        if self.occurrences.len() >= self.caps.max_occurrences
+            || self.bytes.saturating_add(bytes) > self.caps.max_total_bytes
+        {
             self.truncated = true;
             return PushOutcome::Truncated;
         }
+        self.bytes += bytes;
         self.occurrence_keys.insert(key);
         self.occurrences.push(occurrence);
         PushOutcome::Inserted
     }
 
     pub fn symbols(&self, query: &str, limit: usize) -> Vec<WorkspaceSymbol> {
+        if query.len() > self.caps.max_query_bytes {
+            return Vec::new();
+        }
         let query = query.to_lowercase();
         self.symbols
             .iter()
-            .filter(|symbol| symbol.name.to_lowercase().contains(&query))
+            .filter(|symbol| symbol.name.to_lowercase().contains(query.as_str()))
             .take(limit.min(self.caps.max_results))
             .cloned()
             .collect()
     }
 
     pub fn occurrences(&self, path: &str, symbol: &str, limit: usize) -> Vec<SymbolOccurrence> {
+        if path.len() > self.caps.max_path_bytes || symbol.len() > self.caps.max_name_bytes {
+            return Vec::new();
+        }
         self.occurrences
             .iter()
             .filter(|occurrence| occurrence.path == path && occurrence.symbol == symbol)
             .take(limit.min(self.caps.max_results))
             .cloned()
             .collect()
+    }
+}
+
+fn symbol_kind_bytes(kind: &SymbolKind) -> usize {
+    match kind {
+        SymbolKind::Other(value) => value.len(),
+        _ => 0,
     }
 }
 
@@ -737,6 +772,9 @@ mod tests {
             max_symbols: 1,
             max_occurrences: 1,
             max_name_bytes: 16,
+            max_path_bytes: 64,
+            max_query_bytes: 16,
+            max_total_bytes: 1024,
             max_results: 1,
         });
         assert_eq!(
@@ -765,6 +803,13 @@ mod tests {
         assert_eq!(index.push_symbol(absolute), PushOutcome::Truncated);
         let escape = symbol("run", "../src/lib.rs", 1);
         assert_eq!(index.push_symbol(escape), PushOutcome::Truncated);
+
+        let mut long = WorkspaceSymbolIndex::new(SymbolIndexCaps::default());
+        let path = "a".repeat(DEFAULT_MAX_SYMBOL_PATH_BYTES + 1);
+        assert_eq!(
+            long.push_symbol(symbol("run", &path, 1)),
+            PushOutcome::Truncated
+        );
     }
 
     #[test]
@@ -773,6 +818,9 @@ mod tests {
             max_symbols: 4,
             max_occurrences: 4,
             max_name_bytes: 16,
+            max_path_bytes: 64,
+            max_query_bytes: 16,
+            max_total_bytes: 1024,
             max_results: 2,
         });
         for (name, line) in [("run", 1), ("runner", 2), ("stop", 3)] {
@@ -782,6 +830,7 @@ mod tests {
             );
         }
         assert_eq!(index.symbols("RUN", 10).len(), 2);
+        assert!(index.symbols(&"x".repeat(17), 10).is_empty());
         assert_eq!(
             index.push_occurrence(occurrence("run", "src/lib.rs", 4)),
             PushOutcome::Inserted

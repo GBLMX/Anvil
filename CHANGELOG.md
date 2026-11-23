@@ -15,6 +15,11 @@ post-`0.5.0` feature line.
 - `anvil-mod-workspace-index` now has a bounded symbol/occurrence layer with
   definition, reference, and implementation roles.
 - `anvil-dap` is a UI-neutral DAP client extracted from the TUI.
+- `anvil-runtime` composes project discovery, integration grants, and the
+  workspace symbol index behind one UI-neutral entry point.
+- Offline signing can consume the CI build-input artifact; `Release publish`
+  verifies provenance, input checksums, and the checksum-key fingerprint
+  before uploading release assets.
 
 ### Changed
 - The tag-triggered release workflow now builds and uploads unsigned inputs

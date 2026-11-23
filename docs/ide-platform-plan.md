@@ -1,6 +1,6 @@
 # IDE Platform Plan
 
-Status: Active; project, integrations, symbol index, and DAP extraction landed
+Status: Active; project, integrations, symbol index, DAP, and runtime root landed
 
 Scope: move Anvil from an editor with IDE features to a project-aware IDE
 platform without turning the kernel into a language-specific compiler or
@@ -30,7 +30,8 @@ Already landed:
 - `anvil-project` read-only model with a `cargo metadata` adapter;
 - `anvil-integrations` closed capabilities and per-root grant matching;
 - `anvil-mod-workspace-index` bounded symbols and occurrences with ranges;
-- `anvil-dap` UI-neutral Debug Adapter Protocol client.
+- `anvil-dap` UI-neutral Debug Adapter Protocol client;
+- `anvil-runtime` composition root for project, grants, and symbol services.
 
 The remaining product gap is not basic editing. It is project awareness,
 workspace-scale code intelligence, integration contribution, debugger depth,

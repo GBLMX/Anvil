@@ -1,0 +1,13 @@
+[package]
+name = "anvil-runtime"
+description = "UI-neutral composition root for project, integration, and symbol services"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+anvil-integrations = { path = "../anvil-integrations", version = "0.7.0" }
+anvil-mod-workspace-index = { path = "../anvil-mod-workspace-index", version = "0.7.0" }
+anvil-project = { path = "../anvil-project", version = "0.7.0" }

@@ -21,6 +21,7 @@ members = [
     "crates/anvil-platform",
     "crates/anvil-process",
     "crates/anvil-project",
+    "crates/anvil-runtime",
     "crates/anvil-session",
     "crates/anvil-task",
     "crates/anvil-workspace",

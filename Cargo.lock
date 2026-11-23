@@ -247,6 +247,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "anvil-runtime"
+version = "0.7.0"
+dependencies = [
+ "anvil-integrations",
+ "anvil-mod-workspace-index",
+ "anvil-project",
+]
+
+[[package]]
 name = "anvil-session"
 version = "0.7.0"
 dependencies = [
