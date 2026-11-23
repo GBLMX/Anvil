@@ -685,3 +685,25 @@ fn tree_changes_invalidate_the_root_file_cache() {
             .any(|(cached_root, _)| cached_root == &root)
     );
 }
+
+#[test]
+fn secondary_root_removed_event_clears_busy() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let root = dir.path().to_path_buf();
+    let path = root.join("old.txt");
+    fs::write(&path, "old").expect("file");
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.workspace.path = root.clone();
+    model.status.busy = Some("deleting".to_owned());
+
+    model.handle_file_event(
+        Some(&root),
+        FileEvent::Removed {
+            path: path.clone(),
+            result: Ok(()),
+        },
+    );
+
+    assert!(model.status.busy.is_none());
+    assert!(model.file.dirty);
+}

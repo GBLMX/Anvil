@@ -555,242 +555,178 @@ impl Model {
     pub(crate) fn poll_file_worker(&mut self) {
         let poll = self.workspace.poll();
         for event in poll.file_events {
-            match event {
-                FileEvent::Listed {
-                    generation,
-                    path,
-                    result,
-                } => self.handle_tree_listing(generation, path, result),
-                FileEvent::CompletionListed { generation, result } => {
-                    self.handle_path_completion(generation, result);
-                }
-                FileEvent::Files { generation, result } => {
-                    self.handle_fuzzy_files(None, generation, result);
-                }
-                FileEvent::ProjectSearch {
-                    query,
-                    generation,
-                    result,
-                } => self.handle_project_search(None, query, generation, result),
-                FileEvent::ProjectReplacePreview { generation, result } => {
-                    self.handle_project_replace_preview(generation, result)
-                }
-                FileEvent::ProjectReplaceApplied { generation, result } => {
-                    self.handle_project_replace_applied(generation, result)
-                }
-                FileEvent::Preview {
-                    path,
-                    generation,
-                    result,
-                } => self.handle_preview(path, generation, result),
-                FileEvent::Format {
-                    path,
-                    revision,
-                    generation,
-                    result,
-                } => self.handle_format(path, revision, generation, result),
-                FileEvent::GitDiff {
-                    path,
-                    revision,
-                    result,
-                } => self.handle_git_diff(path, revision, result),
-                FileEvent::GitDiffText {
-                    relative,
-                    staged,
-                    generation,
-                    result,
-                } => self.handle_git_diff_text(relative, staged, generation, result),
-                FileEvent::GitApplied { generation, result } => {
-                    self.handle_git_applied(generation, result)
-                }
-                FileEvent::GitBlameText { generation, result } => {
-                    self.handle_git_blame_text(generation, result)
-                }
-                FileEvent::GitConflictStageText {
-                    relative,
-                    stage,
-                    generation,
-                    result,
-                } => self.handle_git_conflict_stage(relative, stage, generation, result),
-                FileEvent::GitResolveConflict {
-                    relative,
-                    stage,
-                    generation,
-                    result,
-                } => self.handle_git_resolved(relative, stage, generation, result),
-                FileEvent::GitConflictsText {
-                    root,
-                    generation,
-                    result,
-                } => self.handle_git_conflicts_text(root, generation, result),
-                FileEvent::Transferred {
-                    from,
-                    to,
-                    copy,
-                    result,
-                } => {
-                    self.status.busy = None;
-                    match result {
-                        Ok(()) => {
-                            if !copy {
-                                self.remap_open_path(&from, &to);
-                            }
-                            self.status.text = if copy {
-                                format!("copied {}", to.display())
-                            } else {
-                                format!("moved {}", to.display())
-                            };
-                            self.refresh_tree(Some(to));
-                            self.finish_busy_progress(None);
-                        }
-                        Err(error) => {
-                            self.status.text = format!("E: {error}");
-                            self.file.dirty = true;
-                            self.finish_busy_progress(Some(&error));
-                        }
-                    }
-                }
-                FileEvent::Removed { path, result } => {
-                    self.status.busy = None;
-                    match result {
-                        Ok(()) => {
-                            self.mark_missing(&path);
-                            self.status.text = format!("deleted {}", path.display());
-                            self.refresh_tree(None);
-                            self.finish_busy_progress(None);
-                        }
-                        Err(error) => {
-                            self.status.text = format!("E: {error}");
-                            self.file.dirty = true;
-                            self.finish_busy_progress(Some(&error));
-                        }
-                    }
-                }
-                FileEvent::ExternalChanged { path } => self.handle_external_change(path),
-                FileEvent::TreeChanged { paths } => {
-                    self.handle_tree_changed(None, paths);
-                }
-                FileEvent::WatchStatus {
-                    root,
-                    mode: _,
-                    coverage,
-                    watched_dirs,
-                    skipped_dirs,
-                    overflow_count,
-                    reason,
-                } => self.apply_watch_status(
-                    root,
-                    crate::state::WatchRootStatus {
-                        coverage,
-                        watched_dirs,
-                        skipped_dirs,
-                        overflow_count,
-                        reason,
-                    },
-                ),
-                FileEvent::TreeWatchUnavailable(error) => {
-                    self.workspace.tree.stale = true;
-                    self.status.text = format!(
-                        "E: tree watcher: {error}; tree is stale, :tree-refresh reloads it"
-                    );
-                }
-                FileEvent::Oversized { message } => {
-                    self.workspace.tree.stale = true;
-                    self.status.text = format!(
-                        "E: file worker: {message}; tree is stale, :tree-refresh reloads it"
-                    );
-                }
-                FileEvent::TreeSnapshot {
-                    generation,
-                    listings,
-                } => self.apply_tree_snapshot(generation, listings),
-                FileEvent::TreeListings {
-                    generation,
-                    listings,
-                } => self.apply_tree_listings(generation, listings),
-                FileEvent::GitStatus {
-                    generation, result, ..
-                } => {
-                    self.handle_git_status(generation, result);
-                }
-            }
-            self.file.dirty = true;
+            self.handle_file_event(None, event);
         }
         for (root, event) in poll.root_events {
-            match event {
-                FileEvent::Files { generation, result } => {
-                    self.handle_fuzzy_files(Some(root.clone()), generation, result);
+            self.handle_file_event(Some(&root), event);
+        }
+    }
+
+    fn handle_file_event(&mut self, root: Option<&PathBuf>, event: FileEvent) {
+        match event {
+            FileEvent::Listed {
+                generation,
+                path,
+                result,
+            } => self.handle_tree_listing(generation, path, result),
+            FileEvent::CompletionListed { generation, result } => {
+                self.handle_path_completion(generation, result);
+            }
+            FileEvent::Files { generation, result } => {
+                self.handle_fuzzy_files(root.cloned(), generation, result);
+            }
+            FileEvent::ProjectSearch {
+                query,
+                generation,
+                result,
+            } => self.handle_project_search(root.cloned(), query, generation, result),
+            FileEvent::ProjectReplacePreview { generation, result } => {
+                self.handle_project_replace_preview(generation, result)
+            }
+            FileEvent::ProjectReplaceApplied { generation, result } => {
+                self.handle_project_replace_applied(generation, result)
+            }
+            FileEvent::Preview {
+                path,
+                generation,
+                result,
+            } => {
+                let path = match root {
+                    Some(root) => root.join(path).to_string_lossy().into_owned(),
+                    None => path,
+                };
+                self.handle_preview(path, generation, result);
+            }
+            FileEvent::Format {
+                path,
+                revision,
+                generation,
+                result,
+            } => self.handle_format(path, revision, generation, result),
+            FileEvent::GitDiff {
+                path,
+                revision,
+                result,
+            } => self.handle_git_diff(path, revision, result),
+            FileEvent::GitDiffText {
+                relative,
+                staged,
+                generation,
+                result,
+            } => self.handle_git_diff_text(relative, staged, generation, result),
+            FileEvent::GitApplied { generation, result } => {
+                self.handle_git_applied(generation, result)
+            }
+            FileEvent::GitBlameText { generation, result } => {
+                self.handle_git_blame_text(generation, result)
+            }
+            FileEvent::GitConflictStageText {
+                relative,
+                stage,
+                generation,
+                result,
+            } => self.handle_git_conflict_stage(relative, stage, generation, result),
+            FileEvent::GitResolveConflict {
+                relative,
+                stage,
+                generation,
+                result,
+            } => self.handle_git_resolved(relative, stage, generation, result),
+            FileEvent::GitConflictsText {
+                root: conflicts_root,
+                generation,
+                result,
+            } => self.handle_git_conflicts_text(conflicts_root, generation, result),
+            FileEvent::Transferred {
+                from,
+                to,
+                copy,
+                result,
+            } => {
+                self.status.busy = None;
+                match result {
+                    Ok(()) => {
+                        if !copy {
+                            self.remap_open_path(&from, &to);
+                        }
+                        self.status.text = if copy {
+                            format!("copied {}", to.display())
+                        } else {
+                            format!("moved {}", to.display())
+                        };
+                        self.refresh_tree(Some(to));
+                        self.finish_busy_progress(None);
+                    }
+                    Err(error) => {
+                        self.status.text = format!("E: {error}");
+                        self.file.dirty = true;
+                        self.finish_busy_progress(Some(&error));
+                    }
                 }
-                FileEvent::Preview {
-                    path,
-                    generation,
-                    result,
-                } => {
-                    let absolute = root.join(path).to_string_lossy().into_owned();
-                    self.handle_preview(absolute, generation, result);
+            }
+            FileEvent::Removed { path, result } => {
+                self.status.busy = None;
+                match result {
+                    Ok(()) => {
+                        self.mark_missing(&path);
+                        self.status.text = format!("deleted {}", path.display());
+                        self.refresh_tree(None);
+                        self.finish_busy_progress(None);
+                    }
+                    Err(error) => {
+                        self.status.text = format!("E: {error}");
+                        self.file.dirty = true;
+                        self.finish_busy_progress(Some(&error));
+                    }
                 }
-                FileEvent::Format {
-                    path,
-                    revision,
-                    generation,
-                    result,
-                } => self.handle_format(path, revision, generation, result),
-                FileEvent::ProjectSearch {
-                    query,
-                    generation,
-                    result,
-                } => {
-                    self.handle_project_search(Some(root.clone()), query, generation, result);
-                }
-                FileEvent::Listed {
-                    generation,
-                    path,
-                    result,
-                } => self.handle_tree_listing(generation, path, result),
-                FileEvent::GitStatus {
-                    generation, result, ..
-                } => self.handle_git_status(generation, result),
-                FileEvent::ExternalChanged { path } => self.handle_external_change(path),
-                FileEvent::TreeChanged { paths } => {
-                    self.handle_tree_changed(Some(&root), paths);
-                }
-                FileEvent::TreeListings {
-                    generation,
-                    listings,
-                } => self.apply_tree_listings(generation, listings),
-                FileEvent::WatchStatus {
-                    root,
-                    mode: _,
+            }
+            FileEvent::ExternalChanged { path } => self.handle_external_change(path),
+            FileEvent::TreeChanged { paths } => {
+                self.handle_tree_changed(root.map(|root| root.as_path()), paths);
+            }
+            FileEvent::WatchStatus {
+                root: watch_root,
+                mode: _,
+                coverage,
+                watched_dirs,
+                skipped_dirs,
+                overflow_count,
+                reason,
+            } => self.apply_watch_status(
+                watch_root,
+                crate::state::WatchRootStatus {
                     coverage,
                     watched_dirs,
                     skipped_dirs,
                     overflow_count,
                     reason,
-                } => self.apply_watch_status(
-                    root,
-                    crate::state::WatchRootStatus {
-                        coverage,
-                        watched_dirs,
-                        skipped_dirs,
-                        overflow_count,
-                        reason,
-                    },
-                ),
-                FileEvent::TreeWatchUnavailable(error) => {
-                    self.workspace.tree.stale = true;
-                    self.status.text = format!(
-                        "E: tree watcher: {error}; tree is stale, :tree-refresh reloads it"
-                    );
-                }
-                FileEvent::Oversized { message } => {
-                    self.workspace.tree.stale = true;
-                    self.status.text = format!(
-                        "E: file worker: {message}; tree is stale, :tree-refresh reloads it"
-                    );
-                }
-                _ => {}
+                },
+            ),
+            FileEvent::TreeWatchUnavailable(error) => {
+                self.workspace.tree.stale = true;
+                self.status.text =
+                    format!("E: tree watcher: {error}; tree is stale, :tree-refresh reloads it");
+            }
+            FileEvent::Oversized { message } => {
+                self.workspace.tree.stale = true;
+                self.status.text =
+                    format!("E: file worker: {message}; tree is stale, :tree-refresh reloads it");
+            }
+            FileEvent::TreeSnapshot {
+                generation,
+                listings,
+            } => self.apply_tree_snapshot(generation, listings),
+            FileEvent::TreeListings {
+                generation,
+                listings,
+            } => self.apply_tree_listings(generation, listings),
+            FileEvent::GitStatus {
+                generation, result, ..
+            } => {
+                self.handle_git_status(generation, result);
             }
         }
+        self.file.dirty = true;
     }
 
     fn tree_entries(&mut self, path: &Path) -> Result<Vec<DirEntry>, String> {
