@@ -703,7 +703,7 @@ fn call_hierarchy_item_from_lsp(item: &serde_json::Value) -> Option<CallHierarch
 }
 
 impl Model {
-    fn apply_workspace_symbols_response(&mut self, result: &serde_json::Value) {
+    pub(crate) fn apply_workspace_symbols_response(&mut self, result: &serde_json::Value) {
         let Some(items) = result.as_array() else {
             if !self.open_cached_workspace_symbols() {
                 self.status.text = "lsp: no workspace symbols".to_owned();

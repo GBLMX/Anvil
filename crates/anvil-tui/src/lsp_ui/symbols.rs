@@ -318,38 +318,35 @@ mod tests {
     fn lsp_symbols_refresh_the_runtime_index() {
         let mut model = Model::new(EditorState::from_text(""), None);
         model.load_project_info();
-        let before = model
-            .project
-            .platform
-            .as_ref()
-            .expect("runtime")
-            .symbols()
-            .len();
         let path = model.workspace.path.join("src/main.rs");
-        model.index_workspace_symbols(&[WorkspaceSymbolItem {
-            name: "refreshed_symbol".to_owned(),
-            detail: "function".to_owned(),
-            path,
-            line: 2,
-            character: 4,
+        let response = serde_json::json!([{
+            "name": "refreshed_symbol",
+            "containerName": "function",
+            "location": {
+                "uri": format!("file://{}", path.display()),
+                "range": {
+                    "start": {"line": 2, "character": 4},
+                    "end": {"line": 2, "character": 8}
+                }
+            }
         }]);
-        let after = model
-            .project
-            .platform
-            .as_ref()
-            .expect("runtime")
-            .symbols()
-            .len();
-        assert!(after > before);
-        assert!(model.open_cached_workspace_symbols());
-        let cached = model
+        model.apply_workspace_symbols_response(&response);
+        let runtime = model.project.platform.as_ref().expect("runtime");
+        assert!(
+            runtime
+                .symbols()
+                .symbols("refreshed_symbol", 10)
+                .iter()
+                .any(|symbol| symbol.name == "refreshed_symbol")
+        );
+        let panel = model
             .overlays
             .lsp_results
             .workspace_symbols
             .as_ref()
-            .expect("cached panel");
+            .expect("workspace symbol panel");
         assert!(
-            cached
+            panel
                 .items
                 .iter()
                 .any(|item| item.name == "refreshed_symbol")
