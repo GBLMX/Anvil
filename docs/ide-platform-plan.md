@@ -1,6 +1,6 @@
 # IDE Platform Plan
 
-Status: Active; S1 and the descriptor/grant contract landed
+Status: Active; S1, integrations, and the workspace symbol index landed
 
 Scope: move Anvil from an editor with IDE features to a project-aware IDE
 platform without turning the kernel into a language-specific compiler or
@@ -28,7 +28,8 @@ Already landed:
   capability-gated `sys.exec` / `sys.exec.v2`;
 - compile-time official modules: Git, workspace index, desktop, LaTeX, Typst;
 - `anvil-project` read-only model with a `cargo metadata` adapter;
-- `anvil-integrations` closed capabilities and per-root grant matching.
+- `anvil-integrations` closed capabilities and per-root grant matching;
+- `anvil-mod-workspace-index` bounded symbols and occurrences with ranges.
 
 The remaining product gap is not basic editing. It is project awareness,
 workspace-scale code intelligence, integration contribution, debugger depth,

@@ -12,6 +12,8 @@ post-`0.5.0` feature line.
   `cargo metadata` adapter for roots, targets, source roots, and capabilities.
 - `anvil-integrations` defines closed execution capabilities, descriptor
   hashing, and grants bound to integration, root, capability, and executable.
+- `anvil-mod-workspace-index` now has a bounded symbol/occurrence layer with
+  definition, reference, and implementation roles.
 
 ### Changed
 - The tag-triggered release workflow now builds and uploads unsigned inputs

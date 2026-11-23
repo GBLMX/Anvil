@@ -121,6 +121,225 @@ impl WorkspaceIndex {
     }
 }
 
+pub const DEFAULT_MAX_SYMBOLS: usize = 200_000;
+pub const DEFAULT_MAX_OCCURRENCES: usize = 1_000_000;
+pub const DEFAULT_MAX_SYMBOL_NAME_BYTES: usize = 256;
+
+/// Bounds for the symbol/occurrence layer.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SymbolIndexCaps {
+    pub max_symbols: usize,
+    pub max_occurrences: usize,
+    pub max_name_bytes: usize,
+    pub max_results: usize,
+}
+
+impl Default for SymbolIndexCaps {
+    fn default() -> Self {
+        Self {
+            max_symbols: DEFAULT_MAX_SYMBOLS,
+            max_occurrences: DEFAULT_MAX_OCCURRENCES,
+            max_name_bytes: DEFAULT_MAX_SYMBOL_NAME_BYTES,
+            max_results: DEFAULT_MAX_RESULTS,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct TextPosition {
+    pub line: u32,
+    pub character: u32,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TextRange {
+    pub start: TextPosition,
+    pub end: TextPosition,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SymbolKind {
+    Module,
+    Function,
+    Struct,
+    Enum,
+    Trait,
+    Method,
+    Field,
+    Constant,
+    Variable,
+    Other(String),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SymbolRole {
+    Definition,
+    Reference,
+    Implementation,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct WorkspaceSymbol {
+    pub name: String,
+    pub kind: SymbolKind,
+    pub path: String,
+    pub range: TextRange,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SymbolOccurrence {
+    pub symbol: String,
+    pub role: SymbolRole,
+    pub path: String,
+    pub range: TextRange,
+}
+
+/// Bounded symbol/occurrence index. It is independent of the path walker so
+/// external indexers can feed symbols without rescanning files.
+#[derive(Clone, Debug)]
+pub struct WorkspaceSymbolIndex {
+    caps: SymbolIndexCaps,
+    symbols: Vec<WorkspaceSymbol>,
+    symbol_keys: BTreeSet<(String, String, u32, u32, u32, u32)>,
+    occurrences: Vec<SymbolOccurrence>,
+    occurrence_keys: BTreeSet<(String, String, u32, u32, u32, u32, u8)>,
+    truncated: bool,
+}
+
+impl WorkspaceSymbolIndex {
+    pub fn new(caps: SymbolIndexCaps) -> Self {
+        Self {
+            caps,
+            symbols: Vec::new(),
+            symbol_keys: BTreeSet::new(),
+            occurrences: Vec::new(),
+            occurrence_keys: BTreeSet::new(),
+            truncated: false,
+        }
+    }
+
+    pub fn caps(&self) -> SymbolIndexCaps {
+        self.caps
+    }
+
+    pub fn is_truncated(&self) -> bool {
+        self.truncated
+    }
+
+    pub fn len(&self) -> usize {
+        self.symbols.len()
+    }
+
+    pub fn occurrence_len(&self) -> usize {
+        self.occurrences.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.symbols.is_empty() && self.occurrences.is_empty()
+    }
+
+    pub fn push_symbol(&mut self, symbol: WorkspaceSymbol) -> PushOutcome {
+        if self.truncated {
+            return PushOutcome::Truncated;
+        }
+        if !valid_symbol_path(&symbol.path)
+            || !valid_range(symbol.range)
+            || symbol.name.is_empty()
+            || symbol.name.len() > self.caps.max_name_bytes
+        {
+            self.truncated = true;
+            return PushOutcome::Truncated;
+        }
+        let key = (
+            symbol.name.clone(),
+            symbol.path.clone(),
+            symbol.range.start.line,
+            symbol.range.start.character,
+            symbol.range.end.line,
+            symbol.range.end.character,
+        );
+        if self.symbol_keys.contains(&key) {
+            return PushOutcome::Duplicate;
+        }
+        if self.symbols.len() >= self.caps.max_symbols {
+            self.truncated = true;
+            return PushOutcome::Truncated;
+        }
+        self.symbol_keys.insert(key);
+        self.symbols.push(symbol);
+        PushOutcome::Inserted
+    }
+
+    pub fn push_occurrence(&mut self, occurrence: SymbolOccurrence) -> PushOutcome {
+        if self.truncated {
+            return PushOutcome::Truncated;
+        }
+        if !valid_symbol_path(&occurrence.path)
+            || !valid_range(occurrence.range)
+            || occurrence.symbol.is_empty()
+            || occurrence.symbol.len() > self.caps.max_name_bytes
+        {
+            self.truncated = true;
+            return PushOutcome::Truncated;
+        }
+        let role = match occurrence.role {
+            SymbolRole::Definition => 0,
+            SymbolRole::Reference => 1,
+            SymbolRole::Implementation => 2,
+        };
+        let key = (
+            occurrence.symbol.clone(),
+            occurrence.path.clone(),
+            occurrence.range.start.line,
+            occurrence.range.start.character,
+            occurrence.range.end.line,
+            occurrence.range.end.character,
+            role,
+        );
+        if self.occurrence_keys.contains(&key) {
+            return PushOutcome::Duplicate;
+        }
+        if self.occurrences.len() >= self.caps.max_occurrences {
+            self.truncated = true;
+            return PushOutcome::Truncated;
+        }
+        self.occurrence_keys.insert(key);
+        self.occurrences.push(occurrence);
+        PushOutcome::Inserted
+    }
+
+    pub fn symbols(&self, query: &str, limit: usize) -> Vec<WorkspaceSymbol> {
+        let query = query.to_lowercase();
+        self.symbols
+            .iter()
+            .filter(|symbol| symbol.name.to_lowercase().contains(&query))
+            .take(limit.min(self.caps.max_results))
+            .cloned()
+            .collect()
+    }
+
+    pub fn occurrences(&self, path: &str, symbol: &str, limit: usize) -> Vec<SymbolOccurrence> {
+        self.occurrences
+            .iter()
+            .filter(|occurrence| occurrence.path == path && occurrence.symbol == symbol)
+            .take(limit.min(self.caps.max_results))
+            .cloned()
+            .collect()
+    }
+}
+
+fn valid_symbol_path(path: &str) -> bool {
+    !path.is_empty()
+        && !Path::new(path).is_absolute()
+        && !Path::new(path)
+            .components()
+            .any(|part| matches!(part, std::path::Component::ParentDir))
+}
+
+fn valid_range(range: TextRange) -> bool {
+    range.start <= range.end
+}
+
 /// Gateway-neutral directory source used by the index walker.
 pub trait WorkspaceIndexSource {
     fn read_dir(&mut self, path: &str) -> Result<Vec<DirEntry>, String>;
@@ -486,5 +705,92 @@ mod tests {
             ),
             Err(WorkspaceIndexError::Stale)
         );
+    }
+
+    fn symbol(name: &str, path: &str, line: u32) -> WorkspaceSymbol {
+        WorkspaceSymbol {
+            name: name.to_owned(),
+            kind: SymbolKind::Function,
+            path: path.to_owned(),
+            range: TextRange {
+                start: TextPosition { line, character: 0 },
+                end: TextPosition { line, character: 3 },
+            },
+        }
+    }
+
+    fn occurrence(symbol: &str, path: &str, line: u32) -> SymbolOccurrence {
+        SymbolOccurrence {
+            symbol: symbol.to_owned(),
+            role: SymbolRole::Reference,
+            path: path.to_owned(),
+            range: TextRange {
+                start: TextPosition { line, character: 0 },
+                end: TextPosition { line, character: 3 },
+            },
+        }
+    }
+
+    #[test]
+    fn symbol_index_deduplicates_and_bounds() {
+        let mut index = WorkspaceSymbolIndex::new(SymbolIndexCaps {
+            max_symbols: 1,
+            max_occurrences: 1,
+            max_name_bytes: 16,
+            max_results: 1,
+        });
+        assert_eq!(
+            index.push_symbol(symbol("run", "src/lib.rs", 1)),
+            PushOutcome::Inserted
+        );
+        assert_eq!(
+            index.push_symbol(symbol("run", "src/lib.rs", 1)),
+            PushOutcome::Duplicate
+        );
+        assert_eq!(
+            index.push_symbol(symbol("stop", "src/lib.rs", 2)),
+            PushOutcome::Truncated
+        );
+        assert!(index.is_truncated());
+        assert_eq!(index.len(), 1);
+    }
+
+    #[test]
+    fn symbol_index_rejects_invalid_ranges_and_paths() {
+        let mut index = WorkspaceSymbolIndex::new(SymbolIndexCaps::default());
+        let mut invalid = symbol("run", "src/lib.rs", 1);
+        invalid.range.start.character = 4;
+        assert_eq!(index.push_symbol(invalid), PushOutcome::Truncated);
+        let absolute = symbol("run", "/src/lib.rs", 1);
+        assert_eq!(index.push_symbol(absolute), PushOutcome::Truncated);
+        let escape = symbol("run", "../src/lib.rs", 1);
+        assert_eq!(index.push_symbol(escape), PushOutcome::Truncated);
+    }
+
+    #[test]
+    fn symbol_and_occurrence_queries_are_bounded() {
+        let mut index = WorkspaceSymbolIndex::new(SymbolIndexCaps {
+            max_symbols: 4,
+            max_occurrences: 4,
+            max_name_bytes: 16,
+            max_results: 2,
+        });
+        for (name, line) in [("run", 1), ("runner", 2), ("stop", 3)] {
+            assert_eq!(
+                index.push_symbol(symbol(name, "src/lib.rs", line)),
+                PushOutcome::Inserted
+            );
+        }
+        assert_eq!(index.symbols("RUN", 10).len(), 2);
+        assert_eq!(
+            index.push_occurrence(occurrence("run", "src/lib.rs", 4)),
+            PushOutcome::Inserted
+        );
+        assert_eq!(
+            index.push_occurrence(occurrence("run", "src/lib.rs", 4)),
+            PushOutcome::Duplicate
+        );
+        assert_eq!(index.occurrences("src/lib.rs", "run", 10).len(), 1);
+        assert_eq!(index.occurrence_len(), 1);
     }
 }
