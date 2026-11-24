@@ -16,15 +16,15 @@ file count or crate count as a goal.
 | `impl Model` blocks | 70 |
 | Files containing `impl Model` | 65 |
 | Methods taking `&mut Model` | 543 |
-| Free functions taking `&mut Model` | 56 |
+| Non-`impl Model` functions taking `&mut Model` | 56 |
 | `Model::new` constructions | 557 |
 | Page-test `Model::new` setups | 2 |
 | Files over 800 lines | 19 |
 
 File counts and LOC are informational: a page split may add files while
 reducing coupling. The budgets are dependency count, `impl Model` count,
-`&mut Model` method and free-function count, full-`Model` test construction
-count, and files over 800 lines.
+`&mut Model` method count, non-Model functions taking `&mut Model`, full-`Model`
+test construction count, and files over 800 lines.
 
 ## Commands
 

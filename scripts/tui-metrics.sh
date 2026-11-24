@@ -39,7 +39,7 @@ for path in root.rglob("*.rs"):
 print(count)
 PY
 )"
-model_mut_free_fns="$(
+model_mut_non_model_fns="$(
     python3 - "$src" <<'PY'
 import pathlib
 import re
@@ -105,7 +105,7 @@ tui-metrics:
   impl_model=$impl_model
   impl_model_files=$impl_model_files
   model_mut_methods=$model_mut_methods
-  model_mut_free_fns=$model_mut_free_fns
+  model_mut_non_model_fns=$model_mut_non_model_fns
   model_new=$model_new
   page_model_setups=$page_model_setups
   files_over_800=$oversized
@@ -133,7 +133,7 @@ check_max() {
 check_max deps "$deps" "$TUI_DEPS"
 check_max impl_model "$impl_model" "$TUI_IMPL_MODEL"
 check_max model_mut_methods "$model_mut_methods" "$TUI_MODEL_MUT_METHODS"
-check_max model_mut_free_fns "$model_mut_free_fns" "$TUI_MODEL_MUT_FREE_FNS"
+check_max model_mut_non_model_fns "$model_mut_non_model_fns" "$TUI_MODEL_MUT_NON_MODEL_FNS"
 check_max page_model_setups "$page_model_setups" "$TUI_PAGE_MODEL_SETUPS"
 check_max files_over_800 "$oversized" "$TUI_FILES_OVER_800"
 

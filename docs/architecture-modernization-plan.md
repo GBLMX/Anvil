@@ -87,7 +87,7 @@ applies the effects to `Model`.
 impl Model:                    71 -> 70
 impl Model files:              66 -> 65
 &mut Model methods:            547 -> 543
-free functions taking Model:   56 (new baseline)
+non-impl-Model functions:     56 (new baseline)
 source lines:                  61,242 -> 61,326
 ```
 
