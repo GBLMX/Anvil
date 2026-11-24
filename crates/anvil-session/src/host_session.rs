@@ -319,7 +319,7 @@ impl HostSession {
         }
         let reserved = self
             .queued_events
-            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |queued| {
+            .try_update(Ordering::AcqRel, Ordering::Acquire, |queued| {
                 (queued < MAX_QUEUED_EVENTS).then_some(queued + 1)
             })
             .is_ok();

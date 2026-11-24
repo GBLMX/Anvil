@@ -253,12 +253,11 @@ fn call_hierarchy_round_trip_through_gateway() {
         let deadline = Instant::now() + Duration::from_secs(20);
         loop {
             model.poll_lsp();
-            if let Some(calls) = &model.overlays.lsp_results.call_hierarchy {
-                if calls.direction == direction
-                    && calls.items.iter().any(|item| item.name == expected)
-                {
-                    return;
-                }
+            if let Some(calls) = &model.overlays.lsp_results.call_hierarchy
+                && calls.direction == direction
+                && calls.items.iter().any(|item| item.name == expected)
+            {
+                return;
             }
             assert!(
                 Instant::now() < deadline,

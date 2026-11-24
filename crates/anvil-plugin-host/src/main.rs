@@ -1131,11 +1131,11 @@ mod linux {
             .cloned()
             .unwrap_or_else(|| serde_json::json!({}));
         if method == "host.event" {
-            if let Some(lua) = lua {
-                if let Err(error) = runtime::call_event(lua, &params) {
-                    HANDLER_ERRORS.fetch_add(1, Ordering::Relaxed);
-                    write_plugin_stderr("host.event: ", &error);
-                }
+            if let Some(lua) = lua
+                && let Err(error) = runtime::call_event(lua, &params)
+            {
+                HANDLER_ERRORS.fetch_add(1, Ordering::Relaxed);
+                write_plugin_stderr("host.event: ", &error);
             }
             return Ok(());
         }

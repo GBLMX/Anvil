@@ -49,7 +49,7 @@ impl SystemDesktopService {
 
     fn acquire(&self) -> Result<(), DesktopError> {
         self.in_flight
-            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |count| {
+            .try_update(Ordering::AcqRel, Ordering::Acquire, |count| {
                 (count < MAX_IN_FLIGHT).then_some(count + 1)
             })
             .map(|_| ())

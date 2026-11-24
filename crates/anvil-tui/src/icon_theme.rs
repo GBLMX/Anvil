@@ -30,11 +30,19 @@ pub enum IconKind {
     DefaultFile,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug)]
 pub struct Icon {
     pub kind: IconKind,
     pub color: fn() -> Color,
 }
+
+impl PartialEq for Icon {
+    fn eq(&self, other: &Self) -> bool {
+        self.kind == other.kind && std::ptr::fn_addr_eq(self.color, other.color)
+    }
+}
+
+impl Eq for Icon {}
 
 #[derive(Clone, Debug, Default)]
 pub struct IconTheme {

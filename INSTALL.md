@@ -21,7 +21,7 @@ Build-host ISA/glibc, user-vs-root, and cgroup findings are recorded in
 ## Requirements
 
 - Linux; Landlock requires Linux 5.13 or newer.
-- Rust 1.88 or newer (the repository pins the toolchain in
+- Rust 1.100 or newer (the repository pins the toolchain in
   `rust-toolchain.toml`).
 - Go 1.26.11 or newer (the repository pins the version in `go.mod`).
 - A locale with UTF-8 support.

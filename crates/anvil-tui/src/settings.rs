@@ -2192,10 +2192,8 @@ impl crate::Model {
         self.language.inlay_hints.hints.clear();
         self.language.inlay_hints.pending = None;
         self.language.inlay_hints.checked = None;
-        if theme_changed {
-            if let Err(error) = theme::apply_choice(settings.theme, false) {
-                self.status.text = format!("E: theme: {error}");
-            }
+        if theme_changed && let Err(error) = theme::apply_choice(settings.theme, false) {
+            self.status.text = format!("E: theme: {error}");
         }
         theme::set_high_contrast(settings.ui.high_contrast);
         if watch_changed {

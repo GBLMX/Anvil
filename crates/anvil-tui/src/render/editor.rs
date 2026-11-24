@@ -346,20 +346,19 @@ pub fn view(model: &Model, frame: &mut Frame) {
             .editor
             .index()
             .position(model.session.editor.text(), model.session.cursor)
-    {
-        if let Some(row) = model.row_of_position(
+        && let Some(row) = model.row_of_position(
             position.line,
             position.display_column,
             usize::from(content.height),
-        ) {
-            let base = model
-                .position_at_visible_row(row)
-                .map_or(model.view.hscroll, |(_, base)| base);
-            let x = text_area.x + position.display_column.saturating_sub(base) as u16;
-            let y = content.y + row as u16;
-            if x < content.right() && y < content.bottom() {
-                frame.set_cursor_position((x, y));
-            }
+        )
+    {
+        let base = model
+            .position_at_visible_row(row)
+            .map_or(model.view.hscroll, |(_, base)| base);
+        let x = text_area.x + position.display_column.saturating_sub(base) as u16;
+        let y = content.y + row as u16;
+        if x < content.right() && y < content.bottom() {
+            frame.set_cursor_position((x, y));
         }
     }
     if let Some(selection) = editor_view.selections.first()

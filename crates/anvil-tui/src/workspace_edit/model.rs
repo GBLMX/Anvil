@@ -112,15 +112,12 @@ impl Model {
             self.buffers.split = None;
             self.ui.focus.split = false;
         }
-        loop {
-            let Some(index) = self
-                .buffers
-                .entries
-                .iter()
-                .position(|buffer| affected(buffer.path.as_deref()))
-            else {
-                break;
-            };
+        while let Some(index) = self
+            .buffers
+            .entries
+            .iter()
+            .position(|buffer| affected(buffer.path.as_deref()))
+        {
             self.close_buffer(index, true);
         }
         self.buffers

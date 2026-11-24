@@ -739,7 +739,7 @@ impl EditorState {
             .iter()
             .map(|(caret, _)| (*caret, text.to_owned()))
             .collect();
-        edits.sort_by(|left, right| right.0.cmp(&left.0));
+        edits.sort_by_key(|edit| std::cmp::Reverse(edit.0));
 
         for (at, text) in &edits {
             self.apply_insert_text(*at, text);

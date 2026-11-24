@@ -385,10 +385,10 @@ impl LspWorker {
                                 return Ok(());
                             }
                         }
-                        if let Some((path, diagnostics)) = publish_diagnostics(data) {
-                            if let Ok(mut latest) = worker_diagnostics.lock() {
-                                latest.insert(path, diagnostics);
-                            }
+                        if let Some((path, diagnostics)) = publish_diagnostics(data)
+                            && let Ok(mut latest) = worker_diagnostics.lock()
+                        {
+                            latest.insert(path, diagnostics);
                         }
                     }
                     _ => {}
@@ -684,10 +684,10 @@ fn project_root(
 
 pub fn file_uri(path: &std::path::Path) -> String {
     let mut absolute = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
-    if absolute.is_relative() {
-        if let Ok(current) = std::env::current_dir() {
-            absolute = current.join(absolute);
-        }
+    if absolute.is_relative()
+        && let Ok(current) = std::env::current_dir()
+    {
+        absolute = current.join(absolute);
     }
     let mut uri = String::from("file://");
     for byte in absolute.to_string_lossy().bytes() {

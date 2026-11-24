@@ -182,16 +182,16 @@ fn terminal_key_bytes(key: KeyEvent) -> Option<Vec<u8>> {
     if key.modifiers.contains(KeyModifiers::ALT) {
         bytes.push(0x1b);
     }
-    if key.modifiers.contains(KeyModifiers::CONTROL) {
-        if let KeyCode::Char(character) = key.code {
-            if character.is_ascii_alphabetic() {
-                bytes.push(character.to_ascii_lowercase() as u8 - b'a' + 1);
-                return Some(bytes);
-            }
-            if character == '[' {
-                bytes.push(0x1b);
-                return Some(bytes);
-            }
+    if key.modifiers.contains(KeyModifiers::CONTROL)
+        && let KeyCode::Char(character) = key.code
+    {
+        if character.is_ascii_alphabetic() {
+            bytes.push(character.to_ascii_lowercase() as u8 - b'a' + 1);
+            return Some(bytes);
+        }
+        if character == '[' {
+            bytes.push(0x1b);
+            return Some(bytes);
         }
     }
     match key.code {

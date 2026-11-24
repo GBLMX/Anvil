@@ -468,11 +468,11 @@ impl Model {
             .and_then(serde_json::Value::as_u64)
             .unwrap_or(0) as usize;
         self.record_jump();
-        if self.session.path.as_ref() != Some(&path) {
-            if let Err(error) = self.open_path(&path) {
-                self.status.text = format!("E: {error}");
-                return;
-            }
+        if self.session.path.as_ref() != Some(&path)
+            && let Err(error) = self.open_path(&path)
+        {
+            self.status.text = format!("E: {error}");
+            return;
         }
         self.session.cursor = self.offset_at_utf16(line, character);
         self.status.text = format!("{label} {}", path.display());

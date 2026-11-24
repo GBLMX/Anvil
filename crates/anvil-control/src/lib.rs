@@ -919,7 +919,7 @@ fn accept_loop(
         match listener.accept() {
             Ok(connection) => {
                 let admitted = active
-                    .fetch_update(Ordering::AcqRel, Ordering::Acquire, |count| {
+                    .try_update(Ordering::AcqRel, Ordering::Acquire, |count| {
                         (count < MAX_CONTROL_CONNECTIONS).then_some(count + 1)
                     })
                     .is_ok();
@@ -1521,7 +1521,7 @@ mod tests {
         };
         assert!(matches!(
             parse_control(&save).unwrap(),
-            ControlRequest::Save { path: Some(path) } if path == PathBuf::from("a.txt")
+            ControlRequest::Save { path: Some(path) } if path.as_path() == Path::new("a.txt")
         ));
         let edit = Request {
             jsonrpc: JSONRPC_VERSION.to_owned(),

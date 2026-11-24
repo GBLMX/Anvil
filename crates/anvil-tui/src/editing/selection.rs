@@ -338,10 +338,7 @@ impl Model {
                 continue;
             };
             let mut at = first.start;
-            loop {
-                let Some(range) = self.session.editor.line_range_at(at) else {
-                    break;
-                };
+            while let Some(range) = self.session.editor.line_range_at(at) {
                 let done = range.end >= last.end || range.end == at;
                 ranges.push(range.clone());
                 if done || ranges.len() > comment::MAX_COMMENT_LINES {

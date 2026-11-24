@@ -409,12 +409,12 @@ impl Model {
             self.file.dirty = true;
             return;
         };
-        if !plugin.enabled {
-            if let Err(error) = self.set_managed_enabled(plugin_id, true) {
-                self.status.text = format!("E: plugin {plugin_id}: {error}");
-                self.file.dirty = true;
-                return;
-            }
+        if !plugin.enabled
+            && let Err(error) = self.set_managed_enabled(plugin_id, true)
+        {
+            self.status.text = format!("E: plugin {plugin_id}: {error}");
+            self.file.dirty = true;
+            return;
         }
         let Some(gateway) = self.workspace.gateway.as_mut() else {
             self.status.text = "E: gateway unavailable".to_owned();

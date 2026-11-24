@@ -107,7 +107,7 @@ impl EditorService {
                 match listener.accept() {
                     Ok(connection) => {
                         let admitted = active
-                            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |connected| {
+                            .try_update(Ordering::AcqRel, Ordering::Acquire, |connected| {
                                 (connected < MAX_CONNECTIONS).then_some(connected + 1)
                             })
                             .is_ok();

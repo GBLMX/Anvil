@@ -298,7 +298,7 @@ impl Model {
 
     fn changed_file_entries(&self) -> (Vec<PickerEntry>, Vec<PathBuf>) {
         let mut files = self.workspace.git.status.iter().collect::<Vec<_>>();
-        files.sort_by(|(left, _), (right, _)| left.cmp(right));
+        files.sort_by_key(|(left, _)| *left);
         let mut paths = Vec::with_capacity(files.len());
         let entries = files
             .into_iter()

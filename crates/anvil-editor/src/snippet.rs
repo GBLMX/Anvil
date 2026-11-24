@@ -107,7 +107,7 @@ impl SnippetSession {
                 (*old_start, *old_end, *caret, start + offset)
             })
             .collect::<Vec<_>>();
-        replacements.sort_by(|left, right| right.0.cmp(&left.0));
+        replacements.sort_by_key(|replacement| std::cmp::Reverse(replacement.0));
         for (_, old_end, caret, index) in replacements {
             let delta = i128::try_from(caret).unwrap_or(i128::MAX)
                 - i128::try_from(old_end).unwrap_or(i128::MAX);

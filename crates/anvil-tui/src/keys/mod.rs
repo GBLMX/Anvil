@@ -488,11 +488,11 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             return;
         }
     }
-    if model.overlays.theme_browser.is_some() {
-        if let Some(action) = theme_browser_action(key) {
-            execute_theme_browser_action(model, action);
-            return;
-        }
+    if model.overlays.theme_browser.is_some()
+        && let Some(action) = theme_browser_action(key)
+    {
+        execute_theme_browser_action(model, action);
+        return;
     }
     if model.overlays.debug_panel.is_some() {
         if let Some(action) = debug_panel_action(key) {
@@ -506,11 +506,11 @@ fn handle_key(model: &mut Model, key: KeyPress) {
         }
         return;
     }
-    if model.ui.problems.visible {
-        if let Some(action) = problems_action(key) {
-            execute_problems_action(model, action);
-            return;
-        }
+    if model.ui.problems.visible
+        && let Some(action) = problems_action(key)
+    {
+        execute_problems_action(model, action);
+        return;
     }
     #[cfg(unix)]
     if model.send_terminal_key(key.event()) {

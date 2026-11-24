@@ -43,10 +43,9 @@ impl FileQuery {
                 if matched.is_some() {
                     return None;
                 }
-            } else if let Some(mut matched) = matched {
-                ranges.append(&mut matched);
             } else {
-                return None;
+                let mut matched = matched?;
+                ranges.append(&mut matched);
             }
         }
         let ranges = merge_ranges(ranges);
@@ -160,10 +159,10 @@ fn find_contiguous(
         if !characters_equal(character, first, case_sensitive) {
             continue;
         }
-        if let Some(end) = match_from(path, start, needle, case_sensitive) {
-            if !suffix || end == path.len() {
-                return Some(start..end);
-            }
+        if let Some(end) = match_from(path, start, needle, case_sensitive)
+            && (!suffix || end == path.len())
+        {
+            return Some(start..end);
         }
     }
     None
