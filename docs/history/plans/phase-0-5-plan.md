@@ -233,20 +233,20 @@ Only changes required by the core slice:
 - workload and RSS coverage;
 - deterministic edit traces;
 - benchmark report;
-- baseline report: [text-model.md](benchmarks/text-model.md)
+- baseline report: [text-model.md](../../benchmarks/text-model.md)
 - PR-only same-runner A/B gate: 10 MB p99 against `origin/main`, 10% ceiling; skip workloads whose baseline p99 is below 10 µs to avoid timer noise.
 - 100 MB remains a manual reference run, not a PR gate.
 
 ### M3: Decision gate (done: PieceTable selected; owner-only accepted)
 
-- [ADR-0009](adr/0009-text-model-snapshot-gate.md) accepted under the Phase 0.5
+- [ADR-0009](../../adr/0009-text-model-snapshot-gate.md) accepted under the Phase 0.5
   owner-only self-approval rule;
 - `TextDocument = PieceTable` is the production backend;
 - Rope and Gap Buffer remain benchmark-only.
 
 ### M4: Editing primitives gate (done: SoA; locked-core p99 gates pass)
 
-- cursor/coordinate ownership [ADR-0010](adr/0010-cursor-and-snapshot-ownership.md) accepted;
+- cursor/coordinate ownership [ADR-0010](../../adr/0010-cursor-and-snapshot-ownership.md) accepted;
 - command/undo/revision with stale-revision rejection and typing groups;
 - snapshot contract;
 - core tests and API view integration.
@@ -258,8 +258,8 @@ Only changes required by the core slice:
   modules;
 - worktree clean;
 - CI green;
-- benchmark data in [editor.md](benchmarks/editor.md) and
-  [line-index-stress.md](benchmarks/line-index-stress.md).
+- benchmark data in [editor.md](../../benchmarks/editor.md) and
+  [line-index-stress.md](../../benchmarks/line-index-stress.md).
 
 ## 9. Risks
 

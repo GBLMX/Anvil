@@ -65,7 +65,6 @@ mod tests {
     use anvil_ipc::GatewayClient;
     use std::path::Path;
 
-
     #[test]
     fn routes_transfer_and_remove_all_through_gateway() {
         use std::sync::{Arc, Mutex};
@@ -310,7 +309,6 @@ mod tests {
         drop(worker);
         server.join().expect("server");
     }
-
 
     #[test]
     fn tree_watch_reports_unavailable_gateway() {

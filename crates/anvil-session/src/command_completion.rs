@@ -77,8 +77,7 @@ fn command_items(query: &str, data: &CommandCompletionData<'_>) -> Vec<Completio
     data.commands
         .iter()
         .filter(|command| {
-            (data.git || !command.name.starts_with("git-"))
-                && (data.desktop || command.name != "open-url")
+            (data.git || !command.starts_with("git-")) && (data.desktop || **command != "open-url")
         })
         .filter(|command| command.to_ascii_lowercase().starts_with(query))
         .map(|command| CompletionItem {

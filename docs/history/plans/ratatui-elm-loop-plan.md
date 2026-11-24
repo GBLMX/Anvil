@@ -186,7 +186,7 @@ call never stalls input.
   falls back to basic key events.
 - The current `TerminalSession` implements the capability gate and balanced
   push/pop lifecycle described in
-  [ADR-0019](adr/0019-terminal-keyboard-enhancement.md).
+  [ADR-0019](../../adr/0019-terminal-keyboard-enhancement.md).
 - The first frame is rendered before any gateway request.
 - Resize invalidates layout and schedules one redraw.
 

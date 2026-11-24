@@ -489,7 +489,7 @@ pub fn parse_git_diff(output: &str) -> Vec<(usize, char)> {
 
 #[cfg(test)]
 mod tests {
-    use super::{GitModule, MODULE_ID, resolve_git_conflict};
+    use super::{GitModule, MODULE_ID, parse_git_diff, parse_git_status, resolve_git_conflict};
     use anvil_ipc::GatewayClient;
     use std::path::Path;
     use std::sync::{Arc, Mutex};

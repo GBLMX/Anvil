@@ -267,7 +267,6 @@ name = "anvil-session"
 version = "0.7.0"
 dependencies = [
  "anvil-api",
- "anvil-control",
  "anvil-core",
  "anvil-editor",
  "anvil-ipc",
@@ -373,7 +372,6 @@ name = "anvil-workspace"
 version = "0.7.0"
 dependencies = [
  "anvil-ipc",
- "anvil-mod-git",
  "anvil-module",
  "anvil-task",
  "serde_json",

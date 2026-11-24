@@ -23,7 +23,7 @@ highlighting is asynchronous but not incremental.
 
 ## 1. Plugin-host empty-host boundary (0.4.0 scope)
 
-Contract: [ADR-0012](adr/0012-plugin-host-isolation.md).
+Contract: [ADR-0012](../../adr/0012-plugin-host-isolation.md).
 Empty-host slice implemented: token FD, fd closure, Landlock FS read + no-exec
 rules, seccomp native-ABI + AF_UNIX-only sockets (TCP/UDP denied),
 `session.hello`, host-side UDS EOF exit, isolation tests, cgroup attach/OOM
