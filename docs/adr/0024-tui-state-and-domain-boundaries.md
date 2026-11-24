@@ -1,8 +1,8 @@
 # ADR-0024: TUI State Composition and Domain Boundaries
 
-- Status: Partially implemented; primitive extraction in ADR-0041; remaining state/page extraction deferred
+- Status: Partially implemented; primitive extraction in ADR-0041; state/page extraction resumed by ADR-0074
 - Date: 2026-11-12
-- Related: [ADR-0013](0013-kernel-distribution-boundary.md), [ADR-0016](0016-render-style-layers.md), [ADR-0022](0022-core-editing-completion.md), [ADR-0023](0023-internal-capability-closure.md), [ADR-0041](0041-tui-primitive-extraction.md)
+- Related: [ADR-0013](0013-kernel-distribution-boundary.md), [ADR-0016](0016-render-style-layers.md), [ADR-0022](0022-core-editing-completion.md), [ADR-0023](0023-internal-capability-closure.md), [ADR-0041](0041-tui-primitive-extraction.md), [ADR-0074](0074-anvil-tui-state-decomposition-and-crate-boundary.md)
 
 ## Context
 

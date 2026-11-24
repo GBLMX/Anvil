@@ -29,7 +29,7 @@ their decision sections.
 | [0021](0021-signed-plugin-index.md) | Signed plugin index, revocations, anti-rollback | Accepted; verifier/cache partial |
 | [0022](0022-core-editing-completion.md) | Core editing completion and semantic ownership | Accepted; implemented |
 | [0023](0023-internal-capability-closure.md) | Internal capability closure before public distribution | Accepted; closure audit ongoing |
-| [0024](0024-tui-state-and-domain-boundaries.md) | TUI state composition, page state, and domain boundaries | Partially implemented; primitives split in ADR-0041 |
+| [0024](0024-tui-state-and-domain-boundaries.md) | TUI state composition, page state, and domain boundaries | Partially implemented; primitives split in ADR-0041; state/page extraction resumed by ADR-0074 |
 | [0025](0025-lsp-and-language-breadth.md) | LSP surface and language breadth boundaries | Accepted; primary-root LSP clause superseded by ADR-0048 |
 | [0026](0026-persistent-undo-decision.md) | Persistent undo is deferred and gated | Accepted |
 | [0027](0027-distribution-composition-crate.md) | Standard distribution composition crate and two consumers | Accepted |
@@ -79,6 +79,7 @@ their decision sections.
 | [0071](0071-tui-terminal-capability-and-frame-delivery.md) | TUI terminal capability and frame delivery upgrade | Accepted; terminal profile, synchronized draw, keyboard normalization, and wide-character truncation implemented |
 | [0072](0072-opt-in-osc52-clipboard-fallback.md) | Opt-in OSC 52 clipboard write fallback | Accepted; implemented 2026-11-23 |
 | [0073](0073-tui-motion-and-transition-boundary.md) | TUI motion and transition boundary | Accepted; overlay and alert enter fades implemented; TachyonFX deferred |
+| [0074](0074-anvil-tui-state-decomposition-and-crate-boundary.md) | Anvil-TUI state decomposition and conditional crate extraction | Proposed; implementation pending |
 
 ## Numbering Rule
 
