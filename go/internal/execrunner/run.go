@@ -68,10 +68,10 @@ func Run(ctx context.Context, cfg ProcessConfig) (ProcessResult, error) {
 	cmd.WaitDelay = 2 * time.Second
 
 	var (
-		mu       sync.Mutex
-		result   ProcessResult
-		killOnce sync.Once
-		pgid     atomic.Int64
+		killOnce  sync.Once
+		pgid      atomic.Int64
+		timedOut  atomic.Bool
+		truncated atomic.Bool
 	)
 	killGroup := func() {
 		group := int(pgid.Load())
@@ -85,63 +85,45 @@ func Run(ctx context.Context, cfg ProcessConfig) (ProcessResult, error) {
 	budget := &outputBudget{
 		remaining: maxOutput,
 		onExceed: func() {
-			mu.Lock()
-			result.OutputTruncated = true
-			mu.Unlock()
+			truncated.Store(true)
 			killGroup()
 		},
 	}
-	cmd.Stdout = &limitedOutput{buffer: &bytes.Buffer{}, budget: budget}
-	cmd.Stderr = &limitedOutput{buffer: &bytes.Buffer{}, budget: budget}
+	stdout := &limitedOutput{buffer: &bytes.Buffer{}, budget: budget}
+	stderr := &limitedOutput{buffer: &bytes.Buffer{}, budget: budget}
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
 
 	if err := cmd.Start(); err != nil {
 		return ProcessResult{}, fmt.Errorf("start %s: %w", cfg.Path, err)
 	}
 	pgid.Store(int64(cmd.Process.Pid))
-
-	var timer *time.Timer
 	if cfg.Timeout > 0 {
-		timer = time.AfterFunc(cfg.Timeout, func() {
-			mu.Lock()
-			result.TimedOut = true
-			mu.Unlock()
-			killGroup()
-		})
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, cfg.Timeout)
+		defer cancel()
 	}
-	done := make(chan struct{})
-	go func() {
-		select {
-		case <-ctx.Done():
-			mu.Lock()
-			result.TimedOut = true
-			mu.Unlock()
-			killGroup()
-		case <-done:
-		}
-	}()
+	stop := context.AfterFunc(ctx, func() {
+		timedOut.Store(true)
+		killGroup()
+	})
+	defer stop()
 
 	waitErr := cmd.Wait()
-	close(done)
-	if timer != nil {
-		timer.Stop()
-	}
+	stop()
 	killGroup()
+	exitCode := 0
 	if cmd.ProcessState != nil {
-		result.ExitCode = cmd.ProcessState.ExitCode()
+		exitCode = cmd.ProcessState.ExitCode()
 	}
-
-	mu.Lock()
-	stdout := append([]byte(nil), cmd.Stdout.(*limitedOutput).buffer.Bytes()...)
-	stderr := append([]byte(nil), cmd.Stderr.(*limitedOutput).buffer.Bytes()...)
-	timedOut := result.TimedOut
-	truncated := result.OutputTruncated
-	mu.Unlock()
-	result.Stdout = stdout
-	result.Stderr = stderr
-	result.TimedOut = timedOut
-	result.OutputTruncated = truncated
-
-	if waitErr != nil && !timedOut && !truncated {
+	result := ProcessResult{
+		Stdout:          append([]byte(nil), stdout.buffer.Bytes()...),
+		Stderr:          append([]byte(nil), stderr.buffer.Bytes()...),
+		ExitCode:        exitCode,
+		TimedOut:        timedOut.Load(),
+		OutputTruncated: truncated.Load(),
+	}
+	if waitErr != nil && !result.TimedOut && !result.OutputTruncated {
 		if _, ok := errors.AsType[*exec.ExitError](waitErr); !ok {
 			return result, waitErr
 		}
