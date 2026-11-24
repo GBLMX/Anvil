@@ -402,3 +402,5 @@ Rules for the next slice:
   no measured ownership failure that justifies another large state refactor.
 - Revisit only when a second frontend, a concrete testability blocker, or a
   measured build/ownership problem appears.
+- 2026-11-24: ADR-0074 records a measured ownership failure and resumes
+  page/state extraction. The 2026-11-13 deferral is historical only.
