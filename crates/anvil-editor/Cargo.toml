@@ -8,14 +8,14 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-anvil-api = { path = "../anvil-api", version = "0.7.0" }
-anvil-core = { path = "../anvil-core", version = "0.7.0" }
-regex = "1"
-unicode-segmentation = "1"
+anvil-api = { workspace = true }
+anvil-core = { workspace = true }
+regex = { workspace = true }
+unicode-segmentation = { workspace = true }
 
 [dev-dependencies]
-criterion = "0.8"
-proptest = "1"
+criterion = { workspace = true }
+proptest = { workspace = true }
 
 [[bench]]
 name = "editor"

@@ -8,7 +8,7 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-anvil-distro-standard = { path = "../../crates/anvil-distro-standard", version = "0.7.0", default-features = false }
+anvil-distro-standard = { workspace = true, default-features = false }
 
 [[bin]]
 name = "anvil-minimal"

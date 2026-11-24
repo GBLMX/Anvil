@@ -8,4 +8,4 @@ license.workspace = true
 repository.workspace = true
 
 [target.'cfg(unix)'.dependencies]
-nix = { version = "0.31", features = ["process", "signal"] }
+nix = { workspace = true, features = ["process", "signal"] }

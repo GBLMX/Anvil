@@ -41,6 +41,76 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/GBLMX/Anvil"
 
 [workspace.dependencies]
+anvil-api = { path = "crates/anvil-api", version = "0.7.0" }
+anvil-control = { path = "crates/anvil-control", version = "0.7.0" }
+anvil-core = { path = "crates/anvil-core", version = "0.7.0" }
+anvil-dap = { path = "crates/anvil-dap", version = "0.7.0" }
+anvil-distro-standard = { path = "crates/anvil-distro-standard", version = "0.7.0" }
+anvil-editor = { path = "crates/anvil-editor", version = "0.7.0" }
+anvil-integrations = { path = "crates/anvil-integrations", version = "0.7.0" }
+anvil-ipc = { path = "crates/anvil-ipc", version = "0.7.0" }
+anvil-lsp-client = { path = "crates/anvil-lsp-client", version = "0.7.0" }
+anvil-mod-desktop = { path = "crates/anvil-mod-desktop", version = "0.7.0" }
+anvil-mod-git = { path = "crates/anvil-mod-git", version = "0.7.0" }
+anvil-mod-language-latex = { path = "crates/anvil-mod-language-latex", version = "0.7.0" }
+anvil-mod-language-typst = { path = "crates/anvil-mod-language-typst", version = "0.7.0" }
+anvil-mod-workspace-index = { path = "crates/anvil-mod-workspace-index", version = "0.7.0" }
+anvil-module = { path = "crates/anvil-module", version = "0.7.0" }
+anvil-platform = { path = "crates/anvil-platform", version = "0.7.0" }
+anvil-plugin-host = { path = "crates/anvil-plugin-host", version = "0.7.0" }
+anvil-process = { path = "crates/anvil-process", version = "0.7.0" }
+anvil-project = { path = "crates/anvil-project", version = "0.7.0" }
+anvil-runtime = { path = "crates/anvil-runtime", version = "0.7.0" }
+anvil-session = { path = "crates/anvil-session", version = "0.7.0" }
+anvil-syntax = { path = "crates/anvil-syntax", version = "0.7.0" }
+anvil-task = { path = "crates/anvil-task", version = "0.7.0" }
+anvil-tui = { path = "crates/anvil-tui", version = "0.7.0" }
+anvil-tui-kit = { path = "crates/anvil-tui-kit", version = "0.7.0" }
+anvil-tui-theme = { path = "crates/anvil-tui-theme", version = "0.7.0" }
+anvil-workspace = { path = "crates/anvil-workspace", version = "0.7.0" }
+
+base64 = "0.23"
+codebook-tree-sitter-latex = "0.6"
+codebook-tree-sitter-typst = "0.12"
+criterion = "0.8"
+crossterm = "0.29"
+getrandom = "0.4"
+libc = "0.2"
+mlua = { version = "0.12", features = ["luau", "vendored", "serialize"] }
+nix = "0.31"
+proptest = "1"
+ratatui = "0.30"
+regex = "1"
+ropey = "1"
+rustix = "1"
+schemars = { version = "1", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.11"
+tempfile = "3"
+toml_edit = { version = "0.25", features = ["serde"] }
+tree-sitter = "0.26"
+tree-sitter-bash = "0.25"
+tree-sitter-c = "0.24.2"
+tree-sitter-cpp = "0.23.4"
+tree-sitter-css = "0.25.0"
+tree-sitter-dockerfile-updated = "0.2"
+tree-sitter-fish = "3.6.0"
+tree-sitter-go = "0.25"
+tree-sitter-html = "0.23"
+tree-sitter-javascript = "0.25.0"
+tree-sitter-json = "0.24"
+tree-sitter-lua = "0.5"
+tree-sitter-make = "1.1"
+tree-sitter-md = "0.5"
+tree-sitter-python = "0.25"
+tree-sitter-rust = "0.24"
+tree-sitter-toml-ng = "0.7"
+tree-sitter-typescript = "0.23.2"
+tree-sitter-yaml = "0.7"
+ts-rs = "12"
+unicode-segmentation = "1"
+unicode-width = "0.2"
 
 [profile.release]
 codegen-units = 1

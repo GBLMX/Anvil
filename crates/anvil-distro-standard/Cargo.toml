@@ -37,22 +37,22 @@ full = [
 ]
 
 [dependencies]
-anvil-tui = { path = "../anvil-tui", version = "0.7.0", default-features = false }
-anvil-lsp-client = { path = "../anvil-lsp-client", version = "0.7.0" }
-anvil-process = { path = "../anvil-process", version = "0.7.0" }
-anvil-control = { path = "../anvil-control", version = "0.7.0" }
-anvil-module = { path = "../anvil-module", version = "0.7.0" }
-anvil-mod-git = { path = "../anvil-mod-git", version = "0.7.0", optional = true }
-anvil-mod-workspace-index = { path = "../anvil-mod-workspace-index", version = "0.7.0", optional = true }
-anvil-mod-desktop = { path = "../anvil-mod-desktop", version = "0.7.0", optional = true }
-anvil-mod-language-latex = { path = "../anvil-mod-language-latex", version = "0.7.0", optional = true }
-anvil-mod-language-typst = { path = "../anvil-mod-language-typst", version = "0.7.0", optional = true }
-libc = "0.2"
-serde_json = "1"
-rustix = { version = "1", features = ["fs"] }
+anvil-tui = { workspace = true, default-features = false }
+anvil-lsp-client = { workspace = true }
+anvil-process = { workspace = true }
+anvil-control = { workspace = true }
+anvil-module = { workspace = true }
+anvil-mod-git = { workspace = true, optional = true }
+anvil-mod-workspace-index = { workspace = true, optional = true }
+anvil-mod-desktop = { workspace = true, optional = true }
+anvil-mod-language-latex = { workspace = true, optional = true }
+anvil-mod-language-typst = { workspace = true, optional = true }
+libc = { workspace = true }
+serde_json = { workspace = true }
+rustix = { workspace = true, features = ["fs"] }
 
 [dev-dependencies]
-tempfile = "3"
+tempfile = { workspace = true }
 
 [[bin]]
 name = "anvil"

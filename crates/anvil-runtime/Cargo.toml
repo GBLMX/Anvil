@@ -8,12 +8,12 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-anvil-integrations = { path = "../anvil-integrations", version = "0.7.0" }
-anvil-mod-workspace-index = { path = "../anvil-mod-workspace-index", version = "0.7.0" }
-anvil-project = { path = "../anvil-project", version = "0.7.0" }
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-sha2 = "0.11"
+anvil-integrations = { workspace = true }
+anvil-mod-workspace-index = { workspace = true }
+anvil-project = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
 
 [dev-dependencies]
-tempfile = "3"
+tempfile = { workspace = true }

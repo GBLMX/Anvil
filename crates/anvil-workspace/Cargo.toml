@@ -12,12 +12,12 @@ default = ["official-git"]
 official-git = ["dep:anvil-mod-git"]
 
 [dependencies]
-anvil-ipc = { path = "../anvil-ipc", version = "0.7.0" }
-anvil-module = { path = "../anvil-module", version = "0.7.0" }
-anvil-task = { path = "../anvil-task", version = "0.7.0" }
-anvil-mod-git = { path = "../anvil-mod-git", version = "0.7.0", optional = true }
-serde_json = "1"
-sha2 = "0.11"
+anvil-ipc = { workspace = true }
+anvil-module = { workspace = true }
+anvil-task = { workspace = true }
+anvil-mod-git = { workspace = true, optional = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
 
 [dev-dependencies]
-tempfile = "3"
+tempfile = { workspace = true }

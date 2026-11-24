@@ -8,12 +8,13 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-ropey = "1"
-unicode-segmentation = "1"
-unicode-width = "0.2"
+ropey = { workspace = true }
+unicode-segmentation = { workspace = true }
+unicode-width = { workspace = true }
+
 [dev-dependencies]
-criterion = "0.8"
-proptest = "1"
+criterion = { workspace = true }
+proptest = { workspace = true }
 
 [[bench]]
 name = "text_model"
