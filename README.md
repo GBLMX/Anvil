@@ -74,13 +74,10 @@ Language servers are not bundled; install them on `PATH`.
   configure CMake with `-DCMAKE_EXPORT_COMPILE_COMMANDS=ON`. Without it, clangd
   may report unresolved includes.
 
-Built-in semantic themes are `anvil-dark`, `tokyonight`, `omp-kde`,
-`helix-base16`, `one-dark`, `gruvbox-dark`, `nord`, `catppuccin-mocha`, and
-`solarized-light`. The boxpigma family adds `boxpigma`, `dracula`, `gruvbox`,
-`solarized`, `tokyo-night`, `catppuccin`, `monokai`, `rose-pine`, `kanagawa`,
-`github-light`, `gruvbox-light`, `one-light`, `catppuccin-latte`,
-`cyberpunk-volt`, `cyberpunk-fury`, and `cyberpunk-hot`. Use `:theme` to list
-them.
+Built-in semantic themes are `anvil-dark`, `tokyonight`, `one-dark`,
+`gruvbox-dark`, `nord`, `catppuccin-mocha`, and `solarized-light`. Legacy IDs
+`tokyo-night`, `catppuccin`, `gruvbox`, and `solarized` resolve to those
+canonical names. Use `:theme` to list them.
 `:theme <name>` and `:theme-auto [dark] [light]` switch and persist to
 `$XDG_CONFIG_HOME/anvil/settings.toml` (override with `ANVIL_SETTINGS`);
 `:theme-save` re-saves the runtime choice explicitly.

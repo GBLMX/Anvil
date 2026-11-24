@@ -2831,13 +2831,13 @@ mod tests {
         )
         .expect("project settings");
         let explicit = directory.path().join("explicit.toml");
-        fs::write(&explicit, "[theme]\nname = \"omp-kde\"\n").expect("explicit settings");
+        fs::write(&explicit, "[theme]\nname = \"one-dark\"\n").expect("explicit settings");
 
         unsafe { std::env::set_var("ANVIL_SETTINGS", &explicit) };
         let result = load_for_workspace(&workspace, true);
         unsafe { std::env::remove_var("ANVIL_SETTINGS") };
         let settings = result.expect("explicit settings");
-        assert_eq!(settings.theme, Choice::Fixed("omp-kde"));
+        assert_eq!(settings.theme, Choice::Fixed("one-dark"));
     }
 
     #[test]

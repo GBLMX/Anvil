@@ -19,6 +19,13 @@ use custom::{CustomTheme, parse_theme_file};
 mod palette;
 use palette::BUILTINS;
 
+const BUILTIN_ALIASES: &[(&str, &str)] = &[
+    ("tokyo-night", "tokyonight"),
+    ("catppuccin", "catppuccin-mocha"),
+    ("gruvbox", "gruvbox-dark"),
+    ("solarized", "solarized-light"),
+];
+
 #[derive(Clone, Copy, Debug)]
 pub struct Theme {
     pub name: &'static str,
@@ -317,9 +324,14 @@ fn active() -> &'static Theme {
 }
 
 fn resolve(name: &str) -> Result<&'static Theme, String> {
+    let canonical_name = BUILTIN_ALIASES
+        .iter()
+        .find(|(alias, _)| alias.eq_ignore_ascii_case(name))
+        .map(|(_, canonical)| *canonical)
+        .unwrap_or(name);
     if let Some(theme) = BUILTINS
         .iter()
-        .find(|theme| theme.name.eq_ignore_ascii_case(name))
+        .find(|theme| theme.name.eq_ignore_ascii_case(canonical_name))
     {
         return Ok(theme);
     }
@@ -585,33 +597,32 @@ mod tests {
     }
 
     #[test]
-    fn lists_modern_builtins() {
-        for name in ["tokyonight", "omp-kde", "helix-base16", "cyberpunk-volt"] {
+    fn lists_curated_builtins() {
+        for name in [
+            "anvil-dark",
+            "tokyonight",
+            "one-dark",
+            "gruvbox-dark",
+            "nord",
+            "catppuccin-mocha",
+            "solarized-light",
+        ] {
             assert!(names().contains(&name), "{name}");
+        }
+        for name in ["boxpigma", "omp-kde", "helix-base16", "cyberpunk-volt"] {
+            assert!(!names().contains(&name), "{name}");
         }
     }
 
     #[test]
-    fn lists_boxpigma_themes() {
-        for name in [
-            "boxpigma",
-            "dracula",
-            "gruvbox",
-            "solarized",
-            "tokyo-night",
-            "catppuccin",
-            "monokai",
-            "rose-pine",
-            "kanagawa",
-            "github-light",
-            "gruvbox-light",
-            "one-light",
-            "catppuccin-latte",
-            "cyberpunk-volt",
-            "cyberpunk-fury",
-            "cyberpunk-hot",
+    fn resolves_legacy_theme_aliases() {
+        for (alias, canonical_name) in [
+            ("tokyo-night", "tokyonight"),
+            ("catppuccin", "catppuccin-mocha"),
+            ("gruvbox", "gruvbox-dark"),
+            ("solarized", "solarized-light"),
         ] {
-            assert!(names().contains(&name), "{name}");
+            assert_eq!(canonical(alias).expect("alias"), canonical_name);
         }
     }
 

@@ -17,13 +17,17 @@ hierarchy, density, focus, and interaction rhythm.
 
 ## Palettes
 
-Built-in modern palettes now include:
+Built-in semantic palettes:
 
 | Theme | Reference |
 |---|---|
+| `anvil-dark` | default Anvil dark palette |
 | `tokyonight` | shared Yazi/Helix Tokyo Night palette |
-| `omp-kde` | omp KDE CachyOS palette |
-| `helix-base16` | Helix base16 default dark, adjusted for AA |
+| `one-dark` | One Dark family |
+| `gruvbox-dark` | warm high-contrast palette |
+| `nord` | cool blue-gray palette |
+| `catppuccin-mocha` | Catppuccin Mocha |
+| `solarized-light` | light counterpart |
 
 All built-ins pass the existing WCAG-AA contrast test.
 
