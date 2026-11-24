@@ -1,7 +1,7 @@
 # ADR-0056: MCP Dual-Era Protocol and Structured Tool Contract
 
-- Status: Accepted; implemented 2026-11-20
-- Version: 1.1.0
+- Status: Accepted; implemented 2026-11-20; legacy floor narrowed 2026-11-24
+- Version: 1.2.0
 - Date: 2026-11-19
 - Related: [ADR-0006](0006-upstream-dependencies.md),
   [ADR-0023](0023-internal-capability-closure.md),
@@ -13,10 +13,10 @@
 ## Context
 
 `anvil-mcp` is the thin stdio MCP adapter over the workspace-scoped
-`anvil-control` socket. It currently advertises MCP `2024-11-05` and implements
-only `initialize`, `ping`, `tools/list`, and `tools/call`. It returns tool
-results as text content only and exposes no discovery metadata, structured
-output, tool annotations, or revision guard for whole-buffer edits.
+`anvil-control` socket. At the initial implementation it advertised MCP `2024-11-05`
+and implemented only `initialize`, `ping`, `tools/list`, and `tools/call`. It
+returned tool results as text content only and exposed no discovery metadata,
+structured output, tool annotations, or revision guard for whole-buffer edits.
 
 The current MCP revision is `2026-07-28`. It makes the protocol stateless,
 removes the `initialize` handshake and `ping`, requires `server/discover` and
@@ -42,8 +42,9 @@ Tokio-based and cannot be adopted without a separate dependency decision.
 
 - **modern**: MCP `2026-07-28`, using per-request metadata and
   `server/discover`;
-- **legacy**: `initialize`-based clients, accepting `2024-11-05`,
-  `2025-03-26`, `2025-06-18`, and `2025-11-25`.
+- **legacy**: `initialize`-based clients, accepting `2025-06-18` and
+  `2025-11-25`. The compatibility floor is `2025-06-18`; `2024-11-05` and
+  `2025-03-26` are rejected with `-32022`.
 
 `server/discover` advertises only `2026-07-28`. Legacy versions are negotiated
 through `initialize` and are intentionally not offered to modern clients as
@@ -197,7 +198,9 @@ Negative:
   - modern `tools/list` order, cache fields, and metadata;
   - modern `tools/call` `resultType`, text, and `structuredContent`;
   - legacy `initialize` for every supported legacy version;
-  - unsupported version returns `-32022` with version data;
+  - removed legacy versions `2024-11-05` and `2025-03-26` are rejected with
+    `-32022` and the supported-version list;
+  - other unsupported versions return `-32022` with version data;
   - malformed JSON is `-32700`; a malformed JSON-RPC envelope is `-32600`;
     missing or invalid params and unknown tools are `-32602`;
   - admin command remains denied before connecting;

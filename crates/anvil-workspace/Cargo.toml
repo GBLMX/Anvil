@@ -7,15 +7,10 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 
-[features]
-default = ["official-git"]
-official-git = ["dep:anvil-mod-git"]
-
 [dependencies]
 anvil-ipc = { workspace = true }
 anvil-module = { workspace = true }
 anvil-task = { workspace = true }
-anvil-mod-git = { workspace = true, optional = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
 

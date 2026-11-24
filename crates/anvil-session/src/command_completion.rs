@@ -3,12 +3,12 @@
 use anvil_api::{
     CompletionContext, CompletionItem, CompletionKind, CompletionRequest, CompletionResponse,
 };
-use anvil_control::COMMANDS;
 
 const MAX_CANDIDATES: usize = 256;
 
 /// Inputs a command-line completer may use without owning UI state.
 pub struct CommandCompletionData<'a> {
+    pub commands: &'a [&'a str],
     pub path_entries: &'a [anvil_ipc::DirEntry],
     pub plugin_ids: &'a [String],
     pub themes: &'a [String],
@@ -74,16 +74,16 @@ fn command_query(request: &CompletionRequest) -> &str {
 }
 
 fn command_items(query: &str, data: &CommandCompletionData<'_>) -> Vec<CompletionItem> {
-    COMMANDS
+    data.commands
         .iter()
         .filter(|command| {
             (data.git || !command.name.starts_with("git-"))
                 && (data.desktop || command.name != "open-url")
         })
-        .filter(|command| command.name.to_ascii_lowercase().starts_with(query))
+        .filter(|command| command.to_ascii_lowercase().starts_with(query))
         .map(|command| CompletionItem {
-            label: command.name.to_owned(),
-            replacement: format!("{} ", command.name),
+            label: (*command).to_owned(),
+            replacement: format!("{command} "),
             detail: None,
             kind: CompletionKind::Command,
             source: "builtin".to_owned(),
@@ -219,12 +219,15 @@ fn sanitize_name(name: &str) -> Option<String> {
 mod tests {
     use super::*;
 
+    const TEST_COMMANDS: &[&str] = &["e", "theme"];
+
     fn data<'a>(
         path_entries: &'a [anvil_ipc::DirEntry],
         themes: &'a [String],
         buffers: &'a [String],
     ) -> CommandCompletionData<'a> {
         CommandCompletionData {
+            commands: TEST_COMMANDS,
             path_entries,
             plugin_ids: &[],
             themes,
@@ -244,7 +247,7 @@ mod tests {
     }
 
     #[test]
-    fn command_names_are_derived_from_the_manifest() {
+    fn command_names_are_derived_from_input() {
         let themes = Vec::new();
         let buffers = Vec::new();
         let response = BuiltinCompleter.complete(

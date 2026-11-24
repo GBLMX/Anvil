@@ -16,7 +16,7 @@ use std::{
 };
 
 const MODERN_PROTOCOL_VERSION: &str = "2026-07-28";
-const LEGACY_PROTOCOL_VERSIONS: &[&str] = &["2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25"];
+const LEGACY_PROTOCOL_VERSIONS: &[&str] = &["2025-06-18", "2025-11-25"];
 const PROTOCOL_VERSION_META: &str = "io.modelcontextprotocol/protocolVersion";
 const SERVER_INFO_META: &str = "io.modelcontextprotocol/serverInfo";
 const CACHE_TTL_MS: u64 = 60_000;
@@ -970,6 +970,21 @@ mod tests {
     }
 
     #[test]
+    fn legacy_initialize_rejects_removed_versions() {
+        for version in ["2024-11-05", "2025-03-26"] {
+            let mut state = ServerState::default();
+            let response = legacy_initialize(&mut state, version);
+            assert_eq!(response["error"]["code"], -32022);
+            assert_eq!(response["error"]["data"]["requested"], version);
+            assert_eq!(
+                response["error"]["data"]["supported"],
+                json!(LEGACY_PROTOCOL_VERSIONS)
+            );
+            assert_eq!(state.era, ProtocolEra::None);
+        }
+    }
+
+    #[test]
     fn modern_discover_and_tools_list_are_versioned() {
         let mut state = ServerState::default();
         let discover = call(
@@ -1060,7 +1075,7 @@ mod tests {
             -32602
         );
 
-        legacy_initialize(&mut state, "2024-11-05");
+        legacy_initialize(&mut state, "2025-11-25");
         assert_eq!(
             call(
                 &mut state,
@@ -1090,7 +1105,7 @@ mod tests {
     #[test]
     fn ping_is_legacy_only_and_notifications_are_silent() {
         let mut state = ServerState::default();
-        legacy_initialize(&mut state, "2024-11-05");
+        legacy_initialize(&mut state, "2025-11-25");
         assert_eq!(
             call(
                 &mut state,
@@ -1120,7 +1135,7 @@ mod tests {
     #[test]
     fn protocol_eras_cannot_mix() {
         let mut state = ServerState::default();
-        legacy_initialize(&mut state, "2024-11-05");
+        legacy_initialize(&mut state, "2025-11-25");
         assert_eq!(
             call(&mut state, modern_params("tools/list", json!({})))["error"]["code"],
             -32600
@@ -1128,7 +1143,7 @@ mod tests {
         let mut modern = ServerState::default();
         call(&mut modern, modern_params("tools/list", json!({})));
         assert_eq!(
-            legacy_initialize(&mut modern, "2024-11-05")["error"]["code"],
+            legacy_initialize(&mut modern, "2025-11-25")["error"]["code"],
             -32600
         );
     }

@@ -112,19 +112,7 @@ pub struct FileWorker {
 impl FileWorker {
     /// Starts the worker with a dedicated gateway connection.
     pub fn start(client: GatewayClient, workspace: PathBuf) -> Self {
-        #[cfg(feature = "official-git")]
-        {
-            Self::start_with_services(
-                client,
-                workspace,
-                Some(Arc::new(anvil_mod_git::SystemGitService)),
-                None,
-            )
-        }
-        #[cfg(not(feature = "official-git"))]
-        {
-            Self::start_with_services(client, workspace, None, None)
-        }
+        Self::start_with_services(client, workspace, None, None)
     }
 
     #[cfg(test)]

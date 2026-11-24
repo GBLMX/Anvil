@@ -13,7 +13,7 @@ authorized. Internal candidates use the CI checksum key under
 chosen candidate version; change it only with the release version.
 
 The `0.7.0` gate matrix and signed dry-run evidence are recorded in
-[docs/release-dry-run-2026-11-22.md](docs/release-dry-run-2026-11-22.md).
+[docs/history/releases/release-dry-run-2026-11-22.md](docs/history/releases/release-dry-run-2026-11-22.md).
 
 
 ## Versioning
@@ -87,7 +87,7 @@ PIN and touch, and reads the matching public key from the same slot. Set
 `YUBICO_PIV_TOOL` when the binary is not on `PATH`.
 
 The local PIV signing rehearsal is recorded in
-[docs/release-yubikey-rehearsal-2026-11-22.md](docs/release-yubikey-rehearsal-2026-11-22.md);
+[docs/history/releases/release-yubikey-rehearsal-2026-11-22.md](docs/history/releases/release-yubikey-rehearsal-2026-11-22.md);
 it is evidence for the hardware path, not public release authority.
 
 For `0.7.0`, ADR-0069 accepts one physical YubiKey with separate plugin and
@@ -120,7 +120,7 @@ gh attestation verify anvil-<version>-linux-x86_64.tar.gz --repo GBLMX/Anvil
 
 Local packaging and signing dry-run evidence, including artifact hashes and
 the installed-artifact check, is recorded in
-[docs/release-dry-run-2026-11-22.md](docs/release-dry-run-2026-11-22.md).
+[docs/history/releases/release-dry-run-2026-11-22.md](docs/history/releases/release-dry-run-2026-11-22.md).
 
 The tarball includes `install.sh`, which copies the layout and runs
 `anvil-gateway -install-bundled` when signed packages are present. The package

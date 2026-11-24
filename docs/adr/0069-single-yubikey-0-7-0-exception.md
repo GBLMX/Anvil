@@ -62,4 +62,4 @@ Negative:
 ## References
 
 - [Release procedure](../../RELEASE.md)
-- [YubiKey rehearsal](../release-yubikey-rehearsal-2026-11-22.md)
+- [YubiKey rehearsal](../history/releases/release-yubikey-rehearsal-2026-11-22.md)

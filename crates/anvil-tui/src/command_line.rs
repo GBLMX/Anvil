@@ -43,6 +43,10 @@ impl CommandCompletion {
             .iter()
             .map(|id| (*id).to_owned())
             .collect::<Vec<_>>();
+        let commands = anvil_control::COMMANDS
+            .iter()
+            .map(|command| command.name)
+            .collect::<Vec<_>>();
         let request = CompletionRequest {
             query: buffer.to_owned(),
             cursor: buffer.len() as u64,
@@ -50,6 +54,7 @@ impl CommandCompletion {
             workspace_revision: 0,
         };
         let data = CommandCompletionData {
+            commands: &commands,
             path_entries: &[],
             plugin_ids: &plugins,
             themes: &themes,
@@ -98,6 +103,7 @@ impl CommandCompletion {
             workspace_revision: 0,
         };
         let data = CommandCompletionData {
+            commands: &[],
             path_entries: &entries,
             plugin_ids: &[],
             themes: &[],

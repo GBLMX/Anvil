@@ -92,7 +92,6 @@ the owner.
 
 ## Landed plans and design records
 
-- [0.4.x](0.4.x-plan.md) — plugin lifecycle, I/O, session/protocol
 - [0.5.x](0.5.x-plan.md) — modal editing and TUI interaction
 - [0.6.0.x provider protocols](0.6.0.x-provider-protocol-plan.md) — picker,
   completion, formatter, test, and DAP providers
@@ -111,15 +110,23 @@ the owner.
 
 Historical plans are records, not current schedules:
 
-- [Phase 0.5](phase-0-5-plan.md) — core evidence and editing primitives
-- [Phase 0.6](phase-0-6-plan.md) — security and host boundaries
-- [Phase 0.7](phase-0-7-plan.md) — 0.3.0 → 0.4.0 polish
-- [Polish and specification](polish-and-specification.md) — 0.4.0 train
-- [Ratatui Elm loop](ratatui-elm-loop-plan.md) — TUI runtime exploration; the
+- [0.4.x](history/plans/0.4.x-plan.md) — plugin lifecycle, I/O, session/protocol
+- [Phase 0.5](history/plans/phase-0-5-plan.md) — core evidence and editing primitives
+- [Phase 0.6](history/plans/phase-0-6-plan.md) — security and host boundaries
+- [Phase 0.7](history/plans/phase-0-7-plan.md) — 0.3.0 → 0.4.0 polish
+- [Polish and specification](history/plans/polish-and-specification.md) — 0.4.0 train
+- [Ratatui Elm loop](history/plans/ratatui-elm-loop-plan.md) — TUI runtime exploration; the
   current runtime is typed-effect based, not an Elm `Msg`/`Cmd` loop
+
+## Historical release records
+
+- [Release dry run — 2026-11-20](history/releases/release-dry-run-2026-11-20.md)
+- [Release dry run — 2026-11-22](history/releases/release-dry-run-2026-11-22.md)
+- [YubiKey release rehearsal — 2026-11-22](history/releases/release-yubikey-rehearsal-2026-11-22.md)
 
 ## Reference
 
+- [Offline signing and verified publish](release-offline-publish.md) — release runbook
 - [Deployment](deployment.md) — gateway, exec-runner, and cgroup boundaries
 - [Keymap configuration](keymap.md) — TOML overrides and key syntax
 - [API surface](api-surface.md) — frozen contracts, version lines, and compatibility gates

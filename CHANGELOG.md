@@ -58,6 +58,8 @@ post-`0.5.0` feature line.
   before uploading release assets.
 
 ### Changed
+- `anvil-mcp` now accepts legacy `initialize` versions `2025-06-18` and
+  `2025-11-25`; `2024-11-05` and `2025-03-26` are rejected with `-32022`.
 - The pinned Rust toolchain and workspace MSRV are now 1.100; deprecated
   atomic APIs and new clippy lints were updated with no behavior change.
 - The pinned Go toolchain is now 1.27.4.
@@ -72,7 +74,7 @@ post-`0.5.0` feature line.
 ### Added
 - Local release layout, installer, signed-plugin, artifact, and
   signature-verification dry run passed with ephemeral production-like Ed25519
-  keys; evidence is in `docs/release-dry-run-2026-11-22.md`.
+  keys; evidence is in `docs/history/releases/release-dry-run-2026-11-22.md`.
 - `scripts/release-yubikey.sh` provides the scripted offline signing half of
   the release flow: plugin signatures in PIV slot `9c`, checksum signatures in
   slot `9d`, and full artifact/lifecycle verification. Publication remains the
@@ -1203,7 +1205,7 @@ This release bundles the `0.4.4` gateway capability control plane and the
 
 - `0.4.0` closes the Polish & Specification train: fixes, tests,
   documentation, and contract closure only; no new capability families. See
-  [the release policy](docs/polish-and-specification.md).
+  [the release policy](docs/history/plans/polish-and-specification.md).
 - The plugin host stops at the sandboxed empty-host boundary. Plugin runtime,
   loading, capability bindings, gateway control-socket registration, and
   end-to-end plugin `sys.*` dispatch move to the post-`0.4.0` feature line;
@@ -1592,7 +1594,7 @@ This release bundles the `0.4.4` gateway capability control plane and the
 
 - 0.1.1 / Phase 0.7: plugin-host isolation, Tree-sitter syntax highlighting,
   LSP client, and optional `:reconnect` poison recovery. See
-  [docs/phase-0-7-plan.md](docs/phase-0-7-plan.md).
+  [docs/history/plans/phase-0-7-plan.md](docs/history/plans/phase-0-7-plan.md).
 
 ## [0.1.0] - 2026-10-31
 

@@ -1,6 +1,6 @@
 # ADR-0074: Anvil-TUI State Decomposition and Crate Boundary
 
-- Status: Proposed; implementation pending
+- Status: Proposed; dependency-direction gate implemented; state/page extraction pending
 - Date: 2026-11-24
 - Related: [ADR-0013](0013-kernel-distribution-boundary.md),
   [ADR-0024](0024-tui-state-and-domain-boundaries.md),
@@ -88,9 +88,9 @@ decision:
 
 | Edge | Current shape | Decision |
 |---|---|---|
-| `anvil-workspace -> anvil-mod-git` | `official-git` is a default feature; `FileWorker::start` constructs `SystemGitService`. `start_with_services` accepts an injected `GitService`; `anvil-tui` disables workspace defaults. | Remove the default back-edge. Keep the feature only as optional compatibility; the TUI or distribution injects the official service. |
+| `anvil-workspace -> anvil-mod-git` | The implementation removed the `official-git` default feature and the `anvil-mod-git` dependency; `FileWorker::start` no longer constructs a Git service. | Keep it removed; the TUI or distribution injects the official service. |
 | `anvil-runtime -> anvil-mod-workspace-index` | `Runtime` is documented as a UI-neutral composition root and stores the concrete index. | Composition-root exception. If third-party replacement is required, inject `Arc<dyn WorkspaceIndexService>` or construct the index in the distribution. |
-| `anvil-session -> anvil-control` | `command_completion` imports `anvil_control::COMMANDS` for the colon command list. | Split the colon command manifest into a protocol/data crate shared by control and session; do not make session depend on the control server. |
+| `anvil-session -> anvil-control` | Completion now receives colon command names through `CommandCompletionData`; session no longer imports `anvil-control`. | Keep the injection; the control manifest remains the source for that list. Do not reintroduce the server dependency. |
 | `anvil-module -> anvil-session` | Modules import `CommandId`/`CommandSpec` from session. | Either document command metadata as part of the module contract, or move it to `anvil-api`/a data-only crate. Do not duplicate command IDs. |
 
 `anvil-control::COMMANDS` (colon commands) and
@@ -161,17 +161,16 @@ The crate graph is acyclic, but acyclicity does not make every edge stable.
 No service crate gets a default edge to a module implementation. A composition
 root may name concrete modules; a service crate may only depend on contracts.
 
-- Remove `official-git` from `anvil-workspace`'s default features. Keep the
-  optional feature only as a compatibility path, and inject
-  `SystemGitService` from the TUI or distribution. Migrate all callers; do not
-  keep a shim edge.
+- Remove `anvil-workspace`'s `official-git` feature and `anvil-mod-git`
+  dependency; `FileWorker::start` no longer constructs a Git service. Inject
+  `SystemGitService` from the TUI or distribution, and do not keep a shim edge.
 - Treat `anvil-runtime`'s concrete workspace index as a documented
   composition-root exception. If a third-party index must be replaceable,
   accept `Arc<dyn WorkspaceIndexService>` or construct the index in the
   distribution.
-- Move the colon command manifest used by `anvil-session` completion out of the
-  control server. The manifest is data; the server is a runtime. A small
-  protocol/data crate is acceptable because there are two consumers.
+- Pass the colon command names into `CommandCompletionData`; `anvil-session`
+  completion must not import `anvil-control`. The control manifest remains the
+  source for that command list; do not duplicate it in session.
 - Move `CommandId`/`CommandSpec` out of `anvil-session` only if module compile
   coupling is measured as a problem. Until then, document it as part of the
   extension contract; do not duplicate command IDs in modules.
@@ -219,10 +218,10 @@ Negative:
 - Too-granular state can fragment ownership; groups must remain cohesive.
 - Crate extraction can add public-API overhead and slow clean builds if done
   before a boundary is stable.
-- Removing `official-git` from the workspace default requires explicit Git
-  injection at every direct consumer and is an API change.
-- A protocol/data crate for colon commands adds one small boundary; without it,
-  session keeps a runtime dependency on the control server.
+- Removing `anvil-workspace`'s `official-git` dependency is an API change for
+  direct `FileWorker::start` callers, which must now inject Git explicitly.
+- Completion data gains a command-name slice; this avoids a new protocol crate
+  without making session depend on the control server.
 
 ## Alternatives rejected
 
@@ -257,13 +256,24 @@ Negative:
 - `anvil-process` tests cover `Drop` fallback, process-group kill, and spawn
   failure.
 - `cargo metadata` or `scripts/architecture-check.sh` shows no cycle or
-  forbidden default edge; `anvil-workspace`'s default build does not select
-  `anvil-mod-git`.
-- Colon command completion no longer requires the control server runtime.
+  forbidden edge; `anvil-workspace` has no `anvil-mod-git` dependency.
+- Colon command completion receives command names through
+  `CommandCompletionData`; session does not depend on the control server.
 - `cargo build -p anvil-tui --timings` is recorded before and after crate
   extraction.
 - Full workspace tests, clippy, formatting, architecture, and docs checks pass
   with no intentional user-visible behaviour change.
+
+## Implementation note (2026-11-24)
+
+`scripts/architecture-check.sh` now enforces predicate rules R1-R6 over normal
+dependencies only. Dev/build dependencies are excluded; declared optional
+dependencies count as architecture edges. `anvil-runtime` is the registered
+composition-root exception for `anvil-mod-workspace-index`.
+
+`anvil-workspace` no longer depends on `anvil-mod-git`, and
+`anvil-session` no longer depends on `anvil-control`. The workspace Git parser
+tests moved to `anvil-mod-git`. State/page extraction remains pending.
 
 ## Supersession note
 

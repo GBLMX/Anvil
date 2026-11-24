@@ -61,7 +61,7 @@ their decision sections.
 | [0053](0053-settings-scopes-and-language-overlays.md) | Explicit settings scopes, language overlays, and registry completeness | Accepted; implemented 2026-11-19 |
 | [0054](0054-file-picker-query-and-index-lifecycle.md) | File picker query, ranking, and index lifecycle | Accepted; implemented 2026-11-19 |
 | [0055](0055-start-dashboard-actions-and-context.md) | Start dashboard actions, focus, and contextual recents | Accepted; implemented 2026-11-19 |
-| [0056](0056-mcp-dual-era-protocol-and-tool-contract.md) | MCP dual-era protocol and structured tool contract | Accepted; implemented 2026-11-20 |
+| [0056](0056-mcp-dual-era-protocol-and-tool-contract.md) | MCP dual-era protocol and structured tool contract | Accepted; implemented 2026-11-20; legacy floor narrowed 2026-11-24 |
 | [0057](0057-tui-surface-model-and-focus-contract.md) | TUI surface model and focus contract | Accepted; core implemented 2026-11-20 |
 | [0058](0058-sandbox-capability-profiles-and-trust-boundaries.md) | Sandbox capability profiles and trust boundaries | Accepted; implemented 2026-11-20 |
 | [0059](0059-public-docs-boundary-and-deferred-navigation.md) | Public docs boundary, accessibility gates, and deferred navigation/search | Accepted; docs entry and checks implemented 2026-11-20 |
@@ -79,7 +79,7 @@ their decision sections.
 | [0071](0071-tui-terminal-capability-and-frame-delivery.md) | TUI terminal capability and frame delivery upgrade | Accepted; terminal profile, synchronized draw, keyboard normalization, and wide-character truncation implemented |
 | [0072](0072-opt-in-osc52-clipboard-fallback.md) | Opt-in OSC 52 clipboard write fallback | Accepted; implemented 2026-11-23 |
 | [0073](0073-tui-motion-and-transition-boundary.md) | TUI motion and transition boundary | Accepted; overlay and alert enter fades implemented; TachyonFX deferred |
-| [0074](0074-anvil-tui-state-decomposition-and-crate-boundary.md) | Anvil-TUI state decomposition, dependency direction, and conditional crate extraction | Proposed; state/page extraction and layer fixes pending |
+| [0074](0074-anvil-tui-state-decomposition-and-crate-boundary.md) | Anvil-TUI state decomposition, dependency direction, and conditional crate extraction | Proposed; dependency-direction gate implemented; state/page extraction pending |
 
 ## Numbering Rule
 

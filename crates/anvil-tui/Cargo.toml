@@ -39,7 +39,7 @@ anvil-process = { workspace = true }
 anvil-runtime = { workspace = true }
 anvil-session = { workspace = true }
 anvil-task = { workspace = true }
-anvil-workspace = { workspace = true, default-features = false }
+anvil-workspace = { workspace = true }
 anvil-tui-kit = { workspace = true }
 anvil-tui-theme = { workspace = true }
 anvil-syntax = { workspace = true }

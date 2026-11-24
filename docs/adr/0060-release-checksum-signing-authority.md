@@ -77,7 +77,7 @@ Negative:
 
 - The release workflow signs `SHA256SUMS`, publishes `release.pub.pem`, and
   verifies the detached signature before publication.
-- `docs/release-dry-run-2026-11-20.md` records an end-to-end signature
+- `docs/history/releases/release-dry-run-2026-11-20.md` records an end-to-end signature
   verification with ephemeral production-like keys.
 - A public release is rejected until the production checksum authority and
   provenance gate are explicitly accepted.

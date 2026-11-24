@@ -137,9 +137,9 @@ class Session:
             assert discovered["resultType"] == "complete", discovered
         else:
             initialized = self.request(
-                "initialize", {"protocolVersion": "2024-11-05"}
+                "initialize", {"protocolVersion": "2025-11-25"}
             )
-            assert initialized["protocolVersion"] == "2024-11-05", initialized
+            assert initialized["protocolVersion"] == "2025-11-25", initialized
 
     def request(self, method, params=None, expect_error=False):
         request_id = self.next_id

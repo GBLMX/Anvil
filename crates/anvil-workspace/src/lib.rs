@@ -18,8 +18,6 @@ mod protocol;
 pub mod roots;
 mod search;
 mod worker;
-#[cfg(all(test, feature = "official-git"))]
-pub(crate) use anvil_mod_git::{parse_git_diff, parse_git_status};
 pub use anvil_module::git::ResolveConflictError;
 pub use preview::PreviewData;
 #[cfg(test)]
@@ -64,20 +62,9 @@ mod tests {
     use super::{
         FileEvent, FileRequest, FileWorker, PREVIEW_MAX_LINES, decode_preview, valid_file_name,
     };
-    #[cfg(feature = "official-git")]
-    use super::{parse_git_diff, parse_git_status};
     use anvil_ipc::GatewayClient;
     use std::path::Path;
 
-    #[test]
-    #[cfg(feature = "official-git")]
-    fn parses_git_hunks_into_line_marks() {
-        let output = "@@ -1 +1 @@\n-old\n+new\n@@ -0,0 +4,2 @@\n+one\n+two\n@@ -8,2 +9,0 @@\n";
-        assert_eq!(
-            parse_git_diff(output),
-            vec![(0, '~'), (3, '+'), (4, '+'), (8, '-')]
-        );
-    }
 
     #[test]
     fn routes_transfer_and_remove_all_through_gateway() {
@@ -324,16 +311,6 @@ mod tests {
         server.join().expect("server");
     }
 
-    #[test]
-    #[cfg(feature = "official-git")]
-    fn parses_git_status_porcelain() {
-        let workspace = Path::new("/ws");
-        let statuses =
-            parse_git_status(" M src/main.rs\0?? new.rs\0R  new.rs\0old.rs\0", workspace);
-        assert_eq!(statuses.get(&workspace.join("src/main.rs")), Some(&'M'));
-        assert_eq!(statuses.get(&workspace.join("new.rs")), Some(&'R'));
-        assert!(!statuses.contains_key(&workspace.join("old.rs")));
-    }
 
     #[test]
     fn tree_watch_reports_unavailable_gateway() {

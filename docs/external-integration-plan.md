@@ -232,7 +232,7 @@ Transport: MCP stdio, one request at a time. No network listener and no
 additional control protocol.
 Protocol upgrade: the adapter serves MCP `2026-07-28` through
 `server/discover` and per-request `_meta`, plus legacy `initialize` clients for
-`2024-11-05`, `2025-03-26`, `2025-06-18`, and `2025-11-25`, as recorded in
+`2025-06-18` and `2025-11-25`, as recorded in
 [ADR-0056](adr/0056-mcp-dual-era-protocol-and-tool-contract.md).
 
 Tools:

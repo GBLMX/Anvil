@@ -85,8 +85,13 @@ metadata = json.loads(
 packages = {package["name"]: package for package in metadata["packages"]}
 
 
+# Normal dependencies only: dev/build dependencies are not shipped.
 def dependencies(name):
-    return {dependency["name"] for dependency in packages[name]["dependencies"]}
+    return {
+        dependency["name"]
+        for dependency in packages[name]["dependencies"]
+        if dependency.get("kind") is None
+    }
 
 
 task_forbidden = {"tokio", "anvil-tui", "anvil-platform", "anvil-session"}
@@ -112,6 +117,95 @@ for crate in ("anvil-core", "anvil-editor"):
             file=sys.stderr,
         )
         sys.exit(1)
+
+normal_workspace = set(packages)
+
+
+def normal_dependencies(name):
+    return {
+        dependency for dependency in dependencies(name)
+        if dependency in normal_workspace
+    }
+
+
+violations = []
+
+
+def forbidden_by_prefix(dependency, prefixes):
+    return dependency.startswith(prefixes)
+
+
+base_crates = {"anvil-api", "anvil-core", "anvil-ipc", "anvil-task"}
+for crate in sorted(base_crates):
+    for dependency in normal_dependencies(crate):
+        violations.append(("R1 L0", crate, dependency))
+
+for crate in sorted(packages):
+    if "anvil-tui" in normal_dependencies(crate) and not crate.startswith(
+        "anvil-distro-"
+    ):
+        violations.append(("R2 TUI reverse", crate, "anvil-tui"))
+
+module_crates = {
+    name for name in packages if name.startswith("anvil-mod-")
+}
+module_dependent_exceptions = {
+    "anvil-runtime": "composition root (ADR-0074)",
+}
+for crate in sorted(packages):
+    for dependency in normal_dependencies(crate):
+        if dependency not in module_crates:
+            continue
+        if crate.startswith(("anvil-distro-", "anvil-tui")):
+            continue
+        if crate in module_dependent_exceptions:
+            continue
+        violations.append(("R3 module reverse", crate, dependency))
+
+service_crates = {
+    "anvil-control",
+    "anvil-dap",
+    "anvil-lsp-client",
+    "anvil-plugin-host",
+    "anvil-process",
+    "anvil-workspace",
+}
+service_forbidden = {"anvil-workspace", "anvil-runtime", "anvil-session"}
+service_forbidden_prefixes = ("anvil-tui", "anvil-distro-")
+for crate in sorted(service_crates):
+    for dependency in normal_dependencies(crate):
+        if dependency in service_forbidden or forbidden_by_prefix(
+            dependency, service_forbidden_prefixes
+        ):
+            violations.append(("R4 service upward", crate, dependency))
+
+session_forbidden = {
+    "anvil-control",
+    "anvil-workspace",
+    "anvil-runtime",
+}
+session_forbidden_prefixes = ("anvil-tui", "anvil-distro-", "anvil-mod-")
+for dependency in normal_dependencies("anvil-session"):
+    if dependency in session_forbidden or forbidden_by_prefix(
+        dependency, session_forbidden_prefixes
+    ):
+        violations.append(("R5 session upward", "anvil-session", dependency))
+
+contract_forbidden = {"anvil-workspace", "anvil-runtime"}
+contract_forbidden_prefixes = ("anvil-tui", "anvil-distro-", "anvil-mod-")
+for dependency in normal_dependencies("anvil-module"):
+    if dependency in contract_forbidden or forbidden_by_prefix(
+        dependency, contract_forbidden_prefixes
+    ):
+        violations.append(("R6 contract inward", "anvil-module", dependency))
+
+if violations:
+    for rule, source, dependency in violations:
+        print(
+            f"architecture: {rule} violation: {source} -> {dependency}",
+            file=sys.stderr,
+        )
+    sys.exit(1)
 PY
 
 echo "architecture: ok"

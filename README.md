@@ -360,11 +360,11 @@ and asserts one active language server. It exits 0 with `SKIP` when `clangd`,
 
 `anvil-mcp` is a thin stdio MCP adapter over `anvil-control`. It serves MCP
 `2026-07-28` through `server/discover` and per-request `_meta`, and legacy
-`initialize` clients using `2024-11-05`, `2025-03-26`, `2025-06-18`, or
-`2025-11-25`. Tool results include text, annotations, output schemas, and
-`structuredContent`; `set` and `replace` require `expected_revision` and
-stale edits fail without changing the buffer. `scripts/mcp-smoke.sh` starts
-both protocol eras against a real TUI.
+`initialize` clients using `2025-06-18` or `2025-11-25`. Tool results include
+text, annotations, output schemas, and `structuredContent`; `set` and
+`replace` require `expected_revision` and stale edits fail without changing the
+buffer. `scripts/mcp-smoke.sh` starts both protocol eras against a real TUI.
+Removed legacy versions `2024-11-05` and `2025-03-26` are rejected.
 
 Quick open: `Space f` filters workspace files and previews the selected file
 through the gateway. Wide terminals show the preview beside the list; narrow
@@ -391,9 +391,9 @@ and `language-pack-lua`.
 - [Recovery and save semantics](docs/recovery.md)
 - [Remote/SSH workflow](docs/remote-ssh.md)
 - [High-frequency command architecture plan](docs/command-architecture-plan.md)
-- [0.3.0 → 0.4.0: Polish & Specification](docs/polish-and-specification.md)
-- [0.3.0 → 0.4.0 / Phase 0.7 plan](docs/phase-0-7-plan.md)
-- [0.4.x feature plan](docs/0.4.x-plan.md)
+- [0.3.0 → 0.4.0: Polish & Specification](docs/history/plans/polish-and-specification.md)
+- [0.3.0 → 0.4.0 / Phase 0.7 plan](docs/history/plans/phase-0-7-plan.md)
+- [0.4.x feature plan](docs/history/plans/0.4.x-plan.md)
 - [0.5.x interaction and UI plan](docs/0.5.x-plan.md)
 - [0.6.x distribution and marketplace plan](docs/0.6.x-plan.md)
 - [0.7.x official optional Rust modules plan](docs/0.7.x-plan.md)
@@ -410,7 +410,7 @@ and `language-pack-lua`.
 - [Architecture](docs/architecture.md)
 - [Architecture maps](docs/architecture-visual.md)
 - [Deployment model](docs/deployment.md)
-- [Ratatui TUI Elm loop plan](docs/ratatui-elm-loop-plan.md)
+- [Ratatui TUI Elm loop plan](docs/history/plans/ratatui-elm-loop-plan.md)
 - [Performance baseline](docs/performance.md)
 - [Go gateway benchmarks](docs/benchmarks/go-gateway.md)
 - [File operation benchmarks](docs/benchmarks/file-operations.md)
@@ -418,8 +418,8 @@ and `language-pack-lua`.
 - [Editor benchmarks](docs/benchmarks/editor.md)
 - [Line index stress](docs/benchmarks/line-index-stress.md)
 - [TUI edit-loop latency](docs/benchmarks/tui.md)
-- [Phase 0.5 plan](docs/phase-0-5-plan.md)
-- [Phase 0.6 plan](docs/phase-0-6-plan.md)
+- [Phase 0.5 plan](docs/history/plans/phase-0-5-plan.md)
+- [Phase 0.6 plan](docs/history/plans/phase-0-6-plan.md)
 - [Upstream dependencies](docs/adr/0006-upstream-dependencies.md)
 - [JSON-RPC and token contract](docs/adr/0007-jsonrpc-envelope-and-capability-token.md)
 - [Kernel/distribution boundary](docs/adr/0013-kernel-distribution-boundary.md)

@@ -9,7 +9,6 @@ repository.workspace = true
 
 [dependencies]
 anvil-api = { workspace = true }
-anvil-control = { workspace = true }
 anvil-core = { workspace = true }
 anvil-editor = { workspace = true }
 anvil-ipc = { workspace = true }

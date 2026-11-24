@@ -491,7 +491,27 @@ pub fn parse_git_diff(output: &str) -> Vec<(usize, char)> {
 mod tests {
     use super::{GitModule, MODULE_ID, resolve_git_conflict};
     use anvil_ipc::GatewayClient;
+    use std::path::Path;
     use std::sync::{Arc, Mutex};
+
+    #[test]
+    fn parses_git_hunks_into_line_marks() {
+        let output = "@@ -1 +1 @@\n-old\n+new\n@@ -0,0 +4,2 @@\n+one\n+two\n@@ -8,2 +9,0 @@\n";
+        assert_eq!(
+            parse_git_diff(output),
+            vec![(0, '~'), (3, '+'), (4, '+'), (8, '-')]
+        );
+    }
+
+    #[test]
+    fn parses_git_status_porcelain() {
+        let workspace = Path::new("/ws");
+        let statuses =
+            parse_git_status(" M src/main.rs\0?? new.rs\0R  new.rs\0old.rs\0", workspace);
+        assert_eq!(statuses.get(&workspace.join("src/main.rs")), Some(&'M'));
+        assert_eq!(statuses.get(&workspace.join("new.rs")), Some(&'R'));
+        assert!(!statuses.contains_key(&workspace.join("old.rs")));
+    }
 
     fn resolve_through_mock(
         stage: u8,
