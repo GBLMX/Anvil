@@ -80,7 +80,7 @@ func TestStoreConcurrentUpdatesDoNotLoseEntries(t *testing.T) {
 	}
 	const workers = 16
 	var group sync.WaitGroup
-	for index := 0; index < workers; index++ {
+	for index := range workers {
 		group.Add(1)
 		go func(index int) {
 			defer group.Done()

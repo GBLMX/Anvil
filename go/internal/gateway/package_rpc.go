@@ -87,7 +87,7 @@ func validDigest(value string) bool {
 	return err == nil && len(raw) == 32 && value == strings.ToLower(value)
 }
 
-func (s *Server) packageDownload(req request, state *connectionState) (interface{}, *rpcError) {
+func (s *Server) packageDownload(req request, state *connectionState) (any, *rpcError) {
 	if rpcErr := s.requireRole(state, "installer"); rpcErr != nil {
 		return nil, rpcErr
 	}
@@ -137,7 +137,7 @@ func (s *Server) packageDownload(req request, state *connectionState) (interface
 	return map[string]string{"job_id": jobID}, nil
 }
 
-func (s *Server) packageInstall(req request, state *connectionState) (interface{}, *rpcError) {
+func (s *Server) packageInstall(req request, state *connectionState) (any, *rpcError) {
 	if rpcErr := s.requireRole(state, "installer"); rpcErr != nil {
 		return nil, rpcErr
 	}
@@ -189,7 +189,7 @@ func (s *Server) packageInstall(req request, state *connectionState) (interface{
 	}, nil
 }
 
-func (s *Server) packageInspect(req request, state *connectionState) (interface{}, *rpcError) {
+func (s *Server) packageInspect(req request, state *connectionState) (any, *rpcError) {
 	if rpcErr := s.requireRole(state, "installer"); rpcErr != nil {
 		return nil, rpcErr
 	}
@@ -221,7 +221,7 @@ func (s *Server) packageInspect(req request, state *connectionState) (interface{
 	if store, loadErr := pkg.LoadTrustStore(trustPath); loadErr == nil {
 		trusted = store.Contains(publicKey)
 	}
-	return map[string]interface{}{
+	return map[string]any{
 		"package_path":   params.PackagePath,
 		"signature_path": params.SignaturePath,
 		"public_key":     params.PublicKey,
@@ -231,7 +231,7 @@ func (s *Server) packageInspect(req request, state *connectionState) (interface{
 	}, nil
 }
 
-func (s *Server) packageTrust(req request, state *connectionState) (interface{}, *rpcError) {
+func (s *Server) packageTrust(req request, state *connectionState) (any, *rpcError) {
 	if rpcErr := editorRequired(state); rpcErr != nil {
 		return nil, rpcErr
 	}
@@ -253,7 +253,7 @@ func (s *Server) packageTrust(req request, state *connectionState) (interface{},
 	return map[string]bool{"trusted": true}, nil
 }
 
-func (s *Server) packageInstalled(_ request, state *connectionState) (interface{}, *rpcError) {
+func (s *Server) packageInstalled(_ request, state *connectionState) (any, *rpcError) {
 	if rpcErr := editorRequired(state); rpcErr != nil {
 		return nil, rpcErr
 	}
@@ -268,10 +268,10 @@ func (s *Server) packageInstalled(_ request, state *connectionState) (interface{
 	if err != nil {
 		return nil, &rpcError{Code: -32009, Message: err.Error()}
 	}
-	return map[string]interface{}{"plugins": plugins, "store_size": size}, nil
+	return map[string]any{"plugins": plugins, "store_size": size}, nil
 }
 
-func (s *Server) packageSetEnabled(req request, state *connectionState) (interface{}, *rpcError) {
+func (s *Server) packageSetEnabled(req request, state *connectionState) (any, *rpcError) {
 	if rpcErr := editorRequired(state); rpcErr != nil {
 		return nil, rpcErr
 	}
@@ -288,7 +288,7 @@ func (s *Server) packageSetEnabled(req request, state *connectionState) (interfa
 	return map[string]bool{"enabled": params.Enabled}, nil
 }
 
-func (s *Server) packageUninstall(req request, state *connectionState) (interface{}, *rpcError) {
+func (s *Server) packageUninstall(req request, state *connectionState) (any, *rpcError) {
 	if rpcErr := editorRequired(state); rpcErr != nil {
 		return nil, rpcErr
 	}
@@ -305,7 +305,7 @@ func (s *Server) packageUninstall(req request, state *connectionState) (interfac
 	return map[string]bool{"uninstalled": true}, nil
 }
 
-func (s *Server) packageRollback(req request, state *connectionState) (interface{}, *rpcError) {
+func (s *Server) packageRollback(req request, state *connectionState) (any, *rpcError) {
 	if rpcErr := editorRequired(state); rpcErr != nil {
 		return nil, rpcErr
 	}

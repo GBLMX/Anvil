@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"slices"
 	"strings"
 	"syscall"
 	"time"
@@ -264,7 +265,7 @@ func splitPermissions(value string) []string {
 		return nil
 	}
 	var permissions []string
-	for _, permission := range strings.Split(value, ",") {
+	for permission := range strings.SplitSeq(value, ",") {
 		if permission = strings.TrimSpace(permission); permission != "" {
 			permissions = append(permissions, permission)
 		}
@@ -273,10 +274,5 @@ func splitPermissions(value string) []string {
 }
 
 func contains(values []string, wanted string) bool {
-	for _, value := range values {
-		if value == wanted {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(values, wanted)
 }

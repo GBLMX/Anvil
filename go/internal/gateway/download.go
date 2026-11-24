@@ -56,9 +56,7 @@ func newDownloadQueue(parent context.Context, fetcher *fetch.Client, trustPath s
 		trustPath: trustPath,
 	}
 	for range workers {
-		queue.wg.Add(1)
-		go func() {
-			defer queue.wg.Done()
+		queue.wg.Go(func() {
 			for {
 				select {
 				case job := <-queue.jobs:
@@ -67,7 +65,7 @@ func newDownloadQueue(parent context.Context, fetcher *fetch.Client, trustPath s
 					return
 				}
 			}
-		}()
+		})
 	}
 	return queue
 }

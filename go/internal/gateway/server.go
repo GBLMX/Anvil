@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -221,16 +222,16 @@ type request struct {
 }
 
 type response struct {
-	JSONRPC string      `json:"jsonrpc"`
-	ID      *string     `json:"id"`
-	Result  interface{} `json:"result,omitempty"`
-	Error   *rpcError   `json:"error,omitempty"`
+	JSONRPC string    `json:"jsonrpc"`
+	ID      *string   `json:"id"`
+	Result  any       `json:"result,omitempty"`
+	Error   *rpcError `json:"error,omitempty"`
 }
 
 type rpcError struct {
-	Code    int         `json:"code"`
-	Message string      `json:"message"`
-	Data    interface{} `json:"data,omitempty"`
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+	Data    any    `json:"data,omitempty"`
 }
 
 type connectionState struct {
@@ -300,10 +301,8 @@ func (s *Server) permissionError(state *connectionState, wanted string) *rpcErro
 		return &rpcError{Code: -32003, Message: "session required"}
 	}
 	permissions := s.effectivePermissions(state)
-	for _, permission := range permissions {
-		if permission == wanted {
-			return nil
-		}
+	if slices.Contains(permissions, wanted) {
+		return nil
 	}
 	return &rpcError{Code: -32002, Message: "policy denied"}
 }
@@ -384,7 +383,7 @@ func matchPath(pattern, path string) bool {
 	return err == nil && compiled.MatchString(path)
 }
 
-func decodeParams(raw json.RawMessage, target interface{}) error {
+func decodeParams(raw json.RawMessage, target any) error {
 	if len(raw) == 0 || string(raw) == "null" {
 		return errors.New("params required")
 	}
@@ -429,7 +428,7 @@ func writeFrame(writer io.Writer, body []byte) error {
 	return err
 }
 
-func writeResult(writer io.Writer, id *string, result interface{}) error {
+func writeResult(writer io.Writer, id *string, result any) error {
 	body, err := json.Marshal(response{JSONRPC: "2.0", ID: id, Result: result})
 	if err != nil {
 		return err

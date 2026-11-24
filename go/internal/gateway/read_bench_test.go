@@ -55,7 +55,7 @@ func BenchmarkReadResponseEncoding(b *testing.B) {
 			NextOffset: benchChunk,
 			EOF:        true,
 		}
-		body, err := json.Marshal(response{JSONRPC: "2.0", ID: stringPtr("r1"), Result: result})
+		body, err := json.Marshal(response{JSONRPC: "2.0", ID: new("r1"), Result: result})
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -83,7 +83,7 @@ func BenchmarkResponseJSON(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if _, err := json.Marshal(response{JSONRPC: "2.0", ID: stringPtr("r1"), Result: result}); err != nil {
+		if _, err := json.Marshal(response{JSONRPC: "2.0", ID: new("r1"), Result: result}); err != nil {
 			b.Fatal(err)
 		}
 	}

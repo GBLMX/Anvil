@@ -96,7 +96,7 @@ type pendingWrite struct {
 	offset int64
 }
 
-func (s *Server) statFile(req request, state *connectionState) (interface{}, *rpcError) {
+func (s *Server) statFile(req request, state *connectionState) (any, *rpcError) {
 	var params statParams
 	if err := decodeParams(req.Params, &params); err != nil {
 		return nil, &rpcError{Code: -32602, Message: "invalid params"}
@@ -123,7 +123,7 @@ func (s *Server) statFile(req request, state *connectionState) (interface{}, *rp
 	return statResult{Size: metadata.Size, Modified: metadata.ModifiedNS}, nil
 }
 
-func (s *Server) readDir(req request, state *connectionState) (interface{}, *rpcError) {
+func (s *Server) readDir(req request, state *connectionState) (any, *rpcError) {
 	var params readDirParams
 	if err := decodeParams(req.Params, &params); err != nil {
 		return nil, &rpcError{Code: -32602, Message: "invalid params"}
@@ -156,7 +156,7 @@ func (s *Server) readDir(req request, state *connectionState) (interface{}, *rpc
 	return readDirResult{Entries: entries}, nil
 }
 
-func (s *Server) readDirSignature(req request, state *connectionState) (interface{}, *rpcError) {
+func (s *Server) readDirSignature(req request, state *connectionState) (any, *rpcError) {
 	var params statParams
 	if err := decodeParams(req.Params, &params); err != nil {
 		return nil, &rpcError{Code: -32602, Message: "invalid params"}
@@ -205,7 +205,7 @@ func fileMutationError(err error) *rpcError {
 	return &rpcError{Code: code, Message: "file operation unavailable"}
 }
 
-func (s *Server) createDir(req request, state *connectionState) (interface{}, *rpcError) {
+func (s *Server) createDir(req request, state *connectionState) (any, *rpcError) {
 	var params createDirParams
 	if err := decodeParams(req.Params, &params); err != nil || params.Path == "" {
 		return nil, &rpcError{Code: -32602, Message: "invalid params"}
@@ -226,7 +226,7 @@ func (s *Server) createDir(req request, state *connectionState) (interface{}, *r
 	return map[string]bool{"ok": true}, nil
 }
 
-func (s *Server) rename(req request, state *connectionState) (interface{}, *rpcError) {
+func (s *Server) rename(req request, state *connectionState) (any, *rpcError) {
 	var params renameParams
 	if err := decodeParams(req.Params, &params); err != nil || params.From == "" || params.To == "" {
 		return nil, &rpcError{Code: -32602, Message: "invalid params"}
@@ -254,7 +254,7 @@ func (s *Server) rename(req request, state *connectionState) (interface{}, *rpcE
 	return map[string]bool{"ok": true}, nil
 }
 
-func (s *Server) remove(req request, state *connectionState) (interface{}, *rpcError) {
+func (s *Server) remove(req request, state *connectionState) (any, *rpcError) {
 	var params removeParams
 	if err := decodeParams(req.Params, &params); err != nil || params.Path == "" {
 		return nil, &rpcError{Code: -32602, Message: "invalid params"}
@@ -275,7 +275,7 @@ func (s *Server) remove(req request, state *connectionState) (interface{}, *rpcE
 	return map[string]bool{"ok": true}, nil
 }
 
-func (s *Server) copy(req request, state *connectionState) (interface{}, *rpcError) {
+func (s *Server) copy(req request, state *connectionState) (any, *rpcError) {
 	var params copyParams
 	if err := decodeParams(req.Params, &params); err != nil || params.From == "" || params.To == "" {
 		return nil, &rpcError{Code: -32602, Message: "invalid params"}
@@ -303,7 +303,7 @@ func (s *Server) copy(req request, state *connectionState) (interface{}, *rpcErr
 	return map[string]bool{"ok": true}, nil
 }
 
-func (s *Server) removeAll(req request, state *connectionState) (interface{}, *rpcError) {
+func (s *Server) removeAll(req request, state *connectionState) (any, *rpcError) {
 	var params removeAllParams
 	if err := decodeParams(req.Params, &params); err != nil || params.Path == "" {
 		return nil, &rpcError{Code: -32602, Message: "invalid params"}
@@ -324,7 +324,7 @@ func (s *Server) removeAll(req request, state *connectionState) (interface{}, *r
 	return map[string]bool{"ok": true}, nil
 }
 
-func (s *Server) readFile(req request, state *connectionState) (interface{}, *rpcError) {
+func (s *Server) readFile(req request, state *connectionState) (any, *rpcError) {
 	var params readParams
 	if err := decodeParams(req.Params, &params); err != nil {
 		return nil, &rpcError{Code: -32602, Message: "invalid params"}
@@ -381,7 +381,7 @@ func (s *Server) readFile(req request, state *connectionState) (interface{}, *rp
 	}, nil
 }
 
-func (s *Server) writeFileBinary(req request, state *connectionState, data []byte) (interface{}, *rpcError) {
+func (s *Server) writeFileBinary(req request, state *connectionState, data []byte) (any, *rpcError) {
 	var params writeParams
 	if err := decodeParams(req.Params, &params); err != nil {
 		return nil, &rpcError{Code: -32602, Message: "invalid params"}
@@ -447,7 +447,7 @@ func (s *Server) writeFileBinary(req request, state *connectionState, data []byt
 	return binaryWriteResult{payload: payload}, nil
 }
 
-func (s *Server) writeFile(req request, state *connectionState) (interface{}, *rpcError) {
+func (s *Server) writeFile(req request, state *connectionState) (any, *rpcError) {
 	var params writeParams
 	if err := decodeParams(req.Params, &params); err != nil {
 		return nil, &rpcError{Code: -32602, Message: "invalid params"}

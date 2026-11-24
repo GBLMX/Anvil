@@ -342,7 +342,7 @@ func countUserTasks() (uint64, error) {
 			continue
 		}
 		var processUID, threads uint64
-		for _, line := range strings.Split(string(status), "\n") {
+		for line := range strings.SplitSeq(string(status), "\n") {
 			switch {
 			case strings.HasPrefix(line, "Uid:"):
 				fields := strings.Fields(line)

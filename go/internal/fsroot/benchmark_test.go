@@ -84,12 +84,12 @@ func BenchmarkRemoveAllTree(b *testing.B) {
 
 func buildBenchTree(root string) error {
 	tree := filepath.Join(root, "tree")
-	for directory := 0; directory < 8; directory++ {
+	for directory := range 8 {
 		dir := filepath.Join(tree, fmt.Sprintf("dir-%d", directory))
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return err
 		}
-		for file := 0; file < 16; file++ {
+		for file := range 16 {
 			path := filepath.Join(dir, fmt.Sprintf("file-%d.txt", file))
 			if err := os.WriteFile(path, []byte("benchmark"), 0o600); err != nil {
 				return err

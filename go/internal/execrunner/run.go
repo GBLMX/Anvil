@@ -142,8 +142,7 @@ func Run(ctx context.Context, cfg ProcessConfig) (ProcessResult, error) {
 	result.OutputTruncated = truncated
 
 	if waitErr != nil && !timedOut && !truncated {
-		var exitErr *exec.ExitError
-		if !errors.As(waitErr, &exitErr) {
+		if _, ok := errors.AsType[*exec.ExitError](waitErr); !ok {
 			return result, waitErr
 		}
 	}

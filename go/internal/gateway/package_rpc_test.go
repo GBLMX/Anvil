@@ -133,7 +133,7 @@ func TestPackageInstallRequiresReviewedDigestAndTrust(t *testing.T) {
 	if rpcErr != nil {
 		t.Fatalf("installed rpc: %+v", rpcErr)
 	}
-	listed, ok := result.(map[string]interface{})["plugins"].([]pkg.ManagedPlugin)
+	listed, ok := result.(map[string]any)["plugins"].([]pkg.ManagedPlugin)
 	if !ok || len(listed) != 1 || listed[0].ID != "demo" {
 		t.Fatalf("installed rpc result: %#v", result)
 	}
@@ -172,7 +172,7 @@ func TestPackageRPCsRejectPluginSessions(t *testing.T) {
 	}
 	pluginToken := strings.Repeat("p", 32)
 	hash := sha256.Sum256([]byte(pluginToken))
-	if response := sendRequest(t, editor, "register", "plugin.register", map[string]interface{}{
+	if response := sendRequest(t, editor, "register", "plugin.register", map[string]any{
 		"plugin_id":    "demo",
 		"token_sha256": hex.EncodeToString(hash[:]),
 		"permissions":  []string{"fs.read:**"},
@@ -183,7 +183,7 @@ func TestPackageRPCsRejectPluginSessions(t *testing.T) {
 	if response := sendRequest(t, plugin, "plugin-hello", "session.hello", helloRequestParams(pluginToken)); response.Error != nil {
 		t.Fatalf("plugin handshake: %+v", response.Error)
 	}
-	response := sendRequest(t, plugin, "trust", "pkg.trust", map[string]interface{}{
+	response := sendRequest(t, plugin, "trust", "pkg.trust", map[string]any{
 		"name":       "demo",
 		"public_key": strings.Repeat("00", 32),
 	})
@@ -270,7 +270,7 @@ func TestPackageInspectReturnsManifestAndDigest(t *testing.T) {
 	if rpcErr != nil {
 		t.Fatalf("inspect: %+v", rpcErr)
 	}
-	response, ok := result.(map[string]interface{})
+	response, ok := result.(map[string]any)
 	if !ok {
 		t.Fatalf("inspect result: %#v", result)
 	}

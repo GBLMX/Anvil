@@ -316,7 +316,7 @@ func TestSymlinkRaceHelper(t *testing.T) {
 	}
 	_, _ = fmt.Fprintln(os.Stdout, "ready")
 	race := filepath.Join(workspace, "race")
-	for i := 0; i < 5000; i++ {
+	for range 5000 {
 		data, err := os.ReadFile(race)
 		if err != nil {
 			if errors.Is(err, unix.EACCES) {
@@ -381,7 +381,7 @@ func TestSymlinkSwapCannotEscape(t *testing.T) {
 	}
 	// Exchange two prepared symlinks atomically so the reader never observes
 	// an intermediate create/remove window.
-	for i := 0; i < 5000; i++ {
+	for i := range 5000 {
 		if err := unix.Renameat2(unix.AT_FDCWD, other, unix.AT_FDCWD, race, unix.RENAME_EXCHANGE); err != nil {
 			info, statErr := os.Lstat(race)
 			target, targetErr := os.Readlink(race)

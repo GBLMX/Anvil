@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -441,12 +442,7 @@ func (version Version) Compatible(apiVersion, platform string) bool {
 	if compareSemver(current, minimum) < 0 || compareSemver(current, maximum) >= 0 {
 		return false
 	}
-	for _, candidate := range version.Platforms {
-		if candidate == platform {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(version.Platforms, platform)
 }
 
 type semver struct {

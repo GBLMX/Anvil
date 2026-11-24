@@ -94,9 +94,9 @@ func dialGateway(t *testing.T, socket string) net.Conn {
 	return conn
 }
 
-func sendRequest(t *testing.T, conn net.Conn, id, method string, params interface{}) response {
+func sendRequest(t *testing.T, conn net.Conn, id, method string, params any) response {
 	t.Helper()
-	body, err := json.Marshal(map[string]interface{}{
+	body, err := json.Marshal(map[string]any{
 		"jsonrpc": "2.0",
 		"id":      id,
 		"method":  method,
@@ -124,8 +124,8 @@ func receiveResponse(t *testing.T, conn net.Conn) response {
 	return response
 }
 
-func helloRequestParams(token string) map[string]interface{} {
-	return map[string]interface{}{
+func helloRequestParams(token string) map[string]any {
+	return map[string]any{
 		"token":       base64.RawURLEncoding.EncodeToString([]byte(token)),
 		"api_version": APIVersion,
 		"protocol":    Protocol,
@@ -139,7 +139,7 @@ func TestHandshake(t *testing.T) {
 	if response.Error != nil {
 		t.Fatalf("handshake error: %+v", response.Error)
 	}
-	result, ok := response.Result.(map[string]interface{})
+	result, ok := response.Result.(map[string]any)
 	if !ok {
 		t.Fatalf("result = %#v", response.Result)
 	}
@@ -163,7 +163,7 @@ func TestPluginRegistrationAndRevoke(t *testing.T) {
 	}
 	pluginToken := strings.Repeat("p", 32)
 	hash := sha256.Sum256([]byte(pluginToken))
-	register := sendRequest(t, editor, "register-1", "plugin.register", map[string]interface{}{
+	register := sendRequest(t, editor, "register-1", "plugin.register", map[string]any{
 		"plugin_id":    "demo",
 		"token_sha256": hex.EncodeToString(hash[:]),
 		"permissions":  []string{"fs.read:**"},
@@ -177,14 +177,14 @@ func TestPluginRegistrationAndRevoke(t *testing.T) {
 	if hello.Error != nil {
 		t.Fatalf("plugin handshake: %+v", hello.Error)
 	}
-	result, _ := hello.Result.(map[string]interface{})
+	result, _ := hello.Result.(map[string]any)
 	if result["plugin_id"] != "demo" {
 		t.Fatalf("plugin_id = %v", result["plugin_id"])
 	}
-	if response := sendRequest(t, plugin, "plugin-read", "sys.read_dir", map[string]interface{}{"path": "."}); response.Error != nil {
+	if response := sendRequest(t, plugin, "plugin-read", "sys.read_dir", map[string]any{"path": "."}); response.Error != nil {
 		t.Fatalf("plugin read: %+v", response.Error)
 	}
-	if response := sendRequest(t, plugin, "plugin-control", "plugin.register", map[string]interface{}{
+	if response := sendRequest(t, plugin, "plugin-control", "plugin.register", map[string]any{
 		"plugin_id":    "other",
 		"token_sha256": hex.EncodeToString(make([]byte, 32)),
 		"permissions":  []string{},
@@ -192,11 +192,11 @@ func TestPluginRegistrationAndRevoke(t *testing.T) {
 		t.Fatal("plugin registered another plugin")
 	}
 
-	revoke := sendRequest(t, editor, "revoke-1", "plugin.revoke", map[string]interface{}{"plugin_id": "demo"})
+	revoke := sendRequest(t, editor, "revoke-1", "plugin.revoke", map[string]any{"plugin_id": "demo"})
 	if revoke.Error != nil {
 		t.Fatalf("revoke: %+v", revoke.Error)
 	}
-	if response := sendRequest(t, plugin, "plugin-read-after", "sys.read_dir", map[string]interface{}{"path": "."}); response.Error == nil {
+	if response := sendRequest(t, plugin, "plugin-read-after", "sys.read_dir", map[string]any{"path": "."}); response.Error == nil {
 		t.Fatal("revoked plugin retained access")
 	}
 	second := dialGateway(t, socket)
@@ -286,13 +286,13 @@ func TestSysFetch(t *testing.T) {
 	if response := sendRequest(t, conn, "hello-1", "session.hello", helloRequestParams(testToken)); response.Error != nil {
 		t.Fatalf("handshake error: %+v", response.Error)
 	}
-	response := sendRequest(t, conn, "fetch-1", "sys.fetch", map[string]interface{}{
+	response := sendRequest(t, conn, "fetch-1", "sys.fetch", map[string]any{
 		"url": httpServer.URL + "/",
 	})
 	if response.Error != nil {
 		t.Fatalf("fetch error: %+v", response.Error)
 	}
-	result, ok := response.Result.(map[string]interface{})
+	result, ok := response.Result.(map[string]any)
 	if !ok || result["body"] != "fetched" || result["status"] != float64(200) {
 		t.Fatalf("result = %#v on port %s", response.Result, parsed.Port())
 	}
@@ -304,7 +304,7 @@ func TestSysFetchDeniedWithoutPermission(t *testing.T) {
 	if response := sendRequest(t, conn, "hello-1", "session.hello", helloRequestParams(testToken)); response.Error != nil {
 		t.Fatalf("handshake error: %+v", response.Error)
 	}
-	response := sendRequest(t, conn, "fetch-1", "sys.fetch", map[string]interface{}{
+	response := sendRequest(t, conn, "fetch-1", "sys.fetch", map[string]any{
 		"url": "https://example.test/",
 	})
 	if response.Error == nil || response.Error.Code != -32002 {
@@ -315,7 +315,7 @@ func TestSysFetchDeniedWithoutPermission(t *testing.T) {
 func TestSysExecRequiresHandshake(t *testing.T) {
 	socket := startGateway(t, []string{"sys.exec"}, "")
 	conn := dialGateway(t, socket)
-	response := sendRequest(t, conn, "exec-1", "sys.exec", map[string]interface{}{
+	response := sendRequest(t, conn, "exec-1", "sys.exec", map[string]any{
 		"tool": "/usr/bin/rg",
 		"args": []string{"-n", "foo", "README.md"},
 	})
@@ -324,7 +324,7 @@ func TestSysExecRequiresHandshake(t *testing.T) {
 	}
 }
 
-func decodedData(t *testing.T, result map[string]interface{}) string {
+func decodedData(t *testing.T, result map[string]any) string {
 	t.Helper()
 	encoded, ok := result["data"].(string)
 	if !ok {
@@ -348,7 +348,7 @@ func TestSysReadFileChunks(t *testing.T) {
 		t.Fatalf("handshake error: %+v", response.Error)
 	}
 
-	response := sendRequest(t, conn, "read-1", "sys.read_file", map[string]interface{}{
+	response := sendRequest(t, conn, "read-1", "sys.read_file", map[string]any{
 		"path":      "file.txt",
 		"offset":    0,
 		"max_bytes": 4,
@@ -356,7 +356,7 @@ func TestSysReadFileChunks(t *testing.T) {
 	if response.Error != nil {
 		t.Fatalf("read error: %+v", response.Error)
 	}
-	first, ok := response.Result.(map[string]interface{})
+	first, ok := response.Result.(map[string]any)
 	if !ok {
 		t.Fatalf("first chunk = %#v", response.Result)
 	}
@@ -364,12 +364,12 @@ func TestSysReadFileChunks(t *testing.T) {
 		t.Fatalf("first chunk = %#v", response.Result)
 	}
 
-	response = sendRequest(t, conn, "read-2", "sys.read_file", map[string]interface{}{
+	response = sendRequest(t, conn, "read-2", "sys.read_file", map[string]any{
 		"path":      "file.txt",
 		"offset":    8,
 		"max_bytes": 4,
 	})
-	last, ok := response.Result.(map[string]interface{})
+	last, ok := response.Result.(map[string]any)
 	if response.Error != nil || !ok {
 		t.Fatalf("last chunk = %#v, error=%+v", response.Result, response.Error)
 	}
@@ -388,7 +388,7 @@ func TestSysReadFileRequiresPermission(t *testing.T) {
 	if response := sendRequest(t, conn, "hello-1", "session.hello", helloRequestParams(testToken)); response.Error != nil {
 		t.Fatalf("handshake error: %+v", response.Error)
 	}
-	response := sendRequest(t, conn, "read-1", "sys.read_file", map[string]interface{}{
+	response := sendRequest(t, conn, "read-1", "sys.read_file", map[string]any{
 		"path":   "file.txt",
 		"offset": 0,
 	})
@@ -416,14 +416,14 @@ func TestSysExecRoutesThroughRunner(t *testing.T) {
 	if response := sendRequest(t, conn, "hello-1", "session.hello", helloRequestParams(testToken)); response.Error != nil {
 		t.Fatalf("handshake error: %+v", response.Error)
 	}
-	response := sendRequest(t, conn, "exec-1", "sys.exec", map[string]interface{}{
+	response := sendRequest(t, conn, "exec-1", "sys.exec", map[string]any{
 		"tool": "/usr/bin/rg",
 		"args": []string{"-n", "foo", "README.md"},
 	})
 	if response.Error != nil {
 		t.Fatalf("exec error: %+v", response.Error)
 	}
-	result, ok := response.Result.(map[string]interface{})
+	result, ok := response.Result.(map[string]any)
 	if !ok {
 		t.Fatalf("result = %#v", response.Result)
 	}
@@ -461,11 +461,11 @@ func TestConnectionCloseCancelsExec(t *testing.T) {
 	if response := sendRequest(t, conn, "hello-1", "session.hello", helloRequestParams(testToken)); response.Error != nil {
 		t.Fatalf("handshake error: %+v", response.Error)
 	}
-	body, err := json.Marshal(map[string]interface{}{
+	body, err := json.Marshal(map[string]any{
 		"jsonrpc": "2.0",
 		"id":      "exec-1",
 		"method":  "sys.exec",
-		"params": map[string]interface{}{
+		"params": map[string]any{
 			"tool": "/usr/bin/rg",
 			"args": []string{"-n", "foo", "README.md"},
 		},
@@ -490,7 +490,7 @@ func TestSysWriteFileChunks(t *testing.T) {
 	if response := sendRequest(t, conn, "hello-1", "session.hello", helloRequestParams(testToken)); response.Error != nil {
 		t.Fatalf("handshake error: %+v", response.Error)
 	}
-	first := sendRequest(t, conn, "write-1", "sys.write_file", map[string]interface{}{
+	first := sendRequest(t, conn, "write-1", "sys.write_file", map[string]any{
 		"path":   "file.txt",
 		"offset": 0,
 		"data":   base64.StdEncoding.EncodeToString([]byte("hello ")),
@@ -499,11 +499,11 @@ func TestSysWriteFileChunks(t *testing.T) {
 	if first.Error != nil {
 		t.Fatalf("first write error: %+v", first.Error)
 	}
-	result, ok := first.Result.(map[string]interface{})
+	result, ok := first.Result.(map[string]any)
 	if !ok || result["next_offset"] != float64(6) {
 		t.Fatalf("first result = %#v", first.Result)
 	}
-	second := sendRequest(t, conn, "write-2", "sys.write_file", map[string]interface{}{
+	second := sendRequest(t, conn, "write-2", "sys.write_file", map[string]any{
 		"path":   "file.txt",
 		"offset": 6,
 		"data":   base64.StdEncoding.EncodeToString([]byte("world")),
@@ -536,7 +536,7 @@ func TestSysWriteFileRequiresPermission(t *testing.T) {
 	if response := sendRequest(t, conn, "hello-1", "session.hello", helloRequestParams(testToken)); response.Error != nil {
 		t.Fatalf("handshake error: %+v", response.Error)
 	}
-	response := sendRequest(t, conn, "write-1", "sys.write_file", map[string]interface{}{
+	response := sendRequest(t, conn, "write-1", "sys.write_file", map[string]any{
 		"path":   "file.txt",
 		"offset": 0,
 		"data":   base64.StdEncoding.EncodeToString([]byte("data")),
@@ -554,7 +554,7 @@ func TestSysWriteFileOffsetConflict(t *testing.T) {
 	if response := sendRequest(t, conn, "hello-1", "session.hello", helloRequestParams(testToken)); response.Error != nil {
 		t.Fatalf("handshake error: %+v", response.Error)
 	}
-	first := sendRequest(t, conn, "write-1", "sys.write_file", map[string]interface{}{
+	first := sendRequest(t, conn, "write-1", "sys.write_file", map[string]any{
 		"path":   "file.txt",
 		"offset": 0,
 		"data":   base64.StdEncoding.EncodeToString([]byte("abc")),
@@ -563,7 +563,7 @@ func TestSysWriteFileOffsetConflict(t *testing.T) {
 	if first.Error != nil {
 		t.Fatalf("first write error: %+v", first.Error)
 	}
-	second := sendRequest(t, conn, "write-2", "sys.write_file", map[string]interface{}{
+	second := sendRequest(t, conn, "write-2", "sys.write_file", map[string]any{
 		"path":   "file.txt",
 		"offset": 1,
 		"data":   base64.StdEncoding.EncodeToString([]byte("x")),
@@ -587,7 +587,7 @@ func TestReadPermissionUsesCanonicalPath(t *testing.T) {
 	if response := sendRequest(t, conn, "hello-1", "session.hello", helloRequestParams(testToken)); response.Error != nil {
 		t.Fatalf("handshake error: %+v", response.Error)
 	}
-	response := sendRequest(t, conn, "read-1", "sys.read_file", map[string]interface{}{
+	response := sendRequest(t, conn, "read-1", "sys.read_file", map[string]any{
 		"path": "src/../secret",
 	})
 	if response.Error == nil || response.Error.Code != -32002 {
@@ -611,7 +611,7 @@ func TestReadPermissionRejectsSymlinkEscalation(t *testing.T) {
 	if response := sendRequest(t, conn, "hello-symlink", "session.hello", helloRequestParams(testToken)); response.Error != nil {
 		t.Fatalf("handshake error: %+v", response.Error)
 	}
-	response := sendRequest(t, conn, "read-symlink", "sys.read_file", map[string]interface{}{
+	response := sendRequest(t, conn, "read-symlink", "sys.read_file", map[string]any{
 		"path": "src/link",
 	})
 	if response.Error == nil {
@@ -630,11 +630,11 @@ func TestSysReadFileBinary(t *testing.T) {
 	if response := sendRequest(t, conn, "hello-1", "session.hello", helloRequestParams(testToken)); response.Error != nil {
 		t.Fatalf("handshake error: %+v", response.Error)
 	}
-	body, err := json.Marshal(map[string]interface{}{
+	body, err := json.Marshal(map[string]any{
 		"jsonrpc": "2.0",
 		"id":      "read-binary",
 		"method":  "sys.read_file",
-		"params": map[string]interface{}{
+		"params": map[string]any{
 			"path":   "file.txt",
 			"offset": 0,
 			"binary": true,
@@ -680,11 +680,11 @@ func TestSysWriteFileBinary(t *testing.T) {
 	if response := sendRequest(t, conn, "hello-1", "session.hello", helloRequestParams(testToken)); response.Error != nil {
 		t.Fatalf("handshake error: %+v", response.Error)
 	}
-	body, err := json.Marshal(map[string]interface{}{
+	body, err := json.Marshal(map[string]any{
 		"jsonrpc": "2.0",
 		"id":      "write-binary",
 		"method":  "sys.write_file",
-		"params": map[string]interface{}{
+		"params": map[string]any{
 			"path":     "file.txt",
 			"offset":   0,
 			"eof":      true,
@@ -740,19 +740,19 @@ func TestSysReadDir(t *testing.T) {
 	if response := sendRequest(t, conn, "hello-1", "session.hello", helloRequestParams(testToken)); response.Error != nil {
 		t.Fatalf("handshake error: %+v", response.Error)
 	}
-	response := sendRequest(t, conn, "read-dir-1", "sys.read_dir", map[string]interface{}{"path": "."})
+	response := sendRequest(t, conn, "read-dir-1", "sys.read_dir", map[string]any{"path": "."})
 	if response.Error != nil {
 		t.Fatalf("read_dir error: %+v", response.Error)
 	}
-	result, ok := response.Result.(map[string]interface{})
+	result, ok := response.Result.(map[string]any)
 	if !ok {
 		t.Fatalf("result = %#v", response.Result)
 	}
-	entries, ok := result["entries"].([]interface{})
+	entries, ok := result["entries"].([]any)
 	if !ok || len(entries) != 1 {
 		t.Fatalf("entries = %#v", result["entries"])
 	}
-	entry, ok := entries[0].(map[string]interface{})
+	entry, ok := entries[0].(map[string]any)
 	if !ok || entry["name"] != "src" || entry["is_dir"] != true {
 		t.Fatalf("entry = %#v", entries[0])
 	}
@@ -765,13 +765,13 @@ func TestSysReadDirSignature(t *testing.T) {
 	if response := sendRequest(t, conn, "hello-1", "session.hello", helloRequestParams(testToken)); response.Error != nil {
 		t.Fatalf("handshake error: %+v", response.Error)
 	}
-	signature := func(id string) map[string]interface{} {
+	signature := func(id string) map[string]any {
 		t.Helper()
-		response := sendRequest(t, conn, id, "sys.read_dir_signature", map[string]interface{}{"path": "."})
+		response := sendRequest(t, conn, id, "sys.read_dir_signature", map[string]any{"path": "."})
 		if response.Error != nil {
 			t.Fatalf("read_dir_signature error: %+v", response.Error)
 		}
-		result, ok := response.Result.(map[string]interface{})
+		result, ok := response.Result.(map[string]any)
 		if !ok {
 			t.Fatalf("result = %#v", response.Result)
 		}
@@ -804,7 +804,7 @@ func TestSysCopyAndRemoveAll(t *testing.T) {
 	if response := sendRequest(t, conn, "hello-1", "session.hello", helloRequestParams(testToken)); response.Error != nil {
 		t.Fatalf("handshake error: %+v", response.Error)
 	}
-	response := sendRequest(t, conn, "copy-1", "sys.copy", map[string]interface{}{
+	response := sendRequest(t, conn, "copy-1", "sys.copy", map[string]any{
 		"from": "source.txt",
 		"to":   "copy.txt",
 	})
@@ -815,7 +815,7 @@ func TestSysCopyAndRemoveAll(t *testing.T) {
 	if err != nil || string(got) != "copy" {
 		t.Fatalf("copy = %q, %v", got, err)
 	}
-	response = sendRequest(t, conn, "remove-1", "sys.remove_all", map[string]interface{}{
+	response = sendRequest(t, conn, "remove-1", "sys.remove_all", map[string]any{
 		"path": "tree",
 	})
 	if response.Error != nil {
@@ -854,7 +854,7 @@ func TestLSPTokenCanReconnect(t *testing.T) {
 		_ = server.Close()
 		<-done
 	})
-	for index := 0; index < 2; index++ {
+	for index := range 2 {
 		conn := dialGateway(t, socket)
 		if response := sendRequest(t, conn, "hello", "session.hello", helloRequestParams(lspToken)); response.Error != nil {
 			t.Fatalf("lsp handshake %d: %+v", index, response.Error)
@@ -914,7 +914,7 @@ func TestSysExecV2ForwardsStdin(t *testing.T) {
 	if response := sendRequest(t, conn, "hello-1", "session.hello", helloRequestParams(testToken)); response.Error != nil {
 		t.Fatalf("handshake error: %+v", response.Error)
 	}
-	response := sendRequest(t, conn, "exec-v2", "sys.exec.v2", map[string]interface{}{
+	response := sendRequest(t, conn, "exec-v2", "sys.exec.v2", map[string]any{
 		"tool":       "/usr/bin/rg",
 		"args":       []string{"-n", "foo", "README.md"},
 		"stdin":      "completion text",
@@ -923,7 +923,7 @@ func TestSysExecV2ForwardsStdin(t *testing.T) {
 	if response.Error != nil {
 		t.Fatalf("exec error: %+v", response.Error)
 	}
-	result, ok := response.Result.(map[string]interface{})
+	result, ok := response.Result.(map[string]any)
 	if !ok {
 		t.Fatalf("result = %#v", response.Result)
 	}

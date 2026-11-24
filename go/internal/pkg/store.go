@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -760,9 +761,7 @@ func (s *Store) DisableRevokedPackages(checker PackageRevocationChecker) ([]stri
 		if state.RevokedPackages == nil {
 			state.RevokedPackages = map[string]string{}
 		}
-		for digest, pluginID := range checker.PackageDigests() {
-			state.RevokedPackages[digest] = pluginID
-		}
+		maps.Copy(state.RevokedPackages, checker.PackageDigests())
 		for _, keyID := range checker.PublisherKeyIDs() {
 			if !slices.Contains(state.RevokedPublishers, keyID) {
 				state.RevokedPublishers = append(state.RevokedPublishers, keyID)
@@ -819,9 +818,7 @@ func (stored storedRevocations) PackageRevoked(digest, pluginID string) bool {
 
 func (stored storedRevocations) PackageDigests() map[string]string {
 	digests := make(map[string]string, len(stored.digests))
-	for digest, pluginID := range stored.digests {
-		digests[digest] = pluginID
-	}
+	maps.Copy(digests, stored.digests)
 	return digests
 }
 

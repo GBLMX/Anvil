@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"maps"
 	"strings"
 	"time"
 )
@@ -176,9 +177,7 @@ func (set *RevocationSet) PackageDigests() map[string]string {
 	if set == nil {
 		return digests
 	}
-	for digest, pluginID := range set.Packages {
-		digests[digest] = pluginID
-	}
+	maps.Copy(digests, set.Packages)
 	return digests
 }
 

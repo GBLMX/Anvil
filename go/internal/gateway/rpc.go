@@ -123,7 +123,7 @@ func (s *Server) handle(serverCtx context.Context, conn net.Conn) {
 	requests.Wait()
 }
 
-func (s *Server) dispatch(ctx context.Context, req request, state *connectionState) (interface{}, *rpcError) {
+func (s *Server) dispatch(ctx context.Context, req request, state *connectionState) (any, *rpcError) {
 	switch req.Method {
 	case "sys.read_file":
 		return s.readFile(req, state)
@@ -191,7 +191,7 @@ func (s *Server) dispatch(ctx context.Context, req request, state *connectionSta
 	}
 }
 
-func (s *Server) hello(req request, state *connectionState) (interface{}, *rpcError) {
+func (s *Server) hello(req request, state *connectionState) (any, *rpcError) {
 	state.mu.Lock()
 	defer state.mu.Unlock()
 	if state.handshaken {
@@ -239,7 +239,7 @@ func (s *Server) hello(req request, state *connectionState) (interface{}, *rpcEr
 	if state.pluginID != "" {
 		pluginID = state.pluginID
 	}
-	return map[string]interface{}{
+	return map[string]any{
 		"session_id":  state.sessionID,
 		"plugin_id":   pluginID,
 		"api_version": APIVersion,
@@ -260,7 +260,7 @@ func (s *Server) consumePluginGrant(hash [32]byte) (pluginGrant, bool) {
 	return pluginGrant{}, false
 }
 
-func (s *Server) registerPlugin(req request, state *connectionState) (interface{}, *rpcError) {
+func (s *Server) registerPlugin(req request, state *connectionState) (any, *rpcError) {
 	state.mu.Lock()
 	editor := state.handshaken && state.isEditor
 	state.mu.Unlock()
@@ -312,13 +312,13 @@ func (s *Server) registerPlugin(req request, state *connectionState) (interface{
 		}
 	}
 	s.plugins[pluginID] = grant
-	return map[string]interface{}{
+	return map[string]any{
 		"plugin_id":  pluginID,
 		"registered": true,
 	}, nil
 }
 
-func (s *Server) revokePlugin(req request, state *connectionState) (interface{}, *rpcError) {
+func (s *Server) revokePlugin(req request, state *connectionState) (any, *rpcError) {
 	state.mu.Lock()
 	editor := state.handshaken && state.isEditor
 	state.mu.Unlock()
@@ -332,5 +332,5 @@ func (s *Server) revokePlugin(req request, state *connectionState) (interface{},
 	s.pluginMu.Lock()
 	delete(s.plugins, params.PluginID)
 	s.pluginMu.Unlock()
-	return map[string]interface{}{"revoked": true}, nil
+	return map[string]any{"revoked": true}, nil
 }

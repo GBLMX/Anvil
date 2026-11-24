@@ -52,7 +52,7 @@ type lspSendParams struct {
 	Data json.RawMessage `json:"data"`
 }
 
-func (s *Server) lspStart(ctx context.Context, req request, state *connectionState) (interface{}, *rpcError) {
+func (s *Server) lspStart(ctx context.Context, req request, state *connectionState) (any, *rpcError) {
 	state.mu.Lock()
 	handshaken := state.handshaken
 	authorized := handshaken && (state.isEditor || state.lspAuthorized)
@@ -186,7 +186,7 @@ func (s *Server) lspStart(ctx context.Context, req request, state *connectionSta
 	return map[string]bool{"started": true}, nil
 }
 
-func (s *Server) lspSend(req request, state *connectionState) (interface{}, *rpcError) {
+func (s *Server) lspSend(req request, state *connectionState) (any, *rpcError) {
 	state.lspMu.Lock()
 	manager := state.lsp
 	state.lspMu.Unlock()
@@ -238,11 +238,11 @@ func (s *Server) forwardLSPStderr(ctx context.Context, state *connectionState, m
 	}
 }
 
-func (s *Server) notifyLSP(state *connectionState, method string, params interface{}) {
+func (s *Server) notifyLSP(state *connectionState, method string, params any) {
 	if state.conn == nil || state.writeMu == nil {
 		return
 	}
-	payload, err := json.Marshal(map[string]interface{}{
+	payload, err := json.Marshal(map[string]any{
 		"jsonrpc": "2.0",
 		"method":  method,
 		"params":  params,

@@ -51,7 +51,7 @@ func BenchmarkHello(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
-	request := request{JSONRPC: "2.0", ID: stringPtr("1"), Method: "session.hello", Params: params}
+	request := request{JSONRPC: "2.0", ID: new("1"), Method: "session.hello", Params: params}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -64,7 +64,5 @@ func BenchmarkHello(b *testing.B) {
 		}
 	}
 }
-
-func stringPtr(value string) *string { return &value }
 
 func sha256Sum(value []byte) [32]byte { return sha256.Sum256(value) }

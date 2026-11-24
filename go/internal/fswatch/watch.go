@@ -477,10 +477,7 @@ func (w *Watcher) flush() {
 	if len(w.order) == 0 && !overflow {
 		return
 	}
-	limit := len(w.order)
-	if limit > maxBatch {
-		limit = maxBatch
-	}
+	limit := min(len(w.order), maxBatch)
 	events := make([]Event, 0, limit+1)
 	if overflow {
 		events = append(events, Event{Kind: "rescan"})

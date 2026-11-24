@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -42,7 +43,7 @@ type execResult struct {
 	OutputTruncated bool   `json:"output_truncated"`
 }
 
-func (s *Server) fetch(parent context.Context, req request, state *connectionState) (interface{}, *rpcError) {
+func (s *Server) fetch(parent context.Context, req request, state *connectionState) (any, *rpcError) {
 	if rpcErr := s.permissionError(state, "sys.fetch"); rpcErr != nil {
 		return nil, rpcErr
 	}
@@ -115,16 +116,14 @@ func needsWorkspaceWrite(tool string, args []string) bool {
 	case "add":
 		return true
 	case "apply":
-		for _, arg := range args {
-			if arg == "--cached" {
-				return true
-			}
+		if slices.Contains(args, "--cached") {
+			return true
 		}
 	}
 	return false
 }
 
-func (s *Server) exec(parent context.Context, req request, state *connectionState) (interface{}, *rpcError) {
+func (s *Server) exec(parent context.Context, req request, state *connectionState) (any, *rpcError) {
 	if rpcErr := s.permissionError(state, "sys.exec"); rpcErr != nil {
 		return nil, rpcErr
 	}

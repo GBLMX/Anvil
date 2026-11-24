@@ -12,7 +12,7 @@ type watchStartParams struct {
 	Mode        string   `json:"mode"`
 }
 
-func (s *Server) watchStart(req request, state *connectionState) (interface{}, *rpcError) {
+func (s *Server) watchStart(req request, state *connectionState) (any, *rpcError) {
 	if s.root == nil {
 		return nil, &rpcError{Code: -32008, Message: "file service unavailable"}
 	}
@@ -61,7 +61,7 @@ func (s *Server) watchStart(req request, state *connectionState) (interface{}, *
 	return status, nil
 }
 
-func (s *Server) watchStatus(_ request, state *connectionState) (interface{}, *rpcError) {
+func (s *Server) watchStatus(_ request, state *connectionState) (any, *rpcError) {
 	state.watchMu.Lock()
 	watcher := state.watch
 	state.watchMu.Unlock()
@@ -75,7 +75,7 @@ func (s *Server) watchStatus(_ request, state *connectionState) (interface{}, *r
 	return watcher.Status(), nil
 }
 
-func (s *Server) watchStop(_ request, state *connectionState) (interface{}, *rpcError) {
+func (s *Server) watchStop(_ request, state *connectionState) (any, *rpcError) {
 	state.stopWatch()
 	return map[string]bool{"stopped": true}, nil
 }

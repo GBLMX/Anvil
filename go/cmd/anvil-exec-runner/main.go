@@ -26,13 +26,13 @@ func main() {
 		os.Exit(2)
 	}
 	paths := execrunner.RuntimePaths()
-	for _, path := range strings.Split(*runtimePaths, ",") {
+	for path := range strings.SplitSeq(*runtimePaths, ",") {
 		if path = strings.TrimSpace(path); path != "" {
 			paths = append(paths, path)
 		}
 	}
 	var executablePaths []string
-	for _, path := range strings.Split(*execPaths, ",") {
+	for path := range strings.SplitSeq(*execPaths, ",") {
 		if path = strings.TrimSpace(path); path != "" {
 			executablePaths = append(executablePaths, path)
 		}
@@ -49,7 +49,7 @@ func main() {
 	}
 	args := append([]string{*tool}, flag.Args()...)
 	env := []string{"LANG=C.UTF-8"}
-	for _, entry := range strings.Split(*extraEnv, ",") {
+	for entry := range strings.SplitSeq(*extraEnv, ",") {
 		if entry = strings.TrimSpace(entry); entry != "" {
 			env = append(env, entry)
 		}
