@@ -18,7 +18,7 @@ Status: **`0.7.0` is the workspace release candidate; public tagging remains
 gated on production signing and provenance**. See the
 [internal polish plan](docs/internal-polish-plan.md) and the
 [0.7.x module plan](docs/0.7.x-plan.md).
-Development uses Rust from `rust-toolchain.toml` and Go **1.26.11 or newer**;
+Development uses Rust from `rust-toolchain.toml` and Go **1.27.4 or newer**;
 CI installs the exact Go version from the root `go.mod`. The ratatui editor now
 includes insert
 mode (`i`/`a`/`A`/`o`/`O`), multi-cursor selection (`s`/`S`/`C`/`Alt-C`),

@@ -60,6 +60,7 @@ post-`0.5.0` feature line.
 ### Changed
 - The pinned Rust toolchain and workspace MSRV are now 1.100; deprecated
   atomic APIs and new clippy lints were updated with no behavior change.
+- The pinned Go toolchain is now 1.27.4.
 - The tag-triggered release workflow now builds and uploads unsigned inputs
   with build provenance instead of signing with CI keys or publishing.
 - Plugin manifests now declare `permissions`; editor RPCs require

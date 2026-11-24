@@ -23,7 +23,7 @@ Build-host ISA/glibc, user-vs-root, and cgroup findings are recorded in
 - Linux; Landlock requires Linux 5.13 or newer.
 - Rust 1.100 or newer (the repository pins the toolchain in
   `rust-toolchain.toml`).
-- Go 1.26.11 or newer (the repository pins the version in `go.mod`).
+- Go 1.27.4 or newer (the repository pins the version in `go.mod`).
 - A locale with UTF-8 support.
 
 Language servers are not bundled. Install the servers you want on `PATH`:
@@ -39,8 +39,8 @@ From the repository root:
 
 ```bash
 cargo build --release -p anvil-distro-standard -p anvil-ctl -p anvil-mcp -p anvil-plugin-host
-GOTOOLCHAIN=go1.26.11 go build -o target/release/anvil-gateway ./go/cmd/anvil-gateway
-GOTOOLCHAIN=go1.26.11 go build -o target/release/anvil-exec-runner ./go/cmd/anvil-exec-runner
+GOTOOLCHAIN=go1.27.4 go build -o target/release/anvil-gateway ./go/cmd/anvil-gateway
+GOTOOLCHAIN=go1.27.4 go build -o target/release/anvil-exec-runner ./go/cmd/anvil-exec-runner
 ```
 
 The default `anvil` composition is standard/Git-only. For a local full build
