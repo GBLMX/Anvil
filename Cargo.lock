@@ -108,6 +108,7 @@ dependencies = [
  "anvil-module",
  "anvil-process",
  "anvil-tui",
+ "anvil-tui-kit",
  "libc",
  "serde_json",
  "tempfile",

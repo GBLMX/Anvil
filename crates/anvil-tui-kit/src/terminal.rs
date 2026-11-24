@@ -17,6 +17,10 @@ use crossterm::{
     },
 };
 use ratatui::{Frame, Terminal, backend::CrosstermBackend};
+use std::sync::{
+    OnceLock,
+    atomic::{AtomicU8, Ordering},
+};
 
 /// Terminal features enabled for a session.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -255,15 +259,38 @@ fn synchronized_output_enabled_for(value: Option<&std::ffi::OsStr>) -> bool {
     value != Some(std::ffi::OsStr::new("0"))
 }
 
-/// Whether the environment advertises 24-bit color.
+fn detected_truecolor() -> bool {
+    static DETECTED: OnceLock<bool> = OnceLock::new();
+    *DETECTED.get_or_init(|| {
+        if let Some(value) = std::env::var_os("ANVIL_TRUECOLOR") {
+            return value != "0";
+        }
+        std::env::var("COLORTERM").is_ok_and(|value| {
+            value.eq_ignore_ascii_case("truecolor") || value.eq_ignore_ascii_case("24bit")
+        }) || std::env::var("TERM")
+            .is_ok_and(|value| value.contains("direct") || value.contains("truecolor"))
+    })
+}
+
+static TRUECOLOR_OVERRIDE: AtomicU8 = AtomicU8::new(0);
+
+/// Override terminal truecolor detection for the current process.
+pub fn set_truecolor_override(value: Option<bool>) {
+    let state = match value {
+        Some(false) => 1,
+        Some(true) => 2,
+        None => 0,
+    };
+    TRUECOLOR_OVERRIDE.store(state, Ordering::Relaxed);
+}
+
+/// Whether the terminal advertises 24-bit color.
 pub fn supports_truecolor() -> bool {
-    if let Some(value) = std::env::var_os("ANVIL_TRUECOLOR") {
-        return value != "0";
+    match TRUECOLOR_OVERRIDE.load(Ordering::Relaxed) {
+        1 => false,
+        2 => true,
+        _ => detected_truecolor(),
     }
-    std::env::var("COLORTERM").is_ok_and(|value| {
-        value.eq_ignore_ascii_case("truecolor") || value.eq_ignore_ascii_case("24bit")
-    }) || std::env::var("TERM")
-        .is_ok_and(|value| value.contains("direct") || value.contains("truecolor"))
 }
 
 #[cfg(test)]
@@ -273,6 +300,15 @@ mod tests {
     #[test]
     fn title_strips_control_characters() {
         assert_eq!(sanitize_title("a\u{1b}]0;bad\u{7}b"), "a ]0;bad b");
+    }
+
+    #[test]
+    fn truecolor_override_takes_precedence() {
+        set_truecolor_override(Some(true));
+        assert!(supports_truecolor());
+        set_truecolor_override(Some(false));
+        assert!(!supports_truecolor());
+        set_truecolor_override(None);
     }
 
     #[test]

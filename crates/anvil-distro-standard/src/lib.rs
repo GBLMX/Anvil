@@ -395,14 +395,12 @@ where
             {
                 return Ok(0);
             }
-            if let Some(enabled) = truecolor {
-                unsafe { env::set_var("ANVIL_TRUECOLOR", if enabled { "1" } else { "0" }) };
-            }
             let git = compose_git(distribution)?;
             let workspace_index = compose_workspace_index(distribution)?;
             let desktop = compose_desktop(distribution)?;
             let language_tooling = compose_language_tooling(distribution)?;
-            Ok(anvil_tui::run_with_all_services(
+            anvil_tui_kit::set_truecolor_override(truecolor);
+            let result = anvil_tui::run_with_all_services(
                 path,
                 workspace,
                 editor,
@@ -414,7 +412,9 @@ where
                     desktop,
                     language_tooling,
                 },
-            )?)
+            );
+            anvil_tui_kit::set_truecolor_override(None);
+            Ok(result?)
         }
         Err(error) => Err(RunError::Args(error)),
     }

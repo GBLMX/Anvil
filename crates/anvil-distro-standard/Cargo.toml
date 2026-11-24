@@ -38,6 +38,7 @@ full = [
 
 [dependencies]
 anvil-tui = { workspace = true, default-features = false }
+anvil-tui-kit = { workspace = true }
 anvil-lsp-client = { workspace = true }
 anvil-process = { workspace = true }
 anvil-control = { workspace = true }
