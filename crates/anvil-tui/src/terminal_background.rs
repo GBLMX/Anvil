@@ -50,7 +50,7 @@ fn read_response() -> Option<Vec<u8>> {
     use nix::poll::{PollFd, PollFlags, PollTimeout, poll};
     use std::fs::OpenOptions;
     use std::io::{Read, Write};
-    use std::os::fd::{AsRawFd, BorrowedFd};
+    use std::os::fd::AsFd;
 
     let mut tty = OpenOptions::new()
         .read(true)
@@ -60,15 +60,16 @@ fn read_response() -> Option<Vec<u8>> {
     tty.write_all(QUERY).ok()?;
     tty.flush().ok()?;
 
-    let fd = tty.as_raw_fd();
-    let borrowed = unsafe { BorrowedFd::borrow_raw(fd) };
-    let mut poll_fds = [PollFd::new(borrowed, PollFlags::POLLIN)];
     let deadline = Instant::now() + QUERY_TIMEOUT;
     let drain_deadline = deadline + DRAIN_TIMEOUT;
     let mut response = Vec::with_capacity(32);
     while Instant::now() < drain_deadline {
         let timeout: u16 = if Instant::now() < deadline { 15 } else { 10 };
-        match poll(&mut poll_fds, PollTimeout::from(timeout)) {
+        let poll_result = {
+            let mut poll_fds = [PollFd::new(tty.as_fd(), PollFlags::POLLIN)];
+            poll(&mut poll_fds, PollTimeout::from(timeout))
+        };
+        match poll_result {
             Ok(0) => {}
             Ok(_) => {
                 let mut byte = [0; 1];

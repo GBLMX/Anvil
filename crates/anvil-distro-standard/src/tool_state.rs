@@ -9,7 +9,6 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use rustix::fs::FlockOperation;
 use serde_json::{Value, json};
 
 use crate::RunError;
@@ -55,7 +54,7 @@ fn record_installed_at(directory: &Path, tools: &[InstalledTool]) -> Result<(), 
         .mode(0o600)
         .open(&lock_path)?;
     fs::set_permissions(&lock_path, fs::Permissions::from_mode(0o600))?;
-    rustix::fs::flock(&lock, FlockOperation::LockExclusive).map_err(|error| {
+    lock.lock().map_err(|error| {
         RunError::Io(io::Error::other(format!(
             "cannot lock {}: {error}",
             lock_path.display()

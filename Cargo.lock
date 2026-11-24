@@ -109,7 +109,6 @@ dependencies = [
  "anvil-process",
  "anvil-tui",
  "libc",
- "rustix",
  "serde_json",
  "tempfile",
 ]

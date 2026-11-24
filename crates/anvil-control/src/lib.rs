@@ -8,7 +8,6 @@
 //! matching TUI.
 
 use anvil_ipc::{JSONRPC_VERSION, Listener, Request, Response, codes, parse_request};
-use rustix::fs::FlockOperation;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
@@ -855,7 +854,7 @@ impl ControlServer {
             .mode(0o600)
             .open(&lock_path)?;
         fs::set_permissions(&lock_path, fs::Permissions::from_mode(0o600))?;
-        if rustix::fs::flock(&lock, FlockOperation::NonBlockingLockExclusive).is_err() {
+        if lock.try_lock().is_err() {
             if is_live(&socket) {
                 return Err(Error::AlreadyRunning);
             }

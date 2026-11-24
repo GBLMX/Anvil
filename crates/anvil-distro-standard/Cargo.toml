@@ -49,7 +49,6 @@ anvil-mod-language-latex = { workspace = true, optional = true }
 anvil-mod-language-typst = { workspace = true, optional = true }
 libc = { workspace = true }
 serde_json = { workspace = true }
-rustix = { workspace = true, features = ["fs"] }
 
 [dev-dependencies]
 tempfile = { workspace = true }

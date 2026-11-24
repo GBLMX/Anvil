@@ -9,7 +9,7 @@ repository.workspace = true
 
 [dependencies]
 anvil-ipc = { workspace = true }
-rustix = { workspace = true, features = ["fs", "process"] }
+rustix = { workspace = true, features = ["process"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }

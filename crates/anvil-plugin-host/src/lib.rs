@@ -126,8 +126,8 @@ pub struct Cgroup;
 #[cfg(target_os = "linux")]
 mod linux {
     use super::{Cgroup, Path, TOKEN_FD, Token};
-    use std::io::{self, Read};
-    use std::os::fd::{FromRawFd, IntoRawFd, RawFd};
+    use std::io::{self, Read, Write};
+    use std::os::fd::{AsRawFd, IntoRawFd, RawFd};
     use std::os::unix::process::CommandExt;
     use std::process::{Child, Command, ExitStatus, Stdio};
 
@@ -330,15 +330,9 @@ mod linux {
         token: Token,
         cgroup_fd: Option<RawFd>,
     ) -> io::Result<(Child, i32, Option<RawFd>)> {
-        let mut pipe = [0; 2];
-        // SAFETY: `pipe2` writes exactly two descriptors into `pipe`, which is
-        // sized for two `c_int`s.
-        if unsafe { libc::pipe2(pipe.as_mut_ptr(), libc::O_CLOEXEC) } != 0 {
-            return Err(io::Error::last_os_error());
-        }
-        let (read_fd, write_fd) = (pipe[0], pipe[1]);
-        // SAFETY: `getpid` has no preconditions and no side effects.
-        let parent_pid = unsafe { libc::getpid() };
+        let (token_reader, mut token_writer) = io::pipe()?;
+        let read_fd = token_reader.as_raw_fd();
+        let parent_pid = std::process::id();
 
         let mut command = Command::new(host);
         command
@@ -362,7 +356,7 @@ mod linux {
                 if libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGKILL) != 0 {
                     return Err(io::Error::last_os_error());
                 }
-                if libc::getppid() != parent_pid {
+                if libc::getppid() as u32 != parent_pid {
                     // Allocation-free stand-in for `io::Error::new`: the child
                     // must not allocate after fork. ESRCH is also the errno a
                     // vanished parent produces.
@@ -376,7 +370,7 @@ mod linux {
                     return Err(io::Error::last_os_error());
                 }
                 if let Some(fd) = cgroup_fd {
-                    write_pid(fd, libc::getpid() as u32)?;
+                    write_pid(fd, std::process::id())?;
                 }
                 if read_fd != TOKEN_FD && libc::dup2(read_fd, TOKEN_FD) < 0 {
                     return Err(io::Error::last_os_error());
@@ -394,29 +388,11 @@ mod linux {
         }
 
         let child = command.spawn();
-        // SAFETY: `read_fd` is the pipe read end created above; the child holds
-        // its own copy and this end is not used again.
-        unsafe {
-            libc::close(read_fd);
-        }
-        let mut child = match child {
-            Ok(child) => child,
-            Err(error) => {
-                // SAFETY: `write_fd` is the pipe write end created above and is
-                // not used after the spawn failure.
-                unsafe {
-                    libc::close(write_fd);
-                }
-                return Err(error);
-            }
-        };
+        drop(token_reader);
+        let mut child = child?;
         let pgid = child.id() as i32;
         let pidfd = open_pidfd(child.id());
-        // SAFETY: `write_fd` is an owned pipe descriptor; `File` takes
-        // ownership and closes it exactly once on drop.
-        let mut writer = unsafe { std::fs::File::from_raw_fd(write_fd) };
-        use std::io::Write;
-        if let Err(error) = writer.write_all(&token.0) {
+        if let Err(error) = token_writer.write_all(&token.0) {
             // SAFETY: `pgid` is the child's process group id; signalling it
             // requires no Rust-side invariants.
             unsafe {
@@ -432,7 +408,7 @@ mod linux {
             }
             return Err(error);
         }
-        drop(writer);
+        drop(token_writer);
 
         Ok((child, pgid, pidfd))
     }

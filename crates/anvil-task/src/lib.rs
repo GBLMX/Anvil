@@ -244,20 +244,11 @@ impl GlobalDataBudget {
     }
 
     fn try_add(counter: &AtomicUsize, capacity: usize, amount: usize) -> bool {
-        let mut current = counter.load(Ordering::Acquire);
-        loop {
-            let Some(next) = current.checked_add(amount) else {
-                return false;
-            };
-            if next > capacity {
-                return false;
-            }
-            match counter.compare_exchange_weak(current, next, Ordering::AcqRel, Ordering::Acquire)
-            {
-                Ok(_) => return true,
-                Err(actual) => current = actual,
-            }
-        }
+        counter
+            .try_update(Ordering::AcqRel, Ordering::Acquire, |current| {
+                current.checked_add(amount).filter(|next| *next <= capacity)
+            })
+            .is_ok()
     }
 
     fn try_acquire(&self, bytes: usize) -> Result<(), BudgetError> {
