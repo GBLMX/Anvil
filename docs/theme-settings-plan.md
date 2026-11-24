@@ -156,6 +156,8 @@ Fallback semantics are split by lifecycle:
 Legacy aliases remain recognized without adding duplicate palettes:
 `tokyo-night` → `tokyonight`, `catppuccin` → `catppuccin-mocha`,
 `gruvbox` → `gruvbox-dark`, and `solarized` → `solarized-light`.
+Other removed legacy IDs are not aliases; validation rejects them and startup
+falls back to `anvil-dark`.
 
 Each theme must pass the existing WCAG-AA contrast test for normal text and
 the status/syntax tokens used on their own backgrounds.
