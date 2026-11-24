@@ -59,14 +59,35 @@ impl std::error::Error for FrameError {}
 ///
 /// Returns `Ok(None)` only on a clean EOF before the first header byte.
 pub fn read_frame<R: Read>(reader: &mut R) -> Result<Option<Vec<u8>>, FrameError> {
+    read_frame_inner(reader, None, |_| Ok(()))
+}
+
+fn read_frame_inner<R: Read, F>(
+    reader: &mut R,
+    deadline: Option<Instant>,
+    mut before_read: F,
+) -> Result<Option<Vec<u8>>, FrameError>
+where
+    F: FnMut(&mut R) -> Result<(), FrameError>,
+{
     let mut header = [0u8; 4];
     let mut read = 0;
     while read < header.len() {
+        before_read(reader)?;
         match reader.read(&mut header[read..]) {
             Ok(0) if read == 0 => return Ok(None),
             Ok(0) => return Err(FrameError::TruncatedHeader),
             Ok(count) => read += count,
             Err(error) if error.kind() == io::ErrorKind::Interrupted => {}
+            Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
+                if let Some(deadline) = deadline {
+                    if Instant::now() >= deadline {
+                        return Err(FrameError::Timeout);
+                    }
+                } else {
+                    return Err(io_error(error));
+                }
+            }
             Err(error) => return Err(io_error(error)),
         }
     }
@@ -82,10 +103,20 @@ pub fn read_frame<R: Read>(reader: &mut R) -> Result<Option<Vec<u8>>, FrameError
     let mut body = vec![0u8; length as usize];
     let mut read = 0;
     while read < body.len() {
+        before_read(reader)?;
         match reader.read(&mut body[read..]) {
             Ok(0) => return Err(FrameError::TruncatedBody),
             Ok(count) => read += count,
             Err(error) if error.kind() == io::ErrorKind::Interrupted => {}
+            Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
+                if let Some(deadline) = deadline {
+                    if Instant::now() >= deadline {
+                        return Err(FrameError::Timeout);
+                    }
+                } else {
+                    return Err(io_error(error));
+                }
+            }
             Err(error) => return Err(io_error(error)),
         }
     }
@@ -195,59 +226,9 @@ impl Connection {
 
     /// Receive one frame with an absolute whole-frame deadline.
     pub fn recv_deadline(&mut self, deadline: Instant) -> Result<Option<Vec<u8>>, FrameError> {
-        let mut header = [0u8; 4];
-        let mut read = 0;
-        while read < header.len() {
-            self.arm_read_deadline(deadline)?;
-            match self.stream.read(&mut header[read..]) {
-                Ok(0) if read == 0 => return Ok(None),
-                Ok(0) => return Err(FrameError::TruncatedHeader),
-                Ok(count) => read += count,
-                Err(error) if error.kind() == io::ErrorKind::Interrupted => {}
-                Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
-                    if Instant::now() >= deadline {
-                        return Err(FrameError::Timeout);
-                    }
-                }
-                Err(error) => return Err(io_error(error)),
-            }
-        }
-        let length = u32::from_be_bytes(header);
-        if length == 0 {
-            return Err(FrameError::Empty);
-        }
-        if length > MAX_FRAME_LEN {
-            return Err(FrameError::TooLarge(length));
-        }
-        let mut body = vec![0u8; length as usize];
-        let mut read = 0;
-        while read < body.len() {
-            self.arm_read_deadline(deadline)?;
-            match self.stream.read(&mut body[read..]) {
-                Ok(0) => return Err(FrameError::TruncatedBody),
-                Ok(count) => read += count,
-                Err(error) if error.kind() == io::ErrorKind::Interrupted => {}
-                Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
-                    if Instant::now() >= deadline {
-                        return Err(FrameError::Timeout);
-                    }
-                }
-                Err(error) => return Err(io_error(error)),
-            }
-        }
-        Ok(Some(body))
-    }
-
-    fn arm_read_deadline(&self, deadline: Instant) -> Result<(), FrameError> {
-        let remaining = deadline
-            .checked_duration_since(Instant::now())
-            .ok_or(FrameError::Timeout)?;
-        if remaining.is_zero() {
-            return Err(FrameError::Timeout);
-        }
-        self.stream
-            .set_read_timeout(Some(remaining))
-            .map_err(io_error)
+        read_frame_inner(&mut self.stream, Some(deadline), |stream| {
+            arm_read_deadline(stream, deadline)
+        })
     }
 
     /// Clone the underlying stream for an interrupt/shutdown watchdog.
@@ -280,6 +261,16 @@ impl Connection {
             .revents()
             .intersects(PollFlags::IN | PollFlags::HUP | PollFlags::ERR))
     }
+}
+
+fn arm_read_deadline(stream: &UnixStream, deadline: Instant) -> Result<(), FrameError> {
+    let remaining = deadline
+        .checked_duration_since(Instant::now())
+        .ok_or(FrameError::Timeout)?;
+    if remaining.is_zero() {
+        return Err(FrameError::Timeout);
+    }
+    stream.set_read_timeout(Some(remaining)).map_err(io_error)
 }
 
 #[cfg(test)]
