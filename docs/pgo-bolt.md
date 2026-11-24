@@ -5,7 +5,7 @@ This is an opt-in release workflow. It does not change the default
 
 ## Prerequisites
 
-- Rust 1.88+ and the LLVM tools matching the Rust compiler for PGO
+- Rust 1.100+ and the LLVM tools matching the Rust compiler for PGO
   (`llvm-profdata`). The script prefers the toolchain's copy; install it with
   `rustup component add llvm-tools` if `llvm-profdata` is not found.
 - `perf`, `perf2bolt`, and `llvm-bolt` for BOLT. On Arch/CachyOS:
