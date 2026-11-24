@@ -135,6 +135,11 @@ and handles remain in the owning domain/runtime group. This preserves the
 ADR-0024 rule that page state stays outside gateways, PTYs, and filesystem
 workers.
 
+`ThemeBrowser` and the command-palette `ThemePicker` remain separate surfaces.
+Only the original/preview/cancel/commit ownership is shared through a
+`ThemePreviewGuard`; list selection, layout, hit testing, and rendering remain
+local. This is an implementation slice under this ADR, not a separate ADR.
+
 ### 3. Extraction order
 
 1. **Measurement baseline.** Run `cargo build -p anvil-tui --timings`, record
@@ -259,6 +264,9 @@ Negative:
   forbidden edge; `anvil-workspace` has no `anvil-mod-git` dependency.
 - Colon command completion receives command names through
   `CommandCompletionData`; session does not depend on the control server.
+- Theme browser and command-palette theme picker share preview/cancel
+  ownership but keep independent selection and rendering; both paths have
+  tests.
 - `cargo build -p anvil-tui --timings` is recorded before and after crate
   extraction.
 - Full workspace tests, clippy, formatting, architecture, and docs checks pass
@@ -273,7 +281,8 @@ composition-root exception for `anvil-mod-workspace-index`.
 
 `anvil-workspace` no longer depends on `anvil-mod-git`, and
 `anvil-session` no longer depends on `anvil-control`. The workspace Git parser
-tests moved to `anvil-mod-git`. State/page extraction remains pending.
+tests moved to `anvil-mod-git`. State/page extraction and the theme preview
+guard remain pending.
 
 ## Supersession note
 
