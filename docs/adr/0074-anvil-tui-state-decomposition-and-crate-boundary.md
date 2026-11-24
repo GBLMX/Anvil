@@ -4,6 +4,8 @@
 - Date: 2026-11-24
 - Related: [ADR-0013](0013-kernel-distribution-boundary.md),
   [ADR-0024](0024-tui-state-and-domain-boundaries.md),
+  [ADR-0027](0027-distribution-composition-crate.md),
+  [ADR-0028](0028-module-contract.md),
   [ADR-0041](0041-tui-primitive-extraction.md),
   [ADR-0057](0057-tui-surface-model-and-focus-contract.md),
   [ADR-0068](0068-tui-visual-language-and-markers.md)
@@ -28,6 +30,17 @@ These counts include test modules. They are not a production-only LOC claim.
 The important signal is not raw size alone: behavior is still spread across
 many `impl Model` blocks even though `Model` already groups fields into named
 state domains.
+
+`anvil-process` is not an untested crate: it has four unit tests and `Drop for
+ProcessTask`. Its remaining gap is integration depth, not the existence of
+cleanup. `TUI_LOC` and file counts are informational.
+`scripts/tui-metrics.sh` gates exactly `deps`, `impl_model`,
+`model_mut_methods`, `model_new`, `page_model_setups`, and
+`files_over_800` through `check_max`. `impl_model_files` is computed and
+printed for comparison only; it has no `check_max` line. `model_new` is a
+source-text count, not a runtime constructor count; `page_model_setups`
+covers page source files, not every page test. Baseline increases in feature
+commits are visible and need a separate governance rule.
 
 The largest source files are, with inline tests included where present:
 
@@ -60,10 +73,35 @@ one-module crates.
 External references:
 
 - [Cargo Book: Workspaces](https://doc.rust-lang.org/cargo/reference/workspaces.html)
+- [Cargo Book: Features](https://doc.rust-lang.org/cargo/reference/features.html)
 - [Large Rust Workspaces](https://matklad.github.io/2021/08/22/large-rust-workspaces.html)
 - [Rust Performance Book: Compile Times](https://nnethercote.github.io/perf-book/compile-times.html)
 - [Ratatui: Component Architecture](https://ratatui.rs/concepts/application-patterns/component-architecture/)
 - [Ratatui: Flux Architecture](https://ratatui.rs/concepts/application-patterns/flux-architecture/)
+
+## Layer audit
+
+The crate graph is acyclic; that satisfies the Acyclic Dependencies Principle,
+but not the Stable Dependencies Principle. A layer edge is acceptable only when
+it points toward a more stable contract. The following edges need an explicit
+decision:
+
+| Edge | Current shape | Decision |
+|---|---|---|
+| `anvil-workspace -> anvil-mod-git` | `official-git` is a default feature; `FileWorker::start` constructs `SystemGitService`. `start_with_services` accepts an injected `GitService`; `anvil-tui` disables workspace defaults. | Remove the default back-edge. Keep the feature only as optional compatibility; the TUI or distribution injects the official service. |
+| `anvil-runtime -> anvil-mod-workspace-index` | `Runtime` is documented as a UI-neutral composition root and stores the concrete index. | Composition-root exception. If third-party replacement is required, inject `Arc<dyn WorkspaceIndexService>` or construct the index in the distribution. |
+| `anvil-session -> anvil-control` | `command_completion` imports `anvil_control::COMMANDS` for the colon command list. | Split the colon command manifest into a protocol/data crate shared by control and session; do not make session depend on the control server. |
+| `anvil-module -> anvil-session` | Modules import `CommandId`/`CommandSpec` from session. | Either document command metadata as part of the module contract, or move it to `anvil-api`/a data-only crate. Do not duplicate command IDs. |
+
+`anvil-control::COMMANDS` (colon commands) and
+`anvil-session::command::COMMANDS` (editor key commands) are different
+manifests. They are not a single source of truth.
+
+No current edge transfers authorization across a process boundary. The issue is
+compile-time coupling, replaceability, and accidental recompilation, not a
+sandbox bypass.
+
+See [Package Coupling Principles](https://learn.microsoft.com/en-us/archive/technet-wiki/18068.package-coupling-principles).
 
 ## Decision
 
@@ -117,15 +155,49 @@ workers.
 5. **Feature gating.** Only after `--timings` proves a heavy optional subsystem
    dominates. Do not use `#[cfg(feature)]` as a substitute for state ownership.
 
-### 4. Guardrails
+### 4. Dependency direction before extraction
+
+The crate graph is acyclic, but acyclicity does not make every edge stable.
+No service crate gets a default edge to a module implementation. A composition
+root may name concrete modules; a service crate may only depend on contracts.
+
+- Remove `official-git` from `anvil-workspace`'s default features. Keep the
+  optional feature only as a compatibility path, and inject
+  `SystemGitService` from the TUI or distribution. Migrate all callers; do not
+  keep a shim edge.
+- Treat `anvil-runtime`'s concrete workspace index as a documented
+  composition-root exception. If a third-party index must be replaceable,
+  accept `Arc<dyn WorkspaceIndexService>` or construct the index in the
+  distribution.
+- Move the colon command manifest used by `anvil-session` completion out of the
+  control server. The manifest is data; the server is a runtime. A small
+  protocol/data crate is acceptable because there are two consumers.
+- Move `CommandId`/`CommandSpec` out of `anvil-session` only if module compile
+  coupling is measured as a problem. Until then, document it as part of the
+  extension contract; do not duplicate command IDs in modules.
+
+Cargo features are additive and do not repair dependency direction. An optional
+dependency that is enabled still forms the same compile edge.
+
+### 5. Guardrails
 
 - A leaf module may not add a new `impl Model`; expose a state method instead.
 - Every page state must be constructible in a unit test without `Model`,
   terminal setup, or a gateway.
 - No user-visible behaviour change is bundled into a state split.
-- `scripts/tui-metrics.sh` gains ratchets for `impl_model`,
-  `impl_model_files`, `model_mut_methods`, and `files_over_800`.
-- Dependency direction remains checked by `scripts/architecture-check.sh`.
+- `scripts/tui-metrics.sh` gains downward-only ratchets for `deps`, `impl_model`,
+  `impl_model_files`, `model_mut_methods`, `model_new`, `page_model_setups`,
+  and `files_over_800`. A baseline increase is a debt decision, not a feature
+  side effect; `TUI_LOC` and file counts remain informational.
+- Metrics that count source text state their semantics: `model_new` is not a
+  runtime constructor count; page tests are counted separately from page
+  source files.
+- `scripts/architecture-check.sh` rejects new cycles and the forbidden default
+  edge `anvil-workspace -> anvil-mod-git`. The
+  `anvil-session -> anvil-control` edge is removed when the colon command
+  manifest moves.
+- `anvil-process` keeps `Drop` as a last-resort cleanup and adds integration
+  coverage for child/process-group exit and spawn failure.
 - Split PRs must keep `cargo test`, clippy, rustfmt, architecture, and docs
   checks green.
 
@@ -147,6 +219,10 @@ Negative:
 - Too-granular state can fragment ownership; groups must remain cohesive.
 - Crate extraction can add public-API overhead and slow clean builds if done
   before a boundary is stable.
+- Removing `official-git` from the workspace default requires explicit Git
+  injection at every direct consumer and is an API change.
+- A protocol/data crate for colon commands adds one small boundary; without it,
+  session keeps a runtime dependency on the control server.
 
 ## Alternatives rejected
 
@@ -163,13 +239,27 @@ Negative:
 - **Do nothing.** Rejected by the measured method/file distribution; the
   ADR-0024 deferral is no longer justified.
 
+- **Hide a layer edge behind an optional feature.** Rejected: Cargo features
+  are additive; they do not change the direction of the default graph.
+- **Treat `anvil-runtime` as a service-layer violation.** Rejected: it is a
+  documented composition root; the actionable decision is injection only when
+  replacement is required.
+- **Move every command manifest into `anvil-control`.** Rejected: the colon
+  command list and the editor key command list are different contracts.
+
 ## Acceptance
 
 - `Model` is a composition root; new page/domain behaviour lives on owned state.
 - Each extracted page has a unit test that constructs only its state.
-- `impl_model` and `model_mut_methods` trend downward; no new `impl Model` is
-  introduced in leaf modules.
-- `files_over_800` is ratcheted downward without hiding tests.
+- `impl_model` and `model_mut_methods` trend downward; `deps`, `model_new`,
+  `impl_model_files`, `page_model_setups`, and `files_over_800` do not rise;
+  baseline changes only ratchet downward.
+- `anvil-process` tests cover `Drop` fallback, process-group kill, and spawn
+  failure.
+- `cargo metadata` or `scripts/architecture-check.sh` shows no cycle or
+  forbidden default edge; `anvil-workspace`'s default build does not select
+  `anvil-mod-git`.
+- Colon command completion no longer requires the control server runtime.
 - `cargo build -p anvil-tui --timings` is recorded before and after crate
   extraction.
 - Full workspace tests, clippy, formatting, architecture, and docs checks pass

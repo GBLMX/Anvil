@@ -79,7 +79,7 @@ their decision sections.
 | [0071](0071-tui-terminal-capability-and-frame-delivery.md) | TUI terminal capability and frame delivery upgrade | Accepted; terminal profile, synchronized draw, keyboard normalization, and wide-character truncation implemented |
 | [0072](0072-opt-in-osc52-clipboard-fallback.md) | Opt-in OSC 52 clipboard write fallback | Accepted; implemented 2026-11-23 |
 | [0073](0073-tui-motion-and-transition-boundary.md) | TUI motion and transition boundary | Accepted; overlay and alert enter fades implemented; TachyonFX deferred |
-| [0074](0074-anvil-tui-state-decomposition-and-crate-boundary.md) | Anvil-TUI state decomposition and conditional crate extraction | Proposed; implementation pending |
+| [0074](0074-anvil-tui-state-decomposition-and-crate-boundary.md) | Anvil-TUI state decomposition, dependency direction, and conditional crate extraction | Proposed; state/page extraction and layer fixes pending |
 
 ## Numbering Rule
 
