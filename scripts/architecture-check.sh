@@ -69,16 +69,49 @@ check_files() {
 check_files '(std::)?thread::(spawn|Builder::new)' "$allowed_threads" "production thread spawn"
 check_files 'mpsc::channel\(\)' "$allowed_channels" "unbounded mpsc channel"
 
-if grep -Eq '(^|[" ])(tokio|anvil-tui|anvil-platform|anvil-session)([" =]|$)' crates/anvil-task/Cargo.toml; then
-    echo "architecture: anvil-task must stay std-only and UI/platform-free" >&2
-    exit 1
-fi
+# Resolve inherited workspace dependencies so centralization cannot bypass
+# the crate-boundary checks.
+python3 - <<'PY'
+import json
+import subprocess
+import sys
 
-for crate in anvil-core anvil-editor; do
-    if grep -Eq 'anvil-(tui|tui-kit|platform|session)' "crates/$crate/Cargo.toml"; then
-        echo "architecture: $crate must not depend on UI/session/platform crates" >&2
-        exit 1
-    fi
-done
+metadata = json.loads(
+    subprocess.check_output(
+        ["cargo", "metadata", "--no-deps", "--format-version", "1"],
+        text=True,
+    )
+)
+packages = {package["name"]: package for package in metadata["packages"]}
+
+
+def dependencies(name):
+    return {dependency["name"] for dependency in packages[name]["dependencies"]}
+
+
+task_forbidden = {"tokio", "anvil-tui", "anvil-platform", "anvil-session"}
+task_bad = sorted(dependencies("anvil-task") & task_forbidden)
+if task_bad:
+    print(
+        "architecture: anvil-task must stay std-only and UI/platform-free: "
+        + ", ".join(task_bad),
+        file=sys.stderr,
+    )
+    sys.exit(1)
+
+for crate in ("anvil-core", "anvil-editor"):
+    bad = sorted(
+        dependency
+        for dependency in dependencies(crate)
+        if dependency.startswith(("anvil-tui", "anvil-platform", "anvil-session"))
+    )
+    if bad:
+        print(
+            f"architecture: {crate} must not depend on UI/session/platform crates: "
+            + ", ".join(bad),
+            file=sys.stderr,
+        )
+        sys.exit(1)
+PY
 
 echo "architecture: ok"
