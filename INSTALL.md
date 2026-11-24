@@ -24,6 +24,10 @@ Build-host ISA/glibc, user-vs-root, and cgroup findings are recorded in
 - Rust 1.100 or newer (the repository pins the toolchain in
   `rust-toolchain.toml`).
 - Go 1.27.4 or newer (the repository pins the version in `go.mod`).
+- A C/C++ compiler for the vendored Luau plugin host.
+- Node.js 26.13.1 and TypeScript 5.9.3 for generated-binding checks; neither is
+  required to build or run Anvil.
+- Python 3 for repository smoke, release, and documentation scripts.
 - A locale with UTF-8 support.
 
 Language servers are not bundled. Install the servers you want on `PATH`:

@@ -52,11 +52,19 @@ go/internal/                gateway, LSP, watch, fetch, policy, fsroot
 docs/                       charter, threat model, ADRs, plans, performance
 ```
 
-Rust is pinned by `rust-toolchain.toml`. Go **1.27.4 or newer** is required;
-CI installs the exact version from the root `go.mod` (currently 1.27.4), while
-local newer toolchains are allowed.
-`mise install` installs the pinned Go version from `mise.toml`.
-Do not introduce a new native dependency without an ADR.
+The pinned development toolchain is:
+
+- Rust **1.100.0** via `rust-toolchain.toml`; install the declared components
+  (`rustfmt`, `clippy`, `rust-src`, `rust-analyzer`).
+- Go **1.27.4** via `go.mod` and `mise.toml`.
+- Node **26.13.1** and TypeScript **5.9.3** for generated API binding type-checks.
+  Node is not a runtime dependency.
+- A C/C++ compiler for the vendored Luau plugin host.
+- Python 3 for repository scripts and smoke checks.
+
+`mise install` installs the pinned Go and Node versions. Rust is selected by
+`rust-toolchain.toml`. `tmux` is additionally required for the real-TUI smoke
+scripts. Do not introduce a new native dependency without an ADR.
 
 ## Required checks
 
@@ -80,6 +88,17 @@ golangci-lint run ./...
 go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
 govulncheck ./...
 ```
+
+For generated API bindings:
+
+```bash
+cargo test -p anvil-api --features bindings
+npm install --global typescript@5.9.3
+tsc --noEmit --skipLibCheck crates/anvil-api/bindings/*.ts
+```
+
+`cargo semver-checks` is used by CI; C/C++ language-server smoke tests also
+need `clangd`, `jdtls`, `rust-analyzer`, and `gopls` on `PATH` when run.
 
 Security and performance changes also need the relevant fixtures under
 `crates/*/benches` or the crate's integration tests.
