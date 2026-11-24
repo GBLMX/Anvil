@@ -36,11 +36,12 @@ piece table is also viable; the choice is not "Gap Buffer or nothing".
 
 ## Current harness
 
-`crates/anvil-core` defines the `TextBuffer` trait and three candidates:
-`RopeBuffer`, `GapBuffer`, and `PieceTable`. The initial CLI benchmark runs:
+`crates/anvil-core` defines the `TextBuffer` trait and the production
+`PieceTable`. The benchmark-only `RopeBuffer`, `GapBuffer`, and CLI harness
+live in `crates/anvil-text-bench`:
 
 ```text
-cargo run --release -p anvil-core --bin text-bench -- 1 10 100
+cargo run --release -p anvil-text-bench --bin text-bench -- 1 10 100
 ```
 
 It measures construction, first viewport extraction, and repeated edits at

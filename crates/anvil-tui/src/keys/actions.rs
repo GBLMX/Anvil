@@ -363,10 +363,36 @@ pub(super) fn theme_browser_action(key: KeyPress) -> Option<ThemeBrowserAction> 
 
 pub(super) fn execute_theme_browser_action(model: &mut Model, action: ThemeBrowserAction) {
     match action {
-        ThemeBrowserAction::Previous => model.move_theme_browser(-1),
-        ThemeBrowserAction::Next => model.move_theme_browser(1),
-        ThemeBrowserAction::Apply => model.apply_theme_browser(),
-        ThemeBrowserAction::Cancel => model.cancel_theme_browser(),
+        ThemeBrowserAction::Previous => {
+            let effect = model
+                .overlays
+                .theme_browser
+                .as_mut()
+                .map(|browser| crate::theme_browser::move_selection(browser, -1));
+            if let Some(effect) = effect {
+                crate::theme_browser::apply_effect(model, effect);
+            }
+        }
+        ThemeBrowserAction::Next => {
+            let effect = model
+                .overlays
+                .theme_browser
+                .as_mut()
+                .map(|browser| crate::theme_browser::move_selection(browser, 1));
+            if let Some(effect) = effect {
+                crate::theme_browser::apply_effect(model, effect);
+            }
+        }
+        ThemeBrowserAction::Apply => {
+            if let Some(browser) = model.overlays.theme_browser.take() {
+                crate::theme_browser::apply_effect(model, crate::theme_browser::apply(browser));
+            }
+        }
+        ThemeBrowserAction::Cancel => {
+            if let Some(browser) = model.overlays.theme_browser.take() {
+                crate::theme_browser::apply_effect(model, crate::theme_browser::cancel(browser));
+            }
+        }
     }
 }
 

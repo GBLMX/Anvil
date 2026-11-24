@@ -1,18 +1,18 @@
 # Internal Polish Plan
 
-Status: 0.6.0 internal polish is complete; **0.7.0** is the release
-candidate. Public signing custody and GitHub provenance remain external
+Status: 0.7.0 internal polish is complete; **0.8.0** is the current workspace
+release candidate. Public signing custody and GitHub provenance remain external
 release-time gates.
 
-The project can land candidate changes and prepare `0.7.0`, but must not publish
+The project can land candidate changes and prepare `0.8.0`, but must not publish
 a public release until those external gates are authorized.
 
 ## 1. Rules
 
-- `Cargo.toml` workspace version is `0.7.0`; the CI release-version guard fails
+- `Cargo.toml` workspace version is `0.8.0`; the CI release-version guard fails
   on an accidental mismatch.
-- `CHANGELOG.md` uses a `0.7.0` candidate section; new post-candidate work goes
-  under `[Unreleased]`.
+- `CHANGELOG.md` keeps post-candidate work under `[Unreleased]`; the `0.7.0`
+  section remains the previous candidate record.
 - Do not create a public tag or publish a release until production signing and
   provenance are authorized. Release secrets stay outside the repository.
 - The plugin API, gateway protocol, plugin index schema, and settings schema
@@ -35,7 +35,7 @@ Already landed:
   role, installed-plugin manager, official-only release layout, installer, and
   signed release workflow.
 
-Candidate version: `0.7.0`.
+Candidate version: `0.8.0`.
 
 ## 3. P0: daily-use completeness
 
@@ -237,7 +237,7 @@ Internal polish ends only when all are true:
   verified with production-like keys in
   [release-dry-run-2026-11-22.md](history/releases/release-dry-run-2026-11-22.md); production key
   custody and CI provenance remain release-time external steps.
-- The next public version is `0.7.0`, and the release-version guard is updated;
+- The next public version is `0.8.0`, and the release-version guard is updated;
   public publication remains gated on production signing custody and CI
   provenance.
 

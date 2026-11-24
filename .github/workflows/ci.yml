@@ -57,14 +57,20 @@ jobs:
       - name: Measure PR p99
         run: |
           TEXT_P99_MB=10 TEXT_P99_SAMPLES=100 \
-            cargo run --release -p anvil-core --bin text-p99 > /tmp/pr-p99.csv
+            cargo run --release -p anvil-text-bench --bin text-p99 > /tmp/pr-p99.csv
       - name: Measure main p99
         run: |
           git worktree add --detach /tmp/bench-base origin/main
           cd /tmp/bench-base
-          CARGO_TARGET_DIR=/tmp/bench-target \
-            TEXT_P99_MB=10 TEXT_P99_SAMPLES=100 \
-            cargo run --release -p anvil-core --bin text-p99 > /tmp/base-p99.csv
+          if [ -d crates/anvil-text-bench ]; then
+            CARGO_TARGET_DIR=/tmp/bench-target \
+              TEXT_P99_MB=10 TEXT_P99_SAMPLES=100 \
+              cargo run --release -p anvil-text-bench --bin text-p99 > /tmp/base-p99.csv
+          else
+            CARGO_TARGET_DIR=/tmp/bench-target \
+              TEXT_P99_MB=10 TEXT_P99_SAMPLES=100 \
+              cargo run --release -p anvil-core --bin text-p99 > /tmp/base-p99.csv
+          fi
       - name: Compare p99 against main
         run: |
           python3 - <<'PY'

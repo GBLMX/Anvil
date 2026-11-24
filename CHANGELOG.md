@@ -69,6 +69,22 @@ post-`0.5.0` feature line.
   with build provenance instead of signing with CI keys or publishing.
 - Plugin manifests now declare `permissions`; editor RPCs require
   `editor.read`/`editor.write` and `ui.notify` requires `ui.notify`.
+- The workspace version is now 0.8.0 for the ADR-0077 kernel API break.
+- Documented the TUI view-boundary extraction gates and corrected the settings
+  environment inventory, separating per-field behavior from `ANVIL_SETTINGS`,
+  presentation variables, and LSP command overrides.
+- Declared the architecture modernization and modularization program; ownership
+  and headless-boundary phases are tracked in
+  `docs/architecture-modernization-plan.md`.
+- Theme-browser state transitions moved out of `impl Model` into the
+  `theme_browser` page module; TUI metrics dropped from 71 to 70 `impl Model`
+  blocks and from 547 to 543 `&mut Model` methods.
+
+### Removed
+- `anvil-core` no longer exports benchmark-only `RopeBuffer`/`GapBuffer` or
+  depends on `ropey`; the comparison harness moved to the unpublished
+  `anvil-text-bench` crate (ADR-0077).
+- Public `RopeBuffer`/`GapBuffer` removal is covered by the 0.8.0 major line.
 
 ## [0.7.0] - 2026-11-22
 ### Added

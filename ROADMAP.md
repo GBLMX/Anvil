@@ -4,14 +4,14 @@ This is a directional roadmap, not a release commitment. The detailed gates stay
 in `PROJECT_CHARTER.md`, `docs/phase-0-7-plan.md`, and the ADRs.
 Canonical layer/order: [docs/README.md § Delivery hierarchy](docs/README.md#delivery-hierarchy).
 
-## 0.7.0 release candidate
+## 0.8.0 release candidate
 
-The workspace version is **0.7.0**.
+The workspace version is **0.8.0**.
 
 - Do not create a public release tag or publish until production signing
   custody and GitHub provenance are authorized.
-- Keep candidate work in the `0.7.0` changelog section; post-candidate work
-  goes under `[Unreleased]`.
+- Keep candidate work under `[Unreleased]`; the `0.7.0` changelog section
+  remains the previous candidate record.
 - Follow [docs/internal-polish-plan.md](docs/internal-polish-plan.md) for the
   remaining external release gates.
 - `scripts/check-frozen-version.sh` fails CI on an accidental release-version
@@ -20,14 +20,17 @@ The workspace version is **0.7.0**.
 
 ## Current
 
-- `0.7.0` release candidate: the `0.6.0` internal-polish baseline, P0/P1
-  feature sets, multi-root routing, cross-workspace process handoff, and the
-  landed `0.7.x` official modules.
+- `0.8.0` release candidate: the `0.7.0` candidate baseline, P0/P1 feature
+  sets, multi-root routing, cross-workspace process handoff, and the landed
+  `0.7.x` official modules.
 - The latest hardening pass closed the open editor, plugin-host, gateway,
   TUI, theme, and icon issues; the workspace gates pass with 1,400 Rust tests
   and 16 explicit ignored/manual tests.
 - The full release layout installs and passes `anvil doctor --profile
   installed`; the remaining exit gates are tracked below.
+- Architecture modernization is active: page/domain state ownership comes
+  before `anvil-view`/`anvil-term` extraction; see
+  [the modernization plan](docs/architecture-modernization-plan.md).
 
 ## Remaining internal polish
 
@@ -47,7 +50,7 @@ signed-index work stay deferred until the polish phase exits.
 
 ## Later
 
-- IDE platform after the `0.7.0` release gates: project model, workspace index,
+- IDE platform after the `0.8.0` release gates: project model, workspace index,
   declarative integration descriptors, debugger depth, and remote workspace;
   see [docs/ide-platform-plan.md](docs/ide-platform-plan.md) and
   [ADR-0070](docs/adr/0070-ide-extension-contributions-and-execution-trust.md).

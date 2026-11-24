@@ -24,6 +24,7 @@ members = [
     "crates/anvil-runtime",
     "crates/anvil-session",
     "crates/anvil-task",
+    "crates/anvil-text-bench",
     "crates/anvil-workspace",
     "crates/anvil-syntax",
     "crates/anvil-tui",
@@ -34,40 +35,40 @@ members = [
 resolver = "3"
 
 [workspace.package]
-version = "0.7.0"
+version = "0.8.0"
 edition = "2024"
 rust-version = "1.100"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/GBLMX/Anvil"
 
 [workspace.dependencies]
-anvil-api = { path = "crates/anvil-api", version = "0.7.0" }
-anvil-control = { path = "crates/anvil-control", version = "0.7.0" }
-anvil-core = { path = "crates/anvil-core", version = "0.7.0" }
-anvil-dap = { path = "crates/anvil-dap", version = "0.7.0" }
-anvil-distro-standard = { path = "crates/anvil-distro-standard", version = "0.7.0" }
-anvil-editor = { path = "crates/anvil-editor", version = "0.7.0" }
-anvil-integrations = { path = "crates/anvil-integrations", version = "0.7.0" }
-anvil-ipc = { path = "crates/anvil-ipc", version = "0.7.0" }
-anvil-lsp-client = { path = "crates/anvil-lsp-client", version = "0.7.0" }
-anvil-mod-desktop = { path = "crates/anvil-mod-desktop", version = "0.7.0" }
-anvil-mod-git = { path = "crates/anvil-mod-git", version = "0.7.0" }
-anvil-mod-language-latex = { path = "crates/anvil-mod-language-latex", version = "0.7.0" }
-anvil-mod-language-typst = { path = "crates/anvil-mod-language-typst", version = "0.7.0" }
-anvil-mod-workspace-index = { path = "crates/anvil-mod-workspace-index", version = "0.7.0" }
-anvil-module = { path = "crates/anvil-module", version = "0.7.0" }
-anvil-platform = { path = "crates/anvil-platform", version = "0.7.0" }
-anvil-plugin-host = { path = "crates/anvil-plugin-host", version = "0.7.0" }
-anvil-process = { path = "crates/anvil-process", version = "0.7.0" }
-anvil-project = { path = "crates/anvil-project", version = "0.7.0" }
-anvil-runtime = { path = "crates/anvil-runtime", version = "0.7.0" }
-anvil-session = { path = "crates/anvil-session", version = "0.7.0" }
-anvil-syntax = { path = "crates/anvil-syntax", version = "0.7.0" }
-anvil-task = { path = "crates/anvil-task", version = "0.7.0" }
-anvil-tui = { path = "crates/anvil-tui", version = "0.7.0" }
-anvil-tui-kit = { path = "crates/anvil-tui-kit", version = "0.7.0" }
-anvil-tui-theme = { path = "crates/anvil-tui-theme", version = "0.7.0" }
-anvil-workspace = { path = "crates/anvil-workspace", version = "0.7.0" }
+anvil-api = { path = "crates/anvil-api", version = "0.8.0" }
+anvil-control = { path = "crates/anvil-control", version = "0.8.0" }
+anvil-core = { path = "crates/anvil-core", version = "0.8.0" }
+anvil-dap = { path = "crates/anvil-dap", version = "0.8.0" }
+anvil-distro-standard = { path = "crates/anvil-distro-standard", version = "0.8.0" }
+anvil-editor = { path = "crates/anvil-editor", version = "0.8.0" }
+anvil-integrations = { path = "crates/anvil-integrations", version = "0.8.0" }
+anvil-ipc = { path = "crates/anvil-ipc", version = "0.8.0" }
+anvil-lsp-client = { path = "crates/anvil-lsp-client", version = "0.8.0" }
+anvil-mod-desktop = { path = "crates/anvil-mod-desktop", version = "0.8.0" }
+anvil-mod-git = { path = "crates/anvil-mod-git", version = "0.8.0" }
+anvil-mod-language-latex = { path = "crates/anvil-mod-language-latex", version = "0.8.0" }
+anvil-mod-language-typst = { path = "crates/anvil-mod-language-typst", version = "0.8.0" }
+anvil-mod-workspace-index = { path = "crates/anvil-mod-workspace-index", version = "0.8.0" }
+anvil-module = { path = "crates/anvil-module", version = "0.8.0" }
+anvil-platform = { path = "crates/anvil-platform", version = "0.8.0" }
+anvil-plugin-host = { path = "crates/anvil-plugin-host", version = "0.8.0" }
+anvil-process = { path = "crates/anvil-process", version = "0.8.0" }
+anvil-project = { path = "crates/anvil-project", version = "0.8.0" }
+anvil-runtime = { path = "crates/anvil-runtime", version = "0.8.0" }
+anvil-session = { path = "crates/anvil-session", version = "0.8.0" }
+anvil-syntax = { path = "crates/anvil-syntax", version = "0.8.0" }
+anvil-task = { path = "crates/anvil-task", version = "0.8.0" }
+anvil-tui = { path = "crates/anvil-tui", version = "0.8.0" }
+anvil-tui-kit = { path = "crates/anvil-tui-kit", version = "0.8.0" }
+anvil-tui-theme = { path = "crates/anvil-tui-theme", version = "0.8.0" }
+anvil-workspace = { path = "crates/anvil-workspace", version = "0.8.0" }
 
 base64 = "0.23"
 codebook-tree-sitter-latex = "0.6"

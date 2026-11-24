@@ -43,63 +43,85 @@ impl ThemeBrowser {
     }
 }
 
-impl Model {
-    pub(crate) fn open_theme_browser(&mut self) {
-        if self.overlays.theme_browser.is_some() {
-            return;
-        }
-        self.overlays.theme_browser = Some(ThemeBrowser::new());
-        self.push_overlay(OverlayKind::ThemeBrowser);
-        let warnings = theme::custom_theme_warnings();
-        self.status.text = if warnings.is_empty() {
-            "themes · Enter apply · Esc cancel".to_owned()
-        } else {
-            format!(
-                "themes · {} warning(s) · {} · Enter apply · Esc cancel",
-                warnings.len(),
-                warnings[0]
-            )
-        };
-        self.file.dirty = true;
-    }
+pub(crate) enum ThemeBrowserEffect {
+    Open {
+        browser: ThemeBrowser,
+        warnings: Vec<String>,
+    },
+    Preview(Option<&'static str>),
+    Apply {
+        name: Option<&'static str>,
+    },
+    Cancel {
+        original: Choice,
+    },
+}
 
-    pub(crate) fn move_theme_browser(&mut self, delta: isize) {
-        let Some(browser) = self.overlays.theme_browser.as_mut() else {
-            return;
-        };
-        if let Some(name) = browser.move_selection(delta) {
+pub(crate) fn open() -> ThemeBrowserEffect {
+    ThemeBrowserEffect::Open {
+        browser: ThemeBrowser::new(),
+        warnings: theme::custom_theme_warnings(),
+    }
+}
+
+pub(crate) fn move_selection(browser: &mut ThemeBrowser, delta: isize) -> ThemeBrowserEffect {
+    ThemeBrowserEffect::Preview(browser.move_selection(delta))
+}
+
+pub(crate) fn apply(browser: ThemeBrowser) -> ThemeBrowserEffect {
+    ThemeBrowserEffect::Apply {
+        name: browser.selected_name(),
+    }
+}
+
+pub(crate) fn cancel(browser: ThemeBrowser) -> ThemeBrowserEffect {
+    ThemeBrowserEffect::Cancel {
+        original: browser.original(),
+    }
+}
+
+pub(crate) fn apply_effect(model: &mut Model, effect: ThemeBrowserEffect) {
+    match effect {
+        ThemeBrowserEffect::Open { browser, warnings } => {
+            if model.overlays.theme_browser.is_some() {
+                return;
+            }
+            model.overlays.theme_browser = Some(browser);
+            model.push_overlay(OverlayKind::ThemeBrowser);
+            model.status.text = if warnings.is_empty() {
+                "themes · Enter apply · Esc cancel".to_owned()
+            } else {
+                format!(
+                    "themes · {} warning(s) · {} · Enter apply · Esc cancel",
+                    warnings.len(),
+                    warnings[0]
+                )
+            };
+        }
+        ThemeBrowserEffect::Preview(Some(name)) => {
             let _ = theme::apply_choice(Choice::Fixed(name), false);
         }
-        self.file.dirty = true;
+        ThemeBrowserEffect::Preview(None) => {}
+        ThemeBrowserEffect::Apply { name } => {
+            model.close_overlay(OverlayKind::ThemeBrowser);
+            let Some(name) = name else {
+                return;
+            };
+            model.status.text = match theme::set_theme(name) {
+                Ok(()) => {
+                    let status = format!("theme: {}", theme::name());
+                    model.persist_theme_status(status)
+                }
+                Err(error) => format!("E: {error}"),
+            };
+        }
+        ThemeBrowserEffect::Cancel { original } => {
+            model.close_overlay(OverlayKind::ThemeBrowser);
+            let _ = theme::apply_choice(original, false);
+            model.status.text = "theme preview cancelled".to_owned();
+        }
     }
-
-    pub(crate) fn apply_theme_browser(&mut self) {
-        let Some(browser) = self.overlays.theme_browser.take() else {
-            return;
-        };
-        self.close_overlay(OverlayKind::ThemeBrowser);
-        let Some(name) = browser.selected_name() else {
-            return;
-        };
-        self.status.text = match theme::set_theme(name) {
-            Ok(()) => {
-                let status = format!("theme: {}", theme::name());
-                self.persist_theme_status(status)
-            }
-            Err(error) => format!("E: {error}"),
-        };
-        self.file.dirty = true;
-    }
-
-    pub(crate) fn cancel_theme_browser(&mut self) {
-        let Some(browser) = self.overlays.theme_browser.take() else {
-            return;
-        };
-        self.close_overlay(OverlayKind::ThemeBrowser);
-        let _ = theme::apply_choice(browser.original(), false);
-        self.status.text = "theme preview cancelled".to_owned();
-        self.file.dirty = true;
-    }
+    model.file.dirty = true;
 }
 
 pub(crate) fn rect(area: ratatui::layout::Rect) -> ratatui::layout::Rect {

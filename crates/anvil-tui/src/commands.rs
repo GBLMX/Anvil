@@ -189,7 +189,9 @@ impl Model {
             ("settings", "") => self.open_settings(),
             ("settings-export", argument) => self.export_settings(argument),
             ("settings-import", argument) => self.import_settings(argument),
-            ("themes", "") => self.open_theme_browser(),
+            ("themes", "") => {
+                crate::theme_browser::apply_effect(self, crate::theme_browser::open())
+            }
             ("theme", argument) => {
                 if argument.is_empty() || argument == "list" {
                     self.status.text = format!(

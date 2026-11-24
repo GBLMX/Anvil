@@ -123,11 +123,25 @@ pub(crate) fn handle_mouse(model: &mut Model, mouse: MouseEvent, width: u16, hei
         if model.overlays.theme_browser.is_some() {
             match mouse.kind {
                 MouseEventKind::ScrollUp => {
-                    model.move_theme_browser(-1);
+                    let effect = model
+                        .overlays
+                        .theme_browser
+                        .as_mut()
+                        .map(|browser| crate::theme_browser::move_selection(browser, -1));
+                    if let Some(effect) = effect {
+                        crate::theme_browser::apply_effect(model, effect);
+                    }
                     return true;
                 }
                 MouseEventKind::ScrollDown => {
-                    model.move_theme_browser(1);
+                    let effect = model
+                        .overlays
+                        .theme_browser
+                        .as_mut()
+                        .map(|browser| crate::theme_browser::move_selection(browser, 1));
+                    if let Some(effect) = effect {
+                        crate::theme_browser::apply_effect(model, effect);
+                    }
                     return true;
                 }
                 MouseEventKind::Down(MouseButton::Left) => {
@@ -623,8 +637,8 @@ fn close_outside_overlay(model: &mut Model) {
     if model.overlays.test_explorer.is_some() {
         model.close_test_explorer();
     }
-    if model.overlays.theme_browser.is_some() {
-        model.cancel_theme_browser();
+    if let Some(browser) = model.overlays.theme_browser.take() {
+        crate::theme_browser::apply_effect(model, crate::theme_browser::cancel(browser));
     }
     if model.language.completion.completion.is_some() {
         model.cancel_completion();

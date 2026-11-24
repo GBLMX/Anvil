@@ -1,6 +1,6 @@
 # ADR-0077: Benchmark-Only Text Backends
 
-- Status: Proposed
+- Status: Accepted; implemented 2026-11-24
 - Version: 1.0.0
 - Date: 2026-11-24
 - Related: [ADR-0004](0004-text-model.md),
@@ -65,6 +65,13 @@ production kernel.
 Removing benchmark-only public types from `anvil-core` is an API break. It is
 accepted as part of this 0.x decision, but it must be documented in the
 changelog and migration guidance.
+
+### Implementation note (2026-11-24)
+
+The comparison backend, CLI harnesses, Criterion target, and their tests now
+live in the unpublished `anvil-text-bench` crate. `anvil-core` exposes only the
+production `PieceTable`/`TextDocument` surface and no `ropey` dependency. The
+change lands in the 0.8.0 major line.
 
 ## Consequences
 

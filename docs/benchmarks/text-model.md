@@ -19,7 +19,7 @@ is 0.8.2; regenerate the baseline before comparing new results.
 Command:
 
 ```bash
-cargo bench --bench text_model -- --save-baseline phase0
+cargo bench -p anvil-text-bench --bench text_model -- --save-baseline phase0
 ```
 
 The baseline is stored under Criterion's local `target/criterion` directory. It
@@ -70,7 +70,7 @@ regression reference.
 Each backend ran in its own process:
 
 ```bash
-cargo run --release -p anvil-core --bin text-rss -- <rope|gap|piece> 100
+cargo run --release -p anvil-text-bench --bin text-rss -- <rope|gap|piece> 100
 ```
 
 | Backend | State | VmRSS | VmHWM |
@@ -88,7 +88,7 @@ does not isolate shared runtime overhead.
 ## 100 MB p99 probe
 
 ```bash
-TEXT_P99_MB=100 cargo run --release -p anvil-core --bin text-p99
+TEXT_P99_MB=100 cargo run --release -p anvil-text-bench --bin text-p99
 ```
 
 | Backend | Open p99 | `len_lines` p99 | Viewport p99 | Random edits p99 |

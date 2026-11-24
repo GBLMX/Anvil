@@ -62,7 +62,7 @@ the search implementation yet.
 Baseline commands:
 
 ```bash
-cargo bench -p anvil-core --bench text_model
+cargo bench -p anvil-text-bench --bench text_model
 go build -o target/release/anvil-gateway ./go/cmd/anvil-gateway
 cargo bench -p anvil-tui --bench e2e_edit --features e2e-bench
 ```
@@ -289,10 +289,10 @@ Selected backend: PieceTable, exposed as `anvil-core::TextDocument`; see
 [ADR-0009](adr/0009-text-model-snapshot-gate.md). Rope remains a benchmark
 fallback; Gap Buffer is rejected.
 
-The initial candidate harness lives in `anvil-core`:
+The initial candidate harness lives in `anvil-text-bench`:
 
 ```text
-cargo run --release -p anvil-core --bin text-bench -- 1 10 100
+cargo run --release -p anvil-text-bench --bin text-bench -- 1 10 100
 ```
 
 It is a smoke/measurement starting point, not the final p99 decision run.

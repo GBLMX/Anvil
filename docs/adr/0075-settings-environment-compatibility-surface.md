@@ -17,17 +17,23 @@
 settings layers, language overlays, origin reporting, `settings check`, and
 `:config-reload`.
 
-A raw repository scan finds 87 unique `ANVIL_*` tokens. That number is not a
-user-facing settings count: it includes sandbox, signing, gateway, CI, and test
-variables. The settings registry itself defines 10 environment variables, and
-the LSP catalog adds 17 `ANVIL_LSP_<LANG>` variables. The frequently quoted
-"63" has no documented filter and must not be used as a target without an
-inventory.
+A raw repository scan now finds 88 unique `ANVIL_*` tokens. That number is not
+a user-facing settings count: it includes sandbox, signing, gateway, CI, test,
+and documentation references. The settings registry defines 13 names: nine
+per-field behavior variables, the `ANVIL_SETTINGS` complete-file override, and
+three presentation variables. The LSP catalog adds 15 unique
+`ANVIL_LSP_<LANG>` command overrides. The older 87/10/17 snapshot is
+historical; “10 settings registry variables” means nine per-field variables
+plus the complete-file override, not ten interchangeable settings. The
+frequently quoted “63” has no documented filter and must not be used as a
+target without an inventory. See
+[Settings sources](../settings-sources.md#environment-inventory).
 
-Current precedence is default, environment, user, and trusted project layers,
-plus language overlays. `ANVIL_SETTINGS` is a complete file override, not an
-ordinary per-field layer. ADR-0038 keeps the project layer trust-gated. The
-problem is not another global field: editor and language behavior already has
+Current precedence is default, user, trusted project, then environment
+(highest), plus language overlays. `ANVIL_SETTINGS` is a complete file
+override, not an ordinary per-field layer. ADR-0038 keeps the project layer
+trust-gated.
+The problem is not another global field: editor and language behavior already has
 file-backed sources, while environment variables create a second, harder-to-
 inspect source and enlarge the origin-reporting surface.
 

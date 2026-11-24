@@ -9,6 +9,7 @@
   [ADR-0041](0041-tui-primitive-extraction.md),
   [ADR-0057](0057-tui-surface-model-and-focus-contract.md),
   [ADR-0068](0068-tui-visual-language-and-markers.md)
+- Analysis: [TUI view boundary and extraction decision](../tui-view-boundary.md).
 
 ## Context
 

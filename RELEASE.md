@@ -5,15 +5,16 @@ current `0.x` line; it is not a compatibility guarantee.
 
 ## Release candidate
 
-`0.7.0` is the current internal release candidate. Do not create a public
+`0.8.0` is the current internal release candidate. Do not create a public
 release tag until production plugin/checksum signing and GitHub provenance are
 authorized. Internal candidates use the CI checksum key under
 [ADR-0060](docs/adr/0060-release-checksum-signing-authority.md).
 `scripts/check-frozen-version.sh` keeps the workspace version pinned to the
 chosen candidate version; change it only with the release version.
 
-The `0.7.0` gate matrix and signed dry-run evidence are recorded in
+The `0.7.0` gate matrix and signed dry-run evidence remain in
 [docs/history/releases/release-dry-run-2026-11-22.md](docs/history/releases/release-dry-run-2026-11-22.md).
+The `0.8.0` line carries the ADR-0077 kernel API break.
 
 
 ## Versioning

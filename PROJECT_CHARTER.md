@@ -1,8 +1,8 @@
 # Anvil Project Charter
 
-Status: **0.7.0 release candidate; public tagging remains gated on production signing and provenance.**
-Release model: **0.7.0 is the current candidate**; `0.3.0 → 0.4.0` was an
-earlier maintenance train released 2026-11-01. Later work lands under `[Unreleased]`.
+Status: **0.8.0 release candidate; public tagging remains gated on production signing and provenance.**
+Release model: **0.8.0 is the current candidate**; `0.7.0` remains the
+previous candidate line. Later work lands under `[Unreleased]`.
 Supersedes: the V1.0 whitepaper draft where it conflicts with the decisions below.
 Changes to this document require an ADR.
 

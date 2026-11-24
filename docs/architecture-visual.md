@@ -1,10 +1,10 @@
 # Anvil Architecture Maps
 
-Status: current as of 2026-11-20. Solid paths are implemented, including
+Status: current as of 2026-11-24. Solid paths are implemented, including
 asynchronous and out-of-process calls; dashed paths are deferred marketplace
-work. `0.6.0` internal polish is complete, `0.7.0` is the release candidate,
-the `0.7.1`–`0.7.4` official modules are landed, and marketplace/signed-index
-surfaces remain deferred. Layer rules and ownership stay in
+work. `0.7.0` internal polish is complete, and `0.8.0` is the current workspace
+release candidate. The `0.7.1`–`0.7.4` official modules are landed, and
+marketplace/signed-index surfaces remain deferred. Layer rules and ownership stay in
 [architecture.md](architecture.md); this file is the diagram view.
 
 ## 1. Process and trust boundaries
@@ -182,7 +182,7 @@ flowchart LR
 | `0.4.x` plugin lifecycle, I/O, session/protocol | landed |
 | `0.5.x` modal editing and TUI interaction | landed |
 | `0.6.0` internal polish | complete |
-| `0.7.0` release candidate | prepared; production signing/provenance external |
+| `0.8.0` release candidate | prepared; ADR-0077 API break; production signing/provenance external |
 | `0.6.1` package store and installed state | landed |
 | `0.7.1`–`0.7.4` official modules | landed |
 | Native workspace watch + live status | landed |

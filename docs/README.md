@@ -13,7 +13,7 @@ material. Last reviewed 2026-11-24.
 - [Architecture](architecture.md) — process model and layer boundaries
 - [Architecture maps](architecture-visual.md) — current processes, flows, and deferred surfaces
 - [Threat model](threat-model.md) — adversaries, mitigations, invariants
-- [Internal polish](internal-polish-plan.md) — `0.7.0` release candidate
+- [Internal polish](internal-polish-plan.md) — `0.7.0` closure and `0.8.0` candidate
 - [Performance baseline](performance.md) — gates and re-run triggers
 
 ## Sources of truth
@@ -26,6 +26,7 @@ Use one owner per question; other docs link instead of restating status.
 | Internal-polish scope and exit gates | [internal-polish-plan.md](internal-polish-plan.md) |
 | Architecture and layer rules | [architecture.md](architecture.md), [ADR-0042](adr/0042-selection-first-session-frontend.md) |
 | TUI structural budget | [tui-maintainability.md](tui-maintainability.md) |
+| TUI view boundary and extraction gates | [tui-view-boundary.md](tui-view-boundary.md) |
 | Architecture decisions | [ADR index](adr/README.md) |
 | Plugin API contract | [plugin-api-v1.md](spec/plugin-api-v1.md) |
 | API surface and versioning | [api-surface.md](api-surface.md) |
@@ -79,7 +80,8 @@ the owner.
 
 | Plan | Scope | Status |
 |---|---|---|
-| [Internal polish](internal-polish-plan.md) | 0.6.0 polish closure and 0.7.0 candidate | Active; external signing/provenance gates |
+| [Architecture modernization](architecture-modernization-plan.md) | TUI ownership, state boundaries, headless proof, optional extraction | Active; Phase 1 theme-browser slice landed |
+| [Internal polish](internal-polish-plan.md) | 0.7.0 closure and 0.8.0 candidate | Active; external signing/provenance gates |
 | [0.6.x distribution](0.6.x-plan.md) | packages, signing, download manager, marketplace | Active; marketplace deferred |
 | [0.7.x modules](0.7.x-plan.md) | optional source-level Rust modules | Active; 0.7.1–0.7.4 landed |
 | [Command architecture](command-architecture-plan.md) | registry, keymap trie, effects | Active; partial |
@@ -203,7 +205,7 @@ Architecture reading order, not a second status table:
 
 ### Version axes
 
-- Product version: workspace/Cargo version (`0.7.0`).
+- Product version: workspace/Cargo version (`0.8.0`).
 - Plan slice: internal labels such as `0.7.0.1`; not semver or release tags.
 - ADR version: `x.y.z`; see [`adr/README.md`](adr/README.md).
 

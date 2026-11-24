@@ -118,13 +118,27 @@ fn browser_previews_cancels_and_applies() {
     let mut model = Model::new(EditorState::from_text("x"), None);
     model.execute_command("themes");
     assert!(model.overlays.theme_browser.is_some());
-    model.move_theme_browser(1);
+    let effect = model
+        .overlays
+        .theme_browser
+        .as_mut()
+        .map(|browser| crate::theme_browser::move_selection(browser, 1))
+        .expect("theme browser");
+    crate::theme_browser::apply_effect(&mut model, effect);
     assert_ne!(theme::name(), "anvil-dark");
-    model.cancel_theme_browser();
+    let browser = model.overlays.theme_browser.take().expect("theme browser");
+    crate::theme_browser::apply_effect(&mut model, crate::theme_browser::cancel(browser));
     assert_eq!(theme::name(), "anvil-dark");
-    model.open_theme_browser();
-    model.move_theme_browser(1);
-    model.apply_theme_browser();
+    crate::theme_browser::apply_effect(&mut model, crate::theme_browser::open());
+    let effect = model
+        .overlays
+        .theme_browser
+        .as_mut()
+        .map(|browser| crate::theme_browser::move_selection(browser, 1))
+        .expect("theme browser");
+    crate::theme_browser::apply_effect(&mut model, effect);
+    let browser = model.overlays.theme_browser.take().expect("theme browser");
+    crate::theme_browser::apply_effect(&mut model, crate::theme_browser::apply(browser));
     assert_ne!(theme::name(), "anvil-dark");
     theme::set_startup_theme("anvil-dark").expect("reset");
 }
@@ -132,7 +146,7 @@ fn browser_previews_cancels_and_applies() {
 fn mouse_wheel_moves_theme_selection() {
     theme::set_startup_theme("anvil-dark").expect("reset");
     let mut model = Model::new(EditorState::from_text("x"), None);
-    model.open_theme_browser();
+    crate::theme_browser::apply_effect(&mut model, crate::theme_browser::open());
     let selected = |model: &Model| {
         model
             .overlays
@@ -169,8 +183,14 @@ fn mouse_wheel_moves_theme_selection() {
 fn theme_browser_renders_the_selected_tail() {
     theme::set_startup_theme("anvil-dark").expect("reset");
     let mut model = Model::new(EditorState::from_text("x"), None);
-    model.open_theme_browser();
-    model.move_theme_browser(theme::names().len() as isize);
+    crate::theme_browser::apply_effect(&mut model, crate::theme_browser::open());
+    let effect = model
+        .overlays
+        .theme_browser
+        .as_mut()
+        .map(|browser| crate::theme_browser::move_selection(browser, theme::names().len() as isize))
+        .expect("theme browser");
+    crate::theme_browser::apply_effect(&mut model, effect);
     let last = *theme::names().last().expect("theme");
     let mut terminal =
         ratatui::Terminal::new(ratatui::backend::TestBackend::new(120, 40)).expect("terminal");

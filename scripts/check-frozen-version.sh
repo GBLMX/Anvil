@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-expected="0.7.0"
+expected="0.8.0"
 actual="$(python3 - <<'PY'
 import tomllib
 with open('Cargo.toml', 'rb') as file:

@@ -82,7 +82,7 @@ their decision sections.
 | [0074](0074-anvil-tui-state-decomposition-and-crate-boundary.md) | Anvil-TUI state decomposition, dependency direction, and conditional crate extraction | Proposed; dependency-direction gate implemented; state/page extraction pending |
 | [0075](0075-settings-environment-compatibility-surface.md) | Settings environment compatibility surface | Proposed |
 | [0076](0076-built-in-lsp-profile-scope.md) | Built-in LSP profile scope | Proposed |
-| [0077](0077-benchmark-only-text-backends.md) | Benchmark-only text backends | Proposed |
+| [0077](0077-benchmark-only-text-backends.md) | Benchmark-only text backends | Accepted; implemented 2026-11-24 |
 
 ## Numbering Rule
 

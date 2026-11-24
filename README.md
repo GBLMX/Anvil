@@ -14,7 +14,7 @@ remain untrusted and sandboxed.
   <img src="docs/assets/anvil-demo.gif" alt="Anvil terminal editor demo: fuzzy open, edit, save, search, tree, and Git gutter" width="900">
 </p>
 
-Status: **`0.7.0` is the workspace release candidate; public tagging remains
+Status: **`0.8.0` is the workspace release candidate; public tagging remains
 gated on production signing and provenance**. See the
 [internal polish plan](docs/internal-polish-plan.md) and the
 [0.7.x module plan](docs/0.7.x-plan.md).

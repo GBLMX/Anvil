@@ -70,6 +70,16 @@ gateway internals beyond the versioned protocol.
 - Semver: PR CI runs `cargo-semver-checks`. Locally, install the pinned
   checker and run `cargo semver-checks check-release --baseline-rev origin/main`.
 
+## Migration notes
+
+### ADR-0077: benchmark-only text backends
+
+`RopeBuffer` and `GapBuffer` are no longer exported by `anvil-core`, and
+`anvil-core` no longer depends on `ropey`. Production consumers should keep
+using `TextDocument`/`PieceTable`; comparison or benchmark consumers should
+depend on the unpublished `anvil-text-bench` crate. The source-breaking change
+is recorded in the changelog for the 0.8.0 major line.
+
 ## Known pending refactors
 
 - `anvil-editor` exposes typed `try_*` methods; legacy `bool` wrappers on

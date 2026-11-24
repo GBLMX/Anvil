@@ -226,7 +226,7 @@ impl EditCommand {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{GapBuffer, PieceTable, RopeBuffer};
+    use crate::PieceTable;
 
     fn exercise<B: TextBuffer>() {
         let mut buffer = B::from_text("ab");
@@ -265,9 +265,7 @@ mod tests {
     }
 
     #[test]
-    fn history_works_for_all_backends() {
-        exercise::<RopeBuffer>();
-        exercise::<GapBuffer>();
+    fn history_works_for_production_backend() {
         exercise::<PieceTable>();
     }
 
@@ -352,8 +350,6 @@ mod tests {
 
     #[test]
     fn contiguous_typing_is_one_undo_group() {
-        typing_group::<RopeBuffer>();
-        typing_group::<GapBuffer>();
         typing_group::<PieceTable>();
     }
 

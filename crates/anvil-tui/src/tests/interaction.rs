@@ -298,7 +298,7 @@ fn overlay_stack_is_lifo_and_restores_focus() {
 fn theme_browser_uses_the_overlay_stack() {
     let mut model = Model::new(EditorState::from_text("alpha"), None);
     model.start_page.welcome = false;
-    model.open_theme_browser();
+    crate::theme_browser::apply_effect(&mut model, crate::theme_browser::open());
     assert_eq!(model.top_overlay(), Some(OverlayKind::ThemeBrowser));
 
     handle_event(&mut model, key(KeyCode::Esc));

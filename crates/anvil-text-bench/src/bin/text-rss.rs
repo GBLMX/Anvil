@@ -1,6 +1,7 @@
 use std::hint::black_box;
 
-use anvil_core::{GapBuffer, PieceTable, RopeBuffer, TextBuffer};
+use anvil_core::{PieceTable, TextBuffer};
+use anvil_text_bench::{GapBuffer, RopeBuffer};
 
 fn synthetic_text(megabytes: usize) -> String {
     let target = megabytes * 1024 * 1024;

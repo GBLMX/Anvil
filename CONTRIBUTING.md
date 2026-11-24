@@ -1,6 +1,6 @@
 # Contributing to Anvil
 
-Anvil is preparing the `0.7.0` release candidate. The most useful
+Anvil is preparing the `0.8.0` release candidate. The most useful
 contributions are security review, threat-model corrections, benchmark
 fixtures, and small vertical slices that match the charter and ADRs.
 

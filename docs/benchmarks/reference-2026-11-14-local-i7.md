@@ -20,7 +20,7 @@ line index, TUI, and Go gateway. Keep it for regression history; use the
 Commands:
 
 ```bash
-taskset -c 0-11 cargo bench -p anvil-core --bench text_model
+taskset -c 0-11 cargo bench -p anvil-text-bench --bench text_model
 taskset -c 0-11 cargo bench -p anvil-core --bench line_index
 TEXT_EDITOR_EDIT_SAMPLES=1000 taskset -c 0-3 \
   cargo run --release -p anvil-editor --bin editor-p99

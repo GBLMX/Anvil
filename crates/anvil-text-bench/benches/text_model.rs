@@ -1,6 +1,7 @@
 use std::{hint::black_box, sync::Arc};
 
-use anvil_core::{GapBuffer, PieceTable, RopeBuffer, TextBuffer};
+use anvil_core::{PieceTable, TextBuffer};
+use anvil_text_bench::{GapBuffer, RopeBuffer};
 use criterion::{BatchSize, Criterion, Throughput, criterion_group, criterion_main};
 
 const VIEWPORT_LINES: usize = 24;

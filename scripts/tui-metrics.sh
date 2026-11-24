@@ -39,6 +39,36 @@ for path in root.rglob("*.rs"):
 print(count)
 PY
 )"
+model_mut_free_fns="$(
+    python3 - "$src" <<'PY'
+import pathlib
+import re
+import sys
+
+root = pathlib.Path(sys.argv[1])
+count = 0
+for path in root.rglob("*.rs"):
+    text = path.read_text()
+    cleaned = list(text)
+    for match in re.finditer(r"(?m)^impl Model\b[^{]*\{", text):
+        end = match.end()
+        depth = 1
+        while end < len(text) and depth:
+            if text[end] == "{":
+                depth += 1
+            elif text[end] == "}":
+                depth -= 1
+            end += 1
+        for index in range(match.start(), end):
+            if cleaned[index] != "\n":
+                cleaned[index] = " "
+    count += sum(
+        "&mut Model" in signature
+        for signature in re.findall(r"\bfn\s+\w+\s*\([^)]*\)", "".join(cleaned))
+    )
+print(count)
+PY
+)"
 model_new="$(grep -R 'Model::new' "$src" --include='*.rs' | wc -l | tr -d ' ')"
 page_model_setups="$(
     python3 - "$src" <<'PY'
@@ -75,6 +105,7 @@ tui-metrics:
   impl_model=$impl_model
   impl_model_files=$impl_model_files
   model_mut_methods=$model_mut_methods
+  model_mut_free_fns=$model_mut_free_fns
   model_new=$model_new
   page_model_setups=$page_model_setups
   files_over_800=$oversized
@@ -102,7 +133,7 @@ check_max() {
 check_max deps "$deps" "$TUI_DEPS"
 check_max impl_model "$impl_model" "$TUI_IMPL_MODEL"
 check_max model_mut_methods "$model_mut_methods" "$TUI_MODEL_MUT_METHODS"
-check_max model_new "$model_new" "$TUI_MODEL_NEW"
+check_max model_mut_free_fns "$model_mut_free_fns" "$TUI_MODEL_MUT_FREE_FNS"
 check_max page_model_setups "$page_model_setups" "$TUI_PAGE_MODEL_SETUPS"
 check_max files_over_800 "$oversized" "$TUI_FILES_OVER_800"
 

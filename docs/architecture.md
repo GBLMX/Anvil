@@ -267,6 +267,7 @@ yet.
 crates/
   anvil-api/           public Rust types, schema, generated stubs
   anvil-core/          text model, commands, snapshots
+  anvil-text-bench/    benchmark-only Rope/Gap comparison harness
   anvil-editor/        editor state, snapshots, text search, snippets, comments
   anvil-syntax/        Tree-sitter grammars, highlighting, and scopes
   anvil-session/       documents, effects, keymap, plugin lifecycle
