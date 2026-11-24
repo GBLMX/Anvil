@@ -3,6 +3,7 @@ package execrunner
 import (
 	"fmt"
 	"math"
+	"runtime"
 	"unsafe"
 
 	"golang.org/x/sys/unix"
@@ -203,5 +204,7 @@ func applySeccomp(allowProcess bool) error {
 	); err != nil {
 		return fmt.Errorf("prctl seccomp: %w", err)
 	}
+	runtime.KeepAlive(&program)
+	runtime.KeepAlive(instructions)
 	return nil
 }

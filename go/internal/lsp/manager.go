@@ -3,11 +3,13 @@ package lsp
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os/exec"
 	"sync"
 	"syscall"
+	"time"
 )
 
 // Config describes one language-server process. It must already name a
@@ -40,6 +42,16 @@ func Start(ctx context.Context, cfg Config) (*Manager, error) {
 	cmd.Dir = cfg.Dir
 	cmd.Env = cfg.Env
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true, Pdeathsig: syscall.SIGKILL}
+	cmd.Cancel = func() error {
+		if cmd.Process == nil {
+			return nil
+		}
+		if err := syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL); err != nil && !errors.Is(err, syscall.ESRCH) {
+			return err
+		}
+		return nil
+	}
+	cmd.WaitDelay = 5 * time.Second
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return nil, err
@@ -102,9 +114,7 @@ func (m *Manager) Close() error {
 	var err error
 	m.once.Do(func() {
 		_ = m.stdin.Close()
-		if m.cmd.Process != nil {
-			_ = syscall.Kill(-m.cmd.Process.Pid, syscall.SIGKILL)
-		}
+		_ = m.cmd.Cancel()
 		<-m.done
 		err = m.waitErr
 	})

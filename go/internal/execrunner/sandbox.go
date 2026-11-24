@@ -386,6 +386,7 @@ func createRuleset(access uint64) (int, error) {
 	if errno != 0 {
 		return -1, fmt.Errorf("landlock_create_ruleset: %w", errno)
 	}
+	runtime.KeepAlive(&attr)
 	unix.CloseOnExec(int(fd))
 	return int(fd), nil
 }
@@ -419,6 +420,7 @@ func addPathRule(ruleset int, path string, access uint64) error {
 	if errno != 0 {
 		return fmt.Errorf("landlock_add_rule %q: %w", path, errno)
 	}
+	runtime.KeepAlive(&rule)
 	return nil
 }
 
