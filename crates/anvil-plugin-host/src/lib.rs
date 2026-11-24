@@ -199,8 +199,8 @@ mod linux {
         /// SIGKILL is delivered through the pidfd when available. A failed
         /// pidfd signal falls back to the process group, so a dead pidfd cannot
         /// leave the host running. The reap is bounded: a host that does not
-        /// exit within [`TERMINATE_WAIT`] is abandoned rather than blocking the
-        /// caller forever.
+        /// exit within 2 seconds is abandoned rather than blocking the caller
+        /// forever.
         pub fn terminate(&mut self) {
             let cgroup_killed = self
                 .cgroup
