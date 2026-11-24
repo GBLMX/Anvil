@@ -55,6 +55,7 @@ docs/                       charter, threat model, ADRs, plans, performance
 Rust is pinned by `rust-toolchain.toml`. Go **1.27.4 or newer** is required;
 CI installs the exact version from the root `go.mod` (currently 1.27.4), while
 local newer toolchains are allowed.
+`mise install` installs the pinned Go version from `mise.toml`.
 Do not introduce a new native dependency without an ADR.
 
 ## Required checks
