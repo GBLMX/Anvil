@@ -80,11 +80,9 @@ func (s *Server) handle(serverCtx context.Context, conn net.Conn) {
 					cancel()
 					break
 				}
-				requests.Add(1)
 				requestSlots <- struct{}{}
-				go func(req request, data []byte) {
+				requests.Go(func() {
 					defer func() { <-requestSlots }()
-					defer requests.Done()
 					result, rpcErr := s.writeFileBinary(req, state, data)
 					writeMu.Lock()
 					defer writeMu.Unlock()
@@ -96,15 +94,13 @@ func (s *Server) handle(serverCtx context.Context, conn net.Conn) {
 						_ = writeFrame(conn, binary.payload)
 						return
 					}
-				}(req, data)
+				})
 				continue
 			}
 		}
-		requests.Add(1)
 		requestSlots <- struct{}{}
-		go func(req request) {
+		requests.Go(func() {
 			defer func() { <-requestSlots }()
-			defer requests.Done()
 			result, rpcErr := s.dispatch(ctx, req, state)
 			writeMu.Lock()
 			defer writeMu.Unlock()
@@ -117,7 +113,7 @@ func (s *Server) handle(serverCtx context.Context, conn net.Conn) {
 				return
 			}
 			_ = writeResult(conn, req.ID, result)
-		}(req)
+		})
 	}
 	cancel()
 	requests.Wait()

@@ -22,9 +22,8 @@ func CloseExtraFDs() error {
 		return fmt.Errorf("close_range: %w", err)
 	}
 	for fd := 3; fd < 4096; fd++ {
-		_, _, errno := unix.Syscall(unix.SYS_FCNTL, uintptr(fd), unix.F_SETFD, unix.FD_CLOEXEC)
-		if errno != 0 && !errors.Is(errno, unix.EBADF) {
-			return fmt.Errorf("fcntl fd %d: %w", fd, errno)
+		if _, err := unix.FcntlInt(uintptr(fd), unix.F_SETFD, unix.FD_CLOEXEC); err != nil && !errors.Is(err, unix.EBADF) {
+			return fmt.Errorf("fcntl fd %d: %w", fd, err)
 		}
 	}
 	return nil

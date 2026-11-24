@@ -6,6 +6,7 @@
 package execrunner
 
 import (
+	"bytes"
 	"debug/elf"
 	"errors"
 	"fmt"
@@ -342,17 +343,17 @@ func countUserTasks() (uint64, error) {
 			continue
 		}
 		var processUID, threads uint64
-		for line := range strings.SplitSeq(string(status), "\n") {
+		for line := range bytes.Lines(status) {
 			switch {
-			case strings.HasPrefix(line, "Uid:"):
-				fields := strings.Fields(line)
+			case bytes.HasPrefix(line, []byte("Uid:")):
+				fields := bytes.Fields(line)
 				if len(fields) > 1 {
-					processUID, _ = strconv.ParseUint(fields[1], 10, 64)
+					processUID, _ = strconv.ParseUint(string(fields[1]), 10, 64)
 				}
-			case strings.HasPrefix(line, "Threads:"):
-				fields := strings.Fields(line)
+			case bytes.HasPrefix(line, []byte("Threads:")):
+				fields := bytes.Fields(line)
 				if len(fields) > 1 {
-					threads, _ = strconv.ParseUint(fields[1], 10, 64)
+					threads, _ = strconv.ParseUint(string(fields[1]), 10, 64)
 				}
 			}
 		}

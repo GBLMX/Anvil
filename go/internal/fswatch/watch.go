@@ -2,6 +2,7 @@
 package fswatch
 
 import (
+	"encoding/binary"
 	"errors"
 	"io/fs"
 	"os"
@@ -9,7 +10,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"unsafe"
 
 	"golang.org/x/sys/unix"
 )
@@ -341,14 +341,17 @@ func (w *Watcher) readEvents() {
 			return
 		}
 		for offset := 0; offset+unix.SizeofInotifyEvent <= n; {
-			event := (*unix.InotifyEvent)(unsafe.Pointer(&buffer[offset]))
+			wd := int32(binary.NativeEndian.Uint32(buffer[offset:]))
+			mask := binary.NativeEndian.Uint32(buffer[offset+4:])
+			cookie := binary.NativeEndian.Uint32(buffer[offset+8:])
+			nameLen := int(binary.NativeEndian.Uint32(buffer[offset+12:]))
 			nameStart := offset + unix.SizeofInotifyEvent
-			nameEnd := nameStart + int(event.Len)
+			nameEnd := nameStart + nameLen
 			if nameEnd > n {
 				break
 			}
 			name := strings.TrimRight(string(buffer[nameStart:nameEnd]), "\x00")
-			w.handleEvent(int(event.Wd), event.Mask, event.Cookie, name)
+			w.handleEvent(int(wd), mask, cookie, name)
 			offset = nameEnd
 		}
 	}

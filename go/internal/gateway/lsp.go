@@ -6,7 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/GBLMX/Anvil/go/internal/execpolicy"
@@ -33,7 +33,7 @@ func lspEnvironment(env map[string]string) ([]string, error) {
 		}
 		keys = append(keys, key)
 	}
-	sort.Strings(keys)
+	slices.Sort(keys)
 	entries := make([]string, 0, len(keys))
 	for _, key := range keys {
 		entries = append(entries, key+"="+env[key])

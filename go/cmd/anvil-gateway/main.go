@@ -135,13 +135,13 @@ func main() {
 		os.Exit(2)
 	}
 	granted := splitPermissions(*permissions)
-	if *allowRead && !contains(granted, "fs.read:**") {
+	if *allowRead && !slices.Contains(granted, "fs.read:**") {
 		granted = append(granted, "fs.read:**")
 	}
-	if *allowWrite && !contains(granted, "fs.write:**") {
+	if *allowWrite && !slices.Contains(granted, "fs.write:**") {
 		granted = append(granted, "fs.write:**")
 	}
-	if *allowExec && !contains(granted, "sys.exec") {
+	if *allowExec && !slices.Contains(granted, "sys.exec") {
 		granted = append(granted, "sys.exec")
 	}
 	var fetcher *fetch.Client
@@ -163,7 +163,7 @@ func main() {
 			fmt.Fprintf(os.Stderr, "anvil-gateway: fetch: %v\n", err)
 			os.Exit(2)
 		}
-		if !contains(granted, "sys.fetch") {
+		if !slices.Contains(granted, "sys.fetch") {
 			granted = append(granted, "sys.fetch")
 		}
 	}
@@ -271,8 +271,4 @@ func splitPermissions(value string) []string {
 		}
 	}
 	return permissions
-}
-
-func contains(values []string, wanted string) bool {
-	return slices.Contains(values, wanted)
 }

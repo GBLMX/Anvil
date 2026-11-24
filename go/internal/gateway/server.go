@@ -4,7 +4,6 @@ package gateway
 import (
 	"context"
 	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -185,14 +184,8 @@ func (s *Server) Serve(ctx context.Context) error {
 		ctx = context.Background()
 	}
 	slots := make(chan struct{}, maxConnections)
-	done := make(chan struct{})
-	go func() {
-		select {
-		case <-ctx.Done():
-			_ = s.Close()
-		case <-done:
-		}
-	}()
+	stop := context.AfterFunc(ctx, func() { _ = s.Close() })
+	defer stop()
 	for {
 		conn, err := s.listener.Accept()
 		if err != nil {
@@ -467,9 +460,5 @@ func peerUID(conn net.Conn) (uint32, error) {
 }
 
 func randomID() string {
-	var buffer [16]byte
-	if _, err := rand.Read(buffer[:]); err != nil {
-		return "session"
-	}
-	return hex.EncodeToString(buffer[:])
+	return rand.Text()
 }

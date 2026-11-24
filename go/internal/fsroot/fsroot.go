@@ -3,13 +3,12 @@ package fsroot
 
 import (
 	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -283,11 +282,14 @@ func (r *Root) ReadDir(path string) ([]DirEntry, error) {
 		}
 		result = append(result, DirEntry{Name: name, IsDir: entry.IsDir(), Ino: ino})
 	}
-	sort.Slice(result, func(i, j int) bool {
-		if result[i].IsDir != result[j].IsDir {
-			return result[i].IsDir
+	slices.SortFunc(result, func(a, b DirEntry) int {
+		if a.IsDir != b.IsDir {
+			if a.IsDir {
+				return -1
+			}
+			return 1
 		}
-		return result[i].Name < result[j].Name
+		return strings.Compare(a.Name, b.Name)
 	})
 	return result, nil
 }
@@ -711,11 +713,7 @@ func (w *WriteTarget) cleanup() {
 func createTemp(dir *os.File) (string, *os.File, error) {
 	dirFD := int(dir.Fd())
 	for range 16 {
-		var suffix [8]byte
-		if _, err := rand.Read(suffix[:]); err != nil {
-			return "", nil, err
-		}
-		name := writeTempPrefix + hex.EncodeToString(suffix[:])
+		name := writeTempPrefix + rand.Text()
 		fd, err := unix.Openat(dirFD, name, unix.O_WRONLY|unix.O_CREAT|unix.O_EXCL|unix.O_CLOEXEC, 0o600)
 		if errors.Is(err, unix.EEXIST) {
 			continue

@@ -10,7 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"sort"
 	"strings"
 	"time"
 
@@ -789,7 +788,7 @@ func (s *Store) DisableRevokedPackages(checker PackageRevocationChecker) ([]stri
 	if err != nil {
 		return nil, err
 	}
-	sort.Strings(disabled)
+	slices.Sort(disabled)
 	return disabled, nil
 }
 
