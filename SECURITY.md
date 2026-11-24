@@ -29,6 +29,7 @@ Especially relevant:
 - `openat2` path escape, symlink race, or workspace boundary bypass;
 - `sys.fetch` SSRF, DNS rebinding, redirect, or TLS/SNI confusion;
 - `sys.exec` argument, environment, executable, or process-tree escape;
+- `anvil-exec-runner` Landlock/seccomp bypass;
 - UDS authentication, token replay, or cross-plugin impersonation;
 - manifest permission escalation;
 - hot-reload use-after-free, zombie, or orphan-process issues;

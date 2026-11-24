@@ -258,9 +258,9 @@ Module compatibility, caps, and deprecation rules are in
 
 Phase 0 still consists of the `anvil-api` contracts, `anvil-core` PieceTable,
 `anvil-editor` snapshots, `anvil-ipc` framing/JSON-RPC/Unix transport, and the
-Go gateway with `openat2`, Landlock/seccomp exec sandboxing, SSRF-constrained
-fetch, and a synchronous Rust gateway client. The TUI discovers the gateway
-beside the binary or via `ANVIL_GATEWAY`.
+Go gateway with `openat2` policy, an `anvil-exec-runner` Landlock/seccomp exec
+sandbox, SSRF-constrained fetch, and a synchronous Rust gateway client. The TUI
+discovers the gateway beside the binary or via `ANVIL_GATEWAY`.
 
 Set `ANVIL_SKIP_TERMINAL_QUERY=1` for CI or synthetic PTYs; it bypasses
 crossterm's keyboard-enhancement query and the OSC 11 background query.
@@ -450,9 +450,10 @@ and `language-pack-lua`.
 - The Rust v1 stack uses `ratatui` + `crossterm` directly, with no Tokio or
   Ferriso runtime dependency. Ferriso is reference material.
 - Lua plugins use `mlua` with Luau; TS uses `rquickjs` (QuickJS-NG), not V8.
-- The Go gateway is a per-session policy gateway, not the plugin sandbox. One
-  gateway process owns one session socket; closing the server removes the
-  socket.
+- The Go gateway is a per-session policy gateway, not the plugin sandbox. Plugin
+  isolation is the plugin-host process plus its Landlock/seccomp sandbox;
+  `sys.exec` isolation is `anvil-exec-runner`. One gateway process owns one
+  session socket; closing the server removes the socket.
 - `sys.exec` routes through `anvil-exec-runner`. The Phase 0.6 gateway uses a
   one-shot 32-byte bootstrap token: the gateway holds only its SHA-256 verifier,
   the raw token appears only in `session.hello`, and a second handshake is
