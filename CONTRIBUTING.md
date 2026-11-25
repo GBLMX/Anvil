@@ -100,6 +100,20 @@ tsc --noEmit --skipLibCheck crates/anvil-api/bindings/*.ts
 `cargo semver-checks` is used by CI; C/C++ language-server smoke tests also
 need `clangd`, `jdtls`, `rust-analyzer`, and `gopls` on `PATH` when run.
 
+## Local CI
+
+GitHub Actions can be run locally with act and Docker:
+
+```bash
+docker pull ghcr.io/catthehacker/ubuntu:act-latest
+act -l
+act -j docs
+act -j rust
+```
+
+See [Local CI](docs/local-ci.md) for image mapping, job selection, and
+limitations. Act is a fast feedback loop, not a replacement for hosted CI.
+
 Security and performance changes also need the relevant fixtures under
 `crates/*/benches` or the crate's integration tests.
 

@@ -14,6 +14,7 @@ material. Last reviewed 2026-11-24.
 - [Architecture maps](architecture-visual.md) — current processes, flows, and deferred surfaces
 - [Threat model](threat-model.md) — adversaries, mitigations, invariants
 - [Internal polish](internal-polish-plan.md) — `0.7.0` closure and `0.8.0` candidate
+- [Local CI with act and Docker](local-ci.md) — reproducible local workflow runs
 - [Performance baseline](performance.md) — gates and re-run triggers
 
 ## Sources of truth
