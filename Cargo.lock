@@ -332,7 +332,6 @@ dependencies = [
  "anvil-ipc",
  "anvil-lsp-client",
  "anvil-mod-git",
- "anvil-mod-workspace-index",
  "anvil-module",
  "anvil-platform",
  "anvil-plugin-host",

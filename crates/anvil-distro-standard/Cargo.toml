@@ -10,7 +10,7 @@ repository.workspace = true
 [features]
 default = ["official-git"]
 official-git = ["anvil-tui/official-git", "dep:anvil-mod-git"]
-official-workspace-index = ["anvil-tui/official-workspace-index", "dep:anvil-mod-workspace-index"]
+official-workspace-index = ["dep:anvil-mod-workspace-index"]
 official-desktop = ["dep:anvil-mod-desktop"]
 official-language-latex = ["anvil-tui/official-language-latex", "dep:anvil-mod-language-latex"]
 official-language-typst = ["anvil-tui/official-language-typst", "dep:anvil-mod-language-typst"]

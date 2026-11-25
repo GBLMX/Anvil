@@ -10,7 +10,6 @@ repository.workspace = true
 [features]
 default = ["official-git"]
 official-git = ["dep:anvil-mod-git"]
-official-workspace-index = ["dep:anvil-mod-workspace-index"]
 official-language-latex = ["anvil-syntax/latex"]
 official-language-typst = ["anvil-syntax/typst"]
 official-language-lua = ["anvil-syntax/lua"]
@@ -31,7 +30,6 @@ anvil-lsp-client = { workspace = true }
 anvil-control = { workspace = true }
 anvil-dap = { workspace = true }
 anvil-mod-git = { workspace = true, optional = true }
-anvil-mod-workspace-index = { workspace = true, optional = true }
 anvil-module = { workspace = true }
 anvil-plugin-host = { workspace = true }
 anvil-platform = { workspace = true }
