@@ -20,7 +20,9 @@ Build-host ISA/glibc, user-vs-root, and cgroup findings are recorded in
 
 ## Requirements
 
-- Linux; Landlock requires Linux 5.13 or newer.
+- Linux; Landlock requires Linux 5.13 or newer. On Windows use WSL2: WSL1
+  lacks Landlock, seccomp, and cgroup v2. See
+  [WSL2 notes](docs/multi-host-install.md#wsl2).
 - Rust 1.100 or newer (the repository pins the toolchain in
   `rust-toolchain.toml`).
 - Go 1.27.4 or newer (the repository pins the version in `go.mod`).

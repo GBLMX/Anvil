@@ -47,6 +47,10 @@ The selected profile and capability details are included in
 `anvil-exec-runner` is resolved from `ANVIL_EXEC_RUNNER`, then the gateway
 sibling, then `PATH`. Gateway startup uses the same order.
 
+When `XDG_RUNTIME_DIR` is unset on WSL, the `runtime-dir` remediation names the
+`[boot] systemd=true` setting when systemd is off; when systemd is already
+running, it points at `XDG_RUNTIME_DIR` or a systemd login session instead.
+
 `TERM=dumb` is a warning even when `ANVIL_TRUECOLOR` is forced.
 
 ## Exit codes
