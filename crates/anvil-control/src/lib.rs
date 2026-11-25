@@ -1370,6 +1370,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore = "Miri isolation does not support realpath")]
     fn workspace_socket_paths_are_stable_and_distinct() {
         let runtime = Path::new("/run/user/1000");
         let first = control_socket_path(runtime, Path::new("/tmp/one"));
@@ -1406,6 +1407,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore = "Miri does not support AF_UNIX sockets")]
     fn explicit_servers_use_distinct_locks() {
         let dir = tempfile::tempdir().expect("tempdir");
         let first = dir.path().join("a.sock");
@@ -1419,6 +1421,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore = "Miri does not support AF_UNIX sockets")]
     fn binds_private_socket_and_parent() {
         let dir = tempfile::tempdir().expect("tempdir");
         let socket = dir.path().join("anvil/control.sock");
@@ -1439,6 +1442,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore = "Miri does not support AF_UNIX sockets")]
     fn replies_to_ping_and_removes_socket_on_drop() {
         let dir = tempfile::tempdir().expect("tempdir");
         let socket = dir.path().join("anvil/control.sock");
@@ -1450,6 +1454,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore = "Miri does not support AF_UNIX sockets")]
     fn slow_client_does_not_block_ping_or_shutdown() {
         let dir = tempfile::tempdir().expect("tempdir");
         let socket = dir.path().join("anvil/control.sock");
@@ -1478,6 +1483,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore = "Miri does not support AF_UNIX sockets")]
     fn request_honors_configured_timeout() {
         let directory = tempfile::tempdir().expect("tempdir");
         let socket = directory.path().join("control.sock");
@@ -1496,6 +1502,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore = "Miri does not support AF_UNIX sockets")]
     fn rejects_a_second_server_and_cleans_a_stale_socket() {
         let dir = tempfile::tempdir().expect("tempdir");
         let socket = dir.path().join("anvil/control.sock");
