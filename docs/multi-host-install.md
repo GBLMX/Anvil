@@ -1,9 +1,10 @@
 # Multi-host install lessons
 
-Status: Reference. Validated 2026-11-20 against four hosts.
+Status: Reference. Validated 2026-11-20 against four native hosts and
+2026-11-25 against a WSL2 host.
 
-This document records what installing Anvil on Arch, Debian, Ubuntu, and
-Fedora revealed about build portability, installation, and deployment. It is
+This document records what installing Anvil on Arch, Debian, Ubuntu, Fedora,
+and WSL2 revealed about build portability, installation, and deployment. It is
 not a support matrix; it is a list of constraints the release process must
 either handle or document.
 
@@ -15,6 +16,7 @@ either handle or document.
 | `r420` | Debian 13 (trixie) | Xeon E5-2407 v2, `x86-64-v2` | 2.41 | Native build; works |
 | `ecs` | Ubuntu 26.04 LTS | Xeon Platinum, `x86-64-v4` | 2.43 | Prebuilt layout; works |
 | `fedora-vm` | Fedora Linux 44 | QEMU x86_64 guest | 2.43 | Generic CLI layout and lifecycle smoke; TUI not tested |
+| `wsl2` | Arch Linux (WSL2) | Intel Core i7-12700H | 2.44 | Native build, doctor, and gateway smoke; works with systemd |
 
 The Debian and Ubuntu hosts are terminal-only. Verification used a TUI inside
 `tmux` plus `anvil-ctl`; this is **remote TUI over SSH/tmux**, not a headless
@@ -196,6 +198,128 @@ cgroup v2 root and otherwise fail closed.
 
 A successful editor install does not imply plugin support. Deployment docs
 must state this explicitly and provide the `ANVIL_CGROUP_ROOT` escape hatch.
+
+## WSL2
+
+Status: Validated 2026-11-25 on Arch WSL2, kernel
+`6.18.58.1-microsoft-standard-WSL2`, glibc 2.44, with systemd enabled: native
+build, `anvil doctor --profile installed`, and the gateway smoke below (open,
+edit, save, quit). The kernel-capability notes also cover the 5.15 and 6.6 WSL
+kernel lines.
+
+Anvil has no WSL-specific code path and no native Windows build. WSL2 runs a
+real Linux kernel, so the normal Linux rules apply. WSL1 does not: it has no
+Landlock, seccomp, or cgroup v2, and `anvil doctor` reports errors rather than
+degrading.
+
+### Kernel capabilities
+
+Microsoft's `WSL2-Linux-Kernel` configuration enables what Anvil needs on the
+5.15, 6.6, and current kernel lines:
+
+- `CONFIG_SECURITY_LANDLOCK=y`
+- `CONFIG_SECCOMP=y`, `CONFIG_SECCOMP_FILTER=y`
+- `CONFIG_CGROUPS=y`, `CONFIG_CGROUP_PIDS=y`, `CONFIG_MEMCG=y`
+
+The Landlock ABI follows the kernel: 1 on 5.15, roughly 3-4 on 6.6, and 7 on
+the validated 6.18 host. Plugin hosts require ABI 1 and enable newer features
+conditionally, so a newer kernel only widens the rule set. A custom kernel
+selected through `.wslconfig` (`kernel=`) may have these options removed;
+confirm with `anvil doctor`.
+
+### systemd and the plugin cgroup
+
+WSL2 boots without systemd by default. Two consequences:
+
+- `XDG_RUNTIME_DIR` is unset and `/run/user/<uid>` does not exist. The control
+  socket falls back to `~/.local/state/anvil/runtime/anvil/`, which keeps
+  `anvil` and `anvil-ctl` working.
+- Plugin hosts need a writable delegated cgroup v2 subtree and fail closed
+  without one (`no writable delegated cgroup v2 root`).
+
+Enable systemd in `/etc/wsl.conf`:
+
+```ini
+[boot]
+systemd=true
+```
+
+then run `wsl --shutdown` from Windows. Interactive login sessions then live
+under `user.slice`, and the nearest writable ancestor is the user manager's
+cgroup, so delegation detection succeeds and `runtime-dir` resolves under
+`/run/user/<uid>`.
+
+Processes started outside systemd stay in the `/non-systemd` root cgroup,
+which is not writable; the ancestor walk then reaches `/sys/fs/cgroup` and
+fails even with systemd enabled. WSL interop daemons and some launchers start
+editors this way, so check `cat /proc/self/cgroup` and use the escape hatch
+below when it reports `0::/non-systemd`.
+
+If systemd cannot be enabled, create a delegated root after each WSL start and
+export the escape hatch:
+
+```bash
+sudo mkdir -p /sys/fs/cgroup/anvil-exec
+sudo chown "$USER" /sys/fs/cgroup/anvil-exec
+export ANVIL_CGROUP_ROOT=/sys/fs/cgroup/anvil-exec
+```
+
+`/sys/fs/cgroup` is rebuilt on every WSL start, so the directory does not
+survive a restart.
+
+### Terminal and truecolor
+
+Windows Terminal is 24-bit capable but does not reliably export `COLORTERM`
+into the distribution. On the validated host `TERM` was `xterm-256color` with
+`COLORTERM` unset, so detection fell back to 256 colors and `anvil doctor`
+warned. Set `ANVIL_TRUECOLOR=1` (or pass `--truecolor=always`); inside tmux
+also set `terminal-features` for RGB.
+
+### Clipboard
+
+Anvil uses `wl-copy`/`wl-paste` when `WAYLAND_DISPLAY` is set and `xclip`
+otherwise. OSC 52 is a copy-only fallback that requires `ANVIL_OSC52=1`; paste
+has no OSC 52 path. Neither backend is installed by default: the validated host
+had WSLg's `WAYLAND_DISPLAY=wayland-0` but no `wl-clipboard`.
+
+- WSLg sets `WAYLAND_DISPLAY`; installing `wl-clipboard`
+  (`pacman -S wl-clipboard` on Arch WSL, `apt install wl-clipboard` on Ubuntu
+  WSL) gives copy and paste through the Windows clipboard.
+- `ANVIL_OSC52=1` covers copy only, and only in terminals that accept OSC 52.
+- A `win32yank` wrapper for `wl-copy`/`wl-paste` is an alternative.
+
+### Filesystem placement
+
+Keep workspaces on the Linux filesystem (`~/src`, reached from Windows as
+`\\wsl$`), not under `/mnt/c`. DrvFs/9p is much slower for `rg` and `git`
+(fuzzy open, gutter diffs), does not carry Linux permission bits without
+metadata enabled, and has different case and mtime semantics. Build there too,
+never in `/mnt/c`.
+
+### Windows executables on PATH
+
+WSL appends the Windows `PATH` by default. If a Linux tool is missing, `git`,
+`rg`, or a language server can resolve to a `*.exe`, which then receives Linux
+paths it cannot open; gutter diffs and LSP silently fail. Check with:
+
+```bash
+command -v git rg rust-analyzer | xargs -r file
+```
+
+Install the Linux versions and, if needed, pin `ANVIL_GIT` and `ANVIL_RG`.
+
+### Verification
+
+```bash
+ps -p 1 -o comm=                          # systemd or init
+systemctl --user is-system-running
+echo "$XDG_RUNTIME_DIR"; ls -ld "/run/user/$(id -u)"
+cat /proc/self/cgroup; mount | grep cgroup
+anvil doctor --profile installed
+```
+
+The gateway smoke recipe below still applies; run it inside `tmux` or another
+pseudo-terminal.
 
 ## Repeatable smoke recipe
 

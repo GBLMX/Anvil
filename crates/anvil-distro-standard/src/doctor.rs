@@ -456,12 +456,40 @@ fn check_runtime_dir() -> DoctorCheck {
         );
     };
     let path = PathBuf::from(home).join(".local/state/anvil/runtime/anvil");
+    let remediation = if is_wsl() {
+        wsl_runtime_hint(Path::new("/run/systemd/system").is_dir())
+    } else {
+        "set XDG_RUNTIME_DIR to a private user runtime directory"
+    };
     check(
         "runtime-dir",
         DoctorLevel::Warn,
         format!("XDG_RUNTIME_DIR is unset; fallback {}", path.display()),
-        "set XDG_RUNTIME_DIR to a private user runtime directory",
+        remediation,
     )
+}
+
+fn wsl_runtime_hint(systemd_running: bool) -> &'static str {
+    if systemd_running {
+        "set XDG_RUNTIME_DIR (for example /run/user/<uid>) or start Anvil from a systemd login session"
+    } else {
+        "enable systemd in WSL ([boot] systemd=true in /etc/wsl.conf, then `wsl --shutdown`)"
+    }
+}
+
+/// True on WSL, where an unset `XDG_RUNTIME_DIR` usually means systemd is off.
+fn is_wsl() -> bool {
+    let distro = env::var_os("WSL_DISTRO_NAME");
+    let osrelease = fs::read_to_string("/proc/sys/kernel/osrelease").unwrap_or_default();
+    wsl_marker(distro.as_deref(), &osrelease)
+}
+
+fn wsl_marker(distro: Option<&std::ffi::OsStr>, osrelease: &str) -> bool {
+    if distro.is_some_and(|value| !value.is_empty()) {
+        return true;
+    }
+    let osrelease = osrelease.to_ascii_lowercase();
+    osrelease.contains("microsoft") || osrelease.contains("wsl")
 }
 
 fn config_path() -> Option<PathBuf> {
@@ -668,6 +696,22 @@ mod tests {
 
         report.seccomp_available = false;
         assert_eq!(check_landlock(&report).level, DoctorLevel::Error);
+    }
+
+    #[test]
+    fn wsl_detection_uses_env_or_kernel_release() {
+        use std::ffi::OsStr;
+        assert!(wsl_marker(Some(OsStr::new("Ubuntu")), ""));
+        assert!(wsl_marker(None, "6.6.87.2-microsoft-standard-WSL2"));
+        assert!(wsl_marker(None, "5.15.153.1-microsoft-standard-WSL2"));
+        assert!(!wsl_marker(None, "6.18.1-arch1-1"));
+        assert!(!wsl_marker(Some(OsStr::new("")), ""));
+    }
+
+    #[test]
+    fn wsl_runtime_hint_distinguishes_systemd_state() {
+        assert!(wsl_runtime_hint(true).contains("XDG_RUNTIME_DIR"));
+        assert!(wsl_runtime_hint(false).contains("systemd=true"));
     }
 
     #[test]

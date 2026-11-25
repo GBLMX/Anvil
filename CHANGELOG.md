@@ -79,6 +79,11 @@ post-`0.5.0` feature line.
 - Theme-browser state transitions moved out of `impl Model` into the
   `theme_browser` page module; TUI metrics dropped from 71 to 70 `impl Model`
   blocks and from 547 to 543 `&mut Model` methods.
+- `anvil doctor` now gives a WSL-specific `runtime-dir` remediation: enable
+  `[boot] systemd=true` when systemd is off, or set `XDG_RUNTIME_DIR` when a
+  session starts outside systemd.
+- `docs/multi-host-install.md` records WSL2 install validation, cgroup
+  delegation, clipboard, truecolor, `/mnt/c`, and Windows-PATH caveats.
 
 ### Removed
 - `anvil-core` no longer exports benchmark-only `RopeBuffer`/`GapBuffer` or
