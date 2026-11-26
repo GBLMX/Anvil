@@ -64,6 +64,11 @@ post-`0.5.0` feature line.
   `completion.popup_delay_ms`, `completion.popup_trigger_len`,
   `completion.popup_in_comments`, and `completion.popup_in_strings` toggles.
   Entering insert mode on a trigger character also opens completion.
+- `[completion] inline_completion` requests LSP 3.18 inline completion, shows
+  the result as italic ghost text at the cursor, and accepts it with Tab.
+- Completion documentation renders basic Markdown (headings, bullets, fences,
+  inline code) and scrolls with PageUp/PageDown or the mouse wheel over the
+  side panel; signature help keeps the active-parameter highlight.
 - LSP snippets now support choices, nested placeholders, and variables; a parse
   failure keeps the server text instead of stripping it.
 - Completion applies server `allCommitCharacters`, executes completion

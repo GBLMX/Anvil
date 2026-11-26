@@ -2397,6 +2397,36 @@ fn keyword_completion_opens_after_its_deadline() {
 }
 
 #[test]
+fn inline_completion_response_replaces_its_range() {
+    let mut model = Model::new(EditorState::from_text("pri"), None);
+    model.ui.input_mode = InputMode::Insert;
+    model.session.cursor = 3;
+    model
+        .language
+        .lsp_requests
+        .pending
+        .insert(41, LspRequestKind::InlineCompletion);
+    model.handle_lsp_response(
+        41,
+        serde_json::json!({
+            "items": [{
+                "insertText": "println",
+                "range": {
+                    "start": {"line": 0, "character": 0},
+                    "end": {"line": 0, "character": 3}
+                }
+            }]
+        }),
+        None,
+    );
+    assert!(model.language.completion.inline.is_some());
+    assert!(model.apply_inline_completion());
+    let text = model.session.editor.text();
+    assert_eq!(text.slice(0..text.len_bytes()), "println");
+    assert!(model.language.completion.inline.is_none());
+}
+
+#[test]
 fn completion_fuzzy_ranks_boundaries_and_restores_items() {
     let mut model = Model::new(EditorState::from_text("x"), None);
     model

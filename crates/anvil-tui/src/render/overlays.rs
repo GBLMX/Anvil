@@ -87,6 +87,69 @@ fn completion_label_spans(label: &str, query: &str, style: Style) -> Vec<Span<'s
     ]
 }
 
+pub(crate) fn markdown_lines(text: &str) -> Vec<Line<'static>> {
+    let base = theme::panel().fg(theme::text_color());
+    let muted = theme::panel().fg(theme::muted());
+    let accent = theme::panel()
+        .fg(theme::accent())
+        .add_modifier(Modifier::BOLD);
+    let mut lines = Vec::new();
+    let mut fenced = false;
+    for raw in text.lines() {
+        let trimmed = raw.trim_start();
+        if trimmed.starts_with("```") {
+            fenced = !fenced;
+            lines.push(Line::styled(raw.to_owned(), muted));
+            continue;
+        }
+        if fenced {
+            lines.push(Line::styled(raw.to_owned(), muted));
+            continue;
+        }
+        if trimmed.starts_with('#') {
+            let heading = trimmed.trim_start_matches('#').trim_start();
+            lines.push(Line::styled(heading.to_owned(), accent));
+            continue;
+        }
+        if let Some(item) = trimmed
+            .strip_prefix("- ")
+            .or_else(|| trimmed.strip_prefix("* "))
+        {
+            let mut spans = vec![Span::styled("• ".to_owned(), accent)];
+            spans.extend(inline_markdown_spans(item, base));
+            lines.push(Line::from(spans));
+            continue;
+        }
+        lines.push(Line::from(inline_markdown_spans(raw, base)));
+    }
+    if lines.is_empty() {
+        lines.push(Line::styled(String::new(), base));
+    }
+    lines
+}
+
+fn inline_markdown_spans(text: &str, style: Style) -> Vec<Span<'static>> {
+    let mut spans = Vec::new();
+    let mut code = false;
+    for segment in text.split('`') {
+        if !segment.is_empty() {
+            spans.push(Span::styled(
+                segment.to_owned(),
+                if code {
+                    style.bg(theme::surface()).fg(theme::accent())
+                } else {
+                    style
+                },
+            ));
+        }
+        code = !code;
+    }
+    if spans.is_empty() {
+        spans.push(Span::styled(String::new(), style));
+    }
+    spans
+}
+
 #[derive(Debug)]
 pub(crate) struct CompletionGeometry {
     pub(crate) popup: Rect,
@@ -263,6 +326,26 @@ pub(crate) fn completion_row_at(model: &Model, area: Rect, col: u16, row: u16) -
     }
     let index = geometry.start + usize::from(row - inner.y);
     (index < completion.filtered.len()).then_some(index)
+}
+
+pub(crate) fn completion_side_at(model: &Model, area: Rect, col: u16, row: u16) -> bool {
+    let Some(geometry) = completion_geometry(model, area) else {
+        return false;
+    };
+    if geometry.side_width == 0 {
+        return false;
+    }
+    let side = Rect {
+        x: geometry
+            .popup
+            .x
+            .saturating_add(geometry.popup.width)
+            .saturating_add(geometry.gap),
+        y: geometry.popup.y,
+        width: geometry.side_width,
+        height: geometry.popup.height,
+    };
+    crate::render::rect_contains(side, col, row)
 }
 
 pub(crate) fn render_overlays(model: &Model, frame: &mut Frame, area: Rect) {
@@ -842,7 +925,7 @@ pub(crate) fn render_overlays(model: &Model, frame: &mut Frame, area: Rect) {
             .unwrap_or_else(|| vec![Span::styled(item.label.clone(), base)]);
         let mut lines = vec![Line::from(label_spans)];
         if !item.documentation.is_empty() {
-            lines.push(Line::raw(item.documentation.clone()));
+            lines.extend(markdown_lines(&item.documentation));
         }
         lines.push(Line::styled(
             format!("parameter {}", signature.active_parameter + 1),
@@ -1036,9 +1119,10 @@ pub(crate) fn render_overlays(model: &Model, frame: &mut Frame, area: Rect) {
             };
             frame.render_widget(Clear, side);
             frame.render_widget(
-                Paragraph::new(body)
+                Paragraph::new(markdown_lines(&body))
                     .style(theme::panel())
                     .wrap(ratatui::widgets::Wrap { trim: false })
+                    .scroll((model.language.completion.documentation_scroll as u16, 0))
                     .block(crate::render::panel_block(Line::styled(
                         title,
                         theme::panel().fg(theme::accent()),

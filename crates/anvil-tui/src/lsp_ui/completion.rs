@@ -83,6 +83,7 @@ impl Model {
         self.language.completion.completion = None;
         self.language.completion.resolve = None;
         self.language.completion.incomplete = false;
+        self.language.completion.inline = None;
         self.close_overlay(OverlayKind::Completion);
     }
     pub(crate) fn auto_completion(&mut self) {
@@ -171,14 +172,16 @@ impl Model {
 
     pub(crate) fn schedule_keyword_completion(&mut self) {
         let settings = self.config.settings.completion;
-        if !settings.auto_popup
+        if (!settings.auto_popup && !settings.inline_completion)
             || !matches!(self.ui.input_mode, InputMode::Insert)
             || self.language.completion.completion.is_some()
             || self.language.completion.snippet.is_some()
         {
             self.language.completion.keyword_due = None;
+            self.language.completion.inline = None;
             return;
         }
+        self.language.completion.inline = None;
         let text = self.session.editor.text();
         let text = text.slice(0..text.len_bytes());
         let cursor = self.session.cursor.min(text.len());
@@ -231,7 +234,70 @@ impl Model {
             return;
         }
         self.language.completion.keyword_due = None;
-        self.start_completion(None, true);
+        if self.config.settings.completion.inline_completion {
+            self.request_inline_completion();
+        } else {
+            self.start_completion(None, true);
+        }
+    }
+
+    pub(crate) fn request_inline_completion(&mut self) {
+        if !self.config.settings.completion.inline_completion
+            || !matches!(self.ui.input_mode, InputMode::Insert)
+            || self.language.completion.completion.is_some()
+            || self.language.completion.snippet.is_some()
+            || self.active_lsp_worker().is_none()
+        {
+            self.language.completion.inline = None;
+            return;
+        }
+        let Some(path) = self.session.path.clone() else {
+            return;
+        };
+        let Some((line, character)) = self.lsp_position() else {
+            return;
+        };
+        let params = serde_json::json!({
+            "textDocument": {"uri": anvil_lsp_client::file_uri(&path)},
+            "position": {"line": line, "character": character},
+            "context": {"triggerKind": 1}
+        });
+        self.send_lsp_request(
+            LspRequestKind::InlineCompletion,
+            "textDocument/inlineCompletion",
+            params,
+        );
+    }
+
+    pub(crate) fn apply_inline_completion(&mut self) -> bool {
+        let Some(inline) = self.language.completion.inline.take() else {
+            return false;
+        };
+        if inline.revision != self.session.editor.revision()
+            || inline.cursor != self.session.cursor
+            || inline.path != self.session.path
+        {
+            return false;
+        }
+        if let Some((start_line, start_char, end_line, end_char)) = inline.replace
+            && let (Some(start), Some(end)) = (
+                self.try_offset_at_utf16(start_line, start_char),
+                self.try_offset_at_utf16(end_line, end_char),
+            )
+            && start <= end
+            && start <= self.session.cursor
+        {
+            let end = end.max(self.session.cursor);
+            if self.apply_completion_transaction(start, end, &inline.text) {
+                self.session.cursor = start + inline.text.len();
+                self.file.modified = true;
+                self.file.dirty = true;
+                return true;
+            }
+        }
+        self.insert_text(&inline.text);
+        self.file.dirty = true;
+        true
     }
 
     pub(crate) fn request_completion_more(&mut self) {
@@ -656,6 +722,7 @@ impl Model {
                 .min(completion.filtered.len().saturating_sub(1));
             self.file.dirty = true;
         }
+        self.language.completion.documentation_scroll = 0;
         self.request_completion_resolve();
     }
     pub(crate) fn filter_completion(&mut self) {

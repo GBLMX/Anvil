@@ -844,7 +844,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             }
             KeyCode::Enter => model.insert_text("\n"),
             KeyCode::Tab => {
-                if !model.next_snippet_stop() {
+                if !model.apply_inline_completion() && !model.next_snippet_stop() {
                     model.insert_text("    ");
                 }
             }

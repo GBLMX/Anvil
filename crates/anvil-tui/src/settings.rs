@@ -33,6 +33,7 @@ const ENV_POPUP_DELAY_MS: &str = "ANVIL_COMPLETION_POPUP_DELAY_MS";
 const ENV_POPUP_TRIGGER_LEN: &str = "ANVIL_COMPLETION_POPUP_TRIGGER_LEN";
 const ENV_POPUP_IN_COMMENTS: &str = "ANVIL_COMPLETION_POPUP_IN_COMMENTS";
 const ENV_POPUP_IN_STRINGS: &str = "ANVIL_COMPLETION_POPUP_IN_STRINGS";
+const ENV_INLINE_COMPLETION: &str = "ANVIL_COMPLETION_INLINE_COMPLETION";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct EditorSettings {
@@ -63,6 +64,7 @@ pub(crate) struct CompletionSettings {
     pub(crate) popup_trigger_len: usize,
     pub(crate) popup_in_comments: bool,
     pub(crate) popup_in_strings: bool,
+    pub(crate) inline_completion: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -154,6 +156,7 @@ impl Default for Settings {
                 popup_trigger_len: 2,
                 popup_in_comments: false,
                 popup_in_strings: false,
+                inline_completion: false,
             },
             ui: UiSettings {
                 reduced_motion: false,
@@ -295,6 +298,7 @@ pub(crate) enum SettingsKey {
     PopupTriggerLen,
     PopupInComments,
     PopupInStrings,
+    InlineCompletion,
     ReducedMotion,
     HighContrast,
     FileWatching,
@@ -594,6 +598,16 @@ pub(crate) const SETTINGS: &[SettingDef] = &[
         kind: SettingKind::Bool,
         label: "completion.popup_in_strings",
         description: "Allow keyword completion inside strings.",
+        group: "Completion",
+        tab: "Language",
+    },
+    SettingDef {
+        key: SettingsKey::InlineCompletion,
+        path: "completion.inline_completion",
+        env: Some(ENV_INLINE_COMPLETION),
+        kind: SettingKind::Bool,
+        label: "completion.inline_completion",
+        description: "Request inline (ghost-text) completion after the idle delay.",
         group: "Completion",
         tab: "Language",
     },
@@ -1119,6 +1133,7 @@ fn settings_value(settings: &Settings, key: SettingsKey) -> String {
         SettingsKey::PopupTriggerLen => settings.completion.popup_trigger_len.to_string(),
         SettingsKey::PopupInComments => settings.completion.popup_in_comments.to_string(),
         SettingsKey::PopupInStrings => settings.completion.popup_in_strings.to_string(),
+        SettingsKey::InlineCompletion => settings.completion.inline_completion.to_string(),
         SettingsKey::ReducedMotion => settings.ui.reduced_motion.to_string(),
         SettingsKey::HighContrast => settings.ui.high_contrast.to_string(),
         SettingsKey::FileWatching => settings.editor.file_watching.to_string(),
@@ -1462,6 +1477,10 @@ fn mark_layer_sources(
             SettingsKey::PopupInStrings,
             ["completion", "popup_in_strings"],
         ),
+        (
+            SettingsKey::InlineCompletion,
+            ["completion", "inline_completion"],
+        ),
         (SettingsKey::ReducedMotion, ["ui", "reduced_motion"]),
         (SettingsKey::HighContrast, ["ui", "high_contrast"]),
         (SettingsKey::FileWatching, ["editor", "file_watching"]),
@@ -1618,7 +1637,8 @@ pub(crate) fn save_patch_to_path(path: &Path, patch: &SettingsPatch) -> Result<(
             || patch.completion.popup_delay_ms.is_some()
             || patch.completion.popup_trigger_len.is_some()
             || patch.completion.popup_in_comments.is_some()
-            || patch.completion.popup_in_strings.is_some(),
+            || patch.completion.popup_in_strings.is_some()
+            || patch.completion.inline_completion.is_some(),
         |table| {
             set_patch_value(table, "auto_brackets", patch.completion.auto_brackets);
             set_patch_value(table, "auto_popup", patch.completion.auto_popup);
@@ -1638,6 +1658,11 @@ pub(crate) fn save_patch_to_path(path: &Path, patch: &SettingsPatch) -> Result<(
                 patch.completion.popup_in_comments,
             );
             set_patch_value(table, "popup_in_strings", patch.completion.popup_in_strings);
+            set_patch_value(
+                table,
+                "inline_completion",
+                patch.completion.inline_completion,
+            );
         },
     )?;
     patch_table(
@@ -1801,6 +1826,9 @@ pub(crate) fn parse(text: &str) -> Result<Settings, String> {
     if let Some(strings) = file.completion.popup_in_strings {
         settings.completion.popup_in_strings = strings;
     }
+    if let Some(inline_completion) = file.completion.inline_completion {
+        settings.completion.inline_completion = inline_completion;
+    }
     if let Some(reduced_motion) = file.ui.reduced_motion {
         settings.ui.reduced_motion = reduced_motion;
     }
@@ -1939,6 +1967,9 @@ fn apply_env(
     }
     if let Some(value) = get(ENV_POPUP_IN_STRINGS) {
         settings.completion.popup_in_strings = parse_bool(ENV_POPUP_IN_STRINGS, &value)?;
+    }
+    if let Some(value) = get(ENV_INLINE_COMPLETION) {
+        settings.completion.inline_completion = parse_bool(ENV_INLINE_COMPLETION, &value)?;
     }
     if let Some(value) = get(ENV_REDUCED_MOTION) {
         settings.ui.reduced_motion = parse_bool(ENV_REDUCED_MOTION, &value)?;
@@ -2187,6 +2218,7 @@ struct CompletionFile {
     popup_delay_ms: Option<u16>,
     popup_trigger_len: Option<usize>,
     popup_in_comments: Option<bool>,
+    inline_completion: Option<bool>,
     popup_in_strings: Option<bool>,
 }
 
@@ -2270,6 +2302,10 @@ impl SettingsPatch {
                 .completion
                 .popup_in_strings
                 .map(|value| value.to_string()),
+            SettingsKey::InlineCompletion => self
+                .completion
+                .inline_completion
+                .map(|value| value.to_string()),
             SettingsKey::ReducedMotion => self.ui.reduced_motion.map(|value| value.to_string()),
             SettingsKey::HighContrast => self.ui.high_contrast.map(|value| value.to_string()),
             SettingsKey::FileWatching => self.editor.file_watching.map(|value| value.to_string()),
@@ -2313,6 +2349,9 @@ impl SettingsPatch {
             SettingsKey::PopupInStrings => {
                 self.completion.popup_in_strings = Some(settings.completion.popup_in_strings)
             }
+            SettingsKey::InlineCompletion => {
+                self.completion.inline_completion = Some(settings.completion.inline_completion)
+            }
             SettingsKey::ReducedMotion => self.ui.reduced_motion = Some(settings.ui.reduced_motion),
             SettingsKey::HighContrast => self.ui.high_contrast = Some(settings.ui.high_contrast),
             SettingsKey::FileWatching => {
@@ -2338,6 +2377,7 @@ impl SettingsPatch {
             SettingsKey::PopupTriggerLen => self.completion.popup_trigger_len = None,
             SettingsKey::PopupInComments => self.completion.popup_in_comments = None,
             SettingsKey::PopupInStrings => self.completion.popup_in_strings = None,
+            SettingsKey::InlineCompletion => self.completion.inline_completion = None,
             SettingsKey::ReducedMotion => self.ui.reduced_motion = None,
             SettingsKey::HighContrast => self.ui.high_contrast = None,
             SettingsKey::FileWatching => self.editor.file_watching = None,
@@ -2530,6 +2570,7 @@ mod tests {
                     popup_trigger_len: 2,
                     popup_in_comments: false,
                     popup_in_strings: false,
+                    inline_completion: false,
                 },
                 ui: UiSettings {
                     reduced_motion: false,
@@ -2575,13 +2616,14 @@ mod tests {
             SettingsKey::PopupTriggerLen,
             SettingsKey::PopupInComments,
             SettingsKey::PopupInStrings,
+            SettingsKey::InlineCompletion,
             SettingsKey::ReducedMotion,
             SettingsKey::HighContrast,
             SettingsKey::FileWatching,
         ] {
             assert!(keys.contains(&key), "missing registry key: {key:?}");
         }
-        assert_eq!(keys.len(), 18);
+        assert_eq!(keys.len(), 19);
     }
 
     #[test]
@@ -3252,7 +3294,8 @@ mod tests {
         let settings = parse(
             "[completion]\nauto_brackets = true\nauto_popup = false\n\
              popup_delay_ms = 50\npopup_trigger_len = 3\n\
-             popup_in_comments = true\npopup_in_strings = true\n",
+             popup_in_comments = true\npopup_in_strings = true\n\
+             inline_completion = true\n",
         )
         .expect("parse");
         assert!(settings.completion.auto_brackets);
@@ -3261,6 +3304,7 @@ mod tests {
         assert_eq!(settings.completion.popup_trigger_len, 3);
         assert!(settings.completion.popup_in_comments);
         assert!(settings.completion.popup_in_strings);
+        assert!(settings.completion.inline_completion);
     }
 
     #[test]

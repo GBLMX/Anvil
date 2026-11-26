@@ -1299,8 +1299,21 @@ pub(crate) struct CompletionUiState {
     /// Pending keyword-popup deadline and the edit state it was scheduled for.
     pub(crate) keyword_due: Option<Instant>,
     pub(crate) keyword_signature: Option<(u64, usize)>,
+    /// Latest inline completion for the cursor, rendered as ghost text.
+    pub(crate) inline: Option<InlineCompletionState>,
     /// Whether the last completion list was truncated and must be re-requested.
+    /// Scroll offset for the completion documentation side panel.
+    pub(crate) documentation_scroll: usize,
     pub(crate) incomplete: bool,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct InlineCompletionState {
+    pub(crate) text: String,
+    pub(crate) revision: u64,
+    pub(crate) cursor: usize,
+    pub(crate) path: Option<PathBuf>,
+    pub(crate) replace: Option<(usize, usize, usize, usize)>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -1452,6 +1465,7 @@ pub(crate) struct SemanticToken {
 pub(crate) enum LspRequestKind {
     Completion,
     CompletionResolve,
+    InlineCompletion,
     SemanticTokens,
     Definition,
     Declaration,

@@ -1705,3 +1705,33 @@ fn completion_popup_shows_label_details_and_deprecation() {
         "{deprecated:?}"
     );
 }
+
+#[test]
+fn inline_completion_renders_ghost_and_tab_accepts() {
+    let mut model = Model::new(EditorState::from_text("pri"), None);
+    model.start_page.welcome = false;
+    model.ui.input_mode = InputMode::Insert;
+    model.session.cursor = 3;
+    model.language.completion.inline = Some(crate::state::InlineCompletionState {
+        text: "ntln".to_owned(),
+        revision: model.session.editor.revision(),
+        cursor: 3,
+        path: None,
+        replace: None,
+    });
+    let backend = TestBackend::new(100, 24);
+    let mut terminal = Terminal::new(backend).expect("terminal");
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+    let rendered = terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect::<String>();
+    assert!(rendered.contains("ntln"), "{rendered}");
+    handle_event(&mut model, key(KeyCode::Tab));
+    let text = model.session.editor.text();
+    assert_eq!(text.slice(0..text.len_bytes()), "println");
+    assert!(model.language.completion.inline.is_none());
+}

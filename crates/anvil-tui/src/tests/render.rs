@@ -779,3 +779,23 @@ fn fuzzy_row_click_selects_the_row() {
         index
     );
 }
+
+#[test]
+fn completion_markdown_styles_code_and_headings() {
+    let lines =
+        crate::render::markdown_lines("# Heading\nUse `code` here\n```\nfn example() {}\n```");
+    let text = lines
+        .iter()
+        .flat_map(|line| line.spans.iter())
+        .map(|span| span.content.as_ref())
+        .collect::<String>();
+    assert!(text.contains("Heading"), "{text}");
+    assert!(text.contains("code"), "{text}");
+    assert!(text.contains("fn example()"), "{text}");
+    let code = lines
+        .iter()
+        .flat_map(|line| line.spans.iter())
+        .find(|span| span.content == "code")
+        .expect("inline code span");
+    assert_eq!(code.style.bg, Some(theme::surface()));
+}

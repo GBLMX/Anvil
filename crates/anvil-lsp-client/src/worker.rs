@@ -210,6 +210,9 @@ impl LspWorker {
                                     "activeParameterSupport": true
                                 }
                             },
+                            "inlineCompletion": {
+                                "dynamicRegistration": false
+                            },
                             "semanticTokens": {
                                 "dynamicRegistration": false,
                                 "requests": {"full": true},

@@ -85,6 +85,7 @@ impl Model {
             .position(|item| item.preselect)
             .or_else(|| recent.and_then(|label| items.iter().position(|item| item.label == label)))
             .unwrap_or(0);
+        self.language.completion.documentation_scroll = 0;
         self.language.completion.completion = Some(CompletionState {
             items,
             filtered,

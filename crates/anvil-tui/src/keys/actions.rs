@@ -639,6 +639,8 @@ pub(super) enum CompletionAction {
     Cancel,
     Backspace,
     Insert(char),
+    DocumentationUp,
+    DocumentationDown,
     CancelAndPassThrough,
 }
 
@@ -652,6 +654,8 @@ pub(super) fn completion_action(key: KeyPress, text_input: bool) -> CompletionAc
         KeyCode::Enter | KeyCode::Tab => CompletionAction::Accept,
         KeyCode::Backspace => CompletionAction::Backspace,
         KeyCode::Char(character) if text_input => CompletionAction::Insert(character),
+        KeyCode::PageUp => CompletionAction::DocumentationUp,
+        KeyCode::PageDown => CompletionAction::DocumentationDown,
         _ => CompletionAction::CancelAndPassThrough,
     }
 }
@@ -711,6 +715,20 @@ pub(super) fn execute_completion_action(model: &mut Model, action: CompletionAct
                 model.cancel_completion();
                 model.auto_completion();
             }
+        }
+        CompletionAction::DocumentationUp => {
+            model.language.completion.documentation_scroll = model
+                .language
+                .completion
+                .documentation_scroll
+                .saturating_sub(1)
+        }
+        CompletionAction::DocumentationDown => {
+            model.language.completion.documentation_scroll = model
+                .language
+                .completion
+                .documentation_scroll
+                .saturating_add(1)
         }
         CompletionAction::CancelAndPassThrough => {
             model.cancel_completion();

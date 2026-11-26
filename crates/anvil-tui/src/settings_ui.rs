@@ -173,6 +173,9 @@ impl SettingsOverlayState {
             settings::SettingsKey::PopupInStrings => {
                 settings.completion.popup_in_strings.to_string()
             }
+            settings::SettingsKey::InlineCompletion => {
+                settings.completion.inline_completion.to_string()
+            }
             settings::SettingsKey::ReducedMotion => settings.ui.reduced_motion.to_string(),
             settings::SettingsKey::HighContrast => settings.ui.high_contrast.to_string(),
             settings::SettingsKey::FileWatching => settings.editor.file_watching.to_string(),
@@ -362,6 +365,9 @@ impl SettingsOverlayState {
             settings::SettingsKey::PopupInStrings => {
                 draft.completion.popup_in_strings = !draft.completion.popup_in_strings
             }
+            settings::SettingsKey::InlineCompletion => {
+                draft.completion.inline_completion = !draft.completion.inline_completion
+            }
             settings::SettingsKey::ReducedMotion => {
                 draft.ui.reduced_motion = !draft.ui.reduced_motion
             }
@@ -434,6 +440,10 @@ impl SettingsOverlayState {
             }
             settings::SettingsKey::PopupInStrings => {
                 self.draft.completion.popup_in_strings = self.inherited.completion.popup_in_strings
+            }
+            settings::SettingsKey::InlineCompletion => {
+                self.draft.completion.inline_completion =
+                    self.inherited.completion.inline_completion
             }
             settings::SettingsKey::ReducedMotion => {
                 self.draft.ui.reduced_motion = self.inherited.ui.reduced_motion

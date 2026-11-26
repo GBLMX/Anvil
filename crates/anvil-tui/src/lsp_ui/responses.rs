@@ -260,6 +260,9 @@ impl Model {
             LspRequestKind::CompletionResolve => {
                 self.apply_completion_resolve_response(id, &result);
             }
+            LspRequestKind::InlineCompletion => {
+                self.apply_inline_completion_response(&result);
+            }
             LspRequestKind::Definition => self.apply_goto_response(&result, "definition"),
             LspRequestKind::Declaration => self.apply_goto_response(&result, "declaration"),
             LspRequestKind::TypeDefinition => {
@@ -495,6 +498,7 @@ impl Model {
                     recent.and_then(|label| items.iter().position(|item| item.label == label))
                 })
                 .unwrap_or(0);
+            self.language.completion.documentation_scroll = 0;
             self.language.completion.completion = Some(CompletionState {
                 items,
                 filtered,
@@ -541,6 +545,54 @@ impl Model {
         }
         item.raw = raw;
         item.resolved = true;
+        self.file.dirty = true;
+    }
+
+    fn apply_inline_completion_response(&mut self, result: &serde_json::Value) {
+        if !matches!(self.ui.input_mode, InputMode::Insert)
+            || self.language.completion.completion.is_some()
+            || self.language.completion.snippet.is_some()
+        {
+            self.language.completion.inline = None;
+            return;
+        }
+        let item = result
+            .get("items")
+            .and_then(serde_json::Value::as_array)
+            .and_then(|items| items.first());
+        let Some(item) = item else {
+            self.language.completion.inline = None;
+            return;
+        };
+        let text = item
+            .get("insertText")
+            .and_then(|value| {
+                value
+                    .as_str()
+                    .or_else(|| value.get("value").and_then(serde_json::Value::as_str))
+            })
+            .unwrap_or_default();
+        if text.is_empty() {
+            self.language.completion.inline = None;
+            return;
+        }
+        let replace = item.get("range").and_then(|range| {
+            let start = range.get("start")?;
+            let end = range.get("end")?;
+            Some((
+                start.get("line")?.as_u64()? as usize,
+                start.get("character")?.as_u64()? as usize,
+                end.get("line")?.as_u64()? as usize,
+                end.get("character")?.as_u64()? as usize,
+            ))
+        });
+        self.language.completion.inline = Some(crate::state::InlineCompletionState {
+            text: text.to_owned(),
+            revision: self.session.editor.revision(),
+            cursor: self.session.cursor,
+            path: self.session.path.clone(),
+            replace,
+        });
         self.file.dirty = true;
     }
 
