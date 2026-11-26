@@ -6,8 +6,8 @@
 use super::*;
 
 pub(crate) const HELP_TEXT: &str = include_str!("help.txt");
-pub(crate) const RECOVERY_TEXT: &str = include_str!("../../../docs/recovery.md");
-pub(crate) const ONBOARDING_TEXT: &str = include_str!("../../../docs/onboarding.md");
+pub(crate) const RECOVERY_TEXT: &str = include_str!("../../../docs/src/recovery.md");
+pub(crate) const ONBOARDING_TEXT: &str = include_str!("../../../docs/src/onboarding.md");
 
 #[derive(Default)]
 pub(crate) struct ReadOnlyState {
