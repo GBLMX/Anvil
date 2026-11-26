@@ -1,0 +1,16 @@
+[book]
+title = "Anvil"
+description = "Architecture, plans, ADRs, and reference material for the Anvil editor"
+authors = ["Anvil contributors"]
+language = "en"
+src = "src"
+
+[build]
+build-dir = "../dist/book"
+create-missing = false
+
+[output.html]
+default-theme = "light"
+preferred-dark-theme = "navy"
+git-repository-url = "https://github.com/GBLMX/Anvil"
+edit-url-template = "https://github.com/GBLMX/Anvil/edit/main/docs/src/{path}"

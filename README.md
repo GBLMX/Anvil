@@ -11,13 +11,13 @@ can compose the kernel with their own UI and trusted Rust code. Runtime plugins
 remain untrusted and sandboxed.
 
 <p align="center">
-  <img src="docs/assets/anvil-demo.gif" alt="Anvil terminal editor demo: fuzzy open, edit, save, search, tree, and Git gutter" width="900">
+  <img src="docs/src/assets/anvil-demo.gif" alt="Anvil terminal editor demo: fuzzy open, edit, save, search, tree, and Git gutter" width="900">
 </p>
 
 Status: **`0.8.0` is the workspace release candidate; public tagging remains
 gated on production signing and provenance**. See the
-[internal polish plan](docs/internal-polish-plan.md) and the
-[0.7.x module plan](docs/0.7.x-plan.md).
+[release process](docs/src/RELEASE.md) and the
+[0.7.x module plan](docs/src/history/plans/0.7.x-plan.md).
 Development uses Rust from `rust-toolchain.toml` and Go **1.27.4 or newer**;
 CI installs the exact Go version from the root `go.mod`. The ratatui editor now
 includes insert
@@ -156,7 +156,7 @@ section includes the active theme row.
 Each row shows its effective source (`default`, environment, user, or trusted
 project file), including ignored project files and the reason. `:config-reload`
 reports the files that actually loaded. See
-[settings sources](docs/settings-sources.md); typed settings are not currently
+[settings sources](docs/src/settings-sources.md); typed settings are not currently
 overridden by CLI flags.
 Auto-save is off by default; when enabled it writes the active named buffer
 on buffer switch/close, split focus/close changes, opening another file, focus
@@ -251,7 +251,7 @@ composition unless `full` is selected. `--all-features` also selects it.
 - `anvil-distro-minimal` composes none of these modules.
 
 Module compatibility, caps, and deprecation rules are in
-[module compatibility](docs/module-compatibility.md).
+[module compatibility](docs/src/modules.md#compatibility-and-deprecation-policy).
 
 Phase 0 still consists of the `anvil-api` contracts, `anvil-core` PieceTable,
 `anvil-editor` snapshots, `anvil-ipc` framing/JSON-RPC/Unix transport, and the
@@ -285,7 +285,7 @@ language servers. `--profile`
 defaults to `auto` (installed layout vs cargo target); dev target sidecars are
 warnings, installed-layout sidecars are errors. `--json` emits schema version
 1 with stable check ids and remediation; required failures exit nonzero. See
-[doctor checks](docs/doctor.md).
+[doctor checks](docs/src/doctor.md).
 
 `anvil setup check` and `plan` are read-only: `check` reports found/missing
 language servers, and `plan` adds provider commands, prerequisites, and root
@@ -383,58 +383,58 @@ and `language-pack-lua`.
 
 ## Documents
 
-- [Installing Anvil](INSTALL.md)
-- [Documentation index](docs/README.md)
+- [Installing Anvil](docs/src/INSTALL.md)
+- [Documentation index](docs/src/index.md)
 - [Project charter](PROJECT_CHARTER.md)
-- [Known issues](docs/known-issues.md)
-- [Getting started](docs/onboarding.md)
-- [Recovery and save semantics](docs/recovery.md)
-- [Remote/SSH workflow](docs/remote-ssh.md)
-- [High-frequency command architecture plan](docs/command-architecture-plan.md)
-- [0.3.0 → 0.4.0: Polish & Specification](docs/history/plans/polish-and-specification.md)
-- [0.3.0 → 0.4.0 / Phase 0.7 plan](docs/history/plans/phase-0-7-plan.md)
-- [0.4.x feature plan](docs/history/plans/0.4.x-plan.md)
-- [0.5.x interaction and UI plan](docs/0.5.x-plan.md)
-- [0.6.x distribution and marketplace plan](docs/0.6.x-plan.md)
-- [0.7.x official optional Rust modules plan](docs/0.7.x-plan.md)
-- [Module compatibility and deprecation policy](docs/module-compatibility.md)
-- [Module contract](docs/adr/0028-module-contract.md)
-- [Desktop URL opener module](docs/adr/0031-desktop-url-opener-module.md)
-- [LaTeX language provider](docs/adr/0033-latex-language-provider.md)
-- [Workspace index module extension points](docs/adr/0030-workspace-index-module.md)
-- [External integration and MCP plan](docs/external-integration-plan.md)
-- [Linux platform plan](docs/linux-platform-plan.md)
-- [Keymap configuration](docs/keymap.md)
-- [Plugin-host isolation ADR](docs/adr/0012-plugin-host-isolation.md)
-- [Threat model](docs/threat-model.md)
-- [Architecture](docs/architecture.md)
-- [Architecture maps](docs/architecture-visual.md)
-- [Deployment model](docs/deployment.md)
-- [Ratatui TUI Elm loop plan](docs/history/plans/ratatui-elm-loop-plan.md)
-- [Performance baseline](docs/performance.md)
-- [Go gateway benchmarks](docs/benchmarks/go-gateway.md)
-- [File operation benchmarks](docs/benchmarks/file-operations.md)
-- [Text model benchmark](docs/benchmarks/text-model.md)
-- [Editor benchmarks](docs/benchmarks/editor.md)
-- [Line index stress](docs/benchmarks/line-index-stress.md)
-- [TUI edit-loop latency](docs/benchmarks/tui.md)
-- [Phase 0.5 plan](docs/history/plans/phase-0-5-plan.md)
-- [Phase 0.6 plan](docs/history/plans/phase-0-6-plan.md)
-- [Upstream dependencies](docs/adr/0006-upstream-dependencies.md)
-- [JSON-RPC and token contract](docs/adr/0007-jsonrpc-envelope-and-capability-token.md)
-- [Kernel/distribution boundary](docs/adr/0013-kernel-distribution-boundary.md)
-- [Selection-first interaction](docs/adr/0008-selection-first-interaction.md)
-- [Text-model snapshot gate](docs/adr/0009-text-model-snapshot-gate.md)
-- [Cursor and snapshot ownership](docs/adr/0010-cursor-and-snapshot-ownership.md)
-- [Workspace file I/O protocol](docs/adr/0011-workspace-chunked-file-io.md)
-- [Workspace tree watching](docs/adr/0018-workspace-tree-watch.md)
-- [Terminal keyboard enhancement](docs/adr/0019-terminal-keyboard-enhancement.md)
-- [Architecture decision records](docs/adr/)
+- [Known issues](docs/src/known-issues.md)
+- [Getting started](docs/src/onboarding.md)
+- [Recovery and save semantics](docs/src/recovery.md)
+- [Remote/SSH workflow](docs/src/multi-host-install.md#remote-ssh-workflow)
+- [High-frequency command architecture plan](docs/src/plans/active/command-architecture-plan.md)
+- [0.3.0 → 0.4.0: Polish & Specification](docs/src/history/plans/polish-and-specification.md)
+- [0.3.0 → 0.4.0 / Phase 0.7 plan](docs/src/history/plans/phase-0-7-plan.md)
+- [0.4.x feature plan](docs/src/history/plans/0.4.x-plan.md)
+- [0.5.x interaction and UI plan](docs/src/history/plans/0.5.x-plan.md)
+- [0.6.x distribution and marketplace plan](docs/src/history/plans/0.6.x-plan.md)
+- [0.7.x official optional Rust modules plan](docs/src/history/plans/0.7.x-plan.md)
+- [Module compatibility and deprecation policy](docs/src/modules.md#compatibility-and-deprecation-policy)
+- [Module contract](docs/src/adr/0028-module-contract.md)
+- [Desktop URL opener module](docs/src/adr/0031-desktop-url-opener-module.md)
+- [LaTeX language provider](docs/src/adr/0033-latex-language-provider.md)
+- [Workspace index module extension points](docs/src/adr/0030-workspace-index-module.md)
+- [External integration and MCP plan](docs/src/external-integration.md)
+- [Linux platform plan](docs/src/plans/active/linux-platform-plan.md)
+- [Keymap configuration](docs/src/keymap.md)
+- [Plugin-host isolation ADR](docs/src/adr/0012-plugin-host-isolation.md)
+- [Threat model](docs/src/threat-model.md)
+- [Architecture](docs/src/architecture.md)
+- [Architecture maps](docs/src/architecture.md#architecture-maps)
+- [Deployment model](docs/src/deployment.md)
+- [Ratatui TUI Elm loop plan](docs/src/history/plans/ratatui-elm-loop-plan.md)
+- [Performance baseline](docs/src/performance.md)
+- [Go gateway benchmarks](docs/src/benchmarks/go-gateway.md)
+- [File operation benchmarks](docs/src/benchmarks/file-operations.md)
+- [Text model benchmark](docs/src/benchmarks/text-model.md)
+- [Editor benchmarks](docs/src/benchmarks/editor.md)
+- [Line index stress](docs/src/benchmarks/line-index-stress.md)
+- [TUI edit-loop latency](docs/src/benchmarks/tui.md)
+- [Phase 0.5 plan](docs/src/history/plans/phase-0-5-plan.md)
+- [Phase 0.6 plan](docs/src/history/plans/phase-0-6-plan.md)
+- [Upstream dependencies](docs/src/adr/0006-upstream-dependencies.md)
+- [JSON-RPC and token contract](docs/src/adr/0007-jsonrpc-envelope-and-capability-token.md)
+- [Kernel/distribution boundary](docs/src/adr/0013-kernel-distribution-boundary.md)
+- [Selection-first interaction](docs/src/adr/0008-selection-first-interaction.md)
+- [Text-model snapshot gate](docs/src/adr/0009-text-model-snapshot-gate.md)
+- [Cursor and snapshot ownership](docs/src/adr/0010-cursor-and-snapshot-ownership.md)
+- [Workspace file I/O protocol](docs/src/adr/0011-workspace-chunked-file-io.md)
+- [Workspace tree watching](docs/src/adr/0018-workspace-tree-watch.md)
+- [Terminal keyboard enhancement](docs/src/adr/0019-terminal-keyboard-enhancement.md)
+- [Architecture decision records](docs/src/adr/index.md)
 - [Governance](GOVERNANCE.md)
 - [Maintainers](MAINTAINERS.md)
-- [Release process](RELEASE.md)
+- [Release process](docs/src/RELEASE.md)
 - [Support](SUPPORT.md)
-- [Roadmap](ROADMAP.md)
+- [Roadmap](docs/src/ROADMAP.md)
 - [Security policy](SECURITY.md)
 - [Contributing](CONTRIBUTING.md)
 - [Code of conduct](CODE_OF_CONDUCT.md)
@@ -462,7 +462,7 @@ and `language-pack-lua`.
   its code-generation cost.
 - The text model is `PieceTable`, exposed as `anvil-core::TextDocument`; Rope and
   Gap Buffer remain benchmark-only. See
-  [ADR-0009](docs/adr/0009-text-model-snapshot-gate.md).
+  [ADR-0009](docs/src/adr/0009-text-model-snapshot-gate.md).
 
 - Syntax highlighting is derived state, not stored in `PieceTable`. Parsing runs
   on a background worker after a 50 ms debounce; stale spans remain visible
@@ -475,11 +475,11 @@ and `language-pack-lua`.
   a typed `ModuleRegistry`; contract v1 is frozen. Modules receive no ambient
   plugin capability, cannot shadow kernel commands, and may not depend on
   `anvil-tui` internals. See
-  [module contract](docs/adr/0028-module-contract.md).
+  [module contract](docs/src/adr/0028-module-contract.md).
 - The native editor/API interaction model is selection-first. The current TUI
   exposes that core through a Vim-like keymap implemented in Rust. Normal,
   operator-pending, and editor/global context bindings can be remapped through
-  [keymap.toml](docs/keymap.md), and bundled ergo and Vim presets can be
+  [keymap.toml](docs/src/keymap.md), and bundled ergo and Vim presets can be
   selected as a base. Lua/TS keymap plugins are not implemented yet.
 - Full untrusted-plugin support targets Linux 5.13+ (Landlock). Linux 5.6-5.12
   may run the editor with trusted plugins only.

@@ -5,7 +5,7 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$root"
 
 src="crates/anvil-tui/src"
-baseline="docs/tui-maintainability.baseline"
+baseline="docs/src/tui-maintainability.baseline"
 check=false
 if [ "${1:-}" = "--check" ]; then
     check=true

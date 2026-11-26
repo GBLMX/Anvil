@@ -1,0 +1,56 @@
+# TUI Maintainability Budget
+
+Status: Active; current baseline recorded 2026-11-24.
+
+The TUI is intentionally one crate until a second consumer or an independent
+boundary is measured. This budget tracks structural coupling instead of treating
+file count or crate count as a goal.
+
+## Current baseline
+
+| Metric | Baseline |
+|---|---:|
+| Rust source files | 112 |
+| Source lines | 61,326 |
+| Normal dependencies | 32 |
+| `impl Model` blocks | 70 |
+| Files containing `impl Model` | 65 |
+| Methods taking `&mut Model` | 543 |
+| Non-`impl Model` functions taking `&mut Model` | 56 |
+| `Model::new` constructions | 557 |
+| Page-test `Model::new` setups | 2 |
+| Files over 800 lines | 19 |
+
+File counts and LOC are informational: a page split may add files while
+reducing coupling. The budgets are dependency count, `impl Model` count,
+`&mut Model` method count, non-Model functions taking `&mut Model`, full-`Model`
+test construction count, and files over 800 lines.
+
+## Commands
+
+```bash
+scripts/tui-metrics.sh
+scripts/tui-metrics.sh --check
+```
+
+`--check` reads `docs/src/tui-maintainability.baseline` and fails if a structural
+budget grows. A deliberate extraction that lowers a metric should update the
+baseline in the same change.
+
+## Target direction
+
+- Page state owns its update logic and tests.
+- `Model` composes domain state and routes cross-domain transitions.
+- Page renderers read state; they do not start I/O.
+- Runtime polling is grouped under domain state, not added to the terminal loop
+  one service at a time.
+- Crate extraction requires a second consumer, a clean state boundary, a wrong
+  dependency edge, or measured build/ownership pressure.
+
+See [ADR-0024](adr/0024-tui-state-and-domain-boundaries.md),
+[ADR-0041](adr/0041-tui-primitive-extraction.md), and
+[ADR-0042](adr/0042-selection-first-session-frontend.md).
+
+See [TUI view boundary and extraction decision](history/analysis/tui-view-boundary.md) for the
+current decision to keep state ownership inside `anvil-tui` before attempting a
+crate split.

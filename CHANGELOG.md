@@ -75,7 +75,7 @@ post-`0.5.0` feature line.
   presentation variables, and LSP command overrides.
 - Declared the architecture modernization and modularization program; ownership
   and headless-boundary phases are tracked in
-  `docs/architecture-modernization-plan.md`.
+  `docs/src/architecture-modernization-plan.md`.
 - Theme-browser state transitions moved out of `impl Model` into the
   `theme_browser` page module; TUI metrics dropped from 71 to 70 `impl Model`
   blocks and from 547 to 543 `&mut Model` methods.
@@ -90,7 +90,7 @@ post-`0.5.0` feature line.
 ### Added
 - Local release layout, installer, signed-plugin, artifact, and
   signature-verification dry run passed with ephemeral production-like Ed25519
-  keys; evidence is in `docs/history/releases/release-dry-run-2026-11-22.md`.
+  keys; evidence is in `docs/src/history/releases/release-dry-run-2026-11-22.md`.
 - `scripts/release-yubikey.sh` provides the scripted offline signing half of
   the release flow: plugin signatures in PIV slot `9c`, checksum signatures in
   slot `9d`, and full artifact/lifecycle verification. Publication remains the
@@ -126,7 +126,7 @@ post-`0.5.0` feature line.
   existing `lua-language-server` profile is unchanged.
 - The local i7-12700H workstation is now the authoritative performance
   reference; the current baseline is
-  `docs/benchmarks/reference-2026-11-20-local-i7.md`. The planned replacement
+  `docs/src/benchmarks/reference-2026-11-20-local-i7.md`. The planned replacement
   host is no longer a gate.
 - `:recent-workspaces` now opens the same start-page workspace list as
   `Space w` instead of printing paths to the status line.
@@ -236,7 +236,7 @@ post-`0.5.0` feature line.
   JSON schema version 1 has stable check ids/remediation; required failures
   exit `1`.
 - Added SSH/tmux color-forwarding diagnostics to `anvil doctor` and a
-  [remote/SSH workflow](docs/remote-ssh.md) guide covering remote install,
+  [remote/SSH workflow](docs/src/multi-host-install.md#remote-ssh-workflow) guide covering remote install,
   environment forwarding, control sockets, and diagnostics.
 - `:settings` now shows the effective origin of each value (`default`,
   environment, user file, or trusted project file), including ignored project
@@ -245,7 +245,7 @@ post-`0.5.0` feature line.
   writes the sparse user patch by default; `--effective` preserves the previous
   resolved-value output. Added `anvil settings schema` and the generated
   `share/anvil/settings.schema.json` release artifact.
-- Added `:help recover` and [recovery semantics](docs/recovery.md) covering
+- Added `:help recover` and [recovery semantics](docs/src/recovery.md) covering
   save durability, session/swap recovery, undo reset, and external conflicts.
 - Added the gateway-side native workspace watcher API
   (`sys.watch_start`, `sys.watch_status`, `sys.watch_stop`) with bounded
@@ -258,7 +258,7 @@ post-`0.5.0` feature line.
   `ENOSPC`/`EMFILE` during registration enters a bounded cooldown instead of
   retrying in a tight loop.
   Polling remains the fallback.
-- Added `:help start` and a first-run [onboarding guide](docs/onboarding.md)
+- Added `:help start` and a first-run [onboarding guide](docs/src/onboarding.md)
   with a task list and compact keymap card.
 - Command-based LSP code actions now dispatch through
   `workspace/executeCommand`, including actions that also carry a workspace
@@ -286,7 +286,7 @@ post-`0.5.0` feature line.
   `try_*` mutation methods; `anvil-session` mirrors the fallible surface.
 - `DocumentSession` boolean mutation wrappers are deprecated; the TUI now
   calls the fallible `try_*` methods directly.
-- Added the API surface snapshot gate and [API 1.1 ADR](docs/adr/0043-plugin-api-1-1.md);
+- Added the API surface snapshot gate and [API 1.1 ADR](docs/src/adr/0043-plugin-api-1-1.md);
   the existing plugin v1 contract remains unchanged.
 - Buffer tabs and the buffer picker now show file-type icons; picker paths are
   workspace-relative instead of absolute.
@@ -920,7 +920,7 @@ post-`0.5.0` feature line.
 - `session.hello` now negotiates API `1.0.0`; plugins declare `api` as `1`,
   `1.0`, or `1.0.0`.
 - Manifest path frozen to `plugin.json`; the v1 contract is documented in
-  `docs/spec/plugin-api-v1.md` and ADR-0014.
+  `docs/src/spec/plugin-api-v1.md` and ADR-0014.
 
 ### Changed
 - Plugin API manifests using the `0.1` line are no longer accepted.
@@ -1203,7 +1203,7 @@ This release bundles the `0.4.4` gateway capability control plane and the
   External create, delete, and rename now refresh the tree while preserving
   selection and expansion; watchers are capped and marked stale when the
   gateway cannot observe the tree. See
-  [ADR-0018](docs/adr/0018-workspace-tree-watch.md).
+  [ADR-0018](docs/src/adr/0018-workspace-tree-watch.md).
 
 ### Fixed
 
@@ -1212,7 +1212,7 @@ This release bundles the `0.4.4` gateway capability control plane and the
 
 ### Changed
 
-- Added [INSTALL.md](INSTALL.md) with source build, sibling-binary, runtime,
+- Added [INSTALL.md](docs/src/INSTALL.md) with source build, sibling-binary, runtime,
   verification, and uninstall instructions.
 
 ## [0.4.0] - 2026-11-01
@@ -1221,7 +1221,7 @@ This release bundles the `0.4.4` gateway capability control plane and the
 
 - `0.4.0` closes the Polish & Specification train: fixes, tests,
   documentation, and contract closure only; no new capability families. See
-  [the release policy](docs/history/plans/polish-and-specification.md).
+  [the release policy](docs/src/history/plans/polish-and-specification.md).
 - The plugin host stops at the sandboxed empty-host boundary. Plugin runtime,
   loading, capability bindings, gateway control-socket registration, and
   end-to-end plugin `sys.*` dispatch move to the post-`0.4.0` feature line;
@@ -1610,7 +1610,7 @@ This release bundles the `0.4.4` gateway capability control plane and the
 
 - 0.1.1 / Phase 0.7: plugin-host isolation, Tree-sitter syntax highlighting,
   LSP client, and optional `:reconnect` poison recovery. See
-  [docs/history/plans/phase-0-7-plan.md](docs/history/plans/phase-0-7-plan.md).
+  [docs/src/history/plans/phase-0-7-plan.md](docs/src/history/plans/phase-0-7-plan.md).
 
 ## [0.1.0] - 2026-10-31
 

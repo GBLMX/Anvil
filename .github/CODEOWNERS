@@ -16,4 +16,4 @@
 /crates/anvil-plugin-host/ @GBLMX
 /crates/anvil-tui/ @GBLMX
 /go/ @GBLMX
-/docs/adr/ @GBLMX
+/docs/src/adr/ @GBLMX

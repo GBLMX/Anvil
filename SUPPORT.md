@@ -9,7 +9,7 @@ Anvil is pre-alpha. There is no supported production release yet.
   [SECURITY.md](SECURITY.md).
 - **Contribution questions:** read [CONTRIBUTING.md](CONTRIBUTING.md) and
   [GOVERNANCE.md](GOVERNANCE.md).
-- **Architecture questions:** check `docs/architecture.md` and the ADRs before
+- **Architecture questions:** check `docs/src/architecture.md` and the ADRs before
   opening an issue.
 
 ## Supported versions

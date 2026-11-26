@@ -9,8 +9,8 @@ fixtures, and small vertical slices that match the charter and ADRs.
 Read:
 
 1. [PROJECT_CHARTER.md](PROJECT_CHARTER.md)
-2. [docs/threat-model.md](docs/threat-model.md)
-3. [docs/architecture.md](docs/architecture.md)
+2. [docs/src/threat-model.md](docs/src/threat-model.md)
+3. [docs/src/architecture.md](docs/src/architecture.md)
 4. The ADR relevant to your change.
 
 If a change alters a trust boundary, permission, IPC contract, text model, or
@@ -49,7 +49,7 @@ crates/anvil-plugin-host/   sandboxed Luau host
 go/cmd/anvil-gateway/       gateway entry point
 go/cmd/anvil-exec-runner/   sandboxed rg/fd launcher
 go/internal/                gateway, LSP, watch, fetch, policy, fsroot
-docs/                       charter, threat model, ADRs, plans, performance
+docs/src/                   charter, threat model, ADRs, plans, performance
 ```
 
 The pinned development toolchain is:
@@ -61,6 +61,7 @@ The pinned development toolchain is:
   Node is not a runtime dependency.
 - A C/C++ compiler for the vendored Luau plugin host.
 - Python 3 for repository scripts and smoke checks.
+- mdBook **0.5.4** via `mise.toml` for the documentation book.
 
 `mise install` installs the pinned Go and Node versions. Rust is selected by
 `rust-toolchain.toml`. `tmux` is additionally required for the real-TUI smoke
@@ -111,8 +112,24 @@ act -j docs
 act -j rust
 ```
 
-See [Local CI](docs/local-ci.md) for image mapping, job selection, and
+See [Local CI](docs/src/local-ci.md) for image mapping, job selection, and
 limitations. Act is a fast feedback loop, not a replacement for hosted CI.
+
+### Documentation book
+
+`docs/src/` is an mdBook source tree; `docs/src/SUMMARY.md` is the chapter
+list. The `docs` CI job builds it and `scripts/docs-check.py` fails on missing
+chapters, broken local links or anchors, plans outside their allowed
+directories, or a root Markdown count over budget.
+
+```bash
+mdbook serve docs      # live preview on http://localhost:3000
+mdbook build docs      # writes dist/book
+python3 scripts/docs-check.py
+```
+
+Relative links inside the book must stay inside `docs/src/`; link to files
+outside it with an absolute `https://github.com/GBLMX/Anvil/...` URL.
 
 Security and performance changes also need the relevant fixtures under
 `crates/*/benches` or the crate's integration tests.
@@ -143,9 +160,9 @@ test(exec): cover symlink race in rg
 
 - [Governance](GOVERNANCE.md)
 - [Maintainers and review ownership](MAINTAINERS.md)
-- [Release process](RELEASE.md)
+- [Release process](docs/src/RELEASE.md)
 - [Support policy](SUPPORT.md)
-- [Roadmap](ROADMAP.md)
+- [Roadmap](docs/src/ROADMAP.md)
 
 ## Security reports
 

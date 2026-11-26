@@ -185,7 +185,7 @@ exec = ["rg", "fd"]
 
 ## 10. Performance gates
 
-Definitions and measurement live in [docs/performance.md](docs/performance.md).
+Definitions and measurement live in [docs/src/performance.md](docs/src/performance.md).
 
 Phase 0 gates:
 
@@ -238,7 +238,7 @@ Dates are planning estimates, not release commitments.
 
 ## 13. Governance
 
-- Architecture decisions are recorded in `docs/adr/`.
+- Architecture decisions are recorded in `docs/src/adr/`.
 - Roles, decision making, and maintainer changes are defined in
   [GOVERNANCE.md](GOVERNANCE.md); review ownership is in
   [.github/CODEOWNERS](.github/CODEOWNERS).
@@ -259,5 +259,5 @@ are accepted under the same dual-license terms.
 
 ## 15. ADR index
 
-The canonical ADR index is [docs/adr/README.md](docs/adr/README.md); it tracks
+The canonical ADR index is [docs/src/adr/index.md](docs/src/adr/index.md); it tracks
 ADR-0001 through ADR-0073. This charter does not maintain a duplicate list.

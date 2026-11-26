@@ -26,7 +26,7 @@ that area. Maintainers are responsible for:
 - reviewing security-sensitive changes;
 - keeping CI and documented checks trustworthy;
 - declining changes that add unmeasured security or compatibility claims;
-- recording architectural decisions in `docs/adr/`.
+- recording architectural decisions in `docs/src/adr/`.
 
 The current maintainer and area ownership are listed in `MAINTAINERS.md`.
 
@@ -51,7 +51,7 @@ An ADR is required before implementation when a change affects:
 - a security invariant or sandbox behavior;
 - a release or compatibility promise.
 
-ADR status values and the index are maintained under `docs/adr/` and
+ADR status values and the index are maintained under `docs/src/adr/` and
 `PROJECT_CHARTER.md`.
 
 ### Security decisions

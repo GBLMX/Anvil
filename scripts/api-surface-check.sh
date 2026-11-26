@@ -4,7 +4,7 @@ set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$root"
 
-snapshot="docs/api-surface.sha256"
+snapshot="docs/src/api-surface.sha256"
 crates=(
     crates/anvil-api/src
     crates/anvil-core/src
