@@ -11,16 +11,18 @@ use std::sync::Arc;
 impl Model {
     pub(crate) fn snapshot(&self) -> Buffer {
         Buffer {
-            id: self.buffers.active_id,
-            editor: self.session.editor.clone(),
-            path: self.session.path.clone(),
+            document: Document {
+                id: self.buffers.active_id,
+                editor: self.session.editor.clone(),
+                path: self.session.path.clone(),
+                modified: self.file.modified,
+                missing: self.file.missing,
+            },
             cursor: self.session.cursor,
             scroll: self.view.scroll,
-            missing: self.file.missing,
             hscroll: self.view.hscroll,
             visual_anchor: self.edit.visual_anchor,
             visual_line: self.edit.visual_line,
-            modified: self.file.modified,
             search_query: self.search.query.clone(),
             syntax: self.syntax_cache.highlights.borrow().active_cache(),
         }
@@ -370,16 +372,18 @@ impl Model {
         let Some(buffer) = self.buffers.entries.get(index).cloned() else {
             return;
         };
+        let id = buffer.id;
         let syntax = buffer.syntax.clone();
-        self.file.missing = buffer.missing;
+        let document = buffer.document;
+        self.file.missing = document.missing;
         self.edit.visual_anchor = buffer.visual_anchor;
         self.edit.visual_line = buffer.visual_line;
-        self.session.editor = buffer.editor;
-        self.session.path = buffer.path;
+        self.session.editor = document.editor;
+        self.session.path = document.path;
         self.session.cursor = buffer.cursor;
         self.view.scroll = buffer.scroll;
         self.view.hscroll = buffer.hscroll;
-        self.file.modified = buffer.modified;
+        self.file.modified = document.modified;
         self.search.query = buffer.search_query;
         self.search.state.reset_for_buffer();
         self.start_page.welcome = false;
@@ -389,7 +393,7 @@ impl Model {
             false,
             Some(syntax),
         );
-        self.buffers.active_id = buffer.id;
+        self.buffers.active_id = id;
         self.buffers.active = index;
         self.ui.input_mode = InputMode::Normal;
         self.input.pending = None;
@@ -430,16 +434,18 @@ impl Model {
         }
         self.ensure_current_buffer();
         self.buffers.entries.push(Buffer {
-            id: BufferId::next(),
-            editor: EditorState::from_text("").into(),
-            path: None,
+            document: Document {
+                id: DocumentId::next(),
+                editor: EditorState::from_text("").into(),
+                path: None,
+                modified: false,
+                missing: false,
+            },
             cursor: 0,
-            missing: false,
             scroll: 0,
+            hscroll: 0,
             visual_anchor: None,
             visual_line: false,
-            hscroll: 0,
-            modified: false,
             search_query: String::new(),
             syntax: Default::default(),
         });
@@ -594,7 +600,7 @@ impl Model {
         self.buffers.split = None;
         self.ui.focus.split = false;
         self.buffers.active = 0;
-        self.buffers.active_id = BufferId::next();
+        self.buffers.active_id = DocumentId::next();
         self.sync_lsp_active();
         self.file.dirty = true;
     }
@@ -680,16 +686,18 @@ impl Model {
             self.buffers.entries.push(self.snapshot());
         }
         self.buffers.entries.push(Buffer {
-            id: BufferId::next(),
-            editor: EditorState::from_text(&text).into(),
-            path: Some(path.clone()),
+            document: Document {
+                id: DocumentId::next(),
+                editor: EditorState::from_text(&text).into(),
+                path: Some(path.clone()),
+                modified: false,
+                missing: false,
+            },
             cursor: 0,
-            missing: false,
-            visual_anchor: None,
-            visual_line: false,
             scroll: 0,
             hscroll: 0,
-            modified: false,
+            visual_anchor: None,
+            visual_line: false,
             search_query: String::new(),
             syntax: Default::default(),
         });

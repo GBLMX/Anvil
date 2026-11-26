@@ -96,6 +96,7 @@ pub(crate) fn handle_event(model: &mut Model, event: Event) {
             model.session.cursor,
         );
     }
+    model.sync_split_document();
 }
 
 const MAX_PASTE_BYTES: usize = 8 * 1024 * 1024;

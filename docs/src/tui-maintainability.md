@@ -15,7 +15,7 @@ file count or crate count as a goal.
 | Normal dependencies | 32 |
 | `impl Model` blocks | 70 |
 | Files containing `impl Model` | 65 |
-| Methods taking `&mut Model` | 543 |
+| Methods taking `&mut Model` | 544 |
 | Non-`impl Model` functions taking `&mut Model` | 56 |
 | `Model::new` constructions | 557 |
 | Page-test `Model::new` setups | 2 |

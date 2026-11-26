@@ -11,6 +11,41 @@ impl Model {
         self.open_split(crate::state::SplitOrientation::Horizontal);
     }
 
+    pub(crate) fn sync_split_document(&mut self) {
+        let Some(pane) = self.buffers.split.as_mut() else {
+            return;
+        };
+        if pane.buffer.id != self.buffers.active_id {
+            return;
+        }
+        let selections = pane.buffer.document.editor.selection_bytes();
+        let viewport = pane.buffer.document.editor.viewport();
+        let interaction_mode = pane.buffer.document.editor.interaction_mode();
+        let fallback_cursor = pane.buffer.cursor;
+        let mut editor = self.session.editor.clone();
+        let length = editor.text().len_bytes();
+        let selections = selections
+            .into_iter()
+            .map(|(anchor, head)| (anchor.min(length), head.min(length)))
+            .collect();
+        if editor.try_set_selections_bytes(selections).is_err() {
+            let mut cursor = fallback_cursor.min(length);
+            while cursor > 0 && editor.try_set_selection_bytes(cursor, cursor).is_err() {
+                cursor -= 1;
+            }
+            let _ = editor.try_set_selection_bytes(cursor, cursor);
+        }
+        editor.set_viewport(viewport);
+        editor.set_interaction_mode(interaction_mode);
+        pane.buffer.document = Document {
+            id: self.buffers.active_id,
+            editor,
+            path: self.session.path.clone(),
+            modified: self.file.modified,
+            missing: self.file.missing,
+        };
+    }
+
     fn open_split(&mut self, orientation: crate::state::SplitOrientation) {
         if self.buffers.split.is_some() {
             self.status.text = "split already open".to_owned();
@@ -60,6 +95,7 @@ impl Model {
         if !self.auto_save_before_focus_change() {
             return;
         }
+        self.sync_split_document();
         if self.ui.focus.split && self.file.modified {
             self.status.text = "No write since last change (:q! to override)".to_owned();
             self.file.dirty = true;
@@ -79,6 +115,7 @@ impl Model {
     }
 
     pub(crate) fn scroll_split_rows(&mut self, delta: isize) {
+        self.sync_split_document();
         let Some(pane) = self.buffers.split.as_mut() else {
             return;
         };
@@ -98,9 +135,11 @@ impl Model {
         if self.buffers.split.is_none() {
             return;
         }
+        self.sync_split_document();
         if !self.auto_save_before_focus_change() {
             return;
         }
+        self.sync_split_document();
         if self.ui.focus.split && self.file.modified {
             self.status.text = "No write since last change (:q! to override)".to_owned();
             self.file.dirty = true;
@@ -149,13 +188,15 @@ impl Model {
                         .position(|candidate| candidate.path.is_none())
                 }),
         };
-        self.session.editor = buffer.editor;
-        self.session.path = buffer.path;
+        self.buffers.active_id = buffer.id;
+        let document = buffer.document;
+        self.session.editor = document.editor;
+        self.session.path = document.path;
         self.session.cursor = buffer.cursor;
         self.view.scroll = buffer.scroll;
         self.view.hscroll = buffer.hscroll;
-        self.file.modified = buffer.modified;
-        self.file.missing = buffer.missing;
+        self.file.modified = document.modified;
+        self.file.missing = document.missing;
         self.edit.visual_anchor = buffer.visual_anchor;
         self.edit.visual_line = buffer.visual_line;
         self.search.query = buffer.search_query;

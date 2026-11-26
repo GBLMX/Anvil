@@ -10,9 +10,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 const GIT_STATUS_DEBOUNCE: Duration = Duration::from_millis(300);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub(crate) struct BufferId(u64);
+pub(crate) struct DocumentId(u64);
 
-impl BufferId {
+impl DocumentId {
     pub(crate) fn next() -> Self {
         static NEXT: AtomicU64 = AtomicU64::new(1);
         Self(NEXT.fetch_add(1, Ordering::Relaxed))
@@ -24,19 +24,38 @@ impl BufferId {
 }
 
 #[derive(Clone)]
-pub(crate) struct Buffer {
-    pub(crate) id: BufferId,
+pub(crate) struct Document {
+    pub(crate) id: DocumentId,
     pub(crate) editor: DocumentSession,
     pub(crate) path: Option<PathBuf>,
+    pub(crate) modified: bool,
+    pub(crate) missing: bool,
+}
+
+#[derive(Clone)]
+pub(crate) struct Buffer {
+    pub(crate) document: Document,
     pub(crate) cursor: usize,
     pub(crate) scroll: usize,
     pub(crate) hscroll: usize,
-    pub(crate) modified: bool,
-    pub(crate) missing: bool,
     pub(crate) visual_anchor: Option<usize>,
     pub(crate) visual_line: bool,
     pub(crate) search_query: String,
     pub(crate) syntax: anvil_syntax::SyntaxCache,
+}
+
+impl std::ops::Deref for Buffer {
+    type Target = Document;
+
+    fn deref(&self) -> &Document {
+        &self.document
+    }
+}
+
+impl std::ops::DerefMut for Buffer {
+    fn deref_mut(&mut self) -> &mut Document {
+        &mut self.document
+    }
 }
 
 pub(crate) struct Pane {
@@ -993,7 +1012,7 @@ pub(crate) struct BufferState {
     /// All open buffers, including the active one after the first switch.
     pub(crate) entries: Vec<Buffer>,
     /// Stable identity of the active editor document.
-    pub(crate) active_id: BufferId,
+    pub(crate) active_id: DocumentId,
     /// Active buffer index.
     pub(crate) active: usize,
     /// Secondary pane when a vertical split is open.
@@ -1006,7 +1025,7 @@ impl Default for BufferState {
     fn default() -> Self {
         Self {
             entries: Vec::new(),
-            active_id: BufferId::next(),
+            active_id: DocumentId::next(),
             active: 0,
             split: None,
             background: HashMap::new(),
