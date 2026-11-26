@@ -668,13 +668,20 @@ pub(super) fn execute_completion_action(model: &mut Model, action: CompletionAct
             }
             model.backspace();
             model.filter_completion();
+            model.request_completion_more();
         }
         CompletionAction::Insert(character) => {
             if let Some(completion) = model.language.completion.completion.as_mut() {
                 completion.query.push(character);
             }
             model.insert_text(&character.to_string());
-            model.filter_completion();
+            if character.is_alphanumeric() || character == '_' {
+                model.filter_completion();
+                model.request_completion_more();
+            } else {
+                model.cancel_completion();
+                model.auto_completion();
+            }
         }
         CompletionAction::CancelAndPassThrough => {
             model.cancel_completion();

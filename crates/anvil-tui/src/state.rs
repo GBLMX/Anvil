@@ -1290,6 +1290,10 @@ pub(crate) struct CompletionUiState {
     pub(crate) completion: Option<CompletionState>,
     pub(crate) resolve: Option<(u64, usize)>,
     pub(crate) snippet: Option<SnippetSession>,
+    /// Server-advertised trigger characters per language server.
+    pub(crate) support: HashMap<LspKey, Vec<String>>,
+    /// Whether the last completion list was truncated and must be re-requested.
+    pub(crate) incomplete: bool,
 }
 
 /// Semantic token legend, cached tokens, and the revision they describe.

@@ -82,14 +82,47 @@ impl Model {
         });
         self.language.completion.completion = None;
         self.language.completion.resolve = None;
+        self.language.completion.incomplete = false;
         self.close_overlay(OverlayKind::Completion);
     }
     pub(crate) fn auto_completion(&mut self) {
-        if self.active_lsp_worker().is_some() {
-            self.request_completion();
+        let text = self.session.editor.text();
+        let text = text.slice(0..text.len_bytes());
+        let cursor = self.session.cursor.min(text.len());
+        let prefix = &text[..cursor];
+        let trigger = self
+            .language
+            .lsp
+            .config
+            .as_ref()
+            .and_then(|key| self.language.completion.support.get(key))
+            .and_then(|characters| {
+                characters
+                    .iter()
+                    .find(|character| prefix.ends_with(character.as_str()))
+                    .cloned()
+            });
+        if let Some(trigger) = trigger {
+            self.start_completion(Some(&trigger));
+            return;
         }
+        if !prefix.ends_with('/') {
+            return;
+        }
+        let local = self.local_completion_items();
+        if local.is_empty() {
+            return;
+        }
+        self.cancel_completion();
+        self.install_completion(local);
+        self.status.text = "completion".to_owned();
+        self.file.dirty = true;
     }
     pub(crate) fn request_completion(&mut self) {
+        self.start_completion(None);
+    }
+
+    fn start_completion(&mut self, trigger: Option<&str>) {
         self.cancel_completion();
         self.close_hover();
         self.close_diagnostic_peek();
@@ -100,22 +133,31 @@ impl Model {
             self.install_completion(local);
             self.status.text = "completion".to_owned();
         }
-        let Some(uri) = self
-            .session
-            .path
-            .as_ref()
-            .map(|path| anvil_lsp_client::file_uri(path))
-        else {
+        let Some(path) = self.session.path.clone() else {
             self.file.dirty = true;
             return;
         };
+        if self.active_lsp_worker().is_none() {
+            if trigger.is_none() && !had_local {
+                self.status.text = "E: lsp is not running".to_owned();
+            }
+            self.file.dirty = true;
+            return;
+        }
         let Some((line, character)) = self.lsp_position() else {
             return;
         };
+        let context = match trigger {
+            Some(trigger) => serde_json::json!({
+                "triggerKind": 2,
+                "triggerCharacter": trigger
+            }),
+            None => serde_json::json!({"triggerKind": 1}),
+        };
         let params = serde_json::json!({
-            "textDocument": {"uri": uri},
+            "textDocument": {"uri": anvil_lsp_client::file_uri(&path)},
             "position": {"line": line, "character": character},
-            "context": {"triggerKind": 1}
+            "context": context
         });
         if self.send_lsp_request(
             LspRequestKind::Completion,
@@ -125,6 +167,36 @@ impl Model {
             self.status.text = "completion".to_owned();
         }
         self.file.dirty = true;
+    }
+
+    pub(crate) fn request_completion_more(&mut self) {
+        if !self.language.completion.incomplete
+            || self.language.completion.completion.is_none()
+            || self.active_lsp_worker().is_none()
+        {
+            return;
+        }
+        let Some(path) = self.session.path.clone() else {
+            return;
+        };
+        let Some((line, character)) = self.lsp_position() else {
+            return;
+        };
+        self.language
+            .lsp_requests
+            .cancel(|kind| kind == LspRequestKind::Completion);
+        let params = serde_json::json!({
+            "textDocument": {"uri": anvil_lsp_client::file_uri(&path)},
+            "position": {"line": line, "character": character},
+            "context": {"triggerKind": 3}
+        });
+        if self.send_lsp_request(
+            LspRequestKind::Completion,
+            "textDocument/completion",
+            params,
+        ) {
+            self.language.completion.incomplete = false;
+        }
     }
     pub(crate) fn request_completion_resolve(&mut self) {
         let Some(completion) = self.language.completion.completion.as_ref() else {
@@ -162,7 +234,12 @@ impl Model {
         let Some(completion) = self.language.completion.completion.take() else {
             return;
         };
+        self.language
+            .lsp_requests
+            .cancel(|kind| kind == LspRequestKind::Completion);
+        self.language.completion.incomplete = false;
         self.close_overlay(OverlayKind::Completion);
+        let query_len = completion.query.len();
         let Some(item) = completion
             .filtered
             .get(completion.selected)
@@ -178,7 +255,7 @@ impl Model {
         let mut snippet = item.snippet.clone();
         self.language.completion.snippet = None;
         if let Some((start, end)) = replace_bytes {
-            let end = end.max(start);
+            let end = end.max(start).max(self.session.cursor);
             if !self.apply_completion_transaction(start, end, &insert) {
                 return;
             }
@@ -199,6 +276,7 @@ impl Model {
                 self.status.text = "E: invalid completion edit range".to_owned();
                 return;
             }
+            let end = end.max(start).max(self.session.cursor);
             if !self.apply_completion_transaction(start, end, &insert) {
                 return;
             }
@@ -210,22 +288,36 @@ impl Model {
         } else {
             let selections = self.session.editor.selection_bytes();
             if selections.len() != 1 {
-                snippet = None;
-            }
-            let start = selections
-                .first()
-                .map(|(anchor, head)| (*anchor).min(*head))
-                .unwrap_or(self.session.cursor);
-            self.insert_text(&insert);
-            if let Some(snippet) = snippet {
-                self.start_snippet(&snippet, start);
+                self.insert_text(&insert);
+            } else {
+                let (anchor, head) = selections[0];
+                let (start, end) = if anchor == head {
+                    (
+                        self.session.cursor.saturating_sub(query_len),
+                        self.session.cursor,
+                    )
+                } else {
+                    (anchor.min(head), anchor.max(head))
+                };
+                if !self.apply_completion_transaction(start, end, &insert) {
+                    return;
+                }
+                self.session.cursor = start + insert.len();
+                self.file.modified = true;
+                if let Some(snippet) = snippet.take() {
+                    self.start_snippet(&snippet, start);
+                }
             }
         }
         if !self.apply_additional_completion_edits(&additional) {
             return;
         }
+        let snippet_active = self.language.completion.snippet.is_some();
         self.status.text = format!("completed {label}");
         self.file.dirty = true;
+        if !snippet_active {
+            self.auto_completion();
+        }
     }
 
     fn apply_completion_transaction(&mut self, start: usize, end: usize, text: &str) -> bool {
@@ -371,6 +463,11 @@ impl Model {
     pub(crate) fn filter_completion(&mut self) {
         if let Some(completion) = self.language.completion.completion.as_mut() {
             let query = completion.query.to_lowercase();
+            let previous = completion
+                .filtered
+                .get(completion.selected)
+                .and_then(|index| completion.items.get(*index))
+                .map(|item| item.label.clone());
             let items = &completion.items;
             let mut filtered = (0..items.len())
                 .filter_map(|index| {
@@ -391,24 +488,32 @@ impl Model {
                 .into_iter()
                 .map(|(index, _)| index)
                 .collect::<Vec<_>>();
-            let preferred = if query.is_empty() {
-                completion
-                    .filtered
-                    .iter()
-                    .position(|index| items[*index].preselect)
-                    .unwrap_or(0)
-            } else {
-                completion
-                    .filtered
-                    .iter()
-                    .position(|index| items[*index].preselect)
-                    .or_else(|| {
-                        completion.filtered.iter().position(|index| {
-                            items[*index].filter_text.to_lowercase().starts_with(&query)
-                        })
-                    })
-                    .unwrap_or(0)
-            };
+            let preferred = previous
+                .and_then(|label| {
+                    completion
+                        .filtered
+                        .iter()
+                        .position(|index| items[*index].label == label)
+                })
+                .or_else(|| {
+                    if query.is_empty() {
+                        completion
+                            .filtered
+                            .iter()
+                            .position(|index| items[*index].preselect)
+                    } else {
+                        completion
+                            .filtered
+                            .iter()
+                            .position(|index| items[*index].preselect)
+                            .or_else(|| {
+                                completion.filtered.iter().position(|index| {
+                                    items[*index].filter_text.to_lowercase().starts_with(&query)
+                                })
+                            })
+                    }
+                })
+                .unwrap_or(0);
             completion.selected = preferred.min(completion.filtered.len().saturating_sub(1));
             self.file.dirty = true;
         }

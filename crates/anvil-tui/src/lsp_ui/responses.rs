@@ -7,6 +7,21 @@ use crate::{
 };
 use std::collections::HashMap;
 use std::path::PathBuf;
+fn completion_edit_range(value: &serde_json::Value) -> Option<(usize, usize, usize, usize)> {
+    let range = value
+        .get("range")
+        .or_else(|| value.get("replace"))
+        .or_else(|| value.get("insert"))
+        .unwrap_or(value);
+    let start = range.get("start")?;
+    let end = range.get("end")?;
+    Some((
+        start.get("line")?.as_u64()? as usize,
+        start.get("character")?.as_u64()? as usize,
+        end.get("line")?.as_u64()? as usize,
+        end.get("character")?.as_u64()? as usize,
+    ))
+}
 
 impl Model {
     pub(crate) fn apply_document_symbols_response(&mut self, result: &serde_json::Value) {
@@ -277,6 +292,17 @@ impl Model {
             self.status.text = "E: lsp: invalid completion response".to_owned();
             return;
         };
+        let defaults = result.get("itemDefaults");
+        let default_edit_range = defaults
+            .and_then(|defaults| defaults.get("editRange"))
+            .and_then(completion_edit_range);
+        let default_insert_format = defaults
+            .and_then(|defaults| defaults.get("insertTextFormat"))
+            .and_then(serde_json::Value::as_u64);
+        let is_incomplete = result
+            .get("isIncomplete")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false);
         let items: Vec<CompletionItem> = items
             .iter()
             .take(2000)
@@ -296,19 +322,21 @@ impl Model {
                     .get("preselect")
                     .and_then(serde_json::Value::as_bool)
                     .unwrap_or(false);
-                let insert = item
-                    .get("textEdit")
+                let text_edit = item.get("textEdit");
+                let insert = text_edit
                     .and_then(|edit| edit.get("newText"))
                     .and_then(serde_json::Value::as_str)
                     .or_else(|| item.get("insertText").and_then(serde_json::Value::as_str))
+                    .or_else(|| item.get("textEditText").and_then(serde_json::Value::as_str))
                     .unwrap_or(&label)
                     .to_owned();
-                let snippet = (item
+                let insert_format = item
                     .get("insertTextFormat")
                     .and_then(serde_json::Value::as_u64)
-                    == Some(2))
-                .then(|| crate::snippet::parse(&insert).ok())
-                .flatten();
+                    .or(default_insert_format);
+                let snippet = (insert_format == Some(2))
+                    .then(|| crate::snippet::parse(&insert).ok())
+                    .flatten();
                 let insert = snippet
                     .as_ref()
                     .map(|snippet| snippet.text.clone())
@@ -322,19 +350,9 @@ impl Model {
                     .get("documentation")
                     .map(hover_text)
                     .filter(|text| !text.is_empty());
-                let replace = item
-                    .get("textEdit")
-                    .and_then(|edit| edit.get("range"))
-                    .and_then(|range| {
-                        let start = range.get("start")?;
-                        let end = range.get("end")?;
-                        Some((
-                            start.get("line")?.as_u64()? as usize,
-                            start.get("character")?.as_u64()? as usize,
-                            end.get("line")?.as_u64()? as usize,
-                            end.get("character")?.as_u64()? as usize,
-                        ))
-                    });
+                let replace = text_edit
+                    .and_then(completion_edit_range)
+                    .or(default_edit_range);
                 Some(CompletionItem {
                     source: anvil_session::provider::ProviderId::new("builtin.lsp"),
                     label,
@@ -352,13 +370,20 @@ impl Model {
                 })
             })
             .collect();
-        let mut merged = self
-            .language
-            .completion
-            .completion
-            .take()
+        let previous = self.language.completion.completion.take();
+        let previous_selected = previous.as_ref().and_then(|completion| {
+            completion
+                .filtered
+                .get(completion.selected)
+                .and_then(|index| completion.items.get(*index))
+                .map(|item| item.label.clone())
+        });
+        let mut merged = previous
             .map(|completion| completion.items)
-            .unwrap_or_default();
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|item| item.source.as_str() != "builtin.lsp")
+            .collect::<Vec<_>>();
         for item in items {
             if merged
                 .iter()
@@ -375,6 +400,7 @@ impl Model {
                 .then_with(|| left.label.cmp(&right.label))
         });
         items.truncate(200);
+        self.language.completion.incomplete = is_incomplete;
         if items.is_empty() {
             self.status.text = "lsp: no completions".to_owned();
             self.language.completion.completion = None;
@@ -386,7 +412,10 @@ impl Model {
                 self.session.cursor,
             );
             let filtered = (0..items.len()).collect();
-            let selected = items.iter().position(|item| item.preselect).unwrap_or(0);
+            let selected = previous_selected
+                .and_then(|label| items.iter().position(|item| item.label == label))
+                .or_else(|| items.iter().position(|item| item.preselect))
+                .unwrap_or(0);
             self.language.completion.completion = Some(CompletionState {
                 items,
                 filtered,

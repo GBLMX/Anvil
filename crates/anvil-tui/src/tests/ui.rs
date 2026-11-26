@@ -1606,3 +1606,54 @@ fn clicking_completion_row_selects_it() {
         1
     );
 }
+
+#[test]
+fn completion_popup_anchors_to_cursor_and_flips_above() {
+    let item = crate::state::CompletionItem {
+        source: anvil_session::provider::ProviderId::new("builtin.lsp"),
+        label: "item".to_owned(),
+        filter_text: "item".to_owned(),
+        sort_text: "item".to_owned(),
+        preselect: false,
+        insert: "item".to_owned(),
+        snippet: None,
+        detail: String::new(),
+        replace: None,
+        replace_bytes: None,
+        documentation: None,
+        raw: serde_json::json!({"kind": 6}),
+        resolved: true,
+    };
+    let text = (0..20)
+        .map(|line| format!("line{line}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let mut model = Model::new(EditorState::from_text(&text), None);
+    model.start_page.welcome = false;
+    model.session.cursor = model
+        .session
+        .editor
+        .text()
+        .slice(0..text.len())
+        .rfind("line19")
+        .expect("line19");
+    model.language.completion.completion = Some(crate::state::CompletionState {
+        items: vec![item.clone(), item],
+        filtered: vec![0, 1],
+        query: String::new(),
+        selected: 0,
+    });
+    let area = ratatui::layout::Rect::new(0, 0, 100, 24);
+    let geometry = crate::render::completion_geometry(&model, area).expect("completion layout");
+    let rects = crate::layout::workbench_rects(&model, 100, 24).expect("workbench");
+    let row = model
+        .row_of_position(19, 0, usize::from(rects.editor.height))
+        .expect("cursor row");
+    let cursor_y = rects.editor.y + u16::try_from(row).expect("row");
+    let text_x = rects.editor.x + model.gutter_width().min(rects.editor.width);
+    assert!(
+        geometry.popup.bottom() <= cursor_y,
+        "popup should flip above the cursor: {geometry:?}"
+    );
+    assert_eq!(geometry.popup.x, text_x);
+}

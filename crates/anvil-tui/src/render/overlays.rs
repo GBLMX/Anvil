@@ -87,6 +87,7 @@ fn completion_label_spans(label: &str, query: &str, style: Style) -> Vec<Span<'s
     ]
 }
 
+#[derive(Debug)]
 pub(crate) struct CompletionGeometry {
     pub(crate) popup: Rect,
     pub(crate) visible: usize,
@@ -152,13 +153,34 @@ pub(crate) fn completion_geometry(model: &Model, area: Rect) -> Option<Completio
         .as_ref()
         .map(|(_, body)| body.lines().count() as u16 + 2)
         .unwrap_or(0);
-    let height = (completion.filtered.len() as u16 + 3 + extra)
+    let desired_height = (completion.filtered.len() as u16 + 3 + extra)
         .max(detail_height)
         .min(15)
         .min(area.height.saturating_sub(2));
+    let (cursor_x, cursor_y, text_area) = completion_cursor_anchor(model, area).unwrap_or((
+        area.x + area.width / 2,
+        area.y + area.height / 2,
+        area,
+    ));
+    let space_below = text_area
+        .bottom()
+        .saturating_sub(cursor_y.saturating_add(1));
+    let space_above = cursor_y.saturating_sub(text_area.y);
+    let (height, y) = if desired_height <= space_below || space_below >= space_above {
+        (
+            desired_height.min(space_below.max(3)),
+            cursor_y.saturating_add(1),
+        )
+    } else {
+        let height = desired_height.min(space_above.max(3));
+        (height, cursor_y.saturating_sub(height))
+    };
+    let x = cursor_x
+        .min(area.right().saturating_sub(total_width))
+        .max(area.x);
     let popup = Rect {
-        x: area.x + (area.width.saturating_sub(total_width)) / 2,
-        y: area.y + (area.height.saturating_sub(height)) / 2,
+        x,
+        y,
         width,
         height,
     };
@@ -179,6 +201,42 @@ pub(crate) fn completion_geometry(model: &Model, area: Rect) -> Option<Completio
         documentation,
         detail_panel,
     })
+}
+
+/// Screen position of the insertion cursor plus the editor text area.
+fn completion_cursor_anchor(model: &Model, area: Rect) -> Option<(u16, u16, Rect)> {
+    let rects = crate::layout::workbench_rects(model, area.width, area.height)?;
+    let editor = rects.editor;
+    let gutter = model.gutter_width().min(editor.width);
+    let text_area = Rect {
+        x: editor.x.saturating_add(gutter),
+        width: editor.width.saturating_sub(gutter),
+        ..editor
+    };
+    let position = model
+        .session
+        .editor
+        .index()
+        .position(model.session.editor.text(), model.session.cursor)?;
+    let row = model.row_of_position(
+        position.line,
+        position.display_column,
+        usize::from(editor.height),
+    )?;
+    let base = model
+        .position_at_visible_row(row)
+        .map_or(model.view.hscroll, |(_, base)| base);
+    let x = text_area.x.saturating_add(
+        u16::try_from(position.display_column.saturating_sub(base)).unwrap_or(u16::MAX),
+    );
+    let y = editor
+        .y
+        .saturating_add(u16::try_from(row).unwrap_or(u16::MAX));
+    Some((
+        x.min(area.right().saturating_sub(1)),
+        y.min(area.bottom().saturating_sub(1)),
+        text_area,
+    ))
 }
 
 pub(crate) fn completion_row_at(model: &Model, area: Rect, col: u16, row: u16) -> Option<usize> {

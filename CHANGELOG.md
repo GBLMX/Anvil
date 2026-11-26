@@ -83,6 +83,16 @@ post-`0.5.0` feature line.
   changelog gate for user-visible pull requests, a scripted release checklist,
   and plan review freshness.
 
+### Fixed
+- Insert-mode completion now triggers on the language server's advertised
+  `triggerCharacters` (and `/` for path completion), sends trigger-character
+  and incomplete-list request contexts, re-requests truncated lists while
+  typing, and keeps local buffer/path items when the server returns none.
+- The completion popup anchors at the cursor and flips above it near the bottom
+  of the viewport instead of opening in the center of the editor.
+- Completion accepts apply `itemDefaults`, `InsertReplaceEdit` ranges, and
+  replace text typed after the request instead of duplicating it.
+
 ### Removed
 - `anvil-core` no longer exports benchmark-only `RopeBuffer`/`GapBuffer` or
   depends on `ropey`; the comparison harness moved to the unpublished

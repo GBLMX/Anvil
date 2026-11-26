@@ -1734,6 +1734,191 @@ fn rename_response_rejects_a_stale_document_version() {
 }
 
 #[test]
+fn completion_applies_item_defaults_edit_range() {
+    let mut model = Model::new(EditorState::from_text("prin"), None);
+    model.session.cursor = 4;
+    model
+        .language
+        .lsp_requests
+        .pending
+        .insert(30, LspRequestKind::Completion);
+    model.handle_lsp_response(
+        30,
+        serde_json::json!({
+            "isIncomplete": false,
+            "itemDefaults": {
+                "editRange": {
+                    "start": {"line": 0, "character": 0},
+                    "end": {"line": 0, "character": 4}
+                },
+                "insertTextFormat": 2
+            },
+            "items": [{"label": "println!", "insertText": "println!($0)"}]
+        }),
+        None,
+    );
+    let completion = model
+        .language
+        .completion
+        .completion
+        .as_ref()
+        .expect("completion");
+    assert_eq!(completion.items[0].replace, Some((0, 0, 0, 4)));
+    assert!(completion.items[0].snippet.is_some());
+    model.apply_completion();
+    let text = model.session.editor.text();
+    assert_eq!(text.slice(0..text.len_bytes()), "println!()");
+}
+
+#[test]
+fn completion_applies_insert_replace_text_edit() {
+    let mut model = Model::new(EditorState::from_text("prin"), None);
+    model.session.cursor = 4;
+    model
+        .language
+        .lsp_requests
+        .pending
+        .insert(31, LspRequestKind::Completion);
+    model.handle_lsp_response(
+        31,
+        serde_json::json!({
+            "isIncomplete": false,
+            "items": [{
+                "label": "println",
+                "textEdit": {
+                    "newText": "println",
+                    "insert": {
+                        "start": {"line": 0, "character": 0},
+                        "end": {"line": 0, "character": 4}
+                    },
+                    "replace": {
+                        "start": {"line": 0, "character": 0},
+                        "end": {"line": 0, "character": 4}
+                    }
+                }
+            }]
+        }),
+        None,
+    );
+    let completion = model
+        .language
+        .completion
+        .completion
+        .as_ref()
+        .expect("completion");
+    assert_eq!(completion.items[0].replace, Some((0, 0, 0, 4)));
+    model.apply_completion();
+    let text = model.session.editor.text();
+    assert_eq!(text.slice(0..text.len_bytes()), "println");
+}
+
+#[test]
+fn completion_accept_replaces_text_typed_after_the_request() {
+    let mut model = Model::new(EditorState::from_text("prin"), None);
+    model.session.cursor = 4;
+    model.language.completion.completion = Some(CompletionState {
+        items: vec![CompletionItem {
+            source: ProviderId::new("builtin.test"),
+            label: "println".to_owned(),
+            filter_text: "println".to_owned(),
+            sort_text: "println".to_owned(),
+            preselect: false,
+            insert: "println".to_owned(),
+            snippet: None,
+            detail: String::new(),
+            replace: None,
+            replace_bytes: Some((0, 2)),
+            documentation: None,
+            raw: serde_json::Value::Null,
+            resolved: true,
+        }],
+        filtered: vec![0],
+        query: "pr".to_owned(),
+        selected: 0,
+    });
+    model.apply_completion();
+    let text = model.session.editor.text();
+    assert_eq!(text.slice(0..text.len_bytes()), "println");
+}
+
+#[test]
+fn empty_lsp_completion_keeps_local_items() {
+    let mut model = Model::new(EditorState::from_text("value value\nval"), None);
+    model.session.cursor = model.session.editor.text().len_bytes();
+    model.request_completion();
+    assert!(model.language.completion.completion.is_some());
+    model
+        .language
+        .lsp_requests
+        .pending
+        .insert(32, LspRequestKind::Completion);
+    model.handle_lsp_response(
+        32,
+        serde_json::json!({"isIncomplete": false, "items": []}),
+        None,
+    );
+    let completion = model
+        .language
+        .completion
+        .completion
+        .as_ref()
+        .expect("local completion survives an empty LSP list");
+    assert!(
+        completion
+            .items
+            .iter()
+            .any(|item| item.label == "value" && item.source.as_str() == "builtin.buffer-words")
+    );
+}
+
+#[test]
+fn incomplete_response_replaces_previous_lsp_items() {
+    let mut model = Model::new(EditorState::from_text("pr"), None);
+    model
+        .language
+        .lsp_requests
+        .pending
+        .insert(33, LspRequestKind::Completion);
+    model.handle_lsp_response(
+        33,
+        serde_json::json!({
+            "isIncomplete": true,
+            "items": [{"label": "first", "insertText": "first"}]
+        }),
+        None,
+    );
+    assert!(model.language.completion.incomplete);
+    model
+        .language
+        .lsp_requests
+        .pending
+        .insert(34, LspRequestKind::Completion);
+    model.handle_lsp_response(
+        34,
+        serde_json::json!({
+            "isIncomplete": false,
+            "items": [{"label": "second", "insertText": "second"}]
+        }),
+        None,
+    );
+    assert!(!model.language.completion.incomplete);
+    let completion = model
+        .language
+        .completion
+        .completion
+        .as_ref()
+        .expect("completion");
+    assert_eq!(
+        completion
+            .items
+            .iter()
+            .map(|item| item.label.as_str())
+            .collect::<Vec<_>>(),
+        vec!["second"]
+    );
+}
+
+#[test]
 fn completion_uses_sort_text_preselect_and_filter_text() {
     let mut model = Model::new(EditorState::from_text("x"), None);
     model
