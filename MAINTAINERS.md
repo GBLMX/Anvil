@@ -1,6 +1,6 @@
 # Maintainers
 
-## Lead maintainer
+## Lead maintainer (BDFL)
 
 - **GBLMX** — project lead, architecture, security boundaries, releases
   - GitHub: [@GBLMX](https://github.com/GBLMX)

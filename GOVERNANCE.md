@@ -30,6 +30,25 @@ that area. Maintainers are responsible for:
 
 The current maintainer and area ownership are listed in `MAINTAINERS.md`.
 
+### BDFL
+
+Anvil is currently led by a **benevolent dictator for life (BDFL)**: the
+project founder and current lead maintainer listed in `MAINTAINERS.md`. "For
+life" means an indefinite tenure, not an irrevocable one: the role ends on
+voluntary step-down, on removal for a security or conduct violation under
+[Removing a maintainer](#removing-a-maintainer), or when an ADR replaces this
+section with maintainer consensus.
+
+The BDFL holds final authority over architecture, trust boundaries, public
+contracts, and releases. The BDFL may make a final call without consensus, but
+must record the rationale in the issue, pull request, or ADR that holds the
+decision. The BDFL is bound by the same review, ADR, and release gates as every
+other maintainer and cannot waive them by decree.
+
+Once the project has multiple active maintainers and working consensus, an ADR
+may replace this section with maintainer consensus; until then the BDFL is the
+tie-breaking authority in [Deadlocks](#deadlocks).
+
 ## Decision making
 
 The default is **lazy consensus**:
@@ -66,8 +85,7 @@ If consensus cannot be reached:
 
 1. Write down the competing technical tradeoffs.
 2. Ask the area owner and one uninvolved maintainer to review.
-3. If still blocked, the lead maintainer makes the final call and records the
-   rationale.
+3. If still blocked, the BDFL makes the final call and records the rationale.
 
 The final call must not silently waive a test, threat-model boundary, or
 supported-version policy.
@@ -99,6 +117,6 @@ change requires an ADR and a pull request that updates `MAINTAINERS.md` and
 
 ## Releases
 
-Release authority and the release checklist live in `RELEASE.md`. A release
-must pass the gates in `CONTRIBUTING.md`; no maintainer may waive a failing
-security test for a release.
+Release authority and the release checklist live in `docs/src/RELEASE.md`. A
+release must pass the gates in `CONTRIBUTING.md`; no maintainer may waive a
+failing security test for a release.
