@@ -179,11 +179,11 @@ impl Model {
         {
             self.language.completion.keyword_due = None;
             self.language.completion.inline = None;
-            self.language.completion.inline_request = None;
+            self.language.completion.inline_requests.clear();
             return;
         }
         self.language.completion.inline = None;
-        self.language.completion.inline_request = None;
+        self.language.completion.inline_requests.clear();
         let text = self.session.editor.text();
         let text = text.slice(0..text.len_bytes());
         let cursor = self.session.cursor.min(text.len());
@@ -251,7 +251,7 @@ impl Model {
             || self.active_lsp_worker().is_none()
         {
             self.language.completion.inline = None;
-            self.language.completion.inline_request = None;
+            self.language.completion.inline_requests.clear();
             return;
         }
         self.language.completion.inline = None;
@@ -268,15 +268,15 @@ impl Model {
             "position": {"line": line, "character": character},
             "context": {"triggerKind": 1}
         });
-        if self.send_lsp_request(
+        if let Some(id) = self.send_lsp_request_id(
             LspRequestKind::InlineCompletion,
             "textDocument/inlineCompletion",
             params,
         ) {
-            self.language.completion.inline_request =
-                Some((request_revision, request_cursor, Some(path)));
-        } else {
-            self.language.completion.inline_request = None;
+            self.language
+                .completion
+                .inline_requests
+                .insert(id, (request_revision, request_cursor, Some(path)));
         }
     }
 

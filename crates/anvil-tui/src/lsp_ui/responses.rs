@@ -223,7 +223,7 @@ impl Model {
             }
             if request.kind == LspRequestKind::InlineCompletion {
                 self.language.completion.inline = None;
-                self.language.completion.inline_request = None;
+                self.language.completion.inline_requests.remove(&id);
             }
             if request.kind == LspRequestKind::StickySymbols {
                 self.overlays.lsp_results.sticky_pending = false;
@@ -265,7 +265,7 @@ impl Model {
                 self.apply_completion_resolve_response(id, &result);
             }
             LspRequestKind::InlineCompletion => {
-                let request = self.language.completion.inline_request.take();
+                let request = self.language.completion.inline_requests.remove(&id);
                 self.apply_inline_completion_response(&result, request);
             }
             LspRequestKind::Definition => self.apply_goto_response(&result, "definition"),

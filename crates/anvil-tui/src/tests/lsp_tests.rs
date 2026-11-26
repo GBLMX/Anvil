@@ -2406,7 +2406,11 @@ fn inline_completion_response_replaces_its_range() {
         .lsp_requests
         .pending
         .insert(41, LspRequestKind::InlineCompletion);
-    model.language.completion.inline_request = Some((model.session.editor.revision(), 3, None));
+    model
+        .language
+        .completion
+        .inline_requests
+        .insert(41, (model.session.editor.revision(), 3, None));
     model.handle_lsp_response(
         41,
         serde_json::json!({
@@ -2437,7 +2441,11 @@ fn stale_inline_completion_response_is_ignored() {
         .lsp_requests
         .pending
         .insert(42, LspRequestKind::InlineCompletion);
-    model.language.completion.inline_request = Some((model.session.editor.revision(), 3, None));
+    model
+        .language
+        .completion
+        .inline_requests
+        .insert(42, (model.session.editor.revision(), 3, None));
     model.session.cursor = 1;
     model.handle_lsp_response(
         42,
@@ -2452,7 +2460,11 @@ fn stale_inline_completion_response_is_ignored() {
         .lsp_requests
         .pending
         .insert(43, LspRequestKind::InlineCompletion);
-    model.language.completion.inline_request = Some((model.session.editor.revision(), 3, None));
+    model
+        .language
+        .completion
+        .inline_requests
+        .insert(43, (model.session.editor.revision(), 3, None));
     let _ = model.session.editor.try_insert(3, "x");
     model.handle_lsp_response(
         43,
@@ -2460,6 +2472,30 @@ fn stale_inline_completion_response_is_ignored() {
         None,
     );
     assert!(model.language.completion.inline.is_none());
+}
+
+#[test]
+fn inline_response_only_consumes_its_own_request_metadata() {
+    let mut model = Model::new(EditorState::from_text("pri"), None);
+    model.ui.input_mode = InputMode::Insert;
+    model.session.cursor = 3;
+    model
+        .language
+        .lsp_requests
+        .pending
+        .insert(50, LspRequestKind::InlineCompletion);
+    model
+        .language
+        .completion
+        .inline_requests
+        .insert(51, (model.session.editor.revision(), 3, None));
+    model.handle_lsp_response(
+        50,
+        serde_json::json!({"items": [{"insertText": "println"}]}),
+        None,
+    );
+    assert!(model.language.completion.inline.is_none());
+    assert!(model.language.completion.inline_requests.contains_key(&51));
 }
 
 #[test]
