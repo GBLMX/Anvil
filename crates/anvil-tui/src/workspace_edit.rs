@@ -749,8 +749,8 @@ fn commit_states(model: &mut Model, prepared: HashMap<PathBuf, EditorState>) {
             model.buffers.background.insert(
                 path.clone(),
                 Buffer {
-                    id: BufferId::next(),
                     document: Document {
+                        id: DocumentId::next(),
                         editor: state.into(),
                         path: Some(path),
                         modified: true,

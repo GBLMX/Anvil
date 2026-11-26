@@ -11,6 +11,22 @@ impl Model {
         self.open_split(crate::state::SplitOrientation::Horizontal);
     }
 
+    pub(crate) fn sync_split_document(&mut self) {
+        let Some(pane) = self.buffers.split.as_mut() else {
+            return;
+        };
+        if pane.buffer.id != self.buffers.active_id {
+            return;
+        }
+        pane.buffer.document = Document {
+            id: self.buffers.active_id,
+            editor: self.session.editor.clone(),
+            path: self.session.path.clone(),
+            modified: self.file.modified,
+            missing: self.file.missing,
+        };
+    }
+
     fn open_split(&mut self, orientation: crate::state::SplitOrientation) {
         if self.buffers.split.is_some() {
             self.status.text = "split already open".to_owned();
@@ -60,6 +76,7 @@ impl Model {
         if !self.auto_save_before_focus_change() {
             return;
         }
+        self.sync_split_document();
         if self.ui.focus.split && self.file.modified {
             self.status.text = "No write since last change (:q! to override)".to_owned();
             self.file.dirty = true;
@@ -79,6 +96,7 @@ impl Model {
     }
 
     pub(crate) fn scroll_split_rows(&mut self, delta: isize) {
+        self.sync_split_document();
         let Some(pane) = self.buffers.split.as_mut() else {
             return;
         };
@@ -98,9 +116,11 @@ impl Model {
         if self.buffers.split.is_none() {
             return;
         }
+        self.sync_split_document();
         if !self.auto_save_before_focus_change() {
             return;
         }
+        self.sync_split_document();
         if self.ui.focus.split && self.file.modified {
             self.status.text = "No write since last change (:q! to override)".to_owned();
             self.file.dirty = true;
@@ -149,6 +169,7 @@ impl Model {
                         .position(|candidate| candidate.path.is_none())
                 }),
         };
+        self.buffers.active_id = buffer.id;
         let document = buffer.document;
         self.session.editor = document.editor;
         self.session.path = document.path;

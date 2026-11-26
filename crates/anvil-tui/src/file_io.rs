@@ -73,8 +73,8 @@ impl Model {
                 self.buffers.active = 0;
             }
             self.buffers.entries.push(Buffer {
-                id: BufferId::next(),
                 document: Document {
+                    id: DocumentId::next(),
                     editor: EditorState::from_text(&text).into(),
                     path: Some(absolute),
                     modified: false,
@@ -309,6 +309,7 @@ impl Model {
             }
             return;
         }
+        self.sync_split_document();
         self.schedule_git_status_refresh();
         if let Some(mtime) = crate::session::source_mtime_ns(&path)
             && self.workspace.last_writes.get(&path).copied() == Some(mtime)
@@ -484,6 +485,7 @@ impl Model {
                 self.file.stdin_buffer = false;
                 self.file.modified = false;
                 self.file.missing = false;
+                self.sync_split_document();
                 self.mark_self_write(&path);
                 self.workspace.git.diff_checked = None;
                 self.workspace.git.diff_due = Some(Instant::now());

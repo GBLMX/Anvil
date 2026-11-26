@@ -724,7 +724,11 @@ fn closing_buffer_refuses_to_drop_dirty_split() {
             .as_ref()
             .is_some_and(|pane| pane.buffer.modified)
     );
-    assert!(model.status.text.contains("split pane has unsaved changes"));
+    assert!(matches!(
+        model.ui.input_mode,
+        InputMode::ConfirmClose { .. }
+    ));
+    assert!(model.status.text.contains("before closing"));
     assert_eq!(model.session.path.as_ref(), Some(&path));
 }
 
@@ -959,7 +963,7 @@ fn external_change_prompts_when_split_copy_is_dirty() {
             .as_ref()
             .is_some_and(|pane| pane.buffer.modified)
     );
-    assert!(!model.file.modified);
+    assert!(model.file.modified);
 
     fs::write(&path, "disk").expect("external write");
     model.handle_external_change(path);
@@ -1950,4 +1954,53 @@ fn buffer_picker_mouse_selects_visible_row_and_closes_outside() {
 
     handle_event(&mut model, Event::Mouse(click(0, 0)));
     assert!(model.overlays.buffer_picker.is_none());
+}
+
+#[test]
+fn split_views_share_live_document_edits() {
+    let mut model = Model::new(EditorState::from_text("one"), None);
+    model.split_vertical();
+
+    handle_event(&mut model, key(KeyCode::Char('i')));
+    type_text(&mut model, "X");
+    handle_event(&mut model, key(KeyCode::Esc));
+
+    let split = model.buffers.split.as_ref().expect("split");
+    assert_eq!(split.buffer.id, model.buffers.active_id);
+    assert_eq!(split.buffer.editor.text().slice(0..4), "Xone");
+    assert!(split.buffer.modified);
+}
+
+#[test]
+fn split_save_clears_shared_modified_state() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("file.txt");
+    fs::write(&path, "a").expect("write");
+    let mut model = Model::open(&path).expect("open");
+    model.split_vertical();
+    model.focus_split(true);
+    model.insert_text("X");
+
+    assert!(model.save());
+    assert_eq!(fs::read_to_string(&path).expect("content"), "Xa");
+    assert!(!model.file.modified);
+    let split = model.buffers.split.as_ref().expect("split");
+    assert!(!split.buffer.modified);
+    assert_eq!(split.buffer.editor.text().slice(0..2), "Xa");
+}
+
+#[test]
+fn split_undo_uses_shared_history() {
+    let mut model = Model::new(EditorState::from_text("one"), None);
+    model.split_vertical();
+    handle_event(&mut model, key(KeyCode::Char('i')));
+    type_text(&mut model, "X");
+    handle_event(&mut model, key(KeyCode::Esc));
+    model.focus_split(true);
+
+    handle_event(&mut model, key(KeyCode::Char('u')));
+
+    let split = model.buffers.split.as_ref().expect("split");
+    assert_eq!(split.buffer.editor.text().slice(0..3), "one");
+    assert_eq!(model.session.editor.text().slice(0..3), "one");
 }

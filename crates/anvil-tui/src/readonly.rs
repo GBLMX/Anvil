@@ -41,8 +41,8 @@ impl Model {
             EditorState::from_text(text).into(),
         );
         let saved = Buffer {
-            id: self.buffers.active_id,
             document: Document {
+                id: self.buffers.active_id,
                 editor,
                 path: self.session.path.take(),
                 modified: self.file.modified,
@@ -109,8 +109,9 @@ impl Model {
         self.workspace.git.stage_pending = None;
         self.workspace.git.resolve_pending = None;
         let syntax = saved.syntax.clone();
+        let id = saved.id;
         let document = saved.document;
-        self.buffers.active_id = saved.id;
+        self.buffers.active_id = id;
         self.session.editor = document.editor;
         self.session.path = document.path;
         self.session.cursor = saved.cursor;

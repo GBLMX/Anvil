@@ -11,8 +11,8 @@ use std::sync::Arc;
 impl Model {
     pub(crate) fn snapshot(&self) -> Buffer {
         Buffer {
-            id: self.buffers.active_id,
             document: Document {
+                id: self.buffers.active_id,
                 editor: self.session.editor.clone(),
                 path: self.session.path.clone(),
                 modified: self.file.modified,
@@ -372,6 +372,7 @@ impl Model {
         let Some(buffer) = self.buffers.entries.get(index).cloned() else {
             return;
         };
+        let id = buffer.id;
         let syntax = buffer.syntax.clone();
         let document = buffer.document;
         self.file.missing = document.missing;
@@ -392,7 +393,7 @@ impl Model {
             false,
             Some(syntax),
         );
-        self.buffers.active_id = buffer.id;
+        self.buffers.active_id = id;
         self.buffers.active = index;
         self.ui.input_mode = InputMode::Normal;
         self.input.pending = None;
@@ -433,8 +434,8 @@ impl Model {
         }
         self.ensure_current_buffer();
         self.buffers.entries.push(Buffer {
-            id: BufferId::next(),
             document: Document {
+                id: DocumentId::next(),
                 editor: EditorState::from_text("").into(),
                 path: None,
                 modified: false,
@@ -599,7 +600,7 @@ impl Model {
         self.buffers.split = None;
         self.ui.focus.split = false;
         self.buffers.active = 0;
-        self.buffers.active_id = BufferId::next();
+        self.buffers.active_id = DocumentId::next();
         self.sync_lsp_active();
         self.file.dirty = true;
     }
@@ -685,8 +686,8 @@ impl Model {
             self.buffers.entries.push(self.snapshot());
         }
         self.buffers.entries.push(Buffer {
-            id: BufferId::next(),
             document: Document {
+                id: DocumentId::next(),
                 editor: EditorState::from_text(&text).into(),
                 path: Some(path.clone()),
                 modified: false,
