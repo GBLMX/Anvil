@@ -27,6 +27,7 @@ const ENV_SEARCH_CASE_SENSITIVE: &str = "ANVIL_SEARCH_CASE_SENSITIVE";
 const ENV_INLAY_HINTS: &str = "ANVIL_LSP_INLAY_HINTS";
 const ENV_REDUCED_MOTION: &str = "ANVIL_REDUCED_MOTION";
 const ENV_HIGH_CONTRAST: &str = "ANVIL_HIGH_CONTRAST";
+const ENV_AUTO_BRACKETS: &str = "ANVIL_COMPLETION_AUTO_BRACKETS";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct EditorSettings {
@@ -47,6 +48,11 @@ pub(crate) struct SearchSettings {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct LspSettings {
     pub(crate) inlay_hints: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct CompletionSettings {
+    pub(crate) auto_brackets: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -109,6 +115,7 @@ pub(crate) struct Settings {
     pub(crate) editor: EditorSettings,
     pub(crate) search: SearchSettings,
     pub(crate) lsp: LspSettings,
+    pub(crate) completion: CompletionSettings,
     pub(crate) ui: UiSettings,
     pub(crate) watch: WatchSettings,
 }
@@ -130,6 +137,9 @@ impl Default for Settings {
                 case_sensitive: false,
             },
             lsp: LspSettings { inlay_hints: true },
+            completion: CompletionSettings {
+                auto_brackets: false,
+            },
             ui: UiSettings {
                 reduced_motion: false,
                 high_contrast: false,
@@ -264,6 +274,7 @@ pub(crate) enum SettingsKey {
     SidebarPercent,
     CaseSensitive,
     InlayHints,
+    AutoBrackets,
     ReducedMotion,
     HighContrast,
     FileWatching,
@@ -504,6 +515,16 @@ pub(crate) const SETTINGS: &[SettingDef] = &[
         label: "lsp.inlay_hints",
         description: "Request and render language-server inlay hints.",
         group: "LSP",
+        tab: "Language",
+    },
+    SettingDef {
+        key: SettingsKey::AutoBrackets,
+        path: "completion.auto_brackets",
+        env: Some(ENV_AUTO_BRACKETS),
+        kind: SettingKind::Bool,
+        label: "completion.auto_brackets",
+        description: "Insert () after function, method, and constructor completions that omit it.",
+        group: "Completion",
         tab: "Language",
     },
     SettingDef {
@@ -1022,6 +1043,7 @@ fn settings_value(settings: &Settings, key: SettingsKey) -> String {
         SettingsKey::SidebarPercent => settings.editor.sidebar_percent.to_string(),
         SettingsKey::CaseSensitive => settings.search.case_sensitive.to_string(),
         SettingsKey::InlayHints => settings.lsp.inlay_hints.to_string(),
+        SettingsKey::AutoBrackets => settings.completion.auto_brackets.to_string(),
         SettingsKey::ReducedMotion => settings.ui.reduced_motion.to_string(),
         SettingsKey::HighContrast => settings.ui.high_contrast.to_string(),
         SettingsKey::FileWatching => settings.editor.file_watching.to_string(),
@@ -1350,6 +1372,7 @@ fn mark_layer_sources(
         (SettingsKey::SidebarPercent, ["editor", "sidebar_percent"]),
         (SettingsKey::CaseSensitive, ["search", "case_sensitive"]),
         (SettingsKey::InlayHints, ["lsp", "inlay_hints"]),
+        (SettingsKey::AutoBrackets, ["completion", "auto_brackets"]),
         (SettingsKey::ReducedMotion, ["ui", "reduced_motion"]),
         (SettingsKey::HighContrast, ["ui", "high_contrast"]),
         (SettingsKey::FileWatching, ["editor", "file_watching"]),
@@ -1497,6 +1520,13 @@ pub(crate) fn save_patch_to_path(path: &Path, patch: &SettingsPatch) -> Result<(
         patch.lsp.inlay_hints.is_some(),
         |table| set_patch_value(table, "inlay_hints", patch.lsp.inlay_hints),
     )?;
+
+    patch_table(
+        &mut document,
+        "completion",
+        patch.completion.auto_brackets.is_some(),
+        |table| set_patch_value(table, "auto_brackets", patch.completion.auto_brackets),
+    )?;
     patch_table(
         &mut document,
         "ui",
@@ -1575,7 +1605,10 @@ pub(crate) fn parse(text: &str) -> Result<Settings, String> {
         .parse::<toml_edit::DocumentMut>()
         .map_err(|error| format!("invalid settings TOML: {error}"))?;
     for (key, _) in document.iter() {
-        if !matches!(key, "theme" | "editor" | "search" | "lsp" | "ui" | "watch") {
+        if !matches!(
+            key,
+            "theme" | "editor" | "search" | "lsp" | "completion" | "ui" | "watch"
+        ) {
             return Err(format!("unknown settings section [{key}]"));
         }
     }
@@ -1626,6 +1659,9 @@ pub(crate) fn parse(text: &str) -> Result<Settings, String> {
     }
     if let Some(inlay_hints) = file.lsp.inlay_hints {
         settings.lsp.inlay_hints = inlay_hints;
+    }
+    if let Some(auto_brackets) = file.completion.auto_brackets {
+        settings.completion.auto_brackets = auto_brackets;
     }
     if let Some(reduced_motion) = file.ui.reduced_motion {
         settings.ui.reduced_motion = reduced_motion;
@@ -1731,6 +1767,9 @@ fn apply_env(
     }
     if let Some(value) = get(ENV_INLAY_HINTS) {
         settings.lsp.inlay_hints = parse_bool(ENV_INLAY_HINTS, &value)?;
+    }
+    if let Some(value) = get(ENV_AUTO_BRACKETS) {
+        settings.completion.auto_brackets = parse_bool(ENV_AUTO_BRACKETS, &value)?;
     }
     if let Some(value) = get(ENV_REDUCED_MOTION) {
         settings.ui.reduced_motion = parse_bool(ENV_REDUCED_MOTION, &value)?;
@@ -1931,6 +1970,7 @@ pub(crate) struct SettingsPatch {
     editor: EditorFile,
     search: SearchFile,
     lsp: LspFile,
+    completion: CompletionFile,
     ui: UiFile,
     watch: WatchFile,
 }
@@ -1968,6 +2008,12 @@ struct LspFile {
     inlay_hints: Option<bool>,
     commands: BTreeMap<String, LspCommandFile>,
     roots: BTreeMap<String, BTreeMap<String, LspRootProfileFile>>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+struct CompletionFile {
+    auto_brackets: Option<bool>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -2030,6 +2076,9 @@ impl SettingsPatch {
             }
             SettingsKey::CaseSensitive => self.search.case_sensitive.map(|value| value.to_string()),
             SettingsKey::InlayHints => self.lsp.inlay_hints.map(|value| value.to_string()),
+            SettingsKey::AutoBrackets => {
+                self.completion.auto_brackets.map(|value| value.to_string())
+            }
             SettingsKey::ReducedMotion => self.ui.reduced_motion.map(|value| value.to_string()),
             SettingsKey::HighContrast => self.ui.high_contrast.map(|value| value.to_string()),
             SettingsKey::FileWatching => self.editor.file_watching.map(|value| value.to_string()),
@@ -2055,6 +2104,9 @@ impl SettingsPatch {
                 self.search.case_sensitive = Some(settings.search.case_sensitive)
             }
             SettingsKey::InlayHints => self.lsp.inlay_hints = Some(settings.lsp.inlay_hints),
+            SettingsKey::AutoBrackets => {
+                self.completion.auto_brackets = Some(settings.completion.auto_brackets)
+            }
             SettingsKey::ReducedMotion => self.ui.reduced_motion = Some(settings.ui.reduced_motion),
             SettingsKey::HighContrast => self.ui.high_contrast = Some(settings.ui.high_contrast),
             SettingsKey::FileWatching => {
@@ -2074,6 +2126,7 @@ impl SettingsPatch {
             SettingsKey::SidebarPercent => self.editor.sidebar_percent = None,
             SettingsKey::CaseSensitive => self.search.case_sensitive = None,
             SettingsKey::InlayHints => self.lsp.inlay_hints = None,
+            SettingsKey::AutoBrackets => self.completion.auto_brackets = None,
             SettingsKey::ReducedMotion => self.ui.reduced_motion = None,
             SettingsKey::HighContrast => self.ui.high_contrast = None,
             SettingsKey::FileWatching => self.editor.file_watching = None,
@@ -2259,6 +2312,9 @@ mod tests {
                     case_sensitive: false,
                 },
                 lsp: LspSettings { inlay_hints: true },
+                completion: CompletionSettings {
+                    auto_brackets: false,
+                },
                 ui: UiSettings {
                     reduced_motion: false,
                     high_contrast: false,
@@ -2297,13 +2353,14 @@ mod tests {
             SettingsKey::SidebarPercent,
             SettingsKey::CaseSensitive,
             SettingsKey::InlayHints,
+            SettingsKey::AutoBrackets,
             SettingsKey::ReducedMotion,
             SettingsKey::HighContrast,
             SettingsKey::FileWatching,
         ] {
             assert!(keys.contains(&key), "missing registry key: {key:?}");
         }
-        assert_eq!(keys.len(), 12);
+        assert_eq!(keys.len(), 13);
     }
 
     #[test]
@@ -2970,6 +3027,12 @@ mod tests {
     }
 
     #[test]
+    fn parses_completion_auto_brackets() {
+        let settings = parse("[completion]\nauto_brackets = true\n").expect("parse");
+        assert!(settings.completion.auto_brackets);
+    }
+
+    #[test]
     fn save_writes_theme_and_domains() {
         let directory =
             std::env::temp_dir().join(format!("anvil-settings-save-{}", std::process::id()));
@@ -3361,6 +3424,9 @@ mod language_settings_tests {
 
     #[test]
     fn settings_check_reports_layers_fields_and_language_errors() {
+        let _guard = TEST_ENV_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         let dir = tempfile::tempdir().expect("tempdir");
         let report = settings_check(dir.path(), true);
         let json = report.to_json();
@@ -3378,6 +3444,9 @@ mod language_settings_tests {
 
     #[test]
     fn settings_check_reports_project_explicit_values() {
+        let _guard = TEST_ENV_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         let dir = tempfile::tempdir().expect("tempdir");
         fs::write(
             dir.path().join(PROJECT_SETTINGS),

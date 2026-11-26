@@ -113,11 +113,32 @@ impl Model {
     }
 
     fn maybe_request_signature_help(&mut self, text: &str) {
-        if let Some(trigger) = text
-            .chars()
-            .last()
-            .filter(|character| matches!(character, '(' | ','))
-        {
+        let trigger = self
+            .language
+            .lsp
+            .config
+            .as_ref()
+            .and_then(|key| self.language.signature_help.support.get(key))
+            .and_then(|support| {
+                let characters = if self.overlays.lsp_results.signature_help.is_some()
+                    && !support.retrigger_characters.is_empty()
+                {
+                    &support.retrigger_characters
+                } else {
+                    &support.trigger_characters
+                };
+                characters
+                    .iter()
+                    .find(|trigger| text.ends_with(trigger.as_str()))
+                    .cloned()
+            })
+            .or_else(|| {
+                text.chars()
+                    .last()
+                    .filter(|character| matches!(character, '(' | ','))
+                    .map(|character| character.to_string())
+            });
+        if let Some(trigger) = trigger {
             self.request_signature_help(Some(trigger));
         }
     }

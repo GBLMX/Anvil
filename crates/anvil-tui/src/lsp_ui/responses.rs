@@ -23,6 +23,44 @@ fn completion_edit_range(value: &serde_json::Value) -> Option<(usize, usize, usi
     ))
 }
 
+fn signature_parameter_ranges(signature: &serde_json::Value, label: &str) -> Vec<(usize, usize)> {
+    signature
+        .get("parameters")
+        .and_then(serde_json::Value::as_array)
+        .map(|parameters| {
+            parameters
+                .iter()
+                .filter_map(|parameter| match parameter.get("label")? {
+                    serde_json::Value::String(text) => {
+                        let start = label.find(text)?;
+                        Some((start, start + text.len()))
+                    }
+                    serde_json::Value::Array(range) => {
+                        let start = range.first()?.as_u64()?;
+                        let end = range.get(1)?.as_u64()?;
+                        Some((
+                            utf16_offset_to_byte(label, start),
+                            utf16_offset_to_byte(label, end),
+                        ))
+                    }
+                    _ => None,
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn utf16_offset_to_byte(text: &str, offset: u64) -> usize {
+    let mut units = 0u64;
+    for (index, character) in text.char_indices() {
+        if units >= offset {
+            return index;
+        }
+        units += character.len_utf16() as u64;
+    }
+    text.len()
+}
+
 impl Model {
     pub(crate) fn apply_document_symbols_response(&mut self, result: &serde_json::Value) {
         let silent = std::mem::take(&mut self.project.silent_symbol_refresh);
@@ -90,9 +128,11 @@ impl Model {
                     .get("documentation")
                     .map(hover_text)
                     .unwrap_or_default();
+                let parameters = signature_parameter_ranges(signature, &label);
                 Some(SignatureItem {
                     label,
                     documentation,
+                    parameters,
                 })
             })
             .collect();
@@ -266,6 +306,9 @@ impl Model {
                 self.status.text = "code lens command executed".to_owned();
                 self.request_code_lens();
             }
+            LspRequestKind::CompletionCommand => {
+                self.status.text = "completion command executed".to_owned();
+            }
             LspRequestKind::CodeActionCommand => {
                 self.status.text = "code action command executed".to_owned();
             }
@@ -299,9 +342,20 @@ impl Model {
         let default_insert_format = defaults
             .and_then(|defaults| defaults.get("insertTextFormat"))
             .and_then(serde_json::Value::as_u64);
+        let default_insert_text_mode = defaults
+            .and_then(|defaults| defaults.get("insertTextMode"))
+            .and_then(serde_json::Value::as_u64);
         let default_commit_characters = defaults
             .and_then(|defaults| defaults.get("commitCharacters"))
             .cloned();
+        let all_commit_characters = self
+            .language
+            .lsp
+            .config
+            .as_ref()
+            .and_then(|key| self.language.completion.all_commit_characters.get(key))
+            .cloned()
+            .map(serde_json::Value::from);
         let is_incomplete = result
             .get("isIncomplete")
             .and_then(serde_json::Value::as_bool)
@@ -337,13 +391,18 @@ impl Model {
                     .get("insertTextFormat")
                     .and_then(serde_json::Value::as_u64)
                     .or(default_insert_format);
-                let snippet = (insert_format == Some(2))
+                let is_snippet = insert_format == Some(2);
+                let snippet = is_snippet
                     .then(|| crate::snippet::parse(&insert).ok())
                     .flatten();
-                let insert = snippet
-                    .as_ref()
-                    .map(|snippet| snippet.text.clone())
-                    .unwrap_or_else(|| expand_snippet(&insert));
+                let insert = if is_snippet {
+                    snippet
+                        .as_ref()
+                        .map(|snippet| snippet.text.clone())
+                        .unwrap_or(insert)
+                } else {
+                    expand_snippet(&insert)
+                };
                 let detail = item
                     .get("detail")
                     .and_then(serde_json::Value::as_str)
@@ -358,9 +417,16 @@ impl Model {
                     .or(default_edit_range);
                 let mut raw = item.clone();
                 if raw.get("commitCharacters").is_none()
-                    && let Some(characters) = &default_commit_characters
+                    && let Some(characters) = default_commit_characters
+                        .as_ref()
+                        .or(all_commit_characters.as_ref())
                 {
                     raw["commitCharacters"] = characters.clone();
+                }
+                if raw.get("insertTextMode").is_none()
+                    && let Some(mode) = default_insert_text_mode
+                {
+                    raw["insertTextMode"] = serde_json::Value::from(mode);
                 }
                 Some(CompletionItem {
                     source: anvil_session::provider::ProviderId::new("builtin.lsp"),
@@ -421,9 +487,13 @@ impl Model {
                 self.session.cursor,
             );
             let filtered = (0..items.len()).collect();
+            let recent = self.language.completion.recent.clone();
             let selected = previous_selected
                 .and_then(|label| items.iter().position(|item| item.label == label))
                 .or_else(|| items.iter().position(|item| item.preselect))
+                .or_else(|| {
+                    recent.and_then(|label| items.iter().position(|item| item.label == label))
+                })
                 .unwrap_or(0);
             self.language.completion.completion = Some(CompletionState {
                 items,
@@ -463,6 +533,11 @@ impl Model {
             && let Some(edits) = item.raw.get("additionalTextEdits").cloned()
         {
             raw["additionalTextEdits"] = edits;
+        }
+        if raw.get("command").is_none()
+            && let Some(command) = item.raw.get("command").cloned()
+        {
+            raw["command"] = command;
         }
         item.raw = raw;
         item.resolved = true;

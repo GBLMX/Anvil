@@ -679,6 +679,54 @@ fn completion_resolve_updates_selected_item() {
 }
 
 #[test]
+fn completion_resolve_preserves_command() {
+    let mut model = Model::new(EditorState::from_text("x"), None);
+    model.language.completion.completion = Some(CompletionState {
+        items: vec![CompletionItem {
+            source: ProviderId::new("builtin.test"),
+            label: "item".to_owned(),
+            filter_text: "item".to_owned(),
+            sort_text: "item".to_owned(),
+            preselect: false,
+            insert: "item".to_owned(),
+            snippet: None,
+            detail: String::new(),
+            replace: None,
+            replace_bytes: None,
+            documentation: None,
+            raw: serde_json::json!({
+                "label": "item",
+                "command": {"command": "server.command", "arguments": [1]}
+            }),
+            resolved: false,
+        }],
+        filtered: vec![0],
+        query: String::new(),
+        selected: 0,
+    });
+    model
+        .language
+        .lsp_requests
+        .pending
+        .insert(8, LspRequestKind::CompletionResolve);
+    model.language.completion.resolve = Some((8, 0));
+    model.handle_lsp_response(8, serde_json::json!({"label": "item"}), None);
+    let item = &model
+        .language
+        .completion
+        .completion
+        .as_ref()
+        .expect("completion")
+        .items[0];
+    assert_eq!(
+        item.raw
+            .pointer("/command/command")
+            .and_then(|value| value.as_str()),
+        Some("server.command")
+    );
+}
+
+#[test]
 fn completion_documentation_is_rendered() {
     let mut model = Model::new(EditorState::from_text("x"), None);
     model.language.completion.completion = Some(CompletionState {
@@ -1994,6 +2042,226 @@ fn completion_commit_character_accepts_and_inserts_the_character() {
 }
 
 #[test]
+fn completion_uses_server_all_commit_characters() {
+    let mut model = Model::new(EditorState::from_text("fo"), None);
+    model.ui.input_mode = InputMode::Insert;
+    model.session.cursor = 2;
+    let lsp_key = ("clangd".to_owned(), "c".to_owned(), PathBuf::from("/ws"));
+    model.language.lsp.config = Some(lsp_key.clone());
+    model
+        .language
+        .completion
+        .all_commit_characters
+        .insert(lsp_key, vec![")".to_owned()]);
+    model
+        .language
+        .lsp_requests
+        .pending
+        .insert(38, LspRequestKind::Completion);
+    model.handle_lsp_response(
+        38,
+        serde_json::json!({
+            "isIncomplete": false,
+            "items": [{"label": "foo", "insertText": "foo"}]
+        }),
+        None,
+    );
+    let completion = model
+        .language
+        .completion
+        .completion
+        .as_ref()
+        .expect("completion");
+    assert_eq!(
+        completion.items[0].raw.get("commitCharacters"),
+        Some(&serde_json::json!([")"]))
+    );
+    handle_event(&mut model, key(KeyCode::Char(')')));
+    let text = model.session.editor.text();
+    assert_eq!(text.slice(0..text.len_bytes()), "foo)");
+}
+
+#[test]
+fn completion_auto_brackets_is_opt_in_and_places_caret_inside() {
+    let item = || CompletionItem {
+        source: ProviderId::new("builtin.lsp"),
+        label: "getcwd".to_owned(),
+        filter_text: "getcwd".to_owned(),
+        sort_text: "getcwd".to_owned(),
+        preselect: false,
+        insert: "getcwd".to_owned(),
+        snippet: None,
+        detail: String::new(),
+        replace: None,
+        replace_bytes: None,
+        documentation: None,
+        raw: serde_json::json!({"kind": 3}),
+        resolved: true,
+    };
+    let mut off = Model::new(
+        EditorState::from_text("getc"),
+        Some(PathBuf::from("/tmp/a.py")),
+    );
+    off.session.cursor = 4;
+    off.language.completion.completion = Some(CompletionState {
+        items: vec![item()],
+        filtered: vec![0],
+        query: "getc".to_owned(),
+        selected: 0,
+    });
+    off.apply_completion();
+    let text = off.session.editor.text();
+    assert_eq!(text.slice(0..text.len_bytes()), "getcwd");
+
+    let mut on = Model::new(
+        EditorState::from_text("getc"),
+        Some(PathBuf::from("/tmp/a.py")),
+    );
+    on.session.cursor = 4;
+    on.config.settings.completion.auto_brackets = true;
+    on.language.completion.completion = Some(CompletionState {
+        items: vec![item()],
+        filtered: vec![0],
+        query: "getc".to_owned(),
+        selected: 0,
+    });
+    on.apply_completion();
+    let text = on.session.editor.text();
+    assert_eq!(text.slice(0..text.len_bytes()), "getcwd()");
+    assert_eq!(on.session.cursor, 7);
+}
+
+#[test]
+fn completion_auto_brackets_skips_tsx_components() {
+    let mut model = Model::new(
+        EditorState::from_text("Compo"),
+        Some(PathBuf::from("/tmp/a.tsx")),
+    );
+    model.session.cursor = 5;
+    model.config.settings.completion.auto_brackets = true;
+    model.language.completion.completion = Some(CompletionState {
+        items: vec![CompletionItem {
+            source: ProviderId::new("builtin.lsp"),
+            label: "Component".to_owned(),
+            filter_text: "Component".to_owned(),
+            sort_text: "Component".to_owned(),
+            preselect: false,
+            insert: "Component".to_owned(),
+            snippet: None,
+            detail: String::new(),
+            replace: None,
+            replace_bytes: None,
+            documentation: None,
+            raw: serde_json::json!({"kind": 3}),
+            resolved: true,
+        }],
+        filtered: vec![0],
+        query: "Compo".to_owned(),
+        selected: 0,
+    });
+    model.apply_completion();
+    let text = model.session.editor.text();
+    assert_eq!(text.slice(0..text.len_bytes()), "Component");
+}
+
+#[test]
+fn signature_help_retriggers_after_debounce() {
+    let mut model = Model::new(EditorState::from_text("foo("), None);
+    model.session.cursor = 4;
+    model.overlays.lsp_results.signature_help = Some(SignatureHelpState {
+        signatures: vec![SignatureItem {
+            label: "foo(x: i32)".to_owned(),
+            documentation: String::new(),
+            parameters: Vec::new(),
+        }],
+        active_signature: 0,
+        active_parameter: 0,
+    });
+    model.language.signature_help.signature = Some((model.session.editor.revision(), 3));
+    model.tick_signature_help();
+    assert!(model.language.signature_help.due.is_some());
+    model.tick_signature_help();
+    assert!(model.overlays.lsp_results.signature_help.is_some());
+    model.language.signature_help.due =
+        Some(std::time::Instant::now() - std::time::Duration::from_millis(1));
+    model.tick_signature_help();
+    assert!(model.overlays.lsp_results.signature_help.is_none());
+}
+
+#[test]
+fn signature_help_parses_parameter_ranges() {
+    let mut model = Model::new(EditorState::from_text("foo("), None);
+    model
+        .language
+        .lsp_requests
+        .pending
+        .insert(40, LspRequestKind::SignatureHelp);
+    model.handle_lsp_response(
+        40,
+        serde_json::json!({
+            "signatures": [{
+                "label": "foo(x: i32, y: i32)",
+                "parameters": [
+                    {"label": [4, 10]},
+                    {"label": [12, 18]}
+                ]
+            }],
+            "activeSignature": 0,
+            "activeParameter": 1
+        }),
+        None,
+    );
+    let signature = model
+        .overlays
+        .lsp_results
+        .signature_help
+        .as_ref()
+        .expect("signature");
+    assert_eq!(signature.active_parameter, 1);
+    assert_eq!(signature.signatures[0].parameters, vec![(4, 10), (12, 18)]);
+}
+
+#[test]
+fn signature_context_reports_trigger_kind_and_retrigger() {
+    let triggered = crate::lsp_ui::signature_help_context(Some("("), false);
+    assert_eq!(triggered["triggerKind"], 2);
+    assert_eq!(triggered["triggerCharacter"], "(");
+    assert_eq!(triggered["isRetrigger"], false);
+    let invoked = crate::lsp_ui::signature_help_context(None, true);
+    assert_eq!(invoked["triggerKind"], 1);
+    assert_eq!(invoked["isRetrigger"], true);
+}
+
+#[test]
+fn completion_adjusts_multiline_indentation() {
+    let mut model = Model::new(EditorState::from_text("    fo"), None);
+    model.session.cursor = 6;
+    model.language.completion.completion = Some(CompletionState {
+        items: vec![CompletionItem {
+            source: ProviderId::new("builtin.lsp"),
+            label: "foo".to_owned(),
+            filter_text: "foo".to_owned(),
+            sort_text: "foo".to_owned(),
+            preselect: false,
+            insert: "foo(\nbar\n)".to_owned(),
+            snippet: None,
+            detail: String::new(),
+            replace: None,
+            replace_bytes: None,
+            documentation: None,
+            raw: serde_json::json!({"kind": 6, "insertTextMode": 2}),
+            resolved: true,
+        }],
+        filtered: vec![0],
+        query: "fo".to_owned(),
+        selected: 0,
+    });
+    model.apply_completion();
+    let text = model.session.editor.text();
+    assert_eq!(text.slice(0..text.len_bytes()), "    foo(\n    bar\n    )");
+}
+
+#[test]
 fn completion_uses_sort_text_preselect_and_filter_text() {
     let mut model = Model::new(EditorState::from_text("x"), None);
     model
@@ -2074,6 +2342,38 @@ fn completion_empty_query_preserves_sort_text_order() {
             .map(|index| completion.items[*index].label.as_str())
             .collect::<Vec<_>>(),
         vec!["zebra-long-name", "a", "b"]
+    );
+}
+
+#[test]
+fn completion_install_preselects_recent_label() {
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.language.completion.recent = Some("beta".to_owned());
+    let item = |label: &str| CompletionItem {
+        source: ProviderId::new("builtin.test"),
+        label: label.to_owned(),
+        filter_text: label.to_owned(),
+        sort_text: label.to_owned(),
+        preselect: false,
+        insert: label.to_owned(),
+        snippet: None,
+        detail: String::new(),
+        replace: None,
+        replace_bytes: None,
+        documentation: None,
+        raw: serde_json::Value::Null,
+        resolved: true,
+    };
+    model.install_completion(vec![item("alpha"), item("beta")]);
+    assert_eq!(
+        model
+            .language
+            .completion
+            .completion
+            .as_ref()
+            .expect("completion")
+            .selected,
+        1
     );
 }
 

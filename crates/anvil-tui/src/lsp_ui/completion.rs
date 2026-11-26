@@ -248,18 +248,31 @@ impl Model {
             return;
         };
         let label = item.label.clone();
+        self.language.completion.recent = Some(label.clone());
         let additional = crate::completion_sources::completion_additional_edits(&item.raw);
-        let insert = item.insert.clone();
+        let mut snippet = item.snippet.clone();
+        let mut insert = item.insert.clone();
+        if item
+            .raw
+            .get("insertTextMode")
+            .and_then(serde_json::Value::as_u64)
+            == Some(2)
+        {
+            insert = self.adjust_completion_indentation(&insert, &mut snippet);
+        }
+        let auto_brackets = self.should_auto_bracket(item, &insert);
+        if auto_brackets {
+            insert.push_str("()");
+        }
         let replace = item.replace;
         let replace_bytes = item.replace_bytes;
-        let mut snippet = item.snippet.clone();
         self.language.completion.snippet = None;
         if let Some((start, end)) = replace_bytes {
             let end = end.max(start).max(self.session.cursor);
             if !self.apply_completion_transaction(start, end, &insert) {
                 return;
             }
-            self.session.cursor = start + insert.len();
+            self.session.cursor = start + insert.len().saturating_sub(usize::from(auto_brackets));
             self.file.modified = true;
             if let Some(snippet) = snippet.take() {
                 self.start_snippet(&snippet, start);
@@ -280,7 +293,7 @@ impl Model {
             if !self.apply_completion_transaction(start, end, &insert) {
                 return;
             }
-            self.session.cursor = start + insert.len();
+            self.session.cursor = start + insert.len().saturating_sub(usize::from(auto_brackets));
             self.file.modified = true;
             if let Some(snippet) = snippet.take() {
                 self.start_snippet(&snippet, start);
@@ -302,7 +315,8 @@ impl Model {
                 if !self.apply_completion_transaction(start, end, &insert) {
                     return;
                 }
-                self.session.cursor = start + insert.len();
+                self.session.cursor =
+                    start + insert.len().saturating_sub(usize::from(auto_brackets));
                 self.file.modified = true;
                 if let Some(snippet) = snippet.take() {
                     self.start_snippet(&snippet, start);
@@ -314,14 +328,129 @@ impl Model {
         }
         let snippet_active = self.language.completion.snippet.is_some();
         let callable = insert.contains('(');
+        let command_requested = self.execute_completion_command(&item.raw);
         self.status.text = format!("completed {label}");
         self.file.dirty = true;
         if !snippet_active {
             self.auto_completion();
         }
-        if callable && self.language.completion.completion.is_none() {
+        if !command_requested
+            && callable
+            && self.language.completion.completion.is_none()
+            && self.active_lsp_worker().is_some()
+        {
             self.request_signature_help(None);
         }
+    }
+
+    fn should_auto_bracket(&self, item: &crate::state::CompletionItem, insert: &str) -> bool {
+        if !self.config.settings.completion.auto_brackets
+            || item.snippet.is_some()
+            || insert.is_empty()
+            || insert.contains('(')
+            || self.auto_brackets_blocked()
+        {
+            return false;
+        }
+        let kind = item.raw.get("kind").and_then(serde_json::Value::as_u64);
+        matches!(kind, Some(2..=4)) && self.session.editor.selection_bytes().len() == 1
+    }
+
+    fn auto_brackets_blocked(&self) -> bool {
+        if let Some(extension) = self
+            .session
+            .path
+            .as_deref()
+            .and_then(|path| path.extension())
+            .and_then(|extension| extension.to_str())
+            && matches!(
+                extension.to_ascii_lowercase().as_str(),
+                "tsx" | "jsx" | "vue"
+            )
+        {
+            return true;
+        }
+        matches!(
+            self.language.lsp.config.as_ref().map(|key| key.1.as_str()),
+            Some("typescriptreact" | "javascriptreact" | "vue")
+        )
+    }
+
+    fn adjust_completion_indentation(
+        &self,
+        text: &str,
+        snippet: &mut Option<crate::snippet::Snippet>,
+    ) -> String {
+        if !text.contains('\n') {
+            return text.to_owned();
+        }
+        let buffer = self.session.editor.text();
+        let buffer = buffer.slice(0..buffer.len_bytes());
+        let cursor = self.session.cursor.min(buffer.len());
+        let line_start = buffer[..cursor].rfind('\n').map_or(0, |index| index + 1);
+        let indent = buffer[line_start..cursor]
+            .chars()
+            .take_while(|character| matches!(character, ' ' | '\t'))
+            .collect::<String>();
+        if indent.is_empty() {
+            return text.to_owned();
+        }
+        let characters = text.chars().collect::<Vec<_>>();
+        let mut output = String::with_capacity(text.len());
+        for (index, character) in characters.iter().enumerate() {
+            output.push(*character);
+            if *character == '\n' && characters.get(index + 1).is_some_and(|next| *next != '\n') {
+                output.push_str(&indent);
+            }
+        }
+        if let Some(snippet) = snippet {
+            for stop in &mut snippet.stops {
+                let added = characters
+                    .iter()
+                    .enumerate()
+                    .filter(|(index, character)| {
+                        **character == '\n'
+                            && *index < stop.start
+                            && characters.get(index + 1).is_some_and(|next| *next != '\n')
+                    })
+                    .count()
+                    * indent.len();
+                stop.start += added;
+                stop.end += added;
+            }
+        }
+        output
+    }
+
+    fn execute_completion_command(&mut self, raw: &serde_json::Value) -> bool {
+        let Some(command) = raw
+            .pointer("/command/command")
+            .and_then(serde_json::Value::as_str)
+        else {
+            return false;
+        };
+        if command == "editor.action.triggerParameterHints" {
+            if self.active_lsp_worker().is_some() {
+                self.request_signature_help(None);
+            }
+            return true;
+        }
+        if self.active_lsp_worker().is_none() {
+            return false;
+        }
+        let arguments = raw
+            .pointer("/command/arguments")
+            .cloned()
+            .unwrap_or_else(|| serde_json::Value::Array(Vec::new()));
+        let params = serde_json::json!({
+            "command": command,
+            "arguments": arguments
+        });
+        self.send_lsp_request(
+            LspRequestKind::CompletionCommand,
+            "workspace/executeCommand",
+            params,
+        )
     }
 
     fn apply_completion_transaction(&mut self, start: usize, end: usize, text: &str) -> bool {

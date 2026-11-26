@@ -111,6 +111,16 @@ pub(crate) fn completion_geometry(model: &Model, area: Rect) -> Option<Completio
     let detail_panel = auto_import.map(|text| ("Auto-import", text)).or_else(|| {
         selected_item.and_then(|item| {
             let mut body = item.detail.clone();
+            if let Some(description) = item
+                .raw
+                .pointer("/labelDetails/description")
+                .and_then(serde_json::Value::as_str)
+            {
+                if !body.is_empty() {
+                    body.push_str("\n\n");
+                }
+                body.push_str(description);
+            }
             if let Some(documentation) = &item.documentation {
                 let documentation =
                     crate::completion_sources::clean_completion_documentation(documentation);
@@ -808,10 +818,29 @@ pub(crate) fn render_overlays(model: &Model, frame: &mut Frame, area: Rect) {
             height,
         };
         frame.render_widget(Clear, popup);
-        let mut lines = vec![Line::styled(
-            item.label.clone(),
-            Style::default().fg(theme::accent()).bg(theme::surface()),
-        )];
+        let base = Style::default().fg(theme::accent()).bg(theme::surface());
+        let label_spans = item
+            .parameters
+            .get(signature.active_parameter)
+            .copied()
+            .filter(|(start, end)| {
+                start < end
+                    && *end <= item.label.len()
+                    && item.label.is_char_boundary(*start)
+                    && item.label.is_char_boundary(*end)
+            })
+            .map(|(start, end)| {
+                vec![
+                    Span::styled(item.label[..start].to_owned(), base),
+                    Span::styled(
+                        item.label[start..end].to_owned(),
+                        base.fg(theme::success()).add_modifier(Modifier::BOLD),
+                    ),
+                    Span::styled(item.label[end..].to_owned(), base),
+                ]
+            })
+            .unwrap_or_else(|| vec![Span::styled(item.label.clone(), base)]);
+        let mut lines = vec![Line::from(label_spans)];
         if !item.documentation.is_empty() {
             lines.push(Line::raw(item.documentation.clone()));
         }
@@ -913,8 +942,29 @@ pub(crate) fn render_overlays(model: &Model, frame: &mut Frame, area: Rect) {
             let kind = completion_kind_label(item);
             let kind_width = unicode_width::UnicodeWidthStr::width(kind);
             let label_max = inner_width.saturating_sub(2 + kind_width + 2).max(1);
+            let deprecated = item
+                .raw
+                .get("deprecated")
+                .and_then(serde_json::Value::as_bool)
+                .unwrap_or(false)
+                || item
+                    .raw
+                    .get("tags")
+                    .and_then(serde_json::Value::as_array)
+                    .is_some_and(|tags| tags.iter().any(|tag| tag.as_u64() == Some(1)));
+            let style = if deprecated {
+                style.add_modifier(Modifier::CROSSED_OUT)
+            } else {
+                style
+            };
+            let label_details = item
+                .raw
+                .pointer("/labelDetails/detail")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or_default();
+            let display = format!("{}{}", item.label, label_details);
             let label = crate::render::truncate_width(
-                &item.label,
+                &display,
                 u16::try_from(label_max).unwrap_or(u16::MAX),
             );
             let label_width = unicode_width::UnicodeWidthStr::width(label.as_str());

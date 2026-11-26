@@ -79,7 +79,12 @@ impl Model {
         let text = self.session.editor.text();
         let query = completion_prefix(&text.slice(0..text.len_bytes()), self.session.cursor);
         let filtered = (0..items.len()).collect();
-        let selected = items.iter().position(|item| item.preselect).unwrap_or(0);
+        let recent = self.language.completion.recent.clone();
+        let selected = items
+            .iter()
+            .position(|item| item.preselect)
+            .or_else(|| recent.and_then(|label| items.iter().position(|item| item.label == label)))
+            .unwrap_or(0);
         self.language.completion.completion = Some(CompletionState {
             items,
             filtered,

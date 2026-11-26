@@ -67,6 +67,23 @@ fn hover_text(value: &serde_json::Value) -> String {
     }
 }
 
+pub(crate) fn signature_help_context(
+    trigger: Option<&str>,
+    is_retrigger: bool,
+) -> serde_json::Value {
+    match trigger {
+        Some(trigger) => serde_json::json!({
+            "triggerKind": 2,
+            "triggerCharacter": trigger,
+            "isRetrigger": is_retrigger
+        }),
+        None => serde_json::json!({
+            "triggerKind": 1,
+            "isRetrigger": is_retrigger
+        }),
+    }
+}
+
 const MAX_SYMBOL_DEPTH: usize = 64;
 const MAX_SYMBOLS: usize = 4096;
 
@@ -223,10 +240,12 @@ impl Model {
             .lsp_requests
             .cancel(|kind| kind == LspRequestKind::SignatureHelp);
         self.overlays.lsp_results.signature_help = None;
+        self.language.signature_help.due = None;
+        self.language.signature_help.signature = None;
         self.file.dirty = true;
     }
 
-    pub(crate) fn request_signature_help(&mut self, trigger: Option<char>) {
+    pub(crate) fn request_signature_help(&mut self, trigger: Option<String>) {
         let is_retrigger = self.overlays.lsp_results.signature_help.is_some();
         self.cancel_completion();
         self.cancel_code_actions();
@@ -245,17 +264,10 @@ impl Model {
         let Some((line, character)) = self.lsp_position() else {
             return;
         };
-        let context = match trigger {
-            Some(trigger) => serde_json::json!({
-                "triggerKind": 2,
-                "triggerCharacter": trigger.to_string(),
-                "isRetrigger": is_retrigger
-            }),
-            None => serde_json::json!({
-                "triggerKind": 1,
-                "isRetrigger": is_retrigger
-            }),
-        };
+        self.language.signature_help.signature =
+            Some((self.session.editor.revision(), self.session.cursor));
+        self.language.signature_help.due = None;
+        let context = signature_help_context(trigger.as_deref(), is_retrigger);
         let params = serde_json::json!({
             "textDocument": {"uri": uri},
             "position": {"line": line, "character": character},
@@ -269,6 +281,28 @@ impl Model {
             self.status.text = "signature".to_owned();
         }
         self.file.dirty = true;
+    }
+
+    pub(crate) fn tick_signature_help(&mut self) {
+        if self.overlays.lsp_results.signature_help.is_none() {
+            self.language.signature_help.due = None;
+            return;
+        }
+        let current = (self.session.editor.revision(), self.session.cursor);
+        if self.language.signature_help.signature == Some(current) {
+            self.language.signature_help.due = None;
+            return;
+        }
+        let now = std::time::Instant::now();
+        let due = *self
+            .language
+            .signature_help
+            .due
+            .get_or_insert(now + std::time::Duration::from_millis(120));
+        if now >= due {
+            self.language.signature_help.due = None;
+            self.request_signature_help(None);
+        }
     }
 
     pub(crate) fn close_hover(&mut self) {

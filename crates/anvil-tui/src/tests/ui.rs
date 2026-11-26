@@ -1657,3 +1657,51 @@ fn completion_popup_anchors_to_cursor_and_flips_above() {
     );
     assert_eq!(geometry.popup.x, text_x);
 }
+
+#[test]
+fn completion_popup_shows_label_details_and_deprecation() {
+    let mut model = Model::new(EditorState::from_text("fo"), None);
+    model.start_page.welcome = false;
+    model.language.completion.completion = Some(crate::state::CompletionState {
+        items: vec![crate::state::CompletionItem {
+            source: anvil_session::provider::ProviderId::new("builtin.lsp"),
+            label: "foo".to_owned(),
+            filter_text: "foo".to_owned(),
+            sort_text: "foo".to_owned(),
+            preselect: true,
+            insert: "foo".to_owned(),
+            snippet: None,
+            detail: String::new(),
+            replace: None,
+            replace_bytes: None,
+            documentation: None,
+            raw: serde_json::json!({
+                "kind": 6,
+                "labelDetails": {"detail": "(T)", "description": "module"},
+                "tags": [1]
+            }),
+            resolved: true,
+        }],
+        filtered: vec![0],
+        query: "fo".to_owned(),
+        selected: 0,
+    });
+    let backend = TestBackend::new(100, 24);
+    let mut terminal = Terminal::new(backend).expect("terminal");
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+    let cells = terminal.backend().buffer().content();
+    let rendered = cells.iter().map(|cell| cell.symbol()).collect::<String>();
+    assert!(rendered.contains("foo(T)"), "{rendered}");
+    assert!(rendered.contains("module"), "{rendered}");
+    let deprecated: Vec<_> = cells
+        .iter()
+        .filter(|cell| cell.symbol() == "f")
+        .map(|cell| cell.modifier)
+        .collect();
+    assert!(
+        deprecated
+            .iter()
+            .any(|modifier| modifier.contains(ratatui::style::Modifier::CROSSED_OUT)),
+        "{deprecated:?}"
+    );
+}

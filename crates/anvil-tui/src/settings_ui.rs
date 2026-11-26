@@ -161,6 +161,7 @@ impl SettingsOverlayState {
             settings::SettingsKey::SidebarPercent => settings.editor.sidebar_percent.to_string(),
             settings::SettingsKey::CaseSensitive => settings.search.case_sensitive.to_string(),
             settings::SettingsKey::InlayHints => settings.lsp.inlay_hints.to_string(),
+            settings::SettingsKey::AutoBrackets => settings.completion.auto_brackets.to_string(),
             settings::SettingsKey::ReducedMotion => settings.ui.reduced_motion.to_string(),
             settings::SettingsKey::HighContrast => settings.ui.high_contrast.to_string(),
             settings::SettingsKey::FileWatching => settings.editor.file_watching.to_string(),
@@ -328,6 +329,9 @@ impl SettingsOverlayState {
                 draft.search.case_sensitive = !draft.search.case_sensitive
             }
             settings::SettingsKey::InlayHints => draft.lsp.inlay_hints = !draft.lsp.inlay_hints,
+            settings::SettingsKey::AutoBrackets => {
+                draft.completion.auto_brackets = !draft.completion.auto_brackets
+            }
             settings::SettingsKey::ReducedMotion => {
                 draft.ui.reduced_motion = !draft.ui.reduced_motion
             }
@@ -380,6 +384,9 @@ impl SettingsOverlayState {
             }
             settings::SettingsKey::InlayHints => {
                 self.draft.lsp.inlay_hints = self.inherited.lsp.inlay_hints
+            }
+            settings::SettingsKey::AutoBrackets => {
+                self.draft.completion.auto_brackets = self.inherited.completion.auto_brackets
             }
             settings::SettingsKey::ReducedMotion => {
                 self.draft.ui.reduced_motion = self.inherited.ui.reduced_motion

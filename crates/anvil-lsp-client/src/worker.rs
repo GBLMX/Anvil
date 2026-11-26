@@ -21,6 +21,9 @@ struct LspCapabilities {
     inlay_hints: bool,
     semantic_token_types: Vec<String>,
     completion_trigger_characters: Vec<String>,
+    completion_all_commit_characters: Vec<String>,
+    signature_help_trigger_characters: Vec<String>,
+    signature_help_retrigger_characters: Vec<String>,
     server_info: Option<String>,
 }
 
@@ -36,6 +39,9 @@ pub enum LspEvent {
         inlay_hints: bool,
         semantic_token_types: Vec<String>,
         completion_trigger_characters: Vec<String>,
+        completion_all_commit_characters: Vec<String>,
+        signature_help_trigger_characters: Vec<String>,
+        signature_help_retrigger_characters: Vec<String>,
         server_info: Option<String>,
     },
     Crashed(String),
@@ -229,6 +235,9 @@ impl LspWorker {
                 inlay_hints,
                 semantic_token_types,
                 completion_trigger_characters,
+                completion_all_commit_characters,
+                signature_help_trigger_characters,
+                signature_help_retrigger_characters,
                 server_info,
             } = match wait_initialize(&mut client, &root, &current_settings) {
                 Ok(capabilities) => capabilities,
@@ -245,6 +254,9 @@ impl LspWorker {
                     inlay_hints,
                     semantic_token_types,
                     completion_trigger_characters,
+                    completion_all_commit_characters,
+                    signature_help_trigger_characters,
+                    signature_help_retrigger_characters,
                     server_info,
                 },
             );
@@ -736,6 +748,21 @@ fn send(client: &mut GatewayClient, message: &serde_json::Value) -> Result<(), S
     client.lsp_send(&body).map_err(|error| error.to_string())
 }
 
+fn capability_strings(capabilities: Option<&Value>, pointer: &str) -> Vec<String> {
+    capabilities
+        .and_then(|capabilities| capabilities.pointer(pointer))
+        .and_then(Value::as_array)
+        .map(|values| {
+            values
+                .iter()
+                .filter_map(Value::as_str)
+                .filter(|value| !value.is_empty())
+                .map(str::to_owned)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 fn wait_initialize(
     client: &mut GatewayClient,
     root: &Path,
@@ -799,20 +826,14 @@ fn wait_initialize(
                         .collect()
                 })
                 .unwrap_or_default();
-            let completion_trigger_characters = capabilities
-                .and_then(|capabilities| {
-                    capabilities.pointer("/completionProvider/triggerCharacters")
-                })
-                .and_then(Value::as_array)
-                .map(|characters| {
-                    characters
-                        .iter()
-                        .filter_map(Value::as_str)
-                        .filter(|character| !character.is_empty())
-                        .map(str::to_owned)
-                        .collect()
-                })
-                .unwrap_or_default();
+            let completion_trigger_characters =
+                capability_strings(capabilities, "/completionProvider/triggerCharacters");
+            let completion_all_commit_characters =
+                capability_strings(capabilities, "/completionProvider/allCommitCharacters");
+            let signature_help_trigger_characters =
+                capability_strings(capabilities, "/signatureHelpProvider/triggerCharacters");
+            let signature_help_retrigger_characters =
+                capability_strings(capabilities, "/signatureHelpProvider/retriggerCharacters");
             let server_info = data.pointer("/result/serverInfo").map(|info| {
                 let name = info
                     .get("name")
@@ -828,6 +849,9 @@ fn wait_initialize(
                 inlay_hints,
                 semantic_token_types,
                 completion_trigger_characters,
+                completion_all_commit_characters,
+                signature_help_trigger_characters,
+                signature_help_retrigger_characters,
                 server_info,
             });
         }
@@ -1043,7 +1067,12 @@ mod tests {
                             "result": {
                                 "capabilities": {
                                     "completionProvider": {
-                                        "triggerCharacters": [".", "::"]
+                                        "triggerCharacters": [".", "::"],
+                                        "allCommitCharacters": [")", ";"]
+                                    },
+                                    "signatureHelpProvider": {
+                                        "triggerCharacters": ["(", ","],
+                                        "retriggerCharacters": [","]
                                     }
                                 }
                             }
@@ -1111,12 +1140,24 @@ mod tests {
                 match event {
                     LspEvent::Capabilities {
                         completion_trigger_characters,
+                        completion_all_commit_characters,
+                        signature_help_trigger_characters,
+                        signature_help_retrigger_characters,
                         ..
                     } => {
                         assert_eq!(
                             completion_trigger_characters,
                             vec![".".to_owned(), "::".to_owned()]
                         );
+                        assert_eq!(
+                            completion_all_commit_characters,
+                            vec![")".to_owned(), ";".to_owned()]
+                        );
+                        assert_eq!(
+                            signature_help_trigger_characters,
+                            vec!["(".to_owned(), ",".to_owned()]
+                        );
+                        assert_eq!(signature_help_retrigger_characters, vec![",".to_owned()]);
                         saw_capabilities = true;
                     }
                     LspEvent::Diagnostics(path, diagnostics) => {

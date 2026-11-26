@@ -69,6 +69,11 @@ impl Model {
             .insert(active.clone(), LspStatus::Stopped { root });
         self.language.inlay_hints.support.remove(&active);
         self.language.completion.support.remove(&active);
+        self.language
+            .completion
+            .all_commit_characters
+            .remove(&active);
+        self.language.signature_help.support.remove(&active);
     }
 
     pub(crate) fn stop_lsp_root(&mut self, root: &Path) {
@@ -92,6 +97,8 @@ impl Model {
             self.language.lsp.retries.remove(&key);
             self.language.inlay_hints.support.remove(&key);
             self.language.completion.support.remove(&key);
+            self.language.completion.all_commit_characters.remove(&key);
+            self.language.signature_help.support.remove(&key);
             self.language.lsp.labels.remove(&key);
             if self.language.lsp.config.as_ref() == Some(&key) {
                 clear_ui = true;
@@ -472,6 +479,8 @@ impl Model {
                 .insert(key.clone(), LspStatus::Stopped { root });
             self.language.inlay_hints.support.remove(&key);
             self.language.completion.support.remove(&key);
+            self.language.completion.all_commit_characters.remove(&key);
+            self.language.signature_help.support.remove(&key);
         }
         self.language.lsp.pending_sync = None;
         self.clear_lsp_ui();
@@ -486,6 +495,9 @@ impl Model {
                 inlay_hints,
                 semantic_token_types,
                 completion_trigger_characters,
+                completion_all_commit_characters,
+                signature_help_trigger_characters,
+                signature_help_retrigger_characters,
                 server_info,
             } => {
                 self.language.lsp.retries.remove(key);
@@ -506,6 +518,17 @@ impl Model {
                     .completion
                     .support
                     .insert(key.clone(), completion_trigger_characters);
+                self.language
+                    .completion
+                    .all_commit_characters
+                    .insert(key.clone(), completion_all_commit_characters);
+                self.language.signature_help.support.insert(
+                    key.clone(),
+                    crate::state::SignatureHelpTriggers {
+                        trigger_characters: signature_help_trigger_characters,
+                        retrigger_characters: signature_help_retrigger_characters,
+                    },
+                );
                 if active {
                     if let Some(info) = server_info {
                         self.status.text = format!("lsp: {info}");
@@ -926,6 +949,9 @@ mod status_tests {
                 inlay_hints: true,
                 semantic_token_types: Vec::new(),
                 completion_trigger_characters: vec![".".to_owned(), "::".to_owned()],
+                completion_all_commit_characters: vec![")".to_owned(), ";".to_owned()],
+                signature_help_trigger_characters: vec!["(".to_owned(), ",".to_owned()],
+                signature_help_retrigger_characters: vec![",".to_owned()],
                 server_info: Some("clangd 18".to_owned()),
             },
         );
@@ -933,6 +959,21 @@ mod status_tests {
             model.language.completion.support.get(&key),
             Some(&vec![".".to_owned(), "::".to_owned()])
         );
+        assert_eq!(
+            model.language.completion.all_commit_characters.get(&key),
+            Some(&vec![")".to_owned(), ";".to_owned()])
+        );
+        let support = model
+            .language
+            .signature_help
+            .support
+            .get(&key)
+            .expect("signature support");
+        assert_eq!(
+            support.trigger_characters,
+            vec!["(".to_owned(), ",".to_owned()]
+        );
+        assert_eq!(support.retrigger_characters, vec![",".to_owned()]);
         assert!(matches!(
             model.language.lsp.status.get(&key),
             Some(LspStatus::Running {
@@ -1014,6 +1055,9 @@ mod status_tests {
                 inlay_hints: false,
                 semantic_token_types: Vec::new(),
                 completion_trigger_characters: Vec::new(),
+                completion_all_commit_characters: Vec::new(),
+                signature_help_trigger_characters: Vec::new(),
+                signature_help_retrigger_characters: Vec::new(),
                 server_info: None,
             },
         );

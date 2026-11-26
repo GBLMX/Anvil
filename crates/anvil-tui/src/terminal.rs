@@ -459,6 +459,7 @@ pub fn run_with_all_services(
             model.poll_settings_watch(&mut settings_watch, &mut settings_reload_pending);
         }
         model.tick_search();
+        model.tick_signature_help();
         if model.file.dirty {
             terminal.draw(|frame| view(&model, frame))?;
             if !terminal.profile().synchronized_output {

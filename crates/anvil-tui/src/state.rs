@@ -1292,8 +1292,25 @@ pub(crate) struct CompletionUiState {
     pub(crate) snippet: Option<SnippetSession>,
     /// Server-advertised trigger characters per language server.
     pub(crate) support: HashMap<LspKey, Vec<String>>,
+    /// Server-wide commit characters per language server.
+    pub(crate) all_commit_characters: HashMap<LspKey, Vec<String>>,
+    /// Last accepted completion label, used to preselect it next time.
+    pub(crate) recent: Option<String>,
     /// Whether the last completion list was truncated and must be re-requested.
     pub(crate) incomplete: bool,
+}
+
+#[derive(Clone, Debug, Default)]
+pub(crate) struct SignatureHelpTriggers {
+    pub(crate) trigger_characters: Vec<String>,
+    pub(crate) retrigger_characters: Vec<String>,
+}
+
+#[derive(Default)]
+pub(crate) struct SignatureHelpUiState {
+    pub(crate) support: HashMap<LspKey, SignatureHelpTriggers>,
+    pub(crate) due: Option<Instant>,
+    pub(crate) signature: Option<(u64, usize)>,
 }
 
 /// Semantic token legend, cached tokens, and the revision they describe.
@@ -1314,6 +1331,7 @@ pub(crate) struct LanguageState {
     pub(crate) inlay_hints: InlayHintsState,
     pub(crate) code_lens: Option<code_lens::CodeLensState>,
     pub(crate) completion: CompletionUiState,
+    pub(crate) signature_help: SignatureHelpUiState,
 }
 pub(crate) enum LspPollEffect {
     Event { key: LspKey, event: lsp::LspEvent },
@@ -1452,6 +1470,7 @@ pub(crate) enum LspRequestKind {
     WorkspaceSymbol,
     InlayHint,
     ExecuteCommand,
+    CompletionCommand,
     CodeActionCommand,
     CodeLens,
 }
@@ -1542,6 +1561,7 @@ pub(crate) struct CallHierarchyState {
 pub(crate) struct SignatureItem {
     pub(crate) label: String,
     pub(crate) documentation: String,
+    pub(crate) parameters: Vec<(usize, usize)>,
 }
 
 #[derive(Debug, Clone)]

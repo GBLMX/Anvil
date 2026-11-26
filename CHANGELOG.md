@@ -56,6 +56,16 @@ post-`0.5.0` feature line.
 - Offline signing can consume the CI build-input artifact; `Release publish`
   verifies provenance, input checksums, and the checksum-key fingerprint
   before uploading release assets.
+- `[completion] auto_brackets` (env `ANVIL_COMPLETION_AUTO_BRACKETS`) inserts
+  `()` for function, method, and constructor completions that omit it, skipping
+  TSX/JSX/Vue source files.
+- LSP snippets now support choices, nested placeholders, and variables; a parse
+  failure keeps the server text instead of stripping it.
+- Completion applies server `allCommitCharacters`, executes completion
+  `command`s, renders `labelDetails` and deprecated tags, honors
+  `insertTextMode` indentation, and preselects the most recently accepted item.
+- Signature help uses the server's trigger and retrigger characters, refreshes
+  after a 120 ms debounce, and highlights the active parameter.
 
 ### Changed
 - `anvil-mcp` now accepts legacy `initialize` versions `2025-06-18` and
