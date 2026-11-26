@@ -78,10 +78,12 @@ Also verify:
 
 1. Create a release branch or freeze `main`.
 2. Run the release gates on Linux.
-3. Update `CHANGELOG.md` and the version fields.
+3. Update `CHANGELOG.md`, the version fields, and the `expected` constant in
+   `scripts/check-frozen-version.sh`.
 4. Check the generated TypeScript bindings.
 5. Build the full official composition and the gateway/exec-runner artifacts.
-6. Create the signed/tagged release only after CI passes.
+6. Run `scripts/release-checklist.sh vX.Y.Z`; create the signed/tagged release
+   only after it and CI pass.
 7. Publish release notes with breaking changes, security notes, and unsupported
    platforms.
 8. Verify installation from the published artifact, not only from the build

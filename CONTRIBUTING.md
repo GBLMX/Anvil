@@ -144,6 +144,8 @@ Security and performance changes also need the relevant fixtures under
 - Never claim a sandbox or performance property that the repository does not
   test.
 - Avoid committing generated caches, editor state, or local benchmark output.
+- Add a `CHANGELOG.md` entry under `[Unreleased]` for user-visible changes, or
+  mark the pull request `skip-changelog`.
 
 ## Commit style
 

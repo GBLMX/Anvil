@@ -363,3 +363,17 @@ jobs:
         run: |
           grep -q '"source": "official"' "$RUNNER_TEMP/store/state.json"
           find "$RUNNER_TEMP/store/store" -name package.anvil-plugin -print -quit | grep -q .
+
+  changelog:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Check changelog for user-visible changes
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.sha }}
+          SKIP_CHANGELOG: ${{ contains(github.event.pull_request.labels.*.name, 'skip-changelog') || contains(github.event.pull_request.body, '[skip changelog]') }}
+        run: scripts/check-changelog.sh

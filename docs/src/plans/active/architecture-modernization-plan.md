@@ -2,6 +2,7 @@
 
 Status: Active; Phase 0 complete; Phase 1 in progress.
 Owner: maintainers.
+Last reviewed: 2026-11-26
 Scope: ownership, state boundaries, and optional crate extraction for the Anvil
 kernel/frontends. This is not a rewrite and not a feature program.
 

@@ -4,6 +4,8 @@ Status: future P3 proposal. No implementation is part of the current polish
 phase. The plugin API and the tactical interaction contracts are separate
 gates; this plan only defines local, bounded, std-only telemetry.
 
+Last reviewed: 2026-11-26
+
 Goal: expose the pace and risk of long MCP-driven editing sessions without
 turning token throughput into a proxy for useful work.
 

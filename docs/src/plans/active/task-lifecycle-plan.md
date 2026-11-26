@@ -8,6 +8,8 @@ exec.
 Target: keep the Rust editor on blocking threads and channels; no Tokio in the
 editor, TUI, or plugin path.
 
+Last reviewed: 2026-11-26
+
 Related: [ADR-0066](../../adr/0066-bounded-background-task-lifecycle.md).
 
 ## 1. Goal

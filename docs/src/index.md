@@ -1,7 +1,7 @@
 # Documentation Index
 
 Status: canonical map for architecture, plans, ADRs, SPECs, and reference
-material. Last reviewed 2026-11-24.
+material. Last reviewed 2026-11-26.
 
 ## Start here
 
@@ -24,6 +24,7 @@ Use one owner per question; other docs link instead of restating status.
 |---|---|
 | Product direction | [ROADMAP.md](ROADMAP.md) |
 | Release gates and candidate checklist | [RELEASE.md](RELEASE.md) |
+| Release cadence, freeze policy, and synchronization | [ADR-0080](adr/0080-release-cadence-and-synchronization.md), [release cycle plan](plans/active/release-cycle-plan.md) |
 | Architecture and layer rules | [architecture.md](architecture.md), [ADR-0042](adr/0042-selection-first-session-frontend.md) |
 | TUI structural budget | [tui-maintainability.md](tui-maintainability.md) |
 | TUI view boundary and extraction gates | [history/analysis/tui-view-boundary.md](history/analysis/tui-view-boundary.md) |
@@ -85,6 +86,7 @@ the owner.
 | [IDE platform](plans/active/ide-platform-plan.md) | project model, workspace index, integration descriptors, debug depth, remote | Active; design accepted, implementation not started |
 | [Linux platform](plans/active/linux-platform-plan.md) | seccomp/cgroup, atomic install, watcher measurements | Active; per-section status |
 | [Task lifecycle](plans/active/task-lifecycle-plan.md) | bounded background work, cancellation, shutdown | Active; slice 1 landed |
+| [Release cycle](plans/active/release-cycle-plan.md) | cadence, freeze policy, sync rails, release checklist | Active; slices 1-5 landed |
 | [External integration](external-integration.md) | `$EDITOR`, stdin, control socket, MCP adapter | Current contract; no remaining tasks |
 
 ## Proposed work
@@ -196,8 +198,8 @@ Architecture reading order, not a second status table:
 ### Verification
 
 - `python3 scripts/docs-check.py` checks relative links and local anchors,
-  ADR identity/date/version, plan status and locations, template sections, and
-  the root Markdown budget.
+  ADR identity/date/version, plan status, locations, review freshness, and
+  index links, template sections, and the root Markdown budget.
 
 ### Status
 

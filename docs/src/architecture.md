@@ -370,9 +370,9 @@ Installation and verification steps are in [INSTALL.md](INSTALL.md) and
 ## Architecture maps
 
 
-This section is the diagram view of the process, data-flow, control-plane, and
-distribution boundaries described above. It is current as of 2026-11-24;
-marketplace and signed-index surfaces remain deferred.
+This section is the diagram view of the process, data-flow, control-plane,
+distribution, and release-cycle boundaries described above. It is current as of
+2026-11-26; marketplace and signed-index surfaces remain deferred.
 
 ### 1. Process and trust boundaries
 
@@ -542,7 +542,42 @@ flowchart LR
     STORE -.-> DISCOVERY["discovery + manager"]
 ```
 
-### 5. Delivery status
+### 5. Release cycle and synchronization
+
+The cycle follows [ADR-0080](adr/0080-release-cadence-and-synchronization.md).
+0.x milestones use the same stages under an 8-week cap. Dependency and vendored
+upstream sync open a cycle; version, changelog, contract, and docs sync must
+agree before the first release candidate. The release edge stays blocked until
+the gates in [RELEASE.md](RELEASE.md) and the signing/provenance prerequisites
+pass.
+
+```mermaid
+flowchart LR
+    PLAN["plan<br/>scope frozen"] --> DEV["merge<br/>weeks 1-4"]
+    DEV --> FREEZE["freeze<br/>week 5"]
+    FREEZE --> RC["release candidates<br/>weeks 6-7"]
+    RC --> REL["release<br/>week 8"]
+    REL --> PATCH["patch releases"]
+    PATCH --> REL
+
+    subgraph RAILS["synchronization rails"]
+        VER["version · tag"]
+        CHG["CHANGELOG"]
+        API["API surface · semver"]
+        DOC["docs-check · mdBook"]
+        DEP["weekly deny · govulncheck"]
+        VEND["vendored upstream revisions"]
+    end
+
+    VER --> RC
+    CHG --> RC
+    API --> RC
+    DOC --> RC
+    DEP --> PLAN
+    VEND --> PLAN
+```
+
+### 6. Delivery status
 
 | Area | Status |
 |---|---|
@@ -556,6 +591,7 @@ flowchart LR
 | Marketplace, signed-index UI, install/update consent | deferred |
 | Release signing/provenance with production keys | external gate |
 | Reference-machine performance baseline | recorded; rerun at boundaries |
+| Release cadence, freeze policy, synchronization rails | ADR-0080; slices 1-5 landed |
 
 Exit gates live in [RELEASE.md](RELEASE.md).
 Architecture decisions and status live in the [ADR index](adr/index.md).

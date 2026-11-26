@@ -5,6 +5,8 @@ Status: proposed. This is the small, Vim-like ergonomics lane under the frozen
 [internal-polish-plan.md](../../history/plans/internal-polish-plan.md) or the capability gates in
 [ide-capability-plan.md](../../history/plans/ide-capability-plan.md).
 
+Last reviewed: 2026-11-26
+
 Scope: missing editor motions, operators, registers, visual-mode actions, and
 small display/Ex commands that are cheap to understand, bounded in behavior,
 and pay off during dogfooding. No new event loop, no Vimscript, no plugin

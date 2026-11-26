@@ -1,0 +1,51 @@
+name: Scheduled checks
+
+on:
+  schedule:
+    - cron: "23 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rust-advisories:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check dependency licenses and advisories
+        uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check
+
+  go-vulnerabilities:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
+      - name: Scan Go modules
+        run: |
+          "$(go env GOPATH)/bin/govulncheck" ./...
+
+  dependency-drift:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Install pinned Rust toolchain
+        run: rustup show
+      - name: Report available Rust updates
+        run: cargo update --dry-run
+      - name: Report available Go updates
+        run: go list -m -u all

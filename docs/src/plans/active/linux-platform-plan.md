@@ -5,6 +5,8 @@ sections track install atomicity, watcher measurements, and structured
 cgroup reporting. Linux is the v1 platform; this plan does not add
 Windows/macOS ports.
 
+Last reviewed: 2026-11-26
+
 Scope: use Linux kernel primitives where they provide enforcement, atomicity, or
 reliable lifecycle. It is not a catalogue of every available syscall.
 

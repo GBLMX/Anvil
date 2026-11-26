@@ -79,6 +79,9 @@ post-`0.5.0` feature line.
 - Theme-browser state transitions moved out of `impl Model` into the
   `theme_browser` page module; TUI metrics dropped from 71 to 70 `impl Model`
   blocks and from 547 to 543 `&mut Model` methods.
+- Release cycles now follow ADR-0080: weekly security and dependency checks, a
+  changelog gate for user-visible pull requests, a scripted release checklist,
+  and plan review freshness.
 
 ### Removed
 - `anvil-core` no longer exports benchmark-only `RopeBuffer`/`GapBuffer` or

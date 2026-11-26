@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import re
 import sys
+from datetime import date
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -18,7 +19,18 @@ STATUS_WORDS = re.compile(
 )
 ADR_ID = re.compile(r"^(\d{4})-.+\.md$")
 ADR_VERSION = re.compile(r"^\d+\.\d+\.\d+$")
-PLAN_REQUIRED = ("## Scope", "## Non-goals", "## Slices", "## Gates", "## Verification")
+PLAN_REVIEW_LIMIT_DAYS = 180
+PLAN_REVIEW = re.compile(
+    r"^Last reviewed:\s*(\d{4}-\d{2}-\d{2})\.?\s*$", re.MULTILINE
+)
+PLAN_REQUIRED = (
+    "## Scope",
+    "## Non-goals",
+    "## Slices",
+    "## Gates",
+    "## Verification",
+    "Last reviewed:",
+)
 ADR_REQUIRED = (
     "- Status:",
     "- Version:",
@@ -144,6 +156,33 @@ def check_adrs() -> None:
 def check_plans() -> None:
     for path in sorted((ROOT / "docs/src").glob("*-plan.md")):
         check_status(path, read(path))
+    for directory in ("active", "proposed"):
+        for path in sorted((ROOT / "docs/src/plans" / directory).glob("*.md")):
+            text = read(path)
+            check_status(path, text)
+            check_plan_review(path, text)
+
+
+def check_plan_review(path: Path, text: str) -> None:
+    match = PLAN_REVIEW.search(text)
+    if match is None:
+        errors.append(f"{path.relative_to(ROOT)}: missing Last reviewed date")
+        return
+    try:
+        reviewed = date.fromisoformat(match.group(1))
+    except ValueError:
+        errors.append(f"{path.relative_to(ROOT)}: invalid Last reviewed date")
+        return
+    today = date.today()
+    if reviewed > today:
+        errors.append(
+            f"{path.relative_to(ROOT)}: Last reviewed date is in the future"
+        )
+    elif (today - reviewed).days > PLAN_REVIEW_LIMIT_DAYS:
+        errors.append(
+            f"{path.relative_to(ROOT)}: Last reviewed {reviewed.isoformat()} is "
+            f"older than {PLAN_REVIEW_LIMIT_DAYS} days"
+        )
 
 
 def check_summary() -> None:
@@ -170,6 +209,28 @@ def check_summary() -> None:
             continue
         if path not in seen:
             errors.append(f"{path.relative_to(ROOT)}: not listed in docs/src/SUMMARY.md")
+
+
+def check_index() -> None:
+    """Require every active or proposed plan to be linked from the map."""
+    index = ROOT / "docs/src/index.md"
+    if not index.exists():
+        errors.append("docs/src/index.md: missing")
+        return
+    linked: set[Path] = set()
+    for match in re.finditer(r"\[[^\]]*\]\(([^)]+)\)", read(index)):
+        raw = match.group(1).strip()
+        if not raw or "://" in raw or raw.startswith(("mailto:", "data:")):
+            continue
+        target = raw.partition("#")[0].strip()
+        if target:
+            linked.add((index.parent / target).resolve())
+    for path in sorted((ROOT / "docs/src/plans").glob("*/*.md")):
+        if path.resolve() not in linked:
+            errors.append(
+                f"{path.relative_to(ROOT)}: not linked from docs/src/index.md"
+            )
+
 
 def check_budget() -> None:
     """Keep active documentation bounded and plans out of the root."""
@@ -230,6 +291,7 @@ def main() -> int:
     check_plans()
     check_templates()
     check_summary()
+    check_index()
     check_budget()
     if errors:
         print("\n".join(errors))

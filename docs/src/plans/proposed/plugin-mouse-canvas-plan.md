@@ -7,6 +7,8 @@ an additive `1.1.0` contract and a new ADR. The three target plugins are:
 - Tactical Graph: a force-directed workspace dependency overlay.
 - Alert System: debounced visual/terminal-bell warnings for new errors.
 
+Last reviewed: 2026-11-26
+
 They are **not** pure-Lua features today. Lua owns the state machine, layout,
 and alert policy; the editor owns coordinate mapping, selection validation,
 overlay compositing, diagnostics summaries, and dependency extraction.

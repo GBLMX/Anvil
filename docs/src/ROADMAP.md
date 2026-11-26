@@ -15,6 +15,9 @@ The workspace version is **0.8.0**.
 - Follow [the release process](RELEASE.md) for the remaining release gates.
 - `scripts/check-frozen-version.sh` fails CI on an accidental release-version
   mismatch.
+- Cycles, freezes, and synchronization follow
+  [ADR-0080](adr/0080-release-cadence-and-synchronization.md) and the
+  [release cycle plan](plans/active/release-cycle-plan.md).
 
 
 ## Current

@@ -7,6 +7,8 @@ by the shared capability registry and dispatched through the bounded
 `EffectQueue`; handler lookup still uses string matching, and the keymap trie,
 Lua/Luau keymap host, and fully registry-driven execution path remain pending.
 
+Last reviewed: 2026-11-26
+
 Decision (2026-11-15): Ex command dispatch remains string-keyed in v1. The
 `CommandId` registry covers native keymap commands and plugin commands; do not
 introduce a second Ex-command registry until a measured consumer needs it.

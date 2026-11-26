@@ -2,6 +2,8 @@
 
 Status: Active; project, integrations, symbol index, DAP, and runtime root landed
 
+Last reviewed: 2026-11-26
+
 Scope: move Anvil from an editor with IDE features to a project-aware IDE
 platform without turning the kernel into a language-specific compiler or
 letting plugins become an execution bypass.

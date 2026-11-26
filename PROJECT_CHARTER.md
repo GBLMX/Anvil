@@ -259,5 +259,6 @@ are accepted under the same dual-license terms.
 
 ## 15. ADR index
 
-The canonical ADR index is [docs/src/adr/index.md](docs/src/adr/index.md); it tracks
-ADR-0001 through ADR-0073. This charter does not maintain a duplicate list.
+The canonical ADR index is [docs/src/adr/index.md](docs/src/adr/index.md); it is
+the single list of accepted and proposed decisions. This charter does not
+maintain a duplicate list.

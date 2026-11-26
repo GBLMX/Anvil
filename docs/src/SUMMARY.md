@@ -43,6 +43,7 @@
 - [High-Frequency Command Architecture Plan](plans/active/command-architecture-plan.md)
 - [IDE Platform Plan](plans/active/ide-platform-plan.md)
 - [Linux Platform Plan](plans/active/linux-platform-plan.md)
+- [Release Cycle Plan](plans/active/release-cycle-plan.md)
 - [Task Lifecycle Plan](plans/active/task-lifecycle-plan.md)
 
 # Proposed plans
@@ -148,6 +149,7 @@
 - [ADR-0077: Benchmark-Only Text Backends](adr/0077-benchmark-only-text-backends.md)
 - [ADR-0078: Gateway Authorization Scopes, Trust Sources, and Audit](adr/0078-gateway-authorization-scopes-and-audit.md)
 - [ADR-0079: Document and View Ownership for TUI Buffers](adr/0079-document-view-ownership-for-tui-buffers.md)
+- [ADR-0080: Release Cadence and Synchronization](adr/0080-release-cadence-and-synchronization.md)
 
 # History
 

@@ -4,7 +4,7 @@ Status: Proposed. This is a research queue, not a release schedule. It does
 not change [ROADMAP.md](../../ROADMAP.md), the internal-polish exit gates, or any
 ADR status.
 
-Last reviewed: 2026-11-18.
+Last reviewed: 2026-11-26
 
 ## Purpose
 

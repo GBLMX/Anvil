@@ -22,19 +22,8 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Check tag
-        run: |
-          version="${GITHUB_REF_NAME#v}"
-          cargo_version="$(python3 - <<'PY'
-          import tomllib
-          with open('Cargo.toml', 'rb') as file:
-              print(tomllib.load(file)['workspace']['package']['version'])
-          PY
-          )"
-          if [ "$version" != "$cargo_version" ]; then
-            echo "tag $GITHUB_REF_NAME does not match Cargo.toml $cargo_version" >&2
-            exit 1
-          fi
+      - name: Check release checklist
+        run: scripts/release-checklist.sh "$GITHUB_REF_NAME"
 
       - name: Build test layout
         run: |
