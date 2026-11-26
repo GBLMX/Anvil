@@ -74,15 +74,17 @@ impl Model {
             }
             self.buffers.entries.push(Buffer {
                 id: BufferId::next(),
-                editor: EditorState::from_text(&text).into(),
-                path: Some(absolute),
-                visual_anchor: None,
-                visual_line: false,
+                document: Document {
+                    editor: EditorState::from_text(&text).into(),
+                    path: Some(absolute),
+                    modified: false,
+                    missing: false,
+                },
                 cursor: 0,
                 scroll: 0,
                 hscroll: 0,
-                modified: false,
-                missing: false,
+                visual_anchor: None,
+                visual_line: false,
                 search_query: String::new(),
                 syntax: Default::default(),
             });

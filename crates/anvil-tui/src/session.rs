@@ -190,13 +190,15 @@ fn restore_buffer(
     };
     let buffer = Buffer {
         id: BufferId::next(),
-        editor: EditorState::from_text(&text).into(),
-        path: path.clone(),
+        document: Document {
+            editor: EditorState::from_text(&text).into(),
+            path: path.clone(),
+            modified,
+            missing: path.as_ref().is_some_and(|path| !path.is_file()),
+        },
         cursor: saved.cursor,
         scroll: saved.scroll,
         hscroll: saved.hscroll,
-        modified,
-        missing: path.as_ref().is_some_and(|path| !path.is_file()),
         visual_anchor: None,
         visual_line: false,
         search_query: String::new(),

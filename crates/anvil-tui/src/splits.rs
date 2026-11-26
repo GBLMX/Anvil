@@ -149,13 +149,14 @@ impl Model {
                         .position(|candidate| candidate.path.is_none())
                 }),
         };
-        self.session.editor = buffer.editor;
-        self.session.path = buffer.path;
+        let document = buffer.document;
+        self.session.editor = document.editor;
+        self.session.path = document.path;
         self.session.cursor = buffer.cursor;
         self.view.scroll = buffer.scroll;
         self.view.hscroll = buffer.hscroll;
-        self.file.modified = buffer.modified;
-        self.file.missing = buffer.missing;
+        self.file.modified = document.modified;
+        self.file.missing = document.missing;
         self.edit.visual_anchor = buffer.visual_anchor;
         self.edit.visual_line = buffer.visual_line;
         self.search.query = buffer.search_query;

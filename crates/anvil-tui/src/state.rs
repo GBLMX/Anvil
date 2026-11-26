@@ -24,19 +24,38 @@ impl BufferId {
 }
 
 #[derive(Clone)]
-pub(crate) struct Buffer {
-    pub(crate) id: BufferId,
+pub(crate) struct Document {
     pub(crate) editor: DocumentSession,
     pub(crate) path: Option<PathBuf>,
+    pub(crate) modified: bool,
+    pub(crate) missing: bool,
+}
+
+#[derive(Clone)]
+pub(crate) struct Buffer {
+    pub(crate) id: BufferId,
+    pub(crate) document: Document,
     pub(crate) cursor: usize,
     pub(crate) scroll: usize,
     pub(crate) hscroll: usize,
-    pub(crate) modified: bool,
-    pub(crate) missing: bool,
     pub(crate) visual_anchor: Option<usize>,
     pub(crate) visual_line: bool,
     pub(crate) search_query: String,
     pub(crate) syntax: anvil_syntax::SyntaxCache,
+}
+
+impl std::ops::Deref for Buffer {
+    type Target = Document;
+
+    fn deref(&self) -> &Document {
+        &self.document
+    }
+}
+
+impl std::ops::DerefMut for Buffer {
+    fn deref_mut(&mut self) -> &mut Document {
+        &mut self.document
+    }
 }
 
 pub(crate) struct Pane {

@@ -42,15 +42,17 @@ impl Model {
         );
         let saved = Buffer {
             id: self.buffers.active_id,
-            editor,
-            path: self.session.path.take(),
+            document: Document {
+                editor,
+                path: self.session.path.take(),
+                modified: self.file.modified,
+                missing: self.file.missing,
+            },
             cursor: self.session.cursor,
             scroll: self.view.scroll,
             hscroll: self.view.hscroll,
             visual_anchor: self.edit.visual_anchor,
             visual_line: self.edit.visual_line,
-            modified: self.file.modified,
-            missing: self.file.missing,
             search_query: std::mem::take(&mut self.search.query),
             syntax: self.syntax_cache.highlights.borrow().active_cache(),
         };
@@ -107,13 +109,14 @@ impl Model {
         self.workspace.git.stage_pending = None;
         self.workspace.git.resolve_pending = None;
         let syntax = saved.syntax.clone();
+        let document = saved.document;
         self.buffers.active_id = saved.id;
-        self.session.editor = saved.editor;
-        self.session.path = saved.path;
+        self.session.editor = document.editor;
+        self.session.path = document.path;
         self.session.cursor = saved.cursor;
         self.view.scroll = saved.scroll;
         self.view.hscroll = saved.hscroll;
-        self.file.modified = saved.modified;
+        self.file.modified = document.modified;
         self.search.query = saved.search_query;
         self.syntax_cache.highlights.borrow_mut().switch_path_with(
             self.session.path.as_deref(),
