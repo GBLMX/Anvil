@@ -58,6 +58,31 @@ fn overlay_edits_apply_and_cancel_restores() {
     assert!(!model.config.settings.completion.auto_brackets);
     model.move_settings(1);
     model.adjust_settings(1);
+    assert!(!model.config.settings.completion.auto_popup);
+    model.reset_settings_row();
+    assert!(model.config.settings.completion.auto_popup);
+    model.move_settings(1);
+    model.adjust_settings(1);
+    assert_eq!(model.config.settings.completion.popup_delay_ms, 251);
+    model.reset_settings_row();
+    assert_eq!(model.config.settings.completion.popup_delay_ms, 250);
+    model.move_settings(1);
+    model.adjust_settings(1);
+    assert_eq!(model.config.settings.completion.popup_trigger_len, 3);
+    model.reset_settings_row();
+    assert_eq!(model.config.settings.completion.popup_trigger_len, 2);
+    model.move_settings(1);
+    model.adjust_settings(1);
+    assert!(model.config.settings.completion.popup_in_comments);
+    model.reset_settings_row();
+    assert!(!model.config.settings.completion.popup_in_comments);
+    model.move_settings(1);
+    model.adjust_settings(1);
+    assert!(model.config.settings.completion.popup_in_strings);
+    model.reset_settings_row();
+    assert!(!model.config.settings.completion.popup_in_strings);
+    model.move_settings(1);
+    model.adjust_settings(1);
     assert!(model.config.settings.ui.reduced_motion);
     model.reset_settings_row();
     assert!(!model.config.settings.ui.reduced_motion);
@@ -82,7 +107,7 @@ fn settings_theme_row_saves_choice() {
     unsafe { std::env::set_var("ANVIL_SETTINGS", &path) };
     let mut model = Model::new(crate::EditorState::from_text("x"), None);
     model.open_settings();
-    for _ in 0..12 {
+    for _ in 0..17 {
         model.move_settings(1);
     }
     model.adjust_settings(1);

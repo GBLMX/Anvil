@@ -103,7 +103,7 @@ impl Model {
                     .cloned()
             });
         if let Some(trigger) = trigger {
-            self.start_completion(Some(&trigger));
+            self.start_completion(Some(&trigger), true);
             return;
         }
         if !prefix.ends_with('/') {
@@ -119,10 +119,10 @@ impl Model {
         self.file.dirty = true;
     }
     pub(crate) fn request_completion(&mut self) {
-        self.start_completion(None);
+        self.start_completion(None, false);
     }
 
-    fn start_completion(&mut self, trigger: Option<&str>) {
+    fn start_completion(&mut self, trigger: Option<&str>, quiet: bool) {
         self.cancel_completion();
         self.close_hover();
         self.close_diagnostic_peek();
@@ -138,7 +138,7 @@ impl Model {
             return;
         };
         if self.active_lsp_worker().is_none() {
-            if trigger.is_none() && !had_local {
+            if !quiet && trigger.is_none() && !had_local {
                 self.status.text = "E: lsp is not running".to_owned();
             }
             self.file.dirty = true;
@@ -167,6 +167,71 @@ impl Model {
             self.status.text = "completion".to_owned();
         }
         self.file.dirty = true;
+    }
+
+    pub(crate) fn schedule_keyword_completion(&mut self) {
+        let settings = self.config.settings.completion;
+        if !settings.auto_popup
+            || !matches!(self.ui.input_mode, InputMode::Insert)
+            || self.language.completion.completion.is_some()
+            || self.language.completion.snippet.is_some()
+        {
+            self.language.completion.keyword_due = None;
+            return;
+        }
+        let text = self.session.editor.text();
+        let text = text.slice(0..text.len_bytes());
+        let cursor = self.session.cursor.min(text.len());
+        let prefix = crate::completion_sources::completion_prefix(&text, cursor);
+        if prefix.chars().count() < settings.popup_trigger_len {
+            self.language.completion.keyword_due = None;
+            return;
+        }
+        let class = {
+            let cache = self.syntax_cache.highlights.borrow().active_cache();
+            cache
+                .highlights()
+                .iter()
+                .find(|highlight| highlight.start <= cursor && cursor < highlight.end)
+                .map(|highlight| highlight.class)
+        };
+        let allowed = match class {
+            Some(anvil_syntax::SyntaxClass::Comment) => settings.popup_in_comments,
+            Some(anvil_syntax::SyntaxClass::String) => settings.popup_in_strings,
+            _ => true,
+        };
+        if !allowed {
+            self.language.completion.keyword_due = None;
+            return;
+        }
+        self.language.completion.keyword_signature = Some((self.session.editor.revision(), cursor));
+        self.language.completion.keyword_due = Some(
+            std::time::Instant::now()
+                + std::time::Duration::from_millis(u64::from(settings.popup_delay_ms)),
+        );
+    }
+
+    pub(crate) fn tick_keyword_completion(&mut self) {
+        if !matches!(self.ui.input_mode, InputMode::Insert)
+            || self.language.completion.completion.is_some()
+            || self.language.completion.snippet.is_some()
+        {
+            self.language.completion.keyword_due = None;
+            return;
+        }
+        let Some(due) = self.language.completion.keyword_due else {
+            return;
+        };
+        if std::time::Instant::now() < due {
+            return;
+        }
+        let current = (self.session.editor.revision(), self.session.cursor);
+        if self.language.completion.keyword_signature != Some(current) {
+            self.language.completion.keyword_due = None;
+            return;
+        }
+        self.language.completion.keyword_due = None;
+        self.start_completion(None, true);
     }
 
     pub(crate) fn request_completion_more(&mut self) {

@@ -1296,6 +1296,9 @@ pub(crate) struct CompletionUiState {
     pub(crate) all_commit_characters: HashMap<LspKey, Vec<String>>,
     /// Last accepted completion label, used to preselect it next time.
     pub(crate) recent: Option<String>,
+    /// Pending keyword-popup deadline and the edit state it was scheduled for.
+    pub(crate) keyword_due: Option<Instant>,
+    pub(crate) keyword_signature: Option<(u64, usize)>,
     /// Whether the last completion list was truncated and must be re-requested.
     pub(crate) incomplete: bool,
 }

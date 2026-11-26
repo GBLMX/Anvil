@@ -851,8 +851,14 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             KeyCode::BackTab => {
                 model.previous_snippet_stop();
             }
-            KeyCode::Backspace => model.backspace(),
-            KeyCode::Delete => model.delete_forward(),
+            KeyCode::Backspace => {
+                model.backspace();
+                model.schedule_keyword_completion();
+            }
+            KeyCode::Delete => {
+                model.delete_forward();
+                model.schedule_keyword_completion();
+            }
             KeyCode::Left => model.move_char(-1),
             KeyCode::Right => model.move_char(1),
             KeyCode::Up => model.move_line(-1),
@@ -864,6 +870,7 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             KeyCode::Char(character) if text_input => {
                 model.insert_auto_pair(character);
                 model.auto_completion();
+                model.schedule_keyword_completion();
             }
             _ => {}
         },

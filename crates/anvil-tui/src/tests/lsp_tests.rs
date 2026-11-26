@@ -2378,6 +2378,25 @@ fn completion_install_preselects_recent_label() {
 }
 
 #[test]
+fn keyword_completion_opens_after_its_deadline() {
+    let mut model = Model::new(EditorState::from_text("value value\nva"), None);
+    model.session.cursor = model.session.editor.text().len_bytes();
+    model.ui.input_mode = InputMode::Insert;
+    model.schedule_keyword_completion();
+    assert!(model.language.completion.keyword_due.is_some());
+    model.language.completion.keyword_due =
+        Some(std::time::Instant::now() - std::time::Duration::from_millis(1));
+    model.tick_keyword_completion();
+    let completion = model
+        .language
+        .completion
+        .completion
+        .as_ref()
+        .expect("keyword completion");
+    assert!(completion.items.iter().any(|item| item.label == "value"));
+}
+
+#[test]
 fn completion_fuzzy_ranks_boundaries_and_restores_items() {
     let mut model = Model::new(EditorState::from_text("x"), None);
     model

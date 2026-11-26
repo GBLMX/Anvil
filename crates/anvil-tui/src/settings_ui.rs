@@ -162,6 +162,17 @@ impl SettingsOverlayState {
             settings::SettingsKey::CaseSensitive => settings.search.case_sensitive.to_string(),
             settings::SettingsKey::InlayHints => settings.lsp.inlay_hints.to_string(),
             settings::SettingsKey::AutoBrackets => settings.completion.auto_brackets.to_string(),
+            settings::SettingsKey::AutoPopup => settings.completion.auto_popup.to_string(),
+            settings::SettingsKey::PopupDelay => settings.completion.popup_delay_ms.to_string(),
+            settings::SettingsKey::PopupTriggerLen => {
+                settings.completion.popup_trigger_len.to_string()
+            }
+            settings::SettingsKey::PopupInComments => {
+                settings.completion.popup_in_comments.to_string()
+            }
+            settings::SettingsKey::PopupInStrings => {
+                settings.completion.popup_in_strings.to_string()
+            }
             settings::SettingsKey::ReducedMotion => settings.ui.reduced_motion.to_string(),
             settings::SettingsKey::HighContrast => settings.ui.high_contrast.to_string(),
             settings::SettingsKey::FileWatching => settings.editor.file_watching.to_string(),
@@ -332,6 +343,25 @@ impl SettingsOverlayState {
             settings::SettingsKey::AutoBrackets => {
                 draft.completion.auto_brackets = !draft.completion.auto_brackets
             }
+            settings::SettingsKey::AutoPopup => {
+                draft.completion.auto_popup = !draft.completion.auto_popup
+            }
+            settings::SettingsKey::PopupDelay => {
+                draft.completion.popup_delay_ms = (draft.completion.popup_delay_ms as i16)
+                    .saturating_add(delta as i16)
+                    .clamp(0, 1000) as u16;
+            }
+            settings::SettingsKey::PopupTriggerLen => {
+                draft.completion.popup_trigger_len = (draft.completion.popup_trigger_len as isize)
+                    .saturating_add(delta)
+                    .clamp(1, 10) as usize;
+            }
+            settings::SettingsKey::PopupInComments => {
+                draft.completion.popup_in_comments = !draft.completion.popup_in_comments
+            }
+            settings::SettingsKey::PopupInStrings => {
+                draft.completion.popup_in_strings = !draft.completion.popup_in_strings
+            }
             settings::SettingsKey::ReducedMotion => {
                 draft.ui.reduced_motion = !draft.ui.reduced_motion
             }
@@ -387,6 +417,23 @@ impl SettingsOverlayState {
             }
             settings::SettingsKey::AutoBrackets => {
                 self.draft.completion.auto_brackets = self.inherited.completion.auto_brackets
+            }
+            settings::SettingsKey::AutoPopup => {
+                self.draft.completion.auto_popup = self.inherited.completion.auto_popup
+            }
+            settings::SettingsKey::PopupDelay => {
+                self.draft.completion.popup_delay_ms = self.inherited.completion.popup_delay_ms
+            }
+            settings::SettingsKey::PopupTriggerLen => {
+                self.draft.completion.popup_trigger_len =
+                    self.inherited.completion.popup_trigger_len
+            }
+            settings::SettingsKey::PopupInComments => {
+                self.draft.completion.popup_in_comments =
+                    self.inherited.completion.popup_in_comments
+            }
+            settings::SettingsKey::PopupInStrings => {
+                self.draft.completion.popup_in_strings = self.inherited.completion.popup_in_strings
             }
             settings::SettingsKey::ReducedMotion => {
                 self.draft.ui.reduced_motion = self.inherited.ui.reduced_motion

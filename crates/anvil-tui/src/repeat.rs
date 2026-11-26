@@ -11,11 +11,14 @@ impl Model {
             valid: true,
         });
         self.ui.input_mode = InputMode::Insert;
+        self.auto_completion();
+        self.schedule_keyword_completion();
         self.file.dirty = true;
     }
 
     pub(crate) fn finish_insert_session(&mut self) {
         self.language.completion.snippet = None;
+        self.language.completion.keyword_due = None;
         let Some(session) = self.edit.insert_session.take() else {
             return;
         };

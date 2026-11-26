@@ -59,6 +59,11 @@ post-`0.5.0` feature line.
 - `[completion] auto_brackets` (env `ANVIL_COMPLETION_AUTO_BRACKETS`) inserts
   `()` for function, method, and constructor completions that omit it, skipping
   TSX/JSX/Vue source files.
+- Completion now opens keyword suggestions after an idle delay (default 250 ms
+  after 2 word characters), with `completion.auto_popup`,
+  `completion.popup_delay_ms`, `completion.popup_trigger_len`,
+  `completion.popup_in_comments`, and `completion.popup_in_strings` toggles.
+  Entering insert mode on a trigger character also opens completion.
 - LSP snippets now support choices, nested placeholders, and variables; a parse
   failure keeps the server text instead of stripping it.
 - Completion applies server `allCommitCharacters`, executes completion

@@ -460,6 +460,7 @@ pub fn run_with_all_services(
         }
         model.tick_search();
         model.tick_signature_help();
+        model.tick_keyword_completion();
         if model.file.dirty {
             terminal.draw(|frame| view(&model, frame))?;
             if !terminal.profile().synchronized_output {
